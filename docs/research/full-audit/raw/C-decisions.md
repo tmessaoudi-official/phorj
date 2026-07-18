@@ -121,6 +121,7 @@
 | DEC-105 | 06-30 | B1 iteration protocol: for-in over string/Map (two-binding) + `List.enumerate`; `zip` deferred to B3 | — | memory session-naming-and-b1 | AUTONOMOUS (within approved marathon) | ✅ |
 | DEC-106 | 07-01 | Dogfood W0/W2: empty-list literal init; comma-throws; nested-quote interpolation; list upcast | — | memory marathon-m-dogfood | AUTONOMOUS | ✅ |
 | DEC-107 | 07-01 | **Q1 dynamic dispatch: NO string-instantiate/string-call primitive** (un-typeable/un-erasable); ADD method-references-as-values (`obj.method` → typed closure) + typed-registry guide | PHP `new $class`/`$obj->$m()` | no-wind spec §context; four-lane plan | ASKED | 📐 |
+| DEC-288 | 07-18 | **Built-in tuple type `(A, B[, …])`** (dev-ruled, parity push) — a lightweight structural tuple + destructuring (`for ((int i, string s) in ps)`, `(a, b) = pair`), transpiling to PHP 2+-element arrays. Unblocks `List.zip -> List<(A,B)>`, `List.partition -> (List<T>, List<T>)`, `Map.entries -> List<(K,V)>`, and general multi-value return. FOUNDATIONAL language feature: parser + type-system + destructuring patterns + all 3 backends + transpile — the biggest slice of this batch; spine-critical, advisor-certified, likely multi-slice | `Core.Pair<A,B>` std class (clunkier, no destructuring); reuse `List<List<T>>` (untyped, same-type only); skip zip/partition | dev AskUserQuestion 2026-07-18 | ASKED | 📐 (ruled, not built) |
 
 ## 5. Naming & renames
 
@@ -181,6 +182,9 @@
 | DEC-154 | 06-28 | Router: `Core.Http` Router + `#[Route]` attributes + middleware | — | specs/2026-06-28-m6-w2-router-attributes-design.md | ASKED | ✅ |
 | DEC-155 | 06-21 | Stack traces identical across backends (interpreter gains a logical call-stack mirroring VM frames); traces on stderr only (FaultKind spine untouched); CLI + dev-mode web error page; **prod = bare 500, never leaks trace/source** | VM-only traces | error-handling plan | ASKED | ✅ |
 | DEC-156 | 07-01 | Manual benchmarking (`Core.Runtime.memoryBytes`/Stopwatch) legal but **quarantined from the byte-identity example set** (`pure:false` model) | blocking manual timing entirely | m-dogfood plan | ASKED | ✅ |
+| DEC-289 | 07-18 | **`List.groupBy(List<T>, (T) -> K) -> Map<K, List<T>>`** (dev-ruled, parity push) — the universal groupBy shape (Kotlin/Swift/LINQ): `[1,2,3,4].groupBy(n => n%2)` = `{1:[1,3], 0:[2,4]}`. First-seen key order; higher-order-native recipe + gated `__phorj_group_by` helper. Self-certifiable (follows the established recipe) | fold-into-Map manually (skip) | dev AskUserQuestion 2026-07-18 | ASKED | 📐 (ruled, next up) |
+| DEC-290 | 07-18 | **Native `Core.DateTime` → PHP `DateTimeImmutable`** (dev-ruled, TOP-20 parity) — construct/parse/format/add-subtract/compare. Parse/format/arithmetic/compare are DETERMINISTIC → byte-identity-gated (DateTimeImmutable + a fixed format map); only `now()` is impure (freezable clock, like Core.Time → quarantined). Supersedes DEC-206's bare-name gate direction (calendar IS built, not lib). Larger slice (new native module) | userland calendar lib on Core.Time; defer | dev AskUserQuestion 2026-07-18 | ASKED | 📐 (ruled) |
+| DEC-291 | 07-18 | **`Core.Fs` breadth** (dev-ruled, TOP-20 #5) — add copy/move(rename)/delete(unlink)/mkdir/exists/isFile/isDir/size/mtime/glob/tempfile mapping to the PHP builtins; impure + spine-quarantined like the existing Core.Fs. Mostly mechanical (impure-native recipe); self-certifiable | minimal set only; defer | dev AskUserQuestion 2026-07-18 | ASKED | 📐 (ruled) |
 
 ## 9. Tooling, build, distribution, interop
 
