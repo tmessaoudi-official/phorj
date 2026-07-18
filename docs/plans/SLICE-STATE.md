@@ -109,6 +109,11 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
       via the EXISTING span-keyed `default_fills` (advisor-OK'd; add a prelude/user span-overlap test —
       the P1 hole is offset-random so green≠safe here) → validation: variadic is last + no default.
       Backends then see `f([a,b,c])` w/ `List<T>` param = byte-identical to PHP `f([a,b,c])`. Lift `...$nums`.
+      ⚠⚠ **THE TRAP THAT BIT TWICE THIS SESSION (reserved-name method path, `uses_regex` string-arg,
+      variadic method/lambda) — a NARROW guard misses the SHARED chokepoint:** the checker has ≥3
+      param/call sites — free-fn (`core.rs:349`), METHOD, and LAMBDA — so put the variadic effective-type
+      + call-collection logic where ALL THREE route (or a shared helper each calls), else you rebuild the
+      method/lambda hole 1b exists to close. Same lesson as the parse-chokepoint fix `c4318af8`.
    2. **Named args** (needs Call to CARRY names till desugar — add PARALLEL field `arg_names:
       Vec<Option<String>>` to `Expr::Call` {exprs.rs:120}/ParentCall/method/`new`, defaulting empty so
       existing `Call{args,..}` matchers are UNAFFECTED) → parser `name: value` call-arg → checker desugar
