@@ -25,7 +25,9 @@ function main(): void {
     Output.printLine("first > 4: {firstBig}");
     bool hasBig = List.any(xs, function(int x) => x > 8);
     bool allPos = List.all(xs, function(int x) => x > 0);
-    Output.printLine("any > 8: {hasBig}, all > 0: {allPos}");
+    // `none` is the third of the trio (none ≡ !any): true iff no element satisfies the predicate.
+    bool noneNeg = List.none(xs, function(int x) => x < 0);
+    Output.printLine("any > 8: {hasBig}, all > 0: {allPos}, none < 0: {noneNeg}");
     // `min`/`max` order strings by byte, so a list of numeric-looking strings is consistent across
     // all three backends (PHP's bare min/max would juggle them numerically).
     List<string> codes = ["10", "9", "100", "2"];

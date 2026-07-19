@@ -1240,6 +1240,14 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_list_none {
+            self.line("function __phorj_none($xs, $p) {");
+            self.indent += 1;
+            self.line("foreach ($xs as $x) { if ($p($x)) { return false; } }");
+            self.line("return true;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_map_set {
             // A NEW map (Phorj maps are immutable). `$m` is passed by value, and PHP arrays are
             // copy-on-write, so assigning into it produces a fresh array — the caller's is untouched.

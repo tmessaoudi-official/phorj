@@ -287,6 +287,7 @@ struct Transpiler {
     uses_list_max: bool,
     uses_list_find: bool,
     uses_list_any: bool,
+    uses_list_none: bool,
     uses_list_all: bool,
     /// Set when `Core.Map.set` / `remove` is emitted — defines the matching `__phorj_map_set` /
     /// `__phorj_map_remove` helper once per file. Both produce a NEW map (Phorj maps are immutable);
@@ -543,6 +544,7 @@ impl Transpiler {
             uses_list_max: false,
             uses_list_find: false,
             uses_list_any: false,
+            uses_list_none: false,
             uses_list_all: false,
             uses_map_set: false,
             uses_map_remove: false,

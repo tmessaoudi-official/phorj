@@ -232,6 +232,7 @@ impl Transpiler {
                                 "max" => self.uses_list_max = true,
                                 "find" => self.uses_list_find = true,
                                 "any" => self.uses_list_any = true,
+                                "none" => self.uses_list_none = true,
                                 "all" => self.uses_list_all = true,
                                 _ => {}
                             }

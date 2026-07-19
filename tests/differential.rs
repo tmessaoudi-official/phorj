@@ -725,6 +725,23 @@ import Core.Set;
     );
 }
 
+/// Wave-B (DEC-307): `List.none` — the third of the any/all/none trio (`none` ≡ `!any`): true iff no
+/// element satisfies the predicate. Short-circuits at the first match (gated `__phorj_none`).
+/// Byte-identical run≡runvm≡php; covers all-false (→true), a match (→false), and the empty list (→true).
+#[test]
+fn list_none_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.List;
+#[Entry] function main() -> void {
+    List<int> xs = [2, 4, 6];
+    Output.printLine("{List.none(xs, function(int x) => x % 2 == 1)}|{List.none(xs, function(int x) => x > 5)}|{List.none(new List<int>(), function(int x) => true)}");
+}"#,
+        "true|false|true\n",
+        "list_none",
+    );
+}
+
 /// Wave-B (DEC-305): `List.product` — the multiplicative companion to `sum` (empty → 1, PHP
 /// `array_product`). Checked overflow (faults, doesn't wrap — PHP promotes to float; examples stay in
 /// range). Byte-identical run≡runvm≡php; covers a normal product, a zero factor, and the empty list.

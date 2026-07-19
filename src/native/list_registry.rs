@@ -456,6 +456,18 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.List",
+            name: "none",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::HigherOrder(list_none),
+            php: |a| format!("__phorj_none({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
             name: "isEmpty",
             params: vec![list(t())],
             ret: Ty::Bool,
@@ -606,6 +618,22 @@ fn list_all(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> 
             Ok(Value::Bool(true))
         }
         _ => Err("List.all expects (List<T>, (T) -> bool)".into()),
+    }
+}
+/// `none(List<T>, (T) -> bool) -> bool` — the companion to `any`/`all`: true iff NO element satisfies
+/// the predicate (`none` ≡ `!any`). Short-circuits at the first match, so a side-effecting predicate
+/// is byte-identical on both backends (gated `__phorj_none`).
+fn list_none(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            for x in xs.iter() {
+                if list_pred(call, f, x)? {
+                    return Ok(Value::Bool(false));
+                }
+            }
+            Ok(Value::Bool(true))
+        }
+        _ => Err("List.none expects (List<T>, (T) -> bool)".into()),
     }
 }
 
