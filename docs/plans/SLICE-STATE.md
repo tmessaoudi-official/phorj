@@ -28,7 +28,7 @@ FINDINGS (owed to next recompute + review):
   2. **🚩 PLACEMENT MISMATCH (flag-already-done rule):** dev ruled TONIGHT crypto→Core.Cryptography, but CSPRNG
      lives in Core.Random + HMAC/KDF in Core.Hash (shipped, byte-identical). AUTO/PENDING: keep shipped placement
      OR consolidate into Core.Cryptography (breaking rename) — dev decides at review. NOT moved silently.
-  3. **§4.10 RECOMPUTE DONE (`<pending>`)** — parity ≈64→**66%** · Vision 66→**67%** · floor 47→**51%** (credited the
+  3. **§4.10 RECOMPUTE DONE (`91737e4a`)** — parity ≈64→**66%** · Vision 66→**67%** · floor 47→**51%** (credited the
      7 overnight features). ⚠ STILL OWED: a full §1.2 PER-ROW re-pass to bank the PHANTOM-GAP undercount (FN-HASH
      hmac/hkdf/pbkdf2 + FN-RAND CSPRNG + Core.Path + Core.FileSystem-broad are BUILT but §1.2 still lists as gaps →
      true parity higher than 66%). §4.10 conservatively did NOT credit phantom coverage (no unverified inflation).
@@ -52,8 +52,15 @@ FINDINGS (owed to next recompute + review):
       variants). **Set** = blocked (no empty-set VM op — `new Set<T>()` deferred, DEC-214). **serialize/
       unserialize**, **var_export/print_r** = byte-identity-fiddly (PHP format fidelity). PriorityQueue =
       next SAFE pure-Phorj-over-List slice (like Deque; needs tuple (value,priority) + max scan).
-    · NEXT SAFE (buildable in a compacted run): **PriorityQueue<T>** (pure-Phorj, mirror Deque), then
-      reassess. Impure FS breadth (glob/stat/mtime) needs functional tests (env-dependent) — lower priority.
+    · ✅ DONE (this run): Deque + PriorityQueue (the two good pure-over-List classes — seam now EXHAUSTED).
+    · **NEXT TOP MOVER = DEC-302 backed enums + cases()** — RULED AUTO w/ full BUILD-MAP in C-decisions.md
+      (recommended repr (B): keep the abstract-class model + emit value const + static cases()/from()/tryFrom(),
+      NOT a PHP-native-enum path). ⚠ EXECUTE IN FRESH CONTEXT — spine-wide (parser+checker+3 backends+transpile+
+      lift); the advisor + the spine→FRESH-context rule say do NOT one-shot it in a compacted run. Build-map ready.
+      ⚠ Invariant-15: the (A) PHP-native-enum vs (B) class-model REPRESENTATION choice needs dev review (recorded AUTO/PENDING).
+    · OTHER genuine-but-forked (not autonomously safe): generators/yield (deepest VM control-flow spine, FRESH);
+      serialize/var_export/print_r (byte-identity-fiddly); Set (no empty-set VM op, DEC-214). Impure FS breadth
+      (glob/stat/mtime) = env-dependent functional tests, lower priority.
   ⚠ M-Decomp: this run grew native/text.rs (586) + cli/preludes.rs (~1420) — both already >500 hard cap
     (DEC-262) and already on the backlog; split DEFERRED (preludes.rs CORE_MODULES order is load-bearing →
     FRESH context). Backlog record corrected in KNOWN_ISSUES (stale "1000 cap/10 files" → 500/~20).
