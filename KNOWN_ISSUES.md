@@ -38,11 +38,11 @@ missing `import Core.String` (fixed `bb39af6f`) — and one TIER1 gap, `ucwords(
 core/always-available). Full gate green (2250 tests, clippy both legs, release built). See memory
 `example-glob-noop-since-dec191`. Note: `uses_impure_native` has THREE callers (the fault-parity leg
 + the run≡runvm glob + the transpile glob — differential.rs:198/1595/2751), all revived by the shared-fn
-fix. ⚠ FOLLOW-UP (owed, not manifesting): the SIBLING `uses_unavailable_gated_module` (differential.rs:1406)
-uses the SAME `src.contains("import {m}")` substring pattern for feature-gated modules (Core.Mail /
-Core.DatabaseModule / …). It is not currently over/under-matching (the revived glob is green with 139
-running, so no gated example wrongly runs), but it shares the substring-hole CLASS — e.g. `Core.Mail` ⊂
-`Core.MailFoo` — and should be converted to the same per-line/whole-token parse. Bounded fresh-context task.
+fix. ✅ FOLLOW-UP DONE (2026-07-19): the SIBLING `uses_unavailable_gated_module` shared the same
+`src.contains("import {m}")` substring pattern for feature-gated modules — converted to the per-line
+whole-token parse (for a GATED module the WHOLE module is absent, so any import under it — whole or
+member — flags; a name-prefix-sharing module like `Core.MailFoo` does not). 2252 green, no regression.
+No other callers of the substring pattern remain (grep-confirmed).
 
 > **⚠ 2026-07-16 FULL REOPEN AUDIT — this file was fully re-verdicted.** Every row was reopened;
 > 17 rows are STALE (superseded by later shipped work) and 8 new flags were raised and ruled.

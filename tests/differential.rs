@@ -1420,9 +1420,28 @@ fn p4c_programs_match_between_backends() {
 /// True iff the source imports a feature-gated Core module NOT compiled into this build (derived
 /// from the cli's gated-module registry — a future gated module is covered with no harness edit).
 fn uses_unavailable_gated_module(src: &str) -> bool {
-    phorj::cli::unavailable_gated_modules()
-        .iter()
-        .any(|m| src.contains(&format!("import {m}")))
+    // Per-line whole-token match (2026-07-19), NOT `src.contains("import {m}")` — the same
+    // substring-hole class as the P0 in `uses_impure_native` (e.g. `Core.Mail` ⊂ `Core.MailFoo`).
+    // For a GATED module the WHOLE module is absent when its feature is off, so ANY import under it —
+    // whole (`import Core.DatabaseModule;`) OR member (`import Core.DatabaseModule.Database;`) — flags;
+    // an unrelated module that merely shares a name prefix does not.
+    let gated = phorj::cli::unavailable_gated_modules();
+    src.lines().any(|line| {
+        let rest = match line.trim().strip_prefix("import ") {
+            Some(r) => r,
+            None => return false,
+        };
+        let path = rest
+            .split(" as ")
+            .next()
+            .unwrap_or(rest)
+            .trim()
+            .trim_end_matches(';')
+            .trim();
+        gated
+            .iter()
+            .any(|m| path == m.as_str() || path.starts_with(&format!("{m}.")))
+    })
 }
 
 fn uses_impure_native(src: &str) -> bool {
