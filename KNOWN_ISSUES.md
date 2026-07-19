@@ -181,6 +181,18 @@ Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical through
 Related: the un-benched-stdlib COVERAGE gap — only **28 of 286 natives** are perf-benched (Invariant 18
 wants all with a php equivalent); these losses were hidden precisely because they weren't benched until now.
 
+## VALIDATION-regex-trailing-newline — the 5 original `Core.Validation` preg_match predicates diverge on a trailing `\n` (FLAGGED 2026-07-19, DEC-310; PRE-EXISTING latent)
+
+The 5 original predicates (`isInt`/`isNumber`/`isAlpha`/`isAlnum`/`isHex`) transpile to `preg_match('/^…$/', $s)`.
+PHP's `$` (without the `D` flag) matches at end-of-string **OR immediately before a final `\n`** — so
+`isAlpha("abc\n")` is **`false` on the Rust legs** (interp+VM: `\n` is not alphabetic) but **`true` under the
+transpiled PHP**. [Verified 2026-07-19: `preg_match("/^[A-Za-z]+$/", "abc\n") === 1` → `bool(true)` on
+php-8.5.8.] A run≡runvm≡PHP byte-identity divergence (Invariant 1), latent because no example/test feeds a
+trailing newline. **Not yet fixed** — the fix is a one-char-each `/…$/D` (PCRE_DOLLAR_ENDONLY) flag, exactly
+what the DEC-310 char-class predicates (`isLower`…`isPrintable`) already do (they emit `preg_match(/…$/D)`
+and are NOT affected). Own small slice: add the `D` flag to the 5 + a differential case with a trailing-`\n`
+input proving the fix.
+
 ## F-029 — namespaced (multi-package) transpile byte-identity gaps (FLAGGED 2026-07-16, DEC-263 build; PRE-EXISTING, not introduced by DEC-263)
 
 Surfaced while building DEC-263: two distinct **transpile-leg-only** divergences that break the

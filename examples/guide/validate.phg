@@ -1,9 +1,12 @@
 // Core.Validation — syntactic string predicates (native-stdlib wave).
 //
 // Format checks, each `string -> bool`: `isInt`, `isNumber` (int or fixed-point), `isAlpha`,
-// `isAlnum`, `isHex`. Phorj is std-only (no regex crate), so each check is hand-rolled in Rust and
-// the transpiled PHP uses the *same* anchored pattern via `preg_match` — byte-identical by
-// construction. These check shape, not range (e.g. `isInt("007")` is true).
+// `isAlnum`, `isHex`, plus the ctype character-class predicates `isLower`, `isUpper`,
+// `isWhitespace`, `isPunctuation`, `isControl`, `isVisible` (printable non-space), `isPrintable`.
+// Phorj is std-only (no regex crate), so each check is hand-rolled in Rust; the transpiled PHP uses
+// the *same* anchored `preg_match` pattern (the class predicates add the `D`/dollar-end-only flag) —
+// byte-identical by construction. These check shape, not range (e.g. `isInt("007")` is true). Every
+// predicate returns false on the empty string.
 package Main;
 
 import Core.Output;
@@ -25,4 +28,16 @@ function main(): void {
     report("isAlnum(abc123)", Validation.isAlnum("abc123"));
     report("isHex(DEADbeef)", Validation.isHex("DEADbeef"));
     report("isHex(0xFF)", Validation.isHex("0xFF"));
+    report("isLower(phorj)", Validation.isLower("phorj"));
+    report("isLower(Phorj)", Validation.isLower("Phorj"));
+    report("isUpper(PHORJ)", Validation.isUpper("PHORJ"));
+    report("isWhitespace(tab)", Validation.isWhitespace("\t"));
+    report("isWhitespace(a b)", Validation.isWhitespace("a b"));
+    report("isPunctuation(!?.)", Validation.isPunctuation("!?."));
+    report("isPunctuation(hi!)", Validation.isPunctuation("hi!"));
+    report("isControl(tab)", Validation.isControl("\t"));
+    report("isControl(abc)", Validation.isControl("abc"));
+    report("isVisible(Phorj!)", Validation.isVisible("Phorj!"));
+    report("isVisible(a b)", Validation.isVisible("a b"));
+    report("isPrintable(Phorj 9!)", Validation.isPrintable("Phorj 9!"));
 }
