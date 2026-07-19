@@ -112,6 +112,54 @@
     "listcontains": {
       "ratio": 0.02,
       "identical": true
+    },
+    "maphas": {
+      "ratio": 0.03,
+      "identical": true
+    },
+    "mapkeys": {
+      "ratio": 0.07,
+      "identical": true
+    },
+    "mapvalues": {
+      "ratio": 0.08,
+      "identical": true
+    },
+    "mapmerge": {
+      "ratio": 0.10,
+      "identical": true
+    },
+    "mapfilter": {
+      "ratio": 0.23,
+      "identical": true
+    },
+    "mapmap": {
+      "ratio": 0.30,
+      "identical": true
+    },
+    "setunion": {
+      "ratio": 0.79,
+      "identical": true
+    },
+    "setintersection": {
+      "ratio": 1.58,
+      "identical": true
+    },
+    "setdifference": {
+      "ratio": 0.40,
+      "identical": true
+    },
+    "setcontains": {
+      "ratio": 0.02,
+      "identical": true
+    },
+    "mathmax": {
+      "ratio": 0.03,
+      "identical": true
+    },
+    "stringcontains": {
+      "ratio": 0.11,
+      "identical": true
     }
   }
 }

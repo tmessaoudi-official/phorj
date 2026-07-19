@@ -1,0 +1,30 @@
+package Main;
+
+import Core.Output;
+import Core.Math;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Math.max` (two-arg integer max). Both operands are data-dependent (`i % 1000` and
+// `(i * 3) % 1000`) so php cannot hoist the call; the checksum folds the running maxima. `max` is a
+// cheap native, so this isolates the native-CALL overhead (VM dispatch vs php's C builtin `max`).
+function bench(int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        acc = acc + Math.max(i % 1000, i * 3 % 1000);
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("mathmax\t{d + guard}\t{acc}");
+}

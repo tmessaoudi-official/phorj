@@ -1,0 +1,37 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Map;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Map.values` (materialize a map's values as a list). The map operand rotates through three
+// precomputed maps (`maps[i % 3]`) so php cannot hoist `array_values`, and the result is INDEXED
+// (`vs[i % length]`) so the values list must actually materialize; the checksum folds that read.
+function bench(int iters): int {
+    Map<string, int> m1 = ["a" => 11, "b" => 22];
+    Map<string, int> m2 = ["a" => 3, "b" => 5, "c" => 7, "d" => 9, "e" => 13];
+    Map<string, int> m3 = ["solo" => 99];
+    List<Map<string, int>> maps = [m1, m2, m3];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Map<string, int> m = maps[i % 3];
+        List<int> vs = Map.values(m);
+        acc = acc + vs[i % List.length(vs)];
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("mapvalues\t{d + guard}\t{acc}");
+}

@@ -1,0 +1,39 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Map;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Map.merge` (combine two maps; right operand wins on key collisions). One operand is
+// constant, the second rotates through three precomputed maps (`others[i % 3]`) so php cannot hoist the
+// merge. The checksum folds the merged-key CARDINALITY (`Map.size`), which is override-order-independent,
+// matching idiomatic php `count(array_merge(...))`.
+function bench(int iters): int {
+    Map<string, int> a = ["a" => 1, "b" => 2, "c" => 3];
+    List<Map<string, int>> others = [
+        ["b" => 20, "d" => 4],
+        ["c" => 30, "e" => 5, "f" => 6],
+        ["a" => 10, "g" => 7]
+    ];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Map<string, int> merged = Map.merge(a, others[i % 3]);
+        acc = acc + Map.size(merged);
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 1000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("mapmerge\t{d + guard}\t{acc}");
+}

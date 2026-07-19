@@ -1,0 +1,33 @@
+package Main;
+
+import Core.Output;
+import Core.Set;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Set.contains` (hash-set membership). The set is constant; the NEEDLE is data-dependent
+// (`i % 16`, so ~half the probes miss), so php cannot hoist the membership test. No per-iteration
+// allocation pollutes the measurement. Idiomatic php models the set as a hash (`isset($s[$k])`).
+function bench(int iters): int {
+    Set<int> s = Set.of([3, 1, 4, 1, 5, 9, 2, 6]);
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        if (Set.contains(s, i % 16)) {
+            acc = acc + 1;
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("setcontains\t{d + guard}\t{acc}");
+}

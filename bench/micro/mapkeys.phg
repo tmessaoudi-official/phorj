@@ -1,0 +1,39 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Map;
+import Core.String;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Map.keys` (materialize a map's keys as a list). The map operand rotates through three
+// precomputed maps of DIFFERENT sizes (`maps[i % 3]`) so php cannot hoist `array_keys`, and the result
+// is INDEXED (`ks[i % length]`) — forcing the keys list to actually materialize on both backends (a
+// mere `count` could be optimized to `count($m)`), then the checksum folds a byte-length read of it.
+function bench(int iters): int {
+    Map<string, int> m1 = ["a" => 1, "b" => 2];
+    Map<string, int> m2 = ["a" => 1, "b" => 2, "c" => 3, "d" => 4, "e" => 5];
+    Map<string, int> m3 = ["solo" => 9];
+    List<Map<string, int>> maps = [m1, m2, m3];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Map<string, int> m = maps[i % 3];
+        List<string> ks = Map.keys(m);
+        acc = acc + String.length(ks[i % List.length(ks)]);
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("mapkeys\t{d + guard}\t{acc}");
+}

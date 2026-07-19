@@ -1,0 +1,39 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Set;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Set.difference` (elements of `a` not in `b`). One operand constant, the second rotates
+// (`bs[i % 4]`) so php cannot hoist the difference out of the loop. The checksum folds the result
+// CARDINALITY (order-independent), matching idiomatic php `count(array_diff(...))`.
+function bench(int iters): int {
+    Set<int> a = Set.of([1, 2, 3, 4, 5, 6, 7, 8]);
+    List<Set<int>> bs = [
+        Set.of([3, 4, 5, 6, 7, 8, 9, 10]),
+        Set.of([9, 10, 11, 12]),
+        Set.of([1, 2, 3, 4]),
+        Set.of([13, 14, 15, 16, 17])
+    ];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Set<int> b = bs[i % 4];
+        acc = acc + Set.size(Set.difference(a, b));
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 1000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("setdifference\t{d + guard}\t{acc}");
+}

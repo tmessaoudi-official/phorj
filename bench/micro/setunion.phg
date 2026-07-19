@@ -1,0 +1,41 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Set;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Set.union` (distinct merge of two int sets). One operand (`a`) is constant; the SECOND
+// operand rotates through four precomputed sets (`bs[i % 4]`) so php's JIT cannot hoist the union out of
+// the loop (a loop-invariant operand is the stringsplit-423x hoisting trap). The checksum folds the
+// union CARDINALITY (`Set.size`), which is order-independent — so the idiomatic php twin need not mimic
+// phorj's insertion order. Precomputed operands mean no per-iteration Set construction pollutes the timing.
+function bench(int iters): int {
+    Set<int> a = Set.of([1, 2, 3, 4, 5, 6, 7, 8]);
+    List<Set<int>> bs = [
+        Set.of([3, 4, 5, 6, 7, 8, 9, 10]),
+        Set.of([9, 10, 11, 12]),
+        Set.of([1, 2, 3, 4]),
+        Set.of([13, 14, 15, 16, 17])
+    ];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Set<int> b = bs[i % 4];
+        acc = acc + Set.size(Set.union(a, b));
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 1000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("setunion\t{d + guard}\t{acc}");
+}

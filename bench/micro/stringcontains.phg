@@ -1,0 +1,35 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.String;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `String.contains` (byte-oriented substring search). The haystack is constant; the NEEDLE
+// rotates through six candidates (`needles[i % 6]`, most of which miss), so php cannot hoist the search.
+// The checksum counts hits. Idiomatic php is the `str_contains` C builtin — a native-vs-builtin probe.
+function bench(int iters): int {
+    string hay = "the quick brown fox jumps over the lazy dog";
+    List<string> needles = ["fox", "cat", "lazy", "zzz", "the", "qux"];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        if (String.contains(hay, needles[i % 6])) {
+            acc = acc + 1;
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("stringcontains\t{d + guard}\t{acc}");
+}
