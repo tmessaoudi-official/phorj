@@ -75,6 +75,15 @@ impl BytecodeProgram {
                     Op::MakeEnum(idx) | Op::MatchTag(idx) => (*idx >= ndescs).then(|| {
                         format!("enum descriptor index {idx} out of range ({ndescs} descriptors)")
                     }),
+                    // DEC-302 `EnumFrom(start, count, _)` scans `enum_descs[start..start+count]` —
+                    // the whole range must be in bounds. `EnumValue` carries no static index.
+                    Op::EnumFrom(start, count, _) => (start.saturating_add(*count) > ndescs)
+                        .then(|| {
+                            format!(
+                                "enum descriptor range {start}..{} out of range ({ndescs} descriptors)",
+                                start + count
+                            )
+                        }),
                     Op::MakeInstance(idx) => (*idx >= nclasses).then(|| {
                         format!(
                             "class descriptor index {idx} out of range ({nclasses} descriptors)"
@@ -148,6 +157,8 @@ impl BytecodeProgram {
                     | Op::MakeRange(_)
                     | Op::Return
                     | Op::GetEnumField(_)
+                    // DEC-302: `EnumValue` reads the backing off the popped enum (no pool index).
+                    | Op::EnumValue
                     | Op::Fault(_)
                     | Op::CallValue(_)
                     // `Throw`/`PopHandler` carry nothing (like `Fault`/`Return`); `Throw`'s value is

@@ -185,6 +185,16 @@ pub enum Op {
     /// this for an index a preceding `MatchTag` already proved in range (P4-7); a defensive
     /// runtime fault covers misuse (EV-7).
     GetEnumField(usize),
+    /// DEC-302 `s.value` on a backed enum: pop a `Value::Enum`, look up its variant's scalar backing
+    /// in `enum_descs` (by `(ty, variant)`), and push it. Net stack effect 0 (pop 1, push 1). A miss
+    /// (checker-unreachable — `.value` only compiles for a backed enum) faults defensively (EV-7).
+    EnumValue,
+    /// DEC-302 `Enum.from(x)` / `Enum.tryFrom(x)`: pop the backing value `x`, scan the contiguous
+    /// `enum_descs[start..start+count]` for the variant whose `backing` equals `x`, and push that
+    /// variant's `Value::Enum` (payload-less). `try` (the `bool`) pushes `Value::Null` on a miss;
+    /// non-`try` faults with the single-sourced [`crate::value::enum_from_miss`] body (byte-identical
+    /// to the interpreter). `start`/`count` are validated against `enum_descs` bounds.
+    EnumFrom(usize, usize, bool),
     /// Abort with a fixed runtime-fault message selected by [`FaultMsg`]. Generalizes the former
     /// `MatchFail` (M3 S2.5): both the `match` exhaustiveness backstop and `opt!`-on-null lower to
     /// this one op, so S2 adds **no new `Op` variant**. The message text lives in the handler (not

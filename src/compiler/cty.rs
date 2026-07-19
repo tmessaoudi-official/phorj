@@ -4,6 +4,39 @@
 use super::*;
 
 impl Compiler<'_> {
+    /// DEC-302: the contiguous `enum_descs` range `(start, count)` for enum `name`, or `None` when
+    /// `name` is not a declared enum. Variants are emitted contiguously per enum in the compiler
+    /// pre-pass, so the range is a single scan (drives `cases()` inlining + `Op::EnumFrom`).
+    pub(in crate::compiler) fn enum_desc_range(&self, name: &str) -> Option<(usize, usize)> {
+        let start = self.enum_descs.iter().position(|d| d.ty.as_ref() == name)?;
+        let count = self.enum_descs[start..]
+            .iter()
+            .take_while(|d| d.ty.as_ref() == name)
+            .count();
+        Some((start, count))
+    }
+
+    /// DEC-302: the operand `CTy` of a backed enum's `.value` (`Int`/`Str`), or `None` when `name`
+    /// is not a backed enum. Lets `s.value` / `from(x).value` specialize as an operand (Invariant 7).
+    pub(in crate::compiler) fn enum_backing_cty(&self, name: &str) -> Option<CTy> {
+        self.enum_descs
+            .iter()
+            .find(|d| d.ty.as_ref() == name && d.backing.is_some())
+            .and_then(|d| d.backing.as_ref())
+            .map(|v| match v {
+                Value::Int(_) => CTy::Int,
+                Value::Str(_) => CTy::Str,
+                _ => CTy::Other,
+            })
+    }
+
+    /// DEC-302: `true` when `object` is a backed-enum-typed receiver (so `object.value` lowers to
+    /// `Op::EnumValue`, not `GetField`). A backed enum's `CTy` is `CTy::Class(name)` (`resolve_cty`'s
+    /// nominal fallback), disambiguated from a real class by `enum_backing_cty`.
+    pub(in crate::compiler) fn is_backed_enum_receiver(&self, object: &Expr) -> bool {
+        matches!(self.ctype(object), Ok(CTy::Class(n)) if self.enum_backing_cty(&n).is_some())
+    }
+
     /// Infer whether an arithmetic operand is int- or float-typed, to pick the specialized op
     /// (decision P2-6). Only reached for operands of `+ - * / %`, which the checker guarantees are
     /// numeric. The numeric projection of `ctype` (M2 Wave 4): `ctype` resolves the operand's full
@@ -125,6 +158,16 @@ impl Compiler<'_> {
                     return Ok(cty);
                 }
                 let obj_cty = self.ctype(object);
+                // DEC-302: `s.value` on a backed enum resolves to its backing operand type (`Int`/
+                // `Str`), so `from(9).value + 1` specializes — without this the VM rejects what the
+                // interpreter accepts (the CTy-operand trap, Invariant 7).
+                if name == "value" {
+                    if let Ok(CTy::Class(n)) = &obj_cty {
+                        if let Some(bt) = self.enum_backing_cty(n) {
+                            return Ok(bt);
+                        }
+                    }
+                }
                 // A property hook read `o.name` (M-mut.7b): its operand type is the `<name>$get`
                 // method's return type. Resolved before the field path so `o.fahrenheit + 1.0`
                 // specializes — without it the VM would reject what the interpreter accepts (the
@@ -194,6 +237,29 @@ impl Compiler<'_> {
                         crate::native::index_of_qualified(self.imports, q, name)
                             .expect("guard above already resolved this qualified native"),
                     ))
+                }
+                // DEC-302 enum static methods `Enum.from(x)` / `Enum.tryFrom(x)` / `Enum.cases()`: the
+                // head is a bare enum name (not a value), so resolve directly. `from`/`tryFrom` yield
+                // the enum type (`CTy::Class(enum)` — an optional carries its inner CTy, so
+                // `tryFrom(x)!.value` specializes); `cases()` yields `List<enum>`. Without this,
+                // `Enum.from(9).value + 1` gets `Other` and the VM rejects the operand (Invariant 7).
+                Expr::Member {
+                    object,
+                    name,
+                    safe: false,
+                    ..
+                } if matches!(&**object, Expr::Ident(en, _)
+                    if self.resolve_local(en).is_none() && self.resolve_binding(en).is_none()
+                        && self.enum_desc_range(en).is_some()
+                        && matches!(name.as_str(), "cases" | "from" | "tryFrom")) =>
+                {
+                    let Expr::Ident(en, _) = &**object else {
+                        unreachable!("guard above already matched `object` as `Expr::Ident`")
+                    };
+                    Ok(match name.as_str() {
+                        "cases" => CTy::List(Box::new(CTy::Class(en.clone()))),
+                        _ => CTy::Class(en.clone()), // from / tryFrom
+                    })
                 }
                 // Static method call `ClassName.method(args)` (slice B0 / Statics): the head is a bare
                 // class name, not a value, so `ctype(object)` would reject it — resolve directly via

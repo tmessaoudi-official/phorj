@@ -611,6 +611,53 @@ impl<'a> Vm<'a> {
                     payload,
                 })));
             }
+            // DEC-302 `s.value`: pop the enum, look its variant's scalar backing up in `enum_descs`
+            // (by `(ty, variant)`), push it. The checker only compiles `.value` for a backed enum, so
+            // a miss is unreachable — faulted defensively (EV-7). Byte-identical to the interpreter.
+            Op::EnumValue => {
+                let ev = match self.pop() {
+                    Value::Enum(ev) => ev,
+                    v => return Err(format!("cannot read `.value` on {}", v.type_name())),
+                };
+                let backing = self
+                    .program
+                    .enum_descs
+                    .iter()
+                    .find(|d| d.ty == ev.ty && d.variant == ev.variant)
+                    .and_then(|d| d.backing.clone());
+                match backing {
+                    Some(v) => self.stack.push(v),
+                    None => {
+                        return Err(format!(
+                            "enum `{}` variant `{}` has no backing value",
+                            ev.ty, ev.variant
+                        ))
+                    }
+                }
+            }
+            // DEC-302 `Enum.from(x)` / `Enum.tryFrom(x)`: pop the backing value, scan the enum's
+            // contiguous descriptor range for a variant whose `backing` equals it, push that
+            // (payload-less) enum value. `try` yields null on a miss; `from` faults with the
+            // single-sourced `enum_from_miss` body — byte-identical to the interpreter.
+            Op::EnumFrom(start, count, is_try) => {
+                let arg = self.pop();
+                let hit = self.program.enum_descs[start..start + count]
+                    .iter()
+                    .find(|d| d.backing.as_ref().is_some_and(|b| b.eq_val(&arg)))
+                    .cloned();
+                match hit {
+                    Some(desc) => self.stack.push(Value::Enum(Rc::new(EnumVal {
+                        ty: desc.ty,
+                        variant: desc.variant,
+                        payload: crate::value::Payload::Zero,
+                    }))),
+                    None if is_try => self.stack.push(Value::Null),
+                    None => {
+                        let enum_name = self.program.enum_descs[start].ty.as_ref();
+                        return Err(crate::value::enum_from_miss(enum_name, &arg));
+                    }
+                }
+            }
             Op::MatchTag(idx) => {
                 let want = self.program.enum_descs[idx].variant.clone();
                 // Pop the scrutinee copy the compiler pushed for this test (it reloads `$match`

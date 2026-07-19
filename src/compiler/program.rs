@@ -89,6 +89,12 @@ pub(super) fn compile_program_with(
                         ty: e.name.as_str().into(),
                         variant: v.name.as_str().into(),
                         arity: v.fields.len(),
+                        // DEC-302: the variant's scalar backing (from the AST literal via
+                        // `const_literal`, `None` for a plain enum) — identical to the interpreter.
+                        backing: v
+                            .backing_value
+                            .as_ref()
+                            .and_then(|b| crate::value::const_literal(b)),
                     });
                 }
             }

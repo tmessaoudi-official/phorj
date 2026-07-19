@@ -185,6 +185,10 @@ pub struct EnumDesc {
     pub ty: std::rc::Rc<str>,
     pub variant: std::rc::Rc<str>,
     pub arity: usize,
+    /// DEC-302 backed enum: the variant's scalar backing value (`int`/`string`), `None` for a plain
+    /// enum. Read by `Op::EnumValue` (`s.value`) and `Op::EnumFrom` (`from`/`tryFrom`); single-sourced
+    /// from the AST literal via `const_literal`, byte-identical to the interpreter's `enum_backing`.
+    pub backing: Option<crate::value::Value>,
 }
 
 /// A static descriptor for one class: its name and the ordered list of promoted-field names a

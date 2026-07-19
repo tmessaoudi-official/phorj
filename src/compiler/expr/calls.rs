@@ -150,6 +150,34 @@ impl Compiler<'_> {
                     }
                 }
             }
+            // DEC-302 enum static methods (compile-time known enum). `cases()` inlines to one
+            // `MakeEnum` per variant (payload-less, declaration order) + `MakeList`. `from(x)` /
+            // `tryFrom(x)` push the arg then `Op::EnumFrom` over the enum's contiguous descriptor
+            // range. Resolved before the class-static path (an enum is not a class). Not `new`-wrapped,
+            // so the `Member` callee is intact (variant construction is bare after `unwrap_new`).
+            if !*safe {
+                if let Expr::Ident(en, _) = &**object {
+                    if self.resolve_local(en).is_none()
+                        && self.resolve_binding(en).is_none()
+                        && matches!(name.as_str(), "cases" | "from" | "tryFrom")
+                    {
+                        if let Some((start, count)) = self.enum_desc_range(en) {
+                            if name == "cases" {
+                                for i in start..start + count {
+                                    self.emit(Op::MakeEnum(i), line);
+                                }
+                                self.emit(Op::MakeList(count), line);
+                            } else {
+                                for a in args {
+                                    self.expr(a)?;
+                                }
+                                self.emit(Op::EnumFrom(start, count, name == "tryFrom"), line);
+                            }
+                            return Ok(());
+                        }
+                    }
+                }
+            }
             // Static method call `ClassName.method(args)` (slice B0): the class is known at compile
             // time. Push a dummy receiver (slot 0 of the compiled method is `$this`, which a static
             // method never reads) then the args. A *non-overloaded* static lowers to a direct

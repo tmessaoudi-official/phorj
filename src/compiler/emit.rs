@@ -93,6 +93,9 @@ impl<'a> Compiler<'a> {
             // BitNot is unary (pop one, push one) like Neg/Not.
             Op::Neg | Op::Not | Op::BitNot | Op::Len | Op::IterElems | Op::Jump(_) => 0,
             Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one
+            // DEC-302: `EnumValue` pops the enum, pushes its backing; `EnumFrom` pops the arg,
+            // pushes the matched variant (or null). Both net 0.
+            Op::EnumValue | Op::EnumFrom(..) => 0,
             Op::Concat(n) | Op::MakeList(n) => 1 - *n as isize,
             Op::MakeMap(n) => 1 - 2 * *n as isize, // pops 2n (key+value pairs), pushes the map
             // Pops `argc` args, pushes the native's return value (the old `Print` + `Const(Unit)`

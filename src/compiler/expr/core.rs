@@ -279,6 +279,18 @@ impl Compiler<'_> {
                         let idx = self.field_name_index(&getm)?;
                         self.emit(Op::CallMethod(idx, 0), line);
                     }
+                } else if name == "value" && self.is_backed_enum_receiver(object) {
+                    // DEC-302 `s.value` on a backed enum → `Op::EnumValue` (backing lookup), not a
+                    // `GetField` (an enum value has no instance field). `?.value` short-circuits null.
+                    if *safe {
+                        self.compile_safe_access(object, line, |c| {
+                            c.emit(Op::EnumValue, line);
+                            Ok(())
+                        })?;
+                    } else {
+                        self.expr(object)?;
+                        self.emit(Op::EnumValue, line);
+                    }
                 } else if *safe {
                     self.compile_safe_access(object, line, |c| {
                         let idx = c.field_name_index(name)?;
