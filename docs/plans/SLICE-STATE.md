@@ -1,5 +1,24 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ⭐⭐⭐ FRESH SESSION — START HERE (2026-07-19 handoff; dev pushing the 40 commits below, resuming fresh)
+Prior session ended at HEAD `36733a95` (40 commits, all green, UNPUSHED — dev pushes). Ended because the
+shared box hit load ~9 (perf measurement impossible) + a transient API error. **DONE this session:**
+🔴✅ P0 — revived the dead example byte-identity glob (was 201 SKIP/0 RUN since DEC-191) · 🎉 backed enums
+DEC-302 COMPLETE+verified (2309-green) · 6 stdlib (DEC-304–308) · perf: proved the flips were load-noise +
+found/documented PERVASIVE native-call-in-loop losses (28→40 natives benched) · parity §4.11 **≈68%**.
+**QUEUE (dev-ruled "all of them"; ORDER by dependency):**
+1. **arena-Json experiment** (jsonround flip — dev ruled "prototype+measure", DEC-309) — NEEDS A QUIET BOX
+   (load ≲2) for the perf verdict; fresh-context subagent; worktree isolation (experiment may not pan out).
+2. **slice-fastpath re-measure** (PERF-native-call-in-loop lever) — byte-identical (2309-green), UNMEASURED;
+   recover via `git stash pop` (stash@{0} "slice-fastpath-pending-quiet-box-measure") or
+   `scratchpad/slice-fastpath.patch`; measure before/after on a QUIET box; commit if a stable win else drop.
+3. **§1.2 full per-row parity re-tally** (analysis, no quiet box needed) — supersedes the targeted §4.11.
+4. **new parity features** (XML/streams/mb-tail — biggest FN-leg movers) + **more stdlib** (Map.update/mapKeys,
+   List.minBy/maxBy). ⚠ Deeper perf lever = per-op JIT verticals (audited `unsafe` island — DEV-DRIVEN, not delegated).
+**Pattern that worked:** fresh-context subagent per spine slice + my independent full-gate verify (delivered
+backed enums clean). ⚠ Grep-verify every "gap"/"fix" first — 5+ phantom tasks caught this session (jsonround
+was already a resolved FLAG). Gate = `PHORJ_REQUIRE_PHP=1 cargo nextest --workspace --all-features` + clippy both legs.
+
 ## 🌙 OVERNIGHT AUTONOMOUS RUN (dev asleep, 2026-07-19 — READ FIRST, governs until dev returns)
 **Mode:** full autonomous, continuous, all night. **Dev directive:** work through the night; stop ONLY if
 truly wedged (a blocker preventing ALL progress), never for a design fork.
