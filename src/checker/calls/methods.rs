@@ -556,6 +556,22 @@ impl Checker {
             other => other.clone(),
         };
         let field_ty = match base {
+            // DEC-302 backed enum: `s.value` reads the variant's scalar backing (→ the backing Ty).
+            // A `.value` on a plain (non-backed) enum is `E-ENUM-NOT-BACKED`; any other field on an
+            // enum value has no storage.
+            Ty::Named(cls, _) if self.enums.contains_key(&cls) => {
+                let backing = self.enums[&cls].backing.clone();
+                match (name, backing) {
+                    ("value", Some(bt)) => bt,
+                    ("value", None) => self.err_coded(
+                        span,
+                        format!("enum `{cls}` has no `value` — it is not a backed enum"),
+                        "E-ENUM-NOT-BACKED",
+                        Some("declare a backing type (`enum E: int { … }`) to give variants a `.value`".into()),
+                    ),
+                    _ => self.err(span, format!("enum `{cls}` has no field `{name}`")),
+                }
+            }
             Ty::Named(cls, cargs) => {
                 // A property hook (M-mut.7b) is resolved before a stored field: `o.name` runs its
                 // `get`. Reading a hook with no `get` (write-only) is `E-HOOK-NO-GET`. A hook is not

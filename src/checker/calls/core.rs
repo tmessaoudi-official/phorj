@@ -166,6 +166,17 @@ impl Checker {
                                 return t;
                             }
                         }
+                        // DEC-302 enum static methods `Enum.cases()` / `Enum.from(x)` /
+                        // `Enum.tryFrom(x)` — resolved before variant construction (they are reserved
+                        // names, never variants — `E-ENUM-RESERVED-VARIANT`). Not `new`-wrapped, so the
+                        // `Member` callee survives `unwrap_new` and every backend sees `Enum.cases()`.
+                        if self.lookup_binding(cls).is_none()
+                            && self.enums.contains_key(cls)
+                            && matches!(name.as_str(), "cases" | "from" | "tryFrom")
+                        {
+                            self.reject_turbofish(&tf, name, span);
+                            return self.check_enum_static(cls, name, args, span);
+                        }
                         // Qualified enum-variant construction `Enum.Variant(args)` (slice A1): the head
                         // is an enum *name* (not a value binding). Resolves after native/class/concurrency
                         // (an import or class of the same name wins), before instance-method dispatch.

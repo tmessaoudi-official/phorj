@@ -1919,6 +1919,65 @@ pub fn explain_text(code: &str) -> Option<String> {
              coming: the `%c` char conversion and precision on the radix conversions. (A dynamic runtime spec\n\
              faults at render time on an unsupported directive instead of at compile time.)\n"
         }
+        "E-ENUM-BACKING-TYPE" => {
+            "E-ENUM-BACKING-TYPE — a backed enum's backing type is not `int` or `string` (DEC-302).\n\n\
+             A backed enum backs each variant with a scalar literal: `enum Suit: string { Hearts = \"H\" }`\n\
+             or `enum Priority: int { Low = 1 }`. Only `int` and `string` are valid backing types\n\
+             (matching PHP 8.1). Change the backing type, or drop it for a plain enum.\n"
+        }
+        "E-ENUM-BACKING-GENERIC" => {
+            "E-ENUM-BACKING-GENERIC — a generic enum also declares a scalar backing type (DEC-302).\n\n\
+             `enum E<T>: int { … }` combines generic type parameters with a scalar backing — the two are\n\
+             mutually exclusive this version. Drop the type parameters, or drop the `: int`/`: string`.\n"
+        }
+        "E-ENUM-VALUE-UNBACKED" => {
+            "E-ENUM-VALUE-UNBACKED — a variant assigns a value but the enum declares no backing type (DEC-302).\n\n\
+             `= value` on a variant is only meaningful for a backed enum. Add a backing type\n\
+             (`enum E: int { A = 1 }`), or drop the `= value` for a plain enum (`enum E { A }`).\n"
+        }
+        "E-ENUM-BACKED-PAYLOAD" => {
+            "E-ENUM-BACKED-PAYLOAD — a backed-enum variant carries a payload (DEC-302).\n\n\
+             A backed enum's variants are scalar-valued, so they cannot also carry constructor payload\n\
+             fields (`enum E: int { A(int x) = 1 }` is rejected). Use a plain payload enum, or drop the\n\
+             payload fields from the backed variant.\n"
+        }
+        "E-ENUM-VARIANT-NO-VALUE" => {
+            "E-ENUM-VARIANT-NO-VALUE — a backed-enum variant is missing its value (DEC-302).\n\n\
+             Every variant of a backed enum must assign a literal of the backing type:\n\
+             `enum Suit: string { Hearts = \"H\", Spades = \"S\" }`. Add the missing `= value`.\n"
+        }
+        "E-ENUM-VALUE-NOT-LITERAL" => {
+            "E-ENUM-VALUE-NOT-LITERAL — a backed-enum value is not a literal constant (DEC-302).\n\n\
+             A variant's backing value must be a plain `int`/`string` literal (no interpolation, no\n\
+             expression) — it is baked in at compile time. Use a literal, e.g. `High = 9`.\n"
+        }
+        "E-ENUM-VALUE-TYPE" => {
+            "E-ENUM-VALUE-TYPE — a backed-enum value's type does not match the backing type (DEC-302).\n\n\
+             In `enum Priority: int { Low = \"x\" }`, the value `\"x\"` is a string but the backing type is\n\
+             `int`. Give every variant a literal of the declared backing type.\n"
+        }
+        "E-ENUM-DUP-VALUE" => {
+            "E-ENUM-DUP-VALUE — two backed-enum variants share the same value (DEC-302).\n\n\
+             `enum E: int { A = 1, B = 1 }` would make `E.from(1)` ambiguous. Each backed variant must\n\
+             carry a distinct value.\n"
+        }
+        "E-ENUM-CASES-PAYLOAD" => {
+            "E-ENUM-CASES-PAYLOAD — `Enum.cases()` used on an enum with payload variants (DEC-302).\n\n\
+             `cases()` enumerates an enum's value-like variants in declaration order, so every variant\n\
+             must be payload-less. A payload variant (`Circle(float r)`) has no canonical value to\n\
+             enumerate. Use `cases()` only on a plain payload-less enum or a backed enum.\n"
+        }
+        "E-ENUM-RESERVED-VARIANT" => {
+            "E-ENUM-RESERVED-VARIANT — a variant is named `cases`, `from`, or `tryFrom` (DEC-302).\n\n\
+             Those three names are an enum's static-method surface (`Enum.cases()`, `Enum.from(x)`,\n\
+             `Enum.tryFrom(x)`), so they cannot also name a variant. Rename the variant.\n"
+        }
+        "E-ENUM-NOT-BACKED" => {
+            "E-ENUM-NOT-BACKED — `.value` / `from` / `tryFrom` used on a plain (non-backed) enum (DEC-302).\n\n\
+             `s.value`, `Enum.from(x)`, and `Enum.tryFrom(x)` exist only for a backed enum (one that\n\
+             declares an `int`/`string` backing type). Declare a backing type, e.g.\n\
+             `enum Suit: string { Hearts = \"H\" }`.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())

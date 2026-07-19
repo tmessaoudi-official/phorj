@@ -126,6 +126,11 @@ struct EnumInfo {
     /// matched *qualified* (`Json.Object(…)`), bare use is `E-INJECTED-VARIANT-BARE` (B). Mirrors
     /// [`crate::ast::EnumDecl::injected`], carried through `collect_enum`.
     injected: bool,
+    /// DEC-302 backed enum (PHP 8.1): `Some(Ty::Int | Ty::String)` when the enum declares a scalar
+    /// backing type (`enum Suit: string { … }`), `None` for a plain enum. Read to type `s.value`
+    /// (→ this Ty), `Enum.from(x)` (arg = this Ty → the enum), and `Enum.tryFrom(x)` (→ enum?);
+    /// its presence also gates `.value`/`from`/`tryFrom` (`E-ENUM-NOT-BACKED` on a plain enum).
+    backing: Option<Ty>,
 }
 
 #[derive(Clone)]
@@ -338,6 +343,7 @@ impl EnumInfo {
             variants: HashMap::new(),
             injected: false,
             type_params,
+            backing: None,
         }
     }
 }

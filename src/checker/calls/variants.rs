@@ -205,6 +205,63 @@ impl Checker {
     /// substitution (`Enum.Variant(args)` → bare `Variant(args)`) into `ufcs_resolutions` — the same
     /// "compile-time sugar erased before any backend" discipline as UFCS/casts (Invariant 5): every
     /// backend and the transpiler see the ordinary bare construction, so byte-identity is unchanged.
+    /// DEC-302 enum static methods. `Enum.cases()` → `List<Enum>` (allowed on ANY enum whose
+    /// variants are all payload-less; `E-ENUM-CASES-PAYLOAD` otherwise). `Enum.from(x)` /
+    /// `Enum.tryFrom(x)` require a BACKED enum (`E-ENUM-NOT-BACKED`): the arg is the backing type and
+    /// the result is `Enum` / `Enum?`. The name is checker-reserved as a variant, so no construction
+    /// path shadows these (`E-ENUM-RESERVED-VARIANT`).
+    pub(in crate::checker) fn check_enum_static(
+        &mut self,
+        enum_name: &str,
+        method: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        let info = &self.enums[enum_name];
+        let backing = info.backing.clone();
+        let all_payload_less = info.variants.values().all(|f| f.is_empty());
+        let result = Ty::Named(enum_name.into(), Vec::new());
+        match method {
+            "cases" => {
+                if !args.is_empty() {
+                    for a in args {
+                        self.check_expr(a);
+                    }
+                    return self.err(span, format!("`{enum_name}.cases()` takes no arguments"));
+                }
+                if !all_payload_less {
+                    return self.err_coded(
+                        span,
+                        format!("`{enum_name}.cases()` needs every variant to be payload-less"),
+                        "E-ENUM-CASES-PAYLOAD",
+                        Some("`cases()` enumerates value-like variants; a payload variant has no canonical value".into()),
+                    );
+                }
+                Ty::List(Box::new(result))
+            }
+            "from" | "tryFrom" => {
+                let Some(bt) = backing else {
+                    for a in args {
+                        self.check_expr(a);
+                    }
+                    return self.err_coded(
+                        span,
+                        format!("`{enum_name}.{method}` needs a backed enum (`enum {enum_name}: int|string`)"),
+                        "E-ENUM-NOT-BACKED",
+                        Some("`from`/`tryFrom` map a backing value to a variant; declare a backing type".into()),
+                    );
+                };
+                self.check_args(&format!("{enum_name}.{method}"), &[bt], args, span);
+                if method == "from" {
+                    result
+                } else {
+                    Ty::Optional(Box::new(result))
+                }
+            }
+            _ => unreachable!("check_enum_static only reached for cases/from/tryFrom"),
+        }
+    }
+
     pub(in crate::checker) fn check_qualified_variant_call(
         &mut self,
         enum_name: &str,
