@@ -355,6 +355,20 @@ impl Transpiler {
                     }
                 }
             }
+            // DEC-302 enum static methods `Enum.cases()`/`from(x)`/`tryFrom(x)` → PHP
+            // `Enum::method(args)` (representation B — the methods are emitted on the base class by
+            // `emit_enum`). `php_type_ref` gives the same base-class reference `emit_enum` declared.
+            if !*safe {
+                if let Expr::Ident(en, _) = &**object {
+                    if !self.is_local(en)
+                        && self.enums.contains(en)
+                        && matches!(name.as_str(), "cases" | "from" | "tryFrom")
+                    {
+                        let a = self.emit_args(args)?;
+                        return Ok(format!("{}::{name}({a})", php_type_ref(en)));
+                    }
+                }
+            }
             // Static method call `ClassName.method(args)` (slice B0) → PHP `Class::method(args)`.
             // The head is a class name (not a local), resolved after the native path (matching the
             // other backends' ordering); `php_type_ref` gives the same reference `new` uses (FQN in

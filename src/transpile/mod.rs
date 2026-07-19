@@ -139,6 +139,9 @@ struct Transpiler {
     /// path. PHP resolves an inherited `Sub::MAX` itself, so only the keys are needed.
     consts: HashSet<(String, String)>,
     variants: HashSet<String>,
+    /// DEC-302: declared enum names — routes `Enum.cases()`/`from(x)`/`tryFrom(x)` to a PHP static
+    /// call (`Enum::method(...)`) rather than the instance-member fallback (`$Enum->method(...)`).
+    enums: HashSet<String>,
     variant_fields: HashMap<String, Vec<String>>,
     /// An enum variant's PHP namespace (`namespace_of` of the — possibly mangled — enum name), so a
     /// cross-package variant is constructed and `instanceof`-tested as a fully-qualified class
@@ -485,6 +488,7 @@ impl Transpiler {
             classes: HashSet::new(),
             consts: HashSet::new(),
             variants: HashSet::new(),
+            enums: HashSet::new(),
             variant_fields: HashMap::new(),
             variant_ns: HashMap::new(),
             out: String::new(),

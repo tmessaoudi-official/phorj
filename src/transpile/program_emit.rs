@@ -166,6 +166,7 @@ impl Transpiler {
                 Item::Interface(_) => {}
                 Item::Enum(e) => {
                     let ns = namespace_of(&e.name);
+                    self.enums.insert(e.name.clone()); // DEC-302: route Enum.cases()/from/tryFrom
                     for v in &e.variants {
                         self.variants.insert(v.name.clone());
                         self.variant_ns.insert(v.name.clone(), ns.clone());
