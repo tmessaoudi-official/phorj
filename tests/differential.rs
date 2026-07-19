@@ -752,8 +752,11 @@ fn list_product_is_byte_identical() {
 import Core.List;
 #[Entry] function main() -> void {
     Output.printLine("{List.product([2, 3, 4])}|{List.product([5])}|{List.product([7, 0, 9])}|{List.product(new List<int>())}");
+    // Invariant 7: the int result is a first-class arithmetic operand (CTy must type it).
+    int r = List.product([2, 3]) + 1;
+    Output.printLine("{r}");
 }"#,
-        "24|5|0|1\n",
+        "24|5|0|1\n7\n",
         "list_product",
     );
 }
