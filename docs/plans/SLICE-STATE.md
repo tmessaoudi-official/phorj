@@ -61,6 +61,11 @@ FINDINGS (owed to next recompute + review):
     · OTHER genuine-but-forked (not autonomously safe): generators/yield (deepest VM control-flow spine, FRESH);
       serialize/var_export/print_r (byte-identity-fiddly); Set (no empty-set VM op, DEC-214). Impure FS breadth
       (glob/stat/mtime) = env-dependent functional tests, lower priority.
+    · ⚠ `String.chunk`/str_split = LADDER, NOT a trivial native: PHP str_split is BYTE-based (splits mid-codepoint),
+      but PhStr holds valid UTF-8 by invariant (no unsafe outside JIT) → can't construct byte-chunks safely. A
+      codepoint-based `String.chunk` + a `__phorj_str_chunk` PHP helper (META-7) is the clean fix (better than PHP:
+      no broken multibyte) — a small DESIGN fork, deferred. Composable alt exists today: List.chunk(String.characters(s), n).
+      Same UTF-8-invariant hazard applies to any new byte-slicing string native (wordwrap w/ cut, substr-by-byte, …).
   ⚠ M-Decomp: this run grew native/text.rs (586) + cli/preludes.rs (~1420) — both already >500 hard cap
     (DEC-262) and already on the backlog; split DEFERRED (preludes.rs CORE_MODULES order is load-bearing →
     FRESH context). Backlog record corrected in KNOWN_ISSUES (stale "1000 cap/10 files" → 500/~20).
