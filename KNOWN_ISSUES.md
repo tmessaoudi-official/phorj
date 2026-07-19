@@ -120,21 +120,36 @@ value** (materialize ADT nodes only on `match`); that is GREENLIT (DEC-294) as a
 spine-sensitive slice (~15 runtime deconstruction touch-points + a new `Value` variant — byte-identity
 is invariant #1, so it is not rushed). Not a correctness issue; run≡runvm≡PHP output is byte-identical.
 
-## PERF-listfilter-reduce — `List.filter`/`List.reduce` lose to php's C callbacks (FLAGGED 2026-07-19, no JIT vertical)
+## PERF-native-call-in-loop — non-JIT'd native calls lose 3–44× to php builtins in hot loops (FLAGGED 2026-07-19)
 
-Surfaced by the 2026-07-19 micro-suite expansion (the first benches for the higher-order List family).
-Pinned+interleaved, K=7: `List.map` **7.9× WIN**, but `List.filter` **0.22×** (≈4.5× slower than php) and
-`List.reduce` **0.27×** (≈3.7× slower). Root cause [Verified: `src/jit/analyze.rs:340`
-`unboxed_native_is_list_map`]: the JIT special-cases `Core.List.map` (the "hofpipe vertical" — an
-unboxed int-list map with the static lambda inlined), so map is compiled to native code (~18ms/500k);
-`filter`/`reduce` have **no such vertical**, so they run the general higher-order path — a re-entrant VM
-closure invocation per element — which is far slower than php's C `array_filter`/`array_reduce` callback.
-Recorded honestly in `bench/micro-baseline.json` as LOSS baselines (map is a WIN baseline; the ratchet
-now protects map and arms filter/reduce for a future win). **Fix (GREENLIT, fresh-context, JIT-spine):**
-add `filter`/`reduce` JIT verticals mirroring the map vertical (`src/jit/analyze.rs` + `src/jit/`; the
-audited `unsafe` island — not rushed at depth). Not a correctness issue; run≡runvm≡php byte-identical.
-Related: the un-benched-stdlib COVERAGE gap (24→27 of 286 natives now benched; Invariant 18 wants all) —
-this loss was hidden precisely because filter/reduce weren't benched until now.
+Surfaced by the 2026-07-19 micro-suite expansion (first benches for the higher-order List family +
+linear search). Pinned+interleaved, K=5–7 vs `php:8.5-cli`+JIT:
+
+| bench | phg vs php | note |
+|---|---|---|
+| `listmap` | **7.9× WIN** | JIT hofpipe vertical (`unboxed_native_is_list_map`, `src/jit/analyze.rs:340`) |
+| `listreduce` | **0.27× LOSS** (~3.7× slower) | no JIT vertical → general higher-order path |
+| `listfilter` | **0.22× LOSS** (~4.5× slower) | no JIT vertical |
+| `listcontains` | **0.02× LOSS** (~44× slower) | no JIT vertical; pure native, no closure |
+
+**Root cause [Verified].** The JIT special-cases ONLY `Core.List.map`; every other stdlib native called
+in a hot loop runs the general VM→native dispatch (~188 ns/call measured for `listcontains`: 564 ms /
+3 M calls) vs php's ~4 ns/call C builtins (`in_array` 12.8 ms / 3 M). Higher-order ones (`filter`/
+`reduce`) add a per-element re-entrant VM closure invocation on top. So the pattern is general: **phg
+wins where the JIT applies (map, index, arithmetic, dispatch, match, alloc, strings) and loses 3–44×
+where it does not (arbitrary stdlib native calls in tight loops).** This is the honest answer to "are we
+faster than php across the whole stdlib" — NO, not in hot loops over non-JIT'd natives. (Real programs
+rarely call `contains` 3 M times in a loop, but WIN-OR-FLAG / Invariant 18 flag it regardless.)
+
+Recorded honestly in `bench/micro-baseline.json` (map WIN-armed; filter/reduce/contains LOSS-armed for a
+future win). **Two fix levers (GREENLIT, fresh-context, JIT/VM-spine — not rushed at depth):** (a) per-op
+JIT verticals mirroring the map vertical (`src/jit/analyze.rs` + `src/jit/`, the audited `unsafe` island)
+— targeted, lifts one native at a time; (b) the higher-leverage architectural fix — reduce the general
+VM native-call overhead itself (arg marshalling / dispatch), which would lift ALL ~286 natives at once.
+Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical throughout.
+
+Related: the un-benched-stdlib COVERAGE gap — only **28 of 286 natives** are perf-benched (Invariant 18
+wants all with a php equivalent); these losses were hidden precisely because they weren't benched until now.
 
 ## F-029 — namespaced (multi-package) transpile byte-identity gaps (FLAGGED 2026-07-16, DEC-263 build; PRE-EXISTING, not introduced by DEC-263)
 

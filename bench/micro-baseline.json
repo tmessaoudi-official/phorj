@@ -108,6 +108,10 @@
     "listreduce": {
       "ratio": 0.27,
       "identical": true
+    },
+    "listcontains": {
+      "ratio": 0.02,
+      "identical": true
     }
   }
 }

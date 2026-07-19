@@ -1,0 +1,33 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `List.contains` (linear membership). The NEEDLE is data-dependent (`i % 12`, so ~2/3 of
+// probes miss and scan the whole list), the list is constant — so php cannot hoist the call, and there
+// is no per-iteration allocation to pollute the search measurement.
+function bench(int iters): int {
+    List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        if (List.contains(xs, i % 12)) {
+            acc = acc + 1;
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("listcontains\t{d + guard}\t{acc}");
+}
