@@ -688,6 +688,26 @@ import Core.String;
     );
 }
 
+/// Wave-B (DEC-303): `String.chunk` — split into pieces of N CODE POINTS (the string twin of
+/// `List.chunk`), NOT PHP `str_split`'s bytes (a valid-UTF-8 `PhStr` cannot hold a mid-code-point
+/// byte chunk). Byte-identical run≡runvm≡php via the gated `__phorj_str_chunk` (`preg_split('//u')` +
+/// `array_chunk` + `implode`); covers ASCII, a multibyte code point kept intact, empty→[], and n>len.
+#[test]
+fn string_chunk_codepoint_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.String;
+import Core.List;
+#[Entry] function main() -> void {
+    Output.printLine(String.join(String.chunk("abcde", 2), "|"));
+    Output.printLine(String.join(String.chunk("café", 2), "|"));
+    Output.printLine("empty={List.length(String.chunk("", 3))} big={String.join(String.chunk("ab", 5), "|")}");
+}"#,
+        "ab|cd|e\nca|fé\nempty=0 big=ab\n",
+        "string_chunk_codepoint",
+    );
+}
+
 /// Wave-B collections (DEC-300): `Core.Deque<T>` — a pure-Phorj double-ended queue over `List<T>`.
 /// Byte-identical run≡runvm≡php by construction (no native; the method bodies transpile to the same
 /// array ops). Covers both ends (push/pop/peek), the empty→`null` optional return (not an
@@ -1388,22 +1408,37 @@ fn uses_unavailable_gated_module(src: &str) -> bool {
 
 fn uses_impure_native(src: &str) -> bool {
     use std::collections::HashSet;
-    let impure: HashSet<&str> = phorj::native::registry()
+    // Per-MEMBER purity (P0 fix 2026-07-19): the old check used a SUBSTRING match
+    // (`src.contains("import Core.Runtime")`), which — since the DEC-191 `#[Entry]` migration made
+    // `import Core.Runtime.Entry` universal and `Core.Runtime` is impure — matched EVERY example and
+    // quarantined the WHOLE corpus (201 SKIP / 0 RUN — the byte-identity glob was dead). The fix
+    // parses each import line and distinguishes a WHOLE-module impure import (`import Core.Time;`)
+    // and an impure-MEMBER import from a PURE-member import (`Core.Runtime.Entry`, `Core.Time.Duration`).
+    let impure_modules: HashSet<&str> = phorj::native::registry()
         .iter()
         .filter(|n| !n.pure)
         .map(|n| n.module)
         .collect();
-    impure.iter().any(|m| {
-        if src.contains(&format!("import {m}")) {
-            return true;
-        }
-        // The `Core.Native.*` convention (DEC-277; formerly `Core.XSys`): the IMPURE natives live
-        // under a `Core.Native.<X>` module, but user programs import the PRELUDE twin
-        // (`Core.DatabaseModule`, not `Core.Native.Database`) — without this mapping such programs
-        // were invisible to the quarantine (the sweep-batch-1 substring hole; previously masked
-        // only by directory exclusions). The twin names diverge from the native leaf (DEC-278
-        // namesake `Module` suffix; `Core.Mail` is not a namesake), so the map is explicit.
-        let prelude_twin = match *m {
+    // Impure NATIVE members — a member import `import Mod.name;` is impure iff (Mod, name) is impure.
+    let impure_native_members: HashSet<(&str, &str)> = phorj::native::registry()
+        .iter()
+        .filter(|n| !n.pure)
+        .map(|n| (n.module, n.name))
+        .collect();
+    // Impure PRELUDE members not represented as natives: transitively-impure CLASSES whose methods
+    // call impure natives internally, so importing the class alone is impure. Corpus inventory:
+    // ONLY `Core.Time.Instant` / `Core.Time.Date` read the clock; `Core.Time.Duration` is PURE and
+    // must NOT flag. (Extend this list if a new impure prelude class is member-imported by an example.)
+    const IMPURE_PRELUDE_MEMBERS: &[(&str, &str)] =
+        &[("Core.Time", "Instant"), ("Core.Time", "Date")];
+    // The `Core.Native.*` convention (DEC-277): impure natives live under `Core.Native.<X>`, but user
+    // programs import the PRELUDE twin (`Core.DatabaseModule`, not `Core.Native.Database`). ANY import
+    // under an impure twin root (whole or member) is impure. Twin names diverge from the native leaf
+    // (DEC-278 `Module` suffix; `Core.Mail` is not a namesake), so the map is explicit. Only impure
+    // `Core.Native.*` modules contribute a root — e.g. `Core.Native.Uri` is PURE, so `Core.UriModule`
+    // imports do NOT flag.
+    let twin = |m: &str| -> Option<&'static str> {
+        match m {
             "Core.Native.Database" => Some("Core.DatabaseModule"),
             "Core.Native.Input" => Some("Core.Input"),
             "Core.Native.FileSystem" => Some("Core.FileSystemModule"),
@@ -1413,8 +1448,44 @@ fn uses_impure_native(src: &str) -> bool {
             "Core.Native.Debug" => Some("Core.DebugModule"),
             "Core.Native.Mail" => Some("Core.Mail"),
             _ => None,
+        }
+    };
+    let impure_twin_roots: HashSet<&str> = impure_modules.iter().filter_map(|m| twin(m)).collect();
+
+    src.lines().any(|line| {
+        let rest = match line.trim().strip_prefix("import ") {
+            Some(r) => r,
+            None => return false,
         };
-        prelude_twin.is_some_and(|prelude| src.contains(&format!("import {prelude}")))
+        // `import PATH [as ALIAS];` → PATH.
+        let path = rest
+            .split(" as ")
+            .next()
+            .unwrap_or(rest)
+            .trim()
+            .trim_end_matches(';')
+            .trim();
+        // Whole-module impure import (`import Core.Time;`).
+        if impure_modules.contains(path) {
+            return true;
+        }
+        // Anything under an impure prelude-twin root (`import Core.DatabaseModule[.X];`).
+        if impure_twin_roots
+            .iter()
+            .any(|root| path == *root || path.starts_with(&format!("{root}.")))
+        {
+            return true;
+        }
+        // Member import `Mod.member` — impure iff the member is an impure native or an impure prelude
+        // class. Pure members (`Core.Runtime.Entry`, `Core.Time.Duration`) fall through to `false`.
+        if let Some((module, member)) = path.rsplit_once('.') {
+            if impure_native_members.contains(&(module, member))
+                || IMPURE_PRELUDE_MEMBERS.contains(&(module, member))
+            {
+                return true;
+            }
+        }
+        false
     })
 }
 
@@ -2886,6 +2957,7 @@ const TIER1_PHP: &[&str] = &[
     "substr_count",
     "trim",
     "ucfirst",
+    "ucwords",
     // encoding / URL (core standard)
     "base64_decode",
     "base64_encode",
