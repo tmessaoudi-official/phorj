@@ -40,6 +40,10 @@ FINDINGS (owed to next recompute + review):
   **§4.10 recompute** (`91737e4a`, parity 64→66% · Vision 66→67% · floor 47→51%); **DEC-302 backed-enums build-map**
   (`d5ba41e9`, ruled AUTO, deferred to fresh context); **DEC-303 `String.chunk`** (codepoint-based, `__phorj_str_chunk`
   helper, `bb39af6f`+src in `73f31189`); **🔴✅ P0 FIX — revived the dead example byte-identity glob** (`a355c342`).
+  **MORE safe stdlib gaps (post-P0, "keep going"):** `Map.containsValue` (`989d3500`, DEC-304, value-side membership);
+  sibling substring fix `uses_unavailable_gated_module` (`6d898e25`, closes the P0 arc — both gate fns now per-token);
+  `List.product` (`6a6e98e8`, DEC-305, mirrors sum, +array_product TIER1); `Set.isSuperset` (`3ec0f31d`, DEC-306,
+  mirrors isSubset). All byte-identical, differential + example + README, gates green. Now-live glob tests each.
   🔴 **P0 (THE session headline): `all_examples_match_between_backends` + the transpile glob were DEAD since DEC-191**
   (`uses_impure_native` substring-matched `import Core.Runtime` inside the universal `import Core.Runtime.Entry` →
   201 SKIP / 0 RUN — Invariant-1 corpus enforcement OFF for weeks). FIXED via per-member impurity (201→8 SKIP,
