@@ -708,6 +708,22 @@ import Core.List;
     );
 }
 
+/// Wave-B (DEC-305): `List.product` — the multiplicative companion to `sum` (empty → 1, PHP
+/// `array_product`). Checked overflow (faults, doesn't wrap — PHP promotes to float; examples stay in
+/// range). Byte-identical run≡runvm≡php; covers a normal product, a zero factor, and the empty list.
+#[test]
+fn list_product_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.List;
+#[Entry] function main() -> void {
+    Output.printLine("{List.product([2, 3, 4])}|{List.product([5])}|{List.product([7, 0, 9])}|{List.product(new List<int>())}");
+}"#,
+        "24|5|0|1\n",
+        "list_product",
+    );
+}
+
 /// Wave-B (DEC-304): `Map.containsValue` — value-side membership (the companion to `has`, which tests
 /// keys). Structural `eq_val`, erases to strict `in_array(needle, map, true)` (scans values, ignores
 /// keys) — byte-identical run≡runvm≡php for scalar values; covers present, absent, and an empty map.
@@ -2897,6 +2913,7 @@ const TIER1_PHP: &[&str] = &[
     "array_reverse",
     "array_search",
     "array_shift",
+    "array_product",
     "array_slice",
     "array_sum",
     "array_unique",

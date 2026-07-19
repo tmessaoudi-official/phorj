@@ -78,6 +78,17 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.List",
+            name: "product",
+            params: vec![Ty::List(Box::new(Ty::Int))],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(list_product),
+            // PHP `array_product` (empty → 1); checked-overflow faults, PHP promotes to float — the
+            // `array_sum` caveat, examples stay in i64 range.
+            php: |a| format!("array_product({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
             name: "contains",
             params: vec![list(t()), t()],
             ret: Ty::Bool,

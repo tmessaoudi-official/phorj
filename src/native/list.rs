@@ -323,6 +323,34 @@ pub(super) fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> 
         _ => Err("List.sum expects (List<int>)".into()),
     }
 }
+/// `product(List<int>) -> int` — the product of the elements (empty → 1, PHP `array_product([])`).
+/// Checked (like `sum` / the int kernels): an overflowing product faults cleanly rather than wrapping;
+/// PHP `array_product` would promote to float on overflow — examples stay well within i64 range
+/// (the same caveat as `List.sum`, KNOWN_ISSUES).
+pub(super) fn list_product(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut acc: i64 = 1;
+            for x in xs.iter() {
+                match x {
+                    Value::Int(n) => {
+                        acc = acc
+                            .checked_mul(*n)
+                            .ok_or_else(|| "integer overflow in List.product".to_string())?;
+                    }
+                    other => {
+                        return Err(format!(
+                            "List.product expects List<int>, found element of type {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::Int(acc))
+        }
+        _ => Err("List.product expects (List<int>)".into()),
+    }
+}
 
 // The higher-order `Core.List` ops (M-RT S7b-3). Each takes a `Value::Closure` argument and calls it
 // once per element via the backend-supplied `call` invoker ([`ClosureInvoker`]) — so the one body

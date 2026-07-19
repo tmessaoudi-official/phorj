@@ -82,4 +82,6 @@ function main(): void {
     List<int> isect = List.intersection([1, 2, 2, 3, 4], [2, 4]);
     Output.printLine("difference: {List.length(diff)} elems sum={List.sum(diff)}");
     Output.printLine("intersection: {List.length(isect)} elems sum={List.sum(isect)}");
+    // product: the multiplicative companion to sum (empty → 1, PHP array_product); checked overflow.
+    Output.printLine("product: {List.product([2, 3, 4])} empty={List.product(new List<int>())}");
 }
