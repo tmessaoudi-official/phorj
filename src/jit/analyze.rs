@@ -355,6 +355,16 @@ pub(super) fn unboxed_native_is_list_count(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.List" && nf.name == "count" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.Map.has` (the maphas vertical: the mapget inline bucket
+/// probe returning a Bool `present?` instead of the value — a HIT is `true`, an empty bucket is a
+/// clean `false` (NOT a fault, unlike `m[k]`); canon-0 keys / non-flat maps punt to the
+/// `rt_u_map_has` helper)?
+pub(super) fn unboxed_native_is_map_has(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Map" && nf.name == "has" && nf.pure)
+}
+
 /// Is `id` one of the pure 2-arg natives routed through the GENERIC `rt_u_native2` bridge
 /// (which calls the registered native itself — single-sourced semantics)? Cheap name gate for
 /// the match guards; the shape table is [`unboxed_native_bridge2`].
@@ -1777,6 +1787,28 @@ pub(super) fn unboxed_analyze(
                         Kind::Int
                     });
                 }
+                Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => {
+                    // The maphas vertical (mirrors the `Op::Index` map arm, minus the value):
+                    // a `Str` key over a `StrIntMap` → `Bool` (key present?). The map is a
+                    // QUERY — it is NOT consumed (only the key is, if owned).
+                    match kinds.pop() {
+                        Some(Kind::Str(_)) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Map.has key kind {other:?}"
+                            )))
+                        }
+                    }
+                    match kinds.pop() {
+                        Some(Kind::StrIntMap(_)) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Map.has receiver kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Bool);
+                }
                 Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => {
                     // The generic pure-native bridge (join/contains/splitOnce/drop) — the
                     // helper calls the registered native itself; kinds from the shape table.
@@ -2699,6 +2731,7 @@ pub(super) fn collect_functions_unboxed(
                 Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_to_string(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => uses_handles = true,
+                Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => uses_handles = true,
                 // hofpipe: the HOF loop arms direct-call the compiled lambda per element.
                 Op::CallNative(id, 2)

@@ -308,6 +308,125 @@ pub(super) fn arm_index_map(
     ub_push(b, vars, fvars, kinds, res, Kind::Int)
 }
 
+/// `Op::CallNative(Core.Map.has, 2)` — the maphas vertical: the SAME inline packed-bucket probe as
+/// [`arm_index_map`], but it pushes a `Bool` (key present?) instead of the value, and — crucially —
+/// a genuine miss is a CLEAN `false` (0), NOT a fault (`m[k]` faults on a missing key; `Map.has`
+/// returns `false`). FLAT-sealed map + canon-nonzero key runs fully inline; a canon-0 key, a
+/// non-flat map, or a mutable builder punts to the `rt_u_map_has` helper (which also answers a clean
+/// miss with `false`, and only DEFENSIVELY returns code 5 → VM redo).
+pub(super) fn arm_maphas(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (iv, ik) = ub_pop(b, vars, fvars, kinds)?;
+    let (mv, mk) = ub_pop(b, vars, fvars, kinds)?;
+    if !matches!(ik, Kind::Str(_)) || !matches!(mk, Kind::StrIntMap(_)) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Map.has operand kinds ({mk:?}, {ik:?})"
+        )));
+    }
+    let merge = b.create_block();
+    b.append_block_param(merge, types::I64); // 1 = present, 0 = absent
+    let fast_blk = b.create_block();
+    let slow_blk = b.create_block();
+    // INLINE iff the map sealed FLAT and the key is an arena slot — the SAME fused tag check as the
+    // mapget vertical: `(mv & FLAT) != 0 && (iv & SLOT) != 0` in three ops (shift the map's FLAT bit
+    // up onto the key's SLOT bit, AND, mask SLOT). Anything else (AMB builder, boxed map) → helper.
+    const _: () = assert!(UB_TAG_FLAT << 1 == UB_TAG_SLOT, "fused tag shift");
+    let mv_flat_up = b.ins().ishl_imm(mv, 1);
+    let fused = b.ins().band(mv_flat_up, iv);
+    let both = b.ins().band_imm(fused, UB_TAG_SLOT);
+    b.ins().brif(both, fast_blk, &[], slow_blk, &[]);
+    // FAST: O(1) packed-bucket walk. The key's CANON word (slot byte 32 — nonzero only when
+    // content-registered) picks the pair; the HASH picks the bucket, ONE canon compare decides. A
+    // canon-0 key (inline-concat result, unregistered runtime string) punts to the helper.
+    b.switch_to_block(fast_blk);
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let ki = b.ins().band_imm(iv, UB_IDX_MASK);
+    let koff = b.ins().ishl_imm(ki, 6);
+    let pk = b.ins().iadd(buf, koff);
+    let khash = b
+        .ins()
+        .load(types::I64, MemFlagsData::new(), pk, UB_SLOT_HASH_OFF as i32);
+    let kcanon = b.ins().load(
+        types::I64,
+        MemFlagsData::new(),
+        pk,
+        UB_SLOT_CANON_OFF as i32,
+    );
+    let probe_blk = b.create_block();
+    b.ins().brif(kcanon, probe_blk, &[], slow_blk, &[]);
+    b.switch_to_block(probe_blk);
+    let cnt_raw = b.ins().ushr_imm(mv, UB_MAP_CNT_SHIFT);
+    let cnt = b.ins().band_imm(cnt_raw, 0xFFF);
+    let lg_raw = b.ins().ushr_imm(mv, UB_MAP_LOG_SHIFT);
+    let lg = b.ins().band_imm(lg_raw, 0x1F);
+    let base = b.ins().band_imm(mv, UB_IDX_MASK);
+    let boff = b.ins().ishl_imm(base, 6);
+    let pbase = b.ins().iadd(buf, boff);
+    let tsoff = b.ins().ishl_imm(cnt, 7); // table starts after the 2·cnt pair slots
+    let tbase = b.ins().iadd(pbase, tsoff);
+    let one = b.ins().iconst(types::I64, 1);
+    let tsize = b.ins().ishl(one, lg);
+    let mask = b.ins().iadd_imm(tsize, -1);
+    let t0 = b.ins().band(khash, mask);
+    let head = b.create_block();
+    b.append_block_param(head, types::I64); // bucket index
+    let hit = b.create_block();
+    let next = b.create_block();
+    b.ins().jump(head, &[t0.into()]);
+    b.switch_to_block(head);
+    let t = b.block_params(head)[0];
+    let btoff = b.ins().ishl_imm(t, 4);
+    let baddr = b.ins().iadd(tbase, btoff);
+    let bcanon = b.ins().load(types::I64, MemFlagsData::new(), baddr, 0);
+    let ceq = b.ins().icmp(IntCC::Equal, bcanon, kcanon);
+    b.ins().brif(ceq, hit, &[], next, &[]);
+    // HIT — present. Consume the key iff runtime-OWNED (the flat map is bump-pinned — nothing to
+    // free); push 1.
+    b.switch_to_block(hit);
+    if ik.is_owned_handle() {
+        ec.slot_free_if_owned(b, iv);
+    }
+    let onev = b.ins().iconst(types::I64, 1);
+    b.ins().jump(merge, &[onev.into()]);
+    // An empty bucket is a genuine ABSENT (the seal's load factor ≤ 1/2 guarantees one exists, so
+    // the walk always terminates) — a CLEAN `false`, NOT a fault. Consume the key, push 0.
+    b.switch_to_block(next);
+    let empty = b.ins().icmp_imm(IntCC::Equal, bcanon, 0);
+    let absent_blk = b.create_block();
+    let step_blk = b.create_block();
+    b.ins().brif(empty, absent_blk, &[], step_blk, &[]);
+    b.switch_to_block(absent_blk);
+    if ik.is_owned_handle() {
+        ec.slot_free_if_owned(b, iv);
+    }
+    let zerov = b.ins().iconst(types::I64, 0);
+    b.ins().jump(merge, &[zerov.into()]);
+    b.switch_to_block(step_blk);
+    let t1 = b.ins().iadd_imm(t, 1);
+    let tw = b.ins().band(t1, mask);
+    b.ins().jump(head, &[tw.into()]);
+    // SLOW: the helper (boxed map / canon-0 key / mutable builder). A clean answer returns
+    // present∈{0,1} with code 0; code 5 is a defensive VM redo (never a genuine miss).
+    b.switch_to_block(slow_blk);
+    let mask_free = (ik.is_owned_handle() as i64) | ((mk.is_owned_handle() as i64) << 1);
+    let maskv = b.ins().iconst(types::I64, mask_free);
+    let call = b.ins().call(h.map_has, &[ec.ctx, mv, iv, maskv]);
+    let spresent = b.inst_results(call)[0];
+    let scode = b.inst_results(call)[1];
+    let bad = b.ins().icmp_imm(IntCC::NotEqual, scode, 0);
+    ec.fault_if(b, bad, 5);
+    b.ins().jump(merge, &[spresent.into()]);
+    b.switch_to_block(merge);
+    let res = b.block_params(merge)[0];
+    ub_push(b, vars, fvars, kinds, res, Kind::Bool)
+}
+
 /// `Op::Index` with an `IntList` beneath the index — P-2c int-list element read
 /// (`xs[i]` → Int, raw i64 at slot bytes 0..8): inline unsigned bounds check + ONE load
 /// for a flat list; the two-return helper for a boxed one.

@@ -1403,6 +1403,84 @@ pub(super) extern "C" fn rt_u_map_get(
     UbMapGetRet { value, code: 0 }
 }
 
+/// `#[repr(C)]` two-`i64` return for [`rt_u_map_has`], matching a Cranelift `returns = [i64, i64]`
+/// import signature (same ABI note as [`UbMapGetRet`]). `present` 1 = key found, 0 = clean absent;
+/// `code` 0 = a clean answer (found OR genuinely-absent — a map query never faults on a miss), 5 =
+/// redo on VM (DEFENSIVE only — the arm couldn't decide, never a genuine miss).
+#[repr(C)]
+pub(super) struct UbMapHasRet {
+    present: i64,
+    code: i64,
+}
+
+/// `Map.has(m, k)` (string-keyed map) — the helper (slow) path: a FLAT map scanned by bytes (covers
+/// hash-0 keys the inline probe punts on), a boxed map through the native's OWN key-presence kernel
+/// (`m.iter().any(|(k,_)| *k == hk)` — byte-identical to `Core.Map.has`). Unlike [`rt_u_map_get`], a
+/// genuine miss is a CLEAN `present:0, code:0` (never a code-5 redo): `Map.has` returns `false`, it
+/// does not fault. code 5 is DEFENSIVE only (undecidable shapes: a mutable AMB builder — perf-deferred
+/// for `has`; an out-of-range handle; a non-utf8 key) — the VM recomputes `Map.has` byte-identically.
+/// `free_mask` bit0 consumes the key, bit1 the map (on a clean answer only — a code-5 return redoes
+/// the whole call on the VM, discarding the ctx).
+pub(super) extern "C" fn rt_u_map_has(
+    ctx: *mut UbCtx,
+    map: i64,
+    key: i64,
+    free_mask: i64,
+) -> UbMapHasRet {
+    let ctx = unsafe { &mut *ctx };
+    let redo = UbMapHasRet {
+        present: 0,
+        code: 5,
+    };
+    let Some(kb) = ctx.str_bytes(key) else {
+        return redo;
+    };
+    // A MUTABLE map builder (AMB) is perf-DEFERRED for `has` — punt to the VM (byte-identical). The
+    // inline AMB packed probe (see `rt_u_map_get`) earns nothing on the `has` bench, so it is not
+    // hand-rolled in the audited island (FORK-C, notes.md).
+    if map & UB_TAG_AMB != 0 {
+        return redo;
+    }
+    let present = if map & UB_TAG_FLAT != 0 {
+        let kb = kb.to_vec(); // end the str_bytes borrow before re-borrowing the arena
+        let n = (map >> UB_MAP_CNT_SHIFT) & 0xFFF;
+        let base = (map & UB_IDX_MASK) as usize;
+        let mut found = false;
+        for i in 0..n as usize {
+            let koff = (base + 2 * i) * UB_SLOT_SIZE;
+            let len = ctx.buf_storage[koff] as usize;
+            if ctx.buf_storage[koff + 1..koff + 1 + len] == kb[..] {
+                found = true; // present — CLEAN answer (code 0), never a redo
+                break;
+            }
+        }
+        found // exhausted scan = genuine absent = CLEAN false (code 0), NOT a redo
+    } else {
+        let Ok(ks) = std::str::from_utf8(kb) else {
+            return redo;
+        };
+        let kv = Value::Str(crate::phstr::PhStr::new(ks));
+        let Some(hk) = crate::value::HKey::from_value(&kv) else {
+            return redo;
+        };
+        match ctx.handles.get(map as usize) {
+            // The native's exact key-presence kernel — cannot drift from `Core.Map.has`.
+            Some(Value::Map(m)) => m.iter().any(|(k, _)| *k == hk),
+            _ => return redo,
+        }
+    };
+    if free_mask & 1 != 0 {
+        ctx.release(key);
+    }
+    if free_mask & 2 != 0 {
+        ctx.release(map);
+    }
+    UbMapHasRet {
+        present: present as i64,
+        code: 0,
+    }
+}
+
 /// FUSED map-builder set (`m[k] = v` on a uniquely-owned map local, the mapinsert vertical) —
 /// the SLOW leg of the inline AMB overwrite (see [`UB_TAG_AMB`]). (1) map already an AMB
 /// record → probe by canon: hit = overwrite (rank unchanged — PHP keeps the original
@@ -2054,6 +2132,7 @@ pub(super) struct UbHelperIds {
     pub(super) map_push_pair: FuncId,
     pub(super) map_seal: FuncId,
     pub(super) map_get: FuncId,
+    pub(super) map_has: FuncId,
     pub(super) list_push_int: FuncId,
     pub(super) index_int: FuncId,
     pub(super) int_to_str: FuncId,
@@ -2084,6 +2163,7 @@ pub(super) struct UbHelperRefs {
     pub(super) map_push_pair: FuncRef,
     pub(super) map_seal: FuncRef,
     pub(super) map_get: FuncRef,
+    pub(super) map_has: FuncRef,
     pub(super) list_push_int: FuncRef,
     pub(super) index_int: FuncRef,
     pub(super) int_to_str: FuncRef,

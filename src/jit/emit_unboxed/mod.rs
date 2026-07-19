@@ -542,6 +542,7 @@ pub(super) fn build_body_unboxed(
         map_push_pair: module.declare_func_in_func(ids.map_push_pair, b.func),
         map_seal: module.declare_func_in_func(ids.map_seal, b.func),
         map_get: module.declare_func_in_func(ids.map_get, b.func),
+        map_has: module.declare_func_in_func(ids.map_has, b.func),
         list_push_int: module.declare_func_in_func(ids.list_push_int, b.func),
         index_int: module.declare_func_in_func(ids.index_int, b.func),
         int_to_str: module.declare_func_in_func(ids.int_to_str, b.func),
@@ -981,6 +982,12 @@ pub(super) fn build_body_unboxed(
                 arm_concat(&mut b, &ec, h, &vars, &fvars, &mut kinds, *cn)?;
             }
             // ---- P-2c numeric conversions: fully inline, no helper, no handle space ------------
+            Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => {
+                // The maphas vertical: the mapget inline bucket probe returning a Bool `present?`
+                // (HIT → true, empty bucket → clean false, no fault); helper for canon-0 / non-flat.
+                let h = ub_ref(ub_refs.as_ref(), "Map.has")?;
+                arm_maphas(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
             Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => {
                 // The generic pure-native bridge — mirrors the analyze arm; the helper calls
                 // the REGISTERED native (single-sourced kernel), so semantics cannot drift.

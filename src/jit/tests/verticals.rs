@@ -861,6 +861,97 @@ fn phg_run_hook_hits_the_jit_on_the_map_vertical() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_maphas_vertical() {
+    // Maphas-vertical DELIVERY-PATH proof: the exact `bench/micro/maphas.phg` shape — a `MakeMap`
+    // of short string keys (seals FLAT), a flat probe list, and `Map.has(m, probes[i % 6])` in an
+    // `if` (the inline bucket probe returning a Bool). Two of the six probes ("e"/"f") MISS — those
+    // exercise the NEW fast-path empty-bucket→false codegen that has no precedent in mapget (which
+    // faults there). Must JIT through the `Op::Call` hook AND stay byte-identical to the oracle.
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.Map;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"a\" => 10, \"b\" => 20, \"c\" => 30, \"d\" => 40];\n\
+          List<string> probes = [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            if (Map.has(m, probes[i % 6])) { acc = acc + 1; }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "maphas-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual maphas-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the maphas vertical must actually hit the JIT — else the perf flip is unproven"
+    );
+}
+
+#[test]
+fn maphas_vertical_slow_path_canon0_key_matches_the_oracle() {
+    // The maphas SLOW path: a canon-0 key (an inline-`+` concat result, never content-registered)
+    // punts from the fast probe to `rt_u_map_has`. Both a HIT ("a"+"b" ⇒ present) and a clean MISS
+    // ("x"+"y" ⇒ absent) must be byte-identical to the oracle — the miss exercises the helper's
+    // `present:0, code:0` clean-false answer (not a code-5 redo). Also proves the fast path is not
+    // silently the only correct answer.
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.Map;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"ab\" => 1, \"cd\" => 2];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            if (Map.has(m, \"a\" + \"b\")) { acc = acc + 1; }\n\
+            if (Map.has(m, \"x\" + \"y\")) { acc = acc + 100; }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(50)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "maphas slow-path (canon-0 key) output must match the interpreter oracle"
+    );
+    // Prove the function actually JITs — a canon-0 key routes to `slow_blk` at runtime, so a
+    // non-zero hit count means `rt_u_map_has` genuinely ran (a silent VM fallback would false-green
+    // the byte-identity assert above and leave the slow helper unexercised).
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual maphas slow-path output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the maphas slow-path function must actually hit the JIT — else rt_u_map_has is unproven"
+    );
+}
+
+#[test]
 fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
     // Webish-vertical proof: mixed `Concat(n)` interpolation (`"h={v} p={p}"`) runs FULLY
     // INLINE for the hot shape — IR digit render (sign, zero, i64::MIN/MAX) + slot joins —

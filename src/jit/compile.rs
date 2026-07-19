@@ -174,6 +174,7 @@ impl Compiled {
             builder.symbol("rt_u_map_push_pair", rt_u_map_push_pair as *const u8);
             builder.symbol("rt_u_map_seal", rt_u_map_seal as *const u8);
             builder.symbol("rt_u_map_get", rt_u_map_get as *const u8);
+            builder.symbol("rt_u_map_has", rt_u_map_has as *const u8);
             builder.symbol("rt_u_list_push_int", rt_u_list_push_int as *const u8);
             builder.symbol("rt_u_index_int", rt_u_index_int as *const u8);
             builder.symbol("rt_u_int_to_str", rt_u_int_to_str as *const u8);
@@ -277,6 +278,8 @@ impl Compiled {
                 map_push_pair: declare(&mut module, "rt_u_map_push_pair", &sig5)?,
                 map_seal: declare(&mut module, "rt_u_map_seal", &sig2)?,
                 map_get: declare(&mut module, "rt_u_map_get", &sig_map_get)?,
+                // Same two-i64 (present, code) return shape as `map_get`.
+                map_has: declare(&mut module, "rt_u_map_has", &sig_map_get)?,
                 list_push_int: declare(&mut module, "rt_u_list_push_int", &sig3)?,
                 index_int: {
                     let mut s = make_sig(
