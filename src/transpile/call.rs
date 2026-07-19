@@ -212,6 +212,7 @@ impl Transpiler {
                                 "trimStart" => self.uses_text_trim_start = true,
                                 "trimEnd" => self.uses_text_trim_end = true,
                                 "parseFloat" => self.uses_text_parse_float = true,
+                                "chunk" => self.uses_text_chunk = true,
                                 _ => {}
                             }
                         }

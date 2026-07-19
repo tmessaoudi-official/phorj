@@ -315,6 +315,10 @@ struct Transpiler {
     /// Set when `Core.Text.parseFloat` is emitted — defines `__phorj_parse_float`, which gates the
     /// float grammar (strict / permissive, rejecting inf/nan) then casts, mirroring the Rust kernel.
     uses_text_parse_float: bool,
+    /// Set when `Core.String.chunk` is emitted — defines `__phorj_str_chunk`, which splits by CODE
+    /// POINTS (not PHP str_split's bytes — no broken multibyte) via `preg_split('//u')` + `array_chunk`
+    /// (the latter throws `ValueError` on n<1, matching the Rust native's fault), then `implode`s each.
+    uses_text_chunk: bool,
     /// Set when a `decimal` `+`/`-`/`*` (or `Decimal.of`) is emitted — each defines its BCMath
     /// `__phorj_dec_*` helper once per file (M-NUM S1). The helpers derive operand scales at runtime,
     /// compute the result scale (add/sub = max, mul = sum), call `bcadd`/`bcsub`/`bcmul`, then
@@ -550,6 +554,7 @@ impl Transpiler {
             uses_text_trim_start: false,
             uses_text_trim_end: false,
             uses_text_parse_float: false,
+            uses_text_chunk: false,
             uses_dec_add: false,
             uses_dec_rem: false,
             uses_dec_div_exact: false,

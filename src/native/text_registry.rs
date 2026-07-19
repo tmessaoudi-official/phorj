@@ -153,6 +153,18 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_characters),
             php: |a| format!("preg_split('//u', {}, -1, PREG_SPLIT_NO_EMPTY)", parg(a, 0)),
         },
+        // `chunk(string, int) -> List<string>` — consecutive pieces of N code points (last shorter);
+        // the string twin of `List.chunk`. Code-point-based (NOT PHP str_split bytes — no broken
+        // multibyte); `size < 1` faults; empty string → []. Gated `__phorj_str_chunk`.
+        NativeFn {
+            module: "Core.String",
+            name: "chunk",
+            params: vec![s(), Ty::Int],
+            ret: Ty::List(Box::new(Ty::String)),
+            pure: true,
+            eval: NativeEval::Pure(text_chunk),
+            php: |a| format!("__phorj_str_chunk({}, {})", parg(a, 0), parg(a, 1)),
+        },
         // `capitalize(string) -> string` — ASCII `ucfirst` (Tier-1, byte-identical).
         NativeFn {
             module: "Core.String",

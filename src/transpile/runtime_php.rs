@@ -1300,6 +1300,19 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `String.chunk(s, n)` — split into consecutive pieces of `n` CODE POINTS (last may be
+        // shorter), NOT PHP `str_split`'s bytes (which splits mid-codepoint into broken strings —
+        // phorj's `PhStr` is valid-UTF-8 by invariant, so byte chunks are unrepresentable anyway).
+        // `preg_split('//u')` yields code points without mbstring; `array_chunk` throws `ValueError`
+        // on `$n < 1`, matching the Rust native's fault; empty string → [] (PHP 8.5 `str_split("")`).
+        if self.uses_text_chunk {
+            self.line("function __phorj_str_chunk($s, $n) {");
+            self.indent += 1;
+            self.line("$cps = $s === '' ? [] : preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY);");
+            self.line("return array_map(fn($g) => implode('', $g), array_chunk($cps, $n));");
+            self.indent -= 1;
+            self.line("}");
+        }
         // `trim`/`trimStart`/`trimEnd` strip Rust's Unicode White_Space set (`char::is_whitespace`) —
         // NOT PHP's `trim`/`ltrim`/`rtrim`, whose default set is ASCII-ish and both misses the
         // multibyte spaces (U+00A0/U+2028/U+3000/…) AND differs even in ASCII (Rust strips form-feed

@@ -89,6 +89,29 @@ pub(super) fn text_characters(args: &[Value], _: &mut String) -> Result<Value, S
         _ => Err("String.characters expects (string)".into()),
     }
 }
+/// `String.chunk(string, int) -> List<string>` — consecutive pieces of `n` CODE POINTS (last may be
+/// shorter), the string twin of `List.chunk`. Code-point-based (like `String.characters`), NOT PHP
+/// `str_split`'s bytes: byte chunks would split multibyte mid-code-point into broken strings, which a
+/// valid-UTF-8 `PhStr` cannot even hold. `n < 1` FAULTS on both backends (charter §3, mirrors
+/// `List.chunk` / PHP `array_chunk`); empty string → empty list (PHP 8.5 `str_split("")`). Erases to
+/// the gated `__phorj_str_chunk` (`preg_split('//u')` + `array_chunk` + `implode`).
+pub(super) fn text_chunk(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Int(n)] => {
+            if *n < 1 {
+                return Err("String.chunk size must be at least 1".into());
+            }
+            let size = *n as usize;
+            let cps: Vec<char> = s.chars().collect();
+            let groups: Vec<Value> = cps
+                .chunks(size)
+                .map(|g| Value::Str(g.iter().collect::<String>().into()))
+                .collect();
+            Ok(Value::List(std::rc::Rc::new(groups)))
+        }
+        _ => Err("String.chunk expects (string, int)".into()),
+    }
+}
 
 pub(super) fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {

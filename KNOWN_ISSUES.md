@@ -1,5 +1,37 @@
 # Known Issues & Limitations
 
+## 🔴 P0 (2026-07-19) — the example byte-identity GLOB is a NO-OP: `all_examples_match_between_backends` skips ALL 201 examples
+
+**Severity: P0 — the primary enforcement of Invariant #1 (byte-identity spine) over the example
+corpus has been DEAD since the DEC-191 `#[Entry]` migration.** Measured: `all_examples_match_between_backends`
+skips **201/201** examples, **runs 0** (`differential: SKIP (impure/quarantined)` for every file). The
+companion `all_examples_transpile_and_match_php` shares the root cause (both use `uses_impure_native` +
+`collect_phg`; it completes in ~0.05s).
+
+**Root cause [Verified: 0 RUN measured]:** `uses_impure_native(src)` (tests/differential.rs) tests
+`src.contains(&format!("import {m}"))` for each impure module `m`. Since DEC-191, EVERY example imports
+`Core.Runtime.Entry` (the `#[Entry]` attribute). `Core.Runtime` is an impure module (exit/monotonicNanos/
+memoryBytes). The substring `"import Core.Runtime"` is contained in `"import Core.Runtime.Entry"` → every
+`#[Entry]` example is misclassified impure → quarantined → never byte-identity-tested. It is a SUBSTRING
+bug (the same class as the memory-noted "sweep-batch-1 substring hole"), now catching the whole corpus.
+
+**Blast radius of the BUG (not the fix):** examples added/changed since DEC-191 were never glob-gated.
+Confirmed one already-broken example: `examples/guide/strings-ext.phg` (missing `import Core.String`,
+introduced 90015c91 this session) — it fails `phg run` yet the suite stayed green because the glob skipped
+it. Named `agree_out_php` tests (e.g. `deque_double_ended`) still gate their features; only the auto-glob
+over the corpus is dead.
+
+**Correct fix (per-MEMBER granularity, NOT a Core.Runtime special-case):** quarantine on a WHOLE-module
+impure import (`import Core.Runtime;`) or a member-import of an IMPURE member — but NOT a member-import of a
+PURE member. `import Core.Runtime.Entry` (pure marker) must NOT flag; `import Core.Time.Duration` (pure
+ctor) must NOT flag while `import Core.Time.Instant` (reads clock → impure) MUST. Under-flagging is a NEW
+failure mode: whole-module `Core.Time`/`Core.Random`/`Core.Process`/`Core.File`/… examples must STILL skip
+(non-deterministic), or the glob goes flaky.
+
+**Status:** FINDING DURABLE (this entry). Fix pending blast-radius measurement — if few examples fail once
+the glob is live, fix + examples in one green commit; if many, a fresh-context PR (do not grind fixes at
+max-compaction). See memory `example-glob-noop-since-dec191`.
+
 > **⚠ 2026-07-16 FULL REOPEN AUDIT — this file was fully re-verdicted.** Every row was reopened;
 > 17 rows are STALE (superseded by later shipped work) and 8 new flags were raised and ruled.
 > The authoritative current-state record + all rulings (DEC-239…267) live in

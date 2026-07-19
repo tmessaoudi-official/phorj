@@ -45,4 +45,8 @@ function main(): void {
     // `capitalizeWords` (PHP ucwords) + `translate` (PHP strtr char-map) — ASCII, byte-identical.
     Output.printLine(String.capitalizeWords("the quick brown fox"));
     Output.printLine(String.translate("hello world", "lo", "LO"));
+    // `chunk` — split into pieces of N CODE POINTS (the string twin of `List.chunk`). Code-point-based,
+    // NOT PHP `str_split`'s bytes: "café" chunks by 2 into ["ca", "fé"] with `é` intact, never split.
+    Output.printLine(String.join(String.chunk("abcdef", 2), "|"));
+    Output.printLine(String.join(String.chunk("café", 2), "|"));
 }
