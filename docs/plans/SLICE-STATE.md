@@ -1,5 +1,18 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ⚖️⚖️ DEV DIRECTIVE + ACTIVE CAMPAIGN (2026-07-19, AskUserQuestion — governs current work)
+**PERF-DoD (standing, absolute):** EVERY feature — new AND already-shipped — gets a perf bench vs PHP;
+if it loses, FLIP it (JIT vertical etc.), else FLAG it. Documented losses without a flip-attempt are NOT
+acceptable. Sharpens Invariant 18 into a per-feature definition-of-done = [[perf-bench-every-feature-flip-or-flag]].
+**ACTIVE CAMPAIGN — FLIP THE NATIVE-CALL-IN-LOOP LOSSES via per-op JIT verticals** (dev chose: fresh-context
+subagent per vertical + main-session independent gate/certify; THEN back to building features each with a
+flip-or-flag bench). ORDER (biggest loss → most tractable): **maphas** (0.03×, mirrors the WINNING mapget
+vertical — IN PROGRESS, subagent) → setcontains (0.02×) → listcontains (0.02×/44×) → mapkeys/values (0.07×)
+→ mathmax. Per vertical: byte-identical VM fallback · PROVE hits>0 (not wall-clock) · core-pinned interleaved
+before/after to confirm the FLIP · SURFACE the unsafe/design choice (don't self-rule the island) · commit green.
+⚠ Honest caveat: mapget's own vertical only reaches 1.08×, so some may land near parity not a huge win —
+measure + report the real number. JIT = deepest unsafe spine (`src/jit/`, `#![deny(unsafe_code)]` island).
+
 ## ⭐⭐⭐⭐ SESSION 4 (2026-07-19 cont. — dev pushed the 41; continuous autonomous 1+2+4). 4 commits, all green, UNPUSHED.
 **Delivered:** (1) 🔴 **push failure diagnosed = LOAD CONTAMINATION, not real test failures** — the full gate
 is green on a CPU-idle box; the pre-push SIGKILLs under load-avg ~9 and git reports it as a hook failure.
