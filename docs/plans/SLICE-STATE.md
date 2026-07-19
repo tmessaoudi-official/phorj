@@ -40,6 +40,15 @@ FINDINGS (owed to next recompute + review):
   **§4.10 recompute** (`91737e4a`, parity 64→66% · Vision 66→67% · floor 47→51%); **DEC-302 backed-enums build-map**
   (`d5ba41e9`, ruled AUTO, deferred to fresh context); **DEC-303 `String.chunk`** (codepoint-based, `__phorj_str_chunk`
   helper, `bb39af6f`+src in `73f31189`); **🔴✅ P0 FIX — revived the dead example byte-identity glob** (`a355c342`).
+  🔬 **PERF COVERAGE EXPANDED (2026-07-19, `3c71707b`, subagent + my verify): 28→40 of 286 natives benched.**
+  Reveals the native-call-in-loop overhead is PERVASIVE (not just filter/reduce/contains): maphas 0.03×, setcontains
+  0.02×, mathmax 0.03×, mapkeys/values/merge/filter/map + stringcontains + setunion/difference all LOSE 3-50× to php
+  C builtins; only listmap (JIT vertical), setintersection 1.58×, mapget 1.08× win. Root cause = ~188ns/call VM→native
+  dispatch. ⚠ FIX LEVER PRESERVED (NOT committed — perf unmeasurable at load 6-9, Inv-11): the subagent's `NativeEval::Pure`
+  slice-fast-path (in-place stack slice + truncate vs per-call split_off Vec alloc) is BYTE-IDENTICAL (2309-green) but
+  reverted pending a QUIET-box before/after — `git stash` + `scratchpad/slice-fastpath.patch`. Detail = KNOWN_ISSUES
+  PERF-native-call-in-loop. Deeper lever = per-op JIT verticals (unsafe island, dev-driven). ⚠ jsonround = phantom
+  fix-task: already a dev-accepted structural FLAG (DEC-294); arena-Json experiment QUEUED (dev ruled "prototype+measure").
   🎉 **DEC-302 BACKED ENUMS COMPLETE + VERIFIED (2026-07-19, `b3f2a788`→`9a5deff6`, repr B, fresh-context subagent + my independent gate).**
   `enum Suit: string {Hearts="H",…}` / `enum Priority: int {…}` + `.value` / `Enum.cases()` (List<Enum>, any payload-less
   enum) / `Enum.from(x)` (faults on miss) / `Enum.tryFrom(x)` (Enum?). 2 new Ops (EnumValue/EnumFrom, all-3-matches, no `_`);

@@ -120,17 +120,42 @@ value** (materialize ADT nodes only on `match`); that is GREENLIT (DEC-294) as a
 spine-sensitive slice (~15 runtime deconstruction touch-points + a new `Value` variant — byte-identity
 is invariant #1, so it is not rushed). Not a correctness issue; run≡runvm≡PHP output is byte-identical.
 
-## PERF-native-call-in-loop — non-JIT'd native calls lose 3–44× to php builtins in hot loops (FLAGGED 2026-07-19)
+## PERF-native-call-in-loop — non-JIT'd native calls lose 3–50× to php builtins in hot loops (FLAGGED 2026-07-19; PERVASIVE)
 
-Surfaced by the 2026-07-19 micro-suite expansion (first benches for the higher-order List family +
-linear search). Pinned+interleaved, K=5–7 vs `php:8.5-cli`+JIT:
+Surfaced by the 2026-07-19 micro-suite expansion (List higher-order + linear search), then CONFIRMED
+PERVASIVE by the Map/Set/Math/String expansion (28→40 of 286 natives benched). Pinned vs `php:8.5-cli`+JIT
+(the big losses are far enough from 1.0 to be real despite box noise):
 
-| bench | phg vs php | note |
-|---|---|---|
-| `listmap` | **7.9× WIN** | JIT hofpipe vertical (`unboxed_native_is_list_map`, `src/jit/analyze.rs:340`) |
-| `listreduce` | **0.27× LOSS** (~3.7× slower) | no JIT vertical → general higher-order path |
-| `listfilter` | **0.22× LOSS** (~4.5× slower) | no JIT vertical |
-| `listcontains` | **0.02× LOSS** (~44× slower) | no JIT vertical; pure native, no closure |
+| bench | phg vs php | | bench | phg vs php |
+|---|---|---|---|---|
+| `listmap` | **7.9× WIN** (JIT vertical) | | `setcontains` | **0.02×** (~50× slower) |
+| `setintersection` | **1.58× WIN** | | `maphas` | **0.03×** |
+| `mapget` | **1.08× WIN** | | `mathmax` | **0.03×** |
+| `listreduce` | 0.27× | | `mapkeys` | **0.07×** |
+| `listfilter` | 0.22× | | `mapvalues` | 0.08× |
+| `listcontains` | **0.02×** (~44×) | | `mapmerge` | 0.10× · `stringcontains` 0.11× · `mapmap` 0.30× · `setdifference` 0.40× |
+
+Only `List.map` (JIT vertical), `Set.intersection` and `Map.get` (enough work/call to amortize dispatch)
+win; the rest lose 3–50×.
+
+**Root cause [Verified].** The JIT special-cases ONLY `Core.List.map`; every other stdlib native called
+in a hot loop runs the general VM→native dispatch (~188 ns/call measured for `listcontains`: 564 ms /
+3 M calls) vs php's ~4 ns/call C builtins (`in_array` 12.8 ms / 3 M). Higher-order ones (`filter`/
+`reduce`) add a per-element re-entrant VM closure invocation on top. The pattern is GENERAL + PERVASIVE:
+**phg wins where the JIT applies (map, index, arithmetic, dispatch, match, alloc, strings) and loses
+3–50× on arbitrary stdlib native calls in tight loops.** Honest answer to "are we faster than php across
+the stdlib": NO in hot loops over non-JIT'd natives. (Real programs rarely loop-call a native millions of
+times, but WIN-OR-FLAG / Invariant 18 flag it regardless.)
+
+**⚠ PENDING FIX LEVER (preserved, NOT committed — perf unmeasured).** A fresh-context subagent (2026-07-19)
+implemented a **slice fast-path** for `NativeEval::Pure` in `vm/exec.rs`: read args as an in-place stack
+SLICE + `truncate` instead of `split_off` (which heap-allocs an argc-Vec every call) — targeting the exact
+per-call alloc overhead, and it would lift ALL pure natives at once. It is **byte-identical (2309-green,
+verified)** but its perf was NOT reliably measurable (box at load 6–9; a before/after was load-drift
+confounded — reverted per Invariant 11). PRESERVED: `git stash` (`slice-fastpath-pending-quiet-box-measure`)
++ patch at `scratchpad/slice-fastpath.patch`. **Next: re-apply on a QUIET box (load ≲2), measure before/
+after pinned across the losing natives; commit if a stable win, else discard.** The deeper lever (per-op
+JIT verticals like map's) is the audited `unsafe` island — dev-driven, not delegated.
 
 **Root cause [Verified].** The JIT special-cases ONLY `Core.List.map`; every other stdlib native called
 in a hot loop runs the general VM→native dispatch (~188 ns/call measured for `listcontains`: 564 ms /
