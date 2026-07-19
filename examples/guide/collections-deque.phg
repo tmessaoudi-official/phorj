@@ -1,0 +1,43 @@
+// Core.Deque (DEC-300) — a generic double-ended queue.
+//
+// `Deque<T>` is a pure-Phorj collection built on `List<T>`: push and pop at BOTH ends, peek at
+// either end, and query size. Because it is written in Phorj over `Core.List` (no native), it runs
+// byte-for-byte identically on the interpreter, the bytecode VM, and the transpiled PHP.
+//
+// Two deliberate departures from PHP's `SplDoublyLinkedList` / `SplStack` / `SplQueue`:
+//   * `pop*` / `peek*` return `T?` (an OPTIONAL) — `null` on an empty deque, never an exception.
+//     Popping-when-empty is a normal control-flow condition, so it is modelled as a value you must
+//     unwrap, not a `RuntimeException` you must remember to catch.
+//   * It is one generic type with a uniform API, rather than three overlapping Spl* classes.
+//
+// Construction follows the mandatory-`new` + inferred-`T` rule: pass an initial backing list, so
+// `T` is inferred from it (`new Deque(new List<int>())` is an empty `Deque<int>`).
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Deque;
+import Core.Runtime.Entry;
+
+#[Entry]
+function main(): void {
+    // Empty deque of strings — `T` = string is inferred from the `List<string>` seed.
+    var d = new Deque(new List<string>());
+    // Push at both ends: order becomes first, mid, last.
+    d.pushBack("mid");
+    d.pushFront("first");
+    d.pushBack("last");
+    Output.printLine("size={d.size()} empty={d.isEmpty()}");
+    // Peeking inspects an end without removing it.
+    Output.printLine("peekFront={d.peekFront() ?? \"?\"} peekBack={d.peekBack() ?? \"?\"}");
+    // Pop from both ends — front yields "first", back yields "last".
+    Output.printLine("popFront={d.popFront() ?? \"?\"}");
+    Output.printLine("popBack={d.popBack() ?? \"?\"}");
+    Output.printLine("remaining={d.size()}");
+    Output.printLine("popFront={d.popFront() ?? \"?\"}");
+    // Popping an empty deque yields null — no exception, no forgotten catch.
+    Output.printLine("popFront-empty={d.popFront() ?? \"<none>\"} empty={d.isEmpty()}");
+    // A deque built from an initial list preserves order (front = index 0).
+    var q = new Deque([10, 20, 30]);
+    Output.printLine("seeded popFront={q.popFront() ?? -1} popBack={q.popBack() ?? -1}");
+}

@@ -688,6 +688,33 @@ import Core.String;
     );
 }
 
+/// Wave-B collections (DEC-300): `Core.Deque<T>` — a pure-Phorj double-ended queue over `List<T>`.
+/// Byte-identical run≡runvm≡php by construction (no native; the method bodies transpile to the same
+/// array ops). Covers both ends (push/pop/peek), the empty→`null` optional return (not an
+/// exception, the deliberate departure from PHP `SplDoublyLinkedList`), and a list-literal seed.
+#[test]
+fn deque_double_ended_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.List;
+import Core.Deque;
+#[Entry] function main() -> void {
+    var d = new Deque(new List<string>());
+    d.pushBack("mid");
+    d.pushFront("first");
+    d.pushBack("last");
+    Output.printLine("size={d.size()} empty={d.isEmpty()}");
+    Output.printLine("{d.peekFront() ?? "?"}|{d.peekBack() ?? "?"}");
+    Output.printLine("{d.popFront() ?? "?"}|{d.popBack() ?? "?"}|{d.size()}");
+    Output.printLine("{d.popFront() ?? "?"}|{d.popFront() ?? "<none>"}|{d.isEmpty()}");
+    var q = new Deque([10, 20, 30]);
+    Output.printLine("{q.popFront() ?? -1}|{q.popBack() ?? -1}");
+}"#,
+        "size=3 empty=false\nfirst|last\nfirst|last|1\nmid|<none>|true\n10|30\n",
+        "deque_double_ended",
+    );
+}
+
 /// Wave-B: the Core.Math tail (inverse trig / hyperbolics / hypot / log2 / log1p / expm1 / angle
 /// conversion) is byte-identical run≡runvm≡php — all delegate to the platform libm PHP also uses;
 /// `log2` deliberately computes `ln(x)/ln(2)` to match PHP's `log(x, 2)` (not a direct `log2` libm call).

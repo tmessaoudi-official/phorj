@@ -187,6 +187,15 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   baseline re-emitted with the 2 new pairs (LOSS baselines — a future improvement ratchets them).
 - **SWEEP BATCH 2 (spine 7, structure + gates)** —
   (1) P1 M-DECOMP BACKLOG (Invariant 13, hard cap 1000): 10 files over cap — jit/analyze.rs 2957 ·
+  <!-- CORRECTION 2026-07-19: the cap is now soft-300/HARD-500 (DEC-262), NOT 1000 — this dated
+  entry predates the amendment. Under the 500 cap the backlog is ~20 files (add ext/db/natives.rs
+  2360, ext/mail/natives.rs 1000, vm/exec.rs 987, checker/calls/methods.rs 957, parser/stmts.rs 935,
+  ext/json/natives.rs 924, cli/pipeline.rs 888, ast/walk.rs 800, native/text.rs 586, …). Wave-B
+  overnight slices ADDED to two already-backlogged files without splitting (native/text.rs via the
+  String tail; cli/preludes.rs via DEC-300 Deque) — split deferred to M-Decomp per the "don't spend
+  the risk budget on a spine-adjacent refactor mid-run" call; CORE_MODULES ordering in preludes.rs is
+  load-bearing, so its split is FRESH-context work. Not a NEW violation (both files were already on
+  this backlog); flagged here per the standing "flag rule-breaks you can't correctly fix now" rule. -->
   checker/desugar_db.rs 2703 · native/db/mod.rs 2267 · jit/handles.rs 2104 · jit/emit_unboxed/mod.rs
   1952 · jit/tests/verticals.rs 1847 · cli/explain.rs 1696 · cli/preludes.rs 1360 · transpile/
   runtime_php.rs 1028 · jit/emit_unboxed/verticals.rs 1025. Each needs its own cohesion split

@@ -32,10 +32,26 @@ FINDINGS (owed to next recompute + review):
      real parity is HIGHER than 64%. Recompute owed (also credit the Math tail + named-args SYN row).
   **DONE this overnight (all committed, green, UNPUSHED — dev pushes AM):** slice#3 named args FULL SCOPE
   (`998e370b`); variadics (`59bf4158`); Wave-B **Math tail** (`841864e7`); Wave-B **List.difference/intersection**
-  (`81cbd331`, typed-strict set ops). Spread DEC-299 AUTO-DEFERRED (VM runtime-arity fork).
-  ⚠ ALREADY-BUILT (grep-verified, DO NOT rebuild): crypto/CSPRNG/HMAC/KDF; Core.String is rich (42 fns);
-  Core.List rich (38 now). NEXT verified-genuine: FS breadth (glob/stat/mtime/tempFile — impure, quarantined) →
-  String tail (capitalizeWords/translate/wordWrap — pure, Unicode-ASCII caveat) → keep grep-verifying each.
+  (`81cbd331`, typed-strict set ops); Wave-B **String tail** capitalizeWords/translate (`90015c91`, ucwords/strtr);
+  **DEC-300 `Core.Deque<T>`** (`<pending sha>`, pure-Phorj generic deque over List, T?-on-empty vs Spl* throw,
+  2249 green). Spread DEC-299 AUTO-DEFERRED (VM runtime-arity fork).
+  ⚠ FRONTIER MAP (grep-verified this run — DO NOT rebuild; the easy pure-native seam is MINED OUT):
+    · ALREADY-BUILT: crypto/CSPRNG/HMAC/KDF; Core.String rich (42+); Core.List rich (39 now); Core.Path
+      (baseName/directoryName/extension/fileStem/join); Core.FileSystem BROAD (read/write/append/copy/move/
+      del/mkdir/rmdir/exists/isDir/isFile/listDir/walk/size/tempDir); match-expr; Process; levenshtein;
+      similarText; number_format; Math gcd/lcm/clamp; String repeat/padStart; List fill/pad.
+    · GENUINE-BUT-FORKED (the real remaining % movers — NOT autonomously safe): **generators/`yield`**
+      = ABSENT as a language surface (the coro substrate exists for concurrency) → deepest VM control-flow
+      SPINE, standing rule = FRESH context only, NOT a compacted-run task. **backed enums + cases()** =
+      ABSENT (enums are algebraic) → Invariant-15 language design fork (how scalar backing meets algebraic
+      variants). **Set** = blocked (no empty-set VM op — `new Set<T>()` deferred, DEC-214). **serialize/
+      unserialize**, **var_export/print_r** = byte-identity-fiddly (PHP format fidelity). PriorityQueue =
+      next SAFE pure-Phorj-over-List slice (like Deque; needs tuple (value,priority) + max scan).
+    · NEXT SAFE (buildable in a compacted run): **PriorityQueue<T>** (pure-Phorj, mirror Deque), then
+      reassess. Impure FS breadth (glob/stat/mtime) needs functional tests (env-dependent) — lower priority.
+  ⚠ M-Decomp: this run grew native/text.rs (586) + cli/preludes.rs (~1420) — both already >500 hard cap
+    (DEC-262) and already on the backlog; split DEFERRED (preludes.rs CORE_MODULES order is load-bearing →
+    FRESH context). Backlog record corrected in KNOWN_ISSUES (stale "1000 cap/10 files" → 500/~20).
 
 
 ## ✅ DONE — CONTINUOUS SESSION 2 (2026-07-18, HEAD `3a8f1b7f`, +12 commits, ALL UNPUSHED — READ FIRST)

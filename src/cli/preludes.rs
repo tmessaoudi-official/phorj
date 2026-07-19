@@ -501,6 +501,54 @@ class FileSystem {
 pub(super) const SECRET_PRELUDE: &str =
     "class Secret<T> { constructor(private T value) {} function expose(): T { return this.value; } }";
 
+/// `Core.Deque` (DEC-300, collections breadth) — a generic double-ended queue, `class Deque<T>`,
+/// backed by a `List<T>` so it is byte-identical across all three backends by construction (its
+/// method bodies transpile to the same array ops PHP would use; there is no native and no ladder
+/// quarantine). Constructed from an initial backing list (`new Deque(new List<int>())` for empty),
+/// consistent with the mandatory-`new` + inferred-`T` rule (a no-arg constructor could not infer
+/// `T`). Chosen OVER a faithful map of PHP `SplDoublyLinkedList`/`SplStack`/`SplQueue` (DEC-300,
+/// fork-rule AUTO): those throw `RuntimeException` when you pop an empty container — a normal
+/// condition modelled as an exception. Phorj's `pop*`/`peek*` return `T?` (null on empty) instead:
+/// safer, more OOP, and impossible to forget to guard. The idiomatic-PHP transpile target is a
+/// plain array (what real PHP code uses; the `Spl*` classes are rarely reached for), so array-op
+/// parity — not the `Spl*` linked list — is the honest perf baseline (front ops are O(n) on both
+/// sides; a ring-buffer native could win later — tracked, not silently degraded).
+pub(super) const DEQUE_PRELUDE: &str = r#"
+import Core.List;
+
+class Deque<T> {
+  constructor(private mutable List<T> items) {}
+  function pushBack(T x): void { this.items = List.append(this.items, x); }
+  function pushFront(T x): void { this.items = List.concat([x], this.items); }
+  function popBack(): T? {
+    int n = List.length(this.items);
+    if (n == 0) { return null; }
+    T tail = this.items[n - 1];
+    this.items = List.slice(this.items, 0, n - 1);
+    return tail;
+  }
+  function popFront(): T? {
+    int n = List.length(this.items);
+    if (n == 0) { return null; }
+    T head = this.items[0];
+    this.items = List.slice(this.items, 1, n);
+    return head;
+  }
+  function peekBack(): T? {
+    int n = List.length(this.items);
+    if (n == 0) { return null; }
+    return this.items[n - 1];
+  }
+  function peekFront(): T? {
+    if (List.length(this.items) == 0) { return null; }
+    return this.items[0];
+  }
+  function size(): int { return List.length(this.items); }
+  function isEmpty(): bool { return List.length(this.items) == 0; }
+  function toList(): List<T> { return this.items; }
+}
+"#;
+
 /// `Core.UriModule` (DEC-240) — one immutable RFC 3986 `Uri` class with the typed `UriError` taxonomy.
 /// The instance state is a single validated RAW string; every accessor/wither/operation calls a
 /// `Core.Native.Uri` native over it (`src/ext/uri/`), whose Rust kernel is pinned byte-for-byte to
@@ -1033,6 +1081,16 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Secret"],
         qualifier: "Secret",
         src: Some(SECRET_PRELUDE),
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    // `Core.Deque` (DEC-300) — the generic double-ended queue. Pure-phorj over `Core.List`; no
+    // transitive Core-class import (only the native `Core.List`), so position is not load-bearing.
+    VirtualModule {
+        module: &["Core", "Deque"],
+        qualifier: "Deque",
+        src: Some(DEQUE_PRELUDE),
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
