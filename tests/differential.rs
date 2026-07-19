@@ -732,6 +732,27 @@ import Core.Set;
     );
 }
 
+/// FORK-D (int-hash `Set.contains` JIT vertical): the transpile/interp legs are UNCHANGED by the
+/// perf work, so this pins the PHP oracle for the edge shapes the vertical's `{occupied, key}` table
+/// must get right — needle 0 as a MEMBER and as ABSENT (the case a naive key-0-is-empty scheme would
+/// break), a negative member, an absent probe that walks buckets, and duplicate-literal dedup. All
+/// three legs (interp ≡ compiled ≡ php-8.5.8) must agree; the JIT≡VM≡interp leg is pinned by the
+/// `jit_setcontains_zero_dedup_and_collision_edges_match_the_oracle` unit test (hot loop → hits>0).
+#[test]
+fn set_contains_int_hash_edges_are_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Set;
+#[Entry] function main() -> void {
+    Set<int> s0 = Set.of([0, 0, 7, 2, 0 - 5, 100, 3, 9, 15, 42]);
+    Set<int> s1 = Set.of([1, 3, 5]);
+    Output.printLine("{Set.contains(s0, 0)}|{Set.contains(s1, 0)}|{Set.contains(s0, 0 - 5)}|{Set.contains(s0, 999)}|{Set.size(s0)}");
+}"#,
+        "true|false|true|false|9\n",
+        "set_contains_int_hash_edges",
+    );
+}
+
 /// Wave-B (DEC-308): `List.sortDescending` — the descending companion to `sort` (natural/byte order,
 /// reversed). Sort-then-reverse (not a reversed comparator) → byte-identical to `array_reverse(__phorj_sort)`
 /// including equal-element order. Covers ints (with a duplicate), strings (byte order), and empty.

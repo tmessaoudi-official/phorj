@@ -180,11 +180,20 @@ Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical through
 
 **✅ FIX LEVER #2 — per-op JIT VERTICALS CAMPAIGN (dev-ruled 2026-07-19, DEC-311; flip the losers one at a time):**
 - **`Map.has` FLIPPED 0.03× → 1.50× WIN** (`b2f927a4`, DEC-311) — int-keyed packed-hash probe, `rt_u_map_has` helper.
-- **`Set.contains` — PARTIAL, FLAGGED (WIN-OR-FLAG): 0.02× → 0.45×** (linear-scan vertical, ZERO new unsafe,
-  25× VM→JIT, byte-identical, gate green). A LINEAR membership scan cannot beat php's O(1) hash `isset`
-  (~4-8 compares/probe vs ~1). ⏳ **FORK-D queued THIS session** — reseal `Set<int>` as an int-keyed packed
-  hash table (the maphas mirror: `Set<int>` ≡ `Map<int,()>`) → O(1) probe, expected to WIN like maphas.
-  When FORK-D lands this flag flips to WIN. Next after: listcontains (0.02×/44×) → mapkeys/values → mathmax.
+- **`Set.contains` FLIPPED 0.02× → 1.05× WIN** (FORK-D, `rt_u_set_seal` building helper) — `Set<int>` is now
+  resealed as an int-keyed packed OPEN-ADDRESSED hash table (the maphas mirror: `Set<int>` ≡ `Map<int,()>`),
+  probed inline in O(1). ~64× VM→JIT; 1.03–1.08× WIN vs release php:8.5-cli+JIT (docker, core-7-pinned,
+  interleaved, 5 rounds; main-session re-confirmed 1.03–1.07× across 3 K=9 runs at core-7 95%+ idle); 4-way
+  byte-identical (interp≡VM≡JIT≡php-8.5.8) incl. needle-0-member/absent, dedup, negatives, collision walk.
+  ⚠ **MARGINAL WIN (honesty):** ~1.05× is barely above parity and FRAGILE — under core-7 contention it reads
+  as a loss (measured 0.68× at 11% idle), so it only registers a WIN on a genuinely quiet core. Unlike maphas's
+  robust 1.50×, php's `in_array` over a small int set is already cheap in C, so the hash + fibonacci probe
+  overhead nearly cancels the O(1) benefit at this set size. Real WIN, but small-regime + load-sensitive. The building unsafe helper carries an explicit bucket-write/arena-alloc/probe-
+  termination safety argument (`src/jit/handles.rs`). Bucket = 16B `{occupied,key}` (occupancy word SEPARATE
+  from the key because an int 0 is a valid member, unlike a map's never-0 canon) — probe tests occupancy first.
+  Hash = fibonacci high-bits (robust vs adversarial clustering). **FORK-D1 (dev to rule):** identity `key&mask`
+  measured 1.15–1.19× (+~10pp) but degrades to O(n) on hostile int sets (all-multiples-of-a-power-of-two
+  collide) — shipped the robust fibonacci default. Next after: listcontains (0.02×/44×) → mapkeys/values → mathmax.
 
 Related: the un-benched-stdlib COVERAGE gap — only **28 of 286 natives** are perf-benched (Invariant 18
 wants all with a php equivalent); these losses were hidden precisely because they weren't benched until now.

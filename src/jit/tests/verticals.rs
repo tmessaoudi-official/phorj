@@ -996,6 +996,107 @@ fn phg_run_hook_hits_the_jit_on_the_setcontains_vertical() {
     );
 }
 
+/// FORK-D edge coverage: 4-leg byte-identity (interp ≡ JIT ≡ pure-VM) + `hits>0`, asserting the
+/// three cases the int-hash table's `{occupied, key}` layout must get right and that a naive
+/// key-0-is-empty scheme would break:
+///  * **needle 0 as a MEMBER** — the set CONTAINS 0; a probe for 0 must HIT (occupancy-first is what
+///    stops an empty bucket's zero key-word from being mistaken for the value 0, and vice-versa).
+///  * **needle 0 as ABSENT** — a different set that does NOT contain 0; a probe for 0 must miss clean.
+///  * **duplicate literals** — `Set.of` dedups; the table is sized on the DISTINCT count.
+///  * **collisions / wraparound** — a larger set (> tsize/2 after the power-of-two round) exercises
+///    the open-addressed linear-probe walk on both hits and misses.
+#[test]
+fn jit_setcontains_zero_dedup_and_collision_edges_match_the_oracle() {
+    // s0 CONTAINS 0 (and negatives); s1 does NOT. The needle `i % 5` sweeps {0,1,2,3,4} so 0 is
+    // probed against BOTH sets every 5 iterations. Duplicate literals (0,0 / 7,7) prove dedup. The
+    // 10-distinct-element s0 rounds to a 32-bucket table with collisions across the walk.
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.Set;\n\
+        function bench(int iters): int {\n\
+          Set<int> s0 = Set.of([0, 0, 7, 7, 2, 4, 9, 15, 23, 42, 0 - 5, 0 - 5, 100, 3]);\n\
+          Set<int> s1 = Set.of([1, 3, 5, 8, 11, 14]);\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            int n = i % 5;\n\
+            if (Set.contains(s0, n)) { acc = acc + 1; }\n\
+            if (Set.contains(s1, n)) { acc = acc + 10; }\n\
+            if (Set.contains(s0, 0 - 5)) { acc = acc + 100; }\n\
+            if (Set.contains(s0, 999)) { acc = acc + 1000; }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(200)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "setcontains edge (zero/dedup/collision) jit output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    // Pure-VM (no JIT) leg — the fourth backend of the byte-identity spine.
+    let vm_only = crate::vm::Vm::new(&program).run().expect("pure-VM run ok");
+    assert_eq!(
+        vm_only, oracle,
+        "pure-VM setcontains edge output must match the oracle"
+    );
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual jit setcontains edge output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the setcontains edge vertical must actually hit the JIT — else the flip/coverage is unproven"
+    );
+}
+
+/// FORK-D `-1` fallback: a set with ≥ 4096 distinct elements trips `rt_u_set_seal`'s `n >= 1<<12`
+/// guard → the seal returns `-1` → `Set.of` faults code 5 → the WHOLE call redoes on the VM (which
+/// builds a real `Value::Set`). This is NOT a "JIT-stays-and-punts" slow path (there is no such path —
+/// a non-flat set can't reach `arm_setcontains`), so `hits>0` is not asserted here; the point is that
+/// the abort-to-VM fallback produces byte-identical output. Membership over the large set must still be
+/// correct on the jit-wired path (via the redo).
+#[test]
+fn jit_setcontains_oversized_set_falls_back_to_vm_and_matches_the_oracle() {
+    let elems: String = (0..4100)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let src = String::from(
+        "package Main; import Core.Runtime.Entry;\n\
+         import Core.Output;\n\
+         import Core.Set;\n\
+         function f(): int {\n\
+           Set<int> s = Set.of([",
+    ) + &elems
+        + "]);\n\
+           mutable int acc = 0;\n\
+           if (Set.contains(s, 0)) { acc = acc + 1; }\n\
+           if (Set.contains(s, 4099)) { acc = acc + 1; }\n\
+           if (Set.contains(s, 9999)) { acc = acc + 1; }\n\
+           return acc;\n\
+         }\n\
+         #[Entry] function main(): void { Output.printLine(\"{f()}\"); }";
+    let jit_out =
+        crate::cli::cmd_run(&src).expect("jit-wired run ok (falls back to VM on the seal)");
+    let oracle = crate::cli::cmd_treewalk(&src).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "oversized-set (-1 seal → VM redo) jit output must match the interpreter oracle"
+    );
+    assert!(
+        jit_out.contains('2'),
+        "0 and 4099 are members, 9999 is not → acc must be 2, got: {jit_out}"
+    );
+}
+
 #[test]
 fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
     // Webish-vertical proof: mixed `Concat(n)` interpolation (`"h={v} p={p}"`) runs FULLY

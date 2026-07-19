@@ -427,16 +427,17 @@ pub(super) fn arm_maphas(
     ub_push(b, vars, fvars, kinds, res, Kind::Bool)
 }
 
-/// `Core.Set.of(List<int>)` — the setcontains vertical's producer. Re-tags a FRESH OWNED flat
-/// int-list handle as an [`Kind::IntSet`] membership store: the sealed arena block
-/// (`UB_TAG_FLAT | count<<40 | base`, raw `i64` per slot) IS the store, so this is a pure
-/// COMPILE-TIME kind change — ZERO Cranelift IR, no helper, no new `unsafe`. Dedup is not applied
-/// (irrelevant to the only consumer, `Set.contains` — membership is dedup-invariant, and the
-/// narrow gating means nothing else observes the block). Owned-ONLY input is the double-free gate
-/// (a Borrowed copy would alias its source local); `analyze` enforces the same, so this reject is
-/// defensive.
+/// `Core.Set.of(List<int>)` — the FORK-D setcontains vertical's producer. SEALS a FRESH OWNED flat
+/// int-list into an int-keyed packed OPEN-ADDRESSED hash table (via [`rt_u_set_seal`]) so
+/// `Set.contains` probes in O(1) — the prior linear-scan vertical could not beat php's C `in_array`.
+/// Returns a [`UB_TAG_FLAT_SET`] handle (base → the bucket table). Owned-ONLY input is the
+/// double-free gate (a Borrowed copy would alias its source local); `analyze` enforces the same, so
+/// this reject is defensive. A `-1` from the helper (non-int element, too-large, arena exhaustion) →
+/// code 5, the WHOLE call redoes on the VM (which builds a real `Value::Set` — byte-identical).
 pub(super) fn arm_set_of(
     b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
     vars: &[Variable],
     fvars: &[Variable],
     kinds: &mut Vec<Kind>,
@@ -447,19 +448,26 @@ pub(super) fn arm_set_of(
             "unboxed Set.of operand kind {k:?} (only a fresh Owned IntList)"
         )));
     }
-    ub_push(b, vars, fvars, kinds, v, Kind::IntSet(Own::Owned))
+    let call = b.ins().call(h.set_seal, &[ec.ctx, v]);
+    let sealed = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sealed, 0);
+    ec.fault_if(b, bad, 5);
+    ub_push(b, vars, fvars, kinds, sealed, Kind::IntSet(Own::Owned))
 }
 
-/// `Core.Set.contains(Set<int>, int)` — the setcontains vertical. An INLINE linear scan of the
-/// flat int block (raw `i64` per 64-byte slot at bytes 0..8) comparing each element to the needle:
-/// byte-identical to the interpreter's own `Vec<HKey::Int>::contains` (`HKey::Int` equality ⇔ i64
-/// equality). A HIT pushes `1` (true); an exhausted scan pushes `0` (a CLEAN false — a membership
-/// test never faults). The set is a QUERY — NOT consumed (mirrors `Map.has`); the needle is a raw
-/// scalar. A non-flat set (a too-large / arena-exhausted seal that stayed boxed) is undecidable
-/// here → code 5, and the WHOLE call redoes on the VM, which recomputes `Set.contains`
-/// byte-identically. SAFETY: the flat handle's `[base, base+count)` slots are arena-resident by
-/// construction of the seal and unchanged by the `Set.of` re-tag, so every inline load is in-bounds
-/// — the same envelope as [`arm_index_int_list`]; this arm adds NO new `unsafe`.
+/// `Core.Set.contains(Set<int>, int)` — the FORK-D setcontains vertical: an INLINE O(1) probe of the
+/// int-keyed packed hash table built by [`rt_u_set_seal`]. Mirrors [`arm_maphas`] but keyed by a raw
+/// `i64` with a SEPARATE occupancy word (an int key of 0 is a valid member, unlike a map's never-0
+/// canon, so the probe tests OCCUPANCY FIRST — an empty bucket's zero key-word must never false-hit a
+/// needle of 0). A HIT pushes `1`; an empty bucket pushes `0` (a CLEAN false — a membership test never
+/// faults). The set is a QUERY — NOT consumed (mirrors `Map.has`); the needle is a raw scalar, so
+/// there is nothing to free (simpler than the map probe). A non-flat (boxed / seal-failed) set is
+/// undecidable here → code 5, the whole call redoes on the VM byte-identically.
+///
+/// SAFETY: the flat handle's table lives in `[base, base + tslots)` arena slots, written whole by the
+/// seal and never mutated after; the probe reads only `{occupied, key}` at `tbase + t·16` for
+/// `t < tsize`, in bounds by the same cap check that bounded the seal's writes — no new `unsafe` here
+/// (the arena-buffer base load is the identical `ec.stable` pattern the map probe uses).
 pub(super) fn arm_setcontains(
     b: &mut FunctionBuilder,
     ec: &Ec,
@@ -478,40 +486,57 @@ pub(super) fn arm_setcontains(
     b.append_block_param(merge, types::I64); // 1 = present, 0 = absent
     let flat_blk = b.create_block();
     let slow_blk = b.create_block();
+    // FLAT-sealed set → inline probe; a boxed (seal-failed) set → helper-less code-5 redo.
     let flat_bit = b.ins().band_imm(sv, UB_TAG_FLAT);
     b.ins().brif(flat_bit, flat_blk, &[], slow_blk, &[]);
-    // FAST: linear scan of the flat int block. `count` rides bits 40..60 of the handle; `base` the
-    // low 40. Walk (addr, remaining); a HIT short-circuits to `merge(1)`, exhaustion to `merge(0)`.
+    // FAST: O(1) packed-bucket probe. `base` (low 40) is the table start; `log2` (bits 52..57) sizes
+    // it. fibonacci high bits pick the first bucket; the walk terminates on an empty bucket (load
+    // factor ≤ 1/2 guarantees one exists). Each 16-byte bucket is `{occupied: u64, key: i64}`.
     b.switch_to_block(flat_blk);
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let cnt_raw = b.ins().ushr_imm(sv, 40);
-    let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
     let base = b.ins().band_imm(sv, UB_IDX_MASK);
     let boff = b.ins().ishl_imm(base, 6);
-    let addr0 = b.ins().iadd(buf, boff);
-    let header = b.create_block();
-    b.append_block_param(header, types::I64); // element address
-    b.append_block_param(header, types::I64); // remaining count
-    let body = b.create_block();
+    let tbase = b.ins().iadd(buf, boff);
+    let lg_raw = b.ins().ushr_imm(sv, UB_MAP_LOG_SHIFT);
+    let lg = b.ins().band_imm(lg_raw, 0x1F);
+    let one = b.ins().iconst(types::I64, 1);
+    let tsize = b.ins().ishl(one, lg);
+    let mask = b.ins().iadd_imm(tsize, -1);
+    // fibonacci high bits: t0 = (needle · MULT) >>u (64 − log2). Identical bits to the seal's build
+    // (i64 imul low-64 == u64 wrapping_mul; ushr == logical shift).
+    let hprod = b.ins().imul_imm(needle, UB_SET_HASH_MULT);
+    let c64 = b.ins().iconst(types::I64, 64);
+    let sh = b.ins().isub(c64, lg); // 64 − log2
+    let t0 = b.ins().ushr(hprod, sh);
+    let head = b.create_block();
+    b.append_block_param(head, types::I64); // bucket index
+    let cont = b.create_block();
     let step = b.create_block();
-    b.ins().jump(header, &[addr0.into(), cnt.into()]);
-    b.switch_to_block(header);
-    let addr = b.block_params(header)[0];
-    let rem = b.block_params(header)[1];
-    // remaining == 0 → absent (a clean 0, NOT a fault).
+    b.ins().jump(head, &[t0.into()]);
+    b.switch_to_block(head);
+    let t = b.block_params(head)[0];
+    let btoff = b.ins().ishl_imm(t, 4);
+    let baddr = b.ins().iadd(tbase, btoff);
+    // OCCUPANCY FIRST: an empty bucket (occupied 0) is a genuine ABSENT (clean false, never a fault),
+    // and its key word is 0 — testing occupancy before the key is what stops a needle of 0
+    // false-hitting an empty bucket.
+    let occ = b.ins().load(types::I64, MemFlagsData::new(), baddr, 0);
     let zerov = b.ins().iconst(types::I64, 0);
-    b.ins().brif(rem, body, &[], merge, &[zerov.into()]);
-    b.switch_to_block(body);
-    let elem = b.ins().load(types::I64, MemFlagsData::new(), addr, 0);
-    let eq = b.ins().icmp(IntCC::Equal, elem, needle);
+    b.ins().brif(occ, cont, &[], merge, &[zerov.into()]);
+    b.switch_to_block(cont);
+    let key = b.ins().load(types::I64, MemFlagsData::new(), baddr, 8);
+    let eq = b.ins().icmp(IntCC::Equal, key, needle);
     let onev = b.ins().iconst(types::I64, 1);
     b.ins().brif(eq, merge, &[onev.into()], step, &[]);
     b.switch_to_block(step);
-    let addr1 = b.ins().iadd_imm(addr, UB_SLOT_SIZE as i64); // next 64-byte slot
-    let rem1 = b.ins().iadd_imm(rem, -1);
-    b.ins().jump(header, &[addr1.into(), rem1.into()]);
-    // SLOW: a non-flat (boxed) set is undecidable inline → code 5, the whole call redoes on the VM
-    // (byte-identical). Only reachable for a too-large / arena-exhausted seal — never a genuine miss.
+    let t1 = b.ins().iadd_imm(t, 1);
+    let tw = b.ins().band(t1, mask);
+    b.ins().jump(head, &[tw.into()]);
+    // SLOW: UNREACHABLE BY CONSTRUCTION — kept as a defensive terminator. `rt_u_set_seal` returns
+    // either a FLAT-tagged handle or `-1` (which faults at `Set.of`, so the seal never yields a boxed
+    // set), and `Kind::IntSet` is produced ONLY by `arm_set_of` (borrowed copies keep the same word),
+    // so every live IntSet handle has the FLAT bit and `flat_bit` always takes `flat_blk`. If a future
+    // change ever routed a non-flat set here, this code-5 redoes the whole call on the VM byte-identically.
     b.switch_to_block(slow_blk);
     let always = b.ins().iconst(types::I64, 1);
     ec.fault_if(b, always, 5);

@@ -173,6 +173,7 @@ impl Compiled {
             builder.symbol("rt_u_free", rt_u_free as *const u8);
             builder.symbol("rt_u_map_push_pair", rt_u_map_push_pair as *const u8);
             builder.symbol("rt_u_map_seal", rt_u_map_seal as *const u8);
+            builder.symbol("rt_u_set_seal", rt_u_set_seal as *const u8);
             builder.symbol("rt_u_map_get", rt_u_map_get as *const u8);
             builder.symbol("rt_u_map_has", rt_u_map_has as *const u8);
             builder.symbol("rt_u_list_push_int", rt_u_list_push_int as *const u8);
@@ -277,6 +278,7 @@ impl Compiled {
                 free: declare(&mut module, "rt_u_free", &sig_free)?,
                 map_push_pair: declare(&mut module, "rt_u_map_push_pair", &sig5)?,
                 map_seal: declare(&mut module, "rt_u_map_seal", &sig2)?,
+                set_seal: declare(&mut module, "rt_u_set_seal", &sig2)?,
                 map_get: declare(&mut module, "rt_u_map_get", &sig_map_get)?,
                 // Same two-i64 (present, code) return shape as `map_get`.
                 map_has: declare(&mut module, "rt_u_map_has", &sig_map_get)?,

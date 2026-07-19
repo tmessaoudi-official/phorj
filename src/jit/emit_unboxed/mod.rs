@@ -541,6 +541,7 @@ pub(super) fn build_body_unboxed(
         free: module.declare_func_in_func(ids.free, b.func),
         map_push_pair: module.declare_func_in_func(ids.map_push_pair, b.func),
         map_seal: module.declare_func_in_func(ids.map_seal, b.func),
+        set_seal: module.declare_func_in_func(ids.set_seal, b.func),
         map_get: module.declare_func_in_func(ids.map_get, b.func),
         map_has: module.declare_func_in_func(ids.map_has, b.func),
         list_push_int: module.declare_func_in_func(ids.list_push_int, b.func),
@@ -989,14 +990,14 @@ pub(super) fn build_body_unboxed(
                 arm_maphas(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => {
-                // The setcontains vertical (Set.of): re-tag a fresh owned flat int list as an
-                // IntSet membership store — ZERO IR, no helper, no new unsafe (the sealed block IS
-                // the store; dedup-invariant for the sole consumer Set.contains).
-                arm_set_of(&mut b, &vars, &fvars, &mut kinds)?;
+                // FORK-D setcontains vertical (Set.of): SEAL a fresh owned flat int list into an
+                // int-keyed packed HASH table (via rt_u_set_seal) so Set.contains probes in O(1).
+                let h = ub_ref(ub_refs.as_ref(), "Set.of")?;
+                arm_set_of(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 2) if unboxed_native_is_set_contains(*id) => {
-                // The setcontains vertical: an inline linear scan of the flat int block returning a
-                // Bool `member?` (HIT → true, exhausted → clean false); a non-flat set → code-5 redo.
+                // FORK-D setcontains vertical: an inline O(1) packed-bucket probe of the int-hash set
+                // returning a Bool `member?` (HIT → true, empty bucket → clean false); non-flat → code-5.
                 arm_setcontains(&mut b, &ec, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => {
