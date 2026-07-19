@@ -28,9 +28,16 @@ ctor) must NOT flag while `import Core.Time.Instant` (reads clock → impure) MU
 failure mode: whole-module `Core.Time`/`Core.Random`/`Core.Process`/`Core.File`/… examples must STILL skip
 (non-deterministic), or the glob goes flaky.
 
-**Status:** FINDING DURABLE (this entry). Fix pending blast-radius measurement — if few examples fail once
-the glob is live, fix + examples in one green commit; if many, a fresh-context PR (do not grind fixes at
-max-compaction). See memory `example-glob-noop-since-dec191`.
+**Status: ✅ FIXED (2026-07-19, `a355c342`).** `uses_impure_native` now parses each import line and
+classifies per-MEMBER: a whole-module impure import (`import Core.Time;`) or an impure-member import
+flags; a pure-member import (`Core.Runtime.Entry`, `Core.Time.Duration`) does not. Impure native members
+come from the registry; impure PRELUDE classes are an explicit small set (`Core.Time.{Instant,Date}`).
+Measured: 201 SKIP → **8 SKIP, 0 RUN → 139 RUN**; the 8 remaining skips are correctly non-deterministic
+(Time/File/Random/stdin/fs). Reviving surfaced exactly ONE hidden-broken example — `strings-ext.phg`
+missing `import Core.String` (fixed `bb39af6f`) — and one TIER1 gap, `ucwords()` (added to TIER1_PHP;
+core/always-available). Full gate green (2250 tests, clippy both legs, release built). See memory
+`example-glob-noop-since-dec191`. ⚠ Follow-up: audit for OTHER dead gates that iterate the corpus via
+`uses_impure_native`/`collect_phg` — the same substring hole may have silenced more than these two globs.
 
 > **⚠ 2026-07-16 FULL REOPEN AUDIT — this file was fully re-verdicted.** Every row was reopened;
 > 17 rows are STALE (superseded by later shipped work) and 8 new flags were raised and ruled.

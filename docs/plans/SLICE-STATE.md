@@ -36,10 +36,22 @@ FINDINGS (owed to next recompute + review):
   (`998e370b`); variadics (`59bf4158`); Wave-B **Math tail** (`841864e7`); Wave-B **List.difference/intersection**
   (`81cbd331`, typed-strict set ops); Wave-B **String tail** capitalizeWords/translate (`90015c91`, ucwords/strtr);
   **DEC-300 `Core.Deque<T>`** (`762b3945`, pure-Phorj generic deque over List, T?-on-empty vs Spl* throw, 2249 green);
-  **DEC-301 `Core.PriorityQueue<T>`** (`<pending>`, pure-Phorj max-PQ over two parallel Lists, T?-on-empty, 2250 green).
+  **DEC-301 `Core.PriorityQueue<T>`** (`580c6041`, pure-Phorj max-PQ over two parallel Lists, T?-on-empty, 2250 green);
+  **§4.10 recompute** (`91737e4a`, parity 64→66% · Vision 66→67% · floor 47→51%); **DEC-302 backed-enums build-map**
+  (`d5ba41e9`, ruled AUTO, deferred to fresh context); **DEC-303 `String.chunk`** (codepoint-based, `__phorj_str_chunk`
+  helper, `bb39af6f`+src in `73f31189`); **🔴✅ P0 FIX — revived the dead example byte-identity glob** (`a355c342`).
+  🔴 **P0 (THE session headline): `all_examples_match_between_backends` + the transpile glob were DEAD since DEC-191**
+  (`uses_impure_native` substring-matched `import Core.Runtime` inside the universal `import Core.Runtime.Entry` →
+  201 SKIP / 0 RUN — Invariant-1 corpus enforcement OFF for weeks). FIXED via per-member impurity (201→8 SKIP,
+  0→139 RUN); surfaced 1 broken example (strings-ext missing `import Core.String`) + `ucwords` TIER1 gap. Full gate
+  green. Detail = KNOWN_ISSUES P0 + memory [[example-glob-noop-since-dec191]]. ⚠ FOLLOW-UP OWED: audit for OTHER
+  dead gates iterating the corpus via the same `uses_impure_native`/`collect_phg` path.
+  ⚠ GIT HYGIENE (dev AM review): `73f31189` (labeled "docs(P0)") ALSO contains the String.chunk src (text.rs/
+  transpile/*) — swept in by a bare `git add -A` (my rule violation). All green + unpushed; history mislabeled, not
+  broken. Left as-is (no history surgery at max-compaction). The `feat(string) bb39af6f` has the example+README+import.
   ⚠ LESSON (PQ): first probe was byte-identical run≡php but SEMANTICALLY WRONG (`List.fill` is `(value,count)` not
   `(count,value)`) — caught only by a seeded-tie assertion on the expected VALUE. Byte-identity ≠ correct; assert
-  semantics, not just backend agreement. Spread DEC-299 AUTO-DEFERRED (VM runtime-arity fork).
+  semantics, not just backend agreement (SAME lesson the dead glob taught: green ≠ tested). Spread DEC-299 AUTO-DEFERRED.
   ⚠ FRONTIER MAP (grep-verified this run — DO NOT rebuild; the easy pure-native seam is MINED OUT):
     · ALREADY-BUILT: crypto/CSPRNG/HMAC/KDF; Core.String rich (42+); Core.List rich (39 now); Core.Path
       (baseName/directoryName/extension/fileStem/join); Core.FileSystem BROAD (read/write/append/copy/move/
