@@ -15,7 +15,14 @@ stacked with §4.11: ≈60/81 already in the weighted model → headline **≈68
 (isLower/isUpper/isWhitespace/isPunctuation/isControl/isVisible/isPrintable) via `preg_match(/…$/D)` (NOT
 ctype_* — shared ext, hermetic-oracle guard fatal; the D-flag makes them MORE correct than the pre-D 5,
 whose trailing-`\n` divergence is now FLAGGED in KNOWN_ISSUES). AUTO-NAMING for dev review.
-**CLEAN RUNWAY (next, from §4.12 genuine-gaps + advisor):** (a) **Math asinh/acosh/atanh** — cheap, BUT has a
+(6) ✅ **Math inverse hyperbolics `8d9788d4`** — asinh/acosh/atanh (mirror of shipped sinh/cosh/tanh; same
+platform libm → bit-identical 3-leg; NaN out-of-domain verified rendered identically BEFORE building; added
+to TIER1_PHP as core std math). Standard names, no fork. FN-MATH §4.12 gap closed.
+**5 commits UNPUSHED** (`d2f95509` `6815ad87` `d7e39535` `c06eb5d5` `8d9788d4`) — dev pushes. Release binary
+rebuilt `target/release/phg`. **STOPPED HERE deliberately** (advisor-concurred): remaining runway all carries
+design edges best not opened deep in a long context (the ctype rationalization this session was caught by the
+HARNESS, not fresh context — the lesson).
+**CLEAN RUNWAY (next session, from §4.12 genuine-gaps + advisor):** (a) **Math asinh/acosh/atanh** — cheap, BUT has a
 NaN-rendering edge (domain violations → NaN); FIRST check how the shipped Math tail (asin/acos) renders NaN
 across all 3 legs and mirror it. (b) **FILTER email/URL** — advisor called it low-edge (Uri.parse exists) but
 byte-identity to PHP's `filter_var(FILTER_VALIDATE_EMAIL)` semantics is actually FIDDLY — verify before
