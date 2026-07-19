@@ -427,6 +427,101 @@ pub(super) fn arm_maphas(
     ub_push(b, vars, fvars, kinds, res, Kind::Bool)
 }
 
+/// `Core.Set.of(List<int>)` — the setcontains vertical's producer. Re-tags a FRESH OWNED flat
+/// int-list handle as an [`Kind::IntSet`] membership store: the sealed arena block
+/// (`UB_TAG_FLAT | count<<40 | base`, raw `i64` per slot) IS the store, so this is a pure
+/// COMPILE-TIME kind change — ZERO Cranelift IR, no helper, no new `unsafe`. Dedup is not applied
+/// (irrelevant to the only consumer, `Set.contains` — membership is dedup-invariant, and the
+/// narrow gating means nothing else observes the block). Owned-ONLY input is the double-free gate
+/// (a Borrowed copy would alias its source local); `analyze` enforces the same, so this reject is
+/// defensive.
+pub(super) fn arm_set_of(
+    b: &mut FunctionBuilder,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (v, k) = ub_pop(b, vars, fvars, kinds)?;
+    if !matches!(k, Kind::IntList(Own::Owned)) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Set.of operand kind {k:?} (only a fresh Owned IntList)"
+        )));
+    }
+    ub_push(b, vars, fvars, kinds, v, Kind::IntSet(Own::Owned))
+}
+
+/// `Core.Set.contains(Set<int>, int)` — the setcontains vertical. An INLINE linear scan of the
+/// flat int block (raw `i64` per 64-byte slot at bytes 0..8) comparing each element to the needle:
+/// byte-identical to the interpreter's own `Vec<HKey::Int>::contains` (`HKey::Int` equality ⇔ i64
+/// equality). A HIT pushes `1` (true); an exhausted scan pushes `0` (a CLEAN false — a membership
+/// test never faults). The set is a QUERY — NOT consumed (mirrors `Map.has`); the needle is a raw
+/// scalar. A non-flat set (a too-large / arena-exhausted seal that stayed boxed) is undecidable
+/// here → code 5, and the WHOLE call redoes on the VM, which recomputes `Set.contains`
+/// byte-identically. SAFETY: the flat handle's `[base, base+count)` slots are arena-resident by
+/// construction of the seal and unchanged by the `Set.of` re-tag, so every inline load is in-bounds
+/// — the same envelope as [`arm_index_int_list`]; this arm adds NO new `unsafe`.
+pub(super) fn arm_setcontains(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (needle, nk) = ub_pop(b, vars, fvars, kinds)?;
+    let (sv, sk) = ub_pop(b, vars, fvars, kinds)?;
+    if nk != Kind::Int || !matches!(sk, Kind::IntSet(_)) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Set.contains operand kinds ({sk:?}, {nk:?})"
+        )));
+    }
+    let merge = b.create_block();
+    b.append_block_param(merge, types::I64); // 1 = present, 0 = absent
+    let flat_blk = b.create_block();
+    let slow_blk = b.create_block();
+    let flat_bit = b.ins().band_imm(sv, UB_TAG_FLAT);
+    b.ins().brif(flat_bit, flat_blk, &[], slow_blk, &[]);
+    // FAST: linear scan of the flat int block. `count` rides bits 40..60 of the handle; `base` the
+    // low 40. Walk (addr, remaining); a HIT short-circuits to `merge(1)`, exhaustion to `merge(0)`.
+    b.switch_to_block(flat_blk);
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let cnt_raw = b.ins().ushr_imm(sv, 40);
+    let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+    let base = b.ins().band_imm(sv, UB_IDX_MASK);
+    let boff = b.ins().ishl_imm(base, 6);
+    let addr0 = b.ins().iadd(buf, boff);
+    let header = b.create_block();
+    b.append_block_param(header, types::I64); // element address
+    b.append_block_param(header, types::I64); // remaining count
+    let body = b.create_block();
+    let step = b.create_block();
+    b.ins().jump(header, &[addr0.into(), cnt.into()]);
+    b.switch_to_block(header);
+    let addr = b.block_params(header)[0];
+    let rem = b.block_params(header)[1];
+    // remaining == 0 → absent (a clean 0, NOT a fault).
+    let zerov = b.ins().iconst(types::I64, 0);
+    b.ins().brif(rem, body, &[], merge, &[zerov.into()]);
+    b.switch_to_block(body);
+    let elem = b.ins().load(types::I64, MemFlagsData::new(), addr, 0);
+    let eq = b.ins().icmp(IntCC::Equal, elem, needle);
+    let onev = b.ins().iconst(types::I64, 1);
+    b.ins().brif(eq, merge, &[onev.into()], step, &[]);
+    b.switch_to_block(step);
+    let addr1 = b.ins().iadd_imm(addr, UB_SLOT_SIZE as i64); // next 64-byte slot
+    let rem1 = b.ins().iadd_imm(rem, -1);
+    b.ins().jump(header, &[addr1.into(), rem1.into()]);
+    // SLOW: a non-flat (boxed) set is undecidable inline → code 5, the whole call redoes on the VM
+    // (byte-identical). Only reachable for a too-large / arena-exhausted seal — never a genuine miss.
+    b.switch_to_block(slow_blk);
+    let always = b.ins().iconst(types::I64, 1);
+    ec.fault_if(b, always, 5);
+    let unreach = b.ins().iconst(types::I64, 0);
+    b.ins().jump(merge, &[unreach.into()]); // unreachable terminator (fault_if diverges)
+    b.switch_to_block(merge);
+    let res = b.block_params(merge)[0];
+    ub_push(b, vars, fvars, kinds, res, Kind::Bool)
+}
+
 /// `Op::Index` with an `IntList` beneath the index — P-2c int-list element read
 /// (`xs[i]` → Int, raw i64 at slot bytes 0..8): inline unsigned bounds check + ONE load
 /// for a flat list; the two-return helper for a boxed one.

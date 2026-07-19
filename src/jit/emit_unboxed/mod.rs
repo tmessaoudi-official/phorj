@@ -988,6 +988,17 @@ pub(super) fn build_body_unboxed(
                 let h = ub_ref(ub_refs.as_ref(), "Map.has")?;
                 arm_maphas(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
+            Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => {
+                // The setcontains vertical (Set.of): re-tag a fresh owned flat int list as an
+                // IntSet membership store — ZERO IR, no helper, no new unsafe (the sealed block IS
+                // the store; dedup-invariant for the sole consumer Set.contains).
+                arm_set_of(&mut b, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 2) if unboxed_native_is_set_contains(*id) => {
+                // The setcontains vertical: an inline linear scan of the flat int block returning a
+                // Bool `member?` (HIT → true, exhausted → clean false); a non-flat set → code-5 redo.
+                arm_setcontains(&mut b, &ec, &vars, &fvars, &mut kinds)?;
+            }
             Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => {
                 // The generic pure-native bridge — mirrors the analyze arm; the helper calls
                 // the REGISTERED native (single-sourced kernel), so semantics cannot drift.

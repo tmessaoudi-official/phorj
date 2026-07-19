@@ -952,6 +952,51 @@ fn maphas_vertical_slow_path_canon0_key_matches_the_oracle() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_setcontains_vertical() {
+    // Setcontains-vertical DELIVERY-PATH proof: the exact `bench/micro/setcontains.phg` shape — a
+    // `Set.of([int literals])` (MakeList → flat int block, re-tagged to an IntSet) and
+    // `Set.contains(s, i % 16)` in a hot `while` (the inline linear membership scan). The needle
+    // `i % 16` (0..15) both HITS (3,1,4,5,9,2,6 present) and MISSES (0,7,8,10..15 absent) across
+    // iterations — the miss exercises the exhausted-scan→CLEAN-false codegen. Must JIT through the
+    // `Op::Call` hook AND stay byte-identical to the interpreter oracle. A silent VM fallback would
+    // false-green the byte-identity assert, so `hits>0` is the load-bearing check (proves the flip).
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.Set;\n\
+        function bench(int iters): int {\n\
+          Set<int> s = Set.of([3, 1, 4, 1, 5, 9, 2, 6]);\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            if (Set.contains(s, i % 16)) { acc = acc + 1; }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "setcontains-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual setcontains-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the setcontains vertical must actually hit the JIT — else the perf flip is unproven"
+    );
+}
+
+#[test]
 fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
     // Webish-vertical proof: mixed `Concat(n)` interpolation (`"h={v} p={p}"`) runs FULLY
     // INLINE for the hot shape — IR digit render (sign, zero, i64::MIN/MAX) + slot joins —

@@ -178,6 +178,14 @@ JIT verticals mirroring the map vertical (`src/jit/analyze.rs` + `src/jit/`, the
 VM native-call overhead itself (arg marshalling / dispatch), which would lift ALL ~286 natives at once.
 Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical throughout.
 
+**✅ FIX LEVER #2 — per-op JIT VERTICALS CAMPAIGN (dev-ruled 2026-07-19, DEC-311; flip the losers one at a time):**
+- **`Map.has` FLIPPED 0.03× → 1.50× WIN** (`b2f927a4`, DEC-311) — int-keyed packed-hash probe, `rt_u_map_has` helper.
+- **`Set.contains` — PARTIAL, FLAGGED (WIN-OR-FLAG): 0.02× → 0.45×** (linear-scan vertical, ZERO new unsafe,
+  25× VM→JIT, byte-identical, gate green). A LINEAR membership scan cannot beat php's O(1) hash `isset`
+  (~4-8 compares/probe vs ~1). ⏳ **FORK-D queued THIS session** — reseal `Set<int>` as an int-keyed packed
+  hash table (the maphas mirror: `Set<int>` ≡ `Map<int,()>`) → O(1) probe, expected to WIN like maphas.
+  When FORK-D lands this flag flips to WIN. Next after: listcontains (0.02×/44×) → mapkeys/values → mathmax.
+
 Related: the un-benched-stdlib COVERAGE gap — only **28 of 286 natives** are perf-benched (Invariant 18
 wants all with a php equivalent); these losses were hidden precisely because they weren't benched until now.
 

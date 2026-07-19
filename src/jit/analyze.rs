@@ -52,6 +52,18 @@ pub(super) enum Kind {
     /// bytes 0..8 (the flat-map VALUE-slot layout), so `Index` is an inline bounds check + one
     /// load; boxed fallbacks go through the two-return `rt_u_index_int` helper.
     IntList(Own),
+    /// A `Set<int>` membership handle (the setcontains vertical — DEC-311 flip campaign). A
+    /// NARROW kind: produced ONLY by `Core.Set.of` (which re-tags a fresh OWNED flat int-list
+    /// handle — same `UB_TAG_FLAT | count<<40 | base` arena encoding as [`Kind::IntList`], raw
+    /// `i64` per 64-byte slot at bytes 0..8), consumed ONLY by `Core.Set.contains` (an inline
+    /// linear membership scan — byte-identical to the interpreter's own `Vec<HKey::Int>::contains`).
+    /// It NEVER participates in any list op (a set is not a list), is never a param / call-arg /
+    /// return (rejected in the `Return` arm so the entry-decode default is unreachable), and its
+    /// release is generic (flat = a bump-pinned no-op via `emit_release`). Dedup is NOT applied at
+    /// `Set.of` — irrelevant to the sole consumer (membership is dedup-invariant) and the narrow
+    /// gating means no other op observes the store. Only requires an OWNED input (no live alias —
+    /// the double-free gate); a borrowed / non-int-list input falls back to the VM.
+    IntSet(Own),
     /// An enum value with AT MOST ONE `Int` payload (the enum vertical), realized as TWO i64
     /// register words: the payload in the I64 space (`vars[d]`, filler 0 for a zero-payload
     /// variant) and the VARIANT TAG (its `enum_descs` index) in the tag space (`evars[d]`).
@@ -157,6 +169,7 @@ impl Kind {
                 | Kind::StrList(_)
                 | Kind::StrIntMap(_)
                 | Kind::IntList(_)
+                | Kind::IntSet(_)
                 | Kind::DynList(_)
                 | Kind::Inst(..)
         )
@@ -169,6 +182,7 @@ impl Kind {
                 | Kind::StrList(Own::Owned)
                 | Kind::StrIntMap(Own::Owned)
                 | Kind::IntList(Own::Owned)
+                | Kind::IntSet(Own::Owned)
                 | Kind::DynList(Own::Owned)
                 | Kind::Inst(_, Own::Owned)
         )
@@ -182,6 +196,7 @@ pub(super) fn borrowed_copy(k: Kind) -> Kind {
         Kind::Str(o) => Kind::Str(o.borrow_of()),
         Kind::StrList(o) => Kind::StrList(o.borrow_of()),
         Kind::IntList(o) => Kind::IntList(o.borrow_of()),
+        Kind::IntSet(o) => Kind::IntSet(o.borrow_of()),
         Kind::StrIntMap(o) => Kind::StrIntMap(o.borrow_of()),
         Kind::Inst(c, o) => Kind::Inst(c, o.borrow_of()),
         Kind::DynList(o) => Kind::DynList(o.borrow_of()),
@@ -304,6 +319,7 @@ pub(super) fn join_kind(a: Kind, b: Kind) -> Option<Kind> {
         (Kind::StrList(x), Kind::StrList(y)) => join_own(x, y).map(Kind::StrList),
         (Kind::StrIntMap(x), Kind::StrIntMap(y)) => join_own(x, y).map(Kind::StrIntMap),
         (Kind::IntList(x), Kind::IntList(y)) => join_own(x, y).map(Kind::IntList),
+        (Kind::IntSet(x), Kind::IntSet(y)) => join_own(x, y).map(Kind::IntSet),
         (Kind::Inst(c1, x), Kind::Inst(c2, y)) if c1 == c2 => {
             join_own(x, y).map(|o| Kind::Inst(c1, o))
         }
@@ -363,6 +379,25 @@ pub(super) fn unboxed_native_is_map_has(id: usize) -> bool {
     crate::native::registry()
         .get(id)
         .is_some_and(|nf| nf.module == "Core.Map" && nf.name == "has" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.Set.of` (the setcontains vertical: re-tag a fresh OWNED
+/// flat int-list handle as an [`Kind::IntSet`] membership store — the sealed block IS the store,
+/// dedup-invariant for the sole consumer `Set.contains`; Borrowed / non-int input → VM fallback)?
+pub(super) fn unboxed_native_is_set_of(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Set" && nf.name == "of" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.Set.contains` (the setcontains vertical: an inline linear
+/// scan of the flat int block — byte-identical to the interpreter's `Vec<HKey::Int>::contains` —
+/// a HIT is `true`, an exhausted scan a clean `false` (never a fault); a non-flat, too-large set
+/// punts to a code-5 VM redo)?
+pub(super) fn unboxed_native_is_set_contains(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Set" && nf.name == "contains" && nf.pure)
 }
 
 /// Is `id` one of the pure 2-arg natives routed through the GENERIC `rt_u_native2` bridge
@@ -1809,6 +1844,44 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::Bool);
                 }
+                Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => {
+                    // The setcontains vertical (Set.of): re-tag a FRESH OWNED flat int list as an
+                    // IntSet membership store. Owned-ONLY is the double-free gate (a Borrowed copy
+                    // would alias its source local — a double-free on a boxed list at teardown);
+                    // dedup is irrelevant to the sole consumer (Set.contains). Non-Owned / non-int
+                    // list → VM fallback.
+                    match kinds.pop() {
+                        Some(Kind::IntList(Own::Owned)) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Set.of operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::IntSet(Own::Owned));
+                }
+                Op::CallNative(id, 2) if unboxed_native_is_set_contains(*id) => {
+                    // The setcontains vertical: an `Int` needle over an `IntSet` → `Bool` (member?).
+                    // The set is a QUERY — NOT consumed (mirrors Map.has); the needle is a scalar.
+                    // A miss is a clean `false`, never a fault.
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Set.contains needle kind {other:?}"
+                            )))
+                        }
+                    }
+                    match kinds.pop() {
+                        Some(Kind::IntSet(_)) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Set.contains receiver kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Bool);
+                }
                 Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => {
                     // The generic pure-native bridge (join/contains/splitOnce/drop) — the
                     // helper calls the registered native itself; kinds from the shape table.
@@ -2589,6 +2662,15 @@ pub(super) fn unboxed_analyze(
                         Kind::StrList(_) => Kind::StrList(Own::Owned),
                         Kind::IntList(_) => Kind::IntList(Own::Owned),
                         Kind::DynList(_) => Kind::DynList(Own::Owned),
+                        // The setcontains IntSet handle has NO entry-decode repr (a returned
+                        // handle word would be mis-decoded as an Int at `compile.rs`); reject so
+                        // that default is provably unreachable for IntSet. Sets aren't returned in
+                        // the vertical's scope (Set.contains yields a Bool).
+                        Kind::IntSet(_) => {
+                            return Err(JitError::Unsupported(
+                                "unboxed: Set (IntSet) return (deferred)".to_string(),
+                            ));
+                        }
                         // W7: a Dyn return has no single-kind decode on the caller side —
                         // mirror the emit reject exactly (analyze accepts ⇒ emit accepts).
                         Kind::Dyn => {
@@ -2732,6 +2814,8 @@ pub(super) fn collect_functions_unboxed(
                 Op::CallNative(id, 1) if unboxed_native_is_to_string(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => uses_handles = true,
+                Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => uses_handles = true,
+                Op::CallNative(id, 2) if unboxed_native_is_set_contains(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => uses_handles = true,
                 // hofpipe: the HOF loop arms direct-call the compiled lambda per element.
                 Op::CallNative(id, 2)
