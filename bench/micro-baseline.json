@@ -2,163 +2,163 @@
   "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT (docker php:8.5-cli). The gate BLOCKS on identity breaks and WIN->LOSS flips (ratio crossing 1.0 downward) — NOT on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after the JIT lands a WIN so the flip check protects it. ratio<1 = the VM still LOSES to php (the JIT is the lever).",
   "features": {
     "closurecall": {
-      "ratio": 2.057,
+      "ratio": 2.118,
       "identical": true
     },
     "dbwork": {
-      "ratio": 1.015,
+      "ratio": 1.093,
       "identical": true
     },
     "deepjson": {
-      "ratio": 0.923,
+      "ratio": 0.969,
       "identical": true
     },
     "enum": {
-      "ratio": 1.704,
+      "ratio": 1.672,
       "identical": true
     },
     "fibrec": {
-      "ratio": 1.844,
+      "ratio": 1.863,
       "identical": true
     },
     "floatarith": {
-      "ratio": 3.921,
+      "ratio": 4.037,
       "identical": true
     },
     "floatloop": {
-      "ratio": 1.017,
+      "ratio": 1.009,
       "identical": true
     },
     "floatmul": {
-      "ratio": 1.000,
+      "ratio": 1.002,
       "identical": true
     },
     "forin": {
-      "ratio": 1.525,
+      "ratio": 1.549,
       "identical": true
     },
     "hofpipe": {
-      "ratio": 5.462,
+      "ratio": 5.527,
       "identical": true
     },
     "intadd": {
-      "ratio": 1.487,
+      "ratio": 1.443,
       "identical": true
     },
     "interp": {
-      "ratio": 2.522,
+      "ratio": 2.578,
       "identical": true
     },
     "jsonround": {
-      "ratio": 0.300,
+      "ratio": 0.296,
       "identical": true
     },
     "listappend": {
-      "ratio": 1.182,
+      "ratio": 1.212,
+      "identical": true
+    },
+    "listcontains": {
+      "ratio": 0.027,
+      "identical": true
+    },
+    "listfilter": {
+      "ratio": 0.221,
       "identical": true
     },
     "listindex": {
       "ratio": 1.791,
       "identical": true
     },
-    "mapget": {
-      "ratio": 1.080,
-      "identical": true
-    },
-    "mapinsert": {
-      "ratio": 1.103,
-      "identical": true
-    },
-    "match": {
-      "ratio": 7.897,
-      "identical": true
-    },
-    "methodcall": {
-      "ratio": 2.917,
-      "identical": true
-    },
-    "objalloc": {
-      "ratio": 8.909,
-      "identical": true
-    },
-    "strbuild": {
-      "ratio": 2.064,
-      "identical": true
-    },
-    "stringconcat": {
-      "ratio": 1.875,
-      "identical": true
-    },
-    "trycatch": {
-      "ratio": 34.533,
-      "identical": true
-    },
-    "webish": {
-      "ratio": 1.943,
-      "identical": true
-    },
     "listmap": {
-      "ratio": 7.5,
-      "identical": true
-    },
-    "listfilter": {
-      "ratio": 0.22,
+      "ratio": 7.926,
       "identical": true
     },
     "listreduce": {
-      "ratio": 0.27,
-      "identical": true
-    },
-    "listcontains": {
-      "ratio": 0.02,
-      "identical": true
-    },
-    "maphas": {
-      "ratio": 0.03,
-      "identical": true
-    },
-    "mapkeys": {
-      "ratio": 0.07,
-      "identical": true
-    },
-    "mapvalues": {
-      "ratio": 0.08,
-      "identical": true
-    },
-    "mapmerge": {
-      "ratio": 0.10,
+      "ratio": 0.298,
       "identical": true
     },
     "mapfilter": {
-      "ratio": 0.23,
+      "ratio": 0.219,
+      "identical": true
+    },
+    "mapget": {
+      "ratio": 1.153,
+      "identical": true
+    },
+    "maphas": {
+      "ratio": 1.522,
+      "identical": true
+    },
+    "mapinsert": {
+      "ratio": 1.071,
+      "identical": true
+    },
+    "mapkeys": {
+      "ratio": 0.083,
       "identical": true
     },
     "mapmap": {
-      "ratio": 0.30,
+      "ratio": 0.319,
       "identical": true
     },
-    "setunion": {
-      "ratio": 0.79,
+    "mapmerge": {
+      "ratio": 0.103,
       "identical": true
     },
-    "setintersection": {
-      "ratio": 1.58,
+    "mapvalues": {
+      "ratio": 0.075,
       "identical": true
     },
-    "setdifference": {
-      "ratio": 0.40,
-      "identical": true
-    },
-    "setcontains": {
-      "ratio": 0.02,
+    "match": {
+      "ratio": 7.399,
       "identical": true
     },
     "mathmax": {
-      "ratio": 0.03,
+      "ratio": 0.027,
+      "identical": true
+    },
+    "methodcall": {
+      "ratio": 2.903,
+      "identical": true
+    },
+    "objalloc": {
+      "ratio": 9.112,
+      "identical": true
+    },
+    "setcontains": {
+      "ratio": 1.024,
+      "identical": true
+    },
+    "setdifference": {
+      "ratio": 0.466,
+      "identical": true
+    },
+    "setintersection": {
+      "ratio": 1.566,
+      "identical": true
+    },
+    "setunion": {
+      "ratio": 0.780,
+      "identical": true
+    },
+    "strbuild": {
+      "ratio": 2.141,
+      "identical": true
+    },
+    "stringconcat": {
+      "ratio": 1.880,
       "identical": true
     },
     "stringcontains": {
-      "ratio": 0.11,
+      "ratio": 0.114,
+      "identical": true
+    },
+    "trycatch": {
+      "ratio": 34.255,
+      "identical": true
+    },
+    "webish": {
+      "ratio": 2.336,
       "identical": true
     }
   }

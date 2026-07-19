@@ -179,6 +179,12 @@ VM native-call overhead itself (arg marshalling / dispatch), which would lift AL
 Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical throughout.
 
 **✅ FIX LEVER #2 — per-op JIT VERTICALS CAMPAIGN (dev-ruled 2026-07-19, DEC-311; flip the losers one at a time):**
+- **RATCHET ARMED 2026-07-19** (quiet box, load-avg 1.7, all cores 90-98% idle; `microbench-gate.sh --emit` K=7,
+  core-7-pinned/interleaved): `bench/micro-baseline.json` now records maphas **1.522** and setcontains **1.024** as WINS
+  (were 0.03/0.02 losses) → both are WIN→LOSS-ratchet-protected. Gate re-run at the pre-push default K=3 PASSED
+  (maphas 1.516, setcontains 1.022; 26 WIN / 14 loss; 0 blocking flips; all output-identical). ⚠ **setcontains is
+  marginal (1.02×) — a LOADED pre-push box could dip its best-of-3 below 1.0 and trip a spurious flip** (same boundary
+  class as floatloop 1.009); re-`--emit` on a quiet box if that ever blocks a push, or the dev may bump pre-push K.
 - **`Map.has` FLIPPED 0.03× → 1.50× WIN** (`b2f927a4`, DEC-311) — int-keyed packed-hash probe, `rt_u_map_has` helper.
 - **`Set.contains` FLIPPED 0.02× → 1.05× WIN** (FORK-D, `rt_u_set_seal` building helper) — `Set<int>` is now
   resealed as an int-keyed packed OPEN-ADDRESSED hash table (the maphas mirror: `Set<int>` ≡ `Map<int,()>`),

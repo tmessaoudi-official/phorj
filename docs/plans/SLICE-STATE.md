@@ -8,11 +8,10 @@ acceptable. Sharpens Invariant 18 into a per-feature definition-of-done = [[perf
 subagent per vertical + main-session independent gate/certify; THEN back to building features each with a
 flip-or-flag bench). ORDER (biggest loss → most tractable): ✅ **maphas DONE `b2f927a4` (DEC-311) — FLIPPED 0.03× → 1.50× WIN
 vs php** (mirrors mapget vertical; `rt_u_map_has` one-deref unsafe, miss=clean-false; VM→JIT 51.4×; hits>0
-proven; 4-way byte-identical; 2306 gate green; main-session independently verified). ⚠ **OWED: arm the WIN
-in `bench/micro-baseline.json` via `scripts/microbench-gate.sh --emit` on a QUIET box — BLOCKED (gate guards
-on load-AVG ≥2.5; external tenant spiking 3-13). Until armed, the flip is NOT gate-protected vs a future
-WIN→LOSS regression** (push itself is fine — LOSS→WIN doesn't trip it). Coverage forks FORK-A (Map<string,int>
-only) / FORK-C (AMB deferred) recorded DEC-311 for dev review.
+proven; 4-way byte-identical; 2306 gate green; main-session independently verified). ✅ **ARMED 2026-07-19
+(quiet box, load-avg 1.7, all cores 90-98% idle): `microbench-gate.sh --emit` K=7 pinned → maphas 0.03→1.522
+in `bench/micro-baseline.json`; the flip is now ratchet-protected vs a future WIN→LOSS regression.** Coverage
+forks FORK-A (Map<string,int> only) / FORK-C (AMB deferred) recorded DEC-311 for dev review.
 ◐ **setcontains PARTIAL committed `2bdc25eb` (0.02×→0.45×, 25× VM→JIT, FLAGGED WIN-OR-FLAG, ZERO new unsafe** —
 linear scan can't beat php O(1) hash). ⏳ **FORK-D BUILDING NOW (subagent) — reseal Set<int> as int-keyed packed
 HASH table → O(1) probe → expected WIN ~1.5× like maphas.** ⚠⚠ **GATING FORK-D (READ THIS — the campaign's crux):**
@@ -31,10 +30,11 @@ reseal (setcontains ~1.05×), MATCHES-or-loses on linear/alloc-bound vs tuned C.
 - **listcontains = FLAGGED (NO vertical)** — linear-vs-C, can't flip (KNOWN_ISSUES FIX-LEVER-#2). Accepted loss.
 - **mapkeys/values (0.07×) + mathmax (0.03×) = QUEUED, MEASURE-FIRST, FRESH context** — map-structured so a
   vertical is PLAUSIBLY parity+, but alloc-touching → BUILD+MEASURE, keep only if ≥parity, else flag. NOT auto-built.
-**SCOREBOARD: maphas WIN 1.50× ✓ · setcontains parity ~1.05× ✓ (both committed) · listcontains flagged · mapkeys/
-values/mathmax = fresh-context measure-first.** ⚠ OWED (both): `microbench-gate.sh --emit` to arm the wins in the
-baseline — BLOCKED on a quiet box (gate guards load-avg ≥2.5, external tenant spiking). Until armed, no WIN→LOSS
-regression protection. ⚠ Next JIT build = FRESH orchestrator context (this session went very deep — advisor-flagged).
+**SCOREBOARD: maphas WIN 1.522× ✓ · setcontains parity 1.024× ✓ (both committed AND ARMED) · listcontains flagged ·
+mapkeys/values/mathmax = fresh-context measure-first.** ✅ **OWED-CLEARED 2026-07-19: `microbench-gate.sh --emit`
+(K=7, pinned, quiet box) armed BOTH wins in `bench/micro-baseline.json` — maphas 0.03→1.522, setcontains 0.02→1.024;
+zero WIN→LOSS regressions, zero identity breaks across all 40 features. WIN→LOSS ratchet protection now LIVE for both.**
+⚠ Next JIT build = FRESH orchestrator context (this session went very deep — advisor-flagged).
 ⚠ **PER-VERTICAL BAR (hold it, do NOT compress):** fresh-context subagent builds → MAIN-SESSION independent
 full --all-features gate + hits>0 + checksum-gated flip + 4-way byte-identity + read the unsafe helper +
 advisor 6C → commit. One vertical per cycle. ⚠ The risk is the ORCHESTRATOR (my) context depth, NOT the
