@@ -708,6 +708,23 @@ import Core.List;
     );
 }
 
+/// Wave-B (DEC-306): `Set.isSuperset` — the symmetric partner of `isSubset` (`a.isSuperset(b)` ≡
+/// `b.isSubset(a)`). Byte-identical run≡runvm≡php (erases to `count(array_diff(b, a)) === 0`).
+#[test]
+fn set_is_superset_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Set;
+#[Entry] function main() -> void {
+    Set<int> big = Set.of([1, 2, 3, 4]);
+    Set<int> small = Set.of([2, 3]);
+    Output.printLine("{Set.isSuperset(big, small)}|{Set.isSuperset(small, big)}|{Set.isSuperset(big, big)}");
+}"#,
+        "true|false|true\n",
+        "set_is_superset",
+    );
+}
+
 /// Wave-B (DEC-305): `List.product` — the multiplicative companion to `sum` (empty → 1, PHP
 /// `array_product`). Checked overflow (faults, doesn't wrap — PHP promotes to float; examples stay in
 /// range). Byte-identical run≡runvm≡php; covers a normal product, a zero factor, and the empty list.

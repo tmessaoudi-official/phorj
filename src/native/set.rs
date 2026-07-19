@@ -101,6 +101,14 @@ fn set_is_subset(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Set.isSubset expects (Set<T>, Set<T>)".into()),
     }
 }
+/// `Set.isSuperset(a, b) -> bool` — a ⊇ b, the symmetric partner of `isSubset` (`a.isSuperset(b)` ≡
+/// `b.isSubset(a)`): every element of `b` is in `a`.
+fn set_is_superset(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(a), Value::Set(b)] => Ok(Value::Bool(b.iter().all(|k| a.contains(k)))),
+        _ => Err("Set.isSuperset expects (Set<T>, Set<T>)".into()),
+    }
+}
 
 fn set_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
@@ -255,6 +263,16 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(set_is_subset),
             // a ⊆ b ⇔ a has no element absent from b.
             php: |a| format!("count(array_diff({}, {})) === 0", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Set",
+            name: "isSuperset",
+            params: vec![Ty::Set(Box::new(t())), Ty::Set(Box::new(t()))],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(set_is_superset),
+            // a ⊇ b ⇔ b has no element absent from a (isSubset with args swapped).
+            php: |a| format!("count(array_diff({}, {})) === 0", parg(a, 1), parg(a, 0)),
         },
     ]
 }

@@ -36,5 +36,8 @@ function main(): void {
     Output.printLine("inter has 1 = {iHas1}");
     // false (1 is not in b)
     Output.printLine("diff has 1  = {dHas1}");
+    // isSubset / isSuperset are symmetric partners: u ⊇ a ⇔ a ⊆ u.
+    // u (the union) is a superset of a → true; a is NOT a superset of u → false.
+    Output.printLine("u superset of a = {Set.isSuperset(u, a)}");
+    Output.printLine("a superset of u = {Set.isSuperset(a, u)}");
 }
-// true
