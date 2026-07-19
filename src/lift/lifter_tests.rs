@@ -225,9 +225,25 @@ fn lifts_array_literals_to_list_and_map() {
 // ── loud Tier-2 / no-equivalent lift errors (never a silent wrong lift) ──
 
 #[test]
+fn lifts_backed_enum() {
+    // DEC-302: a PHP backed enum lifts to a Phorj backed enum — backing type + per-variant values.
+    let out = lift(
+        "<?php enum Suit: string { case Hearts = \"H\"; case Spades = \"S\"; }\nenum Level: int { case Low = 1; case High = 9; }",
+    );
+    assert!(
+        out.contains("enum Suit: string { Hearts = \"H\", Spades = \"S\" }"),
+        "{out}"
+    );
+    assert!(
+        out.contains("enum Level: int { Low = 1, High = 9 }"),
+        "{out}"
+    );
+    assert_reparses(&out);
+}
+
+#[test]
 fn refuses_tier2_constructs() {
     for (php, frag) in [
-        ("<?php enum Suit: string { case H = 'h'; }", "backed enum"),
         (
             "<?php enum E { case A; public function f(): int { return 1; } }",
             "has methods",

@@ -200,34 +200,56 @@ pub(super) fn literal_pattern(e: &php::PhpExpr) -> Result<Pattern, String> {
 // ── enums + types + small helpers ──
 
 pub(super) fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
-    if e.backing.is_some() {
-        return Err(format!(
-            "lift: backed enum `{}` (cases with scalar values) has no Phorj equivalent (Tier-2)",
-            e.name
-        ));
-    }
     if !e.methods.is_empty() {
         return Err(format!(
             "lift: enum `{}` has methods — Phorj enums carry no methods (Tier-2)",
             e.name
         ));
     }
+    // DEC-302: a PHP backed enum (`enum Suit: string { case Hearts = "H"; }`) lifts to a Phorj
+    // backed enum — backing type + per-variant value preserved. Only `int`/`string` back an enum
+    // (both PHP and Phorj), and every case of a backed enum carries a value (PHP requires it).
+    let backing_type = match &e.backing {
+        Some(bt) => {
+            let ty = lift_type(bt)?;
+            if !matches!(&ty, Type::Named { name, .. } if name == "int" || name == "string") {
+                return Err(format!(
+                    "lift: enum `{}` backing type must be `int` or `string` (Tier-2)",
+                    e.name
+                ));
+            }
+            Some(ty)
+        }
+        None => None,
+    };
     let variants = e
         .cases
         .iter()
-        .map(|c| EnumVariant {
-            name: c.name.clone(),
-            fields: Vec::new(),
-            backing_value: None, // DEC-302: backed-enum lift is a later increment (build-map step 6)
-            span: SP,
+        .map(|c| {
+            let backing_value = match (&backing_type, &c.value) {
+                (Some(_), Some(v)) => Some(Box::new(lift_expr(v)?)),
+                (Some(_), None) => {
+                    return Err(format!(
+                        "lift: backed enum `{}` case `{}` has no value",
+                        e.name, c.name
+                    ))
+                }
+                (None, _) => None,
+            };
+            Ok(EnumVariant {
+                name: c.name.clone(),
+                fields: Vec::new(),
+                backing_value,
+                span: SP,
+            })
         })
-        .collect();
+        .collect::<Result<_, String>>()?;
     Ok(EnumDecl {
         vis: crate::ast::Visibility::Public,
         name: e.name.clone(),
         type_params: Vec::new(),
         type_param_bounds: Vec::new(),
-        backing_type: None,
+        backing_type,
         variants,
         injected: false,
         span: SP,

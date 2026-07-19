@@ -1,0 +1,34 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+
+// DEC-302 backed enums (PHP 8.1) — an enum whose every variant carries a scalar value.
+// `: string` / `: int` declares the backing type; each variant assigns a literal of that type.
+enum Suit: string { Hearts = "H", Spades = "S", Diamonds = "D", Clubs = "C" }
+
+enum Priority: int { Low = 1, Medium = 5, High = 9 }
+
+#[Entry]
+function main(): void {
+    // `.value` reads a variant's backing scalar. `Enum.from(x)` maps a value back to its variant
+    // (faulting on no match); the result is a normal enum value.
+    Suit s = Suit.from("S");
+    Output.printLine("from(\"S\").value = {s.value}");
+    // An int-backed `.value` is a first-class arithmetic operand.
+    int scaled = Priority.from(9).value + 1;
+    Output.printLine("High.value + 1 = {scaled}");
+    // `cases()` enumerates every variant in declaration order (a `List<Suit>`).
+    Output.printLine("all suits:");
+    for (Suit c in Suit.cases()) {
+        Output.printLine("  {c.value}");
+    }
+    // `tryFrom(x)` returns `Enum?` — null on no match, so `?.` + `??` handle the miss without a fault.
+    string hit = Suit.tryFrom("D")?.value ?? "none";
+    string miss = Suit.tryFrom("Z")?.value ?? "none";
+    Output.printLine("tryFrom(\"D\") = {hit}, tryFrom(\"Z\") = {miss}");
+    // A backed enum still `match`es on its variants like any enum.
+    Priority p = Priority.from(5);
+    string label = match (p) { Low() => "low", Medium() => "medium", High() => "high" };
+    Output.printLine("priority 5 is {label}");
+}

@@ -110,6 +110,11 @@ enum FaultKind {
     /// never that a value is available). Both backends fault identically; classified by body substring
     /// so the VM's `at N:` line prefix doesn't split it from the interpreter's prefix-less render.
     Concurrency,
+    /// DEC-302 `Enum.from(x)` with no matching backing value — a checker-valid, runtime-reachable
+    /// fault (the checker proves `x` is the backing type, never that a variant carries it). Both
+    /// backends fault with the single-sourced `enum_from_miss` body; classified by body substring so
+    /// the VM's `at N:` prefix doesn't split it from the interpreter's prefix-less render.
+    EnumFromMiss,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -143,6 +148,8 @@ fn classify(err: &str) -> FaultKind {
         || err.contains("assertion failed")
     {
         FaultKind::Panic
+    } else if err.contains("no case of enum") {
+        FaultKind::EnumFromMiss
     } else if err.contains("no field") {
         FaultKind::NoField
     } else if err.contains("unsupported") || err.contains("compile error") {
@@ -3769,6 +3776,78 @@ function classify(Code c) -> string {
 }",
         "server\nclient\nother (200)\n",
         "match_arm_guards_enum",
+    );
+}
+
+/// DEC-302 backed enums — `.value`, `cases()`, `from`, `tryFrom` (hit + miss) across all three
+/// backends. A backed enum is repr B (base class + emitted methods), so this exercises the enum
+/// static methods, the `value` property read, and the `?.`/`??` optional path on a `tryFrom` miss.
+#[test]
+fn backed_enum_value_cases_from_tryfrom_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+enum Suit: string { Hearts = \"H\", Spades = \"S\", Clubs = \"C\" }
+enum Priority: int { Low = 1, High = 9 }
+#[Entry] function main() -> void {
+    Suit s = Suit.from(\"S\");
+    Output.printLine(s.value);
+    for (Suit c in Suit.cases()) { Output.printLine(c.value); }
+    Output.printLine(Suit.tryFrom(\"C\")?.value ?? \"none\");
+    Output.printLine(Suit.tryFrom(\"Z\")?.value ?? \"none\");
+    Priority p = Priority.from(9);
+    Output.printLine(\"{p.value}\");
+}",
+        "S\nH\nS\nC\nC\nnone\n9\n",
+        "backed_enum_surface",
+    );
+}
+
+/// DEC-302 Invariant 7 (CTy-operand trap): an int-backed `.value` — including on the result of
+/// `from(x)` — must type as an `int` operand so the VM specializes the arithmetic exactly as the
+/// interpreter. Without the `ctype` arms for `.value` and `Enum.from(x)` the VM rejects this.
+#[test]
+fn backed_enum_int_value_is_arithmetic_operand() {
+    agree_out_php(
+        "import Core.Output;
+enum Priority: int { Low = 1, High = 9 }
+#[Entry] function main() -> void {
+    int a = Priority.from(9).value + 1;
+    Priority p = Priority.from(1);
+    int b = p.value * 10;
+    Output.printLine(\"{a} {b}\");
+}",
+        "10 10\n",
+        "backed_enum_int_operand",
+    );
+}
+
+/// DEC-302 `cases()` on a PLAIN (non-backed) payload-less enum — the requirement that `cases()`
+/// generalizes beyond backed enums. Declaration order, byte-identical across all three backends.
+#[test]
+fn plain_enum_cases_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+enum Direction { North, South, East, West }
+function nm(Direction d) -> string {
+    return match d { North() => \"N\", South() => \"S\", East() => \"E\", West() => \"W\" };
+}
+#[Entry] function main() -> void {
+    for (Direction d in Direction.cases()) { Output.printLine(nm(d)); }
+}",
+        "N\nS\nE\nW\n",
+        "plain_enum_cases",
+    );
+}
+
+/// DEC-302 `Enum.from(x)` with no matching value faults identically on `run`, `runvm`, AND the
+/// transpiled PHP (Invariant 1 — identical failure behaviour, incl. the PHP leg). A fault can't be
+/// a runnable example (Invariant 9), so it lives here; `agree_err_php` drives the transpiled PHP and
+/// asserts a non-zero exit (the emitted `from` scan ends in `throw new \ValueError`).
+#[test]
+fn backed_enum_from_miss_faults_all_backends() {
+    agree_err_php(
+        "enum Suit: string { Hearts = \"H\", Spades = \"S\" }
+#[Entry] function main() -> void { Suit s = Suit.from(\"Z\"); }",
     );
 }
 

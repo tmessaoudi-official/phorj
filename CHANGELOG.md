@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-302: backed enums (PHP 8.1 parity) — scalar-valued enums
+
+`enum Suit: string { Hearts = "H", … }` / `enum Priority: int { Low = 1, … }` — an enum whose
+every variant carries an `int`/`string` scalar. `s.value` reads the backing (an int-backed
+`.value` is a first-class arithmetic operand); `Enum.cases()` lists every variant in declaration
+order (`List<Enum>`, also valid on any plain payload-less enum); `Enum.from(x)` maps a value → its
+variant (faults on no match); `Enum.tryFrom(x)` returns `Enum?` (null on no match). Representation
+**B** (dev-ruled): the uniform abstract-base-class + `final class` per-variant model, extended with
+a `value` property + static `cases()`/`from()`/`tryFrom()` emitted on the base — NOT a native PHP
+`enum` (one representation, consistent lift, no generic special-case). The VM gains `Op::EnumValue`
++ `Op::EnumFrom` (`cases()` inlines to `MakeEnum×N + MakeList`); the from-miss fault body is
+single-sourced in `value::enum_from_miss` for run≡runvm parity. PHP→Phorj lift now maps a backed
+PHP enum to a backed Phorj enum. 11 new coded diagnostics validate backing/variant/value shape.
+Byte-identical across interpreter, VM, and real PHP; `examples/guide/enums-backed.phg` +
+differential coverage. Repr (A) native-PHP-enum path rejected (two representations, no generics).
+
 ### Added — DEC-273 wave 3: the woven four migrate; the preludes monolith keeps dissolving
 
 `db` (the whole multi-driver tree — sqlite/mysql/postgres driver files colocated), `mail`,

@@ -174,16 +174,25 @@ impl Printer {
         } else {
             format!("<{}>", e.type_params.join(", "))
         };
+        // DEC-302 backed enum: `: int`/`: string` header + per-variant `= value`.
+        let backing = match &e.backing_type {
+            Some(t) => format!(": {}", ty(t)?),
+            None => String::new(),
+        };
         let mut variants = Vec::new();
         for v in &e.variants {
-            if v.fields.is_empty() {
-                variants.push(v.name.clone());
+            let base = if v.fields.is_empty() {
+                v.name.clone()
             } else {
-                variants.push(format!("{}({})", v.name, self.params(&v.fields)?));
+                format!("{}({})", v.name, self.params(&v.fields)?)
+            };
+            match &v.backing_value {
+                Some(val) => variants.push(format!("{base} = {}", self.expr(val)?)),
+                None => variants.push(base),
             }
         }
         self.line(&format!(
-            "enum {}{generics} {{ {} }}",
+            "enum {}{generics}{backing} {{ {} }}",
             e.name,
             variants.join(", ")
         ));
