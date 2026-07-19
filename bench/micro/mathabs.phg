@@ -1,0 +1,32 @@
+package Main;
+
+import Core.Output;
+import Core.Math;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Math.abs` (one-arg integer absolute value). The operand is data-dependent
+// (`i % 2000 - 1000`, spanning negatives) so php cannot hoist the call; the checksum folds the
+// running absolute values. The operand NEVER reaches i64::MIN, so no fault path is exercised here
+// (that edge is covered by the JIT fault-parity test). `abs` is a cheap native, so this isolates
+// the native-CALL overhead (VM dispatch vs php's C builtin `abs`).
+function bench(int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        acc = acc + Math.abs(i % 2000 - 1000);
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("mathabs\t{d + guard}\t{acc}");
+}

@@ -1033,6 +1033,18 @@ pub(super) fn build_body_unboxed(
                 // `Math.max(int, int)` — inline signed `smax`, no dispatch, no fault path.
                 arm_math_max(&mut b, &vars, &fvars, &mut kinds)?;
             }
+            Op::CallNative(id, 2) if unboxed_native_is_math_min(*id) => {
+                // `Math.min(int, int)` — inline signed `smin`, no dispatch, no fault path.
+                arm_math_min(&mut b, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_math_sign(*id) => {
+                // `Math.sign(int)` — inline branchless icmp pair → -1/0/1, no dispatch, no fault.
+                arm_math_sign(&mut b, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_math_abs(*id) => {
+                // `Math.abs(int)` — inline `iabs` with an `i64::MIN` code-5 guard (VM redo).
+                arm_math_abs(&mut b, &ec, &vars, &fvars, &mut kinds)?;
+            }
             Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => {
                 let h = ub_ref(ub_refs.as_ref(), "String.length")?;
                 arm_str_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;

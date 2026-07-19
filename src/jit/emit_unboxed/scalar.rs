@@ -306,3 +306,75 @@ pub(super) fn arm_math_max(
     let res = b.ins().smax(av, bv);
     ub_push(b, vars, fvars, kinds, res, Kind::Int)
 }
+
+/// `Math.min(int, int): int` — the kernel is `(*a).min(*b)` = `i64::min`; Cranelift's scalar
+/// `smin` is the same SIGNED min, so interp ≡ VM ≡ JIT ≡ php by construction. Pure scalar, no
+/// fault path, no handle space. Second arg is on top of the stack (`bv`, popped first). The exact
+/// mirror of [`arm_math_max`].
+pub(super) fn arm_math_min(
+    b: &mut FunctionBuilder,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (bv, bk) = ub_pop(b, vars, fvars, kinds)?;
+    let (av, ak) = ub_pop(b, vars, fvars, kinds)?;
+    if ak != Kind::Int || bk != Kind::Int {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Math.min operand kinds ({ak:?}, {bk:?})"
+        )));
+    }
+    let res = b.ins().smin(av, bv);
+    ub_push(b, vars, fvars, kinds, res, Kind::Int)
+}
+
+/// `Math.sign(int): int` — the kernel is `i64::from(*n > 0) - i64::from(*n < 0)` (-1/0/1).
+/// Materialized branchlessly: `pos = (n > 0)` and `neg = (n < 0)` are i8 booleans, `uextend`ed to
+/// i64 (each 0 or 1 — the SAME bool→i64 widening the comparison arms use), then `pos - neg`. That
+/// is exactly `i64::from(n>0) - i64::from(n<0)`: `n>0 → 1-0 = 1`, `n==0 → 0-0 = 0`, `n<0 → 0-1 = -1`.
+/// interp ≡ VM ≡ JIT ≡ php `($n <=> 0)` by construction. Pure scalar, no fault, no handle space.
+pub(super) fn arm_math_sign(
+    b: &mut FunctionBuilder,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (nv, nk) = ub_pop(b, vars, fvars, kinds)?;
+    if nk != Kind::Int {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Math.sign operand kind {nk:?}"
+        )));
+    }
+    let pos = b.ins().icmp_imm(IntCC::SignedGreaterThan, nv, 0);
+    let neg = b.ins().icmp_imm(IntCC::SignedLessThan, nv, 0);
+    let pos64 = b.ins().uextend(types::I64, pos);
+    let neg64 = b.ins().uextend(types::I64, neg);
+    let res = b.ins().isub(pos64, neg64);
+    ub_push(b, vars, fvars, kinds, res, Kind::Int)
+}
+
+/// `Math.abs(int): int` — the kernel is `n.checked_abs()`, which FAULTS ("integer overflow in
+/// Math.abs") on `i64::MIN` (the only i64 whose absolute value is not representable). Cranelift's
+/// `iabs` WRAPS `i64::MIN` to `i64::MIN` with no trap, which would DIVERGE from the faulting kernel
+/// — so this GUARDS `n == i64::MIN` → code 5 (the VM redo renders the canonical fault) BEFORE
+/// `iabs`, making the JIT fault EXACTLY where the VM faults (run ≡ runvm preserved). For every
+/// other operand `iabs` == `checked_abs` byte-identically. Mirrors the div arm's `i64::MIN` guard.
+pub(super) fn arm_math_abs(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (nv, nk) = ub_pop(b, vars, fvars, kinds)?;
+    if nk != Kind::Int {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Math.abs operand kind {nk:?}"
+        )));
+    }
+    let imin = b.ins().iconst(types::I64, i64::MIN);
+    let is_min = b.ins().icmp(IntCC::Equal, nv, imin);
+    ec.fault_if(b, is_min, 5); // i64::MIN.checked_abs() == None → redo on VM (canonical fault)
+    let res = b.ins().iabs(nv);
+    ub_push(b, vars, fvars, kinds, res, Kind::Int)
+}

@@ -185,6 +185,10 @@ Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical through
   (maphas 1.516, setcontains 1.022; 26 WIN / 14 loss; 0 blocking flips; all output-identical). ⚠ **setcontains is
   marginal (1.02×) — a LOADED pre-push box could dip its best-of-3 below 1.0 and trip a spurious flip** (same boundary
   class as floatloop 1.009); re-`--emit` on a quiet box if that ever blocks a push, or the dev may bump pre-push K.
+- **`Math.min`/`abs`/`sign` FLIPPED to robust WINS** (DEC-311 line, scalar-flip sweep) — `min` 2.18× (`smin`), `abs` 1.89×
+  (`iabs` with an `i64::MIN`→code-5 fault-guard matching `checked_abs`, proven by 2 JIT-path tests), `sign` 2.11×
+  (branchless `(n>0)-(n<0)`). All zero new unsafe, 4-way byte-identical, K=9 pinned identical:true, --all-features gate
+  green (2330), armed same commit. All beat mathmax — the inline-scalar class is a clean sweep of robust wins.
 - **`Math.max(int,int)` FLIPPED 0.03× → 1.69× WIN** (DEC-311 line) — inline Cranelift `smax` on two unboxed i64s
   (the 2-arg analog of the `toFloat`/`truncate` inline-scalar class), ZERO new unsafe. Byte-identical to `i64::max` =
   php `max()` by construction; non-Int operands fail closed to VM. Strongest flip in the campaign; robust (not marginal).

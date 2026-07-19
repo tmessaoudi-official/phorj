@@ -1,5 +1,14 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ⚖️⚖️ DEV DIRECTIVE (2026-07-19 late, AskUserQuestion) — CONTINUOUS RUN, all three in order:
+✅ **(1) scalar-flip sweep DONE — Math.min/abs/sign all FLIPPED to robust WINS** (fresh-context subagent build +
+main-session independent full --all-features gate 2330 + advisor 6C + armed same commit): **mathmin 2.18× · mathabs
+1.89× · mathsign 2.11× WIN** (K=9 pinned, all identical:true, all beat mathmax; zero new unsafe — smin/iabs/branchless-sign;
+abs i64::MIN → code-5 fault-guard proven by 2 JIT-path tests). ⏳ **(2) mapkeys/values NEXT — alloc-touching, needs a
+BUILDING unsafe helper (List alloc+populate) = ctype-class risk → START FRESH CONTEXT** (advisor+discipline: do NOT chain
+into a deep orchestrator context) → **(3) features/parity** (%-mover).
+Don't stop unless to ask a question. Per-vertical bar HOLDS (independent gate + advisor 6C + arm-in-same-commit).
+
 ## ⚖️⚖️ DEV DIRECTIVE + ACTIVE CAMPAIGN (2026-07-19, AskUserQuestion — governs current work)
 **PERF-DoD (standing, absolute):** EVERY feature — new AND already-shipped — gets a perf bench vs PHP;
 if it loses, FLIP it (JIT vertical etc.), else FLAG it. Documented losses without a flip-attempt are NOT
@@ -33,8 +42,8 @@ reseal (setcontains ~1.05×), MATCHES-or-loses on linear/alloc-bound vs tuned C.
   2324 all-features green, hits>0, K=9 flip 1.665×, ARMED in baseline same commit). The strongest flip in the campaign.
 - **mapkeys/values (0.07×/0.08×) = QUEUED, MEASURE-FIRST, FRESH context** — map-structured but ALLOC-touching (materialize
   a List every call vs php's tuned-C array_keys/values) → BUILD+MEASURE, keep only if ≥parity, else flag. NOT auto-built.
-**SCOREBOARD: maphas WIN 1.47× ✓ · setcontains parity 1.05× ✓ · mathmax WIN 1.69× ✓ (all committed AND ARMED) ·
-listcontains flagged · mapkeys/values = fresh-context measure-first.** ✅ **OWED-CLEARED 2026-07-19: `microbench-gate.sh --emit`
+**SCOREBOARD: maphas 1.47× ✓ · setcontains 1.05× ✓ · mathmax 1.69× ✓ · mathmin 2.18× ✓ · mathabs 1.89× ✓ ·
+mathsign 2.11× ✓ (all committed AND ARMED) · listcontains flagged · mapkeys/values = fresh-context measure-first (NEXT).** ✅ **OWED-CLEARED 2026-07-19: `microbench-gate.sh --emit`
 (K=7, pinned, quiet box) armed BOTH wins in `bench/micro-baseline.json` — maphas 0.03→1.522, setcontains 0.02→1.024;
 zero WIN→LOSS regressions, zero identity breaks across all 40 features. WIN→LOSS ratchet protection now LIVE for both.**
 ⚠ Next JIT build = FRESH orchestrator context (this session went very deep — advisor-flagged).

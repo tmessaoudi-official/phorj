@@ -474,6 +474,37 @@ pub(super) fn unboxed_native_is_math_max(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.Math" && nf.name == "max" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.Math.min` (two-arg signed integer min)? The kernel is
+/// `(*a).min(*b)` = `i64::min` = Cranelift `smin` = PHP `min($a,$b)` on two ints — byte-identical
+/// signed min by construction, a PURE SCALAR op with no handles and no allocation. The exact mirror
+/// of `unboxed_native_is_math_max` (the mathmin perf flip).
+pub(super) fn unboxed_native_is_math_min(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Math" && nf.name == "min" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.Math.sign` (one-arg integer sign)? The kernel is
+/// `i64::from(*n > 0) - i64::from(*n < 0)` = -1/0/1 = PHP `($n <=> 0)` (spaceship) — a branchless
+/// PURE SCALAR op with no fault, no overflow, no handles. Materialized inline as two `icmp`s
+/// (`>0`, `<0`) widened to i64 and subtracted (the mathsign perf flip).
+pub(super) fn unboxed_native_is_math_sign(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Math" && nf.name == "sign" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.Math.abs` (one-arg integer absolute value)? The kernel is
+/// `n.checked_abs()`, which FAULTS ("integer overflow in Math.abs") on `i64::MIN`. Cranelift's
+/// `iabs` WRAPS `i64::MIN` to `i64::MIN` (no trap), so the arm GUARDS `n == i64::MIN` → code 5
+/// (VM redo renders the canonical fault) before `iabs`, keeping interp ≡ VM ≡ JIT (the mathabs
+/// perf flip — the one vertical with a fault path).
+pub(super) fn unboxed_native_is_math_abs(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Math" && nf.name == "abs" && nf.pure)
+}
+
 /// Provenance of an operand-stack entry for the provenance pre-pass ONLY (not codegen): `Param(slot)`
 /// = a bare `GetLocal(slot)` result; `Other` = anything else (a `Const`, an arithmetic/comparison
 /// result, a call result).
@@ -1968,6 +1999,53 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::Int);
                 }
+                Op::CallNative(id, 2) if unboxed_native_is_math_min(*id) => {
+                    // `Math.min(int, int): int` — pure scalar signed min. Both operands must be
+                    // `Int` (the second is on top, popped first); the result is `Int`.
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Math.min operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Math.min operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Int);
+                }
+                Op::CallNative(id, 1) if unboxed_native_is_math_sign(*id) => {
+                    // `Math.sign(int): int` — pure scalar sign (-1/0/1). Operand must be `Int`;
+                    // result is `Int`.
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Math.sign operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Int);
+                }
+                Op::CallNative(id, 1) if unboxed_native_is_math_abs(*id) => {
+                    // `Math.abs(int): int` — pure scalar absolute value with an `i64::MIN` fault
+                    // guard. Operand must be `Int`; result is `Int`.
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Math.abs operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Int);
+                }
                 Op::Pop => {
                     // W7: a discarded Dyn would need a tag-gated payload release — no
                     // consumer produces the shape yet (union params are read, not discarded).
@@ -2864,6 +2942,16 @@ pub(super) fn collect_functions_unboxed(
                 // `Math.max(int, int): int` — pure scalar signed max, inline `smax`. No handles,
                 // no float, no call: sets no eligibility flags (just avoids the `other` reject).
                 Op::CallNative(id, 2) if unboxed_native_is_math_max(*id) => {}
+                // `Math.min(int, int): int` — pure scalar signed min, inline `smin`. Mirror of
+                // max: no handles, no float, no call.
+                Op::CallNative(id, 2) if unboxed_native_is_math_min(*id) => {}
+                // `Math.sign(int): int` — pure scalar sign (-1/0/1), inline branchless icmp pair.
+                // No handles, no float, no fault, no call.
+                Op::CallNative(id, 1) if unboxed_native_is_math_sign(*id) => {}
+                // `Math.abs(int): int` — pure scalar abs with an `i64::MIN` fault guard (code 5).
+                // No handles, no float. `CallNative(..)` already forces `needs_fault_exit`, so the
+                // guard's `fault_if` has its block; sets no other eligibility flags.
+                Op::CallNative(id, 1) if unboxed_native_is_math_abs(*id) => {}
                 Op::AddI
                 | Op::SubI
                 | Op::MulI
