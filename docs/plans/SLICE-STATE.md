@@ -40,6 +40,24 @@ FINDINGS (owed to next recompute + review):
   **§4.10 recompute** (`91737e4a`, parity 64→66% · Vision 66→67% · floor 47→51%); **DEC-302 backed-enums build-map**
   (`d5ba41e9`, ruled AUTO, deferred to fresh context); **DEC-303 `String.chunk`** (codepoint-based, `__phorj_str_chunk`
   helper, `bb39af6f`+src in `73f31189`); **🔴✅ P0 FIX — revived the dead example byte-identity glob** (`a355c342`).
+  **DIRECTION (dev AskUserQuestion 2026-07-19): "All of 1, 2, and 3"** = (1) batched companion natives,
+  (2) backed enums DEC-302 (careful incremental build), (3) §1.2 parity re-pass crediting phantom gaps.
+  Then a SECOND direction (dev): perf — "All of 1, 2, and 4" = expand micro suite / macro benches / fix jsonround.
+  🎯 **PERF INVESTIGATION DONE (2026-07-19) — the WIN→LOSS "flips" were LOAD CONTAMINATION, safe to push:**
+  perf-gate (load-immune) PASS 822× vs 10.8 floor; microbench-gate at load 1.8 PASS (0 blocking flips); K=7
+  pinned recheck of borderline features all WIN/parity. My overnight changes were additive (no hot-path touch).
+  ⚠ **BUT the suite EXPANSION surfaced 3 REAL hidden losses** (`6d71bf52`, `89603c3d`): listmap 7.9× WIN (JIT
+  vertical) but listfilter 0.22×, listreduce 0.27×, **listcontains 0.02× (~44× slower)** — the GENERAL pattern:
+  ~188ns/call VM→native dispatch vs php's ~4ns C builtins; phg wins where the JIT applies, loses 3-44× on
+  non-JIT'd native calls in hot loops. FLAGGED = KNOWN_ISSUES "PERF-native-call-in-loop" (2 fix levers: per-op
+  JIT verticals OR general native-call-overhead reduction — dev chooses; fresh-context JIT/VM-spine). Coverage
+  now 28/286 natives benched (Invariant 18 wants all). ⚠ macro-bench design has loop-invariant-hoist traps
+  (dropped a stringsplit bench that php hoisted → fake 423× loss); needs careful fresh-context design.
+  **OUTSTANDING (both dev "all of X" asks — all now genuinely FRESH-CONTEXT/spine or error-prone-at-depth):**
+  backed enums DEC-302 (spine-wide, build-map ready); §1.2 per-row parity re-pass (analysis, error-prone at depth);
+  #2 macro/real-app benches (design-validity risk); jsonround lazy-Json fix (DEC-294, spine); filter/reduce/
+  contains JIT verticals (JIT spine); companion minBy/maxBy/Map.update (diminishing). Sequenced by risk;
+  companion `sortDescending` (`14e097c2`) done as the batch representative.
   **MORE safe stdlib gaps (post-P0, "keep going"):** `Map.containsValue` (`989d3500`, DEC-304, value-side membership);
   sibling substring fix `uses_unavailable_gated_module` (`6d898e25`, closes the P0 arc — both gate fns now per-token);
   `List.product` (`6a6e98e8`, DEC-305, mirrors sum, +array_product TIER1); `Set.isSuperset` (`3ec0f31d`, DEC-306,
