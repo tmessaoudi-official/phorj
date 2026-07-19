@@ -1,0 +1,42 @@
+// Core.PriorityQueue (DEC-301) — a generic max-priority queue.
+//
+// `PriorityQueue<T>` orders elements by an EXPLICIT integer priority: `extractMax` always removes
+// and returns the highest-priority element (like PHP `SplPriorityQueue`). It is pure Phorj, built on
+// two index-aligned `List`s (the values and their priorities), so it runs byte-for-byte identically
+// on the interpreter, the bytecode VM, and the transpiled PHP.
+//
+// Same two deliberate departures from PHP's `SplPriorityQueue` as `Core.Deque`:
+//   * `extractMax` / `peekMax` return `T?` (null on empty), never a `RuntimeException`.
+//   * Ties (equal priority) resolve deterministically to the first element scanned — PHP leaves tie
+//     order unspecified, so this is stricter, not weaker.
+//
+// Construction takes an initial value list for `T` inference (`new PriorityQueue(new List<T>())` is
+// an empty queue); any seed values enter at priority 0.
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.PriorityQueue;
+import Core.Runtime.Entry;
+
+#[Entry]
+function main(): void {
+    // An empty queue of alert channels; higher priority = more urgent.
+    var alerts = new PriorityQueue(new List<string>());
+    alerts.insert("email", 1);
+    alerts.insert("pager", 9);
+    alerts.insert("sms", 5);
+    Output.printLine(
+        "size={alerts.size()} empty={alerts.isEmpty()} peekMax={alerts.peekMax() ?? \"?\"}"
+    );
+    // Drain in priority order: pager(9), sms(5), email(1), then null.
+    Output.printLine("{alerts.extractMax() ?? \"?\"}");
+    Output.printLine("{alerts.extractMax() ?? \"?\"}");
+    Output.printLine("{alerts.extractMax() ?? \"?\"}");
+    Output.printLine("empty-extract={alerts.extractMax() ?? \"<none>\"} empty={alerts.isEmpty()}");
+    // A deterministic tie: two elements at priority 7 — the first inserted wins.
+    var ties = new PriorityQueue(new List<string>());
+    ties.insert("first-at-7", 7);
+    ties.insert("second-at-7", 7);
+    Output.printLine("tie={ties.extractMax() ?? \"?\"}");
+}

@@ -715,6 +715,34 @@ import Core.Deque;
     );
 }
 
+/// Wave-B collections (DEC-301): `Core.PriorityQueue<T>` — a pure-Phorj max-priority queue over two
+/// index-aligned `List`s. Byte-identical run≡runvm≡php by construction. Covers priority ordering
+/// (extractMax highest-first), the empty→`null` optional return, seed-at-priority-0 construction,
+/// and DETERMINISTIC tie resolution (first inserted at the max priority wins — a semantic assertion,
+/// not just backend agreement: an earlier `List.fill` arg-order bug was byte-identical yet WRONG).
+#[test]
+fn priority_queue_max_first_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.List;
+import Core.PriorityQueue;
+#[Entry] function main() -> void {
+    var pq = new PriorityQueue(new List<string>());
+    pq.insert("email", 1);
+    pq.insert("pager", 9);
+    pq.insert("sms", 5);
+    Output.printLine("size={pq.size()} peek={pq.peekMax() ?? "?"}");
+    Output.printLine("{pq.extractMax() ?? "?"}|{pq.extractMax() ?? "?"}|{pq.extractMax() ?? "?"}|{pq.extractMax() ?? "<empty>"}");
+    var ties = new PriorityQueue(new List<string>());
+    ties.insert("a7", 7);
+    ties.insert("b7", 7);
+    Output.printLine("tie={ties.extractMax() ?? "?"} empty={ties.isEmpty()}");
+}"#,
+        "size=3 peek=pager\npager|sms|email|<empty>\ntie=a7 empty=false\n",
+        "priority_queue_max_first",
+    );
+}
+
 /// Wave-B: the Core.Math tail (inverse trig / hyperbolics / hypot / log2 / log1p / expm1 / angle
 /// conversion) is byte-identical run≡runvm≡php — all delegate to the platform libm PHP also uses;
 /// `log2` deliberately computes `ln(x)/ln(2)` to match PHP's `log(x, 2)` (not a direct `log2` libm call).

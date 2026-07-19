@@ -33,8 +33,11 @@ FINDINGS (owed to next recompute + review):
   **DONE this overnight (all committed, green, UNPUSHED — dev pushes AM):** slice#3 named args FULL SCOPE
   (`998e370b`); variadics (`59bf4158`); Wave-B **Math tail** (`841864e7`); Wave-B **List.difference/intersection**
   (`81cbd331`, typed-strict set ops); Wave-B **String tail** capitalizeWords/translate (`90015c91`, ucwords/strtr);
-  **DEC-300 `Core.Deque<T>`** (`<pending sha>`, pure-Phorj generic deque over List, T?-on-empty vs Spl* throw,
-  2249 green). Spread DEC-299 AUTO-DEFERRED (VM runtime-arity fork).
+  **DEC-300 `Core.Deque<T>`** (`762b3945`, pure-Phorj generic deque over List, T?-on-empty vs Spl* throw, 2249 green);
+  **DEC-301 `Core.PriorityQueue<T>`** (`<pending>`, pure-Phorj max-PQ over two parallel Lists, T?-on-empty, 2250 green).
+  ⚠ LESSON (PQ): first probe was byte-identical run≡php but SEMANTICALLY WRONG (`List.fill` is `(value,count)` not
+  `(count,value)`) — caught only by a seeded-tie assertion on the expected VALUE. Byte-identity ≠ correct; assert
+  semantics, not just backend agreement. Spread DEC-299 AUTO-DEFERRED (VM runtime-arity fork).
   ⚠ FRONTIER MAP (grep-verified this run — DO NOT rebuild; the easy pure-native seam is MINED OUT):
     · ALREADY-BUILT: crypto/CSPRNG/HMAC/KDF; Core.String rich (42+); Core.List rich (39 now); Core.Path
       (baseName/directoryName/extension/fileStem/join); Core.FileSystem BROAD (read/write/append/copy/move/

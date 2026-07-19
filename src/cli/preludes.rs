@@ -549,6 +549,65 @@ class Deque<T> {
 }
 "#;
 
+/// `Core.PriorityQueue` (DEC-301, collections breadth) — a generic MAX-priority queue, `class
+/// PriorityQueue<T>`, with EXPLICIT integer priorities (like PHP `SplPriorityQueue`, `extract`
+/// returns the highest-priority element). Pure-Phorj over two parallel `List`s (values +
+/// priorities, index-aligned) — byte-identical across all three backends by construction, no
+/// native, no ladder. Chosen OVER PHP `SplPriorityQueue` with the SAME two "better than PHP"
+/// departures as `Core.Deque` (DEC-300, fork-rule AUTO): `extractMax`/`peekMax` return `T?` (null
+/// on empty) rather than throwing `RuntimeException`; the API is uniform and typed. Parallel lists
+/// (not a `List<(T, int)>` of tuples) keep the element type `T` free of any tuple-key coercion
+/// concern and lean only on the mature `Core.List` kernel. Constructed from an initial value list
+/// (`new PriorityQueue(new List<int>())` empty) for `T` inference per the mandatory-`new` rule;
+/// any seed values enter at priority 0 (a defined behaviour, `List.fill(0, len)` — never a
+/// misaligned pair). Ties resolve to the FIRST element scanned at the max priority (deterministic;
+/// PHP `SplPriorityQueue` is unspecified on ties, so this is stricter, not weaker). ⚠ PERF
+/// (WIN-OR-FLAG, FLAGGED): `insert` is O(1) but `extractMax`/`peekMax` are O(n) (linear max scan) —
+/// a binary heap would be O(log n) extract; the idiomatic-PHP transpile target is plain arrays with
+/// the same linear scan, so array-op parity holds vs real PHP code (the `Spl*` heap is rarely the
+/// baseline reached for). A heap-backed native could win later — tracked, not silently degraded.
+pub(super) const PRIORITY_QUEUE_PRELUDE: &str = r#"
+import Core.List;
+
+class PriorityQueue<T> {
+  private mutable List<T> values;
+  private mutable List<int> priorities;
+  constructor(List<T> seed) {
+    this.values = seed;
+    this.priorities = List.fill(0, List.length(seed));
+  }
+  function insert(T value, int priority): void {
+    this.values = List.append(this.values, value);
+    this.priorities = List.append(this.priorities, priority);
+  }
+  private function maxIndex(): int {
+    int n = List.length(this.priorities);
+    if (n == 0) { return -1; }
+    mutable int best = 0;
+    for (int i in 1..n) {
+      if (this.priorities[i] > this.priorities[best]) { best = i; }
+    }
+    return best;
+  }
+  function peekMax(): T? {
+    int idx = this.maxIndex();
+    if (idx < 0) { return null; }
+    return this.values[idx];
+  }
+  function extractMax(): T? {
+    int idx = this.maxIndex();
+    if (idx < 0) { return null; }
+    T v = this.values[idx];
+    int n = List.length(this.values);
+    this.values = List.concat(List.slice(this.values, 0, idx), List.slice(this.values, idx + 1, n));
+    this.priorities = List.concat(List.slice(this.priorities, 0, idx), List.slice(this.priorities, idx + 1, n));
+    return v;
+  }
+  function size(): int { return List.length(this.values); }
+  function isEmpty(): bool { return List.length(this.values) == 0; }
+}
+"#;
+
 /// `Core.UriModule` (DEC-240) — one immutable RFC 3986 `Uri` class with the typed `UriError` taxonomy.
 /// The instance state is a single validated RAW string; every accessor/wither/operation calls a
 /// `Core.Native.Uri` native over it (`src/ext/uri/`), whose Rust kernel is pinned byte-for-byte to
@@ -1091,6 +1150,17 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Deque"],
         qualifier: "Deque",
         src: Some(DEQUE_PRELUDE),
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    // `Core.PriorityQueue` (DEC-301) — the generic max-priority queue. Pure-phorj over `Core.List`
+    // (two parallel lists); like `Core.Deque`, only imports the native `Core.List` — position not
+    // load-bearing.
+    VirtualModule {
+        module: &["Core", "PriorityQueue"],
+        qualifier: "PriorityQueue",
+        src: Some(PRIORITY_QUEUE_PRELUDE),
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
