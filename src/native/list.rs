@@ -28,6 +28,20 @@ pub(super) fn list_sort(args: &[Value], _: &mut String) -> Result<Value, String>
         _ => Err("List.sort expects (List<T>)".into()),
     }
 }
+/// `List.sortDescending(List<T>) -> List<T>` — the descending companion to `sort`: natural/byte order,
+/// reversed. Defined as SORT-then-REVERSE (not a reversed comparator) so it is byte-identical to the
+/// PHP leg `array_reverse(__phorj_sort($xs))` — including how equal elements are ordered.
+pub(super) fn list_sort_descending(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut ys = (**xs).clone();
+            ys.sort_by(natural_cmp);
+            ys.reverse();
+            Ok(Value::List(std::rc::Rc::new(ys)))
+        }
+        _ => Err("List.sortDescending expects (List<T>)".into()),
+    }
+}
 
 /// `List.sortWith(List<T>, (T, T) -> int) -> List<T>` — a new list ordered by the comparator (negative
 /// ⇒ a before b, like PHP `usort`). The comparator runs on the calling backend via the re-entrant

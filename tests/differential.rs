@@ -725,6 +725,26 @@ import Core.Set;
     );
 }
 
+/// Wave-B (DEC-308): `List.sortDescending` — the descending companion to `sort` (natural/byte order,
+/// reversed). Sort-then-reverse (not a reversed comparator) → byte-identical to `array_reverse(__phorj_sort)`
+/// including equal-element order. Covers ints (with a duplicate), strings (byte order), and empty.
+#[test]
+fn list_sort_descending_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.List;
+import Core.String;
+#[Entry] function main() -> void {
+    List<int> ns = List.sortDescending([3, 1, 4, 1, 5, 9, 2]);
+    Output.printLine("{ns[0]},{ns[1]},{ns[6]}");
+    Output.printLine(String.join(List.sortDescending(["banana", "apple", "cherry"]), ","));
+    Output.printLine("{List.length(List.sortDescending(new List<int>()))}");
+}"#,
+        "9,5,1\ncherry,banana,apple\n0\n",
+        "list_sort_descending",
+    );
+}
+
 /// Wave-B (DEC-307): `List.none` — the third of the any/all/none trio (`none` ≡ `!any`): true iff no
 /// element satisfies the predicate. Short-circuits at the first match (gated `__phorj_none`).
 /// Byte-identical run≡runvm≡php; covers all-false (→true), a match (→false), and the empty list (→true).

@@ -40,5 +40,7 @@ function main(): void {
     // 10 9 apple banana cherry
     // sortWith: a descending comparator (b - a).
     Output.printLine(showInts(List.sortWith(nums, function(int a, int b) => b - a)));
+    // sortDescending: the built-in descending sort (natural order, reversed) — no comparator needed.
+    Output.printLine(showInts(List.sortDescending(nums)));
 }
 // 9 6 5 4 3 2 1 1

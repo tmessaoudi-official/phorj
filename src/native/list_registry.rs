@@ -240,6 +240,16 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_sort),
             php: |a| format!("__phorj_sort({})", parg(a, 0)),
         },
+        NativeFn {
+            module: "Core.List",
+            name: "sortDescending",
+            params: vec![list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_sort_descending),
+            // sort-then-reverse (reuses `__phorj_sort`) so equal-element order matches the Rust kernel.
+            php: |a| format!("array_reverse(__phorj_sort({}))", parg(a, 0)),
+        },
         // `sortWith(List<T>, (T, T) -> int) -> List<T>` — comparator (PHP `usort`), higher-order.
         NativeFn {
             module: "Core.List",
