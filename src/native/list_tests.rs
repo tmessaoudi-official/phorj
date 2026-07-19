@@ -195,6 +195,59 @@ fn list_natives_eval_and_emit() {
 }
 
 #[test]
+fn list_sum_by_eval_and_emit() {
+    let nums = Value::List(std::rc::Rc::new(vec![
+        Value::Int(1),
+        Value::Int(2),
+        Value::Int(3),
+        Value::Int(4),
+    ]));
+    let placeholder = Value::Int(0);
+
+    // Projection: square each element, then sum (1 + 4 + 9 + 16 = 30). Mirrors `sum`, but folds
+    // the closure's result via the re-entrant invoker (stub here).
+    let mut square = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+        [Value::Int(n)] => Ok(Value::Int(n * n)),
+        _ => Err("bad arity".to_string()),
+    };
+    assert!(matches!(
+        list_sum_by(&[nums.clone(), placeholder.clone()], &mut square),
+        Ok(Value::Int(30))
+    ));
+
+    // sumBy over the empty list is 0 (the projection is never called).
+    let empty = Value::List(std::rc::Rc::new(vec![]));
+    let mut never = |_f: &Value, _a: Vec<Value>| Err("must not be called".to_string());
+    assert!(matches!(
+        list_sum_by(&[empty, placeholder.clone()], &mut never),
+        Ok(Value::Int(0))
+    ));
+
+    // EV-7: an overflowing projected sum faults cleanly, never panics (mirrors `list_sum`).
+    let two = Value::List(std::rc::Rc::new(vec![Value::Int(1), Value::Int(2)]));
+    let mut to_max = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(i64::MAX));
+    assert!(list_sum_by(&[two.clone(), placeholder.clone()], &mut to_max).is_err());
+
+    // a non-int projection result is a clean fault, never a panic.
+    let mut nonint = |_f: &Value, _a: Vec<Value>| Ok(Value::Str("x".into()));
+    assert!(list_sum_by(&[two, placeholder], &mut nonint).is_err());
+
+    // PHP erasure: array_sum over the projected array (array_map preserves order); ret is int.
+    assert_eq!(
+        (registry()[index_of("Core.List", "sumBy").unwrap()].php)(&["$xs".into(), "$fn".into()]),
+        "array_sum(array_map($fn, $xs))"
+    );
+    assert_eq!(
+        index_of_by_leaf("List", "sumBy"),
+        index_of("Core.List", "sumBy")
+    );
+    assert_eq!(
+        registry()[index_of("Core.List", "sumBy").unwrap()].ret,
+        Ty::Int
+    );
+}
+
+#[test]
 fn list_contains_eval_and_emit() {
     let mut o = String::new();
     let nums = Value::List(std::rc::Rc::new(vec![

@@ -11,6 +11,15 @@ arm rejects non-Str/Int elements → whole fn never JITs, hits=0) — so a stand
 loss. Real flip needs a MAJOR front-end expansion (list-of-map Kind + MakeList/Index arms + boxed emit) = separate
 DEV-RULED slice, and even then alloc-bound (likely parity). Detail = KNOWN_ISSUES FIX-LEVER-#2. ⏳ **(3) features/parity** (%-mover, NEXT).
 Don't stop unless to ask a question. Per-vertical bar HOLDS (independent gate + advisor 6C + arm-in-same-commit).
+**⚖️ ITEM 3 = FEATURES/PARITY, dev-ruled "all of them, recommended order" (2026-07-20 AskUserQuestion). ORDER
+(rising risk/depth, forks surfaced when reached, spine LAST):** (3.1) stdlib companions — no design fork, grep-verify
+first [◐ IN PROGRESS: ✅ **List.sumBy** DONE — higher-order projection sum, byte-identical run≡runvm≡php + example +
+transpile `array_sum(array_map)`, full --all-features gate green 2331, advisor 6C; perf FLAGGED 0.36× = listfilter class
+(higher-order re-entrant, un-JIT-flippable), LOSS-armed. Genuine remaining companion gaps grep-verified: Map.update,
+List.scan/windowed/associateBy/countBy] → (3.2) List.minBy/maxBy — ONE adjudication (Comparable bound: non-scalar key PHP-loose-< vs Rust compare_ord)
+then build → (3.3) FILTER email/URL — adjudication + fiddly filter_var byte-identity → (3.4) exception backtrace
+(getTrace family, contained) THEN generators/yield LAST in a FRESH session (deepest VM control-flow spine, standing rule).
+DoD each: byte-identity run≡runvm≡php + example (Inv-9) + transpile+lift + full --all-features gate + advisor 6C → commit.
 
 ## ⚖️⚖️ DEV DIRECTIVE + ACTIVE CAMPAIGN (2026-07-19, AskUserQuestion — governs current work)
 **PERF-DoD (standing, absolute):** EVERY feature — new AND already-shipped — gets a perf bench vs PHP;

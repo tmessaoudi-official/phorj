@@ -508,6 +508,22 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             // array_filter keeps the predicate-true elements; count them.
             php: |a| format!("count(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
         },
+        // `sumBy(List<T>, (T) -> int) -> int` — the sum of the projection over every element (empty →
+        // 0). The projection sibling of `sum`/`product`/`count`; single type-var like `find` (fn ret +
+        // native ret are both concrete `int`). Checked-add (overflow faults, EV-7 — the `sum` caveat),
+        // non-int projection faults. Erases to `array_sum(array_map($fn, $xs))` (order-preserving).
+        NativeFn {
+            module: "Core.List",
+            name: "sumBy",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Int), Vec::new()),
+            ],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::HigherOrder(list_sum_by),
+            php: |a| format!("array_sum(array_map({}, {}))", parg(a, 1), parg(a, 0)),
+        },
     ]
 }
 

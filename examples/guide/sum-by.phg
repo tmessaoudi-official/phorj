@@ -1,0 +1,28 @@
+// `Core.List.sumBy` — the projection sibling of `sum`/`product`/`count`: sum of `fn(x)` over every
+// element, left to right (empty → 0). Higher-order (takes a closure, like map/reduce), run once per
+// element on whichever backend is running via one shared native body. Genuine projections here: a
+// String→int length, then a numeric int→int square, then the empty-list identity. Erases to
+// `array_sum(array_map($fn, $xs))` — byte-identical on both backends and real PHP. Integer
+// arithmetic only, well within i64 (overflow is the same excluded fault-domain caveat as `List.sum`).
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.String;
+import Core.Runtime.Entry;
+
+#[Entry]
+function main(): void {
+    // Projection String -> int: total number of characters across all words (5 + 4 + 5).
+    List<string> words = ["alpha", "beta", "gamma"];
+    Output.printLine(
+        "total chars    = {List.sumBy(words, function(string w) => String.length(w))}"
+    );
+    // Projection int -> int: sum of squares (1 + 4 + 9 + 16).
+    List<int> nums = [1, 2, 3, 4];
+    Output.printLine("sum of squares = {List.sumBy(nums, function(int x) => x * x)}");
+    // The int result is a plain arithmetic operand (CTy resolves `sumBy(...) + 1`).
+    Output.printLine("plus one       = {List.sumBy(nums, function(int x) => x * x) + 1}");
+    // Empty list -> 0 (the sum identity; the projection is never called).
+    Output.printLine("empty          = {List.sumBy(new List<int>(), function(int x) => x)}");
+}

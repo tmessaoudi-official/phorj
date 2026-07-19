@@ -1708,9 +1708,17 @@ The first generic stdlib natives ship this slice: `Core.List` `reverse`/`sum` an
 like a generic free function; the parameter is registry-only and never reaches a backend. Two PHP-leg
 caveats (the `run`/`runvm` spine is always byte-identical):
 
-- **`List.sum` faults on i64 overflow; PHP `array_sum` promotes to float instead.** The checked sum
-  keeps EV-7 (never panics), so a sum exceeding `i64::MAX` is a clean Phorj fault, whereas PHP would
-  silently widen to float. Keep sums within i64 range when transpiling (examples do).
+- **`List.sum`/`List.sumBy` fault on i64 overflow; PHP `array_sum` promotes to float instead.** The checked
+  sum keeps EV-7 (never panics), so a sum exceeding `i64::MAX` is a clean Phorj fault, whereas PHP would
+  silently widen to float. Keep sums within i64 range when transpiling (examples do). ⚠ `sumBy` has a subtly
+  BROADER divergence than `sum` (it takes a projection fn): if the running sum overflows at element N but the
+  projection would fault at a LATER element M>N, Phorj (interp≡VM) faults with the overflow at N (it stops early),
+  while PHP's `array_sum(array_map($fn,$xs))` evaluates the whole map first and surfaces the fn-fault. Both legs
+  are inside this already-excluded overflow caveat, so it is not a new correctness surface — noted for completeness.
+  **Perf (flip-or-flag, DEC-311): `sumBy` is FLAGGED at 0.36× vs php** (K=9 pinned, `bench/micro/sumby`) — a
+  higher-order native (a re-entrant VM callback per element), the same structurally-un-JIT-flippable class as
+  `listfilter` 0.22× / `listreduce` 0.27× (php's `array_map` closure dispatch is tuned C). Recorded LOSS-armed in
+  the baseline; no per-op JIT vertical applies (the callback can't be inlined). Accepted loss.
 - **`Map.keys`/`values`/`entries` key coercion** — see the *Maps* note above: PHP coerces integer-like
   string keys and bools to int keys, so use plain string keys for byte-identical PHP round-tripping
   (`entries` renders the key, so a bool-keyed map diverges on the transpile leg — DEC-288).

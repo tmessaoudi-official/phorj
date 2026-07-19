@@ -574,3 +574,34 @@ pub(super) fn list_count(args: &[Value], call: &mut ClosureInvoker) -> Result<Va
         _ => Err("List.count expects (List<T>, (T) -> bool)".into()),
     }
 }
+
+/// `List.sumBy(List<T>, (T) -> int) -> int` — the sum of the projection `fn(x)` over every element,
+/// left to right (empty → 0). The projection sibling of `sum`/`product`/`count`; the projection runs
+/// on the calling backend via the re-entrant invoker. The accumulation mirrors `list_sum` EXACTLY:
+/// checked-add (an overflowing sum faults cleanly, EV-7, rather than wrapping — PHP `array_sum` would
+/// instead promote to float, the same caveat as `sum`, examples stay in i64 range) and a non-int
+/// projection result faults cleanly (never a panic). Erases to `array_sum(array_map($fn, $xs))`.
+pub(super) fn list_sum_by(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut acc: i64 = 0;
+            for x in xs.iter() {
+                match call(f, vec![x.clone()])? {
+                    Value::Int(n) => {
+                        acc = acc
+                            .checked_add(n)
+                            .ok_or_else(|| "integer overflow in List.sumBy".to_string())?;
+                    }
+                    other => {
+                        return Err(format!(
+                            "List.sumBy projection must return int, got {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::Int(acc))
+        }
+        _ => Err("List.sumBy expects (List<T>, (T) -> int)".into()),
+    }
+}
