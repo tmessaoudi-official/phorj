@@ -185,6 +185,17 @@ Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical through
   (maphas 1.516, setcontains 1.022; 26 WIN / 14 loss; 0 blocking flips; all output-identical). ⚠ **setcontains is
   marginal (1.02×) — a LOADED pre-push box could dip its best-of-3 below 1.0 and trip a spurious flip** (same boundary
   class as floatloop 1.009); re-`--emit` on a quiet box if that ever blocks a push, or the dev may bump pre-push K.
+- **`Map.values`/`Map.keys` = FLAGGED (NO vertical built), verified 2026-07-20.** Byte-identity is structurally
+  FEASIBLE (the `UB_TAG_FLAT_MAP` PAIR region at `base+2i`/`base+2i+1` is insertion-ordered = `m.iter()` order; a
+  helper composing `rt_u_list_new`/`push_int`/`seal` would match the interpreter exactly). But TWO blockers make the
+  flip not worth a standalone vertical: (1) the missing vertical itself; (2) **`List<Map>` is not JIT-eligible** — the
+  `MakeList` analyze arm (`src/jit/analyze.rs:1502`) accepts only all-`Str`/all-`Int` elements, so the shipped benches'
+  `List<Map<string,int>> maps=[…]` (used to defeat php hoisting) fails the WHOLE `bench()` function → it never JITs
+  (probe: hits=0 even with NO Map.values call). Fixing (1) alone leaves the shipped-bench loss (0.07×/0.08×) untouched.
+  A real flip needs a **major front-end expansion** (a list-of-map `Kind` + `MakeList` arm + `Op::Index`→`StrIntMap`
+  arm + boxed emit) = a DEV-RULED slice, not a vertical — AND even then the per-iteration O(N) list materialization is
+  alloc-bound vs php's tuned-C `array_keys`/`array_values` ([[native-call-in-loop-overhead]]), so a WIN is not assured.
+  **Campaign decision: FLAG both; `List<Map>` JIT support is a separate dev-ruled slice (Invariant 15).**
 - **`Math.min`/`abs`/`sign` FLIPPED to robust WINS** (DEC-311 line, scalar-flip sweep) — `min` 2.18× (`smin`), `abs` 1.89×
   (`iabs` with an `i64::MIN`→code-5 fault-guard matching `checked_abs`, proven by 2 JIT-path tests), `sign` 2.11×
   (branchless `(n>0)-(n<0)`). All zero new unsafe, 4-way byte-identical, K=9 pinned identical:true, --all-features gate

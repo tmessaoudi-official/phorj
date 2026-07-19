@@ -4,9 +4,12 @@
 ✅ **(1) scalar-flip sweep DONE — Math.min/abs/sign all FLIPPED to robust WINS** (fresh-context subagent build +
 main-session independent full --all-features gate 2330 + advisor 6C + armed same commit): **mathmin 2.18× · mathabs
 1.89× · mathsign 2.11× WIN** (K=9 pinned, all identical:true, all beat mathmax; zero new unsafe — smin/iabs/branchless-sign;
-abs i64::MIN → code-5 fault-guard proven by 2 JIT-path tests). ⏳ **(2) mapkeys/values NEXT — alloc-touching, needs a
-BUILDING unsafe helper (List alloc+populate) = ctype-class risk → START FRESH CONTEXT** (advisor+discipline: do NOT chain
-into a deep orchestrator context) → **(3) features/parity** (%-mover).
+abs i64::MIN → code-5 fault-guard proven by 2 JIT-path tests). ✅ **(2) mapkeys/values = FLAGGED (verified 2026-07-20,
+dev-approved "subagent builds, I certify"; subagent found+I verified the root cause, NOTHING built/committed).** Byte-id
+feasible (pair region insertion-ordered) BUT the shipped benches store `List<Map>` which is NOT JIT-eligible (MakeList
+arm rejects non-Str/Int elements → whole fn never JITs, hits=0) — so a standalone vertical can't move the 0.07×/0.08×
+loss. Real flip needs a MAJOR front-end expansion (list-of-map Kind + MakeList/Index arms + boxed emit) = separate
+DEV-RULED slice, and even then alloc-bound (likely parity). Detail = KNOWN_ISSUES FIX-LEVER-#2. ⏳ **(3) features/parity** (%-mover, NEXT).
 Don't stop unless to ask a question. Per-vertical bar HOLDS (independent gate + advisor 6C + arm-in-same-commit).
 
 ## ⚖️⚖️ DEV DIRECTIVE + ACTIVE CAMPAIGN (2026-07-19, AskUserQuestion — governs current work)
