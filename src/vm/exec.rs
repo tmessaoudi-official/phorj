@@ -435,21 +435,39 @@ impl<'a> Vm<'a> {
                 // The native's `eval` is shared verbatim with the interpreter (structural parity).
                 // `validate` has already bounded `idx`; the args sit on top in source order. The
                 // enum is `Copy`, so reading it ends the `'static` registry borrow before the
-                // higher-order invoker captures `&mut self`.
-                let args = self.split_off(argc);
+                // higher-order invoker captures `&mut self`. Each arm extracts its args itself: the
+                // hot `Pure` arm reads them as an in-place stack SLICE and truncates (no per-call Vec
+                // allocation — perf: the general native-call path is dispatch/marshalling-bound, and
+                // `split_off` heap-allocs an argc-length `Vec` every call); the re-entrant arms
+                // (HigherOrder/Capturing borrow `&mut self` while running; Reflective is cold) keep
+                // owning their args via `split_off`.
                 let eval = crate::native::registry()[idx].eval;
                 let result = match eval {
-                    crate::native::NativeEval::Pure(f) => f(&args, &mut self.out)?,
+                    crate::native::NativeEval::Pure(f) => {
+                        // Slice fast-path: a pure native only READS its args and returns an OWNED
+                        // `Value` (its signature carries no lifetime from the input), so the args can
+                        // stay on the stack and be dropped by a single `truncate`. Truncate BEFORE the
+                        // `?` propagates so a fault leaves the stack argc-shorter — byte-identical to
+                        // the prior `split_off` order (which removed the args before the call), so a
+                        // native `Err` unwinds with exactly the stack the interpreter/old VM had.
+                        let start = self.pop_n_start(argc);
+                        let r = f(&self.stack[start..], &mut self.out);
+                        self.stack.truncate(start);
+                        r?
+                    }
                     // Reflection natives read the precomputed class hierarchy (same `ClassTables` the
                     // interpreter holds + the transpiler emits, so the result is byte-identical).
                     crate::native::NativeEval::Reflective(f) => {
+                        let args = self.split_off(argc);
                         f(&args, &self.program.class_tables)?
                     }
                     crate::native::NativeEval::HigherOrder(f) => {
                         // A closure argument is run re-entrantly on *this* VM via
                         // `call_closure_value` — the same `exec_op` core the main loop drives, so a
                         // closure fault and its result are byte-identical to the interpreter's
-                        // `call_closure` path (M-RT S7b-3).
+                        // `call_closure` path (M-RT S7b-3). The invoker borrows `&mut self`, so the
+                        // args must be OWNED first (the stack is mutated during the call).
+                        let args = self.split_off(argc);
                         let mut invoke =
                             |fv: &Value, cargs: Vec<Value>| self.call_closure_value(fv, cargs);
                         f(&args, &mut invoke)?
@@ -460,6 +478,7 @@ impl<'a> Vm<'a> {
                         // `split_off` — mirrors the interpreter arm (structural parity). A closure
                         // throw propagates the `THROW_SENTINEL` string (with `pending_throw` intact),
                         // exactly as the higher-order path does, so the outer `run` loop unwinds it.
+                        let args = self.split_off(argc);
                         let mut capture = |fv: &Value| {
                             let start = self.out.len();
                             self.call_closure_value(fv, Vec::new())?;

@@ -9,9 +9,13 @@ found/documented PERVASIVE native-call-in-loop losses (28→40 natives benched) 
 **QUEUE (dev-ruled "all of them"; ORDER by dependency):**
 1. **arena-Json experiment** (jsonround flip — dev ruled "prototype+measure", DEC-309) — NEEDS A QUIET BOX
    (load ≲2) for the perf verdict; fresh-context subagent; worktree isolation (experiment may not pan out).
-2. **slice-fastpath re-measure** (PERF-native-call-in-loop lever) — byte-identical (2309-green), UNMEASURED;
-   recover via `git stash pop` (stash@{0} "slice-fastpath-pending-quiet-box-measure") or
-   `scratchpad/slice-fastpath.patch`; measure before/after on a QUIET box; commit if a stable win else drop.
+2. ✅ **slice-fastpath — DONE 2026-07-19 (MEASURED + COMMITTED).** Re-measured core-pinned + interleaved
+   (`taskset -c 7`, core7 ~99% idle despite load-avg ~3 — per-core idle is the real gate, NOT load-average;
+   this is why prior sessions wrongly thought perf was blocked). Two independent runs → stable **2.5–12% win
+   on every Pure native** (mapkeys −9…−12% biggest), JIT winners flat, no regression. Full `--all-features`
+   gate + PHP oracle green (2297). Detail = KNOWN_ISSUES "FIX LEVER #1". Deeper lever (per-op JIT verticals)
+   stays dev-driven (unsafe island). ⚠ LESSON: check `mpstat -P ALL` per-core, NOT `uptime` load-average —
+   a load-avg of 3–9 can still be 95%+ per-core idle (sleeping/IO), and a core-pinned bench is then reliable.
 3. **§1.2 full per-row parity re-tally** (analysis, no quiet box needed) — supersedes the targeted §4.11.
 4. **new parity features** (XML/streams/mb-tail — biggest FN-leg movers) + **more stdlib** (Map.update/mapKeys,
    List.minBy/maxBy). ⚠ Deeper perf lever = per-op JIT verticals (audited `unsafe` island — DEV-DRIVEN, not delegated).

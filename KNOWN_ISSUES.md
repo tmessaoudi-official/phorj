@@ -147,15 +147,20 @@ in a hot loop runs the general VM→native dispatch (~188 ns/call measured for `
 the stdlib": NO in hot loops over non-JIT'd natives. (Real programs rarely loop-call a native millions of
 times, but WIN-OR-FLAG / Invariant 18 flag it regardless.)
 
-**⚠ PENDING FIX LEVER (preserved, NOT committed — perf unmeasured).** A fresh-context subagent (2026-07-19)
-implemented a **slice fast-path** for `NativeEval::Pure` in `vm/exec.rs`: read args as an in-place stack
-SLICE + `truncate` instead of `split_off` (which heap-allocs an argc-Vec every call) — targeting the exact
-per-call alloc overhead, and it would lift ALL pure natives at once. It is **byte-identical (2309-green,
-verified)** but its perf was NOT reliably measurable (box at load 6–9; a before/after was load-drift
-confounded — reverted per Invariant 11). PRESERVED: `git stash` (`slice-fastpath-pending-quiet-box-measure`)
-+ patch at `scratchpad/slice-fastpath.patch`. **Next: re-apply on a QUIET box (load ≲2), measure before/
-after pinned across the losing natives; commit if a stable win, else discard.** The deeper lever (per-op
-JIT verticals like map's) is the audited `unsafe` island — dev-driven, not delegated.
+**✅ FIX LEVER #1 — SLICE FAST-PATH MEASURED + COMMITTED (2026-07-19).** The `NativeEval::Pure` slice
+fast-path in `vm/exec.rs` (read args as an in-place stack SLICE via `pop_n_start` + `truncate` instead of
+`split_off`, which heap-allocs an argc-Vec every call — truncate BEFORE the `?` so a fault leaves the exact
+stack the old path did; the re-entrant arms HigherOrder/Capturing/Reflective keep `split_off` since they
+borrow `&mut self`) is now **measured and committed**. The prior "unmeasured at load 6–9" caveat is closed:
+measured **core-pinned + interleaved** (`taskset -c 7`, before/after adjacent in time, core7 ~99% idle
+despite aggregate load ~3 — per-core idle, not load-average, is the real gate) across TWO independent runs.
+Result = a **stable 2.5–12% VM improvement on every measured Pure native** (6 sampled: mapkeys −9…−12%,
+maphas/mapmerge/mapvalues/listcontains/setcontains −2.5…−5%; generalizes to all Pure natives by the shared
+`CallNative` dispatch mechanism — [Inferred]), with the JIT winners (listmap, mapget) flat (±3%, within
+noise — they don't ride the Pure dispatch path so their flatness confirms the signal) — no regression. Lifts ALL pure natives at once for zero per-native work. It does NOT flip the php
+losses (listcontains still ~560ms vs php's ~13ms C `in_array`) — those need the deeper lever below — but it
+is a genuine, byte-identical (full `--all-features` gate + PHP oracle green) same-binary win. The deeper
+lever (per-op JIT verticals like map's) is the audited `unsafe` island — dev-driven, not delegated.
 
 **Root cause [Verified].** The JIT special-cases ONLY `Core.List.map`; every other stdlib native called
 in a hot loop runs the general VM→native dispatch (~188 ns/call measured for `listcontains`: 564 ms /
