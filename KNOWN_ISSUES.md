@@ -36,8 +36,13 @@ Measured: 201 SKIP → **8 SKIP, 0 RUN → 139 RUN**; the 8 remaining skips are 
 (Time/File/Random/stdin/fs). Reviving surfaced exactly ONE hidden-broken example — `strings-ext.phg`
 missing `import Core.String` (fixed `bb39af6f`) — and one TIER1 gap, `ucwords()` (added to TIER1_PHP;
 core/always-available). Full gate green (2250 tests, clippy both legs, release built). See memory
-`example-glob-noop-since-dec191`. ⚠ Follow-up: audit for OTHER dead gates that iterate the corpus via
-`uses_impure_native`/`collect_phg` — the same substring hole may have silenced more than these two globs.
+`example-glob-noop-since-dec191`. Note: `uses_impure_native` has THREE callers (the fault-parity leg
++ the run≡runvm glob + the transpile glob — differential.rs:198/1595/2751), all revived by the shared-fn
+fix. ⚠ FOLLOW-UP (owed, not manifesting): the SIBLING `uses_unavailable_gated_module` (differential.rs:1406)
+uses the SAME `src.contains("import {m}")` substring pattern for feature-gated modules (Core.Mail /
+Core.DatabaseModule / …). It is not currently over/under-matching (the revived glob is green with 139
+running, so no gated example wrongly runs), but it shares the substring-hole CLASS — e.g. `Core.Mail` ⊂
+`Core.MailFoo` — and should be converted to the same per-line/whole-token parse. Bounded fresh-context task.
 
 > **⚠ 2026-07-16 FULL REOPEN AUDIT — this file was fully re-verdicted.** Every row was reopened;
 > 17 rows are STALE (superseded by later shipped work) and 8 new flags were raised and ruled.
