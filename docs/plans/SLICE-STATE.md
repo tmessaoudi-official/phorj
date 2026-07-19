@@ -13,7 +13,17 @@ in `bench/micro-baseline.json` via `scripts/microbench-gate.sh --emit` on a QUIE
 on load-AVG ≥2.5; external tenant spiking 3-13). Until armed, the flip is NOT gate-protected vs a future
 WIN→LOSS regression** (push itself is fine — LOSS→WIN doesn't trip it). Coverage forks FORK-A (Map<string,int>
 only) / FORK-C (AMB deferred) recorded DEC-311 for dev review.
-NEXT: → **setcontains** (0.02×) → listcontains (0.02×/44×) → mapkeys/values (0.07×) → mathmax.
+◐ **setcontains PARTIAL committed `2bdc25eb` (0.02×→0.45×, 25× VM→JIT, FLAGGED WIN-OR-FLAG, ZERO new unsafe** —
+linear scan can't beat php O(1) hash). ⏳ **FORK-D BUILDING NOW (subagent) — reseal Set<int> as int-keyed packed
+HASH table → O(1) probe → expected WIN ~1.5× like maphas.** ⚠⚠ **GATING FORK-D (READ THIS — the campaign's crux):**
+FORK-D is NOT a probe like maphas — it adds a **BUILDING** unsafe helper (`rt_u_set_of`: hash+alloc+WRITE an arena
+hash table). Its safety surface (bucket-write bounds, arena alloc, count-vs-capacity, collision/probe termination) is
+the BIGGER one — **READ that helper LINE-BY-LINE, it is the real certification.** Full bar: independent --all-features
+gate + hits>0 + checksum-gated flip ≥1.0 + 4-way byte-identity (empty/present/absent/dup-insert/collision) + advisor
+6C. On WIN: commit, flip the KNOWN_ISSUES FIX-LEVER-#2 setcontains flag → WIN. ⚠ **Prefer gating FORK-D in a FRESH/
+compacted orchestrator context** (advisor-flagged: building-unsafe certified at max session-fatigue is the ctype-class
+risk — the harness catches it, not judgment). Base = master tip; subagent forks from there.
+NEXT after FORK-D: → listcontains (0.02×/44×) → mapkeys/values (0.07×) → mathmax. Each: fresh subagent + main-gate, hold the bar.
 ⚠ **PER-VERTICAL BAR (hold it, do NOT compress):** fresh-context subagent builds → MAIN-SESSION independent
 full --all-features gate + hits>0 + checksum-gated flip + 4-way byte-identity + read the unsafe helper +
 advisor 6C → commit. One vertical per cycle. ⚠ The risk is the ORCHESTRATOR (my) context depth, NOT the
