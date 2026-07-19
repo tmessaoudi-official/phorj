@@ -2082,3 +2082,90 @@ fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
         cache.borrow().redos
     );
 }
+
+#[test]
+fn phg_run_hook_hits_the_jit_on_the_mathmax_vertical() {
+    // Mathmax-vertical DELIVERY-PATH proof: the exact `bench/micro/mathmax.phg` loop shape — a hot
+    // `while` folding `Math.max(int, int)` with DATA-DEPENDENT operands (`i % 1000`, `i * 3 % 1000`)
+    // so nothing constant-folds and the native call cannot be hoisted. The inline Cranelift `smax`
+    // is byte-identical to the interpreter's `i64::max` kernel; a silent VM fallback would false-green
+    // the byte-identity assert, so `hits>0` is the load-bearing check (proves the perf flip fired).
+    // Deterministic output only (checksum via printLine — no monotonicNanos timing field).
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.Math;\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            acc = acc + Math.max(i % 1000, i * 3 % 1000);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "mathmax-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual mathmax-vertical run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual mathmax-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the mathmax vertical must actually hit the JIT — else the perf flip is unproven"
+    );
+}
+
+#[test]
+fn jit_mathmax_negative_operands_match_the_oracle() {
+    // SIGNEDNESS edge: the mathmax vertical emits `smax` (SIGNED max, matching the `i64::max`
+    // kernel), not `umax`. The primary vertical test's operands are all non-negative, so it would
+    // green-light a `umax` mistake too — this case picks operands that SPAN negatives and where
+    // signed vs unsigned max DIVERGE (`i - 2000` and `1000 - i` are negative for small/large `i`,
+    // and under `umax` a negative i64 reads as a huge unsigned value → the wrong branch). Byte-
+    // identity against the interpreter oracle (authoritative signed `i64::max`) discriminates, and
+    // `hits>0` keeps a silent VM fallback from false-greening it.
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.Math;\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            acc = acc + Math.max(i - 2000, 1000 - i);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "mathmax negative-operand jit output must match the interpreter oracle (smax, not umax)"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual mathmax negative-operand run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual mathmax negative-operand jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the mathmax negative-operand edge must actually hit the JIT — else signedness is unproven"
+    );
+}

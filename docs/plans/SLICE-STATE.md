@@ -28,10 +28,13 @@ helper `rt_u_set_seal` safety arg verified line-by-line + fixed a -1-path list-r
 dispatch overhead; phorj WINS only where it hash-STRUCTURES vs php's hash (maphas 1.50×), reaches PARITY via a
 reseal (setcontains ~1.05×), MATCHES-or-loses on linear/alloc-bound vs tuned C. Decisions:
 - **listcontains = FLAGGED (NO vertical)** — linear-vs-C, can't flip (KNOWN_ISSUES FIX-LEVER-#2). Accepted loss.
-- **mapkeys/values (0.07×) + mathmax (0.03×) = QUEUED, MEASURE-FIRST, FRESH context** — map-structured so a
-  vertical is PLAUSIBLY parity+, but alloc-touching → BUILD+MEASURE, keep only if ≥parity, else flag. NOT auto-built.
-**SCOREBOARD: maphas WIN 1.522× ✓ · setcontains parity 1.024× ✓ (both committed AND ARMED) · listcontains flagged ·
-mapkeys/values/mathmax = fresh-context measure-first.** ✅ **OWED-CLEARED 2026-07-19: `microbench-gate.sh --emit`
+- ✅ **mathmax FLIPPED 0.03× → 1.69× WIN** (fresh-context subagent build + main-session independent full --all-features
+  gate/certify + advisor 6C; `smax` inline scalar, ZERO new unsafe — the safest vertical yet; 4-way byte-identical,
+  2324 all-features green, hits>0, K=9 flip 1.665×, ARMED in baseline same commit). The strongest flip in the campaign.
+- **mapkeys/values (0.07×/0.08×) = QUEUED, MEASURE-FIRST, FRESH context** — map-structured but ALLOC-touching (materialize
+  a List every call vs php's tuned-C array_keys/values) → BUILD+MEASURE, keep only if ≥parity, else flag. NOT auto-built.
+**SCOREBOARD: maphas WIN 1.47× ✓ · setcontains parity 1.05× ✓ · mathmax WIN 1.69× ✓ (all committed AND ARMED) ·
+listcontains flagged · mapkeys/values = fresh-context measure-first.** ✅ **OWED-CLEARED 2026-07-19: `microbench-gate.sh --emit`
 (K=7, pinned, quiet box) armed BOTH wins in `bench/micro-baseline.json` — maphas 0.03→1.522, setcontains 0.02→1.024;
 zero WIN→LOSS regressions, zero identity breaks across all 40 features. WIN→LOSS ratchet protection now LIVE for both.**
 ⚠ Next JIT build = FRESH orchestrator context (this session went very deep — advisor-flagged).

@@ -1029,6 +1029,10 @@ pub(super) fn build_body_unboxed(
             Op::CallNative(id, 1) if unboxed_native_is_truncate(*id) => {
                 arm_truncate(&mut b, &ec, &vars, &fvars, &mut kinds)?;
             }
+            Op::CallNative(id, 2) if unboxed_native_is_math_max(*id) => {
+                // `Math.max(int, int)` — inline signed `smax`, no dispatch, no fault path.
+                arm_math_max(&mut b, &vars, &fvars, &mut kinds)?;
+            }
             Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => {
                 let h = ub_ref(ub_refs.as_ref(), "String.length")?;
                 arm_str_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;

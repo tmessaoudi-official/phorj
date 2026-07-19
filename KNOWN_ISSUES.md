@@ -185,6 +185,10 @@ Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical through
   (maphas 1.516, setcontains 1.022; 26 WIN / 14 loss; 0 blocking flips; all output-identical). ⚠ **setcontains is
   marginal (1.02×) — a LOADED pre-push box could dip its best-of-3 below 1.0 and trip a spurious flip** (same boundary
   class as floatloop 1.009); re-`--emit` on a quiet box if that ever blocks a push, or the dev may bump pre-push K.
+- **`Math.max(int,int)` FLIPPED 0.03× → 1.69× WIN** (DEC-311 line) — inline Cranelift `smax` on two unboxed i64s
+  (the 2-arg analog of the `toFloat`/`truncate` inline-scalar class), ZERO new unsafe. Byte-identical to `i64::max` =
+  php `max()` by construction; non-Int operands fail closed to VM. Strongest flip in the campaign; robust (not marginal).
+  4-way byte-identical, full --all-features gate green (2324), K=9 flip 1.665×, armed in baseline same commit.
 - **`Map.has` FLIPPED 0.03× → 1.50× WIN** (`b2f927a4`, DEC-311) — int-keyed packed-hash probe, `rt_u_map_has` helper.
 - **`Set.contains` FLIPPED 0.02× → 1.05× WIN** (FORK-D, `rt_u_set_seal` building helper) — `Set<int>` is now
   resealed as an int-keyed packed OPEN-ADDRESSED hash table (the maphas mirror: `Set<int>` ≡ `Map<int,()>`),

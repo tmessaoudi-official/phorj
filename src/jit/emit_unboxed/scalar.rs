@@ -286,3 +286,23 @@ pub(super) fn arm_truncate(
     let res = b.ins().fcvt_to_sint(types::I64, t);
     ub_push(b, vars, fvars, kinds, res, Kind::Int)
 }
+
+/// `Math.max(int, int): int` — the kernel is `(*a).max(*b)` = `i64::max`; Cranelift's scalar
+/// `smax` is the same SIGNED max, so interp ≡ VM ≡ JIT ≡ php by construction. Pure scalar, no
+/// fault path, no handle space. Second arg is on top of the stack (`bv`, popped first).
+pub(super) fn arm_math_max(
+    b: &mut FunctionBuilder,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (bv, bk) = ub_pop(b, vars, fvars, kinds)?;
+    let (av, ak) = ub_pop(b, vars, fvars, kinds)?;
+    if ak != Kind::Int || bk != Kind::Int {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Math.max operand kinds ({ak:?}, {bk:?})"
+        )));
+    }
+    let res = b.ins().smax(av, bv);
+    ub_push(b, vars, fvars, kinds, res, Kind::Int)
+}

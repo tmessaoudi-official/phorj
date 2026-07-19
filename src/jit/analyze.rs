@@ -464,6 +464,16 @@ pub(super) fn unboxed_native_is_truncate(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.Conversion" && nf.name == "truncate" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.Math.max` (two-arg signed integer max)? The kernel is
+/// `(*a).max(*b)` = `i64::max` = Cranelift `smax` = PHP `max($a,$b)` on two ints — byte-identical
+/// signed max by construction, a PURE SCALAR op with no handles and no allocation. Inline-emitted
+/// to eliminate the ~188ns VM→native dispatch (the mathmax perf flip).
+pub(super) fn unboxed_native_is_math_max(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Math" && nf.name == "max" && nf.pure)
+}
+
 /// Provenance of an operand-stack entry for the provenance pre-pass ONLY (not codegen): `Param(slot)`
 /// = a bare `GetLocal(slot)` result; `Other` = anything else (a `Const`, an arithmetic/comparison
 /// result, a call result).
@@ -1937,6 +1947,27 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::Int);
                 }
+                Op::CallNative(id, 2) if unboxed_native_is_math_max(*id) => {
+                    // `Math.max(int, int): int` — pure scalar signed max. Both operands must be
+                    // `Int` (the second is on top, popped first); the result is `Int`.
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Math.max operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Math.max operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Int);
+                }
                 Op::Pop => {
                     // W7: a discarded Dyn would need a tag-gated payload release — no
                     // consumer produces the shape yet (union params are read, not discarded).
@@ -2830,6 +2861,9 @@ pub(super) fn collect_functions_unboxed(
                 {
                     has_float = true;
                 }
+                // `Math.max(int, int): int` — pure scalar signed max, inline `smax`. No handles,
+                // no float, no call: sets no eligibility flags (just avoids the `other` reject).
+                Op::CallNative(id, 2) if unboxed_native_is_math_max(*id) => {}
                 Op::AddI
                 | Op::SubI
                 | Op::MulI
