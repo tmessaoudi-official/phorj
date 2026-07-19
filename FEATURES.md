@@ -20,6 +20,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Classes + fields + methods (`this`) | ✅ | |
 | Constructor promotion | ✅ | `constructor(private int total) {}` |
 | Enums with payloads | ✅ | `enum Shape { Circle(float r), Rect(float w, float h) }` |
+| Backed enums (PHP 8.1) | ✅ | `enum Suit: string { Hearts = "H", … }` / `enum Priority: int { Low = 1, … }` — `s.value`, `Enum.cases()` (→`List<Enum>`, valid on any payload-less enum), `Enum.from(x)` (faults on miss), `Enum.tryFrom(x)` (→`Enum?`); DEC-302, byte-identical interpreter≡VM≡PHP (repr B: class model + emitted methods) |
 | `match` (exhaustiveness-checked) | ✅ | over enum variants — incl. an **optional enum** `E?` scrutinee: variant patterns match directly, exhaustive = all variants + `null` (DEC-250) |
 | String interpolation | ✅ | `"area = {area(s)}"` |
 | `for … in` over lists | ✅ | `for (int s in [80, 30, 55]) { … }` |
