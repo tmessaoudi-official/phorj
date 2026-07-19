@@ -42,6 +42,17 @@ fn map_has(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Map.has expects (Map<K, V>, K)".into()),
     }
 }
+/// `containsValue(Map<K, V>, V) -> bool` — whether any VALUE equals the needle (structural `eq_val`,
+/// like `List.contains`). The value-side companion to `has` (which tests KEYS). Erases to strict
+/// `in_array(needle, map, true)` — `in_array` scans values and ignores keys, so it is byte-identical
+/// for scalar / nested-collection values (a map of class instances differs: PHP `===` is identity,
+/// Phorj structural — the same documented caveat as `List.contains`).
+fn map_contains_value(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m), needle] => Ok(Value::Bool(m.iter().any(|(_, v)| v.eq_val(needle)))),
+        _ => Err("Map.containsValue expects (Map<K, V>, V)".into()),
+    }
+}
 fn map_size(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Map(m)] => Ok(Value::Int(m.len() as i64)),
@@ -228,6 +239,17 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(map_has),
             // PHP `array_key_exists(key, array)` — key first.
             php: |a| format!("array_key_exists({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "containsValue",
+            params: vec![map(), v()],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(map_contains_value),
+            // strict `in_array(needle, map, true)` scans VALUES (ignores keys) — matches `eq_val` for
+            // scalar/nested values; the class-instance identity-vs-structural caveat is `List.contains`'s.
+            php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
             module: "Core.Map",

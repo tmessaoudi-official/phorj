@@ -708,6 +708,25 @@ import Core.List;
     );
 }
 
+/// Wave-B (DEC-304): `Map.containsValue` — value-side membership (the companion to `has`, which tests
+/// keys). Structural `eq_val`, erases to strict `in_array(needle, map, true)` (scans values, ignores
+/// keys) — byte-identical run≡runvm≡php for scalar values; covers present, absent, and an empty map.
+#[test]
+fn map_contains_value_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Map;
+#[Entry] function main() -> void {
+    Map<string, int> m = ["a" => 1, "b" => 2, "c" => 3];
+    Output.printLine("{Map.containsValue(m, 2)}|{Map.containsValue(m, 9)}");
+    Map<string, string> e = new Map<string, string>();
+    Output.printLine("{Map.containsValue(e, "x")}");
+}"#,
+        "true|false\nfalse\n",
+        "map_contains_value",
+    );
+}
+
 /// Wave-B collections (DEC-300): `Core.Deque<T>` — a pure-Phorj double-ended queue over `List<T>`.
 /// Byte-identical run≡runvm≡php by construction (no native; the method bodies transpile to the same
 /// array ops). Covers both ends (push/pop/peek), the empty→`null` optional return (not an

@@ -47,5 +47,8 @@ function main(): void {
     Output.printLine("has bob     = {hasBob}");
     // false
     Output.printLine("dropped size = {Map.size(dropped)}");
+    // `has` tests KEYS; `containsValue` tests VALUES (the value-side companion, strict membership).
+    Output.printLine("has value 41 = {Map.containsValue(withCarol, 41)}");
+    Output.printLine("has value 99 = {Map.containsValue(withCarol, 99)}");
 }
 // 2
