@@ -610,10 +610,13 @@ Coverage:  language 79.8% · stdlib 27.5% row-weighted / 32.5% usage-weighted ·
 PHP-parity %  ≈ 58   (ccb2403 full-pass; domain-weighted; raw row-parity floor 38.8%)
 Vision %      ≈ 60   (ccb2403 full-pass; 70% parity + 30% roadmap-programme at 64.4%)
 
-  ⟶ CURRENT at HEAD da3fc0c2 (2026-07-18, §4.9):  PHP-parity ≈ 64%  ·  Vision ≈ 66%  ·  floor ≈ 47%
+  ⟶ CURRENT at HEAD 580c6041 (2026-07-19, §4.10):  PHP-parity ≈ 66%  ·  Vision ≈ 67%  ·  floor ≈ 51%
      chain: 58% (ccb2403) → 59% (§11.2) → 60% (§4.6, af3aad3) → 61% (§4.7, bea7f61) →
      62% (§4.8, DB+Mail) → 64% (§4.9, Web/Runtime spine: HTTP client #2 + FS #5 + Uri +
-     Unicode #6 + sessions #3). First span where stdlib breadth itself moved (+6pp FN leg).
+     Unicode #6 + sessions #3) → 66% (§4.10, overnight Wave-B: named args + variadics +
+     Math tail + List set-ops + String tail + Deque + PriorityQueue). ⚠ PHANTOM-GAP finding
+     (§4.10): several §1.2 "gaps" are already built (Core.Path/FS-broad/crypto) → true parity is
+     higher, pending the owed full §1.2 per-row re-pass.
 
 PASS 2: 35 beyond-PHP capabilities (no PHP counterpart)
 
@@ -735,3 +738,59 @@ perf/polish: **#2 HTTP client** and **#5 FS breadth** fell, **#6 Unicode** and *
 partial. Parity +2 (62→64), Vision +2 (64→66). The remaining FN drag is now XML (#12), streams (FN-STREAM
 15 GU), intl (#19), SPL heaps/PQ, and the mb_* long tail — which is exactly what the confirmed programme's
 breadth slices (#9 collections, #10 TOP-20, #13 packs+XML+icu4x) target next.
+
+### 4.10 Recompute at HEAD `580c6041` (2026-07-19 — overnight autonomous Wave-B: language ergonomics + collections + stdlib tails)
+
+**Scope of the span (§4.9 HEAD `da3fc0c2` → `580c6041`, overnight autonomous run):** seven VERIFIED
+shipped features, each surface-grep-confirmed this pass (Rule-11), plus a FRONTIER-MAP finding that
+several §1.2 "gaps" are PHANTOM (already built) — flagged below, NOT credited here (that needs the owed
+full §1.2 re-pass). Credited: **named arguments** `f(name: value)` FULL SCOPE (free fns + ctors +
+methods, DEC-297) · **variadics** `f(int ...xs)` (DEC-298) · **Core.Math tail** (asin/acos/atan/atan2/
+sinh/cosh/tanh/log1p/expm1/degToRad/radToDeg/log2/hypot — 13 fns) · **List.difference/intersection**
+(typed-strict set ops, FN-ARR) · **String.capitalizeWords/translate** (ucwords/strtr, FN-STR) ·
+**Core.Deque\<T\>** (DEC-300) · **Core.PriorityQueue\<T\>** (DEC-301).
+
+**Row flips [Verified: registry/prelude surface grep + shipped commits this pass]:**
+
+| # | Group | Tier | Was (§4.9) | Now | Δ score | Evidence |
+|---|---|---|---|---|--|---|
+| 1 | SYN (named args + variadics) | — | 104.5 C | +2.0 | SYN +2.0 | PHP-8.0 named args (colon spelling, transpiles 1:1) + PHP variadic `...` — both parity SYN, now COVERED (DEC-297/298) [Verified: `src/parser/`, differential] |
+| 2 | FN-MATH tail (inverse-trig/hyperbolic/angle) | T3 | 0 C (T3 empty) | +13 C | +13 (T3) | asin/acos/atan/atan2/sinh/cosh/tanh/log1p/expm1/degToRad/radToDeg/log2/hypot; libm-backed, `log2`=ln/ln to match PHP `log(x,2)` [Verified: `src/native/math.rs`] — scientific math = T3 (rare in web code) |
+| 3 | FN-STR (93) | T1 | 32 C (§4.9) | +2 C | +2.0 (T1) | capitalizeWords (ucwords) + translate (strtr) from GU [Verified: `src/native/text.rs`] |
+| 4 | FN-ARR (74) | T1 | 27 C (§4.9) | +2 C | +2.0 (T1) | difference + intersection (typed-strict, filter semantics — NOT PHP array_diff loose) [Verified: `src/native/list_registry.rs`] |
+| 5 | FN-SPL (39) | T2 | 3 C (§4.9) | +2 C | +2.0 (T2) | Core.Deque covers SplDoublyLinkedList/SplStack/SplQueue behaviours; Core.PriorityQueue covers SplPriorityQueue — both pure-Phorj, T?-on-empty (DEC-300/301) [Verified: `src/cli/preludes.rs`] |
+
+**PHANTOM-GAP FINDING (flagged, NOT credited — needs the owed full §1.2 re-pass):** grep-verification
+this run found several §1.2/§4.x "gaps" ALREADY built and shipped — **Core.Path** full (baseName/
+directoryName/extension/fileStem/join), **Core.FileSystem** far broader than §4.9's "17 fns" credit
+(same 17 + appendText + more), **Core.Random/Core.Hash** CSPRNG/HMAC/HKDF/PBKDF2 (crypto — the §4.9
+recompute never credited a FN-HASH/FN-CRYPT flip), plus **match**/**Process**/**levenshtein** (some
+already in §4.9). The true FN parity is therefore HIGHER than even §4.10 credits; a fresh per-row §1.2
+re-tally (the standing process debt) is owed to bank it. Not credited here to avoid unverified inflation.
+
+**Recomputed arithmetic (additive delta on §4.9 — T1 148.5/303, T2 49/140, T3 0/75; SYN 104.5/129; RT 13.5/18):**
+- T1 score 148.5 → 148.5 + (2+2) = **152.5 / 303**
+- T2 score 49 → 49 + 2 = **51 / 140**
+- T3 score 0 → 0 + 13 = **13 / 75**
+- FN usage-weighted = (3×152.5 + 2×51 + 1×13)/1264 = (457.5 + 102 + 13)/1264 = 572.5/1264 = **45.3%** (was 43.0%)
+- SYN: 104.5 → 106.5 / 129 = **82.6%** (was 81.0% — named args + variadics)
+- RT: unchanged **75.0%**
+- **PHP-parity = 0.35×82.6 + 0.40×45.3 + 0.25×75.0 = 28.9 + 18.1 + 18.75 ≈ 66%** (was ≈64)
+- Raw row-parity floor: FN raw 198 (§4.9) + 19 (4+2+13) = 217; (106.5 + 217 + 13.5)/665 = 337/665 ≈ **51%** (was ≈47 — the floor keeps closing on the weighted headline: gap 17pp→15pp, driven by the high-row-count Math tail)
+
+**Vision %** — programme deltas on §4.9 (mean 1144/16 = 71.5): **M-Batteries 62→66** (collections
+Deque/PQ + Math scientific tail), **GA-M12 82→84** (language ergonomics: named args + variadics — a core
+call-site quality-of-life that PHP has). Itemized +4+2 = +6 → new mean = (1144 + 6)/16 = 1150/16 = 71.9.
+**Vision = 0.70×65.75 + 0.30×71.9 = 46.0 + 21.6 ≈ 67%** (was ≈66).
+
+**Grade:** row flips **[Verified]** (each surface grep-confirmed this pass + differential-tested);
+C/P split and tier assignment **[Inferred]** (conservative — Math tail placed in T3 as rare scientific
+math, not T1/T2, to avoid weighting inflation); headline **[Inferred]** (additive delta on the ratified
+35/40/25 model); Vision milestone bumps **[Speculative]** (judgment). The phantom-gap undercount is
+**[Verified]** as existing (grep-confirmed the modules ship) but its parity credit is **[Unverified]**
+pending the per-row re-pass.
+
+**The number the developer asked for:** **PHP-parity ≈ 66% · row-parity floor ≈ 51% · Vision ≈ 67%**
+(from §4.9's 64/47/66). Modest +2 headline — the overnight span was language ergonomics + stdlib
+long-tail, not another TOP-20 blocker fall — but the floor moved +4 (high-row Math tail) and the
+PHANTOM-GAP finding means the *true* parity is higher still, pending the owed re-pass.

@@ -28,8 +28,10 @@ FINDINGS (owed to next recompute + review):
   2. **🚩 PLACEMENT MISMATCH (flag-already-done rule):** dev ruled TONIGHT crypto→Core.Cryptography, but CSPRNG
      lives in Core.Random + HMAC/KDF in Core.Hash (shipped, byte-identical). AUTO/PENDING: keep shipped placement
      OR consolidate into Core.Cryptography (breaking rename) — dev decides at review. NOT moved silently.
-  3. **§4.9 UNDERCOUNT:** FN-HASH (hmac/hkdf/pbkdf2 were GP) + FN-RAND (CSPRNG was P) are BUILT but uncredited →
-     real parity is HIGHER than 64%. Recompute owed (also credit the Math tail + named-args SYN row).
+  3. **§4.10 RECOMPUTE DONE (`<pending>`)** — parity ≈64→**66%** · Vision 66→**67%** · floor 47→**51%** (credited the
+     7 overnight features). ⚠ STILL OWED: a full §1.2 PER-ROW re-pass to bank the PHANTOM-GAP undercount (FN-HASH
+     hmac/hkdf/pbkdf2 + FN-RAND CSPRNG + Core.Path + Core.FileSystem-broad are BUILT but §1.2 still lists as gaps →
+     true parity higher than 66%). §4.10 conservatively did NOT credit phantom coverage (no unverified inflation).
   **DONE this overnight (all committed, green, UNPUSHED — dev pushes AM):** slice#3 named args FULL SCOPE
   (`998e370b`); variadics (`59bf4158`); Wave-B **Math tail** (`841864e7`); Wave-B **List.difference/intersection**
   (`81cbd331`, typed-strict set ops); Wave-B **String tail** capitalizeWords/translate (`90015c91`, ucwords/strtr);
