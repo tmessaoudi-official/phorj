@@ -40,6 +40,12 @@ FINDINGS (owed to next recompute + review):
   **§4.10 recompute** (`91737e4a`, parity 64→66% · Vision 66→67% · floor 47→51%); **DEC-302 backed-enums build-map**
   (`d5ba41e9`, ruled AUTO, deferred to fresh context); **DEC-303 `String.chunk`** (codepoint-based, `__phorj_str_chunk`
   helper, `bb39af6f`+src in `73f31189`); **🔴✅ P0 FIX — revived the dead example byte-identity glob** (`a355c342`).
+  🎉 **DEC-302 BACKED ENUMS COMPLETE + VERIFIED (2026-07-19, `b3f2a788`→`9a5deff6`, repr B, fresh-context subagent + my independent gate).**
+  `enum Suit: string {Hearts="H",…}` / `enum Priority: int {…}` + `.value` / `Enum.cases()` (List<Enum>, any payload-less
+  enum) / `Enum.from(x)` (faults on miss) / `Enum.tryFrom(x)` (Enum?). 2 new Ops (EnumValue/EnumFrom, all-3-matches, no `_`);
+  CTy `Priority.from(9).value + 1` operand (Inv-7); 11 coded diagnostics; transpile = repr-B methods on base class; lift done;
+  example enums-backed.phg IN the RUN set. Full --all-features gate 2309 green, clippy both legs, fmt, build. ⚠ Dev-review AUTO
+  decisions recorded under DEC-302 (a-d); non-blockers owed: FEATURES.md surface note + parity-% recompute (doing §4.11 now).
   **DIRECTION (dev AskUserQuestion 2026-07-19): "All of 1, 2, and 3"** = (1) batched companion natives,
   (2) backed enums DEC-302 (careful incremental build), (3) §1.2 parity re-pass crediting phantom gaps.
   Then a SECOND direction (dev): perf — "All of 1, 2, and 4" = expand micro suite / macro benches / fix jsonround.

@@ -610,7 +610,9 @@ Coverage:  language 79.8% · stdlib 27.5% row-weighted / 32.5% usage-weighted ·
 PHP-parity %  ≈ 58   (ccb2403 full-pass; domain-weighted; raw row-parity floor 38.8%)
 Vision %      ≈ 60   (ccb2403 full-pass; 70% parity + 30% roadmap-programme at 64.4%)
 
-  ⟶ CURRENT at HEAD 580c6041 (2026-07-19, §4.10):  PHP-parity ≈ 66%  ·  Vision ≈ 67%  ·  floor ≈ 51%
+  ⟶ CURRENT at HEAD 9a5deff6 (2026-07-19, §4.11):  PHP-parity ≈ 68%  ·  Vision ≈ 69%  ·  floor ≈ 53%
+     (§4.11 = backed enums DEC-302 (PHP 8.1) + targeted phantom-gap credit (Core.Path, crypto); full re-tally still owed)
+  ⟶ PREV at HEAD 580c6041 (2026-07-19, §4.10):  PHP-parity ≈ 66%  ·  Vision ≈ 67%  ·  floor ≈ 51%
      chain: 58% (ccb2403) → 59% (§11.2) → 60% (§4.6, af3aad3) → 61% (§4.7, bea7f61) →
      62% (§4.8, DB+Mail) → 64% (§4.9, Web/Runtime spine: HTTP client #2 + FS #5 + Uri +
      Unicode #6 + sessions #3) → 66% (§4.10, overnight Wave-B: named args + variadics +
@@ -794,3 +796,44 @@ pending the per-row re-pass.
 (from §4.9's 64/47/66). Modest +2 headline — the overnight span was language ergonomics + stdlib
 long-tail, not another TOP-20 blocker fall — but the floor moved +4 (high-row Math tail) and the
 PHANTOM-GAP finding means the *true* parity is higher still, pending the owed re-pass.
+
+### 4.11 Recompute at HEAD `9a5deff6` (2026-07-19 — backed enums (DEC-302) + a TARGETED phantom-gap credit)
+
+**Scope (§4.10 → `9a5deff6`):** the flagship this span is **backed enums (DEC-302, PHP 8.1)** — fully
+built + gate-verified (2309 tests --all-features, byte-identical, example glob-gated): `enum Suit:
+string {…}` / `enum Priority: int {…}` + `.value`, `Enum.cases()`, `Enum.from()`, `Enum.tryFrom()`.
+This is a genuine PHP-8.1 LANGUAGE feature, not long-tail. Plus a TARGETED crediting of grep-VERIFIED
+phantom gaps (§4.10's finding): **Core.Path** (baseName/directoryName/extension/fileStem/join) and
+**crypto** (FN-HASH/RAND: hmac/equals/hkdf + CSPRNG secureBytes/secureInt), both shipped but never
+credited by §4.9/4.10. **This is a TARGETED recompute, NOT the full 631-row re-tally (still owed).**
+
+**Row flips [Verified: shipped + gate-green this span; phantom credits Inferred-uncredited]:**
+
+| # | Group | Tier | Δ | Evidence |
+|---|---|---|--|---|
+| 1 | SYN — backed-enum decl (`: type` + `= value`) | — | SYN +1 | PHP-8.1 backed enum syntax, dev-ruled repr B [Verified: DEC-302, `parses_backed_enum_decl`] |
+| 2 | FN-ENUM/SPL — `.value`/`cases()`/`from()`/`tryFrom()` | T2 | +4 C | The backed-enum method surface, byte-identical 3-leg [Verified: differential + example] |
+| 3 | FN-PATH — Core.Path (5) | T1 | +5 C | baseName/directoryName/extension/fileStem/join — shipped, uncredited by §4.9/4.10 [Inferred] |
+| 4 | FN-HASH/RAND — crypto (5) | T2 | +5 C | hmac/equals/hkdf + secureBytes/secureInt — shipped, uncredited [Inferred] |
+| 5 | FN — tonight's stdlib (chunk/containsValue/product/none/sortDescending) | T1 | +5 C | DEC-303–308 [Verified: differentials] |
+
+**Arithmetic (additive on §4.10 — T1 152.5/303, T2 51/140, T3 13/75; SYN 106.5/129; RT 13.5/18):**
+- T1: 152.5 + 5 (Path) + 5 (stdlib) = **162.5**
+- T2: 51 + 4 (enum methods) + 5 (crypto) = **60**
+- T3: **13** (unchanged)
+- FN weighted = (3×162.5 + 2×60 + 1×13)/1264 = (487.5 + 120 + 13)/1264 = 620.5/1264 = **49.1%** (was 45.3)
+- SYN: 106.5 → 107.5/129 = **83.3%** (backed-enum syntax)
+- RT: **75.0%**
+- **PHP-parity = 0.35×83.3 + 0.40×49.1 + 0.25×75.0 = 29.2 + 19.6 + 18.75 ≈ 68%** (was ≈66)
+- Raw floor: FN raw 217 + 4 + 5 + 5 = 231; (107.5 + 231 + 13.5)/665 = 352/665 ≈ **53%** (was ≈51)
+
+**Vision** — backed enums is a language-completeness programme win: **GA-M12 84→86**. Mean (1150+2)/16 =
+72.0. **Vision = 0.70×68 + 0.30×72 = 47.6 + 21.6 ≈ 69%** (was ≈67).
+
+**Grade:** backed-enum + tonight's-stdlib credits **[Verified]** (shipped + gate-green + differential);
+Path/crypto phantom credits **[Inferred]** (built confirmed by grep; uncredited-before inferred from
+§4.9/4.10 not listing them); headline **[Inferred]** (additive on the 35/40/25 model). Still a TARGETED
+recompute — a full per-row §1.2 re-tally would likely credit MORE (other phantom gaps) and remains owed.
+
+**The number:** **PHP-parity ≈ 68% · floor ≈ 53% · Vision ≈ 69%** (from §4.10's 66/51/67). The +2 is a
+real PHP-8.1 language feature (backed enums) + banking verified-already-built modules — not long-tail padding.
