@@ -2993,9 +2993,12 @@ const TIER1_PHP: &[&str] = &[
     // math / numeric
     "abs",
     "acos",
+    "acosh",
     "asin",
+    "asinh",
     "atan",
     "atan2",
+    "atanh",
     "ceil",
     "cos",
     "cosh",

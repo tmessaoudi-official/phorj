@@ -74,6 +74,11 @@ function main(): void {
     string shf = Math.numberFormat(Math.sinh(1.0), 6);
     string thf = Math.numberFormat(Math.tanh(0.5), 6);
     Output.printLine("asin(0.5)~{asf}, sinh(1)~{shf}, tanh(0.5)~{thf}");
+    // Inverse hyperbolics (asinh/acosh/atanh) — same platform libm as PHP, in-domain here.
+    string ashf = Math.numberFormat(Math.asinh(1.0), 6);
+    string achf = Math.numberFormat(Math.acosh(2.0), 6);
+    string athf = Math.numberFormat(Math.atanh(0.5), 6);
+    Output.printLine("asinh(1)~{ashf}, acosh(2)~{achf}, atanh(0.5)~{athf}");
     // --- `numberFormat(value, decimals)` → a grouped string, rounded half-away-from-zero. It erases
     // to a `__phorj_number_format` helper (identical string-building on both legs), so it is the safe
     // way to *print* a real transcendental: formatting to a few decimals collapses any last-ULP noise. ---

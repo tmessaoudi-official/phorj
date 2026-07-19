@@ -274,6 +274,12 @@ math_unary!(math_atan, atan, "atan");
 math_unary!(math_sinh, sinh, "sinh");
 math_unary!(math_cosh, cosh, "cosh");
 math_unary!(math_tanh, tanh, "tanh");
+// Inverse hyperbolics — same platform libm as PHP's asinh/acosh/atanh, so bit-for-bit identical.
+// Domain violations return NaN (acosh(x<1), atanh(|x|>1)) — rendered "NaN" byte-identically on all
+// three legs (same as the shipped asin/acos out-of-domain path).
+math_unary!(math_asinh, asinh, "asinh");
+math_unary!(math_acosh, acosh, "acosh");
+math_unary!(math_atanh, atanh, "atanh");
 math_unary!(math_log1p, ln_1p, "log1p");
 math_unary!(math_expm1, exp_m1, "expm1");
 math_unary!(math_deg_to_rad, to_radians, "degToRad");
@@ -679,6 +685,9 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
         unary_float("sinh", math_sinh, |a| format!("sinh({})", parg(a, 0))),
         unary_float("cosh", math_cosh, |a| format!("cosh({})", parg(a, 0))),
         unary_float("tanh", math_tanh, |a| format!("tanh({})", parg(a, 0))),
+        unary_float("asinh", math_asinh, |a| format!("asinh({})", parg(a, 0))),
+        unary_float("acosh", math_acosh, |a| format!("acosh({})", parg(a, 0))),
+        unary_float("atanh", math_atanh, |a| format!("atanh({})", parg(a, 0))),
         unary_float("log2", math_log2, |a| format!("log({}, 2)", parg(a, 0))),
         unary_float("log1p", math_log1p, |a| format!("log1p({})", parg(a, 0))),
         unary_float("expm1", math_expm1, |a| format!("expm1({})", parg(a, 0))),
