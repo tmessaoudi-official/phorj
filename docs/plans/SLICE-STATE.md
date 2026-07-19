@@ -1,5 +1,29 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ⭐⭐⭐⭐ SESSION 4 (2026-07-19 cont. — dev pushed the 41; continuous autonomous 1+2+4). 4 commits, all green, UNPUSHED.
+**Delivered:** (1) 🔴 **push failure diagnosed = LOAD CONTAMINATION, not real test failures** — the full gate
+is green on a CPU-idle box; the pre-push SIGKILLs under load-avg ~9 and git reports it as a hook failure.
+(2) ✅ **PERF WIN `d2f95509`** slice-fastpath for Pure natives — measured (core-pinned + interleaved) a stable
+2.5–12% VM win on every Pure native, JIT winners flat, byte-identical. **UNBLOCK: per-core `mpstat` idle
+(NOT `uptime` load-avg) is the real perf-measurement gate** = [[percore-mpstat-not-loadavg-for-perf]] — a
+load-avg of 3–9 can still be 95%+ per-core idle; core-pin + interleave then measures reliably. This disproves
+several prior sessions' "box too loaded" deferrals. (3) ✅ **arena-Json NO-WIN** (DEC-309 resolved — parse
+already lazy/near-zero-alloc post-DEC-294; jsonround stays a dev-accepted FLAG). (4) ✅ **§4.12 full §1.2
+re-tally `6815ad87`** — FN coverage 27.5%→44.1% simple-model (81 phantom GU/GP→C grep-cited); RECONCILED not
+stacked with §4.11: ≈60/81 already in the weighted model → headline **≈68% is a well-evidenced FLOOR** with
+~1–2pp headroom. (5) ✅ **CTYPE validators `d7e39535` (DEC-310)** — 7 new `Core.Validation` predicates
+(isLower/isUpper/isWhitespace/isPunctuation/isControl/isVisible/isPrintable) via `preg_match(/…$/D)` (NOT
+ctype_* — shared ext, hermetic-oracle guard fatal; the D-flag makes them MORE correct than the pre-D 5,
+whose trailing-`\n` divergence is now FLAGGED in KNOWN_ISSUES). AUTO-NAMING for dev review.
+**CLEAN RUNWAY (next, from §4.12 genuine-gaps + advisor):** (a) **Math asinh/acosh/atanh** — cheap, BUT has a
+NaN-rendering edge (domain violations → NaN); FIRST check how the shipped Math tail (asin/acos) renders NaN
+across all 3 legs and mirror it. (b) **FILTER email/URL** — advisor called it low-edge (Uri.parse exists) but
+byte-identity to PHP's `filter_var(FILTER_VALIDATE_EMAIL)` semantics is actually FIDDLY — verify before
+committing. (c) minBy/maxBy = comparable-key design edge (non-scalar keys: PHP loose `<` vs Rust compare_ord)
+— a real slice, not a companion; needs a Comparable-bound decision. (d) bigger movers XML/streams/generators =
+spine/forked. ⚠ Standing: gate = `PHORJ_REQUIRE_PHP=1 cargo nextest --all-features` + clippy both legs; NEVER push.
+**Pattern proven again:** fresh-context worktree subagent per isolated slice + my independent gate/spot-check.
+
 ## ⭐⭐⭐ FRESH SESSION — START HERE (2026-07-19 handoff; dev pushing the 40 commits below, resuming fresh)
 Prior session ended at HEAD `36733a95` (40 commits, all green, UNPUSHED — dev pushes). Ended because the
 shared box hit load ~9 (perf measurement impossible) + a transient API error. **DONE this session:**
