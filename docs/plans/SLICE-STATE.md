@@ -7,8 +7,14 @@ shared box hit load ~9 (perf measurement impossible) + a transient API error. **
 DEC-302 COMPLETE+verified (2309-green) · 6 stdlib (DEC-304–308) · perf: proved the flips were load-noise +
 found/documented PERVASIVE native-call-in-loop losses (28→40 natives benched) · parity §4.11 **≈68%**.
 **QUEUE (dev-ruled "all of them"; ORDER by dependency):**
-1. **arena-Json experiment** (jsonround flip — dev ruled "prototype+measure", DEC-309) — NEEDS A QUIET BOX
-   (load ≲2) for the perf verdict; fresh-context subagent; worktree isolation (experiment may not pan out).
+1. ✅ **arena-Json — DONE 2026-07-19 (NO-WIN, DEC-309 resolved).** Fresh-context worktree subagent ran a
+   phase-split + eager-routing proxy (did NOT build the full `Value::JsonArena` — bounded it as not worth
+   the blast radius). Verdict NO-WIN, three independent legs: (a) parse is already lazy/near-zero-alloc
+   post-DEC-294 (`validate_json` skip-scan → one `JsonLazy`; phase-split: parse 171ms is the SMALLEST
+   phase, rebuild+stringify 200ms the largest — an arena targets the cheapest phase); (b) deepjson eager
+   +60% regression is INTRINSIC materialization work an arena can't recover; (c) blast radius enormous
+   (new Value variant threading dozens of wildcard-free matches + VM ops + encode/eq/hash). **jsonround
+   residual loss stays a dev-accepted structural FLAG (DEC-294).** Nothing committed; worktree pristine.
 2. ✅ **slice-fastpath — DONE 2026-07-19 (MEASURED + COMMITTED).** Re-measured core-pinned + interleaved
    (`taskset -c 7`, core7 ~99% idle despite load-avg ~3 — per-core idle is the real gate, NOT load-average;
    this is why prior sessions wrongly thought perf was blocked). Two independent runs → stable **2.5–12% win
@@ -16,7 +22,14 @@ found/documented PERVASIVE native-call-in-loop losses (28→40 natives benched) 
    gate + PHP oracle green (2297). Detail = KNOWN_ISSUES "FIX LEVER #1". Deeper lever (per-op JIT verticals)
    stays dev-driven (unsafe island). ⚠ LESSON: check `mpstat -P ALL` per-core, NOT `uptime` load-average —
    a load-avg of 3–9 can still be 95%+ per-core idle (sleeping/IO), and a core-pinned bench is then reliable.
-3. **§1.2 full per-row parity re-tally** (analysis, no quiet box needed) — supersedes the targeted §4.11.
+3. ✅ **§1.2 full per-row re-tally — DONE 2026-07-19 (§4.12 in M-gap-matrix).** Fresh-context subagent
+   grep-verified all 631 FN rows + my independent spot-check (Math/String/DB credits + asinh/var_export
+   discipline catches). **Simple-model FN coverage 27.5% → 44.1%** (81 phantom GU/GP→C, all grep-cited).
+   ⚠ RECONCILED not stacked with §4.11: ~60 of the 81 are ALREADY in the weighted model (§4.8 DB/mail,
+   §4.9 HTTP/FS/Uri/mb/sessions, §4.11 Path/crypto/enum) → headline **≈68% is a well-evidenced FLOOR with
+   only ~1–2pp re-tier headroom** (do NOT chase phantom weighted upside). Genuine remaining gaps (the real
+   targets) listed in §4.12: FS streams, SPL, XML, SOCK, INTL, GD/ZLIB, **FN-CTYPE 5 validators (cheap)**,
+   **Math asinh/acosh/atanh (cheap)**, **FILTER email/URL (Uri.parse exists → cheap)**, sodium/openssl.
 4. **new parity features** (XML/streams/mb-tail — biggest FN-leg movers) + **more stdlib** (Map.update/mapKeys,
    List.minBy/maxBy). ⚠ Deeper perf lever = per-op JIT verticals (audited `unsafe` island — DEV-DRIVEN, not delegated).
 **Pattern that worked:** fresh-context subagent per spine slice + my independent full-gate verify (delivered

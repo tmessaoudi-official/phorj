@@ -837,3 +837,93 @@ recompute — a full per-row §1.2 re-tally would likely credit MORE (other phan
 
 **The number:** **PHP-parity ≈ 68% · floor ≈ 53% · Vision ≈ 69%** (from §4.10's 66/51/67). The +2 is a
 real PHP-8.1 language feature (backed enums) + banking verified-already-built modules — not long-tail padding.
+
+### 4.12 FULL §1.2 per-row re-tally at HEAD `d2f95509` (2026-07-19 — the owed 631-row re-pass)
+
+**Scope:** the FULL §1.2 FN re-pass §4.9/4.10/4.11 all flagged as still owed (they did only targeted
+credits). Every GU/GP the frozen §1.2 Notes named was grep-VERIFIED against the current codebase
+(fresh-context subagent + main-session independent spot-check of the biggest + softest credits: Math
+tail 11/11, String chunk/similarText/levenshtein 5/5, DB DBAL query/prepare/transaction/commit/rollback/
+lastInsertId 6/6, and the discipline catches asinh/acosh/atanh/var_export all confirmed genuinely absent
+— not inflated). Formula is the doc's actual §1.2 method **`(C + 0.5·P) / (total − NA − GD)`** (verified
+against the frozen `(118 + 24.5)/518 = 27.5%`).
+
+**Result — §1.2 SIMPLE-model FN coverage: 27.5% → ≈ 44.1%** `(202 + 0.5·53)/518 = 228.5/518` (honest
+range ≈43–45%; ±1-per-soft-module → 43.6%). **81 phantom-gap rows** reclassified (63 GP→C, 18 GU→C) +
+3 P→C. New FN tally (each group re-verified to sum to its rowcount; Σ = 631 ✓):
+
+| | C | P | GP | GU | GD | NA |
+|---|--|--|--|--|--|--|
+| old (frozen) | 118 | 49 | 100 | 251 | 24 | 89 |
+| **new** | **202** | **53** | **30** | **233** | 24 | 89 |
+
+**Per-group flips (the 17 changed groups; durable audit trail — the subagent worktree auto-cleans).**
+Format `C/P/GP/GU/GD/NA` old → new; every C-credit grep-cited to a `src/…` symbol:
+
+| Group | old → new | Evidence |
+|---|---|---|
+| FN-STR (93) | 30/6/9/35/3/10 → 39/6/5/30/3/10 | +4 sprintf family→`text_registry "format"`; +5 chunk/capitalizeWords/translate/similarText/levenshtein |
+| FN-ARR (74) | 26/12/2/22/2/10 → 30/10/0/22/2/10 | +2 zip/flatMap; +2 P→C difference/intersection (list-level) |
+| FN-MATH (37) | 17/3/11/4/0/2 → 27/3/3/2/0/2 | +8 asin/acos/atan/atan2/sinh/cosh/tanh/hypot/log2/log1p/expm1; +2 CSPRNG secureInt/secureBytes |
+| FN-PCRE (11) | 4/2/0/4/0/1 → 6/2/0/2/0/1 | +2 replaceCallback/quoteMeta |
+| FN-DATE (27) | 5/5/2/8/2/5 → 6/5/2/7/2/5 | +1 date_parse→Instant.parse/Date.parse |
+| FN-FS (55) | 8/2/7/34/0/4 → 13/2/3/33/0/4 | +4 mkdir/rmdir/scandir/opendir; +1 tempnam→tempDir |
+| FN-HASH (8) | 0/1/4/3/0/0 → 4/1/0/3/0/0 | +4 hmac/equals/hkdf/pbkdf2 |
+| FN-DB (10) | 0/0/10/0/0/0 → 8/2/0/0/0/0 | +8 DBAL `src/ext/db/` (2 P: PDO::quote/ATTR — softest) |
+| FN-CURL (13) | 0/0/13/0/0/0 → 10/3/0/0/0/0 | +10 HttpClient `src/ext/http_client/` (3 P: curl_multi/setopt — softest) |
+| FN-MB (22) | 0/2/12/4/0/4 → 6/2/6/4/0/4 | +6 codepointLength/grapheme/codepoints/unicodeUpper/unicodeLower |
+| FN-SPL (39) | 2/2/4/26/0/5 → 10/2/1/21/0/5 | +3 Iterator protocol; +5 PriorityQueue/heaps/Deque preludes |
+| FN-SESS (10) | 0/0/10/0/0/0 → 8/2/0/0/0/0 | +8 Session `src/ext/session/` (2 P: save_path/gc — softest) |
+| FN-INTL (18) | 0/0/6/10/2/0 → 2/0/4/10/2/0 | +2 grapheme_strlen/str* |
+| FN-RAND (4) | 1/1/0/0/0/2 → 2/0/0/0/0/2 | +1 P→C CSPRNG engine (secureBytes/secureInt) |
+| FN-URL (10) | 3/0/3/3/0/1 → 7/0/0/2/0/1 | +3 parse_url/http_build_query/Uri-objects; +1 parse_str→decodeForm |
+| FN-NET (9) | 0/0/1/8/0/0 → 1/0/1/7/0/0 | +1 mail()→`src/ext/mail/` |
+| FN-MISC (18) | 2/1/2/3/3/7 → 3/1/1/3/3/7 | +1 error_log→Core.Log |
+
+(Unchanged, verified: JSON, CRYPT, ICONV, CTYPE, FILTER, STREAM, SOCK, XML, FINFO, ZLIB, ZIP, PHAR, GD,
+REFL, PROC, OB, VAR, FUNC — genuine gaps held, not inflated.)
+
+Biggest banks (all grep-cited to a `src/…` symbol): typed **DBAL** `src/ext/db/` (FN-DB +8), **HttpClient**
+`src/ext/http_client/` (FN-CURL +10), **Session** `src/ext/session/` (+8), **Math tail** asin/acos/atan/
+atan2/sinh/cosh/tanh/hypot/log2/log1p/expm1 (FN-MATH +8), **HMAC/HKDF/PBKDF2/timing-safe** (FN-HASH +4),
+**CSPRNG** secureBytes/secureInt (FN-MATH/RAND), **Uri** parse/build/objects (FN-URL +4), **mail()**
+`src/ext/mail/` (FN-NET +1), **Iterator/PriorityQueue/Deque** preludes (FN-SPL +8), **mb/grapheme** unicode
+(FN-MB +6), **String** chunk/capitalizeWords/translate/similarText/levenshtein (FN-STR +9), **error_log→
+Core.Log** (FN-MISC +1). Per-group evidence detail was produced in a subagent worktree (ephemeral); the
+reclassifications above are the durable record.
+
+**⚠ RECONCILIATION WITH §4.11 — do NOT stack (the integration trap).** This is the SIMPLE row-weighted
+§1.2 model; §4.11's ≈49.1% FN is the USAGE-WEIGHTED (T1/T2/T3) model. **They are the same reality counted
+two ways — parallel views, not summands.** The +81 rows are NOT added onto §4.11's tiered numbers.
+Consistency check passes: simple 44% < weighted 49% (expected — weighting favours the high-frequency
+covered core). **The headline PHP-parity ≈68% is the WEIGHTED-model figure and is UNCHANGED by this
+re-tally** (a different model). ⚠ **Critically — the weighted model is NOT built on the frozen §1.2; it
+has been progressively recomputed and ALREADY contains most of these 81 rows** [Verified against the
+§4.8/§4.9 flip tables]: **§4.8** folded in DB (+9.5 T2) + mail + syslog/Log; **§4.9** folded in HTTP
+client (+10.5) + FS (+5.5) + Uri (+3) + mb/Unicode (+3.5) + sessions (+3.5) + SPL-iterator (+1.5) + STR
+levenshtein/similarText (+2) + ARR zip + DATE — i.e. **~40 of the 81 rows are already in the weighted
+49.1%**, plus §4.11's ~19 (Path/crypto/enum/stdlib). So **~60 of 81 are already weighted-credited**; the
+genuine remaining re-tier upside is only **~20 rows** (Math tail 8, HASH 4, PCRE 2, INTL 2, a few SPL
+heaps/URL) → a modest **~1–2pp** to the weighted FN, NOT the ~15pp the raw 81-count would suggest. **Net:
+≈68% is a WELL-EVIDENCED floor with modest headroom — do NOT chase large phantom weighted upside; the
+81-row simple-model gain is mostly already banked in the weighted headline.** [Grade: simple-model 44.1%
+**[Verified]** (grep-cited + spot-checked); "~60/81 already weighted-credited, ~20 rows / ~1–2pp headroom"
+**[Verified]** against the §4.8/§4.9/§4.11 flip tables.]
+
+**Caveats:** (a) softest credits are module→N-rows [Inferred] — DB (8C from one DBAL), CURL (10C from one
+HttpClient), SESS (8C) map a higher-level typed API onto N PHP rows; the matrix's COVERED-BETTER rule
+supports it but the exact split is judgment (sensitivity trims to 43.6%). (b) ~26 credited rows (DB/CURL/
+mail) sit behind NON-DEFAULT Cargo features — "covered when the feature is compiled in," consistent with
+how PHP's own DB/curl are opt-in extensions and how the baseline already credited gated `regex`.
+(c) reverse-check for over-credit/regression in old-C: none found (spot-checked Hash/Csv/Encoding/sort/
+Option/Result still ship).
+
+**GENUINE remaining gaps (the actionable future-work targets, by weight):** FN-FS fopen stream-handle
+family + stat/chmod/symlink/realpath (33 GU — largest pool) · FN-SPL SplObjectStorage/ArrayAccess/
+decorator-zoo (21) · FN-STREAM wrappers/filters (13) · FN-XML/DOM/XPath (12 — largest untouched family) ·
+FN-SOCK raw sockets (10) · FN-INTL calendars/Normalizer/break-iterators (10) · FN-GD (7) · FN-ZLIB
+compression (7) · **FN-CTYPE isLower/isUpper/isSpace/isPunct/isCntrl/isGraph/isPrint (7 — CHEAP, 5 more
+validators next to the existing 5)** · FN-CRYPT sodium/openssl (5) · FN-STR wordwrap/strtok/strpbrk/strspn/
+soundex/metaphone/strip_tags · **FN-MATH asinh/acosh/atanh (cheap add) + BigInt/GMP** · FN-FILTER
+email/URL validators (Uri.parse exists → cheap wire) · FN-VAR var_export · FN-DATE DatePeriod/getdate ·
+FN-PROC exec/system/proc_open subprocess.
