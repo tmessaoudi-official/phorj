@@ -218,6 +218,7 @@ pub(super) fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
         .map(|c| EnumVariant {
             name: c.name.clone(),
             fields: Vec::new(),
+            backing_value: None, // DEC-302: backed-enum lift is a later increment (build-map step 6)
             span: SP,
         })
         .collect();
@@ -226,6 +227,7 @@ pub(super) fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
         name: e.name.clone(),
         type_params: Vec::new(),
         type_param_bounds: Vec::new(),
+        backing_type: None,
         variants,
         injected: false,
         span: SP,

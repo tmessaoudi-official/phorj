@@ -600,12 +600,14 @@ pub fn erase_generics(program: Program) -> Program {
                     name: e.name,
                     type_params: Vec::new(), // erased
                     type_param_bounds: Vec::new(),
+                    backing_type: e.backing_type, // None here (a generic enum is never backed)
                     variants: e
                         .variants
                         .into_iter()
                         .map(|v| crate::ast::EnumVariant {
                             name: v.name,
                             fields: v.fields.iter().map(|p| rparam(p, &params)).collect(),
+                            backing_value: v.backing_value,
                             span: v.span,
                         })
                         .collect(),

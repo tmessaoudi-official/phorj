@@ -177,6 +177,12 @@ impl Attribute {
 pub struct EnumVariant {
     pub name: String,
     pub fields: Vec<Param>,
+    /// DEC-302 backed-enum scalar value — the `= "H"` / `= 1` after a payload-less variant name (PHP
+    /// 8.1 backed enum). `Some` iff the enclosing enum has a [`EnumDecl::backing_type`]; a backed
+    /// enum's variants are all payload-less (`fields` empty) each with a scalar literal here. Boxed to
+    /// keep the common (non-backed) variant small. Checker validates all-or-none / unique / type-match.
+    /// `None` for a normal algebraic variant.
+    pub backing_value: Option<Box<Expr>>,
     pub span: Span,
 }
 
@@ -195,6 +201,12 @@ pub struct EnumDecl {
     /// DEC-211 generic bounds — sparse `(param, Interface)` pairs (see [`FunctionDecl::type_param_bounds`]).
     /// checker-only; erased before any backend.
     pub type_param_bounds: Vec<(String, String)>,
+    /// DEC-302 backed-enum scalar backing type — the `: string` / `: int` after the enum name (PHP
+    /// 8.1 backed enum). `Some` ⇒ every variant is payload-less with a [`EnumVariant::backing_value`],
+    /// enabling `.value` + static `cases()`/`from()`/`tryFrom()`. Mutually exclusive with generics
+    /// (a backed enum is payload-less → `type_params` is empty when this is `Some`). `None` for a
+    /// normal algebraic enum (the common case).
+    pub backing_type: Option<Type>,
     pub variants: Vec<EnumVariant>,
     /// True for a compiler-INJECTED enum (`Json`, `RoundingMode` — added by `cli::inject_*_prelude`
     /// when the matching `Core.*` module is imported), false for a user-declared enum. Its variants

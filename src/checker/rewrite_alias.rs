@@ -339,12 +339,14 @@ pub fn expand_aliases(program: &Program) -> Program {
                 name: e.name.clone(),
                 type_params: e.type_params.clone(),
                 type_param_bounds: e.type_param_bounds.clone(),
+                backing_type: e.backing_type.clone(),
                 variants: e
                     .variants
                     .iter()
                     .map(|v| EnumVariant {
                         name: v.name.clone(),
                         fields: v.fields.iter().map(|p| rparam(p, &aliases)).collect(),
+                        backing_value: v.backing_value.clone(),
                         span: v.span,
                     })
                     .collect(),
