@@ -185,6 +185,19 @@ impl Value {
 // projection stays in each backend — their op enums (`BinaryOp` vs `Op`) differ, so only the
 // arithmetic and the fault strings are shared, not the dispatch.
 
+/// DEC-302 canonical fault body for `Enum.from(x)` when no variant carries the value `x`. Single-
+/// sourced so the interpreter's `rt(..)` and the VM's `Op::EnumFrom` fault render byte-identically
+/// (Invariant #4 — fault bodies are parity-affecting). The value is shown in its literal form (a
+/// quoted string, a bare int); any other `Value` is checker-unreachable for a backed-enum arg.
+pub fn enum_from_miss(enum_name: &str, value: &Value) -> String {
+    let shown = match value {
+        Value::Str(s) => format!("\"{}\"", s.as_str()),
+        Value::Int(n) => n.to_string(),
+        other => other.type_name().to_string(),
+    };
+    format!("no case of enum `{enum_name}` has value {shown}")
+}
+
 /// Evaluate a compile-time **literal-constant** expression to a `Value` — used to seed `static`
 /// field storage once at program load (M-mut.7). Both backends call this (F3), so the interpreter's
 /// `statics` map and the VM's `static_inits` table hold identical values. Returns `None` for anything

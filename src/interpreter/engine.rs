@@ -19,10 +19,24 @@ impl<'c> Interp<'c> {
                         .push(f.clone());
                 }
                 Item::Enum(e) => {
+                    // DEC-302: record the variant names in declaration order (drives `cases()`), and
+                    // each backed variant's scalar value (drives `.value`/`from`/`tryFrom`). The value
+                    // is single-sourced from the AST literal via `const_literal`, identical to the VM.
+                    let mut order = Vec::with_capacity(e.variants.len());
                     for v in &e.variants {
                         self.variants
                             .insert(v.name.clone(), (e.name.clone(), v.fields.len()));
+                        order.push(v.name.clone());
+                        if let Some(val) = v
+                            .backing_value
+                            .as_ref()
+                            .and_then(|b| crate::value::const_literal(b))
+                        {
+                            self.enum_backing
+                                .insert((e.name.clone(), v.name.clone()), val);
+                        }
                     }
+                    self.enum_variants.insert(e.name.clone(), order);
                 }
                 Item::Class(c) => {
                     // Seed `static` field storage once at load from the literal-const initializer

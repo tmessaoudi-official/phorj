@@ -170,6 +170,21 @@ impl<'c> Interp<'c> {
                                 None => rt(format!("no field `{name}` on `{}`", inst.class)),
                             }
                         }
+                        // DEC-302 backed enum: `s.value` reads the variant's scalar backing. The
+                        // checker guarantees `name == "value"` and that the enum is backed, so a miss
+                        // is checker-unreachable (surfaced as a total runtime fault, never a panic).
+                        Value::Enum(ev) if name == "value" => {
+                            match self
+                                .enum_backing
+                                .get(&(ev.ty.to_string(), ev.variant.to_string()))
+                            {
+                                Some(v) => Ok(v.clone()),
+                                None => rt(format!(
+                                    "enum `{}` variant `{}` has no backing value",
+                                    ev.ty, ev.variant
+                                )),
+                            }
+                        }
                         other => rt(format!("cannot read `.{name}` on {}", other.type_name())),
                     }
                 }

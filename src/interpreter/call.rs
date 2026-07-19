@@ -3,6 +3,51 @@
 use super::*;
 
 impl<'c> Interp<'c> {
+    /// DEC-302 enum static methods. `cases()` builds a `List` of every variant (payload-less,
+    /// declaration order). `from(x)`/`tryFrom(x)` scan the variants for one whose backing equals `x`
+    /// — `from` faults (single-sourced [`crate::value::enum_from_miss`], byte-identical to the VM) on
+    /// a miss, `tryFrom` returns `null`. The checker guarantees the method/arity/backing are valid.
+    fn eval_enum_static(&mut self, enum_name: &str, method: &str, argv: Vec<Value>) -> R<Value> {
+        let variants = self
+            .enum_variants
+            .get(enum_name)
+            .cloned()
+            .unwrap_or_default();
+        let make = |variant: &str| {
+            Value::Enum(Rc::new(EnumVal {
+                ty: enum_name.into(),
+                variant: variant.into(),
+                payload: crate::value::Payload::Zero,
+            }))
+        };
+        match method {
+            "cases" => {
+                let cases: Vec<Value> = variants.iter().map(|v| make(v)).collect();
+                Ok(Value::List(Rc::new(cases)))
+            }
+            "from" | "tryFrom" => {
+                let arg = &argv[0];
+                for v in &variants {
+                    if let Some(backing) =
+                        self.enum_backing.get(&(enum_name.to_string(), v.clone()))
+                    {
+                        if backing.eq_val(arg) {
+                            return Ok(make(v));
+                        }
+                    }
+                }
+                if method == "from" {
+                    rt(crate::value::enum_from_miss(enum_name, arg))
+                } else {
+                    Ok(Value::Null)
+                }
+            }
+            _ => rt(format!(
+                "enum `{enum_name}` has no static method `{method}`"
+            )),
+        }
+    }
+
     pub(super) fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> R<Value> {
         // method call: `object.name(args)`
         if let Expr::Member {
@@ -111,6 +156,20 @@ impl<'c> Interp<'c> {
                             id,
                             Rc::new(std::cell::RefCell::new(std::collections::VecDeque::new())),
                         ));
+                    }
+                }
+            }
+            // DEC-302 enum static methods `Enum.cases()` / `Enum.from(x)` / `Enum.tryFrom(x)`: the head
+            // is an enum name (not a value binding). Intercepted before the class-static and
+            // instance paths (an enum is not a class). The checker has validated arity/backing.
+            if !*safe {
+                if let Expr::Ident(en, _) = &**object {
+                    if self.frame.lookup(en).is_none()
+                        && self.enum_variants.contains_key(en)
+                        && matches!(name.as_str(), "cases" | "from" | "tryFrom")
+                    {
+                        let argv = self.eval_args(args)?;
+                        return self.eval_enum_static(en, name, argv);
                     }
                 }
             }

@@ -39,6 +39,8 @@ impl<'c> Interp<'c> {
             class_tables: crate::native::ClassTables::default(),
             method_origins: std::collections::BTreeMap::new(),
             variants: HashMap::new(),
+            enum_variants: HashMap::new(),
+            enum_backing: HashMap::new(),
             statics: HashMap::new(),
             consts: HashMap::new(),
             field_inits: HashMap::new(),
