@@ -6,9 +6,19 @@ if it loses, FLIP it (JIT vertical etc.), else FLAG it. Documented losses withou
 acceptable. Sharpens Invariant 18 into a per-feature definition-of-done = [[perf-bench-every-feature-flip-or-flag]].
 **ACTIVE CAMPAIGN — FLIP THE NATIVE-CALL-IN-LOOP LOSSES via per-op JIT verticals** (dev chose: fresh-context
 subagent per vertical + main-session independent gate/certify; THEN back to building features each with a
-flip-or-flag bench). ORDER (biggest loss → most tractable): **maphas** (0.03×, mirrors the WINNING mapget
-vertical — IN PROGRESS, subagent) → setcontains (0.02×) → listcontains (0.02×/44×) → mapkeys/values (0.07×)
-→ mathmax. Per vertical: byte-identical VM fallback · PROVE hits>0 (not wall-clock) · core-pinned interleaved
+flip-or-flag bench). ORDER (biggest loss → most tractable): ✅ **maphas DONE `b2f927a4` (DEC-311) — FLIPPED 0.03× → 1.50× WIN
+vs php** (mirrors mapget vertical; `rt_u_map_has` one-deref unsafe, miss=clean-false; VM→JIT 51.4×; hits>0
+proven; 4-way byte-identical; 2306 gate green; main-session independently verified). ⚠ **OWED: arm the WIN
+in `bench/micro-baseline.json` via `scripts/microbench-gate.sh --emit` on a QUIET box — BLOCKED (gate guards
+on load-AVG ≥2.5; external tenant spiking 3-13). Until armed, the flip is NOT gate-protected vs a future
+WIN→LOSS regression** (push itself is fine — LOSS→WIN doesn't trip it). Coverage forks FORK-A (Map<string,int>
+only) / FORK-C (AMB deferred) recorded DEC-311 for dev review.
+NEXT: → **setcontains** (0.02×) → listcontains (0.02×/44×) → mapkeys/values (0.07×) → mathmax.
+⚠ **PER-VERTICAL BAR (hold it, do NOT compress):** fresh-context subagent builds → MAIN-SESSION independent
+full --all-features gate + hits>0 + checksum-gated flip + 4-way byte-identity + read the unsafe helper +
+advisor 6C → commit. One vertical per cycle. ⚠ The risk is the ORCHESTRATOR (my) context depth, NOT the
+subagent — strongly prefer a FRESH orchestrator context before each next vertical (the ctype slip happened
+shallower than max depth; the HARNESS caught it, not judgment). Per vertical: byte-identical VM fallback · PROVE hits>0 (not wall-clock) · core-pinned interleaved
 before/after to confirm the FLIP · SURFACE the unsafe/design choice (don't self-rule the island) · commit green.
 ⚠ Honest caveat: mapget's own vertical only reaches 1.08×, so some may land near parity not a huge win —
 measure + report the real number. JIT = deepest unsafe spine (`src/jit/`, `#![deny(unsafe_code)]` island).
