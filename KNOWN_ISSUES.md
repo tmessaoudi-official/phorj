@@ -193,7 +193,21 @@ Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical through
   from the key because an int 0 is a valid member, unlike a map's never-0 canon) — probe tests occupancy first.
   Hash = fibonacci high-bits (robust vs adversarial clustering). **FORK-D1 (dev to rule):** identity `key&mask`
   measured 1.15–1.19× (+~10pp) but degrades to O(n) on hostile int sets (all-multiples-of-a-power-of-two
-  collide) — shipped the robust fibonacci default. Next after: listcontains (0.02×/44×) → mapkeys/values → mathmax.
+  collide) — shipped the robust fibonacci default.
+- **`List.contains` — FLAGGED as an ACCEPTED loss (dev-ruled 2026-07-19, structural flip-or-flag): NO vertical.**
+  It is **linear-vs-tuned-C** — a `List` has no structure to exploit (order + duplicates matter), so a JIT
+  vertical could only inline a linear scan, which LOSES to php's C `in_array` (the Set.contains LINEAR
+  vertical, same shape, only reached 0.45×). Per the perf mandate (WIN where structural, MATCH-not-beat on
+  20-yr-tuned C) + WIN-OR-FLAG, listcontains stays a documented ~0.02× loss rather than spending a
+  building-unsafe cycle for a still-losing result. **STRUCTURAL FINDING (the campaign's lesson):** the
+  per-op JIT verticals eliminate the catastrophic ~188 ns dispatch overhead; phorj then WINS only where it
+  can hash-STRUCTURE against php's hash (maphas 1.50×), reaches PARITY where a reseal helps (setcontains
+  ~1.05×), and MATCHES-or-loses on genuinely linear/alloc-bound natives vs tuned C. So the campaign is
+  selective from here, not exhaustive.
+- **`Map.keys` / `Map.values` (0.07×/0.08×)** — QUEUED for a measure-first assessment (FRESH context): they
+  are map-structured (a flat-map walk + a flat-list build, both existing JIT machinery), so a vertical is
+  PLAUSIBLY parity+ (unlike listcontains) — but it's allocation-touching, so BUILD + MEASURE before keeping;
+  drop/flag if it can't reach ≥parity. `mathmax` (0.03×) similar (scalar reduce over a list). NOT auto-built.
 
 Related: the un-benched-stdlib COVERAGE gap — only **28 of 286 natives** are perf-benched (Invariant 18
 wants all with a php equivalent); these losses were hidden precisely because they weren't benched until now.

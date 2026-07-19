@@ -23,7 +23,18 @@ gate + hits>0 + checksum-gated flip ≥1.0 + 4-way byte-identity (empty/present/
 6C. On WIN: commit, flip the KNOWN_ISSUES FIX-LEVER-#2 setcontains flag → WIN. ⚠ **Prefer gating FORK-D in a FRESH/
 compacted orchestrator context** (advisor-flagged: building-unsafe certified at max session-fatigue is the ctype-class
 risk — the harness catches it, not judgment). Base = master tip; subagent forks from there.
-NEXT after FORK-D: → listcontains (0.02×/44×) → mapkeys/values (0.07×) → mathmax. Each: fresh subagent + main-gate, hold the bar.
+✅ **FORK-D DONE `f8b74613` — setcontains 50× loss ELIMINATED → ~1.05× (PARITY, marginal/fragile).** Building
+helper `rt_u_set_seal` safety arg verified line-by-line + fixed a -1-path list-release leak (advisor-caught).
+**⚖️ CAMPAIGN NOW SELECTIVE (dev-ruled 2026-07-19 "structural flip-or-flag"):** the verticals kill the ~188ns
+dispatch overhead; phorj WINS only where it hash-STRUCTURES vs php's hash (maphas 1.50×), reaches PARITY via a
+reseal (setcontains ~1.05×), MATCHES-or-loses on linear/alloc-bound vs tuned C. Decisions:
+- **listcontains = FLAGGED (NO vertical)** — linear-vs-C, can't flip (KNOWN_ISSUES FIX-LEVER-#2). Accepted loss.
+- **mapkeys/values (0.07×) + mathmax (0.03×) = QUEUED, MEASURE-FIRST, FRESH context** — map-structured so a
+  vertical is PLAUSIBLY parity+, but alloc-touching → BUILD+MEASURE, keep only if ≥parity, else flag. NOT auto-built.
+**SCOREBOARD: maphas WIN 1.50× ✓ · setcontains parity ~1.05× ✓ (both committed) · listcontains flagged · mapkeys/
+values/mathmax = fresh-context measure-first.** ⚠ OWED (both): `microbench-gate.sh --emit` to arm the wins in the
+baseline — BLOCKED on a quiet box (gate guards load-avg ≥2.5, external tenant spiking). Until armed, no WIN→LOSS
+regression protection. ⚠ Next JIT build = FRESH orchestrator context (this session went very deep — advisor-flagged).
 ⚠ **PER-VERTICAL BAR (hold it, do NOT compress):** fresh-context subagent builds → MAIN-SESSION independent
 full --all-features gate + hits>0 + checksum-gated flip + 4-way byte-identity + read the unsafe helper +
 advisor 6C → commit. One vertical per cycle. ⚠ The risk is the ORCHESTRATOR (my) context depth, NOT the
