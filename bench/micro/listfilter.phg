@@ -1,0 +1,32 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `List.filter` (higher-order, allocates the surviving sublist). Data-dependent predicate
+// `(x + bump) % 2 == 0` so the survivor set changes each iteration and cannot be folded.
+function bench(int iters): int {
+    List<int> xs = [1, 2, 3, 4, 5, 6, 7, 8];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        int bump = i % 2;
+        List<int> ys = List.filter(xs, function(int x) => (x + bump) % 2 == 0);
+        acc = acc + List.length(ys);
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 500000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("listfilter\t{d + guard}\t{acc}");
+}

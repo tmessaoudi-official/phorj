@@ -96,6 +96,18 @@
     "webish": {
       "ratio": 1.943,
       "identical": true
+    },
+    "listmap": {
+      "ratio": 7.5,
+      "identical": true
+    },
+    "listfilter": {
+      "ratio": 0.22,
+      "identical": true
+    },
+    "listreduce": {
+      "ratio": 0.27,
+      "identical": true
     }
   }
 }

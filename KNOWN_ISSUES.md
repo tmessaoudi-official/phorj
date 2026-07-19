@@ -120,6 +120,22 @@ value** (materialize ADT nodes only on `match`); that is GREENLIT (DEC-294) as a
 spine-sensitive slice (~15 runtime deconstruction touch-points + a new `Value` variant — byte-identity
 is invariant #1, so it is not rushed). Not a correctness issue; run≡runvm≡PHP output is byte-identical.
 
+## PERF-listfilter-reduce — `List.filter`/`List.reduce` lose to php's C callbacks (FLAGGED 2026-07-19, no JIT vertical)
+
+Surfaced by the 2026-07-19 micro-suite expansion (the first benches for the higher-order List family).
+Pinned+interleaved, K=7: `List.map` **7.9× WIN**, but `List.filter` **0.22×** (≈4.5× slower than php) and
+`List.reduce` **0.27×** (≈3.7× slower). Root cause [Verified: `src/jit/analyze.rs:340`
+`unboxed_native_is_list_map`]: the JIT special-cases `Core.List.map` (the "hofpipe vertical" — an
+unboxed int-list map with the static lambda inlined), so map is compiled to native code (~18ms/500k);
+`filter`/`reduce` have **no such vertical**, so they run the general higher-order path — a re-entrant VM
+closure invocation per element — which is far slower than php's C `array_filter`/`array_reduce` callback.
+Recorded honestly in `bench/micro-baseline.json` as LOSS baselines (map is a WIN baseline; the ratchet
+now protects map and arms filter/reduce for a future win). **Fix (GREENLIT, fresh-context, JIT-spine):**
+add `filter`/`reduce` JIT verticals mirroring the map vertical (`src/jit/analyze.rs` + `src/jit/`; the
+audited `unsafe` island — not rushed at depth). Not a correctness issue; run≡runvm≡php byte-identical.
+Related: the un-benched-stdlib COVERAGE gap (24→27 of 286 natives now benched; Invariant 18 wants all) —
+this loss was hidden precisely because filter/reduce weren't benched until now.
+
 ## F-029 — namespaced (multi-package) transpile byte-identity gaps (FLAGGED 2026-07-16, DEC-263 build; PRE-EXISTING, not introduced by DEC-263)
 
 Surfaced while building DEC-263: two distinct **transpile-leg-only** divergences that break the
