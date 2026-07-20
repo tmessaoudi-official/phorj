@@ -61,8 +61,18 @@ INCOMPLETE buffers (was `[]` on `Output.` mid-edit); `import Core.`→module pat
 One enumeration API: `src/lsp/catalog.rs` (off `native::registry()`) + `src/cli/module_catalog.rs` (off CORE_MODULES,
 Core.Native.* excluded). `src/lsp/completion.rs` NEW (parse-tolerant, PascalCase-qualifier gate). 5 unit tests assert
 CONTENT. Kept lsp/mod.rs (707) + preludes.rs (1438) under grandfather caps. clippy(default)+pre-commit green.
-⚠ LSP increment REMAINING: project-source package scan (user packages via loader index_packages, needs URI on-disk
-path) + `views/` search root + vscode trigger verify + LSP4IJ doc + instance/type-aware member completion (needs type index).
+**`2d3cb3f` docs(editors)** — vscode 0.4.0 + PhpStorm/LSP4IJ README surface the new completion (both thin clients
+over the one server). **`5dbf1fc` test(bench): isemail+isurl micros** — were unbenched; php twin = the exact emitted
+`preg_match(/D)` (output-identical, acc 1000000/1500000 verified). Indicative (release phg vs php 8.4.19, NON-canonical):
+isemail 0.319× / isurl 0.298× = LOSS (~3×; regex native-call-in-loop, not vertical-flippable → #2b-dependent FLAG).
+
+### ⏳ REMAINING — all next slices need a DECOMP-FIRST step (the Inv-13 ratchet correctly forces it; several
+### target files at ZERO headroom). Best in FRESH context (load-bearing splits): 
+- **LSP project-scan + `views/` root** — needs `loader/mod.rs` (1089==cap) split → add a `loader` discovery accessor.
+- **Transpile FS emitter (DEC-313)** — needs `transpile/runtime_php.rs` (1374==cap) split for `__phorj_fs_*` helpers.
+- **Lift `lift_from` facet (DEC-312)** — needs `native/mod.rs` (561==cap) NativeFn field + per-native population.
+- **Perf #2b (DEC-314)** — deepest VM/JIT spine; fresh context; canonical arming on an 8.5 box.
+- **Instance/type-aware member completion** — needs the checker resolved-type index.
 
 ### ⏳ REMAINING — BUILD SEQUENCE (dev-approved; each = byte-identity + example + transpile&lift same-change +
 ### full gate + DEC-268 → green commit; NEVER push). ⚠ Substantial slices — prefer FRESH context per project rule.
