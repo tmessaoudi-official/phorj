@@ -1,4 +1,6 @@
+use super::encode::{encode, encode_pretty};
 use super::natives::*;
+use super::parser::{parse_json, validate_json};
 use crate::value::Value;
 
 /// Encode a `Json` value to its compact string (the `stringify` kernel).

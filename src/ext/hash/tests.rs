@@ -1,3 +1,5 @@
+use super::digests::*;
+use super::mac::*;
 use super::natives::*;
 use crate::value::Value;
 use std::rc::Rc;

@@ -3,7 +3,9 @@
 //! `std::net::TcpListener` fixture server — deterministic, no external network, no TLS (the https
 //! path is covered by the opt-in live test in `tests/http_client.rs`).
 
+use super::engine::{headers_for_hop, is_blocked_ip, run_request, same_origin};
 use super::natives::*;
+use super::protocol::{decode_chunked, parse_url, resolve_location};
 use crate::value::Value;
 use std::io::{Read as _, Write as _};
 use std::rc::Rc;

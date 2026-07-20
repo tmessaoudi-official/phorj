@@ -29,15 +29,6 @@
 505	src/compiler/cty.rs
 575	src/compiler/expr/calls.rs
 697	src/compiler/program.rs
-594	src/ext/database/mysql.rs
-2360	src/ext/database/natives.rs
-779	src/ext/database/postgres.rs
-628	src/ext/hash/natives.rs
-821	src/ext/http_client/natives.rs
-924	src/ext/json/natives.rs
-1000	src/ext/mail/natives.rs
-591	src/ext/uri/kernel.rs
-522	src/ext/uri/natives.rs
 772	src/format/printer/exprs.rs
 690	src/interpreter/call.rs
 518	src/interpreter/expr.rs

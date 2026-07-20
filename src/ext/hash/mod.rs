@@ -2,6 +2,8 @@
 //! Registry row: `ext::registry::EXTENSIONS`'s `"hash"` entry; build inclusion = the `hash`
 //! Cargo feature.
 
+mod digests;
+mod mac;
 pub mod natives;
 #[cfg(test)]
 mod tests;

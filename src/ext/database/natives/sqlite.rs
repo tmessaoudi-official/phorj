@@ -11,7 +11,8 @@
 //! owns only what is genuinely SQLite-specific: the `rusqlite` connection, the storage-class value
 //! conversions, the `?`-placeholder expansion, and the extended-result-code taxonomy mapping.
 
-use super::{Binds, DriverConn, PosBind};
+use super::driver::DriverConn;
+use super::handles::{Binds, PosBind};
 use crate::value::{HKey, Value};
 use std::rc::Rc;
 

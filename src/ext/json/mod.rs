@@ -2,9 +2,12 @@
 //! Registry row: `ext::registry::EXTENSIONS`'s `"json"` entry; build inclusion = the `json`
 //! Cargo feature.
 
+mod encode;
 pub mod natives;
+mod parser;
 #[cfg(test)]
 mod tests;
 
 pub use natives::json_natives;
-pub use natives::{materialize_if_lazy, materialize_lazy};
+pub use natives::materialize_if_lazy;
+pub use parser::materialize_lazy;

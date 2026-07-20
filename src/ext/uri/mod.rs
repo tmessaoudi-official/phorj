@@ -4,7 +4,9 @@
 //! `Uri\Rfc3986\Uri` (probe record: `docs/research/2026-07-16-uri-twin-probes.md`).
 
 pub mod kernel;
+mod kernel_norm;
 pub mod natives;
+mod registry;
 pub mod url_compat;
 
 #[cfg(test)]
@@ -14,5 +16,5 @@ mod kernel_tests;
 #[path = "url_tests.rs"]
 mod url_tests;
 
-pub use natives::uri_natives;
+pub use registry::uri_natives;
 pub use url_compat::url_natives;
