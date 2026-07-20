@@ -2458,6 +2458,26 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `Session.id()`), wall-clock TTL (`Instant::now()`, not the freezable `Core.Time` clock), and persistent
   in-process store vs PHP's per-request `$_SESSION` model make it not byte-identically transpilable — its
   "yet" was optimistic. Update `explain.rs` accordingly.
+  **BUILD-MAP (2026-07-20 spec, grep-verified):** (1) `FileSystemResult` = a prelude enum (`preludes.rs:405`)
+  `Ok(T value)`/`Err(string message)` → lowers via `emit_enum` to `abstract class FileSystemResult` + `final class
+  Ok{public $value}` + `final class Err{public string $message}`; the emitter must yield `new Ok(v)`/`new
+  Err('<<Kind>>…')`. 7 markers (`preludes.rs:410-416`): NotFound/PermissionDenied/AlreadyExists/NotADirectory/
+  IsADirectory/DirNotEmpty/FileSystemIoError → typed subtypes via `FileSystemError.fail`. (2) Pattern to mirror =
+  `Core.Result` (`new Success($v)`/`new Failure($e)`, combinator helpers `runtime_tables.rs:227-273`) — but FS uses
+  the enum variants `Ok`/`Err` with fields `value`/`message`. (3) 18 natives (`fs.rs:287-373`, all pure:false,
+  placeholder `php:` at `fs.rs:301`) → PHP builtins per the spec table; `exists`/`isFile`/`isDir` infallible→always
+  Ok; `classify()` map at `fs.rs:43-55`. (4) Gated-helper 3-touch (exemplar `uses_clock`): flag `mod.rs:434`+ctor
+  `:595`, set-site `call.rs:306` (`nat.module=="Core.Native.FileSystem"`), bodies `runtime_php.rs` (needs the
+  runtime_php M-Decomp first — file at cap). (5) Quarantine: DROP FS rows `pipeline.rs:582-586,612-616`; KEEP+permanent
+  SESSION `:587-591,617-621`; `explain.rs:1494-1501` FS (retire, keep a catch-all), `:1478-1484` SESSION (reword). (6)
+  Tests: `tests/fs.rs` only interp+VM (no transpile golden); **invert `fs_transpile_is_a_clean_ladder_error`
+  (`fs.rs:106-123`)**; `examples/fs/walk.phg` stays differential-quarantined via `uses_impure_native` (correct —
+  ambient/impure). **⚠ TWO HIGH RISKS:** R1 — a global `__phorj_fs_*` helper's `new Ok/Err` can bind the wrong class
+  in a namespaced/multi-package program (`variant_ref` ns-prefix, `expr.rs:654`); prefer inlining `new Ok(...)` at
+  the call site via `nat.php`, or fully-qualify. R2 — reconstruct `<<Kind>>` in PHP via explicit pre-checks (no
+  `ErrorKind` from php builtins); the 3 pinned kinds (NotFound/DirNotEmpty/PermissionDenied, `tests/fs.rs:63-104`)
+  + the `removeDirAll` `/`-refusal guard + `readText` UTF-8 check must line up. Both verifiable vs php-8.4.19 (FS
+  behavior stable 8.4→8.5) but delicate → best built where the full oracle runs. Full spec in the 2026-07-20 session log.
 
 - **DEC-314 — PERF #2b (general VM→native dispatch-overhead reduction) = a FRESH-CONTEXT build slice (developer-ruled 2026-07-20).**
   #2b (reduce the ~188ns/call `Op::CallNative` dispatch at `src/vm/exec.rs:434`, lifting all ~465 natives at
