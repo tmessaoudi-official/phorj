@@ -53,9 +53,16 @@ but LOUD + a question). Plan file (out-of-repo): `.claude/plans/can-you-pickup-w
   deferred to an 8.5 box (or a relaxed policy). "Arming" = `microbench-gate.sh --emit` writing the measured ratio
   into `bench/micro-baseline.json` so the WIN→LOSS ratchet protects it — needs a real php_ns → needs 8.5.
 
-### ✅ DONE — audit + docs fold (5 commits, green, UNPUSHED — dev pushes):
-`5d64dac` quality gates · `74bfba9` SLICE-STATE verdicts · `fc5d62b` hook-exec fix · `20dc4aa` unified-docs fold
-(DEC-312/313/314 + M-gap-matrix §4.13 + KNOWN_ISSUES CRAFT flags). The 3 design forks are RULED (DEC-312/313/314).
+### ✅ DONE — audit + docs fold + LSP increment (green, UNPUSHED — dev pushes; commits re-authored to dev identity):
+quality gates · SLICE-STATE verdicts · hook-exec fix · unified-docs fold (DEC-312/313/314 + M-gap-matrix §4.13 +
+KNOWN_ISSUES CRAFT flags). The 3 design forks are RULED (DEC-312/313/314).
+**`3a32769` feat(lsp): parse-tolerant import-path + Core-module member completion** — completion now works on
+INCOMPLETE buffers (was `[]` on `Output.` mid-edit); `import Core.`→module paths, `List.`/`Output.`→module natives.
+One enumeration API: `src/lsp/catalog.rs` (off `native::registry()`) + `src/cli/module_catalog.rs` (off CORE_MODULES,
+Core.Native.* excluded). `src/lsp/completion.rs` NEW (parse-tolerant, PascalCase-qualifier gate). 5 unit tests assert
+CONTENT. Kept lsp/mod.rs (707) + preludes.rs (1438) under grandfather caps. clippy(default)+pre-commit green.
+⚠ LSP increment REMAINING: project-source package scan (user packages via loader index_packages, needs URI on-disk
+path) + `views/` search root + vscode trigger verify + LSP4IJ doc + instance/type-aware member completion (needs type index).
 
 ### ⏳ REMAINING — BUILD SEQUENCE (dev-approved; each = byte-identity + example + transpile&lift same-change +
 ### full gate + DEC-268 → green commit; NEVER push). ⚠ Substantial slices — prefer FRESH context per project rule.
