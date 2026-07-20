@@ -29,6 +29,7 @@ pub use rewrite_new::cmd_rewrite_new;
 pub use test_runner::cmd_test;
 
 mod help;
+pub(crate) mod module_catalog;
 mod pipeline;
 pub(crate) mod preludes;
 

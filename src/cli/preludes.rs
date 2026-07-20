@@ -819,8 +819,8 @@ class Instant {
 /// ([`core_module_of`]) — so a new Core module (Database, HTTP expansions) is ONE row here, not edits in
 /// the eight `inject_*_prelude` fns plus the hand-synced `module_of` match this replaced.
 pub(super) struct VirtualModule {
-    /// The import path segments, e.g. `["Core", "Http"]`. Gates injection; also the qualifier root.
-    module: &'static [&'static str],
+    /// Import path segments `["Core","Http"]`; gates injection + qualifier root. `pub(super)`: read by `cli::module_catalog` (LSP import completion).
+    pub(super) module: &'static [&'static str],
     /// The `module_of` return value for this row's `bare_types` (the dotted module below `Core.`),
     /// e.g. `"Http"`, `"Time"`, `"Runtime.Integer"`. Only meaningful when `bare_types` is non-empty.
     qualifier: &'static str,

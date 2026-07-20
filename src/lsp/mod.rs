@@ -15,10 +15,12 @@
 //! engine (same-name idents filtered to those resolving to the same declaration); formatting reuses
 //! `crate::format::format`, so editor-format equals `phg format`. **Go-to-definition and hover are
 //! cross-file** over the open buffer set: a name resolving to neither a local nor a same-file top-level
-//! symbol is looked up in the other open documents (a same-package sibling file). Member completion and
-//! lambda/match-pattern binders, and cross-file *references* (which need project-aware file merging to
-//! stay scope-accurate), remain a documented follow-up.
+//! symbol is looked up in the other open documents (a same-package sibling file). Import-path and
+//! Core-module member completion surface via `completion.rs`; instance/type-aware member completion,
+//! lambda/match-pattern binders, and cross-file *references* remain a documented follow-up.
 
+mod catalog;
+mod completion;
 mod scope;
 mod symbols;
 #[cfg(test)]
@@ -255,30 +257,35 @@ impl Server {
         }
     }
 
-    /// `textDocument/completion` — top-level declaration names, the enclosing callable's in-scope
-    /// locals/params, and the language keywords. No member completion yet (needs the resolved-type
-    /// index); documented in the LSP design.
+    /// `textDocument/completion` — **parse-tolerant** (engine in `completion.rs`). Resolves the cursor
+    /// to a byte offset from the raw buffer, parses best-effort (never required — completion is invoked
+    /// mid-edit, when the buffer rarely parses), and delegates to the completion engine, which infers
+    /// import-path / `Qualifier.`-member / general context from the text before the cursor. Returns `[]`
+    /// only when the document or position can't be located at all. (Before 2026-07-20 this bailed to
+    /// `[]` the moment the buffer didn't parse — i.e. exactly while typing a member access.)
     fn completion(&self, msg: &Json) -> String {
-        let Some((_text, offset, _name, program)) = self.symbol_at(msg) else {
-            return "{\"isIncomplete\":false,\"items\":[]}".to_string();
+        const EMPTY: &str = "{\"isIncomplete\":false,\"items\":[]}";
+        let Some(uri) = doc_uri(msg) else {
+            return EMPTY.to_string();
         };
-        let mut items: Vec<String> = Vec::new();
-        // Top-level declarations (deduped names already unique per the checker).
-        for (name, kind) in symbols::top_level_symbols(&program) {
-            items.push(completion_item(&name, kind, "phorj symbol"));
-        }
-        // In-scope locals/params of the enclosing callable.
-        let mut seen_local: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for (name, _span) in scope::enclosing_bindings(&program, offset) {
-            if seen_local.insert(name.clone()) {
-                items.push(completion_item(&name, 6 /* Variable */, "local"));
-            }
-        }
-        // Language keywords (CompletionItemKind 14 = Keyword).
-        for kw in KEYWORDS {
-            items.push(completion_item(kw, 14, "keyword"));
-        }
-        format!("{{\"isIncomplete\":false,\"items\":[{}]}}", items.join(","))
+        let Some(text) = self.docs.get(&uri) else {
+            return EMPTY.to_string();
+        };
+        let Some(pos) = msg.get("params").and_then(|p| p.get("position")) else {
+            return EMPTY.to_string();
+        };
+        let (Some(line), Some(character)) = (num(pos.get("line")), num(pos.get("character")))
+        else {
+            return EMPTY.to_string();
+        };
+        let Some(offset) = symbols::offset_at(text, line, character) else {
+            return EMPTY.to_string();
+        };
+        // Best-effort parse — completion must work on the incomplete buffers it is invoked on.
+        let program = lex(text)
+            .ok()
+            .and_then(|tokens| Parser::new(tokens).parse_program().ok());
+        completion::complete(text, offset, program.as_ref())
     }
 
     /// Every occurrence of the identifier under the cursor that resolves to the **same declaration**
@@ -521,15 +528,6 @@ fn lsp_diagnostic_json(d: &Diagnostic, text: &str) -> String {
 fn range_json(sl: u32, sc: u32, el: u32, ec: u32) -> String {
     format!(
         "{{\"start\":{{\"line\":{sl},\"character\":{sc}}},\"end\":{{\"line\":{el},\"character\":{ec}}}}}"
-    )
-}
-
-/// A `CompletionItem` JSON object: a label, an LSP `CompletionItemKind`, and a short detail string.
-fn completion_item(label: &str, kind: u32, detail: &str) -> String {
-    format!(
-        "{{\"label\":\"{}\",\"kind\":{kind},\"detail\":\"{}\"}}",
-        escape(label),
-        escape(detail)
     )
 }
 
