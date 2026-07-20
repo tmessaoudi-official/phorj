@@ -1,0 +1,42 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Validation;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Core.Validation.isUrl` (hand-rolled Rust anchored-regex validator, provably ≡ the emitted
+// `preg_match(…/D)`). Probe rotates through six candidates (three valid, three invalid — wrong scheme,
+// embedded space, non-url) so php cannot hoist. Idiomatic php for the SAME semantics is the identical
+// anchored `preg_match`.
+function bench(int iters): int {
+    List<string> probes = [
+        "https://x.io/p",
+        "http://a.b:8080/x",
+        "notaurl",
+        "https://ok.example.org",
+        "ftp://no.go",
+        "https://bad host/x",
+    ];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        if (Validation.isUrl(probes[i % 6])) {
+            acc = acc + 1;
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("isurl\t{d + guard}\t{acc}");
+}

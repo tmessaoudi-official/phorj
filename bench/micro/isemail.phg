@@ -1,0 +1,43 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Validation;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Core.Validation.isEmail` (hand-rolled Rust anchored-regex validator, provably ≡ the
+// emitted `preg_match(…/D)`). The probed address rotates through six candidates (two valid, four
+// invalid — consecutive-dot, no-@, dotless-domain cases) so php cannot hoist the check. No per-iteration
+// allocation. Idiomatic php for the SAME semantics is the identical anchored `preg_match` (NOT
+// `filter_var(FILTER_VALIDATE_EMAIL)`, which accepts dotless domains isEmail deliberately rejects).
+function bench(int iters): int {
+    List<string> probes = [
+        "a@b.co",
+        "user@localhost",
+        "a..b@c.com",
+        "x.y+z@mail.example.org",
+        "no-at-sign",
+        "bad@dom..com",
+    ];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        if (Validation.isEmail(probes[i % 6])) {
+            acc = acc + 1;
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("isemail\t{d + guard}\t{acc}");
+}
