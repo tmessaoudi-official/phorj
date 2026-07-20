@@ -27,10 +27,11 @@ userland `.phg` packages + a native Rust trait-seam SPI (build-your-own `phg`; `
 `docs/EXTENSIONS-AUTHORING.md`; **companion package manager = NEXT MAJOR SLICE (DEC-316)** (`9814dbd`).
 
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
-1. **Companion package manager (DEC-316 — the ruled NEXT MAJOR SLICE)** — fetches/writes userland packages into
-   `vendor/<Publisher>/<Name>/` (`phg` stays offline/reader-only per DEC-282). ⚠ Large interactive design round
-   (Invariant 15): manifest format (dev dislikes `phorj.toml` → prefer a `.phg`-source manifest), lockfile,
-   registry model, semver, checksum/tree-hash integrity → SURFACE forks before building.
+1. ✅ **Companion package manager (DEC-316) — SHIPPED 2026-07-20** (`e896eba`/`775db80`/`6284506`). New
+   std-only `src/pm/` + `phg add/install/update/remove`: composer.json-style `phorj.json`, three source kinds
+   (registry name→git-URL index / git / path), `phorj.lock` tree-SHA-256 integrity, `examples/package-manager/`
+   byte-identity-gated. Only these verbs network (Invariant 10). Follow-ups (documented in DEC-316): registry
+   constraint-intersection, per-package `phg update`, a hosted registry index.
 2. **Transpile FS emitter (DEC-313)** — build-map in C-decisions §2026-07-20 (FileSystemResult Ok/Err, 18 natives,
    `__phorj_fs_*` helpers, kind-reconstruction; ⚠ R1 variant-class ns + R2 kind-reconstruct). Needs `runtime_php.rs`
    room + `uses_fs` on Transpiler. Drop FS from `reject_native_only_transpile`; mark SESSION permanent

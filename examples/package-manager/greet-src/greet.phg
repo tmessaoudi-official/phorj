@@ -1,0 +1,6 @@
+package Acme.Greet;
+
+// A trivial userland package (DEC-315): pure `.phg` source, transpiles like any code.
+function hello(): string {
+    return "Hello from the Acme.Greet package!";
+}

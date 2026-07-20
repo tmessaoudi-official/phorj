@@ -2518,6 +2518,18 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   surfaced), lockfile shape, registry model, semver, checksum/tree-hash integrity (retired DEC-033
   SHA-pin precedent). Without it the userland third-party path (DEC-315 path 1) has no distribution → this is
   what makes the ecosystem real. Design forks surfaced before building.
+  **✅ SHIPPED 2026-07-20** (dev ruled the two forks via AskUserQuestion): manifest = **JSON,
+  composer.json-style** `phorj.json` (dev picked JSON over toml); distribution = **all three source
+  kinds** (registry/git/path). Built as `phg add/install/update/remove` subcommands (NOT a separate
+  binary — softens DEC-216's "companion tool", approved at plan-exit) in a new std-only `src/pm/`
+  (hand-rolled JSON + semver — external-dep policy forbids serde_json). Key design: the central
+  **registry is a name→git-URL index** so every fetch is a `git` checkout or fs copy (no tarball/gz —
+  stays std-only); `phorj.lock` pins a tree SHA-256 (reusing `bundle::sha256`), re-verified offline on
+  install (tampered/stale `vendor/` → hard refusal). Only these verbs touch the network (Invariant 10
+  preserved). Example `examples/package-manager/` passes the byte-identity project gate (a userland
+  `.phg` dep transpiles for free — validates DEC-315). Commits `e896eba`/`775db80`/`6284506`. Follow-ups
+  (documented): registry constraint-intersection across multiple requirers, per-package `phg update`,
+  a hosted registry index (client support shipped; `PHORJ_REGISTRY` selects the index).
 
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their

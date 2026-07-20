@@ -1,0 +1,11 @@
+{
+  "lockVersion": "1",
+  "packages": [
+    {
+      "name": "Acme/Greet",
+      "version": "path",
+      "source": "path:greet-src",
+      "hash": "c571f3dbd3e49c83ba872c4dde7de00772cfe330af7f6d0f9d45eb0a9b50a5da"
+    }
+  ]
+}

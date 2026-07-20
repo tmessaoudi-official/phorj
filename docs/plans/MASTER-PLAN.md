@@ -57,7 +57,10 @@
   packages (`vendor/<Publisher>/<Name>/`, `Publisher.Name.*`, `Core.*` reserved) **+** a
   stability-committed native Rust trait-seam SPI (build-your-own-`phg`; PHP-twin-or-`E-TRANSPILE-<EXT>`
   LADDER per ext); dynamic `.so` permanently rejected. Guide: `docs/EXTENSIONS-AUTHORING.md`.
-  **The companion package manager is the NEXT MAJOR SLICE (DEC-316)** after E2.
+- **✅ Companion package manager SHIPPED (DEC-316, 2026-07-20)** — `phg add/install/update/remove`, std-only
+  `src/pm/`, composer.json-style `phorj.json` + `phorj.lock` (tree-SHA-256), three source kinds
+  (registry-index/git/path); `examples/package-manager/` byte-identity-gated. NEXT autonomous slices: FS
+  transpile emitter (DEC-313) → lift `lift_from` facet (DEC-312) → LSP find-usages → perf #2b.
 
 **CORE PARITY PUSH (confirmed order):**
 0. **§4 recompute** — free credit for already-shipped-uncounted work; establishes true %.

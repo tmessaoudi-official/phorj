@@ -1,0 +1,12 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Acme.Greet;
+
+// Run with `phg run examples/package-manager/src/main.phg` AFTER `phg install`
+// (from examples/package-manager/) has vendored Acme/Greet. See the README.
+#[Entry]
+function main(): void {
+    Output.printLine(Greet.hello());
+}

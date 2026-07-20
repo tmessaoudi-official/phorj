@@ -43,9 +43,21 @@ bright line holds: *if it's `Core.`, the core team shipped it; anything else is 
 → `<approot>/vendor/`, warns `W-SHADOWED` on duplicates, and **never touches the network** (`phg run` /
 `check` / `transpile` are offline; determinism Invariant 10).
 
-**Distributing** is the job of the companion package manager (DEC-316, the next major slice): a separate
-tool that fetches and writes `vendor/<Publisher>/<Name>/`. `phg` itself stays package-agnostic — it only
-ever *reads* `vendor/`. Until that tool lands, packages are placed into `vendor/` by hand.
+**Distributing** is handled by the package-manager verbs (DEC-316, shipped): `phg add`, `phg install`,
+`phg update`, `phg remove` — the only network-capable commands (`run`/`check`/`transpile` stay offline).
+A dependency is declared in a composer.json-style **`phorj.json`** and comes from one of three sources —
+a **registry** semver constraint (`"^1.2"`), a **git** repo (`{ "git": url, "ref": tag }`), or a local
+**path** (`{ "path": dir }`) — all materialized into `vendor/<Publisher>/<Name>/` and pinned by a tree
+SHA-256 in **`phorj.lock`** (re-verified offline on the next install; a tampered/stale tree is refused).
+The central registry is a lightweight name→git-URL index (`PHORJ_REGISTRY`), so every fetch is a `git`
+checkout or a filesystem copy — no tarballs. Worked example: `examples/package-manager/`.
+
+```console
+$ phg add Acme/Json@^1.2                                   # registry
+$ phg add Foo/Bar --git https://example.test/bar.git --ref v2.1.0   # git
+$ phg add Dev/Local --path ../local                        # local path
+$ phg install     # resolve -> vendor/ -> phorj.lock       $ phg update / phg remove Acme/Json
+```
 
 **When to choose this:** almost always. Frameworks (router, DI, ORM, forms, CSRF, migrations,
 scheduler), application concerns (caching over a seam, queues/jobs), alternative serialization formats
@@ -122,6 +134,7 @@ compiled-in, or nothing.
 
 A userland package runs with **full language capability** (it may `import Core.File`, `Core.Process`,
 `Core.HttpClient`, …) — exactly like a Composer package: unprivileged relative to the OS user, fully
-privileged relative to the app. phorj has no capability sandbox today; the companion package manager
-(DEC-316) will support checksum / tree-hash lock-pinning for supply-chain integrity. A native extension
-is trusted the moment you compile it into your `phg` — vet it like any Cargo dependency.
+privileged relative to the app. phorj has no capability sandbox today; the package manager (DEC-316)
+pins every dependency with a tree SHA-256 in `phorj.lock` and refuses a tampered/stale `vendor/` on
+install — supply-chain integrity, though not a capability sandbox. A native extension is trusted the
+moment you compile it into your `phg` — vet it like any Cargo dependency.
