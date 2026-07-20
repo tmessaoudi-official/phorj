@@ -29,6 +29,14 @@ export PHORJ_SKIP_PHP=1
 echo "[pre-commit] cargo fmt --check"
 cargo fmt --check
 
+# `.phg` canonical-format gate (developer-ruled 2026-07-20). The Rust `cargo fmt` above gates the
+# compiler's own sources; this gates the LANGUAGE's own sources. Scope = `examples/` + `selftest/`
+# (the canonical corpus the idempotency sweep `every_repo_phg_formats_idempotently_and_safely`
+# covers, format.rs:120-121); tests/fixtures/ + bench/micro/ are deliberately non-canonical parser/
+# CLI fixtures and are NOT format-gated. `phg format --check` exits 1 if any file would reformat.
+echo "[pre-commit] phg format --check examples selftest (.phg canonical form)"
+cargo run --quiet -- format --check examples selftest
+
 # The two heavy sweeps run at pre-push (see header). nextest filterset excludes them by test name;
 # the `cargo test` fallback uses libtest `--skip` (substring match on the same names).
 _GS_FAST_EXCLUDE='not (test(every_repo_phg_formats) | test(shipped_manual_example_runs))'

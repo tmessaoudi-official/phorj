@@ -41,6 +41,12 @@ export PHORJ_REQUIRE_PHP=1
 echo "[pre-push] cargo fmt --check"
 cargo fmt --check
 
+# File-size gate (Invariant 13 — developer-ruled 2026-07-20). Ratchet: new files capped at 500,
+# the 90 pre-existing breaches grandfathered in scripts/size-baseline.txt (may only shrink), soft
+# warn at 300. Cheap (line counts) — runs early. Detail: scripts/size-gate.sh.
+echo "[pre-push] size-gate (Invariant 13 file-size ratchet)"
+bash "$_gate_root/scripts/size-gate.sh"
+
 # Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
 # ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, database, database-postgres,
 # database-mysql, mail, http-client) — the old `--features jit`-only gate never touched those files, hiding
@@ -64,6 +70,12 @@ else
   echo "[pre-push] cargo test --all-features (nextest absent — fallback, FULL suite + PHP oracle)"
   cargo test --all-features --quiet
 fi
+
+# Release build gate (developer-ruled 2026-07-20; CLAUDE.md "build release after each feature").
+# Catches release-profile-only breakage (a debug-only cfg, an opt-level panic) that the dev/test
+# profiles above would pass green. Runs after the suite so a red test fails faster/cheaper first.
+echo "[pre-push] cargo build --release"
+cargo build --release
 
 echo "[pre-push] microbench-gate (G-8 mandate ratchet — no WIN->LOSS flip, output-identity holds)"
 # Self-skips (exit 0) if docker or the release binary is absent — a push is never wedged by missing
