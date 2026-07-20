@@ -10,7 +10,7 @@ use std::process::exit;
 use phorj::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|serve|lsp|debug|test|format|extensions|explain> \
+    "usage: phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|add|install|update|remove|serve|lsp|debug|test|format|extensions|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -99,8 +99,8 @@ fn main() {
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "check" | "parse" | "tokenize" | "transpile" | "lift" | "disassemble"
-            | "benchmark" | "build" | "vendor" | "serve" | "lsp" | "test" | "format"
-            | "explain" | "debug"),
+            | "benchmark" | "build" | "vendor" | "add" | "install" | "update" | "remove"
+            | "serve" | "lsp" | "test" | "format" | "explain" | "debug"),
         ) => c,
         // DEC-282: bare `phg <existing-file>` dispatches to RUN — the shebang/executable-entry
         // form (`#!/usr/bin/env phg` hands the script path as the first argument; `./bin/console
@@ -186,15 +186,14 @@ fn main() {
         print!("{report}");
         exit(code as i32);
     }
-    // DEC-282: `phg vendor` retired — the compiler never touches the network; dependency
-    // fetching ships as a package-manager extension that writes `vendor/` (the loader only reads).
-    if cmd == "vendor" {
-        eprintln!(
-            "phg vendor is retired (DEC-282): phg never downloads code. Place dependencies under \
-             `vendor/<Publisher>/<Name>/` (folder = package) — a package-manager extension will \
-             manage that tree."
-        );
-        exit(2);
+    // DEC-316: package-manager verbs (`vendor` retired → add/install/update/remove) — the ONLY
+    // network-capable commands (run/check/transpile stay offline, Invariant 10).
+    if matches!(cmd, "vendor" | "add" | "install" | "update" | "remove") {
+        if let Err(e) = cli::pm::dispatch(cmd, &args[2..]) {
+            eprintln!("error: {e}");
+            exit(1);
+        }
+        return;
     }
     // `build` keeps file-only source handling (Phase 1; cross targets extend it in Wave C). It
     // consumes an optional `-o <out>`; a dangling `-o`, an unrecognized trailing arg, or any extra

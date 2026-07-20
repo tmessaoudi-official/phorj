@@ -161,10 +161,33 @@ pub fn help_for(cmd: &str) -> String {
                       phg explain E-UNKNOWN-IDENT\n"
         }
         "vendor" => {
-            "vendor — RETIRED (DEC-282): phg never downloads code.\n\n\
-                     Dependencies resolve OFFLINE from the `vendor/` tree next to your app root:\n\
-                     `import Acme.Strutil;` reads `vendor/Acme/Strutil/…` (folder = package).\n\
-                     A package-manager extension manages that tree; the compiler only reads it.\n"
+            "vendor — RETIRED (DEC-282): superseded by `phg add/install/update/remove` (DEC-316).\n"
+        }
+        "add" => {
+            "add — add a dependency to phorj.json and install it (DEC-316).\n\n\
+                  usage: phg add <Publisher/Name>[@version] [--git <url> --ref <tag>] [--path <dir>]\n\n\
+                  SOURCE (pick one):\n\
+                    (default)      registry — `phg add Acme/Json` or `phg add Acme/Json@^1.2`\n\
+                    --git + --ref  a git repo at a tag/branch/commit\n\
+                    --path <dir>   a local directory (dev dependency)\n\n\
+                  Writes vendor/<Publisher>/<Name>/ and phorj.lock. One of the only network\n\
+                  commands — run/check/transpile never touch the network (Invariant 10).\n"
+        }
+        "install" => {
+            "install — fetch + vendor every dependency in phorj.json, write phorj.lock (DEC-316).\n\n\
+                      usage: phg install\n\n\
+                      Resolves the require map (registry/git/path) transitively into\n\
+                      vendor/<Publisher>/<Name>/ and pins each with a tree SHA-256 in phorj.lock.\n"
+        }
+        "update" => {
+            "update — re-resolve dependencies to the newest satisfying versions (DEC-316).\n\n\
+                     usage: phg update\n\n\
+                     Re-runs resolution from phorj.json (ignoring the old lock) and rewrites\n\
+                     phorj.lock + vendor/.\n"
+        }
+        "remove" => {
+            "remove — drop a dependency from phorj.json and vendor/, then re-resolve (DEC-316).\n\n\
+                     usage: phg remove <Publisher/Name>\n"
         }
         "serve" => {
             "serve — serve a program (or a site directory) over HTTP/1.1.\n\n\

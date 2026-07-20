@@ -17,6 +17,7 @@ mod benchmark;
 mod debug_repl;
 mod explain;
 mod format_cmd;
+pub mod pm;
 mod rewrite_new;
 mod test_runner;
 pub use benchmark::{

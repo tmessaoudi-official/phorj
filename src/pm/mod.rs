@@ -18,9 +18,11 @@ pub mod fetch;
 pub mod json;
 pub mod lockfile;
 pub mod manifest;
+pub mod ops;
 pub mod registry;
 pub mod resolve;
 pub mod semver;
+pub mod vendor;
 
 pub use lockfile::{LockFile, LockedPackage};
 pub use manifest::{Dependency, Manifest, SourceSpec};
