@@ -1,5 +1,66 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## 🧭 CURRENT SESSION (2026-07-20, Opus — "align lift/transpile/LSP + beat-php perf" pass; branch `claude/lift-transpile-lsp-alignment-ei1jr8`)
+**MODE: audit-first → resolve all uncertainties → STOP for dev review before building.** Dev ruled: resolve
+every flagged uncertainty NOW (incl. php-independent perf), unified-docs only (no divergent artifact),
+flawless/craftsmanship bar, coverage = per-feature tests + byte-identity (LADDER drop of transpile allowed
+but LOUD + a question). Plan file (out-of-repo): `.claude/plans/can-you-pickup-where-deep-pinwheel.md`.
+
+### ✅ DONE this session
+- **3 quality gates BUILT + committed `5d64dac` (pre-commit verified green; hooks activated via core.hooksPath):**
+  (1) pre-commit `phg format --check examples selftest` — gate the LANGUAGE's own sources to canonical form
+  (scope = idempotency-sweep scope; fixtures/bench excluded). (2) pre-push `scripts/size-gate.sh` — Invariant-13
+  ratchet 300 soft/500 hard, **90 pre-existing hard-cap breaches grandfathered** in `scripts/size-baseline.txt`
+  (may only shrink). (3) pre-push `cargo build --release`. Dep-policy gate NOT adopted (dev).
+
+### 🔬 AUDIT VERDICTS (all 9 pre-work flags resolved with hard evidence — the matrix inputs)
+- **Native count = 492 all-features / 465 default** (Core 333 + ext 159); pure 374 / impure 118; **34 HigherOrder**
+  (re-entrant, perf-critical). ⚠ The docs' repeated **"286 natives" is STALE** (raw-grep undercount) — real ≈465;
+  so "40 benched" = 40/465 (~8.6%), thinner than claimed.
+- **Transpile gaps = 96 natives** don't transpile: 92 module-quarantined (DB 40 / MAIL 21 / FS 18 / SESSION 7 /
+  HTTPCLIENT 6) + 4 Unicode (`__PHORJ_NATIVE_ONLY_UNICODE__`). Plus non-native UNCHECKED / CONCURRENCY gates.
+- **Lift gap = NO inverse native table** (confirmed: `strlen`→unresolved). Of 631 PHP FN builtins, **~124 already
+  have a forward Core equivalent** in transpile `php:` emitters (directly invertible if an inverse table existed —
+  the concrete seed); ~507 have no Core equivalent; 99 emitters use `__phorj_*` shims (need an idiom recognizer).
+  → **DESIGN FORK (dev ruling needed): how to build the inverse registry** (derive from NativeFn php-emitters vs
+  hand-authored LiftMap vs shared bidirectional table). PENDING.
+- **LSP:** completion returns 8 items at a VALID cursor but **`[]` on incomplete input** (`Output.` mid-edit) —
+  parse-dependent, dies exactly while typing a member access. NO member/import/project completion; LSP consumes
+  ZERO registries today. `native::registry()`+`ext::EXTENSIONS` already `pub`; only `CORE_MODULES` (`pub(super)`)
+  + loader `index_packages`/`peek_package`/`discover_roots` (private) need exposing. `views/` not a search root.
+  Server speaks correct LSP over stdio (LSP4IJ path viable). vscode = pure thin client; phpstorm = README stub.
+- **FS/SESSION LADDER "yet":** FS = **BUILDABLE** (every native maps to a faithful PHP builtin; only raw OS-errno
+  `e.message` text is a gap, and the oracle already treats message text as out-of-contract — needs a small ruling:
+  normalize vs declare out-of-contract). SESSION = **NOT byte-identically buildable** (nondeterministic entropy
+  sids user-observable + wall-clock TTL + persistent-vs-per-request store) → belongs nearer the PERMANENT DB/Mail
+  tier; its "YET" is optimistic. Reclassify.
+- **Dead-gate audit:** exactly **1 AT-RISK** gate — `interop_projects_refuse_to_run_and_match_php_golden`
+  (`tests/interop.rs:144`) early-returns on empty collection (the DEC-191 pattern). All other corpus gates have
+  seed guards. → KNOWN_ISSUES craftsmanship flag.
+- **File-size (Inv 13):** **90 files over the 500 HARD cap**, 174 over 300 soft (of 386). Massively under-enforced;
+  now ratchet-frozen + burn-down backlog = `scripts/size-baseline.txt`. Worst: jit/analyze.rs 3196,
+  checker/desugar_db.rs 3144, jit/tests/verticals.rs 2423, ext/db/natives.rs 2360.
+- **DEC-268 panel:** read-only reviewer subagents available; advisor() auto-activation uncertain → fallback = 3
+  distinct-lens self-passes + disclosure.
+
+### ⛔ ENVIRONMENT BLOCKERS (remote container — org egress policy; README says do NOT route around)
+- **NO php 8.5 obtainable here.** apt php8.5 = 403 (launchpad blocked); `docker pull php:8.5-cli` = 403 (cloudfront
+  blob CDN blocked). Only **php 8.4.19** on PATH (forbidden as gate oracle: floor is 8.5). dockerd DOES start
+  (root) but with "No cpuset support".
+- **Consequence:** the canonical vs-php perf gate (`microbench.sh`→docker) and the full pre-push PHP-oracle
+  (`PHORJ_REQUIRE_PHP=1` nextest `--all-features`) **cannot run here.** VM-health `perf-gate.sh` (tree÷VM) DOES run.
+  Perf work is php-INDEPENDENT here: build/measure phg-before/after; canonical vs-8.5 verdict + ratchet-ARMING
+  deferred to an 8.5 box (or a relaxed policy). "Arming" = `microbench-gate.sh --emit` writing the measured ratio
+  into `bench/micro-baseline.json` so the WIN→LOSS ratchet protects it — needs a real php_ns → needs 8.5.
+
+### ⏳ REMAINING (this pass)
+- **#1/#2/#3 perf (php-independent):** #2b dispatch-overhead spike — ⚠ deepest VM/JIT spine change; project rule =
+  FRESH orchestrator context (this session is very deep). RECOMMENDED: do it as the first fresh-context build slice,
+  baseline pre-measured. isEmail/isUrl + missing benches authorable now.
+- **Finalize matrix** into M-gap-matrix §4.13 + MASTER-PLAN §0 + C-decisions PENDING (lift inverse-registry fork,
+  FS message-text ruling, SESSION reclassify) + KNOWN_ISSUES (interop dead-gate, 90-file backlog, stale 286 count).
+- Then **STOP for dev review** (audit-first contract).
+
 ## ⚖️⚖️ DEV DIRECTIVE (2026-07-19 late, AskUserQuestion) — CONTINUOUS RUN, all three in order:
 ✅ **(1) scalar-flip sweep DONE — Math.min/abs/sign all FLIPPED to robust WINS** (fresh-context subagent build +
 main-session independent full --all-features gate 2330 + advisor 6C + armed same commit): **mathmin 2.18× · mathabs
