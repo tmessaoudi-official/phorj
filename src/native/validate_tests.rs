@@ -135,3 +135,66 @@ fn is_printable_matches_php() {
         assert!(!b(is_printable_native, no), "{no:?}");
     }
 }
+
+// isEmail — pinned to the emitted `preg_match('/^(?!.*\.\.)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+
+// (\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/D')`. The differential harness proves Rust==PCRE on real php;
+// these lock the dev-approved cases + the byte-boundaries most likely to diverge.
+#[test]
+fn is_email_matches_php() {
+    for ok in [
+        "a@b.co",
+        "user.name+tag@example.co.uk",
+        "x_y%z@sub.domain.io",
+        "1@a1.com",
+        "A@B.CO",
+    ] {
+        assert!(b(is_email_native, ok), "{ok}");
+    }
+    for no in [
+        "",             // empty
+        "plainaddress", // no '@'
+        "a@localhost",  // undotted domain → no dotted TLD
+        "a..b@c.com",   // consecutive dots in local
+        "a@b..com",     // consecutive dots in domain
+        "a@b.c",        // 1-char TLD (needs >= 2)
+        "a@b.c1",       // non-letter in TLD
+        "a b@c.com",    // space in local
+        "a@@b.com",     // two '@'
+        "@b.com",       // empty local
+        "a@.com",       // empty first domain label
+        "a@b.com\n",    // trailing newline (D flag rejects)
+        "a@b_c.com",    // '_' not in domain class
+    ] {
+        assert!(!b(is_email_native, no), "{no:?}");
+    }
+}
+
+// isUrl — pinned to `preg_match('/^https?:\/\/[A-Za-z0-9.-]+(:[0-9]+)?(\/[^\x00-\x20]*)?$/D')`.
+#[test]
+fn is_url_matches_php() {
+    for ok in [
+        "https://x.io/p",
+        "http://example.com",
+        "https://example.com/",
+        "http://a.b.c:8080/path/to?q=1&r=2#frag",
+        "https://host:42700",
+        "http://127.0.0.1/x",
+    ] {
+        assert!(b(is_url_native, ok), "{ok}");
+    }
+    for no in [
+        "",                  // empty
+        "notaurl",           // no scheme
+        "ftp://x.io",        // wrong scheme
+        "http://",           // empty host
+        "https://x.io/a b",  // space in path
+        "http://x y.io",     // space in host
+        "http://x.io:/p",    // empty port
+        "http://x.io:80x/p", // non-digit in port
+        "http://x.io#frag",  // '#' with no '/'-path
+        "http://x.io/p\n",   // trailing newline (D flag rejects)
+        "HTTP://x.io",       // scheme is case-sensitive here
+    ] {
+        assert!(!b(is_url_native, no), "{no:?}");
+    }
+}

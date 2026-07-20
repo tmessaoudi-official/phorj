@@ -91,6 +91,103 @@ fn is_printable(s: &str) -> bool {
     !s.is_empty() && s.bytes().all(|b| (0x20..=0x7E).contains(&b))
 }
 
+/// `^(?!.*\.\.)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$` (D flag).
+/// A syntactic e-mail check (not a semantic/deliverability one): a local part, `@`, then a DOTTED
+/// domain whose final label (TLD) is >= 2 ASCII letters — so `user@localhost` is false. Consecutive
+/// dots are rejected anywhere via the `(?!.*\.\.)` negative lookahead → `s.contains("..")` here, so
+/// `a..b@c.com` is false. Byte-identity with the PCRE is airtight: PCRE acceptance requires the
+/// string hold no `\n` (every char class excludes it, and the `D` flag pins `$` to the absolute end),
+/// and on a `\n`-free string `(?!.*\.\.)` is exactly `!contains("..")`.
+fn is_email(s: &str) -> bool {
+    // (?!.*\.\.) — no two adjacent dots anywhere.
+    if s.contains("..") {
+        return false;
+    }
+    // The local class excludes `@` and every domain class excludes `@`, so a match holds EXACTLY one
+    // `@`: split on the first, reject a second.
+    let mut it = s.splitn(2, '@');
+    let local = it.next().unwrap_or("");
+    let Some(domain) = it.next() else {
+        return false; // no '@'
+    };
+    if domain.contains('@') {
+        return false; // more than one '@'
+    }
+    // local = [A-Za-z0-9._%+-]+
+    if local.is_empty()
+        || !local
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'%' | b'+' | b'-'))
+    {
+        return false;
+    }
+    // domain = [A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}
+    //        = HEAD "." TLD, where TLD is letters-only (>= 2) and HEAD is >= 1 dot-separated,
+    //          non-empty [A-Za-z0-9-] labels. The final `\.[A-Za-z]{2,}$` binds to the LAST dot
+    //          (TLD is letters-only to `$`), so `rsplit_once('.')` splits identically.
+    let Some((head, tld)) = domain.rsplit_once('.') else {
+        return false; // undotted domain (e.g. `localhost`)
+    };
+    if tld.len() < 2 || !tld.bytes().all(|c| c.is_ascii_alphabetic()) {
+        return false;
+    }
+    !head.is_empty()
+        && head.split('.').all(|label| {
+            !label.is_empty()
+                && label
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || c == b'-')
+        })
+}
+
+/// `^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[^\x00-\x20]*)?$` (D flag).
+/// A syntactic URL check: an `http`/`https` scheme, a host of `[A-Za-z0-9.-]`, an optional `:port`
+/// (digits), and an optional `/path` of any non-control, non-space bytes. The path class is
+/// `[^\x00-\x20]` (bytes > 0x20) rather than `[^\s]`: it is trivially byte-identical to the Rust
+/// `c > 0x20` scan and sidesteps PCRE's `\s`-set (which is a divergence hazard). The `D` flag pins
+/// `$` to the absolute end (no trailing-`\n` acceptance).
+fn is_url(s: &str) -> bool {
+    let rest = if let Some(r) = s.strip_prefix("https://") {
+        r
+    } else if let Some(r) = s.strip_prefix("http://") {
+        r
+    } else {
+        return false;
+    };
+    // host = [A-Za-z0-9.-]+ — the class excludes `:` and `/`, so it ends at the first of either.
+    let host_end = rest
+        .bytes()
+        .position(|c| c == b':' || c == b'/')
+        .unwrap_or(rest.len());
+    let host = &rest[..host_end];
+    if host.is_empty()
+        || !host
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-'))
+    {
+        return false;
+    }
+    let mut tail = &rest[host_end..];
+    // (:[0-9]+)? — a lone `:` (or `:` + non-digits) can be consumed by nothing else, so an invalid
+    // port fails the whole match, exactly as this early return does.
+    if let Some(after) = tail.strip_prefix(':') {
+        let port_end = after.bytes().position(|c| c == b'/').unwrap_or(after.len());
+        let port = &after[..port_end];
+        if port.is_empty() || !port.bytes().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+        tail = &after[port_end..];
+    }
+    // (/[^\x00-\x20]*)? — optional; empty tail matches the empty option.
+    if tail.is_empty() {
+        return true;
+    }
+    let Some(path) = tail.strip_prefix('/') else {
+        return false; // trailing bytes that are neither a port nor a `/`-path
+    };
+    path.bytes().all(|c| c > 0x20)
+}
+
 fn pred(args: &[Value], f: fn(&str) -> bool, who: &str) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Bool(f(s))),
@@ -132,6 +229,12 @@ fn is_visible_native(a: &[Value], _: &mut String) -> Result<Value, String> {
 }
 fn is_printable_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     pred(a, is_printable, "isPrintable")
+}
+fn is_email_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+    pred(a, is_email, "isEmail")
+}
+fn is_url_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+    pred(a, is_url, "isUrl")
 }
 
 /// The `Core.Validation` registry entries. Each `string -> bool`, the Rust hand-roll mirrored by a PHP
@@ -210,6 +313,20 @@ pub(crate) fn validate_natives() -> Vec<NativeFn> {
         // printable including space (0x20–0x7E).
         entry("isPrintable", is_printable_native, |a| {
             format!("(preg_match('/^[\\x20-\\x7E]+$/D', {}) === 1)", parg(a, 0))
+        }),
+        // isEmail — dotted domain + letters-only TLD (>=2); `(?!.*\.\.)` bars consecutive dots.
+        entry("isEmail", is_email_native, |a| {
+            format!(
+                "(preg_match('/^(?!.*\\.\\.)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{{2,}}$/D', {}) === 1)",
+                parg(a, 0)
+            )
+        }),
+        // isUrl — http/https scheme, host, optional :port, optional /path (delimiter `/` escaped as `\/`).
+        entry("isUrl", is_url_native, |a| {
+            format!(
+                "(preg_match('/^https?:\\/\\/[A-Za-z0-9.-]+(:[0-9]+)?(\\/[^\\x00-\\x20]*)?$/D', {}) === 1)",
+                parg(a, 0)
+            )
         }),
     ]
 }

@@ -20,7 +20,20 @@ List.scan/windowed/associateBy/countBy] ✅ **(3.2) List.minBy/maxBy DONE** — 
 natural_cmp on selector, FIRST-wins tie-break byte-identical both legs + tie differential test, example, gated
 __phorj_min_by/max_by helpers, full --all-features gate 2333, advisor 6C; perf FLAGGED minBy 0.16×/maxBy 0.17× =
 higher-order class, LOSS-armed). Rule-11: NOT the forked slice the handoff feared — mirrors min/max precedent, no
-Comparable-bound adjudication needed → ⏳ **(3.3) FILTER email/URL NEXT** — adjudication + fiddly filter_var byte-identity → (3.4) exception backtrace
+Comparable-bound adjudication needed → ◐ **(3.3) FILTER email/URL — ADJUDICATED (dev AskUserQuestion 2026-07-20): OPTION A = explicit-regex parity**, NOT
+filter_var. Follow the existing Core.Validation mechanism (hand-rolled Rust + IDENTICAL anchored preg_match → byte-id
+by construction; the validate.rs fence). Approved behavior: isEmail("a@b.co")=true, isEmail("user@localhost")=false
+(dotted domain required), isEmail("a..b@c.com")=false, isUrl("https://x.io/p")=true. Better-than-PHP (rejects
+filter_var's surprising dotless/quirk accepts). ✅ **DONE** — isEmail `^(?!.*\.\.)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+
+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$` + isUrl `^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[^\x00-\x20]*)?$`, hand-rolled Rust
+PROVABLY ≡ emitted preg_match (D flag), 33-case differential vs real php:8.5, full --all-features gate 2336, advisor 6C.
+⚠ **PERF flip-or-flag DEFERRED to the queued perf-alignment pass** (cheap pure O(n) scalar scans; not silently skipped —
+folded into the "transpile/lift/perf/LSP 100%-aligned + beating-php" work the dev queued 2026-07-20). → (3.4) exception backtrace (FRESH session)
+## ⚠⚠ NEXT MAJOR BODY OF WORK (dev-queued 2026-07-20, for Fable→Opus): "transpile/lift/perf/LSP editors (vscode/phpstorm)
+100% ALIGNED with everything built + BEATING php + LSP/extension AUTOCOMPLETE (typing `import X.` shows ALL available
+packages/modules; 'almost complete' to help test the language)." SCOPE = (a) gap-audit transpile+lift for EVERY language/
+stdlib feature (find + fill misalignments), (b) perf flip-or-flag sweep of remaining features (incl. isEmail/isUrl above),
+(c) LSP import-path + member autocomplete + package discovery, (d) vscode + phpstorm extensions surfacing it. See handoff below.
 (getTrace family, contained) THEN generators/yield LAST in a FRESH session (deepest VM control-flow spine, standing rule).
 DoD each: byte-identity run≡runvm≡php + example (Inv-9) + transpile+lift + full --all-features gate + advisor 6C → commit.
 

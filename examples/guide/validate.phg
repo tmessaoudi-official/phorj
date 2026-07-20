@@ -2,7 +2,8 @@
 //
 // Format checks, each `string -> bool`: `isInt`, `isNumber` (int or fixed-point), `isAlpha`,
 // `isAlnum`, `isHex`, plus the ctype character-class predicates `isLower`, `isUpper`,
-// `isWhitespace`, `isPunctuation`, `isControl`, `isVisible` (printable non-space), `isPrintable`.
+// `isWhitespace`, `isPunctuation`, `isControl`, `isVisible` (printable non-space), `isPrintable`,
+// and the composite `isEmail` / `isUrl` shape checks.
 // Phorj is std-only (no regex crate), so each check is hand-rolled in Rust; the transpiled PHP uses
 // the *same* anchored `preg_match` pattern (the class predicates add the `D`/dollar-end-only flag) —
 // byte-identical by construction. These check shape, not range (e.g. `isInt("007")` is true). Every
@@ -40,4 +41,9 @@ function main(): void {
     report("isVisible(Phorj!)", Validation.isVisible("Phorj!"));
     report("isVisible(a b)", Validation.isVisible("a b"));
     report("isPrintable(Phorj 9!)", Validation.isPrintable("Phorj 9!"));
+    report("isEmail(a@b.co)", Validation.isEmail("a@b.co"));
+    report("isEmail(user@localhost)", Validation.isEmail("user@localhost"));
+    report("isEmail(a..b@c.com)", Validation.isEmail("a..b@c.com"));
+    report("isUrl(https://x.io/p)", Validation.isUrl("https://x.io/p"));
+    report("isUrl(notaurl)", Validation.isUrl("notaurl"));
 }

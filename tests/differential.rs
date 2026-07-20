@@ -639,6 +639,73 @@ import Core.String;
     );
 }
 
+/// `Core.Validation.isEmail` / `isUrl` — the byte-identity crux of the composite predicates. Each is
+/// hand-rolled in Rust AND emitted as an anchored `preg_match(... /D)`; the two MUST accept/reject the
+/// same strings. `agree_out_php` drives all three legs (interpreter ≡ VM ≡ real php) over one program
+/// that reports every dev-approved case PLUS the byte-boundaries most likely to diverge (consecutive
+/// dots, undotted domain, 1-char/non-letter TLD, double `@`, empty port, non-digit port, a trailing
+/// `\n` that the `D` flag must reject on all three, `#frag` with no `/`-path). A Rust≠PCRE break shows
+/// up here as a `run`/`php` mismatch — the exact failure this whole mechanism exists to prevent.
+#[test]
+fn validation_email_url_byte_identical_across_backends() {
+    // (input, expected). Inputs are embedded verbatim into a Phorj string literal; the only escape any
+    // of them needs is `\n` (represented as the 2-char `\n` escape so the lexer produces a real LF).
+    let email: &[(&str, bool)] = &[
+        ("a@b.co", true),
+        ("user.name+tag@example.co.uk", true),
+        ("x_y%z@sub.domain.io", true),
+        ("1@a1.com", true),
+        ("A@B.CO", true),
+        ("plainaddress", false),
+        ("a@localhost", false),
+        ("a..b@c.com", false),
+        ("a@b..com", false),
+        ("a@b.c", false),
+        ("a@b.c1", false),
+        ("a b@c.com", false),
+        ("a@@b.com", false),
+        ("@b.com", false),
+        ("a@.com", false),
+        ("a@b_c.com", false),
+        ("a@b.com\n", false),
+    ];
+    let url: &[(&str, bool)] = &[
+        ("https://x.io/p", true),
+        ("http://example.com", true),
+        ("https://example.com/", true),
+        ("http://a.b.c:8080/path/to?q=1&r=2#frag", true),
+        ("https://host:42700", true),
+        ("http://127.0.0.1/x", true),
+        ("notaurl", false),
+        ("ftp://x.io", false),
+        ("http://", false),
+        ("https://x.io/a b", false),
+        ("http://x y.io", false),
+        ("http://x.io:/p", false),
+        ("http://x.io:80x/p", false),
+        ("http://x.io#frag", false),
+        ("HTTP://x.io", false),
+        ("http://x.io/p\n", false),
+    ];
+    // A `r(bool)` helper keeps the reported expression out of the interpolation braces (no nested
+    // string literals in `{…}`); a `bool` renders as `true`/`false`.
+    let mut src = String::from(
+        "import Core.Output;\nimport Core.Validation;\n\
+         function r(bool ok) -> void { Output.printLine(\"{ok}\"); }\n\
+         #[Entry] function main() -> void {\n",
+    );
+    let mut expected = String::new();
+    for (fun, cases) in [("isEmail", email), ("isUrl", url)] {
+        for (input, want) in cases {
+            let lit = input.replace('\n', "\\n"); // only escape any case needs
+            src.push_str(&format!("    r(Validation.{fun}(\"{lit}\"));\n"));
+            expected.push_str(if *want { "true\n" } else { "false\n" });
+        }
+    }
+    src.push_str("}\n");
+    agree_out_php(&src, &expected, "validation_email_url");
+}
+
 /// DEC-297: named arguments on a free function. The checker front-normalizes a mixed positional/named
 /// call into positional order (filling omitted defaults) before any backend, so run≡runvm≡php: the
 /// reordered `greet(greeting: "Hey", name: "Cy")` and the default-filled `greet(name: "Ada")` both
