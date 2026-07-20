@@ -53,13 +53,23 @@ but LOUD + a question). Plan file (out-of-repo): `.claude/plans/can-you-pickup-w
   deferred to an 8.5 box (or a relaxed policy). "Arming" = `microbench-gate.sh --emit` writing the measured ratio
   into `bench/micro-baseline.json` so the WIN→LOSS ratchet protects it — needs a real php_ns → needs 8.5.
 
-### ⏳ REMAINING (this pass)
-- **#1/#2/#3 perf (php-independent):** #2b dispatch-overhead spike — ⚠ deepest VM/JIT spine change; project rule =
-  FRESH orchestrator context (this session is very deep). RECOMMENDED: do it as the first fresh-context build slice,
-  baseline pre-measured. isEmail/isUrl + missing benches authorable now.
-- **Finalize matrix** into M-gap-matrix §4.13 + MASTER-PLAN §0 + C-decisions PENDING (lift inverse-registry fork,
-  FS message-text ruling, SESSION reclassify) + KNOWN_ISSUES (interop dead-gate, 90-file backlog, stale 286 count).
-- Then **STOP for dev review** (audit-first contract).
+### ✅ DONE — audit + docs fold (5 commits, green, UNPUSHED — dev pushes):
+`5d64dac` quality gates · `74bfba9` SLICE-STATE verdicts · `fc5d62b` hook-exec fix · `20dc4aa` unified-docs fold
+(DEC-312/313/314 + M-gap-matrix §4.13 + KNOWN_ISSUES CRAFT flags). The 3 design forks are RULED (DEC-312/313/314).
+
+### ⏳ REMAINING — BUILD SEQUENCE (dev-approved; each = byte-identity + example + transpile&lift same-change +
+### full gate + DEC-268 → green commit; NEVER push). ⚠ Substantial slices — prefer FRESH context per project rule.
+1. **LSP autocomplete + project discovery** (first; lowest blast radius, no spine): expose `CORE_MODULES`
+   (`preludes.rs:869` pub(super)) + loader `index_packages`/`peek_package`/`discover_roots` via ONE enumeration
+   API; member completion (`Foo.`), import-path (`import X.`), project scan (src/bin/views/vendor); **fix
+   completion-dies-on-incomplete-input** (parse-tolerant cursor); add `views/` root; vscode surfaces; LSP4IJ doc.
+2. **Transpile FS emitter** (DEC-313: `__phorj_fs_*`, kind reconstruction, msg out-of-contract) + drop FS from
+   `reject_native_only_transpile`; mark SESSION permanent in `explain.rs`.
+3. **Lift `lift_from` facet on NativeFn** (DEC-312) + inverse table from the 124-builtin seed; wire lifter.
+4. **Perf (php-independent):** author `bench/micro/isemail.{phg,php}`+`isurl.*`+top unbenched; `perf-gate.sh`;
+   pre-measure ~188ns dispatch. **#2b build = FRESH session** (DEC-314), armed on an 8.5 box.
+⚠ ENV: full pre-push (php-8.5 oracle) + canonical microbench CANNOT run here — dev runs full gate + arms perf on
+an 8.5 box. Pre-commit IS green here (gates every commit; hooks now executable + active via core.hooksPath).
 
 ## ⚖️⚖️ DEV DIRECTIVE (2026-07-19 late, AskUserQuestion) — CONTINUOUS RUN, all three in order:
 ✅ **(1) scalar-flip sweep DONE — Math.min/abs/sign all FLIPPED to robust WINS** (fresh-context subagent build +
