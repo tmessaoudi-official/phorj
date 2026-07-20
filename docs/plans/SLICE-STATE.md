@@ -1,5 +1,46 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ▶▶ RESUME HERE (post-compaction 2026-07-20) — read this block FIRST, then keep going
+
+**BRANCH:** `master` (single-dev, direct-to-master). **origin/master tip:** `bbb54c9` (UNSIGNED here) — the
+dev re-signs with their GPG key on their box after each push, so on resume the remote tip will have a NEW SHA.
+**⚠ FIRST ACTION on resume:** `git fetch origin && git reset --hard origin/master` (adopt the dev's re-signed
+history — local goes stale after each dev force-push).
+
+**DEV DIRECTIVE (standing): keep going autonomously until the dev stops — drive to 100% of MASTER-PLAN + VISION
++ PHP-parity + perf-beating-php + "better than php".** Each slice: green pre-commit (fmt + `.phg` format-check +
+tests) + size-gate + clippy(both) → commit → **push `git push origin master --no-verify`** (the php-8.5 pre-push
+oracle CANNOT run in this container — see ENV). Surface design forks (Invariant 15); unified-docs only.
+
+**COLLABORATION LOOP (signing):** I build green + push `--no-verify`; the dev pulls, re-signs
+(`git rebase --exec 'git commit --amend --no-edit -S' <base>`), force-pushes; I re-sync. ALWAYS push before the
+dev re-signs so nothing is lost.
+
+**ENV (remote container):** NO php-8.5 (org egress blocks apt Launchpad + docker CDN); NO `cargo nextest` (hooks
+fall back to `cargo test`); dockerd starts but image-pull is blocked. ⇒ full `--all-features`+PHP-oracle gate +
+canonical microbench run on the DEV's 8.5 box. Here: fmt/clippy(both)/size-gate/`cargo test`(PHORJ_SKIP_PHP=1)/
+release build ALL run green. Byte-identity-critical slices (transpile/lift) verify INDICATIVELY vs php-8.4.19 here;
+canonical vs-8.5 confirmation is the dev's.
+
+**NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
+1. **LSP find-usages project-wide** (off-spine, SAFE here) — extend references/rename from single-doc to open
+   sibling buffers for TOP-LEVEL targets. Needs an `occurrences`→new `src/lsp/refs.rs` M-Decomp first (mod.rs at
+   710 cap). Finishes the LSP. (Also-remaining LSP: prelude-class members, whole-project cached index, inferred receivers.)
+2. **Transpile FS emitter (DEC-313)** — build-map in C-decisions §2026-07-20 (FileSystemResult Ok/Err, 18 natives,
+   `__phorj_fs_*` helpers, kind-reconstruction; ⚠ R1 variant-class ns + R2 kind-reconstruct). Needs `runtime_php.rs`
+   room (put helpers in a NEW file + call at emit_runtime_helpers' call-site in program_emit.rs) + `uses_fs` on
+   Transpiler (mod.rs at 757 cap — condense to fit). Drop FS from `reject_native_only_transpile`; mark SESSION
+   permanent (explain.rs); invert `tests/fs.rs::fs_transpile_is_a_clean_ladder_error`. Verify vs php-8.4.19.
+3. **Lift `lift_from` facet (DEC-312)** — add field to `NativeFn` (native/mod.rs at 561 cap → threads ALL
+   construction sites; big) + inverse table from the 124-builtin seed; wire lifter. Verify by inspecting `phg lift`
+   output (mapping) — needs no php for the mapping check.
+4. **Perf #2b (DEC-314)** — deepest VM/JIT spine; FRESH context; canonical arming on the dev's 8.5 box.
+5. **Then broader MASTER-PLAN §0 QUEUE** (parity/vision movers): stdlib TOP-20 tail, XML/streams, generators/yield,
+   feature packs, etc. — recompute §4 parity % at each milestone (M-gap-matrix §4 + MASTER-PLAN §11).
+
+**LSP AUTOCOMPLETE — DONE + COMPREHENSIVE this session** (import Core+project pkgs+vendor · Core members ·
+instance `this.`/typed-receiver members +inherited · project fns from open files · parse-tolerant · vscode+LSP4IJ).
+
 ## 🧭 CURRENT SESSION (2026-07-20, Opus — "align lift/transpile/LSP + beat-php perf" pass; branch `claude/lift-transpile-lsp-alignment-ei1jr8`)
 **MODE: audit-first → resolve all uncertainties → STOP for dev review before building.** Dev ruled: resolve
 every flagged uncertainty NOW (incl. php-independent perf), unified-docs only (no divergent artifact),
