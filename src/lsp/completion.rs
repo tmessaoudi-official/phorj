@@ -38,13 +38,33 @@ enum Ctx {
 
 /// Build the completion response for a cursor at byte `offset` in `text`. `program` is the parsed
 /// buffer *when it happened to parse* — best-effort, never required (completion runs on broken input).
-pub(super) fn complete(text: &str, offset: usize, program: Option<&Program>) -> String {
+pub(super) fn complete(
+    text: &str,
+    offset: usize,
+    program: Option<&Program>,
+    uri: Option<&str>,
+) -> String {
     let items: Vec<String> = match context(text, offset) {
-        Ctx::Import(prefix) => catalog::core_module_paths()
-            .into_iter()
-            .filter(|p| prefix.is_empty() || p.starts_with(&prefix))
-            .map(|p| completion_item(&p, 9 /* Module */, "core module"))
-            .collect(),
+        Ctx::Import(prefix) => {
+            // Core modules (from the registry) + the user's own project packages (from the loader's
+            // project scan of src/vendor/entry-local/views) — the single-source-of-truth enumeration
+            // for `import X.`. Project scan runs only for `file://` URIs; anything else degrades to Core.
+            let mut items: Vec<String> = catalog::core_module_paths()
+                .into_iter()
+                .filter(|p| prefix.is_empty() || p.starts_with(&prefix))
+                .map(|p| completion_item(&p, 9 /* Module */, "core module"))
+                .collect();
+            let project_pkgs = uri
+                .and_then(uri_to_path)
+                .map(|p| crate::loader::project_packages(&p))
+                .unwrap_or_default();
+            for p in &project_pkgs {
+                if prefix.is_empty() || p.starts_with(prefix.as_str()) {
+                    items.push(completion_item(p, 9 /* Module */, "project package"));
+                }
+            }
+            items
+        }
         Ctx::Member(qual) => catalog::module_members(&qual)
             .into_iter()
             .map(|m| completion_item(&m, 3 /* Function */, "member"))
@@ -127,6 +147,14 @@ fn is_ident_byte(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
 }
 
+/// Convert a `file://` document URI to an on-disk path — the SAME minimal handling `diagnostics_for_uri`
+/// uses (strip the scheme; no percent-decoding, matching the existing code). `None` for a non-file URI
+/// or a path that is not a real file, so the project scan simply doesn't apply (untitled/virtual buffers).
+fn uri_to_path(uri: &str) -> Option<std::path::PathBuf> {
+    let p = std::path::PathBuf::from(uri.strip_prefix("file://").unwrap_or(uri));
+    p.is_file().then_some(p)
+}
+
 #[cfg(test)]
 mod tests {
     use super::complete;
@@ -152,7 +180,7 @@ mod tests {
     fn import_context_lists_core_modules() {
         let src = "package Main;\nimport Core.\n";
         let offset = src.find("Core.").unwrap() + "Core.".len(); // right after the dot
-        let got = labels(&complete(src, offset, None));
+        let got = labels(&complete(src, offset, None, None));
         assert!(
             got.iter().any(|l| l == "Core.Json"),
             "want Core.Json in {got:?}"
@@ -171,7 +199,7 @@ mod tests {
     #[test]
     fn import_context_filters_by_prefix() {
         let src = "import Core.J";
-        let got = labels(&complete(src, src.len(), None));
+        let got = labels(&complete(src, src.len(), None, None));
         assert!(
             got.iter().any(|l| l == "Core.Json"),
             "want Core.Json in {got:?}"
@@ -187,7 +215,7 @@ mod tests {
         // `Output.` with nothing after ⇒ the buffer does NOT parse; member completion must still fire.
         let src = "package Main;\nfunction main(): void {\n  Output.\n}\n";
         let offset = src.find("Output.").unwrap() + "Output.".len();
-        let got = labels(&complete(src, offset, None));
+        let got = labels(&complete(src, offset, None, None));
         assert!(
             got.iter().any(|l| l == "printLine"),
             "want printLine in {got:?}"
@@ -201,7 +229,7 @@ mod tests {
         // must fall to general completion, never emit module members for the wrong qualifier.
         let src = "function main(): void {\n  myvar.\n}\n";
         let offset = src.find("myvar.").unwrap() + "myvar.".len();
-        let got = labels(&complete(src, offset, None));
+        let got = labels(&complete(src, offset, None, None));
         // General context always includes keywords; it must NOT be a members list.
         assert!(
             got.iter().any(|l| l == "function"),
@@ -212,7 +240,7 @@ mod tests {
     #[test]
     fn general_context_offers_keywords_without_a_parse() {
         // Even a buffer that does not parse yields keywords (never a bare `[]`).
-        let got = labels(&complete("packag", 6, None));
+        let got = labels(&complete("packag", 6, None, None));
         assert!(
             got.iter().any(|l| l == "package"),
             "want keyword 'package' in {got:?}"

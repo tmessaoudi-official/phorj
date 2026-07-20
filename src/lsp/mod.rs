@@ -285,7 +285,7 @@ impl Server {
         let program = lex(text)
             .ok()
             .and_then(|tokens| Parser::new(tokens).parse_program().ok());
-        completion::complete(text, offset, program.as_ref())
+        completion::complete(text, offset, program.as_ref(), Some(uri.as_str()))
     }
 
     /// Every occurrence of the identifier under the cursor that resolves to the **same declaration**
