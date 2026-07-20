@@ -3,11 +3,9 @@
 //! the raw text + cursor offset and treats a successful parse as a best-effort bonus, never a
 //! requirement. Before this, `completion()` bailed to `[]` the instant the buffer didn't parse, i.e.
 //! exactly while the user was typing a member access. Contexts inferred from the text before the cursor:
-//!   * `import Core.` → importable module paths (from the catalog)
-//!   * `<receiver>.`  → Core-module natives (`List.`/`Output.`) OR, for an instance / `this`, the
-//!                      receiver's DECLARED-type class members + inherited (resolved via a repaired
-//!                      parse of the mid-edit buffer — the trailing `receiver.` is a syntax error)
-//!   * otherwise      → top-level symbols (when the buffer parses) + enclosing locals + keywords
+//!   * `import X.` — importable Core modules + the user's own project packages.
+//!   * `<receiver>.` — Core-module natives (`List.`), or an instance/`this` receiver's declared-type class members + inherited (via a repaired parse of the mid-edit buffer).
+//!   * otherwise — top-level symbols (this file + open sibling buffers) + enclosing locals + keywords.
 //!
 //! Type-aware member completion is DECLARED-type only (params, `Type x` locals, fields, ctor-promoted
 //! params, `this`); an inferred `var x = …` receiver or a method-chain resolves to nothing — the
@@ -18,6 +16,7 @@ use super::KEYWORDS;
 use crate::ast::Program;
 use crate::parser::Parser;
 use crate::tokenizer::lex;
+use std::collections::HashMap;
 
 const EMPTY: &str = "{\"isIncomplete\":false,\"items\":[]}";
 
@@ -49,6 +48,7 @@ pub(super) fn complete(
     offset: usize,
     program: Option<&Program>,
     uri: Option<&str>,
+    docs: &HashMap<String, String>,
 ) -> String {
     let items: Vec<String> = match context(text, offset) {
         Ctx::Import(prefix) => {
@@ -100,7 +100,7 @@ pub(super) fn complete(
                 }
             }
         }
-        Ctx::General => general_items(offset, program),
+        Ctx::General => general_items(offset, program, docs, uri),
     };
     if items.is_empty() {
         return EMPTY.to_string();
@@ -156,16 +156,45 @@ fn context(text: &str, offset: usize) -> Ctx {
 /// General completion: top-level declarations (when the buffer parsed), the enclosing callable's
 /// in-scope locals/params, and the language keywords. Mirrors the pre-2026-07-20 behaviour, but the
 /// parse is now optional — keywords are always offered even on a buffer that does not parse.
-fn general_items(offset: usize, program: Option<&Program>) -> Vec<String> {
+fn general_items(
+    offset: usize,
+    program: Option<&Program>,
+    docs: &HashMap<String, String>,
+    exclude_uri: Option<&str>,
+) -> Vec<String> {
     let mut items: Vec<String> = Vec::new();
+    let mut seen_top: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Some(prog) = program {
         for (name, kind) in super::symbols::top_level_symbols(prog) {
-            items.push(completion_item(&name, kind, "phorj symbol"));
+            if seen_top.insert(name.clone()) {
+                items.push(completion_item(&name, kind, "phorj symbol"));
+            }
         }
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         for (name, _span) in super::scope::enclosing_bindings(prog, offset) {
             if seen.insert(name.clone()) {
                 items.push(completion_item(&name, 6 /* Variable */, "local"));
+            }
+        }
+    }
+    // Top-level symbols from the OTHER open project buffers (same-project siblings) — bounded to open
+    // files (no disk scan → perf-safe), so a function/class defined in another open file completes too.
+    // Sorted-uri iteration keeps the output deterministic (Invariant 10). Whole-project (unopened-file)
+    // symbol completion needs a cached index to stay perf-safe and is a documented follow-up.
+    let mut uris: Vec<&String> = docs.keys().collect();
+    uris.sort();
+    for uri in uris {
+        if Some(uri.as_str()) == exclude_uri {
+            continue;
+        }
+        if let Some(p) = lex(&docs[uri])
+            .ok()
+            .and_then(|t| Parser::new(t).parse_program().ok())
+        {
+            for (name, kind) in super::symbols::top_level_symbols(&p) {
+                if seen_top.insert(name.clone()) {
+                    items.push(completion_item(&name, kind, "project symbol"));
+                }
             }
         }
     }
@@ -234,7 +263,13 @@ mod tests {
     fn import_context_lists_core_modules() {
         let src = "package Main;\nimport Core.\n";
         let offset = src.find("Core.").unwrap() + "Core.".len(); // right after the dot
-        let got = labels(&complete(src, offset, None, None));
+        let got = labels(&complete(
+            src,
+            offset,
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
         assert!(
             got.iter().any(|l| l == "Core.Json"),
             "want Core.Json in {got:?}"
@@ -253,7 +288,13 @@ mod tests {
     #[test]
     fn import_context_filters_by_prefix() {
         let src = "import Core.J";
-        let got = labels(&complete(src, src.len(), None, None));
+        let got = labels(&complete(
+            src,
+            src.len(),
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
         assert!(
             got.iter().any(|l| l == "Core.Json"),
             "want Core.Json in {got:?}"
@@ -269,7 +310,13 @@ mod tests {
         // `Output.` with nothing after ⇒ the buffer does NOT parse; member completion must still fire.
         let src = "package Main;\nfunction main(): void {\n  Output.\n}\n";
         let offset = src.find("Output.").unwrap() + "Output.".len();
-        let got = labels(&complete(src, offset, None, None));
+        let got = labels(&complete(
+            src,
+            offset,
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
         assert!(
             got.iter().any(|l| l == "printLine"),
             "want printLine in {got:?}"
@@ -284,7 +331,13 @@ mod tests {
         // conservative; it must NOT dump general/keyword completions after a `.`.
         let src = "function main(): void {\n  myvar.\n}\n";
         let offset = src.find("myvar.").unwrap() + "myvar.".len();
-        let got = labels(&complete(src, offset, None, None));
+        let got = labels(&complete(
+            src,
+            offset,
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
         assert!(
             !got.iter().any(|l| l == "map"),
             "no module members: {got:?}"
@@ -304,7 +357,13 @@ mod tests {
                    class Animal {\n  public string name = \"\";\n  function speak(): void {}\n}\n\
                    class Dog extends Animal {\n  function bark(): void {}\n  function go(): void {\n    this.\n  }\n}\n";
         let off = src.find("this.").unwrap() + "this.".len();
-        let got = labels(&complete(src, off, None, None));
+        let got = labels(&complete(
+            src,
+            off,
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
         assert!(got.contains(&"bark".to_string()), "own method: {got:?}");
         assert!(
             got.contains(&"speak".to_string()),
@@ -324,7 +383,13 @@ mod tests {
                    class Dog extends Animal { function bark(): void {} }\n\
                    function main(): void {\n  Dog d = new Dog();\n  d.\n}\n";
         let off = src.find("  d.").unwrap() + "  d.".len();
-        let got = labels(&complete(src, off, None, None));
+        let got = labels(&complete(
+            src,
+            off,
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
         assert!(got.contains(&"bark".to_string()), "own: {got:?}");
         assert!(got.contains(&"speak".to_string()), "inherited: {got:?}");
     }
@@ -335,7 +400,13 @@ mod tests {
         // wrong member list). Also an undeclared receiver.
         let src = "package Main;\nfunction main(): void {\n  var x = 1;\n  x.\n}\n";
         let off = src.find("  x.").unwrap() + "  x.".len();
-        let got = labels(&complete(src, off, None, None));
+        let got = labels(&complete(
+            src,
+            off,
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
         assert!(
             !got.iter().any(|l| l == "bark" || l == "speak"),
             "must not invent members for an inferred receiver: {got:?}"
@@ -343,9 +414,33 @@ mod tests {
     }
 
     #[test]
+    fn general_completion_includes_open_sibling_buffer_symbols() {
+        // A function/class defined in ANOTHER open project buffer completes in this file's general ctx.
+        let mut docs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        docs.insert(
+            "file:///lib.phg".to_string(),
+            "package App;\nfunction helper(): void {}\nclass Widget {}\n".to_string(),
+        );
+        let src = "package Main;\nfunction main(): void {\n  \n}\n";
+        let off = src.find("  \n").unwrap() + 2; // empty line inside main body → general ctx
+        let got = labels(&complete(src, off, None, Some("file:///t.phg"), &docs));
+        assert!(got.contains(&"helper".to_string()), "sibling fn: {got:?}");
+        assert!(
+            got.contains(&"Widget".to_string()),
+            "sibling class: {got:?}"
+        );
+    }
+
+    #[test]
     fn general_context_offers_keywords_without_a_parse() {
         // Even a buffer that does not parse yields keywords (never a bare `[]`).
-        let got = labels(&complete("packag", 6, None, None));
+        let got = labels(&complete(
+            "packag",
+            6,
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
         assert!(
             got.iter().any(|l| l == "package"),
             "want keyword 'package' in {got:?}"

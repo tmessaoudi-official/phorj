@@ -8,16 +8,12 @@
 //! carries no `run`/`runvm`/PHP parity risk. Diagnostics reuse the *exact* checker the CLI runs, so
 //! editor squiggles equal `phg check`.
 //!
-//! Capabilities: `publishDiagnostics` (full document sync, token-width ranges), hover,
-//! go-to-definition, completion, document symbols, **references, document-highlight, rename, and
-//! formatting** — top-level *and* local/parameter resolution (the query layer lives in `scope.rs` +
-//! `symbols.rs`, all front-end-only). References/highlight/rename share one scope-accurate `occurrences`
-//! engine (same-name idents filtered to those resolving to the same declaration); formatting reuses
-//! `crate::format::format`, so editor-format equals `phg format`. **Go-to-definition and hover are
-//! cross-file** over the open buffer set: a name resolving to neither a local nor a same-file top-level
-//! symbol is looked up in the other open documents (a same-package sibling file). Import-path and
-//! Core-module member completion surface via `completion.rs`; instance/type-aware member completion,
-//! lambda/match-pattern binders, and cross-file *references* remain a documented follow-up.
+//! Capabilities: `publishDiagnostics` (full sync), hover, go-to-definition, completion, document
+//! symbols, references, document-highlight, rename, formatting — all front-end-only (query layer in
+//! `scope.rs`/`symbols.rs`; `occurrences` is the shared references/highlight/rename engine; formatting
+//! reuses `crate::format::format` ≡ `phg format`; hover/def are cross-file over open buffers).
+//! Completion (`completion.rs`): import-path (Core + project pkgs), member (module natives + instance/
+//! `this` declared-type + inherited), open-sibling project symbols. Follow-ups: prelude members, inference.
 
 mod catalog;
 mod completion;
@@ -285,7 +281,13 @@ impl Server {
         let program = lex(text)
             .ok()
             .and_then(|tokens| Parser::new(tokens).parse_program().ok());
-        completion::complete(text, offset, program.as_ref(), Some(uri.as_str()))
+        completion::complete(
+            text,
+            offset,
+            program.as_ref(),
+            Some(uri.as_str()),
+            &self.docs,
+        )
     }
 
     /// Every occurrence of the identifier under the cursor that resolves to the **same declaration**
