@@ -73,7 +73,22 @@ completion-only `project_packages`); loader/mod.rs 1089→1004. discover_roots l
 scan is LSP-only). Verified end-to-end + unit test. So the full LSP autocomplete slice = DONE: import(Core+
 project) · member(`List.`/`Output.`) · parse-tolerant · views/ · editors (vscode 0.4.0 + LSP4IJ doc).
 
-### ⏳ REMAINING — each needs a DECOMP-FIRST step (Inv-13 ratchet; target files at ZERO headroom):
+### ✅ LSP COMPLETION NOW COMPREHENSIVE (2026-07-20 cont. — commits `aec697d` + `61ce5c2`):
+- **Instance/type-aware member completion** (`aec697d`): `this.` + declared-type receiver (`Dog d` local/param,
+  field, ctor-promoted param) → the class's members + INHERITED (via `ast::class_supertypes`). Declared-type only
+  (inferred `var x =` / chains → nothing, conservative gate). Repaired-parse recovers decls on the broken buffer.
+  scope.rs `receiver_type_name` + catalog.rs `class_members`. Prelude-class members (Date/Uri) = follow-up.
+- **Project-wide symbol completion** (`61ce5c2`): general ctx also offers top-level fns/classes/types from OTHER
+  OPEN project buffers (bounded, no disk scan → perf-safe; sorted-uri deterministic). Whole-project unopened-file
+  symbols need a cached index (follow-up).
+- So the "autocomplete everything" ask is delivered: import(Core+project pkgs+vendor) · Core members · instance
+  members(+inherited) · project functions(open files) · locals · keywords · parse-tolerant.
+- **REMAINING LSP follow-ups** (lower value / need groundwork): project-wide FIND-USAGES (references are single-doc;
+  needs an occurrences→`refs.rs` M-Decomp out of the at-cap mod.rs, then open-buffer scan for top-level targets);
+  prelude-class member completion (needs the injected-prelude program accessor); whole-project unopened-symbol
+  index (perf-cached); local-inference receivers (`var x = foo()`).
+
+### ⏳ REMAINING (non-LSP) — each needs a DECOMP-FIRST step (Inv-13 ratchet; target files at ZERO headroom):
 - **Transpile FS emitter (DEC-313)** — split `transpile/runtime_php.rs` (1374==cap) for `__phorj_fs_*` helpers;
   drop FS from `reject_native_only_transpile`; mark SESSION permanent in `explain.rs`.
 - **Lift `lift_from` facet (DEC-312)** — split `native/mod.rs` (561==cap); add the field + per-native population;
