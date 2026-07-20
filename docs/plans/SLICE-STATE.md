@@ -33,7 +33,23 @@ folded into the "transpile/lift/perf/LSP 100%-aligned + beating-php" work the de
 100% ALIGNED with everything built + BEATING php + LSP/extension AUTOCOMPLETE (typing `import X.` shows ALL available
 packages/modules; 'almost complete' to help test the language)." SCOPE = (a) gap-audit transpile+lift for EVERY language/
 stdlib feature (find + fill misalignments), (b) perf flip-or-flag sweep of remaining features (incl. isEmail/isUrl above),
-(c) LSP import-path + member autocomplete + package discovery, (d) vscode + phpstorm extensions surfacing it. See handoff below.
+(c) LSP import-path + member autocomplete + package discovery, (d) vscode + phpstorm extensions surfacing it.
+**DEV DECISIONS (AskUserQuestion 2026-07-20 — governs the pass):**
+1. **Autocomplete = FULL: import-path + member completion (type-aware `Foo.`→methods/natives) + PROJECT DISCOVERY**
+   — not just `Core.*`; scan the user's project tree (`src/`, `bin/`, `views/`, `vendor/`, …) for available
+   packages/modules so `import X.` lists EVERYTHING. Drives off `cli::CORE_MODULES` + native registry (DEC-252,
+   registry-driven LSP) for Core, PLUS a project-source package scanner for user code. "Almost complete to help test."
+2. **100% aligned = AUDIT-FIRST.** Open the pass with a GAP MATRIX: every language/stdlib feature × {transpile,
+   lift, LSP} → report gaps BEFORE building (bidirectionality: enumerate both sides). Then fill.
+3. **Perf = BEAT PHP ON EVERYTHING** (dev overrode flip-or-flag's "flag is acceptable"). ⚠ HONEST PATH (surfaced to
+   dev): per-op JIT verticals only flip cheap structural cases (done: scalars). The un-flippable class (higher-order
+   re-entrant: sumBy/minBy/maxBy/listfilter/listreduce; alloc-bound: mapkeys/values) CANNOT be won by verticals vs
+   php's tuned C — "everything" requires the DEEPER architectural lever: reduce the general ~188ns VM→native dispatch
+   overhead (KNOWN_ISSUES "fix lever #2/2b" — lifts ALL ~286 natives at once) and/or front-end expansions (List<Map>
+   eligibility = [[mapkeys-listmap-jit-blocker]]). Frame the perf work around the dispatch-overhead reduction, not more per-op verticals.
+4. **Editors = vscode-FIRST, both thin clients over the ONE phorj LSP** (DEC-181 both-same-change); phpstorm/JetBrains after.
+**Standing:** gate = `PHORJ_REQUIRE_PHP=1 cargo nextest --all-features` + clippy both legs + fmt + release; per-feature
+DoD incl. flip-or-flag; NEVER push (dev pushes); design forks → surface (Invariant 15). START = the gap-matrix audit (decision 2).
 (getTrace family, contained) THEN generators/yield LAST in a FRESH session (deepest VM control-flow spine, standing rule).
 DoD each: byte-identity run≡runvm≡php + example (Inv-9) + transpile+lift + full --all-features gate + advisor 6C → commit.
 
