@@ -14,9 +14,12 @@
 //! `phg` itself never networks for run/check/transpile (Invariant 10); only the `phg add/install/
 //! update/remove` commands (`cli`) fetch, and only from an explicit source.
 
+pub mod fetch;
 pub mod json;
 pub mod lockfile;
 pub mod manifest;
+pub mod registry;
+pub mod resolve;
 pub mod semver;
 
 pub use lockfile::{LockFile, LockedPackage};
