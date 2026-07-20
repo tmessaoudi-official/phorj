@@ -2493,3 +2493,36 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   374 / impure 118; 34 HigherOrder). "286" is an old raw-`grep NativeFn {` undercount (misses macro/helper-
   generated rows: Html tag macros, Math `unary_float`, Uri getters, per-`entry()` builders). Consequence:
   perf bench coverage is 40/465 (~8.6%), thinner than the "40/286" claimed. Fix the figure at each doc touch.
+
+- **DEC-315 — THIRD-PARTY EXTENSION MODEL = userland `.phg` packages + a stability-committed native Rust
+  trait-seam SPI (Option B; developer-ruled 2026-07-20, ASKED via AskUserQuestion).** Two authoring paths are
+  open: **(1) userland `.phg` packages** — pure phorj source under `vendor/<Publisher>/<Name>/` (namespaced
+  `Publisher.Name.*`; `Core.*` reserved for first-party), consumed by the DEC-282 offline loader. These get
+  transpile/lift/LSP/byte-identity **for free** (they ARE phorj source; zero LADDER interaction, no `phg`
+  rebuild) — the primary path. **(2) native Rust extensions** — a third party implements a documented,
+  semver-stable public **trait-seam SPI** (`DriverConn`/`Transport`/… — the DEC-273 seams) + a registry row,
+  and rebuilds `phg` with `--features their-ext` (source-level, same `rustc`; NO dynamic ABI). Each native
+  extension MUST carry a faithful PHP twin (emitted at the transpiler runtime-tables chokepoint) OR declare
+  itself native-only with an `E-TRANSPILE-<EXT>` hard error + differential quarantine + disclosure
+  (Invariant 14 LADDER, in full). **REJECTED, permanently: dynamic `.so` plugins** (PHP-C-ext / Go-`plugin`
+  style) — Rust has no stable ABI by design, they violate `#![deny(unsafe_code)]`, have no PHP twin, and
+  can't be sandboxed. Cross-language survey (Rust/PHP/Go/Python/JVM/Swift/C#/Racket/Zig, Invariant 16)
+  confirmed every mature ecosystem's real extension path is source/package-level, not dynamic-native.
+  Consistent with DEC-216/218/282 (userland-first) + DEC-273 (first-party Rust seams). Deliverable: document
+  the SPI + authoring guide + the core-vs-first-party-vs-userland 3-bucket boundary; record here + MASTER-PLAN.
+
+- **DEC-316 — COMPANION PACKAGE MANAGER = the NEXT MAJOR SLICE (developer-ruled 2026-07-20, after the E2
+  extension-file splits).** The tool that fetches + writes userland `.phg` packages into `vendor/` (DEC-282:
+  `phg` itself stays offline / package-agnostic — it only reads `vendor/`). Large interactive design round
+  (Invariant 15): manifest format (dev dislikes `phorj.toml` → prefer a `.phg`-source manifest, to be
+  surfaced), lockfile shape, registry model, semver, checksum/tree-hash integrity (retired DEC-033
+  SHA-pin precedent). Without it the userland third-party path (DEC-315 path 1) has no distribution → this is
+  what makes the ecosystem real. Design forks surfaced before building.
+
+- **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
+  `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their
+  feature/module names), plus `examples/db/`→`examples/database/`, `tests/db*.rs`→`tests/database*.rs`,
+  internal fns/mods (`db_natives`→`database_natives`, `crypto_natives`→`cryptography_natives`,
+  `db_prelude`→`database_prelude`), and the differential byte-identity quarantine re-pointed from `"db"` to
+  `"database"`. Not a user-visible change (no module/feature/surface renamed). Full gate green vs php-8.4
+  (only the pre-existing bcmath decimal-conformance PHP leg self-blocks in-container). Commit `6991429`.

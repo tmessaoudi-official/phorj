@@ -47,9 +47,17 @@
   developer wants to see it). dbwork 0.59× (the better bet — PDO per-call overhead is beatable).
   NOTE: the push-block was only a noise-grade `mapinsert` flip under load — a quiet-box `--emit`
   re-baseline clears it; floatmul/closurecall are genuine wins (the loaded-box census lied).
-- **Extension renames** (developer-confirmed): `db`→`database`, `db-mysql`→`database-mysql`,
-  `db-postgres`→`database-postgres`, `crypto`→`cryptography` (feature flags + cfg gates + playground
-  + registry + docs). The other 18 rows already track their module.
+- **Extension renames** ✅ DONE — feature/flag renames landed earlier (DEC-284); the deferred
+  FOLDER rename (`src/ext/db/`→`database/`, `crypto/`→`cryptography/` + examples/tests/internal fns)
+  shipped 2026-07-20 (commit `6991429`, gate green vs php-8.4). DEC-284 fully closed.
+- **E2 — extension file-size splits (Invariant 13)** (in-flight, developer chose "grind all 9"):
+  bring the 9 over-cap ext files under the 500 cap by cohesion (hash/uri/http_client/mail/json done;
+  the coupled database trio natives.rs 2360 / postgres 779 / mysql 594 → a `database/natives/` dir).
+- **Extension MODEL ruled (2026-07-20, DEC-315/316, AskUserQuestion):** third-party = userland `.phg`
+  packages (`vendor/<Publisher>/<Name>/`, `Publisher.Name.*`, `Core.*` reserved) **+** a
+  stability-committed native Rust trait-seam SPI (build-your-own-`phg`; PHP-twin-or-`E-TRANSPILE-<EXT>`
+  LADDER per ext); dynamic `.so` permanently rejected. Guide: `docs/EXTENSIONS-AUTHORING.md`.
+  **The companion package manager is the NEXT MAJOR SLICE (DEC-316)** after E2.
 
 **CORE PARITY PUSH (confirmed order):**
 0. **§4 recompute** — free credit for already-shipped-uncounted work; establishes true %.
