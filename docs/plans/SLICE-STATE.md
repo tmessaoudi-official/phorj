@@ -66,13 +66,20 @@ over the one server). **`5dbf1fc` test(bench): isemail+isurl micros** — were u
 `preg_match(/D)` (output-identical, acc 1000000/1500000 verified). Indicative (release phg vs php 8.4.19, NON-canonical):
 isemail 0.319× / isurl 0.298× = LOSS (~3×; regex native-call-in-loop, not vertical-flippable → #2b-dependent FLAG).
 
-### ⏳ REMAINING — all next slices need a DECOMP-FIRST step (the Inv-13 ratchet correctly forces it; several
-### target files at ZERO headroom). Best in FRESH context (load-bearing splits): 
-- **LSP project-scan + `views/` root** — needs `loader/mod.rs` (1089==cap) split → add a `loader` discovery accessor.
-- **Transpile FS emitter (DEC-313)** — needs `transpile/runtime_php.rs` (1374==cap) split for `__phorj_fs_*` helpers.
-- **Lift `lift_from` facet (DEC-312)** — needs `native/mod.rs` (561==cap) NativeFn field + per-native population.
+### ✅ LSP SLICE COMPLETE — `2b4b734` feat(lsp): project-source package discovery + loader M-Decomp.
+`import X.` now lists the user's OWN packages (project scan of entry-local/src/vendor + views/), not just Core.
+M-Decomp: extracted `src/loader/discovery.rs` (SearchRoots/discover_roots/peek_package/index_packages +
+completion-only `project_packages`); loader/mod.rs 1089→1004. discover_roots load-semantics UNCHANGED (views
+scan is LSP-only). Verified end-to-end + unit test. So the full LSP autocomplete slice = DONE: import(Core+
+project) · member(`List.`/`Output.`) · parse-tolerant · views/ · editors (vscode 0.4.0 + LSP4IJ doc).
+
+### ⏳ REMAINING — each needs a DECOMP-FIRST step (Inv-13 ratchet; target files at ZERO headroom):
+- **Transpile FS emitter (DEC-313)** — split `transpile/runtime_php.rs` (1374==cap) for `__phorj_fs_*` helpers;
+  drop FS from `reject_native_only_transpile`; mark SESSION permanent in `explain.rs`.
+- **Lift `lift_from` facet (DEC-312)** — split `native/mod.rs` (561==cap); add the field + per-native population;
+  wire the lifter to resolve PHP builtins → Core calls (124-builtin seed).
 - **Perf #2b (DEC-314)** — deepest VM/JIT spine; fresh context; canonical arming on an 8.5 box.
-- **Instance/type-aware member completion** — needs the checker resolved-type index.
+- **LSP instance/type-aware member completion** (`myVar.`) — needs the checker resolved-type index.
 
 ### ⏳ REMAINING — BUILD SEQUENCE (dev-approved; each = byte-identity + example + transpile&lift same-change +
 ### full gate + DEC-268 → green commit; NEVER push). ⚠ Substantial slices — prefer FRESH context per project rule.
