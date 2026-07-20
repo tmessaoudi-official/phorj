@@ -30,10 +30,9 @@ impl Tier {
 /// One extension row. `modules` lists every dotted Core module the extension provides (prelude
 /// twins AND `Core.Native.*` internals) — the disabled-import gate matches imports against these.
 pub struct Extension {
-    /// The extension's short name. Usually also its `src/ext/<name>/` folder once migrated —
-    /// EXCEPT the DEC-284 renames (`database`, `cryptography`) whose folders stay `src/ext/db/` /
-    /// `src/ext/crypto/`: the folder rename is a deferred structural slice (it is spine-coupled —
-    /// `tests/differential.rs` gates the byte-identity quarantine on the literal `db` dir name).
+    /// The extension's short name — ALSO its `src/ext/<name>/` folder (the DEC-284 folder rename
+    /// landed 2026-07-20: `database`/`cryptography` folders now match their names; the byte-identity
+    /// quarantine in `tests/differential.rs` tracks the `examples/database/` dir).
     pub name: &'static str,
     /// The Cargo feature gating build inclusion ("-" for a Mandatory row whose structural
     /// migration behind the seam is still queued — always compiled today).

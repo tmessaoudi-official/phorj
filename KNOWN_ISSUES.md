@@ -100,7 +100,7 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
   grandfathered in `scripts/size-baseline.txt` (may only shrink; new files capped at 500). This is the
   burn-down backlog. Worst offenders: `src/jit/analyze.rs` 3196 (39 fns + 3 impls — NOT a single-dispatcher
   exemption, a genuine split candidate), `src/checker/desugar_db.rs` 3144, `src/jit/tests/verticals.rs` 2423,
-  `src/ext/db/natives.rs` 2360, `src/jit/handles.rs` 2280, `src/cli/explain.rs` 1998, `src/jit/emit_unboxed/mod.rs`
+  `src/ext/database/natives.rs` 2360, `src/jit/handles.rs` 2280, `src/cli/explain.rs` 1998, `src/jit/emit_unboxed/mod.rs`
   1987. M-Decomp burns these down as it reaches them.
 - **CRAFT-2 — transpile gated-helper registration is scattered (DRY/SOLID smell): 83 `uses_*` bool flags on
   `Transpiler`** (`src/transpile/mod.rs`) + **78 set-sites** in `src/transpile/call.rs`. A new gated helper is a
@@ -323,7 +323,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
 - **DEC-227 · `db` is now a DEFAULT cargo feature** (+ `E-EXTENSION-DISABLED` on feature-less builds (DEC-273; formerly `E-MODULE-UNAVAILABLE`),
   + `E-TRANSPILE-DB` ladder gate). Was: stock binary couldn't run any `Core.DatabaseModule` program (unknown-ident
   wall); transpile of Db programs emitted the same wall instead of a ladder error. Severity: P0 UX.
-  Repro (pre-fix): `cargo build && ./target/debug/phg run examples/db/basic.phg`.
+  Repro (pre-fix): `cargo build && ./target/debug/phg run examples/database/basic.phg`.
 - **DEC-228 · Db streaming (item H) shipped as `RowStream` + `DatabaseStream<T>`** (hydrate-on-pull closure;
   turbofish + contextual sinks). Disclosed limit: both drivers MATERIALIZE the result set at
   `stream()` (self-referential-lifetime constraint under `#![deny(unsafe_code)]`) — the surface is
@@ -412,7 +412,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
 - **SWEEP BATCH 1 (spine 7, code+repo hygiene)** — findings from the full review sweep:
   (1) FIXED: the mail commit swept `outbox/phorj-mail-0.eml` INTO the repo (`git add -A` after a
   featured test run — the file-transport example writes cwd-relative). Removed; `outbox/`
-  gitignored; `examples/mail/` excluded from the sweep glob like `examples/db/`.
+  gitignored; `examples/mail/` excluded from the sweep glob like `examples/database/`.
   (2) P2 LATENT: `uses_impure_native` (tests/differential.rs) substring-matches `import <module>`
   against NATIVE module names — an example importing only `Core.DatabaseModule` (natives live in `Core.Native.Database`)
   or `Core.Mail` (`Core.Native.Mail`) is INVISIBLE to the impure check; today only the directory
@@ -424,7 +424,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   session) — developer to keep/relocate/delete.
   (5) FIXED: FEATURES.md had NO Core.DatabaseModule/Core.Mail rows (the flagship batteries absent from the
   surface SSOT); examples/README said "needs --features db" post-DEC-227. Both updated.
-  (6) NOTE: with `db` default, `examples/db/` could enroll in the run≡runvm glob (deterministic
+  (6) NOTE: with `db` default, `examples/database/` could enroll in the run≡runvm glob (deterministic
   in-memory SQLite) for extra coverage — blocked only by postgres/mysql server examples in the same
   dir; consider a per-file quarantine marker instead of the dir exclusion.
 - **DEC-224/225/226 · the three reopened items RULED** (all: keep shipped state + upgrade path now
@@ -631,10 +631,10 @@ not a panic:
   with a synthesized helper name (astronomically unlikely; matches the `phorjInject…` convention).
 
 - **`Core.DatabaseModule` transactions & correctness (DEC-208 slice C) — shipped subset + one PENDING adjudication.**
-  Shipped (`examples/db/transactions.phg`, `tests/db.rs`): manual PDO-faithful transaction control
+  Shipped (`examples/database/transactions.phg`, `tests/database.rs`): manual PDO-faithful transaction control
   `db.begin()` / `db.commit()` / `db.rollback()` — **savepoint-aware** (a nested `begin()` opens
   `SAVEPOINT phorj_sp_<depth>`, so an inner rollback leaves the outer transaction intact), depth tracked
-  in the native (`src/ext/db/natives.rs`, shared across handles); `db.rollbackQuiet()` (a rollback that never
+  in the native (`src/ext/database/natives.rs`, shared across handles); `db.rollbackQuiet()` (a rollback that never
   throws — the auto-rollback idiom `try { …; commit(); ok = true; } finally { if (!ok) rollbackQuiet(); }`
   in a **named** function); a **typed error taxonomy** — `open class DatabaseError` subtyped `UniqueViolationError` /
   `ConstraintViolationError` / `ConnectionError` / `SerializationFailureError` / `TimeoutError` / `SyntaxError`, each
@@ -644,11 +644,11 @@ not a panic:
   deterministic idempotent `db.close()` (further use of the connection or a derived `Statement` faults
   with `ConnectionError`).
   - **SHIPPED (unblocked by DEC-222) — the closure form `db.transaction(fn)` + retry**
-    (`examples/db/transaction-closure.phg`, `tests/db.rs`). DEC-222 (throwing-closure function types,
+    (`examples/database/transaction-closure.phg`, `tests/database.rs`). DEC-222 (throwing-closure function types,
     `() => T throws E`) lifted the block: `db.transaction(function(): T throws DatabaseError { … })` runs the
     closure inside a transaction — COMMIT on a normal return (returning the closure's VALUE),
     auto-ROLLBACK + **re-throw the ORIGINAL typed error** on a throw. Mechanism: a `HigherOrder` native
-    (`NativeDatabase.transaction`, `src/ext/db/natives.rs`) begins, invokes the closure re-entrantly on the calling
+    (`NativeDatabase.transaction`, `src/ext/database/natives.rs`) begins, invokes the closure re-entrantly on the calling
     backend, commits on `Ok`, and on the invoker's `Err` rolls back and re-propagates the *unchanged*
     error — `rollback_inner` is pure `rusqlite` and never re-enters the backend, so the thrown value in
     `pending_throw` survives and the caller catches the exact `DatabaseError` (not a generic one). A nested
@@ -671,7 +671,7 @@ not a panic:
     deferred to keep the overload set arity-distinguished and the slice tight.
 
 - **`Core.DatabaseModule` writes & robustness (DEC-208 slice D) — shipped + disclosures.** Shipped
-  (`examples/db/writes.phg`, `tests/db.rs`): `db.lastInsertId(): int` + `stmt.execReturningId(): int`
+  (`examples/database/writes.phg`, `tests/database.rs`): `db.lastInsertId(): int` + `stmt.execReturningId(): int`
   (SQLite `last_insert_rowid()`); `stmt.executeMany(rows): int` (prepare once, run all bind-sets inside
   one `phorj_bulk` savepoint → atomic + fast, returns total affected); `stmt.bindList(values): Statement`
   (the single `?` in `… IN (?)` expands in place to a comma placeholder list — empty → `IN (NULL)`,
@@ -734,7 +734,7 @@ not a panic:
   `class Json` (DEC-202 permits it — `Json` is not a PHP builtin) used as a row field is respected (it
   hydrates as an ordinary entity), but a user-declared `enum Json` without `import Core.Json` would be
   routed to the JSON-parse path and fail loud (`Json.parse` unresolved) — pathological and non-silent.
-  Example `examples/db/mapping.phg`; fixtures in `tests/db.rs`.
+  Example `examples/database/mapping.phg`; fixtures in `tests/database.rs`.
 
 - **`Core.DatabaseModule` compile-time safety (DEC-208 slice F) — SQL-injection lint shipped; arity check DEFERRED.**
   **Shipped:** the `W-SQL-INJECTION` compile-time lint (`src/checker/calls/methods.rs`,
@@ -746,9 +746,9 @@ not a panic:
   non-interpolated literal never warn; a coincidental user class named `Database` with a `prepare` method never
   warns (no `Core.DatabaseModule` import). It is a WARNING (rides the warning channel, never fails the build) so a
   deliberately-built constant query still compiles. `phg explain W-SQL-INJECTION`; checker fixtures in
-  `src/checker/tests/db_lint.rs`. (The shipped `examples/db/transactions.phg` was migrated from an
+  `src/checker/tests/db_lint.rs`. (The shipped `examples/database/transactions.phg` was migrated from an
   interpolated `WHERE id = {id}` to a bound `WHERE id = ?` + `.bind(id)` — the correct fix the lint
-  steers to; output byte-identical, verified by `tests/db.rs`.)
+  steers to; output byte-identical, verified by `tests/database.rs`.)
   - **Disclosures / boundaries:** (a) The lint is SYNTACTIC on the direct `prepare` argument — a SQL
     string built in a variable and passed as `prepare(sql)`, or interpolated at a helper's call site and
     laundered through a `string` parameter into `prepare`, is not flagged (it is not an interpolated
@@ -776,12 +776,12 @@ not a panic:
 
 - **`Core.DatabaseModule` multi-driver + Postgres (DEC-208 slice I) + credential Secret (slice G) — shipped subset +
   disclosures.** `new Database(dsn)` dispatches on the DSN scheme behind a `DriverConn` trait
-  (`src/ext/db/{mod,sqlite,postgres}.rs`): `sqlite:` → the unchanged rusqlite driver (byte-identical,
+  (`src/ext/database/{mod,sqlite,postgres}.rs`): `sqlite:` → the unchanged rusqlite driver (byte-identical,
   all shipped `db` tests green); `postgres://`/`postgresql://` → the sync `postgres` crate under the new
   non-default `db-postgres` feature (`db-all` = both). `Database.withPassword(dsn, Secret<string>)` (slice G)
   keeps the password out of plaintext user code and out of every error/log (the driver retains only a
   redacted DSN). Deterministic driver coverage (dispatch, `?`/`:name`→`$n` translation, SQLSTATE→taxonomy,
-  redaction) is in `src/ext/db/postgres.rs`; the LIVE round-trip is `tests/db_postgres.rs`, opt-in via
+  redaction) is in `src/ext/database/postgres.rs`; the LIVE round-trip is `tests/database_postgres.rs`, opt-in via
   `PHORJ_PG_TEST_DSN` (skip-loudly if unset — the standard gate never requires a server).
   - **Disclosures / boundaries:** (a) **No oracle.** There is no clean pure-Rust *synchronous* Postgres
     driver to differential the PHP-PDO leg against, so Postgres (like all of `Core.DatabaseModule`) is
@@ -2205,7 +2205,7 @@ Every checker rewrite map (`ufcs_resolutions`, `default_fills`, `for_iter_loweri
 `Span.start` byte offsets, and injected Core preludes are parsed with their OWN offsets — so a
 user-code span can numerically COLLIDE with a prelude-internal span, making a rewrite recorded
 for one site splice at the other. Reproduced 2026-07-17: adding one 9-byte line
-(`#[Entry]\n`, the DEC-191 codemod) to `examples/db/transaction-closure.phg` shifted a user call
+(`#[Entry]\n`, the DEC-191 codemod) to `examples/database/transaction-closure.phg` shifted a user call
 onto a prelude `transaction` span — the VM leg failed (`transaction` is not a function) while
 the interpreter ran (run≠runvm). ANY padding change escapes the collision, which is what makes
 it latent-and-random rather than deterministic. REAL FIX (owed, its own slice): re-base every

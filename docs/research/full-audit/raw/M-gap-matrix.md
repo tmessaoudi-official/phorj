@@ -641,11 +641,11 @@ Secret credentials, W-SQL-INJECTION lint, THREE drivers: bundled SQLite + Postgr
 typed taxonomy) · `Core.Log` · DEC-221/222 throwing ctors + closures · DEC-214 collections ·
 E-TRANSPILE-DB/MAIL ladder gates · 2 macro benches.
 
-**Row flips [Verified: tests/db.rs 79 rows-of-coverage + tests/mail.rs + shipped commits]:**
+**Row flips [Verified: tests/database.rs 79 rows-of-coverage + tests/mail.rs + shipped commits]:**
 
 | # | Row(s) | Was | Now | Δ | Evidence |
 |---|---|---|---|--|---|
-| 1 | FN-DB (10 rows — "entire database surface absent", TOP-20 #1) | 10 GAP-planned | 9 COVERED + 1 P | T2 +9.5 | PDO/mysqli execution parity and beyond: prepared/named binds, typed fetch, transactions incl. savepoints+retry (PDO has no retry), lastInsertId/RETURNING, bulk executeMany, IN-list binds (PDO cannot), 3 drivers, typed error taxonomy (PDO: string codes). The 1 P: isolation-level surface + fetch-mode variety corners deferred [Verified: tests/db.rs on both backends; tests/db_postgres.rs/db_mysql.rs live legs] |
+| 1 | FN-DB (10 rows — "entire database surface absent", TOP-20 #1) | 10 GAP-planned | 9 COVERED + 1 P | T2 +9.5 | PDO/mysqli execution parity and beyond: prepared/named binds, typed fetch, transactions incl. savepoints+retry (PDO has no retry), lastInsertId/RETURNING, bulk executeMany, IN-list binds (PDO cannot), 3 drivers, typed error taxonomy (PDO: string codes). The 1 P: isolation-level surface + fetch-mode variety corners deferred [Verified: tests/database.rs on both backends; tests/database_postgres.rs/db_mysql.rs live legs] |
 | 2 | FN-NET `mail()` (1 row) | GAP-unplanned | COVERED | T2 +1 | Core.Mail exceeds mail(): SMTP auth+TLS+attachments+DKIM vs none of those; DEF-031 header injection = structurally impossible (typed Address) vs PHP's mitigable [Verified: tests/mail.rs both backends] |
 | 3 | FN-NET `syslog` (1 row) | GAP-planned | COVERED | T2 +1 | Core.Log shipped in-span (3-sink) [Verified: tests/log.rs] |
 | 4 | DEF-031 scorecard | N/A ("no mail facility") | **BETTER-THAN-PHP** | — | the injection class is unrepresentable, not merely mitigated |
@@ -869,7 +869,7 @@ Format `C/P/GP/GU/GD/NA` old → new; every C-credit grep-cited to a `src/…` s
 | FN-DATE (27) | 5/5/2/8/2/5 → 6/5/2/7/2/5 | +1 date_parse→Instant.parse/Date.parse |
 | FN-FS (55) | 8/2/7/34/0/4 → 13/2/3/33/0/4 | +4 mkdir/rmdir/scandir/opendir; +1 tempnam→tempDir |
 | FN-HASH (8) | 0/1/4/3/0/0 → 4/1/0/3/0/0 | +4 hmac/equals/hkdf/pbkdf2 |
-| FN-DB (10) | 0/0/10/0/0/0 → 8/2/0/0/0/0 | +8 DBAL `src/ext/db/` (2 P: PDO::quote/ATTR — softest) |
+| FN-DB (10) | 0/0/10/0/0/0 → 8/2/0/0/0/0 | +8 DBAL `src/ext/database/` (2 P: PDO::quote/ATTR — softest) |
 | FN-CURL (13) | 0/0/13/0/0/0 → 10/3/0/0/0/0 | +10 HttpClient `src/ext/http_client/` (3 P: curl_multi/setopt — softest) |
 | FN-MB (22) | 0/2/12/4/0/4 → 6/2/6/4/0/4 | +6 codepointLength/grapheme/codepoints/unicodeUpper/unicodeLower |
 | FN-SPL (39) | 2/2/4/26/0/5 → 10/2/1/21/0/5 | +3 Iterator protocol; +5 PriorityQueue/heaps/Deque preludes |
@@ -883,7 +883,7 @@ Format `C/P/GP/GU/GD/NA` old → new; every C-credit grep-cited to a `src/…` s
 (Unchanged, verified: JSON, CRYPT, ICONV, CTYPE, FILTER, STREAM, SOCK, XML, FINFO, ZLIB, ZIP, PHAR, GD,
 REFL, PROC, OB, VAR, FUNC — genuine gaps held, not inflated.)
 
-Biggest banks (all grep-cited to a `src/…` symbol): typed **DBAL** `src/ext/db/` (FN-DB +8), **HttpClient**
+Biggest banks (all grep-cited to a `src/…` symbol): typed **DBAL** `src/ext/database/` (FN-DB +8), **HttpClient**
 `src/ext/http_client/` (FN-CURL +10), **Session** `src/ext/session/` (+8), **Math tail** asin/acos/atan/
 atan2/sinh/cosh/tanh/hypot/log2/log1p/expm1 (FN-MATH +8), **HMAC/HKDF/PBKDF2/timing-safe** (FN-HASH +4),
 **CSPRNG** secureBytes/secureInt (FN-MATH/RAND), **Uri** parse/build/objects (FN-URL +4), **mail()**

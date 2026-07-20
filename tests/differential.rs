@@ -1735,15 +1735,15 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     if dir.file_name().and_then(|n| n.to_str()) == Some("interop") {
         return;
     }
-    // DEC-208: `examples/db/` needs `--features database` (Core.DatabaseModule → bundled SQLite), which the default
+    // DEC-208: `examples/database/` needs `--features database` (Core.DatabaseModule → bundled SQLite), which the default
     // differential gate does not build — with `database` off, `import Core.DatabaseModule` is an unknown module. These
-    // Core.DatabaseModule examples are quarantined (impure DB I/O) and validated by `tests/db.rs` on both backends.
-    if dir.file_name().and_then(|n| n.to_str()) == Some("db") {
+    // Core.DatabaseModule examples are quarantined (impure DB I/O) and validated by `tests/database.rs` on both backends.
+    if dir.file_name().and_then(|n| n.to_str()) == Some("database") {
         return;
     }
     // DEC-223: `examples/mail/` needs `--features mail`, and its file-transport example writes an
     // `outbox/` into the sweep's cwd (side effects have no place in the byte-identity glob). Impure
-    // mail I/O is quarantined and validated by `tests/mail.rs` on both backends, like `tests/db.rs`.
+    // mail I/O is quarantined and validated by `tests/mail.rs` on both backends, like `tests/database.rs`.
     if dir.file_name().and_then(|n| n.to_str()) == Some("mail") {
         return;
     }

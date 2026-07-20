@@ -190,7 +190,7 @@ fn col_names(prepared: &rusqlite::Statement) -> Vec<String> {
 /// …")` in a loop), and caching skips SQLite's re-compile of identical SQL on every hit — the DEC-266
 /// perf lever for `dbwork`. PDO does NOT cache prepares, so this is a genuine language-side advantage
 /// on identical code. Byte-identical: the cached statement is reset + re-bound per execute (rusqlite
-/// resets on return-to-cache), so results are unchanged; validated by `tests/db.rs` on both backends.
+/// resets on return-to-cache), so results are unchanged; validated by `tests/database.rs` on both backends.
 fn exec_bound(conn: &rusqlite::Connection, sql: &str, binds: &Binds) -> Result<usize, String> {
     match binds {
         Binds::None => {

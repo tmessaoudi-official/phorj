@@ -1,5 +1,5 @@
 #![cfg(feature = "http-client")]
-//! `Core.HttpClientModule` (W3-2) end-to-end fixture — the `tests/db.rs`/`tests/mail.rs` pattern.
+//! `Core.HttpClientModule` (W3-2) end-to-end fixture — the `tests/database.rs`/`tests/mail.rs` pattern.
 //!
 //! The natives are `pure:false` (live network), so importing programs are quarantined from the
 //! byte-identity differential; THIS file gates the surface on BOTH backends (`run ≡ runvm`)

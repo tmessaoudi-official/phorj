@@ -21,14 +21,14 @@
 pub mod registry;
 
 #[cfg(feature = "cryptography")]
-pub mod crypto;
+pub mod cryptography;
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "database")]
-pub mod db;
-/// The db extension's prelude source — unconditional (see [`regex_prelude`]), colocated via `#[path]`.
-#[path = "db/prelude.rs"]
-pub mod db_prelude;
+pub mod database;
+/// The database extension's prelude source — unconditional (see [`regex_prelude`]), colocated via `#[path]`.
+#[path = "database/prelude.rs"]
+pub mod database_prelude;
 #[cfg(feature = "debug")]
 pub mod debug;
 /// The debug extension's prelude source — unconditional (see [`regex_prelude`]'s rationale),

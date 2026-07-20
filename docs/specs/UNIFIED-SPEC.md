@@ -1244,7 +1244,7 @@ per-slice realization notes — the authoritative slice-level record).
 
 - **Connection & drivers**: `new Db(dsn) throws DatabaseError` (throwing ctor, DEC-221 — fail-fast,
   `new PDO`-faithful) dispatches on the DSN scheme behind a `DriverConn` trait
-  (`src/ext/db/{natives,sqlite,postgres,mysql}.rs`): bundled rusqlite SQLite (`database` — a DEFAULT feature
+  (`src/ext/database/{natives,sqlite,postgres,mysql}.rs`): bundled rusqlite SQLite (`database` — a DEFAULT feature
   since DEC-227; flag renamed `db`→`database` 2026-07-17) · sync `postgres` (`database-postgres`) · sync `mysql` v28 minimal-rust (`database-mysql`,
   DEC-229; `mariadb://` normalized). All sync (no tokio at the phorj-facing API), spine-quarantined,
   fixture-tested. A new backend = one `DriverConn` impl + one dep admission. Credentials:
@@ -1280,7 +1280,7 @@ per-slice realization notes — the authoritative slice-level record).
   ConnectionError / TimeoutError / Deadlock / SerializationFailureError / SyntaxError) — never PDO's silent
   false/null. Observability: `db.onQuery((sql, ms) => …)` + `db.timeout(ms)`.
 - **Spine/LADDER**: case-1 (faithful → PHP PDO transpile). Natives `pure:false` → auto-quarantined
-  from the byte-identity differential; `run ≡ runvm` holds; correctness via `tests/db.rs` (+
+  from the byte-identity differential; `run ≡ runvm` holds; correctness via `tests/database.rs` (+
   live round-trips gated on `PHORJ_PG_TEST_DSN`/`PHORJ_MYSQL_TEST_DSN`, skip-loud).
 - **Out of scope (userland or later)**: ORM/relations/migrations/query-builder DSL · pooling/replica
   routing/caching · compile-time SQL-vs-schema checking (needs a schema source) · Postgres

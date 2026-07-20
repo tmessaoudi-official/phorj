@@ -10,7 +10,7 @@
 //! `ROLLBACK TO`, which SQLite and Postgres both accept). Each concrete backend implements only its
 //! genuinely dialect-specific pieces (value mapping, placeholder syntax, error-code taxonomy) in its own
 //! submodule. The public `Core.DatabaseModule` SURFACE (`Database`/`Statement`/`Row` + `new Database(dsn)`) is the phorj-source
-//! `DB_PRELUDE` (`src/ext/db/prelude.rs`) on top of these — the natives live under the `DbSys` qualifier so
+//! `DB_PRELUDE` (`src/ext/database/prelude.rs`) on top of these — the natives live under the `DbSys` qualifier so
 //! a prelude `class Database` never collides with them.
 //!
 //! **Error mechanism (DEC-208 = prelude-wrapper).** phorj's native ABI has no throws channel: a native's
@@ -25,7 +25,7 @@
 //!
 //! **Spine treatment.** Every native is `pure: false`, so `uses_impure_native` auto-excludes any
 //! `import Core.DatabaseModule` program from the byte-identity differential (live DB I/O can't be byte-identical
-//! across the drivers and PHP PDO). Correctness: the in-module unit tests + the `tests/db.rs` fixture.
+//! across the drivers and PHP PDO). Correctness: the in-module unit tests + the `tests/database.rs` fixture.
 //! `run ≡ runvm` holds unconditionally (both backends call these one shared `eval` bodies). The `php`
 //! emitters (faithful PDO, DEC-208 LADDER case 1) are finalized in the DEC-208 transpile slice.
 
@@ -1347,7 +1347,7 @@ fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, 
 /// auto-quarantined from the byte-identity differential, and every native returns `Result<T, string>`
 /// (Success | Failure) — never a hard fault on a DB error (the prelude throws a catchable `DatabaseError`).
 /// The `php` emitters map to PDO (DEC-208 LADDER case 1); finalized in the transpile slice.
-pub fn db_natives() -> Vec<NativeFn> {
+pub fn database_natives() -> Vec<NativeFn> {
     let handle = || Ty::Named("DatabaseHandle".into(), vec![]);
     let res = |t: Ty| Ty::Named("DatabaseResult".into(), vec![t]);
     // A bindable scalar. Built via `Ty::union_of` so members are in the checker's CANONICAL (sorted-by-
@@ -2253,7 +2253,7 @@ mod tests {
     }
 
     /// A hook registered via `onQuery` is stored and returned by the shared cell; a Pure store never
-    /// fails. (Invocation with `(sql, ms)` is exercised end-to-end by `tests/db.rs`, which has a real
+    /// fails. (Invocation with `(sql, ms)` is exercised end-to-end by `tests/database.rs`, which has a real
     /// backend to run the closure.)
     #[test]
     fn on_query_stores_the_hook() {

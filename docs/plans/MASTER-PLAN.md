@@ -129,7 +129,7 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
    Errors = checked `throws DbError`. LADDER case-1 (faithful → PHP PDO). **SPINE: quarantined** —
    register Core.Db natives `pure:false` ⇒ `uses_impure_native` (differential.rs:1068) auto-excludes
    every `import Core.Db` example from the byte-identity differential; correctness via a dedicated
-   fixture harness (`tests/db.rs`, mirror `tests/process.rs`). Verified linchpins: quarantine seam is
+   fixture harness (`tests/database.rs`, mirror `tests/process.rs`). Verified linchpins: quarantine seam is
    flag-derived (no harness edit); `Value::Channel(…, Rc<RefCell<…>>)` (value/types.rs:150) is the
    opaque-handle precedent; native ABI is `fn(&[Value],…)` so a handle rides as arg-0; `Value::Channel`
    ripples only ~12 sites (bounded). **BUILD SLICES (fresh context — design-dense subsystem):**
@@ -139,7 +139,7 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
    (SURFACE) = NEXT, fresh context** — the design-dense part; precise recipe in memory topic
    [[session-2026-07-13-opus-language-reconsideration]] §DEC-208: import-gated built-in classes
    (Db/Statement/Row/DbError — NOT ambient, advisor flag), `new Db` + method typing, compiler+interpreter
-   dispatch to `CallNative` (receiver arg-0), catchable `DbError`, `examples/db/` + `tests/db.rs` fixture.
+   dispatch to `CallNative` (receiver arg-0), catchable `DbError`, `examples/database/` + `tests/database.rs` fixture.
    - **S1** (atomic — no clean thinner cut; a dep alone is inert, a Value variant alone is dead-code/
      warnings-deny): add non-default `db` feature + `rusqlite` (bundled) to Cargo.toml; add opaque
      handle to Value modelled feature-independently (a `Value::Db(Rc<dyn DbHandle>)`-style always-present
@@ -152,7 +152,7 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
      `r.getInt(k)` is a native reading the map; `query()` returns `List<Row>` so `for-in` is free, no
      Rows variant); rusqlite lifetime workaround: Statement handle stores (conn Rc, sql, binds) and
      prepares+executes lazily at query/exec (avoids the Statement-borrows-Connection lifetime knot);
-     PDO transpile (faithful); `tests/db.rs` fixture + quarantined `examples/db/…` walkthrough.
+     PDO transpile (faithful); `tests/database.rs` fixture + quarantined `examples/database/…` walkthrough.
    - **S2** — generics: `queryInto<T>()`/`queryOneInto<T>()` (checker resolves T's field layout →
      native hydrates by strict name; `DbError` on mismatch/NULL); PDO object-hydration transpile.
    - **S3** — remove the old Core.Sql builder prelude + `module_of` row; codemod examples/preludes off

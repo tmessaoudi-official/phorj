@@ -841,7 +841,7 @@ pub(super) struct VirtualModule {
     bare_types: &'static [&'static str],
 }
 
-// DEC-273 wave 3: the db prelude source moved to `crate::ext::db_prelude` (colocation).
+// DEC-273 wave 3: the database prelude source moved to `crate::ext::database_prelude` (colocation).
 
 /// The Core-module registry, in the SAME order as the pre-UA-L2 injection chain — ORDER IS
 /// LOAD-BEARING: `HTTP_PRELUDE` transitively `import Core.Regex`, and Http runs BEFORE Regex, so
@@ -1007,7 +1007,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "DatabaseModule"],
         qualifier: "DatabaseModule",
-        src: Some(crate::ext::db_prelude::PRELUDE),
+        src: Some(crate::ext::database_prelude::PRELUDE),
         respond_bridge: None,
         member_gated: true,
         bare_types: &[

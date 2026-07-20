@@ -78,7 +78,7 @@ fn verify_a_committed_php_argon2id_hash() {
 }
 
 #[test]
-fn crypto_natives_registered_and_emit() {
+fn cryptography_natives_registered_and_emit() {
     assert!(crate::native::index_of("Core.Cryptography", "hashPassword").is_some());
     assert!(crate::native::index_of("Core.Cryptography", "verifyPassword").is_some());
     let php = |name: &str, args: &[&str]| {

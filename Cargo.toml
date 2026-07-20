@@ -96,7 +96,7 @@ jit = ["dep:cranelift", "dep:cranelift-jit", "dep:cranelift-module"]
 # #external-dependency-policy Q1/Q2) links SQLite via its `bundled` feature (no system libsqlite3
 # dependency). Its `unsafe` is SQLite C-FFI internal to the crate — phorj's own code stays unsafe-free.
 # SPINE-QUARANTINED: Core.DatabaseModule natives are `pure:false`, so `uses_impure_native` auto-excludes every
-# `import Core.DatabaseModule` example from the byte-identity differential (tested via the tests/db.rs fixture).
+# `import Core.DatabaseModule` example from the byte-identity differential (tested via the tests/database.rs fixture).
 database = ["dep:rusqlite"]
 # Postgres driver for `Core.DatabaseModule` (DEC-208 slice I). Admits the SYNC `postgres` crate (native-protocol,
 # no libpq/system dependency; TLS left off → no OpenSSL). `database-postgres` implies `database` (it plugs a driver

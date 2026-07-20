@@ -184,7 +184,7 @@ pub enum Value {
     /// cloning shares the same `Rc`, so a statement's accumulated binds are visible through every
     /// binding. **Opaque** to the arithmetic / compare / display kernels (the checker forbids using a
     /// handle as an operand or interpolating it), so the single-sourced `value.rs` kernels are
-    /// untouched. The concrete rusqlite-backed impl is feature-gated (`database`) in `src/ext/db/natives.rs`;
+    /// untouched. The concrete rusqlite-backed impl is feature-gated (`database`) in `src/ext/database/natives.rs`;
     /// with `database` off this variant is unconstructable. Quarantined from the PHP oracle (impure natives);
     /// the transpiler emits faithful PDO (DEC-208, LADDER case 1).
     Db(Rc<dyn DbObject>),

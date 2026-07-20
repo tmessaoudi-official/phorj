@@ -6,4 +6,4 @@ pub mod natives;
 #[cfg(test)]
 mod tests;
 
-pub use natives::crypto_natives;
+pub use natives::cryptography_natives;

@@ -8,7 +8,7 @@
 //! Determinism: listings are SORTED (Invariant 10 — no directory-order leakage); `walk` yields
 //! relative paths sorted lexicographically. All natives are `pure:false` EXCEPT nothing — the whole
 //! module reads ambient filesystem state, so importing programs are spine-quarantined (validated by
-//! `tests/fs.rs` on both backends against a scratch temp dir, the `tests/db.rs` pattern). Files are
+//! `tests/fs.rs` on both backends against a scratch temp dir, the `tests/database.rs` pattern). Files are
 //! UTF-8 for the `*Text` forms (a non-UTF-8 file is a clean typed error steering to `readBytes`).
 
 use super::{NativeEval, NativeFn};

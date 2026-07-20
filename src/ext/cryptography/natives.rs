@@ -55,7 +55,7 @@ pub(super) fn crypto_verify_password(args: &[Value], _: &mut String) -> Result<V
     }
 }
 
-pub fn crypto_natives() -> Vec<NativeFn> {
+pub fn cryptography_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Cryptography",

@@ -1,5 +1,5 @@
 //! `Core.SessionModule` (W3, TOP-20 #3) end-to-end fixture — sessions over synthetic `Core.Http`
-//! requests on BOTH backends (the `tests/db.rs` pattern; `Core.Native.Session` is impure →
+//! requests on BOTH backends (the `tests/database.rs` pattern; `Core.Native.Session` is impure →
 //! quarantined from the byte-identity differential). The store internals (open/reuse, idle
 //! expiry never resurrecting ids, regenerate moving data) are unit-tested in
 //! `src/ext/session/natives.rs`; THIS file proves the phorj-visible story: cookie round-trip,

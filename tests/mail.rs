@@ -1,5 +1,5 @@
 #![cfg(feature = "mail")]
-//! `Core.Mail` (DEC-223) end-to-end fixture — the `tests/db.rs` pattern.
+//! `Core.Mail` (DEC-223) end-to-end fixture — the `tests/database.rs` pattern.
 //!
 //! The mailer natives are `pure:false` (network/filesystem delivery), so every `import Core.Mail`
 //! program is auto-quarantined from the byte-identity differential; THIS file is the gate that runs

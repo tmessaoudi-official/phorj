@@ -1,5 +1,5 @@
 //! `Core.FileSystemModule` (W3) end-to-end fixture — typed filesystem surface on BOTH backends against a scratch
-//! temp dir (the `tests/db.rs` pattern; `Core.Native.FileSystem` is impure → importing programs are quarantined
+//! temp dir (the `tests/database.rs` pattern; `Core.Native.FileSystem` is impure → importing programs are quarantined
 //! from the byte-identity differential).
 
 use phorj::cli::{cmd_run, cmd_transpile, cmd_treewalk};

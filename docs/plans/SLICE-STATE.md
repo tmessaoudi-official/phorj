@@ -700,17 +700,21 @@ Cargo features + registry names now track their real Core module (dev-directed "
 `crypto`→`cryptography` (Core.Cryptography), `db`→`database` (Core.DatabaseModule),
 `db-postgres`→`database-postgres`, `db-mysql`→`database-mysql`, `db-all`→`database-all`. 36 files,
 +127/−126. Atomic cfg flip (MSRV-1.82 `unexpected_cfgs` deny-lint = no silent compile-out backstop).
-Also fixed: 2 BLOCKING runtime driver-not-compiled error strings (src/ext/db/natives.rs:97/111 named a
+Also fixed: 2 BLOCKING runtime driver-not-compiled error strings (src/ext/database/natives.rs:97/111 named a
 dead flag — the panel completeness lens caught it, compiler can't), generated EXTENSIONS.md + examples.js,
 all source doc-comments, example/test headers, SSOT docs, CLAUDE.md. Dated history left as-is.
 Gate GREEN (nextest --all-features + PHP oracle 2276 pass; clippy both legs; fmt; release). DEC-268:
 panel round-1 (r3 completeness found the error strings) → fixed + comprehensive grep sweep → rounds
-A+B BOTH fully clean (2 consecutive) → certified. ⚠ DEFERRED FOLDER-RENAME BACKLOG (both mismatched pairs): `database`→folder `src/ext/db/` AND
-`cryptography`→folder `src/ext/crypto/` (also `examples/db/`, `tests/db*.rs`). NOT a pure rename —
-`tests/differential.rs:1190` gates the byte-identity quarantine on the LITERAL dir name `Some("db")`;
-renaming the folder without updating that gate would un-quarantine `examples/db/*` into the differential
-(fails by design — DB I/O is impure). Own careful spine-aware slice; extension NAMES are correct today.
-Register: C-decisions.md DEC-284.
+A+B BOTH fully clean (2 consecutive) → certified. ✅ FOLDER-RENAME BACKLOG **DONE (2026-07-20)**: folders now
+match feature/module names — `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/`,
+plus `examples/db/`→`examples/database/` and `tests/db{,_mysql,_postgres}.rs`→`tests/database*.rs`. The
+byte-identity quarantine in `tests/differential.rs` was re-pointed from the literal `Some("db")` to
+`Some("database")` in the same change (DB I/O stays impure-quarantined, validated by `tests/database.rs`).
+Internal fns/mods renamed too (`db_natives`→`database_natives`, `crypto_natives`→`cryptography_natives`,
+`db_prelude`→`database_prelude`). Core-side `value/db.rs`/`desugar_db.rs`/`db_lint.rs` keep the `db`
+abbreviation (not extension folders — left as a possible later consistency pass). Full gate green here
+(all-features cargo test vs php-8.4 oracle: 1868+ pass; only the pre-existing bcmath decimal-conformance
+PHP leg self-blocks — bcmath uninstallable in this container, covered on the dev's 8.5 floor). Register: C-decisions.md DEC-284.
 
 ### CURSOR — cargo cleaned this session (quota hit; dev "cargo clean regularly!!" reinforced in memory);
 ### next queue item = PERF (jsonround/dbwork flips, below) then core parity push (MASTER-PLAN §0 QUEUE).
@@ -1071,8 +1075,8 @@ Updated: 2026-07-16 (evening)
     (c) bare throwing calls inside throwing prelude methods need `?` AS WHOLE BINDING INIT
     (`bool has = this.hasNext()?;` — never in if-condition position);
     (d) `panic` diverges for totality ✓ but needs `import Core.Abort.panic;`.
-    MIGRATED: 4 tests/db.rs bodies → foreach/direct-next + NEW exhausted-fault pin test
-    (80/80 db tests pass); examples/db/streaming.phg → foreach (both backends identical);
+    MIGRATED: 4 tests/database.rs bodies → foreach/direct-next + NEW exhausted-fault pin test
+    (80/80 db tests pass); examples/database/streaming.phg → foreach (both backends identical);
     docs (CHANGELOG slice-3, examples/README row, UNIFIED-SPEC stream line, MASTER-PLAN
     "DEC-257 COMPLETE").
   - ✅ SLICE 3 COMMITTED `05f224a7` — **DEC-257 COMPLETE**; release binary rebuilt.
@@ -1117,12 +1121,12 @@ Updated: 2026-07-16 (evening)
      old `entry_point`/`entry_point_count` fns now likely dead → remove after codemod;
   ✅ throws.rs main-no-throws restriction REMOVED (DEC-191 ruling supersedes Batch-1 D;
      comment records the supersession).
-  ✅ wp() (src/cli/tests.rs) + typed_program (tests/db.rs) now inject `#[Entry] ` before a bare
+  ✅ wp() (src/cli/tests.rs) + typed_program (tests/database.rs) now inject `#[Entry] ` before a bare
      `function main(` (replacen 1, skipped when already attributed) — covers most inline tests.
   ✅ CODEMOD DONE: 275 example/conformance .phg files attributed (column-0 regex + the indented
      static-main case for class-main.phg; differential GREEN post-codemod); compiler::tests
      with_pkg helper injects (30/31 pass; missing_main assertion flipped to expect #[Entry]);
-     23 integration .rs files + tests/db.rs textually codemodded (`function main` →
+     23 integration .rs files + tests/database.rs textually codemodded (`function main` →
      `#[Entry] function main`, existing-attr protected); explain entries E-ENTRY-SIG/
      E-ENTRY-TARGET/E-MULTIPLE-ENTRY added. Census r1 = 776 fails; census r2 RUNNING —
      remaining expected: entry_point.rs E-MULTIPLE-MAIN flips ×2, throws
@@ -1150,7 +1154,7 @@ Updated: 2026-07-16 (evening)
      name-magic `handle` → EntryRole::Web), guide/entry.phg example + docs (CHANGELOG/FEATURES/
      register BUILT note incl. the DEC-191-ruling-supersedes-main-no-throws note), old
      entry_point/entry_point_count removal if dead, full gate (raw-verified clippys), commit.
-  ⚠⚠ RESOLVED BUG (was census r4 residue, REPRODUCED + root-caused): examples/db/transaction-closure.phg —
+  ⚠⚠ RESOLVED BUG (was census r4 residue, REPRODUCED + root-caused): examples/database/transaction-closure.phg —
      interpreter leg RUNS CLEAN, VM leg = "compile error: `transaction` is not a function,
      variant, or class" (run≠runvm divergence!). transaction = the DEC-249 default-param method
      (fills machinery). Appeared between 284284e0 (green) and the DEC-191 work. Suspects, in
@@ -1281,7 +1285,7 @@ Updated: 2026-07-16 (evening)
         Iterator<E>-typed value; non-implementor still errors); CHANGELOG/FEATURES/
         examples-README/MASTER-PLAN/UNIFIED-SPEC.
     Then SLICE 3: Db streams reshape (hasNext/next + implements Iterator<Row>/<T>, lookahead
-    buffer; migrate desugar_db sites, examples/db/*, tests/db.rs; RowStream throws move to
+    buffer; migrate desugar_db sites, examples/database/*, tests/database.rs; RowStream throws move to
     hasNext — it pulls).
   - Annotation note: `Iterator<int>` in type position survives to backends WITH args exactly like
     `Box<int>` does (backends already cope; rty keeps heads + recurses args). No new erasure

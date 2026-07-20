@@ -50,7 +50,7 @@ open class DatabaseError implements Error {
   // unifying with the success arm's value type.
   //
   // It is ALSO the single classification point (DEC-208 slice C, spec §6): the native tags a driver
-  // error with a `<<Kind>>` marker prefix (`src/ext/db/natives.rs` `err_kind`), and `fail` strips the marker
+  // error with a `<<Kind>>` marker prefix (`src/ext/database/natives.rs` `err_kind`), and `fail` strips the marker
   // and throws the matching TYPED subtype. Because every Row/Statement/Database method — including the S2
   // `queryInto` hydration helpers — funnels its `DatabaseResult.Err` through here, they all yield the precise
   // `catch (UniqueViolationError e)` type with zero change at the call sites. An untagged message (a logic /
@@ -164,7 +164,7 @@ class Statement {
     // The native binds onto the SHARED raw handle in place (interior-mutable accumulator) and returns
     // that same handle, so `this` already reflects the bind — return it (an Rc bump) instead of
     // allocating a fresh `new Statement(...)` per chained bind (DEC-266 dbwork alloc lever). Byte-
-    // identical: same raw handle + same naming; validated by tests/db.rs on both backends.
+    // identical: same raw handle + same naming; validated by tests/database.rs on both backends.
     return match (NativeDatabase.bind(this.raw, value)) { DatabaseResult.Ok(_) => this, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   function bindNamed(string name, string | int | float | bool value): Statement throws DatabaseError {
@@ -345,7 +345,7 @@ class Database {
   // Best-effort rollback that NEVER throws — safe inside a `finally` (a throwing rollback there would
   // mask the original exception). The auto-rollback idiom is: `db.begin(); mutable bool ok = false;
   // try { …work…; db.commit(); ok = true; } finally { if (!ok) db.rollbackQuiet(); }` — demonstrated in
-  // examples/db/transactions.phg.
+  // examples/database/transactions.phg.
   function rollbackQuiet(): void {
     match (NativeDatabase.rollback(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(_) => Database.ok() };
   }

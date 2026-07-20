@@ -4,7 +4,7 @@
 //! The enhanced-PDO surface opens a real bundled-SQLite database (`rusqlite`), so its example is
 //! `pure:false` → quarantined from the byte-identity differential (live DB I/O can't be byte-identical
 //! across rusqlite and PHP PDO). This is therefore the SOLE gate that runs the shipped
-//! `examples/db/basic.phg` through the real language surface — `new Database(dsn)` → `prepare` → `bind`/
+//! `examples/database/basic.phg` through the real language surface — `new Database(dsn)` → `prepare` → `bind`/
 //! `bindNamed` → `exec`/`query` → typed `Row` accessors, with a catchable `DatabaseError` — on BOTH backends.
 //! The PHP leg is excluded; `run ≡ runvm` must hold (both call the one shared native bodies). Compiled
 //! only under `--features database` (a DEFAULT feature; the pre-push gate covers it via `--all-features`).
@@ -13,7 +13,8 @@ use phorj::cli::{cmd_run, cmd_treewalk};
 
 #[test]
 fn db_example_runs_on_both_backends() {
-    let src = std::fs::read_to_string("examples/db/basic.phg").expect("read examples/db/basic.phg");
+    let src = std::fs::read_to_string("examples/database/basic.phg")
+        .expect("read examples/database/basic.phg");
     // Two rows survive the `age > 30` filter, ordered by age: Ada/36 then Grace/45.
     let expected = "Ada is 36\nGrace is 45\n";
     let tree = cmd_treewalk(&src).expect("basic.phg runs on the interpreter");
@@ -47,7 +48,8 @@ fn fails_with(src: &str, needle: &str) {
 
 #[test]
 fn db_typed_example_runs_on_both_backends() {
-    let src = std::fs::read_to_string("examples/db/typed.phg").expect("read examples/db/typed.phg");
+    let src = std::fs::read_to_string("examples/database/typed.phg")
+        .expect("read examples/database/typed.phg");
     let expected = "Ada (36) aka Countess\n\
                     Grace (45) aka -\n\
                     one: Ada\n\
@@ -216,8 +218,8 @@ class Row2 { constructor(public string name, public int? age) {} }
 
 #[test]
 fn db_nested_example_runs_on_both_backends() {
-    let src =
-        std::fs::read_to_string("examples/db/nested.phg").expect("read examples/db/nested.phg");
+    let src = std::fs::read_to_string("examples/database/nested.phg")
+        .expect("read examples/database/nested.phg");
     let expected = "Book: order 10 total 299 by Ada of France, ships to Japan\n\
                     Pen: order 20 total 150 by Grace of Japan, ships to -\n\
                     sales: 2\n\
@@ -428,8 +430,8 @@ class User { constructor(public string name, public int age) {} }
 
 #[test]
 fn db_naming_example_runs_on_both_backends() {
-    let src =
-        std::fs::read_to_string("examples/db/naming.phg").expect("read examples/db/naming.phg");
+    let src = std::fs::read_to_string("examples/database/naming.phg")
+        .expect("read examples/database/naming.phg");
     let expected = "1: Ada (@ada) lives on Rue de Rivoli, 75001\n\
                     2: Grace (@grace) lives on Baker Street, NW16XE\n\
                     baked:      @hopper\n\
@@ -688,13 +690,13 @@ class U { constructor(public string userName) {} }
 
 // ── DEC-208 slice C: transactions, savepoints, taxonomy, close ───────────────────────────────────
 
-/// The shipped `examples/db/transactions.phg` — the SOLE gate that runs the transaction/savepoint/
+/// The shipped `examples/database/transactions.phg` — the SOLE gate that runs the transaction/savepoint/
 /// taxonomy/close surface through the real language on BOTH backends (it is quarantined from the
 /// byte-identity differential like every `Core.DatabaseModule` example).
 #[test]
 fn db_transactions_example_runs_on_both_backends() {
-    let src = std::fs::read_to_string("examples/db/transactions.phg")
-        .expect("read examples/db/transactions.phg");
+    let src = std::fs::read_to_string("examples/database/transactions.phg")
+        .expect("read examples/database/transactions.phg");
     let expected = "after commit: acct1=70 acct2=30\n\
                     caught UniqueViolationError; transaction rolled back\n\
                     after rollback: acct1=70 acct2=30\n\
@@ -823,13 +825,13 @@ fn db_close_then_use_is_connection_error() {
 // (returning its value) / auto-ROLLBACK + re-throw the ORIGINAL typed error on a throw; a nested call is
 // a SAVEPOINT; `transaction(fn, retries)` re-runs on the transient `SerializationFailureError` only (DEC-249 default param; the former `transactionRetry` is retired).
 
-/// The shipped `examples/db/transaction-closure.phg` — the SOLE gate that runs the closure-form
+/// The shipped `examples/database/transaction-closure.phg` — the SOLE gate that runs the closure-form
 /// transaction surface (commit / value-return / auto-rollback-and-rethrow / nested savepoint / retry)
 /// through the real language on BOTH backends (quarantined from the byte-identity differential).
 #[test]
 fn db_transaction_closure_example_runs_on_both_backends() {
-    let src = std::fs::read_to_string("examples/db/transaction-closure.phg")
-        .expect("read examples/db/transaction-closure.phg");
+    let src = std::fs::read_to_string("examples/database/transaction-closure.phg")
+        .expect("read examples/database/transaction-closure.phg");
     let expected = "after commit: acct1=70 acct2=30\n\
                     total in tx: 100\n\
                     caught UniqueViolationError; transaction rolled back\n\
@@ -990,8 +992,8 @@ fn db_transaction_retry_does_not_retry_a_non_transient_error() {
 /// (its `ms` is wall-clock → excluded, or `run ≢ runvm`).
 #[test]
 fn db_writes_example_runs_on_both_backends() {
-    let src =
-        std::fs::read_to_string("examples/db/writes.phg").expect("read examples/db/writes.phg");
+    let src = std::fs::read_to_string("examples/database/writes.phg")
+        .expect("read examples/database/writes.phg");
     let expected = concat!(
         "inserted Ada -> id 1\n",
         "inserted Grace -> id 2\n",
@@ -1137,8 +1139,8 @@ fn db_on_query_hook_fires_with_sql_and_ms() {
 
 #[test]
 fn db_mapping_example_runs_on_both_backends() {
-    let src =
-        std::fs::read_to_string("examples/db/mapping.phg").expect("read examples/db/mapping.phg");
+    let src = std::fs::read_to_string("examples/database/mapping.phg")
+        .expect("read examples/database/mapping.phg");
     let expected = "Ada: pro credit=19.99 meta=[1,2,3] overdraft=-5.50 extra={\"beta\":true} | billing enterprise 100.00 {\"seats\":9}\n\
                     Bob: free credit=0.10 meta={\"n\":0} overdraft=0.00 extra=- | billing free 0.00 []\n";
     both(&src, expected);
@@ -1676,7 +1678,7 @@ fn db_stream_into_bad_sink_is_rejected() {
 /// The array accessors are wired end-to-end: on SQLite (no array columns) a `getStringList` on a text
 /// column is the clean cross-driver "not an array" DatabaseError — proving the prelude method, native, and
 /// error path; the POSITIVE mapping (a real `text[]` → `List<string>`) is exercised by the live
-/// Postgres round-trip (`tests/db_postgres.rs`) where arrays exist.
+/// Postgres round-trip (`tests/database_postgres.rs`) where arrays exist.
 #[test]
 fn db_get_string_list_on_non_array_column_is_clean_error() {
     let src = typed_program(

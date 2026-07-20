@@ -423,11 +423,11 @@ fn build() -> Vec<NativeFn> {
     registry.extend(crate::ext::test::test_natives());
     registry.extend(time::time_natives());
     #[cfg(feature = "cryptography")]
-    registry.extend(crate::ext::crypto::crypto_natives());
+    registry.extend(crate::ext::cryptography::cryptography_natives());
     #[cfg(feature = "regex")]
     registry.extend(crate::ext::regex::regex_natives());
     #[cfg(feature = "database")]
-    registry.extend(crate::ext::db::db_natives());
+    registry.extend(crate::ext::database::database_natives());
     #[cfg(feature = "mail")]
     registry.extend(crate::ext::mail::mail_natives());
     #[cfg(feature = "http-client")]
