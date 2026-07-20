@@ -39,11 +39,18 @@ attributes). No VSCode required — the directory is just a standard TextMate-co
 3. Apply. Open any `.phg` file: diagnostics appear inline (identical to `phg check`), and hover,
    go-to-definition (`Ctrl/Cmd+Click`), completion, structure view (document symbols), find-usages
    (references), rename, and reformat (`phg format`) all work through the server.
+   - **Completion** (the `.` trigger character is advertised, so it fires as you type) offers:
+     `import Core.` → the importable Core module paths; `List.` / `Output.` → that Core module's
+     members; plus in-scope top-level symbols, locals/params, and keywords. It is **parse-tolerant**
+     — it works mid-edit on a buffer that does not yet parse (e.g. right after typing `Output.`).
 
 ### Notes
 
 - **Formatting** routes to `phg format` (comment- and meaning-preserving); reformatting a file that does
   not parse is a no-op (the server never corrupts an in-progress buffer).
 - References / rename are **single-document** today (cross-file is a server follow-up).
+- Completion covers Core modules/members + import paths + local symbols/keywords; **instance/type-aware
+  member completion** (`myVar.` → the variable's class methods) and **user-package import paths** are
+  server follow-ups (they need the resolved-type index and project-source scanning respectively).
 - The server is **off the byte-identity spine** — it never runs the three execution backends, so it
   carries no `run`/`runvm`/PHP parity risk; its diagnostics equal `phg check` exactly.
