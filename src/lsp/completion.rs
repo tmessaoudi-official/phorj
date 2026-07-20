@@ -4,15 +4,20 @@
 //! requirement. Before this, `completion()` bailed to `[]` the instant the buffer didn't parse, i.e.
 //! exactly while the user was typing a member access. Contexts inferred from the text before the cursor:
 //!   * `import Core.` → importable module paths (from the catalog)
-//!   * `Qualifier.`   → that Core module's native members (PascalCase qualifier ⇒ a module, not a var)
+//!   * `<receiver>.`  → Core-module natives (`List.`/`Output.`) OR, for an instance / `this`, the
+//!                      receiver's DECLARED-type class members + inherited (resolved via a repaired
+//!                      parse of the mid-edit buffer — the trailing `receiver.` is a syntax error)
 //!   * otherwise      → top-level symbols (when the buffer parses) + enclosing locals + keywords
 //!
-//! Instance/type-aware member completion (`myVar.` → the class's methods) needs the checker's resolved
-//! type index and is a documented follow-up; the PascalCase-qualifier gate deliberately avoids emitting
-//! wrong module members for a lowercase variable receiver.
+//! Type-aware member completion is DECLARED-type only (params, `Type x` locals, fields, ctor-promoted
+//! params, `this`); an inferred `var x = …` receiver or a method-chain resolves to nothing — the
+//! conservative gate (a wrong member list is worse than none). Prelude-class members (Date/Uri…) need
+//! the injected prelude program, a documented follow-up.
 use super::catalog;
 use super::KEYWORDS;
 use crate::ast::Program;
+use crate::parser::Parser;
+use crate::tokenizer::lex;
 
 const EMPTY: &str = "{\"isIncomplete\":false,\"items\":[]}";
 
@@ -30,7 +35,8 @@ fn completion_item(label: &str, kind: u32, detail: &str) -> String {
 enum Ctx {
     /// Completing an import path: the partial dotted text after `import `.
     Import(String),
-    /// Completing a member after `Qualifier.`: the PascalCase qualifier before the dot.
+    /// Completing a member after `<receiver>.`: the receiver ident before the dot — a Core-module
+    /// qualifier (`List`) or an instance/`this` (resolved to its declared class in `complete`).
     Member(String),
     /// No special context — general symbol/keyword completion.
     General,
@@ -65,10 +71,35 @@ pub(super) fn complete(
             }
             items
         }
-        Ctx::Member(qual) => catalog::module_members(&qual)
-            .into_iter()
-            .map(|m| completion_item(&m, 3 /* Function */, "member"))
-            .collect(),
+        Ctx::Member(recv) => {
+            // Core-module qualifier first (`List.`/`Output.` → native members).
+            let mods = catalog::module_members(&recv);
+            if !mods.is_empty() {
+                mods.into_iter()
+                    .map(|m| completion_item(&m, 3 /* Function */, "member"))
+                    .collect()
+            } else {
+                // Instance receiver (`this.`/`myVar.`): resolve its declared type → the class's members
+                // (+ inherited). The LIVE buffer usually does NOT parse (the trailing `receiver.` is a
+                // syntax error), so fall back to a repaired parse that blanks the cursor's line — the
+                // receiver's declaration lives on other lines and survives. Emits nothing for
+                // untyped/inferred receivers (the conservative gate).
+                let repaired = match program {
+                    Some(_) => None,
+                    None => parse_repaired(text, offset),
+                };
+                let prog = program.or(repaired.as_ref());
+                match prog.and_then(|p| {
+                    super::scope::receiver_type_name(p, offset, &recv).map(|ty| (p, ty))
+                }) {
+                    Some((p, ty)) => catalog::class_members(p, &ty)
+                        .into_iter()
+                        .map(|(m, kind)| completion_item(&m, kind, "member"))
+                        .collect(),
+                    None => Vec::new(),
+                }
+            }
+        }
         Ctx::General => general_items(offset, program),
     };
     if items.is_empty() {
@@ -96,9 +127,11 @@ fn context(text: &str, offset: usize) -> Ctx {
         }
     }
 
-    // `Qualifier.<partial-member>` immediately before the cursor: scan back over the partial member
-    // (ident chars), require a `.`, then read the qualifier ident. A PascalCase qualifier ⇒ a Core
-    // module receiver (List/Output/Map); a lowercase receiver is an instance (type-aware — deferred).
+    // `<receiver>.<partial-member>` immediately before the cursor: scan back over the partial member
+    // (ident chars), require a `.`, then read the receiver ident. The receiver may be a Core-module
+    // qualifier (`List`/`Output` → module natives) OR an instance / `this` (→ the declared class's
+    // members); `complete` disambiguates. A receiver itself preceded by `.` (a dotted chain like
+    // `Core.List.` or `a.b.`) is skipped — not a single typeable receiver.
     let b = before.as_bytes();
     let mut i = b.len();
     while i > 0 && is_ident_byte(b[i - 1]) {
@@ -111,7 +144,8 @@ fn context(text: &str, offset: usize) -> Ctx {
             j -= 1;
         }
         let qual = &before[j..dot];
-        if !qual.is_empty() && qual.starts_with(|c: char| c.is_ascii_uppercase()) {
+        let in_dotted_chain = j > 0 && b[j - 1] == b'.';
+        if !qual.is_empty() && !in_dotted_chain {
             return Ctx::Member(qual.to_string());
         }
     }
@@ -145,6 +179,26 @@ fn general_items(offset: usize, program: Option<&Program>) -> Vec<String> {
 /// multibyte UTF-8 continuation byte is never one of these, so we never split a codepoint.
 fn is_ident_byte(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
+}
+
+/// Parse a completion buffer whose cursor line is a syntax error (the dangling `receiver.`), by
+/// **blanking that line** with spaces (byte-length-preserving, so scope/offset lookups still align)
+/// and parsing the rest. The receiver's declaration (its `var`/param/field, and the enclosing class)
+/// lives on other lines and survives, which is all instance member completion needs. `None` if even
+/// the repaired buffer doesn't lex/parse.
+fn parse_repaired(text: &str, offset: usize) -> Option<Program> {
+    let end = offset.min(text.len());
+    let line_start = text[..end].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    let line_end = text[line_start..]
+        .find('\n')
+        .map(|i| line_start + i)
+        .unwrap_or(text.len());
+    let mut buf = String::with_capacity(text.len());
+    buf.push_str(&text[..line_start]);
+    buf.push_str(&" ".repeat(line_end - line_start));
+    buf.push_str(&text[line_end..]);
+    let tokens = lex(&buf).ok()?;
+    Parser::new(tokens).parse_program().ok()
 }
 
 /// Convert a `file://` document URI to an on-disk path — the SAME minimal handling `diagnostics_for_uri`
@@ -224,16 +278,67 @@ mod tests {
     }
 
     #[test]
-    fn lowercase_receiver_is_not_module_member_completion() {
-        // A lowercase receiver is an instance (type-aware completion is deferred), NOT a Core module —
-        // must fall to general completion, never emit module members for the wrong qualifier.
+    fn unresolved_lowercase_receiver_emits_neither_module_members_nor_keywords() {
+        // A lowercase receiver is an instance, never a Core module → must NOT emit module members. And
+        // an UNRESOLVED receiver (no declared type in scope) emits nothing — member context is
+        // conservative; it must NOT dump general/keyword completions after a `.`.
         let src = "function main(): void {\n  myvar.\n}\n";
         let offset = src.find("myvar.").unwrap() + "myvar.".len();
         let got = labels(&complete(src, offset, None, None));
-        // General context always includes keywords; it must NOT be a members list.
         assert!(
-            got.iter().any(|l| l == "function"),
-            "want keywords in general ctx: {got:?}"
+            !got.iter().any(|l| l == "map"),
+            "no module members: {got:?}"
+        );
+        assert!(
+            !got.iter().any(|l| l == "function"),
+            "member context must not fall back to keywords: {got:?}"
+        );
+    }
+
+    // Instance/type-aware member completion (this./typed-receiver.) — works on the INCOMPLETE buffer
+    // via the repaired parse, resolving the receiver's declared type → the class's members + inherited.
+
+    #[test]
+    fn this_member_completion_includes_own_and_inherited() {
+        let src = "package Main;\n\
+                   class Animal {\n  public string name = \"\";\n  function speak(): void {}\n}\n\
+                   class Dog extends Animal {\n  function bark(): void {}\n  function go(): void {\n    this.\n  }\n}\n";
+        let off = src.find("this.").unwrap() + "this.".len();
+        let got = labels(&complete(src, off, None, None));
+        assert!(got.contains(&"bark".to_string()), "own method: {got:?}");
+        assert!(
+            got.contains(&"speak".to_string()),
+            "inherited method: {got:?}"
+        );
+        assert!(
+            got.contains(&"name".to_string()),
+            "inherited field: {got:?}"
+        );
+    }
+
+    #[test]
+    fn typed_local_member_completion() {
+        // Type-first typed local `Dog d = …` (NOT `var d: Dog` — `var` is the inferred form).
+        let src = "package Main;\n\
+                   class Animal { function speak(): void {} }\n\
+                   class Dog extends Animal { function bark(): void {} }\n\
+                   function main(): void {\n  Dog d = new Dog();\n  d.\n}\n";
+        let off = src.find("  d.").unwrap() + "  d.".len();
+        let got = labels(&complete(src, off, None, None));
+        assert!(got.contains(&"bark".to_string()), "own: {got:?}");
+        assert!(got.contains(&"speak".to_string()), "inherited: {got:?}");
+    }
+
+    #[test]
+    fn inferred_or_unknown_receiver_yields_nothing() {
+        // `var x = …` has no DECLARED type (Type::Infer) → conservative gate emits nothing (never a
+        // wrong member list). Also an undeclared receiver.
+        let src = "package Main;\nfunction main(): void {\n  var x = 1;\n  x.\n}\n";
+        let off = src.find("  x.").unwrap() + "  x.".len();
+        let got = labels(&complete(src, off, None, None));
+        assert!(
+            !got.iter().any(|l| l == "bark" || l == "speak"),
+            "must not invent members for an inferred receiver: {got:?}"
         );
     }
 

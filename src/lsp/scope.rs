@@ -7,7 +7,7 @@
 //! byte range `[item[i].start .. item[i+1].start)`. That is robust without precise end-spans (a decl's
 //! `Span` covers only its keyword/name).
 
-use crate::ast::{ClassMember, Item, Program, Stmt};
+use crate::ast::{ClassMember, Item, Program, Stmt, Type};
 use crate::token::Span;
 
 /// Convert a byte `offset` into 0-based `(line, character)`, counting `character` in Unicode scalars
@@ -208,4 +208,98 @@ fn enclosing_member(members: &[ClassMember], offset: usize) -> Option<&ClassMemb
         }
     }
     None
+}
+
+/// Resolve the declared class/type NAME of a receiver identifier at `offset`, for instance member
+/// completion (`this.` / `myVar.`). `this` → the enclosing class; otherwise the declared `Type::Named`
+/// head of a matching parameter, `var`, class field, or ctor-promoted param in scope. `None` when the
+/// receiver is untyped / inferred (`var x = …`) / out of scope — completion then emits nothing (the
+/// same conservative gate the module-member path uses; a wrong member list is worse than none).
+pub(super) fn receiver_type_name(
+    program: &Program,
+    offset: usize,
+    receiver: &str,
+) -> Option<String> {
+    let item = enclosing_item(program, offset)?;
+    if receiver == "this" {
+        return match item {
+            Item::Class(c) => Some(c.name.clone()),
+            _ => None,
+        };
+    }
+    let ty = match item {
+        Item::Function(f) => typed_binder_in_fn(f, receiver),
+        Item::Class(c) => class_receiver_type(c, offset, receiver),
+        _ => None,
+    }?;
+    named_head(ty)
+}
+
+/// The head name of a nominal type — `Type::Named` (unwrapping a top-level `T?`). `None` for
+/// non-nominal types (union / intersection / function / inferred): there is no single class whose
+/// members we could list.
+fn named_head(ty: &Type) -> Option<String> {
+    match ty {
+        Type::Named { name, .. } => Some(name.clone()),
+        Type::Optional { inner, .. } => named_head(inner),
+        _ => None,
+    }
+}
+
+/// A parameter or local `var` of a function naming `receiver` (declared type only — `var x = expr`
+/// with inferred type yields `Type::Infer`, which `named_head` rejects).
+fn typed_binder_in_fn<'a>(f: &'a crate::ast::FunctionDecl, receiver: &str) -> Option<&'a Type> {
+    for p in &f.params {
+        if p.name == receiver {
+            return Some(&p.ty);
+        }
+    }
+    typed_binder_in_stmts(&f.body, receiver)
+}
+
+/// A local `var <receiver>: T` declared anywhere in `stmts` (a completion hint — scope-precise
+/// nearest-preceding isn't required to name a type).
+fn typed_binder_in_stmts<'a>(stmts: &'a [Stmt], receiver: &str) -> Option<&'a Type> {
+    for s in stmts {
+        if let Stmt::VarDecl { ty, name, .. } = s {
+            if name == receiver {
+                return Some(ty);
+            }
+        }
+    }
+    None
+}
+
+/// The declared type of `receiver` seen from inside class `c`: an instance field or ctor-promoted
+/// param (both are instance members), else a param / local of the enclosing method or constructor.
+fn class_receiver_type<'a>(
+    c: &'a crate::ast::ClassDecl,
+    offset: usize,
+    receiver: &str,
+) -> Option<&'a Type> {
+    for m in &c.members {
+        match m {
+            ClassMember::Field { name, ty, .. } if name == receiver => return Some(ty),
+            ClassMember::Constructor { params, .. } => {
+                for p in params {
+                    if p.name == receiver {
+                        return Some(&p.ty);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    match enclosing_member(&c.members, offset)? {
+        ClassMember::Method(f) => typed_binder_in_fn(f, receiver),
+        ClassMember::Constructor { params, body, .. } => {
+            for p in params {
+                if p.name == receiver {
+                    return Some(&p.ty);
+                }
+            }
+            typed_binder_in_stmts(body, receiver)
+        }
+        _ => None,
+    }
 }
