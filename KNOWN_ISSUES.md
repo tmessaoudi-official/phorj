@@ -90,6 +90,35 @@ Phorj is pre-1.0. This page lists current limitations and known rough edges. Mos
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
 parse error, non-zero exit) — never a crash.
 
+## CRAFT-2026-07-20 — alignment-pass craftsmanship flags (developer to triage; from the lift/transpile/LSP audit)
+
+Batched per the developer's "flawless" directive; each has a location + recommendation. These are the
+best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps are in M-gap-matrix §4.13).
+
+- **CRAFT-1 — file-size (Invariant 13) is massively under-enforced: 90 files over the 500 HARD cap** (174 over
+  the 300 soft cap, of 386 src files). Now RATCHET-frozen by `scripts/size-gate.sh` (pre-push) with the 90
+  grandfathered in `scripts/size-baseline.txt` (may only shrink; new files capped at 500). This is the
+  burn-down backlog. Worst offenders: `src/jit/analyze.rs` 3196 (39 fns + 3 impls — NOT a single-dispatcher
+  exemption, a genuine split candidate), `src/checker/desugar_db.rs` 3144, `src/jit/tests/verticals.rs` 2423,
+  `src/ext/db/natives.rs` 2360, `src/jit/handles.rs` 2280, `src/cli/explain.rs` 1998, `src/jit/emit_unboxed/mod.rs`
+  1987. M-Decomp burns these down as it reaches them.
+- **CRAFT-2 — transpile gated-helper registration is scattered (DRY/SOLID smell): 83 `uses_*` bool flags on
+  `Transpiler`** (`src/transpile/mod.rs`) + **78 set-sites** in `src/transpile/call.rs`. A new gated helper is a
+  3-touch edit (flag decl + set-site + body in `runtime_php.rs`) — easy to half-wire. Recommend consolidating
+  toward a registry-driven helper mechanism (aligns with the DEC-312 `NativeFn` co-registration direction).
+- **CRAFT-3 — one AT-RISK dead-gate (the DEC-191 bug class): `interop_projects_refuse_to_run_and_match_php_golden`
+  (`tests/interop.rs:144`)** early-returns on empty collection instead of asserting a seed count, so it silently
+  passes green if the interop project(s) ever lose their `phorj.toml` marker. All OTHER corpus-iterating gates
+  were audited and have seed guards. Recommend replacing the `if projects.is_empty() { return; }` with a hard
+  `assert!(!projects.is_empty(), …)` like its sibling at line 103.
+- **CRAFT-4 — LSP advertises a capability it doesn't fulfill + completion dies mid-edit.** The server advertises
+  `completionProvider` with a `.` trigger (`src/lsp/mod.rs:436`) but has NO member completion, and `completion()`
+  (`:261`) is parse-dependent: it returns `[]` on incomplete input (e.g. `Output.` mid-type) — useless exactly
+  when completing. Fix is scheduled in the LSP build slice (parse-tolerant completion + member/import/project).
+- **CRAFT-5 — stale "286 natives" figure** repeated across this file (PERF-native-call-in-loop) and M-gap-matrix.
+  Real count is **492 all-features / 465 default** (see C-decisions §2026-07-20 AUDIT CORRECTION). Bench coverage
+  is therefore 40/465 (~8.6%), not 40/286. Correct at each touch.
+
 ## F-032 — overloaded interface-method visibility not checked at declaration (FLAGGED 2026-07-16, DEC-251(c) build)
 
 `E-IFACE-VIS` (DEC-251(c) — a class implementing a public interface method as private/protected is

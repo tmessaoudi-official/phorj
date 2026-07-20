@@ -927,3 +927,52 @@ validators next to the existing 5)** · FN-CRYPT sodium/openssl (5) · FN-STR wo
 soundex/metaphone/strip_tags · **FN-MATH asinh/acosh/atanh (cheap add) + BigInt/GMP** · FN-FILTER
 email/URL validators (Uri.parse exists → cheap wire) · FN-VAR var_export · FN-DATE DatePeriod/getdate ·
 FN-PROC exec/system/proc_open subprocess.
+
+### 4.13 ALIGNMENT MATRIX — feature × {transpile, lift, LSP} (2026-07-20 audit; the lift/transpile/LSP-align pass)
+
+**Purpose:** the bidirectional-alignment audit the 2026-07-20 pass opened with — for every native/feature,
+does it TRANSPILE (Phorj→PHP), LIFT (PHP→Phorj), and surface in the LSP? All figures grep-cited, cross-checked.
+
+**Registry size (corrects the stale "286"):** **492 natives all-features / 465 default** (Core 333 + ext 159;
+pure 374 / impure 118; **34 HigherOrder** re-entrant). "286" was a raw-`grep NativeFn {` undercount (missed
+macro/helper rows). Source: `native::registry()` / `build()` `src/native/mod.rs:339-453`.
+
+**TRANSPILE leg — 96 natives do NOT transpile (of 492):**
+| Gap | Count | Code | Disposition (DEC-313) |
+|---|---|---|---|
+| Core.Native.Database | 40 | E-TRANSPILE-DB | PERMANENT (live I/O ≠ byte-identical) |
+| Core.Native.Mail | 21 | E-TRANSPILE-MAIL | PERMANENT (SMTP/TLS, injection) |
+| Core.Native.FileSystem | 18 | E-TRANSPILE-FS | **BUILDABLE → build it** (msg text out-of-contract) |
+| Core.Native.Session | 7 | E-TRANSPILE-SESSION | **PERMANENT** (entropy sids + wall-clock TTL + persistent store) |
+| Core.Native.HttpClient | 6 | E-TRANSPILE-HTTPCLIENT | PERMANENT (live network I/O) |
+| Core.String Unicode tier | 4 | E-TRANSPILE-UNICODE | PERMANENT-per-call (mbstring/intl forbidden; codepoint tier transpiles) |
+Plus non-native gates: `#[UncheckedOverflow]` fns (E-TRANSPILE-UNCHECKED), `spawn`/channels (E-CONCURRENCY-NO-PHP).
+Everything else transpiles via the `NativeFn.php` emitter (`src/native/mod.rs:66`). Transpile leg is ~healthy.
+
+**LIFT leg — the biggest gap: NO inverse native table at all.** `src/lift/lifter/*` has zero Core mapping
+(only `echo`→`Core.Output`, `decls.rs:75`); a PHP `strlen($s)` lifts to an unresolved `strlen` call. Of 631 PHP
+FN builtins: **~124 already have a forward Core equivalent** in transpile emitters (directly invertible — the
+build seed), ~507 have no Core equivalent, 99 emitters use `__phorj_*` shims (need an idiom recognizer).
+High-fan-in invertible builtins: `count`(19 emitters), `preg_match`(16), `array_values`(12), `implode`/`array_map`/
+`array_merge`(9/7/7), `strlen`(6). Tier-2 loud-refusals (`src/lift/lifter/exprs.rs`+`decls.rs`): assign/`++`/`--`
+as sub-expr, elvis, mixed keyed/positional array, enum-with-methods, default params, untyped fn/field, `array`
+type needing List/Map/Set inference. **Fix = DEC-312** (`lift_from` facet on `NativeFn`; lifter derives its table
+from the registry — one bidirectional SSOT).
+
+**LSP leg — completion is skeletal + consumes zero registries.** `completion()` (`src/lsp/mod.rs:261`) returns
+only current-buffer top-levels + locals + keywords; it's parse-dependent (returns `[]` on incomplete input like
+`Output.` mid-type — verified live over stdio). NO member completion, NO import-path completion, NO Core-module/
+native completion, NO project scan. The `.` trigger is advertised (`mod.rs:436`) but unfulfilled. Registries: 
+`native::registry()`+`ext::EXTENSIONS` already `pub`; `CORE_MODULES` is `pub(super)` (`preludes.rs:869`), loader
+`index_packages`/`peek_package`/`discover_roots` private (`src/loader/mod.rs`); `views/` not a search root. DEC-252
+diagnostics ARE shared (`front_end_diagnostics`, drift-guarded). Fix = the LSP build slice (one enumeration API +
+member/import/project completion + parse-tolerant cursor). Editors: vscode = thin client (surfaces server); phpstorm
+= README stub, LSP4IJ path (server speaks correct LSP over stdio — verified).
+
+**PERF leg (Invariant 18):** 40/465 natives benched (~8.6%, not 40/286). 30 wins / 16 losses. Loss classes:
+#2b-winnable (mapmerge, stringcontains, the reduces) · physics-blocked linear-vs-C (listcontains/listfilter/
+sumBy/minBy/maxBy — need representation work) · front-end-blocked (mapkeys/mapvalues — `List<Map>` not JIT-eligible,
+`analyze.rs:1502`). isEmail/isUrl NOT benched. #2b (dispatch-overhead) = DEC-314 fresh-context slice.
+
+**Craftsmanship flags:** see KNOWN_ISSUES §CRAFT-2026-07-20 (90 files >500-cap; 83 scattered `uses_*` flags;
+1 at-risk dead-gate `interop.rs:144`; LSP advertises-but-doesn't-fulfill; stale-286).

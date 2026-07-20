@@ -2427,3 +2427,49 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   sweep them — split with reset --soft); piping git-diff through the RTK proxy can false-clean
   (grep an on-disk file). Remaining extension migrations (di — checker-desugar-coupled; log/time/
   runtime classification) = wave 4; html stays a core seam.
+
+## 2026-07-20 lift/transpile/LSP-alignment pass — audit rulings (developer via AskUserQuestion)
+
+- **DEC-312 — LIFT INVERSE REGISTRY = a `lift_from` facet on `NativeFn` (developer-ruled 2026-07-20).**
+  Problem surfaced by the alignment audit: the lifter (`src/lift/`) has **NO inverse native table** — a PHP
+  `strlen($s)` lifts to an unresolved `strlen` call, never `Core.String.length`. Transpile is registry-driven
+  (`NativeFn.php: fn(&[String])->String`, `src/native/mod.rs:66`) but lift is a wholly separate hand-written
+  frontend, so Invariant-17 "same change" is a review convention, not a structural guarantee — the prime
+  drift source. Of the 631 PHP FN builtins, **~124 already have a forward Core equivalent** baked into a
+  transpile emitter (directly invertible); ~507 have no Core equivalent; 99 emitters use `__phorj_*` shims.
+  RULING (recommended option): add an optional field `lift_from: &'static [&'static str]` to `NativeFn`
+  naming the PHP builtin(s) this native inverts, so transpile AND lift are **co-registered on ONE row** — the
+  lifter derives its PHP-builtin→Core table from `native::registry()`. One bidirectional single source of
+  truth; kills lift/transpile drift structurally. Alternatives rejected: standalone hand-authored LiftMap
+  (a second place to forget); auto-derive by inverting the `php:` closures (fragile — `fn`s not cleanly
+  invertible, 99 `__phorj_*` shims). Build: seed `lift_from` from the 124; lifter resolves builtins → Core
+  calls; the `__phorj_*`-shim natives need a later idiom recognizer (tracked, not in v1).
+
+- **DEC-313 — LADDER "yet" quarantines: BUILD FS transpile, SESSION becomes PERMANENT (developer-ruled 2026-07-20).**
+  `E-TRANSPILE-FS` and `E-TRANSPILE-SESSION` both say "yet" (buildable). Audit verdict: **FS is buildable** —
+  every `Core.Native.FileSystem` native (18, `src/native/fs.rs`) maps to a faithful PHP builtin
+  (file_get_contents/file_put_contents/mkdir/scandir/unlink/copy/rename/filesize/is_dir…), listings are
+  pre-sorted both legs (byte-identical by construction), and the 7-way error KIND classification is
+  reconstructable in PHP. The ONE obstacle is the raw OS-errno text embedded in `e.message` (Rust
+  `std::io::Error` Display). RULING: **build the FS emitter** (`__phorj_fs_*` helpers + kind reconstruction),
+  **declaring exception-MESSAGE text OUT-OF-CONTRACT** — the error KIND is the byte-identity contract, and the
+  differential oracle already asserts only the kind (`tests/fs.rs`), never the raw message. **SESSION =
+  reclassify PERMANENT** (like DB/Mail): its nondeterministic entropy session-ids (user-observable via
+  `Session.id()`), wall-clock TTL (`Instant::now()`, not the freezable `Core.Time` clock), and persistent
+  in-process store vs PHP's per-request `$_SESSION` model make it not byte-identically transpilable — its
+  "yet" was optimistic. Update `explain.rs` accordingly.
+
+- **DEC-314 — PERF #2b (general VM→native dispatch-overhead reduction) = a FRESH-CONTEXT build slice (developer-ruled 2026-07-20).**
+  #2b (reduce the ~188ns/call `Op::CallNative` dispatch at `src/vm/exec.rs:434`, lifting all ~465 natives at
+  once) is the deepest VM/JIT spine change and the only lever that can move the linear/alloc-bound losses;
+  more per-op verticals are exhausted (structural finding, DEC-311). RULING: build it as the **first build
+  slice in a FRESH session** (honors the standing JIT-fresh-context rule — depth-induced slips are the
+  ctype-class risk), with the ~188ns baseline pre-measured. Note the environment reality: canonical vs-php
+  perf can't run in the remote container (org egress blocks php-8.5 via apt Launchpad AND docker CDN); the
+  vs-8.5 verdict + ratchet-ARMING (`microbench-gate.sh --emit`) happen on an 8.5-capable box.
+
+- **AUDIT CORRECTION (2026-07-20): the "286 natives" figure repeated across KNOWN_ISSUES/M-gap-matrix is STALE.**
+  Cross-checked two ways, the real registry is **492 all-features / 465 default** (Core 333 + ext 159; pure
+  374 / impure 118; 34 HigherOrder). "286" is an old raw-`grep NativeFn {` undercount (misses macro/helper-
+  generated rows: Html tag macros, Math `unary_float`, Uri getters, per-`entry()` builders). Consequence:
+  perf bench coverage is 40/465 (~8.6%), thinner than the "40/286" claimed. Fix the figure at each doc touch.
