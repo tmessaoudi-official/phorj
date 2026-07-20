@@ -16,8 +16,11 @@ Don't stop unless to ask a question. Per-vertical bar HOLDS (independent gate + 
 first [◐ IN PROGRESS: ✅ **List.sumBy** DONE — higher-order projection sum, byte-identical run≡runvm≡php + example +
 transpile `array_sum(array_map)`, full --all-features gate green 2331, advisor 6C; perf FLAGGED 0.36× = listfilter class
 (higher-order re-entrant, un-JIT-flippable), LOSS-armed. Genuine remaining companion gaps grep-verified: Map.update,
-List.scan/windowed/associateBy/countBy] → (3.2) List.minBy/maxBy — ONE adjudication (Comparable bound: non-scalar key PHP-loose-< vs Rust compare_ord)
-then build → (3.3) FILTER email/URL — adjudication + fiddly filter_var byte-identity → (3.4) exception backtrace
+List.scan/windowed/associateBy/countBy] ✅ **(3.2) List.minBy/maxBy DONE** — projection siblings of min/max (T?,
+natural_cmp on selector, FIRST-wins tie-break byte-identical both legs + tie differential test, example, gated
+__phorj_min_by/max_by helpers, full --all-features gate 2333, advisor 6C; perf FLAGGED minBy 0.16×/maxBy 0.17× =
+higher-order class, LOSS-armed). Rule-11: NOT the forked slice the handoff feared — mirrors min/max precedent, no
+Comparable-bound adjudication needed → ⏳ **(3.3) FILTER email/URL NEXT** — adjudication + fiddly filter_var byte-identity → (3.4) exception backtrace
 (getTrace family, contained) THEN generators/yield LAST in a FRESH session (deepest VM control-flow spine, standing rule).
 DoD each: byte-identity run≡runvm≡php + example (Inv-9) + transpile+lift + full --all-features gate + advisor 6C → commit.
 

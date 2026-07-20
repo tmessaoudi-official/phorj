@@ -1214,6 +1214,28 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `List.minBy` / `List.maxBy` — the ELEMENT whose selector key `$f($x)` is min / max, FIRST-wins
+        // on ties (strict `<`/`>`). The selector fires once per element (a first-seen `$has` flag, never
+        // a primed element-0 double-call) and the key is compared with the same `strcmp`/`<=>` dispatch
+        // as `__phorj_min`/`_max` — byte-identical to the `list_min_by`/`_max_by` fold on both backends.
+        if self.uses_list_min_by {
+            self.line("function __phorj_min_by($xs, $f) {");
+            self.indent += 1;
+            self.line("$best = null; $bk = null; $has = false;");
+            self.line("foreach ($xs as $x) { $k = $f($x); if (!$has || (is_string($k) ? strcmp($k, $bk) : ($k <=> $bk)) < 0) { $best = $x; $bk = $k; $has = true; } }");
+            self.line("return $best;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_list_max_by {
+            self.line("function __phorj_max_by($xs, $f) {");
+            self.indent += 1;
+            self.line("$best = null; $bk = null; $has = false;");
+            self.line("foreach ($xs as $x) { $k = $f($x); if (!$has || (is_string($k) ? strcmp($k, $bk) : ($k <=> $bk)) > 0) { $best = $x; $bk = $k; $has = true; } }");
+            self.line("return $best;");
+            self.indent -= 1;
+            self.line("}");
+        }
         // `List.find` / `any` / `all` — SHORT-CIRCUITING (`foreach` + early `return`), so a
         // side-effecting predicate runs on exactly the same prefix as the Rust backends.
         if self.uses_list_find {

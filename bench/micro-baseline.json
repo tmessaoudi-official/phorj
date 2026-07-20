@@ -176,6 +176,14 @@
     "webish": {
       "ratio": 2.782,
       "identical": true
+    },
+    "minby": {
+      "ratio": 0.161,
+      "identical": true
+    },
+    "maxby": {
+      "ratio": 0.171,
+      "identical": true
     }
   }
 }

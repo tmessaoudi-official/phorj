@@ -1719,6 +1719,14 @@ caveats (the `run`/`runvm` spine is always byte-identical):
   higher-order native (a re-entrant VM callback per element), the same structurally-un-JIT-flippable class as
   `listfilter` 0.22× / `listreduce` 0.27× (php's `array_map` closure dispatch is tuned C). Recorded LOSS-armed in
   the baseline; no per-op JIT vertical applies (the callback can't be inlined). Accepted loss.
+- **`List.minBy`/`maxBy`** — the projection siblings of `List.min`/`max` (return the ELEMENT whose selector value
+  `fn(x)` is extreme; `T?`, empty→null; `natural_cmp` on the selector RESULT, same comparator as min/max). **TIE-BREAK
+  = FIRST-wins** (Kotlin convention) enforced BYTE-IDENTICALLY on both legs: the Rust fold replaces the best only on a
+  STRICTLY-better key (NOT `Iterator::max_by`, which is last-wins), and `__phorj_min_by`/`__phorj_max_by` use strict
+  `<`/`>` keeping the first — proven by a tie differential test (two distinct elements sharing the extreme key → the
+  first is returned on all three backends). Inherits min/max's non-scalar-key caveat (`natural_cmp` vs php loose `<=>`;
+  use scalar selector keys). **Perf (flip-or-flag): FLAGGED — minBy 0.16× / maxBy 0.17× vs php** (higher-order, the
+  sumBy/listfilter class; LOSS-armed, no vertical applies).
 - **`Map.keys`/`values`/`entries` key coercion** — see the *Maps* note above: PHP coerces integer-like
   string keys and bools to int keys, so use plain string keys for byte-identical PHP round-tripping
   (`entries` renders the key, so a bool-keyed map diverges on the transpile leg — DEC-288).

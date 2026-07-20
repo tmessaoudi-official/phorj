@@ -809,6 +809,30 @@ import Core.List;
     );
 }
 
+/// `List.minBy`/`List.maxBy` (higher-order): the ELEMENT whose selector key is min/max, FIRST-wins on
+/// ties. This is THE parity-critical case — unlike `min`/`max` (tied scalars are the same value, so the
+/// choice is invisible), DISTINCT elements can share a selector key, so which one is returned MUST be
+/// byte-identical across interp/VM/php. `Bea` and `Cy` both have age 25 (the min); `Ada` and `Dov` both
+/// have 41 (the max). First-wins ⇒ minBy→Bea, maxBy→Ada on ALL three legs (a `max_by`/last-wins fold, or
+/// a PHP helper priming from element 0, would pick `Cy`/`Dov` and diverge). Also covers empty→null.
+#[test]
+fn list_min_by_max_by_tie_break_is_first_wins_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.List;
+class Person { constructor(public string name, public int age) {} }
+#[Entry] function main() -> void {
+    List<Person> ps = [new Person("Ada", 41), new Person("Bea", 25), new Person("Cy", 25), new Person("Dov", 41)];
+    Output.printLine("min={List.minBy(ps, function(Person p) => p.age)?.name ?? "?"}");
+    Output.printLine("max={List.maxBy(ps, function(Person p) => p.age)?.name ?? "?"}");
+    List<Person> none = new List<Person>();
+    Output.printLine("empty={List.minBy(none, function(Person p) => p.age)?.name ?? "<none>"}");
+}"#,
+        "min=Bea\nmax=Ada\nempty=<none>\n",
+        "list_min_by_max_by_tie",
+    );
+}
+
 /// Wave-B (DEC-304): `Map.containsValue` — value-side membership (the companion to `has`, which tests
 /// keys). Structural `eq_val`, erases to strict `in_array(needle, map, true)` (scans values, ignores
 /// keys) — byte-identical run≡runvm≡php for scalar values; covers present, absent, and an empty map.

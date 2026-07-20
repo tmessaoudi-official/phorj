@@ -605,3 +605,52 @@ pub(super) fn list_sum_by(args: &[Value], call: &mut ClosureInvoker) -> Result<V
         _ => Err("List.sumBy expects (List<T>, (T) -> int)".into()),
     }
 }
+
+/// `List.minBy(List<T>, (T) -> K) -> T?` / `List.maxBy(List<T>, (T) -> K) -> T?` — the ELEMENT whose
+/// selector value `fn(x)` is minimal / maximal (Kotlin `minByOrNull`/`maxByOrNull`), or `null` for an
+/// empty list. The selector RESULTS are compared with `natural_cmp` — the SAME byte-order comparator
+/// `min`/`max` use (strings via `strcmp`, not PHP's numeric-string juggling); the returned element `T`
+/// need NOT itself be comparable. The selector runs once per element on the calling backend via the
+/// re-entrant invoker.
+///
+/// TIE-BREAK IS PARITY-AFFECTING: unlike `min`/`max` (tied scalars ARE the same value, so which one is
+/// returned is invisible), distinct elements can produce EQUAL selector keys — so first-vs-last MUST be
+/// identical across interp/VM/php. Spec: FIRST-wins (the earliest element achieving the extreme key).
+/// The fold replaces the running best ONLY on a STRICTLY better key (`Less` for min / `Greater` for
+/// max), so a tie keeps the first element — this is why the fold is manual and NOT `Iterator::max_by`
+/// (which returns the LAST maximum on ties). The selector fires once per element (first-seen `best`
+/// init, never a primed element-0 double-call), matching the `__phorj_min_by`/`_max_by` PHP helpers.
+pub(super) fn list_min_by(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    list_extreme_by(args, call, Ordering::Less, "minBy")
+}
+pub(super) fn list_max_by(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    list_extreme_by(args, call, Ordering::Greater, "maxBy")
+}
+/// Shared fold behind `minBy`/`maxBy`: keep the first element whose selector key is `better` than the
+/// running best (STRICT — ties keep the incumbent → FIRST-wins). One selector call per element.
+fn list_extreme_by(
+    args: &[Value],
+    call: &mut ClosureInvoker,
+    better: Ordering,
+    name: &str,
+) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            // (element, selector-key) of the running best; `None` until the first element is seen so
+            // the selector fires exactly once per element (no primed element-0 double-invocation).
+            let mut best: Option<(Value, Value)> = None;
+            for x in xs.iter() {
+                let key = call(f, vec![x.clone()])?;
+                let take = match &best {
+                    None => true,
+                    Some((_, best_key)) => natural_cmp(&key, best_key) == better,
+                };
+                if take {
+                    best = Some((x.clone(), key));
+                }
+            }
+            Ok(best.map_or(Value::Null, |(elem, _)| elem))
+        }
+        _ => Err(format!("List.{name} expects (List<T>, (T) -> K)")),
+    }
+}

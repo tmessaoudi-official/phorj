@@ -7,6 +7,10 @@ use crate::types::Ty;
 pub(crate) fn list_natives() -> Vec<NativeFn> {
     let t = || Ty::Param("T".into());
     let u = || Ty::Param("U".into());
+    // `minBy`/`maxBy`'s selector result var: like `map`'s `U`, but it appears ONLY in the selector's
+    // return position and never in the native's result (`Optional(T)`) — the checker binds it in `θ`
+    // and simply never substitutes it (unify recurses into `Ty::Function` returns; overloads.rs).
+    let k = || Ty::Param("K".into());
     let list = |e: Ty| Ty::List(Box::new(e));
     vec![
         NativeFn {
@@ -523,6 +527,36 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(list_sum_by),
             php: |a| format!("array_sum(array_map({}, {}))", parg(a, 1), parg(a, 0)),
+        },
+        // `minBy(List<T>, (T) -> K) -> T?` / `maxBy(List<T>, (T) -> K) -> T?` — the element whose
+        // selector value is minimal / maximal (Kotlin `minByOrNull`/`maxByOrNull`), null for an empty
+        // list. Selector RESULTS compared with the `min`/`max` byte-order (`natural_cmp` ≡ the PHP
+        // `strcmp`/`<=>` dispatch); FIRST-wins on ties (the `__phorj_min_by`/`_max_by` helpers keep the
+        // first via a strict `<`/`>` + first-seen flag — parity-affecting, since distinct elements can
+        // share a key). The selector result var `K` appears only in the arg (see the `k` closure above).
+        NativeFn {
+            module: "Core.List",
+            name: "minBy",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(k()), Vec::new()),
+            ],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_min_by),
+            php: |a| format!("__phorj_min_by({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "maxBy",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(k()), Vec::new()),
+            ],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_max_by),
+            php: |a| format!("__phorj_max_by({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

@@ -598,6 +598,85 @@ fn list_min_max_byte_order_and_empty() {
 }
 
 #[test]
+fn list_min_max_by_first_wins_on_tie_and_calls_selector_once_per_element() {
+    use std::cell::Cell;
+    // Distinct elements; selector keys chosen so TWO share the min (25) AND two share the max (41).
+    // FIRST-wins: the earliest element achieving the extreme key is returned — the fold uses a STRICT
+    // better-than compare, so a tie keeps the incumbent (NOT `Iterator::max_by`, which returns the LAST
+    // maximum). Distinct element identities make first-vs-last observable, which equal keys never would.
+    let people = Value::List(Rc::new(vec![
+        Value::Str("Ada".into()), // key 41  <- first max
+        Value::Str("Bea".into()), // key 25  <- first min
+        Value::Str("Cy".into()),  // key 25  <- min tie, must NOT win
+        Value::Str("Dov".into()), // key 41  <- max tie, must NOT win
+    ]));
+    let key_of = |a: &[Value]| match a {
+        [Value::Str(s)] => match s.as_str() {
+            "Ada" | "Dov" => 41,
+            "Bea" | "Cy" => 25,
+            _ => 0,
+        },
+        _ => -1,
+    };
+    // A `Cell` counter proves the selector fires exactly once per element (no primed element-0
+    // double-call — the parity contract the `__phorj_min_by`/`_max_by` PHP helpers must also honour).
+    let calls = Cell::new(0usize);
+    let mut sel = |_f: &Value, a: Vec<Value>| {
+        calls.set(calls.get() + 1);
+        Ok(Value::Int(key_of(&a)))
+    };
+    let placeholder = Value::Int(0);
+
+    // minBy: Bea and Cy tie at 25 -> the FIRST (Bea) is returned; selector fires once per element (4).
+    assert!(matches!(
+        list_min_by(&[people.clone(), placeholder.clone()], &mut sel),
+        Ok(Value::Str(s)) if s == "Bea"
+    ));
+    assert_eq!(calls.get(), 4);
+    // maxBy: Ada and Dov tie at 41 -> the FIRST (Ada) is returned.
+    calls.set(0);
+    assert!(matches!(
+        list_max_by(&[people.clone(), placeholder.clone()], &mut sel),
+        Ok(Value::Str(s)) if s == "Ada"
+    ));
+    assert_eq!(calls.get(), 4);
+
+    // Empty list -> null; the selector is never called.
+    let empty = Value::List(Rc::new(vec![]));
+    let mut never = |_f: &Value, _a: Vec<Value>| Err("must not be called".to_string());
+    assert!(matches!(
+        list_min_by(&[empty.clone(), placeholder.clone()], &mut never),
+        Ok(Value::Null)
+    ));
+    assert!(matches!(
+        list_max_by(&[empty, placeholder], &mut never),
+        Ok(Value::Null)
+    ));
+
+    // PHP erasure + registry wiring: gated first-wins helpers, `Optional(T)` return, leaf ≡ qualified.
+    assert_eq!(
+        (registry()[index_of("Core.List", "minBy").unwrap()].php)(&["$xs".into(), "$fn".into()]),
+        "__phorj_min_by($xs, $fn)"
+    );
+    assert_eq!(
+        (registry()[index_of("Core.List", "maxBy").unwrap()].php)(&["$xs".into(), "$fn".into()]),
+        "__phorj_max_by($xs, $fn)"
+    );
+    assert_eq!(
+        registry()[index_of("Core.List", "minBy").unwrap()].ret,
+        Ty::Optional(Box::new(Ty::Param("T".into())))
+    );
+    assert_eq!(
+        index_of_by_leaf("List", "minBy"),
+        index_of("Core.List", "minBy")
+    );
+    assert_eq!(
+        index_of_by_leaf("List", "maxBy"),
+        index_of("Core.List", "maxBy")
+    );
+}
+
+#[test]
 fn list_is_empty_flatten_and_count() {
     let mut o = String::new();
     // isEmpty

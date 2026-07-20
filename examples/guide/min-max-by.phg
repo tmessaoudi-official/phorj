@@ -1,0 +1,39 @@
+// `Core.List.minBy` / `Core.List.maxBy` — the ELEMENT whose selector value `fn(x)` is minimal /
+// maximal (Kotlin `minByOrNull`/`maxByOrNull`), or `null` for an empty list. Higher-order siblings of
+// `min`/`max`: the selector runs once per element on whichever backend is running, via one shared
+// native body. The selector RESULTS are compared (with the same byte-order as `min`/`max`); the ELEMENT
+// is returned, so the element type need NOT be comparable — only the selector's key type.
+//
+// TIE-BREAK is byte-identical FIRST-wins: when two DISTINCT elements share the extreme key, the FIRST
+// one is returned on every backend (interp / VM / real PHP). The `Bea` vs `Cy` pair below both have
+// age 25 (the min) — `minBy` returns `Bea` (earlier in the list). Erases to gated
+// `__phorj_min_by`/`__phorj_max_by` helpers (strict `<`/`>`, first-seen), byte-identical to real PHP.
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Runtime.Entry;
+
+class Person {
+    constructor(public string name, public int age) {}
+}
+
+#[Entry]
+function main(): void {
+    List<Person> people = [
+        new Person("Ada", 30),
+        new Person("Bea", 25),
+        new Person("Cy", 25),
+        new Person("Dov", 41)
+    ];
+    // Youngest / oldest by the `age` selector — the ELEMENT is returned, printed via its `name` field.
+    Output.printLine("youngest = {List.minBy(people, function(Person p) => p.age)?.name ?? \"?\"}");
+    Output.printLine("oldest   = {List.maxBy(people, function(Person p) => p.age)?.name ?? \"?\"}");
+    // TIE: Bea and Cy both have the min age (25); minBy returns the FIRST (Bea), first-wins parity.
+    Output.printLine("tie(min) = {List.minBy(people, function(Person p) => p.age)?.name ?? \"?\"}");
+    // Empty list -> null (the selector is never called); `?.`/`??` render the absence.
+    List<Person> none = new List<Person>();
+    Output.printLine(
+        "empty    = {List.minBy(none, function(Person p) => p.age)?.name ?? \"<none>\"}"
+    );
+}

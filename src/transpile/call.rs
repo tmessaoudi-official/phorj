@@ -230,6 +230,8 @@ impl Transpiler {
                                 "intersection" => self.uses_list_intersection = true,
                                 "min" => self.uses_list_min = true,
                                 "max" => self.uses_list_max = true,
+                                "minBy" => self.uses_list_min_by = true,
+                                "maxBy" => self.uses_list_max_by = true,
                                 "find" => self.uses_list_find = true,
                                 "any" => self.uses_list_any = true,
                                 "none" => self.uses_list_none = true,
