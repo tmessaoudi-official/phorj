@@ -59,7 +59,7 @@ pub(super) fn arm_match_tag(
     }
     // The popped cell's tag word (source depth = kinds.len() AFTER the pop).
     let tv = b.use_var(evars[kinds.len()]);
-    let r = b.ins().icmp_imm(IntCC::Equal, tv, tag);
+    let r = b.ins().icmp_imm_s(IntCC::Equal, tv, tag);
     let r64 = b.ins().uextend(types::I64, r);
     ub_push(b, vars, fvars, kinds, r64, Kind::Bool)
 }

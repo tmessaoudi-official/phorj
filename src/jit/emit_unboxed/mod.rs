@@ -73,11 +73,11 @@ impl Ec {
     fn slot_push(&self, b: &mut FunctionBuilder, v: ClValue) {
         let fsp = b.ins().load(types::I64, self.stable, self.ctx, 8);
         let ft = b.ins().load(types::I64, MemFlagsData::new(), self.ctx, 16);
-        let slot = b.ins().band_imm(v, UB_IDX_MASK);
-        let foff = b.ins().ishl_imm(ft, 2);
+        let slot = b.ins().band_imm_s(v, UB_IDX_MASK);
+        let foff = b.ins().ishl_imm_s(ft, 2);
         let faddr = b.ins().iadd(fsp, foff);
         b.ins().istore32(MemFlagsData::new(), slot, faddr, 0);
-        let ft1 = b.ins().iadd_imm(ft, 1);
+        let ft1 = b.ins().iadd_imm_s(ft, 1);
         b.ins().store(MemFlagsData::new(), ft1, self.ctx, 16);
     }
 
@@ -85,7 +85,7 @@ impl Ec {
     /// element or pinned const is compile-time Owned but runtime-borrowed — the free is a no-op).
     /// Used only where the operand is already known slot-tagged (the inline fast paths).
     fn slot_free_if_owned(&self, b: &mut FunctionBuilder, v: ClValue) {
-        let owned_bit = b.ins().band_imm(v, UB_TAG_OWNED);
+        let owned_bit = b.ins().band_imm_s(v, UB_TAG_OWNED);
         let push_blk = b.create_block();
         let cont = b.create_block();
         b.ins().brif(owned_bit, push_blk, &[], cont, &[]);
@@ -107,10 +107,10 @@ impl Ec {
         let ft = b.ins().load(types::I64, MemFlagsData::new(), self.ctx, 16);
         b.ins().brif(ft, pop_blk, &[], bump_blk, &[]);
         b.switch_to_block(pop_blk);
-        let ft1 = b.ins().iadd_imm(ft, -1);
+        let ft1 = b.ins().iadd_imm_s(ft, -1);
         b.ins().store(MemFlagsData::new(), ft1, self.ctx, 16);
         let fsp = b.ins().load(types::I64, self.stable, self.ctx, 8);
-        let foff = b.ins().ishl_imm(ft1, 2);
+        let foff = b.ins().ishl_imm_s(ft1, 2);
         let faddr = b.ins().iadd(fsp, foff);
         let popped = b.ins().uload32(MemFlagsData::new(), faddr, 0);
         b.ins().jump(alloc_done, &[popped.into()]);
@@ -119,7 +119,7 @@ impl Ec {
         let cap = b.ins().load(types::I64, self.stable, self.ctx, 32);
         let full = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, bp, cap);
         self.fault_if(b, full, 5);
-        let bp1 = b.ins().iadd_imm(bp, 1);
+        let bp1 = b.ins().iadd_imm_s(bp, 1);
         b.ins().store(MemFlagsData::new(), bp1, self.ctx, 24);
         b.ins().jump(alloc_done, &[bp.into()]);
         b.switch_to_block(alloc_done);
@@ -166,21 +166,21 @@ fn emit_arg_clone(
     let chk_slot = b.create_block();
     if repr != 2 {
         // FLAT is a list-word encoding only.
-        let flat_bit = b.ins().band_imm(v, UB_TAG_FLAT);
+        let flat_bit = b.ins().band_imm_s(v, UB_TAG_FLAT);
         b.ins().brif(flat_bit, merge, &[v.into()], chk_slot, &[]);
     } else {
         b.ins().jump(chk_slot, &[]);
     }
     b.switch_to_block(chk_slot);
-    let x = b.ins().band_imm(v, UB_TAG_SLOT | UB_TAG_OWNED);
-    let borrowed_slot = b.ins().icmp_imm(IntCC::Equal, x, UB_TAG_SLOT);
+    let x = b.ins().band_imm_s(v, UB_TAG_SLOT | UB_TAG_OWNED);
+    let borrowed_slot = b.ins().icmp_imm_s(IntCC::Equal, x, UB_TAG_SLOT);
     b.ins()
         .brif(borrowed_slot, merge, &[v.into()], clone_blk, &[]);
     b.switch_to_block(clone_blk);
     let reprv = b.ins().iconst(types::I64, repr);
     let call = b.ins().call(h.clone_value, &[ec.ctx, v, reprv]);
     let cv = b.inst_results(call)[0];
-    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, cv, 0);
+    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, cv, 0);
     ec.fault_if(b, bad, 5);
     b.ins().jump(merge, &[cv.into()]);
     b.switch_to_block(merge);
@@ -338,7 +338,7 @@ fn emit_call_to(
     let dmax = b.ins().iconst(types::I64, MAX_CALL_DEPTH as i64);
     let too_deep = b.ins().icmp(IntCC::SignedGreaterThanOrEqual, depth, dmax);
     ec.fault_if(b, too_deep, 5); // ovf-spec: stack-overflow → redo on VM (code 5)
-    let d1 = b.ins().iadd_imm(depth, 1);
+    let d1 = b.ins().iadd_imm_s(depth, 1);
     let mut call_args: Vec<ClValue> = Vec::with_capacity(cargs.len() + 2);
     call_args.push(ctx);
     call_args.push(d1);
@@ -354,18 +354,18 @@ fn emit_call_to(
     match throwing {
         // Non-throwing graph: code 0 or 5 only — the 2-way fast dispatch.
         None => {
-            let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
+            let is_fault = b.ins().icmp_imm_s(IntCC::NotEqual, ccode, 0);
             b.ins().brif(is_fault, fx, &[ccode.into()], cont, &[]);
         }
         // Throwing graph: 0 → continue; 6 → route the thrown payload (unwind to the active
         // pad, or forward `(payload, 6)` out of this frame); else → fault-exit (redo on VM).
         Some(ts) => {
             let not_ok = b.create_block();
-            let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
+            let is_fault = b.ins().icmp_imm_s(IntCC::NotEqual, ccode, 0);
             b.ins().brif(is_fault, not_ok, &[], cont, &[]);
             b.switch_to_block(not_ok);
             let thrown_blk = b.create_block();
-            let is_thrown = b.ins().icmp_imm(IntCC::Equal, ccode, 6);
+            let is_thrown = b.ins().icmp_imm_s(IntCC::Equal, ccode, 6);
             b.ins()
                 .brif(is_thrown, thrown_blk, &[], fx, &[ccode.into()]);
             b.switch_to_block(thrown_blk);
@@ -696,7 +696,7 @@ pub(super) fn build_body_unboxed(
     for &(slot, gmax) in &entry_guards {
         let fx = fault_exit.expect("entry guards imply needs_fault_exit");
         let v = b.use_var(vars[slot]);
-        let over = b.ins().icmp_imm(IntCC::SignedGreaterThan, v, gmax);
+        let over = b.ins().icmp_imm_s(IntCC::SignedGreaterThan, v, gmax);
         let cv = b.ins().iconst(types::I64, 5);
         let cont = b.create_block();
         b.ins().brif(over, fx, &[cv.into()], cont, &[]);
@@ -826,7 +826,7 @@ pub(super) fn build_body_unboxed(
                             let old = b.use_var(vars[*s]);
                             let call = b.ins().call(h.list_acc_reseed, &[ec.ctx, old, vv]);
                             let sres = b.inst_results(call)[0];
-                            let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                            let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
                             ec.fault_if(&mut b, bad, 5);
                             b.def_var(vars[*s], sres);
                             kinds[*s] = Kind::IntList(Own::Owned);
@@ -855,7 +855,7 @@ pub(super) fn build_body_unboxed(
                                 let old = b.use_var(vars[*s]);
                                 let call = b.ins().call(h.map_builder_seed, &[ec.ctx, old, iv, vv]);
                                 let sres = b.inst_results(call)[0];
-                                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                                let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
                                 ec.fault_if(&mut b, bad, 5);
                                 b.def_var(vars[*s], sres);
                                 kinds[*s] = Kind::StrIntMap(Own::Owned);
@@ -946,7 +946,7 @@ pub(super) fn build_body_unboxed(
                         let (bv, bk) = if bk0 == Kind::Int {
                             let call = b.ins().call(h.int_to_str, &[ec.ctx, bv0]);
                             let rv = b.inst_results(call)[0];
-                            let bad = b.ins().icmp_imm(IntCC::SignedLessThan, rv, 0);
+                            let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, rv, 0);
                             ec.fault_if(&mut b, bad, 5);
                             (rv, Kind::Str(Own::Owned))
                         } else {
@@ -1019,7 +1019,7 @@ pub(super) fn build_body_unboxed(
                 let call = b.ins().call(h.native2, &[ec.ctx, idv, av, bv, metav]);
                 let sval = b.inst_results(call)[0];
                 let scode = b.inst_results(call)[1];
-                let bad = b.ins().icmp_imm(IntCC::NotEqual, scode, 0);
+                let bad = b.ins().icmp_imm_s(IntCC::NotEqual, scode, 0);
                 ec.fault_if(&mut b, bad, 5);
                 ub_push(&mut b, &vars, &fvars, &mut kinds, sval, out_kind)?;
             }
@@ -1060,7 +1060,7 @@ pub(super) fn build_body_unboxed(
                 }
                 let call = b.ins().call(h.int_to_str, &[ec.ctx, nv]);
                 let sres = b.inst_results(call)[0];
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
                 ec.fault_if(&mut b, bad, 5);
                 ub_push(
                     &mut b,
@@ -1150,7 +1150,7 @@ pub(super) fn build_body_unboxed(
                     .ins()
                     .call(h.list_append_dyn, &[ec.ctx, lv, payload, tag, metav]);
                 let sres = b.inst_results(call)[0];
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
                 ec.fault_if(&mut b, bad, 5);
                 ub_push(
                     &mut b,
@@ -1235,7 +1235,7 @@ pub(super) fn build_body_unboxed(
                 }
                 let call = b.ins().call(h.str_list_acc_append, &[ec.ctx, av, vv]);
                 let res = b.inst_results(call)[0];
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
+                let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, res, 0);
                 ec.fault_if(&mut b, bad, 5);
                 b.def_var(vars[s], res);
                 kinds[s] = Kind::StrList(Own::Owned);
@@ -1263,7 +1263,7 @@ pub(super) fn build_body_unboxed(
                 let metav = b.ins().iconst(types::I64, meta);
                 let call = b.ins().call(h.list_append_clone, &[ec.ctx, lv, ev, metav]);
                 let sres = b.inst_results(call)[0];
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
                 ec.fault_if(&mut b, bad, 5);
                 ub_push(&mut b, &vars, &fvars, &mut kinds, sres, out_kind)?;
             }
@@ -1292,7 +1292,7 @@ pub(super) fn build_body_unboxed(
                 }
                 let (_one, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let (pv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                let bumped = b.ins().iadd_imm(pv, 64);
+                let bumped = b.ins().iadd_imm_s(pv, 64);
                 ub_push(&mut b, &vars, &fvars, &mut kinds, bumped, Kind::IterPtr)?;
             }
             Op::AddI | Op::SubI | Op::MulI => {
@@ -1352,10 +1352,10 @@ pub(super) fn build_body_unboxed(
                 let metav = b.ins().iconst(types::I64, meta);
                 let call = b.ins().call(h.str_eq, &[ec.ctx, av, bv, metav]);
                 let sres = b.inst_results(call)[0];
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
                 ec.fault_if(&mut b, bad, 5);
                 let res = if matches!(op, Op::Ne) {
-                    b.ins().bxor_imm(sres, 1)
+                    b.ins().bxor_imm_s(sres, 1)
                 } else {
                     sres
                 };
@@ -1898,7 +1898,7 @@ pub(super) fn build_body_unboxed(
                         let reprv = b.ins().iconst(types::I64, repr);
                         let call = b.ins().call(h.clone_value, &[ec.ctx, v, reprv]);
                         let cv = b.inst_results(call)[0];
-                        let bad = b.ins().icmp_imm(IntCC::SignedLessThan, cv, 0);
+                        let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, cv, 0);
                         ec.fault_if(&mut b, bad, 5);
                         let owned = match kind {
                             Kind::Str(_) => Kind::Str(Own::Owned),
@@ -1982,6 +1982,7 @@ pub(super) fn build_body_unboxed(
     }
 
     b.seal_all_blocks();
-    b.finalize();
+    let frontend_config = module.target_config();
+    b.finalize(frontend_config);
     Ok(())
 }

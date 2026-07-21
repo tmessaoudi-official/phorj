@@ -46,7 +46,7 @@ pub(super) fn arm_concat(
             Kind::Int => {
                 let call = b.ins().call(h.int_to_str, &[ec.ctx, part.0]);
                 let sres = b.inst_results(call)[0];
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
                 ec.fault_if(b, bad, 5);
                 *part = (sres, Kind::Str(Own::Owned));
             }
@@ -89,23 +89,23 @@ pub(super) fn concat_pair(
     // Fast iff BOTH operands are arena slots (a pinned short const, a flat element, or
     // an owned temp) — one AND + one branch.
     let both = b.ins().band(av, bv);
-    let both_slot = b.ins().band_imm(both, UB_TAG_SLOT);
+    let both_slot = b.ins().band_imm_s(both, UB_TAG_SLOT);
     b.ins().brif(both_slot, fast1, &[], slow_blk, &[]);
     // INLINE: load both lengths; a ≤22-byte result is built in a fresh slot with
     // bounded 3×8-byte over-copies (the 64-byte slot slack absorbs them — see
     // `UB_SLOT_SIZE`); the byte semantics are exactly `PhStr::concat`'s.
     b.switch_to_block(fast1);
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let ia = b.ins().band_imm(av, UB_IDX_MASK);
-    let aoff = b.ins().ishl_imm(ia, 6);
+    let ia = b.ins().band_imm_s(av, UB_IDX_MASK);
+    let aoff = b.ins().ishl_imm_s(ia, 6);
     let pa = b.ins().iadd(buf, aoff);
-    let ib = b.ins().band_imm(bv, UB_IDX_MASK);
-    let boff = b.ins().ishl_imm(ib, 6);
+    let ib = b.ins().band_imm_s(bv, UB_IDX_MASK);
+    let boff = b.ins().ishl_imm_s(ib, 6);
     let pb = b.ins().iadd(buf, boff);
     let la = b.ins().uload8(types::I64, MemFlagsData::new(), pa, 0);
     let lb = b.ins().uload8(types::I64, MemFlagsData::new(), pb, 0);
     let tot = b.ins().iadd(la, lb);
-    let big = b.ins().icmp_imm(
+    let big = b.ins().icmp_imm_s(
         IntCC::UnsignedGreaterThan,
         tot,
         crate::phstr::INLINE_CAP as i64,
@@ -116,7 +116,7 @@ pub(super) fn concat_pair(
     // full → code 5, redo on VM — exhaustion is a fallback, never a user-visible fault).
     b.switch_to_block(fast2);
     let sidx = ec.slot_alloc(b);
-    let doff = b.ins().ishl_imm(sidx, 6);
+    let doff = b.ins().ishl_imm_s(sidx, 6);
     let pd = b.ins().iadd(buf, doff);
     b.ins().istore8(MemFlagsData::new(), tot, pd, 0);
     // Copy a → dst+1 (static offsets; over-copy is absorbed by the slot slack).
@@ -125,7 +125,7 @@ pub(super) fn concat_pair(
         b.ins().store(MemFlagsData::new(), w, pd, 1 + 8 * k);
     }
     // Copy b → dst+1+la (runtime offset).
-    let la1 = b.ins().iadd_imm(la, 1);
+    let la1 = b.ins().iadd_imm_s(la, 1);
     let pdb = b.ins().iadd(pd, la1);
     for k in 0..3 {
         let w = b.ins().load(types::I64, MemFlagsData::new(), pb, 1 + 8 * k);
@@ -146,8 +146,8 @@ pub(super) fn concat_pair(
             ec.slot_free_if_owned(b, v);
         }
     }
-    let fres_raw = b.ins().bor_imm(sidx, UB_TAG_SLOT);
-    let fres = b.ins().bor_imm(fres_raw, UB_TAG_OWNED);
+    let fres_raw = b.ins().bor_imm_s(sidx, UB_TAG_SLOT);
+    let fres = b.ins().bor_imm_s(fres_raw, UB_TAG_OWNED);
     b.ins().jump(merge, &[fres.into()]);
     // SLOW: the helper handles every encoding + the >22-byte (heap) result.
     b.switch_to_block(slow_blk);
@@ -155,7 +155,7 @@ pub(super) fn concat_pair(
     let maskv = b.ins().iconst(types::I64, mask);
     let call = b.ins().call(h.concat, &[ec.ctx, av, bv, maskv]);
     let sres = b.inst_results(call)[0];
-    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
     ec.fault_if(b, bad, 5);
     b.ins().jump(merge, &[sres.into()]);
     b.switch_to_block(merge);
@@ -218,7 +218,7 @@ pub(super) fn concat_mix_n(
         for &v in rest {
             acc = b.ins().band(acc, v);
         }
-        let slot_bit = b.ins().band_imm(acc, UB_TAG_SLOT);
+        let slot_bit = b.ins().band_imm_s(acc, UB_TAG_SLOT);
         b.ins().brif(slot_bit, fast0, &[], slow_blk, &[]);
     } else {
         b.ins().jump(fast0, &[]);
@@ -230,11 +230,11 @@ pub(super) fn concat_mix_n(
     for &(pv, pk) in parts {
         match pk {
             Kind::Str(_) => {
-                let idx = b.ins().band_imm(pv, UB_IDX_MASK);
-                let off = b.ins().ishl_imm(idx, 6);
+                let idx = b.ins().band_imm_s(pv, UB_IDX_MASK);
+                let off = b.ins().ishl_imm_s(idx, 6);
                 let ps = b.ins().iadd(buf, off);
                 let len = b.ins().uload8(types::I64, MemFlagsData::new(), ps, 0);
-                let data = b.ins().iadd_imm(ps, 1);
+                let data = b.ins().iadd_imm_s(ps, 1);
                 pieces.push((data, len));
             }
             Kind::Int => {
@@ -245,7 +245,7 @@ pub(super) fn concat_mix_n(
                 ));
                 let base = b.ins().stack_addr(types::I64, ss, 0);
                 // |v| as unsigned (`ineg(i64::MIN)` == i64::MIN == 2^63 unsigned — correct).
-                let neg = b.ins().icmp_imm(IntCC::SignedLessThan, pv, 0);
+                let neg = b.ins().icmp_imm_s(IntCC::SignedLessThan, pv, 0);
                 let nv = b.ins().ineg(pv);
                 let u0 = b.ins().select(neg, nv, pv);
                 let loop_hdr = b.create_block();
@@ -258,10 +258,10 @@ pub(super) fn concat_mix_n(
                 b.switch_to_block(loop_hdr);
                 let u = b.block_params(loop_hdr)[0];
                 let pos = b.block_params(loop_hdr)[1];
-                let pos1 = b.ins().iadd_imm(pos, -1);
+                let pos1 = b.ins().iadd_imm_s(pos, -1);
                 let ten = b.ins().iconst(types::I64, 10);
                 let rem = b.ins().urem(u, ten);
-                let ch = b.ins().iadd_imm(rem, b'0' as i64);
+                let ch = b.ins().iadd_imm_s(rem, b'0' as i64);
                 let addr = b.ins().iadd(base, pos1);
                 b.ins().istore8(MemFlagsData::new(), ch, addr, 0);
                 let u1 = b.ins().udiv(u, ten);
@@ -293,7 +293,7 @@ pub(super) fn concat_mix_n(
     for &(_, l) in &pieces[1..] {
         tot = b.ins().iadd(tot, l);
     }
-    let big = b.ins().icmp_imm(
+    let big = b.ins().icmp_imm_s(
         IntCC::UnsignedGreaterThan,
         tot,
         crate::phstr::INLINE_CAP as i64,
@@ -302,7 +302,7 @@ pub(super) fn concat_mix_n(
     b.ins().brif(big, slow_blk, &[], fast2, &[]);
     b.switch_to_block(fast2);
     let sidx = ec.slot_alloc(b);
-    let doff = b.ins().ishl_imm(sidx, 6);
+    let doff = b.ins().ishl_imm_s(sidx, 6);
     let pd = b.ins().iadd(buf, doff);
     b.ins().istore8(MemFlagsData::new(), tot, pd, 0);
     // Bounded copies at a running cursor (dst byte 1 onward; each piece ≤ 22 → 3×8 covers it).
@@ -328,8 +328,8 @@ pub(super) fn concat_mix_n(
             ec.slot_free_if_owned(b, v);
         }
     }
-    let fres_raw = b.ins().bor_imm(sidx, UB_TAG_SLOT);
-    let fres = b.ins().bor_imm(fres_raw, UB_TAG_OWNED);
+    let fres_raw = b.ins().bor_imm_s(sidx, UB_TAG_SLOT);
+    let fres = b.ins().bor_imm_s(fres_raw, UB_TAG_OWNED);
     b.ins().jump(merge, &[fres.into()]);
     // SLOW: the fused helper — heap parts, >22-byte results (byte-identical join).
     b.switch_to_block(slow_blk);
@@ -342,7 +342,7 @@ pub(super) fn concat_mix_n(
     args.extend(std::iter::repeat_n(zero, 6 - n));
     let call = b.ins().call(h.concat_mix, &args);
     let sres = b.inst_results(call)[0];
-    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
     ec.fault_if(b, bad, 5);
     b.ins().jump(merge, &[sres.into()]);
     b.switch_to_block(merge);
@@ -378,22 +378,22 @@ pub(super) fn concat_acc(
     let chk_rhs = b.create_block();
     let fast0 = b.create_block();
     let slow_blk = b.create_block();
-    let acc_bit = b.ins().band_imm(av, UB_TAG_ACC);
+    let acc_bit = b.ins().band_imm_s(av, UB_TAG_ACC);
     b.ins().brif(acc_bit, chk_rhs, &[], slow_blk, &[]);
     b.switch_to_block(chk_rhs);
-    let slot_bit = b.ins().band_imm(bv, UB_TAG_SLOT);
+    let slot_bit = b.ins().band_imm_s(bv, UB_TAG_SLOT);
     b.ins().brif(slot_bit, fast0, &[], slow_blk, &[]);
     // INLINE: cap-checked in-place append of a slot piece (≤ 22 bytes, one 3×8 copy).
     b.switch_to_block(fast0);
     let abase = b.ins().load(types::I64, ec.stable, ec.ctx, 40);
-    let idx = b.ins().band_imm(av, UB_IDX_MASK);
-    let roff = b.ins().imul_imm(idx, 24);
+    let idx = b.ins().band_imm_s(av, UB_IDX_MASK);
+    let roff = b.ins().imul_imm_s(idx, 24);
     let prec = b.ins().iadd(abase, roff);
     let len = b.ins().load(types::I64, MemFlagsData::new(), prec, 8);
     let cap = b.ins().load(types::I64, MemFlagsData::new(), prec, 16);
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let bidx = b.ins().band_imm(bv, UB_IDX_MASK);
-    let boff = b.ins().ishl_imm(bidx, 6);
+    let bidx = b.ins().band_imm_s(bv, UB_IDX_MASK);
+    let boff = b.ins().ishl_imm_s(bidx, 6);
     let pb = b.ins().iadd(buf, boff);
     let rl = b.ins().uload8(types::I64, MemFlagsData::new(), pb, 0);
     let nl = b.ins().iadd(len, rl);
@@ -419,7 +419,7 @@ pub(super) fn concat_acc(
     let maskv = b.ins().iconst(types::I64, mask);
     let call = b.ins().call(h.acc_append, &[ec.ctx, av, bv, maskv]);
     let sres = b.inst_results(call)[0];
-    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
     ec.fault_if(b, bad, 5);
     b.ins().jump(merge, &[sres.into()]);
     b.switch_to_block(merge);

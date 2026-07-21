@@ -78,7 +78,7 @@ pub(super) fn arm_div_rem(
                 )))
             }
         };
-        let res = b.ins().band_imm(av, c - 1);
+        let res = b.ins().band_imm_s(av, c - 1);
         return ub_push(b, vars, fvars, kinds, res, Kind::Int);
     }
     // ovf-spec: div/rem CANNOT be speculated — `sdiv`/`srem` hardware-trap (SIGFPE) on both
@@ -175,7 +175,7 @@ pub(super) fn arm_not(
     kinds: &mut Vec<Kind>,
 ) -> Result<(), JitError> {
     let (av, _) = ub_pop(b, vars, fvars, kinds)?;
-    let r = b.ins().icmp_imm(IntCC::Equal, av, 0); // 1 iff false
+    let r = b.ins().icmp_imm_s(IntCC::Equal, av, 0); // 1 iff false
     let r64 = b.ins().uextend(types::I64, r);
     ub_push(b, vars, fvars, kinds, r64, Kind::Bool)
 }
@@ -281,7 +281,7 @@ pub(super) fn arm_truncate(
     let ge = b.ins().fcmp(FloatCC::GreaterThanOrEqual, t, lower);
     let lt = b.ins().fcmp(FloatCC::LessThan, t, upper);
     let ok = b.ins().band(ge, lt);
-    let bad = b.ins().icmp_imm(IntCC::Equal, ok, 0);
+    let bad = b.ins().icmp_imm_s(IntCC::Equal, ok, 0);
     ec.fault_if(b, bad, 5);
     let res = b.ins().fcvt_to_sint(types::I64, t);
     ub_push(b, vars, fvars, kinds, res, Kind::Int)
@@ -345,8 +345,8 @@ pub(super) fn arm_math_sign(
             "unboxed Math.sign operand kind {nk:?}"
         )));
     }
-    let pos = b.ins().icmp_imm(IntCC::SignedGreaterThan, nv, 0);
-    let neg = b.ins().icmp_imm(IntCC::SignedLessThan, nv, 0);
+    let pos = b.ins().icmp_imm_s(IntCC::SignedGreaterThan, nv, 0);
+    let neg = b.ins().icmp_imm_s(IntCC::SignedLessThan, nv, 0);
     let pos64 = b.ins().uextend(types::I64, pos);
     let neg64 = b.ins().uextend(types::I64, neg);
     let res = b.ins().isub(pos64, neg64);

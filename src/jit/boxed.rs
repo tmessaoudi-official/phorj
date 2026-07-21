@@ -580,7 +580,7 @@ pub(super) fn build_body(
                 let res = b.inst_results(call)[0];
                 // Fault (status 2) → fault-exit; else test true/false.
                 let fb = *fault_block.get_or_insert_with(|| b.create_block());
-                let is_fault = b.ins().icmp_imm(IntCC::Equal, res, JIF_FAULT);
+                let is_fault = b.ins().icmp_imm_s(IntCC::Equal, res, JIF_FAULT);
                 let notfault = b.create_block();
                 b.ins().brif(is_fault, fb, &[], notfault, &[]);
                 b.switch_to_block(notfault);
@@ -590,7 +590,7 @@ pub(super) fn build_body(
                     JitError::Codegen(format!("JumpIfFalse fall-through ip {}", ip + 1))
                 })?;
                 // status 1 (JIF_FALSE) → take the jump; status 0 (JIF_TRUE) → fall through.
-                let is_false = b.ins().icmp_imm(IntCC::Equal, res, JIF_FALSE);
+                let is_false = b.ins().icmp_imm_s(IntCC::Equal, res, JIF_FALSE);
                 b.ins().brif(is_false, tb, &[], fallb, &[]);
                 current = None;
             }
@@ -633,6 +633,7 @@ pub(super) fn build_body(
         b.ins().return_(&[one]);
     }
     b.seal_all_blocks();
-    b.finalize();
+    let frontend_config = module.target_config();
+    b.finalize(frontend_config);
     Ok(())
 }

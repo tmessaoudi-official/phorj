@@ -31,7 +31,7 @@ fn field_addr(
     }
     let bidx = b.ins().load(types::I64, MemFlagsData::new(), pa, 56);
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let boff = b.ins().ishl_imm(bidx, 6);
+    let boff = b.ins().ishl_imm_s(bidx, 6);
     let pb = b.ins().iadd(buf, boff);
     (pb, (8 * (layout_slot - 7)) as i32)
 }
@@ -57,7 +57,7 @@ pub(super) fn arm_make_instance(
     }
     let sidx = ec.slot_alloc(b);
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let soff = b.ins().ishl_imm(sidx, 6);
+    let soff = b.ins().ishl_imm_s(sidx, 6);
     let pd = b.ins().iadd(buf, soff);
     // WIDE (> 8 fields): a second slot for fields 7.. — its raw index at A byte 56. (An
     // exhaustion mid-pair is code 5; the entry reset reclaims the half-built pair.)
@@ -65,7 +65,7 @@ pub(super) fn arm_make_instance(
     let pb = if wide {
         let bidx = ec.slot_alloc(b);
         b.ins().store(MemFlagsData::new(), bidx, pd, 56);
-        let boff = b.ins().ishl_imm(bidx, 6);
+        let boff = b.ins().ishl_imm_s(bidx, 6);
         Some(b.ins().iadd(buf, boff))
     } else {
         None
@@ -83,8 +83,8 @@ pub(super) fn arm_make_instance(
         b.ins().store(MemFlagsData::new(), v, dst, off);
     }
     kinds.truncate(d - nf);
-    let h_raw = b.ins().bor_imm(sidx, UB_TAG_SLOT);
-    let h = b.ins().bor_imm(h_raw, UB_TAG_OWNED);
+    let h_raw = b.ins().bor_imm_s(sidx, UB_TAG_SLOT);
+    let h = b.ins().bor_imm_s(h_raw, UB_TAG_OWNED);
     ub_push(b, vars, fvars, kinds, h, Kind::Inst(cidx, Own::Owned))
 }
 
@@ -135,8 +135,8 @@ pub(super) fn arm_get_field(
         }
     };
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let ri = b.ins().band_imm(rv, UB_IDX_MASK);
-    let roff = b.ins().ishl_imm(ri, 6);
+    let ri = b.ins().band_imm_s(rv, UB_IDX_MASK);
+    let roff = b.ins().ishl_imm_s(ri, 6);
     let pr = b.ins().iadd(buf, roff);
     let (fp, foff) = field_addr(b, ec, pr, slot, is_wide(program, c));
     let val = b.ins().load(types::I64, MemFlagsData::new(), fp, foff);
@@ -224,8 +224,8 @@ pub(super) fn arm_set_field(
             JitError::Codegen("unboxed: SetField name unresolved past analyze".to_string())
         })?;
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let ri = b.ins().band_imm(rv, UB_IDX_MASK);
-    let roff = b.ins().ishl_imm(ri, 6);
+    let ri = b.ins().band_imm_s(rv, UB_IDX_MASK);
+    let roff = b.ins().ishl_imm_s(ri, 6);
     let pr = b.ins().iadd(buf, roff);
     let (fp, foff) = field_addr(b, ec, pr, slot, is_wide(program, c));
     // A HANDLE field overwrite releases the OLD word first (the instance owned it; the
@@ -308,14 +308,14 @@ pub(super) fn release_kinded(
     // Instances are always slot-tagged: gate on the runtime OWNED bit, then free the str
     // field words (full ladder each — a long string field is an untagged heap handle) and
     // recycle the instance slot itself.
-    let owned_bit = b.ins().band_imm(v, UB_TAG_OWNED);
+    let owned_bit = b.ins().band_imm_s(v, UB_TAG_OWNED);
     let free_blk = b.create_block();
     let cont = b.create_block();
     b.ins().brif(owned_bit, free_blk, &[], cont, &[]);
     b.switch_to_block(free_blk);
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let vi = b.ins().band_imm(v, UB_IDX_MASK);
-    let voff = b.ins().ishl_imm(vi, 6);
+    let vi = b.ins().band_imm_s(v, UB_IDX_MASK);
+    let voff = b.ins().ishl_imm_s(vi, 6);
     let pv = b.ins().iadd(buf, voff);
     for s in str_slots {
         let (fp, foff) = field_addr(b, ec, pv, s, wide);

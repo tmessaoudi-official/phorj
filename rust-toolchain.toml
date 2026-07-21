@@ -4,7 +4,7 @@
 # Pinning neutralises it: a toolchain upgrade becomes a deliberate edit to this file, re-verified
 # against the suite, rather than a surprise CI/local break.
 [toolchain]
-channel = "1.96.0"
+channel = "1.97.1"
 components = ["rustfmt", "clippy"]
 # The WASM playground member builds for this target; rustup installs it automatically in CI. Local
 # native builds/tests ignore it (the core crate and `phg` bin never target wasm).

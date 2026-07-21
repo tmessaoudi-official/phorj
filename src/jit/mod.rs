@@ -219,7 +219,7 @@ fn leaders(code: &[Op], reach: &[bool]) -> Vec<bool> {
 /// block on fault and continue in a fresh block (the sequential-execution successor).
 fn emit_fault_check(b: &mut FunctionBuilder, res: ClValue, fault_block: &mut Option<Block>) {
     let fb = *fault_block.get_or_insert_with(|| b.create_block());
-    let is_fault = b.ins().icmp_imm(IntCC::NotEqual, res, 0);
+    let is_fault = b.ins().icmp_imm_s(IntCC::NotEqual, res, 0);
     let cont = b.create_block();
     b.ins().brif(is_fault, fb, &[], cont, &[]);
     b.switch_to_block(cont);
