@@ -45,7 +45,7 @@ var double = function (int n) -> int { return n * 2; };
 - `phg check` → `OK (type-checks clean)`, exit 0.
 - `phg run` → correct output (`3`, `10`), exit 0.
 - `phg format -` on the same file rewrites every arrow to canonical (`: int`, `(int) => int`)
-  with no diagnostic [Verified: ran all three, binary `phg 0.5.1-alpha.1` built at HEAD].
+  with no diagnostic [Verified: ran all three, binary `phg 1.0.0-nightly.0` built at HEAD].
 
 ### A3. The corpus is 100% clean of *syntactic* `->` [Verified: swept + filtered]
 

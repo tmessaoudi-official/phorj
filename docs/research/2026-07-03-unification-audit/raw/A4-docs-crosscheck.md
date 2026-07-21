@@ -3,7 +3,7 @@
 Date: 2026-07-03 · HEAD: `0691228` (clean tree) · Auditor: A4 (docs/code consistency)
 Method: two independent inventories (Appendix I = doc claims, Appendix II = code ground truth,
 each built before comparison), then diffed both directions. Every finding carries an evidence
-grade. Binary tests ran against `target/release/phg 0.5.1-alpha.1` (matches HEAD's Cargo.toml
+grade. Binary tests ran against `target/release/phg 1.0.0-nightly.0` (matches HEAD's Cargo.toml
 version; parser source at HEAD agrees with observed binary behavior on every tested point).
 
 Executive counts: **12 false-claim clusters (≈45 doc:line sites)** · **7 undocumented-feature
@@ -291,7 +291,7 @@ KNOWN_ISSUES:678); `fn` (STABILITY:24).
 
 # Appendix II — Inventory B: code-side ground truth (all [Verified] at HEAD 0691228)
 
-- **Binary**: `phg 0.5.1-alpha.1`. Long-help verbs (15): run runvm check parse tokenize transpile
+- **Binary**: `phg 1.0.0-nightly.0`. Long-help verbs (15): run runvm check parse tokenize transpile
   lift disassemble benchmark build vendor serve test format explain. Short-usage adds: **lsp,
   debug** (main.rs:74-75; dispatch :244/:256). No fmt/bench/disasm/lex aliases.
 - **Deps** (Cargo.toml): default features crypto+regex+signals+green → argon2 0.5, regex 1,

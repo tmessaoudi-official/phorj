@@ -1,7 +1,7 @@
 # A5 — Stdlib API Consistency + Fuzz Audit (2026-07-03)
 
 Auditor: A5 (stdlib/native-function consistency, naming, inconsistent features, fuzz/DX).
-State audited: HEAD `0691228`, clean tree. Binary: `target/release/phg` 0.5.1-alpha.1.
+State audited: HEAD `0691228`, clean tree. Binary: `target/release/phg` 1.0.0-nightly.0.
 PHP oracle used for parity legs: `/stack/tools/phpbrew/php/php-8.5.7/bin/php -n`.
 
 Method: full registry extraction from `src/native/*.rs` (module/name/params/ret of every

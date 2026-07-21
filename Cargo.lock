@@ -1673,7 +1673,7 @@ dependencies = [
 
 [[package]]
 name = "phorj"
-version = "0.5.1-alpha.1"
+version = "1.0.0-nightly.0"
 dependencies = [
  "argon2",
  "corosensei",

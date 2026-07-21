@@ -3,7 +3,7 @@
 > **Agent M output — full-audit fleet, Stage 2.** Inputs: `D-php-surface.md` (869 rows: 173 SYN,
 > 631 FN, 20 RT, 45 DEF) and `E-phorj-surface.md` (code-verified at `ccb2403`). Where a verdict
 > needed confirmation beyond E, it was checked against source or the built binary
-> (`phg 0.5.1-alpha.1`) — those rows carry `[Verified: …]`. Roadmap citations refer to
+> (`phg 1.0.0-nightly.0`) — those rows carry `[Verified: …]`. Roadmap citations refer to
 > `ROADMAP.md` and `docs/specs/2026-06-21-php-parity-and-beyond.md` (the parity SSOT, "§3 rollup"
 > / "§5 reject-list").
 >

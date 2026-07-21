@@ -1,7 +1,7 @@
 # Agent G — Showcase & Adoption Surface Audit
 
 Date: 2026-07-02 · Scope: examples/, conformance story, CI/tests/tools/playground/editors gap-fill, onboarding.
-Binary audited: `target/release/phg` 0.5.1-alpha.1. All claims graded per Rule 18.
+Binary audited: `target/release/phg` 1.0.0-nightly.0. All claims graded per Rule 18.
 
 ---
 
@@ -214,7 +214,7 @@ preserves them); the CLAUDE.md reference to `tools/wave1_migrate.py` is already 
   `when`/`spawn`/`receive`/`discard`/`never`/`decimal`/`bytes`/`b|r` string prefixes — good — but is
   **missing** `empty` (the naming-overhaul keyword), `todo`, `unreachable`, `parent`, and the
   `html"…"` literal prefix (only `b|r` matched) [Verified: keyword-by-keyword grep]. Extension
-  version 0.2.0 vs phg 0.5.1-alpha.1; a built `phorj-0.2.0.vsix` binary is committed to the repo
+  version 0.2.0 vs phg 1.0.0-nightly.0; a built `phorj-0.2.0.vsix` binary is committed to the repo
   (P3 — artifact in git). `editors/*/README.md` teach the retired `phg fmt`-era names (counted in
   P0-2).
 
@@ -239,7 +239,7 @@ a methodology doc; publish the ratio range, not one cherry.
     (line 305) are **false** — argon2, regex, corosensei, ctrlc ship in Cargo.toml
     [Verified: read Cargo.toml deps section; the manifest itself numbers them FIRST/FOURTH].
   - Status table: "M2.5 🔨 in progress", "M3+ 🔲 planned" — M3, M5, M6, M-RT, M-DX are complete;
-    the version is 0.5.1-alpha.1. The table undersells by ~15 shipped milestones.
+    the version is 1.0.0-nightly.0. The table undersells by ~15 shipped milestones.
   - "PHP → Phorj import is a separate future milestone" (line 280) — `phg lift` ships in the binary
     today [Verified: --help lists it]. The *bidirectional bridge is the pitch* and the README denies
     half of it.

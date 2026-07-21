@@ -201,7 +201,7 @@ pub fn number_format(value: f64, decimals: usize) -> String {
     }
     let n = int_digits.len();
     for (i, b) in int_digits.iter().enumerate() {
-        if i > 0 && (n - i) % 3 == 0 {
+        if i > 0 && (n - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(*b as char);

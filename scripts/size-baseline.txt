@@ -34,9 +34,9 @@
 518	src/interpreter/expr.rs
 548	src/interpreter/mod.rs
 3196	src/jit/analyze.rs
-638	src/jit/boxed.rs
+639	src/jit/boxed.rs
 620	src/jit/compile.rs
-1987	src/jit/emit_unboxed/mod.rs
+1988	src/jit/emit_unboxed/mod.rs
 1264	src/jit/emit_unboxed/verticals.rs
 2280	src/jit/handles.rs
 762	src/jit/range_acc.rs

@@ -1,7 +1,7 @@
 # A10 — UI / DX / UX surface audit (phg CLI, LSP, formatter, debugger, playground)
 
 Auditor: batch-2 agent A10 · Date: 2026-07-03 · HEAD: `0691228` (clean tree)
-Binary: `target/release/phg` (phg 0.5.1-alpha.1, rebuilt fresh — 0 crates recompiled).
+Binary: `target/release/phg` (phg 1.0.0-nightly.0, rebuilt fresh — 0 crates recompiled).
 Method: every claim below was exercised against the real binary or grepped in source; grades per
 Rule 18. Certification note: this subagent has no `advisor()` tool — the pre-completion check is
 **self-graded** (three lenses: completeness vs the 8-task brief, worst-failure-mode, blast radius),

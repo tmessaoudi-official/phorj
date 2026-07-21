@@ -64,7 +64,7 @@ fn b64_decode_strict(s: &str) -> Option<Vec<u8>> {
         sextets.push(v);
     }
     // Padding makes the total a multiple of 4; a lone leftover sextet is invalid.
-    if pad > 2 || (sextets.len() + pad) % 4 != 0 || sextets.len() % 4 == 1 {
+    if pad > 2 || !(sextets.len() + pad).is_multiple_of(4) || sextets.len() % 4 == 1 {
         return None;
     }
     let mut out = Vec::with_capacity(sextets.len() / 4 * 3);
@@ -99,7 +99,7 @@ fn hex_encode(data: &[u8]) -> String {
 /// cases and returns false otherwise).
 fn hex_decode(s: &str) -> Option<Vec<u8>> {
     let raw = s.as_bytes();
-    if raw.len() % 2 != 0 {
+    if !raw.len().is_multiple_of(2) {
         return None;
     }
     let nib = |c: u8| -> Option<u8> {

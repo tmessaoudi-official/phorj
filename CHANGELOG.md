@@ -2695,7 +2695,7 @@ The foundation slice for the language-evolution roadmap
   codemod (`tools/return_type_codemod.py`, a balanced-paren scanner) annotated every existing function
   with `-> void`. Both new error codes self-document via `phg explain`.
 
-## [0.5.1-alpha.1] - 2026-06-24
+## [1.0.0-nightly.0] - 2026-06-24
 
 First tagged pre-release. Rolls up all work since the internal 0.4.0 mark: M3 + the full M-RT
 rich-type system (instanceof, interfaces, Map/Set, generics-all, unions, intersections, overloading,

@@ -1,6 +1,6 @@
 # Agent H — Enforcement Audit (adversarial static-guarantee verification)
 
-> Binary: `target/release/phg` 0.5.1-alpha.1 (built 2026-07-01 22:01, one commit behind HEAD;
+> Binary: `target/release/phg` 1.0.0-nightly.0 (built 2026-07-01 22:01, one commit behind HEAD;
 > the only later code commit a23ca00 adds Core.File natives, no diagnostic codes — valid for
 > enforcement probes). ~300 probes total: 197-code trigger sweep + 45 targeted checker probes +
 > 12 runtime-parity probes (run vs runvm) + 12 missing-rule probes + 20 project-mode probes +
