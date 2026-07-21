@@ -12,7 +12,7 @@
 //! conservative gate (a wrong member list is worse than none). Prelude-class members (Date/Uri…) need
 //! the injected prelude program, a documented follow-up.
 use super::catalog;
-use super::KEYWORDS;
+use super::keywords::KEYWORDS;
 use crate::ast::Program;
 use crate::parser::Parser;
 use crate::tokenizer::lex;

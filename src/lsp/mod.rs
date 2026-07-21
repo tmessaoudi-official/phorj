@@ -17,6 +17,7 @@
 
 mod catalog;
 mod completion;
+mod keywords;
 mod scope;
 mod symbols;
 #[cfg(test)]
@@ -532,65 +533,6 @@ fn range_json(sl: u32, sc: u32, el: u32, ec: u32) -> String {
         "{{\"start\":{{\"line\":{sl},\"character\":{sc}}},\"end\":{{\"line\":{el},\"character\":{ec}}}}}"
     )
 }
-
-/// The Phorj keyword set surfaced in completion (CompletionItemKind 14 = Keyword). Not exhaustive of
-/// every contextual word, but the structural keywords a user types most.
-const KEYWORDS: &[&str] = &[
-    "package",
-    "import",
-    "function",
-    "class",
-    "enum",
-    "interface",
-    "trait",
-    "type",
-    "constructor",
-    "declare",
-    "return",
-    "if",
-    "else",
-    "for",
-    "while",
-    "do",
-    "in",
-    "match",
-    "when",
-    "var",
-    "mutable",
-    "static",
-    "const",
-    "open",
-    "abstract",
-    "public",
-    "private",
-    "protected",
-    "internal",
-    "new",
-    "this",
-    "true",
-    "false",
-    "null",
-    "throw",
-    "throws",
-    "try",
-    "catch",
-    "finally",
-    "break",
-    "continue",
-    "instanceof",
-    "use",
-    "with",
-    "extends",
-    "implements",
-    "as",
-    "spawn",
-    "receive",
-    "discard",
-    "panic",
-    "assert",
-    "test",
-    "never",
-];
 
 /// Build a JSON-RPC success response for request `id` with a raw `result` JSON fragment.
 fn response(id: Option<&Json>, result: &str) -> Out {

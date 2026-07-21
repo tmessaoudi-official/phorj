@@ -296,6 +296,12 @@ fn completion_lists_top_level_locals_and_keywords() {
         body.contains("\"label\":\"return\""),
         "keyword missing: {body}"
     );
+    // Structural modifiers must be offered — `sealed` regressed out of the set once (grammar had it,
+    // completion didn't); pin it alongside its siblings so the surfaces can't drift apart again.
+    assert!(
+        body.contains("\"label\":\"sealed\""),
+        "structural keyword `sealed` missing: {body}"
+    );
 }
 
 #[test]

@@ -40,8 +40,8 @@ Open any `.phg` file in the dev host; diagnostics, hover, and go-to-definition a
 ```sh
 npm install -g @vscode/vsce
 cd editors/vscode
-vsce package         # produces phorj-0.3.0.vsix
-code --install-extension phorj-0.3.0.vsix
+vsce package         # produces phorj-0.4.0.vsix
+code --install-extension phorj-0.4.0.vsix
 ```
 
 ## Configuration
