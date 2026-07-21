@@ -2531,6 +2531,42 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   (documented): registry constraint-intersection across multiple requirers, per-package `phg update`,
   a hosted registry index (client support shipped; `PHORJ_REGISTRY` selects the index).
 
+- **DEC-317 — STRUCTURED LOGGING (Log-v2) = FULL Monolog-class upgrade over the stderr `Core.Log`
+  (developer-ruled 2026-07-21; SPEC READY, BUILD QUEUED).** The existing `Core.Log` (DEC-220 S1,
+  leveled→stderr) is upgraded to MASTER-PLAN #18 "structured logging". Dev ruled the FULL scope via
+  AskUserQuestion: named **channels** (`Log.channel("name")`, a `default` channel preserves the current
+  top-level `Log.info(...)`), PSR-3 **levels** (Debug…Emergency, ordinal for min-level compare) with a
+  per-handler min-level, **handlers** implementing the `LogSink` SPI seam (DEC-315) — `StreamHandler` /
+  `FileHandler` / `RotatingFileHandler`, **formatters** `LineFormatter` + `JsonFormatter` (reuses the
+  `__phorj_json_*` transpile helpers), and **processors** (context injectors: timestamp/pid/static extra).
+  Wiring is config-driven via DEC-318's `#[Config]` provider (`LogConfig`/`Channel`/`FileHandler` are
+  ordinary phorj classes). **LADDER ruling (Invariant 14): TRANSPILABLE** — every sink maps to a faithful
+  PHP builtin (`fopen`/`fwrite`/`file_put_contents(…,FILE_APPEND)`, `fwrite(STDERR,…)`, rename+size/date,
+  `json_encode`) — but **impure → FileSystem-style differential quarantine**: dropped from the auto
+  `examples/**/*.phg` byte-identity glob, given its own deterministic transpile-parity test printing
+  content+level+channel ONLY (timestamps/pid/paths are **out-of-contract**, like FS message tails);
+  rotation tested structurally, not by wall-clock. Emit gated `__phorj_log_*` helpers (the
+  `uses_clock`/`emit_fs_helpers` 3-touch pattern; results constructed INLINE per the FS R1 rule). Lands as
+  the DEC-273 wave-4 `log` extension folder. Spec: plan file
+  `.claude/plans/can-you-pickup-where-deep-pinwheel.md`. **NOT YET BUILT** (spec'd on <1% weekly budget
+  2026-07-21; build on next fresh budget).
+
+- **DEC-318 — TYPED CONFIG = `#[Config]` provider fn + entry-param injection (developer-ruled 2026-07-21;
+  SPEC READY, BUILD QUEUED).** How a `.phg` file yields a typed app config, ruled via AskUserQuestion. A
+  zero-arg `#[Config]`-attributed `function` returns a user config type; the runtime **injects** it into
+  `#[Entry] function main(config: AppConfig)`. **NO new grammar** — reuses the attribute + `function` +
+  params machinery of `#[Entry]`. Bare top-level `return` (PHP `return [...]` idiom) was **REJECTED**:
+  biggest grammar/semantics change (value-producing modules), runtime not compile-time, unneeded. YAML
+  **REJECTED** (external-dep policy bars a YAML crate; config-as-typed-phorj matches the roadmap's
+  "Core.Config compile-time typed"). Modeled as **compile-time-only sugar expanded OUT before any backend**
+  (Invariant 5) in the `cli::check_and_expand` chokepoint (new `src/expand/config_inject.rs`): the desugar
+  rewrites `main(cfg: T)` → an entry that calls the resolved provider and passes its value, emitting
+  ordinary AST → **transpiles byte-identically** (a plain PHP call) and **lifts** as ordinary functions, so
+  config stays IN the byte-identity spine (it is pure). Checker rules (`E-CONFIG-*`): exactly one provider
+  per config-type; `main`'s param type must match a provider return type; missing/ambiguous = typed error.
+  Provider discovery uses the existing project/registry scan (DEC-252/DEC-282), sorted (Invariant 10). Spec:
+  same plan file. **NOT YET BUILT** (spec'd 2026-07-21; build on next fresh budget).
+
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their
   feature/module names), plus `examples/db/`→`examples/database/`, `tests/db*.rs`→`tests/database*.rs`,

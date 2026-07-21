@@ -27,6 +27,15 @@ userland `.phg` packages + a native Rust trait-seam SPI (build-your-own `phg`; `
 `docs/EXTENSIONS-AUTHORING.md`; **companion package manager = NEXT MAJOR SLICE (DEC-316)** (`9814dbd`).
 
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
+0. ▶▶ **PRIORITY — Structured logging (Log-v2, DEC-317) + typed `#[Config]` provider+injection (DEC-318).**
+   Dev's ACTIVE need (building a real app). SPEC READY, adjudicated 2026-07-21 (both forks ruled): full
+   Monolog-class logging (channels/levels/Stream+File+RotatingFile handlers/Line+Json formatters/processors,
+   config-driven, `LogSink` SPI) + `#[Config]` fn injected into `#[Entry] main(config: AppConfig)` (no new
+   grammar; compile-time sugar in `check_and_expand`). LADDER: logging TRANSPILES but impure→FS-style
+   quarantine + content-only parity test; config is pure→stays in spine. Full build-map + 5-step green
+   sequencing in plan file `.claude/plans/can-you-pickup-where-deep-pinwheel.md` and DEC-317/DEC-318 in the
+   register. **NOT YET BUILT** (spec'd on <1% weekly budget; build on next fresh budget). Step 0 = confirm
+   the current `Core.Log` surface before extending.
 1. ✅ **Companion package manager (DEC-316) — SHIPPED 2026-07-20** (`e896eba`/`775db80`/`6284506`). New
    std-only `src/pm/` + `phg add/install/update/remove`: composer.json-style `phorj.json`, three source kinds
    (registry name→git-URL index / git / path), `phorj.lock` tree-SHA-256 integrity, `examples/package-manager/`
