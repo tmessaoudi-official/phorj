@@ -153,6 +153,18 @@ asking, when the quality gate above is green. Limits:
     benches (whole programs/pipelines) join the suite; `var/phorj-app` (gitignored) is the
     developer's live real-world comparison app — never propose deleting it. WIN-OR-FLAG applies
     to all of it.
+19. **Plans live in the repo; ZERO divergence from the SSOT** (ratified 2026-07-21). Every plan
+    or spec Claude produces is persisted IN the repo — the out-of-repo plan-mode file
+    (`.claude/plans/*`) is an ephemeral scratchpad, NEVER the record of truth (the container is
+    reclaimed; only committed state survives). The canonical homes are: `docs/plans/MASTER-PLAN.md`
+    (roadmap SSOT), the decision register `docs/research/full-audit/raw/C-decisions.md` (every DEC
+    row / ruling), and `docs/plans/SLICE-STATE.md` (the live cursor — current slice + queue). A
+    plan approved for build is mirrored into these BEFORE or IN the commit that starts the work; a
+    spec ruled-but-not-yet-built is recorded there too (as QUEUED), so a fresh context resumes
+    purely from repo state. **No divergent artifact** (extends Invariant 17's unified-docs
+    discipline to plans): every roadmap item, decision, and slice-status lives in exactly ONE
+    canonical place and everything else points to it — MASTER-PLAN + register + SLICE-STATE are
+    kept mutually consistent in the SAME change, never forked into a parallel doc.
 
 ## Where things live (pointers — read these instead of duplicating them here)
 
