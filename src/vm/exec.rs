@@ -8,9 +8,8 @@ impl<'a> Vm<'a> {
     /// fault carries only its body string; `run` attaches the source position from `Chunk.lines`.
     pub(super) fn exec_op(&mut self, op: &Op, fr: usize, func: usize) -> Result<Flow, String> {
         // `op` is borrowed from `program.functions[..].chunk.code` (lifetime `'a`, independent of
-        // `self`) — the dispatch loops pass `&code[ip]` instead of cloning it (M-perf: the per-op
-        // `Op::clone` was ~8% of all executed instructions in a call-heavy profile). Matching `*op`
-        // binds the `Copy` operands (indices / bools) by value, so the arms are unchanged; the only
+        // `self`) — the dispatch loops pass `&code[ip]`, never cloning (M-perf: `Op::clone` was ~8%
+        // of executed instructions). Matching `*op` binds the `Copy` operands by value; the only
         // two non-`Copy` payloads (`Fault(FaultMsg)`, `IsInstance(String)`) bind by `ref`.
         match *op {
             Op::Const(i) => {
@@ -678,19 +677,25 @@ impl<'a> Vm<'a> {
                 }
             }
             Op::MatchTag(idx) => {
+                // Pop the scrutinee copy the compiler pushed per arm (lazy Json materializes one
+                // level, DEC-294); DEC-329.3: (ty, variant) test — precise under shared names.
+                let d = &self.program.enum_descs[idx];
+                let (want_ty, want) = (d.ty.clone(), d.variant.clone());
+                let scrut = crate::value::materialize_if_lazy(self.pop());
+                let matched =
+                    matches!(scrut, Value::Enum(ev) if ev.ty == want_ty && ev.variant == want);
+                self.stack.push(Value::Bool(matched));
+            }
+            // Duck-typed `?` (DEC-329.3): variant NAME only — interp `Propagate` parity.
+            Op::MatchTagName(idx) => {
                 let want = self.program.enum_descs[idx].variant.clone();
-                // Pop the scrutinee copy the compiler pushed for this test (it reloads `$match`
-                // per arm), leaving just the bool for the following `JumpIfFalse`. A lazy Json node
-                // (DEC-294) materializes one level here first (memoized, so the paired GetEnumField
-                // reload is a cache hit).
                 let scrut = crate::value::materialize_if_lazy(self.pop());
                 let matched = matches!(scrut, Value::Enum(ev) if ev.variant == want);
                 self.stack.push(Value::Bool(matched));
             }
             Op::GetEnumField(i) => match crate::value::materialize_if_lazy(self.pop()) {
                 Value::Enum(ev) => {
-                    // Clone the element out of the shared payload (can't move out of an `Rc`); the
-                    // element is itself `Rc`-shared if compound, so this stays an O(1) bump (P5a).
+                    // Clone the element out of the shared payload (`Rc`-shared if compound — O(1), P5a).
                     let v = ev
                         .payload
                         .as_slice()
@@ -701,26 +706,21 @@ impl<'a> Vm<'a> {
                 }
                 v => return Err(format!("cannot extract enum field from {}", v.type_name())),
             },
-            // A fixed runtime fault (match-exhaustiveness backstop or `opt!`-on-null), byte-identical
-            // to the interpreter's fault for the same cause (the `agree_err` oracle classifies by
-            // body). The message is single-sourced on `FaultMsg` (M3 S2.5).
+            // A fixed runtime fault (match backstop / `opt!`-on-null), byte-identical to the
+            // interpreter's fault for the same cause; single-sourced on `FaultMsg` (M3 S2.5).
             Op::Fault(ref m) => return Err(m.message()),
 
             // --- P4b: classes ---
             Op::MakeInstance(idx) => {
-                // Split the field values off the stack first — this needs only the field COUNT
-                // (a scoped immutable borrow that ends immediately), so `split_off`'s `&mut self`
-                // has no outstanding borrow. Then re-borrow the descriptor immutably to map
-                // name→slot. This avoids cloning the whole `ClassDesc` on every construction: its
-                // `fields: Vec<String>` is used only transiently here (never stored in `Instance`),
-                // so the old per-instance `.clone()` allocated a throwaway Vec + one String per
-                // field for nothing. Only the cheap `layout` Rc bump + the one class-name clone
-                // (both genuinely stored) remain. Output is byte-identical (same `Instance` built).
+                // Split the field values off the stack first — needs only the field COUNT (a
+                // scoped immutable borrow), so `split_off`'s `&mut self` has no outstanding
+                // borrow; then re-borrow the descriptor to map name→slot. Avoids cloning the
+                // whole `ClassDesc` per construction (its `fields` Vec is transient here) — only
+                // the cheap `layout` Rc bump + one class-name clone remain. Byte-identical.
                 let values = self.split_off(self.program.class_descs[idx].fields.len());
                 let desc = &self.program.class_descs[idx];
-                // M-perf S1b: place each promoted-field value at its slot in the shared layout. The
-                // field push order (`desc.fields`) need not match slot order — `slot(name)` maps it —
-                // so construction and access agree regardless of order (the MI-offset hazard is moot).
+                // M-perf S1b: place each promoted-field value at its slot in the shared layout —
+                // `slot(name)` maps push order to slot order, so construction and access agree.
                 let layout = desc.layout.clone();
                 let mut slots: Vec<Option<Value>> = vec![None; layout.len()];
                 for (name, val) in desc.fields.iter().zip(values) {

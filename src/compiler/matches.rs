@@ -99,10 +99,17 @@ impl Compiler<'_> {
                 // (interpreter parity, `match_pattern`). `eq_val` defines `(Null, Null) => true`.
                 self.emit_literal_test(m_slot, path, Value::Null, skips, line);
             }
-            Pattern::Variant { name, fields, .. } => {
+            Pattern::Variant {
+                name,
+                fields,
+                enum_qualifier,
+                ..
+            } => {
+                // DEC-329.3: the canonical qualifier picks the RIGHT descriptor when two enums
+                // share a variant name; `Op::MatchTag` then tests (ty, variant) at runtime.
                 let idx = self
                     .variants
-                    .get(name)
+                    .get(enum_qualifier.as_deref(), name)
                     .ok_or_else(|| format!("unknown variant `{name}`"))?
                     .index;
                 self.emit_load_path(m_slot, path, line);
@@ -175,10 +182,15 @@ impl Compiler<'_> {
                 path: path.to_vec(),
                 ty: cur_ty,
             }),
-            Pattern::Variant { name, fields, .. } => {
+            Pattern::Variant {
+                name,
+                fields,
+                enum_qualifier,
+                ..
+            } => {
                 let field_tags = self
                     .variants
-                    .get(name)
+                    .get(enum_qualifier.as_deref(), name)
                     .ok_or_else(|| format!("unknown variant `{name}`"))?
                     .field_tags
                     .clone();

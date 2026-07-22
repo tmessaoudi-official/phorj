@@ -104,14 +104,6 @@ struct FnMeta {
     generic_ret_from_param: Option<usize>,
 }
 
-/// Per-variant metadata gathered in the pre-pass: its index into the `enum_descs` table (for
-/// `MakeEnum`/`MatchTag`) and the class-aware type of each payload field (so a payload binding —
-/// including a class-typed one — resolves through `ctype`). Decision P4-2.
-struct VariantMeta {
-    index: usize,
-    field_tags: Vec<CTy>,
-}
-
 /// One step from the `$match` scrutinee to a sub-value: an enum-payload index (`Op::GetEnumField`)
 /// or a named instance field (`Op::GetField` into the names pool). The mixed sequence lets a binding
 /// reach, e.g., `Wrapper(Point { x })` — an enum field then a struct field — with no new `Op` (S5.2).
@@ -149,8 +141,9 @@ struct Compiler<'a> {
     /// `n_captures` for each lambda in `extra_functions` (parallel array, same index).
     /// `stack_effect(MakeClosure(idx))` reads `lambda_n_captures[idx - base_fn_idx]`.
     lambda_n_captures: Vec<usize>,
-    /// Variant name → its descriptor metadata (construction + pattern dispatch).
-    variants: &'a HashMap<String, VariantMeta>,
+    /// Variant descriptor metadata, (enum, variant)-precise with a bare-name fallback
+    /// (construction + pattern dispatch — see [`VariantIndex`]).
+    variants: &'a VariantIndex,
     /// The shared enum-descriptor table — `stack_effect` reads `MakeEnum`'s payload arity from it.
     enum_descs: &'a [EnumDesc],
     /// Class name → the index of its synthetic constructor function (for `ClassName(args)`).
@@ -457,8 +450,10 @@ mod expr;
 mod matches;
 mod program;
 mod stmt;
+mod variants;
 use ctors::*;
 use program::*;
+use variants::{VariantIndex, VariantMeta};
 
 mod ctors;
 mod cty;

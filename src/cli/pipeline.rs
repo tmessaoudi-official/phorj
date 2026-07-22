@@ -141,8 +141,8 @@ pub fn check_and_expand_reified(
             for_iters,
             for_binds,
             tuple_binds,
-            // DEC-329.3 commit B consumes this via the `qualify_variants` pass; produced + tested now.
-            _variant_enums,
+            // DEC-329.3: span.start → owning enum, consumed by `qualify_variants` below.
+            variant_enums,
         )) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
@@ -176,6 +176,9 @@ pub fn check_and_expand_reified(
             // independent of every expression rewrite above; its generated hasNext/next pulls
             // are plain method calls needing no further pass on any backend.
             Ok((
+                // DEC-329.3: `qualify_variants` runs OUTERMOST (splice-back passes keep source
+                // spans), rewriting every variant use to its canonical enum-qualified form.
+                crate::checker::qualify_variants(
                 // DEC-288: write inferred tuple-destructure binder types into the AST (Invariant 7),
                 // then erase tuple literals to list literals LAST (both independent rewrites), so no
                 // backend sees `Expr::Tuple` and every tuple binder carries its concrete type.
@@ -219,6 +222,8 @@ pub fn check_and_expand_reified(
                     ),
                     &tuple_binds,
                 )),
+                &variant_enums,
+                ),
                 reified,
             ))
         }
@@ -778,7 +783,7 @@ pub(super) fn annotate(op: &Op, chunk: &Chunk, p: &BytecodeProgram) -> Option<St
         Op::CallNative(i, argc) => crate::native::registry()
             .get(*i)
             .map(|n| format!("-> {}.{}(argc={argc})", n.module, n.name)),
-        Op::MakeEnum(i) | Op::MatchTag(i) => p
+        Op::MakeEnum(i) | Op::MatchTag(i) | Op::MatchTagName(i) => p
             .enum_descs
             .get(*i)
             .map(|d| format!("{}::{}", d.ty, d.variant)),

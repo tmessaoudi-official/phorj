@@ -46,8 +46,12 @@ conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `P
     Rust: tail appended in `state.rs` emit (std SystemTime + process::id); PHP twin in `log_php.rs`
     (`microtime`/`getmypid`); parity test STRIPS the tail (regex ` \| ts=\d+ pid=\d+$` / json keys) —
     prefix stays byte-compared. KNOWN_ISSUES Log-v2 limits section updated same-change.
-(b) **qualify_variants post-check pass** → then enum-scoped variant classes (DEC-329.3; build-notes in
-    the DEC-329 register row).
+(b) **DEC-329.3 — commits A+B1 SHIPPED**: checker determinism + `E-VARIANT-AMBIGUOUS` + side-table
+    (A, `9d4ac34`); `qualify_variants` post-check pass + qualified keying on ALL backends
+    (B1 — interp `enum_variants` pairs, VM `VariantIndex` + ty-checking `Op::MatchTag` +
+    name-only `Op::MatchTagName` for the duck-typed `?`, transpiler qualified-construction
+    intercept). **REMAINS (B2): enum-scoped PHP variant classes** (`Shape_Circle`) lifting
+    `E-TRANSPILE-VARIANT-COLLISION` + golden regen — the actual DEC-329 ruling deliverable.
 (c) **DEC-320 v1 `phg build --php`** (DEC-329.1; per-file split build-note in the register row).
 (d) **`phg serve` native rustls TLS** (DEC-329.2; Web-pack; dep ruling for rustls server-side goes
     through the dependency policy like http-client did).

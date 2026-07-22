@@ -72,7 +72,8 @@ impl BytecodeProgram {
                             })
                         }
                     }
-                    Op::MakeEnum(idx) | Op::MatchTag(idx) => (*idx >= ndescs).then(|| {
+                    Op::MakeEnum(idx) | Op::MatchTag(idx) | Op::MatchTagName(idx) => (*idx >= ndescs)
+                        .then(|| {
                         format!("enum descriptor index {idx} out of range ({ndescs} descriptors)")
                     }),
                     // DEC-302 `EnumFrom(start, count, _)` scans `enum_descs[start..start+count]` —

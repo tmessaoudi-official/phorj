@@ -27,7 +27,6 @@
 1438	src/cli/preludes.rs
 872	src/cli/tests.rs
 505	src/compiler/cty.rs
-575	src/compiler/expr/calls.rs
 697	src/compiler/program.rs
 772	src/format/printer/exprs.rs
 690	src/interpreter/call.rs

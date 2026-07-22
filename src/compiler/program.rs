@@ -22,10 +22,10 @@ pub(super) fn compile_program_with(
     // M-RT overloading: name → every function index declared under it (declaration order). Names with
     // more than one entry become overload sets in the post-pass below.
     let mut overload_order: HashMap<String, Vec<usize>> = HashMap::new();
-    // Enum pre-pass: one `EnumDesc` per variant of every declared enum, plus the variant-name →
-    // metadata map both construction and `match` resolve through (decision P4-2).
+    // Enum pre-pass: one `EnumDesc` per variant + the two-way `VariantIndex` construction and
+    // `match` resolve through (P4-2; DEC-329.3).
     let mut enum_descs: Vec<EnumDesc> = Vec::new();
-    let mut variants: HashMap<String, VariantMeta> = HashMap::new();
+    let mut variants = VariantIndex::default();
     // M-RT S8: each trait becomes a synthetic method-bearing decl so its methods are registered and
     // compiled under the trait name; `class_method_origins` then aliases every using class's trait
     // method to the trait's fn index. A trait is never instantiated (no `MakeInstance`), so the extra
@@ -60,9 +60,8 @@ pub(super) fn compile_program_with(
         match it {
             Item::Function(f) => {
                 let index = order.len();
-                // M-RT overloading: keep the FIRST overload's `FnMeta` (return type is shared across
-                // the set, so it still types a call's result); record every overload's function index
-                // so the post-pass can build the dispatch table for names with more than one.
+                // M-RT overloading: keep the FIRST overload's `FnMeta` (the return type is shared
+                // across the set); the post-pass builds dispatch tables from every recorded index.
                 fns.entry(f.name.clone()).or_insert_with(|| FnMeta {
                     index,
                     ret: f.ret.as_ref().map_or(CTy::Other, resolve_cty),
@@ -79,7 +78,8 @@ pub(super) fn compile_program_with(
             Item::Enum(e) => {
                 for v in &e.variants {
                     variants.insert(
-                        v.name.clone(),
+                        &e.name,
+                        &v.name,
                         VariantMeta {
                             index: enum_descs.len(),
                             field_tags: v.fields.iter().map(|p| resolve_cty(&p.ty)).collect(),

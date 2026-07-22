@@ -168,7 +168,12 @@ pub(super) fn match_pattern(
         Pattern::Str(s, _) => matches!(value, Value::Str(v) if v == s),
         Pattern::Bool(b, _) => matches!(value, Value::Bool(v) if v == b),
         Pattern::Null(_) => matches!(value, Value::Null), // M3 S2.6: `null` arm over a `T?`
-        Pattern::Variant { name, fields, .. } => {
+        Pattern::Variant {
+            name,
+            fields,
+            enum_qualifier,
+            ..
+        } => {
             // A lazy Json node (DEC-294) materializes one level here, before the variant test.
             #[cfg(feature = "json")]
             if let Value::JsonLazy(l) = value {
@@ -176,7 +181,16 @@ pub(super) fn match_pattern(
                 return match_pattern(pat, &m, implements, out);
             }
             if let Value::Enum(ev) = value {
-                if ev.variant.as_ref() == name.as_str() && ev.payload.len() == fields.len() {
+                // DEC-329.3: a qualified pattern also tests the OWNING enum — `A.Dup(..)` must not
+                // match a `B.Dup` value when two enums share the variant name. `qualify_variants`
+                // canonicalizes every pattern's qualifier to the checker-resolved enum, so this is
+                // an exact-string test; a `None` qualifier (defensive fallback) keeps the
+                // name-only behavior. Mirrors the VM's `Op::MatchTag` (ty + variant).
+                let ty_ok = enum_qualifier
+                    .as_ref()
+                    .is_none_or(|q| ev.ty.as_ref() == q.as_str());
+                if ty_ok && ev.variant.as_ref() == name.as_str() && ev.payload.len() == fields.len()
+                {
                     return fields
                         .iter()
                         .zip(ev.payload.iter())

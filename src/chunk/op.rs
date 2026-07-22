@@ -177,10 +177,18 @@ pub enum Op {
     /// Construct an enum value from `enum_descs[idx]`: pop `desc.arity` payload values (in
     /// source order — top of stack is the last field) and push `Value::Enum` (decision P4-3).
     MakeEnum(usize),
-    /// Pop the scrutinee and push a `Bool`: whether it is a `Value::Enum` whose variant equals
-    /// `enum_descs[idx].variant`. Variant names are globally unique (the checker keys them by
-    /// name), so the variant string alone disambiguates. Used by `match` arm dispatch (P4-7).
+    /// Pop the scrutinee and push a `Bool`: whether it is a `Value::Enum` whose (ty, variant)
+    /// equals `enum_descs[idx]`'s. Used by `match` arm dispatch (P4-7); the ty half makes the
+    /// test precise when two enums share a variant name (DEC-329.3 — `qualify_variants` keys the
+    /// compiler on the pattern's owning enum, and this op enforces it at runtime, mirroring the
+    /// interpreter's qualifier check).
     MatchTag(usize),
+    /// Pop the scrutinee and push a `Bool`: whether it is a `Value::Enum` whose variant NAME
+    /// equals `enum_descs[idx].variant` — the owning enum is deliberately NOT tested. Used only
+    /// by the duck-typed `?` (`compile_propagate`): the checker accepts any Result-SHAPED enum,
+    /// so the `Failure` test must hold for every such enum, exactly like the interpreter's
+    /// name-only `Expr::Propagate` arm (DEC-329.3).
+    MatchTagName(usize),
     /// Pop an enum value and push a clone of its payload element `i`. The compiler only emits
     /// this for an index a preceding `MatchTag` already proved in range (P4-7); a defensive
     /// runtime fault covers misuse (EV-7).

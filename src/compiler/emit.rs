@@ -10,7 +10,7 @@ impl<'a> Compiler<'a> {
     pub(in crate::compiler) fn new(
         fns: &'a HashMap<String, FnMeta>,
         arities: &'a [usize],
-        variants: &'a HashMap<String, VariantMeta>,
+        variants: &'a VariantIndex,
         enum_descs: &'a [EnumDesc],
         classes: &'a HashMap<String, usize>,
         imports: &'a HashMap<String, String>,
@@ -92,7 +92,7 @@ impl<'a> Compiler<'a> {
             Op::SetPathLocal(_, depth) => -(*depth as isize + 1),
             // BitNot is unary (pop one, push one) like Neg/Not.
             Op::Neg | Op::Not | Op::BitNot | Op::Len | Op::IterElems | Op::Jump(_) => 0,
-            Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one
+            Op::MatchTag(_) | Op::MatchTagName(_) | Op::GetEnumField(_) => 0, // pop one, push one
             // DEC-302: `EnumValue` pops the enum, pushes its backing; `EnumFrom` pops the arg,
             // pushes the matched variant (or null). Both net 0.
             Op::EnumValue | Op::EnumFrom(..) => 0,

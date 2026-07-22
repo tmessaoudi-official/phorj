@@ -97,6 +97,20 @@ impl Transpiler {
             object, name, safe, ..
         } = callee
         {
+            // DEC-329.3: qualified enum-variant construction `Enum.Variant(args)` — the canonical
+            // form `qualify_variants` produces for EVERY construction. Emits the same variant
+            // class the bare path does. The guard (declared enum head + declared variant, never a
+            // local) cannot capture a native/static call: variants are PascalCase and module
+            // functions camelCase (naming SSOT), and `cases`/`from`/`tryFrom` are checker-reserved.
+            if !*safe {
+                if let Expr::Ident(en, _) = &**object {
+                    if !self.is_local(en) && self.enums.contains(en) && self.variants.contains(name)
+                    {
+                        let argv = self.emit_args(args)?;
+                        return Ok(format!("new {}({argv})", self.variant_ref(name)));
+                    }
+                }
+            }
             // Namespaced native call: `console.println(x)` → the native's PHP erasure (M3 Wave 1).
             // Resolved through the import map (the transpiler has no variable scope to tell a
             // qualifier from a value; the checker rejects a local shadowing an imported qualifier,

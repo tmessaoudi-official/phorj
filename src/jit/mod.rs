@@ -115,6 +115,7 @@ pub enum JitRun {
 
 mod analyze;
 mod boxed;
+mod collect_unboxed;
 mod compile;
 mod emit_unboxed;
 mod handles;
@@ -124,6 +125,7 @@ pub use self::compile::Compiled;
 
 use self::analyze::*;
 use self::boxed::*;
+use self::collect_unboxed::*;
 use self::emit_unboxed::*;
 use self::handles::*;
 use self::range_acc::*;

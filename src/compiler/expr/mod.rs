@@ -5,3 +5,4 @@ use super::*;
 mod binary;
 mod calls;
 mod core;
+mod lambda;

@@ -185,15 +185,14 @@ pub struct Interp<'c> {
     /// multi-parent / resolution-clause / renamed call resolves to the *same* body the VM dispatches
     /// to (M-RT S6b). Subsumes the parent-chain walk: `call_method` is now a single table lookup.
     method_origins: std::collections::BTreeMap<(String, String), (String, String)>,
-    /// variant name -> (enum name, arity)
+    /// variant name -> (enum name, arity) — bare-keyed FALLBACK (last declaration wins);
+    /// canonical qualified constructions resolve via `enum_variants` (DEC-329.3).
     variants: HashMap<String, (String, usize)>,
-    /// DEC-302: enum name -> its variant names in DECLARATION order. Drives `Enum.cases()` (any
-    /// payload-less enum) and the `Enum.from`/`tryFrom` scan; ordered (never a HashMap iteration) so
-    /// `cases()` is deterministic and matches the VM's AST-ordered `enum_descs` emission.
-    enum_variants: HashMap<String, Vec<String>>,
-    /// DEC-302: `(enum, variant)` -> the variant's scalar backing value, for a backed enum only.
-    /// Read by `s.value` and the `from`/`tryFrom` scan; the value is single-sourced from the AST
-    /// literal via `const_literal`, identical to the VM's `EnumDesc.backing`.
+    /// DEC-302: enum -> `(variant, arity)` in DECLARATION order (`cases()` matches the VM's
+    /// `enum_descs`); also the DEC-329.3 qualified-construction resolver.
+    enum_variants: HashMap<String, Vec<(String, usize)>>,
+    /// DEC-302: `(enum, variant)` -> scalar backing value (backed enums only). Read by `s.value`
+    /// and `from`/`tryFrom`; single-sourced via `const_literal`, identical to `EnumDesc.backing`.
     enum_backing: HashMap<(String, String), Value>,
     /// Program-lifetime `static` field storage (M-mut.7), keyed by `(class, field)`. Seeded once at
     /// load from each static's literal-const initializer; read/written via `ClassName.field`.
@@ -531,6 +530,7 @@ mod call;
 mod construct;
 mod expr;
 mod stmt;
+mod variants;
 
 // Cooperative green-thread driver (M6 W4 / S4.3) — native + `green` only (uses stackful coroutines,
 // which corosensei cannot provide on wasm32; the wasm interpreter keeps the eager model).

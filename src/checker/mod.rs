@@ -24,6 +24,7 @@ mod function_imports;
 mod inline_parent_ctor;
 mod intrinsic_imports;
 mod overloads;
+mod qualify_variants;
 mod resolve_variant_imports;
 mod rewrite_alias;
 mod rewrite_fills;
@@ -42,6 +43,7 @@ pub use erase_tuples::erase_tuples;
 pub use inline_parent_ctor::inline_parent_ctors;
 pub use intrinsic_imports::resolve_intrinsic_imports;
 pub use overloads::rename_overload_defs;
+pub use qualify_variants::qualify_variants;
 pub use resolve_variant_imports::resolve_variant_imports;
 pub use rewrite_alias::expand_aliases;
 pub use rewrite_fills::apply_default_fills;
@@ -611,12 +613,10 @@ pub struct Checker {
     return_overload_methods: HashMap<(String, String), Vec<(Ty, String)>>,
     /// S2.1-broad: per-expression *reified operand type*, keyed by the expression's `span.start`, for
     /// `Call`/`Member`/`Index` nodes whose checker-resolved `Ty` is concrete. The VM compiler's `ctype`
-    /// consults this FIRST so a generic method result (`box.get() + 1`), a generic field read
-    /// (`box.value + 1`), or a `List<T>`/`Map`-typed return specializes as the arithmetic operand the
-    /// checker proved — closing the run↔runvm "CTy-operand trap" for results the static shape erases to
-    /// `mixed`. The checker is authoritative on the value's runtime type (erasure doesn't change it), so
-    /// overriding `ctype` with it is sound; entries that map to `CTy::Other` are dropped at the compile
-    /// boundary, so non-operand results never override `ctype`'s normal (fn-value/class) resolution.
+    /// consults this FIRST so a generic method result (`box.get() + 1`), field read, or `List<T>`/`Map`
+    /// return specializes as the operand the checker proved — closing the run↔runvm "CTy-operand trap"
+    /// for results erased to `mixed`. The checker is authoritative on the runtime type, so the override
+    /// is sound; `CTy::Other` entries are dropped at the compile boundary (never override fn/class).
     reified_operands: HashMap<usize, Ty>,
     /// DEC-329.3: resolved VARIANT USES, `span.start` → owning enum (feeds `qualify_variants`).
     variant_resolutions: HashMap<usize, String>,

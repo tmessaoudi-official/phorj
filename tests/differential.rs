@@ -4591,3 +4591,66 @@ import Core.Time;
         "s2d_qualified_construction",
     );
 }
+
+// ── DEC-329.3: variant names shared by two enums ─────────────────────────────────────────────────
+
+/// Two enums declaring the SAME variant name: qualified construction must build each value with
+/// its OWN enum identity (pre-329.3 both backends resolved the bare post-erasure name through a
+/// last-declaration-wins map — `new A.Dup(7)` could silently carry ty `B`), and a qualified
+/// pattern must test the owning enum, not just the variant name. The rendered `Ty.Variant(…)`
+/// debug form makes the constructed identity observable.
+#[test]
+fn dec329_shared_variant_names_keep_their_owning_enum() {
+    let src = r#"import Core.Output;
+import Core.DebugModule;
+enum A { Dup(int x) }
+enum B { Dup(string y) }
+function tagA(A a): string { return match (a) { A.Dup(x) => "A:{x}" }; }
+function tagB(B b): string { return match (b) { B.Dup(y) => "B:{y}" }; }
+#[Entry] function main(): void {
+  A a = new A.Dup(7);
+  B b = new B.Dup("s");
+  discard Debug.dump(a);
+  discard Debug.dump(b);
+  Output.printLine(tagA(a));
+  Output.printLine(tagB(b));
+}"#;
+    let with = with_pkg(src);
+    let tree = cmd_treewalk(&with);
+    let vm = cmd_run(&with);
+    assert_eq!(tree, vm, "run vs runvm:\n  run={tree:?}\n  runvm={vm:?}");
+    let out = tree.expect("program runs clean");
+    // The FIRST line proves construction identity: `a` renders with ty `A` (not `B`).
+    assert_eq!(out, "A.Dup(7)\nB.Dup(\"s\")\nA:7\nB:s\n");
+}
+
+/// `?` is DUCK-TYPED (any Result-shaped enum) — with BOTH a user Result-shaped enum and the
+/// injected `Core.Result` in scope, the `Failure` test must stay a variant-NAME test
+/// (`Op::MatchTagName`), never the (ty, variant) `MatchTag` against whichever descriptor the bare
+/// owner map picked (DEC-329.3 would otherwise have turned this working program into one whose
+/// `Failure` silently unwraps as `Success`).
+#[test]
+fn dec329_propagate_stays_duck_typed_beside_injected_result() {
+    let src = r#"import Core.Output;
+import Core.Result;
+import Core.DebugModule;
+enum MyRes { Success(int v), Failure(string e) }
+function half(int x): MyRes {
+  if (x % 2 == 0) { return new MyRes.Success(x / 2); }
+  return new MyRes.Failure("odd");
+}
+function driver(int x): MyRes {
+  int v = half(x)?;
+  return new MyRes.Success(v + 100);
+}
+#[Entry] function main(): void {
+  discard Debug.dump(driver(8));
+  discard Debug.dump(driver(3));
+}"#;
+    let with = with_pkg(src);
+    let tree = cmd_treewalk(&with);
+    let vm = cmd_run(&with);
+    assert_eq!(tree, vm, "run vs runvm:\n  run={tree:?}\n  runvm={vm:?}");
+    let out = tree.expect("program runs clean");
+    assert_eq!(out, "MyRes.Success(104)\nMyRes.Failure(\"odd\")\n");
+}

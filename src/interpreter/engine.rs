@@ -26,7 +26,7 @@ impl<'c> Interp<'c> {
                     for v in &e.variants {
                         self.variants
                             .insert(v.name.clone(), (e.name.clone(), v.fields.len()));
-                        order.push(v.name.clone());
+                        order.push((v.name.clone(), v.fields.len()));
                         if let Some(val) = v
                             .backing_value
                             .as_ref()

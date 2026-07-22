@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — DEC-329.3 (commits A + B1): variant names shared by two enums resolve to their OWNING enum
+
+Pre-fix, every backend resolved a variant use through a bare-name map (last-declaration-wins): with
+`enum A { Dup(int) }` and `enum B { Dup(string) }`, even a *qualified* `new A.Dup(7)` could
+construct a value carrying ty `B` (the checker's owner pick was HashMap-iteration nondeterministic,
+and `unwrap_new` erased the qualifier before any backend saw it), and `A.Dup(..)` patterns matched
+`B.Dup` values by name. Now: (A) the checker resolves owners deterministically, rejects a BARE use
+of a shared name with `E-VARIANT-AMBIGUOUS`, and records every resolved use in a span-keyed
+side-table; (B1) the new `qualify_variants` post-check pass rewrites every construction/pattern to
+its canonical enum-qualified form, and all three backends key on it — interpreter construction +
+pattern-qualifier test, VM `VariantIndex` + `Op::MatchTag` now testing **(ty, variant)**, and a
+transpiler qualified-construction intercept. The duck-typed `?` keeps NAME-only `Failure` matching
+via the new `Op::MatchTagName` (a user Result-shaped enum beside injected `Core.Result` still
+propagates correctly; the JIT declines it fail-closed when the name is shared). PHP class names are
+unchanged in B1 (`E-TRANSPILE-VARIANT-COLLISION` still refuses two enums sharing a variant name on
+the PHP leg); the ruled enum-scoped classes land in the follow-up.
+
 ### Added — DEC-302: backed enums (PHP 8.1 parity) — scalar-valued enums
 
 `enum Suit: string { Hearts = "H", … }` / `enum Priority: int { Low = 1, … }` — an enum whose

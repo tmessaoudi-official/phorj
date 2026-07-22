@@ -2771,6 +2771,33 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   of the single-program transpile output (PSR-4 = one class per file): transpile whole-program (the
   checker needs it), then route each item to the `.php` sibling of the `.phg` that declared it —
   needs the loader's item→source-file attribution (verify what `loader::load` preserves).
+  **(3) BUILD — commit B1 SHIPPED (2026-07-22), Rust-leg correctness half.** The recon under-stated
+  the blast radius: the RUST legs were wrong too — interp `variants` map + VM `VariantMeta` map +
+  `Op::MatchTag` exec were all bare-name keyed (last-declaration-wins), so a *qualified* use of a
+  shared variant name constructed/matched against the WRONG enum on run/runvm as well (and
+  `unwrap_new` erases the qualifier before backends, so nothing downstream could know better).
+  Shipped: `checker/qualify_variants.rs` (span-table consumer, OUTERMOST in
+  `check_and_expand_reified`; rewrites constructions to `Member{Ident(enum), v}` callees and
+  (over)writes every pattern's `enum_qualifier` with the canonical checker resolution; owns-guard
+  against span collisions; table-miss degrades to the old bare path). Backends: interp
+  `enum_variants` now carries `(variant, arity)` pairs and `eval_call` intercepts
+  `Enum.Variant(args)`; interp `match_pattern` tests `ev.ty == qualifier`; VM compiler keys through
+  a two-way `VariantIndex` (`by_enum` + bare `owner` fallback; `compiler/variants.rs`), the
+  qualified-construction intercept emits the right `MakeEnum` desc, patterns pick the
+  qualifier-keyed desc, and `Op::MatchTag` exec now tests **(ty, variant)** — plus a NEW
+  **`Op::MatchTagName`** (Invariant 3 trio + JIT arms extended same-commit) used ONLY by
+  `compile_propagate`: `?` is DUCK-TYPED (`is_result_enum` is structural), so its `Failure` test
+  must stay name-only or a user Result-shaped enum's Failure beside injected `Core.Result` would
+  silently unwrap as Success (regression test
+  `dec329_propagate_stays_duck_typed_beside_injected_result`; JIT declines `MatchTagName` when the
+  variant name is shared — fail-closed). Transpiler got the qualified-construction intercept
+  emitting today's FLAT class names (goldens byte-identical). Differential:
+  `dec329_shared_variant_names_keep_their_owning_enum` (construction identity observable via
+  `Debug.dump` — pre-fix it rendered the WRONG enum). Inv-13: analyze.rs → `jit/collect_unboxed.rs`
+  split; `compile_lambda` → `compiler/expr/lambda.rs`; `eval_enum_static` →
+  `interpreter/variants.rs`. **REMAINS (B2): the ruled deliverable — enum-SCOPED PHP variant
+  classes** (`Shape_Circle`, lift `E-TRANSPILE-VARIANT-COLLISION`, one-time golden regen, helper
+  tables single-sourced through the scoped naming fn).
 
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their

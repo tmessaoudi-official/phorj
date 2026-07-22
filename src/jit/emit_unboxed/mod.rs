@@ -1753,14 +1753,14 @@ pub(super) fn build_body_unboxed(
                     arity,
                 )?;
             }
-            Op::MatchTag(idx) => {
+            // `MatchTagName` shares the compare: analyze declined shared names (DEC-329.3).
+            Op::MatchTag(idx) | Op::MatchTagName(idx) => {
                 arm_match_tag(&mut b, &vars, &fvars, &evars, &mut kinds, *idx as i64)?;
             }
             Op::GetEnumField(0) => {
                 arm_get_enum_field(&mut b, &vars, &fvars, &mut kinds)?;
             }
-            // Native try/catch: handler bookkeeping is COMPILE-TIME (the lexical ranges) —
-            // no runtime code at the markers.
+            // Native try/catch: handler bookkeeping is COMPILE-TIME (lexical ranges) — no code.
             Op::PushHandler(_) | Op::PopHandler => {}
             // `Throw`: release everything the VM's unwind would drop, then jump to the active
             // pad with the payload (or leave the frame as `(payload, 6)`). Pending overflow

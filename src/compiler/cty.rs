@@ -4,9 +4,8 @@
 use super::*;
 
 impl Compiler<'_> {
-    /// DEC-302: the contiguous `enum_descs` range `(start, count)` for enum `name`, or `None` when
-    /// `name` is not a declared enum. Variants are emitted contiguously per enum in the compiler
-    /// pre-pass, so the range is a single scan (drives `cases()` inlining + `Op::EnumFrom`).
+    /// DEC-302: the contiguous `enum_descs` range `(start, count)` for enum `name` (`None` when not
+    /// a declared enum). Variants are emitted contiguously per enum (drives `cases()`/`EnumFrom`).
     pub(in crate::compiler) fn enum_desc_range(&self, name: &str) -> Option<(usize, usize)> {
         let start = self.enum_descs.iter().position(|d| d.ty.as_ref() == name)?;
         let count = self.enum_descs[start..]
@@ -16,8 +15,8 @@ impl Compiler<'_> {
         Some((start, count))
     }
 
-    /// DEC-302: the operand `CTy` of a backed enum's `.value` (`Int`/`Str`), or `None` when `name`
-    /// is not a backed enum. Lets `s.value` / `from(x).value` specialize as an operand (Invariant 7).
+    /// DEC-302: the operand `CTy` of a backed enum's `.value` (`Int`/`Str`), else `None` — lets
+    /// `s.value` / `from(x).value` specialize as an operand (Invariant 7).
     pub(in crate::compiler) fn enum_backing_cty(&self, name: &str) -> Option<CTy> {
         self.enum_descs
             .iter()
@@ -30,18 +29,16 @@ impl Compiler<'_> {
             })
     }
 
-    /// DEC-302: `true` when `object` is a backed-enum-typed receiver (so `object.value` lowers to
-    /// `Op::EnumValue`, not `GetField`). A backed enum's `CTy` is `CTy::Class(name)` (`resolve_cty`'s
-    /// nominal fallback), disambiguated from a real class by `enum_backing_cty`.
+    /// DEC-302: `true` when `object` is a backed-enum-typed receiver (`object.value` lowers to
+    /// `Op::EnumValue`, not `GetField`); `CTy::Class(name)` disambiguated by `enum_backing_cty`.
     pub(in crate::compiler) fn is_backed_enum_receiver(&self, object: &Expr) -> bool {
         matches!(self.ctype(object), Ok(CTy::Class(n)) if self.enum_backing_cty(&n).is_some())
     }
 
     /// Infer whether an arithmetic operand is int- or float-typed, to pick the specialized op
-    /// (decision P2-6). Only reached for operands of `+ - * / %`, which the checker guarantees are
-    /// numeric. The numeric projection of `ctype` (M2 Wave 4): `ctype` resolves the operand's full
-    /// class-aware type and `as_num` narrows it. The error wording matches the pre-Wave-4 paths (a
-    /// checker-unreachable surface — no test depends on it — kept faithful regardless).
+    /// (P2-6). Only reached for `+ - * / %` operands (checker-guaranteed numeric): `ctype` resolves
+    /// the full class-aware type, `as_num` narrows it. Error wording matches the pre-Wave-4 paths
+    /// (a checker-unreachable surface, kept faithful regardless).
     pub(in crate::compiler) fn num_ty(&self, e: &Expr) -> Result<NumTy, String> {
         let cty = self.ctype(e)?;
         Self::as_num(&cty).ok_or_else(|| match e {
@@ -62,16 +59,13 @@ impl Compiler<'_> {
     /// method return type. Anything it can name but isn't numeric/class collapses to `Other`; only a
     /// genuinely unresolvable operand errors (the same surface that errored pre-Wave-4).
     pub(in crate::compiler) fn ctype(&self, e: &Expr) -> Result<CTy, String> {
-        // S2.1-broad reified-operand side-table — consulted as a **FALLBACK**, not first. The normal
-        // class-aware resolution wins whenever it yields a concrete operand type, so a correctly-typed
-        // field/method read is never overridden. Why fallback (not first): the map is keyed only by
-        // `span.start`, and an injected prelude (parsed from its own 0-based source string, then
-        // prepended) can share a `span.start` with a user expression — consulting it first let a user
-        // entry hijack a prelude `this.field` read, a spurious "cannot infer numeric type" (the
-        // `datetimes.phg` regression). Reified now applies ONLY when the normal path can't resolve the
-        // operand (an erased generic — `box.get() + 1`, `box.value + 1`, a `List<T>`/`Map` return —
-        // which collapses to `Other`), exactly what the side-table was built for, so the generic
-        // specialization is unaffected. Empty on the run-family `compile` path ⇒ zero overhead.
+        // S2.1-broad reified-operand side-table — a **FALLBACK**, not first: the normal class-aware
+        // resolution wins whenever it yields a concrete type. Why: the map is keyed only by
+        // `span.start`, and an injected prelude (parsed from its own 0-based source) can share a
+        // `span.start` with a user expression — consulting it first hijacked a prelude `this.field`
+        // read (the `datetimes.phg` regression). Reified applies ONLY when the normal path collapses
+        // to `Other` (erased generics — `box.get() + 1`, a `List<T>`/`Map` return), exactly what the
+        // table was built for. Empty on the run-family `compile` path ⇒ zero overhead.
         let normal = self.ctype_normal(e);
         if matches!(normal, Ok(ref c) if !matches!(c, CTy::Other)) {
             return normal;
@@ -202,7 +196,7 @@ impl Compiler<'_> {
                         Ok(meta.ret.clone())
                     } else if self.classes.contains_key(name) {
                         Ok(CTy::Class(name.clone())) // a constructor returns its instance
-                    } else if self.variants.contains_key(name) {
+                    } else if self.variants.contains_bare(name) {
                         Ok(CTy::Other) // an enum value: not numeric, not a class we track fields of
                     } else if let Some(slot) = self.resolve_local(name) {
                         // A function-value local (lambda): the call result is the lambda's ret type.
@@ -214,13 +208,10 @@ impl Compiler<'_> {
                         Err(format!("cannot infer numeric type of {e:?}"))
                     }
                 }
-                // Native module-qualified call (`List.length(xs)`, `Text.parseInt(s)`, …): resolve to
-                // the native's return operand type. Checked BEFORE `ctype(object)` — the qualifier is a
-                // bare module name (`List`), not a value, so `ctype(Ident("List"))` would error. Mirror
-                // the emit-path guard in `compiler/expr.rs`: a head that is not a local/match-binding,
-                // resolvable via `index_of_qualified` (import-map-first, Native-excluded leaf
-                // fallback — same rule as the emit path). Without this, `List.length(xs) - 1` compiles on
-                // the interpreter but the VM rejects it ("undefined variable `List`") — a parity break.
+                // Native module-qualified call (`List.length(xs)`, …): resolve to the native's return
+                // operand type, BEFORE `ctype(object)` (the qualifier is a bare module name — not a
+                // value). Mirrors the emit-path guard (not a local/binding + `index_of_qualified`).
+                // Without this, `List.length(xs) - 1` compiles on the interpreter but not the VM.
                 Expr::Member {
                     object,
                     name,
@@ -238,11 +229,9 @@ impl Compiler<'_> {
                             .expect("guard above already resolved this qualified native"),
                     ))
                 }
-                // DEC-302 enum static methods `Enum.from(x)` / `Enum.tryFrom(x)` / `Enum.cases()`: the
-                // head is a bare enum name (not a value), so resolve directly. `from`/`tryFrom` yield
-                // the enum type (`CTy::Class(enum)` — an optional carries its inner CTy, so
-                // `tryFrom(x)!.value` specializes); `cases()` yields `List<enum>`. Without this,
-                // `Enum.from(9).value + 1` gets `Other` and the VM rejects the operand (Invariant 7).
+                // DEC-302 enum statics `Enum.from/tryFrom/cases`: the head is a bare enum name, so
+                // resolve directly — `from`/`tryFrom` yield `CTy::Class(enum)`, `cases()` a
+                // `List<enum>`. Without this `Enum.from(9).value + 1` is rejected (Invariant 7).
                 Expr::Member {
                     object,
                     name,
@@ -261,11 +250,22 @@ impl Compiler<'_> {
                         _ => CTy::Class(en.clone()), // from / tryFrom
                     })
                 }
-                // Static method call `ClassName.method(args)` (slice B0 / Statics): the head is a bare
-                // class name, not a value, so `ctype(object)` would reject it — resolve directly via
-                // `method_rets[(class, method)]`. Without this, `var f = Router.compose(...)` gets
-                // `CTy::Other` and a later `f(x)` is rejected on the VM as "not a function" — a parity
-                // break (the same CTy-operand/fn-value trap as the native arm above).
+                // DEC-329.3 qualified variant construction `Enum.Variant(args)` — the canonical
+                // post-`qualify_variants` form; same operand answer as the bare arm: an enum value.
+                Expr::Member {
+                    object,
+                    name,
+                    safe: false,
+                    ..
+                } if matches!(&**object, Expr::Ident(en, _)
+                    if self.resolve_local(en).is_none() && self.resolve_binding(en).is_none()
+                        && self.variants.get(Some(en), name).is_some()) =>
+                {
+                    Ok(CTy::Other)
+                }
+                // Static method call `ClassName.method(args)` (slice B0): the head is a bare class
+                // name — resolve via `method_rets[(class, method)]`. Without this, `var f =
+                // Router.compose(...)` collapses and a later `f(x)` is VM-rejected (parity break).
                 Expr::Member {
                     object,
                     name,
