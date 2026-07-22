@@ -2902,5 +2902,13 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     — running the correct command on `y`. **TTY-guarded** (impl detail, dev-flagged/accepted): the y/N
     prompt only in an interactive terminal; in CI / a pipe (no TTY) print the error + suggestion and exit
     non-zero WITHOUT prompting (never block on stdin).
-  - **D7+ (PENDING):** inbound TLS (native-only? enablement? version floor? out-of-scope set), Rich
-    Request, Invokable/toString, parity scheduling — recorded here as each locks.
+  - **D7 (LOCKED 2026-07-22) — inbound TLS.** (a) `serve`+TLS are **native-only**: transpile emits
+    `E-TRANSPILE-SERVE` (Ladder tier 2, loud refusal — `serve` is already native-only, TLS inherits it;
+    no silent PHP built-in-server downgrade). (b) HTTPS **auto-enables when both `cert` and `key` are
+    present** in `Http.ServeConfig` (plain HTTP otherwise; no redundant `--tls` flag). (c) Version floor
+    already covered by `ServeConfig.tlsMinVersion` (default TLS 1.2, D4). **Deferred to a later slice**
+    (dev: no preference → take recommendation; documented in KNOWN_ISSUES): HTTP→HTTPS redirect, HSTS,
+    cert hot-reload, mTLS/client-certs. v1 = terminating TLS only.
+  - **D8+ (PENDING):** Rich Request (immutable/lazy, body.json type, case-insensitive headers, bag API,
+    multi-value keys, value types, files/multipart scope, replace-existing, attributes type), Invokable/
+    toString, parity scheduling — recorded here as each locks.
