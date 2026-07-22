@@ -2922,5 +2922,17 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     the native-backed Request caches on first access (the Core.Json `LazyJson` precedent) while staying
     observationally immutable to phorj. Eager can 400 a malformed request before the handler; lazy defers
     cost (handlers that ignore a large body) and surfaces bad input at access (`None`/fault).
-  - **D9+ (PENDING):** Invokable/toString, parity scheduling, build order, spec-first, env/php —
-    recorded here as each locks.
+  - **D9 (PARTIAL 2026-07-22) — Invokable + toString.** LOCKED: **D9a** callability is marked by an
+    **`#[Invoke]` attribute** on a method (NOT a magic method-name) — checker rewrites `x(3)` to the
+    invoke call statically; the class is assignable to a matching function type (Route handler/callback).
+    **D9c** OVERLOADING allowed — multiple `#[Invoke]` methods with DIFFERENT signatures all serve as
+    call targets (arbitrary method names; resolved by arity/type at the call site); two with the SAME
+    signature = compile error. **Byte-identity-safe** [Verified]: the VM already dispatches overloads
+    (`Op::CallOverload`/`CallStaticOverload` + `dispatch::select_overload`, `chunk/mod.rs` overload
+    tables) on both backends; the old "VM rejects overloaded `respond`" limit is moot (D5 retired
+    `respond`). PHP leg emits native `__invoke` (single) — MULTI-invoke has no faithful PHP `__invoke`
+    (one per class) → LADDER check owed at build (likely `__phorj_*` arity-dispatch shim or E-TRANSPILE;
+    surface to dev). **D9b PENDING re-ask** — dev wants an ATTRIBUTE for toString too (parallel to
+    `#[Invoke]`); design + is-it-a-good-idea being re-surfaced.
+  - **D10+ (PENDING):** parity scheduling (generators/iterators, LSB, etc.), build order, spec-first,
+    env/php — recorded here as each locks.
