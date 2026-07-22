@@ -1476,11 +1476,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              the mail-sending part native and transpile only the rest of your program.\n"
         }
         "E-TRANSPILE-SESSION" => {
-            "E-TRANSPILE-SESSION — a program importing `Core.SessionModule` cannot be transpiled to PHP yet.\n\n\
-             `Core.SessionModule`'s in-process store matches `phg serve`'s long-lived process model; PHP's\n\
-             per-request model needs a `session_start()`/`$_SESSION` mapping — a recorded future\n\
-             lift. Until it lands, transpile refuses rather than emitting a silently-diverging\n\
-             program (§14 LADDER). Run session programs with `phg run` / `phg serve`.\n"
+            "E-TRANSPILE-SESSION — a program importing `Core.SessionModule` is native-only (PERMANENT, DEC-313).\n\n\
+             Sessions cannot be byte-identically transpiled: ids are OS-entropy random (observable\n\
+             via `Session.id()`), the idle TTL reads the wall clock (not the freezable `Core.Time`\n\
+             one), and the persistent in-process store matches `phg serve`'s long-lived process —\n\
+             PHP's per-request `$_SESSION` is a different model. Refusing beats silent divergence\n\
+             (§14 LADDER). Run session programs with `phg run` / `phg serve`.\n"
         }
         "E-TRANSPILE-UNICODE" => {
             "E-TRANSPILE-UNICODE — a call to a native-only `Core.String` Unicode function cannot be transpiled to PHP.\n\n\

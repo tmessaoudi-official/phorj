@@ -587,7 +587,7 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
         (
             &["Core", "SessionModule"],
             "E-TRANSPILE-SESSION",
-            "`Core.SessionModule` is native-only for now: its in-process session store matches phg serve's process model; PHP's per-request model needs a session_start() mapping — a recorded future lift (THE LADDER RULE: refusing beats silent divergence). Run session programs with `phg run` / `phg serve`.",
+            "`Core.SessionModule` is native-only PERMANENTLY (DEC-313): entropy-random session ids (observable via Session.id()), a wall-clock idle TTL, and the persistent in-process store make it not byte-identically transpilable to PHP's per-request $_SESSION model (THE LADDER RULE: refusing beats silent divergence). Run session programs with `phg run` / `phg serve`.",
         ),
         (
             &["Core", "HttpClientModule"],
@@ -617,7 +617,7 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
         (
             &["Core", "Native", "Session"],
             "E-TRANSPILE-SESSION",
-            "`Core.Native.Session` (the raw natives under `Core.SessionModule`) is native-only for now (THE LADDER RULE). Run session programs with `phg run` / `phg serve`.",
+            "`Core.Native.Session` (the raw natives under `Core.SessionModule`) is native-only PERMANENTLY (DEC-313, same grounds as the module). Run session programs with `phg run` / `phg serve`.",
         ),
         (
             &["Core", "Native", "HttpClient"],
