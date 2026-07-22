@@ -100,7 +100,7 @@ pub(super) fn complete(
                 }
             }
         }
-        Ctx::General => general_items(offset, program, docs, uri),
+        Ctx::General => general_items(text, offset, program, docs, uri),
     };
     if items.is_empty() {
         return EMPTY.to_string();
@@ -153,15 +153,24 @@ fn context(text: &str, offset: usize) -> Ctx {
     Ctx::General
 }
 
-/// General completion: top-level declarations (when the buffer parsed), the enclosing callable's
-/// in-scope locals/params, and the language keywords. Mirrors the pre-2026-07-20 behaviour, but the
-/// parse is now optional — keywords are always offered even on a buffer that does not parse.
+/// General completion: top-level declarations, the enclosing callable's in-scope locals/params, the
+/// buffer's imported module qualifiers (`import Core.Output;` → `Output`), and the language keywords.
+/// The buffer almost never parses at this moment — a half-typed identifier IS a parse error — so when
+/// the live parse failed, retry on a repaired buffer (cursor line blanked, same trick as member
+/// completion). Before this, an unparseable buffer dropped every symbol/local and the user saw ONLY
+/// keywords — i.e. "no autocomplete" for the most common action, typing a name.
 fn general_items(
+    text: &str,
     offset: usize,
     program: Option<&Program>,
     docs: &HashMap<String, String>,
     exclude_uri: Option<&str>,
 ) -> Vec<String> {
+    let repaired = match program {
+        Some(_) => None,
+        None => parse_repaired(text, offset),
+    };
+    let program = program.or(repaired.as_ref());
     let mut items: Vec<String> = Vec::new();
     let mut seen_top: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Some(prog) = program {
@@ -175,6 +184,13 @@ fn general_items(
             if seen.insert(name.clone()) {
                 items.push(completion_item(&name, 6 /* Variable */, "local"));
             }
+        }
+    }
+    // Imported module qualifiers (`import Core.Output;` → `Output`) — the receiver names the user
+    // types before a `.`. Lexical scan (never needs a parse) so they survive any mid-edit state.
+    for q in imported_qualifiers(text) {
+        if seen_top.insert(q.clone()) {
+            items.push(completion_item(&q, 9 /* Module */, "imported module"));
         }
     }
     // Top-level symbols from the OTHER open project buffers (same-project siblings) — bounded to open
@@ -210,6 +226,27 @@ fn is_ident_byte(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
 }
 
+/// The module qualifiers this buffer imports (`import Core.Output;` → `Output`), by lexical line scan
+/// — parse-free so half-typed buffers still surface them. Sorted + deduped (Invariant 10).
+fn imported_qualifiers(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = text
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("import "))
+        .filter_map(|rest| {
+            let path = rest.trim_end().trim_end_matches(';').trim();
+            (!path.is_empty()
+                && path
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '.' || c == '_'))
+            .then(|| path.rsplit('.').next().unwrap_or(path).to_string())
+        })
+        .filter(|q| !q.is_empty())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// Parse a completion buffer whose cursor line is a syntax error (the dangling `receiver.`), by
 /// **blanking that line** with spaces (byte-length-preserving, so scope/offset lookups still align)
 /// and parsing the rest. The receiver's declaration (its `var`/param/field, and the enclosing class)
@@ -239,211 +276,4 @@ fn uri_to_path(uri: &str) -> Option<std::path::PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::complete;
-
-    /// Extract every `"label":"…"` value from a completion response (assert on CONTENT, not just count).
-    fn labels(resp: &str) -> Vec<String> {
-        let mut out = Vec::new();
-        let mut rest = resp;
-        while let Some(i) = rest.find("\"label\":\"") {
-            rest = &rest[i + 9..];
-            if let Some(end) = rest.find('"') {
-                out.push(rest[..end].to_string());
-                rest = &rest[end..];
-            }
-        }
-        out
-    }
-
-    // The key regression this slice fixes: completion on an INCOMPLETE buffer (parse fails) must still
-    // work — before 2026-07-20 every case below returned `[]` because `symbol_at` required a parse.
-
-    #[test]
-    fn import_context_lists_core_modules() {
-        let src = "package Main;\nimport Core.\n";
-        let offset = src.find("Core.").unwrap() + "Core.".len(); // right after the dot
-        let got = labels(&complete(
-            src,
-            offset,
-            None,
-            None,
-            &std::collections::HashMap::new(),
-        ));
-        assert!(
-            got.iter().any(|l| l == "Core.Json"),
-            "want Core.Json in {got:?}"
-        );
-        assert!(
-            got.iter().any(|l| l == "Core.Http"),
-            "want Core.Http in {got:?}"
-        );
-        // Raw `Core.Native.*` twins are excluded (users import the friendly module).
-        assert!(
-            !got.iter().any(|l| l.starts_with("Core.Native.")),
-            "raw twins leaked: {got:?}"
-        );
-    }
-
-    #[test]
-    fn import_context_filters_by_prefix() {
-        let src = "import Core.J";
-        let got = labels(&complete(
-            src,
-            src.len(),
-            None,
-            None,
-            &std::collections::HashMap::new(),
-        ));
-        assert!(
-            got.iter().any(|l| l == "Core.Json"),
-            "want Core.Json in {got:?}"
-        );
-        assert!(
-            got.iter().all(|l| l.starts_with("Core.J")),
-            "prefix not applied: {got:?}"
-        );
-    }
-
-    #[test]
-    fn member_context_lists_module_natives_on_incomplete_buffer() {
-        // `Output.` with nothing after ⇒ the buffer does NOT parse; member completion must still fire.
-        let src = "package Main;\nfunction main(): void {\n  Output.\n}\n";
-        let offset = src.find("Output.").unwrap() + "Output.".len();
-        let got = labels(&complete(
-            src,
-            offset,
-            None,
-            None,
-            &std::collections::HashMap::new(),
-        ));
-        assert!(
-            got.iter().any(|l| l == "printLine"),
-            "want printLine in {got:?}"
-        );
-        assert!(!got.is_empty());
-    }
-
-    #[test]
-    fn unresolved_lowercase_receiver_emits_neither_module_members_nor_keywords() {
-        // A lowercase receiver is an instance, never a Core module → must NOT emit module members. And
-        // an UNRESOLVED receiver (no declared type in scope) emits nothing — member context is
-        // conservative; it must NOT dump general/keyword completions after a `.`.
-        let src = "function main(): void {\n  myvar.\n}\n";
-        let offset = src.find("myvar.").unwrap() + "myvar.".len();
-        let got = labels(&complete(
-            src,
-            offset,
-            None,
-            None,
-            &std::collections::HashMap::new(),
-        ));
-        assert!(
-            !got.iter().any(|l| l == "map"),
-            "no module members: {got:?}"
-        );
-        assert!(
-            !got.iter().any(|l| l == "function"),
-            "member context must not fall back to keywords: {got:?}"
-        );
-    }
-
-    // Instance/type-aware member completion (this./typed-receiver.) — works on the INCOMPLETE buffer
-    // via the repaired parse, resolving the receiver's declared type → the class's members + inherited.
-
-    #[test]
-    fn this_member_completion_includes_own_and_inherited() {
-        let src = "package Main;\n\
-                   class Animal {\n  public string name = \"\";\n  function speak(): void {}\n}\n\
-                   class Dog extends Animal {\n  function bark(): void {}\n  function go(): void {\n    this.\n  }\n}\n";
-        let off = src.find("this.").unwrap() + "this.".len();
-        let got = labels(&complete(
-            src,
-            off,
-            None,
-            None,
-            &std::collections::HashMap::new(),
-        ));
-        assert!(got.contains(&"bark".to_string()), "own method: {got:?}");
-        assert!(
-            got.contains(&"speak".to_string()),
-            "inherited method: {got:?}"
-        );
-        assert!(
-            got.contains(&"name".to_string()),
-            "inherited field: {got:?}"
-        );
-    }
-
-    #[test]
-    fn typed_local_member_completion() {
-        // Type-first typed local `Dog d = …` (NOT `var d: Dog` — `var` is the inferred form).
-        let src = "package Main;\n\
-                   class Animal { function speak(): void {} }\n\
-                   class Dog extends Animal { function bark(): void {} }\n\
-                   function main(): void {\n  Dog d = new Dog();\n  d.\n}\n";
-        let off = src.find("  d.").unwrap() + "  d.".len();
-        let got = labels(&complete(
-            src,
-            off,
-            None,
-            None,
-            &std::collections::HashMap::new(),
-        ));
-        assert!(got.contains(&"bark".to_string()), "own: {got:?}");
-        assert!(got.contains(&"speak".to_string()), "inherited: {got:?}");
-    }
-
-    #[test]
-    fn inferred_or_unknown_receiver_yields_nothing() {
-        // `var x = …` has no DECLARED type (Type::Infer) → conservative gate emits nothing (never a
-        // wrong member list). Also an undeclared receiver.
-        let src = "package Main;\nfunction main(): void {\n  var x = 1;\n  x.\n}\n";
-        let off = src.find("  x.").unwrap() + "  x.".len();
-        let got = labels(&complete(
-            src,
-            off,
-            None,
-            None,
-            &std::collections::HashMap::new(),
-        ));
-        assert!(
-            !got.iter().any(|l| l == "bark" || l == "speak"),
-            "must not invent members for an inferred receiver: {got:?}"
-        );
-    }
-
-    #[test]
-    fn general_completion_includes_open_sibling_buffer_symbols() {
-        // A function/class defined in ANOTHER open project buffer completes in this file's general ctx.
-        let mut docs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-        docs.insert(
-            "file:///lib.phg".to_string(),
-            "package App;\nfunction helper(): void {}\nclass Widget {}\n".to_string(),
-        );
-        let src = "package Main;\nfunction main(): void {\n  \n}\n";
-        let off = src.find("  \n").unwrap() + 2; // empty line inside main body → general ctx
-        let got = labels(&complete(src, off, None, Some("file:///t.phg"), &docs));
-        assert!(got.contains(&"helper".to_string()), "sibling fn: {got:?}");
-        assert!(
-            got.contains(&"Widget".to_string()),
-            "sibling class: {got:?}"
-        );
-    }
-
-    #[test]
-    fn general_context_offers_keywords_without_a_parse() {
-        // Even a buffer that does not parse yields keywords (never a bare `[]`).
-        let got = labels(&complete(
-            "packag",
-            6,
-            None,
-            None,
-            &std::collections::HashMap::new(),
-        ));
-        assert!(
-            got.iter().any(|l| l == "package"),
-            "want keyword 'package' in {got:?}"
-        );
-    }
-}
+mod tests;
