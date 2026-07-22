@@ -19,9 +19,6 @@ use crate::types::Ty;
 use crate::value::Value;
 use std::io::Write;
 
-/// The four severity levels, in ascending order. The tag is the uppercase name in brackets.
-const LEVELS: [&str; 4] = ["DEBUG", "INFO", "WARN", "ERROR"];
-
 /// Frame a log message: `"[LEVEL] message"` (no trailing newline — the writer adds it). Pure and
 /// deterministic; this is the unit-tested part of the sink.
 fn format_line(level: &str, msg: &str) -> String {
@@ -46,69 +43,65 @@ fn emit(level: &str, args: &[Value]) -> Result<Value, String> {
 }
 
 fn log_debug(args: &[Value], _out: &mut String) -> Result<Value, String> {
-    emit(LEVELS[0], args)
+    emit("DEBUG", args)
 }
 fn log_info(args: &[Value], _out: &mut String) -> Result<Value, String> {
-    emit(LEVELS[1], args)
+    emit("INFO", args)
+}
+fn log_notice(args: &[Value], _out: &mut String) -> Result<Value, String> {
+    emit("NOTICE", args)
 }
 fn log_warn(args: &[Value], _out: &mut String) -> Result<Value, String> {
-    emit(LEVELS[2], args)
+    emit("WARN", args)
 }
 fn log_error(args: &[Value], _out: &mut String) -> Result<Value, String> {
-    emit(LEVELS[3], args)
+    emit("ERROR", args)
+}
+fn log_critical(args: &[Value], _out: &mut String) -> Result<Value, String> {
+    emit("CRITICAL", args)
+}
+fn log_alert(args: &[Value], _out: &mut String) -> Result<Value, String> {
+    emit("ALERT", args)
+}
+fn log_emergency(args: &[Value], _out: &mut String) -> Result<Value, String> {
+    emit("EMERGENCY", args)
 }
 
 /// The `Core.Log` registry entries. All `pure: false` — they write to the ambient process stderr, so a
 /// program importing this module is quarantined from the byte-identity differential (see the module
 /// docs). PHP emission maps to `error_log` with the same `[LEVEL]` framing (best-effort; not compared).
 pub(crate) fn log_natives() -> Vec<NativeFn> {
+    // One row per level (DEC-317: full PSR-3 set; `warning` = PSR-spelled alias of the historical
+    // `warn`). The `php:` closure must be a capture-free fn pointer, so the tag is written literally
+    // per row via the macro.
+    macro_rules! level {
+        ($name:literal, $tag:literal, $eval:expr) => {
+            NativeFn {
+                module: "Core.Log",
+                name: $name,
+                params: vec![Ty::String],
+                ret: Ty::Void,
+                pure: false,
+                eval: NativeEval::Pure($eval),
+                php: |a| {
+                    format!(
+                        concat!("error_log(\"[", $tag, "] \" . {})"),
+                        a.first().map_or("''", |s| s)
+                    )
+                },
+            }
+        };
+    }
     vec![
-        NativeFn {
-            module: "Core.Log",
-            name: "debug",
-            params: vec![Ty::String],
-            ret: Ty::Void,
-            pure: false,
-            eval: NativeEval::Pure(log_debug),
-            php: |a| {
-                format!(
-                    "error_log(\"[DEBUG] \" . {})",
-                    a.first().map_or("''", |s| s)
-                )
-            },
-        },
-        NativeFn {
-            module: "Core.Log",
-            name: "info",
-            params: vec![Ty::String],
-            ret: Ty::Void,
-            pure: false,
-            eval: NativeEval::Pure(log_info),
-            php: |a| format!("error_log(\"[INFO] \" . {})", a.first().map_or("''", |s| s)),
-        },
-        NativeFn {
-            module: "Core.Log",
-            name: "warn",
-            params: vec![Ty::String],
-            ret: Ty::Void,
-            pure: false,
-            eval: NativeEval::Pure(log_warn),
-            php: |a| format!("error_log(\"[WARN] \" . {})", a.first().map_or("''", |s| s)),
-        },
-        NativeFn {
-            module: "Core.Log",
-            name: "error",
-            params: vec![Ty::String],
-            ret: Ty::Void,
-            pure: false,
-            eval: NativeEval::Pure(log_error),
-            php: |a| {
-                format!(
-                    "error_log(\"[ERROR] \" . {})",
-                    a.first().map_or("''", |s| s)
-                )
-            },
-        },
+        level!("debug", "DEBUG", log_debug),
+        level!("info", "INFO", log_info),
+        level!("notice", "NOTICE", log_notice),
+        level!("warn", "WARN", log_warn),
+        level!("warning", "WARN", log_warn),
+        level!("error", "ERROR", log_error),
+        level!("critical", "CRITICAL", log_critical),
+        level!("alert", "ALERT", log_alert),
+        level!("emergency", "EMERGENCY", log_emergency),
     ]
 }
 
@@ -116,11 +109,39 @@ pub(crate) fn log_natives() -> Vec<NativeFn> {
 mod tests {
     use super::*;
 
+    /// The severity levels, ascending (DEC-317: PSR-3; `warn` keeps its historical DEC-220 name,
+    /// PSR's `warning` is an alias native). B2's min-level filtering will lift this into the
+    /// non-test surface.
+    const LEVELS: [&str; 8] = [
+        "DEBUG",
+        "INFO",
+        "NOTICE",
+        "WARN",
+        "ERROR",
+        "CRITICAL",
+        "ALERT",
+        "EMERGENCY",
+    ];
+
     #[test]
     fn frames_each_level() {
         assert_eq!(format_line("INFO", "hello"), "[INFO] hello");
         assert_eq!(format_line("ERROR", "boom"), "[ERROR] boom");
         assert_eq!(format_line("DEBUG", ""), "[DEBUG] ");
+        // The ascending PSR-3 severity order is part of the surface (min-level filtering builds on it).
+        assert_eq!(
+            LEVELS,
+            [
+                "DEBUG",
+                "INFO",
+                "NOTICE",
+                "WARN",
+                "ERROR",
+                "CRITICAL",
+                "ALERT",
+                "EMERGENCY"
+            ]
+        );
     }
 
     #[test]
@@ -135,10 +156,23 @@ mod tests {
     #[test]
     fn every_level_has_an_entry() {
         let ns = log_natives();
-        assert_eq!(ns.len(), 4);
+        assert_eq!(ns.len(), 9);
         let mut names: Vec<&str> = ns.iter().map(|n| n.name).collect();
         names.sort_unstable();
-        assert_eq!(names, ["debug", "error", "info", "warn"]);
+        assert_eq!(
+            names,
+            [
+                "alert",
+                "critical",
+                "debug",
+                "emergency",
+                "error",
+                "info",
+                "notice",
+                "warn",
+                "warning"
+            ]
+        );
         assert!(
             ns.iter().all(|n| !n.pure),
             "Log natives must be pure:false (quarantine seam)"
