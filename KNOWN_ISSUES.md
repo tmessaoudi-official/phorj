@@ -2242,11 +2242,11 @@ legs for symmetry.
 
 ## Transpile P1s exposed by the FS de-quarantine (audit 2026-07-22 — queued slices)
 
-1. **Flat enum-variant class names collide**: variants emit as flat `final class Ok extends …`; a
-   user enum with `Ok`/`Err` variants + any FS-transpiling program is a PHP `Cannot redeclare class
-   Ok` fatal (Rust legs fine). Fix queued: enum-prefixed variant class names (`FileSystemResult_Ok`)
-   or a checker collision reject.
-2. **Injected prelude classes land only in `namespace Main`**: a NON-Main package calling
-   `FileSystem.exists` / `Uri.*` transpiles to `Class "Acme\X\FileSystem" not found` (pre-existing —
-   reproduced with Core.UriModule too; DEC-240/DEC-313 "transpiles" claims hold for Main-package
-   programs only). Fix queued: qualify injected-class references `\Main\…` (or per-namespace `use`).
+1. **Flat enum-variant class names collide** — MITIGATED 2026-07-22: the transpiler now refuses the
+   collision LOUDLY (`E-TRANSPILE-VARIANT-COLLISION`; the program still runs on the Rust legs)
+   instead of emitting a `Cannot redeclare class` fatal. The REAL fix (enum-scoped variant classes,
+   lifting the restriction) stays queued.
+2. **Injected prelude classes land only in `namespace Main`** — ✅ FIXED 2026-07-22: every non-Main
+   namespace block now opens with `use \Main\<name>;` aliases for the Main-bucket top-level names
+   (inert when unused; skipped when the block declares the name), so `FileSystem.exists` from
+   `package Acme.Fs` runs on the PHP leg. Verified on the recorded reproduction (FS + Uri shape).

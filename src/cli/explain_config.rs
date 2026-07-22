@@ -23,6 +23,13 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
                  import Core.Runtime.Config;\n\
                  #[Config] function appConfig() -> T { return new T(...); }\n"
         }
+        "E-TRANSPILE-VARIANT-COLLISION" => {
+            "E-TRANSPILE-VARIANT-COLLISION — two enums declare the same variant name.\n\n\
+             Enum variants transpile to flat PHP classes (`final class <Variant> extends <Enum>`),\n\
+             so a shared variant name would redeclare a class — the transpiler refuses rather than\n\
+             emitting a fatally-broken program (\u{00a7}14 LADDER). The program still runs with `phg run`.\n\
+             Rename one variant; enum-scoped variant classes are a recorded follow-up.\n"
+        }
         "E-CONFIG-TARGET" => {
             "E-CONFIG-TARGET — `#[Config]` on a method.\n\n\
              A config provider runs before any instance exists, so it must be a TOP-LEVEL function\n\

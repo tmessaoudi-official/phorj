@@ -2730,6 +2730,18 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   M-Decomp: the leg lives in `src/lsp/references.rs` with its own tests (3: cross-open-buffer,
   unopened-disk-file, locals-stay-local).
 
+- **DEC-328 — the two DEC-325 transpile P1s resolved (autonomous, 2026-07-22).** (1) VARIANT
+  COLLISION: two enums sharing a variant name now REFUSE transpile loudly
+  (`E-TRANSPILE-VARIANT-COLLISION`, `transpile/collisions.rs`, explain entry) instead of emitting a
+  `Cannot redeclare class` fatal — the program still runs on the Rust legs; enum-SCOPED variant
+  classes (lifting the restriction) stay the queued real fix. (2) MAIN-NAMESPACE PRELUDES **FIXED**:
+  every non-Main namespace block opens with `use \Main\<name>;` aliases for the Main-bucket
+  top-level names (classes/interfaces/traits/enums + mangled variant classes; `use function` for
+  fns; inert when unused; skipped when the block declares the name) — `FileSystem.exists` from
+  `package Acme.Fs` now runs on the PHP leg, verified on the recorded FS reproduction (`phg run` ≡
+  php output). FOLLOW-UP recorded: a committed multi-package FS project fixture in the test sweep
+  (the fix is repro-verified; the fixture makes it regression-gated).
+
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their
   feature/module names), plus `examples/db/`→`examples/database/`, `tests/db*.rs`→`tests/database*.rs`,

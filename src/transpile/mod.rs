@@ -1,12 +1,11 @@
-//! Phorj → PHP transpiler. Walks the untyped AST (the same AST the evaluator walks)
-//! and emits runnable PHP 8.x source. Entry point: [`emit`].
+//! Phorj → PHP transpiler: walks the untyped AST and emits runnable PHP 8.x. Entry point: [`emit`].
 use crate::ast::*;
 use crate::dispatch::ParamKind;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-/// Transpile a parsed program to PHP source. Returns the PHP text, or a
-/// `transpile error: …` message for an unsupported construct.
+/// Transpile a parsed program to PHP source, or a `transpile error: …` for an unsupported construct.
 pub fn emit(program: &Program) -> Result<String, String> {
+    collisions::check_variant_collisions(program)?;
     let mut t = Transpiler::new();
     t.class_implements = crate::ast::class_implements(program);
     t.class_tables = crate::native::ClassTables::from_program(program);
@@ -465,6 +464,7 @@ enum MatchTarget {
 mod call;
 mod classes;
 mod classes_synth;
+mod collisions;
 mod expr;
 mod fs_php;
 mod functions;

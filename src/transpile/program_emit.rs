@@ -335,10 +335,59 @@ impl Transpiler {
             };
             buckets.entry(ns).or_default().push(item);
         }
+        // DEC-325 P1 (recorded KNOWN_ISSUES): injected prelude classes/enums land in `namespace
+        // Main`, so a bare reference from any OTHER package fatals (`Class "Acme\\X\\FileSystem"
+        // not found`). Alias every Main-bucket top-level name into each non-Main block (`use
+        // \\Main\\X;` — inert when unused; skipped when the block declares the same name itself).
+        let main_names: Vec<(bool, String)> = buckets
+            .get("Main")
+            .map(|items| {
+                let mut ns_names = Vec::new();
+                for it in items {
+                    match it {
+                        Item::Class(c) => ns_names.push((false, c.name.clone())),
+                        Item::Interface(i) => ns_names.push((false, i.name.clone())),
+                        Item::Trait(t) => ns_names.push((false, t.name.clone())),
+                        Item::Enum(e) => {
+                            ns_names.push((false, e.name.clone()));
+                            for v in &e.variants {
+                                ns_names.push((false, php_variant_name(&v.name)));
+                            }
+                        }
+                        Item::Function(f) => ns_names.push((true, f.name.clone())),
+                        _ => {}
+                    }
+                }
+                ns_names
+            })
+            .unwrap_or_default();
         let mut emitted_overloads: HashSet<String> = HashSet::new();
         for (ns, items) in &buckets {
             self.line(&format!("namespace {ns} {{"));
             self.indent += 1;
+            if ns != "Main" {
+                let declared: HashSet<String> = items
+                    .iter()
+                    .filter_map(|it| match it {
+                        Item::Class(c) => Some(leaf_name(&c.name)),
+                        Item::Interface(i) => Some(leaf_name(&i.name)),
+                        Item::Trait(t) => Some(leaf_name(&t.name)),
+                        Item::Enum(e) => Some(leaf_name(&e.name)),
+                        Item::Function(f) => Some(leaf_name(&f.name)),
+                        _ => None,
+                    })
+                    .collect();
+                for (is_fn, name) in &main_names {
+                    if declared.contains(name) {
+                        continue;
+                    }
+                    if *is_fn {
+                        self.line(&format!("use function \\Main\\{name};"));
+                    } else {
+                        self.line(&format!("use \\Main\\{name};"));
+                    }
+                }
+            }
             for item in items {
                 match item {
                     Item::Function(f) => {
@@ -382,4 +431,11 @@ impl Transpiler {
         self.line("}");
         Ok(())
     }
+}
+
+/// The declared LEAF of a (possibly package-mangled) top-level name — `Acme\\Fs\\Probe` → `Probe`,
+/// bare names unchanged. Used by the DEC-325 `use \\Main\\…` aliasing to skip names a namespace
+/// declares itself.
+fn leaf_name(name: &str) -> String {
+    name.rsplit('\\').next().unwrap_or(name).to_string()
 }
