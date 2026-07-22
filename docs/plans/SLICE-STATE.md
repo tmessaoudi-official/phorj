@@ -39,6 +39,19 @@ v2 = REAL PARALLELISM design slice QUEUED); **(d) Claude-config bootstrap** comm
 conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `PHORJ_PHP=/usr/bin/php`.
 
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
+▶▶ **NEXT CONTEXT RESUMES HERE (2026-07-22, all four DEC-329 rulings in hand):**
+(a) **Log-v2 processors** (DEC-329.4, SMALL — do first): out-of-contract tail ` | ts=<epoch-ms> pid=<pid>`.
+    Surface pinned: `LineFormatter(bool processInfo = false)` (shipped default-params make it additive);
+    `JsonFormatter(bool processInfo = false)` adds `"ts"`/`"pid"` keys AFTER the fixed contract keys.
+    Rust: tail appended in `state.rs` emit (std SystemTime + process::id); PHP twin in `log_php.rs`
+    (`microtime`/`getmypid`); parity test STRIPS the tail (regex ` \| ts=\d+ pid=\d+$` / json keys) —
+    prefix stays byte-compared. KNOWN_ISSUES Log-v2 limits section updated same-change.
+(b) **qualify_variants post-check pass** → then enum-scoped variant classes (DEC-329.3; build-notes in
+    the DEC-329 register row).
+(c) **DEC-320 v1 `phg build --php`** (DEC-329.1; per-file split build-note in the register row).
+(d) **`phg serve` native rustls TLS** (DEC-329.2; Web-pack; dep ruling for rustls server-side goes
+    through the dependency policy like http-client did).
+
 0. ✅ **DONE 2026-07-22 — Log-v2 (DEC-317 core) + `#[Config]` injection (DEC-318) BOTH SHIPPED.**
    DEC-318: `desugar_config.rs` pre-check pass, byte-identical all legs, `examples/guide/config.phg`.
    DEC-317: channels/PSR-3 levels/Stream+File+RotatingFile handlers/Line+Json formatters, `Logger`
