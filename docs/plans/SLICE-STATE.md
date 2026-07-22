@@ -26,6 +26,18 @@ prelude-`#[path]` assessed = correct end-state, no change. **EXTENSION MODEL RUL
 userland `.phg` packages + a native Rust trait-seam SPI (build-your-own `phg`; `.so` rejected); guide
 `docs/EXTENSIONS-AUTHORING.md`; **companion package manager = NEXT MAJOR SLICE (DEC-316)** (`9814dbd`).
 
+**2026-07-22 SESSION LOG:** dev updated deps (cranelift 0.133→0.134), version → `1.0.0-nightly.0`, added
+release.yml push trigger. This session: **(a) nightly channel FIXED + LIVE** (DEC-323 — `publish-nightly`
+job; release `nightly` re-points with 4 sha256 assets each master push); **(b) LSP completion field-bug
+FIXED** (dev report "no autocomplete": general completion now survives mid-typing parse errors via the
+repaired parse, imported module qualifiers offered, import catalog unions native-only modules —
+`completion/{mod,tests}.rs` M-Decomp split); **(c) adoption review recorded** (DEC-319 validation +
+DX north-star; DEC-320 transpile-into-project QUEUED; DEC-321 edition field QUEUED; DEC-322 concurrency
+v2 = REAL PARALLELISM design slice QUEUED); **(d) Claude-config bootstrap** committed under
+`scripts/claude-bootstrap/` + repo `.claude/skills/` (ephemeral-container framework restore).
+**ENV note:** php in this container is 8.4 WITHOUT bcmath (uninstallable, org proxy) → decimal
+conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `PHORJ_PHP=/usr/bin/php`.
+
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
 0. ▶▶ **PRIORITY — Structured logging (Log-v2, DEC-317) + typed `#[Config]` provider+injection (DEC-318).**
    Dev's ACTIVE need (building a real app). SPEC READY, adjudicated 2026-07-21 (both forks ruled): full
@@ -41,6 +53,9 @@ userland `.phg` packages + a native Rust trait-seam SPI (build-your-own `phg`; `
    (registry name→git-URL index / git / path), `phorj.lock` tree-SHA-256 integrity, `examples/package-manager/`
    byte-identity-gated. Only these verbs network (Invariant 10). Follow-ups (documented in DEC-316): registry
    constraint-intersection, per-package `phg update`, a hosted registry index.
+1b. **Adoption-review queue (DEC-319, 2026-07-22):** `edition` field in phorj.json (DEC-321, small) ·
+   'transpile-into-project' mixed PHP adoption (DEC-320, spec-first, adoption/GA wave) · concurrency v2
+   REAL PARALLELISM (DEC-322, DESIGN slice — forks adjudicated at design time). DEC-323 channels ✅ shipped.
 2. **Transpile FS emitter (DEC-313)** — build-map in C-decisions §2026-07-20 (FileSystemResult Ok/Err, 18 natives,
    `__phorj_fs_*` helpers, kind-reconstruction; ⚠ R1 variant-class ns + R2 kind-reconstruct). Needs `runtime_php.rs`
    room + `uses_fs` on Transpiler. Drop FS from `reject_native_only_transpile`; mark SESSION permanent

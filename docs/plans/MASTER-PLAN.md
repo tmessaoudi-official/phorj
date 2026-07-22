@@ -62,6 +62,18 @@
   (registry-index/git/path); `examples/package-manager/` byte-identity-gated. NEXT autonomous slices: FS
   transpile emitter (DEC-313) → lift `lift_from` facet (DEC-312) → LSP find-usages → perf #2b.
 
+**ADOPTION-REVIEW ADDITIONS (2026-07-22, DEC-319 — dev-ruled; slot per-item):** the external
+adoption review validated ~10/14 themes as already covered and added four ruled items:
+- **Log-v2 + `#[Config]` injection (DEC-317/318)** — the dev's ACTIVE-need slice (spec ready, build next).
+- **`edition` field in `phorj.json` (DEC-321)** — small slice, near-term (inert `2026` edition; full
+  editions machinery stays the §11.3 post-1.0 residual).
+- **'Transpile-into-project' mixed PHP adoption (DEC-320)** — spec-first slice in the adoption/GA wave
+  (W6 neighborhood): `.phg` → `.php` siblings inside a live PHP app, composer/PSR-4-compatible.
+- **Concurrency v2 = real parallelism (DEC-322)** — DESIGN slice (multi-core + structured scopes +
+  bounded channels + cancellation; forks adjudicated at design time). Runtime feature-pack neighborhood.
+- **Release channels (DEC-323)** — ✅ SHIPPED (nightly prerelease CI + SEMVER/SECURITY channel docs).
+DX north-star (DEC-319) governs prioritization: smooth/intuitive tooling, strictness intact, more OOP.
+
 **CORE PARITY PUSH (confirmed order):**
 0. **§4 recompute** — free credit for already-shipped-uncounted work; establishes true %.
 1. **Full TOP-20 stdlib (FN leg 37→~70%, the +13pp move):** filesystem breadth (~40 rows) →

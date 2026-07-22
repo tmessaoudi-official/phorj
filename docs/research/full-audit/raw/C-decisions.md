@@ -2567,6 +2567,58 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   Provider discovery uses the existing project/registry scan (DEC-252/DEC-282), sorted (Invariant 10). Spec:
   same plan file. **NOT YET BUILT** (spec'd 2026-07-21; build on next fresh budget).
 
+- **DEC-319 — EXTERNAL ADOPTION REVIEW SYNTHESIZED (2026-07-22): roadmap validated ~10/14; DX
+  NORTH-STAR recorded.** A cross-language "what makes a language robust & mass-adopted" review (dev's
+  external Claude conversation, META-7 discipline) was gap-checked against the roadmap. ALREADY COVERED
+  (validation, no action): SemVer+stability tiers+deprecation lint; debugger REPL (eval-REPL W5-15);
+  `phg doc` (W5-15); diagnostics-as-product (shipped + W2 ratchet); differential testing (normative-spec
+  conformance W6-5); public flagship (W6-1); sound-mandatory static typing (gradual REJECTED, stands);
+  BDFL governance (RFC process = future); naming casing test-gated (arg-order gate W2-13). EXPLICITLY
+  KEPT against the review's suggestion: **self-hosting stays a NON-goal** (DEC-273). Genuine deltas ruled
+  as DEC-320/321/322/323 below. **DX NORTH-STAR (dev, 2026-07-22, verbatim intent):** "everything smooth,
+  intuitive and easy to use WITHOUT losing the advantage over PHP (typing and strictness) — and more
+  object-oriented." Operational reading: the checker stays strict; the TOOLING is forgiving (parse-tolerant
+  LSP, great diagnostics, zero-config defaults); OOP ergonomics keep growing. Governs DX prioritization.
+
+- **DEC-320 — MIXED PHORJ/PHP PROJECT ADOPTION = 'transpile-into-project' build mode (developer-ruled
+  2026-07-22; QUEUED, spec-first).** The TS→JS playbook: `.phg` files emit `.php` siblings INSIDE an
+  existing PHP application (composer/PSR-4-compatible placement), so a team migrates file-by-file while
+  the app keeps running on PHP. COMPILE-TIME ONLY — the earlier live-interop rejection (live PHP→Phorj
+  on-the-spot rebuild, per-file gradual typing) STANDS untouched. This closes the roadmap's biggest
+  adoption gap (the review's #1 lever: "a gradual migration path from existing PHP is bigger than any
+  individual language nicety"). Design forks for the spec round: output placement/naming convention,
+  autoload wiring, incremental rebuild trigger, how phorj-side imports of not-yet-migrated PHP files are
+  typed (extern stubs?). Roadmap home: adoption/GA wave. Spec + adjudication before build.
+
+- **DEC-321 — EDITION FIELD BAKED NOW; editions machinery stays post-1.0 (developer-ruled 2026-07-22;
+  QUEUED, small slice).** `phorj.json` gains an `edition` key (single live edition `2026`) and the
+  compiler/loader accepts + records it — no behavior forks yet. Rationale (review finding, accepted):
+  retrofitting the identity metadata into every manifest/tool AFTER an ecosystem exists is the expensive
+  part of Rust-style editions; carrying one inert field from the first release is nearly free. The full
+  editions machinery (per-edition parse/behavior forks, migration lints) remains the §11.3 post-1.0
+  residual, unchanged.
+
+- **DEC-322 — CONCURRENCY V2 = REAL PARALLELISM mandate (developer-ruled 2026-07-22; DESIGN SLICE
+  QUEUED).** Dev ruling (verbatim intent): "we don't have real concurrency now — we need to implement
+  real parallel concurrency." Today's `spawn`/channels are corosensei green threads: cooperative,
+  single-core. Scope of the v2 design: TRUE multi-core execution + structured scopes (a task cannot
+  outlive its scope) + bounded/closeable channels + cancellation. Design forks to ADJUDICATE in the
+  design round (Invariant 15 — NOT ruled here): threading model (share-nothing actors/message-passing
+  vs scoped shared-state), `Value` thread-safety strategy (the interpreter/VM value kernel is not
+  `Send`/`Sync` today), JIT/VM interaction, scheduler shape. LADDER: concurrency is already permanently
+  PHP-excluded (`E-CONCURRENCY-NO-PHP`) — parallelism does not change the spine contract. DESIGN-FIRST:
+  no build until the forks are ruled.
+
+- **DEC-323 — RELEASE CHANNELS: nightly/stable recorded; LTS deferred post-1.0 (developer-ruled
+  2026-07-22; ✅ SHIPPED same day).** Channels: **nightly** = rolling prerelease re-pointed at every
+  master push with the 4 platform archives attached; **stable** = `v*` tagged releases (the SemVer
+  contract's channel). LTS = post-1.0 decision, recorded not scheduled. BUILD: the dev's push trigger
+  built archives but never published (attach step gated on the `release` event; no nightly tag existed)
+  — fixed by the `publish-nightly` job in `.github/workflows/release.yml` (downloads the matrix
+  artifacts, force-moves the `nightly` tag, delete-then-recreates the prerelease via `gh`;
+  `--latest=false` keeps the Latest badge on stable). Verified LIVE: release `nightly (10262b6)` with
+  4 sha256-digested assets. Docs: SEMVER.md §Release channels + SECURITY.md supported-versions row.
+
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their
   feature/module names), plus `examples/db/`→`examples/database/`, `tests/db*.rs`→`tests/database*.rs`,

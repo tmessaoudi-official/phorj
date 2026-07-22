@@ -7,8 +7,12 @@ Phorj is pre-1.0 and developed by a single maintainer. Only the latest tagged re
 
 | Version | Supported |
 |---|---|
-| latest release / `master` | ✅ |
+| latest stable (`v*`) release / `master` | ✅ |
+| `nightly` (rolling prerelease from `master`) | ✅ — fixed by the next master push |
 | older tags | ❌ |
+
+(Channels: `nightly` = rolling prerelease rebuilt on every master push; `stable` = `v*` tags — see
+[`SEMVER.md`](SEMVER.md) §Release channels. No LTS pre-1.0.)
 
 ## Reporting a vulnerability
 

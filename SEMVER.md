@@ -3,6 +3,16 @@
 Phorj follows [Semantic Versioning](https://semver.org/) **with an explicit pre-1.0 contract**. The
 current series is `0.x` (the binary reports `phg --version`).
 
+## Release channels (DEC-323)
+
+- **nightly** — every push to `master` rebuilds the four platform archives and re-points the rolling
+  `nightly` tag + prerelease at that commit (`.github/workflows/release.yml`, `publish-nightly` job).
+  Bleeding edge: no compatibility promise, assets are replaced on every push — never pin to them.
+- **stable** — the `v*` tagged releases. This is the channel the contract below governs, and the only
+  channel to pin in anything durable.
+- **LTS** — none pre-1.0; designated long-support versions are a post-1.0 decision (recorded, not
+  scheduled).
+
 ## Pre-1.0 (the `0.x` series) — *may break, always documented*
 
 While the major version is `0`, the public surface is **not yet frozen**. A minor release (`0.y`)
