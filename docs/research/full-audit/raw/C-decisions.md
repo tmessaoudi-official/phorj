@@ -2757,6 +2757,16 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `E-TRANSPILE-VARIANT-COLLISION` entirely (one-time golden regen; behavior identical). (4) **Log-v2
   processors = OUT-OF-CONTRACT TAIL** (the FS message-tail precedent): deterministic prefix stays
   the parity contract, the `| ts=… pid=…` tail is env-dependent and stripped by parity tests.
+  BUILD-NOTES from the post-ruling recon (2026-07-22, for the next context): (3) enum-scoping REQUIRES
+  a new post-check pass first — bare variant uses/patterns carry NO enum in the AST
+  (`Pattern::Variant.enum_qualifier: Option`, constructions are bare `Ident` calls; the transpiler's
+  `variant_fields`/`variant_ns` maps key on the bare name — last-in-wins, i.e. pre-refusal the wrong
+  enum's FIELDS could be picked silently). Design: `qualify_variants` post-check pass (the
+  `resolve_variant_imports` precedent) rewrites every variant use to its checker-resolved qualified
+  form; then transpile keying scopes trivially. (1) DEC-320 sibling emit REQUIRES per-file splitting
+  of the single-program transpile output (PSR-4 = one class per file): transpile whole-program (the
+  checker needs it), then route each item to the `.php` sibling of the `.phg` that declared it —
+  needs the loader's item→source-file attribution (verify what `loader::load` preserves).
 
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their
