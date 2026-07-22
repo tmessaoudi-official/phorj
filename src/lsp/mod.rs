@@ -18,6 +18,7 @@
 mod catalog;
 mod completion;
 mod keywords;
+mod references;
 mod scope;
 mod symbols;
 #[cfg(test)]
@@ -309,14 +310,19 @@ impl Server {
         Some((uri, spans))
     }
 
-    /// `textDocument/references` — every use of the symbol under the cursor (declaration included), as
-    /// `Location[]`. Single-document (the open buffer); cross-file references are a follow-up.
+    /// `textDocument/references` — every use of the symbol under the cursor (declaration included),
+    /// as `Location[]`. PROJECT-WIDE for a top-level symbol (DEC-327): the open buffer's
+    /// scope-accurate occurrences PLUS a per-request scan of every project `.phg` file (the loader's
+    /// discovery roots; open-buffer content wins over disk). Precision note (recorded): cross-file
+    /// matching is name-based with per-file local-shadow exclusion — a same-named top-level symbol
+    /// in an unrelated package also matches (find-usages is a navigation aid; the checker owns
+    /// resolution truth). A LOCAL symbol stays single-buffer, as do rename/highlight.
     fn references(&self, msg: &Json) -> String {
         let Some((uri, spans)) = self.occurrences(msg) else {
             return "[]".to_string();
         };
         let text = self.docs.get(&uri).map(String::as_str).unwrap_or("");
-        let locs: Vec<String> = spans
+        let mut locs: Vec<String> = spans
             .iter()
             .map(|sp| {
                 let (sl, sc) = scope::position_at(text, sp.start);
@@ -328,6 +334,16 @@ impl Server {
                 )
             })
             .collect();
+        // Cross-file leg: only when the cursor symbol is a TOP-LEVEL decl (locals cannot escape
+        // their file).
+        if let Some((_, offset, Some(name), program)) = self.symbol_at(msg) {
+            if matches!(
+                Self::resolve_decl(offset, &name, &program),
+                Some((_, false))
+            ) {
+                locs.extend(self.cross_file_references(&uri, &name));
+            }
+        }
         format!("[{}]", locs.join(","))
     }
 
@@ -569,6 +585,11 @@ fn num(j: Option<&Json>) -> Option<u32> {
 }
 
 /// The document URI of a `textDocument/...` notification (`params.textDocument.uri`).
+pub(super) fn uri_to_path(uri: &str) -> Option<std::path::PathBuf> {
+    let p = std::path::PathBuf::from(uri.strip_prefix("file://").unwrap_or(uri));
+    p.is_file().then_some(p)
+}
+
 fn doc_uri(msg: &Json) -> Option<String> {
     msg.get("params")
         .and_then(|p| p.get("textDocument"))

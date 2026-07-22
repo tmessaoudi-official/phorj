@@ -2717,6 +2717,19 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   textual scan now also counts `.nativeName(` occurrences of the module's natives — generous by
   design, a false positive only silences a hygiene lint). FEATURES UFCS row carries the style rule.
 
+- **DEC-327 — LSP PROJECT-WIDE FIND-USAGES (autonomous build 2026-07-22; completes the field-report
+  LSP queue).** `textDocument/references` was single-buffer ("cross-file = follow-up"). Now: a
+  TOP-LEVEL symbol's references scan the WHOLE project on demand — the loader's discovery roots
+  (entry-local/src/vendor/views via the new `loader::project_phg_files`, query-layer only) plus every
+  other open buffer (buffer content wins over disk). Per-file precision: occurrences shadowed by a
+  local are excluded; a mid-edit unparsable file is skipped (never breaks the query); sorted paths
+  (Invariant 10). RECORDED precision limit: cross-file matching is name-based — a same-named
+  top-level symbol in an unrelated package also lists (navigation aid; the checker owns resolution
+  truth; full semantic cross-package resolution = the cached-index follow-up). Locals stay
+  single-buffer, as do rename/documentHighlight (multi-file rename = WorkspaceEdit slice, queued).
+  M-Decomp: the leg lives in `src/lsp/references.rs` with its own tests (3: cross-open-buffer,
+  unopened-disk-file, locals-stay-local).
+
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their
   feature/module names), plus `examples/db/`→`examples/database/`, `tests/db*.rs`→`tests/database*.rs`,

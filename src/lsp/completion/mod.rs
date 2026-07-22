@@ -61,7 +61,7 @@ pub(super) fn complete(
                 .map(|p| completion_item(&p, 9 /* Module */, "core module"))
                 .collect();
             let project_pkgs = uri
-                .and_then(uri_to_path)
+                .and_then(super::uri_to_path)
                 .map(|p| crate::loader::project_packages(&p))
                 .unwrap_or_default();
             for p in &project_pkgs {
@@ -265,14 +265,6 @@ fn parse_repaired(text: &str, offset: usize) -> Option<Program> {
     buf.push_str(&text[line_end..]);
     let tokens = lex(&buf).ok()?;
     Parser::new(tokens).parse_program().ok()
-}
-
-/// Convert a `file://` document URI to an on-disk path — the SAME minimal handling `diagnostics_for_uri`
-/// uses (strip the scheme; no percent-decoding, matching the existing code). `None` for a non-file URI
-/// or a path that is not a real file, so the project scan simply doesn't apply (untitled/virtual buffers).
-fn uri_to_path(uri: &str) -> Option<std::path::PathBuf> {
-    let p = std::path::PathBuf::from(uri.strip_prefix("file://").unwrap_or(uri));
-    p.is_file().then_some(p)
 }
 
 #[cfg(test)]

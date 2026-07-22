@@ -67,7 +67,7 @@ fn unknown_request_is_method_not_found_but_unknown_notification_is_ignored() {
 
 // ── diagnostics ──────────────────────────────────────────────────────────────────────────────
 
-fn did_open(uri: &str, text: &str) -> Json {
+pub(super) fn did_open(uri: &str, text: &str) -> Json {
     // The text is embedded as a JSON string — escape quotes/newlines.
     let escaped = super::escape(text);
     Json::parse(&format!(
@@ -148,11 +148,11 @@ fn change_then_close_updates_then_clears_document() {
 // ── hover + go-to-definition ───────────────────────────────────────────────────────────────────
 
 /// A program where `helper` is declared on line 1 (0-based) and called on line 2.
-const PROG: &str =
+pub(super) const PROG: &str =
     "package Main;\nfunction helper(int n) -> int { return n; }\nfunction main() -> void { var r = helper(3); }";
 
 /// A `textDocument/<method>` request positioned at (line, character) (0-based) in `file:///x.phg`.
-fn req_at(method: &str, line: u32, character: u32) -> Json {
+pub(super) fn req_at(method: &str, line: u32, character: u32) -> Json {
     Json::parse(&format!(
         r#"{{"id":7,"method":"textDocument/{method}","params":{{"textDocument":{{"uri":"file:///x.phg"}},"position":{{"line":{line},"character":{character}}}}}}}"#
     ))
@@ -405,7 +405,7 @@ fn formatting_unparseable_buffer_yields_no_edit() {
 
 // ── cross-file go-to-definition + hover (Item D follow-up) ───────────────────────────────────────
 
-fn req_at_uri(uri: &str, method: &str, line: u32, character: u32) -> Json {
+pub(super) fn req_at_uri(uri: &str, method: &str, line: u32, character: u32) -> Json {
     Json::parse(&format!(
         r#"{{"id":7,"method":"textDocument/{method}","params":{{"textDocument":{{"uri":"{uri}"}},"position":{{"line":{line},"character":{character}}}}}}}"#
     ))

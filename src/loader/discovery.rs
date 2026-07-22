@@ -131,6 +131,37 @@ pub(crate) fn project_packages(entry: &Path) -> Vec<String> {
     pkgs.into_iter().collect()
 }
 
+/// LSP project FILE enumeration (DEC-327 find-usages): every `.phg` file reachable from `entry`'s
+/// project — the same roots as [`project_packages`] (entry-local + `src/` + `vendor/` + a sibling
+/// `views/`), INCLUDING `Main`-package files (references live anywhere). Sorted + deduped;
+/// query-layer only (never affects a build); errors degrade to fewer results.
+pub(crate) fn project_phg_files(entry: &Path) -> Vec<PathBuf> {
+    let roots = discover_roots(entry);
+    let mut files: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut add = |root: &Path| {
+        if let Ok(fs) = collect_phg(root) {
+            files.extend(fs);
+        }
+    };
+    add(&roots.entry_local);
+    if let Some(s) = &roots.src_root {
+        add(s);
+    }
+    if let Some(v) = &roots.vendor_root {
+        add(v);
+    }
+    let approot = roots
+        .src_root
+        .as_deref()
+        .and_then(Path::parent)
+        .unwrap_or(&roots.entry_local);
+    let views = approot.join("views");
+    if views.is_dir() {
+        add(&views);
+    }
+    files.into_iter().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::project_packages;

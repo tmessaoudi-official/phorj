@@ -48,9 +48,9 @@ mod discovery;
 mod fs;
 mod resolve;
 
-/// Project-package enumeration for the LSP import-path completion (the `discovery` module is private).
-pub(crate) use discovery::project_packages;
 use discovery::{discover_roots, index_packages, SearchRoots};
+/// Project-package enumeration for the LSP import-path completion (the `discovery` module is private).
+pub(crate) use discovery::{project_packages, project_phg_files};
 use fs::*;
 use resolve::*;
 
