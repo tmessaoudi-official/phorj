@@ -2932,7 +2932,13 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     tables) on both backends; the old "VM rejects overloaded `respond`" limit is moot (D5 retired
     `respond`). PHP leg emits native `__invoke` (single) — MULTI-invoke has no faithful PHP `__invoke`
     (one per class) → LADDER check owed at build (likely `__phorj_*` arity-dispatch shim or E-TRANSPILE;
-    surface to dev). **D9b PENDING re-ask** — dev wants an ATTRIBUTE for toString too (parallel to
-    `#[Invoke]`); design + is-it-a-good-idea being re-surfaced.
+    surface to dev). **D9b LOCKED** — toString is an **`#[ToString]` attribute** on a method (parallel to
+    `#[Invoke]`; unifies phorj's model = "attributes designate conventional methods", not magic names).
+    STRICT signature enforced at compile time: the `#[ToString]` method takes **ZERO parameters** and
+    **returns `string`** (violation = compile error); **exactly ONE per class** (multiple = error);
+    auto-called in string context (`"{obj}"`, print) when present; **compile error** if an object with no
+    `#[ToString]` is used in string context (more correct than PHP's runtime warning); PHP leg emits
+    `__toString`. **Both `#[Invoke]` and `#[ToString]` methods stay NORMALLY CALLABLE by their own name**
+    — the attribute adds the call/stringify sugar, it does not restrict the direct method call.
   - **D10+ (PENDING):** parity scheduling (generators/iterators, LSB, etc.), build order, spec-first,
     env/php — recorded here as each locks.
