@@ -18,9 +18,8 @@ impl Checker {
         // names matched by `Circle c =>` arms.
         let mut covered_types: Vec<String> = Vec::new();
         let mut has_catch_all = false;
-        // Once a `null` arm has matched, a later catch-all binding over a `T?` scrutinee sees only
-        // the non-null inner — the smart-cast that makes `match opt { null => …, v => … }` bind
-        // `v: T` (M3 S2.6 / S1.4). Tracks whether a prior arm covered `null`.
+        // After a `null` arm, a later catch-all binding over a `T?` scrutinee sees the non-null
+        // inner (`match opt { null => …, v => … }` binds `v: T`, M3 S2.6). Tracks null coverage.
         let mut null_seen = false;
         // Reachability lints (W-MATCH-UNREACHABLE): an arm after a catch-all, or a duplicate
         // literal/variant/type arm, can never match. `catch_all_seen`/`seen_keys` reflect *prior*
@@ -378,8 +377,7 @@ impl Checker {
                             Some(format!("use `{enum_name}.{name}(…)` (or the bare `{name}(…)`)")),
                         );
                     }
-                    // Variant-qualification B: a bare pattern on an injected enum's variant is "in the
-                    // wind" — require the qualified `Enum.Variant(..)` form (mirrors construction).
+                    // Qualification B: a bare injected-enum pattern is "in the wind" — qualify it.
                     None if self.enums.get(&enum_name).is_some_and(|i| i.injected) => {
                         self.err_coded(
                             *span,
@@ -390,10 +388,12 @@ impl Checker {
                     }
                     _ => {}
                 }
+                // DEC-329.3: record the scrutinee's enum (feeds `qualify_variants`).
+                let k = span.start;
+                self.variant_resolutions.insert(k, enum_name.clone());
                 let field_tys: Vec<Ty> = match self.enums[&enum_name].variants.get(name) {
-                    // Substitute the enum's type parameters with the scrutinee's type arguments
-                    // (`Option<int>` ⇒ `{T → int}`) so a generic variant's payload binds at the
-                    // concrete type (M-RT generic enums); identity for a non-generic enum.
+                    // Substitute enum type params with the scrutinee's args (`Option<int>` ⇒
+                    // `{T → int}`) — generic payloads bind concrete; identity for non-generic.
                     Some(f) => {
                         let theta = self.enum_subst(&enum_name, &eargs);
                         f.iter().map(|t| apply_subst(t, &theta)).collect()

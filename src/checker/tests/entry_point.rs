@@ -139,3 +139,33 @@ fn single_class_static_main_is_not_multiple() {
     let src = "class App { static function main(): void { } }";
     assert!(!has(src, "E-MULTIPLE-MAIN"), "{:?}", errors_of(src));
 }
+
+// ── DEC-329.3 commit A: variant-use resolution ───────────────────────────────────────────────────
+
+#[test]
+fn bare_variant_shared_by_two_enums_is_ambiguous() {
+    let src = "enum A { Dup(int x) }\nenum B { Dup(string y) }\n\
+               function f(): void { discard new Dup(1); }";
+    assert!(has(src, "E-VARIANT-AMBIGUOUS"), "must be ambiguous");
+    // Qualified constructions of BOTH stay clean.
+    let q = "enum A { Dup(int x) }\nenum B { Dup(string y) }\n\
+             function f(): void { discard new A.Dup(1); discard new B.Dup(\"s\"); }";
+    assert!(!has(q, "E-VARIANT-AMBIGUOUS"), "qualified is unambiguous");
+}
+
+#[test]
+fn variant_resolutions_side_table_maps_uses_to_owning_enums() {
+    let src = "package Main;\nenum Shape { Circle(float r) }\n\
+               function f(Shape s): float {\n  return match (s) { Circle(r) => r };\n}\n\
+               function g(): Shape { return new Circle(1.0); }\n";
+    let toks = crate::tokenizer::lex(src).expect("lex");
+    let prog = crate::parser::Parser::new(toks)
+        .parse_program()
+        .expect("parse");
+    let (.., table) = crate::checker::check_resolutions(&prog).expect("checks clean");
+    assert!(
+        table.values().any(|e| e == "Shape"),
+        "construction + pattern resolutions recorded: {table:?}"
+    );
+    assert!(table.len() >= 2, "both use-sites recorded: {table:?}");
+}

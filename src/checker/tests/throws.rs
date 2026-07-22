@@ -242,7 +242,6 @@ fn throw_tail_satisfies_totality() {
 #[test]
 fn throws_mode_propagate_is_recorded_for_erasure() {
     // A throws-mode `?` is a checker-only marker: it must be recorded (mapped to the bare call)
-    // so `resolve_html` erases the `Propagate` node before any backend sees it.
     let p = prog(&format!(
         "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
              function g() -> void throws BadInputError {{ f()?; }} function main() -> void {{}}"
@@ -258,6 +257,7 @@ fn throws_mode_propagate_is_recorded_for_erasure() {
         _for_iters,
         _for_binds,
         _tuple_binds,
+        _variants,
     ) = check_resolutions(&p).expect("checks clean");
     assert_eq!(
         subst.len(),

@@ -141,6 +141,8 @@ pub fn check_and_expand_reified(
             for_iters,
             for_binds,
             tuple_binds,
+            // DEC-329.3 commit B consumes this via the `qualify_variants` pass; produced + tested now.
+            _variant_enums,
         )) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
@@ -562,6 +564,7 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
             _for_iters,
             _for_binds,
             _tuple_binds,
+            _variant_enums,
         )) => (crate::diagnostic::diagnostics_json(&[], &warnings), false),
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),
     })

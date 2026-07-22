@@ -23,6 +23,12 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
                  import Core.Runtime.Config;\n\
                  #[Config] function appConfig() -> T { return new T(...); }\n"
         }
+        "E-VARIANT-AMBIGUOUS" => {
+            "E-VARIANT-AMBIGUOUS — a bare variant name is declared by more than one enum.\n\n\
+             `new Dup(…)` cannot know which enum you mean (before 2026-07-22 the pick was silently\n\
+             arbitrary — a soundness hole, now closed). Qualify the construction:\n\n\
+                 new TheEnum.Dup(…)\n"
+        }
         "E-TRANSPILE-VARIANT-COLLISION" => {
             "E-TRANSPILE-VARIANT-COLLISION — two enums declare the same variant name.\n\n\
              Enum variants transpile to flat PHP classes (`final class <Variant> extends <Enum>`),\n\

@@ -618,6 +618,8 @@ pub struct Checker {
     /// overriding `ctype` with it is sound; entries that map to `CTy::Other` are dropped at the compile
     /// boundary, so non-operand results never override `ctype`'s normal (fn-value/class) resolution.
     reified_operands: HashMap<usize, Ty>,
+    /// DEC-329.3: resolved VARIANT USES, `span.start` → owning enum (feeds `qualify_variants`).
+    variant_resolutions: HashMap<usize, String>,
     /// DEC-239: contextual pipe-lambda parameter resolutions — the checker-inferred `Ty` of each
     /// lambda parameter written as `Type::Infer` (the pipe lambda `x |> (v => …)` and the multi-`%`
     /// IIFE), keyed by the parameter's `span.start`. `cli::check_and_expand_reified` materializes
@@ -707,25 +709,22 @@ pub fn check_resolutions(
         std::collections::HashSet<usize>,
         HashMap<usize, (Option<Ty>, Option<Ty>)>,
         HashMap<usize, Vec<Ty>>,
+        HashMap<usize, String>,
     ),
     Vec<Diagnostic>,
 > {
     let c = run_checker(program);
     if c.errors.is_empty() {
         // Merge the Reflect `typeName` substitutions into the call-rewrite map applied by
-        // `rewrite_ufcs`. Keys are disjoint (a `typeName` call site is a native member call, never a
-        // UFCS site), and a single combined pass — rather than two ordered passes — is what makes the
-        // two kinds of sugar compose correctly when nested (UFCS inside a `typeName` argument, or
-        // `typeName` inside a UFCS argument): one walker that knows every replacement re-resolves
-        // embedded original subtrees regardless of nesting direction.
+        // `rewrite_ufcs`. Keys are disjoint (a `typeName` site is a native member call, never UFCS);
+        // ONE combined pass makes the two sugars compose when nested either way — the single walker
+        // re-resolves embedded original subtrees regardless of nesting direction.
         let mut calls = c.ufcs_resolutions;
         calls.extend(c.reflect_resolutions);
-        // M4/DEC-249 default-parameter fills are returned SEPARATELY (not merged into the
-        // rewrite_ufcs map): a fill is a CHECK-TIME clone, so it must be spliced back FIRST —
-        // before resolve_html erases throws-`?` / unwrap_new strips `new` — or a lambda argument's
-        // already-erased nodes get restored stale (the db.transaction(fn) regression). The
-        // pipeline applies them via `apply_default_fills` ahead of every other rewrite, so the
-        // spliced subtrees flow through the whole chain like hand-written code.
+        // M4/DEC-249 default-parameter fills return SEPARATELY (never merged into the rewrite_ufcs
+        // map): a fill is a CHECK-TIME clone spliced back FIRST — before resolve_html/unwrap_new
+        // erase nodes — or a lambda argument's already-erased nodes restore stale (the
+        // db.transaction(fn) regression). `apply_default_fills` runs ahead of every other rewrite.
         // M4 as-matrix: primitive-cast → native-conversion-call substitutions, keyed by the `Cast`
         // node's span (the `as` token — disjoint from every call/UFCS/fill/reflect span). Applied by
         // the same `rewrite_ufcs` walker (its `Cast` arm now consults this map).
@@ -750,6 +749,7 @@ pub fn check_resolutions(
             c.for_bind_resolutions,
             // DEC-288: inferred tuple-destructure binder types, written by `materialize_tuple_binds`.
             c.tuple_bind_resolutions,
+            c.variant_resolutions, // DEC-329.3 (see field doc)
         ))
     } else {
         Err(c.errors)

@@ -11,20 +11,47 @@ impl Checker {
         span: Span,
         skip_throws: bool,
     ) -> Option<Ty> {
-        // enum variant constructor: find the (unique) enum that owns this variant name
-        let owner = self
+        // enum variant constructor: collect EVERY enum that owns this variant name. Pre-DEC-329.3
+        // this was a `.find()` over the HashMap — with two owning enums the pick was ITERATION-ORDER
+        // NONDETERMINISTIC (a real soundness hole: the same program could type against either enum).
+        // Now: 2+ owners = a strict `E-VARIANT-AMBIGUOUS` (qualify to disambiguate); the diagnostic
+        // proceeds with the FIRST owner in sorted order so cascades stay deterministic.
+        let mut owners: Vec<String> = self
             .enums
             .iter()
-            .find(|(_, info)| info.variants.contains_key(name))
-            .map(|(enum_name, info)| {
-                (
-                    enum_name.clone(),
-                    info.variants[name].clone(),
-                    info.type_params.clone(),
-                    info.injected,
-                )
-            });
+            .filter(|(_, info)| info.variants.contains_key(name))
+            .map(|(enum_name, _)| enum_name.clone())
+            .collect();
+        owners.sort();
+        if owners.len() > 1 {
+            let all = owners
+                .iter()
+                .map(|e| format!("`{e}`"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.err_coded(
+                span,
+                format!("variant `{name}` is ambiguous — declared by {all}"),
+                "E-VARIANT-AMBIGUOUS",
+                Some(format!(
+                    "qualify the construction: `new {}.{name}(…)`",
+                    owners[0]
+                )),
+            );
+        }
+        let owner = owners.first().map(|enum_name| {
+            let info = &self.enums[enum_name.as_str()];
+            (
+                enum_name.clone(),
+                info.variants[name].clone(),
+                info.type_params.clone(),
+                info.injected,
+            )
+        });
         if let Some((enum_name, fields, type_params, injected)) = owner {
+            // DEC-329.3: record the resolved owner for the `qualify_variants` pass (commit B).
+            self.variant_resolutions
+                .insert(span.start, enum_name.clone());
             // Variant-qualification B: a compiler-injected enum's variant must be constructed
             // *qualified* (`new Json.Object(…)`) — a bare `new Object(…)` is a name the user never
             // wrote, "in the wind" (DEC-020). Qualified construction routes through
@@ -273,6 +300,9 @@ impl Checker {
         // `new`). A qualified construction reached without `new` is `E-NEW-REQUIRED`, exactly like the
         // bare form (DEC-083 mandatory `new`).
         let was_new = std::mem::take(&mut self.under_new);
+        // DEC-329.3: qualified constructions resolve trivially — record for `qualify_variants`.
+        self.variant_resolutions
+            .insert(span.start, enum_name.to_string());
         let info = &self.enums[enum_name];
         let Some(fields) = info.variants.get(variant).cloned() else {
             for a in args {

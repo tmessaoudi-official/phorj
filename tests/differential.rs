@@ -3082,6 +3082,8 @@ const TIER1_PHP: &[&str] = &[
     "sys_get_temp_dir",
     // string (ext/standard) — the DEC-317 `__phorj_log_ord` variant-class basename extraction.
     "strrchr",
+    // process (ext/standard) — the DEC-329.4 processor tail (`pid=` on opted-in log lines).
+    "getmypid",
     // arrays / iterables
     "array_chunk",
     // core since 8.1 (transpile floor is 8.5); used by the DEC-238 __phorj_debug_render twin.
