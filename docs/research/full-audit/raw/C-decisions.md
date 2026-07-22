@@ -2878,6 +2878,16 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     inline default. OPEN sub-point flagged for the build: whether signature inference (DEC-191) stays as
     a fallback when `kind:` is omitted, or is retired for explicit `kind:`.
   - **D2/D3 folded into D1** (reserved role names; config location + precedence — both answered above).
-  - **D4+ (PENDING):** `Http.ServeConfig` field-set contract, web-model reconcile (raw `respond(bytes)`
-    vs typed `(Request):Response`), inbound TLS, Rich Request, Invokable/toString, parity scheduling —
-    recorded here as each locks.
+  - **`#[Entry]` and `#[Config]` work on CLASSES too** (dev-ruled 2026-07-22), not only free functions:
+    a class static method may carry either attribute (entry-as-class-static already exists via
+    `entry_candidates`; `#[Config]` provider likewise), and config values are class instances
+    (`Http.ServeConfig` is a class). Applies across every kind.
+  - **D4 (LOCKED 2026-07-22) — web runtime config contract.** Ship a canonical stdlib `Http.ServeConfig`
+    the built-in server reads, fields: `host` (default `127.0.0.1`), `port` (`8080`), `workers` (=cores),
+    `timeout` secs (`0`=none), `cert?`, `key?`, `serverName?`, `maxBodySize` bytes (8 MB), `tlsMinVersion?`
+    (TLS 1.2). Rationale: bind/TLS/limit knobs are the runtime's contract → a stdlib type it can rely on,
+    not a free-form user shape. **App-specific settings are a SEPARATE injected parameter** (a user config
+    class), kept distinct from the runtime contract. Built by a `#[Config]` provider (function or class
+    static method) per the D1 precedence chain.
+  - **D5+ (PENDING):** web-model reconcile (raw `respond(bytes)` vs typed `(Request):Response`), inbound
+    TLS, Rich Request, Invokable/toString, parity scheduling — recorded here as each locks.
