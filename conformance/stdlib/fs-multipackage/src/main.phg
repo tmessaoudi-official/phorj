@@ -1,0 +1,15 @@
+// DEC-328 regression fixture: a NON-Main package calling the Core.FileSystemModule prelude. Before
+// the fix, the transpiled PHP fataled (`Class "Storage\FileSystem" not found`) — injected
+// prelude classes land in `namespace Main`, and non-Main blocks had no aliases. Deterministic FS
+// reads only (exists on fixed paths), so the output is golden-stable on all three legs.
+package Main;
+
+import Core.Output;
+import Storage;
+import Core.Runtime.Entry;
+
+#[Entry]
+function main(): void {
+    Output.printLine("root " + Storage.describeRoot());
+    Output.printLine("ghost " + Storage.describeGhost());
+}

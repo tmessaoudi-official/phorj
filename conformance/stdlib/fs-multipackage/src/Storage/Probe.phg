@@ -1,0 +1,25 @@
+// The non-Main package exercising the injected FS prelude from outside `namespace Main`.
+package Storage;
+
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+
+function describe(string path): string {
+    try {
+        if (FileSystem.exists(path)) {
+            return "present";
+        }
+        return "absent";
+    } catch (FileSystemError e) {
+        return "error";
+    }
+}
+
+function describeRoot(): string {
+    return describe("/");
+}
+
+function describeGhost(): string {
+    return describe("/phorj-conformance-definitely-absent");
+}
