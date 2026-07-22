@@ -2862,3 +2862,22 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `db_prelude`→`database_prelude`), and the differential byte-identity quarantine re-pointed from `"db"` to
   `"database"`. Not a user-visible change (no module/feature/surface renamed). Full gate green vs php-8.4
   (only the pre-existing bcmath decimal-conformance PHP leg self-blocks in-container). Commit `6991429`.
+
+- **DEC-331 — Web/entry-roles + rich per-type config + web-parity slices (INTERACTIVE DESIGN, QUEUED;
+  rulings accumulate here as the dev locks each — this DEC block is the single canonical home per
+  Invariant 19, no side plan doc).**
+  - **D1 (LOCKED 2026-07-22) — entry roles & config wiring.** Role declared via `#[Entry(kind: Type)]`
+    (named arg). Active kinds `Cli`, `Web`; reserved (recognized, unbuilt) `Desktop`, `Mobile`, `Worker`,
+    `Embedded`. Config is injected as a **typed parameter** of the entry (DEC-318 entry-param injection),
+    NOT named in the attribute — the parameter type is the single declaration of which config the entry
+    wants (rejected `#[Entry(kind: Web, config: WebConfig)]`: duplicates the type attribute↔param, drift
+    risk, needs a new type-as-attribute-arg capability for no gain). **Per-type config for EVERY kind**
+    (not just Web): each kind receives its own config type, built by a `#[Config]` provider (phorj code —
+    reads env, computes, typed; conventionally in `src/config.phg`, not mandatory). **Precedence
+    (highest wins):** CLI flag > env var > `#[Config]` provider > `phorj.json` static block > attribute
+    inline default. OPEN sub-point flagged for the build: whether signature inference (DEC-191) stays as
+    a fallback when `kind:` is omitted, or is retired for explicit `kind:`.
+  - **D2/D3 folded into D1** (reserved role names; config location + precedence — both answered above).
+  - **D4+ (PENDING):** `Http.ServeConfig` field-set contract, web-model reconcile (raw `respond(bytes)`
+    vs typed `(Request):Response`), inbound TLS, Rich Request, Invokable/toString, parity scheduling —
+    recorded here as each locks.

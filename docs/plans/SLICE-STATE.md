@@ -42,6 +42,13 @@ v2 = REAL PARALLELISM design slice QUEUED); **(d) Claude-config bootstrap** comm
 **ENV note:** php in this container is 8.4 WITHOUT bcmath (uninstallable, org proxy) → decimal
 conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `PHORJ_PHP=/usr/bin/php`.
 
+**CURRENT SLICE (2026-07-22, interactive design — DEC-331):** the dev is ruling the web/entry/parity
+slices one decision at a time (Invariant 15). Rulings land in **DEC-331** (register) — the single
+canonical home, no side plan doc (Invariant 19). **D1 LOCKED:** `#[Entry(kind: Type)]` + per-type
+`#[Config]`-injected typed-parameter config, precedence CLI>env>`#[Config]`>`phorj.json`>attr. D4+
+(ServeConfig contract, web-model reconcile, inbound TLS, Rich Request, Invokable/toString) PENDING.
+Nothing builds until the design is fully ruled.
+
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
 ▶▶ **NEXT CONTEXT RESUMES HERE (2026-07-22, all four DEC-329 rulings in hand):**
 (a) **Log-v2 processors** (DEC-329.4, SMALL — do first): out-of-contract tail ` | ts=<epoch-ms> pid=<pid>`.
