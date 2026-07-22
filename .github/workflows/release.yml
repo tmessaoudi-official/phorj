@@ -1,9 +1,14 @@
 # Build the `phg` binary for Linux, Windows, and macOS and attach the archives to a GitHub Release.
 #
 # Native runners per OS (not cross-compilation): each target builds on its own platform, so the
-# binary is correctly linked — and it fills the macOS gap that `phg build --target` defers. Triggered
-# when a Release is published; `workflow_dispatch` also builds the archives and uploads them as run
-# artifacts (so the pipeline can be exercised without cutting a release).
+# binary is correctly linked — and it fills the macOS gap that `phg build --target` defers.
+#
+# Release channels (DEC-323):
+#   nightly — every push to master rebuilds the 4 archives and the `publish-nightly` job re-points
+#             the rolling `nightly` tag + prerelease at that commit with the fresh binaries attached.
+#   stable  — publishing a `v*` Release triggers the same matrix and each job attaches its archive
+#             to that release (the pre-existing path, unchanged).
+# `workflow_dispatch` builds the archives and uploads them as run artifacts only (pipeline dry-run).
 name: release
 
 on:
@@ -93,3 +98,42 @@ jobs:
           files: |
             ${{ matrix.asset }}.tar.gz
             ${{ matrix.asset }}.zip
+
+  # The nightly channel (DEC-323): on every master push, re-point the rolling `nightly` tag at this
+  # commit and publish a prerelease carrying all four archives. Delete-then-recreate (instead of
+  # editing in place) so stale assets from the previous nightly can never linger. Runs AFTER the whole
+  # matrix so a nightly is only cut when all four platforms built. No recursion: events created with
+  # the workflow's own GITHUB_TOKEN do not trigger new workflow runs, so publishing the nightly
+  # release does NOT re-fire this workflow's `release:` trigger.
+  publish-nightly:
+    name: publish nightly prerelease
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download all archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: phg-*
+          path: assets
+          merge-multiple: true
+
+      # `gh` is preinstalled on GitHub runners; GITHUB_TOKEN + `contents: write` (set at workflow
+      # level) covers release + tag management. `--latest=false` keeps the "Latest" badge on the
+      # newest stable `v*` release — nightly is a prerelease channel, never the storefront.
+      - name: Recreate the rolling nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ls -l assets/
+          gh release delete nightly --yes || true
+          git push origin :refs/tags/nightly || true
+          git push origin "+${GITHUB_SHA}:refs/tags/nightly"
+          gh release create nightly assets/* \
+            --prerelease \
+            --latest=false \
+            --title "nightly (${GITHUB_SHA:0:7})" \
+            --notes "Rolling nightly build from \`master\` @ ${GITHUB_SHA}. Rebuilt and re-pointed on every push to master — do not pin to these assets; use a \`v*\` release for anything durable."
