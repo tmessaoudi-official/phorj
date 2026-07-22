@@ -39,6 +39,12 @@ pub fn parse_program(src: &str) -> Result<Program, String> {
     lex_parse(src)
 }
 
+/// Render a pre-check pass's diagnostics into the pipeline's one-per-line error string.
+fn render_all(ds: &[crate::diagnostic::Diagnostic], diag_src: &str) -> String {
+    let lines: Vec<String> = ds.iter().map(|e| e.render(diag_src)).collect();
+    lines.join("\n")
+}
+
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
     check_and_expand_reified(prog, diag_src).map(|(p, _)| p)
 }
@@ -108,31 +114,20 @@ pub fn check_and_expand_reified(
     // the qualifier collapse (its output is bare injected TYPE names, disjoint from variant heads) and
     // before `check_resolutions`.
     let routed = crate::checker::resolve_variant_imports(routed);
-    // DI v1 (`docs/plans/di-attributes.plan.md`): expand `inject<T>()` composition roots into plain
-    // `new` construction (a synthesized `__phorj_di_<T>()` factory per requested type). Pre-check, so
-    // the generated graph type-checks like hand-written code and every backend sees explicit
-    // construction (Inv-5). A no-op unless `inject` is used; compile errors (E-DI-*/E-INJECT-NO-TYPE)
-    // surface here exactly like the other pre-check passes.
-    let routed = match crate::checker::desugar_di(routed) {
-        Ok(p) => p,
-        Err(ds) => {
-            let lines: Vec<String> = ds.iter().map(|e| e.render(diag_src)).collect();
-            return Err(lines.join("\n"));
-        }
-    };
-    // DEC-208 S2: lower the type-directed `Core.DatabaseModule` hydration calls `stmt.queryInto()` /
-    // `stmt.queryOneInto()` into plain construction via synthesized per-class helpers, drawing the row
-    // class from the binding's declared type OR an explicit call-site turbofish (slice A wired —
-    // turbofish wins; arity checked in the pass, `E-TYPE-ARG-COUNT`). Pre-check, so the generated
-    // `new T(row.getX(..)?)` graph type-checks like hand-written code and both backends run the one
-    // desugared AST (Inv-5; `run ≡ runvm` automatic). A no-op unless `Core.DatabaseModule` is imported.
-    let routed = match crate::checker::desugar_db(routed) {
-        Ok(p) => p,
-        Err(ds) => {
-            let lines: Vec<String> = ds.iter().map(|e| e.render(diag_src)).collect();
-            return Err(lines.join("\n"));
-        }
-    };
+    // DI v1: expand `inject<T>()` composition roots into plain `new` construction (a synthesized
+    // `__phorj_di_<T>()` factory per type). Pre-check, so the graph type-checks like hand-written
+    // code (Inv-5); E-DI-*/E-INJECT-NO-TYPE surface here like the other pre-check passes.
+    let routed = crate::checker::desugar_di(routed).map_err(|ds| render_all(&ds, diag_src))?;
+    // DEC-208 S2: lower the type-directed `Core.DatabaseModule` hydration calls (`queryInto` family)
+    // into plain construction via synthesized per-class helpers (row class from the sink type OR a
+    // call-site turbofish, which wins; arity checked, `E-TYPE-ARG-COUNT`). Pre-check (Inv-5) — the
+    // generated `new T(row.getX(..)?)` graph type-checks like hand-written code on both backends.
+    let routed = crate::checker::desugar_db(routed).map_err(|ds| render_all(&ds, diag_src))?;
+    // DEC-318: `#[Config]` typed-config injection — `#[Entry] main(config: T)` becomes a zero-arg
+    // entry whose body opens with `T config = <provider>();`. Pre-check, so the injected call
+    // type-checks like hand-written code and every backend (and the PHP output) runs the one
+    // desugared AST (Inv-5 — pure, so it stays INSIDE the byte-identity spine).
+    let routed = crate::checker::desugar_config(routed).map_err(|ds| render_all(&ds, diag_src))?;
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
         Ok((
@@ -266,6 +261,11 @@ pub fn front_end_diagnostics(prog: &Program) -> Vec<crate::diagnostic::Diagnosti
         Err(ds) => return ds,
     };
     let routed = match crate::checker::desugar_db(routed) {
+        Ok(p) => p,
+        Err(ds) => return ds,
+    };
+    // DEC-318 `#[Config]` injection — mirrored from `check_and_expand_reified` (DEC-252 drift rule).
+    let routed = match crate::checker::desugar_config(routed) {
         Ok(p) => p,
         Err(ds) => return ds,
     };

@@ -1,0 +1,35 @@
+// Typed configuration with `#[Config]` + entry injection (DEC-318).
+//
+// A `#[Config]`-attributed zero-arg function is the program's typed-config PROVIDER; the `#[Entry]`
+// function declares a parameter of that type and the compiler injects the provider's result — no
+// container, no reflection, no config-file parser. Config is plain phorj code, so it is type-checked,
+// refactorable, and completion-aware like everything else — and because the injection desugars to an
+// ordinary call BEFORE any backend runs, it is pure and byte-identical across run / runvm / PHP.
+//
+//   phg run examples/guide/config.phg
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.Config;
+
+class AppConfig {
+    constructor(public string appName, public int workers, public bool verbose) {}
+}
+
+#[Config]
+function appConfig(): AppConfig {
+    return new AppConfig("demo-app", 4, false);
+}
+
+#[Entry]
+function main(AppConfig config): void {
+    // `config` arrives injected: the compiler rewrote this entry to call `appConfig()` first.
+    Output.printLine("app     = {config.appName}");
+    Output.printLine("workers = {config.workers}");
+    mutable var verbose = "no";
+    if (config.verbose) {
+        verbose = "yes";
+    }
+    Output.printLine("verbose = " + verbose);
+}

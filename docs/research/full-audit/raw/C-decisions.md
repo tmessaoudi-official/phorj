@@ -2564,8 +2564,16 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   ordinary AST → **transpiles byte-identically** (a plain PHP call) and **lifts** as ordinary functions, so
   config stays IN the byte-identity spine (it is pure). Checker rules (`E-CONFIG-*`): exactly one provider
   per config-type; `main`'s param type must match a provider return type; missing/ambiguous = typed error.
-  Provider discovery uses the existing project/registry scan (DEC-252/DEC-282), sorted (Invariant 10). Spec:
-  same plan file. **NOT YET BUILT** (spec'd 2026-07-21; build on next fresh budget).
+  Provider discovery uses the existing project/registry scan (DEC-252/DEC-282), sorted (Invariant 10).
+  **✅ SHIPPED 2026-07-22** — built as the pre-check pass `src/checker/desugar_config.rs` (the
+  `desugar_di`/`desugar_db` pattern): `#[Entry] main(config: T)` with `entry_role == None` desugars to a
+  zero-arg entry whose body opens with `T config = <provider>();` — valid entry shapes (`()`, argv, web)
+  pass through untouched, so no `entry_role` change was needed. Marker gated by `import
+  Core.Runtime.Config;` (`bare_types`, the Entry precedent); known-attribute arm in
+  `checker/program/attributes.rs`; wired in BOTH `check_and_expand_reified` AND `front_end_diagnostics`
+  (DEC-252 drift test). Typed errors `E-CONFIG-SIG/DUP/MISSING/TARGET` (+ `E-ATTRIBUTE-ARGS` on a
+  non-bare marker), all in `phg explain`. Verified byte-identical interpreter ≡ VM ≡ no-JIT ≡ php on
+  `examples/guide/config.phg` (pure → INSIDE the differential spine); 7 unit tests in the pass.
 
 - **DEC-319 — EXTERNAL ADOPTION REVIEW SYNTHESIZED (2026-07-22): roadmap validated ~10/14; DX
   NORTH-STAR recorded.** A cross-language "what makes a language robust & mass-adopted" review (dev's

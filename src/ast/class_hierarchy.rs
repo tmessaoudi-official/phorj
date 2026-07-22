@@ -109,10 +109,9 @@ pub fn class_supertypes(program: &Program) -> std::collections::BTreeMap<String,
     out
 }
 
-/// DEC-191: is this attribute the `#[Entry]` marker? Recognized in every "nothing in the wind" import
-/// form (bare `#[Entry]` after `import Core.Runtime.Entry;`, OR fully-qualified `#[Core.Runtime.Entry]`,
-/// self-gating) — single-sourced through [`crate::ast::Attribute::is_entry`]. Argument validation is
-/// the checker's job.
+/// DEC-191: the `#[Entry]` marker, in every "nothing in the wind" import form (bare after
+/// `import Core.Runtime.Entry;`, or fully-qualified) — single source [`crate::ast::Attribute::is_entry`].
+/// (`#[Config]`, DEC-318, has no free-fn twin — call [`crate::ast::Attribute::is_config`] directly.)
 pub fn is_entry_attr(a: &crate::ast::Attribute) -> bool {
     a.is_entry()
 }

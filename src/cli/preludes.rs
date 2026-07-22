@@ -1210,9 +1210,9 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         src: None,
         respond_bridge: None,
         member_gated: false,
-        // DEC-191 addendum: `#[Entry]` is import-gated (wind rule) — `import Core.Runtime.Entry;`
-        // exactly like the UncheckedOverflow precedent one row up.
-        bare_types: &["Attribute", "Entry"],
+        // DEC-191: `#[Entry]` is import-gated (wind rule), like the UncheckedOverflow precedent one
+        // row up; DEC-318 adds the `#[Config]` provider marker under the same gate.
+        bare_types: &["Attribute", "Entry", "Config"],
     },
     VirtualModule {
         module: &["Core", "DependencyInjection"],

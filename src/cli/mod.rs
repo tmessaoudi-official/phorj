@@ -16,6 +16,7 @@ use crate::vm::Vm;
 mod benchmark;
 mod debug_repl;
 mod explain;
+mod explain_config;
 mod format_cmd;
 pub mod pm;
 mod rewrite_new;

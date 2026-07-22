@@ -39,7 +39,11 @@ v2 = REAL PARALLELISM design slice QUEUED); **(d) Claude-config bootstrap** comm
 conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `PHORJ_PHP=/usr/bin/php`.
 
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
-0. ▶▶ **PRIORITY — Structured logging (Log-v2, DEC-317) + typed `#[Config]` provider+injection (DEC-318).**
+0. ▶▶ **PRIORITY — Structured logging (Log-v2, DEC-317) + typed `#[Config]` provider+injection (DEC-318).
+   Part A (`#[Config]` injection, DEC-318) ✅ SHIPPED 2026-07-22** (`desugar_config.rs` pre-check pass,
+   byte-identical all legs, `examples/guide/config.phg`). Part B (Log-v2, DEC-317) = NEXT: extend
+   `src/native/log.rs` (levels/channels/handlers/formatters/processors per the DEC-317 spec; note
+   Core.Log is native-only, no `log` cargo feature yet — wave-4 ext migration optional, not required).
    Dev's ACTIVE need (building a real app). SPEC READY, adjudicated 2026-07-21 (both forks ruled): full
    Monolog-class logging (channels/levels/Stream+File+RotatingFile handlers/Line+Json formatters/processors,
    config-driven, `LogSink` SPI) + `#[Config]` fn injected into `#[Entry] main(config: AppConfig)` (no new

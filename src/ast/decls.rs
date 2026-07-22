@@ -164,6 +164,13 @@ impl Attribute {
         attr_path_matches(&self.name, "Core.Runtime.Entry")
     }
 
+    /// True iff this is the `#[Config]` typed-config provider marker (DEC-318). Canonical
+    /// `Core.Runtime.Config`, recognized in every import form via [`attr_path_matches`] — the
+    /// `#[Entry]` twin. The single source is [`is_config_attr`].
+    pub fn is_config(&self) -> bool {
+        attr_path_matches(&self.name, "Core.Runtime.Config")
+    }
+
     /// True iff this is the `#[Route("METHOD", "/path")]` HTTP route handler marker (M6 W2). Canonical
     /// `Core.Http.Route`, every import form via [`attr_path_matches`]. SINGLE SOURCE — the checker
     /// validation and `desugar_router` both consult this, so they cannot drift.

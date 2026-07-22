@@ -199,6 +199,12 @@ impl Checker {
             if crate::ast::is_entry_attr(attr) {
                 continue;
             }
+            // DEC-318: `#[Config]` — the typed-config provider marker. Fully validated (zero-arg,
+            // concrete return, one per type, top-level only) by the pre-check `desugar_config`
+            // pass; here it just needs to be KNOWN, exactly like `#[Entry]` above.
+            if attr.is_config() {
+                continue;
+            }
             // DEC-194 2b-3: a user-defined attribute (`#[Tag]`, where `Tag` carries `#[Attribute]`) is a
             // legal use on a function/method (valid on all targets this slice); validated against its ctor.
             if self.check_user_attribute_use(attr) {
