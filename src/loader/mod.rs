@@ -113,6 +113,10 @@ pub struct Unit {
     /// (error-handling slice 1). Covers free functions (incl. `main`); methods/ctors — whose frame
     /// names are backend-synthesized (`Class::m`) — are not keyed here and show line-only.
     pub fn_files: std::collections::HashMap<String, PathBuf>,
+    /// DEC-320: EVERY top-level definition's origin — mangled name → declaring `.phg` file, types
+    /// AND functions (Pass 1 knows both; `fn_files` above stays the trace-frame subset). Drives the
+    /// `phg build --php` sibling emit's item→file routing. Empty in loose mode.
+    pub item_files: std::collections::HashMap<String, PathBuf>,
 }
 
 impl Unit {
@@ -231,6 +235,7 @@ fn load_unified_src(entry: &Path, entry_src: String) -> Result<Unit, String> {
             stats: None,
             sources: std::collections::HashMap::new(),
             fn_files: std::collections::HashMap::new(),
+            item_files: std::collections::HashMap::new(),
         });
     }
 
@@ -514,6 +519,7 @@ pub fn load_loose_src(src: &str) -> Result<Unit, String> {
         stats: None,
         sources: std::collections::HashMap::new(),
         fn_files: std::collections::HashMap::new(),
+        item_files: std::collections::HashMap::new(),
     })
 }
 
@@ -546,6 +552,7 @@ fn assemble(
     // Trace-attribution maps (error-handling slice 1): per-file source + function → file.
     let mut src_map: HashMap<PathBuf, String> = HashMap::new();
     let mut fn_files: HashMap<String, PathBuf> = HashMap::new();
+    let mut item_files: HashMap<String, PathBuf> = HashMap::new();
     for src_entry in &sources {
         let file = &src_entry.file;
         // The LSP buffer override (DEC-252): the entry's text may be the editor's unsaved buffer.
@@ -614,6 +621,9 @@ fn assemble(
             if !is_type {
                 fn_files.insert(mangle(&prog.package, name), file.clone());
             }
+            // DEC-320: every top-level definition (types too) → its declaring file, for the
+            // `phg build --php` sibling emit's per-item routing.
+            item_files.insert(mangle(&prog.package, name), file.clone());
             defs += 1;
         }
         parsed.push((file.clone(), prog));
@@ -702,6 +712,7 @@ fn assemble(
         stats: Some(stats),
         sources: src_map,
         fn_files,
+        item_files,
     })
 }
 

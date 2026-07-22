@@ -1,8 +1,7 @@
-//! Phorj CLI: `phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|serve|extensions|explain>
-//! <file>`. Thin dispatcher over the testable `phorj::cli` module. `run` executes on the bytecode VM
-//! (the runtime); `run --tree-walker` selects the interpreter oracle.
-// `deny`, not `forbid`: first-party `unsafe` is confined to the JIT island (`src/jit/`); see the
-// crate-root note in `src/lib.rs`. The `phg` binary itself contains no `unsafe`.
+//! Phorj CLI: thin dispatcher over the testable `phorj::cli` module. `run` executes on the
+//! bytecode VM (the runtime); `run --tree-walker` selects the interpreter oracle.
+// `deny`, not `forbid`: first-party `unsafe` is confined to the JIT island (`src/jit/`; see
+// `src/lib.rs`) — the `phg` binary itself contains none.
 #![deny(unsafe_code)]
 
 use std::process::exit;
@@ -18,16 +17,13 @@ fn main() {
     // exit before any CLI parsing. No payload -> fall through to the normal dispatcher.
     if let Some((src, profile)) = phorj::bundle::embedded_program() {
         // M-DX S0: a shipped artifact runs at the profile baked into its container (Release by
-        // default, Dev only if built with `--dev`). Set it before running so profile-gated machinery
-        // reads it — secure by construction: no environment variable can flip a Release artifact's
-        // PROFILE (PHG_NO_JIT below flips only the execution ENGINE — byte-identical + de-escalating).
+        // default) — no env var flips the PROFILE (PHG_NO_JIT flips only the engine).
         phorj::profile::set_active(profile);
         // A standalone built binary runs as a normal executable, so `Core.Process.args()` reads the
         // real process arguments (everything after the program name).
         phorj::native::set_process_args(std::env::args().skip(1).collect());
-        // DEC-273 build+JIT ruling: artifacts JIT by default (measured ~110× on hot pure loops)
-        // and honor `PHG_NO_JIT=1` as the byte-identical pure-VM escape hatch — env, not argv,
-        // because the artifact's argv belongs to the embedded program's `#[Entry]`.
+        // DEC-273: artifacts JIT by default (measured ~110× on hot pure loops); `PHG_NO_JIT=1`
+        // is the byte-identical pure-VM escape hatch (env — the argv belongs to the program).
         #[cfg(feature = "jit")]
         if std::env::var("PHG_NO_JIT").is_ok_and(|v| !v.is_empty() && v != "0") {
             phorj::vm::set_jit_enabled(false);
@@ -61,9 +57,8 @@ fn main() {
     // DEC-273: `phg extensions` lists every extension (name/tier/flag/state/modules) from the
     // same registry the compiler's disabled-import gate reads — the discoverability surface.
     if args.get(1).map(String::as_str) == Some("extensions") {
-        // `--docs` renders the build-independent form committed as docs/EXTENSIONS.md. Any other
-        // trailing argument is a usage error (the repo convention: loud rejection, never a
-        // silently-ignored typo — `--doc` must not regenerate the wrong form).
+        // `--docs` renders the build-independent form committed as docs/EXTENSIONS.md; any other
+        // trailing argument is a loud usage error (`--doc` must not regenerate the wrong form).
         let docs = match args.get(2).map(String::as_str) {
             None => false,
             Some("--docs") if args.len() == 3 => true,
@@ -102,12 +97,9 @@ fn main() {
             | "benchmark" | "build" | "vendor" | "add" | "install" | "update" | "remove"
             | "serve" | "lsp" | "test" | "format" | "explain" | "debug"),
         ) => c,
-        // DEC-282: bare `phg <existing-file>` dispatches to RUN — the shebang/executable-entry
-        // form (`#!/usr/bin/env phg` hands the script path as the first argument; `./bin/console
-        // migrate` reaches here as `phg /path/bin/console migrate`). Subcommand names keep
-        // priority (matched above — a file literally named `check` needs `phg run check`), and a
-        // non-existing first argument still prints usage. The args after the path become the
-        // entry's argv, exactly as `phg run <file> -- args` would pass them.
+        // DEC-282: bare `phg <existing-file>` dispatches to RUN (the `#!/usr/bin/env phg` form).
+        // Subcommand names keep priority (a file named `check` needs `phg run check`); a missing
+        // first argument still prints usage; trailing args become the entry's argv.
         Some(path) if std::path::Path::new(path).is_file() => {
             let mut rewritten: Vec<String> =
                 vec![args[0].clone(), "run".to_string(), path.to_string()];
@@ -195,9 +187,8 @@ fn main() {
         }
         return;
     }
-    // `build` keeps file-only source handling (Phase 1; cross targets extend it in Wave C). It
-    // consumes an optional `-o <out>`; a dangling `-o`, an unrecognized trailing arg, or any extra
-    // argument is a usage error (exit 2) — never a silent default-named build.
+    // `build` keeps file-only source handling (Phase 1; cross targets extend it in Wave C); a
+    // dangling `-o`, unrecognized flag, or extra argument is a usage error — never silent.
     if cmd == "build" {
         let file = match args.get(2) {
             Some(f) => f,
@@ -206,6 +197,22 @@ fn main() {
                 exit(2);
             }
         };
+        // DEC-320 split PHP emission (no other build flag applies).
+        if args.iter().skip(3).any(|a| a == "--php") {
+            if args.len() != 4 {
+                eprintln!("{USAGE}");
+                exit(2);
+            }
+            let entry = std::path::Path::new(file);
+            match loader::load(entry).and_then(|unit| cli::cmd_build_php(entry, &unit)) {
+                Ok(text) => print!("{text}"),
+                Err(err) => {
+                    eprintln!("{err}");
+                    exit(1);
+                }
+            }
+            return;
+        }
         let src = read_source_file(file);
         // Flags after `<file>`: optional -o <out>, optional (--target <triple> | --all), mutually
         // exclusive. --sign is reserved for Phase 3; unknown flags / extra args → usage, exit 2.
@@ -283,9 +290,8 @@ fn main() {
             }
         }
     }
-    // `debug <file>` (M-DX S5) runs the program under the interactive REPL debugger, reading commands
-    // on stdin and writing the debugger UI to stderr. Dev-only + interpreter-only; project-aware load
-    // like `run`. Program stdout is printed after the session (the interpreter buffers it).
+    // `debug <file>` (M-DX S5): the interactive REPL debugger — commands on stdin, UI on stderr;
+    // Dev-only + interpreter-only; project-aware load; program stdout prints after the session.
     if cmd == "debug" {
         // `--dap` runs the Debug Adapter Protocol server (editor integration); otherwise the terminal
         // REPL. The file is the first non-flag argument.
@@ -330,9 +336,8 @@ fn main() {
             }
         }
     }
-    // `serve <file> [--address ADDR]` runs the blocking HTTP server. The program is loaded
-    // project-aware (like `run`) and must define `respond(bytes): bytes`. The loop runs until the
-    // process is killed; only a bind/socket error returns (exit 1). Default address 127.0.0.1:8080.
+    // `serve <file> [--address ADDR]` runs the blocking HTTP server (project-aware load; the
+    // program defines `respond(bytes): bytes`; runs until killed; default 127.0.0.1:8080).
     if cmd == "serve" {
         let mut file: Option<&str> = None;
         let mut addr = "127.0.0.1:8080";
@@ -344,10 +349,9 @@ fn main() {
         // `--workers N` request concurrency (M6 W3). 0 (the sentinel) = auto = CPU cores; 1 = the
         // single-threaded path. Resolved after parsing.
         let mut workers: usize = 0;
-        // `--tree-walker` runs requests on the interpreter oracle instead of the (default) bytecode VM
-        // — mirrors `phg run --tree-walker`. The VM is faster (measured ~2.3× lower serve latency on a
-        // representative handler) and byte-identical; the interpreter
-        // is the correctness reference (and serves an overloaded `respond`, which the VM path rejects).
+        // `--tree-walker` serves on the interpreter oracle instead of the (default) VM — mirrors
+        // `phg run --tree-walker`. The VM is faster (measured ~2.3× lower latency) and
+        // byte-identical; the interpreter also serves an overloaded `respond` (VM path rejects).
         let mut tree_walker = false;
         let mut i = 2;
         while i < args.len() {
@@ -497,11 +501,8 @@ fn main() {
         })
         .cloned()
         .collect();
-    // run/check/transpile are project-aware (M5 S2b): a <file> source is resolved through the
-    // manifest-less project loader (DEC-282) — walking up from the entry to its `src/` roots triggers
-    // multi-file merge + folder=path validation; a lone file loads loose (`package Main` only).
-    // `-e`/stdin are always loose. parse, tokenize, disasm, and bench keep the single-file string
-    // path (they dump/measure one source).
+    // run/check/transpile are project-aware (M5 S2b): a <file> resolves through the manifest-less
+    // project loader (DEC-282); `-e`/stdin load loose; parse/tokenize/disasm/bench stay single-file.
     let result = if matches!(cmd, "run" | "check" | "transpile") {
         // Resolve the source AND the program argv (`-- a b c`); the argv feeds `Core.Process.args()`
         // and is only meaningful for run (check/transpile ignore it).

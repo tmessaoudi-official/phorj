@@ -138,6 +138,10 @@ struct Transpiler {
     /// path. PHP resolves an inherited `Sub::MAX` itself, so only the keys are needed.
     consts: HashSet<(String, String)>,
     variants: HashSet<String>,
+    /// DEC-320 split emission: `Some` = only these top-level items emit; `None` = classic emit.
+    keep: Option<HashSet<String>>,
+    /// DEC-320: the running split pass (gates bootstrap / statics / trailing helpers).
+    split: split::SplitPass,
     /// DEC-329.3: bare variant → declaring enum (last wins) — FALLBACK only (`qualify_variants`).
     variant_owner: HashMap<String, String>,
     /// DEC-302: declared enum names — routes `Enum.cases()`/`from(x)`/`tryFrom(x)` to a PHP static
@@ -158,13 +162,11 @@ struct Transpiler {
     /// The class whose members are being emitted, for `this` operand-kind resolution (T6b). Set
     /// around `emit_class_members`, restored after.
     cur_class: Option<String>,
-    /// B2 — active trait-alias map for `parent.m(…)` / `parent(A).m(…)` calls emitted inside an
-    /// **MI class** or a **decomposed trait body**, where PHP has no native `parent::`/`A::` target
-    /// (the ancestor lives in a `use`d trait). `Some` only while emitting such a body; keyed by the
-    /// call's `(ancestor-as-written, method)`, valued by the `private` trait alias the `use` block
-    /// declares (`T<dp>::m as private __super_<dp>_<m>` ⇒ `$this->__super_<dp>_<m>(…)`). A parent call
-    /// absent from the map while this is `Some` targets a non-direct ancestor (a transitive MI jump) —
-    /// not yet lowerable, surfaced as a transpile error rather than invalid PHP.
+    /// B2 — active trait-alias map for `parent.m(…)` / `parent(A).m(…)` calls inside an **MI
+    /// class** or **decomposed trait body** (PHP has no native `parent::`/`A::` target there).
+    /// `Some` only while emitting such a body; keyed `(ancestor-as-written, method)`, valued by
+    /// the `private` trait alias the `use` block declares. A miss while `Some` = a transitive MI
+    /// jump — not yet lowerable, surfaced as a transpile error rather than invalid PHP.
     parent_aliases: Option<std::collections::BTreeMap<(Option<String>, String), String>>,
     /// `class → (field/hook/promoted-ctor-param name → OpKind)` — operand kinds of a class's *own*
     /// members (T6b). Field reads (`p.x`, `this.x`) resolve through here + the parent chain
@@ -277,9 +279,8 @@ struct Transpiler {
     uses_capture: bool,
     /// Set when the matching `Core.List` breadth op is emitted — each defines a `__phorj_*` helper
     /// once per file (List breadth slice). They exist instead of inlining PHP `min`/`max`/`array_unique`
-    /// because those juggle numeric strings, diverging from the Rust backends' byte-order; `find`/`any`/
-    /// `all` short-circuit (`foreach` + early `return`) to match the Rust short-circuit on a
-    /// side-effecting predicate.
+    /// because those juggle numeric strings, diverging from the Rust backends' byte-order;
+    /// `find`/`any`/`all` short-circuit (`foreach` + early `return`) like the Rust kernels.
     uses_list_unique: bool,
     uses_list_difference: bool,
     uses_list_intersection: bool,
@@ -341,10 +342,8 @@ struct Transpiler {
     /// (a tier-1 PCRE — NOT mbstring) + i128 range, returning the normalized decimal string or `null`.
     uses_dec_of: bool,
     /// Set when `Decimal.div`/`Decimal.round` are emitted (M-NUM S2) — define `__phorj_dec_div` /
-    /// `__phorj_dec_round`, replicating the Rust `round_div` rounding kernel via BCMath
-    /// (`bcdiv`/`bcmod`/`bccomp` truncate-toward-zero, dividend-signed remainder — verified identical
-    /// to Rust i128 `/`/`%`), switching on the `RoundingMode` enum's PHP form, and reusing
-    /// `__phorj_dec_check` for the i128 overflow fault. Both gate the shared `__phorj_round_div`.
+    /// `__phorj_dec_round`, replicating the Rust `round_div` kernel via BCMath (verified vs Rust
+    /// i128 `/`/`%`), switching on `RoundingMode`'s PHP form; both gate `__phorj_round_div`.
     uses_dec_div: bool,
     uses_dec_round: bool,
     /// Set when `Convert.toInt(float)` is emitted (M-NUM S3) — defines `__phorj_float_to_int`,
@@ -425,13 +424,11 @@ struct Transpiler {
     uses_log: bool,
     /// `Core.Native.FileSystem` emitted (DEC-313) → the `__phorj_fs_*` helpers (`fs_php.rs`).
     uses_fs: bool,
-    /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
-    /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
-    /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
-    /// therefore needs an `I<name>` interface + `T<name>` trait + a concrete `class <name>` form.
-    /// Built once in `emit`. A class outside this set lowers as a plain class / single `extends`
-    /// (byte-identical to pre-S6b output). The multi-parent classes themselves are emitted via
-    /// `emit_multi_class` (a class that `implements`+`use`s), not listed here.
+    /// Classes lowering to the **interface + trait** decomposition (M-RT S6b): every transitive
+    /// ancestor of a multi-parent (`extends A, B`) class — PHP has no MI, so each ancestor needs
+    /// an `I<name>` interface + `T<name>` trait + a concrete `class <name>`. Built once in `emit`;
+    /// classes outside the set lower plainly. The multi-parent classes themselves are emitted via
+    /// `emit_multi_class`, not listed here.
     decomposed: BTreeSet<String>,
     /// Monotonic counter for the hidden `$__phorj_d{N}` temporary that a let-destructuring spills its
     /// initializer into (Phase 1 slice 5). The name never collides with a user local (`$__phorj_` is
@@ -473,6 +470,7 @@ mod names;
 mod program_emit;
 mod runtime_php;
 mod runtime_tables;
+pub mod split;
 mod stmt;
 mod types;
 use self::names::*;
@@ -487,6 +485,8 @@ impl Transpiler {
             consts: HashSet::new(),
             variants: HashSet::new(),
             enums: HashSet::new(),
+            keep: None,
+            split: split::SplitPass::Off,
             variant_owner: HashMap::new(),
             variant_fields: HashMap::new(),
             out: String::new(),

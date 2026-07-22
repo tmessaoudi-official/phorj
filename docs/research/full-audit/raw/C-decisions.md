@@ -2784,6 +2784,31 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   of the single-program transpile output (PSR-4 = one class per file): transpile whole-program (the
   checker needs it), then route each item to the `.php` sibling of the `.phg` that declared it —
   needs the loader's item→source-file attribution (verify what `loader::load` preserves).
+  **(1) DEC-320 v1 BUILT (2026-07-22).** `phg build <entry> --php`: the loader now exports
+  `Unit.item_files` (EVERY top-level definition's mangled name → declaring `.phg`; Pass 1 already
+  knew it), and `transpile::split::emit_split` runs ONE whole-program transpile routed per item —
+  a shared `Transpiler` runs a pass per originating file (types only; `keep` filter +
+  `SplitPass::File` suppresses bootstrap/statics/helpers) and a final `SplitPass::Runtime` pass
+  (injected preludes + ALL free functions + statics-init-called-at-include-time + the helpers,
+  whose `uses_*` flags ACCUMULATED across the file passes — the runtime carries exactly the
+  project's helper set with no force-list to drift). `cmd_build_php` writes `.php` siblings
+  (skip-if-current by content compare — idempotent) + `_phorj/runtime.php` beside the entry, and
+  prints the one-time composer `files` diff (phg never edits composer.json). Single-file (loose)
+  entries attribute everything to the entry itself. Host-parity gated by `tests/build_php.rs`
+  (structural always; behavior vs real php with the oracle's skip-loud/REQUIRE gating) — the
+  split output under a composer-style host is byte-identical to `phg run` on the shapes fixture.
+  **Two DISCLOSED deltas from the spec (META-7 — surfaced, not self-ruled silently):**
+  (α) the runtime ships a generated CLASSMAP autoloader covering every sibling class — found
+  live: an enum emits several classes (base + DEC-329.3 scoped variants) from one file, which
+  plain PSR-4 cannot address; with the classmap, the ONE `files` entry is the host's total
+  wiring (strictly less composer coupling than the spec's PSR-4 reliance). (β) the F2
+  `phpInterop { namespaceRoot, sourceRoot }` knob is NOT built — v1 keeps package path =
+  namespace (the host maps it or consumes FQNs as-is); prefixing ripples through every
+  namespace/FQN emission site, so it is queued as **PENDING adjudication: is `App\`-prefixing
+  worth the transpiler-wide namespace-prefix plumbing, or is the no-prefix law fine for GA?**
+  Also v1-ruled here: NO `#[Entry]` bootstrap in split mode (the host owns the lifecycle;
+  `\Main\main()` stays callable) and free functions live in the runtime (PHP never autoloads
+  functions; composer `files` loads it eagerly).
   **(3) BUILD — commit B1 SHIPPED (2026-07-22), Rust-leg correctness half.** The recon under-stated
   the blast radius: the RUST legs were wrong too — interp `variants` map + VM `VariantMeta` map +
   `Op::MatchTag` exec were all bare-name keyed (last-declaration-wins), so a *qualified* use of a

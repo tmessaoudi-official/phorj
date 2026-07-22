@@ -56,12 +56,13 @@ conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `P
     PHP variant classes (`Shape_Circle`) lifting `E-TRANSPILE-VARIANT-COLLISION` for shared names
     (now only the pathological composed-name case refuses), reserved-word variant mangle subsumed,
     helper surfaces re-pointed, demo golden regen, `examples/guide/shared-variant-names.phg` (B2).
-(c) **DEC-320 v1 `phg build --php`** (DEC-329.1; per-file split build-note in the register row).
-    RECON (2026-07-22): the loader's Pass-1 `DefInfo` (loader/mod.rs ~541, `prov_fns`/`prov_types`
-    keyed (pkg, name) with `.file`) already knows EVERY definition's origin file, but `Unit` exports
-    only `fn_files` (free fns, trace frames). Build step 1 = export a full top-level item→file map
-    on `Unit` (types + functions, mangled names); step 2 = route the whole-program transpile output
-    per item to the `.phg` sibling; step 3 = `_phorj/runtime.php` shared helpers + composer diff.
+(c) ✅ **DEC-320 v1 `phg build --php` SHIPPED (2026-07-22)** — `Unit.item_files` attribution,
+    `transpile/split.rs` (per-file passes + runtime pass with accumulated helper flags),
+    `cli/build_php.rs` (siblings + `_phorj/runtime.php` + classmap autoloader + composer diff,
+    idempotent), `tests/build_php.rs` host-parity gate, `examples/build-php/README.md`.
+    Two disclosed deltas in the DEC-320 register note: classmap supersedes host-PSR-4 coupling;
+    F2 `phpInterop` namespace-prefix knob deferred as PENDING adjudication. v2 queue unchanged:
+    `phg stubs`, `phg watch`.
 (d) **`phg serve` native rustls TLS** (DEC-329.2; Web-pack; dep ruling for rustls server-side goes
     through the dependency policy like http-client did).
 

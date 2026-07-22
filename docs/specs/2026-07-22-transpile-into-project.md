@@ -1,6 +1,9 @@
 # DEC-320 — `transpile-into-project`: file-by-file phorj adoption inside a live PHP app
 
-**Status: SPEC — forks awaiting adjudication (Invariant 15). Nothing here is built.**
+**Status: v1 BUILT (2026-07-22) with the DEC-329 ruled defaults — see the DEC-320 build note in
+the decision register for the shipped shape and the two disclosed deltas (classmap autoloader
+supersedes the host-PSR-4 coupling; the F2 `phpInterop` namespace-prefix knob is deferred as a
+PENDING adjudication — v1 keeps package path = namespace).**
 Ruled scope (DEC-319/320, 2026-07-22): COMPILE-TIME ONLY — the TS→JS playbook. `.phg` files emit
 `.php` siblings inside an existing PHP application so a team migrates one file at a time while the
 app keeps running on PHP. The earlier live-interop rejection (on-the-spot rebuild, per-file gradual

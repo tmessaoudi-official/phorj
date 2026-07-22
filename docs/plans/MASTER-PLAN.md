@@ -89,8 +89,12 @@ adoption review validated ~10/14 themes as already covered and added four ruled 
 - **Log-v2 + `#[Config]` injection (DEC-317/318)** — the dev's ACTIVE-need slice (spec ready, build next).
 - **`edition` field in `phorj.json` (DEC-321)** — small slice, near-term (inert `2026` edition; full
   editions machinery stays the §11.3 post-1.0 residual).
-- **'Transpile-into-project' mixed PHP adoption (DEC-320)** — spec-first slice in the adoption/GA wave
-  (W6 neighborhood): `.phg` → `.php` siblings inside a live PHP app, composer/PSR-4-compatible.
+- **'Transpile-into-project' mixed PHP adoption (DEC-320)** — ✅ **v1 SHIPPED 2026-07-22**
+  (`phg build <entry> --php`): `.phg` → `.php` siblings + one shared `_phorj/runtime.php` (helpers,
+  injected preludes, free functions, generated classmap autoloader) — the host's total wiring is one
+  composer `files` entry; idempotent rebuilds; host-parity gated (`tests/build_php.rs`). v2 queue:
+  `phg stubs`, `phg watch`; the `phpInterop` namespace-prefix knob is a PENDING adjudication
+  (register DEC-320 build note).
 - **Concurrency v2 = real parallelism (DEC-322)** — DESIGN slice (multi-core + structured scopes +
   bounded channels + cancellation; forks adjudicated at design time). Runtime feature-pack neighborhood.
 - **Release channels (DEC-323)** — ✅ SHIPPED (nightly prerelease CI + SEMVER/SECURITY channel docs).

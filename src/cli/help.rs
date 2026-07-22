@@ -116,11 +116,20 @@ pub fn help_for(cmd: &str) -> String {
                     The artifact runs on the same VM+JIT as `phg run` (it inherits the building\n\
                     phg's extensions/features). `PHG_NO_JIT=1 ./app` is the byte-identical pure-VM\n\
                     escape hatch — an env var, since the artifact's argv belongs to your program.\n\n\
-                    usage:\n  phg build <file> [-o out] [--target triple | --all]\n\n\
+                    `phg build <entry> --php` (DEC-320) instead transpiles the project INTO a host\n\
+                    PHP app: every class/enum/interface/trait lands in the `.php` SIBLING of its\n\
+                    `.phg` (PSR-4 addressing unchanged — zero composer edits for classes) plus ONE\n\
+                    shared `_phorj/runtime.php` (helpers + injected preludes + free functions;\n\
+                    register it once under composer `\"files\"` — the diff is printed, phg never\n\
+                    edits composer.json). Unchanged siblings are skipped, so rebuilds are no-ops.\n\
+                    No `#[Entry]` bootstrap is emitted — the host app owns the request lifecycle.\n\n\
+                    usage:\n  phg build <file> [-o out] [--target triple | --all]\n  \
+                    phg build <entry> --php\n\n\
                     examples:\n  \
                     phg build app.phg\n  \
                     phg build app.phg -o dist/app\n  \
-                    phg build app.phg --target x86_64-unknown-linux-musl\n"
+                    phg build app.phg --target x86_64-unknown-linux-musl\n  \
+                    phg build src/main.phg --php\n"
         }
         "test" => {
             "test — discover and run `test \"name\" { … }` blocks on the interpreter.\n\n\

@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-320 v1: `phg build --php` — transpile INTO a live PHP app (the TS→JS playbook)
+
+`phg build <entry> --php` emits a `.php` SIBLING per type-declaring `.phg` (PSR-4 paths, so humans
+find them where the autoloader would) plus ONE shared `_phorj/runtime.php`: the `__phorj_*` helpers
+the project actually uses, the injected preludes, every free function (PHP never autoloads
+functions), the runtime-static initializer (runs at include time), and a generated classmap
+autoloader covering every sibling class — including an enum's several classes per file, which
+plain PSR-4 cannot address. The host app's ONLY wiring is one composer `files` entry (printed as a
+diff; phg never edits composer.json). Rebuilds are idempotent (content-compare skip). No `#[Entry]`
+bootstrap is emitted — the host owns the lifecycle; `\Main\main()` stays a plain callable.
+Host-parity gated: the split output under a composer-style host `php` is byte-identical to
+`phg run`. `phg stubs` / `phg watch` are the recorded v2 slices; the `phpInterop` namespace-prefix
+knob is deferred as a PENDING adjudication (v1 keeps package path = namespace).
+
 ### Fixed — DEC-329.3 (commits A + B1): variant names shared by two enums resolve to their OWNING enum
 
 Pre-fix, every backend resolved a variant use through a bare-name map (last-declaration-wins): with

@@ -236,6 +236,10 @@ impl Transpiler {
         self.out.push_str("<?php\n");
         let mut emitted_overloads: HashSet<String> = HashSet::new();
         for item in &program.items {
+            // DEC-320 split emission: a per-file/runtime pass emits only its routed items.
+            if !self.keeps(item) {
+                continue;
+            }
             match item {
                 Item::Import { .. } => {}
                 // M8.5: a foreign `declare function` produces no PHP definition (PHP already has it).
@@ -273,14 +277,22 @@ impl Transpiler {
         // is a runnable program, not just definitions.
         // Batch-1 D: the entry may be a top-level `main` OR a class-static `main` (so the guard is
         // `entry_point`, not `funcs.contains("main")` — a static entry isn't a free function).
-        if crate::ast::entry_for(program, crate::ast::EntryRole::Cli).is_some() {
+        // DEC-320: a split build embeds phorj code in a host PHP app — no bootstrap; the runtime
+        // pass still initializes statics AT INCLUDE TIME (composer `files` loads it before any
+        // user code, the same before-main point the classic emit guarantees).
+        if self.split == split::SplitPass::Off
+            && crate::ast::entry_for(program, crate::ast::EntryRole::Cli).is_some()
+        {
             if !rt_statics.is_empty() {
                 self.line("__phorj_init_statics();");
             }
             let stmt = main_bootstrap_stmt(program, "");
             self.line(&stmt);
         }
-        if !rt_statics.is_empty() {
+        if self.split == split::SplitPass::Runtime && !rt_statics.is_empty() {
+            self.line("__phorj_init_statics();");
+        }
+        if self.split != split::SplitPass::File && !rt_statics.is_empty() {
             self.line("function __phorj_init_statics() {");
             self.indent += 1;
             for (cls, field, e) in &rt_statics {
@@ -300,9 +312,12 @@ impl Transpiler {
         }
         // The runtime helpers, each defined once when used. PHP hoists top-level function
         // declarations, so emitting them after `main();` is still callable from any body.
-        self.emit_runtime_helpers();
-        self.emit_log_helpers();
-        self.emit_fs_helpers();
+        // DEC-320: a per-file pass emits NO helpers — they all live in the shared runtime.
+        if self.split != split::SplitPass::File {
+            self.emit_runtime_helpers();
+            self.emit_log_helpers();
+            self.emit_fs_helpers();
+        }
         Ok(())
     }
 
@@ -318,6 +333,10 @@ impl Transpiler {
         self.out.push_str("<?php\n");
         let mut buckets: BTreeMap<String, Vec<&Item>> = BTreeMap::new();
         for item in &program.items {
+            // DEC-320 split emission: a per-file/runtime pass buckets only its routed items.
+            if !self.keeps(item) {
+                continue;
+            }
             let ns = match item {
                 // M8.5: a foreign `declare` (function or class) produces no PHP definition — PHP already
                 // has it. References emit the global `\Name` form; never bucket it into a namespace.
@@ -338,28 +357,48 @@ impl Transpiler {
         // Main`, so a bare reference from any OTHER package fatals (`Class "Acme\\X\\FileSystem"
         // not found`). Alias every Main-bucket top-level name into each non-Main block (`use
         // \\Main\\X;` — inert when unused; skipped when the block declares the same name itself).
-        let main_names: Vec<(bool, String)> = buckets
-            .get("Main")
-            .map(|items| {
-                let mut ns_names = Vec::new();
-                for it in items {
-                    match it {
-                        Item::Class(c) => ns_names.push((false, c.name.clone())),
-                        Item::Interface(i) => ns_names.push((false, i.name.clone())),
-                        Item::Trait(t) => ns_names.push((false, t.name.clone())),
-                        Item::Enum(e) => {
-                            ns_names.push((false, e.name.clone()));
-                            for v in &e.variants {
-                                ns_names.push((false, php_scoped_variant_name(&e.name, &v.name)));
+        // Derived from the FULL program (not the possibly-filtered buckets): a DEC-320 per-file
+        // pass still needs every Main-bucket name aliased — the injected preludes it references
+        // are emitted by the RUNTIME pass, not this one. Byte-identical for the classic emit.
+        let main_names: Vec<(bool, String)> = {
+            let items: Vec<&Item> = program
+                .items
+                .iter()
+                .filter(|it| match it {
+                    Item::Function(f) if f.foreign => false,
+                    Item::Class(c) if c.foreign => false,
+                    Item::Function(f) => namespace_of(&f.name) == "Main",
+                    Item::Enum(e) => namespace_of(&e.name) == "Main",
+                    Item::Class(c) => namespace_of(&c.name) == "Main",
+                    Item::Interface(i) => namespace_of(&i.name) == "Main",
+                    Item::Trait(t) => namespace_of(&t.name) == "Main",
+                    _ => false,
+                })
+                .collect();
+            Some(items)
+                .filter(|v| !v.is_empty())
+                .map(|items| {
+                    let mut ns_names = Vec::new();
+                    for it in items {
+                        match it {
+                            Item::Class(c) => ns_names.push((false, c.name.clone())),
+                            Item::Interface(i) => ns_names.push((false, i.name.clone())),
+                            Item::Trait(t) => ns_names.push((false, t.name.clone())),
+                            Item::Enum(e) => {
+                                ns_names.push((false, e.name.clone()));
+                                for v in &e.variants {
+                                    ns_names
+                                        .push((false, php_scoped_variant_name(&e.name, &v.name)));
+                                }
                             }
+                            Item::Function(f) => ns_names.push((true, f.name.clone())),
+                            _ => {}
                         }
-                        Item::Function(f) => ns_names.push((true, f.name.clone())),
-                        _ => {}
                     }
-                }
-                ns_names
-            })
-            .unwrap_or_default();
+                    ns_names
+                })
+                .unwrap_or_default()
+        };
         let mut emitted_overloads: HashSet<String> = HashSet::new();
         for (ns, items) in &buckets {
             self.line(&format!("namespace {ns} {{"));
@@ -419,13 +458,18 @@ impl Transpiler {
         }
         self.line("namespace {");
         self.indent += 1;
-        if crate::ast::entry_for(program, crate::ast::EntryRole::Cli).is_some() {
+        if self.split == split::SplitPass::Off
+            && crate::ast::entry_for(program, crate::ast::EntryRole::Cli).is_some()
+        {
             let stmt = main_bootstrap_stmt(program, "\\Main\\");
             self.line(&stmt);
         }
-        self.emit_runtime_helpers();
-        self.emit_log_helpers();
-        self.emit_fs_helpers();
+        // DEC-320: helpers live in the shared runtime for a split build (see the flat path).
+        if self.split != split::SplitPass::File {
+            self.emit_runtime_helpers();
+            self.emit_log_helpers();
+            self.emit_fs_helpers();
+        }
         self.indent -= 1;
         self.line("}");
         Ok(())

@@ -582,7 +582,7 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
 /// DB I/O, SMTP delivery) — HARD-ERRORS on transpile with a module-specific `E-TRANSPILE-<FEATURE>`
 /// code. Never a silent degrade, and never the wall of prelude-internal errors the check would
 /// otherwise produce. New native-only module = one row here.
-fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
+pub(super) fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
     const NATIVE_ONLY: &[(&[&str], &str, &str)] = &[
         (
             &["Core", "DatabaseModule"],
