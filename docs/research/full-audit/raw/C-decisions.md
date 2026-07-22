@@ -2746,6 +2746,18 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   php output). FOLLOW-UP recorded: a committed multi-package FS project fixture in the test sweep
   (the fix is repro-verified; the fixture makes it regression-gated).
 
+- **DEC-329 — FOUR ADJUDICATIONS RULED (developer via AskUserQuestion, 2026-07-22; all recommended
+  options adopted).** (1) **DEC-320 v1 BUILD APPROVED** with the spec defaults: F1 sibling emit
+  (`src/X.phg` → `src/X.php`, PSR-4 unchanged, zero composer edits), F5 one shared
+  `_phorj/runtime.php` + composer `files` entry (printed as a diff, never auto-applied), F3 explicit
+  `phg build --php`, F4 `declare` interop as the v1 typing surface; `phg stubs`/`phg watch` = v2.
+  (2) **`phg serve` TLS = NATIVE rustls termination** (`--tls-cert/--key`; rustls already an admitted
+  dep) — the GA-blocking posture is ruled; build joins the Web pack. (3) **ENUM-SCOPED VARIANT
+  CLASSES approved**: the PHP leg emits variant classes scoped by their enum, lifting
+  `E-TRANSPILE-VARIANT-COLLISION` entirely (one-time golden regen; behavior identical). (4) **Log-v2
+  processors = OUT-OF-CONTRACT TAIL** (the FS message-tail precedent): deterministic prefix stays
+  the parity contract, the `| ts=… pid=…` tail is env-dependent and stripped by parity tests.
+
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their
   feature/module names), plus `examples/db/`→`examples/database/`, `tests/db*.rs`→`tests/database*.rs`,
