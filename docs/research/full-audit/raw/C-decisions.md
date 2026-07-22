@@ -2710,6 +2710,12 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   modernizes (`strlen($s)` → `s.length()`). BUILD QUEUED (next slice): lifter emits receiver form
   for subject-first natives (DEC-312 emission update + tests); examples/docs migrate as touched;
   a formatter canonicalization lint is the recorded v2.
+  **✅ SHIPPED 2026-07-22:** lifter emits receiver form for subject-first natives
+  (`strlen(strtoupper($s))` → `s.upperCase().length()`, zero-arg natives keep module form; UFCS
+  erases both to the one module call pre-backend, so the spine is untouched); FIXED the blocker the
+  build surfaced: `E-UNUSED-IMPORT` false-fired on modules used ONLY via receiver form (the loader's
+  textual scan now also counts `.nativeName(` occurrences of the module's natives — generous by
+  design, a false positive only silences a hygiene lint). FEATURES UFCS row carries the style rule.
 
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their

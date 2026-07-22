@@ -69,17 +69,27 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             if let php::PhpExpr::Name(n) = &**callee {
                 if let Some(nat) = crate::native::lift_of(n) {
                     if nat.params.len() == args.len() {
-                        let qualifier = nat.module.rsplit('.').next().expect("dotted module");
                         super::record_native_module(nat.module);
+                        let mut lifted = lift_exprs(args)?;
+                        // DEC-326: the RECEIVER form is the canonical style — a subject-first
+                        // native lifts to `subject.name(rest…)` (UFCS erases it back to the module
+                        // call pre-backend); a zero-arg native keeps the module form.
+                        let (object, rest) = if lifted.is_empty() {
+                            let q = nat.module.rsplit('.').next().expect("dotted module");
+                            (Expr::Ident(q.to_string(), SP), Vec::new())
+                        } else {
+                            let recv = lifted.remove(0);
+                            (recv, lifted)
+                        };
                         return Ok(Expr::Call {
                             callee: Box::new(Expr::Member {
-                                object: Box::new(Expr::Ident(qualifier.to_string(), SP)),
+                                object: Box::new(object),
                                 name: nat.name.to_string(),
                                 safe: false,
                                 sep: crate::ast::MemberSep::Dot,
                                 span: SP,
                             }),
-                            args: lift_exprs(args)?,
+                            args: rest,
                             type_args: Vec::new(),
                             span: SP,
                         });

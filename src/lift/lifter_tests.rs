@@ -339,12 +339,11 @@ fn end_to_end_representative_program_reparses() {
 // ── DEC-312: builtin → Core resolution through the registry's `lift_from` facet ─────────────────
 
 #[test]
-fn lifts_registered_builtins_to_core_calls_with_imports() {
+fn lifts_registered_builtins_to_receiver_form_with_imports() {
+    // DEC-326: the RECEIVER form is the canonical style — `strlen(strtoupper($s))` lifts to
+    // `"hi".upperCase().length()`, visibly more modern than the PHP original.
     let out = lift(r#"<?php echo strlen(strtoupper("hi"));"#);
-    assert!(
-        out.contains("String.length(String.upperCase(\"hi\"))"),
-        "{out}"
-    );
+    assert!(out.contains("\"hi\".upperCase().length()"), "{out}");
     assert!(out.contains("import Core.String;"), "{out}");
     assert_reparses(&out);
 }

@@ -442,9 +442,23 @@ fn check_unused_imports(prog: &Program, src: &str, file: &Path) -> Result<(), St
     };
     let body_lines: Vec<&str> = scan.lines().collect();
     for (path, names) in &imports {
-        let used = names
+        let mut used = names
             .iter()
             .any(|n| !n.is_empty() && body_lines.iter().any(|l| word_in(l, n)));
+        // DEC-326 (UFCS canonical style): a Core module used ONLY through the receiver form
+        // (`s.upperCase()`) never mentions its qualifier — count a `.nativeName(` call of any of
+        // the module's natives as a use. Textual and deliberately generous: a false positive just
+        // silences a hygiene lint; the checker still validates the real resolution.
+        if !used && path.first().map(String::as_str) == Some("Core") {
+            let module = path.join(".");
+            used = crate::native::registry()
+                .iter()
+                .filter(|n| n.module == module)
+                .any(|n| {
+                    let needle = format!(".{}(", n.name);
+                    body_lines.iter().any(|l| l.contains(&needle))
+                });
+        }
         if !used {
             return Err(format!(
                 "{}: unused import `{}` — nothing in this file references `{}` \
