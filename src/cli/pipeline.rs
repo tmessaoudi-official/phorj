@@ -580,11 +580,6 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
             "`Core.DatabaseModule` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
         ),
         (
-            &["Core", "FileSystemModule"],
-            "E-TRANSPILE-FS",
-            "`Core.FileSystemModule` is native-only for now: its typed FileSystemError protocol has no PHP emitter yet (PHP has faithful filesystem functions, so a real mapping is a recorded future lift — refusing beats emitting a silently-diverging program, THE LADDER RULE). Run this program with `phg run`, or use the transpilable `Core.File` subset.",
-        ),
-        (
             &["Core", "SessionModule"],
             "E-TRANSPILE-SESSION",
             "`Core.SessionModule` is native-only PERMANENTLY (DEC-313): entropy-random session ids (observable via Session.id()), a wall-clock idle TTL, and the persistent in-process store make it not byte-identically transpilable to PHP's per-request $_SESSION model (THE LADDER RULE: refusing beats silent divergence). Run session programs with `phg run` / `phg serve`.",
@@ -608,11 +603,6 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
             &["Core", "Native", "Database"],
             "E-TRANSPILE-DB",
             "`Core.Native.Database` (the raw natives under `Core.DatabaseModule`) is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
-        ),
-        (
-            &["Core", "Native", "FileSystem"],
-            "E-TRANSPILE-FS",
-            "`Core.Native.FileSystem` (the raw natives under `Core.FileSystemModule`) is native-only for now (THE LADDER RULE). Run this program with `phg run`, or use the transpilable `Core.File` subset.",
         ),
         (
             &["Core", "Native", "Session"],

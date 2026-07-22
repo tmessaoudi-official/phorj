@@ -7,8 +7,8 @@
 // Contrast the older `Core.File` (kept, transpilable): null-on-missing reads, faulting writes.
 //
 // Impure (ambient filesystem) → quarantined from the byte-identity differential; gated by
-// `tests/fs.rs` on both backends. NATIVE-ONLY for now (`E-TRANSPILE-FS` — a PHP mapping is a
-// recorded future lift).
+// `tests/fs.rs` on both backends — and TRANSPILES since DEC-313 (the `__phorj_fs_*` helpers;
+// content parity on all three legs, error-message tails out-of-contract).
 package Main;
 
 import Core.Output;

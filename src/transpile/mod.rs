@@ -410,15 +410,11 @@ struct Transpiler {
     /// `__phorj_number_format`, assembling the grouped string byte-for-byte like `value::number_format`
     /// (so the PHP leg never relies on PHP's own `number_format` and its `-0`/locale quirks).
     uses_math_number_format: bool,
-    /// Set when any `Core.Random` native is emitted (2026-06-27) — defines the `__phorj_rng_*`
-    /// helpers: a process-global state plus a hand-rolled xorshift64 byte-identical to the Rust kernel
-    /// (so a seeded sequence matches `run`/`runvm`). `>>` is masked for logical shift; `GOLDEN` is the
-    /// signed-i64 reinterpretation of the unsigned constant.
+    /// `Core.Random` emitted → the `__phorj_rng_*` helpers: hand-rolled xorshift64 byte-identical to
+    /// the Rust kernel (masked `>>` = logical shift; `GOLDEN` = signed reinterpretation).
     uses_rng: bool,
-    /// Set when any `Core.Native.Uri` native is emitted (DEC-240) — defines the `__phorj_uri*`
-    /// helpers: thin wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri` (the transpile twin),
-    /// catching `Uri\InvalidUriException` into the `<<E>>`-sentinel messages the injected `Uri`
-    /// prelude classifies into the typed `UriError` taxonomy.
+    /// `Core.Native.Uri` emitted (DEC-240) → the `__phorj_uri*` helpers over PHP 8.5's `Uri\Rfc3986`,
+    /// mapping `InvalidUriException` to the `<<E>>`-sentinels the `Uri` prelude classifies.
     uses_uri: bool,
     /// `Core.Regex` emitted (Fork A) → the `__phorj_regex_*` helpers (+ `__phorj_regex_delim`): the
     /// injected `Regex` holds the bare pattern, each helper builds a collision-free `~…~u` PCRE form
@@ -430,6 +426,8 @@ struct Transpiler {
     uses_clock: bool,
     /// `Core.Log`/`Core.Native.Log` emitted (DEC-317) → the `__phorj_log_*` helpers (`log_php.rs`).
     uses_log: bool,
+    /// `Core.Native.FileSystem` emitted (DEC-313) → the `__phorj_fs_*` helpers (`fs_php.rs`).
+    uses_fs: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -468,6 +466,7 @@ mod call;
 mod classes;
 mod classes_synth;
 mod expr;
+mod fs_php;
 mod functions;
 mod kinds;
 mod log_php;
@@ -593,6 +592,7 @@ impl Transpiler {
             uses_regex: false,
             uses_clock: false,
             uses_log: false,
+            uses_fs: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

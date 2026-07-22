@@ -303,6 +303,7 @@ impl Transpiler {
         // declarations, so emitting them after `main();` is still callable from any body.
         self.emit_runtime_helpers();
         self.emit_log_helpers();
+        self.emit_fs_helpers();
         Ok(())
     }
 
@@ -376,6 +377,7 @@ impl Transpiler {
         }
         self.emit_runtime_helpers();
         self.emit_log_helpers();
+        self.emit_fs_helpers();
         self.indent -= 1;
         self.line("}");
         Ok(())

@@ -2445,7 +2445,8 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   invertible, 99 `__phorj_*` shims). Build: seed `lift_from` from the 124; lifter resolves builtins → Core
   calls; the `__phorj_*`-shim natives need a later idiom recognizer (tracked, not in v1).
 
-- **DEC-313 — LADDER "yet" quarantines: BUILD FS transpile, SESSION becomes PERMANENT (developer-ruled 2026-07-20).**
+- **DEC-313 — LADDER "yet" quarantines: BUILD FS transpile, SESSION becomes PERMANENT (developer-ruled
+  2026-07-20; ✅ SHIPPED 2026-07-22 — both halves).**
   `E-TRANSPILE-FS` and `E-TRANSPILE-SESSION` both say "yet" (buildable). Audit verdict: **FS is buildable** —
   every `Core.Native.FileSystem` native (18, `src/native/fs.rs`) maps to a faithful PHP builtin
   (file_get_contents/file_put_contents/mkdir/scandir/unlink/copy/rename/filesize/is_dir…), listings are
@@ -2476,6 +2477,14 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   in a namespaced/multi-package program (`variant_ref` ns-prefix, `expr.rs:654`); prefer inlining `new Ok(...)` at
   the call site via `nat.php`, or fully-qualify. R2 — reconstruct `<<Kind>>` in PHP via explicit pre-checks (no
   `ErrorKind` from php builtins); the 3 pinned kinds (NotFound/DirNotEmpty/PermissionDenied, `tests/fs.rs:63-104`)
+  are exact. **BUILD (2026-07-22):** helpers in `src/transpile/fs_php.rs` (`uses_fs` 3-touch); every
+  `php:` emitter wraps its helper AT THE CALL SITE — `(($__fsr = __phorj_fs_x(..))[0] ? new Ok($__fsr[1])
+  : new Err($__fsr[1]))` — so Ok/Err bind in the caller's namespace (R1 resolved as speced); kinds
+  reconstructed via explicit pre-checks (R2), pinned trio exact, `FileSystemIoError` the wildcard twin of
+  Rust `classify()`; listings `sort(.., SORT_STRING)` ≡ Rust byte-sort. Quarantine rows dropped from
+  `reject_native_only_transpile`; `E-TRANSPILE-FS` explain entry marked RETIRED; ladder test inverted into
+  `fs_transpiles_and_matches_the_backends_on_php` (transpile succeeds + php-leg stdout parity incl. the
+  typed-catch trio). SESSION rows + explain reworded PERMANENT (same commit series).
   + the `removeDirAll` `/`-refusal guard + `readText` UTF-8 check must line up. Both verifiable vs php-8.4.19 (FS
   behavior stable 8.4→8.5) but delicate → best built where the full oracle runs. Full spec in the 2026-07-20 session log.
 

@@ -363,8 +363,8 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
 - **DEC-232 · Core.FileSystemModule SHIPPED** (typed filesystem; sorted listings; loud removeDirAll). QUEUED
   ADJUDICATIONS for you: (a) `Core.File` deprecation/migration (its write/delete failures are
   UNCATCHABLE faults — the pre-taxonomy era; Core.FileSystemModule is the typed successor, additive for now);
-  (b) a sandboxed `new Fs(root)` scoped-filesystem instance (security v2); (c) the E-TRANSPILE-FS
-  lift (PHP mapping exists in principle — emitter work).
+  (b) a sandboxed `new Fs(root)` scoped-filesystem instance (security v2); (c) ~~the E-TRANSPILE-FS
+  lift~~ ✅ DONE 2026-07-22 (DEC-313 — the `__phorj_fs_*` emitter; FS transpiles, 3-leg parity).
 - **DEC-231 · Core.HttpClientModule SHIPPED** (sync HTTP/1.1 + rustls; security defaults beyond PHP curl;
   native-only ladder). QUEUED ADJUDICATION for you: the cross-prelude ERROR-CLASS NAMESPACE smell —
   injected-class dedup means two preludes declaring the same error name silently share one class

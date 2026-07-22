@@ -315,6 +315,11 @@ impl Transpiler {
                         if nat.module == "Core.Log" || nat.module == "Core.Native.Log" {
                             self.uses_log = true;
                         }
+                        // `Core.Native.FileSystem` (DEC-313) routes through the gated `__phorj_fs_*`
+                        // helpers; the `FileSystemResult` wrap happens at the call site (R1).
+                        if nat.module == "Core.Native.FileSystem" {
+                            self.uses_fs = true;
+                        }
                         // `Decimal.*` erases to gated `__phorj_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {
