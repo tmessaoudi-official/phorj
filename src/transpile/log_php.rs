@@ -25,9 +25,12 @@ impl Transpiler {
         self.line("$k = $h->sinkKind();");
         self.line("$min = __phorj_log_ord($h->minLevel);");
         self.line("$fmt = $h->formatter->kind();");
-        self.line("if ($k === 'stream') { $hs[] = ['stream', $h->stream, $min, $fmt, 0, 0]; }");
-        self.line("elseif ($k === 'file') { $hs[] = ['file', $h->path, $min, $fmt, 0, 0]; }");
-        self.line("elseif ($k === 'rotating') { $hs[] = ['rotating', $h->path, $min, $fmt, $h->maxBytes, $h->keep]; }");
+        self.line("$pi = $h->formatter->processInfo;");
+        self.line(
+            "if ($k === 'stream') { $hs[] = ['stream', $h->stream, $min, $fmt, 0, 0, $pi]; }",
+        );
+        self.line("elseif ($k === 'file') { $hs[] = ['file', $h->path, $min, $fmt, 0, 0, $pi]; }");
+        self.line("elseif ($k === 'rotating') { $hs[] = ['rotating', $h->path, $min, $fmt, $h->maxBytes, $h->keep, $pi]; }");
         self.line("else { throw new \\RuntimeException('Log.configure: unsupported handler class (v1 supports StreamHandler/FileHandler/RotatingFileHandler)'); }");
         self.indent -= 1;
         self.line("}");
@@ -68,14 +71,20 @@ impl Transpiler {
         self.line("return $out;");
         self.indent -= 1;
         self.line("}");
-        self.line("function __phorj_log_fmt($chan, $tag, $msg, $format) {");
+        self.line("function __phorj_log_fmt($chan, $tag, $msg, $format, $pi = false) {");
         self.indent += 1;
-        self.line("if ($format === 'json') {");
+        self.line("$line = ($format === 'json')");
+        self.line("    ? '{\"channel\":\"' . __phorj_log_json_escape($chan) . '\",\"level\":\"' . $tag . '\",\"message\":\"' . __phorj_log_json_escape($msg) . '\"}'");
+        self.line("    : (($chan === 'default') ? \"[$tag] $msg\" : \"[$tag] $chan: $msg\");");
+        self.line("if ($pi) {");
         self.indent += 1;
-        self.line("return '{\"channel\":\"' . __phorj_log_json_escape($chan) . '\",\"level\":\"' . $tag . '\",\"message\":\"' . __phorj_log_json_escape($msg) . '\"}';");
+        self.line("$ms = (int)(microtime(true) * 1000); $pid = getmypid();");
+        self.line("$line = ($format === 'json')");
+        self.line("    ? substr($line, 0, -1) . ',\"ts\":' . $ms . ',\"pid\":' . $pid . '}'");
+        self.line("    : $line . ' | ts=' . $ms . ' pid=' . $pid;");
         self.indent -= 1;
         self.line("}");
-        self.line("return ($chan === 'default') ? \"[$tag] $msg\" : \"[$tag] $chan: $msg\";");
+        self.line("return $line;");
         self.indent -= 1;
         self.line("}");
         self.line("function __phorj_log_rotate($path, $max, $keep) {");
@@ -116,7 +125,9 @@ impl Transpiler {
         self.line("foreach ($hs as $h) {");
         self.indent += 1;
         self.line("if ($level < $h[2]) { continue; }");
-        self.line("__phorj_log_write($h, __phorj_log_fmt($chan, $tag, $msg, $h[3]));");
+        self.line(
+            "__phorj_log_write($h, __phorj_log_fmt($chan, $tag, $msg, $h[3], $h[6] ?? false));",
+        );
         self.indent -= 1;
         self.line("}");
         self.line("return null;");

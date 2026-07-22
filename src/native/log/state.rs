@@ -35,6 +35,10 @@ pub(super) struct HandlerCfg {
     pub min: i64,
     /// `"line"` or `"json"`.
     pub format: String,
+    /// DEC-329.4: append the OUT-OF-CONTRACT processor tail (`| ts=<epoch-ms> pid=<pid>` on line,
+    /// trailing `"ts"`/`"pid"` keys on json). Env-dependent by nature — parity tests strip it; the
+    /// deterministic prefix stays the byte-identity contract (the FS message-tail precedent).
+    pub process_info: bool,
 }
 
 pub(super) enum SinkKind {
@@ -148,11 +152,23 @@ pub(super) fn emit_channel(
                 if level < h.min {
                     continue;
                 }
-                let line = if h.format == "json" {
+                let mut line = if h.format == "json" {
                     format_json(channel, tag, msg)
                 } else {
                     format_line(channel, tag, msg)
                 };
+                if h.process_info {
+                    let ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_millis());
+                    let pid = std::process::id();
+                    if h.format == "json" {
+                        line.truncate(line.len() - 1); // drop the closing `}`
+                        line.push_str(&format!(",\"ts\":{ms},\"pid\":{pid}}}"));
+                    } else {
+                        line.push_str(&format!(" | ts={ms} pid={pid}"));
+                    }
+                }
                 write_sink(&h.kind, &line, out);
             }
         }

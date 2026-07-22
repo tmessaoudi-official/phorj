@@ -2757,6 +2757,10 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `E-TRANSPILE-VARIANT-COLLISION` entirely (one-time golden regen; behavior identical). (4) **Log-v2
   processors = OUT-OF-CONTRACT TAIL** (the FS message-tail precedent): deterministic prefix stays
   the parity contract, the `| ts=… pid=…` tail is env-dependent and stripped by parity tests.
+  **(4) ✅ SHIPPED same day**: `LineFormatter(bool processInfo = false)`/`JsonFormatter(...)` —
+  additive via the shipped default-params; Rust tail in `state.rs` (SystemTime/process::id), PHP twin
+  in `log_php.rs` (microtime/getmypid, config element [6]); 3-leg prefix parity + tail-shape test
+  `log_v2_processor_tail_is_out_of_contract_but_shaped`.
   BUILD-NOTES from the post-ruling recon (2026-07-22, for the next context): (3) enum-scoping REQUIRES
   a new post-check pass first — bare variant uses/patterns carry NO enum in the AST
   (`Pattern::Variant.enum_qualifier: Option`, constructions are bare `Ident` calls; the transpiler's

@@ -2230,10 +2230,11 @@ while `phg check` on the same file is clean — the same family as the LSP raw-c
 
 ## Log-v2 v1 limits: processors + userland sinks/formatters deferred (DEC-317, 2026-07-22)
 
-The shipped Log-v2 core (channels/levels/handlers/formatters) intentionally defers two spec'd
-pieces, both recorded in the DEC-317 register row: **processors** (timestamp/pid/extra context
-injectors — they would break the deterministic-content parity contract; they need the
-out-of-contract-tail design from the FS quarantine model, own slice) and **userland
+The shipped Log-v2 core (channels/levels/handlers/formatters) has one remaining deferral,
+recorded in the DEC-317 register row: ~~processors~~ ✅ SHIPPED 2026-07-22 (DEC-329.4:
+`LineFormatter(true)`/`JsonFormatter(true)` opt into the OUT-OF-CONTRACT tail — `| ts=… pid=…` /
+trailing `"ts"`/`"pid"` json keys; the deterministic prefix stays the parity contract, tails are
+stripped by the parity test) and **userland
 `LogSink`/`LogFormatter` implementations** (`Log.configure` refuses unknown handler/formatter
 classes LOUDLY rather than dropping records — natives cannot yet call back into phorj code; the
 interfaces exist in the prelude as the SPI seam). A custom formatter whose `kind()` returns

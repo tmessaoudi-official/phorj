@@ -18,8 +18,14 @@ import Core.Native.Log as NativeLog;
 enum Level { Debug(), Info(), Notice(), Warn(), Error(), Critical(), Alert(), Emergency() }
 
 interface LogFormatter { function kind(): string; }
-class LineFormatter implements LogFormatter { function kind(): string { return "line"; } }
-class JsonFormatter implements LogFormatter { function kind(): string { return "json"; } }
+class LineFormatter implements LogFormatter {
+  constructor(public bool processInfo = false) {}
+  function kind(): string { return "line"; }
+}
+class JsonFormatter implements LogFormatter {
+  constructor(public bool processInfo = false) {}
+  function kind(): string { return "json"; }
+}
 
 interface LogSink { function sinkKind(): string; }
 

@@ -170,3 +170,93 @@ fn logging_v2_example_runs_on_both_backends() {
     assert_eq!(tree, "program output still owns stdout\n");
     assert_eq!(cmd_run(&src).expect("runs on the VM"), tree, "run ≡ runvm");
 }
+
+/// DEC-329.4: the processor tail (`| ts=… pid=…` / trailing `"ts"`/`"pid"` json keys) is
+/// OUT-OF-CONTRACT (env-dependent) — this test STRIPS it and byte-compares the deterministic
+/// prefix on all three legs, while asserting the tail SHAPE is present on each.
+#[test]
+fn log_v2_processor_tail_is_out_of_contract_but_shaped() {
+    let _gate = LOG_GATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let base = std::env::temp_dir().join(format!("phorj-logpi-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let prog = |dir: &str| {
+        format!(
+            r#"package Main;
+import Core.Output;
+import Core.Log;
+import Core.Log.Level;
+import Core.Log.LineFormatter;
+import Core.Log.JsonFormatter;
+import Core.Log.FileHandler;
+import Core.Log.ChannelConfig;
+import Core.Log.LogConfig;
+import Core.Runtime.Entry;
+#[Entry] function main(): void {{
+    Log.configure(new LogConfig([
+        new ChannelConfig("app", [
+            new FileHandler("{dir}/line.log", new Level.Debug(), new LineFormatter(true)),
+            new FileHandler("{dir}/json.log", new Level.Debug(), new JsonFormatter(true))
+        ])
+    ]));
+    Log.channel("app").warning("tail check");
+    Output.printLine("done");
+}}
+"#
+        )
+    };
+    let line_re = |s: &str| {
+        let (prefix, tail) = s.trim_end().rsplit_once(" | ").expect("line tail present");
+        assert!(
+            tail.starts_with("ts=") && tail.contains(" pid="),
+            "tail shape: {s}"
+        );
+        prefix.to_string()
+    };
+    let json_prefix = |s: &str| {
+        let i = s.find(",\"ts\":").expect("json tail present");
+        s[..i].to_string()
+    };
+    let read = |d: &std::path::Path| {
+        (
+            std::fs::read_to_string(d.join("line.log")).unwrap(),
+            std::fs::read_to_string(d.join("json.log")).unwrap(),
+        )
+    };
+
+    let d1 = base.join("interp");
+    std::fs::create_dir_all(&d1).unwrap();
+    assert_eq!(cmd_treewalk(&prog(d1.to_str().unwrap())).unwrap(), "done\n");
+    let (l1, j1) = read(&d1);
+    assert_eq!(line_re(&l1), "[WARN] app: tail check");
+    assert_eq!(
+        json_prefix(&j1),
+        "{\"channel\":\"app\",\"level\":\"WARN\",\"message\":\"tail check\""
+    );
+
+    let d2 = base.join("vm");
+    std::fs::create_dir_all(&d2).unwrap();
+    assert_eq!(cmd_run(&prog(d2.to_str().unwrap())).unwrap(), "done\n");
+    let (l2, j2) = read(&d2);
+    assert_eq!(line_re(&l2), line_re(&l1), "run ≡ runvm prefix");
+    assert_eq!(json_prefix(&j2), json_prefix(&j1));
+
+    if let Some(php) = php_bin() {
+        let d3 = base.join("php");
+        std::fs::create_dir_all(&d3).unwrap();
+        let code = phorj::cli::cmd_transpile(&prog(d3.to_str().unwrap())).expect("transpiles");
+        let f = base.join("pi.php");
+        std::fs::write(&f, &code).unwrap();
+        let out = Command::new(&php).arg(&f).output().expect("php runs");
+        assert!(
+            out.status.success(),
+            "php: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let (l3, j3) = read(&d3);
+        assert_eq!(line_re(&l3), line_re(&l1), "php prefix parity");
+        assert_eq!(json_prefix(&j3), json_prefix(&j1));
+    }
+    let _ = std::fs::remove_dir_all(&base);
+}

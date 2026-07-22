@@ -130,10 +130,12 @@ fn extract_handler(v: &Value) -> Result<state::HandlerCfg, String> {
             ));
         }
     };
+    let (format, process_info) = field_format(h, "formatter")?;
     Ok(state::HandlerCfg {
         kind,
         min: field_level(h, "minLevel")?,
-        format: field_format(h, "formatter")?,
+        format,
+        process_info,
     })
 }
 
@@ -164,15 +166,22 @@ fn field_level(inst: &Instance, name: &str) -> Result<i64, String> {
 
 /// Read a promoted `LogFormatter` field down to its `"line"`/`"json"` kind. v1 recognizes the two
 /// built-in formatter classes; a userland `LogFormatter` is refused loudly (the recorded SPI v2).
-fn field_format(inst: &Instance, name: &str) -> Result<String, String> {
+fn field_format(inst: &Instance, name: &str) -> Result<(String, bool), String> {
     match inst.get_field(name) {
-        Some(Value::Instance(f)) => match f.class.as_ref() {
-            "LineFormatter" => Ok("line".to_string()),
-            "JsonFormatter" => Ok("json".to_string()),
-            other => Err(format!(
-                "Log.configure: unsupported formatter class `{other}` (v1 supports LineFormatter/JsonFormatter)"
-            )),
-        },
+        Some(Value::Instance(f)) => {
+            let kind = match f.class.as_ref() {
+                "LineFormatter" => "line".to_string(),
+                "JsonFormatter" => "json".to_string(),
+                other => {
+                    return Err(format!(
+                        "Log.configure: unsupported formatter class `{other}` (v1 supports LineFormatter/JsonFormatter)"
+                    ))
+                }
+            };
+            // DEC-329.4: the opt-in processor tail (`| ts=… pid=…`, out-of-contract).
+            let process_info = matches!(f.get_field("processInfo"), Some(Value::Bool(true)));
+            Ok((kind, process_info))
+        }
         _ => Err(format!(
             "Log.configure: {}.{name} missing or not a LogFormatter",
             inst.class
