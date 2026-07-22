@@ -13,8 +13,9 @@ final class Named {
     }
 }
 function area(Shape $s): float {
-    if ($s instanceof Circle) { $r = $s->r; return (3.14159 * $r) * $r; }
-    elseif ($s instanceof Square) { $side = $s->side; return $side * $side; }
+    $__m1 = $s;
+    if ($__m1 instanceof Circle) { $r = $__m1->r; return (3.14159 * $r) * $r; }
+    elseif ($__m1 instanceof Square) { $side = $__m1->side; return $side * $side; }
     else { throw new \UnhandledMatchError(); }
 }
 function main(): void {
