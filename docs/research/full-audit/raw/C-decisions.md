@@ -2546,10 +2546,26 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `examples/**/*.phg` byte-identity glob, given its own deterministic transpile-parity test printing
   content+level+channel ONLY (timestamps/pid/paths are **out-of-contract**, like FS message tails);
   rotation tested structurally, not by wall-clock. Emit gated `__phorj_log_*` helpers (the
-  `uses_clock`/`emit_fs_helpers` 3-touch pattern; results constructed INLINE per the FS R1 rule). Lands as
-  the DEC-273 wave-4 `log` extension folder. Spec: plan file
-  `.claude/plans/can-you-pickup-where-deep-pinwheel.md`. **NOT YET BUILT** (spec'd on <1% weekly budget
-  2026-07-21; build on next fresh budget).
+  `uses_clock`/`emit_fs_helpers` 3-touch pattern; results constructed INLINE per the FS R1 rule).
+  **✅ SHIPPED 2026-07-22 (core)** — built per the SLICE-STATE architecture pin (config-data-in-Rust,
+  objects-in-prelude): `src/native/log/{mod,state,prelude}.rs` — the `Core.Log` prelude declares
+  `Level` (injected enum, `new Level.Warn()`), `LogFormatter`+`LineFormatter`/`JsonFormatter`,
+  `LogSink`+the 3 handlers (promoted fields), `ChannelConfig`/`LogConfig`, and **`Logger`** (the
+  channel handle — NOT named `Channel`, which is the concurrency built-in `Channel<T>`); `Log.configure`
+  extracts plain data into a `Mutex` global (Session-store precedent; Rust reads the `Level` variant +
+  built-in formatter class directly); `Log.channel(name)` builds the `Logger` carrier (Regex pattern);
+  `Core.Native.Log.emit` is the kernel (filter→format→write, size rotation, DEC-220 stderr fallback
+  when unconfigured/unknown — never crashes, never silent). Formats deterministic v1 (no timestamps):
+  line `[TAG] msg` / `[TAG] chan: msg`; json fixed-key minimal-escaper (NEVER `json_encode`). PHP leg
+  = gated `__phorj_log_*` helpers (`uses_log`, `transpile/log_php.rs`; `__phorj_log_ord` is
+  variant-class-name mangling-aware, `Error`→`Error_`); content parity on ALL THREE legs gated by
+  `tests/log.rs` (`log_v2_channels_write_identical_content_on_every_leg` — stdout + 4 log files
+  byte-compared, incl. rotation; process-global registry ⇒ the in-file `LOG_GATE` mutex serializes
+  the log tests). DEVIATIONS from the spec (recorded): **processors deferred** (timestamp/pid inject
+  — would break the deterministic-content contract; needs the out-of-contract tail design, own
+  slice); **userland `LogSink`/`LogFormatter` = recorded v2** (configure refuses them loudly — natives
+  can't call back into phorj yet); **not a wave-4 ext folder** (Core.Log is always-compiled in
+  `src/native/log/`; the ext migration remains optional wave-4 work).
 
 - **DEC-318 — TYPED CONFIG = `#[Config]` provider fn + entry-param injection (developer-ruled 2026-07-21;
   SPEC READY, BUILD QUEUED).** How a `.phg` file yields a typed app config, ruled via AskUserQuestion. A

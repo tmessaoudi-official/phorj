@@ -2227,3 +2227,15 @@ expansion, so injected-type files (e.g. anything using `Option`) fail `<check>` 
 while `phg check` on the same file is clean — the same family as the LSP raw-checker gotcha
 (since fixed for the LSP by DEC-282's same-loader rule). Found by the DEC-273 wave-1 panel
 (round 5); predates the wave. Fix = route the test runner through the same front-end pipeline.
+
+## Log-v2 v1 limits: processors + userland sinks/formatters deferred (DEC-317, 2026-07-22)
+
+The shipped Log-v2 core (channels/levels/handlers/formatters) intentionally defers two spec'd
+pieces, both recorded in the DEC-317 register row: **processors** (timestamp/pid/extra context
+injectors — they would break the deterministic-content parity contract; they need the
+out-of-contract-tail design from the FS quarantine model, own slice) and **userland
+`LogSink`/`LogFormatter` implementations** (`Log.configure` refuses unknown handler/formatter
+classes LOUDLY rather than dropping records — natives cannot yet call back into phorj code; the
+interfaces exist in the prelude as the SPI seam). A custom formatter whose `kind()` returns
+`"line"`/`"json"` still composes on the PHP leg but is refused at configure time on the native
+legs for symmetry.

@@ -309,6 +309,12 @@ impl Transpiler {
                         if nat.module == "Core.Time" {
                             self.uses_clock = true;
                         }
+                        // `Core.Log` / `Core.Native.Log` (DEC-317 Log-v2) route through the gated
+                        // `__phorj_log_*` helpers: a `$GLOBALS`-held channel config + an emit kernel
+                        // hand-rolled to the same deterministic line/json contract as the Rust one.
+                        if nat.module == "Core.Log" || nat.module == "Core.Native.Log" {
+                            self.uses_log = true;
+                        }
                         // `Decimal.*` erases to gated `__phorj_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {

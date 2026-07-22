@@ -18,6 +18,7 @@ mod debug_repl;
 mod explain;
 mod explain_config;
 mod format_cmd;
+pub(crate) mod http_prelude;
 pub mod pm;
 mod rewrite_new;
 mod test_runner;

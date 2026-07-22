@@ -46,6 +46,9 @@ fn every_other_native_is_pure() {
         "Core.Time",
         "Core.Runtime",
         "Core.Log",
+        // `Core.Native.Log` is the Log-v2 emit kernel under the `Core.Log` prelude (DEC-317):
+        // stderr/file side effects, same quarantine as its parent module.
+        "Core.Native.Log",
         "Core.Native.Database",
         // `Core.Native.Mail` is whole-module impure (DEC-223): network/filesystem mail delivery — any
         // importing program is quarantined. Only compiled under `--features mail`.

@@ -1,0 +1,58 @@
+// Log-v2 (DEC-317): channels, handlers, formatters — Monolog-class logging, config-driven.
+//
+// `Log.configure(cfg)` installs named CHANNELS, each a list of handlers: `StreamHandler`
+// ("stderr"/"stdout"), `FileHandler` (append), `RotatingFileHandler` (size-capped, keeps N old
+// files). Every handler has a MINIMUM `Level` (the PSR-3 ladder: Debug < Info < Notice < Warn <
+// Error < Critical < Alert < Emergency) and a formatter: `LineFormatter` (`[LEVEL] msg`, named
+// channels as `[LEVEL] name: msg`) or `JsonFormatter` (fixed-key, timestamp-free — deterministic).
+// `Log.channel("name")` returns a `Logger` handle; the plain `Log.info(..)` statics ARE the
+// `default` channel. Unconfigured, everything behaves exactly like the base logger: `[LEVEL] msg`
+// on stderr. The natural home for the config is a `#[Config]` provider (see guide/config.phg).
+//
+// Impure (stderr/file side effects) ⇒ quarantined from the byte-identity differential; the content
+// contract (line/json framing, filtering, rotation) is parity-gated on all three legs by
+// `tests/log.rs`. Run and split the sinks:
+//   phg run examples/guide/logging-v2.phg 2>/dev/null   # only stdout
+//   phg run examples/guide/logging-v2.phg 1>/dev/null   # only the log lines
+package Main;
+
+import Core.Output;
+import Core.Log;
+import Core.Log.Level;
+import Core.Log.LineFormatter;
+import Core.Log.StreamHandler;
+import Core.Log.ChannelConfig;
+import Core.Log.LogConfig;
+import Core.Runtime.Entry;
+
+#[Entry]
+function main(): void {
+    Log.configure(
+        new LogConfig(
+            [
+                new ChannelConfig(
+                    "default",
+                    [new StreamHandler("stderr", new Level.Warn(), new LineFormatter())]
+                ),
+                new ChannelConfig(
+                    "payments",
+                    [new StreamHandler("stderr", new Level.Debug(), new LineFormatter())]
+                )
+            ]
+        )
+    );
+    // The default channel now drops anything below Warn.
+    // A named channel with its own threshold.
+    Log.debug("swallowed by the Warn threshold");
+    Log.info("also swallowed");
+    Log.error("kept");
+    // [ERROR] kept                                  -> stderr
+    Log.channel("payments").debug("invoice 42 opened");
+    // [DEBUG] payments: invoice 42 opened           -> stderr
+    Log.channel("payments").warning("invoice 42 late");
+    // [WARN] payments: invoice 42 late              -> stderr
+    // An unconfigured channel falls back to the base behavior (never crashes, never silent).
+    Log.channel("audit").notice("fallback still logs");
+    // [NOTICE] audit: fallback still logs           -> stderr
+    Output.printLine("program output still owns stdout");
+}

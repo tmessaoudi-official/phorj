@@ -420,18 +420,16 @@ struct Transpiler {
     /// catching `Uri\InvalidUriException` into the `<<E>>`-sentinel messages the injected `Uri`
     /// prelude classifies into the typed `UriError` taxonomy.
     uses_uri: bool,
-    /// Set when any `Core.Regex` native is emitted (Fork A, 2026-06-28) — defines the
-    /// `__phorj_regex_*` helpers + the `__phorj_regex_delim` delimiter picker. The injected `Regex`
-    /// class holds the bare pattern; each helper builds a collision-free `~…~u` PCRE form and calls the
-    /// matching `preg_*`. Byte-identical to the `regex`-crate backends on the regular subset (the
-    /// engine's no-backref/lookaround set ≡ what PCRE matches identically); `\d\w\s` Unicode-vs-ASCII
-    /// is the one documented edge (KNOWN_ISSUES), so shipped examples keep ASCII subjects.
+    /// `Core.Regex` emitted (Fork A) → the `__phorj_regex_*` helpers (+ `__phorj_regex_delim`): the
+    /// injected `Regex` holds the bare pattern, each helper builds a collision-free `~…~u` PCRE form
+    /// for the matching `preg_*`. Byte-identical to the `regex`-crate backends on the regular subset;
+    /// `\d\w\s` Unicode-vs-ASCII is the one documented edge (KNOWN_ISSUES) — examples keep ASCII.
     uses_regex: bool,
-    /// Set when any `Core.Time` native is emitted (M-TIME, 2026-06-28) — defines the `__phorj_now_*`
-    /// helpers: a freezable process-global clock (`static $frozen`) hand-rolled to match the Rust kernel
-    /// (`src/native/time.rs`). A *frozen* program is byte-identical on `run`/`runvm`/transpiled PHP; an
-    /// unfrozen `nowMillis()` reads the wall clock on each backend and is documented non-gated.
+    /// `Core.Time` emitted (M-TIME) → the `__phorj_now_*` freezable-clock helpers matching the Rust
+    /// kernel (`src/native/time.rs`); frozen = byte-identical, unfrozen = documented non-gated.
     uses_clock: bool,
+    /// `Core.Log`/`Core.Native.Log` emitted (DEC-317) → the `__phorj_log_*` helpers (`log_php.rs`).
+    uses_log: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -472,6 +470,7 @@ mod classes_synth;
 mod expr;
 mod functions;
 mod kinds;
+mod log_php;
 mod matches;
 mod names;
 mod program_emit;
@@ -593,6 +592,7 @@ impl Transpiler {
             uses_uri: false,
             uses_regex: false,
             uses_clock: false,
+            uses_log: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

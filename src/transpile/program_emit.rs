@@ -302,6 +302,7 @@ impl Transpiler {
         // The runtime helpers, each defined once when used. PHP hoists top-level function
         // declarations, so emitting them after `main();` is still callable from any body.
         self.emit_runtime_helpers();
+        self.emit_log_helpers();
         Ok(())
     }
 
@@ -374,6 +375,7 @@ impl Transpiler {
             self.line(&stmt);
         }
         self.emit_runtime_helpers();
+        self.emit_log_helpers();
         self.indent -= 1;
         self.line("}");
         Ok(())

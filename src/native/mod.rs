@@ -28,7 +28,7 @@ mod html;
 mod input;
 mod list;
 mod list_registry;
-mod log;
+pub(crate) mod log;
 mod map;
 mod math;
 mod option;
