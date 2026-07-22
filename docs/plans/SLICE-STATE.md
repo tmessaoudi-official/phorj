@@ -41,9 +41,26 @@ conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `P
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
 0. ▶▶ **PRIORITY — Structured logging (Log-v2, DEC-317) + typed `#[Config]` provider+injection (DEC-318).
    Part A (`#[Config]` injection, DEC-318) ✅ SHIPPED 2026-07-22** (`desugar_config.rs` pre-check pass,
-   byte-identical all legs, `examples/guide/config.phg`). Part B (Log-v2, DEC-317) = NEXT: extend
-   `src/native/log.rs` (levels/channels/handlers/formatters/processors per the DEC-317 spec; note
-   Core.Log is native-only, no `log` cargo feature yet — wave-4 ext migration optional, not required).
+   byte-identical all legs, `examples/guide/config.phg`). Part B (Log-v2, DEC-317) = NEXT, **v1
+   architecture settled (2026-07-22)**: config-data-in-Rust, objects-in-prelude. (a) A `Core.Log`
+   PRELUDE (`src` on the VirtualModule, today `src: None`) declares `Level` (backed int enum,
+   Debug..Emergency), `LogRecord`, `LogFormatter` iface + `LineFormatter`/`JsonFormatter`,
+   `LogSink` iface (the DEC-315 SPI — userland handlers = follow-up), `StreamHandler`/`FileHandler`/
+   `RotatingFileHandler`, `Channel`, `LogConfig` — plain phorj classes, constructed in the user's
+   `#[Config]` provider (DEC-318 synergy). (b) `Log.configure(cfg: LogConfig)` NATIVE walks the value
+   and stores PLAIN DATA (name→[{kind,path,minLevel,formatter,maxBytes,keep,extras}]) in a Rust
+   global (Mutex/OnceLock — the Session in-process-store precedent; never store phorj Values). (c)
+   `Log.channel("x")` returns a thin prelude `Channel(name)` whose level methods call native
+   `log_emit(channel, level, msg)` — filter/format/rotate/write all in Rust. Legacy
+   `Log.debug/info/warn/error` = the `default` channel (back-compat, `[LEVEL] msg` stderr when
+   unconfigured). (d) New natives beside the existing 4: `configure`, `emit` (+ internal
+   timestamp/pid). (e) Transpile: gated `__phorj_log_*` helpers (uses_clock 3-touch pattern), PHP-side
+   config in a `$GLOBALS['__phorj_log']` array; impure → FS-style differential quarantine + a
+   content-only parity test (timestamps/pid out-of-contract). (f) Lift: `error_log` → `Log.*` where
+   faithful. Files: `src/native/log.rs` (grow → split `src/native/log/{mod,emit,config}.rs` as
+   needed), prelude in `preludes.rs` row (src: Some), `transpile/log_helpers.rs` NEW, examples
+   `guide/logging-v2.phg` (quarantined) + config-driven wiring in `guide/config.phg` family, bench
+   file-append vs php `file_put_contents` (DEC-259).
    Dev's ACTIVE need (building a real app). SPEC READY, adjudicated 2026-07-21 (both forks ruled): full
    Monolog-class logging (channels/levels/Stream+File+RotatingFile handlers/Line+Json formatters/processors,
    config-driven, `LogSink` SPI) + `#[Config]` fn injected into `#[Entry] main(config: AppConfig)` (no new
