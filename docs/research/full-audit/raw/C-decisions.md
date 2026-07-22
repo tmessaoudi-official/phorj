@@ -2909,6 +2909,18 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     already covered by `ServeConfig.tlsMinVersion` (default TLS 1.2, D4). **Deferred to a later slice**
     (dev: no preference → take recommendation; documented in KNOWN_ISSUES): HTTP→HTTPS redirect, HSTS,
     cert hot-reload, mTLS/client-certs. v1 = terminating TLS only.
-  - **D8+ (PENDING):** Rich Request (immutable/lazy, body.json type, case-insensitive headers, bag API,
-    multi-value keys, value types, files/multipart scope, replace-existing, attributes type), Invokable/
-    toString, parity scheduling — recorded here as each locks.
+  - **D8 (PARTIAL 2026-07-22) — Rich Request.** LOCKED: **D8b** repeated keys → `.get(k)` returns the
+    FIRST value + `.getAll(k): List<string>` for all (safe vs PHP parameter-pollution); **D8c** file
+    uploads / multipart are **IN v1** (`req.files.get(..) -> UploadedFile{name,size,contentType,bytes()}`,
+    temp-spill + size caps); **D8d** all six defaults confirmed — `body.json(): Json?` (Core.Json ADT, no
+    `mixed`), CASE-INSENSITIVE headers, uniform `.get/.get(default)/.has/.all` on every bag, query/form
+    values always `string` (caller coerces), the rich Request REPLACES the thin `Core.Http.Request`
+    (examples/web/* migrated same change), `attributes` bag `string->string`. **D8a LOCKED** — BOTH
+    eager+lazy via a config switch `Http.ServeConfig.requestParsing = Eager (default) | Lazy`, with an
+    IDENTICAL handler API in both modes (only WHEN parsing happens changes). Enabler: each request runs
+    on its own worker thread + own heap, so a Request never crosses threads → lazy memoization is safe;
+    the native-backed Request caches on first access (the Core.Json `LazyJson` precedent) while staying
+    observationally immutable to phorj. Eager can 400 a malformed request before the handler; lazy defers
+    cost (handlers that ignore a large body) and surfaces bad input at access (`None`/fault).
+  - **D9+ (PENDING):** Invokable/toString, parity scheduling, build order, spec-first, env/php —
+    recorded here as each locks.
