@@ -1,6 +1,7 @@
 {
   "name": "Acme/DemoApp",
   "version": "0.1.0",
+  "edition": "2026",
   "description": "Demonstrates the phorj package manager (DEC-316).",
   "require": {
     "Acme/Greet": { "path": "greet-src" }

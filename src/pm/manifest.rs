@@ -27,12 +27,22 @@ pub struct Dependency {
     pub source: SourceSpec,
 }
 
+/// The language editions this toolchain understands (DEC-321). One live edition today: carrying
+/// the identity field from the first release is nearly free, while retrofitting it into every
+/// manifest AFTER an ecosystem exists is the expensive part of Rust-style editions. The full
+/// per-edition behavior machinery stays post-1.0 (UNIFIED-SPEC §11.3); until then the field is
+/// validated, preserved, and otherwise inert.
+pub const KNOWN_EDITIONS: [&str; 1] = ["2026"];
+
 /// A parsed `phorj.json`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Manifest {
     pub name: Option<String>,
     pub version: Option<Version>,
     pub description: Option<String>,
+    /// DEC-321: the language edition this package is written for (`"2026"`, the only live edition).
+    /// Absent = the current edition (every pre-edition manifest stays valid).
+    pub edition: Option<String>,
     pub require: Vec<Dependency>,
 }
 
@@ -56,6 +66,19 @@ impl Manifest {
             .get("description")
             .and_then(Json::as_str)
             .map(str::to_string);
+        let edition = match j.get("edition") {
+            None => None,
+            Some(e) => match e.as_str() {
+                Some(ed) if KNOWN_EDITIONS.contains(&ed) => Some(ed.to_string()),
+                Some(ed) => {
+                    return Err(format!(
+                        "phorj.json: unknown edition `{ed}` (this toolchain knows: {})",
+                        KNOWN_EDITIONS.join(", ")
+                    ))
+                }
+                None => return Err("phorj.json: `edition` must be a string".to_string()),
+            },
+        };
 
         let mut require = Vec::new();
         if let Some(req) = j.get("require") {
@@ -74,13 +97,14 @@ impl Manifest {
             name,
             version,
             description,
+            edition,
             require,
         })
     }
 
     /// Serialize back to a `phorj.json` (used by `phg add`/`remove` to rewrite the manifest). Preserves
-    /// the canonical key order (name, version, description, require) and sorts `require` by name for a
-    /// stable diff.
+    /// the canonical key order (name, version, description, edition, require) and sorts `require` by
+    /// name for a stable diff.
     pub fn to_pretty(&self) -> String {
         let mut top: Vec<(String, Json)> = Vec::new();
         if let Some(n) = &self.name {
@@ -91,6 +115,9 @@ impl Manifest {
         }
         if let Some(d) = &self.description {
             top.push(("description".into(), Json::Str(d.clone())));
+        }
+        if let Some(e) = &self.edition {
+            top.push(("edition".into(), Json::Str(e.clone())));
         }
         let mut deps = self.require.clone();
         deps.sort_by(|a, b| a.name.cmp(&b.name));
@@ -244,5 +271,26 @@ mod tests {
     fn empty_manifest_is_valid() {
         let m = Manifest::parse(r#"{"name":"Acme/App"}"#).unwrap();
         assert!(m.require.is_empty());
+        assert!(m.edition.is_none(), "pre-edition manifests stay valid");
+    }
+
+    #[test]
+    fn edition_parses_roundtrips_and_rejects_unknown() {
+        let m = Manifest::parse(r#"{"name":"Acme/App","edition":"2026"}"#).unwrap();
+        assert_eq!(m.edition.as_deref(), Some("2026"));
+        let out = m.to_pretty();
+        assert_eq!(
+            Manifest::parse(&out).unwrap().edition.as_deref(),
+            Some("2026")
+        );
+        let err = Manifest::parse(r#"{"edition":"2031"}"#).unwrap_err();
+        assert!(
+            err.contains("unknown edition `2031`") && err.contains("2026"),
+            "{err}"
+        );
+        assert!(
+            Manifest::parse(r#"{"edition":2026}"#).is_err(),
+            "non-string edition rejected"
+        );
     }
 }

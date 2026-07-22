@@ -51,7 +51,7 @@ conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `P
    (registry name→git-URL index / git / path), `phorj.lock` tree-SHA-256 integrity, `examples/package-manager/`
    byte-identity-gated. Only these verbs network (Invariant 10). Follow-ups (documented in DEC-316): registry
    constraint-intersection, per-package `phg update`, a hosted registry index.
-1b. **Adoption-review queue (DEC-319, 2026-07-22):** `edition` field in phorj.json (DEC-321, small) ·
+1b. **Adoption-review queue (DEC-319, 2026-07-22):** `edition` field (DEC-321) ✅ SHIPPED 2026-07-22 ·
    'transpile-into-project' mixed PHP adoption (DEC-320, spec-first, adoption/GA wave) · concurrency v2
    REAL PARALLELISM (DEC-322, DESIGN slice — forks adjudicated at design time). DEC-323 channels ✅ shipped.
 2. **Transpile FS emitter (DEC-313)** — build-map in C-decisions §2026-07-20 (FileSystemResult Ok/Err, 18 natives,

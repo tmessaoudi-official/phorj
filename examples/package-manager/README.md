@@ -21,13 +21,15 @@ out of the box (and gated). In a real project you'd `.gitignore vendor/` and com
 
 ## The manifest — `phorj.json`
 
-Composer-style: a `name`, a `version`, and a `require` map of `Publisher/Name` → source. Three source
-kinds are supported (this demo uses a local **path** so it needs no network):
+Composer-style: a `name`, a `version`, an optional `edition`, and a `require` map of
+`Publisher/Name` → source. Three source kinds are supported (this demo uses a local **path** so it
+needs no network):
 
 ```json
 {
   "name": "Acme/DemoApp",
   "version": "0.1.0",
+  "edition": "2026",
   "require": {
     "Acme/Greet": { "path": "greet-src" },
     "Acme/Json":  "^1.2",
@@ -39,6 +41,12 @@ kinds are supported (this demo uses a local **path** so it needs no network):
 - `"^1.2"` (a bare string) → the **registry** (resolved via the registry index by semver constraint).
 - `{ "git": …, "ref": … }` → a **git** repo at a tag/branch/commit.
 - `{ "path": … }` → a **local** directory (dev dependency).
+
+`"edition"` (DEC-321) names the language edition the package is written for — `"2026"` is the only
+live edition, and an absent field means exactly that, so every pre-edition manifest stays valid. The
+field is validated (an unknown edition is a clean error naming what this toolchain knows) and
+carried so future Rust-style edition forks never need a manifest migration; `phg add` stamps it into
+a fresh manifest. Per-edition behavior forks are deliberately post-1.0.
 
 ## The commands
 

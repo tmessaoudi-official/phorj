@@ -50,6 +50,9 @@ pub fn add(root: &Path, name: &str, source: SourceSpec) -> Result<InstallReport,
             name: None,
             version: None,
             description: None,
+            // A FRESH manifest is stamped with the current edition (DEC-321); existing
+            // pre-edition manifests are never rewritten to add it.
+            edition: Some(crate::pm::manifest::KNOWN_EDITIONS[0].to_string()),
             require: Vec::new(),
         },
     };

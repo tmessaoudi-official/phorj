@@ -2615,12 +2615,15 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   typed (extern stubs?). Roadmap home: adoption/GA wave. Spec + adjudication before build.
 
 - **DEC-321 — EDITION FIELD BAKED NOW; editions machinery stays post-1.0 (developer-ruled 2026-07-22;
-  QUEUED, small slice).** `phorj.json` gains an `edition` key (single live edition `2026`) and the
+  ✅ SHIPPED same day).** `phorj.json` gains an `edition` key (single live edition `2026`) and the
   compiler/loader accepts + records it — no behavior forks yet. Rationale (review finding, accepted):
   retrofitting the identity metadata into every manifest/tool AFTER an ecosystem exists is the expensive
   part of Rust-style editions; carrying one inert field from the first release is nearly free. The full
   editions machinery (per-edition parse/behavior forks, migration lints) remains the §11.3 post-1.0
-  residual, unchanged.
+  residual, unchanged. BUILD: `Manifest.edition` in `src/pm/manifest.rs` (`KNOWN_EDITIONS = ["2026"]`;
+  unknown edition = clean error naming the known list; absent = current edition, so pre-edition
+  manifests stay valid; serialized after `version`); `phg add` stamps `"2026"` into a FRESH manifest
+  (never rewrites existing ones); demo manifest + package-manager README document it.
 
 - **DEC-322 — CONCURRENCY V2 = REAL PARALLELISM mandate (developer-ruled 2026-07-22; DESIGN SLICE
   QUEUED).** Dev ruling (verbatim intent): "we don't have real concurrency now — we need to implement
