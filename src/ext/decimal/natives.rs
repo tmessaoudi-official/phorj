@@ -67,6 +67,7 @@ pub fn decimal_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(decimal_of),
             // The `__phorj_dec_of` helper is gated on by `transpile::emit_member_call` (a native's
             // `php` closure has no `&mut self` to set `uses_dec_of`). Mirrors `value::decimal_of`.
+            lift_from: &[],
             php: |a| format!("__phorj_dec_of({})", parg(a, 0)),
         },
         NativeFn {
@@ -78,6 +79,7 @@ pub fn decimal_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(decimal_div_native),
             // `__phorj_dec_div($a, $b, $scale, $mode)` — gated in `transpile::call`. The mode enum
             // arrives in its PHP form; the helper switches on it. Mirrors `value::decimal_div`.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_dec_div({}, {}, {}, {})",
@@ -97,6 +99,7 @@ pub fn decimal_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(decimal_round_native),
             // `__phorj_dec_round($d, $scale, $mode)` — gated in `transpile::call`. Mirrors
             // `value::decimal_round`.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_dec_round({}, {}, {})",

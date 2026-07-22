@@ -3069,6 +3069,19 @@ fn all_example_projects_transpile_and_match_php() {
 /// core/PCRE/JSON/BCMath; a NEW shared extension beyond BCMath ALSO needs ci.yml `extensions:` +
 /// `php_n_args` (see the transpile hermetic-extension policy).
 const TIER1_PHP: &[&str] = &[
+    // filesystem + stream (ext/standard, always compiled — the DEC-313 `__phorj_fs_*` helpers and
+    // the DEC-317 `__phorj_log_*` handlers; hermetic under `php -n`)
+    "fwrite",
+    "is_dir",
+    "is_file",
+    "is_link",
+    "is_writable",
+    "mkdir",
+    "rmdir",
+    "scandir",
+    "sys_get_temp_dir",
+    // string (ext/standard) — the DEC-317 `__phorj_log_ord` variant-class basename extraction.
+    "strrchr",
     // arrays / iterables
     "array_chunk",
     // core since 8.1 (transpile floor is 8.5); used by the DEC-238 __phorj_debug_render twin.

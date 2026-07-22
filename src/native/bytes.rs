@@ -80,6 +80,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(bytes_from_string),
             // PHP strings are byte arrays → identity.
+            lift_from: &[],
             php: |a| parg(a, 0).to_string(),
         },
         NativeFn {
@@ -93,6 +94,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             // the oracle runs `php -n` and minimal/Alpine PHP drop ini-loaded mbstring, so a core
             // primitive must stay extension-free. preg_match returns 1 (valid) / 0 / false → keep
             // the string only on an exact `=== 1`, else null (the `string?` absent case).
+            lift_from: &[],
             php: |a| format!("(preg_match('//u', {0}) === 1 ? {0} : null)", parg(a, 0)),
         },
         NativeFn {
@@ -103,6 +105,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(bytes_len),
             // BYTE count (strlen), not character count (mb_strlen).
+            lift_from: &[],
             php: |a| format!("strlen({})", parg(a, 0)),
         },
         NativeFn {
@@ -113,6 +116,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(bytes_find),
             // strpos returns int|false; map false → null (the `int?` absent case). Empty needle → 0.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(($__bp = strpos({0}, {1})) === false ? null : $__bp)",
@@ -128,6 +132,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             ret: Ty::Bytes,
             pure: true,
             eval: NativeEval::Pure(bytes_concat),
+            lift_from: &[],
             php: |a| format!("({} . {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -138,6 +143,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(bytes_slice),
             // Total, bounds-clamped half-open slice via an IIFE — matches the Rust clamp exactly.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($b,$s,$e){{$n=strlen($b);$s=max(0,min($s,$n));$e=max(0,min($e,$n));return $s<$e?substr($b,$s,$e-$s):\"\";}})({}, {}, {})",

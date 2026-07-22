@@ -78,6 +78,7 @@ pub(crate) fn time_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: false,
             eval: NativeEval::Pure(time_now_millis),
+            lift_from: &[],
             php: |_| "__phorj_now_millis()".to_string(),
         },
         NativeFn {
@@ -87,6 +88,7 @@ pub(crate) fn time_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: false,
             eval: NativeEval::Pure(time_freeze),
+            lift_from: &[],
             php: |a| format!("__phorj_now_freeze({})", parg(a, 0)),
         },
         NativeFn {
@@ -96,6 +98,7 @@ pub(crate) fn time_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: false,
             eval: NativeEval::Pure(time_unfreeze),
+            lift_from: &[],
             php: |_| "__phorj_now_unfreeze()".to_string(),
         },
     ]

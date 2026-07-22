@@ -170,6 +170,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Bytes,
             pure: false,
             eval: NativeEval::Pure(secure_bytes_native),
+            lift_from: &["random_bytes"],
             php: |a| format!("random_bytes({})", parg(a, 0)),
         },
         NativeFn {
@@ -179,6 +180,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: false,
             eval: NativeEval::Pure(secure_int_native),
+            lift_from: &["random_int"],
             php: |a| format!("random_int({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -188,6 +190,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(random_seed),
+            lift_from: &[],
             php: |a| format!("__phorj_rng_seed({})", parg(a, 0)),
         },
         NativeFn {
@@ -197,6 +200,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(random_next),
+            lift_from: &[],
             php: |_| "__phorj_rng_next()".to_string(),
         },
         NativeFn {
@@ -206,6 +210,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(random_next_float),
+            lift_from: &[],
             php: |_| "__phorj_rng_next_float()".to_string(),
         },
         NativeFn {
@@ -215,6 +220,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(random_int_between),
+            lift_from: &[],
             php: |a| format!("__phorj_rng_int_between({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]

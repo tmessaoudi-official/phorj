@@ -171,6 +171,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             ret: res(u(), e()),
             pure: true,
             eval: NativeEval::HigherOrder(result_map),
+            lift_from: &[],
             php: |a| format!("__phorj_result_map({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -183,6 +184,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             ret: res(t(), f()),
             pure: true,
             eval: NativeEval::HigherOrder(result_map_err),
+            lift_from: &[],
             php: |a| format!("__phorj_result_map_err({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -195,6 +197,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             ret: res(u(), e()),
             pure: true,
             eval: NativeEval::HigherOrder(result_and_then),
+            lift_from: &[],
             php: |a| format!("__phorj_result_and_then({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -204,6 +207,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             ret: t(),
             pure: true,
             eval: NativeEval::Pure(result_get_or_else),
+            lift_from: &[],
             php: |a| format!("__phorj_result_get_or_else({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -216,6 +220,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             ret: res(t(), f()),
             pure: true,
             eval: NativeEval::HigherOrder(result_or_else),
+            lift_from: &[],
             php: |a| format!("__phorj_result_or_else({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -225,6 +230,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             ret: opt(t()),
             pure: true,
             eval: NativeEval::Pure(result_to_option),
+            lift_from: &[],
             php: |a| format!("__phorj_result_to_option({})", parg(a, 0)),
         },
         NativeFn {
@@ -234,6 +240,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(result_is_success),
+            lift_from: &[],
             php: |a| format!("({} instanceof Success)", parg(a, 0)),
         },
         NativeFn {
@@ -243,6 +250,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(result_is_failure),
+            lift_from: &[],
             php: |a| format!("({} instanceof Failure)", parg(a, 0)),
         },
     ]

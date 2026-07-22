@@ -61,6 +61,7 @@ pub fn ini_natives() -> Vec<NativeFn> {
         ret: Ty::Map(Box::new(Ty::String), Box::new(Ty::String)),
         pure: true,
         eval: NativeEval::Pure(ini_parse),
+        lift_from: &[],
         php: |a| format!("__phorj_ini_parse({})", parg(a, 0)),
     }]
 }

@@ -231,6 +231,7 @@ pub fn http_client_natives() -> Vec<NativeFn> {
             ret,
             pure: false,
             eval: NativeEval::Pure(eval),
+            lift_from: &[],
             php: |a| a.first().cloned().unwrap_or_else(|| "''".to_string()),
         };
     vec![

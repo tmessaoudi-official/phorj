@@ -170,6 +170,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             // `emit_member_call` sets `uses_reflect_kind` before calling this (the gated-helper pattern);
             // the helper is defined once in `emit_runtime_helpers`. `looks_like_global_call` adds the
             // leading `\` in namespaced mode.
+            lift_from: &[],
             php: |a| format!("__phorj_kind({})", parg(a, 0)),
         },
         NativeFn {
@@ -182,6 +183,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             // Gated `__phorj_class_name` helper (set in `emit_member_call`): single-evaluates its
             // argument (an inline `is_object($x) ? get_class($x) : null` would double-evaluate a
             // side-effecting argument) and excludes closures, matching the Rust arm.
+            lift_from: &[],
             php: |a| format!("__phorj_class_name({})", parg(a, 0)),
         },
         NativeFn {
@@ -193,6 +195,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             // eval/php is dead/defensive (see `reflect_type_name`). `php` can only be coarse.
             pure: true,
             eval: NativeEval::Pure(reflect_type_name),
+            lift_from: &[],
             php: |a| format!("__phorj_kind({})", parg(a, 0)),
         },
         NativeFn {
@@ -204,6 +207,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             // Needs the static class hierarchy (Reflective). `emit_member_call` sets
             // `uses_reflect_tables`; the `__phorj_reflect_of` helper + table are emitted once.
             eval: NativeEval::Reflective(reflect_interfaces),
+            lift_from: &[],
             php: |a| format!("__phorj_reflect_of({}, \"interfaces\")", parg(a, 0)),
         },
         NativeFn {
@@ -213,6 +217,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Reflective(reflect_parents),
+            lift_from: &[],
             php: |a| format!("__phorj_reflect_of({}, \"parents\")", parg(a, 0)),
         },
         NativeFn {
@@ -222,6 +227,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Reflective(reflect_methods),
+            lift_from: &[],
             php: |a| format!("__phorj_reflect_of({}, \"methods\")", parg(a, 0)),
         },
         NativeFn {
@@ -231,6 +237,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Reflective(reflect_fields),
+            lift_from: &[],
             php: |a| format!("__phorj_reflect_of({}, \"fields\")", parg(a, 0)),
         },
     ]

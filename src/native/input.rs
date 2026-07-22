@@ -162,6 +162,7 @@ pub(crate) fn input_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(input_read_all),
             // CLI SAPI defines STDIN; a non-CLI context (no stdin) reads as empty.
+            lift_from: &[],
             php: |_| {
                 "(defined('STDIN') ? (($__phorj_in = stream_get_contents(STDIN)) === false ? '' : $__phorj_in) : '')"
                     .to_string()
@@ -175,6 +176,7 @@ pub(crate) fn input_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(input_read_all_bytes),
             // Phorj `bytes` rides a PHP string — the same raw read serves both.
+            lift_from: &[],
             php: |_| {
                 "(defined('STDIN') ? (($__phorj_in = stream_get_contents(STDIN)) === false ? '' : $__phorj_in) : '')"
                     .to_string()
@@ -190,6 +192,7 @@ pub(crate) fn input_natives() -> Vec<NativeFn> {
             // EXACTLY one terminator strips (`\n` or `\r\n`) — NOT `rtrim($l, "\r\n")`, which would
             // eat every trailing CR (a line body ending in bare `\r` must survive, matching the
             // Rust strip_eol; PCRE is Tier-1).
+            lift_from: &[],
             php: |_| {
                 "(defined('STDIN') ? (($__phorj_l = fgets(STDIN)) === false ? null : preg_replace(\"/\\r?\\n$/\", '', $__phorj_l)) : null)"
                     .to_string()
@@ -202,6 +205,7 @@ pub(crate) fn input_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: false,
             eval: NativeEval::Pure(input_is_interactive),
+            lift_from: &[],
             php: |_| {
                 "(defined('STDIN') && function_exists('stream_isatty') ? stream_isatty(STDIN) : false)"
                     .to_string()

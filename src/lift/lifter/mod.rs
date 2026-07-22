@@ -34,3 +34,26 @@ mod decls;
 mod exprs;
 pub use decls::*;
 use exprs::*;
+
+// DEC-312: the Core modules referenced by builtin→native resolutions during one lift, drained into
+// `import` items at assembly. Thread-local (the lifter is stateless free functions; a lift runs on
+// one thread) — reset at the start of every `lift_program` so runs never leak into each other.
+thread_local! {
+    static LIFTED_NATIVE_MODULES: std::cell::RefCell<std::collections::BTreeSet<&'static str>> =
+        const { std::cell::RefCell::new(std::collections::BTreeSet::new()) };
+}
+
+pub(super) fn record_native_module(module: &'static str) {
+    LIFTED_NATIVE_MODULES.with(|m| {
+        m.borrow_mut().insert(module);
+    });
+}
+
+pub(super) fn drain_native_modules() -> Vec<&'static str> {
+    LIFTED_NATIVE_MODULES.with(|m| {
+        let mut set = m.borrow_mut();
+        let out: Vec<&'static str> = set.iter().copied().collect();
+        set.clear();
+        out
+    })
+}

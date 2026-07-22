@@ -19,6 +19,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_format),
+            lift_from: &[],
             php: |a| format!("__phorj_format({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -28,6 +29,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(text_is_empty),
+            lift_from: &[],
             php: |a| format!("({}) === ''", parg(a, 0)),
         },
         NativeFn {
@@ -37,6 +39,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_trim_start),
+            lift_from: &[],
             php: |a| format!("__phorj_text_trim_start({})", parg(a, 0)),
         },
         NativeFn {
@@ -46,6 +49,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_trim_end),
+            lift_from: &[],
             php: |a| format!("__phorj_text_trim_end({})", parg(a, 0)),
         },
         NativeFn {
@@ -55,6 +59,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(text_count),
+            lift_from: &["substr_count"],
             php: |a| format!("substr_count({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -64,6 +69,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(text_len),
+            lift_from: &["strlen"],
             php: |a| format!("strlen({})", parg(a, 0)),
         },
         NativeFn {
@@ -73,6 +79,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_upper),
+            lift_from: &["strtoupper"],
             php: |a| format!("strtoupper({})", parg(a, 0)),
         },
         NativeFn {
@@ -82,6 +89,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_lower),
+            lift_from: &["strtolower"],
             php: |a| format!("strtolower({})", parg(a, 0)),
         },
         NativeFn {
@@ -91,6 +99,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_trim),
+            lift_from: &[],
             php: |a| format!("__phorj_text_trim({})", parg(a, 0)),
         },
         NativeFn {
@@ -100,6 +109,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(text_contains),
+            lift_from: &["str_contains"],
             php: |a| format!("str_contains({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -111,6 +121,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_reverse),
             // Erases to `__phorj_text_reverse` (code-point reversal), NOT `strrev` (byte reversal
             // mangles multibyte) — UA-1.2. Rust already reverses by `chars()`.
+            lift_from: &[],
             php: |a| format!("__phorj_text_reverse({})", parg(a, 0)),
         },
         NativeFn {
@@ -120,6 +131,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(text_equals_ignore_case),
+            lift_from: &[],
             php: |a| format!("strcasecmp({}, {}) === 0", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -129,6 +141,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(text_contains_ignore_case),
+            lift_from: &[],
             php: |a| format!("stripos({}, {}) !== false", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -140,6 +153,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_split),
             // PHP `explode(separator, string)` — separator first. `explode("")` throws (empty
             // delimiter), matching the Rust empty-separator fault; non-empty splits agree.
+            lift_from: &[],
             php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
         },
         // `characters(string) -> List<string>` — each Unicode code point (parallels `lines`). The named
@@ -151,6 +165,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Pure(text_characters),
+            lift_from: &[],
             php: |a| format!("preg_split('//u', {}, -1, PREG_SPLIT_NO_EMPTY)", parg(a, 0)),
         },
         // `chunk(string, int) -> List<string>` — consecutive pieces of N code points (last shorter);
@@ -163,6 +178,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Pure(text_chunk),
+            lift_from: &[],
             php: |a| format!("__phorj_str_chunk({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `capitalize(string) -> string` — ASCII `ucfirst` (Tier-1, byte-identical).
@@ -173,6 +189,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_capitalize),
+            lift_from: &["ucfirst"],
             php: |a| format!("ucfirst({})", parg(a, 0)),
         },
         // `capitalizeWords(string) -> string` — PHP `ucwords` (ASCII, first letter of each word).
@@ -183,6 +200,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_capitalize_words),
+            lift_from: &["ucwords"],
             php: |a| format!("ucwords({})", parg(a, 0)),
         },
         // `translate(string, from, to) -> string` — PHP `strtr($s, $from, $to)` (byte char-map).
@@ -193,6 +211,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_translate),
+            lift_from: &["strtr"],
             php: |a| format!("strtr({}, {}, {})", parg(a, 0), parg(a, 1), parg(a, 2)),
         },
         // `lines(string) -> List<string>` — split on `\n` (charter §2 subject-first; Tier-1).
@@ -203,6 +222,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Pure(text_lines),
+            lift_from: &[],
             php: |a| format!("explode(\"\\n\", {})", parg(a, 0)),
         },
         NativeFn {
@@ -213,6 +233,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_split_once),
             // PHP `explode(separator, string, 2)` — separator first; the limit-2 yields [head, tail].
+            lift_from: &[],
             php: |a| format!("explode({}, {}, 2)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -223,6 +244,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_join),
             // PHP `implode(glue, array)` — glue first.
+            lift_from: &[],
             php: |a| format!("implode({}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -233,6 +255,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_replace),
             // PHP `str_replace(search, replace, subject)`.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "str_replace({}, {}, {})",
@@ -249,6 +272,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(text_starts_with),
+            lift_from: &["str_starts_with"],
             php: |a| format!("str_starts_with({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -258,6 +282,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(text_ends_with),
+            lift_from: &["str_ends_with"],
             php: |a| format!("str_ends_with({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -268,6 +293,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_codepoint_length),
             // PCRE is always built into PHP — `/us` counts codepoints exactly.
+            lift_from: &[],
             php: |a| format!("preg_match_all('/./us', {})", parg(a, 0)),
         },
         NativeFn {
@@ -278,6 +304,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_codepoints),
             // Pure-PHP UTF-8 scalar decode (no mbstring): split codepoints via PCRE, decode bytes.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_map(function($c) {{ $b = array_values(unpack('C*', $c)); $n = count($b); if ($n === 1) {{ return $b[0]; }} if ($n === 2) {{ return (($b[0] & 0x1F) << 6) | ($b[1] & 0x3F); }} if ($n === 3) {{ return (($b[0] & 0x0F) << 12) | (($b[1] & 0x3F) << 6) | ($b[2] & 0x3F); }} return (($b[0] & 0x07) << 18) | (($b[1] & 0x3F) << 12) | (($b[2] & 0x3F) << 6) | ($b[3] & 0x3F); }}, preg_split('//u', {}, -1, PREG_SPLIT_NO_EMPTY))",
@@ -293,6 +320,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_unicode_upper),
+            lift_from: &[],
             php: |_| "__PHORJ_NATIVE_ONLY_UNICODE__".to_string(),
         },
         NativeFn {
@@ -302,6 +330,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_unicode_lower),
+            lift_from: &[],
             php: |_| "__PHORJ_NATIVE_ONLY_UNICODE__".to_string(),
         },
         #[cfg(feature = "unicode")]
@@ -312,6 +341,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(text_grapheme_length),
+            lift_from: &[],
             php: |_| "__PHORJ_NATIVE_ONLY_UNICODE__".to_string(),
         },
         #[cfg(feature = "unicode")]
@@ -322,6 +352,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Pure(text_graphemes),
+            lift_from: &[],
             php: |_| "__PHORJ_NATIVE_ONLY_UNICODE__".to_string(),
         },
         NativeFn {
@@ -331,6 +362,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(text_levenshtein),
+            lift_from: &["levenshtein"],
             php: |a| format!("levenshtein({}, {})", parg(a, 0), parg(a, 1)),
         },
         // DEC-243: PHP-parity `similar_text()` count; the by-reference `$percent` twin is the
@@ -342,6 +374,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(text_similar),
+            lift_from: &["similar_text"],
             php: |a| format!("similar_text({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -353,6 +386,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_similar_percent),
             // PHP exposes the percent only via the by-ref third arg — an IIFE keeps this a pure
             // Tier-1 expression (no gated helper needed; META-7 trade disclosed in the register).
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($a, $b) {{ $p = 0.0; if ($a !== '' || $b !== '') {{ similar_text($a, $b, $p); }} return $p; }})({}, {})",
@@ -368,6 +402,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_repeat),
+            lift_from: &["str_repeat"],
             php: |a| format!("str_repeat({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `parseInt(string) -> int?` — None on a non-integer (the first optional-return native). PHP
@@ -381,6 +416,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(text_parse_int),
+            lift_from: &[],
             php: |a| format!("__phorj_parse_int({})", parg(a, 0)),
         },
         // `parseBool(string) -> bool?` (M4 `string as bool`) — strict `"true"`/`"false"` only; never
@@ -392,6 +428,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Bool)),
             pure: true,
             eval: NativeEval::Pure(text_parse_bool),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(fn($__b) => $__b === 'true' ? true : ($__b === 'false' ? false : null))({})",
@@ -409,6 +446,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Float)),
             pure: true,
             eval: NativeEval::Pure(text_parse_float),
+            lift_from: &[],
             php: |a| format!("__phorj_parse_float({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `padLeft`/`padRight(string, int, string) -> string` — PHP `str_pad` (byte-based, no mbstring).
@@ -419,6 +457,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_pad_left),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "str_pad({}, {}, {}, STR_PAD_LEFT)",
@@ -436,6 +475,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_pad_right),
             // STR_PAD_RIGHT is the default, but pass it explicitly for symmetry/legibility.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "str_pad({}, {}, {}, STR_PAD_RIGHT)",
@@ -453,6 +493,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(text_index_of),
+            lift_from: &[],
             php: |a| format!("__phorj_text_index_of({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `lastIndexOf(string, string) -> int?` — the last occurrence (PHP `strrpos` → null via a
@@ -464,6 +505,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(text_last_index_of),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(fn($__h, $__n) => ($__p = strrpos($__h, $__n)) === false ? null : $__p)({}, {})",
@@ -481,6 +523,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_remove_prefix),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(fn($__s, $__p) => str_starts_with($__s, $__p) ? substr($__s, strlen($__p)) : $__s)({}, {})",
@@ -496,6 +539,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_remove_suffix),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(fn($__s, $__p) => str_ends_with($__s, $__p) ? substr($__s, 0, strlen($__s) - strlen($__p)) : $__s)({}, {})",
@@ -512,6 +556,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_substring),
+            lift_from: &["substr"],
             php: |a| format!("substr({}, {}, {})", parg(a, 0), parg(a, 1), parg(a, 2)),
         },
     ]

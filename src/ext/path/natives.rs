@@ -121,6 +121,7 @@ pub fn path_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(path_basename),
+            lift_from: &["basename"],
             php: |a| format!("basename({})", parg(a, 0)),
         },
         NativeFn {
@@ -130,6 +131,7 @@ pub fn path_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(path_dirname),
+            lift_from: &["dirname"],
             php: |a| format!("dirname({})", parg(a, 0)),
         },
         NativeFn {
@@ -139,6 +141,7 @@ pub fn path_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(path_extension),
+            lift_from: &[],
             php: |a| format!("pathinfo({}, PATHINFO_EXTENSION)", parg(a, 0)),
         },
         NativeFn {
@@ -148,6 +151,7 @@ pub fn path_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(path_stem),
+            lift_from: &[],
             php: |a| format!("pathinfo({}, PATHINFO_FILENAME)", parg(a, 0)),
         },
         NativeFn {
@@ -157,6 +161,7 @@ pub fn path_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(path_join),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "rtrim({}, '/') . '/' . ltrim({}, '/')",

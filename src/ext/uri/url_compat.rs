@@ -124,6 +124,7 @@ pub fn url_natives() -> Vec<NativeFn> {
         },
         pure: true,
         eval: NativeEval::Pure(eval),
+        lift_from: &[],
         php,
     };
     vec![

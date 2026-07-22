@@ -11,6 +11,8 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
 
 /// Lift a parsed PHP program into a Phorj program (`package Main; import Core.Runtime.Entry;`).
 pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
+    // DEC-312: reset the per-lift native-module recorder (never leak across runs on this thread).
+    let _ = super::drain_native_modules();
     let mut l = Lifter {
         needs_console: false,
     };
@@ -88,6 +90,14 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     if l.needs_console {
         final_items.push(Item::Import {
             path: vec!["Core".into(), "Output".into()],
+            alias: None,
+            span: SP,
+        });
+    }
+    // DEC-312: one `import <module>;` per Core module a builtin→native resolution referenced.
+    for module in super::drain_native_modules() {
+        final_items.push(Item::Import {
+            path: module.split('.').map(str::to_string).collect(),
             alias: None,
             span: SP,
         });

@@ -21,6 +21,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(list_reverse),
             // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
+            lift_from: &["array_reverse"],
             php: |a| format!("array_reverse({})", parg(a, 0)),
         },
         // `zip(a, b) -> List<(A, B)>` (DEC-288) — positional pairs, length = min(|a|, |b|).
@@ -33,6 +34,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_zip),
             // An IIFE binds both args ONCE (no double-eval) and truncates to the shorter length —
             // `array_map(null, …)` would pad the shorter with null (length = max), so it can't be used.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($__za, $__zb) {{ $__zn = min(count($__za), count($__zb)); $__zr = []; for ($__zi = 0; $__zi < $__zn; $__zi++) {{ $__zr[] = [$__za[$__zi], $__zb[$__zi]]; }} return $__zr; }})({}, {})",
@@ -50,6 +52,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(list_enumerate),
             // A PHP list is already 0-keyed; array_values guarantees sequential int keys.
+            lift_from: &["array_values"],
             php: |a| format!("array_values({})", parg(a, 0)),
         },
         // `fill(value, count) -> List<T>` — `count` copies of `value` (PHP `array_fill`, value last).
@@ -60,6 +63,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_fill),
+            lift_from: &[],
             php: |a| format!("array_fill(0, {}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -69,6 +73,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(list_length),
+            lift_from: &["count"],
             php: |a| format!("count({})", parg(a, 0)),
         },
         NativeFn {
@@ -78,6 +83,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(list_sum),
+            lift_from: &["array_sum"],
             php: |a| format!("array_sum({})", parg(a, 0)),
         },
         NativeFn {
@@ -89,6 +95,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_product),
             // PHP `array_product` (empty → 1); checked-overflow faults, PHP promotes to float — the
             // `array_sum` caveat, examples stay in i64 range.
+            lift_from: &["array_product"],
             php: |a| format!("array_product({})", parg(a, 0)),
         },
         NativeFn {
@@ -102,6 +109,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             // lists/maps; arg order is (needle, haystack) — the reverse of `contains(list, value)`.
             // (A list of class instances would differ: PHP `===` is identity, Phorj is structural —
             // KNOWN_ISSUES; scalar/collection element lists are byte-identical.)
+            lift_from: &[],
             php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -115,6 +123,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(list_map),
             // array_map(callable, array) — note the order is swapped vs Phorj's map(list, f).
+            lift_from: &[],
             php: |a| format!("array_map({}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -128,6 +137,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(list_filter),
             // array_filter preserves original keys; array_values re-indexes to a sequential list.
+            lift_from: &[],
             php: |a| format!("array_values(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
         },
         // `partition(xs, pred) -> (List<T>, List<T>)` (DEC-288) — (matching, non-matching).
@@ -143,6 +153,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::HigherOrder(list_partition),
             // An IIFE binds the list + predicate ONCE, splits in one pass, and returns the erased
             // 2-tuple `[matching, non-matching]` — both re-indexed sequentially (`[]` append).
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($__pl, $__pf) {{ $__py = []; $__pn = []; foreach ($__pl as $__px) {{ if ($__pf($__px)) {{ $__py[] = $__px; }} else {{ $__pn[] = $__px; }} }} return [$__py, $__pn]; }})({}, {})",
@@ -164,6 +175,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             // map each element to a list, then concatenate. `[]` seeds array_merge so an empty input
             // (or all-empty results) yields `[]`, never array_merge()'s no-argument error; the spread
             // re-indexes exactly like the native's sequential extend.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_merge([], ...array_map({}, {}))",
@@ -184,6 +196,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::HigherOrder(list_take_while),
             // Gated `__phorj_take_while` (binds the list once; a `foreach` + early `break` matches the
             // native's stop-at-first-false — an inline expression would re-evaluate the list arg).
+            lift_from: &[],
             php: |a| format!("__phorj_take_while({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -196,6 +209,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::HigherOrder(list_drop_while),
+            lift_from: &[],
             php: |a| format!("__phorj_drop_while({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -210,6 +224,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::HigherOrder(list_group_by),
             // Gated `__phorj_group_by`: `$out[$f($x)][] = $x` auto-vivifies groups in first-seen key
             // order (≡ the native's first-seen Vec), matching the Map<U,List<T>> representation.
+            lift_from: &[],
             php: |a| format!("__phorj_group_by({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -224,6 +239,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(list_reduce),
             // array_reduce(array, callback, initial) — initial is Phorj's 2nd arg, fn its 3rd.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_reduce({}, {}, {})",
@@ -242,6 +258,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_sort),
+            lift_from: &[],
             php: |a| format!("__phorj_sort({})", parg(a, 0)),
         },
         NativeFn {
@@ -252,6 +269,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(list_sort_descending),
             // sort-then-reverse (reuses `__phorj_sort`) so equal-element order matches the Rust kernel.
+            lift_from: &[],
             php: |a| format!("array_reverse(__phorj_sort({}))", parg(a, 0)),
         },
         // `sortWith(List<T>, (T, T) -> int) -> List<T>` — comparator (PHP `usort`), higher-order.
@@ -265,6 +283,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::HigherOrder(list_sort_with),
+            lift_from: &[],
             php: |a| format!("__phorj_sort_with({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `slice(List<T>, int, int) -> List<T>` — PHP `array_slice` (offset, length; negatives count
@@ -276,6 +295,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_slice),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_slice({}, {}, {})",
@@ -292,6 +312,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_take),
+            lift_from: &[],
             php: |a| format!("array_slice({}, 0, max(0, {}))", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -301,6 +322,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_drop),
+            lift_from: &[],
             php: |a| format!("array_slice({}, max(0, {}))", parg(a, 0), parg(a, 1)),
         },
         // `chunk(List<T>, int) -> List<List<T>>` — consecutive groups of `size` (last may be shorter).
@@ -312,6 +334,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(list(t())),
             pure: true,
             eval: NativeEval::Pure(list_chunk),
+            lift_from: &["array_chunk"],
             php: |a| format!("array_chunk({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `indexOf(List<T>, T) -> int?` — gated `__phorj_index_of` (PHP `array_search` strict → null).
@@ -322,6 +345,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(list_index_of),
+            lift_from: &[],
             php: |a| format!("__phorj_index_of({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `lastIndexOf(List<T>, T) -> int?` — gated `__phorj_last_index_of` (PHP `array_keys` strict →
@@ -333,6 +357,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(list_last_index_of),
+            lift_from: &[],
             php: |a| format!("__phorj_last_index_of({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `concat(List<T>, List<T>) -> List<T>` — PHP `array_merge` (re-indexes sequential lists).
@@ -343,6 +368,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_concat),
+            lift_from: &["array_merge"],
             php: |a| format!("array_merge({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `append(List<T>, T) -> List<T>` — a new list with the element added at the end (COW, O(n));
@@ -354,6 +380,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_append),
+            lift_from: &[],
             php: |a| format!("array_merge({}, [{}])", parg(a, 0), parg(a, 1)),
         },
         // `first(List<T>) -> T?` / `last(List<T>) -> T?` — head/tail or null for an empty list.
@@ -364,6 +391,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(list_first),
+            lift_from: &[],
             php: |a| format!("({}[0] ?? null)", parg(a, 0)),
         },
         NativeFn {
@@ -373,6 +401,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(list_last),
+            lift_from: &[],
             php: |a| format!("({0}[count({0}) - 1] ?? null)", parg(a, 0)),
         },
         // `unique(List<T>) -> List<T>` — dedupe, keeping first occurrence + order. Value-equality
@@ -385,6 +414,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_unique),
+            lift_from: &[],
             php: |a| format!("__phorj_unique({})", parg(a, 0)),
         },
         // Set-style ops on Lists (FN-ARR long-tail) — typed-strict (better than PHP array_diff/intersect
@@ -396,6 +426,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_difference),
+            lift_from: &[],
             php: |a| format!("__phorj_list_difference({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -405,6 +436,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_intersection),
+            lift_from: &[],
             php: |a| format!("__phorj_list_intersection({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `min(List<T>) -> T?` / `max(List<T>) -> T?` — null for an empty list. Uses the `natural_cmp`
@@ -417,6 +449,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(list_min),
+            lift_from: &[],
             php: |a| format!("__phorj_min({})", parg(a, 0)),
         },
         NativeFn {
@@ -426,6 +459,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(list_max),
+            lift_from: &[],
             php: |a| format!("__phorj_max({})", parg(a, 0)),
         },
         // `find(List<T>, (T) -> bool) -> T?` — the first element satisfying the predicate, or null.
@@ -442,6 +476,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::HigherOrder(list_find),
+            lift_from: &[],
             php: |a| format!("__phorj_find({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -454,6 +489,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::HigherOrder(list_any),
+            lift_from: &[],
             php: |a| format!("__phorj_any({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -466,6 +502,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::HigherOrder(list_all),
+            lift_from: &[],
             php: |a| format!("__phorj_all({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -478,6 +515,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::HigherOrder(list_none),
+            lift_from: &[],
             php: |a| format!("__phorj_none({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -487,6 +525,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(list_is_empty),
+            lift_from: &[],
             php: |a| format!("count({}) === 0", parg(a, 0)),
         },
         NativeFn {
@@ -497,6 +536,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(list_flatten),
             // `array_merge(...$xss)` concatenates + re-indexes; `...[]` ⇒ `array_merge()` ⇒ `[]`.
+            lift_from: &[],
             php: |a| format!("array_merge(...{})", parg(a, 0)),
         },
         NativeFn {
@@ -510,6 +550,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(list_count),
             // array_filter keeps the predicate-true elements; count them.
+            lift_from: &[],
             php: |a| format!("count(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
         },
         // `sumBy(List<T>, (T) -> int) -> int` — the sum of the projection over every element (empty →
@@ -526,6 +567,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::HigherOrder(list_sum_by),
+            lift_from: &[],
             php: |a| format!("array_sum(array_map({}, {}))", parg(a, 1), parg(a, 0)),
         },
         // `minBy(List<T>, (T) -> K) -> T?` / `maxBy(List<T>, (T) -> K) -> T?` — the element whose
@@ -544,6 +586,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::HigherOrder(list_min_by),
+            lift_from: &[],
             php: |a| format!("__phorj_min_by({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -556,6 +599,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::HigherOrder(list_max_by),
+            lift_from: &[],
             php: |a| format!("__phorj_max_by({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]

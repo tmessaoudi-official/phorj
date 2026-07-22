@@ -64,6 +64,7 @@ pub fn cryptography_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: false, // random salt → quarantined from the oracle
             eval: NativeEval::Pure(crypto_hash_password),
+            lift_from: &[],
             php: |a| format!("password_hash({}, PASSWORD_ARGON2ID)", parg(a, 0)),
         },
         NativeFn {
@@ -73,6 +74,7 @@ pub fn cryptography_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true, // deterministic for a fixed (password, hash) → gateable
             eval: NativeEval::Pure(crypto_verify_password),
+            lift_from: &["password_verify"],
             php: |a| format!("password_verify({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]

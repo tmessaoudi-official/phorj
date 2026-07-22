@@ -64,6 +64,12 @@ pub struct NativeFn {
     /// PHP emission: given the already-emitted PHP for each argument, return the PHP snippet this
     /// native erases to (decision N-2). For `Output.printLine`: `echo {a}, "\n"`.
     pub php: fn(&[String]) -> String,
+    /// DEC-312 — the INVERSE registration: the PHP builtin name(s) this native faithfully inverts,
+    /// so the LIFTER derives its builtin→Core table from this same row (transpile and lift
+    /// co-registered; kills the drift structurally). Empty = not directly invertible (most rows:
+    /// `__phorj_*` shims, multi-call emitters, natives with no PHP analog). A builtin may appear on
+    /// at most ONE row (validated by `lift_table`).
+    pub lift_from: &'static [&'static str],
     /// Whether this native is **deterministic** w.r.t. the program text (`true` for all but the
     /// ambient-environment natives — `Core.Process`/`Core.Environment`, whose result depends on the process,
     /// not the source). A program that calls an impure native is *quarantined* from the byte-identity
@@ -344,6 +350,7 @@ fn build() -> Vec<NativeFn> {
         ret: Ty::Void,
         pure: true,
         eval: NativeEval::Pure(console_println),
+        lift_from: &[],
         php: |args| {
             let a = args
                 .first()
@@ -361,6 +368,7 @@ fn build() -> Vec<NativeFn> {
         ret: Ty::Void,
         pure: true,
         eval: NativeEval::Pure(console_print),
+        lift_from: &[],
         php: |args| {
             let a = args
                 .first()
@@ -382,6 +390,7 @@ fn build() -> Vec<NativeFn> {
         // Gated `__phorj_capture($fn){ ob_start(); $fn(); return ob_get_clean(); }` (set the flag in
         // transpile/call.rs — a native's `php` closure has no `&mut self`). The closure's `Output.*`
         // (`echo …`) writes into the started buffer; `ob_get_clean()` returns exactly the captured bytes.
+        lift_from: &[],
         php: |a| format!("__phorj_capture({})", parg(a, 0)),
     });
     registry.extend(math::math_natives());
@@ -453,6 +462,24 @@ fn build() -> Vec<NativeFn> {
 pub fn registry() -> &'static [NativeFn] {
     static REG: OnceLock<Vec<NativeFn>> = OnceLock::new();
     REG.get_or_init(build)
+}
+
+/// DEC-312 — the derived PHP-builtin → native inverse table: the native whose `lift_from` names
+/// `builtin`. Transpile and lift co-registered on one row; the LIFTER uses this to resolve a bare
+/// PHP call (`strlen($s)`) into its Core form (`String.length(s)`). Uniqueness (one row per
+/// builtin) is enforced by `lift_from_builtins_are_unique`.
+pub fn lift_of(builtin: &str) -> Option<&'static NativeFn> {
+    static TABLE: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
+    let table = TABLE.get_or_init(|| {
+        let mut m = HashMap::new();
+        for (i, n) in registry().iter().enumerate() {
+            for b in n.lift_from {
+                m.entry(*b).or_insert(i);
+            }
+        }
+        m
+    });
+    table.get(builtin).map(|&i| &registry()[i])
 }
 
 /// Index of the native `(module, name)`, or `None`. Used by the checker and the transpiler, which

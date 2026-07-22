@@ -346,6 +346,7 @@ fn math_is_odd(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn unary_float(
     name: &'static str,
     eval: fn(&[Value], &mut String) -> Result<Value, String>,
+    lift_from: &'static [&'static str],
     php: fn(&[String]) -> String,
 ) -> NativeFn {
     NativeFn {
@@ -355,6 +356,7 @@ fn unary_float(
         ret: Ty::Float,
         pure: true,
         eval: NativeEval::Pure(eval),
+        lift_from,
         php,
     }
 }
@@ -368,6 +370,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(math_is_even),
+            lift_from: &[],
             php: |a| format!("({}) % 2 === 0", parg(a, 0)),
         },
         NativeFn {
@@ -377,6 +380,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(math_is_odd),
+            lift_from: &[],
             php: |a| format!("({}) % 2 !== 0", parg(a, 0)),
         },
         // `Math.tryAdd/trySub/tryMul(int, int): int?` — checked arithmetic returning `null` on overflow
@@ -390,6 +394,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(math_try_add),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($x, $y) {{ $r = $x + $y; return is_int($r) ? $r : null; }})({}, {})",
@@ -405,6 +410,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(math_try_sub),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($x, $y) {{ $r = $x - $y; return is_int($r) ? $r : null; }})({}, {})",
@@ -420,6 +426,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(math_try_mul),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($x, $y) {{ $r = $x * $y; return is_int($r) ? $r : null; }})({}, {})",
@@ -435,6 +442,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_sqrt),
+            lift_from: &["sqrt"],
             php: |a| format!("sqrt({})", parg(a, 0)),
         },
         NativeFn {
@@ -444,6 +452,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_pow),
+            lift_from: &["pow"],
             php: |a| format!("pow({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -457,6 +466,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_ipow),
+            lift_from: &[],
             php: |a| format!("pow({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -466,6 +476,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_floor),
+            lift_from: &["floor"],
             php: |a| format!("floor({})", parg(a, 0)),
         },
         NativeFn {
@@ -475,6 +486,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_ceil),
+            lift_from: &["ceil"],
             php: |a| format!("ceil({})", parg(a, 0)),
         },
         NativeFn {
@@ -484,6 +496,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_abs),
+            lift_from: &["abs"],
             php: |a| format!("abs({})", parg(a, 0)),
         },
         NativeFn {
@@ -493,6 +506,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_min),
+            lift_from: &["min"],
             php: |a| format!("min({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -502,6 +516,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_max),
+            lift_from: &["max"],
             php: |a| format!("max({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -511,6 +526,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_round),
+            lift_from: &[],
             php: |a| format!("(int)round({})", parg(a, 0)),
         },
         // --- Float predicates + special values + intdiv (M-NUM S3) ---
@@ -521,6 +537,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(math_is_nan),
+            lift_from: &["is_nan"],
             php: |a| format!("is_nan({})", parg(a, 0)),
         },
         NativeFn {
@@ -530,6 +547,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(math_is_finite),
+            lift_from: &["is_finite"],
             php: |a| format!("is_finite({})", parg(a, 0)),
         },
         NativeFn {
@@ -539,6 +557,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(math_is_infinite),
+            lift_from: &["is_infinite"],
             php: |a| format!("is_infinite({})", parg(a, 0)),
         },
         NativeFn {
@@ -548,6 +567,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_nan),
+            lift_from: &[],
             php: |_| "NAN".to_string(),
         },
         NativeFn {
@@ -557,6 +577,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_infinity),
+            lift_from: &[],
             php: |_| "INF".to_string(),
         },
         NativeFn {
@@ -566,6 +587,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_neg_infinity),
+            lift_from: &[],
             php: |_| "-INF".to_string(),
         },
         NativeFn {
@@ -575,6 +597,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_intdiv),
+            lift_from: &["intdiv"],
             php: |a| format!("intdiv({}, {})", parg(a, 0), parg(a, 1)),
         },
         // --- Math breadth (M-NUM S4) ---
@@ -586,6 +609,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(math_sign),
             // PHP `<=>` yields -1/0/1 and evaluates its operand once (no double-emission).
+            lift_from: &[],
             php: |a| format!("({} <=> 0)", parg(a, 0)),
         },
         NativeFn {
@@ -597,6 +621,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(math_clamp),
             // Erases to a gated `__phorj_clamp` helper (UA-1.7): it must fault on `lo > hi` to match
             // the native, which the inline `max(min())` could not express.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_clamp({}, {}, {})",
@@ -613,6 +638,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_gcd),
+            lift_from: &[],
             php: |a| format!("__phorj_gcd({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -622,6 +648,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_lcm),
+            lift_from: &[],
             php: |a| format!("__phorj_lcm({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -631,6 +658,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_log),
+            lift_from: &["log"],
             php: |a| format!("log({})", parg(a, 0)),
         },
         NativeFn {
@@ -640,6 +668,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_log10),
+            lift_from: &["log10"],
             php: |a| format!("log10({})", parg(a, 0)),
         },
         NativeFn {
@@ -649,6 +678,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_exp),
+            lift_from: &["exp"],
             php: |a| format!("exp({})", parg(a, 0)),
         },
         NativeFn {
@@ -658,6 +688,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_sin),
+            lift_from: &["sin"],
             php: |a| format!("sin({})", parg(a, 0)),
         },
         NativeFn {
@@ -667,6 +698,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_cos),
+            lift_from: &["cos"],
             php: |a| format!("cos({})", parg(a, 0)),
         },
         NativeFn {
@@ -676,26 +708,51 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_tan),
+            lift_from: &["tan"],
             php: |a| format!("tan({})", parg(a, 0)),
         },
         // Wave-B math tail (G-math-breadth). Unary f64 → f64 (phorj name == PHP name for these).
-        unary_float("asin", math_asin, |a| format!("asin({})", parg(a, 0))),
-        unary_float("acos", math_acos, |a| format!("acos({})", parg(a, 0))),
-        unary_float("atan", math_atan, |a| format!("atan({})", parg(a, 0))),
-        unary_float("sinh", math_sinh, |a| format!("sinh({})", parg(a, 0))),
-        unary_float("cosh", math_cosh, |a| format!("cosh({})", parg(a, 0))),
-        unary_float("tanh", math_tanh, |a| format!("tanh({})", parg(a, 0))),
-        unary_float("asinh", math_asinh, |a| format!("asinh({})", parg(a, 0))),
-        unary_float("acosh", math_acosh, |a| format!("acosh({})", parg(a, 0))),
-        unary_float("atanh", math_atanh, |a| format!("atanh({})", parg(a, 0))),
-        unary_float("log2", math_log2, |a| format!("log({}, 2)", parg(a, 0))),
-        unary_float("log1p", math_log1p, |a| format!("log1p({})", parg(a, 0))),
-        unary_float("expm1", math_expm1, |a| format!("expm1({})", parg(a, 0))),
+        unary_float("asin", math_asin, &["asin"], |a| {
+            format!("asin({})", parg(a, 0))
+        }),
+        unary_float("acos", math_acos, &["acos"], |a| {
+            format!("acos({})", parg(a, 0))
+        }),
+        unary_float("atan", math_atan, &["atan"], |a| {
+            format!("atan({})", parg(a, 0))
+        }),
+        unary_float("sinh", math_sinh, &["sinh"], |a| {
+            format!("sinh({})", parg(a, 0))
+        }),
+        unary_float("cosh", math_cosh, &["cosh"], |a| {
+            format!("cosh({})", parg(a, 0))
+        }),
+        unary_float("tanh", math_tanh, &["tanh"], |a| {
+            format!("tanh({})", parg(a, 0))
+        }),
+        unary_float("asinh", math_asinh, &["asinh"], |a| {
+            format!("asinh({})", parg(a, 0))
+        }),
+        unary_float("acosh", math_acosh, &["acosh"], |a| {
+            format!("acosh({})", parg(a, 0))
+        }),
+        unary_float("atanh", math_atanh, &["atanh"], |a| {
+            format!("atanh({})", parg(a, 0))
+        }),
+        unary_float("log2", math_log2, &[], |a| {
+            format!("log({}, 2)", parg(a, 0))
+        }),
+        unary_float("log1p", math_log1p, &["log1p"], |a| {
+            format!("log1p({})", parg(a, 0))
+        }),
+        unary_float("expm1", math_expm1, &["expm1"], |a| {
+            format!("expm1({})", parg(a, 0))
+        }),
         // Angle conversion — clearer camelCase than PHP `deg2rad`/`rad2deg` (transpiled to those).
-        unary_float("degToRad", math_deg_to_rad, |a| {
+        unary_float("degToRad", math_deg_to_rad, &["deg2rad"], |a| {
             format!("deg2rad({})", parg(a, 0))
         }),
-        unary_float("radToDeg", math_rad_to_deg, |a| {
+        unary_float("radToDeg", math_rad_to_deg, &["rad2deg"], |a| {
             format!("rad2deg({})", parg(a, 0))
         }),
         NativeFn {
@@ -705,6 +762,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_atan2),
+            lift_from: &["atan2"],
             php: |a| format!("atan2({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -714,6 +772,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_hypot),
+            lift_from: &["hypot"],
             php: |a| format!("hypot({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -723,6 +782,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_pi),
+            lift_from: &[],
             php: |_| "M_PI".to_string(),
         },
         NativeFn {
@@ -732,6 +792,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(math_e),
+            lift_from: &[],
             php: |_| "M_E".to_string(),
         },
         NativeFn {
@@ -741,6 +802,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(math_number_format),
+            lift_from: &[],
             php: |a| format!("__phorj_number_format({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]

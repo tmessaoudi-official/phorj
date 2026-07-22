@@ -194,6 +194,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(map_is_empty),
+            lift_from: &[],
             php: |a| format!("count({}) === 0", parg(a, 0)),
         },
         NativeFn {
@@ -203,6 +204,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(k())),
             pure: true,
             eval: NativeEval::Pure(map_keys),
+            lift_from: &["array_keys"],
             php: |a| format!("array_keys({})", parg(a, 0)),
         },
         NativeFn {
@@ -212,6 +214,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(v())),
             pure: true,
             eval: NativeEval::Pure(map_values),
+            lift_from: &[],
             php: |a| format!("array_values({})", parg(a, 0)),
         },
         NativeFn {
@@ -223,6 +226,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(map_entries),
             // keys + values are equal-length, so `array_map(null, …)` pairs them (no padding) into
             // `[[k, v], …]` — byte-identical to the Rust list-of-2-lists (erased tuples), insertion order.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_map(null, array_keys({0}), array_values({0}))",
@@ -238,6 +242,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(map_has),
             // PHP `array_key_exists(key, array)` — key first.
+            lift_from: &[],
             php: |a| format!("array_key_exists({}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -249,6 +254,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(map_contains_value),
             // strict `in_array(needle, map, true)` scans VALUES (ignores keys) — matches `eq_val` for
             // scalar/nested values; the class-instance identity-vs-structural caveat is `List.contains`'s.
+            lift_from: &[],
             php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -258,6 +264,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(map_size),
+            lift_from: &[],
             php: |a| format!("count({})", parg(a, 0)),
         },
         NativeFn {
@@ -268,6 +275,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(map_get),
             // `V` is non-optional, so a present value is never null → `?? null` means "absent".
+            lift_from: &[],
             php: |a| format!("({}[{}] ?? null)", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -279,6 +287,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(map_set_native),
             // Gated `__phorj_map_set($m, $k, $v)` — a copy-then-assign (PHP arrays are COW value
             // types, so `$m` inside the helper is already a copy → a new map, caller untouched).
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_map_set({}, {}, {})",
@@ -295,6 +304,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             ret: map(),
             pure: true,
             eval: NativeEval::Pure(map_remove),
+            lift_from: &[],
             php: |a| format!("__phorj_map_remove({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `getOr` — safe access with a fallback (never faults / returns the default for an absent key).
@@ -306,6 +316,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(map_get_or),
             // array_key_exists (not `??`) so a present key with a null value returns that null.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(array_key_exists({1}, {0}) ? {0}[{1}] : {2})",
@@ -323,6 +334,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             ret: map(),
             pure: true,
             eval: NativeEval::Pure(map_merge),
+            lift_from: &[],
             php: |a| format!("array_merge({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `map` / `filter` over VALUES (keys preserved) — higher-order, like the `Core.List` versions.
@@ -334,6 +346,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(map_map),
             // array_map(callable, array) over a single assoc array preserves keys.
+            lift_from: &[],
             php: |a| format!("array_map({}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -347,6 +360,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(map_filter),
             // array_filter(array, callback) default mode: callback gets the value, keys preserved.
+            lift_from: &["array_filter"],
             php: |a| format!("array_filter({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]

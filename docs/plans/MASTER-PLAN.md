@@ -62,6 +62,28 @@
   (registry-index/git/path); `examples/package-manager/` byte-identity-gated. NEXT autonomous slices: FS
   transpile emitter (DEC-313) → lift `lift_from` facet (DEC-312) → LSP find-usages → perf #2b.
 
+**PHP-GAP ROUND-2 ADDITIONS (2026-07-22, DEC-324 — sweep report `docs/research/php-gap-round2.md`;
+25 grep-verified unmapped items; waves = recommended slots, per-item adjudication at build time):**
+- **Web pack (W3) additions:** trusted-proxy headers (`TrustedProxies` deny-by-default CIDR config) ·
+  `Response.stream(Iterator<bytes>)` chunked/file streaming · static-file Range + gzip ·
+  HttpClient outbound proxy/custom-CA/mTLS (`ProxyConfig`/`TlsConfig` on the Transport seam, Secret-typed)
+  · HttpClient streaming bodies (cap becomes the default, not the wall) · `SessionStore` joins the
+  layered-openness public-contract list (Memory now, Db-backed rides Core.DatabaseModule).
+- **W4 language additions:** class-const EXPRESSIVENESS (const expressions/typed consts/new-in-init —
+  compile-time-evaluated, types mandatory; direct lifter blocker) · enum `implements` + enum constants ·
+  trait constants (VERIFY the SYN-115 CE credit first — likely over-credited) · `pack`/`unpack` analog:
+  typed `Bytes.read*/write*` + declarative compile-checked `BinaryLayout` (also fixes a D-surface
+  inventory hole) · bz2 as a format row in the queued Core.Compress slice.
+- **W5/W6 runtime+ops:** `Runtime.cpuTime()` (getrusage twin, feeds Metrics) · `phg env` doctor command
+  (deterministic, secret-free, `--json` — the phpinfo answer) · **`phg serve` TLS posture = GA-BLOCKING
+  ADJUDICATION** (native rustls termination vs ruled reverse-proxy-only doc — PENDING, Invariant 15).
+- **post-1.0:** server-side HTTP/2 (rides the TLS ruling) · graceful reload (SIGHUP handover) ·
+  `phg run-script` (explicit-only, never on install) · LDAP extension candidate.
+- **Appendix-A rows to record (PENDING-REJECT, currently silent drops):** SOAP · IMAP (PHP itself
+  unbundled it) · SNMP · dba+SysV IPC (contradicts the isolates+channels ruling) · pspell/enchant ·
+  ext/calendar (icu4x subsumes) · tidy (W4-10 HTML5 parser subsumes). Plus: **repair the D-php-surface
+  denominator** (add inventory rows for the 12 never-swept extension domains).
+
 **ADOPTION-REVIEW ADDITIONS (2026-07-22, DEC-319 — dev-ruled; slot per-item):** the external
 adoption review validated ~10/14 themes as already covered and added four ruled items:
 - **Log-v2 + `#[Config]` injection (DEC-317/318)** — the dev's ACTIVE-need slice (spec ready, build next).

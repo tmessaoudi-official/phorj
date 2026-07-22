@@ -122,6 +122,7 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
             ret: opt(u()),
             pure: true,
             eval: NativeEval::HigherOrder(option_map),
+            lift_from: &[],
             php: |a| format!("__phorj_option_map({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -134,6 +135,7 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
             ret: opt(u()),
             pure: true,
             eval: NativeEval::HigherOrder(option_and_then),
+            lift_from: &[],
             php: |a| format!("__phorj_option_and_then({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -146,6 +148,7 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
             ret: opt(t()),
             pure: true,
             eval: NativeEval::HigherOrder(option_filter),
+            lift_from: &[],
             php: |a| format!("__phorj_option_filter({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -155,6 +158,7 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
             ret: t(),
             pure: true,
             eval: NativeEval::Pure(option_get_or_else),
+            lift_from: &[],
             php: |a| format!("__phorj_option_get_or_else({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -164,6 +168,7 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
             ret: opt(t()),
             pure: true,
             eval: NativeEval::Pure(option_of_nullable),
+            lift_from: &[],
             php: |a| format!("__phorj_option_of_nullable({})", parg(a, 0)),
         },
         NativeFn {
@@ -173,6 +178,7 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(option_to_nullable),
+            lift_from: &[],
             php: |a| format!("__phorj_option_to_nullable({})", parg(a, 0)),
         },
     ]

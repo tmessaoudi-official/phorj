@@ -51,12 +51,12 @@
 710	src/lsp/mod.rs
 622	src/main.rs
 656	src/native/list.rs
-710	src/native/list_registry.rs
+754	src/native/list_registry.rs
 740	src/native/list_tests.rs
-757	src/native/math.rs
-561	src/native/mod.rs
+819	src/native/math.rs
+588	src/native/mod.rs
 609	src/native/text.rs
-555	src/native/text_registry.rs
+600	src/native/text_registry.rs
 658	src/parser/exprs/climb.rs
 605	src/parser/items/decls.rs
 584	src/parser/items/types.rs

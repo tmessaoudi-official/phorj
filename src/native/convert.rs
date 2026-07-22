@@ -234,6 +234,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(convert_to_string),
             // Reuses the existing `__phorj_str` helper (gated via `uses_str`, set in transpile/call.rs).
+            lift_from: &[],
             php: |a| format!("__phorj_str({})", parg(a, 0)),
         },
         NativeFn {
@@ -243,6 +244,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             eval: NativeEval::Pure(convert_to_float),
+            lift_from: &[],
             php: |a| format!("(float)({})", parg(a, 0)),
         },
         NativeFn {
@@ -252,6 +254,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(convert_truncate),
+            lift_from: &[],
             php: |a| format!("__phorj_trunc({})", parg(a, 0)),
         },
         NativeFn {
@@ -261,6 +264,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(convert_round),
+            lift_from: &[],
             php: |a| format!("__phorj_round({})", parg(a, 0)),
         },
         // --- Numeric conversions (M-NUM S3) ---
@@ -272,6 +276,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             pure: true,
             // `__phorj_float_to_int` is gated in `transpile::emit_member_call` (a native's `php`
             // closure has no `&mut self`). Mirrors `value::float_to_int`.
+            lift_from: &[],
             php: |a| format!("__phorj_float_to_int({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_to_int),
         },
@@ -282,6 +287,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Decimal,
             pure: true,
             // The decimal carrier is the integer's string form (M-NUM S1 carrier convention).
+            lift_from: &[],
             php: |a| format!("(string)({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_int_to_decimal),
         },
@@ -292,6 +298,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Float,
             pure: true,
             // The carrier is already the decimal's string form; `(float)$s` parses it (lossy).
+            lift_from: &[],
             php: |a| format!("(float)({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_float),
         },
@@ -303,6 +310,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             pure: true,
             // `__phorj_dec_to_int` is gated in `transpile::emit_member_call`. Mirrors
             // `value::decimal_to_int` (split the carrier string before the dot, range-check).
+            lift_from: &[],
             php: |a| format!("__phorj_dec_to_int({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_int),
         },
@@ -313,6 +321,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Float],
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
+            lift_from: &[],
             php: |a| format!("__phorj_float_to_int_exact({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_float_to_int_exact),
         },
@@ -322,6 +331,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Decimal],
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
+            lift_from: &[],
             php: |a| format!("__phorj_dec_to_int_exact({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_int_exact),
         },
@@ -334,6 +344,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             pure: true,
             // Reuses the float-display (`__phorj_str`) + decimal-parse (`__phorj_dec_of`) helpers,
             // both gated in `transpile::emit_member_call` (see the `floatToDecimal` case there).
+            lift_from: &[],
             php: |a| format!("__phorj_dec_of(__phorj_str({}))", parg(a, 0)),
             eval: NativeEval::Pure(convert_float_to_decimal),
         },
@@ -344,6 +355,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Int],
             ret: Ty::Bool,
             pure: true,
+            lift_from: &[],
             php: |a| format!("(({}) != 0)", parg(a, 0)),
             eval: NativeEval::Pure(convert_int_to_bool),
         },
@@ -353,6 +365,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Float],
             ret: Ty::Bool,
             pure: true,
+            lift_from: &[],
             php: |a| format!("(({}) != 0.0)", parg(a, 0)),
             eval: NativeEval::Pure(convert_float_to_bool),
         },
@@ -364,6 +377,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             pure: true,
             // The carrier is a plain decimal string; it is non-zero iff it contains a 1-9 digit
             // (handles `0.00`, `-0.0`, any scale — no BCMath, no exponent forms).
+            lift_from: &[],
             php: |a| format!("(preg_match('/[1-9]/', {}) === 1)", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_bool),
         },
@@ -373,6 +387,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Bool],
             ret: Ty::Int,
             pure: true,
+            lift_from: &[],
             php: |a| format!("(({}) ? 1 : 0)", parg(a, 0)),
             eval: NativeEval::Pure(convert_bool_to_int),
         },
@@ -382,6 +397,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Bool],
             ret: Ty::Float,
             pure: true,
+            lift_from: &[],
             php: |a| format!("(({}) ? 1.0 : 0.0)", parg(a, 0)),
             eval: NativeEval::Pure(convert_bool_to_float),
         },
@@ -392,6 +408,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Decimal,
             pure: true,
             // Decimal carrier is a string; `'1'`/`'0'` (scale 0).
+            lift_from: &[],
             php: |a| format!("(({}) ? '1' : '0')", parg(a, 0)),
             eval: NativeEval::Pure(convert_bool_to_decimal),
         },
@@ -403,6 +420,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             // Arrow-IIFE so the operand is evaluated exactly once (the `as` single-eval contract).
+            lift_from: &[],
             php: |a| format!("(fn($__a) => is_int($__a) ? $__a : null)({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_as_int),
         },
@@ -412,6 +430,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Param("T".into())],
             ret: Ty::Optional(Box::new(Ty::Float)),
             pure: true,
+            lift_from: &[],
             php: |a| format!("(fn($__a) => is_float($__a) ? $__a : null)({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_as_float),
         },
@@ -421,6 +440,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Param("T".into())],
             ret: Ty::Optional(Box::new(Ty::Bool)),
             pure: true,
+            lift_from: &[],
             php: |a| format!("(fn($__a) => is_bool($__a) ? $__a : null)({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_as_bool),
         },

@@ -335,3 +335,27 @@ fn end_to_end_representative_program_reparses() {
     assert!(out.contains("function main(): void {"), "{out}");
     assert_reparses(&out);
 }
+
+// ── DEC-312: builtin → Core resolution through the registry's `lift_from` facet ─────────────────
+
+#[test]
+fn lifts_registered_builtins_to_core_calls_with_imports() {
+    let out = lift(r#"<?php echo strlen(strtoupper("hi"));"#);
+    assert!(
+        out.contains("String.length(String.upperCase(\"hi\"))"),
+        "{out}"
+    );
+    assert!(out.contains("import Core.String;"), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn unregistered_or_wrong_arity_builtins_stay_unresolved() {
+    // `trim` is deliberately unregistered (its transpile twin is a Unicode-whitespace shim);
+    // a wrong-arity `strlen` must not resolve either — the draft stays loud, never a wrong guess.
+    let out = lift(r#"<?php echo trim(" x ");"#);
+    assert!(out.contains("trim(\" x \")"), "{out}");
+    assert!(!out.contains("import Core.String;"), "{out}");
+    let out2 = lift(r#"<?php echo strlen("a", "b");"#);
+    assert!(out2.contains("strlen(\"a\", \"b\")"), "{out2}");
+}

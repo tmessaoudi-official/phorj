@@ -90,6 +90,7 @@ pub fn hash_natives() -> Vec<NativeFn> {
     fn entry(
         name: &'static str,
         eval: fn(&[Value], &mut String) -> Result<Value, String>,
+        lift_from: &'static [&'static str],
         php: fn(&[String]) -> String,
     ) -> NativeFn {
         NativeFn {
@@ -99,16 +100,24 @@ pub fn hash_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(eval),
+            lift_from,
             php,
         }
     }
     vec![
-        entry("crc32", crc32_native, |a| {
+        // NOT lift-registered: PHP's `crc32()` builtin returns an INT; this native is the
+        // `hash('crc32b', …)` HEX-string form — inverting would change semantics (DEC-312 rule:
+        // no wrong guesses).
+        entry("crc32", crc32_native, &[], |a| {
             format!("hash('crc32b', {})", parg(a, 0))
         }),
-        entry("md5", md5_native, |a| format!("md5({})", parg(a, 0))),
-        entry("sha1", sha1_native, |a| format!("sha1({})", parg(a, 0))),
-        entry("sha256", sha256_native, |a| {
+        entry("md5", md5_native, &["md5"], |a| {
+            format!("md5({})", parg(a, 0))
+        }),
+        entry("sha1", sha1_native, &["sha1"], |a| {
+            format!("sha1({})", parg(a, 0))
+        }),
+        entry("sha256", sha256_native, &[], |a| {
             format!("hash('sha256', {})", parg(a, 0))
         }),
         // W3-4 MAC/KDF. `hmac(key, data)` — note PHP `hash_hmac(algo, data, key)` arg order.
@@ -120,6 +129,7 @@ pub fn hash_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(hmac_native),
             // `true` = raw binary output (UA-1.4: hmac returns bytes, matching hkdf/pbkdf2).
+            lift_from: &[],
             php: |a| format!("hash_hmac('sha256', {}, {}, true)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -129,6 +139,7 @@ pub fn hash_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(equals_native),
+            lift_from: &["hash_equals"],
             php: |a| format!("hash_equals({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `hkdf(ikm, salt, info, length)` → PHP `hash_hkdf(algo, ikm, length, info, salt)` (raw bytes).
@@ -139,6 +150,7 @@ pub fn hash_natives() -> Vec<NativeFn> {
             ret: Ty::Bytes,
             pure: true,
             eval: NativeEval::Pure(hkdf_native),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "hash_hkdf('sha256', {}, {}, {}, {})",
@@ -157,6 +169,7 @@ pub fn hash_natives() -> Vec<NativeFn> {
             ret: Ty::Bytes,
             pure: true,
             eval: NativeEval::Pure(pbkdf2_native),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "hash_pbkdf2('sha256', {}, {}, {}, {}, true)",

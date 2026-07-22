@@ -83,6 +83,7 @@ pub(crate) fn process_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(process_args),
             // PHP: the args after the script name. `$argv` exists under the CLI SAPI (register_argc_argv).
+            lift_from: &[],
             php: |_| "array_slice($argv ?? [], 1)".to_string(),
         },
         NativeFn {
@@ -94,6 +95,7 @@ pub(crate) fn process_natives() -> Vec<NativeFn> {
             // `getenv` returns `false` when unset → coerce to `null`. The arg is single-evaluated via
             // an assignment-expression temp (`$__phorj_env`), which Phorj variables never collide with.
             eval: NativeEval::Pure(env_get),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(($__phorj_env = getenv({})) === false ? null : $__phorj_env)",
@@ -110,6 +112,7 @@ pub(crate) fn process_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(env_all),
             // `getenv()` (no arg) returns all vars as an assoc array (PHP 7.1+); `ksort` matches the
             // sorted-by-key Rust result.
+            lift_from: &[],
             php: |_| "(function(){$e=getenv();ksort($e);return $e;})()".to_string(),
         },
     ]

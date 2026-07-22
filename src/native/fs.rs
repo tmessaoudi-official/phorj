@@ -294,6 +294,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
                  params: Vec<Ty>,
                  ret: Ty,
                  eval: fn(&[Value], &mut String) -> Result<Value, String>,
+                 lift_from: &'static [&'static str],
                  php: fn(&[String]) -> String| NativeFn {
         module: "Core.Native.FileSystem",
         name,
@@ -301,6 +302,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
         ret,
         pure: false,
         eval: NativeEval::Pure(eval),
+        lift_from,
         php,
     };
     // `wrapped!(helper, N)` emits the call-site FileSystemResult wrap around an N-arg helper call;
@@ -355,6 +357,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String],
             res(Ty::String),
             fs_read_text,
+            &[],
             wrapped!("__phorj_fs_read_text", 1),
         ),
         entry(
@@ -362,6 +365,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String],
             res(Ty::Bytes),
             fs_read_bytes,
+            &[],
             wrapped!("__phorj_fs_read_bytes", 1),
         ),
         entry(
@@ -369,6 +373,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String, Ty::String],
             res(opt_null()),
             fs_write_text,
+            &[],
             wrapped!("__phorj_fs_put", put "false" "writeText"),
         ),
         entry(
@@ -376,6 +381,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String, Ty::Bytes],
             res(opt_null()),
             fs_write_bytes,
+            &[],
             wrapped!("__phorj_fs_put", put "false" "writeBytes"),
         ),
         entry(
@@ -383,6 +389,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String, Ty::String],
             res(opt_null()),
             fs_append_text,
+            &[],
             wrapped!("__phorj_fs_put", put "true" "appendText"),
         ),
         entry(
@@ -390,6 +397,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String, Ty::String],
             res(opt_null()),
             fs_copy,
+            &[],
             wrapped!("__phorj_fs_copy", 2),
         ),
         entry(
@@ -397,6 +405,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String, Ty::String],
             res(opt_null()),
             fs_move,
+            &[],
             wrapped!("__phorj_fs_move", 2),
         ),
         entry(
@@ -404,6 +413,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String],
             res(opt_null()),
             fs_delete,
+            &[],
             wrapped!("__phorj_fs_delete", 1),
         ),
         entry(
@@ -411,22 +421,39 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String],
             res(Ty::Int),
             fs_size,
+            &[],
             wrapped!("__phorj_fs_size", 1),
         ),
-        entry("exists", vec![Ty::String], res(Ty::Bool), fs_exists, |a| {
-            format!("new Ok(file_exists({}))", a.first().map_or("''", |s| s))
-        }),
-        entry("isFile", vec![Ty::String], res(Ty::Bool), fs_is_file, |a| {
-            format!("new Ok(is_file({}))", a.first().map_or("''", |s| s))
-        }),
-        entry("isDir", vec![Ty::String], res(Ty::Bool), fs_is_dir, |a| {
-            format!("new Ok(is_dir({}))", a.first().map_or("''", |s| s))
-        }),
+        entry(
+            "exists",
+            vec![Ty::String],
+            res(Ty::Bool),
+            fs_exists,
+            &[],
+            |a| format!("new Ok(file_exists({}))", a.first().map_or("''", |s| s)),
+        ),
+        entry(
+            "isFile",
+            vec![Ty::String],
+            res(Ty::Bool),
+            fs_is_file,
+            &[],
+            |a| format!("new Ok(is_file({}))", a.first().map_or("''", |s| s)),
+        ),
+        entry(
+            "isDir",
+            vec![Ty::String],
+            res(Ty::Bool),
+            fs_is_dir,
+            &[],
+            |a| format!("new Ok(is_dir({}))", a.first().map_or("''", |s| s)),
+        ),
         entry(
             "createDir",
             vec![Ty::String],
             res(opt_null()),
             fs_create_dir,
+            &[],
             wrapped!("__phorj_fs_create_dir", 1),
         ),
         entry(
@@ -434,6 +461,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String],
             res(opt_null()),
             fs_remove_dir,
+            &[],
             wrapped!("__phorj_fs_remove_dir", 1),
         ),
         entry(
@@ -441,6 +469,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String],
             res(opt_null()),
             fs_remove_dir_all,
+            &[],
             wrapped!("__phorj_fs_remove_dir_all", 1),
         ),
         entry(
@@ -448,6 +477,7 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String],
             res(Ty::List(Box::new(Ty::String))),
             fs_list_dir,
+            &[],
             wrapped!("__phorj_fs_list_dir", 1),
         ),
         entry(
@@ -455,9 +485,10 @@ pub fn fs_natives() -> Vec<NativeFn> {
             vec![Ty::String],
             res(Ty::List(Box::new(Ty::String))),
             fs_walk,
+            &[],
             wrapped!("__phorj_fs_walk", 1),
         ),
-        entry("tempDir", vec![], res(Ty::String), fs_temp_dir, |_| {
+        entry("tempDir", vec![], res(Ty::String), fs_temp_dir, &[], |_| {
             "new Ok(sys_get_temp_dir())".to_string()
         }),
     ]

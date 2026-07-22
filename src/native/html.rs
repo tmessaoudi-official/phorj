@@ -153,6 +153,7 @@ macro_rules! tag_el {
             ret: Ty::Html,
             pure: true,
             eval: NativeEval::Pure(ev),
+            lift_from: &[],
             php,
         }
     }};
@@ -188,6 +189,7 @@ macro_rules! tag_void {
             ret: Ty::Html,
             pure: true,
             eval: NativeEval::Pure(ev),
+            lift_from: &[],
             php,
         }
     }};
@@ -204,6 +206,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(html_text),
             // Flags PINNED (not PHP's version-varying default) so the output is stable and `php -n`
             // safe; htmlspecialchars is tier-1 (ext/standard, always compiled).
+            lift_from: &[],
             php: |a| format!("htmlspecialchars({}, ENT_QUOTES, 'UTF-8')", parg(a, 0)),
         },
         NativeFn {
@@ -213,6 +216,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             ret: Ty::Html,
             pure: true,
             eval: NativeEval::Pure(html_identity),
+            lift_from: &[],
             php: |a| format!("({})", parg(a, 0)),
         },
         NativeFn {
@@ -222,6 +226,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(html_identity),
+            lift_from: &[],
             php: |a| format!("({})", parg(a, 0)),
         },
         // ---- Wave 2 builders ----
@@ -234,6 +239,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(html_attr),
             // ` name="ESC(value)"` — name trusted (author literal), value escaped (same boundary as
             // `text`). Single-quoted PHP literals carry the leading space + `="` + closing `"`.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "' ' . {} . '=\"' . htmlspecialchars({}, ENT_QUOTES, 'UTF-8') . '\"'",
@@ -249,6 +255,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             ret: Ty::Attr,
             pure: true,
             eval: NativeEval::Pure(html_bool_attr),
+            lift_from: &[],
             php: |a| format!("' ' . {}", parg(a, 0)),
         },
         NativeFn {
@@ -264,6 +271,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(html_el),
             // IIFE so the tag expr is evaluated once (no double-eval) — byte-identical to the single
             // Rust evaluation: `<` . tag . implode(attrs) . `>` . implode(children) . `</` . tag . `>`.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($t,$a,$c){{return '<' . $t . implode('', $a) . '>' . implode('', $c) . '</' . $t . '>';}})({}, {}, {})",
@@ -280,6 +288,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             ret: Ty::Html,
             pure: true,
             eval: NativeEval::Pure(html_void_el),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(function($t,$a){{return '<' . $t . implode('', $a) . '/>';}})({}, {})",
@@ -295,6 +304,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             ret: Ty::Html,
             pure: true,
             eval: NativeEval::Pure(html_concat),
+            lift_from: &[],
             php: |a| format!("implode('', {})", parg(a, 0)),
         },
         // ---- Option 1: named per-tag helpers (curated common HTML5 set) ----

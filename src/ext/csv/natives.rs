@@ -151,6 +151,7 @@ pub fn csv_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(csv_parse),
             // Empty input → `[]` to match the Rust kernel (str_getcsv would give `[null]`); the
             // scratch `$__csv` avoids double-evaluating the argument expression.
+            lift_from: &[],
             php: |a| {
                 format!(
                     r#"(($__csv = {}) === "" ? [] : str_getcsv($__csv, ",", "\"", ""))"#,
@@ -165,6 +166,7 @@ pub fn csv_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(csv_format),
+            lift_from: &[],
             php: |a| {
                 format!(
                     r#"implode(",", array_map(fn($f) => (strpbrk($f, ",\"\n\r") === false) ? $f : '"' . str_replace('"', '""', $f) . '"', {}))"#,

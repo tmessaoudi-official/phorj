@@ -138,6 +138,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(set_is_empty),
+            lift_from: &[],
             php: |a| format!("count({}) === 0", parg(a, 0)),
         },
         NativeFn {
@@ -148,6 +149,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(set_to_list),
             // The set is already a sequential array; array_values is a defensive re-index.
+            lift_from: &[],
             php: |a| format!("array_values({})", parg(a, 0)),
         },
         NativeFn {
@@ -158,6 +160,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(set_of),
             // Dedup preserving first-occurrence order; SORT_STRING matches HKey string-distinctness.
+            lift_from: &[],
             php: |a| format!("array_values(array_unique({}, SORT_STRING))", parg(a, 0)),
         },
         NativeFn {
@@ -168,6 +171,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(set_contains),
             // Strict in_array(needle, haystack) — needle first.
+            lift_from: &[],
             php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -177,6 +181,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(set_size),
+            lift_from: &[],
             php: |a| format!("count({})", parg(a, 0)),
         },
         // Set algebra — each returns a new set; the result order follows the FIRST set (and, for
@@ -190,6 +195,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             ret: Ty::Set(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(set_union),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_values(array_unique(array_merge({}, {}), SORT_STRING))",
@@ -205,6 +211,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             ret: Ty::Set(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(set_intersection),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_values(array_intersect({}, {}))",
@@ -220,6 +227,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             ret: Ty::Set(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(set_difference),
+            lift_from: &[],
             php: |a| format!("array_values(array_diff({}, {}))", parg(a, 0), parg(a, 1)),
         },
         // `add` / `remove` return a new set (sets are immutable); `isSubset` is a containment test.
@@ -231,6 +239,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(set_add),
             // ≡ union with a singleton: dedup-merge keeping first-occurrence order (SORT_STRING ≡ HKey).
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_values(array_unique(array_merge({}, [{}]), SORT_STRING))",
@@ -246,6 +255,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             ret: Ty::Set(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(set_remove),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "array_values(array_filter({}, fn($e) => $e !== {}))",
@@ -262,6 +272,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(set_is_subset),
             // a ⊆ b ⇔ a has no element absent from b.
+            lift_from: &[],
             php: |a| format!("count(array_diff({}, {})) === 0", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -272,6 +283,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(set_is_superset),
             // a ⊇ b ⇔ b has no element absent from a (isSubset with args swapped).
+            lift_from: &[],
             php: |a| format!("count(array_diff({}, {})) === 0", parg(a, 1), parg(a, 0)),
         },
     ]

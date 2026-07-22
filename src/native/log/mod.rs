@@ -218,6 +218,7 @@ pub(crate) fn log_natives() -> Vec<NativeFn> {
                 ret: Ty::Void,
                 pure: false,
                 eval: NativeEval::Pure($eval),
+                lift_from: &[],
                 php: |a| {
                     format!(
                         concat!("__phorj_log_emit('default', ", $ord, ", {})"),
@@ -244,6 +245,7 @@ pub(crate) fn log_natives() -> Vec<NativeFn> {
             ret: ty_class("Logger"),
             pure: false,
             eval: NativeEval::Pure(log_channel),
+            lift_from: &[],
             php: |a| format!("new Logger({})", a.first().map_or("''", |s| s)),
         },
         NativeFn {
@@ -253,6 +255,7 @@ pub(crate) fn log_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: false,
             eval: NativeEval::Pure(log_configure),
+            lift_from: &[],
             php: |a| format!("__phorj_log_configure({})", a.first().map_or("''", |s| s)),
         },
         NativeFn {
@@ -262,6 +265,7 @@ pub(crate) fn log_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: false,
             eval: NativeEval::Pure(log_emit),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_log_emit({}, {}, {})",

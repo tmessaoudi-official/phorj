@@ -244,6 +244,7 @@ pub(crate) fn validate_natives() -> Vec<NativeFn> {
     fn entry(
         name: &'static str,
         eval: fn(&[Value], &mut String) -> Result<Value, String>,
+        lift_from: &'static [&'static str],
         php: fn(&[String]) -> String,
     ) -> NativeFn {
         NativeFn {
@@ -253,26 +254,27 @@ pub(crate) fn validate_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(eval),
+            lift_from,
             php,
         }
     }
     vec![
-        entry("isInt", is_int_native, |a| {
+        entry("isInt", is_int_native, &[], |a| {
             format!("(preg_match('/^[+-]?[0-9]+$/', {}) === 1)", parg(a, 0))
         }),
-        entry("isNumber", is_number_native, |a| {
+        entry("isNumber", is_number_native, &[], |a| {
             format!(
                 "(preg_match('/^[+-]?[0-9]+(\\.[0-9]+)?$/', {}) === 1)",
                 parg(a, 0)
             )
         }),
-        entry("isAlpha", is_alpha_native, |a| {
+        entry("isAlpha", is_alpha_native, &[], |a| {
             format!("(preg_match('/^[A-Za-z]+$/', {}) === 1)", parg(a, 0))
         }),
-        entry("isAlnum", is_alnum_native, |a| {
+        entry("isAlnum", is_alnum_native, &[], |a| {
             format!("(preg_match('/^[A-Za-z0-9]+$/', {}) === 1)", parg(a, 0))
         }),
-        entry("isHex", is_hex_native, |a| {
+        entry("isHex", is_hex_native, &[], |a| {
             format!("(preg_match('/^[0-9A-Fa-f]+$/', {}) === 1)", parg(a, 0))
         }),
         // ctype-class predicates → `preg_match` over an explicit `\xNN` char class with the `D`
@@ -280,49 +282,49 @@ pub(crate) fn validate_natives() -> Vec<NativeFn> {
         // under the hermetic `php -n` oracle — the ctype_digit bug); `\xNN` ranges avoid delimiter
         // escaping and match the Rust `is_ascii_*` kernels exactly; `D` makes `$` match only the
         // absolute end, killing the trailing-`\n` divergence the pre-D validators above still carry.
-        entry("isLower", is_lower_native, |a| {
+        entry("isLower", is_lower_native, &[], |a| {
             format!("(preg_match('/^[a-z]+$/D', {}) === 1)", parg(a, 0))
         }),
-        entry("isUpper", is_upper_native, |a| {
+        entry("isUpper", is_upper_native, &[], |a| {
             format!("(preg_match('/^[A-Z]+$/D', {}) === 1)", parg(a, 0))
         }),
         // ctype_space set = { \t \n \x0B \f \r space } = 0x09–0x0D plus 0x20.
-        entry("isWhitespace", is_whitespace_native, |a| {
+        entry("isWhitespace", is_whitespace_native, &[], |a| {
             format!(
                 "(preg_match('/^[\\x09-\\x0D\\x20]+$/D', {}) === 1)",
                 parg(a, 0)
             )
         }),
         // punctuation = printable non-alnum non-space: 0x21–2F, 0x3A–40, 0x5B–60, 0x7B–7E.
-        entry("isPunctuation", is_punct_native, |a| {
+        entry("isPunctuation", is_punct_native, &[], |a| {
             format!(
                 "(preg_match('/^[\\x21-\\x2F\\x3A-\\x40\\x5B-\\x60\\x7B-\\x7E]+$/D', {}) === 1)",
                 parg(a, 0)
             )
         }),
-        entry("isControl", is_control_native, |a| {
+        entry("isControl", is_control_native, &[], |a| {
             format!(
                 "(preg_match('/^[\\x00-\\x1F\\x7F]+$/D', {}) === 1)",
                 parg(a, 0)
             )
         }),
         // visible = printable excluding space (0x21–0x7E).
-        entry("isVisible", is_visible_native, |a| {
+        entry("isVisible", is_visible_native, &[], |a| {
             format!("(preg_match('/^[\\x21-\\x7E]+$/D', {}) === 1)", parg(a, 0))
         }),
         // printable including space (0x20–0x7E).
-        entry("isPrintable", is_printable_native, |a| {
+        entry("isPrintable", is_printable_native, &[], |a| {
             format!("(preg_match('/^[\\x20-\\x7E]+$/D', {}) === 1)", parg(a, 0))
         }),
         // isEmail — dotted domain + letters-only TLD (>=2); `(?!.*\.\.)` bars consecutive dots.
-        entry("isEmail", is_email_native, |a| {
+        entry("isEmail", is_email_native, &[], |a| {
             format!(
                 "(preg_match('/^(?!.*\\.\\.)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{{2,}}$/D', {}) === 1)",
                 parg(a, 0)
             )
         }),
         // isUrl — http/https scheme, host, optional :port, optional /path (delimiter `/` escaped as `\/`).
-        entry("isUrl", is_url_native, |a| {
+        entry("isUrl", is_url_native, &[], |a| {
             format!(
                 "(preg_match('/^https?:\\/\\/[A-Za-z0-9.-]+(:[0-9]+)?(\\/[^\\x00-\\x20]*)?$/D', {}) === 1)",
                 parg(a, 0)

@@ -2444,6 +2444,24 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   (a second place to forget); auto-derive by inverting the `php:` closures (fragile — `fn`s not cleanly
   invertible, 99 `__phorj_*` shims). Build: seed `lift_from` from the 124; lifter resolves builtins → Core
   calls; the `__phorj_*`-shim natives need a later idiom recognizer (tracked, not in v1).
+  **✅ SHIPPED 2026-07-22 (v1 tranche).** `NativeFn.lift_from: &'static [&'static str]` added across all
+  356 registry rows; seeding was MACHINE-DERIVED with a strict matcher (emitter = exactly one builtin,
+  args in order) then HAND-AUDITED — final tranche **53 unique builtins** (the 124 estimate included
+  shim/multi-call emitters the strict rule correctly refuses). Deliberate non-registrations recorded
+  in-code: `trim` (the `__phorj_trim` Unicode-whitespace shim — inverting changes semantics), `crc32`
+  (PHP builtin returns int, ours is the crc32b hex form), `log2` (emits `log(x,2)`). Collisions resolved
+  dominant-idiom (strlen→String.length not Bytes; count/array_values/array_merge→List not Map/Set — a
+  wrong pick surfaces as a LOUD type error in the draft, never silent divergence); uniqueness enforced
+  by `lift_from_builtins_are_unique`. Lifter: `native::lift_of()` derived table; bare `PhpExpr::Name`
+  calls resolve arity-checked to qualified Core calls + auto-`import` (thread-local recorder, reset per
+  lift). Verified e2e: `strtoupper/strlen/sqrt` → `String.upperCase/String.length/Math.sqrt` + imports.
+  DISCLOSED Invariant-13 exception (review welcome): the mandated one-line-per-row field grew 4
+  grandfathered registry files (native/mod, text_registry, list_registry, math) by exactly the
+  mechanical delta — their `size-baseline.txt` rows were RE-FROZEN at the new counts rather than
+  make-work-splitting four cohesive registry tables; no logic growth. PROCESS LESSON (recorded per the
+  audit directive): the DEC-313 push went out on a TIMED-OUT full suite — the tier-1 allowlist gap
+  (`fwrite/scandir/…` from the new FS/Log helpers) reached CI. Fixed same-day (TIER1_PHP extended —
+  all ext/standard, hermetic under `php -n`); rule reaffirmed: a truncated gate is a red gate.
 
 - **DEC-313 — LADDER "yet" quarantines: BUILD FS transpile, SESSION becomes PERMANENT (developer-ruled
   2026-07-20; ✅ SHIPPED 2026-07-22 — both halves).**
@@ -2654,6 +2672,20 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   artifacts, force-moves the `nightly` tag, delete-then-recreates the prerelease via `gh`;
   `--latest=false` keeps the Latest badge on stable). Verified LIVE: release `nightly (10262b6)` with
   4 sha256-digested assets. Docs: SEMVER.md §Release channels + SECURITY.md supported-versions row.
+
+- **DEC-324 — PHP-GAP ROUND-2 SWEEP folded into MASTER-PLAN (autonomous, 2026-07-22; per-item
+  adjudication reserved).** Dev directive: "do more rounds to cover what PHP does that we still did not
+  map". A full re-sweep (report: `docs/research/php-gap-round2.md`) grep-verified 25 items absent from
+  EVERY coverage surface (MASTER-PLAN, M-gap-matrix incl. FN-group notes, D-php-surface's 869 rows,
+  FEATURES, KNOWN_ISSUES, SLICE-STATE, D0 re-sweep): 8 TOP (serve TLS posture = GA-blocking PENDING
+  adjudication; trusted proxies; response streaming; Range+gzip; HttpClient proxy/CA/mTLS + streaming;
+  class-const expressiveness; enum interfaces/consts), 8 MID (pack/unpack BinaryLayout, trait-consts
+  credit VERIFY, SessionStore seam, cpuTime, phg env, run-script, graceful reload), 9 REJECT-candidates
+  recorded as PENDING-REJECT Appendix-A rows (SOAP/IMAP/SNMP/dba+SysV/pspell/enchant/calendar/tidy/LDAP→
+  post-1.0). STRUCTURAL: D-php-surface never inventoried 12 extension domains — a silent denominator
+  hole in the 824-row parity model; repairing it is queued with the Appendix rows. All slotted in
+  MASTER-PLAN §PHP-GAP ROUND-2 ADDITIONS; waves are RECOMMENDATIONS — each item is adjudicated at build
+  time per Invariant 15 (nothing here self-rules a user-visible design).
 
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their

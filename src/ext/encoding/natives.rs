@@ -158,6 +158,7 @@ pub fn encoding_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(base64_encode_native),
+            lift_from: &["base64_encode"],
             php: |a| format!("base64_encode({})", parg(a, 0)),
         },
         NativeFn {
@@ -168,6 +169,7 @@ pub fn encoding_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(base64_decode_native),
             // strict mode (2nd arg true) → false on malformed; map false → null (the `bytes?` absent).
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(($__b64 = base64_decode({}, true)) === false ? null : $__b64)",
@@ -182,6 +184,7 @@ pub fn encoding_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(hex_encode_native),
+            lift_from: &["bin2hex"],
             php: |a| format!("bin2hex({})", parg(a, 0)),
         },
         NativeFn {
@@ -193,6 +196,7 @@ pub fn encoding_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(hex_decode_native),
             // hex2bin returns false (+ warning to stderr) on odd length / non-hex; map false → null.
             // `@` suppresses the warning so stdout stays clean (the oracle compares stdout).
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(($__hx = @hex2bin({})) === false ? null : $__hx)",

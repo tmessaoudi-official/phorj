@@ -61,12 +61,38 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
                 span: SP,
             }
         }
-        php::PhpExpr::Call { callee, args } => Expr::Call {
-            callee: Box::new(lift_expr(callee)?),
-            args: lift_exprs(args)?,
-            type_args: Vec::new(),
-            span: SP,
-        },
+        php::PhpExpr::Call { callee, args } => {
+            // DEC-312: a bare PHP builtin with a registered inverse lifts to its Core form
+            // (`strlen($s)` → `String.length(s)`, one registry row for both directions). Arity must
+            // match the native's signature — a mismatched call falls through to the plain unresolved
+            // lift (loud later, never a wrong guess).
+            if let php::PhpExpr::Name(n) = &**callee {
+                if let Some(nat) = crate::native::lift_of(n) {
+                    if nat.params.len() == args.len() {
+                        let qualifier = nat.module.rsplit('.').next().expect("dotted module");
+                        super::record_native_module(nat.module);
+                        return Ok(Expr::Call {
+                            callee: Box::new(Expr::Member {
+                                object: Box::new(Expr::Ident(qualifier.to_string(), SP)),
+                                name: nat.name.to_string(),
+                                safe: false,
+                                sep: crate::ast::MemberSep::Dot,
+                                span: SP,
+                            }),
+                            args: lift_exprs(args)?,
+                            type_args: Vec::new(),
+                            span: SP,
+                        });
+                    }
+                }
+            }
+            Expr::Call {
+                callee: Box::new(lift_expr(callee)?),
+                args: lift_exprs(args)?,
+                type_args: Vec::new(),
+                span: SP,
+            }
+        }
         php::PhpExpr::MethodCall {
             recv,
             name,

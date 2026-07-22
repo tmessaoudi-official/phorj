@@ -303,6 +303,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: regex_ty(),
             pure: true,
             eval: NativeEval::Pure(regex_compile),
+            lift_from: &[],
             php: |a| format!("new Regex({})", parg(a, 0)),
         },
         NativeFn {
@@ -312,6 +313,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(regex_matches),
+            lift_from: &[],
             php: |a| format!("__phorj_regex_matches({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -321,6 +323,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: opt_str(),
             pure: true,
             eval: NativeEval::Pure(regex_find),
+            lift_from: &[],
             php: |a| format!("__phorj_regex_find({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -330,6 +333,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: list_str(),
             pure: true,
             eval: NativeEval::Pure(regex_find_all),
+            lift_from: &[],
             php: |a| format!("__phorj_regex_find_all({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -339,6 +343,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: opt_map(),
             pure: true,
             eval: NativeEval::Pure(regex_find_groups),
+            lift_from: &[],
             php: |a| format!("__phorj_regex_find_groups({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -351,6 +356,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ))),
             pure: true,
             eval: NativeEval::Pure(regex_find_all_groups),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_regex_find_all_groups({}, {})",
@@ -366,6 +372,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(regex_replace),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_regex_replace({}, {}, {})",
@@ -382,6 +389,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: list_str(),
             pure: true,
             eval: NativeEval::Pure(regex_split),
+            lift_from: &[],
             php: |a| format!("__phorj_regex_split({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -391,6 +399,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(regex_quote_meta),
+            lift_from: &[],
             php: |a| format!("__phorj_regex_quote_meta({})", parg(a, 0)),
         },
         NativeFn {
@@ -408,6 +417,7 @@ pub fn regex_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::HigherOrder(regex_replace_callback),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_regex_replace_callback({}, {}, {})",

@@ -198,6 +198,7 @@ pub fn debug_natives() -> Vec<NativeFn> {
         ret: Ty::String,
         pure: true,
         eval: NativeEval::Pure(debug_render),
+        lift_from: &[],
         php: |a| {
             format!(
                 "__phorj_debug_render({})",

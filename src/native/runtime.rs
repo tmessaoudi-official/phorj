@@ -96,6 +96,7 @@ pub(crate) fn runtime_natives() -> Vec<NativeFn> {
             ret: Ty::Never,
             pure: false,
             eval: NativeEval::Pure(runtime_exit),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "exit((int) {})",
@@ -110,6 +111,7 @@ pub(crate) fn runtime_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: false,
             eval: NativeEval::Pure(runtime_monotonic_nanos),
+            lift_from: &[],
             php: |_| "hrtime(true)".to_string(),
         },
         NativeFn {
@@ -119,6 +121,7 @@ pub(crate) fn runtime_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: false,
             eval: NativeEval::Pure(runtime_memory_bytes),
+            lift_from: &[],
             php: |_| "memory_get_usage(true)".to_string(),
         },
         NativeFn {
@@ -128,6 +131,7 @@ pub(crate) fn runtime_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: false,
             eval: NativeEval::Pure(runtime_peak_memory_bytes),
+            lift_from: &[],
             php: |_| "memory_get_peak_usage(true)".to_string(),
         },
         NativeFn {
@@ -137,6 +141,7 @@ pub(crate) fn runtime_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: false,
             eval: NativeEval::Pure(runtime_reset_peak_memory),
+            lift_from: &[],
             php: |_| "memory_reset_peak_usage()".to_string(),
         },
     ]

@@ -124,3 +124,38 @@ fn import_map_binds_leaf_to_full_path() {
     assert_eq!(m.get("u").map(String::as_str), Some("acme.util"));
     assert!(!m.contains_key("util"), "alias replaces the leaf qualifier");
 }
+
+// ── DEC-312: the lift inverse registration ──────────────────────────────────────────────────────
+
+/// A PHP builtin may appear in at most ONE row's `lift_from` — two rows claiming the same builtin
+/// would make the lifter's resolution order-dependent. (Collisions found at seeding time — strlen
+/// on String+Bytes, count on List/Map/Set — were resolved by keeping the dominant-idiom row.)
+#[test]
+fn lift_from_builtins_are_unique() {
+    let mut seen: HashMap<&str, (&str, &str)> = HashMap::new();
+    for n in registry() {
+        for b in n.lift_from {
+            if let Some((m, f)) = seen.insert(b, (n.module, n.name)) {
+                panic!(
+                    "builtin `{b}` claimed by both {m}.{f} and {}.{}",
+                    n.module, n.name
+                );
+            }
+        }
+    }
+    assert!(seen.len() >= 50, "seed tranche present ({})", seen.len());
+}
+
+#[test]
+fn lift_of_resolves_the_seeded_builtins() {
+    let n = lift_of("strlen").expect("strlen registered");
+    assert_eq!((n.module, n.name), ("Core.String", "length"));
+    let n = lift_of("strtoupper").expect("strtoupper registered");
+    assert_eq!((n.module, n.name), ("Core.String", "upperCase"));
+    let n = lift_of("sqrt").expect("sqrt registered");
+    assert_eq!((n.module, n.name), ("Core.Math", "sqrt"));
+    assert!(lift_of("definitely_not_a_builtin").is_none());
+    // `trim` must stay UNREGISTERED: its emitter is a `__phorj_trim` shim (Rust Unicode whitespace
+    // vs PHP's ASCII set) — inverting it would change semantics.
+    assert!(lift_of("trim").is_none());
+}

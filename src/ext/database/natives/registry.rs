@@ -50,6 +50,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(handle()),
             pure: false,
             eval: NativeEval::Pure(db_open),
+            lift_from: &[],
             php: |a| format!("new \\PDO({})", a.first().map_or("''", |s| s)),
         },
         // Credential-Secret DSN builder (DEC-208 slice G): inject a `Core.Secret` password into a
@@ -64,6 +65,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: false,
             eval: NativeEval::Pure(db_dsn_with_password),
+            lift_from: &[],
             php: |a| a.first().cloned().unwrap_or_else(|| "''".to_string()),
         },
         NativeFn {
@@ -73,6 +75,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(handle()),
             pure: false,
             eval: NativeEval::Pure(db_prepare),
+            lift_from: &[],
             php: |a| format!("{}->prepare({})", a[0], a[1]),
         },
         NativeFn {
@@ -84,6 +87,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(db_bind),
             // Positional binds are collected and passed to execute() in the transpile slice; the
             // receiver PHP is threaded through for now (finalized there).
+            lift_from: &[],
             php: |a| a[0].clone(),
         },
         NativeFn {
@@ -93,6 +97,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(handle()),
             pure: false,
             eval: NativeEval::Pure(db_bind_named),
+            lift_from: &[],
             php: |a| a[0].clone(),
         },
         NativeFn {
@@ -103,6 +108,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             pure: false,
             // HigherOrder (DEC-208 slice D): fires the `onQuery` hook + applies timeout classification.
             eval: NativeEval::HigherOrder(db_query),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "{}->execute() /* fetchAll finalized in transpile slice */",
@@ -117,6 +123,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::HigherOrder(db_exec),
+            lift_from: &[],
             php: |a| format!("{}->execute()", a[0]),
         },
         // Streaming (DEC-208 item H): `stream` runs the query (HigherOrder — fires `onQuery` exactly
@@ -130,6 +137,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(handle()),
             pure: false,
             eval: NativeEval::HigherOrder(db_stream),
+            lift_from: &[],
             php: |a| a[0].clone(),
         },
         NativeFn {
@@ -139,6 +147,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Optional(Box::new(handle()))),
             pure: false,
             eval: NativeEval::Pure(db_stream_next),
+            lift_from: &[],
             php: |a| a[0].clone(),
         },
         // --- Writes & robustness (DEC-208 slice D, spec §4/§7). `bindList` (IN-list) is Pure (records
@@ -157,6 +166,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(handle()),
             pure: false,
             eval: NativeEval::Pure(db_bind_list),
+            lift_from: &[],
             php: |a| a[0].clone(),
         },
         NativeFn {
@@ -169,6 +179,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::HigherOrder(db_execute_many),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "{}->execute() /* executeMany finalized in transpile slice */",
@@ -183,6 +194,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::HigherOrder(db_exec_returning_id),
+            lift_from: &[],
             php: |a| format!("{}->execute()", a[0]),
         },
         NativeFn {
@@ -192,6 +204,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::Pure(db_last_insert_id),
+            lift_from: &[],
             php: |a| format!("(int) {}->lastInsertId()", a[0]),
         },
         NativeFn {
@@ -202,6 +215,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(db_timeout),
             // PDO: ATTR_TIMEOUT (seconds); the receiver is threaded through for now.
+            lift_from: &[],
             php: |a| a[0].clone(),
         },
         NativeFn {
@@ -215,6 +229,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(db_on_query),
             // No faithful PDO analog (PDO has no per-query hook); placeholder, quarantined.
+            lift_from: &[],
             php: |_a| "null".to_string(),
         },
         // --- Transaction control (DEC-208 slice C). Savepoint-aware via the connection's depth counter
@@ -227,6 +242,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::Pure(db_begin),
+            lift_from: &[],
             php: |a| format!("{}->beginTransaction()", a[0]),
         },
         NativeFn {
@@ -236,6 +252,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::Pure(db_commit),
+            lift_from: &[],
             php: |a| format!("{}->commit()", a[0]),
         },
         NativeFn {
@@ -245,6 +262,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::Pure(db_rollback),
+            lift_from: &[],
             php: |a| format!("{}->rollBack()", a[0]),
         },
         NativeFn {
@@ -255,6 +273,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(db_close),
             // PDO closes when the last reference is unset; there is no explicit close() method.
+            lift_from: &[],
             php: |_a| "null".to_string(),
         },
         // Closure-form transaction (DEC-208 slice C, unblocked by DEC-222). GENERIC over the closure's
@@ -277,6 +296,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             ret: res(Ty::Param("T".into())),
             pure: false,
             eval: NativeEval::HigherOrder(db_transaction),
+            lift_from: &[],
             php: |a| format!("/* db.transaction finalized in transpile slice */ {}", a[0]),
         },
     ]

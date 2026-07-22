@@ -203,6 +203,7 @@ pub fn json_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(json())),
             pure: true,
             eval: NativeEval::Pure(json_parse),
+            lift_from: &[],
             php: |a| format!("__phorj_json_decode({})", parg(a, 0)),
         },
         NativeFn {
@@ -212,6 +213,7 @@ pub fn json_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::List(Box::new(json())))),
             pure: true,
             eval: NativeEval::Pure(json_parse_lines),
+            lift_from: &[],
             php: |a| format!("__phorj_json_parse_lines({})", parg(a, 0)),
         },
         NativeFn {
@@ -221,6 +223,7 @@ pub fn json_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(json_stringify_lines),
+            lift_from: &[],
             php: |a| format!("__phorj_json_stringify_lines({})", parg(a, 0)),
         },
         NativeFn {
@@ -230,6 +233,7 @@ pub fn json_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(json_stringify),
+            lift_from: &[],
             php: |a| format!("__phorj_json_encode({})", parg(a, 0)),
         },
         NativeFn {
@@ -239,6 +243,7 @@ pub fn json_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(json_stringify_pretty),
+            lift_from: &[],
             php: |a| format!("__phorj_json_encode_pretty({})", parg(a, 0)),
         },
     ]

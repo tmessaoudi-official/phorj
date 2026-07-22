@@ -131,6 +131,7 @@ pub fn test_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(test_assert),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "({} ? null : throw new \\Exception('assertion failed: ' . {}))",
@@ -146,6 +147,7 @@ pub fn test_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(test_assert_true),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "({} ? null : throw new \\Exception('assertion failed: expected true, got false'))",
@@ -160,6 +162,7 @@ pub fn test_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(test_assert_false),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(!{} ? null : throw new \\Exception('assertion failed: expected false, got true'))",
@@ -174,6 +177,7 @@ pub fn test_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(test_assert_equals),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(({}) == ({}) ? null : throw new \\Exception('assertion failed: values not equal'))",
@@ -189,6 +193,7 @@ pub fn test_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(test_assert_not_equals),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(({}) != ({}) ? null : throw new \\Exception('assertion failed: values unexpectedly equal'))",
@@ -207,6 +212,7 @@ pub fn test_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(test_assert_null),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(({}) === null ? null : throw new \\Exception('assertion failed: expected null'))",
@@ -221,6 +227,7 @@ pub fn test_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(test_assert_not_null),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(({}) !== null ? null : throw new \\Exception('assertion failed: expected non-null'))",
@@ -241,6 +248,7 @@ pub fn test_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::HigherOrder(test_assert_faults),
+            lift_from: &[],
             php: |a| {
                 // Bridge-only (never byte-identity-gated): run the closure; pass iff it throws.
                 format!(

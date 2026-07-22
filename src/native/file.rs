@@ -105,6 +105,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(file_read),
             // `@` suppresses the missing-file warning; the assign-and-compare distinguishes a missing
             // file (`false` → null) from a legitimately empty one (`""`), which a bare `?:` would not.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(($__c = @file_get_contents({})) === false ? null : $__c)",
@@ -119,6 +120,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(file_exists),
+            lift_from: &["file_exists"],
             php: |a| format!("file_exists({})", parg(a, 0)),
         },
         NativeFn {
@@ -128,6 +130,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(file_write),
+            lift_from: &["file_put_contents"],
             php: |a| format!("file_put_contents({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -137,6 +140,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: false,
             eval: NativeEval::Pure(file_append),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "file_put_contents({}, {}, FILE_APPEND)",
@@ -152,6 +156,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: false,
             eval: NativeEval::Pure(file_delete),
+            lift_from: &[],
             php: |a| format!("@unlink({})", parg(a, 0)),
         },
         NativeFn {
@@ -161,6 +166,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: false,
             eval: NativeEval::Pure(file_rename),
+            lift_from: &["rename"],
             php: |a| format!("rename({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -171,6 +177,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(file_copy),
             // PHP `copy` returns a bool; emit the byte count to match the Phorj `int` return.
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(copy({from}, {to}) ? filesize({to}) : 0)",
@@ -188,6 +195,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             // below, so an example using `size` is quarantined regardless, but the flag stays honest.
             pure: true,
             eval: NativeEval::Pure(file_size),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "(($__sz = @filesize({})) === false ? null : $__sz)",

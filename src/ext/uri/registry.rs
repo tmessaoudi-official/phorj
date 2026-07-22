@@ -25,6 +25,7 @@ pub fn uri_natives() -> Vec<NativeFn> {
             ret: str_ty(),
             pure: true,
             eval: NativeEval::Pure(uri_parse),
+            lift_from: &[],
             php: |a| format!("__phorj_uri_parse({})", parg(a, 0)),
         },
         NativeFn {
@@ -34,6 +35,7 @@ pub fn uri_natives() -> Vec<NativeFn> {
             ret: str_ty(),
             pure: true,
             eval: NativeEval::Pure(uri_to_string),
+            lift_from: &[],
             php: |a| format!("{}->toString()", php_obj(parg(a, 0))),
         },
         NativeFn {
@@ -43,6 +45,7 @@ pub fn uri_natives() -> Vec<NativeFn> {
             ret: str_ty(),
             pure: true,
             eval: NativeEval::Pure(uri_resolve),
+            lift_from: &[],
             php: |a| format!("__phorj_uri_resolve({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -52,6 +55,7 @@ pub fn uri_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(uri_equals),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "{}->equals({}, {} ? \\Uri\\UriComparisonMode::IncludeFragment : \\Uri\\UriComparisonMode::ExcludeFragment)",
@@ -77,6 +81,7 @@ pub fn uri_natives() -> Vec<NativeFn> {
                     ),
                 })
             }),
+            lift_from: &[],
             php: |a| format!("{}->getPort()", php_obj(parg(a, 0))),
         },
     ];
@@ -97,6 +102,7 @@ pub fn uri_natives() -> Vec<NativeFn> {
                 ret: Ty::Optional(Box::new(Ty::String)),
                 pure: true,
                 eval: NativeEval::Pure(eval),
+                lift_from: &[],
                 php,
             }
         }};
@@ -163,6 +169,7 @@ pub fn uri_natives() -> Vec<NativeFn> {
                 Value::Str(kernel::normalize(p).path.into())
             })
         }),
+        lift_from: &[],
         php: |a| format!("{}->getPath()", php_obj(parg(a, 0))),
     });
     v.push(NativeFn {
@@ -174,6 +181,7 @@ pub fn uri_natives() -> Vec<NativeFn> {
         eval: NativeEval::Pure(|a, _| {
             getter(a, "Uri.rawPath", |p| Value::Str(p.path.clone().into()))
         }),
+        lift_from: &[],
         php: |a| format!("{}->getRawPath()", php_obj(parg(a, 0))),
     });
     v.extend(wither_rows());
@@ -204,6 +212,7 @@ fn wither_rows() -> Vec<NativeFn> {
                     },
                 )
             }),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_uri_with({}, 'withScheme', {})",
@@ -227,6 +236,7 @@ fn wither_rows() -> Vec<NativeFn> {
                     |p, v| p.userinfo = v,
                 )
             }),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_uri_with({}, 'withUserInfo', {})",
@@ -253,6 +263,7 @@ fn wither_rows() -> Vec<NativeFn> {
                     p.host = v;
                 })
             }),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_uri_with({}, 'withHost', {})",
@@ -282,6 +293,7 @@ fn wither_rows() -> Vec<NativeFn> {
                     Ok(())
                 })
             }),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_uri_with({}, 'withPort', {})",
@@ -305,6 +317,7 @@ fn wither_rows() -> Vec<NativeFn> {
                     _ => Err("Uri.withPath: expected a string".into()),
                 })
             }),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_uri_with({}, 'withPath', {})",
@@ -328,6 +341,7 @@ fn wither_rows() -> Vec<NativeFn> {
                     |p, v| p.query = v,
                 )
             }),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_uri_with({}, 'withQuery', {})",
@@ -351,6 +365,7 @@ fn wither_rows() -> Vec<NativeFn> {
                     |p, v| p.fragment = v,
                 )
             }),
+            lift_from: &[],
             php: |a| {
                 format!(
                     "__phorj_uri_with({}, 'withFragment', {})",
