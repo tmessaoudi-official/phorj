@@ -165,18 +165,17 @@ impl Transpiler {
                 // they are emitted as PHP `interface` blocks in pass 2.
                 Item::Interface(_) => {}
                 Item::Enum(e) => {
-                    let ns = namespace_of(&e.name);
                     self.enums.insert(e.name.clone()); // DEC-302: route Enum.cases()/from/tryFrom
                     for v in &e.variants {
                         self.variants.insert(v.name.clone());
-                        self.variant_ns.insert(v.name.clone(), ns.clone());
+                        self.variant_owner.insert(v.name.clone(), e.name.clone());
                         self.variant_fields.insert(
-                            v.name.clone(),
+                            (e.name.clone(), v.name.clone()),
                             v.fields.iter().map(|p| p.name.clone()).collect(),
                         );
                         // T6b: payload kinds (positional) for variant-payload match bindings.
                         self.variant_field_kinds.insert(
-                            v.name.clone(),
+                            (e.name.clone(), v.name.clone()),
                             v.fields.iter().map(|p| kind_of_type(&p.ty)).collect(),
                         );
                     }
@@ -351,7 +350,7 @@ impl Transpiler {
                         Item::Enum(e) => {
                             ns_names.push((false, e.name.clone()));
                             for v in &e.variants {
-                                ns_names.push((false, php_variant_name(&v.name)));
+                                ns_names.push((false, php_scoped_variant_name(&e.name, &v.name)));
                             }
                         }
                         Item::Function(f) => ns_names.push((true, f.name.clone())),

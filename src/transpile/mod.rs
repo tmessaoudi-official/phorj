@@ -138,14 +138,13 @@ struct Transpiler {
     /// path. PHP resolves an inherited `Sub::MAX` itself, so only the keys are needed.
     consts: HashSet<(String, String)>,
     variants: HashSet<String>,
+    /// DEC-329.3: bare variant → declaring enum (last wins) — FALLBACK only (`qualify_variants`).
+    variant_owner: HashMap<String, String>,
     /// DEC-302: declared enum names — routes `Enum.cases()`/`from(x)`/`tryFrom(x)` to a PHP static
     /// call (`Enum::method(...)`) rather than the instance-member fallback (`$Enum->method(...)`).
     enums: HashSet<String>,
-    variant_fields: HashMap<String, Vec<String>>,
-    /// An enum variant's PHP namespace (`namespace_of` of the — possibly mangled — enum name), so a
-    /// cross-package variant is constructed and `instanceof`-tested as a fully-qualified class
-    /// (`new \Acme\Geometry\Circle(…)`). A `package Main` (bare) enum maps to `Main` ⇒ bare emission.
-    variant_ns: HashMap<String, String>,
+    /// `(enum, variant) → payload field names` — keyed precisely since DEC-329.3.
+    variant_fields: HashMap<(String, String), Vec<String>>,
     out: String,
     indent: usize,
     locals: Vec<HashSet<String>>,
@@ -173,9 +172,9 @@ struct Transpiler {
     class_field_kinds: HashMap<String, HashMap<String, OpKind>>,
     /// `class → direct parents` (`extends`), for inherited-field kind lookup (T6b).
     class_parents: HashMap<String, Vec<String>>,
-    /// `variant → payload field OpKinds` (positional), so a variant-payload match binding (`Pass(s)`)
-    /// resolves `s`'s kind for native operand specialization (T6b).
-    variant_field_kinds: HashMap<String, Vec<OpKind>>,
+    /// `(enum, variant) → payload OpKinds` (positional) — a variant-payload match binding
+    /// resolves its kind for operand specialization (T6b; DEC-329.3 keying).
+    variant_field_kinds: HashMap<(String, String), Vec<OpKind>>,
     /// `free-function name → return OpKind` (T6c), so a call result (`bulk(x)`, `"{f(x)}"`) resolves
     /// to a native operand. Overloads with differing return kinds collapse to `Other` (the fallback).
     fn_ret_kinds: HashMap<String, OpKind>,
@@ -228,7 +227,7 @@ struct Transpiler {
     /// Set when `Core.Json.stringify` / `stringifyPretty` / `parse` is emitted — each defines its
     /// `__phorj_json_*` recursive helper once per file (the gated-helper pattern, set in
     /// `emit_member_call` because a native's `php` closure has no `&mut self`). The helpers walk the
-    /// injected `Json` enum's PHP class hierarchy (mangled variant classes `Int_`/`Bool_`/…) so the
+    /// injected `Json` enum's PHP class hierarchy (scoped variant classes `Json_Int`/`Json_Bool`/…) so the
     /// PHP leg matches `run`/`runvm` byte-for-byte; floats route through `__phorj_float` (positional,
     /// not native json's scientific), so `uses_float` is implied by an encode.
     uses_json_encode: bool,
@@ -247,8 +246,7 @@ struct Transpiler {
     uses_option_get_or_else: bool,
     uses_option_of_nullable: bool,
     uses_option_to_nullable: bool,
-    // `Core.Result` combinator helpers (Wave B B-2b, DEC-185); `isSuccess`/`isFailure` inline
-    // `instanceof` at the call site (no helper).
+    // `Core.Result` combinators (B-2b, DEC-185); `isSuccess`/`isFailure` inline `instanceof`.
     uses_result_map: bool,
     uses_result_map_err: bool,
     uses_result_and_then: bool,
@@ -489,8 +487,8 @@ impl Transpiler {
             consts: HashSet::new(),
             variants: HashSet::new(),
             enums: HashSet::new(),
+            variant_owner: HashMap::new(),
             variant_fields: HashMap::new(),
-            variant_ns: HashMap::new(),
             out: String::new(),
             indent: 0,
             locals: Vec::new(),
@@ -755,3 +753,5 @@ fn vis(mods: &[Modifier]) -> String {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_enums;

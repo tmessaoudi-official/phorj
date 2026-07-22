@@ -19,9 +19,17 @@ its canonical enum-qualified form, and all three backends key on it — interpre
 pattern-qualifier test, VM `VariantIndex` + `Op::MatchTag` now testing **(ty, variant)**, and a
 transpiler qualified-construction intercept. The duck-typed `?` keeps NAME-only `Failure` matching
 via the new `Op::MatchTagName` (a user Result-shaped enum beside injected `Core.Result` still
-propagates correctly; the JIT declines it fail-closed when the name is shared). PHP class names are
-unchanged in B1 (`E-TRANSPILE-VARIANT-COLLISION` still refuses two enums sharing a variant name on
-the PHP leg); the ruled enum-scoped classes land in the follow-up.
+propagates correctly; the JIT declines it fail-closed when the name is shared). On the PHP leg (commit B2, the
+DEC-329 ruling's deliverable) variant classes are now enum-SCOPED — `Shape.Circle` ⇒
+`final class Shape_Circle extends Shape` — lifting the `E-TRANSPILE-VARIANT-COLLISION` refusal for
+shared variant names entirely (it now covers only the pathological composed-name collision, e.g.
+`class Shape_Circle` beside `enum Shape { Circle }`). Scoping subsumes the old reserved-word
+variant mangle (`Int`→`Int_` is now `Tok_Int`); the injected enums' helper surfaces
+(Json/Option/Result/FileSystemResult/Level/RoundingMode PHP helpers) reference the scoped classes;
+program stdout is byte-identical (the DEC-238 debug rows render `Enum.Variant(…)` from the class
+map). Duck-typed `?` covers every `Failure`-owning enum with a sorted `instanceof` chain. One-time
+golden regen (`examples/transpile/demo.php`); new `examples/guide/shared-variant-names.phg` is
+3-leg-gated by the differential.
 
 ### Added — DEC-302: backed enums (PHP 8.1 parity) — scalar-valued enums
 

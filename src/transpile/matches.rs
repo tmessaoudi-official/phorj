@@ -358,15 +358,26 @@ impl Transpiler {
             Pattern::Variant {
                 name: vname,
                 fields: pats,
+                enum_qualifier,
                 ..
             } => {
-                let props = self.variant_fields.get(vname).cloned().unwrap_or_default();
+                // DEC-329.3: the canonical qualifier (always `Some` post-`qualify_variants`) keys
+                // the (enum, variant)-precise tables; the bare-owner map is the documented fallback.
+                let en = enum_qualifier
+                    .clone()
+                    .or_else(|| self.variant_owner.get(vname).cloned())
+                    .unwrap_or_default();
+                let key = (en.clone(), vname.clone());
+                let props = self.variant_fields.get(&key).cloned().unwrap_or_default();
                 let kinds = self
                     .variant_field_kinds
-                    .get(vname)
+                    .get(&key)
                     .cloned()
                     .unwrap_or_default();
-                let mut tests = vec![format!("{subj} instanceof {}", self.variant_ref(vname))];
+                let mut tests = vec![format!(
+                    "{subj} instanceof {}",
+                    self.variant_ref(&en, vname)
+                )];
                 let mut binds = Vec::new();
                 for (i, fp) in pats.iter().enumerate() {
                     let prop = props

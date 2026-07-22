@@ -15,84 +15,25 @@ pub(super) fn last_segment(name: &str) -> &str {
     name.rsplit('\\').next().unwrap_or(name)
 }
 
-/// PHP reserves a fixed set of words as **class names** — `int`/`float`/`bool`/`null` etc. — and
-/// rejects them as a class name *even inside a namespace* (verified vs PHP 8.5). An enum variant
-/// transpiles to `final class <Variant> extends <Enum>`, so a variant named after one of these would
-/// be a parse error. We mangle such a variant's PHP class name by appending `_` (`Int`→`Int_`). This
-/// is **transpiler-only**: `run`/`runvm` address a variant by its Phorj name (`EnumVal.variant`),
-/// never a PHP class name, so program stdout is unaffected. Comparison is case-insensitive (PHP class
-/// names are). `array`/`callable`/`list` ARE rejected as class names by PHP 8.5 (verified) and so are
-/// mangled; `enum` is the one type-ish word PHP still accepts as a class name, left untouched.
-///
-/// Three groups (all verified rejected as a `class` name vs PHP 8.5.8):
-///   1. **value-type words** (`int`/`float`/… — the original set);
-///   2. **keyword-as-class-name words** — reserved words / language constructs PHP forbids in a class
-///      position (`empty`/`echo`/`print`/`match`/`fn`/… — e.g. a variant `Empty` ⇒ `final class Empty`
-///      is `Parse error: unexpected token "empty"`). This group closes the F-m byte-identity break
-///      (`run ≡ run --tree-walker` succeeded while the transpiled PHP failed to parse);
-///   3. **always-present PHP builtin class/interface names** (`Exception`/`DateTime`/`ArrayObject`/… — a
-///      variant `DateTime` ⇒ `final class DateTime` is a "cannot redeclare class" fatal). Single-sourced
-///      via `crate::php_names::is_php_builtin_class_name` (DEC-213) — the SAME list the checker's DEC-202
-///      reject uses, so the reject set and this mangle set can never drift (they did before DEC-213: a
-///      variant named after an SPL/date/json builtin passed the reject but redeclared in transpiled PHP).
-///      The *unbounded* extension-loaded tail (`PDO`, `mysqli`, …) is not enumerable and stays caught by
-///      the transpile→real-PHP oracle — an honest, bounded reduction; mangling is invisible and free.
-pub(super) fn php_variant_name(variant: &str) -> String {
-    // The trailing segment is the actual PHP class name (`\Ns\Int` ⇒ `Int`); mangle only that.
-    let leaf = last_segment(variant);
-    const RESERVED: &[&str] = &[
-        // 1. value-type words
-        "int",
-        "float",
-        "bool",
-        "string",
-        "true",
-        "false",
-        "null",
-        "void",
-        "iterable",
-        "object",
-        "mixed",
-        "never",
-        "self",
-        "parent",
-        "static",
-        "array",
-        "list",
-        "callable",
-        // 2. keyword-as-class-name words (PHP rejects these in a class position)
-        "empty",
-        "echo",
-        "print",
-        "unset",
-        "isset",
-        "eval",
-        "exit",
-        "die",
-        "clone",
-        "goto",
-        "and",
-        "or",
-        "xor",
-        "yield",
-        "use",
-        "namespace",
-        "switch",
-        "case",
-        "default",
-        "foreach",
-        "match",
-        "fn",
-        "readonly",
-        // Group 3 (always-present PHP builtin class/interface names) is single-sourced below via
-        // `crate::php_names::is_php_builtin_class_name` (DEC-213) — do NOT re-inline it here.
-    ];
-    if RESERVED.contains(&leaf.to_ascii_lowercase().as_str())
-        || crate::php_names::is_php_builtin_class_name(leaf)
-    {
-        format!("{variant}_")
+/// DEC-329.3: the PHP class name of an enum variant, SCOPED by its owning enum —
+/// `Shape.Circle` ⇒ `final class Shape_Circle extends Shape`. Two enums sharing a variant name
+/// emit distinct classes, so the old flat-name collision (the pre-329.3
+/// `E-TRANSPILE-VARIANT-COLLISION` refusal) cannot occur, and the pre-329.3 reserved-word mangle
+/// (`Int`→`Int_`) is subsumed: a scoped name always carries the `Enum_` prefix, so it can never be
+/// a bare PHP reserved word. The name is **transpiler-only**: `run`/`runvm` address a variant by
+/// its Phorj name (`EnumVal.variant`), and the PHP debug renderer maps the class back to
+/// `Enum.Variant(…)` via the DEC-238 rows — program stdout is unaffected. The always-present PHP
+/// builtin class/interface list is still guarded (DEC-213 single source — underscore builtins like
+/// `__PHP_Incomplete_Class` exist); the unbounded extension-loaded tail stays caught by the
+/// transpile→real-PHP oracle.
+pub(super) fn php_scoped_variant_name(enum_name: &str, variant: &str) -> String {
+    // Both trailing segments: the enum leaf scopes, the variant leaf names (`\Ns\Shape.Circle`
+    // declares inside its namespace block, so the class name itself is namespace-free).
+    let name = format!("{}_{}", last_segment(enum_name), last_segment(variant));
+    if crate::php_names::is_php_builtin_class_name(&name) {
+        format!("{name}_")
     } else {
-        variant.to_string()
+        name
     }
 }
 

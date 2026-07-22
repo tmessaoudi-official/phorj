@@ -4615,13 +4615,12 @@ function tagB(B b): string { return match (b) { B.Dup(y) => "B:{y}" }; }
   Output.printLine(tagA(a));
   Output.printLine(tagB(b));
 }"#;
-    let with = with_pkg(src);
-    let tree = cmd_treewalk(&with);
-    let vm = cmd_run(&with);
-    assert_eq!(tree, vm, "run vs runvm:\n  run={tree:?}\n  runvm={vm:?}");
-    let out = tree.expect("program runs clean");
     // The FIRST line proves construction identity: `a` renders with ty `A` (not `B`).
-    assert_eq!(out, "A.Dup(7)\nB.Dup(\"s\")\nA:7\nB:s\n");
+    agree_out_php(
+        src,
+        "A.Dup(7)\nB.Dup(\"s\")\nA:7\nB:s\n",
+        "dec329_shared_variant_names",
+    );
 }
 
 /// `?` is DUCK-TYPED (any Result-shaped enum) — with BOTH a user Result-shaped enum and the
@@ -4647,10 +4646,9 @@ function driver(int x): MyRes {
   discard Debug.dump(driver(8));
   discard Debug.dump(driver(3));
 }"#;
-    let with = with_pkg(src);
-    let tree = cmd_treewalk(&with);
-    let vm = cmd_run(&with);
-    assert_eq!(tree, vm, "run vs runvm:\n  run={tree:?}\n  runvm={vm:?}");
-    let out = tree.expect("program runs clean");
-    assert_eq!(out, "MyRes.Success(104)\nMyRes.Failure(\"odd\")\n");
+    agree_out_php(
+        src,
+        "MyRes.Success(104)\nMyRes.Failure(\"odd\")\n",
+        "dec329_propagate_duck_typed",
+    );
 }

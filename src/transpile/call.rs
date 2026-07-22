@@ -44,8 +44,8 @@ impl Transpiler {
             // Enum variant or class construction → `new`; mirrors the evaluator's dispatch. A
             // cross-package class name is mangled (FQN); a variant subclass lives in its enum's
             // namespace, so a cross-package variant is constructed fully-qualified too.
-            if self.variants.contains(name) {
-                return Ok(format!("new {}({argv})", self.variant_ref(name)));
+            if let Some(en) = self.variant_owner.get(name).cloned() {
+                return Ok(format!("new {}({argv})", self.variant_ref(&en, name)));
             }
             // M8.5: construct a foreign PHP class as `new \Name(…)` (global).
             if self.foreign_classes.contains(name) {
@@ -107,7 +107,7 @@ impl Transpiler {
                     if !self.is_local(en) && self.enums.contains(en) && self.variants.contains(name)
                     {
                         let argv = self.emit_args(args)?;
-                        return Ok(format!("new {}({argv})", self.variant_ref(name)));
+                        return Ok(format!("new {}({argv})", self.variant_ref(en, name)));
                     }
                 }
             }

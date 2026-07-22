@@ -27,7 +27,7 @@ impl Transpiler {
             let cases: Vec<String> = e
                 .variants
                 .iter()
-                .map(|v| format!("new {}()", super::php_variant_name(&v.name)))
+                .map(|v| format!("new {}()", super::php_scoped_variant_name(&e.name, &v.name)))
                 .collect();
             self.line("public static function cases(): array {");
             self.indent += 1;
@@ -66,9 +66,9 @@ impl Transpiler {
             self.line(&format!("abstract class {base} {{}}"));
         }
         for v in &e.variants {
-            // A variant whose name is a PHP-reserved class word (`Int`/`Bool`/`Null`/…) is mangled
-            // (`Int_`); the construction + `instanceof` sites mangle identically via `variant_ref`.
-            let vname = super::php_variant_name(&v.name);
+            // DEC-329.3: variant classes are enum-SCOPED (`Shape_Circle`) — collision-proof and
+            // never a bare reserved word; construction/`instanceof` match via `variant_ref`.
+            let vname = super::php_scoped_variant_name(&e.name, &v.name);
             // DEC-238: record `php-class → (enum, variant)` so `__phorj_debug_render` can render a
             // transpiled enum value as `Ty.Variant(...)` (never the mangled class shape).
             self.debug_enum_rows.push((

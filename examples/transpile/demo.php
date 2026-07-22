@@ -1,9 +1,9 @@
 <?php
 abstract class Shape {}
-final class Circle extends Shape {
+final class Shape_Circle extends Shape {
     public function __construct(public float $r) {}
 }
-final class Square extends Shape {
+final class Shape_Square extends Shape {
     public function __construct(public float $side) {}
 }
 final class Named {
@@ -14,13 +14,13 @@ final class Named {
 }
 function area(Shape $s): float {
     $__m1 = $s;
-    if ($__m1 instanceof Circle) { $r = $__m1->r; return (3.14159 * $r) * $r; }
-    elseif ($__m1 instanceof Square) { $side = $__m1->side; return $side * $side; }
+    if ($__m1 instanceof Shape_Circle) { $r = $__m1->r; return (3.14159 * $r) * $r; }
+    elseif ($__m1 instanceof Shape_Square) { $side = $__m1->side; return $side * $side; }
     else { throw new \UnhandledMatchError(); }
 }
 function main(): void {
     $n = new Named("demo");
-    echo "{$n->labelOf()}: circle area = " . __phorj_float(area(new Circle(2.0))), "\n";
+    echo "{$n->labelOf()}: circle area = " . __phorj_float(area(new Shape_Circle(2.0))), "\n";
 }
 main();
 function __phorj_float($v) {

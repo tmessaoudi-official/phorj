@@ -241,7 +241,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(result_is_success),
             lift_from: &[],
-            php: |a| format!("({} instanceof Success)", parg(a, 0)),
+            php: |a| format!("({} instanceof Result_Success)", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Result",
@@ -251,7 +251,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(result_is_failure),
             lift_from: &[],
-            php: |a| format!("({} instanceof Failure)", parg(a, 0)),
+            php: |a| format!("({} instanceof Result_Failure)", parg(a, 0)),
         },
     ]
 }

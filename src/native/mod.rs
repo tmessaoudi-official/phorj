@@ -9,8 +9,7 @@
 //!
 //! The registry is the load-bearing target of `import Core.Output;` (M3 namespace reshape, Wave 1,
 //! `docs/specs/2026-06-18-m3-namespace-system-design.md`). The former free global `println` is
-//! retired in favor of `Core.Output.printLine`, and `Op::Print` in favor of
-//! `Op::CallNative(index, argc)` indexing this table.
+//! retired for `Core.Output.printLine`, `Op::Print` for `Op::CallNative(index, argc)`.
 
 use crate::ast::Item;
 use crate::types::Ty;
@@ -18,12 +17,13 @@ use crate::value::Value;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-// Per-leaf stdlib modules: each owns its `*_natives()` builder + bodies; `build()` below is the sole
-// ordering coordinator (the pinned-slot invariant). `Core.Console` stays here (slot 0, inlined).
+// Per-leaf stdlib modules: each owns its `*_natives()` builder + bodies; `build()` below is the
+// sole ordering coordinator (pinned slots); `Core.Console` stays here (slot 0, inlined).
 mod bytes;
 mod convert;
 mod file;
 mod fs;
+mod fs_bodies;
 mod html;
 mod input;
 mod list;

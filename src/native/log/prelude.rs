@@ -6,7 +6,7 @@
 //! extracts them ONCE into the native registry (`state.rs`), and every record then flows through the
 //! `log_emit` kernel. handlers carry `Level` + formatter values promoted; the ordinal/kind extraction happens at
 //! `Log.configure` time (Rust reads the enum variant + built-in formatter class directly; the PHP
-//! helper maps the variant CLASS name — mangling-aware, `Error` → `Error_` — and calls `kind()`).
+//! helper maps the enum-scoped variant CLASS name — `Level_Error` etc. (DEC-329.3) — and calls `kind()`).
 //!
 //! `LogFormatter`/`LogSink` are real interfaces — the recorded SPI seam. v1 accepts ONLY the
 //! built-in formatter/handler classes: `Log.configure` refuses userland implementations LOUDLY on

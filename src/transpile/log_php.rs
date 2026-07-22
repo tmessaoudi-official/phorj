@@ -41,12 +41,12 @@ impl Transpiler {
         self.line("return null;");
         self.indent -= 1;
         self.line("}");
-        // Level variant → ordinal, by variant CLASS basename. Mangling-aware: `Error` is a PHP
-        // builtin class, so its variant class transpiles as `Error_` (enum-reserved-variants rule).
+        // Level variant → ordinal, by variant CLASS basename — the enum-scoped `Level_*` classes
+        // (DEC-329.3; the old `Error_` reserved-name mangle is subsumed by the scoping).
         self.line("function __phorj_log_ord($lvl) {");
         self.indent += 1;
         self.line("$n = substr(strrchr('\\\\' . get_class($lvl), '\\\\'), 1);");
-        self.line("$m = ['Debug'=>0,'Info'=>1,'Notice'=>2,'Warn'=>3,'Error'=>4,'Error_'=>4,'Critical'=>5,'Alert'=>6,'Emergency'=>7];");
+        self.line("$m = ['Level_Debug'=>0,'Level_Info'=>1,'Level_Notice'=>2,'Level_Warn'=>3,'Level_Error'=>4,'Level_Critical'=>5,'Level_Alert'=>6,'Level_Emergency'=>7];");
         self.line("return $m[$n];");
         self.indent -= 1;
         self.line("}");

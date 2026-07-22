@@ -3,11 +3,11 @@
 // Phorj does not reserve `int`/`float`/`bool`/`null` — nor language keywords like `empty`/`match`, nor
 // PHP builtin class names like `Exception`/`Closure` — as identifiers, so they all make perfectly good
 // enum *variant* names. PHP, however, reserves every one of them as a *class* name, and an enum variant
-// transpiles to `final class <Variant> extends <Enum>`. The transpiler resolves this invisibly by
-// mangling a reserved variant's PHP class name (`Int` → `Int_`, `Empty` → `Empty_`,
-// `Exception` → `Exception_`), at the declaration, construction, and `instanceof` sites alike. This is
-// transpile-only: both backends address a variant by its Phorj name, so the program behaves and prints
-// identically on all three backends.
+// transpiles to a final class extending the enum's base. The DEC-329.3 enum-SCOPED class names
+// (`Tok.Int` → `final class Tok_Int extends Tok`) resolve this invisibly: a scoped name always carries
+// the `Enum_` prefix, so it can never be a bare reserved word — at the declaration, construction, and
+// `instanceof` sites alike. This is transpile-only: both backends address a variant by its Phorj name,
+// so the program behaves and prints identically on all three backends.
 package Main;
 
 import Core.Output;

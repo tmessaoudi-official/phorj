@@ -648,16 +648,14 @@ impl Transpiler {
         }
     }
 
-    /// A PHP reference to an enum variant subclass: fully-qualified when its enum lives in a package
-    /// namespace (`new \Acme\Geometry\Circle(…)`, an `instanceof` against it), bare for a `package
-    /// main` enum (`Circle`) — byte-identical to the pre-lift output for a single-package program.
-    pub(super) fn variant_ref(&self, variant: &str) -> String {
-        // Mangle a PHP-reserved variant class name (`Int`→`Int_`) identically to `emit_enum`'s
-        // declaration, so construction (`new Int_`) and `instanceof Int_` reference the real class.
-        let mangled = super::php_variant_name(variant);
-        match self.variant_ns.get(variant) {
-            Some(ns) if ns != "Main" => format!("\\{ns}\\{mangled}"),
-            _ => mangled,
+    /// A PHP reference to an enum variant subclass — enum-SCOPED (`Shape_Circle`, DEC-329.3),
+    /// matching `emit_enum`'s declaration; fully-qualified when the enum lives in a package
+    /// namespace (`new \Acme\Geometry\Shape_Circle(…)`), bare for a `package Main` enum.
+    pub(super) fn variant_ref(&self, enum_name: &str, variant: &str) -> String {
+        let scoped = super::php_scoped_variant_name(enum_name, variant);
+        match super::namespace_of(enum_name) {
+            ns if ns != "Main" => format!("\\{ns}\\{scoped}"),
+            _ => scoped,
         }
     }
 

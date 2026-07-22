@@ -30,11 +30,14 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
                  new TheEnum.Dup(…)\n"
         }
         "E-TRANSPILE-VARIANT-COLLISION" => {
-            "E-TRANSPILE-VARIANT-COLLISION — two enums declare the same variant name.\n\n\
-             Enum variants transpile to flat PHP classes (`final class <Variant> extends <Enum>`),\n\
-             so a shared variant name would redeclare a class — the transpiler refuses rather than\n\
-             emitting a fatally-broken program (\u{00a7}14 LADDER). The program still runs with `phg run`.\n\
-             Rename one variant; enum-scoped variant classes are a recorded follow-up.\n"
+            "E-TRANSPILE-VARIANT-COLLISION — two top-level PHP class names collide.\n\n\
+             Enum variants transpile to enum-SCOPED PHP classes (`Shape.Circle` ⇒\n\
+             `final class Shape_Circle extends Shape`, DEC-329.3), so two enums sharing a variant\n\
+             name coexist fine. This error is the PATHOLOGICAL composed-name case — a scoped name\n\
+             equal to another top-level class in the same namespace (`class Shape_Circle` beside\n\
+             `enum Shape { Circle }`, or `enum A_B { C }` beside `enum A { B_C }`). The transpiler\n\
+             refuses rather than emitting a fatally-broken program (\u{00a7}14 LADDER); the program\n\
+             still runs with `phg run`. Rename one of the colliding declarations.\n"
         }
         "E-CONFIG-TARGET" => {
             "E-CONFIG-TARGET — `#[Config]` on a method.\n\n\

@@ -4,8 +4,8 @@ use super::*;
 
 impl Transpiler {
     /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected
-    /// `Json` enum's PHP class hierarchy — mangled variant classes `Null_`/`Bool_`/`Int_`/`Float_` and
-    /// bare `Str`/`Arr`/`Obj` (the reserved-name mangle from this slice's prerequisite). Encoding
+    /// `Json` enum's PHP class hierarchy — the enum-scoped variant classes `Json_Null`/`Json_Bool`/
+    /// `Json_Int`/… (DEC-329.3). Encoding
     /// mirrors the Rust `ext::json` kernels byte-for-byte: a string scalar uses native
     /// `json_encode` (authoritative escaping); a float uses `__phorj_float` (positional shortest
     /// round-trip — NOT json's scientific notation, so it matches `run`/`runvm`); structure is
@@ -23,21 +23,21 @@ impl Transpiler {
             self.line("function __phorj_json_encode($j) {");
             self.indent += 1;
             self.line(&format!(
-                "if ($j instanceof {jp}Null_) {{ return \"null\"; }}"
+                "if ($j instanceof {jp}Json_Null) {{ return \"null\"; }}"
             ));
             self.line(&format!(
-                "if ($j instanceof {jp}Bool_) {{ return $j->value ? \"true\" : \"false\"; }}"
+                "if ($j instanceof {jp}Json_Bool) {{ return $j->value ? \"true\" : \"false\"; }}"
             ));
             self.line(&format!(
-                "if ($j instanceof {jp}Int_) {{ return (string)$j->value; }}"
+                "if ($j instanceof {jp}Json_Int) {{ return (string)$j->value; }}"
             ));
             self.line(&format!(
-                "if ($j instanceof {jp}Float_) {{ return __phorj_float($j->value); }}"
+                "if ($j instanceof {jp}Json_Float) {{ return __phorj_float($j->value); }}"
             ));
             self.line(&format!(
-                "if ($j instanceof {jp}String_) {{ return json_encode($j->value); }}"
+                "if ($j instanceof {jp}Json_String) {{ return json_encode($j->value); }}"
             ));
-            self.line(&format!("if ($j instanceof {jp}Array_) {{"));
+            self.line(&format!("if ($j instanceof {jp}Json_Array) {{"));
             self.indent += 1;
             self.line("$parts = [];");
             self.line("foreach ($j->items as $x) { $parts[] = __phorj_json_encode($x); }");
@@ -59,7 +59,7 @@ impl Transpiler {
             self.line("function __phorj_json_pretty($j, $indent) {");
             self.indent += 1;
             self.line(&format!(
-                "if ($j instanceof {jp}Array_ && count($j->items) > 0) {{"
+                "if ($j instanceof {jp}Json_Array && count($j->items) > 0) {{"
             ));
             self.indent += 1;
             self.line("$pad = str_repeat(\" \", $indent + 4);");
@@ -73,7 +73,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
             self.line(&format!(
-                "if ($j instanceof {jp}Object_ && count($j->entries) > 0) {{"
+                "if ($j instanceof {jp}Json_Object && count($j->entries) > 0) {{"
             ));
             self.indent += 1;
             self.line("$pad = str_repeat(\" \", $indent + 4);");
@@ -100,27 +100,33 @@ impl Transpiler {
             self.line("}");
             self.line("function __phorj_json_build($d) {");
             self.indent += 1;
-            self.line(&format!("if (is_null($d)) {{ return new {jp}Null_(); }}"));
-            self.line(&format!("if (is_bool($d)) {{ return new {jp}Bool_($d); }}"));
-            self.line(&format!("if (is_int($d)) {{ return new {jp}Int_($d); }}"));
             self.line(&format!(
-                "if (is_float($d)) {{ return new {jp}Float_($d); }}"
+                "if (is_null($d)) {{ return new {jp}Json_Null(); }}"
             ));
             self.line(&format!(
-                "if (is_string($d)) {{ return new {jp}String_($d); }}"
+                "if (is_bool($d)) {{ return new {jp}Json_Bool($d); }}"
+            ));
+            self.line(&format!(
+                "if (is_int($d)) {{ return new {jp}Json_Int($d); }}"
+            ));
+            self.line(&format!(
+                "if (is_float($d)) {{ return new {jp}Json_Float($d); }}"
+            ));
+            self.line(&format!(
+                "if (is_string($d)) {{ return new {jp}Json_String($d); }}"
             ));
             self.line("if (is_array($d)) {");
             self.indent += 1;
             self.line("$items = [];");
             self.line("foreach ($d as $x) { $items[] = __phorj_json_build($x); }");
-            self.line(&format!("return new {jp}Array_($items);"));
+            self.line(&format!("return new {jp}Json_Array($items);"));
             self.indent -= 1;
             self.line("}");
             self.line("$entries = [];");
             self.line(
                 "foreach (get_object_vars($d) as $k => $v) { $entries[(string)$k] = __phorj_json_build($v); }",
             );
-            self.line(&format!("return new {jp}Object_($entries);"));
+            self.line(&format!("return new {jp}Json_Object($entries);"));
             self.indent -= 1;
             self.line("}");
         }
@@ -179,95 +185,101 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        // `Core.Option` combinators (Wave B B-2a) — over the injected `Some`/`None` PHP classes (no
+        // `Core.Option` combinators (Wave B B-2a) — over the injected `Option_Some`/`Option_None` PHP classes (no
         // builtin analog). The receiver is a param, so it is bound once (no double-eval of the call-site
         // argument expression). `map`/`filter` re-wrap; `andThen`'s `$f` itself returns an Option.
         if self.uses_option_map {
             self.line("function __phorj_option_map($o, $f) {");
             self.indent += 1;
-            self.line("return $o instanceof Some ? new Some($f($o->value)) : $o;");
+            self.line("return $o instanceof Option_Some ? new Option_Some($f($o->value)) : $o;");
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_option_and_then {
             self.line("function __phorj_option_and_then($o, $f) {");
             self.indent += 1;
-            self.line("return $o instanceof Some ? $f($o->value) : $o;");
+            self.line("return $o instanceof Option_Some ? $f($o->value) : $o;");
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_option_filter {
             self.line("function __phorj_option_filter($o, $f) {");
             self.indent += 1;
-            self.line("return ($o instanceof Some && $f($o->value)) ? $o : new None();");
+            self.line(
+                "return ($o instanceof Option_Some && $f($o->value)) ? $o : new Option_None();",
+            );
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_option_get_or_else {
             self.line("function __phorj_option_get_or_else($o, $d) {");
             self.indent += 1;
-            self.line("return $o instanceof Some ? $o->value : $d;");
+            self.line("return $o instanceof Option_Some ? $o->value : $d;");
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_option_of_nullable {
             self.line("function __phorj_option_of_nullable($v) {");
             self.indent += 1;
-            self.line("return $v === null ? new None() : new Some($v);");
+            self.line("return $v === null ? new Option_None() : new Option_Some($v);");
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_option_to_nullable {
             self.line("function __phorj_option_to_nullable($o) {");
             self.indent += 1;
-            self.line("return $o instanceof Some ? $o->value : null;");
+            self.line("return $o instanceof Option_Some ? $o->value : null;");
             self.indent -= 1;
             self.line("}");
         }
-        // `Core.Result` combinators (Wave B B-2b, DEC-185) over the injected `Success`/`Failure` PHP
-        // classes (`Success->value`, `Failure->error`). The receiver is a param (bound once, no
+        // `Core.Result` combinators (Wave B B-2b, DEC-185) over the injected `Result_Success`/
+        // `Result_Failure` PHP classes (`->value`, `->error`). The receiver is a param (bound once, no
         // double-eval). `map`/`mapErr` re-wrap the touched arm and pass the other through unchanged;
         // `andThen`/`orElse` bind (the `$f` itself returns a Result). `toOption` bridges to the Option
-        // injection's `Some`/`None`. `isSuccess`/`isFailure` are emitted inline at the call site.
+        // injection's classes. `isSuccess`/`isFailure` are emitted inline at the call site.
         if self.uses_result_map {
             self.line("function __phorj_result_map($r, $f) {");
             self.indent += 1;
-            self.line("return $r instanceof Success ? new Success($f($r->value)) : $r;");
+            self.line(
+                "return $r instanceof Result_Success ? new Result_Success($f($r->value)) : $r;",
+            );
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_result_map_err {
             self.line("function __phorj_result_map_err($r, $f) {");
             self.indent += 1;
-            self.line("return $r instanceof Failure ? new Failure($f($r->error)) : $r;");
+            self.line(
+                "return $r instanceof Result_Failure ? new Result_Failure($f($r->error)) : $r;",
+            );
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_result_and_then {
             self.line("function __phorj_result_and_then($r, $f) {");
             self.indent += 1;
-            self.line("return $r instanceof Success ? $f($r->value) : $r;");
+            self.line("return $r instanceof Result_Success ? $f($r->value) : $r;");
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_result_get_or_else {
             self.line("function __phorj_result_get_or_else($r, $d) {");
             self.indent += 1;
-            self.line("return $r instanceof Success ? $r->value : $d;");
+            self.line("return $r instanceof Result_Success ? $r->value : $d;");
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_result_or_else {
             self.line("function __phorj_result_or_else($r, $f) {");
             self.indent += 1;
-            self.line("return $r instanceof Success ? $r : $f($r->error);");
+            self.line("return $r instanceof Result_Success ? $r : $f($r->error);");
             self.indent -= 1;
             self.line("}");
         }
         if self.uses_result_to_option {
             self.line("function __phorj_result_to_option($r) {");
             self.indent += 1;
-            self.line("return $r instanceof Success ? new Some($r->value) : new None();");
+            self.line("return $r instanceof Result_Success ? new Option_Some($r->value) : new Option_None();");
             self.indent -= 1;
             self.line("}");
         }

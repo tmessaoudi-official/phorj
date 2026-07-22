@@ -2795,9 +2795,27 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `dec329_shared_variant_names_keep_their_owning_enum` (construction identity observable via
   `Debug.dump` — pre-fix it rendered the WRONG enum). Inv-13: analyze.rs → `jit/collect_unboxed.rs`
   split; `compile_lambda` → `compiler/expr/lambda.rs`; `eval_enum_static` →
-  `interpreter/variants.rs`. **REMAINS (B2): the ruled deliverable — enum-SCOPED PHP variant
-  classes** (`Shape_Circle`, lift `E-TRANSPILE-VARIANT-COLLISION`, one-time golden regen, helper
-  tables single-sourced through the scoped naming fn).
+  `interpreter/variants.rs`.
+  **(3) BUILD — commit B2 SHIPPED (2026-07-22): the ruled deliverable.** PHP variant classes are
+  enum-SCOPED via one naming fn (`php_scoped_variant_name`: `{enum-leaf}_{variant}` + the DEC-213
+  builtin-class guard) — `Shape.Circle` ⇒ `final class Shape_Circle extends Shape`. The transpiler's
+  `variant_fields`/`variant_field_kinds` key on (enum, variant) (`variant_ns` deleted — the scoped
+  ref derives the namespace from the enum name; a bare-name `variant_owner` map is the documented
+  fallback); `variant_ref(enum, variant)` feeds construction, `instanceof`, and the DEC-325
+  `use \Main\…` aliasing. Scoping SUBSUMES the reserved-word variant mangle (`Int_`→`Tok_Int`; the
+  RESERVED list is deleted, the builtin guard stays). Helper surfaces re-pointed to the scoped
+  classes: Json (`Json_Null`/…), Option/Result combinators (`Option_Some`/`Result_Success`/…),
+  FS wraps (`FileSystemResult_Ok`/`_Err` in the `php:` erasures), `isSuccess`/`isFailure`
+  (`Result_Success`), `__phorj_log_ord` (`Level_*`, the `Error_` dual dropped), `__phorj_round_mode`
+  switch (`RoundingMode_*`). Duck-typed `?` on the PHP leg: the `Failure` test is a sorted
+  `instanceof` chain over every Failure-owning enum (single-owner keeps the pretty `->field`
+  unwrap; multi-owner unwraps positionally via `get_object_vars` — payload[0], the interp/VM
+  contract). `E-TRANSPILE-VARIANT-COLLISION` narrowed to the pathological composed-name collision
+  (`class Shape_Circle` beside `enum Shape { Circle }`; `enum A_B { C }` beside `enum A { B_C }`)
+  — explain entry + tests updated. Lift needs NO change (it parses only native PHP `enum`
+  declarations, never the variant-class shape). One-time golden regen (`examples/transpile/demo.php`);
+  `examples/guide/shared-variant-names.phg` ships the feature (differential 3-leg-gated) and the two
+  dec329 differential tests were upgraded to `agree_out_php`.
 
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their

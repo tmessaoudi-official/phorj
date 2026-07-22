@@ -2243,10 +2243,14 @@ legs for symmetry.
 
 ## Transpile P1s exposed by the FS de-quarantine (audit 2026-07-22 — queued slices)
 
-1. **Flat enum-variant class names collide** — MITIGATED 2026-07-22: the transpiler now refuses the
-   collision LOUDLY (`E-TRANSPILE-VARIANT-COLLISION`; the program still runs on the Rust legs)
-   instead of emitting a `Cannot redeclare class` fatal. The REAL fix (enum-scoped variant classes,
-   lifting the restriction) stays queued.
+1. **Flat enum-variant class names collide** — ✅ FIXED 2026-07-22 (DEC-329.3): variant classes are
+   now enum-SCOPED (`Shape.Circle` ⇒ `final class Shape_Circle extends Shape`), so two enums sharing
+   a variant name coexist on the PHP leg; the refusal now covers only the pathological composed-name
+   collision (`class Shape_Circle` beside `enum Shape { Circle }`). The same slice fixed the RUST
+   legs' bare-name maps (a qualified use of a shared name could construct/match the WRONG enum) via
+   the `qualify_variants` pass + (ty, variant)-precise keying on every backend. Residual (accepted):
+   the duck-typed `?` under the unboxed JIT declines (VM fallback) when a program shares the
+   `Failure` variant name across enums — fail-closed, never wrong.
 2. **Injected prelude classes land only in `namespace Main`** — ✅ FIXED 2026-07-22: every non-Main
    namespace block now opens with `use \Main\<name>;` aliases for the Main-bucket top-level names
    (inert when unused; skipped when the block declares the name), so `FileSystem.exists` from

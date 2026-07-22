@@ -36,18 +36,48 @@ impl Transpiler {
             } => {
                 let v = self.emit_expr(inner)?;
                 self.declare(name);
-                let err = self.variant_ref("Failure");
-                let ok_field = self
+                // DEC-329.3: `?` is DUCK-TYPED (any Result-shaped enum), and variant classes are
+                // enum-scoped — so the `Failure` test covers EVERY enum declaring one (sorted for
+                // determinism; a single owner — the common case — is a single `instanceof`).
+                let mut fail_owners: Vec<&String> = self
                     .variant_fields
-                    .get("Success")
-                    .and_then(|f| f.first())
-                    .cloned()
-                    .unwrap_or_else(|| "value".to_string());
+                    .keys()
+                    .filter(|(_, v)| v == "Failure")
+                    .map(|(e, _)| e)
+                    .collect();
+                fail_owners.sort();
+                let err = fail_owners
+                    .iter()
+                    .map(|en| format!("${name} instanceof {}", self.variant_ref(en, "Failure")))
+                    .collect::<Vec<_>>()
+                    .join(" || ");
                 self.line(&format!("${name} = {v};"));
-                self.line(&format!(
-                    "if (${name} instanceof {err}) {{ return ${name}; }}"
-                ));
-                self.line(&format!("${name} = ${name}->{ok_field};"));
+                self.line(&format!("if ({err}) {{ return ${name}; }}"));
+                // The `Success` unwrap is POSITIONAL (payload[0] — exactly the interpreter's
+                // `e.payload[0]` / the VM's `GetEnumField(0)`): with one Success-owning enum the
+                // named first field is emitted (pretty); with several (whose field names may
+                // differ) the positional first-property read is the faithful general form.
+                let mut ok_owners: Vec<&String> = self
+                    .variant_fields
+                    .keys()
+                    .filter(|(_, v)| v == "Success")
+                    .map(|(e, _)| e)
+                    .collect();
+                ok_owners.sort();
+                match ok_owners.as_slice() {
+                    [only] => {
+                        let ok_field = self
+                            .variant_fields
+                            .get(&((*only).clone(), "Success".to_string()))
+                            .and_then(|f| f.first())
+                            .cloned()
+                            .unwrap_or_else(|| "value".to_string());
+                        self.line(&format!("${name} = ${name}->{ok_field};"));
+                    }
+                    _ => self.line(&format!(
+                        "${name} = array_values(get_object_vars(${name}))[0];"
+                    )),
+                }
             }
             Stmt::VarDecl { ty, name, init, .. } => {
                 let e = self.emit_expr(init)?;

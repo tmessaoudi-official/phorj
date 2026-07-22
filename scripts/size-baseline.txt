@@ -71,7 +71,6 @@
 757	src/transpile/expr.rs
 757	src/transpile/mod.rs
 1374	src/transpile/runtime_php.rs
-674	src/transpile/tests.rs
 596	src/types.rs
 526	src/value/decimal.rs
 668	src/value/mod.rs

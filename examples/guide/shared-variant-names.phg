@@ -1,0 +1,44 @@
+// Shared variant names (DEC-329.3) — two enums may declare the SAME variant name, and every use
+// resolves to its OWNING enum on every backend (interpreter, VM, transpiled PHP).
+//
+// The rules:
+//   * A BARE use of a shared name is ambiguous and rejected at check time (`E-VARIANT-AMBIGUOUS`)
+//     — qualify it (`new Payment.Pending(…)`), exactly like the injected enums.
+//   * A QUALIFIED construction builds a value carrying its own enum's identity, and a qualified
+//     `match` pattern tests that identity — `Payment.Pending(..)` never matches a
+//     `Shipment.Pending` value, even though the variant names are equal.
+//   * On the PHP leg each variant emits an enum-SCOPED class (`Payment_Pending` /
+//     `Shipment_Pending`), so the two enums coexist in one PHP program with no name collision.
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+
+// Two domains that naturally share lifecycle vocabulary — no renaming gymnastics required.
+enum Payment { Pending(int cents), Settled(int cents) }
+
+enum Shipment { Pending(string carrier), Delivered(string carrier) }
+
+function describePayment(Payment p): string {
+    return match (p) {
+        Payment.Pending(cents) => "payment pending: {cents}c",
+        Payment.Settled(cents) => "payment settled: {cents}c"
+    };
+}
+
+function describeShipment(Shipment s): string {
+    return match (s) {
+        Shipment.Pending(carrier) => "shipment pending via {carrier}",
+        Shipment.Delivered(carrier) => "delivered by {carrier}"
+    };
+}
+
+#[Entry]
+function main(): void {
+    Payment p = new Payment.Pending(1250);
+    Shipment s = new Shipment.Pending("DHL");
+    Output.printLine(describePayment(p));
+    Output.printLine(describeShipment(s));
+    Output.printLine(describePayment(new Payment.Settled(1250)));
+    Output.printLine(describeShipment(new Shipment.Delivered("DHL")));
+}

@@ -300,7 +300,7 @@ impl Transpiler {
             self.line("return str_replace('.', '', $x);");
             self.indent -= 1;
             self.line("}");
-            // Short (namespace-free) class name of the RoundingMode value — `HalfUp`, `Floor`, …
+            // Short class name of the RoundingMode value — enum-scoped `RoundingMode_*` (DEC-329.3).
             self.line("function __phorj_round_mode($mode) {");
             self.indent += 1;
             self.line("$c = get_class($mode);");
@@ -329,13 +329,13 @@ impl Transpiler {
             self.line("$mode = __phorj_round_mode($mode);");
             self.line("switch ($mode) {");
             self.indent += 1;
-            self.line("case 'Down': return $q;");
-            self.line("case 'Up': return bcadd($q, $s, 0);");
-            self.line("case 'Ceiling': return bccomp($n, '0', 0) > 0 ? bcadd($q, '1', 0) : $q;");
-            self.line("case 'Floor': return bccomp($n, '0', 0) < 0 ? bcadd($q, '-1', 0) : $q;");
-            self.line("case 'HalfUp': return $cmp >= 0 ? bcadd($q, $s, 0) : $q;");
-            self.line("case 'HalfDown': return $cmp > 0 ? bcadd($q, $s, 0) : $q;");
-            self.line("case 'HalfEven':");
+            self.line("case 'RoundingMode_Down': return $q;");
+            self.line("case 'RoundingMode_Up': return bcadd($q, $s, 0);");
+            self.line("case 'RoundingMode_Ceiling': return bccomp($n, '0', 0) > 0 ? bcadd($q, '1', 0) : $q;");
+            self.line("case 'RoundingMode_Floor': return bccomp($n, '0', 0) < 0 ? bcadd($q, '-1', 0) : $q;");
+            self.line("case 'RoundingMode_HalfUp': return $cmp >= 0 ? bcadd($q, $s, 0) : $q;");
+            self.line("case 'RoundingMode_HalfDown': return $cmp > 0 ? bcadd($q, $s, 0) : $q;");
+            self.line("case 'RoundingMode_HalfEven':");
             self.indent += 1;
             self.line("if ($cmp > 0) { return bcadd($q, $s, 0); }");
             self.line("if ($cmp < 0) { return $q; }");
