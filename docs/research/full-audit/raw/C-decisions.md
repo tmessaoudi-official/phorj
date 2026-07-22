@@ -2896,5 +2896,11 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     cluster): `serve`'s documented contract + `examples/web/*` + site-mode `index.phg` that used
     `respond(bytes)` migrate to typed handlers in the same slice. Static-file **site mode** (public/,
     MIME/ETag/traversal guards, DEC-282) is orthogonal and unchanged.
-  - **D6+ (PENDING):** run/serve role-mismatch error, inbound TLS (native-only? enablement? version
-    floor? out-of-scope set), Rich Request, Invokable/toString, parity scheduling — recorded as each locks.
+  - **D6 (LOCKED 2026-07-22) — command/role mismatch.** When `phg run` hits a program with only a Web
+    entry (or `phg serve` a Cli-only program): emit a clear `E-NO-ENTRY-FOR-ROLE` naming the mismatch AND
+    the right command, THEN an interactive auto-correct prompt — "Did you mean `phg serve <file>`? [y/N]"
+    — running the correct command on `y`. **TTY-guarded** (impl detail, dev-flagged/accepted): the y/N
+    prompt only in an interactive terminal; in CI / a pipe (no TTY) print the error + suggestion and exit
+    non-zero WITHOUT prompting (never block on stdin).
+  - **D7+ (PENDING):** inbound TLS (native-only? enablement? version floor? out-of-scope set), Rich
+    Request, Invokable/toString, parity scheduling — recorded here as each locks.
