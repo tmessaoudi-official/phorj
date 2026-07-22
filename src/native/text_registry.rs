@@ -593,7 +593,7 @@ fn text_parse_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
 // read(p))`). DETERMINISM: a file *read* is byte-identical across backends iff every backend reads
 // the same bytes, so file examples read a **committed fixture**; `write` is a non-deterministic side
 // effect and is excluded from the byte-identity-gated example set (it is unit-tested with a temp
-// file). The run↔runvm spine shares the same `eval`, so it is always identical regardless.
+// file). The interp↔VM spine shares the same `eval`, so it is always identical regardless.
 
 #[cfg(test)]
 #[path = "text_tests.rs"]

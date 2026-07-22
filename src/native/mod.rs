@@ -322,10 +322,10 @@ fn console_print(args: &[Value], out: &mut String) -> Result<Value, String> {
 /// backend-supplied `capture` invoker diverts the closure's output (`out.split_off(start)`) and hands
 /// it back; this body just wraps it into a `Value::Str`. Opt-in, explicit scope, no ambient state —
 /// the import-gated primitive users wrap as `Response.html(Output.capture(() => { … }))`. Shared
-/// verbatim by both backends (structural parity, like `List.map`); byte-identical across `run`/`runvm`
+/// verbatim by both backends (structural parity, like `List.map`); byte-identical across interp/VM
 /// /PHP for the gated happy path (a printing, returning closure). A lambda cannot introduce a throw
 /// here (a lambda can't declare `throws`, and a throwing lambda body is `E-THROW-UNDECLARED`), but a
-/// NAMED throwing function may be passed by reference — on such a mid-capture throw `run`≡`runvm` still
+/// NAMED throwing function may be passed by reference — on such a mid-capture throw interp ≡ VM still
 /// holds (the throw propagates via the sentinel BEFORE `split_off`, so the partial output stays in
 /// `out`), while the PHP `ob_get_clean` path is not a gated byte-identity claim (see `KNOWN_ISSUES.md`).
 fn output_capture(args: &[Value], capture: &mut CapturingInvoker) -> Result<Value, String> {

@@ -3,12 +3,12 @@
 //! `pure: true` (2026-06-27): the result is deterministic w.r.t. the program text — a process-global
 //! xorshift64 state advanced by each call, seeded deterministically, replaying the same stream on
 //! every backend. The transpiler hand-rolls the **same** xorshift64 in PHP (`__phorj_rng_*`), so a
-//! seeded sequence is **byte-identical** on `run`/`runvm`/transpiled PHP and Random is gated by the
+//! seeded sequence is **byte-identical** on interp/VM/transpiled PHP and Random is gated by the
 //! oracle like any other native (no longer quarantined; the prior `mt_srand`/`mt_rand` divergence is
 //! gone). The PHP `>>` is arithmetic where Rust's `u64 >>` is logical, so the emitted step masks the
 //! sign-extended bits (`& 0x01FFFFFFFFFFFFFF` for the `>> 7`); `GOLDEN` is emitted as its signed-i64
 //! reinterpretation (the unsigned literal exceeds `PHP_INT_MAX`). Correctness is exercised in
-//! `tests/random.rs` (seed determinism + `run ≡ runvm` + bounds) and `examples/random/`.
+//! `tests/random.rs` (seed determinism + `interp ≡ VM` + bounds) and `examples/random/`.
 //!
 //! The Rust kernel is a `xorshift64` generator: only XOR and shifts in `1..=63` (no multiply that
 //! could overflow-panic in debug, no float division), and every emitted value is masked to a
@@ -30,7 +30,7 @@ use std::sync::RwLock;
 const GOLDEN: u64 = 0x9E37_79B9_7F4A_7C15;
 
 /// The process-wide generator state. A global because a `phg run` is one program in one process; the
-/// Rust backends share it so `run ≡ runvm`. `RwLock` so a program can re-seed mid-run. Initialized to
+/// Rust backends share it so `interp ≡ VM`. `RwLock` so a program can re-seed mid-run. Initialized to
 /// a fixed non-zero constant, so an unseeded program is still deterministic.
 static RANDOM_STATE: RwLock<u64> = RwLock::new(GOLDEN);
 
@@ -78,7 +78,7 @@ fn random_next(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// Advance and return a float in `[0.0, 1.0)`. Uses the top 53 bits of the (non-negative, 63-bit)
 /// step output as the mantissa, divided by `2^53` — a dyadic rational `k / 2^53` with `k < 2^53`, so
 /// it is *exactly* representable in `f64` and the identical division is exact in PHP (both operands
-/// exactly representable). This keeps `nextFloat` byte-identical on `run`/`runvm`/transpiled PHP,
+/// exactly representable). This keeps `nextFloat` byte-identical on interp/VM/transpiled PHP,
 /// unlike an irrational float (see KNOWN_ISSUES) — the value is a clean fraction, not a transcendental.
 fn advance_float() -> f64 {
     // `advance()` is a non-negative i64 (< 2^63, 63 significant bits); `>> 10` keeps the top 53.
@@ -156,7 +156,7 @@ fn secure_int_native(a: &[Value], _: &mut String) -> Result<Value, String> {
 
 /// The `Core.Random` registry entries. The seeded PRNG is `pure: true` (2026-06-27): the PHP emission
 /// **hand-rolls the same xorshift64** (`__phorj_rng_*` helpers) rather than PHP's Mersenne-Twister, so
-/// a seeded sequence is **byte-identical** on `run`/`runvm`/transpiled PHP — Random rejoins the oracle
+/// a seeded sequence is **byte-identical** on interp/VM/transpiled PHP — Random rejoins the oracle
 /// and reproducibility survives transpile. The kernel is still process-global state (a call depends on
 /// prior calls) but *deterministic w.r.t. the program text*, which is what `pure` means here. The W3-4
 /// `secure*` CSPRNG entries are `pure: false` (OS entropy) and oracle-quarantined.

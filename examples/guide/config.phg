@@ -4,7 +4,7 @@
 // function declares a parameter of that type and the compiler injects the provider's result — no
 // container, no reflection, no config-file parser. Config is plain phorj code, so it is type-checked,
 // refactorable, and completion-aware like everything else — and because the injection desugars to an
-// ordinary call BEFORE any backend runs, it is pure and byte-identical across run / runvm / PHP.
+// ordinary call BEFORE any backend runs, it is pure and byte-identical across interp / VM / PHP.
 //
 //   phg run examples/guide/config.phg
 package Main;

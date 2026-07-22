@@ -43,7 +43,7 @@ impl Stage {
 /// means a line is known but not a column (VM runtime errors, located via `Chunk.lines`).
 /// One frame of a runtime call stack (error-handling slice 1). Built identically by both backends —
 /// the VM walks its live `Frame`s, the interpreter snapshots its `trace_stack` — so a fault yields the
-/// same trace on `run` and `runvm`. `file` is `None` until the loader's source map attributes it (and
+/// same trace on both engines. `file` is `None` until the loader's source map attributes it (and
 /// always `None` in loose `-e`/stdin mode, where there is no file).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
@@ -106,7 +106,7 @@ impl Diagnostic {
     /// Attach a runtime call stack (error-handling slice 1). When this diagnostic has no position of
     /// its own (`line == 0` — the tree-walking interpreter tracks none), backfill it from the
     /// innermost frame so the header line matches the VM's (which sets a line via `Chunk.lines`) —
-    /// keeping `run`-traces byte-identical to `runvm`-traces.
+    /// keeping interpreter traces byte-identical to VM traces.
     #[must_use]
     pub fn with_frames(mut self, frames: Vec<Frame>) -> Self {
         if self.line == 0 {

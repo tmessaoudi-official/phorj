@@ -74,7 +74,7 @@ impl Compiler<'_> {
             // `**` power has no dedicated `Op`: it lowers (type-directed) to a `Core.Math` native
             // call — `ipow` for `int**int`, `pow` for `float**float` — keeping the no-new-Op
             // invariant. The native dispatches into `value::int_pow`/`float_pow`, the *same* kernels
-            // the interpreter's `**` arm uses, so `run`/`runvm` compute and fault identically. The
+            // the interpreter's `**` arm uses, so interp/VM compute and fault identically. The
             // registry index is resolved at compile time, so no `import Core.Math` is required.
             Pow => {
                 let leaf = match self.num_ty(lhs)? {

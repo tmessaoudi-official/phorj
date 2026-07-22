@@ -228,7 +228,7 @@ impl Checker {
                             span,
                             "type test `string` is ambiguous here — the operand's type also holds a type that erases to a PHP string (decimal/bytes/html/attr), so the transpiled PHP can't distinguish them".to_string(),
                             "E-MATCH-ERASED-AMBIG",
-                            Some("split the type or test a more specific one — run/runvm could tell them apart, but the PHP leg cannot".into()),
+                            Some("split the type or test a more specific one — interp/VM could tell them apart, but the PHP leg cannot".into()),
                         );
                     }
                 }

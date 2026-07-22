@@ -19,7 +19,7 @@
 //! Loaded files then run the same two-pass assembly as always: every non-`Main` definition is
 //! mangled to a globally-unique name (`Acme.Util` + `compute` ⇒ `Acme\Util\compute`), call/type
 //! sites rewrite per file against its import map, and all items merge into one flat [`Program`]
-//! — so the checker/interpreter/compiler/VM are unchanged (run==runvm is structural) and only the
+//! — so the checker/interpreter/compiler/VM are unchanged (interp ≡ VM is structural) and only the
 //! transpiler de-mangles into PHP `namespace` blocks.
 //!
 //! Enforcement and resolution live here (path-aware), never in the type checker, so

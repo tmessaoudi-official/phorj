@@ -21,7 +21,7 @@ use std::process::Command;
 // ── php oracle (mirrors tests/differential.rs) ────────────────────────────────────────────────
 
 fn php_bin() -> Option<String> {
-    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == runvm, no oracle)
+    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == vm, no oracle)
     // regardless of what `php` is on PATH — set by the pre-commit hook. The full PHP-oracle spine
     // check moves to pre-push (`PHORJ_REQUIRE_PHP=1` against the 8.5 floor).
     if std::env::var("PHORJ_SKIP_PHP").as_deref() == Ok("1") {
@@ -186,8 +186,8 @@ fn conformance_single_file_golden() {
             .unwrap_or_else(|e| panic!("missing golden output {}: {e}", out_path.display()));
         let run = cmd_treewalk(&src).unwrap_or_else(|e| panic!("{label}: run errored: {e}"));
         assert_eq!(run, expected, "interpreter ≠ golden for {label}");
-        let runvm = cmd_run(&src).unwrap_or_else(|e| panic!("{label}: runvm errored: {e}"));
-        assert_eq!(runvm, expected, "VM ≠ golden for {label}");
+        let vm = cmd_run(&src).unwrap_or_else(|e| panic!("{label}: vm errored: {e}"));
+        assert_eq!(vm, expected, "VM ≠ golden for {label}");
         if let Some(php) = php_or_gate(&label) {
             let php_src = cmd_transpile(&src).expect("transpile ok");
             let got = run_php(&php, &php_src, &label);
@@ -216,9 +216,8 @@ fn conformance_projects_golden() {
         let run =
             cli::treewalk_program(&unit).unwrap_or_else(|e| panic!("{label}: run errored: {e}"));
         assert_eq!(run, expected, "interpreter ≠ golden for project {label}");
-        let runvm =
-            cli::run_program(&unit).unwrap_or_else(|e| panic!("{label}: runvm errored: {e}"));
-        assert_eq!(runvm, expected, "VM ≠ golden for project {label}");
+        let vm = cli::run_program(&unit).unwrap_or_else(|e| panic!("{label}: vm errored: {e}"));
+        assert_eq!(vm, expected, "VM ≠ golden for project {label}");
         if let Some(php) = php_or_gate(&label) {
             let php_src = cli::transpile_program(&unit.program, &unit.diag_src)
                 .expect("transpile project ok");

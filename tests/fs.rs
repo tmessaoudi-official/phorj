@@ -10,7 +10,7 @@ fn both(src: &str, expected: &str) {
     assert_eq!(
         cmd_run(src).expect("program runs on the VM"),
         tree,
-        "run ≡ runvm"
+        "interp ≡ VM"
     );
 }
 

@@ -250,7 +250,7 @@ pub fn entry_point_count(program: &Program, name: &str) -> usize {
 /// its transitive parent classes ([`class_supertypes`]) **and** its transitive interfaces
 /// ([`class_implements`]). This is the single source consumed by `instanceof`, match type-patterns, and
 /// overload subtyping on **both** backends, so a `Dog instanceof Animal` / `Duck instanceof Swimmer`
-/// (a *class* ancestor, not just an interface) is true and can never diverge between `run` and `runvm`.
+/// (a *class* ancestor, not just an interface) is true and can never diverge between the interpreter and the VM.
 /// (The checker keeps a separate interfaces-only `class_implements` for interface *conformance*; its
 /// `is_subtype` already consults `class_supertypes` independently.)
 pub fn instanceof_table(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
@@ -328,7 +328,7 @@ pub fn class_parents(program: &Program) -> std::collections::BTreeMap<String, Ve
 /// Why a `parent`/super call could not resolve (M-RT super/parent dispatch). Mapped to the
 /// `E-PARENT-*` diagnostics by the checker; the backends never see an error (the build fails first),
 /// but they call the same [`resolve_parent_method`] so a resolved target is byte-identical across
-/// `run`/`runvm`.
+/// interp/VM.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParentResolveError {
     /// The lexical class has no parents at all (`E-PARENT-NO-PARENT`).
@@ -344,7 +344,7 @@ pub enum ParentResolveError {
 
 /// Resolve a `parent`/super method call to its concrete `(declaring_class, method)` target — the
 /// **single source** consumed by the checker (errors + typing), the interpreter (dispatch), and the
-/// compiler (bakes the function index), so `run ≡ runvm` by construction (the same discipline as
+/// compiler (bakes the function index), so `interp ≡ VM` by construction (the same discipline as
 /// [`class_method_origins`]). `parent` is **lexical**: `lexical_class` is the class whose method body
 /// contains the call (where the override is *written*), NOT the receiver's runtime class — so an
 /// override calling `parent.m()` reaches the version it shadows.
@@ -408,7 +408,7 @@ pub fn resolve_parent_method(
 /// gives the `(declaring_class, declaring_method)` a call of `name` on an instance of `class` runs.
 /// This is the **single source of dispatch** for *both* backends — the interpreter looks up the
 /// origin and the compiler aliases the bytecode method-table entry to it — so multi-parent dispatch
-/// (including resolution clauses and renamed aliases) can never diverge between `run` and `runvm`.
+/// (including resolution clauses and renamed aliases) can never diverge between the interpreter and the VM.
 ///
 /// Composition: a class's own methods map to itself (override); each direct parent contributes its
 /// own resolved table; a diamond shared base auto-merges (both arms reach the *same* declaring

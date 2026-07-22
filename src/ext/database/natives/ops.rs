@@ -325,7 +325,7 @@ pub(super) fn remap_timeout(res: Result<Value, String>, active: bool) -> Result<
 /// exception, so its error (reachable only via a hard fault / the throw sentinel) is PROPAGATED, never
 /// swallowed — swallowing would strand the backend's throw sentinel. `elapsed_ms` is wall-clock and
 /// thus NON-deterministic across the two backends: examples/tests must never print it raw, or
-/// `run ≡ runvm` breaks. When no hook is set and no timeout is armed, this is byte-identical to the old
+/// `interp ≡ VM` breaks. When no hook is set and no timeout is armed, this is byte-identical to the old
 /// `Ok(wrap(inner(args)))`.
 pub(super) fn with_hook(
     args: &[Value],

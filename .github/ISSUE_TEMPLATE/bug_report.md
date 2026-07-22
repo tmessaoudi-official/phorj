@@ -22,7 +22,7 @@ function main() {
 
 ## Command
 
-<!-- e.g. `phg run repro.phg`, `phg runvm -e '...'`, `phg build repro.phg` -->
+<!-- e.g. `phg run repro.phg`, `phg run -e '...'`, `phg build repro.phg` -->
 
 ```sh
 phorj ...
@@ -35,11 +35,11 @@ phorj ...
 
 ## Does it differ between backends?
 
-<!-- Important for parity bugs: do `phg run` and `phg runvm` produce DIFFERENT output? -->
+<!-- Important for parity bugs: do `phg run` and `phg run` produce DIFFERENT output? -->
 
-- [ ] `run` and `runvm` disagree
+- [ ] `run` and the VM disagree
 - [ ] only `run` is wrong
-- [ ] only `runvm` is wrong
+- [ ] only the VM is wrong
 - [ ] both agree (output is just wrong, or it's a crash)
 
 ## Environment

@@ -224,7 +224,7 @@ impl Transpiler {
             // `value as TypeName` → the checked downcast (M4 casting axis 2), result `TypeName?`.
             // Lowered to an arrow-fn IIFE so `value` is evaluated EXACTLY ONCE (a naive
             // `$v instanceof T ? $v : null` would double-evaluate a side-effecting scrutinee like
-            // `f() as T` and diverge from the run/runvm backends). The `$__as` parameter is local to
+            // `f() as T` and diverge from the interp/VM backends). The `$__as` parameter is local to
             // the arrow fn, so nested casts don't collide.
             Expr::Cast {
                 value, type_name, ..
@@ -309,8 +309,8 @@ impl Transpiler {
                         let who = ancestor.as_deref().unwrap_or("parent");
                         Err(format!(
                             "transpile: `parent({who}).{method}(…)` targets a non-direct ancestor under \
-                             multiple inheritance — not yet supported (B2 follow-up; the run/runvm \
-                             backends handle it)"
+                             multiple inheritance — not yet supported (B2 follow-up; `phg run` \
+                             handles it (both engines))"
                         ))
                     }
                     // Single inheritance → native PHP.
@@ -419,7 +419,7 @@ impl Transpiler {
             }
             // `__phorj_range` reproduces Phorj's range semantics under PHP: an empty/reversed range
             // (`start > hi`) yields `[]`, where PHP's bare `range()` would *descend* (QW-13 — formerly
-            // a transpile-only divergence). The `run`/`runvm` backends were always byte-identical.
+            // a transpile-only divergence). The interp/VM backends were always byte-identical.
             Expr::Range {
                 start,
                 end,

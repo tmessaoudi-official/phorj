@@ -354,7 +354,7 @@ impl Parser {
     /// Parse a `declare …` foreign-symbol declaration (M8.5 interop). Currently `declare function
     /// name(params) -> ret;` — a bodyless signature describing an existing PHP function. The result is a
     /// `FunctionDecl` with `foreign: true` and an empty body; the checker validates calls against it but
-    /// skips the body, `run`/`runvm` refuse the program (`E-FOREIGN-RUNTIME`), and the transpiler emits
+    /// skips the body, interp/VM refuse the program (`E-FOREIGN-RUNTIME`), and the transpiler emits
     /// `\name(…)`. (`declare class` is M8.5 S2.)
     pub(in crate::parser) fn parse_declare(&mut self, sp: Span) -> Result<Item, Diagnostic> {
         self.expect_ident("'declare'")?; // consume the contextual `declare`

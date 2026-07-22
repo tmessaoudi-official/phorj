@@ -466,6 +466,6 @@ fn text_characters_splits_by_code_point() {
     assert_eq!(chars("abc"), vec!["a", "b", "c"]);
     assert!(chars("").is_empty());
     // Astral-plane (4-byte UTF-8) code points: one `char` each, matching PHP `preg_split('//u')`
-    // (verified byte-identical run≡runvm≡php). This is the edge a code-point splitter gets wrong.
+    // (verified byte-identical interp ≡ VM ≡ php). This is the edge a code-point splitter gets wrong.
     assert_eq!(chars("😀a🎉"), vec!["😀", "a", "🎉"]);
 }

@@ -248,7 +248,7 @@ pub const SECRET_CLASS: &str = "Secret";
 
 /// The universal redaction sentinel a `Secret<T>` renders as on EVERY surface (DEC-263). Never the
 /// wrapped value — `.expose()` is the sole read path. Byte-identical to the string the transpiled PHP
-/// twin emits, so a dumped secret agrees across `run`/`runvm`/PHP.
+/// twin emits, so a dumped secret agrees across interp/VM/PHP.
 pub const SECRET_REDACTED: &str = "Secret(<redacted>)";
 
 impl Instance {

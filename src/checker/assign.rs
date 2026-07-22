@@ -224,7 +224,7 @@ impl Checker {
                     }
                     Some(fty) => {
                         // W0-2: a `private`/`protected` static write from outside its scope is
-                        // rejected here (E-FIELD-VISIBILITY) — closing the run≡runvm≡PHP hole (PHP
+                        // rejected here (E-FIELD-VISIBILITY) — closing the interp ≡ VM ≡ PHP hole (PHP
                         // fatals writing a `private static` from outside).
                         self.enforce_member_vis(svis, name, span, true);
                         // DEC-241: static writes honor `(set)` visibility too.

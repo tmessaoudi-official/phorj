@@ -77,7 +77,9 @@ asking, when the quality gate above is green. Limits:
 
 ## Delivery invariants (the rules — details in `docs/INVARIANTS.md`)
 
-1. **Byte-identity spine.** `phg run` ≡ `phg runvm` ≡ transpiled PHP under a real `php` —
+1. **Byte-identity spine.** `phg run` ≡ `phg run --tree-walker` ≡ transpiled PHP under a real
+   `php` (there is NO `runvm` command — the VM is `run`'s default engine, the tree-walker its
+   `--tree-walker` oracle) —
    identical stdout AND identical failure behaviour, for every program and every example.
    Enforced by `tests/differential.rs` (globs `examples/**/*.phg`, project-aware). Nothing is
    "done" until the full correctness gate above has run green. The ONE disclosed exception:
@@ -94,8 +96,9 @@ asking, when the quality gate above is green. Limits:
    generics erasure, html — all via the single `cli::check_and_expand` chokepoint). New sugar
    follows the same discipline: backends and the PHP output must never see it.
 6. **Reified operands thread ALL vm-compile paths.** Anything that compiles for the VM
-   (playground runvm, `disassemble`, `benchmark`, …) must go through
-   `check_and_expand_reified` + `compile_with`, never plain `compile` — a miss hides run≠runvm
+   (the playground VM pane, `disassemble`, `benchmark`, …) must go through
+   `check_and_expand_reified` + `compile_with`, never plain `compile` — a miss hides a VM≠tree-walker
+   divergence
    off the differential's CLI path.
 7. **CTy-operand trap (MUST-CHECK).** Un-rejecting an expression form, or adding one whose result
    can be an arithmetic operand, requires the compiler's `CTy` resolver to type it — and a

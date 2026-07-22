@@ -1,6 +1,6 @@
 //! Scope, position, and outline helpers for LSP v2 (locals/params resolution, completion, document
 //! symbols). Pure front-end queries over the parsed AST + raw buffer — **off the byte-identity spine**
-//! (no backend is touched), so they carry no `run`/`runvm`/PHP parity risk.
+//! (no backend is touched), so they carry no interp/VM/PHP parity risk.
 //!
 //! The enclosing callable for a cursor is found by *source ordering*, not span containment: top-level
 //! items (and a class's members) are emitted in source order with ascending spans, so item `i` owns the

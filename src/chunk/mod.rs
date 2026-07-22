@@ -1,7 +1,7 @@
 //! Bytecode chunk + instruction set for the M2 VM.
 //! See docs/specs/2026-06-15-m2-bytecode-vm-design.md (§4, §5).
 //! P2 scope: full M1 expression/statement surface for `main` (see
-//! docs/plans/2026-06-15-m2-plan2-compiler-runvm.md). P4a adds single-payload enums + `match`;
+//! the M2 compiler/VM design (docs/specs archive)). P4a adds single-payload enums + `match`;
 //! P4b adds classes (construction + constructor promotion + field reads); P4c adds methods + `this`.
 //! Reuses `value::Value` directly for scalars, lists, *and* enums/instances — the VM mirrors the
 //! interpreter's value-semantics object model (clone-on-use, no heap; decision P4-1). An arena is

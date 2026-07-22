@@ -9,7 +9,7 @@
 //   - `own 1 1` — `w1` and `w2` are DISTINCT `Worker`s (each per-instance counter starts fresh);
 //   - `shared 1 2` — both share the ONE `Counter` (its mutable tick runs 1 then 2).
 // The synthesized factory hoists the shared `Counter` to a single local and inlines a fresh `Worker` at
-// each use (`new App(new Worker(c), new Worker(c))`) — byte-identical run/runvm/PHP.
+// each use (`new App(new Worker(c), new Worker(c))`) — byte-identical both engines/PHP.
 package Main;
 
 import Core.Output;

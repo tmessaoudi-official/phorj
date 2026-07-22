@@ -1,16 +1,16 @@
-//! Cooperative green-thread driver for the bytecode VM (M6 W4 / S4.3 cutover) — the `runvm` twin of
+//! Cooperative green-thread driver for the bytecode VM (M6 W4 / S4.3 cutover) — the VM twin of
 //! [`interpreter::coop`](crate::interpreter). Native + `green` only (stackful coroutines don't compile
 //! on wasm32).
 //!
 //! Each green task runs *its own* `Vm` inside a `corosensei` coroutine, driven by the SAME
 //! [`run_loop`](crate::green::exec::run_loop) over the SAME [`Scheduler`](crate::green::sched) the
 //! interpreter uses — so the two backends pick the same task at every step ⇒ byte-identical task
-//! interleaving (`run≡runvm`). A task-VM borrows a captured `Rc<BytecodeProgram>` and holds a clone of
+//! interleaving (`interp ≡ VM`). A task-VM borrows a captured `Rc<BytecodeProgram>` and holds a clone of
 //! that `Rc` ([`Vm::program_rc`]) so a `SpawnCall` can build a child task-VM coroutine. `spawn` defers
 //! (the function body is the coroutine root — no lambda); `recv`/`join` suspend via the yielder.
 //!
 //! Wired into `cmd_run`/`cmd_run_exit` (S4.3 flip): a `uses_concurrency` program routes here, in
-//! the same step `cmd_treewalk` routes to the interpreter twin — so the byte-identity spine (`run≡runvm`)
+//! the same step `cmd_treewalk` routes to the interpreter twin — so the byte-identity spine (`interp ≡ VM`)
 //! holds. Every non-concurrent program stays on the unchanged synchronous [`run_main`](Vm::run_main).
 
 use super::*;
@@ -82,7 +82,7 @@ impl<'a> Vm<'a> {
 }
 
 /// Cooperative VM entry point (S4.3): run a `uses_concurrency` program with real task interleaving —
-/// the `runvm` twin of [`run_cooperative_interp`](crate::interpreter::run_cooperative_interp). Seeds
+/// the VM twin of [`run_cooperative_interp`](crate::interpreter::run_cooperative_interp). Seeds
 /// task 0 = `main` as a coroutine, then drives [`run_loop`]. Returns merged output + `main`'s exit code,
 /// or a runtime `Diagnostic` (task fault / deadlock). The synchronous [`run_main`](Vm::run_main) still
 /// serves every non-concurrent program, byte-identical.
@@ -119,7 +119,7 @@ mod tests {
 
     /// Front-end (parse→check→expand→compile) then run on the cooperative VM. Mirrors `cmd_run`'s
     /// pipeline but routes the compiled program to the cooperative driver.
-    fn coop_runvm(src: &str) -> Result<String, String> {
+    fn coop_vm(src: &str) -> Result<String, String> {
         let prog = crate::cli::parse_checked_program(src)?;
         let program = crate::compiler::compile(&prog).map_err(|d| d.to_string())?;
         run_cooperative_vm(&program)
@@ -150,7 +150,7 @@ function consume(Channel<int> ch): int {
     Output.printLine("done {got}");
 }
 "#;
-        assert_eq!(coop_runvm(src).unwrap(), "got 42\ndone 42\n");
+        assert_eq!(coop_vm(src).unwrap(), "got 42\ndone 42\n");
     }
 
     /// Genuine suspend/resume on the VM: `main` recvs on an empty channel (producer spawned, not yet
@@ -176,6 +176,6 @@ function produce(Channel<int> ch): int {
     Output.printLine("done {r}");
 }
 "#;
-        assert_eq!(coop_runvm(src).unwrap(), "recv 99\ndone 1\n");
+        assert_eq!(coop_vm(src).unwrap(), "recv 99\ndone 1\n");
     }
 }

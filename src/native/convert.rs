@@ -56,7 +56,7 @@ fn convert_round(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// `Convert.toInt(float) -> int?` (M-NUM S3) — truncate toward zero, or `null` on NaN / ±∞ /
-/// out-of-i64-range. Single-sourced with `value::float_to_int` (the edge-safe guards), so `run`/`runvm`
+/// out-of-i64-range. Single-sourced with `value::float_to_int` (the edge-safe guards), so interp/VM
 /// agree; mirrored by the PHP `__phorj_float_to_int` helper. Avoids PHP's `(int)NAN == 0`.
 fn convert_to_int(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {

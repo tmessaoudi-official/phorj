@@ -228,7 +228,7 @@ struct Transpiler {
     /// `__phorj_json_*` recursive helper once per file (the gated-helper pattern, set in
     /// `emit_member_call` because a native's `php` closure has no `&mut self`). The helpers walk the
     /// injected `Json` enum's PHP class hierarchy (scoped variant classes `Json_Int`/`Json_Bool`/…) so the
-    /// PHP leg matches `run`/`runvm` byte-for-byte; floats route through `__phorj_float` (positional,
+    /// PHP leg matches interp/VM byte-for-byte; floats route through `__phorj_float` (positional,
     /// not native json's scientific), so `uses_float` is implied by an encode.
     uses_json_encode: bool,
     uses_json_pretty: bool,
@@ -326,7 +326,7 @@ struct Transpiler {
     /// `__phorj_dec_*` helper once per file (M-NUM S1). The helpers derive operand scales at runtime,
     /// compute the result scale (add/sub = max, mul = sum), call `bcadd`/`bcsub`/`bcmul`, then
     /// bounds-check the result against i128 range and `throw` the same `decimal overflow` fault as the
-    /// Rust kernels — so the PHP leg matches `run`/`runvm` byte-for-byte (incl. the overflow fault).
+    /// Rust kernels — so the PHP leg matches interp/VM byte-for-byte (incl. the overflow fault).
     uses_dec_add: bool,
     uses_dec_sub: bool,
     uses_dec_mul: bool,

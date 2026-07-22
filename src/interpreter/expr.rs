@@ -19,7 +19,7 @@ impl<'c> Interp<'c> {
             Expr::Spawn { call, .. } => {
                 // Cooperative cutover (S4.3): when running inside the cooperative driver, DEFER the
                 // call as a scheduler task (args eval'd eagerly here, the function body run as the
-                // task's coroutine root — no synthetic lambda frame, so traces stay run≡runvm). On the
+                // task's coroutine root — no synthetic lambda frame, so traces stay interp ≡ VM). On the
                 // synchronous path (and on wasm, which keeps the eager model) run the call inline now
                 // and store its result by a fresh task id, so `join` always has it.
                 #[cfg(all(feature = "green", not(target_arch = "wasm32")))]

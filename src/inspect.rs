@@ -15,7 +15,7 @@
 //!    ever appear. The output is reproducible, so it can be golden-tested.
 //!
 //! It lives **outside** the correctness spine: nothing here is transpiled, and its output goes to a
-//! side-channel (stderr), never a program's stdout — so it can never change `run ≡ runvm ≡ PHP`.
+//! side-channel (stderr), never a program's stdout — so it can never change `interp ≡ VM ≡ PHP`.
 
 use crate::value::{fmt_decimal, HKey, Value};
 

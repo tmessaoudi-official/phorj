@@ -342,7 +342,7 @@ async function runAll() {
     renderDiagnostics(check);
 
     const [vm, tr] = await Promise.all([
-      callJson("runvm", src),
+      callJson("vm", src),
       callJson("transpile", src),
     ]);
 

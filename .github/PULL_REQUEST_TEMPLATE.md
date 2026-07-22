@@ -22,7 +22,7 @@
 
 ## Backend-parity impact (if touching language semantics)
 
-<!-- The interpreter (`run`) and VM (`runvm`) MUST stay byte-identical — see docs/INVARIANTS.md. -->
+<!-- The interpreter (`run`) and VM (the VM) MUST stay byte-identical — see docs/INVARIANTS.md. -->
 
 - [ ] No semantic change, OR
 - [ ] `tests/differential.rs` still passes and (if needed) a new differential case was added

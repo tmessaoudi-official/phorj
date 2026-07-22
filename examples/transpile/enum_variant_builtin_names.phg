@@ -5,7 +5,7 @@ package Main;
 // class name (`Tok.RuntimeException` → `Tok_RuntimeException`) differs by construction, and the
 // composed name is still guarded against the single-sourced builtin list (`crate::php_names`,
 // shared with the checker's DEC-202 reject, so the two can never drift). Naming is invisible:
-// `run`/`runvm` address a variant by its Phorj name, so stdout is identical on all backends and
+// interp/VM address a variant by its Phorj name, so stdout is identical on all backends and
 // under real PHP.
 import Core.Output;
 import Core.Runtime.Entry;

@@ -1,4 +1,4 @@
-//! Collection kernels (single-sourced, run ≡ runvm): map/set building + dedup, indexing,
+//! Collection kernels (single-sourced, interp ≡ VM): map/set building + dedup, indexing,
 //! COW element sets, ranges, and the canonical ordering compare.
 
 use super::*;
@@ -23,7 +23,7 @@ pub fn iter_elements(v: &Value) -> Result<Vec<Value>, String> {
             .collect()),
         // B1: a `Map<K, V>` iterates as `[key, value]` 2-element lists in insertion order — the
         // two-binding `for (k, v in map)` form destructures each pair (the VM indexes [0]/[1], the
-        // interpreter unpacks below). Single-sourced so run≡runvm.
+        // interpreter unpacks below). Single-sourced so interp ≡ VM.
         Value::Map(entries) => Ok(entries
             .iter()
             .map(|(k, v)| Value::List(Rc::new(vec![k.to_value(), v.clone()])))
@@ -35,7 +35,7 @@ pub fn iter_elements(v: &Value) -> Result<Vec<Value>, String> {
 /// Build an **insertion-ordered** map from evaluated `(key, value)` pairs, matching PHP literal
 /// semantics: a duplicate key keeps its **first position** but takes the **last value**
 /// (`["a" => 1, "a" => 2]` ⇒ `["a" => 2]`, position of the first `"a"`). Single-sourced so the
-/// interpreter (`Expr::Map`) and the VM (`Op::MakeMap`) dedup identically — `run ≡ runvm` (and a
+/// interpreter (`Expr::Map`) and the VM (`Op::MakeMap`) dedup identically — `interp ≡ VM` (and a
 /// non-`HKey` key, checker-unreachable, faults cleanly rather than panicking, EV-7).
 pub fn build_map(pairs: Vec<(Value, Value)>) -> Result<Vec<(HKey, Value)>, String> {
     let mut out: Vec<(HKey, Value)> = Vec::with_capacity(pairs.len());
@@ -54,7 +54,7 @@ pub fn build_map(pairs: Vec<(Value, Value)>) -> Result<Vec<(HKey, Value)>, Strin
 /// Build an **insertion-ordered, deduplicated** set from evaluated element values, keeping each
 /// element's **first occurrence** and discarding later duplicates (`Set.of([1, 2, 1]) ⇒ {1, 2}`,
 /// in that order) — the same first-seen-order discipline as [`build_map`]'s keys. Single-sourced so
-/// the interpreter and the VM dedup identically (`run ≡ runvm`); a non-`HKey` element
+/// the interpreter and the VM dedup identically (`interp ≡ VM`); a non-`HKey` element
 /// (checker-unreachable, the checker constrains a `Set<T>` element to the hashable subset) faults
 /// cleanly rather than panicking (EV-7).
 pub fn build_set(elems: Vec<Value>) -> Result<Vec<HKey>, String> {
@@ -113,7 +113,7 @@ pub fn map_set(map: &mut Vec<(HKey, Value)>, key: &Value, v: Value) -> Result<()
 /// so descent mutates in place; a genuinely-shared level still copies (value semantics preserved). The
 /// caller owns the outermost COW (it mutates `container` in its slot). `indices` is non-empty; a
 /// single index is the flat `xs[i]=e` case. A bad index/key faults exactly like a read (`"list index
-/// out of range"` / `"map key not found"`). **Single-sourced so `run ≡ runvm`** — both backends call it.
+/// out of range"` / `"map key not found"`). **Single-sourced so `interp ≡ VM`** — both backends call it.
 pub fn set_nested(container: &mut Value, indices: &[Value], v: Value) -> Result<(), String> {
     let (idx, rest) = indices
         .split_first()
@@ -165,7 +165,7 @@ pub const MAX_RANGE_LEN: i64 = 10_000_000;
 /// is the inclusive upper bound: `end` for `..=`, `end - 1` for `..`. An empty/reversed range
 /// (`start > hi`) yields `[]`. A range wider than [`MAX_RANGE_LEN`] faults `"range too large"` rather
 /// than OOM-aborting. All arithmetic is checked (EV-7): `end - 1` underflow (exclusive `..i64::MIN`)
-/// and `hi - start` overflow both resolve without panicking. Single-sourced so `run`/`runvm` fault
+/// and `hi - start` overflow both resolve without panicking. Single-sourced so interp/VM fault
 /// identically (the differential harness classifies the body substring as `RangeTooLarge`).
 pub fn build_range(start: i64, end: i64, inclusive: bool) -> Result<Vec<Value>, String> {
     let hi = if inclusive {

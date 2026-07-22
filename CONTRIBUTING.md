@@ -50,10 +50,10 @@ change is considered complete.
 These are non-negotiable. The full list is in [`docs/INVARIANTS.md`](docs/INVARIANTS.md); the
 load-bearing ones:
 
-1. **Backend parity is the spine.** `phg run` (interpreter) and `phg runvm` (VM) must produce
+1. **Backend parity is the spine.** `phg run` (interpreter) and `phg run` (VM) must produce
    **byte-identical** output. The interpreter is the reference semantics; the VM matches it. Enforced
    by `tests/differential.rs`, which globs `examples/**/*.phg`. A standalone built binary is a third
-   surface on the same spine and must match `runvm`.
+   surface on the same spine and must match the VM.
 2. **Adding an `Op` touches three exhaustive matches in the same commit:** `vm.rs::exec_op`,
    `chunk.rs::BytecodeProgram::validate`, and `compiler.rs::stack_effect`. Miss one and the build
    won't compile (by design).

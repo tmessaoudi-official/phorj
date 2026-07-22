@@ -231,7 +231,7 @@ pub fn class_field_layout(program: &Program) -> std::collections::BTreeMap<Strin
 /// This is the single source consumed by all three backends — the interpreter inlines the `Value`, the
 /// compiler emits `Op::Const` + derives the operand `CTy` from the `Type`, and the transpiler keys its
 /// `ClassName::NAME` access emission on the table's keys — so a const access can never diverge between
-/// `run`, `runvm`, and real PHP. The checker validates each initializer is a compile-time literal
+/// the interpreter, the VM, and real PHP. The checker validates each initializer is a compile-time literal
 /// before any backend runs, so `const_literal` here is total (a checker-unreachable non-literal folds
 /// to `Unit`, like a static's). The `extends`/`use` walk is cycle-safe via a visited set.
 pub fn class_consts(

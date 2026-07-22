@@ -103,7 +103,7 @@ pub enum Op {
     /// Pop an iterable (`List`/`Set`); push a `List` of its elements in iteration order (B1 iteration
     /// protocol). Emitted once at the top of a `for`-`in` loop so the loop body indexes a plain list
     /// regardless of the source collection. Single-sourced with the interpreter via
-    /// [`crate::value::iter_elements`], so iteration order is byte-identical (`run≡runvm`).
+    /// [`crate::value::iter_elements`], so iteration order is byte-identical (`interp ≡ VM`).
     IterElems,
     /// Pop two ints (`end` on top, then `start`) and push a `List<int>` materialization of the
     /// range: `[start, …, end-1]` exclusive, or `[start, …, end]` inclusive (the `bool` flag). Empty
@@ -123,7 +123,7 @@ pub enum Op {
     /// already run, leaving its value on top). The general form — used when the spawned operand is a
     /// method/overloaded/closure call whose function index isn't known at compile time. The cooperative
     /// driver (S4.3) rejects this form (a non-free-function `spawn` is a documented follow-up), matching
-    /// the interpreter, so `run≡runvm`.
+    /// the interpreter, so `interp ≡ VM`.
     Spawn,
     /// `SpawnCall(func_idx, argc)`: spawn the **free function** at `func_idx`, taking the top `argc`
     /// values as its arguments (the call is *not* run before this op — the compiler lowers a

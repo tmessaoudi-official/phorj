@@ -39,7 +39,7 @@ impl<'c> Interp<'c> {
                 // nested-value-index). Flatten the place into (root local, index path j0..jk), eval the
                 // indices left-to-right then the value, then mutate the root **in its slot** via the
                 // shared `value::set_nested` kernel (COW `Rc::make_mut` root-to-leaf, O(1) per level in
-                // the common case — same single-source the VM calls, so `run ≡ runvm`). Looking the slot
+                // the common case — same single-source the VM calls, so `interp ≡ VM`). Looking the slot
                 // up mutably keeps the outer refcount at 1 (M-DOGFOOD W8, generalized).
                 Expr::Index { .. } => {
                     // Collect index expressions innermost-`Index`-first, then reverse to source order.

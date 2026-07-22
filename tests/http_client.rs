@@ -2,7 +2,7 @@
 //! `Core.HttpClientModule` (W3-2) end-to-end fixture — the `tests/database.rs`/`tests/mail.rs` pattern.
 //!
 //! The natives are `pure:false` (live network), so importing programs are quarantined from the
-//! byte-identity differential; THIS file gates the surface on BOTH backends (`run ≡ runvm`)
+//! byte-identity differential; THIS file gates the surface on BOTH backends (`interp ≡ VM`)
 //! against an in-process `std::net::TcpListener` fixture server (deterministic, loopback-only —
 //! no external network). Wire-level details (URL parsing, chunked decoding, redirects, timeouts,
 //! header-injection gate) are unit-tested server-free in `src/ext/http_client/natives.rs`.
@@ -16,7 +16,7 @@ fn both(src: &str, expected: &str) {
     assert_eq!(
         cmd_run(src).expect("program runs on the VM"),
         tree,
-        "run ≡ runvm"
+        "interp ≡ VM"
     );
 }
 

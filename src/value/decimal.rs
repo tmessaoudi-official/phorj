@@ -508,7 +508,7 @@ pub fn decimal_of(s: &str) -> Option<(i128, u8)> {
 /// Checked integer power `base ** exp` (Phase 1 operators slice). A negative exponent faults
 /// ([`FAULT_NEGATIVE_EXPONENT`] — the result can't be a typed `int`); overflow (incl. an exponent
 /// too large to fit `u32`) is a clean [`FAULT_INT_OVERFLOW`], never a panic (EV-7). Single-sourced:
-/// both the interpreter's `**` arm and the `Core.Math.ipow` native call this, so `run`/`runvm`
+/// both the interpreter's `**` arm and the `Core.Math.ipow` native call this, so interp/VM
 /// compute and fault identically. PHP's `**`/`pow` return `int` for the same non-negative,
 /// non-overflowing domain, keeping the transpiled output byte-identical there.
 pub fn int_pow(base: i64, exp: i64) -> Result<i64, String> {

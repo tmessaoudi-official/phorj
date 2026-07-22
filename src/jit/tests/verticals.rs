@@ -1655,7 +1655,7 @@ fn qualified_unchecked_overflow_attribute_is_recognized_and_wraps_on_the_vm() {
     // the BARE form; this locks the qualified surface so a future recognition change can't silently drop
     // it. Asserts the compiler set the fn `unchecked` flag AND the VM wraps (MAX+1 → MIN) instead of
     // faulting — the VM reads that same flag, so a wrap proves end-to-end recognition on the VM path (the
-    // interpreter reads the same predicate via `attrs_unchecked`; the shipped example covers run≡runvm).
+    // interpreter reads the same predicate via `attrs_unchecked`; the shipped example covers interp ≡ VM).
     let program = compile_source(
         "package Main; import Core.Runtime.Entry;\n\
          import Core.Runtime.Integer;\n\
@@ -1680,7 +1680,7 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
     // The mixed-call boundary — the load-bearing surface for the `cur_unchecked` save/restore in the
     // interp's `run_call` (and the VM reading each frame's own fn flag). NEITHER direction is covered by
     // the leaf tests above, so a future refactor that dropped the save/restore would only fail HERE.
-    // Both directions asserted run≡runvm (`cmd_run` = VM+JIT vs `cmd_treewalk` = interp oracle).
+    // Both directions asserted interp ≡ VM (`cmd_run` = VM+JIT vs `cmd_treewalk` = interp oracle).
 
     // (1) `#[UncheckedOverflow]` outer calling a CHECKED inner: the checked inner must STILL fault on overflow
     // even though the caller wraps — the callee's own flag governs, not the caller's.

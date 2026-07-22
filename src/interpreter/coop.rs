@@ -4,7 +4,7 @@
 //! stackful `corosensei` coroutine, all driven by the shared, backend-agnostic
 //! [`run_loop`](crate::green::exec::run_loop) over the single-sourced
 //! [`Scheduler`](crate::green::sched::Scheduler) — so `run`'s task interleaving is identical to the
-//! VM's (`runvm`), the byte-identity spine. `spawn` **defers** (args eval'd eagerly in the spawning
+//! VM's, the byte-identity spine. `spawn` **defers** (args eval'd eagerly in the spawning
 //! task, the resolved function body run as the coroutine's root call — *not* a synthetic lambda, so a
 //! fault inside it traces exactly like a direct call; the reverted thunk's lambda frame was what broke
 //! that, `b5053a4`); `recv`-on-empty / `join`-on-incomplete suspend via the coroutine yielder until the
@@ -12,7 +12,7 @@
 //!
 //! Wired into `cmd_treewalk`/`cmd_treewalk_exit` (S4.3 flip): a `uses_concurrency` program routes here, every
 //! other program stays on the unchanged synchronous interpreter. `cmd_run` routes to the VM twin
-//! [`vm::coop`](crate::vm) in the same step, so the byte-identity spine (`run≡runvm`) holds.
+//! [`vm::coop`](crate::vm) in the same step, so the byte-identity spine (`interp ≡ VM`) holds.
 
 use super::*;
 use crate::green::coro::{CoroutineTask, TaskCoroutine, TaskYielder, YielderSuspend};
@@ -72,7 +72,7 @@ impl<'c> Interp<'c> {
     /// interpreter has a fresh scope and cannot see the spawner's locals), and the function body is the
     /// new coroutine's root call (no synthetic lambda → fault traces match a direct call). Every other
     /// operand (method / overloaded / closure / variant call) runs **inline** here, matching the VM
-    /// (whose compiler emits `<call>; Op::Spawn`, run inline) — so `run≡runvm`; those forms are
+    /// (whose compiler emits `<call>; Op::Spawn`, run inline) — so `interp ≡ VM`; those forms are
     /// synchronous-degenerate for now (true concurrency for them is a documented follow-up).
     pub(super) fn spawn_cooperative(&mut self, call: &Expr) -> R<Value> {
         // Defer iff the operand is a call to a bare identifier naming a single-overload free function.
@@ -131,7 +131,7 @@ fn run_task_call(
     body: &[Stmt],
     args: Vec<Value>,
 ) -> Result<Value, String> {
-    // Concurrency is run≡runvm-only + LADDER-excluded from PHP; `#[UncheckedOverflow]` inside a spawned task is
+    // Concurrency is interp ≡ VM-only + LADDER-excluded from PHP; `#[UncheckedOverflow]` inside a spawned task is
     // not supported this slice (no decl/attrs threaded here) → checked. Documented in KNOWN_ISSUES.
     match task.run_call(fn_name, names, body, args, None, None, false) {
         Ok(v) => Ok(v),
@@ -218,7 +218,7 @@ mod tests {
     /// would run at `spawn` and fault `recv from empty channel`. Under the cooperative driver the call
     /// is deferred — `main` sends first, then the consumer runs and finds the value — so the program
     /// succeeds. This is exactly the plan's `spawn consume(ch); send(42)` litmus; passing here proves
-    /// `spawn` truly defers on the interpreter (the VM half + the run≡runvm flip are the next step).
+    /// `spawn` truly defers on the interpreter (the VM half + the interp ≡ VM flip are the next step).
     #[test]
     fn litmus_spawned_recver_succeeds_only_when_deferred() {
         let src = r#"

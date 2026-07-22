@@ -747,7 +747,7 @@ fn list_none(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String>
 // `keys`/`values` are byte-identical with PHP's order-preserving `array_keys`/`array_values`. KEY
 // COERCION CAVEAT (KNOWN_ISSUES): PHP arrays coerce integer-like string keys and bools to int keys,
 // so a `keys()` over such a map renders differently under PHP than on the Rust backends; examples use
-// plain (non-numeric) string keys, which PHP keeps verbatim. The run↔runvm spine is always identical.
+// plain (non-numeric) string keys, which PHP keeps verbatim. The interp↔VM spine is always identical.
 
 #[cfg(test)]
 #[path = "list_tests.rs"]

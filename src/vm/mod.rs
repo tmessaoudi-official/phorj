@@ -357,7 +357,7 @@ impl<'a> Vm<'a> {
     /// ~2.3× lower end-to-end serve latency on a representative handler). `args` become slots
     /// `0..arity` at the frame base, exactly as `Op::Call` lays out a callee's window. **Non-cooperative
     /// by design** — it mirrors `call_named` (which enters `run_call` directly, not the green-thread
-    /// driver), so `run ≡ runvm` holds on the serve path; a `respond` body never uses concurrency.
+    /// driver), so `interp ≡ VM` holds on the serve path; a `respond` body never uses concurrency.
     /// A fresh [`Vm`] per call re-seeds `statics` from `static_inits`, so each request starts from the
     /// once-at-load static state — identical to `call_named` building a fresh interpreter each call.
     pub fn run_entry(

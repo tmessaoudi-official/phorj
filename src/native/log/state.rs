@@ -125,7 +125,7 @@ fn json_escape(s: &str) -> String {
 /// stderr fallback when unconfigured / unknown). `level` is the [`LEVELS`] ordinal. `out` is the
 /// program's captured STDOUT buffer — a `stdout` stream handler writes THERE (audit 2026-07-22,
 /// P0): writing to the real process stdout would misorder log lines against `Output.*` (buffered,
-/// flushed at exit) on run/runvm while the PHP leg interleaves naturally.
+/// flushed at exit) on interp/VM while the PHP leg interleaves naturally.
 pub(super) fn emit_channel(
     channel: &str,
     level: i64,

@@ -236,7 +236,7 @@ pub struct Interp<'c> {
     /// `run_call` entry (function name + current line) and popped **only on success** — an error path
     /// skips the pop, so at the top-level catch the stack still holds every active frame to snapshot.
     /// Names mirror the VM's compiled `Function.name` (`main`, `Class::method`, `Class::new`,
-    /// `Class::name$set`) so `run`-traces are byte-identical to `runvm`-traces.
+    /// `Class::name$set`) so interpreter traces are byte-identical to VM traces.
     trace_stack: Vec<crate::diagnostic::Frame>,
     /// Live call-frame depth, checked against [`crate::limits::MAX_CALL_DEPTH`] in `run_call`.
     /// Converts unbounded recursion into a clean `"stack overflow"` fault instead of a native
@@ -441,7 +441,7 @@ fn catch_type_names(ty: &crate::ast::Type) -> Vec<String> {
 /// Call a single named top-level function with pre-built `args`, returning its value plus the
 /// captured stdout. The serve runtime (M6 W3, `crate::serve`) uses this to invoke
 /// `respond(bytes) -> bytes` once per request — the one entry the socket bridge needs. The
-/// interpreter is the reference backend; `run` ≡ `runvm` (the differential harness) guarantees the
+/// interpreter is the reference backend; interp ≡ VM (the differential harness) guarantees the
 /// VM would compute identical bytes, so the spike does not need a VM `call_named` (deferred — the
 /// VM has no return-value capture today). Mirrors [`interpret`] exactly, but enters an arbitrary
 /// named function with caller-supplied arguments instead of an argument-less `main`.

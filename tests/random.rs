@@ -2,7 +2,7 @@
 //!
 //! `Core.Random` is `pure: false`: it advances a process-global generator, so a program importing it
 //! is SKIPPED by the byte-identity differential (`uses_impure_native` in `tests/differential.rs`).
-//! The Rust backends share the one generator, so `run ≡ runvm` still holds deterministically — that
+//! The Rust backends share the one generator, so `interp ≡ VM` still holds deterministically — that
 //! (plus seed reproducibility and bounds) is what this dedicated suite checks. The PHP leg is *not*
 //! checked here: the transpiled code uses PHP's `mt_rand`, whose sequence intentionally differs.
 
@@ -15,7 +15,7 @@ use std::sync::Mutex;
 static RNG_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
-fn seeded_random_is_deterministic_and_run_matches_runvm() {
+fn seeded_random_is_deterministic_and_run_matches_vm() {
     let _g = RNG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let src = r#"package Main;
 import Core.Runtime.Entry;
@@ -37,7 +37,7 @@ import Core.Random;
 
     // The two Rust backends share the generator, so they agree (only the PHP leg is quarantined).
     let vm = cmd_run(src).unwrap();
-    assert_eq!(first, vm, "run ≡ runvm under a shared generator");
+    assert_eq!(first, vm, "interp ≡ VM under a shared generator");
 
     // Five rolls, each a valid d6.
     let lines: Vec<&str> = first.lines().collect();

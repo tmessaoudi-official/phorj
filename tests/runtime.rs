@@ -3,8 +3,8 @@
 //! `Core.Runtime` natives (monotonic clock + resident-memory counters) are `pure: false`: their
 //! results depend on the running process, so the byte-identity differential SKIPS any program that
 //! imports them (see `uses_impure_native` in `tests/differential.rs`). They are exercised here
-//! instead, asserting: (1) both Rust backends agree (they share the process, so run ≡ runvm always
-//! holds — only the PHP leg is unreliable, which is why the oracle is skipped, not run≡runvm), and
+//! instead, asserting: (1) both Rust backends agree (they share the process, so interp ≡ VM always
+//! holds — only the PHP leg is unreliable, which is why the oracle is skipped, not interp ≡ VM), and
 //! (2) the manual-benchmark shape works end to end. This also guards the shipped walkthrough example
 //! (`examples/benchmark/manual/`) against rot, since the differential harness never runs it.
 
@@ -36,7 +36,7 @@ fn runtime_bench_shape_runs_and_backends_agree() {
         "unexpected output: {run}"
     );
     // The Rust backends share the process, so they always agree even for impure natives.
-    assert_eq!(cmd_run(BENCH_SHAPE).expect("runvm ok"), run);
+    assert_eq!(cmd_run(BENCH_SHAPE).expect("vm ok"), run);
 }
 
 #[test]

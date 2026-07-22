@@ -292,7 +292,7 @@ pub(super) fn parse_checked(src: &str) -> Result<Program, String> {
 /// VM-running caller can [`compile_with`] it — the byte-identical path [`cmd_run`] uses. Without it,
 /// a method-call/field-read result used as an arithmetic operand (`a.join() + b.join()`,
 /// `box.get() + 1`) is rejected by the VM compiler (`ctype` falls through to `method_rets`) while the
-/// interpreter accepts it — a `run ≠ runvm` divergence. Any inline-source path that builds a
+/// interpreter accepts it — a `engine divergence` divergence. Any inline-source path that builds a
 /// `BytecodeProgram` (`disasm`, `bench`) MUST use this, not `parse_checked` + `compile`.
 #[allow(clippy::type_complexity)]
 pub(super) fn parse_checked_reified(
@@ -323,7 +323,7 @@ pub fn parse_checked_program_reified(
 /// `run`: lex -> parse -> check (gate) -> interpret -> captured stdout.
 /// M8.5 interop: refuse to *execute* a program that uses foreign `declare` symbols. The Rust backends
 /// (interpreter/VM) have no PHP runtime, so a foreign call cannot run — the program is PHP-target-only.
-/// `check`/`transpile` work fully; only `run`/`runvm` hit this one clean pre-flight gate (no per-call
+/// `check`/`transpile` work fully; only interp/VM hit this one clean pre-flight gate (no per-call
 /// fault machinery in the execution paths). A single scan after type-checking, before any backend.
 pub(super) fn foreign_runtime_gate(prog: &Program) -> Result<(), String> {
     use crate::ast::Item;
@@ -333,7 +333,7 @@ pub(super) fn foreign_runtime_gate(prog: &Program) -> Result<(), String> {
     if has_foreign {
         return Err(
             "error[E-FOREIGN-RUNTIME]: this program declares foreign PHP symbols (`declare`), \
-             which require the PHP runtime to execute. The Rust backends (run/runvm) have no PHP \
+             which require the PHP runtime to execute. The Rust backends (both engines) have no PHP \
              runtime — transpile it instead: `phg transpile <file> > out.php && php out.php`.\n"
                 .to_string(),
         );
@@ -358,7 +358,7 @@ pub fn cmd_treewalk(src: &str) -> Result<String, String> {
         // S4.3 cutover: a program that uses `spawn` runs on the cooperative green-thread driver (real
         // task interleaving); every other program stays on the unchanged synchronous interpreter. wasm
         // (and a `--no-default-features` build without `green`) keeps the eager path — the cfg gate
-        // makes the cooperative driver absent there. Byte-identical to `runvm` via the shared scheduler.
+        // makes the cooperative driver absent there. Byte-identical to the VM leg via the shared scheduler.
         #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
         if crate::ast::uses_concurrency(&prog) {
             return crate::interpreter::run_cooperative_interp(&prog)
@@ -369,7 +369,7 @@ pub fn cmd_treewalk(src: &str) -> Result<String, String> {
     })
 }
 
-/// `runvm`: lex -> parse -> check (gate) -> compile to bytecode -> VM -> captured stdout.
+/// The VM leg (`phg run`'s default engine): lex -> parse -> check (gate) -> compile -> VM -> captured stdout.
 /// The bytecode backend; must produce byte-identical output to `cmd_treewalk` (differential).
 /// Build a `Vm` for `program`, attaching a fresh JIT hot-function cache when the `jit` feature is on
 /// (b3b — wire `phg run` to the JIT). A fresh cache per program run keeps the compile-once cache
@@ -477,7 +477,7 @@ pub fn treewalk_program(unit: &crate::loader::Unit) -> Result<String, String> {
     })
 }
 
-/// `runvm` on a loaded [`Unit`] (bytecode + VM backend). Same trace rendering as [`treewalk_program`].
+/// The VM leg on a loaded [`Unit`] (bytecode + VM backend). Same trace rendering as [`treewalk_program`].
 pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
         let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
@@ -587,7 +587,7 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
         (
             &["Core", "DatabaseModule"],
             "E-TRANSPILE-DB",
-            "`Core.DatabaseModule` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
+            "`Core.DatabaseModule` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run`.",
         ),
         (
             &["Core", "SessionModule"],
@@ -612,7 +612,7 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
         (
             &["Core", "Native", "Database"],
             "E-TRANSPILE-DB",
-            "`Core.Native.Database` (the raw natives under `Core.DatabaseModule`) is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
+            "`Core.Native.Database` (the raw natives under `Core.DatabaseModule`) is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO (THE LADDER RULE). Run this program with `phg run`.",
         ),
         (
             &["Core", "Native", "Session"],

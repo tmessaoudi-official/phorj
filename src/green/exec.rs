@@ -11,7 +11,7 @@
 //! contiguously, so the output it produced in that slice is one contiguous fragment. Each `resume`
 //! returns that fragment ([`Step`]); the loop appends fragments in resume order, which reconstructs
 //! the correct interleaved output **without** any shared output buffer — so the per-task engines keep
-//! their own `out: String` unchanged. This is what makes `run≡runvm` byte-identical: both backends
+//! their own `out: String` unchanged. This is what makes `interp ≡ VM` byte-identical: both backends
 //! drive this same loop with the same scheduler, so fragments are appended in the same order.
 //!
 //! **Determinism.** The loop takes the next ready task from the FIFO scheduler, drains newly-spawned

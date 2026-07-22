@@ -1,6 +1,6 @@
 // Conformance: the Core.Http Router (M6 W2) — path parameters, literal>param precedence, method
 // sensitivity, and the 404 fallback. Experimental tier (M6 web layer in progress), pinned here for
-// golden-output regression coverage. Byte-identical run≡runvm≡real PHP.
+// golden-output regression coverage. Byte-identical interp ≡ VM≡real PHP.
 package Main;
 
 import Core.Output;

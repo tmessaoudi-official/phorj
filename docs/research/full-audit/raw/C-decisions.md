@@ -2746,6 +2746,19 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   php output). FOLLOW-UP recorded: a committed multi-package FS project fixture in the test sweep
   (the fix is repro-verified; the fixture makes it regression-gated).
 
+- **DEC-330 — TERMINOLOGY RULED (developer, 2026-07-22): there is NO `runvm` — only `phg run` and
+  the transpiled PHP.** The VM is `run`'s default engine and the tree-walker its `--tree-walker`
+  oracle; `runvm` was a retired historical subcommand whose name had survived as shorthand across
+  the repo. Swept (this ruling's build): every USER-FACING string (`phg explain` bodies, the
+  native-only transpile refusals, the MI `parent()` transpile error), every LIVING doc
+  (CLAUDE.md Invariant 1, INVARIANTS/ARCHITECTURE/CONTRIBUTING/STABILITY/SEMVER/GA-CHECKLIST/
+  UNIFIED-SPEC/ADRs, examples+editors+selftest READMEs, .github templates, MASTER-PLAN/
+  SLICE-STATE, KNOWN_ISSUES), all `examples/**`+`conformance/**` sources (playground examples.js
+  regenerated), all `src/` comments (shorthand now "interp ≡ VM"), test fn/var names, and the
+  playground's internal wasm surface (`pg_runvm`→`pg_vm`, worker key `runvm`→`vm`, lockstep with
+  worker.js/main.js). LEFT AS RECORDS (deliberate): CHANGELOG/HISTORY/MILESTONES entries and
+  docs/research + docs/specs/archive — they narrate the era when the subcommand existed.
+
 - **DEC-329 — FOUR ADJUDICATIONS RULED (developer via AskUserQuestion, 2026-07-22; all recommended
   options adopted).** (1) **DEC-320 v1 BUILD APPROVED** with the spec defaults: F1 sibling emit
   (`src/X.phg` → `src/X.php`, PSR-4 unchanged, zero composer edits), F5 one shared

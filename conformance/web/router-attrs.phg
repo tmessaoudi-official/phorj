@@ -1,6 +1,6 @@
 // Conformance: the `#[Route(...)]` attribute + `Http.autoRouter()` compile-time desugar (M6 W2).
 // Declaring routes via attributes produces the identical behaviour as explicit `.route(...)`
-// registration (see conformance/web/router.phg). Experimental tier; byte-identical run≡runvm≡real PHP.
+// registration (see conformance/web/router.phg). Experimental tier; byte-identical interp ≡ VM≡real PHP.
 package Main;
 
 import Core.Output;

@@ -25,7 +25,7 @@
 //! A PRE-CHECK desugar (mirrors [`crate::checker::desugar_di`]): it lowers the four type-directed
 //! result calls into plain, already-working S1 primitives BEFORE the type-checker, so the generated
 //! code type-checks like hand-written source and every backend sees the same explicit construction
-//! (Inv-5). Byte-identity is trivial (`run ≡ runvm`: both backends run the one desugared AST) and there
+//! (Inv-5). Byte-identity is trivial (`interp ≡ VM`: both backends run the one desugared AST) and there
 //! is no runtime reflection — generics are erased before the backends, so a native could never see `T`'s
 //! fields; the field layout is resolved HERE, at compile time, from `T`'s constructor (recursively for a
 //! nested entity — cycles are rejected `E-DB-HYDRATE-CYCLE`, since eager whole-graph loading is
@@ -110,7 +110,7 @@ enum ClassKind {
 /// Naming.X())` call in the receiver chain AT COMPILE TIME (the developer's ruling: compile-time,
 /// per-query). It changes only the generated column-name string literal; there is no runtime component
 /// (the prelude `Statement.namingStrategy` is a chainable no-op returning `this`, present solely so the
-/// chain type-checks). Because the transform runs before the backends, `run ≡ runvm` is trivial.
+/// chain type-checks). Because the transform runs before the backends, `interp ≡ VM` is trivial.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Naming {
     /// The default (unchanged from slice B): the column name IS the field name (strict-exact).

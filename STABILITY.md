@@ -73,7 +73,7 @@ dependency set is exactly these four; see `docs/specs/UNIFIED-SPEC.md#external-d
 ## CLI commands
 
 ### stable
-`run`, `runvm`, `check`, `transpile`, `build`, `test`, `format`, `explain`, `benchmark`,
+`run`, the VM, `check`, `transpile`, `build`, `test`, `format`, `explain`, `benchmark`,
 `disassemble`, `parse`, `tokenize`, plus the source forms (`<file>`, `-`/stdin, `-e`/`--eval`, `--`)
 and `-h`/`-v`.
 

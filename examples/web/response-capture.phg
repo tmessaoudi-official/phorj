@@ -11,7 +11,7 @@
 // Output.capture(() => { … }))` — which keeps the capture surface a single explicit primitive rather
 // than a prelude method that would have had to reach the native through a leaking `import Core.Output`.
 //
-// Pure buffering of deterministic prints → byte-identical across `run`, `runvm`, and real PHP
+// Pure buffering of deterministic prints → byte-identical across `run`, the VM, and real PHP
 // (`ob_start`/`ob_get_clean`).
 package Main;
 

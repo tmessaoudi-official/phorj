@@ -408,12 +408,12 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
 }
 
 /// Whether the program contains any `spawn` expression anywhere — the M6 W4 green-thread **gate**.
-/// The run/runvm entry points branch on it: a program with **no** `spawn` takes the unchanged
+/// The interp/VM entry points branch on it: a program with **no** `spawn` takes the unchanged
 /// synchronous path (byte-identical to today, zero risk to non-concurrent examples); one **with**
 /// `spawn` takes the cooperative scheduler driver. Soundness note: we return `true` only on a real
 /// [`Expr::Spawn`], so there are **no false positives** (the only risky direction — it would route a
 /// non-spawning program through the cooperative driver). A false *negative* (a missed `spawn`) merely
-/// degrades to the eager path, which still satisfies `run≡runvm` — so completeness is best-effort but
+/// degrades to the eager path, which still satisfies `interp ≡ VM` — so completeness is best-effort but
 /// not load-bearing. Mirrors the exhaustive [`lambda_uses_this`] walker.
 #[must_use]
 pub fn uses_concurrency(program: &Program) -> bool {

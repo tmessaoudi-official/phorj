@@ -3,7 +3,7 @@
 // may mix, but every positional must come BEFORE the first named one.
 //
 // It's compile-time sugar: the checker reorders named args into their declared slots and fills any
-// omitted defaults BEFORE any backend, so `phg run`, `phg runvm`, and the transpiled PHP (which gets
+// omitted defaults BEFORE any backend, so `phg run`, `phg run`, and the transpiled PHP (which gets
 // a plain positional call) all agree byte-for-byte. Works on free functions, CONSTRUCTORS, and
 // METHODS (instance + static); generic/overloaded/native calls and variadics take positional args only.
 package Main;

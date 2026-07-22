@@ -8,7 +8,7 @@ impl Transpiler {
     /// `Json_Int`/… (DEC-329.3). Encoding
     /// mirrors the Rust `ext::json` kernels byte-for-byte: a string scalar uses native
     /// `json_encode` (authoritative escaping); a float uses `__phorj_float` (positional shortest
-    /// round-trip — NOT json's scientific notation, so it matches `run`/`runvm`); structure is
+    /// round-trip — NOT json's scientific notation, so it matches interp/VM); structure is
     /// hand-walked. Decoding delegates to native `json_decode` (objects → `stdClass` so `{}` ≠ `[]`),
     /// returning `null` (Phorj `None`) on any parse error, then rebuilds the enum hierarchy.
     pub(super) fn emit_json_helpers(&mut self) {

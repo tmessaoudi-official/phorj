@@ -4,7 +4,7 @@ use super::*;
 /// (`Http.Router`, `Time.Duration`, `Decimal.RoundingMode`) down to its bare injected type name, so the
 /// checker and every backend see the plain `Router` / `Duration` / `RoundingMode` the injection preludes
 /// declare. Runs AFTER the six preludes are injected and `desugar_auto_router`, BEFORE `check` — the
-/// single chokepoint [`crate::cli::check_and_expand_reified`] wires it, covering run/runvm/transpile/
+/// single chokepoint [`crate::cli::check_and_expand_reified`] wires it, covering interp/VM/transpile/
 /// disassemble/benchmark/playground alike (Invariant 6).
 ///
 /// The registry is static and mirrors the preludes' multi-type modules (single-type modules

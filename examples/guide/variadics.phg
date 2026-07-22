@@ -4,7 +4,7 @@
 // the rest collect. Free functions only (v1); a variadic method/lambda is `E-VARIADIC-UNSUPPORTED`.
 //
 // It's plain sugar: the checker rewrites the DECLARATION `int ...nums` to `List<int> nums` and the
-// CALL `sum(1, 2, 3)` to `sum([1, 2, 3])` before any backend — so `phg run`, `phg runvm`, and the
+// CALL `sum(1, 2, 3)` to `sum([1, 2, 3])` before any backend — so `phg run`, `phg run`, and the
 // transpiled PHP (`function sum(array $nums)` + `sum([1, 2, 3])`) all agree byte-for-byte.
 package Main;
 

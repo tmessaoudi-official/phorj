@@ -7,7 +7,7 @@
 //! `cli::check_and_expand_reified`'s rewrite chain — after `rewrite_ufcs` has spliced any recorded
 //! replacements back into the tree — and mutates only `Param.ty`, so there is no cloned-subtree
 //! staleness to manage. Leaving `Infer` in a backend-bound param would de-specialize the VM
-//! compiler's `resolve_cty` (CTy `Other`) and the transpiler's kind analysis — the run≠runvm
+//! compiler's `resolve_cty` (CTy `Other`) and the transpiler's kind analysis — the interp ≠ VM
 //! CTy-operand trap (Invariant 7) — which the differential `pipe-lambda-result + 1` case guards.
 
 use super::*;

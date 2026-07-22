@@ -240,7 +240,7 @@ pub(super) fn bench_report_opts(
         // Thread the checker's reified-operand side-table into the VM compile (the byte-identical
         // path `cmd_run` uses) so a program whose arithmetic operand is a method/field result
         // (`a.join() + b.join()`, `box.get() + 1`) compiles here exactly as it runs — not rejected
-        // by `ctype` falling through to `method_rets` (a run≠runvm divergence).
+        // by `ctype` falling through to `method_rets` (a interp ≠ VM divergence).
         let (prog, reified) = parse_checked_reified(src)?;
         let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
 

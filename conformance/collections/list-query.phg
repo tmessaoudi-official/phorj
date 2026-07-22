@@ -1,6 +1,6 @@
 // Conformance: Core.List breadth — unique / min / max / find / any / all (stdlib breadth slice).
 // Includes the numeric-string min/max parity case (byte-order, not PHP numeric juggling) and the
-// empty-list null case. Byte-identical run≡runvm≡real PHP.
+// empty-list null case. Byte-identical interp ≡ VM≡real PHP.
 package Main;
 
 import Core.Output;

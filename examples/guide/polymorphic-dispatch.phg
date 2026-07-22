@@ -8,7 +8,7 @@
 // the class-NAME pointer (unique per class) — NOT the `ClassLayout` pointer: were it keyed by
 // something two distinct classes could share (e.g. an empty layout deduped across field-less classes,
 // a plausible future optimization), a polymorphic site like this could return the wrong `say()`. All
-// three legs (`run`/`runvm`/PHP) are byte-identical.
+// three legs (`phg run` (both engines)/PHP) are byte-identical.
 package Main;
 
 import Core.Output;

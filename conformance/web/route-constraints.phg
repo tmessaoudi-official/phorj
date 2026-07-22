@@ -1,6 +1,6 @@
 // Conformance: regex/typed route constraints `{name:regex}` (M6 W2-ext slice 2) — whole-segment
 // anchored match via Core.Regex; precedence literal > constrained > bare param. Experimental tier;
-// byte-identical run≡runvm≡real PHP (ASCII patterns).
+// byte-identical interp ≡ VM≡real PHP (ASCII patterns).
 package Main;
 
 import Core.Output;

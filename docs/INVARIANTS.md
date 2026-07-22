@@ -5,8 +5,8 @@ plausible-looking change, and enforced somewhere concrete. Read this before touc
 the value kernels, or the `Op` set. (Companion to `docs/ARCHITECTURE.md` for the layout, and the
 frozen design records in `docs/specs/`.)
 
-## 1. Backend parity is the spine — `run` ≡ `runvm`, byte-identical
-The tree-walking interpreter (`phg run`) and the bytecode VM (`phg runvm`) must produce
+## 1. Backend parity is the spine — `run` ≡ the VM, byte-identical
+The tree-walking interpreter (`phg run`) and the bytecode VM (`phg run`) must produce
 **identical stdout *and* identical failure behaviour** for every program. This is the project's
 central correctness contract.
 - **Enforced by** `tests/differential.rs`: `agree(src)` compares the `Ok` output; `agree_err(src)`
@@ -16,15 +16,15 @@ central correctness contract.
 - **Why it bites:** the original `Op::Neg` P0 (negating `i64::MIN`) hid in the gap that existed
   before `agree_err` — the Ok-only oracle never saw divergent *crashes*.
 - **Third surface (M2.5 `phg build`):** a standalone binary runs its **embedded source** through
-  `cli::cmd_runvm` at startup (the self-detect hook in `src/main.rs`), so its output MUST equal
-  `phg runvm <file>`. **Enforced by** `tests/build.rs::built_binary_matches_runvm`. The startup
-  hook must keep dispatching through `cmd_runvm` (never `cmd_run`) and must not transform the source
+  `cli::cmd_the VM leg` at startup (the self-detect hook in `src/main.rs`), so its output MUST equal
+  `phg run <file>`. **Enforced by** `tests/build.rs::built_binary_matches_the VM leg`. The startup
+  hook must keep dispatching through `cmd_the VM leg` (never `cmd_run`) and must not transform the source
   before execution — otherwise the distribution layer silently drifts off the spine while the
   differential suite (which never builds a binary) stays green.
   - **Cross-targets (Phase 2):** the surface now spans cross-built binaries. The stub-cache key is the
     **FNV-1a-64 of the running phg binary's bytes**, so a rebuilt phorj ⇒ cache miss ⇒ fresh stub —
     a stale stub can never embed your source into an *old* VM. Cross-parity is gated by
-    `cross_musl_binary_matches_runvm` (native exec) and `cross_windows_section_round_trips` (PE section
+    `cross_musl_binary_matches_the VM leg` (native exec) and `cross_windows_section_round_trips` (PE section
     round-trip). The object-file section readers (ELF/PE/Mach-O/fat) honor **EV-7**: every offset uses
     checked arithmetic, and malformed/adversarial images return `None`, never a panic or OOB read.
 
@@ -87,7 +87,7 @@ forms (`line==0` → no position; `col==0` → `at <line>` (VM runtime); else `a
 (front-end)). Both backends now attach a source line to runtime faults (the VM via
 `Chunk.lines[ip]`, the interpreter via its stack-trace frames) and they agree for ordinary faults.
 **Known limitation (fault-line skew — W0-5 / H §5):** a fault raised *inside* a `"{…}"` string
-interpolation is the one exception — `run` reports the true line, but `runvm` reports **line 1**
+interpolation is the one exception — `run` reports the true line, but the VM reports **line 1**
 (stack-trace frames likewise), because `parser::split_interpolation` re-lexes the inner expression
 with a fresh lexer that resets to line 1 and the VM has no scope IP ranges to recover the real line.
 Message, `FaultKind`, and exit code still agree, so the body-substring oracle (#1), `agree_err`, and

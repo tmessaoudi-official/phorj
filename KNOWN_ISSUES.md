@@ -37,7 +37,7 @@ Measured: 201 SKIP → **8 SKIP, 0 RUN → 139 RUN**; the 8 remaining skips are 
 missing `import Core.String` (fixed `bb39af6f`) — and one TIER1 gap, `ucwords()` (added to TIER1_PHP;
 core/always-available). Full gate green (2250 tests, clippy both legs, release built). See memory
 `example-glob-noop-since-dec191`. Note: `uses_impure_native` has THREE callers (the fault-parity leg
-+ the run≡runvm glob + the transpile glob — differential.rs:198/1595/2751), all revived by the shared-fn
++ the interp ≡ VM glob + the transpile glob — differential.rs:198/1595/2751), all revived by the shared-fn
 fix. ✅ FOLLOW-UP DONE (2026-07-19): the SIBLING `uses_unavailable_gated_module` shared the same
 `src.contains("import {m}")` substring pattern for feature-gated modules — converted to the per-line
 whole-token parse (for a GATED module the WHOLE module is absent, so any import under it — whole or
@@ -61,13 +61,13 @@ No other callers of the substring pattern remain (grep-confirmed).
 > 1. **CLI command renames left stale refs (DEC-113).** `fmt→format`, `bench→benchmark`, `lex→tokenize`,
 >    `disasm→disassemble` — the old names are dead verbs (`phg -h` confirms; they print usage). Fixed in
 >    the example docs; sweep the rest.
-> 2. **`run`/`runvm` labels stale/inverted.** The CLI merged the backends: **`phg run` = the bytecode VM**,
->    **`phg run --tree-walker` = the interpreter (oracle)**; there is **no `phg runvm` subcommand**. Docs
->    still name a literal `phg runvm` and/or label `phg run` as "the interpreter". The shorthand
->    "`run ≡ runvm ≡ PHP`" (the spine's *name*, ~800 refs) is benign — NOT the target. Misleading literal /
+> 2. **interp/VM labels stale/inverted.** The CLI merged the backends: **`phg run` = the bytecode VM**,
+>    **`phg run --tree-walker` = the interpreter (oracle)**; there is **no `phg run` subcommand**. Docs
+>    still name a literal `phg run` and/or label `phg run` as "the interpreter". The shorthand
+>    "`interp ≡ VM ≡ PHP`" (the spine's *name*, ~800 refs) is benign — NOT the target. Misleading literal /
 >    inverted instances: `docs/INVARIANTS.md` (intro + built-binary row), `CONTRIBUTING.md`, `CLAUDE.md`
->    (Invariant 1), `.github/ISSUE_TEMPLATE/bug_report.md` (`phg runvm -e`), `KNOWN_ISSUES.md`
->    (`phg runvm --dump-on-fault`). Fixed the internal `src/main.rs` comments already.
+>    (Invariant 1), `.github/ISSUE_TEMPLATE/bug_report.md` (`phg run -e`), `KNOWN_ISSUES.md`
+>    (`phg run --dump-on-fault`). Fixed the internal `src/main.rs` comments already.
 > 3. **DEC-282 manifest retirement left stale refs.** Retired: `phorj.toml`, `[require]`, `phorj.lock`,
 >    `phg vendor` (compiler never touches the network now). Fixed `FEATURES.md` (was self-contradictory,
 >    rows 70 vs 94). Remaining: `SECURITY.md` (calls `phg vendor` "the only command that touches the
@@ -128,8 +128,8 @@ overload satisfies the interface; checking the first would false-reject valid co
 beside a conforming `public m(int)`). The overloaded case is therefore deferred at DECLARATION time.
 **Residual divergence (rare):** a class implementing a public interface method via a private-conforming
 overload, accessed through a plain `I`-typed receiver (`I x = new C(); x.m(...)`), is accepted and
-dispatches to the private method on run/runvm, whereas transpiled PHP fatals at the class declaration —
-a run≡runvm-vs-PHP break in this narrow shape. NOT a soundness/security hole (the single-overload common
+dispatches to the private method on interp/VM, whereas transpiled PHP fatals at the class declaration —
+a interp ≡ VM-vs-PHP break in this narrow shape. NOT a soundness/security hole (the single-overload common
 case — the actual intersection-bypass enabler — is fully closed; intersection access-site enforcement
 covers the `I & C` path). Full fix = track per-overload visibility so the conforming overload's
 visibility is the one enforced. Low priority (overloaded + interface + reduced-visibility is rare).
@@ -147,7 +147,7 @@ allocation. Within-representation wins already taken (DEC-293: scalar-node inter
 encode) moved it 0.28×→0.32× but cannot cross the floor. **The flip requires a lazy/compact Json
 value** (materialize ADT nodes only on `match`); that is GREENLIT (DEC-294) as a fresh-context,
 spine-sensitive slice (~15 runtime deconstruction touch-points + a new `Value` variant — byte-identity
-is invariant #1, so it is not rushed). Not a correctness issue; run≡runvm≡PHP output is byte-identical.
+is invariant #1, so it is not rushed). Not a correctness issue; interp ≡ VM≡PHP output is byte-identical.
 
 ## PERF-native-call-in-loop — non-JIT'd native calls lose 3–50× to php builtins in hot loops (FLAGGED 2026-07-19; PERVASIVE)
 
@@ -205,7 +205,7 @@ future win). **Two fix levers (GREENLIT, fresh-context, JIT/VM-spine — not rus
 JIT verticals mirroring the map vertical (`src/jit/analyze.rs` + `src/jit/`, the audited `unsafe` island)
 — targeted, lifts one native at a time; (b) the higher-leverage architectural fix — reduce the general
 VM native-call overhead itself (arg marshalling / dispatch), which would lift ALL ~286 natives at once.
-Dev to choose. Not a correctness issue; run≡runvm≡php byte-identical throughout.
+Dev to choose. Not a correctness issue; interp ≡ VM≡php byte-identical throughout.
 
 **✅ FIX LEVER #2 — per-op JIT VERTICALS CAMPAIGN (dev-ruled 2026-07-19, DEC-311; flip the losers one at a time):**
 - **RATCHET ARMED 2026-07-19** (quiet box, load-avg 1.7, all cores 90-98% idle; `microbench-gate.sh --emit` K=7,
@@ -272,7 +272,7 @@ The 5 original predicates (`isInt`/`isNumber`/`isAlpha`/`isAlnum`/`isHex`) trans
 PHP's `$` (without the `D` flag) matches at end-of-string **OR immediately before a final `\n`** — so
 `isAlpha("abc\n")` is **`false` on the Rust legs** (interp+VM: `\n` is not alphabetic) but **`true` under the
 transpiled PHP**. [Verified 2026-07-19: `preg_match("/^[A-Za-z]+$/", "abc\n") === 1` → `bool(true)` on
-php-8.5.8.] A run≡runvm≡PHP byte-identity divergence (Invariant 1), latent because no example/test feeds a
+php-8.5.8.] A interp ≡ VM≡PHP byte-identity divergence (Invariant 1), latent because no example/test feeds a
 trailing newline. **Not yet fixed** — the fix is a one-char-each `/…$/D` (PCRE_DOLLAR_ENDONLY) flag, exactly
 what the DEC-310 char-class predicates (`isLower`…`isPrintable`) already do (they emit `preg_match(/…$/D)`
 and are NOT affected). Own small slice: add the `D` flag to the 5 + a differential case with a trailing-`\n`
@@ -281,7 +281,7 @@ input proving the fix.
 ## F-029 — namespaced (multi-package) transpile byte-identity gaps (FLAGGED 2026-07-16, DEC-263 build; PRE-EXISTING, not introduced by DEC-263)
 
 Surfaced while building DEC-263: two distinct **transpile-leg-only** divergences that break the
-`run ≡ runvm ≡ PHP` spine (Invariant 1) for **multi-package** programs (any file in a non-`Main`
+`interp ≡ VM ≡ PHP` spine (Invariant 1) for **multi-package** programs (any file in a non-`Main`
 package — even a single-segment one like `Acme` — produces a `\`-bearing mangled name that flips
 `self.namespaced` on: `src/transpile/program_emit.rs:214`). Both are
 **latent/untested** — no multi-package example exercised an injected type or a `Debug.dump` until now
@@ -424,7 +424,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   session) — developer to keep/relocate/delete.
   (5) FIXED: FEATURES.md had NO Core.DatabaseModule/Core.Mail rows (the flagship batteries absent from the
   surface SSOT); examples/README said "needs --features db" post-DEC-227. Both updated.
-  (6) NOTE: with `db` default, `examples/database/` could enroll in the run≡runvm glob (deterministic
+  (6) NOTE: with `db` default, `examples/database/` could enroll in the interp ≡ VM glob (deterministic
   in-memory SQLite) for extra coverage — blocked only by postgres/mysql server examples in the same
   dir; consider a per-file quarantine marker instead of the dir exclusion.
 - **DEC-224/225/226 · the three reopened items RULED** (all: keep shipped state + upgrade path now
@@ -540,12 +540,12 @@ not a panic:
   specifiers (`"{x:>8}"`) are a separate future decision (W5-1).
 
 - **`Output.capture` with a THROWING closure — not a gated byte-identity claim (DEC-220-S3).**
-  `Output.capture(fn)` (the opt-in output-buffering primitive) is `run`≡`runvm`≡real-PHP byte-identical
+  `Output.capture(fn)` (the opt-in output-buffering primitive) is `run`≡the VM≡real-PHP byte-identical
   for the ONLY shape a lambda can take here: a `() -> void` closure that prints and returns (a lambda
   literal cannot declare `throws` — parse error — and a lambda body that throws is
   `E-THROW-UNDECLARED`). A *named* throwing function CAN still be passed by reference
   (`Output.capture(boomer)` where `boomer(): void throws Boom`), and that DOES type-check. On such a
-  mid-capture throw, `run`≡`runvm` still holds on every path (both backends leave the partial output in
+  mid-capture throw, `run`≡the VM still holds on every path (both backends leave the partial output in
   the main buffer and never `split_off` on a fault); the transpile leaves PHP's `ob_start` buffer
   dangling until script-end auto-flush, which happens to byte-match in the simple propagate-and-catch
   case but is NOT guaranteed identical for arbitrarily nested capture/output shapes. This path is
@@ -558,11 +558,11 @@ not a panic:
   *instance* method this way is `E-STATIC-CALL`. **Inherited / trait static methods now work**
   (Statics-A, 2026-06-28): `Child.parentStatic()` resolves the declaring class's body via the shared
   `method_origins` dispatch table, and a `trait`-supplied static is callable on the using class —
-  byte-identical run≡runvm≡real PHP. **Overloaded static methods now work too** (Statics-B, 2026-06-28):
+  byte-identical interp ≡ VM≡real PHP. **Overloaded static methods now work too** (Statics-B, 2026-06-28):
   `ClassName.m(args)` over an overloaded `static` selects the matching body at runtime via the VM's
   `Op::CallStaticOverload` (a dummy receiver below the args + the shared `dispatch::select_overload`),
   the same selector the interpreter and the transpiled PHP `static` dispatcher use — byte-identical
-  run≡runvm≡real PHP (`examples/guide/overloaded-statics.phg`). All overloads of one name must agree on
+  interp ≡ VM≡real PHP (`examples/guide/overloaded-statics.phg`). All overloads of one name must agree on
   `static`-ness (`E-OVERLOAD-STATIC-MIX`), matching PHP. **Remaining deferrals** (each rejected cleanly,
   never a runtime divergence): (1) A static method using the **class's own type parameter** (a static on
   a generic class) is out of scope — no instance binds the class type argument. (2) **Late static
@@ -616,7 +616,7 @@ not a panic:
   and `T? = stmt.queryOneInto()` map result rows into a class, by field NAME, STRICT (a missing column /
   type mismatch / SQL-NULL-into-non-optional throws `DatabaseError`; a `T?` field admits NULL; extra columns
   ignored). Lowered PRE-check to plain `new T(row.getX("col")?)` construction over the S1 primitives
-  (`src/checker/desugar_db.rs`), so there is no runtime reflection and `run ≡ runvm` is automatic.
+  (`src/checker/desugar_db.rs`), so there is no runtime reflection and `interp ≡ VM` is automatic.
   **Surface deviation (developer-authorized):** contextual inference, NOT the `<T>` turbofish DEC-208/
   MASTER-PLAN wrote — `T` comes from the binding's declared type (a typed `var` decl, a `return`, or a
   lambda expr-body return), exactly like DEC-201 empty collections. A `queryInto()` with no inferable sink
@@ -695,7 +695,7 @@ not a panic:
 
 - **`Core.DatabaseModule` typed hydration completion (DEC-208 slice B) — shipped + disclosures.** Three shape-directed
   extensions of the S2 desugar (`src/checker/desugar_db.rs`), same PRE-check lowering to S1 primitives, so
-  `run ≡ runvm` stays automatic. (1) **Nested hydration:** a field that is itself an entity is hydrated
+  `interp ≡ VM` stays automatic. (1) **Nested hydration:** a field that is itself an entity is hydrated
   eagerly (one query) from columns aliased with a DOTTED prefix (`"order.total"`, a quoted identifier),
   recursing to arbitrary depth; an OPTIONAL entity field (`Order? order`) is `null` when ALL its columns
   are NULL (a LEFT-JOIN miss, tested via the new `Row.isNull` accessor), else it hydrates strictly (a NULL
@@ -715,7 +715,7 @@ not a panic:
 
 - **`Core.DatabaseModule` value mapping (DEC-208 slice E) — shipped subset (enum/decimal/JSON) + `DateTime` deferred.**
   Three column→type conversions the hydration desugar performs at compile time, composing with the
-  flat/nested/optional shapes (`src/checker/desugar_db.rs`; `run ≡ runvm` stays automatic). (1) **enum** — a
+  flat/nested/optional shapes (`src/checker/desugar_db.rs`; `interp ≡ VM` stays automatic). (1) **enum** — a
   phorj-`enum` field maps from a TEXT column by matching the value against the variant NAME (case-sensitive,
   `'Active'` → `Status.Active()`), **zero-payload variants ONLY** (a data-carrying variant → the compile
   error `E-DB-HYDRATE-ENUM-PAYLOAD`); an unknown value → catchable `DatabaseError`; `enum?` admits NULL. (2)
@@ -785,7 +785,7 @@ not a panic:
   `PHORJ_PG_TEST_DSN` (skip-loudly if unset — the standard gate never requires a server).
   - **Disclosures / boundaries:** (a) **No oracle.** There is no clean pure-Rust *synchronous* Postgres
     driver to differential the PHP-PDO leg against, so Postgres (like all of `Core.DatabaseModule`) is
-    spine-quarantined (`pure:false`); correctness rests on `run ≡ runvm` (shared eval) + the unit/gated
+    spine-quarantined (`pure:false`); correctness rests on `interp ≡ VM` (shared eval) + the unit/gated
     tests. (b) **Value-mapping subset.** Fetched columns are read by the binary protocol on the column's
     type OID: bool, int2/int4/int8, float4/float8, text/varchar/bpchar/name, bytea. Richer types
     (`numeric`, `json`/`jsonb`, `timestamp`/`timestamptz`, arrays) are NOT read directly — select them
@@ -828,7 +828,7 @@ not a panic:
   quotient. (The non-terminating/zero faults are fault-domain, excluded from the example oracle; the
   exact paths are byte-identity-gated through `decimals.phg`.) (2) **i128 overflow is
   a runtime fault, not a compile error** — an exact `+ - *` result (or a scale alignment) that leaves
-  the `i128` range faults `"decimal overflow"` (byte-identical on `run`/`runvm` and in the emitted
+  the `i128` range faults `"decimal overflow"` (byte-identical on interp/VM and in the emitted
   BCMath, which bounds-checks the result against i128 range and `throw`s the same body). Because every
   shipped example must produce identical *Ok* output, the fault is **not** a runnable example — it is
   exercised by the kernel unit tests (`value::decimal_overflow_is_a_clean_fault`); a program that
@@ -849,7 +849,7 @@ not a panic:
   in `value::round_div` and mirrored by BCMath. Deferrals/corners: (1) **The fault cases are not runnable
   examples** — a zero divisor (`"decimal division by zero"`), a negative `scale`
   (`"decimal scale out of range"`), and an intermediate i128 overflow (`"decimal overflow"`) are clean
-  faults, byte-identical on `run`/`runvm` (FaultKind parity) and the emitted PHP helper `throw`s the same
+  faults, byte-identical on interp/VM (FaultKind parity) and the emitted PHP helper `throw`s the same
   body; but because every shipped example must produce identical *Ok* output, the faults are exercised by
   the kernel + native unit tests (`value::decimal_div_by_zero_is_a_clean_fault`, …) and the differential
   `agree_err` cases, not the example set. (2) **No default-scale division** — `Decimal.div` always takes
@@ -864,12 +864,12 @@ not a panic:
   `toFloat`/`toInt`/`intToDecimal`/`decimalToFloat`/`decimalToInt` ship as additive natives.
   Corners: (1) **`integerDivide` faults are not runnable examples** — a zero divisor (`"division by zero"`) and
   the `integerDivide(i64::MIN, -1)` overflow (`"integer overflow"`) are clean faults, byte-identical on
-  `run`/`runvm` (FaultKind parity) and PHP `integerDivide` throws the matching class; but every shipped example
+  interp/VM (FaultKind parity) and PHP `integerDivide` throws the matching class; but every shipped example
   must produce identical *Ok* output, so the faults are exercised by the `value::int_intdiv_truncates_and_faults`
   kernel test + the `math_intdiv` native test, not the example set. (2) **`Math.nan()`/`infinity()`/`negativeInfinity()`
   must not be *printed*** — Rust renders `NaN`/`inf`/`-inf` while PHP `echo`es `NAN`/`INF`/`-INF`
   (the pre-existing float-display divergence, also noted for `Core.Json`); the example exercises them
-  only through the `bool`-returning predicates, never `Output.printLine(infinity())`. The `run ≡ runvm`
+  only through the `bool`-returning predicates, never `Output.printLine(infinity())`. The `interp ≡ VM`
   spine is always byte-identical (both Rust); only printing a special value would diverge from PHP.
   (3) **`toInt(float): int?` / `decimalToInt(decimal): int?` return `null` on out-of-range / special
   inputs** — `toInt` is `null` for NaN/±∞/out-of-i64-range (deliberately avoiding PHP's `(int)NAN == 0`);
@@ -886,7 +886,7 @@ not a panic:
   libm, and a non-representable result would diverge between Rust's shortest-round-trip and PHP, so the
   guide exercises them at their *exact* IEEE-defined points (`exp(0)`=1, `sin(0)`=0, `cos(0)`=1, …) and
   prints real values through `numberFormat`, which collapses any last-ULP libm difference. The
-  `run ≡ runvm` spine is always identical (both Rust). (2) **`numberFormat` rounding is byte-identical**
+  `interp ≡ VM` spine is always identical (both Rust). (2) **`numberFormat` rounding is byte-identical**
   (fixed 2026-06-27) — both `value::number_format` and `__phorj_number_format` now **digit-string
   round** the *shortest-round-trip* decimal (`__phorj_float`, identical to Rust's `{}` Display)
   half-away-from-zero by carry, NOT `(value * 10^d).round()`. So a half-way money value rounds the
@@ -898,11 +898,11 @@ not a panic:
 
 - **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
   `json_encode`:** Phorj renders a float with the positional shortest-round-trip form (`__phorj_float`)
-  for consistency with `run`/`runvm` everywhere, so an extreme magnitude (`1e20`) stringifies as
-  `100000000000000000000`, not json's `1.0e+20`. `run ≡ runvm ≡ real PHP` is always byte-identical (the
+  for consistency with interp/VM everywhere, so an extreme magnitude (`1e20`) stringifies as
+  `100000000000000000000`, not json's `1.0e+20`. `interp ≡ VM ≡ real PHP` is always byte-identical (the
   PHP leg uses the same helper); only the comparison to PHP's *native* `json_encode` differs at
   magnitude extremes. (2) **Multi-package now works** (validated 2026-06-29): a multi-package project
-  that `import`s `Core.Json` round-trips byte-identically `run ≡ runvm ≡ real PHP`
+  that `import`s `Core.Json` round-trips byte-identically `interp ≡ VM ≡ real PHP`
   (`examples/project/jsonmulti/`). The injected `Json` enum is a `package Main` type, so in a namespaced
   program its variant classes live in `\Main\`; the JSON runtime helpers (emitted in the global block)
   now reference them as `\Main\Object` etc. instead of bare names. (The companion fix: the loader's
@@ -944,24 +944,24 @@ not a panic:
   (nearest declaring ancestor) and `parent(A).m(…)` (jump to a named transitive ancestor) invoke the
   inherited method an override shadows; resolution is lexical + non-virtual + single-sourced
   (`ast::resolve_parent_method`), one new `Op::CallParent`, transpiles to native PHP `parent::m`/`A::m`,
-  byte-identical run≡runvm≡real PHP (`guide/parent-dispatch.phg`). Errors
+  byte-identical interp ≡ VM≡real PHP (`guide/parent-dispatch.phg`). Errors
   `E-PARENT-OUTSIDE-METHOD`/`-NO-PARENT`/`-NOT-ANCESTOR`/`-NO-METHOD`/`-AMBIGUOUS`.
   **B1b shipped (parent-constructor forwarding, single inheritance):** `parent.constructor(…)` (immediate)
   and `parent(A).constructor(…)` (named ancestor) run the parent constructor's effect — parameter
   bindings, promotions, field initializers, body — on the existing instance, lowered by *front-end
-  inlining* before any backend (NO new `Op`/`Value`), byte-identical run≡runvm≡real PHP
+  inlining* before any backend (NO new `Op`/`Value`), byte-identical interp ≡ VM≡real PHP
   (`guide/parent-constructor.phg`). Statement-only inside a constructor body; codes
   `E-PARENT-CTOR-OUTSIDE`/`-STMT`/`-MI`.
   **B2 shipped (multiple-inheritance parent-*method* dispatch, transpiler trait aliasing):**
   `parent(A).m(…)` / `parent.m(…)` inside an MI class (or a decomposed-ancestor trait body) lower to a
   `private` trait alias — `use … { T<dp>::m as private __super_<dp>_<m>; }` ⇒ `$this->__super_<dp>_<m>(…)`
-  (the `run`/`runvm` backends already dispatched MI via `Op::CallParent`; B2 fixes only the PHP emission).
-  Byte-identical run≡runvm≡real PHP (`guide/parent-dispatch-mi.phg`). **Deferred:**
+  (the interp/VM backends already dispatched MI via `Op::CallParent`; B2 fixes only the PHP emission).
+  Byte-identical interp ≡ VM≡real PHP (`guide/parent-dispatch-mi.phg`). **Deferred:**
   (a) **multiple-inheritance constructor forwarding** via the bare form (`E-PARENT-CTOR-MI`) — the
   idiomatic per-parent `parent(P).constructor(…)` already works on all three backends (B1b inline);
   (b) a parent-method jump to a **non-direct** ancestor under MI (`parent(G).m()` through an MI arm) —
   PHP cannot alias a transitively-`use`d trait method, so this is a **clean transpile error** (the
-  `run`/`runvm` backends handle it); (c) the **multi-of-multi** trait lowering — a class that is both an
+  interp/VM backends handle it); (c) the **multi-of-multi** trait lowering — a class that is both an
   MI leaf and an MI ancestor takes the `implements`/`use` path and is not also emitted as a trait (a deep
   edge outside `package Main` scope); (d) an **overloaded** parent method (the compiler resolves via the
   `methods` table, which doesn't carry the overload set — single-method parents only for now).
@@ -970,7 +970,7 @@ not a panic:
   constructor + fields, override its `open` methods, and call up with both `parent.m(…)` and the named
   `parent(Ancestor).m(…)` form — the loader mangles the `extends` parent name and the
   `parent(Ancestor)` reference to the library FQN, the transpiler emits `extends \Acme\Zoo\Animal` +
-  `parent::m()`. Byte-identical `run ≡ runvm ≡ real PHP` over a two-level chain
+  `parent::m()`. Byte-identical `interp ≡ VM ≡ real PHP` over a two-level chain
   (`examples/project/inherit/`). Cross-package **multiple** inheritance (a class decomposed to PHP
   traits across packages) is still out of scope (the MI transpile path is `package Main`-only).
 
@@ -986,7 +986,7 @@ not a panic:
   runs on the default stack.
 
 - **Value-dump on fault — interpreter-rich, VM backtrace-only (M-DX S3).** `phg run --dump-on-fault`
-  prints the faulting frame's named locals; `phg runvm --dump-on-fault` prints the byte-identical
+  prints the faulting frame's named locals; `phg run --dump-on-fault` prints the byte-identical
   backtrace but no locals section. The bytecode VM stores slot-indexed locals with no runtime
   slot→name table, so a byte-identical *named* dump would need a per-scope debug-symbol table —
   deliberately not built (the same interpreter-only rationale as the S5 debugger: the parity spine
@@ -999,7 +999,7 @@ not a panic:
   the parsed program — it does **not** run the `check_and_expand` front-end that injects the compiler
   types (`Core.Json`'s `Json`, `Core.Decimal`'s `RoundingMode`, `Core.Option`/`Core.Result`,
   `Core.Http`/`Core.Time` types). So an editor shows spurious `E-UNKNOWN-TYPE`/`E-UNKNOWN-IDENT` squiggles
-  on `Option<T>`/`Result<T,E>`/`Json`/`Router`/… even though `phg check`/`run`/`runvm` and the differential
+  on `Option<T>`/`Result<T,E>`/`Json`/`Router`/… even though `phg check`/interp/VM and the differential
   are all clean on the same file. This is a **diagnostic-surface gap only** — the compiler is correct; the
   editor is over-reporting. It predates the Wave B work (it hits B-1's `core-result.phg` and B-2a's
   `option-combinators.phg` identically). Corrects the earlier "LSP DoD satisfied by construction" note:
@@ -1008,7 +1008,7 @@ not a panic:
   discipline (`resolve_intrinsic_imports`) also lives only in `check_and_expand`, so the LSP raw checker
   never runs it — a valid QUALIFIED intrinsic call (`Assert.assert(x)` after `import Core.Assert;`) shows
   a spurious squiggle in-editor (the raw checker tries to resolve `Assert.assert` as a member/native and
-  fails), even though `phg check`/`run`/`runvm`/differential are clean. The BARE form (`panic(...)` after
+  fails), even though `phg check`/interp/VM/differential are clean. The BARE form (`panic(...)` after
   a member import) is unaffected (the intrinsic resolves in the raw checker at `calls.rs`). So DEC-196 Q3's
   "editors free by construction" holds only for the bare form, not the qualified one — folded into the same
   dedicated LSP slice (route `diagnostics_for` through `check_and_expand`).
@@ -1035,8 +1035,8 @@ not a panic:
   shadow limitation.** Slice 2 resolves a bare member-imported cross-package function
   (`import App.Text.banner; banner(…)` / `var f = banner;`) in the loader (`build_function_imports` +
   `resolve_call`/`resolve_expr`), rewriting it to the same mangled FQN a qualified `Text.banner(…)` call
-  produces (byte-identity inherited from the proven qualified cross-package path — run≡runvm structural,
-  PHP manually verified since the project differential is run≡runvm-only). The loader is **pre-scope**, so
+  produces (byte-identity inherited from the proven qualified cross-package path — interp ≡ VM structural,
+  PHP manually verified since the project differential is interp ≡ VM-only). The loader is **pre-scope**, so
   it cannot honor `local > imported` for a local that shadows an imported function name — but this is the
   SAME limitation the loader already has for **same-package** function calls (a local `foo` shadowing a
   same-package `function foo` is likewise rewritten), so slice 2 is no worse than the status quo, and for
@@ -1075,13 +1075,13 @@ not a panic:
   FQN, so the checker's by-name trait flatten lines up; the transpiler emits a native PHP `trait` in its
   package namespace and the using class composes it via `use \Acme\Mix\Greet`. Method reuse, a private
   helper, and an abstract requirement satisfied by the using class all work byte-identically
-  `run ≡ runvm ≡ real PHP` (`examples/project/mixins/`). Narrower remaining edge: a cross-package
+  `interp ≡ VM ≡ real PHP` (`examples/project/mixins/`). Narrower remaining edge: a cross-package
   trait-vs-trait *conflict-resolution* clause (`use P.m` across packages) is not yet exercised, and a
   trait whose member calls another *cross-package* free function inside its own body inherits the same
   loader-rewrite scope as a class. (4) **trait-vs-trait
   conflict-resolution transpilation — SHIPPED (Wave 1.3).** A collision resolved by `use P.m`/`rename`/
   `exclude` now lowers to a combined PHP `use P, Q { P::m insteadof Q; P::m as n; }` block (mirroring the
-  MI-decomposition path), byte-identical run≡runvm≡real PHP (`guide/trait-conflicts.phg`). Narrower
+  MI-decomposition path), byte-identical interp ≡ VM≡real PHP (`guide/trait-conflicts.phg`). Narrower
   remaining edge: a collision where one trait supplies the method only via its *own* nested `use`
   (not a direct declaration) isn't detected by the clause builder — caught by the PHP oracle if it
   arises. (5) **immutable trait instance
@@ -1095,7 +1095,7 @@ not a panic:
   a type across files anyway); and a visibility keyword on an `import` re-export. **Member-level**
   `Modifier` visibility (`private`/`protected` on instance fields, promoted ctor params, and methods)
   is now **checker-enforced** (Wave 1.1, `E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY`): an out-of-scope
-  read/write/call is rejected up front so `run ≡ runvm ≡ transpiled PHP` all agree. Remaining
+  read/write/call is rejected up front so `interp ≡ VM ≡ transpiled PHP` all agree. Remaining
   *not-yet-enforced* corners (still PHP-only, narrower than before): a `private`/`protected` **static
   field** read externally (`ClassName.field`), and a member reached through an **intersection-typed**
   receiver. Both are rare and tracked for a follow-up; instance-field/method access — the documented
@@ -1183,13 +1183,13 @@ not a panic:
   a nested `if (guard)` in the bound then-scope, the else shared by bind-fail and guard-false) and
   **while-let `when` guards ship** (S2.4 — `while (var x = opt when g) { … }`, desugared so a false
   guard `break`s the loop). Both are pure parser desugars (no `Stmt::If.guard` field, no backend
-  change), byte-identical run≡runvm≡real PHP.
+  change), byte-identical interp ≡ VM≡real PHP.
 - **Struct destructuring ships** (S5.2: shorthand `Point { x, y }`, rename `Point { x: px }`, full
   nesting, plus nested type patterns in variant payloads `W(Circle c)`). Deferred corners:
   (1) a struct pattern reads instance fields by name, so it assumes **initialized fields** — fine for
   the universal case (promoted ctor params, always populated); destructuring a declared-but-uninitialized
   explicit field is unsupported (the interpreter treats an absent field as a no-match while the VM's
-  `GetField` faults — a narrow run↔runvm asymmetry only for the binding-bound-but-unused case). (2) A
+  `GetField` faults — a narrow interp↔VM asymmetry only for the binding-bound-but-unused case). (2) A
   refutable nested pattern never discharges its variant/struct's exhaustiveness, even when it is in
   fact total over a concrete payload type (`W(Circle c)` on a `Circle`-typed payload still needs a
   fallback) — the checker doesn't prove payload-subtype totality. (3) Struct patterns on **generic
@@ -1220,7 +1220,7 @@ instance fields `o.f=e`** (M-mut.6 — instances are handles; see `examples/guid
 **`static`/`static mutable` class fields** `ClassName.field` (M-mut.7a), and **property hooks**
 `T name { get => …; set(T v) { … } }` (M-mut.7b — virtual get/set, subsumes the old get-hook plan;
 see `examples/guide/property-hooks.phg`). The milestone is **feature-complete**. Each slice is
-byte-identical `run ≡ runvm ≡ real PHP`. Still deferred (each is either a clean compile-time error or
+byte-identical `interp ≡ VM ≡ real PHP`. Still deferred (each is either a clean compile-time error or
 an explicit non-goal, never a panic):
 
 - **No cycle collector.** Instances are shared-mutable handles, so `a.next = b; b.next = a` forms a
@@ -1260,7 +1260,7 @@ but they shape how imperative code ports:
   arrays.** PHP's `$groups[$cat]['sum'] += …` (nested value-array) has no direct equivalent, but the
   idiomatic Phorj form does: a `Map<K, AccClass>` where the accumulator is a **class** (instances are
   shared-mutable handles), so `groups[cat].sum = groups[cat].sum + v` mutates the held instance in
-  place — verified `run≡runvm` in the ported `AggregationBenchmark`. Only a **nested *value*-container**
+  place — verified `interp ≡ VM` in the ported `AggregationBenchmark`. Only a **nested *value*-container**
   index-assign (`grid[i][j]=e` for a `List<List<int>>` matrix, `m[k1][k2]=e` of value types) hits the
   nested-place wall. So of the benchforge suite, Fibonacci/PrimeSieve/**Aggregation** are ported;
   Sorting (in-place recursive quicksort) needs by-ref params. **Matrix's nested-value index-assign
@@ -1277,7 +1277,7 @@ but they shape how imperative code ports:
 ## Error model Slice 2a (M-faults) — deferred refinements
 
 The value tier (`Result<T, E>` + `?`) and the panic tier (`panic`/`todo`/`unreachable`/`assert`) ship in
-2a, byte-identical `run ≡ runvm ≡ real PHP`. The enforced `throws E` exception tier (with `try`/`catch`/
+2a, byte-identical `interp ≡ VM ≡ real PHP`. The enforced `throws E` exception tier (with `try`/`catch`/
 `finally`) is Slice 2b. Deliberately deferred (each rejected cleanly, never a crash):
 
 - **`?` is allowed only as a whole let-initializer** (`int a = f()?;`). Nested (`g(f()?)`) or
@@ -1294,7 +1294,7 @@ The value tier (`Result<T, E>` + `?`) and the panic tier (`panic`/`todo`/`unreac
 ## Error model Slice 2b (M-faults) — deferred refinements
 
 Checked exceptions — `throws`/`throw`/`try`/`catch`/`finally` and `?`-throws — ship in 2b, byte-identical
-`run ≡ runvm ≡ real PHP` (`examples/guide/errors.phg`). Notes and deliberate deferrals:
+`interp ≡ VM ≡ real PHP` (`examples/guide/errors.phg`). Notes and deliberate deferrals:
 
 - **Panics/faults are uncatchable by design.** A `panic`/`todo`/`unreachable`/failed `assert`, or a
   runtime fault (division by zero, index out of range, …), is a separate tier from a `throw`: it passes
@@ -1318,7 +1318,7 @@ Checked exceptions — `throws`/`throw`/`try`/`catch`/`finally` and `?`-throws �
 - **Cause-chains ship in Slice 2c** (`examples/guide/cause-chain.phg`): a conventional `cause` field of
   type `Error?` on an `Error` subtype is routed into PHP's native exception chain
   (`parent::__construct($message, 0, $cause)` → `getPrevious()`); the Phorj backends read it back as a
-  plain field, byte-identical `run ≡ runvm ≡ real PHP`. Two deliberate deferrals remain: **reading a
+  plain field, byte-identical `interp ≡ VM ≡ real PHP`. Two deliberate deferrals remain: **reading a
   cause through PHP's `getPrevious()` accessor** (a `.cause()` method form, as opposed to the field read)
   is only meaningful for a *foreign* PHP exception, so it folds into **PHP interop (M8.5)**; and
   **catching PHP-thrown exceptions across the interop boundary** now ships in **M8.5 S3a** —
@@ -1345,7 +1345,7 @@ Open corners (each is a documented bridge limit, never a crash):
 ## Totality cluster (M-RT) — deferred refinements
 
 Return-on-all-paths (`E-MISSING-RETURN`), the `never` bottom type, and the `W-UNREACHABLE` /
-`W-MATCH-UNREACHABLE` dead-code lints ship and are byte-identical `run ≡ runvm ≡ real PHP` (see
+`W-MATCH-UNREACHABLE` dead-code lints ship and are byte-identical `interp ≡ VM ≡ real PHP` (see
 `examples/guide/totality.phg`). The termination analysis is deliberately **structural and
 conservative** — it claims divergence only for shapes it can prove, so it never rejects a function
 that does return on every path. The corners below are deferred (each is sound, never a crash):
@@ -1367,17 +1367,17 @@ that does return on every path. The corners below are deferred (each is sound, n
 ## Method & function overloading (M-RT) — deferred refinements
 
 Dynamic multiple dispatch over free functions and class methods ships and is byte-identical
-`run ≡ runvm ≡ real PHP` (`examples/guide/overloading.phg`). Deliberate deferrals:
+`interp ≡ VM ≡ real PHP` (`examples/guide/overloading.phg`). Deliberate deferrals:
 
 - **Overloaded constructors** are not supported (PHP cannot overload a constructor either; Phorj has
   constructor promotion and — when it lands — default arguments). Overload a static factory method.
 - **Return-type overloading SHIPPED for free functions** (M-RT Slice C1, 2026-06-29): free functions
   may share a name AND parameter signature, differing only in return type, resolved at compile time by
   an explicit `<Type>f(args)` selector and mangled per return before any backend
-  (`examples/guide/return-overloading.phg`, byte-identical `run ≡ runvm ≡ real PHP`). Remaining C1
+  (`examples/guide/return-overloading.phg`, byte-identical `interp ≡ VM ≡ real PHP`). Remaining C1
   deferrals: (1) **methods SHIPPED** (M-RT S2.2, 2026-06-29): a class method may now return-overload too
   (`examples/guide/method-return-overloading.phg`), resolved by a `<Type>receiver.m(args)` selector and
-  mangled per return (`read__ret_int`), byte-identical `run ≡ runvm ≡ real PHP`, no new `Op`. Method
+  mangled per return (`read__ret_int`), byte-identical `interp ≡ VM ≡ real PHP`, no new `Op`. Method
   scope is **C1-equivalent** (deliberately tighter than free fns): the selector is the ONLY resolving
   context — a bare method overload call is `E-OVERLOAD-NO-CONTEXT` even at a typed binding/`return`
   (no C2 sink for methods yet); a **single declaring class** only — a return-overloaded method
@@ -1416,7 +1416,7 @@ Dynamic multiple dispatch over free functions and class methods ships and is byt
 Erased generics ship for **free functions, class methods, classes, and enums**: `function id<T>(T x)
 : T`, `class U { function id<T>(T x): T … }`, `class Box<T> { … }` / `class Pair<A, B> { … }`, and
 `enum Option<T>` / `enum Result<T, E>`, inferred at the call site / at construction / at the variant
-constructor, byte-identical `run ≡ runvm ≡ real PHP` (see `examples/guide/generics.phg`,
+constructor, byte-identical `interp ≡ VM ≡ real PHP` (see `examples/guide/generics.phg`,
 `generic-methods.phg`, `generic-types.phg`, `generic-enums.phg`). There is no monomorphization — type
 parameters are erased to PHP `mixed` before any backend; a generic class/enum value carries no runtime
 type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements are deliberately deferred
@@ -1437,12 +1437,12 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
   (`FunctionDecl::generic_ret_from_param`, set in `erase_generics`); the VM compiler's `ctype` recovers
   the erased result's operand type from that argument, so **`identity(7) + 1` and `firstOr(xs, -1) * 2`
   now specialize on the VM** exactly as the interpreter evaluates them (byte-identical, gated by
-  `examples/guide/generics.phg`). [Verified: both `run` and `runvm` print `8`.] **Generic *methods*
+  `examples/guide/generics.phg`). [Verified: both `run` and the VM print `8`.] **Generic *methods*
   echoing a param now work too** (S2.1-methods, 2026-06-29): `erase_generics` computes the echo index
   for class methods, threaded into the compiler as `method_generic_ret_from_param` and recovered in the
   method-call `ctype` arm, so **`u.pick(7, 8) + 1`** (a method `pick<T>(T a, T b): T`) specializes on
   the VM (`examples/guide/generic-methods.phg`, differential `generic_method_result_echoing_param_is_vm_operand`).
-  [Verified: `run` ≡ `runvm` ≡ real PHP.] **S2.1-broad CLOSED** (2026-06-29) — the general fix shipped:
+  [Verified: `run` ≡ the VM ≡ real PHP.] **S2.1-broad CLOSED** (2026-06-29) — the general fix shipped:
   the checker records a **reified-operand side-table** (`expr span.start → Ty` for `Call`/`Member`/`Index`
   results whose resolved type is concrete) returned from `check_resolutions`, threaded to the VM compiler
   via `check_and_expand_reified` + `compile_with`, and consulted FIRST in `ctype` (entries that map to
@@ -1452,7 +1452,7 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
   (`List.sum(g.all()) + 1`), and a multi-param-derived return — all specialize on the VM exactly as the
   interpreter evaluates them (the checker is authoritative on the runtime type; erasure doesn't change
   it). `examples/guide/generic-types.phg`, differential `generic_class_member_results_are_vm_operands`;
-  byte-identical `run ≡ runvm ≡ real PHP`. The field-based `generic_ret_from_param` paths still work (the
+  byte-identical `interp ≡ VM ≡ real PHP`. The field-based `generic_ret_from_param` paths still work (the
   side-table just wins first). No new `Op`/`Value`.
 - **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
@@ -1461,7 +1461,7 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
   `import Pkg.Path.Type`, inferred at construction and recovered at each use site, with invariant
   type arguments enforced across the package boundary. The loader leaves the type parameter untouched
   and `erase_generics` removes it before any backend, so it rides the same erasure path as a
-  `package Main` generic class — byte-identical `run ≡ runvm ≡ real PHP`
+  `package Main` generic class — byte-identical `interp ≡ VM ≡ real PHP`
   (`examples/project/genericbox/`). Generic *enums* in a library package are the same erasure path but
   not yet covered by a shipped example; cross-package generic *methods* on a non-generic library class
   likewise ride the existing method machinery.
@@ -1494,7 +1494,7 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
 ## Lambdas & first-class functions (M3 S3) — deferred refinements
 
 Lambdas (expression + statement body), higher-order functions, first-class named-function
-references, and the pipe operator `|>` all ship in M3 S3 and are byte-identical on `run`/`runvm`
+references, and the pipe operator `|>` all ship in M3 S3 and are byte-identical on interp/VM
 and round-trip through real PHP. These refinements are deliberately deferred (each rejected cleanly
 or simply unavailable, never a crash):
 
@@ -1514,7 +1514,7 @@ or simply unavailable, never a crash):
   every position — at a call site, inside a lambda body (`function(int x) => dbl(x)`), AND in value position
   (`var f = dbl;` / passing `dbl` to a higher-order call) — to its package FQN, so the backends resolve
   the mangled function. For `package Main` the mangle is a no-op, so single-file programs are
-  byte-identical. Verified `run ≡ runvm ≡ real PHP` (`examples/project/funcvalues/`). Still deferred:
+  byte-identical. Verified `interp ≡ VM ≡ real PHP` (`examples/project/funcvalues/`). Still deferred:
   **qualified / cross-package function *values*** — passing `Acme.Calc.dbl` itself (the dotted member as
   a value, vs. *calling* it `Acme.Calc.dbl(x)`) is not yet rewritten; call it, or wrap it in a local
   same-package function and pass that.
@@ -1553,7 +1553,7 @@ or simply unavailable, never a crash):
   a dependency's *own* `[require]` is not walked. Vendor flat-named leaf libraries for now (the
   shipped `examples/project/withdeps/` does exactly this).
 - **`phg build` is single-file and does not merge `vendor/`.** A program that imports a vendored
-  (or any cross-package) dependency runs via `run`/`runvm`/`transpile` (which go through the project
+  (or any cross-package) dependency runs via interp/VM/`transpile` (which go through the project
   loader) but cannot yet be compiled to a standalone executable. `build` embeds one source file only
   (M2.5 Phase 1 scope), unchanged by S3.
 - **Resolution is offline by design.** `run`/`check`/`transpile` never fetch — they read the
@@ -1590,7 +1590,7 @@ or simply unavailable, never a crash):
 - **Route constraints depend on `Core.Regex`** — importing `Core.Http` now also pulls in `Core.Regex`
   (the prelude matches constraints with it). With the `regex` cargo feature disabled (e.g. a custom
   playground build), a program that imports `Core.Http` would fail to resolve `Core.Regex`. Constraint
-  matching is byte-identical run≡runvm≡PHP for ASCII patterns; exotic patterns inherit `Core.Regex`'s
+  matching is byte-identical interp ≡ VM≡PHP for ASCII patterns; exotic patterns inherit `Core.Regex`'s
   documented regex-crate-vs-PCRE caveats.
 - **Router lives on the injected `Core.Http` types.** A program that declares its *own* `Request`/
   `Response` (the W1 examples) does not get the injected `Router`; import `Core.Http` to use it.
@@ -1599,7 +1599,7 @@ or simply unavailable, never a crash):
 
 The concurrency *surface* and value model (`docs/specs/2026-06-29-m6-w4-green-threads-design.md`):
 `spawn <call>` → `Task<T>`, `t.join()`, typed `Channel<T>` (`Channel.create()` / `ch.send(v)` /
-`ch.receive()`). Both backends run it **byte-identically** (`run≡runvm`); it is **quarantined from the PHP
+`ch.receive()`). Both backends run it **byte-identically** (`interp ≡ VM`); it is **quarantined from the PHP
 oracle** (PHP has no green threads — the transpiler emits `E-CONCURRENCY-NO-PHP`, never a misleading
 synchronous lowering).
 
@@ -1613,12 +1613,12 @@ synchronous lowering).
   frame-swap executor (tracked).
 - **Cooperative `spawn` defers only a single-overload free-function call.** A spawned *method* call, an
   *overloaded* free function, a *closure* value, or a *variant* constructor runs **inline** in the
-  spawning task (synchronous-degenerate) on both backends — identical `run≡runvm`, but not yet truly
+  spawning task (synchronous-degenerate) on both backends — identical `interp ≡ VM`, but not yet truly
   concurrent. True deferral for those forms is a follow-up (the VM needs an overload-dispatching /
   receiver-bound spawn op).
 - **A cooperative task fault renders without its stack-trace frames.** The cooperative driver propagates
   a task fault as a bare message (the coroutine boundary doesn't yet thread the interpreter's
-  `trace_stack` / the VM's frame attribution out). Fault *kind* + message are byte-identical `run≡runvm`;
+  `trace_stack` / the VM's frame attribution out). Fault *kind* + message are byte-identical `interp ≡ VM`;
   only the rendered backtrace is absent (follow-up). The synchronous path's traces are unchanged.
 - **Statics are per-task in cooperative mode.** Each green task builds its own engine, so a `static`
   field written in one task is not observed in another. No shipped program relies on cross-task static
@@ -1637,10 +1637,10 @@ synchronous lowering).
 - **`spawn` roots a task at the function's own frame (no thunk frame).** A free-function `spawn f(x)`
   lowers to `Op::SpawnCall(func_idx, argc)` (VM) / defers `f`'s body as the coroutine root
   (interpreter) — *not* a thunk closure — so a fault inside a spawned call traces through the real call
-  (`f → …`) **identically** on `run` and `runvm`. (A thunk lambda would surface as a synthetic
+  (`f → …`) **identically** on `run` and the VM. (A thunk lambda would surface as a synthetic
   `<lambda@N>` frame on the VM only — closures are real call frames there but invisible in the
-  tree-walker — a `run`≢`runvm` trace divergence, the reverted `b5053a4` bug.) This sits on a **broader pre-existing asymmetry**: a
-  fault inside *any* lambda/closure call shows the closure frame (`<lambda@N>`) on `runvm` but not on
+  tree-walker — a `run`≢the VM trace divergence, the reverted `b5053a4` bug.) This sits on a **broader pre-existing asymmetry**: a
+  fault inside *any* lambda/closure call shows the closure frame (`<lambda@N>`) on the VM but not on
   `run` (the interpreter pushes no trace frame for closure calls). The differential `agree_err` oracle
   classifies faults by *kind* (body substring), so it tolerates this trace-text difference; the
   emitted output and fault kind stay byte-identical. Making closure-call traces fully identical on both
@@ -1698,7 +1698,7 @@ conversion, primitive-union assertion, the bool cells, and `float`/`string as de
 ## Maps (M-RT S3 — foundation)
 
 `Map<K, V>` ships its **foundation** this slice: literals `[k => v, …]` and indexing `m[k]`,
-byte-identical on `run`/`runvm` and round-tripped through real PHP. These are deliberately deferred
+byte-identical on interp/VM and round-tripped through real PHP. These are deliberately deferred
 (each rejected cleanly or simply unavailable, never a crash):
 
 - **No empty map literal yet.** `[]` is the empty *list*; a map literal needs at least one `k => v`
@@ -1717,7 +1717,7 @@ byte-identical on `run`/`runvm` and round-tripped through real PHP. These are de
   *iteration* and `Set` itself are still pending** (Set construction is the next S7b sub-slice). Key
   coercion caveat: PHP arrays coerce integer-like string keys (and bools) to int keys, so `keys()`/
   `values()` over such a map render differently under PHP than on the Rust backends — use plain
-  (non-numeric) string keys when transpiling, which PHP keeps verbatim. The `run`/`runvm` spine is
+  (non-numeric) string keys when transpiling, which PHP keeps verbatim. The interp/VM spine is
   always byte-identical.
 - **A string-literal index inside a `"{…}"` interpolation nests quotes.** `"{m["k"]}"` ends the
   string early (the shared interpolation rule — see Core.Html). Bind the lookup to a local first:
@@ -1726,16 +1726,16 @@ byte-identical on `run`/`runvm` and round-tripped through real PHP. These are de
   A `Map<bool, V>` is byte-identical for value-only access, but any op that RENDERS the *key* diverges
   under PHP: `Map.entries` (DEC-288) yields `array_keys`-coerced int keys (`1`/`0`) where the Phorj
   backends keep `true`/`false` — e.g. `for ((k, v) in Map.entries(boolMap))` prints `1=…` under PHP
-  vs `true=…` on run/runvm. This is the same PHP array-key coercion as `Map.keys`/`values`; PHP arrays
+  vs `true=…` on interp/VM. This is the same PHP array-key coercion as `Map.keys`/`values`; PHP arrays
   simply cannot hold a bool key. **Use string/int keys** for byte-identical PHP round-tripping (the
-  `run ≡ runvm` spine is always identical; this is a transpile-leg-only edge on a rare key type).
+  `interp ≡ VM` spine is always identical; this is a transpile-leg-only edge on a rare key type).
 
 ## Generic natives (M-RT S7b — `Core.List` / `Core.Map`)
 
 The first generic stdlib natives ship this slice: `Core.List` `reverse`/`sum` and `Core.Map`
 `keys`/`values`/`has`/`size`. Their signatures carry `Ty::Param` and unify at the call site exactly
 like a generic free function; the parameter is registry-only and never reaches a backend. Two PHP-leg
-caveats (the `run`/`runvm` spine is always byte-identical):
+caveats (the interp/VM spine is always byte-identical):
 
 - **`List.sum`/`List.sumBy` fault on i64 overflow; PHP `array_sum` promotes to float instead.** The checked
   sum keeps EV-7 (never panics), so a sum exceeding `i64::MAX` is a clean Phorj fault, whereas PHP would
@@ -1847,7 +1847,7 @@ byte-identical by construction. The clock is the one non-deterministic surface, 
 ## Core.Regex (Fork A) — documented edges + deferrals
 
 `Core.Regex` is backed by the `regex` crate (RE2-style, linear-time, ReDoS-immune). The byte-identity
-spine (`run ≡ runvm ≡ real PHP`) holds on the **regular subset** the engine accepts; the items below
+spine (`interp ≡ VM ≡ real PHP`) holds on the **regular subset** the engine accepts; the items below
 are deliberate edges, each either rejected cleanly or kept inside ASCII where the three backends agree.
 
 - **Backreferences / lookaround are rejected at `Regex.compile`** (the engine omits them by design —
@@ -1861,13 +1861,13 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   that does not participate in the match is omitted.
   ⚠ **Optional non-participating named groups diverge on the PHP leg** (inherited, both APIs): the Rust
   backends OMIT a non-matching named group, but transpiled PCRE fills a non-trailing unmatched group
-  as `""` — so `run`/`runvm` yield `{b:"bar"}` while transpiled PHP yields `{a:"",b:"bar"}` for
+  as `""` — so interp/VM yield `{b:"bar"}` while transpiled PHP yields `{a:"",b:"bar"}` for
   `(?<a>foo)?(?<b>bar)` on `"bar"` [Verified: `phg run` has_a=false vs `transpile|php` has_a=true].
   Shipped examples use only mandatory named groups (all participate), where all three agree. A future
   alignment would filter `""`-valued non-participating keys in the PHP helper.
   ✅ **`replaceCallback`'s `RegexMatch` does NOT have this divergence** (DEC-295): its PHP twin uses
   `PREG_UNMATCHED_AS_NULL` + a null-filter, so a non-participating group is omitted on every backend and
-  `RegexMatch.group(name)` returns `null` identically on run≡runvm≡php. The same fix could be back-ported
+  `RegexMatch.group(name)` returns `null` identically on interp ≡ VM≡php. The same fix could be back-ported
   to `findGroups`/`findAllGroups` (they predate it) if/when it's worth a change.
 - **Always Unicode (`/u`), case-sensitive.** Inline flags / case-insensitivity (`Regex.compileWith`)
   are deferred — add when requested.
@@ -1885,7 +1885,7 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   Regex; a consequence of interpolation. The guide example and docs use raw strings throughout.
 - **Multi-package transpile is a follow-up** (same boundary as `Core.Json`): the injected `Regex`
   class lives in the entry package, so a *namespaced* multi-package program emitting `new Regex(...)`
-  inside another package block is untested. Single-package `run ≡ runvm ≡ real PHP` is gated green.
+  inside another package block is untested. Single-package `interp ≡ VM ≡ real PHP` is gated green.
 
 ## Secret<T> (Fork B) — scope
 
@@ -1947,7 +1947,7 @@ Some user-facing native faults lower to a **raw PHP builtin**, so the Phorj faul
 `ValueError`/`TypeError`/`Fatal` differ (`List.chunk(xs,0)`→`array_chunk` `ValueError`; `Hash.hkdf(len>8160)`
 →`hash_hkdf` `ValueError`; `Conversion.toString(closure)`→`(string)$v` `Fatal`). **This is NOT a
 byte-identity divergence.** The fault-parity rule is: where Phorj faults, PHP must also **fault** (not
-silently succeed) — the *text need not match* (`agree_err` compares run≡runvm only; faults aren't
+silently succeed) — the *text need not match* (`agree_err` compares interp ≡ VM only; faults aren't
 byte-identity examples, Invariant 9 / G-1.1; the `__phorj_clamp` comment states this). All three DO fault
 in PHP → **behaviourally consistent**. (An earlier B-2d note called these "latent divergences" using the
 wrong text-match lens — retracted; see `docs/research/b2d-rich-error-audit.md`.)
@@ -1975,8 +1975,8 @@ are byte-identical by construction — the helper throws the same string on both
   anything raised *within* a `"{ … }"` interpolation loses its true line. Two cases:
   - **Front-end type errors** inside interpolation report line 1 on *both* backends (the checker is
     shared) and the caret underlines column 1 — a diagnostic-quality issue, not a backend divergence.
-  - **Runtime faults** inside interpolation are a real `run` ≡ `runvm` **divergence**: `run` (the
-    interpreter, via its stack-trace frames) reports the **true** line, but `runvm` reports **line 1**
+  - **Runtime faults** inside interpolation are a real `run` ≡ the VM **divergence**: `run` (the
+    interpreter, via its stack-trace frames) reports the **true** line, but the VM reports **line 1**
     (stack-trace frames likewise). Message, `FaultKind`, and exit code still agree, so the differential
     harness stays green — only the line diverges. Pinned by the `#[ignore]`d
     `interpolation_fault_line_matches_between_backends` gate in `tests/differential.rs`; the fix needs
@@ -2009,7 +2009,7 @@ are byte-identical by construction — the helper throws the same string on both
   variants.
 - **`instanceof` is the type-test operator (M-RT S1); the value-equality `is` alias is retired.**
   `value instanceof ClassName` parses (the right operand is a class *type name*, not an expression),
-  evaluates to `bool` on `run`/`runvm`, and transpiles to PHP `$value instanceof ClassName` —
+  evaluates to `bool` on interp/VM, and transpiles to PHP `$value instanceof ClassName` —
   byte-identical across all three backends (see `guide/instanceof.phg`). Inside
   `if (x instanceof T) { … }` the checker smart-casts `x` to `T` in the then-block. As of **M-RT S2**
   the right operand may be a **class or an interface** (`guide/interfaces.phg`); a class that
@@ -2030,13 +2030,13 @@ are byte-identical by construction — the helper throws the same string on both
   `precision=14` rounding or scientific-notation switch — see `guide/floats.phg`, which round-trips
   every magnitude through real PHP). **Float division by zero now FAULTS** (resolved 2026-06-27, the
   "any division by zero throws" rule): `1.0 / 0.0` → `"division by zero"` and `1.0 % 0.0` → `"modulo by
-  zero"` on `run`/`runvm` (no IEEE `inf`/`NaN`), and the transpiled PHP throws `DivisionByZeroError`
+  zero"` on interp/VM (no IEEE `inf`/`NaN`), and the transpiled PHP throws `DivisionByZeroError`
   to agree (`/` throws natively; float `%` routes through `__phorj_rem`, which guards `$b == 0`). A
   finite overflow-to-`inf` (huge ÷ tiny non-zero) is *not* a zero division and stays `inf`;
   `__phorj_float` renders `inf`/`-inf`/`NaN` the Rust way if one is reached through other means.
 - **`opt!`-on-null fault: message body matches across backends; only the source location differs.**
   A null force-unwrap faults with the body `force-unwrap of null` on **all three** backends — `run`/
-  `runvm` (located, classified `FaultKind::ForceUnwrap`) and the transpiled PHP, which throws
+  the VM (located, classified `FaultKind::ForceUnwrap`) and the transpiled PHP, which throws
   `RuntimeException("force-unwrap of null")` (same body, verified 2026-06-27). The only residual
   difference is the *location*: PHP's exception carries the generated `.php` file:line, not the Phorj
   source line — inherent to transpilation (a PHP exception has no Phorj source position) and
@@ -2051,7 +2051,7 @@ are byte-identical by construction — the helper throws the same string on both
 - **Member visibility is enforced (Wave 1.1 — was a byte-identity hole).** An external read/write of a
   `private`/`protected` instance field (incl. a promoted ctor param), or an external call of a
   `private`/`protected` method, is now a **compile error** (`E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY`)
-  — so `run`/`runvm`/transpiled PHP all reject it instead of the Phorj backends accepting what PHP
+  — so interp/VM/transpiled PHP all reject it instead of the Phorj backends accepting what PHP
   would throw on (`Cannot access private property`). Declare the member `public` (the default) when it
   is accessed from outside, or expose it through a public accessor (`obj.valueOf()`). A `private` member
   used only inside the declaring class — and a `protected` one inside that class or a subclass — is
@@ -2207,7 +2207,7 @@ user-code span can numerically COLLIDE with a prelude-internal span, making a re
 for one site splice at the other. Reproduced 2026-07-17: adding one 9-byte line
 (`#[Entry]\n`, the DEC-191 codemod) to `examples/database/transaction-closure.phg` shifted a user call
 onto a prelude `transaction` span — the VM leg failed (`transaction` is not a function) while
-the interpreter ran (run≠runvm). ANY padding change escapes the collision, which is what makes
+the interpreter ran (interp ≠ VM). ANY padding change escapes the collision, which is what makes
 it latent-and-random rather than deterministic. REAL FIX (owed, its own slice): re-base every
 injected module's `Span.start` into a per-module high offset window at injection time (line/col
 stay original for diagnostics), so prelude and user span keys can never meet. Until then the

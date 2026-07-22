@@ -8,7 +8,7 @@
 //! MUST be gone before compile/interpret/transpile. The TYPE form (`Type::Tuple` annotations) is left
 //! in place and handled backend-side as a list view — the compiler's `resolve_cty` maps it to
 //! `CTy::List` and the transpiler's `emit_type` to a PHP type that does not affect stdout — so
-//! run ≡ runvm ≡ PHP output is byte-identical either way.
+//! interp ≡ VM ≡ PHP output is byte-identical either way.
 //!
 //! Runs in `cli::check_and_expand_reified` (the chokepoint BOTH the interpreter and the VM/transpile
 //! paths flow through), so no backend ever sees `Expr::Tuple` (Invariant 6).

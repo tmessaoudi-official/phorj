@@ -62,7 +62,7 @@ fn agree(src: &str) {
     let vm = cmd_run(&src);
     assert_eq!(
         tree, vm,
-        "backend mismatch for:\n{src}\n  run={tree:?}\n  runvm={vm:?}"
+        "backend mismatch for:\n{src}\n  run={tree:?}\n  vm={vm:?}"
     );
 }
 
@@ -169,7 +169,7 @@ fn agree_err(src: &str) {
     let vm_kind = vm.as_ref().err().map(|e| classify(e));
     assert_eq!(
         tree_kind, vm_kind,
-        "fault-kind mismatch for:\n{src}\n  run={tree:?}\n  runvm={vm:?}"
+        "fault-kind mismatch for:\n{src}\n  run={tree:?}\n  vm={vm:?}"
     );
     assert!(
         tree_kind.is_some(),
@@ -185,7 +185,7 @@ fn php_bin_cached() -> Option<&'static str> {
     PHP.get_or_init(php_bin).as_deref()
 }
 
-/// DEC-255 fault-parity leg. `agree_err` proves `run ≡ runvm` fault on a program; this ALSO drives
+/// DEC-255 fault-parity leg. `agree_err` proves `interp ≡ VM` fault on a program; this ALSO drives
 /// the transpiled PHP and asserts it faults too (non-zero exit) — closing the byte-identity break
 /// where phorj faults at RUNTIME but the naive PHP erasure silently succeeds (exit 0).
 ///
@@ -206,7 +206,7 @@ fn agree_err_php(src: &str) {
         return;
     }
     let Some(php) = php_bin_cached() else {
-        return; // pre-commit / no php — the run≡runvm leg above still gates
+        return; // pre-commit / no php — the interp ≡ VM leg above still gates
     };
     let Ok(php_src) = cli::cmd_transpile(&src) else {
         return; // compile-time fault or native-only ladder module → no runnable PHP leg
@@ -244,7 +244,7 @@ fn fault_line(err: &str) -> Option<usize> {
 }
 
 /// W0-5 (H §5): faults raised INSIDE a `"{…}"` interpolation report the wrong line on the VM —
-/// `run` gives the true line, `runvm` reports line 1 (stack-trace frames likewise skewed). Message,
+/// `run` gives the true line, the VM reports line 1 (stack-trace frames likewise skewed). Message,
 /// FaultKind, and exit code agree (so `agree_err` and the CLI differential stay green); only the line
 /// diverges. This is a real break in the byte-identity claim, disclosed in KNOWN_ISSUES + G-1.1.
 ///
@@ -272,7 +272,7 @@ fn interpolation_fault_line_matches_between_backends() {
     ];
     for (src, want) in cases {
         let run = cmd_treewalk(src).expect_err("program must fault on run");
-        let vm = cmd_run(src).expect_err("program must fault on runvm");
+        let vm = cmd_run(src).expect_err("program must fault on the VM leg");
         assert_eq!(
             fault_line(&run),
             Some(*want),
@@ -342,7 +342,7 @@ fn p2_programs_match_between_backends() {
 
 /// Variant qualification slice A1 — qualified enum-variant construction `new Enum.Variant(args)` runs
 /// byte-identically on both backends (it is erased to the bare `Variant(args)` construction before any
-/// backend, so run≡runvm is structural). Covers a non-generic and a generic enum; constructed
+/// backend, so interp ≡ VM is structural). Covers a non-generic and a generic enum; constructed
 /// qualified, matched bare (qualified match patterns are slice A2).
 #[test]
 fn qualified_variant_construction_is_byte_identical() {
@@ -384,7 +384,7 @@ function area(Shape s): float {
 
 /// M-RT S6a — single inheritance: an inherited method, an overridden method (via a subclass ref),
 /// and dynamic dispatch (via a superclass-typed ref holding the subclass) all resolve identically on
-/// `run` and `runvm`. The interpreter walks the parent chain; the compiler pre-flattens the same
+/// `run` and the VM. The interpreter walks the parent chain; the compiler pre-flattens the same
 /// lookup into the VM's method table.
 #[test]
 fn s6_inheritance_dispatch_is_byte_identical() {
@@ -409,7 +409,7 @@ class Dog extends Animal {
 
 /// M-RT S6b.1 — multi-parent composition. A method declared on the *second* parent must dispatch on
 /// both backends (the latent trap: the interpreter walked only the first-parent chain while the
-/// compiler BFS-flattened every parent — so `d.soar()` faulted on `run` but resolved on `runvm`). A
+/// compiler BFS-flattened every parent — so `d.soar()` faulted on `run` but resolved on the VM). A
 /// non-overridden method from the first parent and a diamond shared-base method (auto-merged because
 /// both arms reach the *same* declaring method) must also resolve identically.
 #[test]
@@ -456,7 +456,7 @@ class Mid extends Left, Right {}
 /// M-RT S6b.2 — a cross-parent method collision resolved with `use P.m` dispatches identically on
 /// both backends. `Swimmer.move` and `Flyer.move` collide; `use Flyer.move` (the *second* parent —
 /// the case BFS-first-wins would get wrong) picks Flyer's, so `d.move()` must run Flyer's body on
-/// `run` and `runvm` alike.
+/// `run` and the VM alike.
 #[test]
 fn s6b_resolution_use_picks_the_named_parent() {
     agree(
@@ -562,7 +562,7 @@ fn agree_out_php(src: &str, expected: &str, label: &str) {
     let vm = cmd_run(&src);
     assert_eq!(
         tree, vm,
-        "run vs runvm for {label}:\n  run={tree:?}\n  runvm={vm:?}"
+        "interp vs VM for {label}:\n  run={tree:?}\n  vm={vm:?}"
     );
     let out = tree.unwrap_or_else(|e| panic!("{label}: program errored on `run`: {e}"));
     assert_eq!(out, expected, "interpreter output for {label}");
@@ -614,7 +614,7 @@ import Core.Regex;
 
 /// DEC-295: `Regex.replaceCallback` hands the closure a typed `RegexMatch` (`full()` = whole match,
 /// `group(name)` = a named capture or null). Proves (1) a native-built `RegexMatch` instance's methods
-/// dispatch identically on run≡runvm≡php, and (2) the API FIXES the optional-group divergence that
+/// dispatch identically on interp ≡ VM≡php, and (2) the API FIXES the optional-group divergence that
 /// findGroups/findAllGroups still carry: a NON-PARTICIPATING named group (`(?<a>x)?` on "y") yields
 /// `group("a") == null` on ALL three legs (the PHP twin's PREG_UNMATCHED_AS_NULL + null-filter) —
 /// where findGroups diverges (Rust omits → null vs PCRE fills "").
@@ -707,7 +707,7 @@ fn validation_email_url_byte_identical_across_backends() {
 }
 
 /// DEC-297: named arguments on a free function. The checker front-normalizes a mixed positional/named
-/// call into positional order (filling omitted defaults) before any backend, so run≡runvm≡php: the
+/// call into positional order (filling omitted defaults) before any backend, so interp ≡ VM≡php: the
 /// reordered `greet(greeting: "Hey", name: "Cy")` and the default-filled `greet(name: "Ada")` both
 /// erase to plain positional calls (`greet("Cy", "Hey", false)` / `greet("Ada", "Hello", false)`).
 #[test]
@@ -726,7 +726,7 @@ function greet(string name, string greeting = "Hello", bool loud = false) -> str
 }
 
 /// Wave-B: `String.capitalizeWords` (ucwords) + `String.translate` (strtr) — ASCII byte-identical
-/// run≡runvm≡php (like the existing `capitalize`/`upperCase`; multibyte is the documented ASCII caveat).
+/// interp ≡ VM≡php (like the existing `capitalize`/`upperCase`; multibyte is the documented ASCII caveat).
 #[test]
 fn string_capitalize_words_and_translate_byte_identical() {
     agree_out_php(
@@ -743,7 +743,7 @@ import Core.String;
 }
 
 /// Wave-B: `List.difference`/`intersection` (FN-ARR long-tail) — typed-strict set ops on lists,
-/// filter semantics (keep a's order + dups), byte-identical run≡runvm≡php via the strict
+/// filter semantics (keep a's order + dups), byte-identical interp ≡ VM≡php via the strict
 /// `__phorj_list_difference`/`_intersection` helpers (NOT PHP `array_diff`/`array_intersect`).
 #[test]
 fn list_difference_intersection_is_byte_identical() {
@@ -764,7 +764,7 @@ import Core.String;
 
 /// Wave-B (DEC-303): `String.chunk` — split into pieces of N CODE POINTS (the string twin of
 /// `List.chunk`), NOT PHP `str_split`'s bytes (a valid-UTF-8 `PhStr` cannot hold a mid-code-point
-/// byte chunk). Byte-identical run≡runvm≡php via the gated `__phorj_str_chunk` (`preg_split('//u')` +
+/// byte chunk). Byte-identical interp ≡ VM≡php via the gated `__phorj_str_chunk` (`preg_split('//u')` +
 /// `array_chunk` + `implode`); covers ASCII, a multibyte code point kept intact, empty→[], and n>len.
 #[test]
 fn string_chunk_codepoint_is_byte_identical() {
@@ -783,7 +783,7 @@ import Core.List;
 }
 
 /// Wave-B (DEC-306): `Set.isSuperset` — the symmetric partner of `isSubset` (`a.isSuperset(b)` ≡
-/// `b.isSubset(a)`). Byte-identical run≡runvm≡php (erases to `count(array_diff(b, a)) === 0`).
+/// `b.isSubset(a)`). Byte-identical interp ≡ VM≡php (erases to `count(array_diff(b, a)) === 0`).
 #[test]
 fn set_is_superset_is_byte_identical() {
     agree_out_php(
@@ -842,7 +842,7 @@ import Core.String;
 
 /// Wave-B (DEC-307): `List.none` — the third of the any/all/none trio (`none` ≡ `!any`): true iff no
 /// element satisfies the predicate. Short-circuits at the first match (gated `__phorj_none`).
-/// Byte-identical run≡runvm≡php; covers all-false (→true), a match (→false), and the empty list (→true).
+/// Byte-identical interp ≡ VM≡php; covers all-false (→true), a match (→false), and the empty list (→true).
 #[test]
 fn list_none_is_byte_identical() {
     agree_out_php(
@@ -859,7 +859,7 @@ import Core.List;
 
 /// Wave-B (DEC-305): `List.product` — the multiplicative companion to `sum` (empty → 1, PHP
 /// `array_product`). Checked overflow (faults, doesn't wrap — PHP promotes to float; examples stay in
-/// range). Byte-identical run≡runvm≡php; covers a normal product, a zero factor, and the empty list.
+/// range). Byte-identical interp ≡ VM≡php; covers a normal product, a zero factor, and the empty list.
 #[test]
 fn list_product_is_byte_identical() {
     agree_out_php(
@@ -902,7 +902,7 @@ class Person { constructor(public string name, public int age) {} }
 
 /// Wave-B (DEC-304): `Map.containsValue` — value-side membership (the companion to `has`, which tests
 /// keys). Structural `eq_val`, erases to strict `in_array(needle, map, true)` (scans values, ignores
-/// keys) — byte-identical run≡runvm≡php for scalar values; covers present, absent, and an empty map.
+/// keys) — byte-identical interp ≡ VM≡php for scalar values; covers present, absent, and an empty map.
 #[test]
 fn map_contains_value_is_byte_identical() {
     agree_out_php(
@@ -920,7 +920,7 @@ import Core.Map;
 }
 
 /// Wave-B collections (DEC-300): `Core.Deque<T>` — a pure-Phorj double-ended queue over `List<T>`.
-/// Byte-identical run≡runvm≡php by construction (no native; the method bodies transpile to the same
+/// Byte-identical interp ≡ VM≡php by construction (no native; the method bodies transpile to the same
 /// array ops). Covers both ends (push/pop/peek), the empty→`null` optional return (not an
 /// exception, the deliberate departure from PHP `SplDoublyLinkedList`), and a list-literal seed.
 #[test]
@@ -947,7 +947,7 @@ import Core.Deque;
 }
 
 /// Wave-B collections (DEC-301): `Core.PriorityQueue<T>` — a pure-Phorj max-priority queue over two
-/// index-aligned `List`s. Byte-identical run≡runvm≡php by construction. Covers priority ordering
+/// index-aligned `List`s. Byte-identical interp ≡ VM≡php by construction. Covers priority ordering
 /// (extractMax highest-first), the empty→`null` optional return, seed-at-priority-0 construction,
 /// and DETERMINISTIC tie resolution (first inserted at the max priority wins — a semantic assertion,
 /// not just backend agreement: an earlier `List.fill` arg-order bug was byte-identical yet WRONG).
@@ -975,7 +975,7 @@ import Core.PriorityQueue;
 }
 
 /// Wave-B: the Core.Math tail (inverse trig / hyperbolics / hypot / log2 / log1p / expm1 / angle
-/// conversion) is byte-identical run≡runvm≡php — all delegate to the platform libm PHP also uses;
+/// conversion) is byte-identical interp ≡ VM≡php — all delegate to the platform libm PHP also uses;
 /// `log2` deliberately computes `ln(x)/ln(2)` to match PHP's `log(x, 2)` (not a direct `log2` libm call).
 #[test]
 fn math_tail_is_byte_identical() {
@@ -1014,7 +1014,7 @@ import Core.Math;
 }
 
 /// DEC-297 part 2: named arguments on a CONSTRUCTOR (`new Point(y: 9, x: 2)`) — reordered + defaults
-/// filled to positional before any backend, byte-identical run≡runvm≡php.
+/// filled to positional before any backend, byte-identical interp ≡ VM≡php.
 #[test]
 fn named_args_constructor_reorder_and_defaults() {
     agree_out_php(
@@ -1032,7 +1032,7 @@ class Point { constructor(public int x, public int y = 0, public string label = 
 }
 
 /// DEC-297 part 3: named arguments on an instance + static METHOD — reordered + defaults filled,
-/// byte-identical run≡runvm≡php.
+/// byte-identical interp ≡ VM≡php.
 #[test]
 fn named_args_method_reorder_and_defaults() {
     agree_out_php(
@@ -1051,7 +1051,7 @@ class Calc { function add(int a, int b = 10, int c = 100) -> int { return a + b 
 }
 
 /// DEC-298: a variadic free function `int ...nums` collects a call's trailing args into a `List<int>`.
-/// Proves run≡runvm≡php: the checker rewrites the call `sum(1,2,3)` → `sum([1,2,3])` and the param
+/// Proves interp ≡ VM≡php: the checker rewrites the call `sum(1,2,3)` → `sum([1,2,3])` and the param
 /// `int ...nums` → `List<int> nums` (PHP `array $nums`), so all three backends agree byte-for-byte,
 /// including the empty case `sum()` → `sum([])`.
 #[test]
@@ -1107,7 +1107,7 @@ class Leaf extends Mid {}
 /// M-RT S6c.2b — multi-parent orchestrating constructor. A class with ≥2 parents and **no own
 /// constructor** inherits a synthesized constructor whose parameters are the parents' ctor params
 /// concatenated in `extends` order; constructing it runs each parent's constructor (with its arg
-/// slice) on the one instance, initializing every inherited field. Byte-identical run≡runvm≡real PHP.
+/// slice) on the one instance, initializing every inherited field. Byte-identical interp ≡ VM≡real PHP.
 #[test]
 fn s6c_multi_parent_ctor_is_byte_identical() {
     // promotion-only parents: all inherited fields populated from the concatenated args
@@ -1147,7 +1147,7 @@ class Player extends Named, Scored {}
 /// `implements I…`, so `instanceof Swimmer` (the concrete class) was wrong there too. The fix threads
 /// the transitive parent-class set into the oracle (`ast::instanceof_table`) and emits the interface
 /// form for a decomposed ancestor in PHP. Single-parent, multi-parent, and a parent-typed param must
-/// all be byte-identical run≡runvm≡real PHP.
+/// all be byte-identical interp ≡ VM≡real PHP.
 #[test]
 fn s6c_instanceof_across_lattice_is_byte_identical() {
     // single-parent: `instanceof` against the parent class is true
@@ -1262,7 +1262,7 @@ fn s1_index_oob_faults_identically() {
 /// kind — but a fault is never a byte-identity example, so it is captured in `selftest/faults.phg`.)
 /// The faulting call is kept OUT of a `"{…}"` interpolation on purpose: an unclassified native
 /// fault classifies to `Other(<full message incl. line>)`, and the W0-5 VM interpolation-line skew
-/// would otherwise make the `Other` strings differ (run "at 3" vs runvm "at 1").
+/// would otherwise make the `Other` strings differ (run "at 3" vs vm "at 1").
 #[test]
 fn math_clamp_min_gt_max_faults_identically() {
     agree_err(
@@ -1854,7 +1854,7 @@ fn all_examples_match_between_backends() {
 /// backends. Unlike the single-file glob above, a project is assembled through `loader::load` (which
 /// walks up to its `phorj.toml`, parses every file under the source root, validates folder=path, and
 /// resolves cross-package qualified calls into one flat program). Because the loader produces concrete
-/// bare names before any backend runs, run==runvm is structural — but a malformed example (an import
+/// bare names before any backend runs, run==vm is structural — but a malformed example (an import
 /// that resolves to nothing, a folder=path violation) would surface as a *shared* failure, which the
 /// explicit `Ok` assertion catches. Discovery is glob-based, so a project added later is auto-gated.
 #[test]
@@ -1872,7 +1872,7 @@ fn all_example_projects_match_between_backends() {
         let unit = loader::load(&entry)
             .unwrap_or_else(|e| panic!("project {} must load: {e}", project.display()));
         let run = cli::treewalk_program(&unit);
-        let runvm = cli::run_program(&unit);
+        let vm = cli::run_program(&unit);
         assert!(
             run.is_ok(),
             "project {} must run on the interpreter, got {run:?}",
@@ -1880,8 +1880,8 @@ fn all_example_projects_match_between_backends() {
         );
         assert_eq!(
             run,
-            runvm,
-            "backend mismatch for project {}:\n  run={run:?}\n  runvm={runvm:?}",
+            vm,
+            "backend mismatch for project {}:\n  run={run:?}\n  vm={vm:?}",
             project.display()
         );
     }
@@ -1955,7 +1955,7 @@ const ERR_PROGRAMS: &[&str] = &[
     // modulo by zero
     r#"import Core.Output;
 #[Entry] function main() -> void { int z = 0; Output.printLine("{1 % z}"); }"#,
-    // float division by zero — faults like int /0 (no IEEE inf), byte-identical run/runvm
+    // float division by zero — faults like int /0 (no IEEE inf), byte-identical interp/VM
     r#"import Core.Output;
 #[Entry] function main() -> void { float z = 0.0; Output.printLine("{1.0 / z}"); }"#,
     // float modulo by zero — faults like int %0 (PHP fmod would give NAN; we throw)
@@ -2062,7 +2062,7 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
         cmd_treewalk(&with_pkg(src)).as_deref(),
         Ok("optionals ok\n")
     );
-    agree(src); // run ≡ runvm
+    agree(src); // interp ≡ VM
 }
 
 #[test]
@@ -2112,7 +2112,7 @@ fn s2_if_let_is_byte_identical() {
     assert_eq!(cmd_treewalk(&with_pkg(absent)).as_deref(), Ok("none\n"));
     agree(absent);
     // The smart-cast inner is a real arithmetic operand: `x + 1` must specialize identically on both
-    // backends (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
+    // backends (guards the interp↔VM operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
         "import Core.Output; #[Entry] function main() -> void { int? o = 41; if (var x = o) { Output.printLine(\"{x + 1}\"); } else { Output.printLine(\"none\"); } }";
     assert_eq!(cmd_treewalk(&with_pkg(arith)).as_deref(), Ok("42\n"));
@@ -2127,7 +2127,7 @@ fn s2_force_unwrap_is_byte_identical() {
     assert_eq!(cmd_treewalk(&with_pkg(present)).as_deref(), Ok("5\n"));
     agree(present);
     // The unwrapped value is a real arithmetic operand: `o! + 1` must specialize identically
-    // (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
+    // (guards the interp↔VM operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
         "import Core.Output; #[Entry] function main() -> void { int? o = 41; Output.printLine(\"{o! + 1}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(arith)).as_deref(), Ok("42\n"));
@@ -2302,7 +2302,7 @@ fn mutation_element_set_agrees() {
 #[test]
 fn b1_for_in_over_set_agrees() {
     // B1 iteration protocol: `for (x in set)` walks a Set's insertion-ordered, deduped elements via
-    // the shared `value::iter_elements` kernel (`Op::IterElems` on the VM) — byte-identical run≡runvm.
+    // the shared `value::iter_elements` kernel (`Op::IterElems` on the VM) — byte-identical interp ≡ VM.
     agree(
         "import Core.Output; import Core.Set; \
          #[Entry] function main() -> void { \
@@ -2329,7 +2329,7 @@ fn mutation_element_set_oob_faults_agree() {
 #[test]
 fn mutation_instance_field_set_agrees() {
     // M-mut.6: shared-mutable instance field set `o.f = e` — handle semantics, byte-identical on
-    // run/runvm + real PHP (`agree` is the 3-way oracle).
+    // interp/VM + real PHP (`agree` is the 3-way oracle).
     // Basic field set + read-back.
     agree("import Core.Output; class P { constructor(public mutable int x) {} } #[Entry] function main()-> void { P p = new P(1); p.x = 42; Output.printLine(\"{p.x}\"); }"); // 42
                                                                                                                                                                               // HANDLE semantics (the P0 catcher, F13): mutate via one binding, observe via the alias — BOTH
@@ -2347,7 +2347,7 @@ fn mutation_instance_field_set_agrees() {
 #[test]
 fn mutation_static_field_agrees() {
     // M-mut.7: program-lifetime `static mutable` class fields, read/written as `ClassName.field` —
-    // byte-identical run/runvm + real PHP. A static is shared across all instances (one program-level
+    // byte-identical interp/VM + real PHP. A static is shared across all instances (one program-level
     // slot), so a counter incremented in the constructor accumulates across constructions.
     agree("import Core.Output; class Counter { static mutable int total = 0; constructor() { Counter.total = Counter.total + 1; } } #[Entry] function main()-> void { new Counter(); new Counter(); new Counter(); Output.printLine(\"{Counter.total}\"); }"); // 3
                                                                                                                                                                                                                                                                // Direct read/write from a free function; an immutable static string too.
@@ -2361,7 +2361,7 @@ fn mutation_static_field_agrees() {
 fn mutation_property_hooks_agrees() {
     // M-mut.7b: property hooks `T name { get => …; set(T v) { … } }` — a get computes on read, a
     // set intercepts a write (typically mutating a backing `mutable` field). Byte-identical on
-    // run/runvm + real PHP (the synthetic-method VM lowering ≡ the PHP 8.4 property hook).
+    // interp/VM + real PHP (the synthetic-method VM lowering ≡ the PHP 8.4 property hook).
     // A read-only computed hook reads a backing field.
     agree("import Core.Output; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } #[Entry] function main()-> void { C c = new C(21); Output.printLine(\"{c.doubled}\"); }"); // 42
                                                                                                                                                                                                                   // A get used as an arithmetic operand — the CTy-operand path (`o.hook + 1` must specialize on the VM).
@@ -2444,7 +2444,7 @@ fn call_of_general_expression_callee_agrees_and_transpiles() {
     let src =
         "import Core.Output; function adder() -> (int) -> int { return function(int x) => x + 1; } \
                #[Entry] function main()-> void { Output.printLine(\"{adder()(41)}\"); }";
-    agree(src); // run ≡ runvm  → 42
+    agree(src); // interp ≡ VM  → 42
     let php = transpile_ok(&with_pkg(src));
     assert!(php.contains("(adder())(41)"), "{php}");
 }
@@ -2602,7 +2602,7 @@ fn generic_method_result_echoing_param_is_vm_operand() {
     // (`pick<T>(T a, T b) -> T`) erases to `mixed`/`Other`, but its call result is a specialized
     // arithmetic operand on the VM — recovered from the echoed argument — so `u.pick(7, 8) + 1` runs
     // byte-identically. Without the fix the VM rejected (`cannot infer numeric type`) what the
-    // interpreter accepts — a run↔runvm parity break (the documented CTy-operand trap).
+    // interpreter accepts — a interp↔VM parity break (the documented CTy-operand trap).
     agree_out_php(
         "import Core.Output; \
            class U { constructor() {} function pick<T>(T a, T b)->T { return a; } } \
@@ -2626,7 +2626,7 @@ fn generic_class_member_results_are_vm_operands() {
     // generic FIELD read (`box.value`), both erase to `mixed` statically — yet their results are
     // specialized arithmetic operands on the VM, recovered from the checker's reified-operand
     // side-table. Without it the VM rejected (`cannot infer numeric type`) what the interpreter
-    // accepts — a run↔runvm parity break (the documented CTy-operand trap).
+    // accepts — a interp↔VM parity break (the documented CTy-operand trap).
     agree_out_php(
         "import Core.Output; \
            class Box<T> { constructor(public T value) {} function get()->T { return this.value; } } \
@@ -2684,7 +2684,7 @@ fn escaping_and_nested_lambdas_agree() {
 #[test]
 fn html_literal_sugar_agrees() {
     // Core.Html Wave 3 — `html"…"` desugars to html.raw/html.text/html.concat, all of which are
-    // already byte-identical across backends, so the sugar inherits parity. (run ≡ runvm here; the
+    // already byte-identical across backends, so the sugar inherits parity. (interp ≡ VM here; the
     // glob test below adds run ≡ php on examples/guide/html.phg.)
     // A string hole auto-escapes; literal chunks pass through.
     agree(
@@ -2737,7 +2737,7 @@ fn transpiles_html_literal_to_kernel_calls() {
 #[test]
 fn named_tag_helpers_agree() {
     // Core.Html Option 1 — `html.<tag>(attrs, children)` bakes the tag, byte-identical to el/void_el,
-    // so it inherits parity. (run ≡ runvm here; the glob test adds run ≡ php on the guide example.)
+    // so it inherits parity. (interp ≡ VM here; the glob test adds run ≡ php on the guide example.)
     // Content element: attribute value escaped, text child escaped.
     agree(
         r#"import Core.Output; import Core.Html; #[Entry] function main()-> void { Output.printLine(Html.render(Html.a([Html.attr("href","/?x=1&y=2")],[Html.text("A & B")]))); }"#,
@@ -2767,18 +2767,18 @@ fn transpiles_named_tag_to_baked_php() {
 }
 
 // ── M7: the PHP oracle — the third correctness leg ───────────────────────────────────────────────
-// `run ≡ runvm` is gated by every test above. This gates `run ≡ php` (⇒ all three byte-identical):
+// `interp ≡ VM` is gated by every test above. This gates `run ≡ php` (⇒ all three byte-identical):
 // the transpiled PHP, executed by a real `php`, must print exactly what the interpreter prints.
 // Gating contract (closes P0-ROOT — no more self-skip-to-PASS):
 //   PHORJ_REQUIRE_PHP=1 → a missing php FAILS the test (CI / enforced mode).
 //   unset/empty          → a missing php skips LOUDLY (dev convenience), never a silent green.
 // Optional PHORJ_PHP=<path> overrides the php binary (non-PATH installs).
 // Scope: stdout-parity over runnable (`Ok`) examples + projects. Fault classes (overflow, OOB,
-// range-too-large) stay `run ≡ runvm` `agree_err` above — they are not runnable examples.
+// range-too-large) stay `interp ≡ VM` `agree_err` above — they are not runnable examples.
 
 /// Resolve the php binary: `PHORJ_PHP` override, else `php` on PATH if `--version` succeeds.
 fn php_bin() -> Option<String> {
-    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == runvm, no oracle)
+    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == vm, no oracle)
     // regardless of what `php` is on PATH — set by the pre-commit hook. The full PHP-oracle spine
     // check moves to pre-push (`PHORJ_REQUIRE_PHP=1` against the 8.5 floor).
     if std::env::var("PHORJ_SKIP_PHP").as_deref() == Ok("1") {
@@ -2864,7 +2864,7 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
     String::from_utf8(out.stdout).expect("utf-8 php stdout")
 }
 
-/// Batch-1 B: `main`'s `int` return is the process exit code on ALL three legs — `run`, `runvm`, and
+/// Batch-1 B: `main`'s `int` return is the process exit code on ALL three legs — `run`, the VM, and
 /// the transpiled PHP — with byte-identical stdout. `run_php` asserts a zero exit, so this drives php
 /// directly to read the non-zero status.
 #[test]
@@ -2872,8 +2872,8 @@ fn main_exit_code_is_byte_identical_across_backends() {
     let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
                #[Entry] function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n}";
     let run = cmd_treewalk_exit(src).expect("run ok");
-    let runvm = cmd_run_exit(src).expect("runvm ok");
-    assert_eq!(run, runvm, "run vs runvm (stdout, exit)");
+    let vm = cmd_run_exit(src).expect("vm ok");
+    assert_eq!(run, vm, "interp vs VM (stdout, exit)");
     assert_eq!(run, ("x\n".to_string(), 7));
     if let Some(php) = php_or_gate("main_exit_code") {
         let php_src = cli::cmd_transpile(src).expect("transpile ok");
@@ -2902,8 +2902,8 @@ fn class_static_main_exit_code_is_byte_identical_across_backends() {
     let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
                class App {\n  #[Entry] static function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n  }\n}";
     let run = cmd_treewalk_exit(src).expect("run ok");
-    let runvm = cmd_run_exit(src).expect("runvm ok");
-    assert_eq!(run, runvm, "run vs runvm (stdout, exit)");
+    let vm = cmd_run_exit(src).expect("vm ok");
+    assert_eq!(run, vm, "interp vs VM (stdout, exit)");
     assert_eq!(run, ("x\n".to_string(), 7));
     if let Some(php) = php_or_gate("class_static_main_exit_code") {
         let php_src = cli::cmd_transpile(src).expect("transpile ok");
@@ -2961,7 +2961,7 @@ class Duck extends Swimmer, Flyer {
 
 /// Every runnable single-file example: transpiled PHP run by `php` prints exactly what `cmd_treewalk`
 /// (the interpreter) prints. Globbed like `all_examples_match_between_backends`, so a new example is
-/// auto-gated. A non-`Ok` example is skipped here (it's gated by the run≡runvm glob); the oracle is
+/// auto-gated. A non-`Ok` example is skipped here (it's gated by the interp ≡ VM glob); the oracle is
 /// stdout-parity on success only.
 #[test]
 fn all_examples_transpile_and_match_php() {
@@ -2983,21 +2983,21 @@ fn all_examples_transpile_and_match_php() {
         }
         let expected = match cmd_treewalk(&src) {
             Ok(o) => o,
-            Err(_) => continue, // non-runnable example — gated by the run≡runvm glob, not here
+            Err(_) => continue, // non-runnable example — gated by the interp ≡ VM glob, not here
         };
         let php_src = match cli::cmd_transpile(&src) {
             Ok(php) => php,
             // Green-thread concurrency (M6 W4) has NO PHP target (`E-CONCURRENCY-NO-PHP`) — PHP has no
             // green threads and a synchronous lowering would diverge from the VM, so a `spawn`/channel
             // example is QUARANTINED from the oracle exactly like the ambient-environment impure
-            // modules. The run≡runvm glob still gates it byte-identically.
+            // modules. The interp ≡ VM glob still gates it byte-identically.
             Err(e) if e.contains("E-CONCURRENCY-NO-PHP") => {
                 eprintln!("SKIP (concurrency/quarantined) {label}");
                 continue;
             }
             // `#[UncheckedOverflow]` (Core.Runtime.Integer.UncheckedOverflow) wrapping int arithmetic has NO PHP target
             // (`E-TRANSPILE-UNCHECKED`, §14 LADDER) — PHP overflows int→float, which would diverge from
-            // the VM's two's-complement wrap. Quarantined from the oracle like `spawn`; run≡runvm still
+            // the VM's two's-complement wrap. Quarantined from the oracle like `spawn`; interp ≡ VM still
             // gates it byte-identically.
             Err(e) if e.contains("E-TRANSPILE-UNCHECKED") => {
                 eprintln!("SKIP (unchecked/quarantined) {label}");
@@ -3005,7 +3005,7 @@ fn all_examples_transpile_and_match_php() {
             }
             // NATIVE-ONLY ladder modules (§14 case 2 — `E-TRANSPILE-DB`, `E-TRANSPILE-MAIL`, …):
             // transpile refuses BY DESIGN (disclosed, register-recorded exclusions), so their
-            // examples are oracle-quarantined here exactly like concurrency; the run≡runvm glob (or
+            // examples are oracle-quarantined here exactly like concurrency; the interp ≡ VM glob (or
             // the module's own fixture suite) still gates them byte-identically. The `E-TRANSPILE-`
             // prefix is reserved for deliberate ladder artifacts, so this arm can never hide an
             // accidental transpiler regression (those surface as other codes → the panic below).
@@ -3494,7 +3494,7 @@ fn transpiled_examples_use_only_tier1_php_functions() {
 /// PHP construct (the divergence-safe choice — `intdiv`/`fmod`/inline-ternary), with the runtime
 /// helper kept only as the fallback for operands of unknown kind. This pins the *emitted PHP shape*
 /// (the oracle above pins the *runtime behavior* over the examples); together they make a P0
-/// regression impossible to ship silently. `run ≡ runvm` for these was always correct — php-leg-only.
+/// regression impossible to ship silently. `interp ≡ VM` for these was always correct — php-leg-only.
 #[test]
 fn m7_emitter_uses_correctness_helpers() {
     // P0-1 (int `/` ⇒ `intdiv`, never bare `/`) + P0-4 (int `%` ⇒ native `%`) — both literal-int.
@@ -3638,7 +3638,7 @@ fn error_base_type_reserved_and_implementable() {
 }
 
 /// M-faults 2b.2: a class `implements Error` is a usable value type — construct it and read its
-/// `message` field — byte-identical on run/runvm AND real PHP. In PHP it transpiles to
+/// `message` field — byte-identical on interp/VM AND real PHP. In PHP it transpiles to
 /// `class ParseError extends \Exception` with the promoted `message` emitted UNTYPED (a typed
 /// redeclaration of \Exception's inherited `$message` is a PHP fatal) + `parent::__construct`, so
 /// `e.message` (a plain field read) returns the value on every backend.
@@ -3653,7 +3653,7 @@ class BadInputError implements Error { constructor(public string message) {} }
     );
     let tree = cmd_treewalk(&src);
     let vm = cmd_run(&src);
-    assert_eq!(tree, vm, "run vs runvm:\n  run={tree:?}\n  runvm={vm:?}");
+    assert_eq!(tree, vm, "interp vs VM:\n  run={tree:?}\n  vm={vm:?}");
     if let Some(php) = php_or_gate("error_subtype_value_is_byte_identical") {
         let php_src = cli::cmd_transpile(&src).expect("transpile ok");
         let got = run_php(&php, &php_src, "error_subtype_value");
@@ -3663,9 +3663,9 @@ class BadInputError implements Error { constructor(public string message) {} }
 }
 
 /// M-faults 2b.5: native unwinding on the VM (`Op::Throw`/`PushHandler`/`PopHandler`) is
-/// byte-identical to the interpreter. These are `run ≡ runvm` only — the PHP transpile of
+/// byte-identical to the interpreter. These are `interp ≡ VM` only — the PHP transpile of
 /// `throw`/`try`/`catch`/`finally` lands in 2b.6, after which an `examples/guide/errors.phg` adds the
-/// three-way (`run ≡ runvm ≡ php`) gate (2b.7). The shared header defines two `Error` subtypes.
+/// three-way (`interp ≡ VM ≡ php`) gate (2b.7). The shared header defines two `Error` subtypes.
 #[cfg(test)]
 const ERR_HDR: &str = "import Core.Output; \
     class E1 implements Error { constructor(public string message) {} } \
@@ -3969,7 +3969,7 @@ function nm(Direction d) -> string {
     );
 }
 
-/// DEC-302 `Enum.from(x)` with no matching value faults identically on `run`, `runvm`, AND the
+/// DEC-302 `Enum.from(x)` with no matching value faults identically on `run`, the VM, AND the
 /// transpiled PHP (Invariant 1 — identical failure behaviour, incl. the PHP leg). A fault can't be
 /// a runnable example (Invariant 9), so it lives here; `agree_err_php` drives the transpiled PHP and
 /// asserts a non-zero exit (the emitted `from` scan ends in `throw new \ValueError`).
@@ -4064,7 +4064,7 @@ fn console_print_byte_identical() {
 /// Pattern cluster S5.2 — struct (named-field) destructuring: shorthand `Circle { r }`, rename
 /// `Point { x: px }`, and nesting `Line { from: Point { x, y }, to }`. The instance test reuses
 /// `Op::IsInstance` (no new op); each field is read by name. The nested `fx + fy` exercises the CTy
-/// operand path (a struct-bound int must be an arithmetic operand on the VM). run ≡ runvm ≡ real PHP.
+/// operand path (a struct-bound int must be an arithmetic operand on the VM). interp ≡ VM ≡ real PHP.
 #[test]
 fn struct_destructuring_byte_identical() {
     agree_out_php(
@@ -4092,7 +4092,7 @@ function originSum(Line l) -> int {
 
 /// Pattern cluster S5.3 — if-let `when` guard. `if (var u = e when g)` binds an optional and tests a
 /// condition on the binding in one header; the then-branch runs only when the bind succeeds AND the
-/// guard holds. Parser-desugared to a nested `if` (no new `Op`). run ≡ runvm ≡ real PHP.
+/// guard holds. Parser-desugared to a nested `if` (no new `Op`). interp ≡ VM ≡ real PHP.
 #[test]
 fn if_let_when_guard_byte_identical() {
     agree_out_php(
@@ -4169,7 +4169,7 @@ function dim(Circle | Square s) -> float {
 /// payload (an interface) is matched to a concrete class via the same `Op::IsInstance` test, then the
 /// binding's field is read (`c.r + 1.0` exercises the CTy operand path on a nested-pattern binding).
 /// A refutable payload doesn't discharge the variant's coverage, so a `_` fallback is required.
-/// run ≡ runvm ≡ real PHP.
+/// interp ≡ VM ≡ real PHP.
 #[test]
 fn nested_type_pattern_in_variant_payload_byte_identical() {
     agree_out_php(
@@ -4225,7 +4225,7 @@ fn m_num_s2_decimal_div_by_zero_faults_identically() {
     // `Decimal.divide` with a zero divisor faults the same way on both backends (the `decimal division
     // by zero` body contains `division by zero`, so it classifies as FaultKind::DivZero). The PHP
     // helper throws the same body — but a fault is not a runnable example (Ok-only rule), so this is a
-    // run≡runvm parity check, not a 3-way one.
+    // interp ≡ VM parity check, not a 3-way one.
     agree_err(
         "import Core.Decimal; #[Entry] function main() -> void { decimal r = Decimal.divide(10.00d, 0d, 2, new HalfUp()); }",
     );
@@ -4302,7 +4302,7 @@ fn m6w4_spawned_call_fault_agrees() {
     // A fault inside a `spawn`ned call must fault identically on both backends. `spawn f()` compiles
     // the call **inline** (not via a thunk lambda) precisely so the VM stack trace matches the
     // interpreter's — a thunk lambda would surface as a `<lambda@N>` frame only on the VM (closures
-    // are real frames there, invisible in the tree-walker), a run≢runvm trace divergence. This guards
+    // are real frames there, invisible in the tree-walker), a run≢vm trace divergence. This guards
     // fault-kind parity; the trace-text parity is verified at the CLI level (the rendered trace).
     agree_err(
         "function risky(int n) -> int { return 100 / n; } \
@@ -4315,7 +4315,7 @@ fn m6w4_cooperative_cutover_interleaves_identically() {
     // S4.3 cutover litmus: a `recv`-ing consumer is SPAWNED, so the eager model would run it at
     // `spawn` and fault `recv from empty channel`. The cooperative driver defers it — `main` sends
     // first, then the consumer runs and finds the value — so the program succeeds, and must do so
-    // byte-identically on `run` (coroutine-hosted interpreter) and `runvm` (coroutine-hosted VM), both
+    // byte-identically on `run` (coroutine-hosted interpreter) and the VM (coroutine-hosted VM), both
     // driven by the shared `green::sched` scheduler. PHP-quarantined (no green threads in PHP).
     agree(
         "import Core.Output; \
@@ -4354,7 +4354,7 @@ fn m6w4_spawn_is_a_usable_identifier() {
 
 // --- Import redesign S1: qualified injected-type references in type position ------------------
 // `Http.Router` / `Time.Duration` / `Decimal.RoundingMode` as a type ANNOTATION resolve to the bare
-// injected type (the S1 collapse pass), and are byte-identical across run/runvm/PHP to the bare form.
+// injected type (the S1 collapse pass), and are byte-identical across interp/VM/PHP to the bare form.
 // Zero `.phg` edits — the surface migration is S2. No `E-INJECTED-TYPE-BARE` enforcement yet (S2),
 // so bare `Router` still works; S1 only ADDS the qualified spelling.
 
@@ -4394,7 +4394,7 @@ function serve(Http.Router rt, bytes raw): void {
 #[test]
 fn s1_qualified_form_checks_and_runs_identically_to_member_import() {
     // The `Http.Router` QUALIFIED annotation (S1 collapse) and the member-imported bare `Router`
-    // (S2) name the same type and must produce identical check + run + runvm output. Both are legal
+    // (S2) name the same type and must produce identical check + run + vm output. Both are legal
     // under S2 enforcement; a plain `import Core.Http` + bare `Router` would now be E-INJECTED-TYPE-BARE.
     let member = "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http; import Core.Http.Router;\n\
         function useRouter(Router rt): int { return 0; }\n\
@@ -4418,7 +4418,7 @@ fn s1_qualified_form_checks_and_runs_identically_to_member_import() {
     assert_eq!(
         cli::cmd_run(member),
         cli::cmd_run(qualified),
-        "member-import vs qualified runvm output"
+        "member-import vs qualified vm output"
     );
 }
 
@@ -4444,7 +4444,7 @@ function label(Time.Duration d): string { return "{d.toMilliseconds()}ms"; }
 // --- Import redesign S2 (stage A): member-imports (import Core.Http.Response etc.) -------------
 // A member-import triggers the injected prelude and binds the leaf type; a type whose prelude
 // self-references its module (Time's Instant.now -> Time.nowMilliseconds) is self-contained. Bare
-// usage stays byte-identical across run/runvm/PHP. Enforcement (bare-without-import) is stage C.
+// usage stays byte-identical across interp/VM/PHP. Enforcement (bare-without-import) is stage C.
 
 #[test]
 fn s2a_http_member_import_is_byte_identical() {
@@ -4486,7 +4486,7 @@ fn s2a_time_instant_member_import_is_self_contained() {
         cli::cmd_check(src).is_ok(),
         "member-imported Instant must check"
     );
-    assert_eq!(cli::cmd_treewalk(src), cli::cmd_run(src), "run vs runvm");
+    assert_eq!(cli::cmd_treewalk(src), cli::cmd_run(src), "interp vs VM");
     assert_eq!(cli::cmd_treewalk(src).unwrap(), "ok\n");
 }
 

@@ -167,7 +167,7 @@ fn run_reports_parse_error() {
 #[test]
 fn library_file_without_main_checks_and_transpiles_but_run_errors_clearly() {
     // Batch-1 A: a library/web file with no `main` is valid — it type-checks and transpiles. Only
-    // *running* needs an entry point; the run/runvm error names it clearly (not a bare "no main").
+    // *running* needs an entry point; the interp/VM error names it clearly (not a bare "no main").
     let lib = wp("function helper(int n) -> int { return n + 1; }");
     assert!(cmd_check(&lib).unwrap().contains("OK"), "check should pass");
     assert!(
@@ -182,7 +182,7 @@ fn library_file_without_main_checks_and_transpiles_but_run_errors_clearly() {
         "run error: {run_err}"
     );
     let vm_err = cmd_run(&lib).unwrap_err();
-    assert!(vm_err.contains("no entry point"), "runvm error: {vm_err}");
+    assert!(vm_err.contains("no entry point"), "vm error: {vm_err}");
 }
 
 #[test]
@@ -255,7 +255,7 @@ function main(): void { int r = (5 |> (v => v * 2)) + 1; Output.printLine("{r}")
 }
 
 #[test]
-fn runvm_matches_run_on_simple_program() {
+fn vm_matches_interpreter_on_simple_program() {
     let src = wp(r#"import Core.Output;
 function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);
     assert_eq!(cmd_run(&src).unwrap(), cmd_treewalk(&src).unwrap());
@@ -263,13 +263,13 @@ function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);
 }
 
 #[test]
-fn runvm_reports_type_error_via_the_gate() {
+fn vm_leg_reports_type_error_via_the_gate() {
     let err = cmd_run(&wp(r#"function main(): void { int x = "no"; }"#)).unwrap_err();
     assert!(err.contains("type error"), "{err}");
 }
 
 #[test]
-fn runvm_reports_runtime_error_with_prefix() {
+fn vm_leg_reports_runtime_error_with_prefix() {
     let err = cmd_run(&wp(r#"import Core.Output;
 function main(): void { Output.printLine("{1 / 0}"); }"#))
     .unwrap_err();
@@ -277,7 +277,7 @@ function main(): void { Output.printLine("{1 / 0}"); }"#))
 }
 
 #[test]
-fn runvm_runtime_error_carries_source_line() {
+fn vm_leg_runtime_error_carries_source_line() {
     // div-by-zero in a statement on line 3. The VM now locates the fault via `Chunk.lines`
     // and renders `runtime error at 3: …`, while the canonical body ("division by zero")
     // stays intact so the differential `agree_err` oracle still classifies it identically.

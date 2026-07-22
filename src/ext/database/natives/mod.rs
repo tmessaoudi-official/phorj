@@ -38,7 +38,7 @@
 //! **Spine treatment.** Every native is `pure: false`, so `uses_impure_native` auto-excludes any
 //! `import Core.DatabaseModule` program from the byte-identity differential (live DB I/O can't be byte-identical
 //! across the drivers and PHP PDO). Correctness: the in-module unit tests + the `tests/database.rs` fixture.
-//! `run ≡ runvm` holds unconditionally (both backends call these one shared `eval` bodies). The `php`
+//! `interp ≡ VM` holds unconditionally (both backends call these one shared `eval` bodies). The `php`
 //! emitters (faithful PDO, DEC-208 LADDER case 1) are finalized in the DEC-208 transpile slice.
 
 mod driver;

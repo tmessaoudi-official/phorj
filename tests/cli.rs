@@ -115,7 +115,7 @@ fn debug_repl_steps_inspects_and_continues() {
     );
 }
 
-/// M-DX S3: the VM backend has no named locals, so `runvm --dump-on-fault` emits the (byte-identical)
+/// M-DX S3: the VM backend has no named locals, so `vm --dump-on-fault` emits the (byte-identical)
 /// backtrace without a locals section — never slot noise, never a leak.
 #[test]
 fn dump_on_fault_vm_emits_backtrace_without_locals() {
@@ -369,9 +369,9 @@ import Core.Output;
 }
 
 #[test]
-fn runvm_simple_program_exits_0() {
+fn vm_leg_simple_program_exits_0() {
     let path = write_temp(
-        "runvm_ok",
+        "vm_ok",
         r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
@@ -387,9 +387,9 @@ import Core.Output;
 }
 
 #[test]
-fn runvm_runtime_error_exits_1() {
+fn vm_leg_runtime_error_exits_1() {
     let path = write_temp(
-        "runvm_rt",
+        "vm_rt",
         r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
@@ -454,7 +454,7 @@ fn explain_subcommand_known_and_unknown() {
 }
 
 /// B2 — a multiple-inheritance super-method call (`parent(A).m(…)`) transpiles to a `private` trait
-/// alias (PHP has no native `parent::`/`A::` in an MI class). The run≡runvm≡real-PHP byte-identity is
+/// alias (PHP has no native `parent::`/`A::` in an MI class). The interp ≡ VM≡real-PHP byte-identity is
 /// gated by `examples/guide/parent-dispatch-mi.phg`; this locks the *shape* of the emitted PHP.
 #[test]
 fn mi_super_method_transpiles_to_a_trait_alias() {
@@ -488,7 +488,7 @@ fn mi_super_method_transpiles_to_a_trait_alias() {
 
 /// B2 — a parent-method jump to a *non-direct* ancestor under multiple inheritance is not yet lowerable
 /// to PHP (the trait alias requires a directly-`use`d ancestor); it is a clean transpile error, not
-/// invalid PHP. The `run`/`runvm` backends still handle it (resolution is MI-aware).
+/// invalid PHP. The interp/VM backends still handle it (resolution is MI-aware).
 #[test]
 fn mi_transitive_parent_jump_is_a_clean_transpile_error() {
     let path = std::env::temp_dir().join("phg_b2_mi_transitive.phg");
@@ -526,11 +526,11 @@ fn mi_transitive_parent_jump_is_a_clean_transpile_error() {
 
 /// Regression: every inline-source command that builds a `BytecodeProgram` (`disasm`, `bench`) must
 /// thread the checker's reified-operand side-table into the VM compile (`check_and_expand_reified` +
-/// `compile_with`), exactly like `runvm`. The concurrency example uses `a.join() + b.join()` — a
+/// `compile_with`), exactly like the VM. The concurrency example uses `a.join() + b.join()` — a
 /// method result as an arithmetic operand — which the VM compiler's `ctype` can only resolve from
 /// that side-table; with the old map-dropping `compile` path these commands rejected it with
-/// "no method `join` on `Task`" while `run`/`runvm` accepted it (the same root cause that broke the
-/// playground's runvm). Guards all three surfaces against re-diverging.
+/// "no method `join` on `Task`" while interp/VM accepted it (the same root cause that broke the
+/// playground's vm). Guards all three surfaces against re-diverging.
 #[test]
 fn disasm_and_bench_accept_reified_operand_program() {
     let ex = "examples/guide/concurrency.phg";

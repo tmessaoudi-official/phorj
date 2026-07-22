@@ -5,7 +5,7 @@
 //! - [`sched`] is the **single-sourced, backend-agnostic scheduler kernel** — it owns ONLY scheduling
 //!   decisions (run-queue order, channel wait-lists, wake/pick) over opaque `TaskId`/`ChanId`. Both the
 //!   interpreter and the VM drive the SAME kernel (like `value.rs` kernels are single-sourced), so the
-//!   two backends make identical scheduling decisions ⇒ byte-identical task interleaving ⇒ `run≡runvm`.
+//!   two backends make identical scheduling decisions ⇒ byte-identical task interleaving ⇒ `interp ≡ VM`.
 //! - The **executor** (resuming a task until it traps) is per-backend: native uses stackful coroutines
 //!   on both backends; `wasm32` runs tasks on the VM frame-swap (coroutines don't compile on wasm). The
 //!   kernel here is target-independent and identical everywhere.

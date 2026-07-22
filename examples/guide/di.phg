@@ -5,7 +5,7 @@
 // / `DependencyInjection.inject<T>()` with a single `import Core.DependencyInjection;`.
 //
 // `inject<App>()` resolves App's dependency graph BY TYPE at compile time and expands to plain `new`
-// construction before any backend (byte-identical run/runvm/PHP — there is no runtime DI machinery). The
+// construction before any backend (byte-identical both engines/PHP — there is no runtime DI machinery). The
 // graph here is a DIAMOND: both `App` and `EnglishGreeter` depend on `Clock`. The ruled default lifetime
 // is SHARED, so a single `inject<App>()` constructs ONE `Clock` and threads it to both. A single-
 // implementation interface (`Greeter`) auto-binds to its only `#[Injectable]` implementor. Wiring is

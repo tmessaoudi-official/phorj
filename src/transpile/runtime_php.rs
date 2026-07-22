@@ -7,7 +7,7 @@ impl Transpiler {
     /// The once-per-file runtime helpers (each gated by its `uses_*` flag). In flat mode they are
     /// top-level globals; in namespaced mode they are emitted inside the nameless block, so their
     /// fully-qualified names are `\__phorj_*` (which the call sites emit via the `bs` prefix). Each
-    /// mirrors a Phorj value kernel / `as_display` so the PHP leg matches `run`/`runvm` byte-for-byte.
+    /// mirrors a Phorj value kernel / `as_display` so the PHP leg matches interp/VM byte-for-byte.
     pub(super) fn emit_runtime_helpers(&mut self) {
         if self.uses_div {
             // Phorj `/`: int/int truncates toward zero (`intdiv`); float/float is real division.
@@ -289,7 +289,7 @@ impl Transpiler {
         // --- Decimal division + rounding (M-NUM S2). Replicate the Rust `value::round_div` kernel via
         // BCMath integer arithmetic on the *unscaled* integer strings (`bcdiv`/`bcmod` truncate toward
         // zero / take the dividend's sign — verified identical to Rust i128 `/`/`%`), so every rounding
-        // mode matches `run`/`runvm` byte-for-byte. The `RoundingMode` enum value arrives as a PHP
+        // mode matches interp/VM byte-for-byte. The `RoundingMode` enum value arrives as a PHP
         // object (`new HalfUp()` ⇒ an instance of the injected global class `HalfUp`); the helper reads
         // its short class name and switches on it, exactly as the Rust native reads `Value::Enum.variant`.
         if self.uses_dec_div || self.uses_dec_round {
@@ -746,7 +746,7 @@ impl Transpiler {
             self.indent += 1;
             // Precision on `%s` (slice 4a) = truncate to N chars, NEVER splitting a UTF-8 char (developer-
             // ruled). We char-truncate here rather than let `sprintf`'s byte-based `%.Ns` split a char, so
-            // run≡runvm≡this-helper agree; then delegate width/flags to `sprintf` (the precision is a no-op
+            // interp ≡ VM≡this-helper agree; then delegate width/flags to `sprintf` (the precision is a no-op
             // on the already-≤N-byte string). Manual scan keeps to tier-1 functions (hermetic `php -n`).
             self.line("$s = __phorj_str($v);");
             self.line("if ($hasPrec) {");

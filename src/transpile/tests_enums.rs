@@ -50,7 +50,7 @@ fn enum_emits_base_and_subclasses() {
 // DEC-329.3: variant classes are enum-SCOPED (`Tok_Int`) — which also subsumes the old
 // reserved-word mangle: PHP reserves int/float/bool/null (and string/true/false/…) as class names
 // even inside a namespace, but a scoped name always carries the `Enum_` prefix and can never be a
-// bare reserved word. Transpiler-only: run/runvm use the Phorj variant string, so stdout
+// bare reserved word. Transpiler-only: interp/VM use the Phorj variant string, so stdout
 // byte-identity is untouched.
 const RESERVED_ENUM: &str =
     "enum Tok { Int(int v), Float(float f), Bool(bool b), Null(), Str(string s) }";
@@ -68,7 +68,7 @@ fn reserved_value_type_variant_names_are_safe_via_enum_scoping() {
 
 // The keyword-as-class-name words (`empty`/`echo`/`match`/…) and the always-present PHP builtin
 // class names (`Exception`/`Closure`/`Generator`/…) are ALSO reserved as PHP class names — the
-// historic F-m byte-identity break (`final class Empty` parse-errored while run/runvm succeeded).
+// historic F-m byte-identity break (`final class Empty` parse-errored while interp/VM succeeded).
 // Enum scoping (DEC-329.3) covers them all uniformly.
 const RESERVED_ENUM_KW: &str =
     "enum Kw { Empty(), Echo(), Match(), Exception(), Closure(), Generator(), Plain(int v) }";

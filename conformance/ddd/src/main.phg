@@ -1,6 +1,6 @@
 // Entry point (package Main): wires the Catalog + Ordering bounded contexts together. Demonstrates
 // composition at scale — two library packages, cross-package types, an aggregate computing over its
-// entities, all byte-identical on run / runvm / real PHP (exact integer-cents arithmetic).
+// entities, all byte-identical on interp / VM / real PHP (exact integer-cents arithmetic).
 package Main;
 
 import Core.Output;

@@ -9,7 +9,7 @@
 //
 // Everything is resolved at COMPILE TIME from each class's field layout and lowered to the shipped S1
 // `Row` accessors (`new Sale(row.getString("product")?, new Order(row.getInt("order.id")?, …), …)`),
-// so there is no runtime reflection and `run ≡ runvm` holds by construction. Like every `Core.DatabaseModule`
+// so there is no runtime reflection and `run ≡ run --tree-walker` holds by construction. Like every `Core.DatabaseModule`
 // program it opens real bundled SQLite (`rusqlite`) → quarantined from the byte-identity differential;
 // validated by `tests/db.rs` on both backends. Built only under `--features database`.
 package Main;

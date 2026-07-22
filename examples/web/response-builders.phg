@@ -12,7 +12,7 @@
 //     with chainable `.path()`/`.secure()`/`.httpOnly()`/`.partitioned()` builders)
 //   * `resp.withCookies(list)`          — a copy with one `Set-Cookie` header per Cookie
 //   * `resp.serialize() -> bytes`       — render to the HTTP/1.1 wire form
-// Pure value construction → byte-identical across `run`, `runvm`, and real PHP.
+// Pure value construction → byte-identical across `run`, the VM, and real PHP.
 package Main;
 
 import Core.Output;

@@ -11,7 +11,7 @@
 // form shown here and the contextual sink form (`DatabaseStream<User> s = stmt.streamInto();`).
 //
 // Like every `Core.DatabaseModule` program this opens a real database, so it is quarantined from the
-// byte-identity differential; `tests/db.rs` validates it on BOTH backends (`run ≡ runvm`).
+// byte-identity differential; `tests/db.rs` validates it on BOTH backends (`run ≡ run --tree-walker`).
 package Main;
 
 import Core.Output;

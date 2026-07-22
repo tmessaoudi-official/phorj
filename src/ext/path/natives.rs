@@ -1,7 +1,7 @@
 //! `Core.Path` — pure filesystem-*path* string manipulation (M4 stdlib breadth, Tier 1).
 //!
 //! These natives operate on a path **as a string** — they never touch the filesystem, so they are
-//! pure, deterministic, and byte-identical across `run`/`runvm`/real PHP. Every function maps to a
+//! pure, deterministic, and byte-identical across interp/VM/real PHP. Every function maps to a
 //! PHP core builtin (`basename`/`dirname`/`pathinfo`) available under `php -n`, so the PHP oracle
 //! verifies the Rust kernels directly. Separator is `/` only (the Linux oracle's
 //! `DIRECTORY_SEPARATOR`); the algorithms below were derived from PHP 8.5 ground truth.

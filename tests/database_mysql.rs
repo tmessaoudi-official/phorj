@@ -5,7 +5,7 @@
 //! this test is OPT-IN via the `PHORJ_MYSQL_TEST_DSN` env var (the `db_postgres` discipline): unset →
 //! the test SKIPS LOUDLY (prints how to enable it) and passes, so the standard gate never requires a
 //! live MySQL. Set it to a DSN and the full round-trip runs and is asserted on BOTH backends
-//! (`run ≡ runvm`) — e.g.
+//! (`interp ≡ VM`) — e.g.
 //!
 //! ```text
 //! PHORJ_MYSQL_TEST_DSN='mysql://developer:developer@localhost:42708/testx' \
@@ -126,10 +126,10 @@ fn mysql_round_trip_on_both_backends() {
     let expected = "1=Ada/12.50\n2=Grace/0.00\nreturning=3\nunique-violation\nbulk=2\ntx=7\n";
     let tree = cmd_treewalk(&src).expect("mysql round-trip runs on the interpreter");
     assert_eq!(tree, expected, "interpreter output");
-    // run ≡ runvm: the VM must produce byte-identical stdout.
+    // interp ≡ VM: the VM must produce byte-identical stdout.
     assert_eq!(
         cmd_run(&src).expect("mysql round-trip runs on the VM"),
         tree,
-        "run ≡ runvm"
+        "interp ≡ VM"
     );
 }

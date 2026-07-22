@@ -1,5 +1,5 @@
 // Conformance: Router middleware (`use`) + route groups (`group`) with short-circuit + pass-through
-// (M6 W2-ext slice 1). Experimental tier; byte-identical run≡runvm≡real PHP.
+// (M6 W2-ext slice 1). Experimental tier; byte-identical interp ≡ VM≡real PHP.
 package Main;
 
 import Core.Output;

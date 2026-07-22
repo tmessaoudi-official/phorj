@@ -244,7 +244,7 @@ impl<'c> Interp<'c> {
     /// Select the overload of free function `name` to run for `argv` (M-RT dynamic dispatch). A
     /// single-overload set is returned directly; otherwise the most-specific match by the runtime
     /// argument types wins. The same selection runs in the VM (`dispatch::select_overload` over the
-    /// same `ParamKind`s), so `run`/`runvm` pick the same body. An ambiguous or unmatched call faults
+    /// same `ParamKind`s), so interp/VM pick the same body. An ambiguous or unmatched call faults
     /// with a byte-identical message.
     pub(super) fn select_free_overload(
         &self,
@@ -379,7 +379,7 @@ impl<'c> Interp<'c> {
     /// concrete `(declaring_class, method)` via the shared `ast::resolve_parent_method` against the
     /// **lexical** class of the currently-running body (`cur_class`), then runs that method's body
     /// **non-virtually** on the current receiver (`this`) — so an override calling `parent.m()` reaches
-    /// the version it shadows, not itself. The compiler bakes the same target, so `run ≡ runvm`.
+    /// the version it shadows, not itself. The compiler bakes the same target, so `interp ≡ VM`.
     pub(super) fn eval_parent_call(
         &mut self,
         ancestor: Option<&str>,
@@ -455,7 +455,7 @@ impl<'c> Interp<'c> {
     pub(super) fn call_method(&mut self, recv: Value, name: &str, args: Vec<Value>) -> R<Value> {
         // Built-in concurrency handle methods (M6 W4): `Channel<T>` send/recv, `Task<T>` join.
         // Synchronous-degenerate (step 2): recv-on-empty / join-on-incomplete fault — the fault
-        // strings match the VM's `exec_op` exactly (run≡runvm + `agree_err` FaultKind parity).
+        // strings match the VM's `exec_op` exactly (interp ≡ VM + `agree_err` FaultKind parity).
         match &recv {
             Value::Channel(id, buf) => {
                 return match name {
@@ -519,7 +519,7 @@ impl<'c> Interp<'c> {
         // M-RT S6/S6b: resolve the method through the shared dispatch table, which maps `(class, name)`
         // to the `(declaring_class, method)` it runs — already accounting for override, multi-parent
         // composition, diamond auto-merge, and `use`/`rename`/`exclude` resolution clauses. The
-        // compiler pre-flattens the identical table into the VM's `methods` table, so `run`/`runvm`
+        // compiler pre-flattens the identical table into the VM's `methods` table, so interp/VM
         // dispatch to the same body. The candidates are that origin class's overloads of the resolved
         // method name (which differs from `name` only for a renamed alias).
         // The lexical (declaring) class of the resolved body — needed both to find the candidates and,
@@ -600,7 +600,7 @@ impl<'c> Interp<'c> {
     /// `ClassName.method(args)` — a **static** method call. Resolved through the shared
     /// `method_origins` dispatch table (Statics-A, 2026-06-28), exactly like `call_method`, so an
     /// **inherited** or **trait** static resolves to its declaring class's body (the compiler's
-    /// pre-flattened `methods` table dispatches `run`/`runvm` identically). The candidates are that
+    /// pre-flattened `methods` table dispatches interp/VM identically). The candidates are that
     /// origin class's `static` overloads of the resolved name; overload selection mirrors `call_method`.
     /// No receiver (`this = None`).
     pub(super) fn call_static_method(

@@ -1,7 +1,7 @@
 // Conformance: a native module-qualified call used as an ARITHMETIC OPERAND (`List.length(xs) - 1`,
 // `Math.abs(n) + 1`, …). The compiler must resolve the call's operand CTy from the native's return
-// type; otherwise the VM rejects what the interpreter accepts (a run↔runvm break — the documented
-// CTy-operand trap). Regression for that fix. Byte-identical run≡runvm≡real PHP.
+// type; otherwise the VM rejects what the interpreter accepts (a interp↔VM break — the documented
+// CTy-operand trap). Regression for that fix. Byte-identical interp ≡ VM≡real PHP.
 package Main;
 
 import Core.Output;

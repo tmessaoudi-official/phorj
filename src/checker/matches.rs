@@ -434,7 +434,7 @@ impl Checker {
                     // and transpiled to `is_int()`/`is_float()`/`is_string()`/`is_bool()`/`is_null()`.
                     // Byte-identity guard: `string` is ambiguous in the PHP leg if the union also holds
                     // a type that erases to a PHP `string` (decimal/bytes/html/attr), so reject it —
-                    // `run`/`runvm` distinguish them by `Value` variant but the transpiled PHP cannot.
+                    // interp/VM distinguish them by `Value` variant but the transpiled PHP cannot.
                     if matches!(prim, Ty::String) {
                         // The union may sit behind an `Optional` (`(string | decimal)?`, e.g. the
                         // `T?` a `List.first`/`Map.get` returns) — `union_members_of` unwraps it so
@@ -448,7 +448,7 @@ impl Checker {
                                     *span,
                                     "type pattern `string` is ambiguous here — the union also holds a type that erases to a PHP string (decimal/bytes/html/attr), so the transpiled PHP can't distinguish them".to_string(),
                                     "E-MATCH-ERASED-AMBIG",
-                                    Some("split the union or add a `_` arm — run/runvm could tell them apart, but the PHP leg cannot".into()),
+                                    Some("split the union or add a `_` arm — interp/VM could tell them apart, but the PHP leg cannot".into()),
                                 );
                             }
                         }

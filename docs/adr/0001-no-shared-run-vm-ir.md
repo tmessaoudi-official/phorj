@@ -8,9 +8,9 @@
 ## Context
 
 Phorj has three backends — the tree-walking interpreter (`run`), the bytecode compiler + stack VM
-(`runvm`), and the Phorj→PHP transpiler — and they all consume the **same validated AST**. Today
+(the VM), and the Phorj→PHP transpiler — and they all consume the **same validated AST**. Today
 each is a plain free function dispatched by a string `match` in `main.rs`
-(`cmd_run` / `cmd_runvm` / `cmd_transpile`); `grep 'trait ' src/` returns zero. Two unifications are
+(`cmd_run` / `cmd_the VM leg` / `cmd_transpile`); `grep 'trait ' src/` returns zero. Two unifications are
 perennially tempting: a shared intermediate representation (`src/ir.rs`) that all backends lower
 through, and a `Backend` trait that abstracts "execute a program."
 
@@ -20,7 +20,7 @@ Keep the three-backend model with **no shared IR and no `Backend` trait**. Each 
 AST directly. Any shared-IR rewrite, and the `Backend` trait, are **deferred** until feature velocity
 actually demands them — by the Rule of Three, the trait is justified only once the 4th backend
 (`phg build`, M2.5) proves the abstraction. The *unifier* is not a type; it is the **byte-identity
-differential spine** (`run ≡ runvm ≡ php`, enforced in `tests/differential.rs`).
+differential spine** (`interp ≡ VM ≡ php`, enforced in `tests/differential.rs`).
 
 ## Consequences
 

@@ -23,7 +23,7 @@ global namespace from inside a `namespace` block.
 ## Consequences
 
 - **Deterministic, byte-identical output** — a single file with no load-order ambiguity keeps the
-  `run ≡ runvm ≡ php` spine intact (no autoloader nondeterminism to reason about).
+  `interp ≡ VM ≡ php` spine intact (no autoloader nondeterminism to reason about).
 - The transpiled program runs under stock `php` with **no external tooling** to install or configure.
 - One artifact to ship, read, and diff — aligns with the "honest to read" GA goal.
 

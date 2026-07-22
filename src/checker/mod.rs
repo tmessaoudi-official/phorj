@@ -219,12 +219,12 @@ struct ClassInfo {
     /// Member visibility for instance fields (incl. promoted ctor params): field name → (vis, owner).
     /// The owner is the *declaring* class, preserved through inheritance so a `private`/`protected`
     /// access is checked against the real owner (mirrors [`ConstEntry`]). Enforced at the
-    /// instance-field read/write sites (Wave 1.1) so `run ≡ runvm ≡ transpiled PHP` — which enforces
+    /// instance-field read/write sites (Wave 1.1) so `interp ≡ VM ≡ transpiled PHP` — which enforces
     /// visibility natively — all reject an out-of-scope access instead of diverging at runtime.
     field_vis: HashMap<String, (MemberVis, String)>,
     /// Static-field visibility + declaring owner, parallel to [`Self::statics`] (like [`Self::field_vis`]
     /// for instance fields). W0-2: a `private`/`protected` static read/write from outside its scope is
-    /// rejected here, closing the run≡runvm≡PHP hole (PHP emits a real `private static` property).
+    /// rejected here, closing the interp ≡ VM ≡ PHP hole (PHP emits a real `private static` property).
     static_vis: HashMap<String, (MemberVis, String)>,
     /// Member visibility for methods: method name → (vis, owner). Per-name (an overload set shares one
     /// visibility — the first-declared overload's modifiers win). Enforced at the method-call site.
@@ -443,7 +443,7 @@ pub struct Checker {
     /// field initializer, where `this` IS in scope).
     in_static_init: bool,
     /// Set when checking a program under `phg test` (M-Test). When true, `test "name" { … }` items
-    /// are allowed and their bodies type-checked; when false (every normal build — run/runvm/check/
+    /// are allowed and their bodies type-checked; when false (every normal build — run/check/
     /// transpile), a `test` item is rejected as `E-TEST-OUTSIDE-TESTS` so production code cannot
     /// smuggle test blocks. Default `false`; flipped only by [`check_tests`].
     test_mode: bool,
@@ -614,7 +614,7 @@ pub struct Checker {
     /// S2.1-broad: per-expression *reified operand type*, keyed by the expression's `span.start`, for
     /// `Call`/`Member`/`Index` nodes whose checker-resolved `Ty` is concrete. The VM compiler's `ctype`
     /// consults this FIRST so a generic method result (`box.get() + 1`), field read, or `List<T>`/`Map`
-    /// return specializes as the operand the checker proved — closing the run↔runvm "CTy-operand trap"
+    /// return specializes as the operand the checker proved — closing the interp↔VM "CTy-operand trap"
     /// for results erased to `mixed`. The checker is authoritative on the runtime type, so the override
     /// is sound; `CTy::Other` entries are dropped at the compile boundary (never override fn/class).
     reified_operands: HashMap<usize, Ty>,
@@ -625,7 +625,7 @@ pub struct Checker {
     /// IIFE), keyed by the parameter's `span.start`. `cli::check_and_expand_reified` materializes
     /// each into the AST param (`checker::materialize_pipe_params`, LAST in the rewrite chain) so
     /// the VM compiler's `resolve_cty` and the transpiler's kind analysis see a concrete type —
-    /// leaving `Infer` in a backend-bound param is exactly the run≠runvm CTy-operand trap.
+    /// leaving `Infer` in a backend-bound param is exactly the interp ≠ VM CTy-operand trap.
     pipe_param_resolutions: HashMap<usize, Ty>,
     /// Method declaration sites accumulated during collection — `(class, method, decl span, resolved
     /// params, resolved ret)` — so [`Self::finalize_method_overloads`] can emit a span-keyed rename for
@@ -692,7 +692,7 @@ pub fn check_tests(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>
 
 /// Like [`check`], but on success also returns the `html"…"` desugarings keyed by literal
 /// `Span.start` — fed to [`resolve_html`] so the backend-facing program is `Expr::Html`-free. Used
-/// by the run/runvm/transpile pipeline ([`crate::cli::check_and_expand`]); plain [`check`] (e.g.
+/// by the interp/VM/transpile pipeline ([`crate::cli::check_and_expand`]); plain [`check`] (e.g.
 /// `phg check`) ignores the map since it never reaches a backend.
 #[allow(clippy::type_complexity)]
 pub fn check_resolutions(

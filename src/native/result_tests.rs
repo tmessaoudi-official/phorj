@@ -1,7 +1,7 @@
 //! Unit tests for the `Core.Result` combinator native bodies (Wave B B-2b, DEC-185). The higher-order
 //! ones are driven with a mock [`ClosureInvoker`] applying a fixed transform, so the test exercises the
 //! native's own logic (Success/Failure dispatch, re-wrap, pass-through, error threading) independent of a
-//! backend. End-to-end byte-identity across run/runvm/PHP is covered by the differential example
+//! backend. End-to-end byte-identity across interp/VM/PHP is covered by the differential example
 //! `examples/guide/result-combinators.phg`.
 use super::*;
 use crate::value::Value;

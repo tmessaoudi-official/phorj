@@ -2,7 +2,7 @@
 //!
 //! `lift` carries no byte-identity guarantee on its own (it's a best-effort draft), so confidence is
 //! *earned* here: for a Tier-1 PHP sample we **lift** it to Phorj, then check that the lifted Phorj
-//! behaves exactly like the original PHP — running it three ways (`run` interpreter, `runvm` VM, and
+//! behaves exactly like the original PHP — running it three ways (`run` interpreter, the VM VM, and
 //! its own transpiled-back PHP) and asserting all three match the **original PHP's** stdout. A full
 //! match is evidence the lift preserved behavior; the original program is the source of truth.
 //!
@@ -17,7 +17,7 @@ use std::process::Command;
 
 /// Resolve the php binary: `PHORJ_PHP` override, else `php` on PATH if `--version` succeeds.
 fn php_bin() -> Option<String> {
-    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == runvm, no oracle)
+    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == vm, no oracle)
     // regardless of what `php` is on PATH — set by the pre-commit hook. The full PHP-oracle spine
     // check moves to pre-push (`PHORJ_REQUIRE_PHP=1` against the 8.5 floor).
     if std::env::var("PHORJ_SKIP_PHP").as_deref() == Ok("1") {

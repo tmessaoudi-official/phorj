@@ -1,7 +1,7 @@
 //! Checker tests — member visibility enforcement (Wave 1.1).
 //!
 //! `private`/`protected` on instance fields, promoted ctor params, and methods is now enforced by
-//! the checker (not just emitted to PHP), so `run ≡ runvm ≡ transpiled PHP` all agree: an out-of-scope
+//! the checker (not just emitted to PHP), so `interp ≡ VM ≡ transpiled PHP` all agree: an out-of-scope
 //! access is rejected up front instead of passing on the Phorj backends and throwing in PHP.
 
 use super::support::*;
@@ -132,7 +132,7 @@ fn protected_field_read_from_outside_is_error() {
 
 // ── static fields (W0-2, P0 spine repair) ──────────────────────────────────────────────────────
 // A `private`/`protected` static read/write from outside its scope used to check clean, print on
-// run/runvm, and FATAL on the PHP leg (`Cannot access private property A::$s`) — a three-way spine
+// interp/VM, and FATAL on the PHP leg (`Cannot access private property A::$s`) — a three-way spine
 // break. Static fields now carry visibility like consts + instance fields, gated on both paths.
 
 #[test]

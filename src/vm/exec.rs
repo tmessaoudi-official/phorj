@@ -306,7 +306,7 @@ impl<'a> Vm<'a> {
                 // Nested in-place COW element set on a local container (Spec nested-value-index).
                 // Stack (top-down): value, i_{depth-1}, …, i0. Pop the value, then the indices
                 // (reversing to source order), and mutate the root slot in place via the shared
-                // `value::set_nested` kernel (same single-source the interpreter calls → run≡runvm).
+                // `value::set_nested` kernel (same single-source the interpreter calls → interp ≡ VM).
                 let v = self.pop();
                 let mut indices: Vec<Value> = (0..depth).map(|_| self.pop()).collect();
                 indices.reverse();
@@ -331,7 +331,7 @@ impl<'a> Vm<'a> {
             // Green-thread concurrency (M6 W4 / S4.3) — synchronous-degenerate bodies (the cooperative
             // driver, 3b-2b/c, reuses the same ops but defers/suspends). Channels/tasks carry their
             // scheduler ids (allocated from `self.coop`); a task's result lives in `coop.results`. The
-            // fault strings MUST match the interpreter's exactly (run≡runvm + `agree_err` parity).
+            // fault strings MUST match the interpreter's exactly (interp ≡ VM + `agree_err` parity).
             Op::Spawn => {
                 // Eager: the spawned call already ran inline (its result is on top); register a
                 // finished task and store the result by id. (The cooperative cutover will instead
@@ -571,7 +571,7 @@ impl<'a> Vm<'a> {
                 }
                 // M-RT dynamic dispatch: peek the `argc` argument values already on the stack and
                 // pick the most-specific matching overload — the SAME selector + `ParamKind`s the
-                // interpreter uses, so `run`/`runvm` resolve to the same function.
+                // interpreter uses, so interp/VM resolve to the same function.
                 let n = self.stack.len();
                 let set = &self.program.overloads[set_id];
                 let cands: Vec<Vec<crate::dispatch::ParamKind>> =

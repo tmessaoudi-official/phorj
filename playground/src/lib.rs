@@ -5,8 +5,8 @@
 //! functions here call the **public inner pipeline directly** on the calling stack:
 //!
 //!   parse → `cli::check_and_expand` (via `cli::parse_checked_program`) → `interpreter::interpret`
-//!         / `cli::check_and_expand_reified` + `compiler::compile_with` + `vm::Vm::run` (runvm threads
-//!           the reified-operand side-table, exactly like `cli::cmd_runvm`) / `transpile::emit`.
+//!         / `cli::check_and_expand_reified` + `compiler::compile_with` + `vm::Vm::run` (vm_json threads
+//!           the reified-operand side-table, exactly like `cli::cmd_run`) / `transpile::emit`.
 //!
 //! The wrapper *logic* lives in plain `*_json(&str) -> String` functions (no wasm dependency) so it is
 //! unit-tested on the native target by `cargo test`. Only the thin `#[wasm_bindgen]` exports at the
@@ -76,14 +76,14 @@ pub fn run_json(src: &str) -> String {
     exec_json(result)
 }
 
-/// `runvm`: the bytecode compiler + stack VM backend. Must be byte-identical to [`run_json`].
+/// The VM leg: the bytecode compiler + stack VM backend. Must be byte-identical to [`run_json`].
 ///
 /// Threads the checker's **reified-operand side-table** (`check_and_expand_reified` → `compile_with`)
-/// exactly like the CLI's `cli::cmd_runvm` — NOT the map-dropping `parse_checked_program` + `compile`.
+/// exactly like the CLI's `cli::cmd_run` — NOT the map-dropping `parse_checked_program` + `compile`.
 /// Without it, a method-call/field-read result used as an arithmetic operand (e.g. `a.join() + b.join()`,
 /// `box.get() + 1`) makes the VM compiler's `ctype` miss the side-table and reject what the interpreter
-/// accepts — a playground-only `run ≠ runvm` divergence the CLI differential harness never exercises.
-pub fn runvm_json(src: &str) -> String {
+/// accepts — a playground-only `interp ≠ VM` divergence the CLI differential harness never exercises.
+pub fn vm_json(src: &str) -> String {
     let result = (|| {
         let parsed = cli::parse_program(src).map_err(ExecErr::Front)?;
         let (prog, reified) =
@@ -144,8 +144,8 @@ pub fn pg_run(src: &str) -> String {
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn pg_runvm(src: &str) -> String {
-    runvm_json(src)
+pub fn pg_vm(src: &str) -> String {
+    vm_json(src)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -222,36 +222,36 @@ mod tests {
     }
 
     #[test]
-    fn runvm_hello_matches_run() {
+    fn vm_hello_matches_run() {
         let r = parse(&run_json(HELLO));
-        let vm = parse(&runvm_json(HELLO));
-        assert_eq!(r["stdout"], vm["stdout"], "run and runvm must agree");
+        let vm = parse(&vm_json(HELLO));
+        assert_eq!(r["stdout"], vm["stdout"], "run and vm must agree");
         assert_eq!(vm["ok"], json!(true));
     }
 
     #[test]
-    fn runvm_threads_reified_operands_like_run() {
+    fn vm_threads_reified_operands_like_run() {
         // Regression (reported: the concurrency example ran on the playground's interpreter but the
         // VM rejected it with "no method `join` on `Task`"). The VM wrapper MUST thread the checker's
-        // reified-operand side-table (S2.1-broad) exactly like the CLI's `cmd_runvm` — otherwise a
+        // reified-operand side-table (S2.1-broad) exactly like the CLI's `cmd_vm` — otherwise a
         // method-call result used as an arithmetic operand (`a.join() + b.join()`) makes the VM
         // compiler's `ctype` miss the side-table and fall through to `method_rets`, rejecting what the
-        // interpreter accepts: a playground-only run≠runvm divergence the CLI differential never saw.
+        // interpreter accepts: a playground-only interp ≠ VM divergence the CLI differential never saw.
         let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
             function sq(int n): int { return n * n; }\n\
             function f(): int { Task<int> a = spawn sq(2); Task<int> b = spawn sq(3); return a.join() + b.join(); }\n\
             #[Entry] function main() -> void { Output.printLine(\"{f()}\"); }\n";
         let r = parse(&run_json(src));
-        let vm = parse(&runvm_json(src));
+        let vm = parse(&vm_json(src));
         assert_eq!(r["ok"], json!(true), "run must accept the program: {r}");
         assert_eq!(
             vm["ok"],
             json!(true),
-            "runvm must accept it too (reified operands threaded): {vm}"
+            "vm must accept it too (reified operands threaded): {vm}"
         );
         assert_eq!(
             r["stdout"], vm["stdout"],
-            "run and runvm must agree byte-for-byte"
+            "run and vm must agree byte-for-byte"
         );
         assert_eq!(vm["stdout"], json!("13\n"));
     }

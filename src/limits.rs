@@ -11,7 +11,7 @@
 
 /// Maximum call-frame depth, enforced **identically by both backends** — the interpreter's
 /// `run_call` depth counter and the VM's `frames` cap. Exceeding it is a clean `"stack overflow"`
-/// runtime error (exit 1), never an abort. A *single shared* limit is what keeps `run` ≡ `runvm`
+/// runtime error (exit 1), never an abort. A *single shared* limit is what keeps interp ≡ VM
 /// in the fault path: separate limits would let one backend succeed where the other errors.
 ///
 /// The value is far below what the VM's heap-allocated frames could hold (it formerly capped at
@@ -33,7 +33,7 @@ pub const MAX_NEST_DEPTH: usize = 512;
 /// *nesting* (parens, unary chains), but a long left-associative chain like `1+1+…` is built
 /// *iteratively* and so escapes that limit — yet still produces a deeply left-leaning AST that
 /// every recursive walker (checker, interpreter, compiler) descends. The checker is the gate both
-/// backends share, so bounding depth here faults such input cleanly (identically on `run`/`runvm`)
+/// backends share, so bounding depth here faults such input cleanly (identically on interp/VM)
 /// instead of letting a downstream walker overflow its stack. Measured: a chain overflows the
 /// 256 MB pipeline thread around ~50–100k terms, so this sits well below with margin.
 pub const MAX_EXPR_DEPTH: usize = 10_000;

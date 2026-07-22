@@ -8,7 +8,7 @@
 //   * `db.onQuery(hook)`    — a per-query observability hook `(string sql, int ms) => void`.
 //
 // `Core.DatabaseModule` opens a real SQLite database (bundled `rusqlite`), so an importing program is quarantined
-// from the byte-identity differential; it is validated by `tests/db.rs` on both backends (`run ≡ runvm`).
+// from the byte-identity differential; it is validated by `tests/db.rs` on both backends (`run ≡ run --tree-walker`).
 // The hook's `ms` is wall-clock (non-deterministic), so it is NEVER printed here — only the SQL text is
 // logged, keeping the example byte-identical across backends. Built only under `--features database`.
 package Main;

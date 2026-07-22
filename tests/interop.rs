@@ -3,7 +3,7 @@
 //! A program that uses `declare` (foreign PHP symbols) cannot run on the Rust backends (it has no PHP
 //! runtime), so it is **quarantined** from the byte-identity oracle. Instead each `examples/interop/**.phg`
 //! is validated two ways:
-//!   1. **`run`/`runvm` refuse it** with the `E-FOREIGN-RUNTIME` pre-flight gate (foreign code needs PHP).
+//!   1. **interp/VM refuse it** with the `E-FOREIGN-RUNTIME` pre-flight gate (foreign code needs PHP).
 //!   2. **`transpile` → real PHP → golden** — the transpiled PHP runs under a real `php` and must match
 //!      the committed sibling `.out` exactly.
 //!
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn php_bin() -> Option<String> {
-    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == runvm, no oracle)
+    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == vm, no oracle)
     // regardless of what `php` is on PATH — set by the pre-commit hook. The full PHP-oracle spine
     // check moves to pre-push (`PHORJ_REQUIRE_PHP=1` against the 8.5 floor).
     if std::env::var("PHORJ_SKIP_PHP").as_deref() == Ok("1") {
@@ -119,10 +119,10 @@ fn interop_examples_refuse_to_run_and_match_php_golden() {
             run_err.contains("E-FOREIGN-RUNTIME"),
             "{label}: run should fail with E-FOREIGN-RUNTIME, got:\n{run_err}"
         );
-        let vm_err = cli::cmd_run(&src).expect_err("runvm must refuse a foreign program");
+        let vm_err = cli::cmd_run(&src).expect_err("vm must refuse a foreign program");
         assert!(
             vm_err.contains("E-FOREIGN-RUNTIME"),
-            "{label}: runvm should fail with E-FOREIGN-RUNTIME, got:\n{vm_err}"
+            "{label}: vm should fail with E-FOREIGN-RUNTIME, got:\n{vm_err}"
         );
 
         // 3. transpile → real PHP → golden (the sibling .out), when a php is available.
@@ -166,10 +166,10 @@ fn interop_projects_refuse_to_run_and_match_php_golden() {
             run_err.contains("E-FOREIGN-RUNTIME"),
             "{label}: run should fail with E-FOREIGN-RUNTIME, got:\n{run_err}"
         );
-        let vm_err = cli::run_program(&unit).expect_err("runvm must refuse a foreign project");
+        let vm_err = cli::run_program(&unit).expect_err("vm must refuse a foreign project");
         assert!(
             vm_err.contains("E-FOREIGN-RUNTIME"),
-            "{label}: runvm should fail with E-FOREIGN-RUNTIME, got:\n{vm_err}"
+            "{label}: vm should fail with E-FOREIGN-RUNTIME, got:\n{vm_err}"
         );
 
         // 3. transpile → real PHP → golden (project-root `expected.out`).

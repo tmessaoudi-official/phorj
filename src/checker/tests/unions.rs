@@ -172,7 +172,7 @@ fn type_pattern_nested_in_variant_is_accepted() {
 fn union_string_pattern_erased_ambig_rejected() {
     // Byte-identity guard (G-1): a `string` type-pattern over a union that also holds a
     // decimal/bytes/html/attr sibling is `E-MATCH-ERASED-AMBIG` — the transpiled `is_string()`
-    // can't tell an erased sibling from a real string (run/runvm distinguish by value kind).
+    // can't tell an erased sibling from a real string (interp/VM distinguish by value kind).
     let bad = errors_of(
         "function f(string | decimal v) -> string { \
                return match v { string s => s, default => \"x\" }; } \

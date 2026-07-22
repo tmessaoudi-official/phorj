@@ -35,8 +35,8 @@ impl Drop for TempDir {
 fn run_both(entry: &Path) -> (String, String) {
     let unit = loader::load(entry).expect("project loads");
     let run = cli::treewalk_program(&unit).expect("interpreter runs");
-    let runvm = cli::run_program(&unit).expect("vm runs");
-    (run, runvm)
+    let vm = cli::run_program(&unit).expect("vm runs");
+    (run, vm)
 }
 
 #[test]
@@ -54,9 +54,9 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
         "package Acme.Util;\nfunction compute(int n) -> int {\n    return n + n + 2;\n}",
     );
 
-    let (run, runvm) = run_both(&entry);
+    let (run, vm) = run_both(&entry);
     assert_eq!(run, "42\n");
-    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+    assert_eq!(run, vm, "run and vm must be byte-identical");
 }
 
 #[test]
@@ -73,9 +73,9 @@ fn import_alias_resolves_qualified_call() {
         "package Acme.Util;\nfunction compute(int n) -> int {\n    return n + n + 2;\n}",
     );
 
-    let (run, runvm) = run_both(&entry);
+    let (run, vm) = run_both(&entry);
     assert_eq!(run, "42\n");
-    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+    assert_eq!(run, vm, "run and vm must be byte-identical");
 }
 
 #[test]
@@ -97,9 +97,9 @@ fn same_package_cross_file_bare_call_resolves() {
         "package Acme.Util;\nfunction inner(int n) -> int {\n    return n + n;\n}",
     );
 
-    let (run, runvm) = run_both(&entry);
+    let (run, vm) = run_both(&entry);
     assert_eq!(run, "42\n");
-    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+    assert_eq!(run, vm, "run and vm must be byte-identical");
 }
 
 #[test]
@@ -119,10 +119,10 @@ fn unqualified_cross_package_call_is_rejected() {
     let unit = loader::load(&entry).expect("project loads");
     // Both backends reject identically (the bare `compute` no longer names any function).
     let run = cli::treewalk_program(&unit);
-    let runvm = cli::run_program(&unit);
+    let vm = cli::run_program(&unit);
     assert!(run.is_err(), "bare cross-package call must fail");
     assert!(
-        runvm.is_err(),
+        vm.is_err(),
         "bare cross-package call must fail on the VM too"
     );
 }
@@ -144,9 +144,9 @@ fn library_package_type_is_usable_cross_package() {
     let unit = loader::load(&entry).expect("project with a cross-package type loads");
     // Both backends agree (the type def + every reference were mangled before either backend ran).
     let run = cli::treewalk_program(&unit);
-    let runvm = cli::run_program(&unit);
+    let vm = cli::run_program(&unit);
     assert_eq!(run.as_deref(), Ok("5\n"), "run output");
-    assert_eq!(runvm.as_deref(), Ok("5\n"), "runvm output");
+    assert_eq!(vm.as_deref(), Ok("5\n"), "vm output");
 }
 
 /// `import type` of a type a package does not export.
@@ -382,9 +382,9 @@ fn cross_package_trait_composition_runs_byte_identically() {
         "src/Acme/Mix/Greet.phg",
         "package Acme.Mix;\ntrait Greet {\n  function hello() -> string { return \"hi\"; }\n}",
     );
-    let (run, runvm) = run_both(&entry);
+    let (run, vm) = run_both(&entry);
     assert_eq!(run, "ada: hi\n");
-    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+    assert_eq!(run, vm, "run and vm must be byte-identical");
 }
 
 /// The cross-package trait transpiles to a native PHP `trait` in its package namespace, composed by
@@ -444,9 +444,9 @@ fn cross_package_call_inside_map_literal_resolves() {
         "src/Acme/Util/compute.phg",
         "package Acme.Util;\nfunction compute(int n) -> int { return n + 22; }",
     );
-    let (run, runvm) = run_both(&entry);
+    let (run, vm) = run_both(&entry);
     assert_eq!(run, "42\n");
-    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+    assert_eq!(run, vm, "run and vm must be byte-identical");
 }
 
 /// A `package Main` class `extends` a library-package class (imported via `import type`), inheriting
@@ -465,9 +465,9 @@ fn cross_package_inheritance_and_parent_calls_run_byte_identically() {
         "src/Acme/Zoo/Animal.phg",
         "package Acme.Zoo;\nopen class Animal {\n  constructor(public string name) {}\n  open function speak() -> string { return \"(animal)\"; }\n}",
     );
-    let (run, runvm) = run_both(&entry);
+    let (run, vm) = run_both(&entry);
     assert_eq!(run, "woof/(animal)\n");
-    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+    assert_eq!(run, vm, "run and vm must be byte-identical");
 }
 
 /// The cross-package parent class is emitted as `extends \Acme\Zoo\Animal` and the parent call as

@@ -6,7 +6,7 @@
 //! allocates a *new* instance, so the parent ctor cannot simply be *called*; instead this pass splices
 //! the parent constructor's effect — parameter bindings, promotions, field initializers, and body — as
 //! a fresh-scoped `Stmt::Block` in place of the forwarding statement. Because the *same* lowered AST
-//! feeds every backend (interpreter / VM / transpiler), `run ≡ runvm ≡ PHP` byte-identity holds by
+//! feeds every backend (interpreter / VM / transpiler), `interp ≡ VM ≡ PHP` byte-identity holds by
 //! construction; there is no new `Op` or `Value`. Same "front-end sugar, expanded out before backends"
 //! discipline as `type` aliases / `html"…"` / erased generics. Runs LAST in `cli::check_and_expand`, so
 //! the cloned parent body is already fully de-sugared.

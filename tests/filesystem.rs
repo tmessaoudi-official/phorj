@@ -4,9 +4,9 @@
 //! differential SKIPS any program importing `Core.File` (see `uses_impure_native` in
 //! `tests/differential.rs`) — a filesystem side effect is state outside the program text. They are
 //! exercised here instead, each in its own unique temp dir so the tests are order-independent and can
-//! run concurrently. Every case also asserts `run ≡ runvm` (the Rust backends always agree — only the
+//! run concurrently. Every case also asserts `interp ≡ VM` (the Rust backends always agree — only the
 //! PHP leg is unreliable across a separate process, which is why these are quarantined from the oracle,
-//! not from run≡runvm).
+//! not from interp ≡ VM).
 
 use phorj::cli::{cmd_run, cmd_treewalk};
 use std::path::PathBuf;
@@ -38,7 +38,7 @@ impl Drop for TmpDir {
 /// Run `src` on both backends, assert they agree, and return the shared stdout.
 fn both(src: &str) -> String {
     let r = cmd_treewalk(src).expect("run ok");
-    assert_eq!(cmd_run(src).expect("runvm ok"), r, "run ≡ runvm");
+    assert_eq!(cmd_run(src).expect("vm ok"), r, "interp ≡ VM");
     r
 }
 

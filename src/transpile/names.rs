@@ -20,7 +20,7 @@ pub(super) fn last_segment(name: &str) -> &str {
 /// emit distinct classes, so the old flat-name collision (the pre-329.3
 /// `E-TRANSPILE-VARIANT-COLLISION` refusal) cannot occur, and the pre-329.3 reserved-word mangle
 /// (`Int`→`Int_`) is subsumed: a scoped name always carries the `Enum_` prefix, so it can never be
-/// a bare PHP reserved word. The name is **transpiler-only**: `run`/`runvm` address a variant by
+/// a bare PHP reserved word. The name is **transpiler-only**: interp/VM address a variant by
 /// its Phorj name (`EnumVal.variant`), and the PHP debug renderer maps the class back to
 /// `Enum.Variant(…)` via the DEC-238 rows — program stdout is unaffected. The always-present PHP
 /// builtin class/interface list is still guarded (DEC-213 single source — underscore builtins like
@@ -75,13 +75,13 @@ pub(super) fn php_type_ref(name: &str) -> String {
 /// case today is `RoundingMode`: PHP 8.4+ ships a built-in `enum RoundingMode`, so the injected M-NUM
 /// S2 enum (`abstract class RoundingMode` + its variant subclasses) would otherwise fatal with
 /// "cannot extend enum RoundingMode". Append `_` (`RoundingMode` → `RoundingMode_`), transpiler-only:
-/// `run`/`runvm` address the enum by its Phorj name (`EnumVal.ty`), never a PHP class name, so
+/// interp/VM address the enum by its Phorj name (`EnumVal.ty`), never a PHP class name, so
 /// program stdout is unaffected. Distinct from [`php_variant_name`] (which mangles reserved *variant*
 /// names like `Int`); the enum *type* name and its variant names mangle independently.
 pub(super) fn php_class_name(name: &str) -> String {
     // `Iterator` (DEC-257): the injected `Core.IteratorModule` interface collides with PHP's root
     // builtin interface `Iterator` in the (un-namespaced) transpiled output — same mangle, same
-    // rationale as `RoundingMode`. `run`/`runvm` never see a PHP class name, so stdout is
+    // rationale as `RoundingMode`. interp/VM never see a PHP class name, so stdout is
     // unaffected; META-7 disclosure lives in the CHANGELOG entry.
     if name.eq_ignore_ascii_case("RoundingMode") || name == "Iterator" {
         format!("{name}_")

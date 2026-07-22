@@ -52,7 +52,7 @@ impl Value {
             // A decimal renders with exactly `scale` fractional digits (BCMath pads), never `-0`.
             // The same `fmt_decimal` both backends use, and the emitted PHP string already carries
             // this form (a BCMath result string `(string)`s identically) — so interpolating a decimal
-            // is byte-identical across run/runvm/PHP (M-NUM S1).
+            // is byte-identical across interp/VM/PHP (M-NUM S1).
             Value::Decimal { unscaled, scale } => Some(fmt_decimal(*unscaled, *scale)),
             Value::Bool(b) => Some(b.to_string()),
             Value::Str(s) => Some(s.as_str().to_string()),

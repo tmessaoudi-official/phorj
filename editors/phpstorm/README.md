@@ -53,4 +53,4 @@ attributes). No VSCode required — the directory is just a standard TextMate-co
   member completion** (`myVar.` → the variable's class methods) and **user-package import paths** are
   server follow-ups (they need the resolved-type index and project-source scanning respectively).
 - The server is **off the byte-identity spine** — it never runs the three execution backends, so it
-  carries no `run`/`runvm`/PHP parity risk; its diagnostics equal `phg check` exactly.
+  carries no interp/VM/PHP parity risk; its diagnostics equal `phg check` exactly.

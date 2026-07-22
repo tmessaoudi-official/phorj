@@ -1,7 +1,7 @@
 //! Arithmetic kernels + canonical fault strings (single-sourced; fault bodies are
 //! parity-affecting — see docs/INVARIANTS.md).
 
-/// Canonical fault body for integer `x / 0`. Single-sourced so `run` ≡ `runvm` in the fault path.
+/// Canonical fault body for integer `x / 0`. Single-sourced so interp ≡ VM in the fault path.
 pub const FAULT_DIV_ZERO: &str = "division by zero";
 /// Canonical fault body for integer `x % 0`.
 pub const FAULT_MOD_ZERO: &str = "modulo by zero";
@@ -16,7 +16,7 @@ pub const FAULT_NEGATIVE_SHIFT: &str = "bit shift by negative number";
 pub const FAULT_DECIMAL_OVERFLOW: &str = "decimal overflow";
 /// Canonical fault body for `Decimal.div` with a zero divisor (M-NUM S2). Distinct from the integer
 /// `FAULT_DIV_ZERO` body so the message is decimal-specific, but it still *contains* the substring
-/// `"division by zero"`, so the differential harness classifies it as `FaultKind::DivZero` (run≡runvm
+/// `"division by zero"`, so the differential harness classifies it as `FaultKind::DivZero` (interp ≡ VM
 /// parity); the emitted PHP `__phorj_dec_div` helper throws the same body.
 pub const FAULT_DECIMAL_DIV_ZERO: &str = "decimal division by zero";
 /// Canonical fault body for a negative `scale` argument to `Decimal.div`/`Decimal.round` (M-NUM S2).
@@ -113,7 +113,7 @@ pub fn int_intdiv(a: i64, b: i64) -> Result<i64, String> {
 /// `i64::MAX` (2^63 − 1) is not — so the in-range window is `[-2^63, 2^63)` (upper **exclusive**;
 /// `i64::MIN` is exactly `-2^63`). A value `v` with `LOWER <= v.trunc() < UPPER` casts losslessly via
 /// `as i64`; anything else (incl. NaN/±∞, which fail the comparisons) returns `None`. This avoids
-/// PHP's surprising `(int)NAN == 0`. Single-sourced so `run`/`runvm` agree; mirrored by the PHP
+/// PHP's surprising `(int)NAN == 0`. Single-sourced so interp/VM agree; mirrored by the PHP
 /// `__phorj_float_to_int` helper (which uses the same `9.2233720368547758E18` literal).
 pub fn float_to_int(v: f64) -> Option<i64> {
     const UPPER: f64 = 9_223_372_036_854_775_808.0; // 2^63 — exclusive upper bound

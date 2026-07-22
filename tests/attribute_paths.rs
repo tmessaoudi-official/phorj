@@ -23,11 +23,11 @@ fn attr(name: &str) -> Attribute {
     }
 }
 
-/// Run the program on BOTH backends and assert they agree (run ≡ runvm); return the shared stdout.
+/// Run the program on BOTH backends and assert they agree (interp ≡ VM); return the shared stdout.
 fn run_both(src: &str) -> String {
     let tree = cmd_treewalk(src).expect("interpreter runs the program");
     let vm = cmd_run(src).expect("VM runs the program");
-    assert_eq!(tree, vm, "run ≡ runvm");
+    assert_eq!(tree, vm, "interp ≡ VM");
     tree
 }
 

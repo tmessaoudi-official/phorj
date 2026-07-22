@@ -25,7 +25,7 @@ fn vm_fault_carries_call_stack() {
 }
 
 #[test]
-fn run_and_runvm_traces_match() {
+fn interp_and_vm_traces_match() {
     // The slice-1 invariant: a fault yields byte-identical trace text on both backends.
     for src in [
         "package Main;\nimport Core.Runtime.Entry;\n\
@@ -41,7 +41,7 @@ fn run_and_runvm_traces_match() {
         assert_eq!(
             interp_err.render(""),
             vm_err.render(""),
-            "run vs runvm trace text diverged for:\n{src}"
+            "interp vs VM trace text diverged for:\n{src}"
         );
     }
 }

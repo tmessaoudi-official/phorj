@@ -49,7 +49,7 @@ has settled. The **deprecated** tier may be removed in the next **MAJOR**.
 ## What "compatible" means for Phorj
 
 Phorj's defining invariant is that the three backends — the tree-walking interpreter (`run`), the
-bytecode VM (`runvm`), and the transpiled PHP — produce **byte-identical** output for every program.
+bytecode VM (the VM), and the transpiled PHP — produce **byte-identical** output for every program.
 Compatibility is therefore about *observable program behavior*, not internal representation: the `Op`
 set, the bytecode format, the AST, and the emitted-PHP *shape* are all implementation details that may
 change at any time, as long as a stable-tier program's **output** is unchanged.

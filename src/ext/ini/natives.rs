@@ -9,7 +9,7 @@
 //! PHP-map semantics via `build_map`); a line that is neither a comment, a `[section]`, nor a
 //! `key=value` is skipped.
 //!
-//! Byte-identical run/runvm/transpiled-PHP: the transpiler emits a matching hand-rolled
+//! Byte-identical interp/VM/transpiled-PHP: the transpiler emits a matching hand-rolled
 //! `__phorj_ini_parse` (never `parse_ini_string`); per-line trim uses PHP `trim()`'s exact default
 //! set on both legs.
 

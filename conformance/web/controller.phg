@@ -1,6 +1,6 @@
 // Conformance: `#[Route]` on static class methods + Http.autoRouter() (M6 W2-ext slice 3). A class is
 // a namespace of static route handlers; methods + free functions register together. Experimental tier;
-// byte-identical run≡runvm≡real PHP.
+// byte-identical interp ≡ VM≡real PHP.
 package Main;
 
 import Core.Output;

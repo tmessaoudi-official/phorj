@@ -1,5 +1,5 @@
 // Conformance: Set ergonomics (add/remove/isSubset) + Map ergonomics (getOr/merge/map/filter) —
-// stdlib breadth slice. Byte-identical run≡runvm≡real PHP.
+// stdlib breadth slice. Byte-identical interp ≡ VM≡real PHP.
 package Main;
 
 import Core.Output;

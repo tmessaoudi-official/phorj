@@ -6,7 +6,7 @@
 //! across rusqlite and PHP PDO). This is therefore the SOLE gate that runs the shipped
 //! `examples/database/basic.phg` through the real language surface — `new Database(dsn)` → `prepare` → `bind`/
 //! `bindNamed` → `exec`/`query` → typed `Row` accessors, with a catchable `DatabaseError` — on BOTH backends.
-//! The PHP leg is excluded; `run ≡ runvm` must hold (both call the one shared native bodies). Compiled
+//! The PHP leg is excluded; `interp ≡ VM` must hold (both call the one shared native bodies). Compiled
 //! only under `--features database` (a DEFAULT feature; the pre-push gate covers it via `--all-features`).
 
 use phorj::cli::{cmd_run, cmd_treewalk};
@@ -19,21 +19,21 @@ fn db_example_runs_on_both_backends() {
     let expected = "Ada is 36\nGrace is 45\n";
     let tree = cmd_treewalk(&src).expect("basic.phg runs on the interpreter");
     assert_eq!(tree, expected);
-    // run ≡ runvm: the VM must produce byte-identical stdout.
+    // interp ≡ VM: the VM must produce byte-identical stdout.
     assert_eq!(cmd_run(&src).expect("basic.phg runs on the VM"), tree);
 }
 
 // ── DEC-208 S2: typed-generic hydration (`queryInto` / `queryOneInto`) ───────────────────────────
 
 /// Assert that a program produces `expected` on BOTH backends (interpreter reference + VM), byte-
-/// identically (`run ≡ runvm`).
+/// identically (`interp ≡ VM`).
 fn both(src: &str, expected: &str) {
     let tree = cmd_treewalk(src).expect("program runs on the interpreter");
     assert_eq!(tree, expected, "interpreter output");
     assert_eq!(
         cmd_run(src).expect("program runs on the VM"),
         tree,
-        "run ≡ runvm"
+        "interp ≡ VM"
     );
 }
 
@@ -989,7 +989,7 @@ fn db_transaction_retry_does_not_retry_a_non_transient_error() {
 /// The SOLE gate that runs the slice-D write surface (`execReturningId`/`lastInsertId`/`executeMany`/
 /// `bindList`/`timeout`/`onQuery`) through the real language on BOTH backends (quarantined from the
 /// byte-identity differential like every `Core.DatabaseModule` example). The `onQuery` hook logs only the SQL text
-/// (its `ms` is wall-clock → excluded, or `run ≢ runvm`).
+/// (its `ms` is wall-clock → excluded, or `run ≢ vm`).
 #[test]
 fn db_writes_example_runs_on_both_backends() {
     let src = std::fs::read_to_string("examples/database/writes.phg")
@@ -1120,7 +1120,7 @@ fn db_bind_list_mixes_with_positional_bind() {
 #[test]
 fn db_on_query_hook_fires_with_sql_and_ms() {
     // The hook fires after each exec/query with the (original) SQL text + an int ms. `ms` is wall-clock
-    // so only `ms >= 0` (always true) is printed — printing ms raw would break run ≡ runvm.
+    // so only `ms >= 0` (always true) is printed — printing ms raw would break interp ≡ VM.
     let src = writes_program(
         r#"discard db.onQuery(function(string sql, int ms) => Output.printLine("hook:{sql}:{ms >= 0}"));
        discard db.prepare("INSERT INTO people(name, city) VALUES(?, ?)").bind("A").bind("P").exec();

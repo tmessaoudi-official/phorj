@@ -31,8 +31,8 @@ import Core.List;
     for (string s in a) { Output.printLine(s); }
 }"#;
     assert_eq!(cmd_treewalk(src).unwrap(), "n=2\nhello\nworld\n");
-    // `runvm` shares the same process global, so it agrees (the Rust backends always do — only the
-    // PHP leg is unreliable, which is why these are quarantined from the oracle, not from run≡runvm).
+    // the VM shares the same process global, so it agrees (the Rust backends always do — only the
+    // PHP leg is unreliable, which is why these are quarantined from the oracle, not from interp ≡ VM).
     assert_eq!(
         phorj::cli::cmd_run(src).unwrap(),
         cmd_treewalk(src).unwrap()

@@ -8,7 +8,7 @@
 ## Context
 
 Phorj supports git dependencies (pinned by tag/rev). The project's central correctness contract is
-a **byte-identical spine** (`run ≡ runvm ≡ php`) over committed examples, and that demands
+a **byte-identical spine** (`interp ≡ VM ≡ php`) over committed examples, and that demands
 deterministic, reproducible builds. Network access during a build is inherently non-deterministic
 (a tag can move, a host can be down), which would break both reproducibility and the offline
 example suite.

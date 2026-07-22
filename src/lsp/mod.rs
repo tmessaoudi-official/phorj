@@ -5,7 +5,7 @@
 //! `tower-lsp`/`lsp-server`/`serde`. This module owns a tiny total JSON parser (for inbound request
 //! bodies), the `Content-Length` framing, the server loop, and the diagnostic mapping. It is internal
 //! tooling — **off the byte-identity spine** (it never touches the three execution backends), so it
-//! carries no `run`/`runvm`/PHP parity risk. Diagnostics reuse the *exact* checker the CLI runs, so
+//! carries no interp/VM/PHP parity risk. Diagnostics reuse the *exact* checker the CLI runs, so
 //! editor squiggles equal `phg check`.
 //!
 //! Capabilities: `publishDiagnostics` (full sync), hover, go-to-definition, completion, document

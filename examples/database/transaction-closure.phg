@@ -1,7 +1,7 @@
 // The CLOSURE form of transactions with `Core.DatabaseModule` (DEC-208 slice C, spec §5) — unblocked by DEC-222
 // (throwing-closure function types). Like every `Core.DatabaseModule` example this opens a real bundled-SQLite
 // database, so it is quarantined from the byte-identity differential (live DB I/O is not byte-identical
-// rusqlite-vs-PDO) and is instead run on BOTH Rust backends by `tests/db.rs` (`run ≡ runvm`).
+// rusqlite-vs-PDO) and is instead run on BOTH Rust backends by `tests/db.rs` (`run ≡ run --tree-walker`).
 //
 //   * `db.transaction(fn)` runs the closure inside a transaction: COMMIT on a normal return (returning
 //     the closure's value), auto-ROLLBACK + re-throw the ORIGINAL typed error on a throw. The closure is

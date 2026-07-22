@@ -4,7 +4,7 @@
 // Built by `wasm-pack build playground --target web --out-dir web/pkg`, which emits ./pkg/.
 import init, {
   pg_check,
-  pg_runvm,
+  pg_vm,
   pg_transpile,
   pg_explain,
   pg_lift,
@@ -17,7 +17,7 @@ const ready = init(); // resolves once the wasm module is instantiated
 // native test suite (tests/differential.rs); this in-browser build never disagrees with it.
 const OPS = {
   check: pg_check,
-  runvm: pg_runvm,
+  vm: pg_vm,
   transpile: pg_transpile,
   explain: pg_explain,
   lift: pg_lift, // PHP source -> Phorj draft (the inverse of transpile)

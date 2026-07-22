@@ -1,7 +1,7 @@
 //! Unit tests for the `Core.Option` combinator/conversion native bodies (Wave B B-2a). The
 //! higher-order ones are driven with a mock [`ClosureInvoker`] applying a fixed transform, so the
 //! test exercises the native's own logic (Some/None dispatch, re-wrap, pass-through) independent of a
-//! backend. End-to-end byte-identity across run/runvm/PHP is covered by the differential example
+//! backend. End-to-end byte-identity across interp/VM/PHP is covered by the differential example
 //! `examples/guide/option-combinators.phg`.
 use super::*;
 use crate::value::Value;

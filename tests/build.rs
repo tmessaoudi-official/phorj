@@ -43,11 +43,11 @@ fn objcopy_available() -> bool {
 /// Tier 3 (Phase 3a) — the full *distributed* path: a sourceless phg DOWNLOADS a prebuilt musl stub
 /// from a fixture registry, sha256-verifies it (hand-rolled SHA-256 vs the host `sha256sum` that wrote
 /// the manifest — a cross-implementation check), embeds the program, and the produced musl binary runs
-/// byte-identically to `runvm`. Forces the download branch by running `phg build` from a dir with no
+/// byte-identically to the VM. Forces the download branch by running `phg build` from a dir with no
 /// `Cargo.toml` and a fresh `XDG_CACHE_HOME`. Reuses the musl stub the cache already holds (built by
 /// `phg build --target` here) so this adds no second full cross-compile. Toolchain-gated graceful skip.
 #[test]
-fn distributed_download_embed_run_matches_runvm() {
+fn distributed_download_embed_run_matches_vm() {
     let target = "x86_64-unknown-linux-musl";
     if !cross_toolchain_ready(target) || !objcopy_available() {
         return;
@@ -127,20 +127,17 @@ fn distributed_download_embed_run_matches_runvm() {
         "download did not populate the fresh cache"
     );
 
-    // 4) The produced musl binary runs byte-identically to runvm.
+    // 4) The produced musl binary runs byte-identically to vm.
     let ran = Command::new(&out)
         .output()
         .expect("run downloaded-stub binary");
-    let runvm = Command::new(BIN).args(["run", src]).output().expect("run");
-    assert_eq!(
-        ran.stdout, runvm.stdout,
-        "downloaded-stub binary output != runvm"
-    );
+    let vm = Command::new(BIN).args(["run", src]).output().expect("run");
+    assert_eq!(ran.stdout, vm.stdout, "downloaded-stub binary output != vm");
     let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
-fn cross_musl_binary_matches_runvm() {
+fn cross_musl_binary_matches_vm() {
     // Tier 3 — native execution: x86_64-musl runs on this x86_64-linux box.
     let target = "x86_64-unknown-linux-musl";
     if !cross_toolchain_ready(target) {
@@ -159,9 +156,9 @@ fn cross_musl_binary_matches_runvm() {
         String::from_utf8_lossy(&built.stderr)
     );
     let ran = Command::new(&out).output().expect("run musl binary");
-    let runvm = Command::new(BIN).args(["run", src]).output().expect("run");
+    let vm = Command::new(BIN).args(["run", src]).output().expect("run");
     let _ = std::fs::remove_file(&out);
-    assert_eq!(ran.stdout, runvm.stdout, "musl binary output != runvm");
+    assert_eq!(ran.stdout, vm.stdout, "musl binary output != vm");
 }
 
 #[test]
@@ -204,7 +201,7 @@ fn cross_windows_section_round_trips() {
 }
 
 #[test]
-fn built_binary_matches_runvm() {
+fn built_binary_matches_vm() {
     if !objcopy_available() {
         return;
     }
@@ -232,7 +229,7 @@ fn built_binary_matches_runvm() {
     assert!(produced.status.success(), "built binary exited non-zero");
     assert_eq!(
         produced.stdout, expected.stdout,
-        "built binary output diverged from runvm"
+        "built binary output diverged from vm"
     );
 }
 

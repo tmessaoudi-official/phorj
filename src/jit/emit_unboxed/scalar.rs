@@ -357,7 +357,7 @@ pub(super) fn arm_math_sign(
 /// Math.abs") on `i64::MIN` (the only i64 whose absolute value is not representable). Cranelift's
 /// `iabs` WRAPS `i64::MIN` to `i64::MIN` with no trap, which would DIVERGE from the faulting kernel
 /// — so this GUARDS `n == i64::MIN` → code 5 (the VM redo renders the canonical fault) BEFORE
-/// `iabs`, making the JIT fault EXACTLY where the VM faults (run ≡ runvm preserved). For every
+/// `iabs`, making the JIT fault EXACTLY where the VM faults (interp ≡ VM preserved). For every
 /// other operand `iabs` == `checked_abs` byte-identically. Mirrors the div arm's `i64::MIN` guard.
 pub(super) fn arm_math_abs(
     b: &mut FunctionBuilder,

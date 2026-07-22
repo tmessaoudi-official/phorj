@@ -44,7 +44,7 @@ test "addition" {
 ```
 
 A `test` block is checked like a `-> void` body (no `this`, no return value). It is valid **only**
-in a file run by `phg test`; a `test` block in a normal build (`run`/`runvm`/`transpile`) is the
+in a file run by `phg test`; a `test` block in a normal build (interp/VM/`transpile`) is the
 error `E-TEST-OUTSIDE-TESTS` (`phg explain E-TEST-OUTSIDE-TESTS`).
 
 ## The `Core.Test` assertions

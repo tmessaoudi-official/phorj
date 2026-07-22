@@ -204,14 +204,14 @@ impl Compiler<'_> {
             // call inline (rather than wrapping it in a thunk lambda) keeps the fault stack trace
             // identical to the interpreter's — a synthetic thunk frame would show as `<lambda@N>` only
             // on the VM (closures are real frames there, invisible in the tree-walker), breaking the
-            // run≡runvm trace. The cooperative cutover will introduce deferral with trace consistency.
+            // interp ≡ VM trace. The cooperative cutover will introduce deferral with trace consistency.
             // `spawn <call>` (M6 W4 / S4.3). A single-overload **free-function** call lowers to
             // args-push + `Op::SpawnCall(func_idx, argc)` — the call body is NOT run before the op, so
             // the cooperative driver can defer it as a task rooted at the function's own frame (no
             // synthetic lambda → fault traces match the interpreter). Any other operand (method,
             // overloaded, closure, variant) keeps the eager `<call>; Op::Spawn` form; the cooperative
             // driver rejects those on both backends (a free-function-only restriction, matching the
-            // interpreter), so `run≡runvm`.
+            // interpreter), so `interp ≡ VM`.
             Expr::Spawn { call, span } => {
                 let deferred = if let Expr::Call { callee, args, .. } = &**call {
                     if let Expr::Ident(name, _) = &**callee {

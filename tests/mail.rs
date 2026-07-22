@@ -3,7 +3,7 @@
 //!
 //! The mailer natives are `pure:false` (network/filesystem delivery), so every `import Core.Mail`
 //! program is auto-quarantined from the byte-identity differential; THIS file is the gate that runs
-//! the surface on BOTH backends (`run ≡ runvm`) using the deterministic `file`/`null` transports.
+//! the surface on BOTH backends (`interp ≡ VM`) using the deterministic `file`/`null` transports.
 //! The MIME internals (multipart nesting, auto-plaintext, CID inlines, address-injection rejection)
 //! are unit-tested server-free in `src/ext/mail/natives.rs`. The LIVE SMTP round-trip is opt-in via
 //! `PHORJ_MAILPIT_SMTP` (e.g. `localhost:1025` for a stack Mailpit) — skip-loudly when unset, so the
@@ -17,7 +17,7 @@ fn both(src: &str, expected: &str) {
     assert_eq!(
         cmd_run(src).expect("program runs on the VM"),
         tree,
-        "run ≡ runvm"
+        "interp ≡ VM"
     );
 }
 

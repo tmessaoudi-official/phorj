@@ -26,6 +26,10 @@ prelude-`#[path]` assessed = correct end-state, no change. **EXTENSION MODEL RUL
 userland `.phg` packages + a native Rust trait-seam SPI (build-your-own `phg`; `.so` rejected); guide
 `docs/EXTENSIONS-AUTHORING.md`; **companion package manager = NEXT MAJOR SLICE (DEC-316)** (`9814dbd`).
 
+**TERMINOLOGY (DEC-330, dev-ruled 2026-07-22): there is NO `runvm` — only `phg run` (VM default,
+`--tree-walker` oracle, `--no-jit`) and the transpiled PHP.** All user-facing strings, living docs,
+examples, src comments, and the playground wasm surface swept; historical records left as written.
+
 **2026-07-22 SESSION LOG:** dev updated deps (cranelift 0.133→0.134), version → `1.0.0-nightly.0`, added
 release.yml push trigger. This session: **(a) nightly channel FIXED + LIVE** (DEC-323 — `publish-nightly`
 job; release `nightly` re-points with 4 sha256 assets each master push); **(b) LSP completion field-bug
@@ -210,7 +214,7 @@ DEV-RULED slice, and even then alloc-bound (likely parity). Detail = KNOWN_ISSUE
 Don't stop unless to ask a question. Per-vertical bar HOLDS (independent gate + advisor 6C + arm-in-same-commit).
 **⚖️ ITEM 3 = FEATURES/PARITY, dev-ruled "all of them, recommended order" (2026-07-20 AskUserQuestion). ORDER
 (rising risk/depth, forks surfaced when reached, spine LAST):** (3.1) stdlib companions — no design fork, grep-verify
-first [◐ IN PROGRESS: ✅ **List.sumBy** DONE — higher-order projection sum, byte-identical run≡runvm≡php + example +
+first [◐ IN PROGRESS: ✅ **List.sumBy** DONE — higher-order projection sum, byte-identical run ≡ run --tree-walker ≡ php + example +
 transpile `array_sum(array_map)`, full --all-features gate green 2331, advisor 6C; perf FLAGGED 0.36× = listfilter class
 (higher-order re-entrant, un-JIT-flippable), LOSS-armed. Genuine remaining companion gaps grep-verified: Map.update,
 List.scan/windowed/associateBy/countBy] ✅ **(3.2) List.minBy/maxBy DONE** — projection siblings of min/max (T?,
@@ -248,7 +252,7 @@ stdlib feature (find + fill misalignments), (b) perf flip-or-flag sweep of remai
 **Standing:** gate = `PHORJ_REQUIRE_PHP=1 cargo nextest --all-features` + clippy both legs + fmt + release; per-feature
 DoD incl. flip-or-flag; NEVER push (dev pushes); design forks → surface (Invariant 15). START = the gap-matrix audit (decision 2).
 (getTrace family, contained) THEN generators/yield LAST in a FRESH session (deepest VM control-flow spine, standing rule).
-DoD each: byte-identity run≡runvm≡php + example (Inv-9) + transpile+lift + full --all-features gate + advisor 6C → commit.
+DoD each: byte-identity run ≡ run --tree-walker ≡ php + example (Inv-9) + transpile+lift + full --all-features gate + advisor 6C → commit.
 
 ## ⚖️⚖️ DEV DIRECTIVE + ACTIVE CAMPAIGN (2026-07-19, AskUserQuestion — governs current work)
 **PERF-DoD (standing, absolute):** EVERY feature — new AND already-shipped — gets a perf bench vs PHP;
@@ -377,7 +381,7 @@ hypot/log2/log1p/expm1/deg2rad/rad2deg); array long-tail → (5) generators/yiel
 **FORK RULE (dev-ruled):** on ANY design fork, make the BEST decision by the full rule set — *better than PHP
 conceptually + theoretically + practically; more secure, faster, more OOP, more organized, cleaner* — BUILD it,
 and record it as an **AUTO decision** (status `✅ AUTO — REVIEW`) in C-decisions.md for morning review. NEVER block.
-**DoD each slice:** byte-identity run≡runvm≡php + example (Inv-9) + tests + clippy --all-features AND
+**DoD each slice:** byte-identity run ≡ run --tree-walker ≡ php + example (Inv-9) + tests + clippy --all-features AND
 --no-default-features + fmt + advisor 6C → autonomous `git commit` green. **NEVER push** (dev pushes AM; note:
 pre-push perf gate flagged losses = load-contaminated box, dev re-checks quiet). **Perf work DEFERRED entirely.**
 **Discipline:** accepted surface == working surface (reject every unhandled path — the recurring trap); heavy
@@ -593,7 +597,7 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
    BUILD ORDER (safest-first, each a green commit):
    1. **Variadics** (LOWEST risk — pure desugar, ZERO backend/Call-repr change):
       ✅ **DONE (1a `d0705500` foundation + 1b semantics this session)** — free functions only v1,
-      byte-identical run≡runvm≡php, 2229 green, clippy both legs. Approach B (FnSig+check_args_defaulted,
+      byte-identical run ≡ run --tree-walker ≡ php, 2229 green, clippy both legs. Approach B (FnSig+check_args_defaulted,
       advisor-ruled over name-based desugar which breaks on return-overloads). Method/lambda variadic
       REJECTED via shared `reject_nonfree_variadic` (the ≥3-site trap bit the lambda once → fixed). See DEC-298.
       (historical 1b plan below, now done:)
@@ -708,7 +712,7 @@ full-gate needed). NOT started — the clear next major slice.
 - **DEC-285** (`d63e255a`): built-in attributes (`Entry`/`Route`/`UncheckedOverflow`/`Attribute`/DI) resolve in
   EVERY import form — `#[Core.Runtime.Entry]` (qualified, was E-UNKNOWN-ATTRIBUTE) now works, bare-after-import
   preferred. `ast::attr_path_matches` suffix-matcher; import-gating unchanged (enforce_injected self-gates dotted).
-  Byte-identical run≡runvm≡php-8.5.8. advisor-certified. tests/attribute_paths.rs (3 tests).
+  Byte-identical run ≡ run --tree-walker ≡ php-8.5.8. advisor-certified. tests/attribute_paths.rs (3 tests).
 - **jsonround perf (DEC-266 line):** byte-cursor parse `79a1f4fb` (Vec<char>→&[u8], byte-identical, no flip) +
   **inline-payload `EnumVal.payload`→`Payload{Zero,One,Many}`** (this slice, advisor-certified, byte-identical:
   2279 tests + differential + oracle + all-micro output-identity; microbench-gate PASS no flips; enum/match benches
@@ -732,7 +736,7 @@ full-gate needed). NOT started — the clear next major slice.
   FS, `null-safety`=stderr W-FORCE-UNWRAP artifact — stdout identical). This substantially closes the DEC-287
   "full --all-features gate not run on final HEAD since gate4" caveat FOR THE SPINE (the core contract); still
   OWED on the dev's first pre-push: the two heavy sweeps + clippy on final HEAD. Also found+logged 2 pre-existing
-  drift/divergence issues (KNOWN_ISSUES top): run/runvm CLI doc-drift + the "no entry point" run≠tree-walker
+  drift/divergence issues (KNOWN_ISSUES top): both engines CLI doc-drift + the "no entry point" run≠tree-walker
   prefix divergence; fixed safe living-doc/example/comment instances (main.rs, example CLI cmds, FEATURES row 70).
 - **NEXT (perf mission substantially complete — both losses addressed):** per the confirmed programme, the
   CORE PARITY PUSH (the big %-movers: FN parity is the 40%-weighted drag at ~37%) — TOP-20 stdlib breadth
@@ -984,7 +988,7 @@ PHP leg self-blocks — bcmath uninstallable in this container, covered on the d
   was a type error) + `phg format`ed (width-canonical sweep pins it).
 - **DEC-242 Cookie BUILT + example 3-leg-verified**; Cookie/SameSite added to Http bare_types
   (wind rule). **DEC-256 examples built**: guide/unicode-codepoints.phg (3-leg) +
-  guide/unicode-native.phg (run≡runvm; E-TRANSPILE-UNICODE verified). Docs DONE:
+  guide/unicode-native.phg (run ≡ run --tree-walker; E-TRANSPILE-UNICODE verified). Docs DONE:
   CHANGELOG (256+242+191-addendum), FEATURES ×2 rows, examples/README ×3 rows, register BUILT
   notes ×3. NEXT: full gate → commit slices → **DEC-258 COMBINED MODEL (ruled — register
   "DEC-258 REFINEMENT"): baked-when-traceable + dual-bake+runtime-dispatch-on-db.naming when
@@ -1178,7 +1182,7 @@ Updated: 2026-07-16 (evening)
      remaining expected: entry_point.rs E-MULTIPLE-MAIN flips ×2, throws
      main_may_not_declare_throws (rule removed → flip/delete), run_executes_sample (SAMPLE
      const direct call), library_file error-text assertion, format pipe test?, playground
-     runvm tests (its own fixtures), dap handshake fixture, vendor fixture, serve/handle
+     the VM leg tests (its own fixtures), dap handshake fixture, vendor fixture, serve/handle
      name-magic rewire still pending + old entry_point fns removal + exit codes + docs.
   ✅ census r6 = **2291/2291 GREEN** (776→0 convergence). CLOSE-OUT DONE: respond bridge
      rewired to the ATTRIBUTED web entry (textual callee substitution into HTTP_RESPOND_BRIDGE;
@@ -1202,7 +1206,7 @@ Updated: 2026-07-16 (evening)
      entry_point/entry_point_count removal if dead, full gate (raw-verified clippys), commit.
   ⚠⚠ RESOLVED BUG (was census r4 residue, REPRODUCED + root-caused): examples/database/transaction-closure.phg —
      interpreter leg RUNS CLEAN, VM leg = "compile error: `transaction` is not a function,
-     variant, or class" (run≠runvm divergence!). transaction = the DEC-249 default-param method
+     variant, or class" (interp ≠ VM divergence!). transaction = the DEC-249 default-param method
      (fills machinery). Appeared between 284284e0 (green) and the DEC-191 work. Suspects, in
      order: (1) apply_default_fills interplay with the reified chain rewrap I did for
      materialize_for_binds/lower_foreach_iter (re-nested parens in pipeline.rs — check the arg

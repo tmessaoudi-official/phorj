@@ -6,7 +6,7 @@
 //! `import Core.Log` resolution + `Log.*` namespaced-native dispatch — rather than calling
 //! `log_natives()` directly (which the unit tests do). It asserts STDOUT (the captured output buffer);
 //! the `[LEVEL]` lines go to the process's real stderr, which is not captured here and need not be
-//! (logs are the out-of-band sink). `run ≡ runvm` holds — only the PHP leg is quarantined.
+//! (logs are the out-of-band sink). `interp ≡ VM` holds — only the PHP leg is quarantined.
 
 use phorj::cli::{cmd_run, cmd_treewalk};
 
@@ -24,7 +24,7 @@ fn logging_example_runs_on_both_backends() {
     // STDOUT is only the `Output.printLine` result; every `Log.*` line went to (uncaptured) stderr.
     let tree = cmd_treewalk(&src).expect("logging.phg runs on the interpreter");
     assert_eq!(tree, "sum = 6\n");
-    // run ≡ runvm: the VM must produce byte-identical stdout (both call the one shared native body).
+    // interp ≡ VM: the VM must produce byte-identical stdout (both call the one shared native body).
     assert_eq!(cmd_run(&src).expect("logging.phg runs on the VM"), tree);
 }
 
@@ -125,7 +125,7 @@ fn log_v2_channels_write_identical_content_on_every_leg() {
     std::fs::create_dir_all(&d2).unwrap();
     let src2 = channels_src(d2.to_str().unwrap());
     assert_eq!(cmd_run(&src2).expect("vm runs"), "done\n");
-    assert_eq!(read_logs(&d2), interp, "run ≡ runvm on handler content");
+    assert_eq!(read_logs(&d2), interp, "interp ≡ VM on handler content");
 
     // Leg 3: transpiled PHP (same gating as the conformance oracle; skip-loud without php).
     if let Some(php) = php_bin() {
@@ -168,7 +168,7 @@ fn logging_v2_example_runs_on_both_backends() {
         std::fs::read_to_string("examples/guide/logging-v2.phg").expect("read logging-v2.phg");
     let tree = cmd_treewalk(&src).expect("logging-v2.phg runs on the interpreter");
     assert_eq!(tree, "program output still owns stdout\n");
-    assert_eq!(cmd_run(&src).expect("runs on the VM"), tree, "run ≡ runvm");
+    assert_eq!(cmd_run(&src).expect("runs on the VM"), tree, "interp ≡ VM");
 }
 
 /// DEC-329.4: the processor tail (`| ts=… pid=…` / trailing `"ts"`/`"pid"` json keys) is
@@ -239,7 +239,7 @@ import Core.Runtime.Entry;
     std::fs::create_dir_all(&d2).unwrap();
     assert_eq!(cmd_run(&prog(d2.to_str().unwrap())).unwrap(), "done\n");
     let (l2, j2) = read(&d2);
-    assert_eq!(line_re(&l2), line_re(&l1), "run ≡ runvm prefix");
+    assert_eq!(line_re(&l2), line_re(&l1), "interp ≡ VM prefix");
     assert_eq!(json_prefix(&j2), json_prefix(&j1));
 
     if let Some(php) = php_bin() {

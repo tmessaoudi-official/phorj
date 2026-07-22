@@ -739,7 +739,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              leg does it with `is_int`/`is_float`/`is_string`/`is_bool`/`is_null`. `decimal`, `bytes`,\n\
              `html` and `attr` all erase to a PHP `string` at transpile, so `is_string` can't tell them\n\
              apart from a real `string` — a type pattern naming one could not be byte-identical across\n\
-             `run`/`runvm`/PHP. Only `int`/`float`/`string`/`bool`/`null` and classes/interfaces can be\n\
+             `phg run` (both engines)/PHP. Only `int`/`float`/`string`/`bool`/`null` and classes/interfaces can be\n\
              type-tested; match the value's wrapping form, or use a class/interface, instead.\n"
         }
         "E-MATCH-ERASED-AMBIG" => {
@@ -1014,7 +1014,7 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-FOREIGN-RUNTIME — a program using foreign PHP `declare` symbols was run on a Rust backend.\n\n\
              `declare function …;` (M8.5 interop) describes an existing PHP function so Phorj can\n\
              type-check calls into it and transpile to real PHP. But foreign PHP only exists in the PHP\n\
-             runtime — the interpreter and VM (`phg run` / `phg runvm`) have no PHP runtime, so they\n\
+             runtime — the interpreter and VM (`phg run`) have no PHP runtime, so they\n\
              cannot execute it. Such a program is PHP-target-only: `phg check` and `phg transpile` work,\n\
              but to run it, transpile and execute under PHP:\n\n    \
              phg transpile app.phg > app.php && php app.php\n\n\
@@ -1263,7 +1263,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-TEST-OUTSIDE-TESTS" => {
             "E-TEST-OUTSIDE-TESTS — a `test \"name\" { … }` block appears in a normal build.\n\n\
              A `test` block is a unit test (M-Test). It is only valid in a file run by `phg test`, so\n\
-             production code (run/runvm/check/transpile) cannot smuggle test blocks into a release. Move\n\
+             production code (run/check/transpile) cannot smuggle test blocks into a release. Move\n\
              the block into a `*.phg` file under a `tests/` directory and run `phg test`. `test` is a\n\
              contextual keyword, so it stays usable as an ordinary identifier everywhere else.\n"
         }
@@ -1444,7 +1444,7 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-CONCURRENCY-NO-PHP — green threads (`spawn` / channels) cannot be transpiled to PHP.\n\n\
              PHP has no green threads, and a synchronous lowering would make a concurrent program\n\
              behave differently under PHP than on the Phorj VM/interpreter — breaking the byte-identical\n\
-             spine. So `spawn`/channel programs run on `phg run` / `phg runvm` only (byte-identically),\n\
+             spine. So `spawn`/channel programs run on `phg run` only (byte-identically),\n\
              and `phg transpile` rejects them rather than emitting misleading PHP (M6 W4).\n"
         }
         "E-TRANSPILE-UNCHECKED" => {
@@ -1465,7 +1465,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              PDO — connection behaviour, error text, and type coercions all differ. Rather than emit\n\
              a PHP program that silently diverges from what `phg run` does, `phg transpile` refuses\n\
              (§14 LADDER: no silent semantic downgrade). Run database programs with `phg run` /\n\
-             `phg runvm`, or serve them with `phg serve`.\n"
+             `phg run`, or serve them with `phg serve`.\n"
         }
         "E-TRANSPILE-MAIL" => {
             "E-TRANSPILE-MAIL — a program importing `Core.Mail` cannot be transpiled to PHP.\n\n\

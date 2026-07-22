@@ -5,7 +5,7 @@
 //! per return type** before any backend: each member becomes a distinct single-overload function
 //! (`f__ret_int`, `f__ret_bool`) and the resolved call site is rewritten to the mangled name. This is
 //! the same "erase front-end sugar before any backend" discipline as generics / aliases / UFCS, so it
-//! adds no `Op`/`Value` and keeps `run ≡ runvm ≡ real PHP`. Single-return names are never mangled, so
+//! adds no `Op`/`Value` and keeps `interp ≡ VM ≡ real PHP`. Single-return names are never mangled, so
 //! programs with no return-overloading are byte-identical.
 //!
 //! Scope (C1): free functions only; the selector is the only resolving context (C2 widens to the

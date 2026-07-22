@@ -6,7 +6,7 @@
 //! the terminal REPL and the DAP server (VS Code / JetBrains) — "shared engine, two thin adapters".
 //!
 //! **Interpreter-only, by design.** The bytecode VM has no source-line/local-name table, so stepping
-//! it would need a debug-symbol subproject; the parity spine guarantees `run ≡ runvm ≡ PHP`, so a
+//! it would need a debug-symbol subproject; the parity spine guarantees `interp ≡ VM ≡ PHP`, so a
 //! debug session on the interpreter provably reflects the other backends. Dev-only (`phg debug`), and
 //! entirely a side-channel: it never touches stdout or the `tests/differential.rs` correctness spine.
 //!

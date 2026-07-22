@@ -12,14 +12,14 @@
 //! - **Secret-safe + bounded.** Rendering goes through [`crate::inspect`], which redacts `Secret<T>`
 //!   and caps depth/size.
 //! - **Side-channel only.** The dump is appended to the stderr fault render; it never touches stdout,
-//!   so it is outside the `run ≡ runvm ≡ PHP` correctness spine.
+//!   so it is outside the `interp ≡ VM ≡ PHP` correctness spine.
 //!
 //! # Backend scope
 //!
 //! Rich named locals are produced on the **interpreter**, which holds live `name → Value` scopes at
 //! fault time. The VM stores slot-indexed locals with no name mapping, so a byte-identical *named*
 //! dump would need a per-scope debug-symbol table — deliberately not built, mirroring the debugger
-//! (S5), which is interpreter-only for the same reason: the spine guarantees `run ≡ runvm ≡ PHP`, so
+//! (S5), which is interpreter-only for the same reason: the spine guarantees `interp ≡ VM ≡ PHP`, so
 //! a dump taken on the interpreter provably reflects the VM's state. The stack-trace backtrace is
 //! byte-identical on both backends (error-handling slice 1).
 
@@ -29,7 +29,7 @@ use crate::value::Value;
 
 /// Whether `--dump-on-fault` was requested. Process-global (like the active profile) — set once at the
 /// CLI entry, read on the fault path. It is a *side-channel* switch: it changes only stderr output, so
-/// reading it never affects `run ≡ runvm` (which compares stdout).
+/// reading it never affects `interp ≡ VM` (which compares stdout).
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// Request value-dumps on fault (from `--dump-on-fault`).

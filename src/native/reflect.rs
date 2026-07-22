@@ -120,7 +120,7 @@ fn reflect_class_name(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// (`"int"`/`"List"`/`"Map"`/`"bytes"`/enum name/…), an object → the runtime `className`, an optional
 /// → a null-branch, an erased generic → the coarse `kind`. By the time any backend runs, the call has
 /// been rewritten away — so this `eval`/`php` is **dead** (defensive only). `eval` mirrors the static
-/// rule from the runtime `Value` (keeps run/runvm correct under a hypothetical un-erased leak); `php`
+/// rule from the runtime `Value` (keeps interp/VM correct under a hypothetical un-erased leak); `php`
 /// can only be coarse (it falls back to `kind`), so a leak would diverge and the differential gate
 /// would catch it. `typeName` is also excluded from UFCS (`checker::calls`) for the same reason.
 fn reflect_type_name(args: &[Value], _: &mut String) -> Result<Value, String> {

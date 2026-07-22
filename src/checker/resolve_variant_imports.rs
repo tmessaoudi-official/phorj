@@ -5,7 +5,7 @@
 //!
 //! **Why rewrite to qualified rather than teach the resolver a third form:** the qualified construction
 //! (`new Result.Success(v)`) and qualified pattern (`Result.Success(v) =>`) paths are already proven and
-//! byte-identical across run/runvm/PHP (variant-qualification A2/B). Rewriting every imported use into that
+//! byte-identical across interp/VM/PHP (variant-qualification A2/B). Rewriting every imported use into that
 //! form means we reuse them wholesale — no new resolution site, no bespoke bare-Ident→variant backend
 //! rename, and `unwrap_new` still collapses the `Enum.Variant` callee to the bare variant for the backend.
 //!

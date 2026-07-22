@@ -1,6 +1,6 @@
 //! AST → bytecode compiler (M2 P1–P3). A dedicated pass over the type-checked AST,
 //! emitting a `Chunk` the VM executes. Mirrors the tree-walker's semantics so
-//! `runvm` output is byte-identical to `run` (the differential oracle).
+//! VM output is byte-identical to the interpreter (the differential oracle).
 //!
 //! P2 scope: `main`-only programs — literals, arithmetic, comparison, logical
 //! short-circuit, unary, interpolation, `println`, list literals, locals, `if`/`else`,
@@ -66,7 +66,7 @@ enum CTy {
     List(Box<CTy>),
     /// A `Map<key, val>`, carrying both so `ctype(Index)` (`m[k]`) resolves to the **value** type —
     /// which can be an arithmetic operand (e.g. `m["a"] + 1` → `AddI`). Without this, a map-index
-    /// operand collapses to `Other` and `num_ty` errors on the VM only — a `run`↔`runvm` break
+    /// operand collapses to `Other` and `num_ty` errors on the VM only — an interp↔VM break
     /// (M-RT S3, the same reason `List` carries its element type).
     Map(Box<CTy>, Box<CTy>),
     /// A function type `(params) -> ret` — not a numeric operand; carried for future lambda support.
@@ -190,7 +190,7 @@ struct Compiler<'a> {
     method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
     /// Checker reified-operand side-table (S2.1-broad): `expr span.start → operand CTy` for
     /// `Call`/`Member`/`Index` results. `ctype` consults this FIRST, so a generic method result / field
-    /// read / `List<T>` return specializes as the operand the checker proved (closing the run↔runvm
+    /// read / `List<T>` return specializes as the operand the checker proved (closing the interp↔VM
     /// CTy-operand trap for erased-to-`mixed` results). Empty on the run-family `compile` path.
     reified_operands: &'a HashMap<usize, CTy>,
     /// Program-wide `(class, method) → function index` table (slice B0). A non-overloaded static call
@@ -418,7 +418,7 @@ fn cty_of_type_name(name: &str) -> CTy {
 /// A checker [`crate::types::Ty`] → operand [`CTy`], mirroring [`resolve_cty`] (which maps the AST
 /// `Type`). Used to give a native module-qualified call (`List.length(xs)`, `Text.parseInt(s)`) its
 /// return operand type, so its result is a valid arithmetic operand (`List.length(xs) - 1`) on the VM —
-/// without it `ctype` would recurse into the bare module qualifier `List` and error, a `run`↔`runvm`
+/// without it `ctype` would recurse into the bare module qualifier `List` and error, an interp↔VM
 /// break (the documented CTy-operand trap). Only the operand-relevant shapes are tracked; the rest
 /// collapse to `Other`.
 fn ty_to_cty(ty: &crate::types::Ty) -> CTy {

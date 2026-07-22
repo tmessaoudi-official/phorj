@@ -86,7 +86,7 @@ are opposite concepts (the rename in P3.5 removed the old name collision).
 
 ## Backends today vs. planned
 Three backends exist as **free functions** dispatched by a string `match` in `main.rs`
-(`cmd_run`/`cmd_runvm`/`cmd_transpile`). There is no `Backend` trait yet — `grep -rnE '^\s*(pub )?trait ' src/ | grep -v test`
+(`cmd_run`/`cmd_the VM leg`/`cmd_transpile`). There is no `Backend` trait yet — `grep -rnE '^\s*(pub )?trait ' src/ | grep -v test`
 finds 4 traits (`Transport`, `DebugFrontend`, `Suspend`, `Task`), none a backend abstraction;
 the backend seam is deferred to the 4th backend (`phg build`, M2.5) per the Rule of Three — see ecosystem
 spec E-1.

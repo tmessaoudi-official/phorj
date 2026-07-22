@@ -199,7 +199,7 @@ fn serves_known_unknown_and_malformed() {
 
 /// The default VM serve path must produce **byte-identical** responses to the interpreter path
 /// (`--tree-walker`). serve is deliberately OUTSIDE the differential harness (the determinism
-/// quarantine), so this is where `run ≡ runvm` is asserted for the served `respond` entry — covering
+/// quarantine), so this is where `interp ≡ VM` is asserted for the served `respond` entry — covering
 /// the normal 200/404/400 routes, the production (non-dev) 500, and the injected Core.Http bridge.
 #[test]
 fn vm_serve_is_byte_identical_to_interpreter() {

@@ -4,7 +4,7 @@
 //! # The keystone principle
 //!
 //! **A build profile may change diagnostics, observability, and side-channels ONLY — never observable
-//! program behavior or output.** `run ≡ runvm ≡ real PHP` must hold *identically* under both `Dev`
+//! program behavior or output.** `interp ≡ VM ≡ real PHP` must hold *identically* under both `Dev`
 //! and `Release`. Consequences:
 //! - Assertions are always-checked; they are NOT stripped in `Release` (unlike C `NDEBUG`). A profile
 //!   may only make a *failure diagnostic* terser, never remove a check (that would change control flow).
@@ -13,7 +13,7 @@
 //!
 //! # How the profile is chosen (compile-time / entry-time, never a runtime env var)
 //!
-//! - `phg run` / `runvm` / `test` — the interactive developer tool — are **Dev** (the default).
+//! - `phg run` / `test` — the interactive developer tool — are **Dev** (the default).
 //! - `phg serve` is **Release** unless `--dev` is passed (rich HTML fault pages leak traces/source,
 //!   so they are Dev-only).
 //! - `phg build` bakes the profile **into the artifact's container** (secure-by-construction):

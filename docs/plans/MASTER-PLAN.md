@@ -30,7 +30,7 @@
 | **Completion** | **PHP-parity ≈68% · Vision ≈69% · raw floor ≈53%** (§4.11, 2026-07-19 — backed enums DEC-302 (PHP 8.1, verified) + targeted phantom-gap credit Core.Path/crypto; §4.10 was ≈66/67/51). Weights 35 SYN(≈83%) / 40 FN(≈49%, still the drag) / 25 RT(≈75%) on 824 rows. ⚠ A full per-row §1.2 re-tally is still owed (would likely credit MORE phantom gaps). The ONE big lever remains the FN stdlib leg; next FN blockers = XML/streams/intl/SPL-heaps/mb-tail. ⚠ PERF: non-JIT'd native calls lose 3-44× in hot loops (KNOWN_ISSUES PERF-native-call-in-loop) — orthogonal to parity but a real WIN-OR-FLAG debt. |
 | **Active programme** | **THE AUTONOMOUS PROGRAMME (confirmed 2026-07-17 via AskUserQuestion — full scope selected). Ordered master queue below (§0 THE QUEUE); grind continuously, gate + DEC-268-panel each wave, commit green, NEVER push.** |
 | **Locked rulings (2026-07-11, developer via ask-human)** | **Perf** = multi-dimensional "better" (faster/safer/organized/SOLID). **AMENDED (2026-07-11, Fable session, developer via ask-human): the string/array/collection speed-beat is REOPENED NOW — fresh-eyes attempt at the FRONT of this run, target faster-or-at-least-equal to PHP, evidence-gated (pure-Rust ceiling spike FIRST per KNOWN_ISSUES §"Parked perf"; WIN-OR-FLAG; no MATCH in the ceiling test → report honestly and re-ask).** Prior end-stage park superseded. **Target** = 100% VISION. **Footguns** audited in Ω-0. **GLOBAL TENETS (whole wave):** prefer INSTANCES + mandatory `new`; nothing in the wind (every symbol import-gated, leaf-or-parent); decoupled / composable / generic / scalable / modular / SOLID. **Core.Sql DBAL = instance model** (`new QueryBuilder("t","a")` → typed per-verb sub-builders `SelectQuery`/`InsertStatement`/`UpdateStatement`/`DeleteStatement`; always-alias + `E-SQL-AMBIGUOUS-COLUMN`; decoupled dialect rendered at `db.execute`; `new Query(sql,[binds])` raw — SUPERSEDES the shipped slices 1+2 static-factory `Sql.query`/`Sql.select`, reworked in Ω-1). **PERF-FIRST rulings (2026-07-11, session 3, developer via ask-human):** (1) **Order A** — unboxed arena verticals (enum → closure/method → objalloc → composites) → V3b single-alloc `Instance` → NaN-box end-state, each shape spike-gated WIN-OR-FLAG; (2) **exit bar = beat-or-match EVERYTHING** (every micro ≥1.0× vs fresh docker php:8.5-cli+JIT, pinned+interleaved) — a flag is accepted only after all three levers are exhausted on that shape, loss anatomy documented; (3) **intadd** scored WON via `#[UncheckedOverflow]` 2× (apples-to-apples vs php's unchecked semantics); checked-DEFAULT ≥1.0× is an ACTIVE best-effort target — range-proof overflow-check-elision front REOPENED (induction/const-init proofs eliding checks where overflow is provably impossible; fault behavior unchanged); (4) **trycatch (0.48×, un-ruled prior)** = full lever attempt in the wave (anatomy first, then zero-cost-on-no-throw shape). **ADJUDICATION BATCH CLEARED (2026-07-12, session 6, developer via AskUserQuestion — DEC-201…206 + META-1…3, full rulings with alternatives in the decision register):** empty literals = contextual typing + List.empty/Map.empty (DEC-201); reserved top-level names = reject E-RESERVED-NAME incl. PHP builtin classes (DEC-202, closes DEC-200); scope guard = `using` + Closable (DEC-203); Runtime.onShutdown (DEC-204); cycles = collector-then-Weak<T>, phased (DEC-205); bare DateTime gated (DEC-206). META-1: sqlbuild goes ALL THE WAY (L2a → L2b → L3 refcounted handles) to ≥1.0× BEFORE Ω-wave work; run-end full reopen of all known issues/design decisions; every decision recorded with alternatives. META-2: L3 = in-island zero-dep (arena count array in src/jit/handles.rs). META-3: wave order as written. **PER-FEATURE PERF GATE (2026-07-12, developer via ask-human, session 5):** programme confirmed Phase A (session-5 perf tail: listappend → mapinsert → hofpipe → forin lever-3 → re-adjudicate+ratchet all 21 → representation slice → perf register+G-8) then Phase B (Ω-0…Ω-9); **every new feature shipped in the Ω waves lands its own perf micro in the same change and must score ≥1.0× vs fresh php:8.5-cli+JIT (beat-or-match, pinned+interleaved protocol)** — the bar is per-feature definition-of-done, not only an Ω-8 hold; run continues without stopping until 100% VISION. **AMENDED 2026-07-16 (DEC-269): WIN-OR-FLAG precedence — after all levers are exhausted on a shape, a LOSS-FLAGGED entry with anatomy + queued levers is an acceptable DoD; perf work is continuous as features ship.** |
-| **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy (both configs, incl. `--no-default-features`) + fmt + release build + an Invariant-9 example + byte-identity `run≡runvm≡php-8.5.8`. **`jit` is a DEFAULT feature** (bare `cargo test`/`build`/`clippy` include it; `--features jit` is a harmless redundant no-op; verify jit-off compiles via `cargo check --no-default-features`; run without native codegen via `phg run --no-jit`). Pre-commit = fast Rust-only tier (~12s); pre-push = full oracle + microbench-gate. Commit each green slice; **NEVER push** (developer pushes). |
+| **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy (both configs, incl. `--no-default-features`) + fmt + release build + an Invariant-9 example + byte-identity `run ≡ run --tree-walker ≡ php-8.5.8`. **`jit` is a DEFAULT feature** (bare `cargo test`/`build`/`clippy` include it; `--features jit` is a harmless redundant no-op; verify jit-off compiles via `cargo check --no-default-features`; run without native codegen via `phg run --no-jit`). Pre-commit = fast Rust-only tier (~12s); pre-push = full oracle + microbench-gate. Commit each green slice; **NEVER push** (developer pushes). |
 | **Next** | **See §0 THE QUEUE (immediately below). In-flight: perf (jsonround/dbwork → wins + baselined), the db→database/crypto→cryptography extension renames, the §4 recompute.** (The former sqlbuild-JIT-saga text is retired — captured in git history + [[w7-union-dyn-cells]]; the bytecode-inlining/scalar-replacement blueprint remains a parked general JIT lever under DEC-266.) |
 
 ## 0 THE QUEUE — the confirmed autonomous programme (2026-07-17, developer via AskUserQuestion)
@@ -571,13 +571,13 @@ Fable main); until then 3C/6C run self-graded with explicit disclosure.
 
 ## 1. GOVERNANCE & STANDING RULES
 
-**G-1 · Byte-identity spine.** `phg run` ≡ `phg runvm` ≡ transpiled PHP under a real `php` (floor
+**G-1 · Byte-identity spine.** `phg run` ≡ `phg run` ≡ transpiled PHP under a real `php` (floor
 **8.5**, `PHORJ_REQUIRE_PHP=1` fails-not-skips): identical stdout AND failure behavior, every
 program, every example; the interpreter is the reference oracle. Enforced by `tests/differential.rs`
 (3308 lines — split tracked as W1-1) + `tests/conformance.rs`.
 
 **G-1.1 · The concurrency exception (disclose wherever byte-identity is claimed).** Concurrency
-(`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle (DEC-133, ratified): `run ≡ runvm`
+(`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle (DEC-133, ratified): `run ≡ run --tree-walker`
 holds; the PHP leg is a hard error — **the shipped code is `E-CONCURRENCY-NO-PHP`** (the ledger's
 "E-TRANSPILE-CONCURRENCY" was the pre-implementation name; audit B3-4 verified only
 `E-CONCURRENCY-NO-PHP` exists — use it everywhere) — with explicit `--sequential-concurrency`
@@ -1043,7 +1043,7 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   helper, unboxed int result). **P-2c** default-deny rollout to the remaining string/collection ops.
   Then recompute the perf register + G-8 language.
 - **Ω-9 · GA close** — spec freeze, GA-CHECKLIST, final vision-% recompute, showcase; THEN resolve the
-  remaining `KNOWN_ISSUES` park-items (ruling A). Hygiene follow-up parked here: the **`runvm` → `interpreter
+  remaining `KNOWN_ISSUES` park-items (ruling A). Hygiene follow-up parked here: the **the VM → `interpreter
   ≡ VM ≡ PHP` terminology sweep** (~150 occurrences / ~80 files; a semantic rewrite, its own commit + a
   `PHORJ_REQUIRE_PHP` gate — cli-name-sync's deferred leg; see the note under "Execution protocol").
 
@@ -1055,7 +1055,7 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   entry: what, why-parked, the fork for the developer) and move on. Never silently downgrade (Invariant 14).
 - **Per-slice gate (non-negotiable):** full oracle `PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy
   (both feature configs, incl. `--no-default-features`) + fmt + release build + an Invariant-9 runnable
-  example + byte-identity `run≡runvm≡php-8.5.8`. Commit each green slice. **NEVER push** (developer pushes).
+  example + byte-identity `run ≡ run --tree-walker ≡ php-8.5.8`. Commit each green slice. **NEVER push** (developer pushes).
 - **Spine-sensitive slices → advisor review before commit** (the green gate alone masks byte-identity P0s).
 - **Recompute the % at each sub-wave close** (824-row model, weights 35 SYN / 40 FN / 25 RT) → update the §0
   cursor + §11 in that commit.
@@ -1065,8 +1065,8 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   failing-program example, don't self-rule; if blocked, park + continue elsewhere.
 - **Hygiene banked (cli-name-sync):** the CLI-name/module-name sync is **DONE** (commit `56645a3` — CLI
   command surface canonical, code renamed to match: `lexer/`→`tokenizer/`, `fmt/`→`format/`, `cmd_lex`→
-  `cmd_tokenize`, etc.). ONE follow-up remains = the `runvm` → `interpreter ≡ VM ≡ PHP` terminology sweep
-  (~150 occurrences / ~80 files; post-CLI-reshape `phg run` IS the VM so `run ≡ runvm` is stale in both
+  `cmd_tokenize`, etc.). ONE follow-up remains = the the VM → `interpreter ≡ VM ≡ PHP` terminology sweep
+  (~150 occurrences / ~80 files; post-CLI-reshape `phg run` IS the VM so `run ≡ run --tree-walker` is stale in both
   terms → a *semantic* rewrite requiring per-site care + its own commit + `PHORJ_REQUIRE_PHP` gate). Parked
   to Ω-9 hygiene.
 
@@ -1096,9 +1096,9 @@ Ordered P1→P3. Each item is done when its acceptance evidence exists and the g
 
 | # | Sev | Item (source) | Status |
 |---|-----|---------------|--------|
-| UA-0.1 | P1 | **Test-gate serialization** — **PREMISE STALE, remainder DEFERRED (2026-07-04, evidence below; not "done", per G-7).** (a) The fmt corpus test *already* fans out across all cores via `std::thread::scope` (`tests/fmt.rs:128-146`, added since the "111 s" measurement) — the sharding win is already banked. (b) `runtime::shipped_manual_example_runs_on_both_backends` is NOT a corpus monolith: it runs ONE example (`fib(30)`), compute-bound (~57 s, 2.7M tree-walk calls × run+runvm) — not shardable without weakening the shipped-example guard. (c) The persistent-worker refactor is confirmed low-ROI (97 µs/call × ~260 calls ≈ 25 ms against 46 s — noise) AND not safely buildable here: a persistent worker must receive *borrowed* closures over a channel, which needs `stacker`/unsafe — both blocked by `forbid(unsafe_code)` + no-new-deps. **The real lever is `cargo-nextest`** (one global -j16 pool across binaries vs cargo's serial-per-binary; handoff proves 228→118 s here) — wiped by the stack reload, restore attempted (from-source `cargo install`, prebuilt blocked by classifier). (B1-1) | ⏸ deferred |
+| UA-0.1 | P1 | **Test-gate serialization** — **PREMISE STALE, remainder DEFERRED (2026-07-04, evidence below; not "done", per G-7).** (a) The fmt corpus test *already* fans out across all cores via `std::thread::scope` (`tests/fmt.rs:128-146`, added since the "111 s" measurement) — the sharding win is already banked. (b) `runtime::shipped_manual_example_runs_on_both_backends` is NOT a corpus monolith: it runs ONE example (`fib(30)`), compute-bound (~57 s, 2.7M tree-walk calls × run+the VM leg) — not shardable without weakening the shipped-example guard. (c) The persistent-worker refactor is confirmed low-ROI (97 µs/call × ~260 calls ≈ 25 ms against 46 s — noise) AND not safely buildable here: a persistent worker must receive *borrowed* closures over a channel, which needs `stacker`/unsafe — both blocked by `forbid(unsafe_code)` + no-new-deps. **The real lever is `cargo-nextest`** (one global -j16 pool across binaries vs cargo's serial-per-binary; handoff proves 228→118 s here) — wiped by the stack reload, restore attempted (from-source `cargo install`, prebuilt blocked by classifier). (B1-1) | ⏸ deferred |
 | UA-0.2 | P1 | **Wire mold**: `/bin/mold` is installed, no `.cargo/config.toml` exists — add the gitignored machine-local config (CI has no mold). (B1-2) | ✅ `b77e50e` |
-| UA-0.3 | P1 | **Fix broken `--help` examples**: `run`/`runvm`/`disassemble` examples fail verbatim (missing `package Main; import Core.Output;`) and teach `->` — fix + convert to `: void` (`src/cli/mod.rs:77,85,129` + arrow prose at `:52,201,638`, `src/main.rs:301`). First contact with the tool currently produces two errors. (B1-3; syntax half sequences with UA-1.5) | ✅ `b77e50e` |
+| UA-0.3 | P1 | **Fix broken `--help` examples**: interp/VM/`disassemble` examples fail verbatim (missing `package Main; import Core.Output;`) and teach `->` — fix + convert to `: void` (`src/cli/mod.rs:77,85,129` + arrow prose at `:52,201,638`, `src/main.rs:301`). First contact with the tool currently produces two errors. (B1-3; syntax half sequences with UA-1.5) | ✅ `b77e50e` |
 | UA-0.4 | P1 | **Help-surface parity**: add `lsp` + `debug` to the long `--help` (terse usage lists 18 verbs, long help lists 16) + per-command help for both. (B1-4) | ✅ `b77e50e` |
 | UA-0.5 | P2 | **6 golden diagnostic corpus cases** (E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-INJECTED-TYPE-BARE, E-DUP-FIELD, E-NEW-ON-NONCONSTRUCT, one `protected` variant) + a **reverse ratchet** (every explained code has ≥1 emission site). (B1-5) | ☐ |
 | UA-0.6 | P2 | **Static-FIELD-via-instance diagnostic**: `a.s` on a static field falls through to a generic code-less message (`src/checker/calls.rs:1709`) while the method sibling got `E-STATIC-VIA-INSTANCE` in W0-3 — mirror the shipped pattern + corpus case. (B1-6) | ✅ **DONE** (status-audit 2026-07-09): `src/checker/calls.rs:~1926` emits `` `{name}` is a static field of `{cls}` — read it as `{cls}.{name}` `` (comment cites UA-0.6), mirroring the const sibling `E-CONST-INSTANCE-ACCESS`. |
@@ -1299,7 +1299,7 @@ from; do not run it as a separate queue.*
    --workspace` + clippy + fmt + `cargo build --release` (php-8.5.8; a missing php FAILS, never skips).
 2. Invariant 9 — every shipped feature lands a runnable `examples/**/*.phg` (auto-gated by the
    differential glob) + an `examples/README.md` row, same commit.
-3. Byte-identity holds (`run ≡ runvm ≡ transpiled PHP`) unless the item is a ruled quarantine
+3. Byte-identity holds (``phg run` ≡ `phg run --tree-walker` ≡ transpiled PHP`) unless the item is a ruled quarantine
    (concurrency, impure natives, the UA-L1 checked-exception pilot cases).
 4. Report `target/release/phg` path after each shipped feature (standing rule).
 
@@ -1414,7 +1414,7 @@ commands). All rulings Appendix B; item recipes in git history `0691228`.*
 - **W2-9** Naming-overhaul remainder — **fold into UA-L5** (one rename wave; the naming section of UNIFIED-SPEC is the SSOT).
 - **W2-10** Narrow soundness-hole batch (static-init protected ctor, interface throws discharge, `x.m()?`, MI lowering corners…).
 - **W2-11** Static-call ergonomics + `this.f[i] = e` field-base index-assign (unblocks W6-4 benchmark ports).
-- **W2-12** Erased-generic result as VM operand (close the run↔runvm CTy gap; option ii — kernel-backed dynamic fallback — is the spine-safe default).
+- **W2-12** Erased-generic result as VM operand (close the interp↔VM CTy gap; option ii — kernel-backed dynamic fallback — is the spine-safe default).
 - **W2-13** Enforcement audit → should-error conformance suite + the explain-coverage ratchet (UA-0.5/0.7 seed it).
 - **W2-14** `new` on enum variants — ✅ ruled KEEP (closed).
 
@@ -1478,7 +1478,7 @@ W3-1/W3-2 add stdlib types.**
   `E-FORMAT-ARG-COUNT`); heterogeneous value lists accepted (per-element scalar check); qualified + DEC-197
   bare import both work; `guide/string-format.phg` + 8 checker tests + 6 `E-FORMAT-*` explain entries.
   **NEXT SLICES:** (2) width/precision/flags (`-`/`0`/`+`) + `%f`; (3) `%x/%o/%b/%e/%g`; (4) `%N$` positional
-  — each a byte-match-PHP-sprintf increment (run≡runvm≡php-8.5.8; unsupported → clean fault; dynamic spec
+  — each a byte-match-PHP-sprintf increment (run ≡ run --tree-walker ≡ php-8.5.8; unsupported → clean fault; dynamic spec
   supported). (Superseded DEC-198's `{}` desugar-to-`Str` — `%` uses the runtime renderer instead.)
 - **W3-6 · Filesystem breadth + serve static-handle bridge** (L) — `Core.Directory`
   (mkdir/listDir/glob/…), fs-OOP question resolved (statics until streams demand handles); serve
@@ -1533,7 +1533,7 @@ W3-1/W3-2 add stdlib types.**
   coordinate with UA-L3) · let-else · auto-import quickfix/organizer · tuples + multiple return ·
   Printable (=W4-3) · labeled loops. `phg fix` = W2-1.
 - **W5-13 · VM debug symbols** (L) — scope IP ranges → named locals → per-line pause → DAP over
-  runvm; fixes the interpolation fault-line divergence (flip the W0-5 harness flag on).
+  the VM leg; fixes the interpolation fault-line divergence (flip the W0-5 harness flag on).
 - **W5-14 · M-perf lane** (L) — CallMethod inline cache, CallValue captures borrow, static/const
   borrow-keyed lookup; **the Rc-share `Value::Str` item is now UA-L4 (pulled forward, ruled)**;
   IsInstance interning, dispatch, const-fold, peephole, lazy for-range; incremental compilation
@@ -1554,7 +1554,7 @@ W3-1/W3-2 add stdlib types.**
 
 ### §7-CLOSED · `trait` — RULED 2026-07-04 (DEC-177): BLESSED alongside MI
 Resolved. The premise was stale: `trait` is NOT unadopted — it is fully wired (lexer keyword,
-parser construct with bodies + `use TraitName;`, `run≡runvm`≡transpiled PHP `trait`/`use`, verified
+parser construct with bodies + `use TraitName;`, `run ≡ run --tree-walker`≡transpiled PHP `trait`/`use`, verified
 end-to-end). Developer **blessed BOTH `trait` AND multiple-inheritance as first-class** — this
 mirrors PHP's own trait/composition duality (familiarity-first). Record in Appendix A as ADOPTED;
 FEATURES `trait` entry flips to delivered. No open language question remains here.
@@ -1832,7 +1832,7 @@ interactively (AskUserQuestion), each with a verified failing/working program in
 mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
 
 - [2026-07-04] **§7-OPEN trait → BLESSED (DEC-177).** `trait` is not unadopted — it's fully wired
-  (`run≡runvm`≡PHP `trait`/`use`, verified end-to-end). Developer blessed BOTH `trait` AND
+  (`run ≡ run --tree-walker`≡PHP `trait`/`use`, verified end-to-end). Developer blessed BOTH `trait` AND
   multiple-inheritance as first-class (mirrors PHP's own trait/composition duality). → Appendix A
   ADOPTED; FEATURES `trait` flips to delivered. **No longer an open question.**
 - [2026-07-04] **W3-5 blocker → RESOLVED via the Type-System programme (DEC-178).** The
@@ -1882,7 +1882,7 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   downstream erases `T`/`E`). Gated on import + skipped if a same-name enum is user-declared. Qualified
   variants only (`injected:true` ⇒ `E-INJECTED-VARIANT-BARE` on bare). Examples `core-option.phg`/
   `core-result.phg` + 6 checker tests (`injected_result_option.rs`); full gate 1710 green, byte-identical
-  run≡runvm≡php-8.5.8. **Foundation only — combinators + `T?`↔`Option` conversions are slice B-2 (pending).**
+  run ≡ run --tree-walker ≡ php-8.5.8. **Foundation only — combinators + `T?`↔`Option` conversions are slice B-2 (pending).**
   Disclosed a pre-existing F-m guard gap (variant names + PHP builtin class names unguarded) in KNOWN_ISSUES.
 - [2026-07-04] **SHIPPED — Wave B slice B-2a: `Core.Option` combinators + conversions (DEC-182 Option
   set, all explicitly ruled).** Six `Core.Option` natives (`src/native/option.rs`): `map`/`andThen`/
@@ -1947,7 +1947,7 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   **⚠ NEWLY-FOUND TRAP (part-1 investigation, sharpens the pass): a ZERO-PAYLOAD variant used bare in a
   PATTERN (`None =>`, no parens) parses as `Pattern::Binding` (a catch-all matching ANYTHING), NOT
   `Pattern::Variant` — so an imported bare `None`/`Empty` pattern is invisible to a Variant-only rewrite
-  and would silently become a catch-all → wrong match semantics, run≡runvm≡PHP all AGREE on the WRONG
+  and would silently become a catch-all → wrong match semantics, run ≡ run --tree-walker≡PHP all AGREE on the WRONG
   behaviour (not even a divergence — a correctness bug the differential won't flag). The pass MUST also
   rewrite `Pattern::Binding{name}` whose name ∈ variant-imports AND is a zero-field variant → the
   qualified zero-payload variant pattern (check how `Option.None =>` is represented first). Also:
@@ -1999,12 +1999,12 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   - **Q2 [COMPILER, breaking — ✅ SHIPPED 2026-07-05]:** enforced camelCase (Invariant 12). The `.phg` corpus was already 100% clean (constants stay SCREAMING_SNAKE_CASE), so the change collapsed to the **two native renames**: `String.uppercase`→`upperCase`, `String.lowercase`→`lowerCase` — `name:` field + fault string in `src/native/text.rs` (PHP emit unchanged: `strtoupper`/`strtolower`; interpreter logic unchanged → name-only breaking change), UFCS calls (`s.upperCase()`), tests (`checker/tests/calls.rs`, `transpile/tests.rs`), examples (`guide/text.phg`, `guide/ufcs.phg`, `guide/imports.phg`, `conformance/stdlib/math-text.phg` + comments), `examples.js` regen, docs (`examples/README.md`, `UNIFIED-SPEC.md`). Strengthened `charter_function_names_are_lowercamel` with a **curated regression denylist** (`uppercase`/`lowercase`) — proven red-with-a-listed-name/green-after; a general "multi-word-all-lowercase" rule is NOT mechanically decidable (`substring`/`capitalize` are legit single words), disclosed in the test comment. Full oracle gate green (php-8.5.8). `substring` stays one word.
   - **Q3 [DESIGN, W2-6 — ✅ RULED 2026-07-05 after surfacing a source conflict; TWO-MODE model].** The build investigation surfaced a bare-vs-qualified contradiction between DEC-196 Q3 ("used bare"), UNIFIED-SPEC §"Nothing in the wind"/W2-6 (qualified, principle in force), and audit §1.11 (developer instinct "bare reads inconsistent" → qualified) → surfaced via AskUserQuestion (Invariant 15). **DEVELOPER RULED (2026-07-05): the TWO-MODE model, mirroring Phorj's existing type/variant-import discipline (DEC-186).** Modules: **`Core.Assert`** = { `assert` }, **`Core.Abort`** = { `panic`, `todo`, `unreachable` }. (1) **Whole-module import → QUALIFIED calls:** `import Core.Assert;` ⇒ `Assert.assert(x)`; `import Core.Abort;` ⇒ `Abort.panic(x)`/`Abort.todo()`/`Abort.unreachable()`. (2) **Member import → BARE calls:** `import Core.Abort.panic;` ⇒ `panic(x)`; `import Core.Assert.assert;` ⇒ `assert(x)`. (3) **Grouped member import → BARE:** `import Core.Abort.{ panic, todo };` (consistent with DEC-186 variant-import groups). Any intrinsic used with NO covering import ⇒ **`E-UNIMPORTED`**. This reconciles both sources: nothing-in-the-wind holds (bare requires an explicit member import that names the intrinsic; module import gives the attributed qualified form). Distinct from `Core.Test.assert`. **✅ SHIPPED 2026-07-05.** New pass `resolve_intrinsic_imports` (`src/checker/intrinsic_imports.rs`) runs on the RAW program in `check_and_expand` (one `&mut` traversal): validates coverage (`E-UNIMPORTED`; strict two-mode — each form needs its own import) + normalizes the qualified `Assert.assert(...)` form to the bare intrinsic every backend already lowers (backends UNCHANGED → byte-identity preserved). Casing carve-out in `program.rs` exempts the lowercase intrinsic leaf of a `Core.Assert`/`Core.Abort` member import from `E-PKG-CASE`. Bad member leaf → `E-IMPORT-UNKNOWN`; alias on an intrinsic import rejected. `is_intrinsic_name` reservation stays (single-sourced via `intrinsic_module_of`). Reused DEC-186 grouped-import parser (no parser change). Examples `guide/assertions.phg`+`guide/result.phg` gained `import Core.Assert.assert;`; new `guide/intrinsic-imports.phg` (3 modes, byte-identical); `phg explain E-UNIMPORTED`; UNIFIED-SPEC §"Nothing in the wind" updated to the two-mode model. 12 checker tests + full oracle gate green. **DEC-196 COMPLETE (Q1+Q2+Q3+Q4 all shipped).**
   - **Q4 [FIX — SHIPPED this session]:** `gen_examples.py`: added the MISSING `Core.Regex` to the exclusion set (the only real generator bug — `regex.phg` was leaking into the playground; `Core.Cryptography` was already correct, NOT a typo — an earlier "Cryptography→Crypto" claim was a substring-match error, reverted) + added `bench` to `SKIP_DIRS` (excludes `workload.phg`'s depth-1000 recursion WITHOUT editing the workload or perturbing `bench/baseline.json` — cleaner than the "reduce depth→120" option, which would have moved the perf baseline). Regenerated `examples.js` (146 entries; `regex`/`workload`/`password-verify` all excluded). Frontend `main.js`: graceful message on `RangeError: Maximum call stack size exceeded` (browser stack limit, not a Phorj error). Fixed the stale `playground/Cargo.toml` comment (`regex`/`crypto` both off). **NEXT SESSION (needs WASM rebuild, wasm-pack absent):** enable the `regex` feature in `playground/Cargo.toml` so `regex.phg` returns. Also [COMPILER]-next: scope the leaky `Core.Http` prelude imports.
-- [2026-07-05] **FAULT-PARITY PASS run (the correct-lens work deferred from DEC-195; `docs/research/fault-parity-pass-2026-07-05.md`).** Exit-status lens ("Phorj faults but PHP silently succeeds") over the reachable value-guard fault set = **NO divergence** — PHP 8.5 throws `ValueError` on every bad-value case (`String.repeat`/`count`/`padLeft`/`padRight`, `List.fill`/`chunk`, `Hash.hkdf`), and Conversion faults are guarded by construction (`toInt`→`int?`, `*Exact`→`__phorj_*` throwing helpers). **But a different real divergence FOUND: `Conversion.truncate`/`round` on an out-of-i64-range float** — both legs *succeed* with DIFFERENT stdout (Rust `as i64` saturates to i64::MAX = `9223372036854775807`; PHP raw `(int)`/`(int)round` wraps = `5076964154930102272` + a warning). Latent byte-identity break (no example uses out-of-range input). Safe siblings exist (`toInt`→`int?`, `floatToIntExact`→fault). **FIX ✅ RULED + SHIPPED 2026-07-05: developer chose FAULT** (Invariant 15, AskUserQuestion) — `truncate`/`round` now fault on NaN/±∞/out-of-i64-range (Rust via `value::float_to_int`; PHP via new throwing `__phorj_trunc`/`__phorj_round` helpers), consistent with `floatToIntExact`; in-range unchanged; `toInt`→`int?` stays the graceful path. Now partial (breaking). Tests: Rust fault (`convert_tests`), emit + PHP-helper-throws (`convert_tests`/`transpile/tests`), run≡runvm `agree_err` (`differential`); example comment in `guide/convert.phg`. **OUTPUT-PARITY SWEEP run (2026-07-05, high-risk raw-builtins):** probed `substr`/`intdiv`/`pow`/`explode` edge inputs — `substring`/`integerDivide` AGREE; `pow(0,neg)` value-identical (only the known UA-0.14 deprecation warning differs). **FOUND + FIXED a 2nd divergence: `String.split(s, "")`** — Rust returned per-char-with-empty-ends, PHP `explode("")` faulted → now both FAULT (developer-ruled, empty sep ill-defined) + **added `String.characters(s) -> List<string>`** (code-point-safe, parallels `lines`; the named way to split into chars). **STILL a larger follow-up (fresh context): the remaining ~50 lower-risk raw-builtin emits** (array ops, libm math, hash, path, url) — not individually probed.
+- [2026-07-05] **FAULT-PARITY PASS run (the correct-lens work deferred from DEC-195; `docs/research/fault-parity-pass-2026-07-05.md`).** Exit-status lens ("Phorj faults but PHP silently succeeds") over the reachable value-guard fault set = **NO divergence** — PHP 8.5 throws `ValueError` on every bad-value case (`String.repeat`/`count`/`padLeft`/`padRight`, `List.fill`/`chunk`, `Hash.hkdf`), and Conversion faults are guarded by construction (`toInt`→`int?`, `*Exact`→`__phorj_*` throwing helpers). **But a different real divergence FOUND: `Conversion.truncate`/`round` on an out-of-i64-range float** — both legs *succeed* with DIFFERENT stdout (Rust `as i64` saturates to i64::MAX = `9223372036854775807`; PHP raw `(int)`/`(int)round` wraps = `5076964154930102272` + a warning). Latent byte-identity break (no example uses out-of-range input). Safe siblings exist (`toInt`→`int?`, `floatToIntExact`→fault). **FIX ✅ RULED + SHIPPED 2026-07-05: developer chose FAULT** (Invariant 15, AskUserQuestion) — `truncate`/`round` now fault on NaN/±∞/out-of-i64-range (Rust via `value::float_to_int`; PHP via new throwing `__phorj_trunc`/`__phorj_round` helpers), consistent with `floatToIntExact`; in-range unchanged; `toInt`→`int?` stays the graceful path. Now partial (breaking). Tests: Rust fault (`convert_tests`), emit + PHP-helper-throws (`convert_tests`/`transpile/tests`), run ≡ run --tree-walker `agree_err` (`differential`); example comment in `guide/convert.phg`. **OUTPUT-PARITY SWEEP run (2026-07-05, high-risk raw-builtins):** probed `substr`/`intdiv`/`pow`/`explode` edge inputs — `substring`/`integerDivide` AGREE; `pow(0,neg)` value-identical (only the known UA-0.14 deprecation warning differs). **FOUND + FIXED a 2nd divergence: `String.split(s, "")`** — Rust returned per-char-with-empty-ends, PHP `explode("")` faulted → now both FAULT (developer-ruled, empty sep ill-defined) + **added `String.characters(s) -> List<string>`** (code-point-safe, parallels `lines`; the named way to split into chars). **STILL a larger follow-up (fresh context): the remaining ~50 lower-risk raw-builtin emits** (array ops, libm math, hash, path, url) — not individually probed.
 - [2026-07-05] **DEC-195 — guard-helper for the 3 "divergences": RULED, then the PREMISE was RETRACTED
   (same day) → NOT built; developer must RE-DECIDE.** The developer adjudicated guard-helper for all 3
   (`List.chunk`/`Hash.hkdf`/`Conversion.toString`), but that was on the B-2d audit's **wrong premise**
   that Phorj-fault-text ≠ PHP-error-text is a byte-identity divergence. **It is not** — verified from
-  primary sources (`agree_err` compares run≡runvm ONLY, never PHP; `run_php` asserts exit-0; faults
+  primary sources (`agree_err` compares run ≡ run --tree-walker ONLY, never PHP; `run_php` asserts exit-0; faults
   aren't byte-identity examples per Invariant 9 / G-1.1; `__phorj_clamp` comment: *"a fault is never a
   byte-identity example… only that both legs fault"*). All 3 **fault in PHP** (`ValueError`/`Fatal`) →
   behaviourally consistent, NOT divergences. So the guard-helpers are **cosmetic** (PHP-error wording),
@@ -2089,7 +2089,7 @@ shadowing (redeclare same-name enum ⇒ Core injection skipped) ships.
   functions). Ruled: an attribute IS a class marked `#[Attribute]`, applied as `#[MyAttr(const-args)]` to
   declarations (functions/classes/methods/fields), with **compile-time-const args** (fits config-compile-
   time leaning), read via `Core.Reflect`. Reuses classes + reflection; PHP-familiar. **Design crux (own
-  §15 + ladder slice under DEC-189):** attribute READING must be byte-identical across run/runvm/PHP —
+  §15 + ladder slice under DEC-189):** attribute READING must be byte-identical across both engines/PHP —
   transpile to PHP attributes where faithful, else a native reflection table (mirrors Core.Reflect's
   ClassTables pattern). Also expands attribute targets beyond free functions.
 

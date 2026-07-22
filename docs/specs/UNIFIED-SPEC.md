@@ -1280,7 +1280,7 @@ per-slice realization notes — the authoritative slice-level record).
   ConnectionError / TimeoutError / Deadlock / SerializationFailureError / SyntaxError) — never PDO's silent
   false/null. Observability: `db.onQuery((sql, ms) => …)` + `db.timeout(ms)`.
 - **Spine/LADDER**: case-1 (faithful → PHP PDO transpile). Natives `pure:false` → auto-quarantined
-  from the byte-identity differential; `run ≡ runvm` holds; correctness via `tests/database.rs` (+
+  from the byte-identity differential; `interp ≡ VM` holds; correctness via `tests/database.rs` (+
   live round-trips gated on `PHORJ_PG_TEST_DSN`/`PHORJ_MYSQL_TEST_DSN`, skip-loud).
 - **Out of scope (userland or later)**: ORM/relations/migrations/query-builder DSL · pooling/replica
   routing/caching · compile-time SQL-vs-schema checking (needs a schema source) · Postgres
@@ -1349,7 +1349,7 @@ bare, OR qualified `#[DI.Injectable]` / `DI.inject<T>()` via `import Core.Depend
 `phorjInject<T>()` factories (`src/checker/desugar_di.rs`); default-SHARED (diamond → one instance);
 single-impl interface auto-bind; `#[Provides]` static factories (precedence over `new`/single-impl);
 `#[Transient]` fresh-per-use via a let-float codegen; field injection via a synthesized construction-init
-(immutable-safe). Byte-identical run≡runvm≡php-8.5.8.
+(immutable-safe). Byte-identical interp ≡ VM≡php-8.5.8.
 
 ### DI v2 — DESIGN (later layers, Ω-4/Ω-7)
 

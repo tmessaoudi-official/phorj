@@ -4,7 +4,7 @@ use super::support::*;
 
 #[test]
 fn test_item_outside_test_mode_is_rejected() {
-    // A `test` block in a normal build (run/runvm/transpile) must not compile — production code
+    // A `test` block in a normal build (interp/VM/transpile) must not compile — production code
     // cannot smuggle test blocks. Only `phg test` (test mode) accepts them.
     let errs = errors_of("test \"x\" { var y = 1; }");
     assert!(

@@ -525,7 +525,7 @@ impl Checker {
                         Some(t) => {
                             // W0-2: a `private`/`protected` static read from outside its scope is
                             // rejected here (E-FIELD-VISIBILITY), mirroring the const path above and
-                            // the instance-field path below — closing the run≡runvm≡PHP hole.
+                            // the instance-field path below — closing the interp ≡ VM ≡ PHP hole.
                             let v = self.classes[cls].static_vis.get(name).cloned();
                             self.enforce_member_vis(v, name, span, true);
                             t
@@ -722,7 +722,7 @@ impl Checker {
     /// `method_vis`); `None` ⇒ no recorded visibility ⇒ public by construction (e.g. an interface
     /// method) ⇒ no-op. `private` is reachable only from inside the owner; `protected` from the owner
     /// and its subclasses (`cur_class` is the enclosing class, `None` in a free function). Mirrors the
-    /// `const` check (`E-CONST-VISIBILITY`) so `run ≡ runvm ≡ transpiled PHP` all reject the same
+    /// `const` check (`E-CONST-VISIBILITY`) so `interp ≡ VM ≡ transpiled PHP` all reject the same
     /// out-of-scope access — closing the documented byte-identity hole. `is_field` picks the code.
     /// DEC-241: enforce a member's asymmetric SET visibility at a WRITE site (`o.f = e`,
     /// `C.f = e`, a `with { f = … }` override). `entry` is the `set_vis`/`static_set_vis` row —

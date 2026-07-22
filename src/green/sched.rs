@@ -8,7 +8,7 @@
 //! Every decision is **deterministic**: the ready queue is FIFO, per-channel receive wait-lists are
 //! FIFO, and a completed task wakes its joiners in registration order. Because both backends call this
 //! same kernel, they pick the same task at every step ⇒ identical interleaving ⇒ byte-identical output
-//! (the `run≡runvm` spine). No `unsafe`, no backend types — pure data + logic, unit-tested in isolation.
+//! (the `interp ≡ VM` spine). No `unsafe`, no backend types — pure data + logic, unit-tested in isolation.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 

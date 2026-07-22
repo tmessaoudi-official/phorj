@@ -5,7 +5,7 @@
 //! this test is OPT-IN via the `PHORJ_PG_TEST_DSN` env var (the same discipline as the PHP oracle's
 //! `PHORJ_REQUIRE_PHP`): unset → the test SKIPS LOUDLY (prints how to enable it) and passes, so the
 //! standard gate never requires a live Postgres. Set it to a DSN and the full round-trip runs and is
-//! asserted on BOTH backends (`run ≡ runvm`) — e.g.
+//! asserted on BOTH backends (`interp ≡ VM`) — e.g.
 //!
 //! ```text
 //! PHORJ_PG_TEST_DSN='postgres://developer:developer@localhost:42710/testx' \
@@ -134,10 +134,10 @@ fn postgres_round_trip_on_both_backends() {
         "1=Ada\n2=Grace\nreturning=3\nunique-violation\nbulk=2\nnums=3 first=1 tags=2\ntx=7\n";
     let tree = cmd_treewalk(&src).expect("postgres round-trip runs on the interpreter");
     assert_eq!(tree, expected, "interpreter output");
-    // run ≡ runvm: the VM must produce byte-identical stdout.
+    // interp ≡ VM: the VM must produce byte-identical stdout.
     assert_eq!(
         cmd_run(&src).expect("postgres round-trip runs on the VM"),
         tree,
-        "run ≡ runvm"
+        "interp ≡ VM"
     );
 }

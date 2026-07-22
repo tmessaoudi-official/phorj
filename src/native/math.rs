@@ -136,7 +136,7 @@ fn math_neg_infinity(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 /// `Math.integerDivide(int, int) -> int` (M-NUM S3) — integer division truncating toward zero. Single-sourced
 /// with `value::int_intdiv`: `b == 0` faults `"division by zero"`, `intdiv(i64::MIN, -1)` faults
-/// `"integer overflow"` (both run≡runvm via FaultKind; PHP `intdiv` throws the matching class).
+/// `"integer overflow"` (both interp ≡ VM via FaultKind; PHP `intdiv` throws the matching class).
 fn math_intdiv(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(a), Value::Int(b)] => crate::value::int_intdiv(*a, *b).map(Value::Int),
@@ -812,7 +812,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
 // String natives, all concrete-typed. Each erases to a PHP string builtin (D-L9). ASCII-oriented to
 // stay byte-identical with PHP: `len` is the *byte* length (PHP `strlen`), and `upper`/`lower` are
 // ASCII-case (PHP `strtoupper`/`strtolower`), so multi-byte text could differ between the Rust
-// backends and PHP — examples use ASCII. The run↔runvm spine is always byte-identical (both Rust).
+// backends and PHP — examples use ASCII. The interp↔VM spine is always byte-identical (both Rust).
 
 #[cfg(test)]
 #[path = "math_tests.rs"]

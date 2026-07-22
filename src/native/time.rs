@@ -10,7 +10,7 @@
 //! optional frozen epoch-milliseconds value. `Time.freeze(ms)` pins it so every shipped example/conformance
 //! program is deterministic; `Time.unfreeze()` restores real-clock behavior; `Time.nowMilliseconds()` returns
 //! the frozen value when set, else the real wall clock. The transpiler hand-rolls the SAME freezable
-//! clock in PHP (`__phorj_now_*`), so a frozen program is byte-identical on `run`/`runvm`/transpiled PHP.
+//! clock in PHP (`__phorj_now_*`), so a frozen program is byte-identical on interp/VM/transpiled PHP.
 //!
 //! These natives are `pure: false` — an unfrozen `nowMilliseconds()` depends on the environment, so it must not
 //! be folded or treated as deterministic. A program that wants reproducible output freezes first.
@@ -23,7 +23,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The process-wide frozen clock. `None` = read the real wall clock; `Some(ms)` = a pinned epoch-milliseconds
 /// value (set by `Time.freeze`). A `phg run` is one program in one process, and the Rust backends share
-/// this so `run ≡ runvm`.
+/// this so `interp ≡ VM`.
 static FROZEN: RwLock<Option<i64>> = RwLock::new(None);
 
 /// Current epoch-milliseconds: the frozen value if pinned, else the real wall clock. A pre-1970 system clock
