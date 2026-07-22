@@ -2637,9 +2637,13 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   the app keeps running on PHP. COMPILE-TIME ONLY — the earlier live-interop rejection (live PHP→Phorj
   on-the-spot rebuild, per-file gradual typing) STANDS untouched. This closes the roadmap's biggest
   adoption gap (the review's #1 lever: "a gradual migration path from existing PHP is bigger than any
-  individual language nicety"). Design forks for the spec round: output placement/naming convention,
-  autoload wiring, incremental rebuild trigger, how phorj-side imports of not-yet-migrated PHP files are
-  typed (extern stubs?). Roadmap home: adoption/GA wave. Spec + adjudication before build.
+  individual language nicety"). **SPEC READY 2026-07-22**: `docs/specs/2026-07-22-transpile-into-project.md`
+  — five forks each with a recommended default (F1 sibling emit = zero composer edits, the tsc killer
+  property; F2 one `phpInterop{namespaceRoot,sourceRoot}` knob; F3 explicit `phg build --php`, watcher
+  v2; F4 the SHIPPED M8.5 `declare` interop now + a `phg stubs` generator v2; F5 one shared
+  `_phorj/runtime.php` + composer `files` entry — the per-file helper embedding would fatally
+  re-declare). Five adjudications queued in the spec's final section; BUILD BLOCKED on them
+  (Invariant 15). Roadmap home: adoption/GA wave.
 
 - **DEC-321 — EDITION FIELD BAKED NOW; editions machinery stays post-1.0 (developer-ruled 2026-07-22;
   ✅ SHIPPED same day).** `phorj.json` gains an `edition` key (single live edition `2026`) and the

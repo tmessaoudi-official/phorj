@@ -52,7 +52,7 @@ conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `P
    byte-identity-gated. Only these verbs network (Invariant 10). Follow-ups (documented in DEC-316): registry
    constraint-intersection, per-package `phg update`, a hosted registry index.
 1b. **Adoption-review queue (DEC-319, 2026-07-22):** `edition` field (DEC-321) ✅ SHIPPED 2026-07-22 ·
-   'transpile-into-project' mixed PHP adoption (DEC-320, spec-first, adoption/GA wave) · concurrency v2
+   'transpile-into-project' (DEC-320) — SPEC READY 2026-07-22 (docs/specs/2026-07-22-transpile-into-project.md; 5 adjudications queued, build blocked on them) · concurrency v2
    REAL PARALLELISM (DEC-322, DESIGN slice — forks adjudicated at design time). DEC-323 channels ✅ shipped.
 2. ✅ **DONE 2026-07-22 — Transpile FS emitter (DEC-313)** (helpers `transpile/fs_php.rs`, call-site Ok/Err wrap, kind pre-checks, quarantine lifted, php-leg parity test; Session→PERMANENT same slice). Original notes: — build-map in C-decisions §2026-07-20 (FileSystemResult Ok/Err, 18 natives,
    `__phorj_fs_*` helpers, kind-reconstruction; ⚠ R1 variant-class ns + R2 kind-reconstruct). Needs `runtime_php.rs`
