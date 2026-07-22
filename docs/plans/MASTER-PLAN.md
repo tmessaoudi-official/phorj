@@ -71,7 +71,7 @@
   layered-openness public-contract list (Memory now, Db-backed rides Core.DatabaseModule).
 - **W4 language additions:** class-const EXPRESSIVENESS (const expressions/typed consts/new-in-init —
   compile-time-evaluated, types mandatory; direct lifter blocker) · enum `implements` + enum constants ·
-  trait constants (VERIFY the SYN-115 CE credit first — likely over-credited) · `pack`/`unpack` analog:
+  trait constants (VERIFIED absent 2026-07-22 — parse error; SYN-115 downgraded CE→P in the matrix) · `pack`/`unpack` analog:
   typed `Bytes.read*/write*` + declarative compile-checked `BinaryLayout` (also fixes a D-surface
   inventory hole) · bz2 as a format row in the queued Core.Compress slice.
 - **W5/W6 runtime+ops:** `Runtime.cpuTime()` (getrusage twin, feeds Metrics) · `phg env` doctor command

@@ -138,7 +138,7 @@
 | SYN-112 | CB | **multiple** inheritance with explicit conflict errors (`E-MI-*`) + final-by-default `open` opt-in + `abstract` |
 | SYN-113 | P | overrides checked but invariant (`E-OVERRIDE-SIG`); no co/contravariance |
 | SYN-114 | CE | interfaces: multi-`extends`, nominal subtyping, `instanceof` RHS (PJ-OOP-003) |
-| SYN-115 | CE | traits with methods/state/ctors/abstract-reqs/hooks + `use/rename/exclude`; conflicts are errors (arguably better than `insteadof`) |
+| SYN-115 | P | traits with methods/state/ctors/abstract-reqs/hooks + `use/rename/exclude`; conflicts are errors (arguably better than `insteadof`). **DOWNGRADED CE→P 2026-07-22 (DEC-324 verify): trait `const` (PHP 8.2) is a PARSE ERROR** (`expected a field name, found Eq`) — slice queued W4 with the const-expressiveness work |
 | SYN-116 | CB | payload variants + generic enums (`Option<T>`/`Result<T,E>`) — PHP enums carry no payload; backed-enum sugar (`->value`/`cases()`) GAP-planned (A-backed-enums, §3) |
 | SYN-117 | GU | no anonymous classes |
 | SYN-118 | P | `#[Route]` only; no user-defined attributes (`E-UNKNOWN-ATTRIBUTE`) — **→ [HEAD `af3aad3`: improved but STILL PARTIAL — user-defined attributes are now declarable + applyable with compile-time-type-checked args (DEC-194, git `bf05648`/`451fb89`), which is better than PHP on the targets it supports. But narrower than PHP's feature: attributes attach only to classes + free functions (2 of PHP's 7 targets — no method/property/param/const/enum; AST `attrs` on `ClassDecl`/`FunctionDecl` only), and are "inert metadata until a later slice reads them via reflection" — attribute-**reflection**, the primary purpose, does not exist yet. Verdict unchanged (P). NOT counted as a mover in §4.6.]** |
