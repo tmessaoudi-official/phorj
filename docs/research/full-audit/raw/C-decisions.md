@@ -2889,5 +2889,12 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     not a free-form user shape. **App-specific settings are a SEPARATE injected parameter** (a user config
     class), kept distinct from the runtime contract. Built by a `#[Config]` provider (function or class
     static method) per the D1 precedence chain.
-  - **D5+ (PENDING):** web-model reconcile (raw `respond(bytes)` vs typed `(Request):Response`), inbound
-    TLS, Rich Request, Invokable/toString, parity scheduling — recorded here as each locks.
+  - **D5 (LOCKED 2026-07-22) — web-model reconcile.** The typed `(Request): Response` handler is THE
+    (only) web handler model; the raw `respond(bytes): bytes` path is RETIRED. Rationale: one blessed
+    model to learn/document/test; immutable `Response` makes PHP's "headers already sent" structurally
+    impossible; it's what Router/middleware/Rich-Request build on. **Breaking change** (the one in this
+    cluster): `serve`'s documented contract + `examples/web/*` + site-mode `index.phg` that used
+    `respond(bytes)` migrate to typed handlers in the same slice. Static-file **site mode** (public/,
+    MIME/ETag/traversal guards, DEC-282) is orthogonal and unchanged.
+  - **D6+ (PENDING):** run/serve role-mismatch error, inbound TLS (native-only? enablement? version
+    floor? out-of-scope set), Rich Request, Invokable/toString, parity scheduling — recorded as each locks.
