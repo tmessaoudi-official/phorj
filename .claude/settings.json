@@ -9,5 +9,17 @@
       "Bash(source scripts/toolchain.env:*)",
       "Bash(./target/release/phg:*)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/claude-bootstrap/install.sh"
+          }
+        ]
+      }
+    ]
   }
 }
