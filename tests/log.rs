@@ -156,3 +156,17 @@ fn log_v2_channels_write_identical_content_on_every_leg() {
 
     let _ = std::fs::remove_dir_all(&base);
 }
+
+/// The shipped Log-v2 example is differential-QUARANTINED (impure), so nothing else executes it —
+/// this smoke keeps it from rotting green (audit 2026-07-22, P2).
+#[test]
+fn logging_v2_example_runs_on_both_backends() {
+    let _gate = LOG_GATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let src =
+        std::fs::read_to_string("examples/guide/logging-v2.phg").expect("read logging-v2.phg");
+    let tree = cmd_treewalk(&src).expect("logging-v2.phg runs on the interpreter");
+    assert_eq!(tree, "program output still owns stdout\n");
+    assert_eq!(cmd_run(&src).expect("runs on the VM"), tree, "run ≡ runvm");
+}

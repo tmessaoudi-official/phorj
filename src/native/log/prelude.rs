@@ -8,8 +8,9 @@
 //! `Log.configure` time (Rust reads the enum variant + built-in formatter class directly; the PHP
 //! helper maps the variant CLASS name — mangling-aware, `Error` → `Error_` — and calls `kind()`).
 //!
-//! `LogFormatter`/`LogSink` are real interfaces — the recorded SPI seam: a userland formatter whose
-//! `kind()` returns `"line"`/`"json"` works today; arbitrary userland sinks are the recorded v2.
+//! `LogFormatter`/`LogSink` are real interfaces — the recorded SPI seam. v1 accepts ONLY the
+//! built-in formatter/handler classes: `Log.configure` refuses userland implementations LOUDLY on
+//! every leg (see KNOWN_ISSUES §Log-v2 v1 limits); opening the seam is the recorded v2.
 
 pub const PRELUDE: &str = r#"
 import Core.Native.Log as NativeLog;

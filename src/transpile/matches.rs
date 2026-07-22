@@ -187,6 +187,17 @@ impl Transpiler {
             }
         }
         let subj = self.emit_expr(scrutinee)?;
+        // Bind the scrutinee ONCE (audit 2026-07-22, P0): `subj` is spliced into every arm's tests
+        // AND every binding access below, so a side-effecting scrutinee (e.g. the DEC-313 `$__fsr`
+        // FS-native wrap) would run 2-3× on the PHP leg while the Rust legs evaluate exactly once —
+        // a spine divergence. A temp statement is always legal here (the chain emits via
+        // `self.line`).
+        let subj = {
+            self.tmp += 1;
+            let v = format!("$__m{}", self.tmp);
+            self.line(&format!("{v} = {subj};"));
+            v
+        };
         let yield_stmt = |t: &MatchTarget, body: &str| match t {
             MatchTarget::Return => format!("return {body};"),
             MatchTarget::Assign(v) => format!("${v} = {body};"),

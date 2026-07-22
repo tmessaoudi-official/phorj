@@ -2239,3 +2239,14 @@ classes LOUDLY rather than dropping records — natives cannot yet call back int
 interfaces exist in the prelude as the SPI seam). A custom formatter whose `kind()` returns
 `"line"`/`"json"` still composes on the PHP leg but is refused at configure time on the native
 legs for symmetry.
+
+## Transpile P1s exposed by the FS de-quarantine (audit 2026-07-22 — queued slices)
+
+1. **Flat enum-variant class names collide**: variants emit as flat `final class Ok extends …`; a
+   user enum with `Ok`/`Err` variants + any FS-transpiling program is a PHP `Cannot redeclare class
+   Ok` fatal (Rust legs fine). Fix queued: enum-prefixed variant class names (`FileSystemResult_Ok`)
+   or a checker collision reject.
+2. **Injected prelude classes land only in `namespace Main`**: a NON-Main package calling
+   `FileSystem.exists` / `Uri.*` transpiles to `Class "Acme\X\FileSystem" not found` (pre-existing —
+   reproduced with Core.UriModule too; DEC-240/DEC-313 "transpiles" claims hold for Main-package
+   programs only). Fix queued: qualify injected-class references `\Main\…` (or per-namespace `use`).

@@ -344,6 +344,7 @@ pub fn check_and_expand_for_debug(prog: &Program, diag_src: &str) -> Result<Prog
 }
 
 pub fn cmd_treewalk(src: &str) -> Result<String, String> {
+    crate::native::log::reset_channels();
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
         foreign_runtime_gate(&prog)?;
@@ -387,6 +388,7 @@ pub(super) fn vm_for(program: &BytecodeProgram) -> Vm<'_> {
 }
 
 pub fn cmd_run(src: &str) -> Result<String, String> {
+    crate::native::log::reset_channels();
     on_deep_stack(|| {
         let parsed = lex_parse(src)?;
         let (prog, reified) = check_and_expand_reified(&parsed, src)?;

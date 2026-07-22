@@ -76,7 +76,11 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
                     ));
                     continue;
                 }
-                let ty = ret_name.expect("checked above");
+                // Key by the type's LEAF segment (audit 2026-07-22, P1): the entry may spell the
+                // type qualified (`Cfg.AppConfig`) while the provider's return is bare in its own
+                // package — one type, two legal spellings. Leaf collisions across packages are
+                // refused loudly below (E-CONFIG-DUP), never guessed.
+                let ty = leaf(&ret_name.expect("checked above")).to_string();
                 if let Some(first) = providers.get(&ty) {
                     errs.push(err(
                         f.span,
@@ -89,6 +93,21 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
                     continue;
                 }
                 providers.insert(ty, f.name.clone());
+            }
+            Item::Trait(t) => {
+                for m in &t.members {
+                    if let crate::ast::ClassMember::Method(mf) = m {
+                        if let Some(attr) = mf.attrs.iter().find(|a| a.is_config()) {
+                            errs.push(err(
+                                attr.span,
+                                "`#[Config]` on a trait method — providers are top-level functions only"
+                                    .into(),
+                                "E-CONFIG-TARGET",
+                                Some("move the provider to a top-level function".into()),
+                            ));
+                        }
+                    }
+                }
             }
             Item::Class(c) => {
                 // `#[Config]` is top-level-only: a method provider has no injection story (whose
@@ -129,7 +148,7 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
         let Some((param_ty_name, param_span)) = config_entry_param(f) else {
             continue;
         };
-        match providers.get(&param_ty_name) {
+        match providers.get(leaf(&param_ty_name)) {
             Some(provider) => {
                 let p = f.params.remove(0);
                 let init = Expr::Call {
@@ -156,7 +175,8 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
                 ),
                 "E-CONFIG-MISSING",
                 Some(format!(
-                    "declare one: `#[Config] function appConfig() -> {param_ty_name} {{ ... }}` (import Core.Runtime.Config;)"
+                    "declare one: `#[Config] function appConfig() -> {} {{ ... }}` (import Core.Runtime.Config;)",
+                    leaf(&param_ty_name)
                 )),
             )),
         }
@@ -206,6 +226,11 @@ fn err(
         Some(h) => d.with_hint(h),
         None => d,
     }
+}
+
+/// The last dot-segment of a type name.
+fn leaf(name: &str) -> &str {
+    name.rsplit('.').next().unwrap_or(name)
 }
 
 #[cfg(test)]

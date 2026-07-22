@@ -2687,6 +2687,30 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   MASTER-PLAN §PHP-GAP ROUND-2 ADDITIONS; waves are RECOMMENDATIONS — each item is adjudicated at build
   time per Invariant 15 (nothing here self-rules a user-visible design).
 
+- **DEC-325 — CRAFTSMANSHIP AUDIT ROUND over the 2026-07-22 session (dev directive: audit every
+  slice; fixes applied same-day).** Evidence-based panel found 2 P0 + 3 P1 + 7 P2. FIXED: match
+  scrutinee now bound ONCE in transpiled PHP (side-effecting scrutinees ran 2-3× — spine divergence;
+  `$__mN` temp, transpile/matches.rs); stdout StreamHandler routed through the program output buffer
+  (was misordered vs `Output.*` on run/runvm); `#[Config]` providers keyed by type LEAF (qualified
+  spelling `Cfg.AppConfig` resolves; ambiguity stays loud) + `E-CONFIG-TARGET` extended to trait
+  methods; PHP log helpers: loud unknown-sink arm + level bounds guard (were silent divergences);
+  channel registry reset at cmd_run/cmd_treewalk (state leaked across in-process runs);
+  logging-v2 example now smoke-tested (was executed by NO test — Invariant-9 hole for quarantined
+  examples); prelude doc contradiction fixed. RECORDED (queued, KNOWN_ISSUES §Transpile P1s): flat
+  variant-class collision (`Ok`/`Err`); injected preludes Main-namespace-only on the PHP leg.
+  DEFERRED (accepted): stringly HandlerCfg.format/Stream → enums (mechanical, next log touch).
+
+- **DEC-326 — UFCS CANONICAL STYLE = RECEIVER FORM (developer-ruled 2026-07-22: both forms legal,
+  one canonical style everywhere).** `String.length(s)` AND `s.length()` are both legal (UFCS,
+  shipped — `rewrite_ufcs`). THE RULE: the RECEIVER form `s.length()` is canonical wherever the
+  first parameter is the natural subject; the MODULE form stays canonical for receiver-less calls
+  (constructors/config/ambient: `Log.configure(...)`, `Math.max(a, b)`-style multi-subject).
+  Rationale (recommendation adopted): matches the DEC-319 "more OOP" north-star; `s.`-completion
+  discovery beats module-name recall; Kotlin/Rust converged on the same idiom; lifted PHP visibly
+  modernizes (`strlen($s)` → `s.length()`). BUILD QUEUED (next slice): lifter emits receiver form
+  for subject-first natives (DEC-312 emission update + tests); examples/docs migrate as touched;
+  a formatter canonicalization lint is the recorded v2.
+
 - **DEC-284 FOLDER-RENAME BACKLOG — COMPLETED 2026-07-20.** The deferred structural slice of DEC-284 shipped:
   `src/ext/db/`→`src/ext/database/`, `src/ext/crypto/`→`src/ext/cryptography/` (folders now match their
   feature/module names), plus `examples/db/`→`examples/database/`, `tests/db*.rs`→`tests/database*.rs`,

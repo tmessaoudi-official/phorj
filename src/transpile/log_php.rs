@@ -27,7 +27,8 @@ impl Transpiler {
         self.line("$fmt = $h->formatter->kind();");
         self.line("if ($k === 'stream') { $hs[] = ['stream', $h->stream, $min, $fmt, 0, 0]; }");
         self.line("elseif ($k === 'file') { $hs[] = ['file', $h->path, $min, $fmt, 0, 0]; }");
-        self.line("else { $hs[] = ['rotating', $h->path, $min, $fmt, $h->maxBytes, $h->keep]; }");
+        self.line("elseif ($k === 'rotating') { $hs[] = ['rotating', $h->path, $min, $fmt, $h->maxBytes, $h->keep]; }");
+        self.line("else { throw new \\RuntimeException('Log.configure: unsupported handler class (v1 supports StreamHandler/FileHandler/RotatingFileHandler)'); }");
         self.indent -= 1;
         self.line("}");
         self.line("$chans[$cc->name] = $hs;");
@@ -107,6 +108,7 @@ impl Transpiler {
         self.line(
             "$tags = ['DEBUG','INFO','NOTICE','WARN','ERROR','CRITICAL','ALERT','EMERGENCY'];",
         );
+        self.line("if ($level < 0 || $level > 7) { throw new \\RuntimeException('Core.Log: level ordinal ' . $level . ' out of range'); }");
         self.line("$tag = $tags[$level];");
         self.line("$cfg = $GLOBALS['__phorj_log'] ?? null;");
         self.line("$hs = ($cfg !== null && array_key_exists($chan, $cfg)) ? $cfg[$chan] : null;");

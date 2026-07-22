@@ -543,16 +543,14 @@ fn match_in_return_emits_instanceof_chain() {
         "{SHAPE} function area(Shape s) -> float {{ \
                return match s {{ Circle(r) => 3.14159 * r * r, Rect(w, h) => w * h, }}; }}"
     ));
-    assert!(out.contains("if ($s instanceof Circle) {"), "{out}");
-    assert!(out.contains("$r = $s->radius;"), "{out}"); // positional: r <- field 0 (radius)
-                                                        // P0-2: a compound operand keeps grouping parens (`3.14159 * r * r` is left-assoc Mul, so the
-                                                        // left operand of the outer `*` is the inner product, conservatively parenthesized).
+    assert!(out.contains(" = $s;"), "{out}"); // scrutinee bound ONCE (P0 audit fix)
+    assert!(out.contains("instanceof Circle) {"), "{out}");
+    assert!(out.contains("->radius;"), "{out}"); // positional: r <- field 0 (radius)
+                                                 // P0-2: a compound operand keeps grouping parens (`3.14159 * r * r` is left-assoc Mul, so the
+                                                 // left operand of the outer `*` is the inner product, conservatively parenthesized).
     assert!(out.contains("return (3.14159 * $r) * $r;"), "{out}");
-    assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
-    assert!(
-        out.contains("$w = $s->w;") && out.contains("$h = $s->h;"),
-        "{out}"
-    );
+    assert!(out.contains("instanceof Rect) {"), "{out}");
+    assert!(out.contains("->w;") && out.contains("->h;"), "{out}");
     assert!(out.contains("throw new \\UnhandledMatchError();"), "{out}");
 }
 
@@ -562,11 +560,13 @@ fn match_in_var_decl_assigns_in_each_arm() {
         "{SHAPE} function f(Shape s) -> float {{ \
                float a = match s {{ Circle(r) => r, Rect(w, h) => w, }}; return a; }}"
     ));
+    // Scrutinee bound ONCE to a `$__mN` temp (P0 audit fix) — arms test/read the temp.
+    assert!(out.contains(" = $s;"), "{out}");
     assert!(
-        out.contains("if ($s instanceof Circle) { $r = $s->radius; $a = $r; }"),
+        out.contains("instanceof Circle) { $r = $__m") && out.contains("->radius; $a = $r; }"),
         "{out}"
     );
-    assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
+    assert!(out.contains("instanceof Rect) {"), "{out}");
 }
 
 #[test]

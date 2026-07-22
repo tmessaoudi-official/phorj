@@ -56,6 +56,16 @@ pub(super) type ChannelTable = Vec<(String, Vec<HandlerCfg>)>;
 /// The installed table. `None` = unconfigured (the DEC-220 fallback).
 static CHANNELS: Mutex<Option<ChannelTable>> = Mutex::new(None);
 
+/// Reset to UNCONFIGURED (audit 2026-07-22, P2): the table is process-global, so a second program
+/// run in the same process (tests, playground-style hosts) must not inherit the previous program's
+/// channels. Called at every `cmd_run`/`cmd_treewalk` entry.
+pub fn reset() {
+    let mut guard = CHANNELS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *guard = None;
+}
+
 /// Install the configuration extracted by `Log.configure` (replaces any prior one).
 pub(super) fn install(channels: ChannelTable) {
     let mut guard = CHANNELS
@@ -108,8 +118,16 @@ fn json_escape(s: &str) -> String {
 }
 
 /// The emit kernel: route one record through the configured handlers of `channel` (or the DEC-220
-/// stderr fallback when unconfigured / unknown). `level` is the [`LEVELS`] ordinal.
-pub(super) fn emit_channel(channel: &str, level: i64, msg: &str) -> Result<Value, String> {
+/// stderr fallback when unconfigured / unknown). `level` is the [`LEVELS`] ordinal. `out` is the
+/// program's captured STDOUT buffer — a `stdout` stream handler writes THERE (audit 2026-07-22,
+/// P0): writing to the real process stdout would misorder log lines against `Output.*` (buffered,
+/// flushed at exit) on run/runvm while the PHP leg interleaves naturally.
+pub(super) fn emit_channel(
+    channel: &str,
+    level: i64,
+    msg: &str,
+    out: &mut String,
+) -> Result<Value, String> {
     let tag = LEVELS
         .get(usize::try_from(level).unwrap_or(usize::MAX))
         .ok_or_else(|| format!("Core.Log: level ordinal {level} out of range"))?;
@@ -135,7 +153,7 @@ pub(super) fn emit_channel(channel: &str, level: i64, msg: &str) -> Result<Value
                 } else {
                     format_line(channel, tag, msg)
                 };
-                write_sink(&h.kind, &line);
+                write_sink(&h.kind, &line, out);
             }
         }
     }
@@ -143,10 +161,11 @@ pub(super) fn emit_channel(channel: &str, level: i64, msg: &str) -> Result<Value
 }
 
 /// Write one formatted line (plus `\n`) to a sink. Errors are swallowed (see module docs).
-fn write_sink(kind: &SinkKind, line: &str) {
+fn write_sink(kind: &SinkKind, line: &str, out: &mut String) {
     match kind {
         SinkKind::Stream(s) if s == "stdout" => {
-            let _ = writeln!(std::io::stdout(), "{line}");
+            out.push_str(line);
+            out.push('\n');
         }
         SinkKind::Stream(_) => {
             let _ = writeln!(std::io::stderr(), "{line}");
@@ -241,7 +260,7 @@ mod tests {
 
     #[test]
     fn emit_unconfigured_is_total_and_bounds_checked() {
-        assert!(emit_channel("default", 1, "x").is_ok());
-        assert!(emit_channel("default", 99, "x").is_err());
+        assert!(emit_channel("default", 1, "x", &mut String::new()).is_ok());
+        assert!(emit_channel("default", 99, "x", &mut String::new()).is_err());
     }
 }

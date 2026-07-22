@@ -16,6 +16,7 @@ mod prelude;
 mod state;
 
 pub use prelude::PRELUDE;
+pub use state::reset as reset_channels;
 
 use super::{NativeEval, NativeFn};
 use crate::types::Ty;
@@ -28,9 +29,9 @@ fn ty_class(name: &str) -> Ty {
 
 // ── level statics: the `default` channel ────────────────────────────────────────────────────────
 
-fn level_eval(level: i64, args: &[Value]) -> Result<Value, String> {
+fn level_eval(level: i64, args: &[Value], out: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(msg)] => state::emit_channel("default", level, msg.as_str()),
+        [Value::Str(msg)] => state::emit_channel("default", level, msg.as_str(), out),
         _ => Err(format!(
             "Log.{} expects (string message)",
             state::LEVELS[level as usize].to_lowercase()
@@ -40,8 +41,8 @@ fn level_eval(level: i64, args: &[Value]) -> Result<Value, String> {
 
 macro_rules! level_fn {
     ($fn_name:ident, $ord:expr) => {
-        fn $fn_name(args: &[Value], _out: &mut String) -> Result<Value, String> {
-            level_eval($ord, args)
+        fn $fn_name(args: &[Value], out: &mut String) -> Result<Value, String> {
+            level_eval($ord, args, out)
         }
     };
 }
@@ -72,10 +73,10 @@ fn log_channel(args: &[Value], _out: &mut String) -> Result<Value, String> {
 
 /// `Core.Native.Log.emit(channel, levelOrdinal, message)` — the kernel the prelude `Channel`
 /// methods call.
-fn log_emit(args: &[Value], _out: &mut String) -> Result<Value, String> {
+fn log_emit(args: &[Value], out: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(c), Value::Int(l), Value::Str(m)] => {
-            state::emit_channel(c.as_str(), *l, m.as_str())
+            state::emit_channel(c.as_str(), *l, m.as_str(), out)
         }
         _ => Err("Core.Native.Log.emit expects (string, int, string)".into()),
     }
@@ -284,11 +285,11 @@ mod tests {
 
     #[test]
     fn level_statics_route_the_default_channel_and_reject_bad_arity() {
-        assert!(level_eval(1, &[Value::Str("x".into())])
+        assert!(level_eval(1, &[Value::Str("x".into())], &mut String::new())
             .unwrap()
             .eq_val(&Value::Unit));
-        assert!(level_eval(1, &[]).is_err());
-        assert!(level_eval(1, &[Value::Int(1)]).is_err());
+        assert!(level_eval(1, &[], &mut String::new()).is_err());
+        assert!(level_eval(1, &[Value::Int(1)], &mut String::new()).is_err());
     }
 
     #[test]
