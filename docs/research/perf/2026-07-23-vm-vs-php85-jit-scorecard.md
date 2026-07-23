@@ -141,6 +141,33 @@ rounds, SHARED copy-on-append, merge override/append order, long-key boxed fallb
 differential. mapkeys/mapvalues margins are THIN (1.07×) — php's C array_keys is the hardest class;
 re-verify on the dev box.
 
+## UPDATE 5 (2026-07-23, later): listfilter / mapfilter / mapmap FLIPPED — inline HOF loops + recyclable records
+
+| feature | before | after | how |
+|---|---|---|---|
+| listfilter | 0.22× | **9.78× WIN** (257.4M → 26.3M ns) | `ListHof::Filter` — conditional ACL append in the hofpipe loop |
+| mapfilter | 0.23× | **4.44× WIN** (253.7M → 57.1M ns) | inline pair walk + direct call per entry → AMB record |
+| mapmap | 0.29× | **1.94× WIN** (265.4M → 137.0M ns) | same walk, transformed values; `Map.values` gained an AMB rank-walk leg |
+
+Design: unlike UPDATE 4's memoized materializations, these closures are DATA-DEPENDENT (`bump`
+changes per iteration) — nothing to memoize. The lever is the hofpipe one: inline the STATIC
+lambda as a direct Cranelift call per element (php pays closure dispatch per element; we don't),
+and build the result as a RECYCLABLE record, never a seal: `List.filter` → conditional
+`list_append_acc` into an ACL builder; `Map.map`/`Map.filter` → `rt_u_map_ext_new`/`_push` build
+a canonical AMB builder record (canon+hash read straight off the parent's bump-pinned key slots
+— no hashing, no interning) that every AMB consumer already understands (`Map.size` inline,
+`m[k]` table probe, `m[k] = v` builder-set extend, `Map.values` via a new AMB leg that walks the
+rank list into a fresh recycled ACL). Result records are released by their consumers each
+iteration and recycled from the 16-record pool — a hot loop allocates ZERO arena slots by
+construction (no memo table to grow, no per-iteration seal: the UPDATE-4 cliff cannot exist
+here for ANY capture distribution, including unbounded `bump = i`). Non-FLAT receivers fault
+code-5 BEFORE any lambda call → byte-identical VM redo (sound unconditionally: the unboxed
+graph admits pure ops only). Byte-identity: 9 new tests in `src/jit/tests/hof_filter_map.rs`
+(hits>0 per bench shape, survivor order/values, empty survivor sets, get/builder-set compat on
+a filtered AMB record, values association+order through the transform, transform-overflow fault
+parity) + the differential. mapmap is the thinnest (1.94×) — the per-iteration AMB build +
+values-ACL materialization is the remaining cost.
+
 ## Interpreter matrix (dev ask 2026-07-23): phg without JIT vs php without opcache/JIT
 
 Same harness, new knobs (`MICROBENCH_PHG_ARGS='--no-jit'|'--tree-walker'`, `MICROBENCH_PHP_JIT=0`).

@@ -130,12 +130,14 @@ scan vertical) + **sumby 0.34×→~17×** (hofpipe vertical + checked accumulato
 verticals: sealed flat maps are immutable+bump-pinned so keys/values/merge results memoize —
 inline direct-mapped probe backed by a full per-run memo, SHARED builder records, narrow
 `Kind::MapList` for the rotating-operand shape; `emit_unboxed/verticals_map.rs` +
-`handles/maps_ext.rs`). Dev-box fresh table (2026-07-23) also shows `listcontains` back at 0.71×
-there — re-verify on the dev box after re-pull. **12 losses remain**, each its own
+`handles/maps_ext.rs`). Then **listfilter 0.22×→9.78× / mapfilter 0.23×→4.44× / mapmap 0.29×→1.94×** (inline HOF verticals:
+`ListHof::Filter` conditional ACL append; `arm_map_hof` inline pair walk + direct call per entry →
+recyclable AMB records via `rt_u_map_ext_new`/`_push`, `Map.values` AMB rank-walk leg — NO memo, no
+per-iteration seal, zero arena growth for any capture distribution; `src/jit/tests/hof_filter_map.rs`).
+Dev-box fresh table (2026-07-23) also shows `listcontains` back at 0.71×
+there — re-verify on the dev box after re-pull. **9 losses remain**, each its own
 vertical/representation slice, in order:
-- `listfilter`/`mapfilter`/`mapmap` (0.23–0.32×) — HOF filter/map verticals over
-  IntList/flat-map (the listmap/hofpipe pattern + the new map walk) (NEXT).
-- string-scan `isemail`/`isurl`/`stringcontains` (0.12–0.24×) — inline substring-scan vertical.
+- string-scan `isemail`/`isurl`/`stringcontains` (0.12–0.24×) — inline substring-scan vertical (NEXT).
 - ⚠ `maxby`/`minby` (0.19–0.20×) — **BLOCKED on a representation lever (HARD FLAG, dev to rule):** they
   return `T?` and the unboxed `Kind` enum has NO nullable/optional variant, so the element result can't
   stay unboxed. Options (dev): add an `Int?`-style nullable arena kind (broadest, also unblocks other
