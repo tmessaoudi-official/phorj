@@ -98,10 +98,15 @@ adoption review validated ~10/14 themes as already covered and added four ruled 
 
 **WEB / ENTRY / PARITY CLUSTER (DEC-331 — decision round D1–D10 COMPLETE 2026-07-23, dev-ruled
 interactively; full rulings in the register, cursor in SLICE-STATE). SPEC-FIRST per D10b —
-**SPECCING WAVE COMPLETE (2026-07-23): all seven specs FROZEN in `docs/specs/2026-07-23-*.md`
-(the three cluster slices below + labeled-break-continue + typed-lsb + eval-position +
-array-access), each with an explicit PENDING list — dev rules on each spec, then the cluster
-builds in D10a order, then the DEC-333 perf roadmap (the ruled interleave).**
+**SPECCING WAVE COMPLETE AND DEV-RULED (2026-07-23): all seven specs in
+`docs/specs/2026-07-23-*.md` are BUILD-READY (every P-point answered in each spec's §RULED;
+full addendum in the DEC-331 register row). Cluster builds in D10a order, then the DEC-333
+perf roadmap. Ruling highlights: slice 3 now carries TWO breaking changes (respond retired +
+bare `#[Entry]` = `E-ENTRY-KIND-REQUIRED`, DEC-191 inference retired); `Core.Sandbox` BUILDS
+in v1 (pure-expr, tree-walker-only, `E-TRANSPILE-SANDBOX`); ArrayAccess ADOPTED (reopen flag)
+with overloaded indexers + the PHP `\ArrayAccess` glue; rustls ships behind
+`http-server-tls`. NEW QUEUED CAMPAIGN: **DEC-334 runtime-config catalog** (php.ini-equivalent
+knob enumeration with defaults, project/global mapping — multi-round research with the dev).**
 Build cluster, in order (D10a):
 - **(1) `#[Invoke]` + `#[ToString]`** — attribute-designated conventional methods (overloadable
   `#[Invoke]`, VM-safe via existing overload dispatch; strict zero-param/`string` `#[ToString]`;

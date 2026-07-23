@@ -1,7 +1,8 @@
 # SPEC — `#[Entry(kind:)]` + `Http.ServeConfig` + serve{} + inbound TLS + retire `respond` (DEC-331 D1/D4/D5/D6/D7, build slice 3 of 3)
 
-> Status: **SPEC FROZEN, awaiting dev ruling (D10b).** The riskiest slice (D10a: built last).
-> Contains the cluster's ONE breaking change (D5: `respond(bytes)` retired).
+> Status: **SPEC RULED (dev, 2026-07-23) — BUILD-READY.** The riskiest slice (D10a: built last).
+> Contains the cluster's TWO breaking changes (D5: `respond(bytes)` retired; §6 P1: bare
+> `#[Entry]` now requires `kind:`).
 
 ## 1. Surface
 
@@ -60,7 +61,7 @@ function tool(): void { /* the same program can also ship a CLI role */ }
   refusal, no silent PHP-built-in-server downgrade). HTTPS auto-enables iff BOTH `cert` and
   `key` are set (no `--tls` flag). Floor via `tlsMinVersion` (default 1.2). Deferred to a later
   slice + KNOWN_ISSUES: HTTP→HTTPS redirect, HSTS, cert hot-reload, mTLS. v1 = terminating TLS
-  only, via **rustls** (feature-gated `http-server-tls`? see P2 — external-dependency policy).
+  only, via **rustls** (RULED §6 P2: feature-gated `http-server-tls`).
 
 ## 3. Checker / CLI rules
 
@@ -69,7 +70,7 @@ function tool(): void { /* the same program can also ship a CLI role */ }
 2. Entry params must each resolve to exactly one `#[Config]` provider (or a
    precedence-chain source) by TYPE — ambiguity/missing = compile error naming the type.
 3. `phg run` selects the `Cli` entry; `phg serve` the `Web` entry (D6 mismatch UX otherwise).
-4. **OPEN (D1 flagged): signature inference (DEC-191) when `kind:` is omitted** — see P1.
+4. **RULED (§6 P1): bare `#[Entry]` = `E-ENTRY-KIND-REQUIRED`** — DEC-191 inference retired.
 
 ## 4. Backends (Invariant 17)
 
@@ -86,14 +87,12 @@ rule), migrated `examples/web/*` (D5); tests: precedence-chain resolution, dupli
 error, role-mismatch UX (TTY + non-TTY legs), TLS handshake smoke (self-signed fixture),
 `maxBodySize` enforcement, reserved-kind error.
 
-## 6. PENDING for dev
+## 6. RULED (dev, 2026-07-23)
 
-- **P1** (flagged in D1): when `kind:` is omitted — keep DEC-191 signature inference as a
-  fallback (recommended: yes for one release with a deprecation note steering to explicit
-  `kind:`) or hard-require `kind:` now?
-- **P2**: rustls lands as a NEW vetted exception to the std-only policy (UNIFIED-SPEC
-  §external-deps currently lists argon2/regex/ctrlc/corosensei) — feature-gated
-  `http-server-tls` (recommended, mirrors `http-client`) or bundled into the default `jit`-like
-  feature set?
-- **P3**: `E-NO-ENTRY-FOR-ROLE` auto-correct — also offered for `phg serve`→`phg run`
-  direction (recommended: yes, symmetric)?
+- **P1 → HARD-REQUIRE `kind:` NOW** (dev chose the clean end-state over the deprecation
+  path): bare `#[Entry]` = compile error `E-ENTRY-KIND-REQUIRED`; DEC-191 signature inference
+  is RETIRED. This is the slice's SECOND breaking change (alongside D5's respond retirement)
+  — all shipped examples migrate in the same slice.
+- **P2 → feature-gated `http-server-tls`** (off by default; rustls added as a vetted
+  exception row in UNIFIED-SPEC §external-deps same-change; the all-features gate covers it).
+- **P3 → symmetric auto-correct** (both `run`→`serve` and `serve`→`run` directions).

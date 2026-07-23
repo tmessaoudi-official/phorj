@@ -2975,7 +2975,33 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   points are explicit per-spec PENDING lists for the dev (D10b: dev rules on each spec before
   any code). **INTERLEAVE RULED (2026-07-23, with DEC-333): after the spec rulings, the DEC-331
   build cluster builds FIRST, then the DEC-333 perf roadmap (Json-ADT → AOT → A+C+D).**
+  **ALL SEVEN SPECS RULED (dev, 2026-07-23, 4 AskUserQuestion rounds + 1 tradeoff re-ask —
+  every P-point answered, folded into each spec's §RULED):** invoke-tostring (multi-invoke →
+  `__phorj_invoke_dispatch` shim; `#[ToString]` applies EVERYWHERE incl. `Conversion.toString`);
+  rich-request (256 KiB spill; `Request.fake` in v1; mutable `attributes.set`); entry-kinds
+  (**BREAKING #2: bare `#[Entry]` = `E-ENTRY-KIND-REQUIRED`, DEC-191 inference RETIRED**;
+  rustls via feature `http-server-tls` + vetted-dep row; symmetric role auto-correct);
+  labeled-break-continue (`label@` form, loops-only v1); typed-lsb (`Self` keyword, STRICT
+  compile-time ctor check); eval-position (rejection + substitutes accepted; **SCOPE CHANGE:
+  `Core.Sandbox` BUILDS IN V1** — pure-expr, tree-walker-only, `E-TRANSPILE-SANDBOX`, dev
+  accepted the four compromises after the tradeoff re-ask); array-access (**ADOPTED with a
+  REOPEN flag** ("might revisit"); **overloaded indexers IN v1** (D9c machinery); **PHP
+  `\ArrayAccess` glue EMITTED** — interop gain accepted, offsetUnset throws). OPEN SCHEDULING
+  POINT (the one thing not yet sequenced, dev to slot at pickup): where the four ruled design
+  slices (labeled/LSB/ArrayAccess/Sandbox) build relative to the DEC-333 roadmap — the ruled
+  order so far is D10a cluster → DEC-333.
 
+- **DEC-334 — RUNTIME-CONFIG CATALOG (php.ini-equivalent), dev-directed 2026-07-23 — QUEUED
+  RESEARCH+DESIGN CAMPAIGN (multi-round, interactive).** Dev directive (verbatim intent, from
+  the rich-request P1 ruling): "collect all the possible things that we should convert/use
+  params like php ini — enumerate a list with default values and make a config, either in
+  project or global — needs thinking/research/brainstorming and many rounds to absolutely
+  cover everything." Scope: survey EVERY php.ini knob class (limits, uploads, sessions,
+  timeouts, error modes, extensions…) + phorj's own runtime knobs; produce the exhaustive
+  catalog with defaults, each row mapped to project-level `phorj.json` vs global config vs
+  ServeConfig vs env/CLI (the D1 precedence chain); rows already known: UploadedFile 256 KiB
+  spill threshold, every `Http.ServeConfig` field. Deliverable: a frozen spec + the catalog
+  doc; dev rules per-row in rounds (ADJUDICATION). Not scheduled yet — dev to slot.
 - **DEC-333 — POST-CAMPAIGN PERF ROADMAP (dev RULED 2026-07-23 via AskUserQuestion, all six
   locked before compact).** (a) **BUILD ORDER: Json-ADT JIT slice → AOT → Interpreter
   campaign.** (b) **AOT scope = FULL `phg build --native` M1-M3**: M1 ObjectModule seam behind
