@@ -122,9 +122,16 @@ seeded via call_sigs; window-less uses stay on the VM (fail closed). 6 tests
 `src/jit/tests/extreme_by.rs`; scorecard UPDATE 7. **THEN `setdifference` 0.45×→40.33× / `setunion` 0.66×→60.82× CLOSED (same day):** memoized
 flat-set ops (mapmerge discipline — per-(a,b,op) memo, separate entry ranges 24..32/32..40,
 `seal_set_keys` single writer, `Kind::SetList`, inline `Set.size`; setintersection/listcontains
-re-verified). 5 tests `src/jit/tests/set_ops.rs`; scorecard UPDATE 8. **2 losses remain
-(jsonround 0.32× / deepjson 0.90×; floatmul/floatloop near-ties tracked separately). PERF NEXT:
-`jsonround`/`deepjson`** →
+re-verified). 5 tests `src/jit/tests/set_ops.rs`; scorecard UPDATE 8. **THEN `jsonround`/`deepjson` MEASURED → HARD FLAG (2026-07-23, DEC-269 pattern):** the natives
+are NOT the bottleneck (validate = 146ns/70B doc, measured; JIT≡no-JIT — nothing in the bench
+bodies is in the unboxed subset; even FREE natives leave VM-dispatch time ≈ php's whole
+budget). The ONLY flip lever is the **Json-ADT JIT slice** (enum cells with string/map/list
+payloads over the W7 Dyn machinery + `Map<string,Dyn>` + `JsonLazy` unboxed) — multi-session,
+QUEUED, dev to prioritize. A principled `skip_string` bulk-run scan shipped anyway (helps any
+big-string doc). Scorecard UPDATE 9. **CAMPAIGN CLOSE: 16 of 18 flipped to WINs today; 2
+hard-flagged with measured anatomy + queued lever; float near-ties floatmul 0.99×/floatloop
+0.82× queued separately (Cranelift codegen constant factor). PERF NEXT (dev to rule): the
+Json-ADT slice, the float codegen pass, or the dev-box reconciliation run** →
 then string-scan. **`maxBy`/`minBy` HARD FLAG RESOLVED 2026-07-23** (was: blocked on a nullable arena kind; the
 dev's "flip them ALL, any well-thought method" was taken as the GO it reads as): the ??-fusion
 window shipped and both flipped to ~8.1× WINs — see the PERF block above. The broader

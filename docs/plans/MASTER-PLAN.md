@@ -147,10 +147,13 @@ its own vertical/representation slice, in order:
 Then **setdifference 0.45×→40.33× / setunion 0.66×→60.82×** (memoized flat-set ops — the
 mapmerge discipline: per-(a,b,op) memo in separate entry ranges, `seal_set_keys` single writer,
 narrow `Kind::SetList` for `bs[i%4]`, inline `Set.size`; setintersection 1.40× and listcontains
-1.99× re-verified in the same run). **2 losses remain**:
-- JSON `jsonround` (0.32×) / `deepjson` (0.90×) (NEXT).
-- Float near-ties `floatmul` (0.99×) / `floatloop` (0.82×), and the dev-box `listcontains`
-  0.71× recheck.
+1.99× re-verified in the same run). **CAMPAIGN CLOSE (2026-07-23): 16 of 18 flipped; 2 HARD-FLAGGED with measured anatomy** —
+`jsonround` 0.32× / `deepjson` 0.92×: VM-dispatch-bound (validate = 146ns/doc measured; even
+free natives leave VM time ≈ php's whole budget); the only flip lever is the QUEUED **Json-ADT
+JIT slice** (enum cells with string/map/list payloads via W7 Dyn + `Map<string,Dyn>` +
+`JsonLazy` unboxed — multi-session, dev to prioritize; scorecard UPDATE 9, DEC-269 pattern).
+Also queued: float near-ties `floatmul` 0.99× / `floatloop` 0.82× (JIT codegen constant
+factor) and the dev-box `listcontains` 0.71× / thin-margin (mapkeys 1.07×) reconciliation run.
 - **COVERAGE (dev ask):** ADD micros until the suite covers 100% of phorj's php-comparable surface, so
   the "beats php" claim is exhaustive (WIN-OR-FLAG on every covered feature). Reconcile the from-source
   baseline vs the official docker `php:8.5-cli` on the dev box.
