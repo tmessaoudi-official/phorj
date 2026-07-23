@@ -1452,6 +1452,12 @@ pub(super) fn unboxed_analyze(
                 Op::CallNative(id, 2) if unboxed_native_is_map_filter(*id) => {
                     admit_map_hof(program, info, &mut kinds, true, "Map.filter")?;
                 }
+                Op::CallNative(id, 2) if unboxed_native_is_str_contains(*id) => {
+                    admit_str_predicate(&mut kinds, 2, "String.contains")?;
+                }
+                Op::CallNative(id, 1) if unboxed_native_validate_which(*id).is_some() => {
+                    admit_str_predicate(&mut kinds, 1, "Validation")?;
+                }
                 Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => {
                     // The maphas vertical (mirrors `Op::Index` map arm minus the value): a `Str` key
                     // over a `StrIntMap` → `Bool` (present?); the map is a QUERY, not consumed.

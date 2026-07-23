@@ -43,7 +43,7 @@ mod text_format;
 mod text_registry;
 pub(crate) use text_format::parse_format_directive;
 mod time;
-mod validate;
+pub(crate) mod validate;
 
 pub use input::{set_stdin_disabled, set_stdin_override};
 pub use process::{process_args_value, set_process_args};

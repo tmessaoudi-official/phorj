@@ -98,7 +98,7 @@ fn is_printable(s: &str) -> bool {
 /// `a..b@c.com` is false. Byte-identity with the PCRE is airtight: PCRE acceptance requires the
 /// string hold no `\n` (every char class excludes it, and the `D` flag pins `$` to the absolute end),
 /// and on a `\n`-free string `(?!.*\.\.)` is exactly `!contains("..")`.
-fn is_email(s: &str) -> bool {
+pub(crate) fn is_email(s: &str) -> bool {
     // (?!.*\.\.) — no two adjacent dots anywhere.
     if s.contains("..") {
         return false;
@@ -146,7 +146,7 @@ fn is_email(s: &str) -> bool {
 /// `[^\x00-\x20]` (bytes > 0x20) rather than `[^\s]`: it is trivially byte-identical to the Rust
 /// `c > 0x20` scan and sidesteps PCRE's `\s`-set (which is a divergence hazard). The `D` flag pins
 /// `$` to the absolute end (no trailing-`\n` acceptance).
-fn is_url(s: &str) -> bool {
+pub(crate) fn is_url(s: &str) -> bool {
     let rest = if let Some(r) = s.strip_prefix("https://") {
         r
     } else if let Some(r) = s.strip_prefix("http://") {
