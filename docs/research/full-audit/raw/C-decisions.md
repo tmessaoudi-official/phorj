@@ -2969,6 +2969,29 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   labeled break/continue, typed LSB. ON HOLD (spec tomorrow): eval, ArrayAccess. Env: PHP 8.5.8 built
   from source in-container (D10d).
 
+- **DEC-333 — POST-CAMPAIGN PERF ROADMAP (dev RULED 2026-07-23 via AskUserQuestion, all six
+  locked before compact).** (a) **BUILD ORDER: Json-ADT JIT slice → AOT → Interpreter
+  campaign.** (b) **AOT scope = FULL `phg build --native` M1-M3**: M1 ObjectModule seam behind
+  the existing emit code (`compile.rs` backend-agnostic), M2 `phorj-rt` static lib (VM + natives
+  + `rt_u_*` helpers + non-subset functions' bytecode embedded — the code-5 fallback seam
+  unchanged, byte-identity kept), M3 the `phg build --native` CLI + a NATIVE leg in the
+  differential harness; the JIT-disk-cache warmup win ships as a byproduct. (c) **`--no-jit`
+  performance CONTRACT: beat PLAIN php (Zend-parity class)** — locked with the explicit physics
+  disclosure that an interpreter can never match compiled code; native-class speed is the job of
+  `run` (JIT) and `build --native`. Delivered by the **full A+C+D interpreter campaign** (A =
+  NaN-boxed 8-byte `Value` — the already-ruled V3b→NaN-box end-state; C = register bytecode +
+  typed-op specialization — new `Op` set through all three exhaustive matches, Invariant 3; D =
+  superinstruction fusion), WIN-OR-FLAG measured on the interpreter matrix
+  (`MICROBENCH_PHP_JIT=0`). (d) **Tree-walker: INHERIT-ONLY** — it gets `Value`-representation
+  wins (NaN-boxing) automatically but receives NO dedicated optimization that costs oracle
+  simplicity; dev phrasing: "chase the correct optimization without losing what the tree-walker
+  offers" — i.e. safe representation-level wins yes, architectural complexity no (Invariant 2
+  untouched). (e) **Docker bench fairness SHIPPED**: `MICROBENCH_DOCKER_BOTH=1` (dev's
+  docker-cp idea) runs BOTH legs inside the same pinned php container — the canonical
+  close-margin protocol; shipped untested-in-authoring-container (docker blocked), dev
+  validates with one run. (f) Stable-box `listcontains` 0.85×/`mapget` 0.96× diagnosis stays
+  queued dev-side (DEC-332 UPDATE 10). Roadmap mirrored in MASTER-PLAN §0 + SLICE-STATE (Inv
+  19, same change).
 - **DEC-332 — PERF WIN-OR-FLAG vs php+JIT + M-DECOMP campaign (dev mandate 2026-07-23).** (a) Every
   php-comparable feature's VM+JIT path MUST beat php-8.5.8+opcache-JIT; a loss is HARD-FLAGGED, never
   silently accepted (extends the G-8 bar to an absolute). (b) COVERAGE: grow the `bench/micro` suite

@@ -156,6 +156,16 @@ prioritize; anatomy in UPDATE 9, DEC-269 pattern); `listcontains` 0.85× + `mapg
 STABLE-BOX diagnosis only (a memo lever was tried and REVERTED on measured evidence — UPDATE
 10; candidate: packed-stride flat-list layout slice; container noise now disqualifies
 close-margin work there — `PHORJ_JIT_DISASM=1` shipped for that session).
+**RULED ROADMAP (DEC-333, 2026-07-23 — all six locked): (1) Json-ADT JIT slice (NEXT: flips
+jsonround/deepjson — enum cells with string/map/list payloads via W7 Dyn, `Map<string,Dyn>`,
+`JsonLazy` unboxed); (2) AOT full M1-M3 (`phg build --native`: ObjectModule seam → phorj-rt
+static lib with the embedded-VM code-5 fallback → linked binary + a native differential leg);
+(3) Interpreter campaign FULL A+C+D (NaN-boxed Value + register bytecode/typed-op
+specialization + superinstructions) with the locked `--no-jit` CONTRACT: beat PLAIN php —
+native-class speed stays `run`/`build`'s job. Tree-walker: INHERIT-ONLY (representation wins
+yes, dedicated complexity no — the oracle stays simple). Bench protocol:
+`MICROBENCH_DOCKER_BOTH=1` (both legs in one pinned container) is the canonical close-margin
+protocol once dev-validated.**
 - **COVERAGE (dev ask):** ADD micros until the suite covers 100% of phorj's php-comparable surface, so
   the "beats php" claim is exhaustive (WIN-OR-FLAG on every covered feature). Reconcile the from-source
   baseline vs the official docker `php:8.5-cli` on the dev box.

@@ -57,6 +57,18 @@ PHG_ARGS="${MICROBENCH_PHG_ARGS:-}"
 [[ "${MICROBENCH_PHP_JIT:-1}" == "0" ]] && JIT_FLAGS=""
 
 LOCAL_PHP="${MICROBENCH_PHP_BIN:-}"
+# MICROBENCH_DOCKER_BOTH=1 (DEC-333e, dev's fairness ruling): run BOTH legs inside the SAME
+# php docker container — `docker cp` the phg binary in and `docker exec` both, so kernel,
+# cgroup CPU set, libc, and scheduler pressure are identical for the two legs (the close-margin
+# protocol; host-vs-container asymmetry measured up to 2.7x swings on the php leg alone).
+# ⚠ Shipped UNTESTED in the authoring container (docker blocked there) — validate with one run.
+# Requires docker mode (mutually exclusive with MICROBENCH_PHP_BIN) and a glibc-compatible phg
+# (the debian-based php image runs a host glibc build; a musl/static build always works).
+DOCKER_BOTH="${MICROBENCH_DOCKER_BOTH:-0}"
+if [[ "$DOCKER_BOTH" == "1" && -n "$LOCAL_PHP" ]]; then
+  echo "microbench: MICROBENCH_DOCKER_BOTH=1 needs docker mode — unset MICROBENCH_PHP_BIN" >&2
+  exit 2
+fi
 OPCACHE_ARG=""
 [[ -n "$LOCAL_PHP" && -n "${MICROBENCH_PHP_OPCACHE:-}" ]] && OPCACHE_ARG="-dzend_extension=${MICROBENCH_PHP_OPCACHE}"
 if [[ -z "$LOCAL_PHP" ]]; then
@@ -107,6 +119,8 @@ cleanup_container() { [[ -n "$CONTAINER" ]] && docker rm -f "$CONTAINER" >/dev/n
 if [[ -z "$LOCAL_PHP" ]]; then
   CONTAINER="$(docker run -d --rm --cpuset-cpus="$CPU" -v "$MICRO:/w:ro" "$PHP_IMAGE" sleep infinity)"
   trap cleanup_container EXIT
+  # DOCKER_BOTH: the phg leg runs inside the same pinned container as the php leg.
+  [[ "$DOCKER_BOTH" == "1" ]] && docker cp "$BIN" "$CONTAINER:/phg"
 fi
 
 declare -A vm_ns vm_sum php_ns php_sum
@@ -117,7 +131,11 @@ for name in "${features[@]}"; do
   pcs=""
   for ((k = 0; k < K; k++)); do
     # shellcheck disable=SC2086 # PHG_ARGS is a deliberate word-split flag list
-    line="$(taskset -c "$CPU" "$BIN" run $PHG_ARGS "$MICRO/$name.phg")"
+    if [[ "$DOCKER_BOTH" == "1" ]]; then
+      line="$(docker exec "$CONTAINER" /phg run $PHG_ARGS "/w/$name.phg")"
+    else
+      line="$(taskset -c "$CPU" "$BIN" run $PHG_ARGS "$MICRO/$name.phg")"
+    fi
     ns="$(printf '%s' "$line" | cut -f2)"
     vcs="$(printf '%s' "$line" | cut -f3)"
     if [[ -z "$vbest" || "$ns" -lt "$vbest" ]]; then vbest="$ns"; fi
