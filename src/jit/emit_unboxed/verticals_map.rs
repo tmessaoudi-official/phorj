@@ -159,6 +159,136 @@ pub(super) fn arm_map_merge(
     ub_push(b, vars, fvars, kinds, res, Kind::StrIntMap(Own::Owned))
 }
 
+/// Which Map higher-order op [`arm_map_hof`] is emitting: `Map` transforms every value (all
+/// entries survive), `Filter` keeps entries whose 0/1 predicate result is nonzero.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum MapHof {
+    Map,
+    Filter,
+}
+
+/// `Map.map` / `Map.filter` with a STATIC lambda (the mapmap/mapfilter flips): an inline walk
+/// over the FLAT receiver's pair slots — one value load + one DIRECT call per entry — building
+/// an AMB record (`rt_u_map_ext_new`/`_push`: canon+hash read straight off the parent's
+/// bump-pinned key slots, insertion order preserved). The result is a fresh RECYCLABLE record
+/// (released by its consumer — a hot loop never seals, so the arena cannot exhaust) that every
+/// AMB consumer already understands (`Map.size` inline, `m[k]` probe, `m[k] = v` builder-set,
+/// `Map.values` rank walk). A non-FLAT receiver (boxed / AMB / long-key seal fallback) is
+/// code 5 BEFORE any calls — the byte-identical VM redo runs the canonical higher-order native
+/// (sound unconditionally: the unboxed graph admits pure ops only).
+#[allow(clippy::too_many_arguments)] // emit plumbing
+pub(super) fn arm_map_hof(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    fn_refs: &[Option<FuncRef>],
+    ctx: ClValue,
+    depth: ClValue,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    info: &UbGraphInfo,
+    hof: MapHof,
+) -> Result<(), JitError> {
+    let (fv, fk) = ub_pop(b, vars, fvars, kinds)?;
+    let (f, has_cap) = match fk {
+        Kind::Fn(f) => (f, false),
+        Kind::FnCap1(f) => (f, true),
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed Map HOF callee kind {other:?}"
+            )))
+        }
+    };
+    let (mv, mk) = ub_pop(b, vars, fvars, kinds)?;
+    if !matches!(mk, Kind::StrIntMap(_)) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Map HOF receiver kind {mk:?}"
+        )));
+    }
+    // FLAT-only, checked BEFORE any lambda call (a mid-loop deopt would be sound — pure graph —
+    // but a pre-loop check keeps the fallback a single branch).
+    let tag = b.ins().band_imm_s(mv, UB_TAG_FLAT_MAP);
+    let not_flat = b.ins().icmp_imm_s(IntCC::NotEqual, tag, UB_TAG_FLAT_MAP);
+    ec.fault_if(b, not_flat, 5);
+    let cnt_raw = b.ins().ushr_imm_s(mv, UB_MAP_CNT_SHIFT);
+    let count = b.ins().band_imm_s(cnt_raw, 0xFFF);
+    let base = b.ins().band_imm_s(mv, UB_IDX_MASK);
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let call = b.ins().call(h.map_ext_new, &[ec.ctx, count]);
+    let amb = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, amb, 0);
+    ec.fault_if(b, bad, 5);
+    // The loop: pair index `i` walks 0..count; the AMB handle is loop-invariant (the record
+    // buffer may grow inside `_push` — the ptr refresh lives in the record table, not here).
+    let header = b.create_block();
+    b.append_block_param(header, types::I64); // i
+    let bodyb = b.create_block();
+    let exitb = b.create_block();
+    let zero = b.ins().iconst(types::I64, 0);
+    b.ins().jump(header, &[zero.into()]);
+    b.switch_to_block(header);
+    let i = b.block_params(header)[0];
+    let more = b.ins().icmp(IntCC::UnsignedLessThan, i, count);
+    b.ins().brif(more, bodyb, &[], exitb, &[]);
+    b.switch_to_block(bodyb);
+    // kslot = base + 2i; value = raw i64 at slot (kslot + 1), bytes 0..8.
+    let i2 = b.ins().ishl_imm_s(i, 1);
+    let kslot = b.ins().iadd(base, i2);
+    let vslot = b.ins().iadd_imm_s(kslot, 1);
+    let voff = b.ins().ishl_imm_s(vslot, 6);
+    let vaddr = b.ins().iadd(buf, voff);
+    let val = b.ins().load(types::I64, MemFlagsData::new(), vaddr, 0);
+    let cargs = if has_cap { vec![fv, val] } else { vec![val] };
+    emit_call_to(
+        b,
+        ec,
+        fn_refs,
+        ctx,
+        depth,
+        vars,
+        fvars,
+        kinds,
+        f,
+        cargs,
+        info.ret_of(f),
+        None,
+    )?;
+    let (rv, _rk) = ub_pop(b, vars, fvars, kinds)?;
+    let next = b.create_block();
+    match hof {
+        MapHof::Map => {
+            // Every entry survives with the transformed value.
+            let pc = b.ins().call(h.map_ext_push, &[ec.ctx, amb, kslot, rv]);
+            let pr = b.inst_results(pc)[0];
+            let pbad = b.ins().icmp_imm_s(IntCC::SignedLessThan, pr, 0);
+            ec.fault_if(b, pbad, 5);
+            b.ins().jump(next, &[]);
+        }
+        MapHof::Filter => {
+            // Keep the ORIGINAL value iff the 0/1 predicate word is nonzero.
+            let keep_blk = b.create_block();
+            b.ins().brif(rv, keep_blk, &[], next, &[]);
+            b.switch_to_block(keep_blk);
+            let pc = b.ins().call(h.map_ext_push, &[ec.ctx, amb, kslot, val]);
+            let pr = b.inst_results(pc)[0];
+            let pbad = b.ins().icmp_imm_s(IntCC::SignedLessThan, pr, 0);
+            ec.fault_if(b, pbad, 5);
+            b.ins().jump(next, &[]);
+        }
+    }
+    b.switch_to_block(next);
+    let i1 = b.ins().iadd_imm_s(i, 1);
+    b.ins().jump(header, &[i1.into()]);
+    b.switch_to_block(exitb);
+    // The receiver was a QUERY; a flat map's release is a no-op, but the kind gate mirrors the
+    // sibling arms (a future Owned boxed receiver would recycle correctly).
+    if mk.is_owned_handle() {
+        emit_release(b, ec, h, mv);
+    }
+    ub_push(b, vars, fvars, kinds, amb, Kind::StrIntMap(Own::Owned))
+}
+
 /// `Op::CallNative(Core.Map.size, 1)` — FLAT: the handle's 12-bit count field (two ops); AMB:
 /// the builder record's count word; boxed: the helper. Never a fault on a valid map.
 pub(super) fn arm_map_size(

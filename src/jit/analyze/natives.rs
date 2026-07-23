@@ -59,6 +59,78 @@ pub(crate) fn unboxed_native_is_list_sum_by(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.List" && nf.name == "sumBy" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.List.filter` (the listfilter flip: a STATIC-predicate
+/// filter lowers to the hofpipe loop with a CONDITIONAL append — the original element joins the
+/// ACL builder iff the 0/1 predicate result is nonzero; survivor order = input order)?
+pub(crate) fn unboxed_native_is_list_filter(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "filter" && nf.pure)
+}
+
+/// Admit a List HOF (`map`/`count`/`sumBy`/`filter`, arity-2 `CallNative`) into the unboxed
+/// subset: a STATIC lambda (`Fn`/`FnCap1`, 1 declared param) over an `IntList` → a native loop,
+/// one direct call per element. Return-kind rule: map/sumBy `Int` only; filter `Bool` only;
+/// count `Bool` or `Int`. Result: `IntList(Owned)` for map/filter (an ACL builder at runtime),
+/// `Int` otherwise. A throwing graph stays on the VM (fail closed, v1 — no thrown payload out
+/// of the loop). Lives here (natives headroom) so the grandfathered `analyze/mod.rs` arm stays
+/// a one-liner (Invariant 13).
+pub(crate) fn admit_list_hof(
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
+    kinds: &mut Vec<Kind>,
+    id: usize,
+) -> Result<(), JitError> {
+    if info.thrown_class.is_some() {
+        return Err(JitError::Unsupported(
+            "unboxed: List HOF in a throwing graph (deferred)".to_string(),
+        ));
+    }
+    let is_map = unboxed_native_is_list_map(id);
+    let is_filter = unboxed_native_is_list_filter(id);
+    let f = match kinds.pop() {
+        Some(Kind::Fn(f)) | Some(Kind::FnCap1(f)) => f,
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed List HOF callee kind {other:?} (deferred)"
+            )))
+        }
+    };
+    // `arity` folds captures in (frame = [caps.., args..]) — HOF passes 1 arg, params == 1.
+    if program.functions[f].arity - program.functions[f].n_captures != 1 {
+        return Err(JitError::Unsupported(
+            "unboxed: List HOF lambda arity != 1 (VM renders any fault)".to_string(),
+        ));
+    }
+    let rk = info.ret_of(f);
+    let ok = if is_map || unboxed_native_is_list_sum_by(id) {
+        rk == Kind::Int
+    } else if is_filter {
+        rk == Kind::Bool
+    } else {
+        rk == Kind::Int || rk == Kind::Bool
+    };
+    if !ok {
+        return Err(JitError::Unsupported(format!(
+            "unboxed: List HOF lambda return kind {rk:?} (deferred)"
+        )));
+    }
+    match kinds.pop() {
+        Some(Kind::IntList(_)) => {}
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed List HOF receiver kind {other:?}"
+            )))
+        }
+    }
+    kinds.push(if is_map || is_filter {
+        Kind::IntList(Own::Owned)
+    } else {
+        Kind::Int
+    });
+    Ok(())
+}
+
 /// Is native-registry entry `id` `Core.List.reduce` (the fold vertical: the same inline walk as
 /// `sumBy`/`count`, but the accumulator is SEEDED from the 3rd operand and each step calls the 2-arg
 /// `f(acc, elem)`; the running `acc` threads through with no fold-level overflow guard — arithmetic

@@ -44,5 +44,7 @@ pub(super) fn declare_ub_refs(
         map_values: m.declare_func_in_func(ids.map_values, f),
         map_merge: m.declare_func_in_func(ids.map_merge, f),
         map_size: m.declare_func_in_func(ids.map_size, f),
+        map_ext_new: m.declare_func_in_func(ids.map_ext_new, f),
+        map_ext_push: m.declare_func_in_func(ids.map_ext_push, f),
     }
 }

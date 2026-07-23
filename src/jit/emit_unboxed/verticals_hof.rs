@@ -7,16 +7,19 @@
 
 use super::*;
 
-/// Which List higher-order op the shared `arm_list_hof` loop is emitting. All three walk the
+/// Which List higher-order op the shared `arm_list_hof` loop is emitting. All four walk the
 /// input identically (one direct call per element); they differ only in the accumulator:
 /// `Map` seeds/extends an ACL int-list builder; `Count` sums the raw 0/1 predicate result with a
 /// WRAPPING `iadd` (bounded by list length — cannot overflow); `Sum` sums the int projection with
-/// a CHECKED `sadd_overflow` (an overflow → code-5 VM redo → `list_sum_by`'s exact fault).
+/// a CHECKED `sadd_overflow` (an overflow → code-5 VM redo → `list_sum_by`'s exact fault);
+/// `Filter` appends the ORIGINAL element to the ACL builder iff the 0/1 predicate result is
+/// nonzero (the listfilter flip — a conditional `list_append_acc`, survivor order = input order).
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum ListHof {
     Map,
     Count,
     Sum,
+    Filter,
 }
 
 /// `List.map` / `List.count` / `List.sumBy` with a STATIC lambda (the hofpipe vertical): ONE loop —
@@ -40,7 +43,7 @@ pub(super) fn arm_list_hof(
     info: &UbGraphInfo,
     hof: ListHof,
 ) -> Result<(), JitError> {
-    let is_map = hof == ListHof::Map;
+    let builds_list = matches!(hof, ListHof::Map | ListHof::Filter);
     let (fv, fk) = ub_pop(b, vars, fvars, kinds)?;
     let (f, has_cap) = match fk {
         Kind::Fn(f) => (f, false),
@@ -58,8 +61,8 @@ pub(super) fn arm_list_hof(
         )));
     }
     let (addr0, count, stride) = ub_list_walk_setup(b, ec, lv);
-    // Output seed: map → a fresh ACL builder; count → a zero register.
-    let acc0 = if is_map {
+    // Output seed: map/filter → a fresh ACL builder; count/sum → a zero register.
+    let acc0 = if builds_list {
         let call = b.ins().call(h.list_builder_new, &[ec.ctx]);
         let oh = b.inst_results(call)[0];
         let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, oh, 0);
@@ -113,6 +116,21 @@ pub(super) fn arm_list_hof(
             ec.fault_if(b, ovf, 5);
             sum
         }
+        ListHof::Filter => {
+            // Conditional append of the ORIGINAL element: a 0/1 predicate word branches around
+            // the builder push; both edges merge with the (possibly extended) builder handle.
+            // `list_append_acc` returns the SAME record handle it received (in-place push), so
+            // threading its result through the merge is exact.
+            let keep_blk = b.create_block();
+            let joinb = b.create_block();
+            b.append_block_param(joinb, types::I64);
+            b.ins().brif(rv, keep_blk, &[], joinb, &[acc.into()]);
+            b.switch_to_block(keep_blk);
+            let acc_kept = list_append_acc(b, ec, h, acc, elem)?;
+            b.ins().jump(joinb, &[acc_kept.into()]);
+            b.switch_to_block(joinb);
+            b.block_params(joinb)[0]
+        }
     };
     let addr1 = b.ins().iadd(addr, stride);
     let rem1 = b.ins().iadd_imm_s(rem, -1);
@@ -130,7 +148,7 @@ pub(super) fn arm_list_hof(
         fvars,
         kinds,
         res,
-        if is_map {
+        if builds_list {
             Kind::IntList(Own::Owned)
         } else {
             Kind::Int

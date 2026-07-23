@@ -114,7 +114,15 @@ pub(super) fn collect_functions_unboxed(
                 Op::CallNative(id, 2)
                     if unboxed_native_is_list_map(*id)
                         || unboxed_native_is_list_count(*id)
-                        || unboxed_native_is_list_sum_by(*id) =>
+                        || unboxed_native_is_list_sum_by(*id)
+                        || unboxed_native_is_list_filter(*id) =>
+                {
+                    uses_handles = true;
+                    has_call = true;
+                }
+                // Map HOFs (mapmap/mapfilter flips): inline pair walk + direct call per entry.
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_map_map(*id) || unboxed_native_is_map_filter(*id) =>
                 {
                     uses_handles = true;
                     has_call = true;

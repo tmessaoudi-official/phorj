@@ -3,9 +3,11 @@
 
 use super::*;
 
+mod helper_refs;
 mod list_builders;
 mod maps_ext;
 mod symbols;
+pub(in crate::jit) use helper_refs::*;
 pub(super) use list_builders::*;
 pub(super) use maps_ext::*;
 pub(super) use symbols::*;
@@ -2083,78 +2085,4 @@ pub(super) extern "C" fn rt_u_index_int(
 pub(super) extern "C" fn rt_u_free(ctx: *mut UbCtx, h: i64) {
     let ctx = unsafe { &mut *ctx };
     ctx.release(h);
-}
-
-/// The declared import ids of the handle-op helpers (one per `JITModule`, when the graph uses
-/// handles); [`UbHelperRefs`] is the same set declared into one function body.
-pub(super) struct UbHelperIds {
-    pub(super) list_new: FuncId,
-    pub(super) list_push: FuncId,
-    pub(super) list_seal: FuncId,
-    pub(super) index: FuncId,
-    pub(super) concat: FuncId,
-    pub(super) str_len: FuncId,
-    pub(super) free: FuncId,
-    pub(super) map_push_pair: FuncId,
-    pub(super) map_seal: FuncId,
-    pub(super) set_seal: FuncId,
-    pub(super) map_get: FuncId,
-    pub(super) map_has: FuncId,
-    pub(super) list_push_int: FuncId,
-    pub(super) index_int: FuncId,
-    pub(super) int_to_str: FuncId,
-    pub(super) concat_mix: FuncId,
-    pub(super) acc_append: FuncId,
-    pub(super) list_len: FuncId,
-    pub(super) list_acc_append: FuncId,
-    pub(super) map_builder_set: FuncId,
-    pub(super) map_builder_seed: FuncId,
-    pub(super) list_acc_reseed: FuncId,
-    pub(super) list_builder_new: FuncId,
-    pub(super) list_append_clone: FuncId,
-    pub(super) native2: FuncId,
-    pub(super) str_eq: FuncId,
-    pub(super) clone_value: FuncId,
-    pub(super) list_append_dyn: FuncId,
-    pub(super) str_list_acc_append: FuncId,
-    pub(super) map_keys: FuncId,
-    pub(super) map_values: FuncId,
-    pub(super) map_merge: FuncId,
-    pub(super) map_size: FuncId,
-}
-
-pub(super) struct UbHelperRefs {
-    pub(super) list_new: FuncRef,
-    pub(super) list_push: FuncRef,
-    pub(super) list_seal: FuncRef,
-    pub(super) index: FuncRef,
-    pub(super) concat: FuncRef,
-    pub(super) str_len: FuncRef,
-    pub(super) free: FuncRef,
-    pub(super) map_push_pair: FuncRef,
-    pub(super) map_seal: FuncRef,
-    pub(super) set_seal: FuncRef,
-    pub(super) map_get: FuncRef,
-    pub(super) map_has: FuncRef,
-    pub(super) list_push_int: FuncRef,
-    pub(super) index_int: FuncRef,
-    pub(super) int_to_str: FuncRef,
-    pub(super) concat_mix: FuncRef,
-    pub(super) acc_append: FuncRef,
-    pub(super) list_len: FuncRef,
-    pub(super) list_acc_append: FuncRef,
-    pub(super) map_builder_set: FuncRef,
-    pub(super) map_builder_seed: FuncRef,
-    pub(super) list_acc_reseed: FuncRef,
-    pub(super) list_builder_new: FuncRef,
-    pub(super) list_append_clone: FuncRef,
-    pub(super) native2: FuncRef,
-    pub(super) str_eq: FuncRef,
-    pub(super) clone_value: FuncRef,
-    pub(super) list_append_dyn: FuncRef,
-    pub(super) str_list_acc_append: FuncRef,
-    pub(super) map_keys: FuncRef,
-    pub(super) map_values: FuncRef,
-    pub(super) map_merge: FuncRef,
-    pub(super) map_size: FuncRef,
 }
