@@ -121,5 +121,7 @@ pub(super) fn declare_ub_helper_ids(
         map_ext_push: declare(module, "rt_u_map_ext_push", &sig4)?,
         str_contains: declare(module, "rt_u_str_contains", &sig4)?,
         validate: declare(module, "rt_u_validate", &sig4)?,
+        set_diff: declare(module, "rt_u_set_diff", &sig4)?,
+        set_union: declare(module, "rt_u_set_union", &sig4)?,
     })
 }

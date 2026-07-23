@@ -32,11 +32,11 @@
 690	src/interpreter/call.rs
 518	src/interpreter/expr.rs
 548	src/interpreter/mod.rs
-2448	src/jit/analyze/mod.rs
+2435	src/jit/analyze/mod.rs
 639	src/jit/boxed.rs
-1650	src/jit/emit_unboxed/mod.rs
-1011	src/jit/emit_unboxed/verticals.rs
-2061	src/jit/handles/mod.rs
+1641	src/jit/emit_unboxed/mod.rs
+944	src/jit/emit_unboxed/verticals.rs
+1982	src/jit/handles/mod.rs
 762	src/jit/range_acc.rs
 674	src/jit/tests/unboxed_flow.rs
 511	src/jit/tests/unboxed_int.rs

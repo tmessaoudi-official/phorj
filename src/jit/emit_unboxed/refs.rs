@@ -48,5 +48,7 @@ pub(super) fn declare_ub_refs(
         map_ext_push: m.declare_func_in_func(ids.map_ext_push, f),
         str_contains: m.declare_func_in_func(ids.str_contains, f),
         validate: m.declare_func_in_func(ids.validate, f),
+        set_diff: m.declare_func_in_func(ids.set_diff, f),
+        set_union: m.declare_func_in_func(ids.set_union, f),
     }
 }

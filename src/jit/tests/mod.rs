@@ -18,6 +18,7 @@ mod listcontains;
 mod map_materialize;
 mod math_verticals;
 mod range_and_overflow;
+mod set_ops;
 mod string_scan;
 mod sumby;
 mod unboxed_flow;

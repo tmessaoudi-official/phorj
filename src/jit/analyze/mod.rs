@@ -6,8 +6,10 @@ use super::*;
 
 mod natives;
 mod natives_map;
+mod natives_set;
 pub(super) use natives::*;
 pub(super) use natives_map::*;
+pub(super) use natives_set::*;
 mod kinds;
 pub(super) use kinds::*;
 
@@ -1103,33 +1105,7 @@ pub(super) fn unboxed_analyze(
                 // P-2a handle verticals — mirror build_body's stack effects exactly (default-deny on
                 // any operand-kind mismatch: fall back to the VM, never mis-type a handle).
                 Op::MakeList(n) => {
-                    // Element kinds select the list flavor: all-`Str` → `StrList`, all-`Int` →
-                    // `IntList` (P-2c), all-`StrIntMap` → `MapList` (the map-word list); anything
-                    // else (mixed, floats, nested) is default-denied.
-                    let d = kinds.len();
-                    if *n > d {
-                        return Err(JitError::Codegen("unboxed MakeList underflow".to_string()));
-                    }
-                    let all_str = kinds[d - n..].iter().all(|k| matches!(k, Kind::Str(_)));
-                    let all_int = *n > 0 && kinds[d - n..].iter().all(|k| *k == Kind::Int);
-                    let all_map = *n > 0
-                        && kinds[d - n..]
-                            .iter()
-                            .all(|k| matches!(k, Kind::StrIntMap(_)));
-                    if !(all_str || all_int || all_map) {
-                        return Err(JitError::Unsupported(format!(
-                            "unboxed MakeList element kinds {:?}",
-                            &kinds[d - n..]
-                        )));
-                    }
-                    kinds.truncate(d - n);
-                    kinds.push(if all_int {
-                        Kind::IntList(Own::Owned)
-                    } else if all_map {
-                        Kind::MapList(Own::Owned)
-                    } else {
-                        Kind::StrList(Own::Owned)
-                    });
+                    admit_make_list(&mut kinds, *n)?;
                 }
                 Op::MakeMap(n) => {
                     // The 2n operands are k1,v1,…,kn,vn (vn on top): pop value (Int) then key (Str),
@@ -1176,9 +1152,11 @@ pub(super) fn unboxed_analyze(
                         Some(Kind::Int) => match kinds.pop() {
                             Some(Kind::StrList(_)) => kinds.push(Kind::Str(Own::Owned)),
                             Some(Kind::IntList(_)) => kinds.push(Kind::Int),
-                            // MapList element: the loaded word is runtime-guarded FLAT (immutable,
-                            // bump-pinned — release no-ops), so an OWNED push is aliasing-safe.
+                            // MapList/SetList element: the loaded word is runtime-guarded FLAT
+                            // (immutable, bump-pinned — release no-ops), so an OWNED push is
+                            // aliasing-safe.
                             Some(Kind::MapList(_)) => kinds.push(Kind::StrIntMap(Own::Owned)),
+                            Some(Kind::SetList(_)) => kinds.push(Kind::IntSet(Own::Owned)),
                             other => {
                                 return Err(JitError::Unsupported(format!(
                                     "unboxed Index receiver kind {other:?}"
@@ -1461,6 +1439,15 @@ pub(super) fn unboxed_analyze(
                 }
                 Op::CallNative(id, 2) if unboxed_native_is_map_filter(*id) => {
                     admit_map_hof(program, info, &mut kinds, true, "Map.filter")?;
+                }
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_set_union(*id)
+                        || unboxed_native_is_set_difference(*id) =>
+                {
+                    admit_set_op(&mut kinds)?;
+                }
+                Op::CallNative(id, 1) if unboxed_native_is_set_size(*id) => {
+                    admit_set_size(&mut kinds)?;
                 }
                 Op::CallNative(id, 2) if unboxed_native_is_str_contains(*id) => {
                     admit_str_predicate(&mut kinds, 2, "String.contains")?;

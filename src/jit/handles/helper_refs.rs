@@ -46,6 +46,8 @@ pub(in crate::jit) struct UbHelperIds {
     pub(in crate::jit) map_ext_push: FuncId,
     pub(in crate::jit) str_contains: FuncId,
     pub(in crate::jit) validate: FuncId,
+    pub(in crate::jit) set_diff: FuncId,
+    pub(in crate::jit) set_union: FuncId,
 }
 
 pub(in crate::jit) struct UbHelperRefs {
@@ -86,4 +88,6 @@ pub(in crate::jit) struct UbHelperRefs {
     pub(in crate::jit) map_ext_push: FuncRef,
     pub(in crate::jit) str_contains: FuncRef,
     pub(in crate::jit) validate: FuncRef,
+    pub(in crate::jit) set_diff: FuncRef,
+    pub(in crate::jit) set_union: FuncRef,
 }
