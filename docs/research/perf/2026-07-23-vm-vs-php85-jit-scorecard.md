@@ -116,3 +116,139 @@ these because they map to hand-optimized C builtins over flat mutable arrays.
 HARD-FLAGGED, unresolved. No speculative fix applied (Rule 14 — no fix without a proven before/after).
 Reconcile against the official docker php:8.5-cli baseline on the dev box; if confirmed, this is a
 WIN-OR-FLAG breach requiring the collection-representation work above.
+
+
+---
+
+## UPDATE 4 (2026-07-23, later): mapkeys / mapvalues / mapmerge FLIPPED — memoized materialization verticals
+
+| feature | before | after | how |
+|---|---|---|---|
+| mapkeys | 0.08× | **1.07× WIN** (768.6M → 55.6M ns) | memoized SHARED `ACL|ACLS` record of borrowed key-slot handles |
+| mapvalues | 0.08× | **1.07× WIN** (726.3M → 53.6M ns) | memoized SHARED `ACL` record of raw value words |
+| mapmerge | 0.10× | **2.01× WIN** (440.9M → 23.0M ns) | memoized re-SEAL per (a,b) pair (canonical kernel order) |
+
+Design: a sealed FLAT map is immutable + bump-pinned for the run, so `Map.keys`/`values`/`merge`
+over it are pure functions of the handle word(s). The emit arms probe a JIT-visible direct-mapped
+memo INLINE (~10 ops steady-state); the `rt_u_map_*` helpers back it with a FULL per-run memo
+(HashMap), so an inline-cache eviction re-installs — never rebuilds (the rebuild-per-iteration
+arena-exhaustion cliff found and fixed during bring-up: rotating pairs collided in the direct-mapped
+table under the first weak hash; now Fibonacci-mixed AND backed by the full memo). New narrow
+`Kind::MapList` covers the benches' rotating-operand shape `maps[i % 3]`; `Map.size` reads flat
+count bits / AMB record count inline. SHARED (bit 55) protects memo-owned records: consumer releases
+no-op, in-place appends copy. Byte-identity: 7 new tests (hits>0 per bench shape, memo-collision
+rounds, SHARED copy-on-append, merge override/append order, long-key boxed fallback) + the
+differential. mapkeys/mapvalues margins are THIN (1.07×) — php's C array_keys is the hardest class;
+re-verify on the dev box.
+
+## Interpreter matrix (dev ask 2026-07-23): phg without JIT vs php without opcache/JIT
+
+Same harness, new knobs (`MICROBENCH_PHG_ARGS='--no-jit'|'--tree-walker'`, `MICROBENCH_PHP_JIT=0`).
+Container numbers (some build-noise; indicative). Headline: **VM --no-jit 1/48 WINs, tree-walker
+0/48** — plain Zend is a 25-year hand-tuned C interpreter; phorj's raw engines lose 3–50× without
+codegen. The JIT-by-default VM is the perf product; the tree-walker is the correctness oracle, and
+that division of labor is working as designed (the JIT'd table above beats php+JIT on 33+/48).
+
+### VM `--no-jit` vs plain php (total self-timed ns ratio)
+```
+closurecall       0.10x  LOSS
+dbwork            0.97x  LOSS
+deepjson          0.80x  LOSS
+enum              0.05x  LOSS
+fibrec            0.16x  LOSS
+floatarith        0.07x  LOSS
+floatloop         0.05x  LOSS
+floatmul          0.05x  LOSS
+forin             0.05x  LOSS
+hofpipe           0.21x  LOSS
+intadd            0.06x  LOSS
+interp            0.13x  LOSS
+isemail           0.31x  LOSS
+isurl             0.28x  LOSS
+jsonround         0.33x  LOSS
+listappend        0.02x  LOSS
+listcontains      0.11x  LOSS
+listfilter        0.25x  LOSS
+listindex         0.09x  LOSS
+listmap           0.31x  LOSS
+listreduce        0.29x  LOSS
+mapfilter         0.26x  LOSS
+mapget            0.08x  LOSS
+maphas            0.07x  LOSS
+mapinsert         0.09x  LOSS
+mapkeys           0.16x  LOSS
+mapmap            0.33x  LOSS
+mapmerge          0.15x  LOSS
+mapvalues         0.15x  LOSS
+match             0.08x  LOSS
+mathabs           0.09x  LOSS
+mathmax           0.08x  LOSS
+mathmin           0.08x  LOSS
+mathsign          0.07x  LOSS
+maxby             0.37x  LOSS
+methodcall        0.14x  LOSS
+minby             0.36x  LOSS
+objalloc          0.24x  LOSS
+setcontains       0.05x  LOSS
+setdifference     0.52x  LOSS
+setintersection   1.66x  WIN
+setunion          0.82x  LOSS
+strbuild          0.10x  LOSS
+stringconcat      0.11x  LOSS
+stringcontains    0.11x  LOSS
+sumby             0.37x  LOSS
+trycatch          0.53x  LOSS
+webish            0.13x  LOSS
+```
+
+### tree-walker vs plain php
+```
+closurecall       0.05x  LOSS
+dbwork            0.11x  LOSS
+deepjson          0.11x  LOSS
+enum              0.02x  LOSS
+fibrec            0.01x  LOSS
+floatarith        0.03x  LOSS
+floatloop         0.03x  LOSS
+floatmul          0.03x  LOSS
+forin             0.04x  LOSS
+hofpipe           0.08x  LOSS
+intadd            0.04x  LOSS
+interp            0.06x  LOSS
+isemail           0.10x  LOSS
+isurl             0.09x  LOSS
+jsonround         0.03x  LOSS
+listappend        0.01x  LOSS
+listcontains      0.03x  LOSS
+listfilter        0.09x  LOSS
+listindex         0.04x  LOSS
+listmap           0.10x  LOSS
+listreduce        0.09x  LOSS
+mapfilter         0.11x  LOSS
+mapget            0.04x  LOSS
+maphas            0.03x  LOSS
+mapinsert         0.04x  LOSS
+mapkeys           0.04x  LOSS
+mapmap            0.10x  LOSS
+mapmerge          0.06x  LOSS
+mapvalues         0.04x  LOSS
+match             0.05x  LOSS
+mathabs           0.04x  LOSS
+mathmax           0.04x  LOSS
+mathmin           0.04x  LOSS
+mathsign          0.04x  LOSS
+maxby             0.13x  LOSS
+methodcall        0.02x  LOSS
+minby             0.13x  LOSS
+objalloc          0.03x  LOSS
+setcontains       0.02x  LOSS
+setdifference     0.17x  LOSS
+setintersection   0.49x  LOSS
+setunion          0.27x  LOSS
+strbuild          0.06x  LOSS
+stringconcat      0.05x  LOSS
+stringcontains    0.05x  LOSS
+sumby             0.11x  LOSS
+trycatch          0.06x  LOSS
+webish            0.06x  LOSS
+```

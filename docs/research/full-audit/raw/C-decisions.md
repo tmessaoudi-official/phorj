@@ -2984,7 +2984,19 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `verticals_hof.rs`); (3) `listReduce` 0.30×→11.29× (`arm_list_reduce`, the arity-3 fold — seed operand
   + 2-arg `(acc,elem)` call; shared `ub_list_walk_setup` helper extracted behavior-preservingly from
   `arm_list_hof`). This disproves the earlier "re-entrant folds can't be won by verticals" note — the
-  win IS the per-element dispatch elimination. NEXT: `mapkeys`/`mapvalues` (Map materialization).
+  win IS the per-element dispatch elimination. (4)(5)(6) `mapkeys` 0.08×→1.07× / `mapvalues`
+  0.08×→1.07× / `mapmerge` 0.10×→2.01× (2026-07-23, post-re-sign): MEMOIZED map-materialization
+  verticals — sealed flat maps are immutable+bump-pinned, so keys/values/merge results memoize per
+  handle/(a,b) pair; inline direct-mapped memo probe (Fibonacci-mixed) backed by a FULL per-run
+  memo (an eviction re-installs, never rebuilds — kills the rebuild-per-iteration arena cliff);
+  `UB_TAG_SHARED` (bit 55) marks memo-owned records (consumer release no-op, in-place appends
+  copy); narrow `Kind::MapList` admits the rotating `maps[i%3]` shape; `Map.size` inline. Also
+  shipped with it (M-DECOMP, same slice): `handles.rs`→`handles/` dir + `maps_ext.rs`/
+  `list_builders.rs`/`symbols.rs`, `analyze/kinds.rs`, `emit_unboxed/index_lists.rs`+`refs.rs`,
+  `compile.rs` symbol-block extraction — baselines ratcheted. AND the dev-asked INTERPRETER
+  MATRIX: `microbench.sh` `MICROBENCH_PHG_ARGS`/`MICROBENCH_PHP_JIT=0` knobs; VM-nojit 1/48,
+  tree-walker 0/48 vs plain php (scorecard §"Interpreter matrix") — the JIT-by-default engine is
+  the perf product. NEXT: `listfilter`/`mapfilter`/`mapmap` (HOF verticals).
   ⚠ **HARD FLAG (2026-07-23): `maxBy`/`minBy` (0.19–0.20×) are BLOCKED on a representation
   lever — dev to rule.** They return `T?`, and the unboxed `Kind` enum (Int/Float/Bool/Str/…/IntList)
   has NO nullable/optional variant, so the element result cannot stay unboxed. Options: (i) add an

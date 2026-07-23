@@ -49,6 +49,13 @@ done
 # to a real release php WITH opcache/JIT to run without docker (e.g. a container that has no docker or
 # where image pulls are blocked); MICROBENCH_PHP_OPCACHE points at its opcache.so when JIT ships as a
 # shared zend_extension (a from-source CLI build). The local path pins the same core as the phg side.
+# Engine/JIT matrix knobs: MICROBENCH_PHG_ARGS = extra `phg run` args (e.g. `--no-jit` for the
+# plain VM, `--tree-walker` for the reference interpreter) and MICROBENCH_PHP_JIT=0 = drop the
+# opcache/JIT flags (a plain interpreted php) — together they produce the interpreter-vs-
+# interpreter matrix. Defaults preserve the G-8 harness (VM+JIT vs php+JIT) exactly.
+PHG_ARGS="${MICROBENCH_PHG_ARGS:-}"
+[[ "${MICROBENCH_PHP_JIT:-1}" == "0" ]] && JIT_FLAGS=""
+
 LOCAL_PHP="${MICROBENCH_PHP_BIN:-}"
 OPCACHE_ARG=""
 [[ -n "$LOCAL_PHP" && -n "${MICROBENCH_PHP_OPCACHE:-}" ]] && OPCACHE_ARG="-dzend_extension=${MICROBENCH_PHP_OPCACHE}"
@@ -109,7 +116,8 @@ for name in "${features[@]}"; do
   pbest=""
   pcs=""
   for ((k = 0; k < K; k++)); do
-    line="$(taskset -c "$CPU" "$BIN" run "$MICRO/$name.phg")"
+    # shellcheck disable=SC2086 # PHG_ARGS is a deliberate word-split flag list
+    line="$(taskset -c "$CPU" "$BIN" run $PHG_ARGS "$MICRO/$name.phg")"
     ns="$(printf '%s' "$line" | cut -f2)"
     vcs="$(printf '%s' "$line" | cut -f3)"
     if [[ -z "$vbest" || "$ns" -lt "$vbest" ]]; then vbest="$ns"; fi
