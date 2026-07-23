@@ -2967,7 +2967,14 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   per D10a): (1) `#[Invoke]` + `#[ToString]`; (2) Rich Request v1 (incl. files); (3) `#[Entry(kind:)]` +
   `Http.ServeConfig` + serve{} + inbound rustls TLS + retire `respond`. Separate QUEUED design slices:
   labeled break/continue, typed LSB. ON HOLD (spec tomorrow): eval, ArrayAccess. Env: PHP 8.5.8 built
-  from source in-container (D10d).
+  from source in-container (D10d). **SPECCING WAVE COMPLETE (2026-07-23, the held wave): ALL SEVEN
+  specs frozen in `docs/specs/2026-07-23-*.md`** — invoke-tostring, rich-request,
+  entry-kinds-serve-tls (the build cluster, D10a order), labeled-break-continue, typed-lsb,
+  eval-position (rejection rationale + substitutes + frozen `Core.Sandbox` avenue),
+  array-access (`#[ArrayGet]`/`#[ArraySet]`). Each elaborates the locked rulings only; open
+  points are explicit per-spec PENDING lists for the dev (D10b: dev rules on each spec before
+  any code). **INTERLEAVE RULED (2026-07-23, with DEC-333): after the spec rulings, the DEC-331
+  build cluster builds FIRST, then the DEC-333 perf roadmap (Json-ADT → AOT → A+C+D).**
 
 - **DEC-333 — POST-CAMPAIGN PERF ROADMAP (dev RULED 2026-07-23 via AskUserQuestion, all six
   locked before compact).** (a) **BUILD ORDER: Json-ADT JIT slice → AOT → Interpreter
