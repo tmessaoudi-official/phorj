@@ -142,8 +142,7 @@ pinned-ness decided from the RUNTIME word — `strings_ext.rs`, `emit_unboxed/sc
 at 0.71× there — re-verify on the dev box after re-pull. Then **maxby 0.19×→8.13× / minby
 0.20×→8.18×** (the HARD FLAG closed by the ruled ??-fusion lever: `extreme_by_coalesce_window`
 fuses `maxBy/minBy(xs,f) ?? <int>` into a total-Int first-wins fold across all four passes;
-window-less uses stay on the VM, the nullable-Kind lever stays open). **4 losses remain**, each
-its own vertical/representation slice, in order:
+window-less uses stay on the VM, the nullable-Kind lever stays open).
 Then **setdifference 0.45×→40.33× / setunion 0.66×→60.82×** (memoized flat-set ops — the
 mapmerge discipline: per-(a,b,op) memo in separate entry ranges, `seal_set_keys` single writer,
 narrow `Kind::SetList` for `bs[i%4]`, inline `Set.size`; setintersection 1.40× and listcontains
