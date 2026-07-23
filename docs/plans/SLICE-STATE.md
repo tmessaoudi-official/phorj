@@ -73,10 +73,19 @@ mapkeys/values 0.09×, HOF folds + string-scan + JSON). **3 CLOSED 2026-07-23:**
 shared `ub_list_walk_setup` helper; 17.6M vs 199M ns). All byte-identical (JIT≡VM≡tree-walker;
 `src/jit/tests/sumby.rs`). **15 losses remain.** CAMPAIGN SSOT = **DEC-332** + MASTER-PLAN §0 (perf
 WIN-OR-FLAG + 100%-coverage + M-DECOMP); detail in `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`.
-**M-DECOMP progress: `analyze/natives.rs` DONE** (analyze.rs 2869 → analyze/mod.rs 2683 + natives.rs
-250); **`arm_list_hof`/`arm_list_reduce` DONE** (verticals.rs 1264 → 1111 + new `verticals_hof.rs`, Inv
-13, behavior-preserving, gate-green). **NEXT: `mapkeys`/`mapvalues`** (Map key/value materialization
-vertical) → then string-scan. **⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable
+**M-DECOMP CAMPAIGN (Inv 13 / DEC-332(d), dev-requested 2026-07-23 "shrink big files, better
+architecture/folders, no compromises"): 79 files over the 500 hard cap; behavior-preserving cohesion
+splits, gate-green, one commit per file, JIT-first.** DONE so far (all pushed): `analyze/natives.rs`
+(analyze.rs 2869→2683 + natives.rs 250); `verticals_hof.rs` (emit_unboxed/verticals.rs 1264→1111);
+**`jit/tests/verticals.rs` 2423 → 1411** across 3 carves — `math_verticals.rs` (344), `range_and_overflow.rs`
+(384), `accumulator_elision.rs` (299), all gate-green. **NEXT (finish verticals.rs → <500): 3-way carve
+of the delivery block** — keep 1–469 (core hook + basic verticals); `instance_and_string_verticals.rs`
+← 470–818; `map_set_verticals.rs` ← 819–1097; `interpolation_and_accumulators.rs` ← 1099–1411. CARVE
+RULE (2 bugs hit this session): start each carve at the leading `#[test]`/`// ---` (not the `fn`), and
+PRUNE the source file's now-unused cross-file `use` (ub_int/ub_float/vm_float) after moving. Then the
+JIT engine giants (`analyze/mod.rs` 2683, `handles.rs` 2280, `emit_unboxed/mod.rs` 1988), then
+`checker/desugar_db.rs` 3144, `cli/explain.rs` 1998, and the tail (see `sort -rn scripts/size-baseline.txt`).
+**PERF NEXT (separate track): `mapkeys`/`mapvalues`** (Map key/value materialization vertical) → then string-scan. **⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable
 arena-kind** — they return `T?` and
 the unboxed `Kind` enum has no optional variant, so the element result can't stay unboxed; dev to rule
 the representation lever (add `Int?` kind / non-empty-`??` peephole / accept flag) — NOT a night call
