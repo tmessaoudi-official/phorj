@@ -98,15 +98,18 @@ adoption review validated ~10/14 themes as already covered and added four ruled 
 
 **WEB / ENTRY / PARITY CLUSTER (DEC-331 — decision round D1–D10 COMPLETE 2026-07-23, dev-ruled
 interactively; full rulings in the register, cursor in SLICE-STATE). SPEC-FIRST per D10b —
-**SPECCING WAVE COMPLETE AND DEV-RULED (2026-07-23): all seven specs in
+**SPECCING WAVE COMPLETE AND DEV-RULED (2026-07-23): all EIGHT specs in
 `docs/specs/2026-07-23-*.md` are BUILD-READY (every P-point answered in each spec's §RULED;
-full addendum in the DEC-331 register row). Cluster builds in D10a order, then the DEC-333
-perf roadmap. Ruling highlights: slice 3 now carries TWO breaking changes (respond retired +
-bare `#[Entry]` = `E-ENTRY-KIND-REQUIRED`, DEC-191 inference retired); `Core.Sandbox` BUILDS
-in v1 (pure-expr, tree-walker-only, `E-TRANSPILE-SANDBOX`); ArrayAccess ADOPTED (reopen flag)
-with overloaded indexers + the PHP `\ArrayAccess` glue; rustls ships behind
-`http-server-tls`. NEW QUEUED CAMPAIGN: **DEC-334 runtime-config catalog** (php.ini-equivalent
-knob enumeration with defaults, project/global mapping — multi-round research with the dev).**
+full addendum in the DEC-331 register row + the DEC-335 row). Cluster builds in D10a order,
+then the DEC-333 perf roadmap. Ruling highlights: slice 3 now carries TWO breaking changes
+(respond retired + bare `#[Entry]` = `E-ENTRY-KIND-REQUIRED`, DEC-191 inference retired);
+`Core.Sandbox` BUILDS in v1 (pure-expr, tree-walker-only, `E-TRANSPILE-SANDBOX`); ArrayAccess
+ADOPTED (reopen flag) with overloaded indexers + the PHP `\ArrayAccess` glue; rustls ships
+behind `http-server-tls`; **DEC-335 two-tier top types `Any` + `Object`** (Any→`mixed`,
+Object→`object`, erased root class, membership = classes+enums+functions, both member-less —
+`#[ToString]` re-confirmed as the stringify designator). NEW QUEUED CAMPAIGN: **DEC-334
+runtime-config catalog** (php.ini-equivalent knob enumeration with defaults, project/global
+mapping — multi-round research with the dev).**
 Build cluster, in order (D10a):
 - **(1) `#[Invoke]` + `#[ToString]`** — attribute-designated conventional methods (overloadable
   `#[Invoke]`, VM-safe via existing overload dispatch; strict zero-param/`string` `#[ToString]`;
@@ -117,10 +120,10 @@ Build cluster, in order (D10a):
 - **(3) `#[Entry(kind: Cli|Web|Desktop|Mobile|Worker|Embedded)]`** + per-type `#[Config]`-injected
   typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
   contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`.
-- **Separate QUEUED design slices (specs frozen, same wave):** labeled `break`/`continue`
-  (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self` return), `eval`
-  (position spec: rejection + substitutes + use-case-gated `Core.Sandbox` avenue), ArrayAccess
-  (`#[ArrayGet]`/`#[ArraySet]`).
+- **Separate QUEUED design slices (specs frozen, same wave + DEC-335):** labeled
+  `break`/`continue` (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self`
+  return), `eval` (position spec: rejection + substitutes; `Core.Sandbox` builds in v1),
+  ArrayAccess (`#[ArrayGet]`/`#[ArraySet]`), **two-tier top types `Any`+`Object` (DEC-335)**.
 - **Env:** real PHP 8.5.8 built from source in-container (D10d); `toolchain.env` container-aware. The
   8.5.8 oracle surfaced + FIXED a DEC-329.3 byte-identity regression (`Reflect.className` on an enum
   variant: PHP `Color_Green` vs interp `Green`).
@@ -167,7 +170,7 @@ STABLE-BOX diagnosis only (a memo lever was tried and REVERTED on measured evide
 10; candidate: packed-stride flat-list layout slice; container noise now disqualifies
 close-margin work there — `PHORJ_JIT_DISASM=1` shipped for that session).
 **RULED ROADMAP (DEC-333 + the DEC-331 interleave, 2026-07-23): FIRST the DEC-331 build
-cluster once its frozen specs are dev-ruled (`docs/specs/2026-07-23-*.md`, seven specs —
+cluster — its specs are dev-ruled (`docs/specs/2026-07-23-*.md`, eight specs incl. DEC-335 —
 D10a order: Invoke/ToString → Rich Request → Entry-kinds/serve/TLS), THEN the perf roadmap:
 (1) Json-ADT JIT slice (flips
 jsonround/deepjson — enum cells with string/map/list payloads via W7 Dyn, `Map<string,Dyn>`,
