@@ -36,7 +36,9 @@ if (x instanceof Object o) { ... }    // true for ANY reference value
 
 - **Subtyping lattice**: `C <: Object <: Any` for every class `C`; enum types and function
   types `<: Object`; primitives (`int`/`float`/`bool`/`string`) and collections
-  (`List`/`Map`/`Set`) `<: Any` only. `null` is in neither — `Any?`/`Object?` as usual.
+  (`List`/`Map`/`Set`) `<: Any` only. `null` is in neither — `Any?`/`Object?` as usual
+  (DERIVED from phorj's orthogonal nullability, not a separate ruling — flag at build if it
+  surprises).
 - **Both are MEMBER-LESS** (per the D9b/P2 ruling — `#[ToString]` stays the designator):
   no default `toString`, no universal `equals`/`hashCode`. `E-NO-TOSTRING` stays strict —
   an `Any`/`Object` value in string context is an error until narrowed to a stringifiable
@@ -49,8 +51,10 @@ if (x instanceof Object o) { ... }    // true for ANY reference value
   class instances + enum values + function values. This makes the PHP leg byte-identical
   with ZERO shims by construction.
 - **`instanceof`**: `x instanceof Object` is special-cased (like interfaces) — true iff the
-  runtime value is a reference value. `x instanceof Any` = `E-INSTANCEOF-ANY` compile error
-  (always-true dead test).
+  runtime value is a reference value. `x instanceof Any` is an always-true dead test —
+  proposed handling: `E-INSTANCEOF-ANY` compile error (PENDING, dev rules at build pickup —
+  Invariant 15: a new user-visible diagnostic is not self-decided; alternative is constant-
+  folding to `true`).
 - **Unions**: any member type of a union flows into `Any` as usual; `Any` inside a union is
   redundant (build detail: warn or fold — fixed at build).
 
@@ -77,8 +81,17 @@ if (x instanceof Object o) { ... }    // true for ANY reference value
 
 ## 4. Faults / diagnostics
 
-`E-INSTANCEOF-ANY` (compile-time). Everything else reuses existing type-error machinery
-(`E-TYPE` on bad flows into `Object`, standard narrowing requirements). No new runtime faults.
+`E-INSTANCEOF-ANY` (compile-time — PENDING per §2, dev rules the error-vs-fold choice at
+build). Everything else reuses existing type-error machinery (`E-TYPE` on bad flows into
+`Object`, standard narrowing requirements). No new runtime faults.
+
+**Reserved-name reconciliation (blast radius, `KNOWN_ISSUES.md` §E-RESERVED-NAME):** the
+existing guard rejects PHP type words — including `object` — as user class/enum/interface/
+trait names, and PHP's reserved-word matching is case-insensitive. `Object` and `Any` now
+become BUILT-IN type names: user redeclaration (`class Object {}`, `class Any {}`) must be
+rejected (extend `E-RESERVED-NAME` or the existing built-in-shadowing error — exact channel
+fixed at build) and the KNOWN_ISSUES row updated in the build commit. Erasure already keeps
+the PHP leg safe (no `class Object` is ever emitted).
 
 ## 5. Examples & tests (Inv 9)
 
@@ -87,7 +100,8 @@ a class instance, an enum value, and a function value + `instanceof` narrowing +
 `new Object()` sentinel) + README row; differential across backends incl. the bare-Object
 equality case; checker negatives (`Object x = 42`, `Object y = [1,2]`, un-narrowed use,
 `instanceof Any`); transpile snapshot (`mixed`/`object` hints, `is_object`, `\stdClass`);
-lift round-trip of a PHP `object`-hinted API.
+lift round-trip of a PHP `object`-hinted API. (The `instanceof Any` negative test lands with
+whichever handling the dev rules per §2/§4.)
 
 ## 6. RULED (dev, 2026-07-23)
 
