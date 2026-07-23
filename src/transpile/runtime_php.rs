@@ -125,17 +125,9 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_reflect_class_name {
-            // `Reflect.className` — runtime class name for an object, else null. Mirrors the Rust
-            // `reflect_class_name` arm: a closure is is_object in PHP but reports as not-a-class
-            // (null) on both sides, so it is excluded. Single-evaluates `$v`. Tier-1 only (`php -n`).
-            self.line("function __phorj_class_name($v) {");
-            self.indent += 1;
-            self.line("if (is_object($v) && !($v instanceof \\Closure)) { return get_class($v); }");
-            self.line("return null;");
-            self.indent -= 1;
-            self.line("}");
-        }
+        // `Reflect.className` helper (DEC-329.3 variant-scoped-class parity) lives with the other
+        // reflect emitters in `runtime_tables.rs`; the gate is inside.
+        self.emit_class_name_helper();
         if self.uses_reflect_tables {
             self.emit_reflect_table();
         }

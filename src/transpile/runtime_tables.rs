@@ -337,4 +337,42 @@ impl Transpiler {
         self.indent -= 1;
         self.line("}");
     }
+
+    /// `Reflect.className($v)` — object's runtime class name, else null (closures null on both sides).
+    /// DEC-329.3 fallout: an enum variant is a scoped PHP class (`Color_Green`), so raw `get_class`
+    /// diverges from the interpreter's bare variant (`Green`). The `$variants` map (scoped LEAF → bare,
+    /// built from `variant_fields`; keys unique per the `E-TRANSPILE-VARIANT-COLLISION` guard) restores
+    /// parity; a regular class is absent from the map and falls through unchanged. Tier-1 (`php -n`).
+    pub(super) fn emit_class_name_helper(&mut self) {
+        if !self.uses_reflect_class_name {
+            return;
+        }
+        let mut rows: Vec<String> = self
+            .variant_fields
+            .keys()
+            .map(|(en, v)| {
+                format!(
+                    "'{}' => '{}',",
+                    super::php_scoped_variant_name(en, v),
+                    super::last_segment(v)
+                )
+            })
+            .collect();
+        rows.sort();
+        self.line("function __phorj_class_name($v) {");
+        self.indent += 1;
+        self.line("if (!is_object($v) || $v instanceof \\Closure) { return null; }");
+        self.line("$c = get_class($v);");
+        self.line("static $variants = [");
+        self.indent += 1;
+        for r in rows {
+            self.line(&r);
+        }
+        self.indent -= 1;
+        self.line("];");
+        self.line("$p = strrpos($c, '\\\\');");
+        self.line("return $variants[$p !== false ? substr($c, $p + 1) : $c] ?? $c;");
+        self.indent -= 1;
+        self.line("}");
+    }
 }

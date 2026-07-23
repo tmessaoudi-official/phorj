@@ -54,7 +54,11 @@ QUEUED design slices: labeled break/continue, typed LSB. ON HOLD (spec tomorrow)
 oracle: `PHORJ_PHP=<scratchpad>/php85/php-8.5.8/sapi/cli/php` (EPHEMERAL — rebuild via
 `scripts` scratchpad `build-php85.sh` after a container reset). `toolchain.env` now CONTAINER-AWARE
 (stack path primary → on-PATH `php8.5` fallback → loud warn; explicit `PHORJ_PHP` always wins). The
-2 formerly env-skipped legs (decimal.phg, as-primitives.phg) now RUN here.
+2 formerly env-skipped legs (decimal.phg, as-primitives.phg) now RUN here. **The 8.5.8 oracle
+immediately surfaced a REAL byte-identity regression** (DEC-329.3 fallout): `Reflect.className` on an
+enum variant returned the scoped PHP class `Color_Green` vs the interpreter's `Green` — FIXED
+(`__phorj_class_name` maps scoped-leaf→bare from `variant_fields`; reflect helper M-Decomp-moved to
+`runtime_tables.rs`). Full workspace suite now 100% green here (1887+ passed, 0 failed).
 
 **TONIGHT (dev directive, asleep): work ONLY on 100%-clear, already-specced items** — perf, sugar,
 PHP-parity with NO open design question. Nothing needing a ruling.

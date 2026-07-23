@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Reflect.className` on an enum variant: PHP leg ≠ interpreter (DEC-329.3 fallout)
+
+`Reflect.className(variant)` returned the enum-scoped PHP class name (`Color_Green`) on the
+transpiled PHP leg while the interpreter/VM return the bare variant name (`Green`) — a byte-identity
+divergence introduced when DEC-329.3 made PHP variant classes enum-scoped, and surfaced by gating
+against a real PHP 8.5.8 oracle. The `__phorj_class_name` helper now maps a scoped variant-class leaf
+back to its bare variant (built from `variant_fields`; keys unique per the `E-TRANSPILE-VARIANT-COLLISION`
+guard); regular class instances fall through `get_class` unchanged. Regression-locked by
+`examples/guide/reflect.phg` (differential, 3-leg). The reflect helper was M-Decomp-moved from
+`runtime_php.rs` into `runtime_tables.rs` beside the other reflect emitters (Invariant 13).
+
 ### Added — DEC-320 v1: `phg build --php` — transpile INTO a live PHP app (the TS→JS playbook)
 
 `phg build <entry> --php` emits a `.php` SIBLING per type-declaring `.phg` (PSR-4 paths, so humans
