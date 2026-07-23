@@ -222,6 +222,29 @@ window-less hot shape ever matters). Byte-identity: 6 tests in `src/jit/tests/ex
 (hits>0 both shapes, tie-break first-wins, runtime-empty receiver → default, window-less VM
 fallback parity, selector-overflow fault parity) + the differential.
 
+## UPDATE 8 (2026-07-23, later): setdifference / setunion FLIPPED — memoized flat-set ops
+
+| feature | before | after | how |
+|---|---|---|---|
+| setdifference | 0.45× | **40.33× WIN** (264.6M → 6.6M ns) | memoized flat×flat build, entries 24..32 |
+| setunion | 0.66× | **60.82× WIN** (414.5M → 6.8M ns) | same, entries 32..40 |
+
+The mapmerge discipline applied to sets: sealed flat sets are immutable + bump-pinned, so
+`Set.difference`/`Set.union` are pure functions of the handle pair — memoized per `(a, b, op)`
+(inline direct-mapped lines in the widened memo table, entries 24..32 diff / 32..40 union —
+SEPARATE ranges so both ops on the same pair never alias — backed by the full `memo_setop`
+map: evictions re-install, never re-seal). Results are fresh sealed flat sets built by
+`seal_set_keys` (extracted from the relocated `rt_u_set_seal` — single writer). The result is
+a bucket table with NO insertion order: sound because every admitted `IntSet` consumer
+(`size`/`contains`/these ops) is order-insensitive and set kinds never escape the unboxed
+graph; order-observing paths run on the VM. New narrow `Kind::SetList` covers the benches'
+rotating-operand shape `bs[i % 4]` (MakeList over `IntSet` + Index with a FLAT_SET word
+guard); `Set.size` reads the flat handle's count bits inline. Regression checks in the same
+run: `setintersection` 1.40× WIN (untouched), `listcontains` 1.99× WIN (holds). Byte-identity:
+5 tests in `src/jit/tests/set_ops.rs` (hits>0 both shapes, both-ops-same-pair no-alias,
+results answering `Set.contains` + chained ops, disjoint/subset/empty-result edges) + the
+differential.
+
 ## Interpreter matrix (dev ask 2026-07-23): phg without JIT vs php without opcache/JIT
 
 Same harness, new knobs (`MICROBENCH_PHG_ARGS='--no-jit'|'--tree-walker'`, `MICROBENCH_PHP_JIT=0`).
