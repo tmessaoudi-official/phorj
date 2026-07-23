@@ -187,7 +187,7 @@ fn reachable(code: &[Op]) -> Vec<bool> {
 /// drive off it, so the two can never drift apart. NOTE: the fall-through after an unconditional
 /// `Jump` / a `Return` is NOT a leader (it is only reachable via an explicit branch, which adds it as
 /// a target if live) — matching `reachable`.
-fn leaders(code: &[Op], reach: &[bool]) -> Vec<bool> {
+fn leaders(code: &[Op], reach: &[bool], consts: &[Value]) -> Vec<bool> {
     let n = code.len();
     let mut is_leader = vec![false; n];
     if n > 0 {
@@ -203,6 +203,13 @@ fn leaders(code: &[Op], reach: &[bool]) -> Vec<bool> {
                     is_leader[*t] = true;
                 }
             }
+            // A `??`-fused maxBy/minBy window's OWN conditional jump is consumed by the fused
+            // vertical (analyze + emit skip the whole window through the same recognizer), so
+            // it must not mint leaders — a leader-created Cranelift block nothing ever fills
+            // would fail finalization. The recognizer indexes the window by its CALL ip, so
+            // `ip - 4` is the candidate call site of a window whose jump sits at `ip`.
+            Op::JumpIfFalse(_)
+                if ip >= 4 && extreme_by_coalesce_window(code, consts, ip - 4).is_some() => {}
             Op::JumpIfFalse(t) => {
                 if *t < n {
                     is_leader[*t] = true;
@@ -217,6 +224,71 @@ fn leaders(code: &[Op], reach: &[bool]) -> Vec<bool> {
         }
     }
     is_leader
+}
+
+/// Recognize the `List.maxBy(xs, f) ?? <int const>` FUSION WINDOW at call ip `ip` — the exact
+/// Coalesce desugar the compiler emits (see `compiler/expr/binary.rs`):
+/// `CallNative(maxBy|minBy, 2); GetLocal(s); Const(Null); Eq; JumpIfFalse(ip+7);
+/// Const(Int d); SetLocal(s)`. Returns `(is_max, default)` when the window matches AND no
+/// other jump/handler in the function targets its interior (`ip+1 ..= ip+6`) — the fused
+/// vertical emits ONE straight-line total fold and both walks skip the six desugar ops, so an
+/// external edge into the window would have no block to land in (fail closed: no fusion, the
+/// whole function stays on the VM). This is what makes the nullable `maxBy: T?` result
+/// representable in the unboxed subset without an optional Kind: fused with its `??` default,
+/// the result is a total `Int`.
+fn extreme_by_coalesce_window(code: &[Op], consts: &[Value], ip: usize) -> Option<(bool, i64)> {
+    let is_max = match code.get(ip) {
+        Some(Op::CallNative(id, 2)) => {
+            if unboxed_native_is_list_max_by(*id) {
+                true
+            } else if unboxed_native_is_list_min_by(*id) {
+                false
+            } else {
+                return None;
+            }
+        }
+        _ => return None,
+    };
+    let (Some(Op::GetLocal(s1)), Some(Op::Eq), Some(Op::SetLocal(s2))) =
+        (code.get(ip + 1), code.get(ip + 3), code.get(ip + 6))
+    else {
+        return None;
+    };
+    if s1 != s2 {
+        return None;
+    }
+    match code.get(ip + 2) {
+        Some(Op::Const(c)) if matches!(consts.get(*c), Some(Value::Null)) => {}
+        _ => return None,
+    }
+    match code.get(ip + 4) {
+        Some(Op::JumpIfFalse(t)) if *t == ip + 7 => {}
+        _ => return None,
+    }
+    let default = match code.get(ip + 5) {
+        Some(Op::Const(c)) => match consts.get(*c) {
+            Some(Value::Int(v)) => *v,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    // No external edge may land inside the consumed window (its own jump exits to ip+7).
+    for (j, op) in code.iter().enumerate() {
+        let t = match op {
+            Op::Jump(t) | Op::PushHandler(t) => *t,
+            Op::JumpIfFalse(t) => {
+                if j != ip + 4 && (ip..=ip + 5).contains(&j) {
+                    return None; // impossible by the shape checks — defensive
+                }
+                *t
+            }
+            _ => continue,
+        };
+        if j != ip + 4 && (ip + 1..=ip + 6).contains(&t) {
+            return None;
+        }
+    }
+    Some((is_max, default))
 }
 
 /// After a call whose result `res` is a `0 = ok / 1 = fault` status, branch to the shared fault-exit

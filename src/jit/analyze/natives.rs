@@ -68,6 +68,95 @@ pub(crate) fn unboxed_native_is_list_filter(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.List" && nf.name == "filter" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.List.maxBy` (the maxby flip — ONLY as the `?? <int>`
+/// fusion window, where the nullable `T?` result becomes a total Int fold)?
+pub(crate) fn unboxed_native_is_list_max_by(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "maxBy" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.List.minBy` (the minby flip — same fusion-window-only
+/// admission as `maxBy`)?
+pub(crate) fn unboxed_native_is_list_min_by(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "minBy" && nf.pure)
+}
+
+/// Admit a FUSED `List.maxBy/minBy(xs, f) ?? <int>` window (see `extreme_by_coalesce_window`):
+/// pop the static `Fn`/`FnCap1` callee (1 param, `Int` selector — keys compare with the same
+/// strict first-wins fold as the kernel), pop the `IntList` receiver, push the TOTAL `Int`
+/// result. The desugar's scratch slot must be exactly the call result's stack position (the
+/// compiler emits `height - 1`; anything else is not the Coalesce shape — fail closed). The
+/// caller then skips the six consumed desugar ops. A throwing graph stays on the VM.
+pub(crate) fn admit_extreme_by(
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
+    disc: &mut UbDiscovery,
+    kinds: &mut Vec<Kind>,
+    func_idx: usize,
+    ip: usize,
+) -> Result<(), JitError> {
+    let code = &program.functions[func_idx].chunk.code;
+    let consts = &program.functions[func_idx].chunk.consts;
+    if crate::jit::extreme_by_coalesce_window(code, consts, ip).is_none() {
+        return Err(JitError::Unsupported(
+            "unboxed: maxBy/minBy outside the ?? fusion window (nullable result, deferred)"
+                .to_string(),
+        ));
+    }
+    if info.thrown_class.is_some() {
+        return Err(JitError::Unsupported(
+            "unboxed: maxBy/minBy in a throwing graph (deferred)".to_string(),
+        ));
+    }
+    let f = match kinds.pop() {
+        Some(Kind::Fn(f)) | Some(Kind::FnCap1(f)) => f,
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed maxBy/minBy callee kind {other:?} (deferred)"
+            )))
+        }
+    };
+    if program.functions[f].arity - program.functions[f].n_captures != 1 {
+        return Err(JitError::Unsupported(
+            "unboxed: maxBy/minBy selector arity != 1 (VM renders any fault)".to_string(),
+        ));
+    }
+    // Seed the selector's param kinds (the fused loop passes one Int element; an FnCap1's
+    // capture was already admitted Int at `MakeClosure`) — without this, an IDENTITY selector
+    // (`x => x`, the common max-element shape) returns its raw param and `ret_of` never
+    // resolves past Unknown in the fixpoint.
+    disc.call_sigs
+        .push((f, vec![Kind::Int; program.functions[f].arity]));
+    let rk = info.ret_of(f);
+    if rk != Kind::Int && rk != Kind::Unknown {
+        return Err(JitError::Unsupported(format!(
+            "unboxed: maxBy/minBy selector return kind {rk:?} (deferred)"
+        )));
+    }
+    match kinds.pop() {
+        Some(Kind::IntList(_)) => {}
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed maxBy/minBy receiver kind {other:?}"
+            )))
+        }
+    }
+    match code.get(ip + 1) {
+        Some(Op::GetLocal(s)) if *s == kinds.len() => {}
+        _ => {
+            return Err(JitError::Unsupported(
+                "unboxed: maxBy/minBy ?? scratch slot is not the call result (deferred)"
+                    .to_string(),
+            ))
+        }
+    }
+    kinds.push(Kind::Int);
+    Ok(())
+}
+
 /// Admit a List HOF (`map`/`count`/`sumBy`/`filter`, arity-2 `CallNative`) into the unboxed
 /// subset: a STATIC lambda (`Fn`/`FnCap1`, 1 declared param) over an `IntList` → a native loop,
 /// one direct call per element. Return-kind rule: map/sumBy `Int` only; filter `Bool` only;

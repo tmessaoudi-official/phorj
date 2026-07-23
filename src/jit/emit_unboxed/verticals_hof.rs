@@ -212,6 +212,113 @@ fn ub_list_walk_setup(
     )
 }
 
+/// The ??-FUSED `List.maxBy`/`minBy` fold (the maxby/minby flips): the same inline
+/// `(addr, stride)` walk, one direct selector call per element, and a FIRST-WINS strict
+/// extreme fold — the running best is replaced only on a STRICTLY better key (`sgt` for max,
+/// `slt` for min; parity-affecting tie-break, see `list_extreme_by`'s kernel doc) with the
+/// first element forced in via `rem == count`. The nullable `T?` result is made TOTAL by the
+/// fused `?? <int>` window: an empty list yields `default` (exactly what `null ?? default`
+/// evaluates to), so the pushed kind is a plain `Int` — no optional Kind needed. A boxed list
+/// → code 5 (VM redo).
+#[allow(clippy::too_many_arguments)] // emit plumbing
+pub(super) fn arm_list_extreme_by(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    fn_refs: &[Option<FuncRef>],
+    ctx: ClValue,
+    depth: ClValue,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    info: &UbGraphInfo,
+    is_max: bool,
+    default: i64,
+) -> Result<(), JitError> {
+    let (fv, fk) = ub_pop(b, vars, fvars, kinds)?;
+    let (f, has_cap) = match fk {
+        Kind::Fn(f) => (f, false),
+        Kind::FnCap1(f) => (f, true),
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed maxBy/minBy callee kind {other:?}"
+            )))
+        }
+    };
+    let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
+    if !matches!(lk, Kind::IntList(_)) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed maxBy/minBy receiver kind {lk:?}"
+        )));
+    }
+    let (addr0, count, stride) = ub_list_walk_setup(b, ec, lv);
+    let header = b.create_block();
+    b.append_block_param(header, types::I64); // addr
+    b.append_block_param(header, types::I64); // remaining
+    b.append_block_param(header, types::I64); // best key
+    b.append_block_param(header, types::I64); // best element
+    let bodyb = b.create_block();
+    let exitb = b.create_block();
+    b.append_block_param(exitb, types::I64);
+    let zero = b.ins().iconst(types::I64, 0);
+    b.ins().jump(
+        header,
+        &[addr0.into(), count.into(), zero.into(), zero.into()],
+    );
+    b.switch_to_block(header);
+    let addr = b.block_params(header)[0];
+    let rem = b.block_params(header)[1];
+    let bkey = b.block_params(header)[2];
+    let belem = b.block_params(header)[3];
+    b.ins().brif(rem, bodyb, &[], exitb, &[belem.into()]);
+    b.switch_to_block(bodyb);
+    let elem = b.ins().load(types::I64, MemFlagsData::new(), addr, 0);
+    let cargs = if has_cap { vec![fv, elem] } else { vec![elem] };
+    emit_call_to(
+        b,
+        ec,
+        fn_refs,
+        ctx,
+        depth,
+        vars,
+        fvars,
+        kinds,
+        f,
+        cargs,
+        info.ret_of(f),
+        None,
+    )?;
+    let (key, _kk) = ub_pop(b, vars, fvars, kinds)?;
+    // Replace ONLY on a strictly better key; the FIRST element is forced in (its `bkey` seed
+    // is dead) via `rem == count` — the selector still ran for it, exactly once.
+    let cc = if is_max {
+        IntCC::SignedGreaterThan
+    } else {
+        IntCC::SignedLessThan
+    };
+    let better = b.ins().icmp(cc, key, bkey);
+    let first = b.ins().icmp(IntCC::Equal, rem, count);
+    let take = b.ins().bor(better, first);
+    let nkey = b.ins().select(take, key, bkey);
+    let nelem = b.ins().select(take, elem, belem);
+    let addr1 = b.ins().iadd(addr, stride);
+    let rem1 = b.ins().iadd_imm_s(rem, -1);
+    b.ins().jump(
+        header,
+        &[addr1.into(), rem1.into(), nkey.into(), nelem.into()],
+    );
+    b.switch_to_block(exitb);
+    let best = b.block_params(exitb)[0];
+    // Empty list → the fused `??` default (the `null ?? default` byte-identical result).
+    let dflt = b.ins().iconst(types::I64, default);
+    let nonempty = b.ins().icmp_imm_s(IntCC::NotEqual, count, 0);
+    let res = b.ins().select(nonempty, best, dflt);
+    if lk.is_owned_handle() {
+        emit_release(b, ec, h, lv);
+    }
+    ub_push(b, vars, fvars, kinds, res, Kind::Int)
+}
+
 /// `List.reduce(xs, seed, f)` with a STATIC 2-arg lambda (the fold vertical): the same inline
 /// `(addr, stride)` walk as `arm_list_hof`, but the accumulator is SEEDED from the `seed` operand and
 /// each step calls `f(acc, elem)` — the running `acc` is PREPENDED to the element (an `FnCap1` capture

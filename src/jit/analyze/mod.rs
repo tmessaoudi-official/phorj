@@ -377,7 +377,7 @@ pub(super) fn range_proven_ops(func: &crate::chunk::Function) -> Vec<bool> {
 /// collector admits are modeled; any other op ends the scan.
 fn entry_prefix_const_inits(func: &crate::chunk::Function, reach: &[bool]) -> Vec<Option<i64>> {
     let code = &func.chunk.code;
-    let is_leader = leaders(code, reach);
+    let is_leader = leaders(code, reach, &func.chunk.consts);
     let mut st: Vec<Option<i64>> = vec![None; func.arity];
     for (ip, op) in code.iter().enumerate() {
         if ip > 0 && is_leader[ip] {
@@ -761,7 +761,7 @@ pub(super) fn owned_this_taken_fields(
         })
         .collect();
     let reach = reachable(code);
-    let is_leader = leaders(code, &reach);
+    let is_leader = leaders(code, &reach, &program.functions[func_idx].chunk.consts);
     let mut last_read: Vec<Option<usize>> = vec![None; nfields];
     let mut looped: Vec<bool> = vec![false; nfields];
     let mut escape_reads: Vec<bool> = vec![false; nfields];
@@ -1001,9 +1001,10 @@ pub(super) fn unboxed_analyze(
     disc: &mut UbDiscovery,
 ) -> Result<UbAnalysis, JitError> {
     let code = &program.functions[func_idx].chunk.code;
+    let consts = &program.functions[func_idx].chunk.consts;
     let n = code.len();
     let reach = reachable(code);
-    let is_leader = leaders(code, &reach);
+    let is_leader = leaders(code, &reach, consts);
     // L2b: the field-TAKE mask for an owned-`this` method (None otherwise) — shared with
     // the emit dispatch (same function, same inputs: mirror-safe by construction).
     let this_taken: Option<Vec<Option<usize>>> = match param_kinds.first() {
@@ -1424,6 +1425,15 @@ pub(super) fn unboxed_analyze(
                     }
                 }
                 Op::CallNative(id, 2)
+                    if unboxed_native_is_list_max_by(*id) || unboxed_native_is_list_min_by(*id) =>
+                {
+                    // The ??-FUSED extreme fold: admission requires the full Coalesce window,
+                    // then the six consumed desugar ops are skipped (the emit mirrors with its
+                    // range skip; `leaders` suppressed the window's own jump).
+                    admit_extreme_by(program, info, disc, &mut kinds, func_idx, ip)?;
+                    ip += 6;
+                }
+                Op::CallNative(id, 2)
                     if unboxed_native_is_list_map(*id)
                         || unboxed_native_is_list_count(*id)
                         || unboxed_native_is_list_sum_by(*id)
@@ -1459,25 +1469,7 @@ pub(super) fn unboxed_analyze(
                     admit_str_predicate(&mut kinds, 1, "Validation")?;
                 }
                 Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => {
-                    // The maphas vertical (mirrors `Op::Index` map arm minus the value): a `Str` key
-                    // over a `StrIntMap` → `Bool` (present?); the map is a QUERY, not consumed.
-                    match kinds.pop() {
-                        Some(Kind::Str(_)) => {}
-                        other => {
-                            return Err(JitError::Unsupported(format!(
-                                "unboxed Map.has key kind {other:?}"
-                            )))
-                        }
-                    }
-                    match kinds.pop() {
-                        Some(Kind::StrIntMap(_)) => {}
-                        other => {
-                            return Err(JitError::Unsupported(format!(
-                                "unboxed Map.has receiver kind {other:?}"
-                            )))
-                        }
-                    }
-                    kinds.push(Kind::Bool);
+                    admit_map_has(&mut kinds)?;
                 }
                 Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => {
                     // The setcontains vertical (Set.of): re-tag a FRESH OWNED flat int list as an IntSet
