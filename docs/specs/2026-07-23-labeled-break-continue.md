@@ -1,6 +1,6 @@
 # SPEC — Labeled `break` / `continue` (DEC-331 D10c design slice)
 
-> Status: **SPEC FROZEN, awaiting dev ruling.** D10c ruling: the safe, structured, fully
+> Status: **SPEC RULED (dev, 2026-07-23) — BUILD-READY.** D10c ruling: the safe, structured, fully
 > typeable "goto for nested-loop escape"; RAW goto stays rejected.
 
 ## 1. Surface (proposed — cross-language scan per META-7)
@@ -58,8 +58,7 @@ like a type annotation), Rust `'outer:` (tick is alien to phorj). **Recommended:
 re-eval); checker negatives for all three errors; transpile snapshot proving `break 2`
 round-trips (lift → run → transpile) byte-identically.
 
-## 5. PENDING for dev
+## 5. RULED (dev, 2026-07-23)
 
-- **P1**: the surface form — `label@ for` (recommended) vs `label: for`.
-- **P2**: allow labels on plain blocks with `break label@` (Kotlin/Rust allow; recommended:
-  NO for v1 — loops only, smallest surface).
+- **P1 → `label@`** (Kotlin-style, as specced in §1).
+- **P2 → loops only in v1** (while/for/loop; block labels deferred on demand).

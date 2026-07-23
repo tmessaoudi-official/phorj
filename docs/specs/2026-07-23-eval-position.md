@@ -1,6 +1,6 @@
 # SPEC — `eval`: position paper (DEC-331 D10c, the "spec tomorrow" hold)
 
-> Status: **POSITION SPEC, awaiting dev ruling.** D10c ruling being elaborated: full `eval`
+> Status: **RULED (dev, 2026-07-23): rejection + substitutes ACCEPTED; `Core.Sandbox` BUILDS IN V1** (scope change from the frozen recommendation — see §5). D10c ruling being elaborated: full `eval`
 > stays REJECTED (breaks the closed-language / no-RCE / soundness guarantee); the only open
 > avenue is a sandboxed typed sub-interpreter, gated on a concrete use case.
 
@@ -44,18 +44,20 @@ equivalent; a `__phorj_*` reimplementation of the checker in PHP is out of scope
 using it are native-only, loudly. (5) fuel/step limit + depth cap (no DoS via `while(true)` if
 loops ever land).
 
-**Gate (per the D10c ruling): this ships ONLY against a concrete use case.** The register
-records none today. Candidates worth waiting for: user formula fields (pricing/report tools),
-safe config expressions. Until one is real, `Core.Sandbox` stays a frozen design.
+**RULED (dev, 2026-07-23): `Core.Sandbox` BUILDS IN V1** with exactly this scope — pure
+expressions only, caller-bound environment, tree-walker-only execution, `E-TRANSPILE-SANDBOX`
+(native-only, loud), fuel/step caps. The dev accepted the four compromises explicitly
+(native-only programs; slowest engine by design; a frozen public API over checker internals;
+API-shape risk without a live consumer). Target consumers: user formula fields, pricing
+rules, report expressions, config arithmetic.
 
-## 4. Recommendation
+## 4. Final position (ruled)
 
-Lock §1 as the permanent rejection rationale (FEATURES/KNOWN_ISSUES pointer), publish §2 as
-the "instead of eval" doc section, keep §3 frozen-not-queued. Revisit only on a named use
-case (ADJUDICATION as always).
+§1 = the permanent rejection rationale (FEATURES/KNOWN_ISSUES pointer), §2 = the published
+"instead of eval" doc section, §3 = a V1 BUILD ITEM (not frozen).
 
-## 5. PENDING for dev
+## 5. RULED (dev, 2026-07-23)
 
-- **P1**: accept the recommendation (reject + substitutes doc + frozen sandbox design)?
-- **P2**: if `Core.Sandbox` is ever activated — v1 scope confirm: pure expressions only,
-  tree-walker-only, `E-TRANSPILE-SANDBOX` (all three recommended above).
+- **P1 → accepted**: full-eval rejection + substitutes doc locked.
+- **P2 → Core.Sandbox v1 BUILDS** (dev overrode the freeze recommendation after the
+  tradeoff re-ask): pure-expression scope, tree-walker-only, `E-TRANSPILE-SANDBOX`.

@@ -1,8 +1,8 @@
 # SPEC — `#[Invoke]` + `#[ToString]` (DEC-331 D9, build slice 1 of 3)
 
-> Status: **SPEC FROZEN, awaiting dev ruling (D10b: dev rules on each spec before any code).**
+> Status: **SPEC RULED (dev, 2026-07-23) — BUILD-READY.**
 > Rulings elaborated here: D9a (attribute-marked callability), D9b (`#[ToString]`), D9c
-> (overloaded invoke). Nothing in this spec re-decides a ruling; PENDING points are marked.
+> (overloaded invoke). All open points RULED — see §7.
 
 ## 1. Surface
 
@@ -75,10 +75,9 @@ function main(): void {
   lowers to the `#[ToString]` method call before backends (compile-time sugar, Invariant 5).
 - **Transpile — LADDER CHECK (owed to dev, Invariant 14/16):** PHP has ONE `__invoke` per class.
   - Single `#[Invoke]` → emit native `__invoke` (faithful, tier 1).
-  - MULTI `#[Invoke]` → **PENDING dev ruling, options**:
-    (a) *(recommended)* emit `__invoke(...$args)` + a `__phorj_invoke_dispatch` arity/type shim
-        (META-7: `__phorj_*` helpers are an accepted tool, trade surfaced);
-    (b) `E-TRANSPILE-MULTI-INVOKE` hard error (tier 2 quarantine);
+  - MULTI `#[Invoke]` → **RULED (§7): emit `__invoke(...$args)` + the
+    `__phorj_invoke_dispatch` arity/type shim** (META-7: `__phorj_*` helpers are an accepted
+    tool, trade surfaced and ruled);
   - `#[ToString]` → native `__toString` (faithful).
 - **Lift (PHP→phorj)**: `__invoke` lifts to `#[Invoke]` on a method named `invoke`;
   `__toString` lifts to `#[ToString]` on `toString`.
@@ -92,10 +91,11 @@ function main(): void {
 
 `examples/invoke_tostring.phg` (the §1 program) + README row; checker negative tests for all
 five errors; differential coverage via the example; transpile snapshot incl. the multi-invoke
-resolution once ruled.
+shim dispatch.
 
-## 7. PENDING for dev
+## 7. RULED (dev, 2026-07-23)
 
-- **P1**: multi-`#[Invoke]` PHP leg — shim (a) vs hard error (b) above.
-- **P2**: does `#[ToString]` auto-apply in `Conversion.toString(obj)` too (recommended: yes,
-  same lowering) or only in interpolation/print?
+- **P1 → (a) the `__phorj_invoke_dispatch` arity/type shim**: multi-`#[Invoke]` emits
+  `__invoke(...$args)` + the shim; single-`#[Invoke]` emits native `__invoke`.
+- **P2 → yes, everywhere**: `Conversion.toString(obj)` lowers to the same `#[ToString]` call —
+  one stringification story.

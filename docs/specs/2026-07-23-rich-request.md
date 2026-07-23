@@ -1,6 +1,6 @@
 # SPEC — Rich Request v1, incl. file uploads (DEC-331 D8, build slice 2 of 3)
 
-> Status: **SPEC FROZEN, awaiting dev ruling (D10b).** Elaborates D8a (eager+lazy switch),
+> Status: **SPEC RULED (dev, 2026-07-23) — BUILD-READY.** Elaborates D8a (eager+lazy switch),
 > D8b (first-wins + getAll), D8c (files in v1), D8d (the six confirmed defaults).
 
 ## 1. Surface
@@ -64,8 +64,8 @@ the access point (`None` / canonical fault). `RequestParsing` is a stdlib enum.
   call the same native builder — byte-identity by construction).
 - **Transpile — Ladder**: `serve` is already native-only (`E-TRANSPILE-SERVE`, D7a); Request
   therefore only exists behind serve → NO new transpile surface. The TYPE still transpiles
-  (class shape) for code that merely mentions it, but constructing one outside serve is not a
-  supported path in v1 (PENDING P2 below).
+  (class shape) for code that merely mentions it; userland construction is via the RULED
+  `Request.fake(...)` test builder (§7 P2) — the only non-serve constructor.
 - **Lift**: PHP superglobal reads (`$_GET['k']`, `$_POST`, `$_FILES`, `getallheaders()`) lift
   to the corresponding bag calls where the lifter already recognizes them; unrecognized
   patterns keep the existing lift behavior (no regression; incremental mapping table).
@@ -84,12 +84,12 @@ per bag (first-wins, getAll, case-insensitive headers, default overloads); multi
 tests (small inline + spill threshold + oversize rejection); eager-vs-lazy parity test (same
 program, both modes, identical output); migration of existing `examples/web/*`.
 
-## 7. PENDING for dev
+## 7. RULED (dev, 2026-07-23)
 
-- **P1**: `UploadedFile` spill threshold default (recommended: 256 KiB in-memory, then temp
-  file; cap always `maxBodySize`).
-- **P2**: is a `Request` constructible in userland for TESTS (`Request.fake(...)` builder,
-  recommended — enables handler unit tests without a socket) or serve-only in v1?
-- **P3**: `attributes` mutability — middleware writes via `req.attributes.set(k, v)`
-  (recommended; the ONE mutable bag, documented) vs a fully immutable Request + a
-  `withAttribute` copy.
+- **P1 → 256 KiB spill threshold** (in-memory below, temp-file above; cap = `maxBodySize`).
+  **PLUS a NEW dev directive → DEC-334**: enumerate and research the FULL php.ini-equivalent
+  runtime-knob catalog (every convertible setting, default values, project `phorj.json` vs
+  global config) — a dedicated multi-round research/design campaign with the dev; this spill
+  threshold and the ServeConfig fields become rows in that catalog.
+- **P2 → `Request.fake(...)` ships in v1** (handler unit tests without a socket).
+- **P3 → mutable `req.attributes.set(k, v)`** — the ONE documented mutable bag.

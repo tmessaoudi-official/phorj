@@ -3,9 +3,10 @@
 ## ▶▶ RESUME HERE (updated 2026-07-23, pre-compact) — read this block FIRST, then keep going
 
 **CURRENT STATE + NEXT WORK: jump to the "LIVE CURSOR" block in the 2026-07-23 session log
-below.** Speccing wave COMPLETE (7 frozen specs in `docs/specs/2026-07-23-*.md`, dev to rule);
-then the DEC-331 build cluster, then the DEC-333 roadmap (Json-ADT JIT → AOT M1-M3 → full
-A+C+D interpreter campaign). The perf campaign is CLOSED at 44 WIN / 4 LOSS (dev-box
+below.** Speccing wave COMPLETE AND RULED (7 specs in `docs/specs/2026-07-23-*.md`, all P-points
+answered — build-ready); then the DEC-331 build cluster, then the DEC-333 roadmap (Json-ADT
+JIT → AOT M1-M3 → full A+C+D interpreter campaign). New: DEC-334 config-catalog campaign
+QUEUED. The perf campaign is CLOSED at 44 WIN / 4 LOSS (dev-box
 canonical, scorecard UPDATE 10).
 
 **BRANCH:** `master` (single-dev, direct-to-master). **origin/master tip at writing:** `66c9375`
@@ -141,12 +142,16 @@ RECONCILIATION LANDED (dev ran all 48 micros): canonical ledger = 44 WIN / 4 LOS
 dbwork are WINs there (no codegen work needed); remaining: jsonround 0.31×/deepjson 0.95× (the
 queued Json-ADT JIT slice) + listcontains 0.85×/mapget 0.96× (stable-box diagnosis only — a
 memo lever was tried and REVERTED on measured evidence, scorecard UPDATE 10; container noise
-now disqualifies close-margin work). ▶▶ **LIVE CURSOR — DEC-333 RULED + SPECCING WAVE COMPLETE (2026-07-23, pre-compact).
-ALL SEVEN held specs are frozen in `docs/specs/2026-07-23-*.md` (invoke-tostring /
-rich-request / entry-kinds-serve-tls / labeled-break-continue / typed-lsb / eval-position /
-array-access), each with an explicit PENDING list. IMMEDIATE NEXT: dev rules on the specs
-(D10b), then BUILD ORDER (ruled): the DEC-331 cluster (D10a: Invoke/ToString → Rich Request →
-Entry-kinds/serve/TLS) FIRST, then the DEC-333 perf roadmap. Next PERF slice = Json-ADT JIT (jsonround/deepjson flips — enum cells with
+now disqualifies close-margin work). ▶▶ **LIVE CURSOR — SPECS RULED, BUILD-READY (2026-07-23, pre-compact). All seven specs in
+`docs/specs/2026-07-23-*.md` are DEV-RULED (every P-point answered — see each spec's §RULED +
+the DEC-331 addendum). BUILD ORDER (ruled): the DEC-331 cluster FIRST (D10a: Invoke/ToString →
+Rich Request → Entry-kinds/serve/TLS — note TWO breaking changes in slice 3: respond retired +
+`E-ENTRY-KIND-REQUIRED`), then the DEC-333 perf roadmap. Scope changes from the rulings:
+Core.Sandbox BUILDS in v1; ArrayAccess adopted (REOPEN flag) with overloads + PHP glue.
+NEW QUEUED: DEC-334 runtime-config catalog (php.ini-equivalent, multi-round research with
+dev). ONE OPEN SCHEDULING POINT: where the four design-slice builds
+(labeled/LSB/ArrayAccess/Sandbox) sit relative to DEC-333 — dev slots at pickup. Next PERF
+slice = Json-ADT JIT (jsonround/deepjson flips — enum cells with
 string/map/list payloads via W7 Dyn, `Map<string,Dyn>`, `JsonLazy` unboxed), then AOT M1-M3
 (`phg build --native`), then the FULL A+C+D interpreter campaign (--no-jit contract: beat
 PLAIN php; tree-walker inherit-only, oracle stays simple). `MICROBENCH_DOCKER_BOTH=1` shipped

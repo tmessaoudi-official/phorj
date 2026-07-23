@@ -1,6 +1,6 @@
 # SPEC — ArrayAccess: `#[ArrayGet]` / `#[ArraySet]` (DEC-331 D10c, the "spec tomorrow" hold)
 
-> Status: **SPEC FROZEN, awaiting dev ruling.** D10c candidate being elaborated: attribute-
+> Status: **SPEC RULED (dev, 2026-07-23) — BUILD-READY, with a REOPEN flag** (dev: adopted "but we might revisit — put it where we can reopen it later"; this header + the DEC-331 register addendum are that reopen hook). D10c candidate being elaborated: attribute-
 > designated indexers, consistent with the attribute-conventional model (`#[Invoke]`,
 > `#[ToString]`, `#[Entry]`, `#[Config]`).
 
@@ -32,8 +32,10 @@ float x = m[Pair.of(1, 2)];       // -> m.at(Pair.of(1, 2))
   method call; the KEY TYPE is the parameter type, the ELEMENT TYPE the return type — fully
   typed indexing (vs PHP's `mixed offsetGet(mixed)`).
 - `#[ArraySet]` on a 2-param `(key, value): void` method: `obj[k] = v` rewrites likewise.
-- At most ONE of each per class in v1 (`E-ARRAYACCESS-DUPLICATE`); overloaded indexers
-  (multiple key types) deferred — see P2. Strict signatures (`E-ARRAYACCESS-SIGNATURE`).
+- **OVERLOADED indexers ARE in v1** (ruled): multiple `#[ArrayGet]`/`#[ArraySet]` with
+  DISTINCT key types resolve statically by key type (the D9c `#[Invoke]`-overload machinery);
+  two with the SAME key type = `E-ARRAYACCESS-DUPLICATE`. Strict signatures
+  (`E-ARRAYACCESS-SIGNATURE`).
 - Read-only types: `#[ArrayGet]` without `#[ArraySet]` — `obj[k] = v` is then
   `E-NOT-INDEX-ASSIGNABLE` at compile time (PHP throws at runtime; we reject statically).
 - NO `offsetExists`/`offsetUnset` analogs in v1: existence is the key-type's job (`T?` return
@@ -51,10 +53,12 @@ float x = m[Pair.of(1, 2)];       // -> m.at(Pair.of(1, 2))
   calls. NO new `Op`. (The compiler's `Op::Index`/`SetIndexLocal` paths stay
   collection-only; the CTy-operand trap does not fire — `m[k]` types as the getter's return,
   Invariant 7 note recorded at build.)
-- **Transpile**: plain method calls (faithful, tier 1). OPTIONAL fidelity upgrade (P3): also
-  emit PHP `ArrayAccess` interface glue (`offsetGet`/`offsetSet` delegating to the methods)
-  so lifted-then-retranspiled code keeps `$m[$k]` syntax — recommended NO for v1 (plain calls
-  are already byte-identical; the glue adds surface for zero output difference).
+- **Transpile (ruled): plain method calls (tier 1) PLUS the PHP `ArrayAccess` glue** —
+  emitted classes `implement \ArrayAccess` with all four methods: `offsetGet`/`offsetSet`
+  delegate to the attributed methods (multi-key overloads dispatch via the same `__phorj_*`
+  shim pattern as multi-invoke), `offsetExists` = getter nullability (exact semantics fixed
+  at build), `offsetUnset` throws (phorj has no unset). Gain: PHP-side interop (frameworks
+  type-hinting `ArrayAccess`). phorj-compiled output is byte-identical either way.
 - **Lift**: PHP classes implementing `ArrayAccess` lift `offsetGet`→`#[ArrayGet]`,
   `offsetSet`→`#[ArraySet]`; `offsetExists`/`offsetUnset` lift as plain methods with a
   disclosure comment (no sugar) — closes a lift gap.
@@ -65,13 +69,9 @@ float x = m[Pair.of(1, 2)];       // -> m.at(Pair.of(1, 2))
 row; differential across backends; checker negatives (duplicate, bad signature, read-only
 assignment, attribute on a native/static); lift round-trip of a PHP `ArrayAccess` class.
 
-## 5. PENDING for dev
+## 5. RULED (dev, 2026-07-23)
 
-- **P1**: adopt `#[ArrayGet]`/`#[ArraySet]` as specced? (The alternative — rejecting
-  ArrayAccess entirely and pointing at named methods — remains open to you; this spec makes
-  the sugar cheap and fully static.)
-- **P2**: overloaded indexers (multiple `#[ArrayGet]` with different key types, mirroring
-  D9c invoke-overloading) — v1 (consistent) or defer (recommended: defer — smallest surface,
-  add on demand)?
-- **P3**: the PHP `ArrayAccess`-interface emission fidelity upgrade — v1 no (recommended) /
-  v1 yes.
+- **P1 → ADOPTED, with a REOPEN flag** ("we might revisit — put it where we can reopen it
+  later"): the reopen hook is this spec's header + the DEC-331 register addendum row.
+- **P2 → overloads IN v1** (distinct key types, D9c machinery).
+- **P3 → EMIT the `\ArrayAccess` glue** (PHP-side interop; costs accepted).
