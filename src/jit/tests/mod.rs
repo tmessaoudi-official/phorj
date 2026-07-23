@@ -10,9 +10,11 @@ use super::{compile_and_run, Compiled, JitError, JitRun, REDO_ON_VM};
 use crate::chunk::BytecodeProgram;
 use crate::value::Value;
 
+mod accumulator_elision;
 mod boxed;
 mod listcontains;
 mod math_verticals;
+mod range_and_overflow;
 mod sumby;
 mod unboxed_flow;
 mod unboxed_int;
