@@ -142,15 +142,19 @@ RECONCILIATION LANDED (dev ran all 48 micros): canonical ledger = 44 WIN / 4 LOS
 dbwork are WINs there (no codegen work needed); remaining: jsonround 0.31×/deepjson 0.95× (the
 queued Json-ADT JIT slice) + listcontains 0.85×/mapget 0.96× (stable-box diagnosis only — a
 memo lever was tried and REVERTED on measured evidence, scorecard UPDATE 10; container noise
-now disqualifies close-margin work). ▶▶ **LIVE CURSOR — SPECS RULED, BUILD-READY (2026-07-23, pre-compact). All seven specs in
+now disqualifies close-margin work). ▶▶ **LIVE CURSOR — SPECS RULED, BUILD-READY (2026-07-23, pre-compact). All EIGHT specs in
 `docs/specs/2026-07-23-*.md` are DEV-RULED (every P-point answered — see each spec's §RULED +
-the DEC-331 addendum). BUILD ORDER (ruled): the DEC-331 cluster FIRST (D10a: Invoke/ToString →
-Rich Request → Entry-kinds/serve/TLS — note TWO breaking changes in slice 3: respond retired +
-`E-ENTRY-KIND-REQUIRED`), then the DEC-333 perf roadmap. Scope changes from the rulings:
-Core.Sandbox BUILDS in v1; ArrayAccess adopted (REOPEN flag) with overloads + PHP glue.
-NEW QUEUED: DEC-334 runtime-config catalog (php.ini-equivalent, multi-round research with
-dev). ONE OPEN SCHEDULING POINT: where the four design-slice builds
-(labeled/LSB/ArrayAccess/Sandbox) sit relative to DEC-333 — dev slots at pickup. Next PERF
+the DEC-331 addendum + DEC-335). BUILD ORDER (ruled): the DEC-331 cluster FIRST (D10a:
+Invoke/ToString → Rich Request → Entry-kinds/serve/TLS — note TWO breaking changes in slice
+3: respond retired + `E-ENTRY-KIND-REQUIRED`), then the DEC-333 perf roadmap. Scope changes
+from the rulings: Core.Sandbox BUILDS in v1; ArrayAccess adopted (REOPEN flag) with overloads
++ PHP glue; **DEC-335 two-tier top types `Any`+`Object` RULED same day** (dev-initiated:
+Any→`mixed` top of all values, Object→`object` erased root class over classes+enums+functions,
+both member-less, `#[ToString]` re-confirmed, `new Object()`→`\stdClass`, `instanceof
+Object`→`is_object`; spec `2026-07-23-any-object-top-types.md`). NEW QUEUED: DEC-334
+runtime-config catalog (php.ini-equivalent, multi-round research with dev). ONE OPEN
+SCHEDULING POINT: where the FIVE design-slice builds
+(labeled/LSB/ArrayAccess/Sandbox/Any-Object) sit relative to DEC-333 — dev slots at pickup. Next PERF
 slice = Json-ADT JIT (jsonround/deepjson flips — enum cells with
 string/map/list payloads via W7 Dyn, `Map<string,Dyn>`, `JsonLazy` unboxed), then AOT M1-M3
 (`phg build --native`), then the FULL A+C+D interpreter campaign (--no-jit contract: beat

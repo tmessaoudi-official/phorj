@@ -2987,10 +2987,31 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   accepted the four compromises after the tradeoff re-ask); array-access (**ADOPTED with a
   REOPEN flag** ("might revisit"); **overloaded indexers IN v1** (D9c machinery); **PHP
   `\ArrayAccess` glue EMITTED** — interop gain accepted, offsetUnset throws). OPEN SCHEDULING
-  POINT (the one thing not yet sequenced, dev to slot at pickup): where the four ruled design
-  slices (labeled/LSB/ArrayAccess/Sandbox) build relative to the DEC-333 roadmap — the ruled
-  order so far is D10a cluster → DEC-333.
+  POINT (the one thing not yet sequenced, dev to slot at pickup): where the ruled design
+  slices (labeled/LSB/ArrayAccess/Sandbox — FIVE since DEC-335 added Any/Object) build
+  relative to the DEC-333 roadmap — the ruled order so far is D10a cluster → DEC-333.
 
+- **DEC-335 — TWO-TIER TOP TYPES `Any` + `Object` (dev-initiated + RULED 2026-07-23, three
+  AskUserQuestion rounds) — SPEC FROZEN (`docs/specs/2026-07-23-any-object-top-types.md`),
+  BUILD QUEUED with the design slices.** Dev proposal: "a global parent Object everything
+  derives from, like Java — so generics can span primitives or classes"; key reframe locked
+  during adjudication: generics ALREADY span primitives/classes (erasure + uniform Value) —
+  the tops add HETEROGENEITY + typeable "accepts anything" sinks. Rulings: **(P1a) BOTH
+  tiers** — `Any` = top of ALL values, `Object` = top of REFERENCE values (`C <: Object <:
+  Any`; primitives/collections are Any-only); **(P1b) Object = implicit root class, ERASED**
+  (`new Object()` legal → `\stdClass`, explicit `extends Object` legal no-op, `instanceof
+  Object` special-cased → `is_object($x)`; NO emitted PHP base class — a literal one would
+  break instanceof on vendor objects); **(P1c) Object membership = classes + enums +
+  functions** ("the more correct thing" — matches Java's own semantics AND PHP's `object`
+  hint; byte-identical with ZERO shims); **(P2) `#[ToString]` attribute KEPT** — the
+  attribute-vs-method fork was put to the dev explicitly (it had ridden in with the D9
+  premise unasked); both tops are MEMBER-LESS, `E-NO-TOSTRING` stays strict, the frozen
+  invoke-tostring spec stands untouched; **(P3) spec-now-then-build** — spec lands before
+  the DEC-331 cluster builds; the build slice joins the design-slice queue (now FIVE:
+  labeled/LSB/ArrayAccess/Sandbox/Any-Object; scheduling vs DEC-333 stays the one open
+  point). Transpile mapping: `Any`→`mixed`, `Object`→`object` (native hints, tier 1);
+  lift closes four gaps; JIT untouched (boxed path). Build watchpoint: bare-Object equality
+  must match the PHP leg (differential case ships with the slice).
 - **DEC-334 — RUNTIME-CONFIG CATALOG (php.ini-equivalent), dev-directed 2026-07-23 — QUEUED
   RESEARCH+DESIGN CAMPAIGN (multi-round, interactive).** Dev directive (verbatim intent, from
   the rich-request P1 ruling): "collect all the possible things that we should convert/use
