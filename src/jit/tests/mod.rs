@@ -13,6 +13,7 @@ use crate::value::Value;
 mod accumulator_elision;
 mod boxed;
 mod listcontains;
+mod map_materialize;
 mod math_verticals;
 mod range_and_overflow;
 mod sumby;

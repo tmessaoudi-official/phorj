@@ -11,18 +11,24 @@ use super::*;
 
 mod concat;
 mod enums;
+mod index_lists;
 mod list_contains;
 mod objects;
+mod refs;
 mod scalar;
 mod verticals;
 mod verticals_hof;
+mod verticals_map;
 
 use concat::*;
 use enums::*;
+use index_lists::*;
 use objects::*;
+use refs::*;
 use scalar::*;
 use verticals::*;
 use verticals_hof::*;
+use verticals_map::*;
 
 /// Copy-able per-function emit context shared by every op arm: the `UbCtx` pointer, the
 /// stable-header memflags, and the (optional) shared fault-exit / speculation-sticky handles.
@@ -526,37 +532,7 @@ pub(super) fn build_body_unboxed(
         }
     }
     // P-2a: the handle-op helper refs (declared into this body only when the graph uses handles).
-    let ub_refs = ub.map(|ids| UbHelperRefs {
-        list_new: module.declare_func_in_func(ids.list_new, b.func),
-        list_push: module.declare_func_in_func(ids.list_push, b.func),
-        list_seal: module.declare_func_in_func(ids.list_seal, b.func),
-        index: module.declare_func_in_func(ids.index, b.func),
-        concat: module.declare_func_in_func(ids.concat, b.func),
-        str_len: module.declare_func_in_func(ids.str_len, b.func),
-        free: module.declare_func_in_func(ids.free, b.func),
-        map_push_pair: module.declare_func_in_func(ids.map_push_pair, b.func),
-        map_seal: module.declare_func_in_func(ids.map_seal, b.func),
-        set_seal: module.declare_func_in_func(ids.set_seal, b.func),
-        map_get: module.declare_func_in_func(ids.map_get, b.func),
-        map_has: module.declare_func_in_func(ids.map_has, b.func),
-        list_push_int: module.declare_func_in_func(ids.list_push_int, b.func),
-        index_int: module.declare_func_in_func(ids.index_int, b.func),
-        int_to_str: module.declare_func_in_func(ids.int_to_str, b.func),
-        concat_mix: module.declare_func_in_func(ids.concat_mix, b.func),
-        acc_append: module.declare_func_in_func(ids.acc_append, b.func),
-        list_len: module.declare_func_in_func(ids.list_len, b.func),
-        list_acc_append: module.declare_func_in_func(ids.list_acc_append, b.func),
-        map_builder_set: module.declare_func_in_func(ids.map_builder_set, b.func),
-        map_builder_seed: module.declare_func_in_func(ids.map_builder_seed, b.func),
-        list_acc_reseed: module.declare_func_in_func(ids.list_acc_reseed, b.func),
-        list_builder_new: module.declare_func_in_func(ids.list_builder_new, b.func),
-        list_append_clone: module.declare_func_in_func(ids.list_append_clone, b.func),
-        native2: module.declare_func_in_func(ids.native2, b.func),
-        str_eq: module.declare_func_in_func(ids.str_eq, b.func),
-        clone_value: module.declare_func_in_func(ids.clone_value, b.func),
-        list_append_dyn: module.declare_func_in_func(ids.list_append_dyn, b.func),
-        str_list_acc_append: module.declare_func_in_func(ids.str_list_acc_append, b.func),
-    });
+    let ub_refs = ub.map(|ids| declare_ub_refs(module, ids, b.func));
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
     // `depth` is the live frame count at the call site (the caller passes `depth + 1`; the top-level
@@ -894,6 +870,14 @@ pub(super) fn build_body_unboxed(
                 let h = ub_ref(ub_refs.as_ref(), "Index(int)")?;
                 arm_index_int_list(&mut b, &ec, h, &vars, &fvars, &mut kinds, proven_ops[ip])?;
             }
+            Op::Index
+                if matches!(
+                    kinds.get(kinds.len().wrapping_sub(2)),
+                    Some(Kind::MapList(_))
+                ) =>
+            {
+                arm_index_map_list(&mut b, &ec, &vars, &fvars, &mut kinds, proven_ops[ip])?;
+            }
             Op::Index => {
                 let h = ub_ref(ub_refs.as_ref(), "Index")?;
                 arm_index_str_list(&mut b, &ec, h, &vars, &fvars, &mut kinds, proven_ops[ip])?;
@@ -981,6 +965,22 @@ pub(super) fn build_body_unboxed(
                 // maphas vertical: the mapget bucket probe → Bool `present?`; helper for canon-0/non-flat.
                 let h = ub_ref(ub_refs.as_ref(), "Map.has")?;
                 arm_maphas(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_map_keys(*id) => {
+                let h = ub_ref(ub_refs.as_ref(), "Map.keys")?;
+                arm_map_keys(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_map_values(*id) => {
+                let h = ub_ref(ub_refs.as_ref(), "Map.values")?;
+                arm_map_values(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_map_size(*id) => {
+                let h = ub_ref(ub_refs.as_ref(), "Map.size")?;
+                arm_map_size(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 2) if unboxed_native_is_map_merge(*id) => {
+                let h = ub_ref(ub_refs.as_ref(), "Map.merge")?;
+                arm_map_merge(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => {
                 // setcontains vertical (Set.of): SEAL a fresh owned flat int list into a packed HASH table.

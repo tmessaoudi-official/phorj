@@ -22,10 +22,16 @@ pub(super) fn arm_make_list(
         return Err(JitError::Codegen("unboxed MakeList underflow".to_string()));
     }
     // Element kinds select the flavor (mirrors the analyze arm): all-`Str` →
-    // `StrList` (handle pushes), all-`Int` → `IntList` (raw i64 pushes, P-2c).
+    // `StrList` (handle pushes), all-`Int` → `IntList` (raw i64 pushes, P-2c), all-map →
+    // `MapList` (the map HANDLE words ride the raw-i64 path — never freed here: a flat map
+    // word is bump-pinned, a boxed one safe-leaks until run end).
     let all_str = kinds[d - n..].iter().all(|k| matches!(k, Kind::Str(_)));
     let all_int = n > 0 && kinds[d - n..].iter().all(|k| *k == Kind::Int);
-    if !(all_str || all_int) {
+    let all_map = n > 0
+        && kinds[d - n..]
+            .iter()
+            .all(|k| matches!(k, Kind::StrIntMap(_)));
+    if !(all_str || all_int || all_map) {
         return Err(JitError::Unsupported(format!(
             "unboxed MakeList element kinds {:?}",
             &kinds[d - n..]
@@ -39,7 +45,7 @@ pub(super) fn arm_make_list(
     for j in 0..n {
         let depth_j = d - n + j;
         let ev = b.use_var(vars[depth_j]);
-        let pc = if all_int {
+        let pc = if all_int || all_map {
             b.ins().call(h.list_push_int, &[ec.ctx, list_h, ev])
         } else {
             let freev = b
@@ -51,8 +57,8 @@ pub(super) fn arm_make_list(
         let bad = b.ins().icmp_imm_s(IntCC::NotEqual, status, 0);
         ec.fault_if(b, bad, 5);
     }
-    // Seal: all-short strings / all ints flatten into consecutive arena slots (a FLAT
-    // handle) so `Index` runs fully inline; anything else keeps the boxed handle.
+    // Seal: all-short strings / all ints (incl. map words) flatten into consecutive arena
+    // slots (a FLAT handle) so `Index` runs fully inline; anything else keeps the boxed handle.
     let sc = b.ins().call(h.list_seal, &[ec.ctx, list_h]);
     let sealed = b.inst_results(sc)[0];
     let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sealed, 0);
@@ -66,6 +72,8 @@ pub(super) fn arm_make_list(
         sealed,
         if all_int {
             Kind::IntList(Own::Owned)
+        } else if all_map {
+            Kind::MapList(Own::Owned)
         } else {
             Kind::StrList(Own::Owned)
         },
@@ -547,117 +555,6 @@ pub(super) fn arm_setcontains(
     ub_push(b, vars, fvars, kinds, res, Kind::Bool)
 }
 
-/// `Op::Index` with an `IntList` beneath the index — P-2c int-list element read
-/// (`xs[i]` → Int, raw i64 at slot bytes 0..8): inline unsigned bounds check + ONE load
-/// for a flat list; the two-return helper for a boxed one.
-#[allow(clippy::too_many_arguments)] // emit plumbing
-pub(super) fn arm_index_int_list(
-    b: &mut FunctionBuilder,
-    ec: &Ec,
-    h: &UbHelperRefs,
-    vars: &[Variable],
-    fvars: &[Variable],
-    kinds: &mut Vec<Kind>,
-    proven: bool,
-) -> Result<(), JitError> {
-    let (iv, ik) = ub_pop(b, vars, fvars, kinds)?;
-    let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
-    if ik != Kind::Int || !matches!(lk, Kind::IntList(_)) {
-        return Err(JitError::Unsupported(format!(
-            "unboxed Index operand kinds ({lk:?}[{ik:?}])"
-        )));
-    }
-    let merge = b.create_block();
-    b.append_block_param(merge, types::I64);
-    let flat_blk = b.create_block();
-    let slow_blk = b.create_block();
-    let flat_bit = b.ins().band_imm_s(lv, UB_TAG_FLAT);
-    b.ins().brif(flat_bit, flat_blk, &[], slow_blk, &[]);
-    // INLINE (flat int list): unsigned bounds check, then ONE load of the raw i64 at
-    // `buf[(base+idx)*64]`. Out-of-range → code 5 → the canonical fault on the VM.
-    b.switch_to_block(flat_blk);
-    // Task-9 v2: a range-PROVEN in-bounds index (interval ⊆ [0, len)) drops the bounds branch.
-    if !proven {
-        let cnt_raw = b.ins().ushr_imm_s(lv, 40);
-        let cnt = b.ins().band_imm_s(cnt_raw, 0xFFFFF);
-        let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
-        ec.fault_if(b, oob, 5);
-    }
-    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let base = b.ins().band_imm_s(lv, UB_IDX_MASK);
-    let slot = b.ins().iadd(base, iv);
-    let soff = b.ins().ishl_imm_s(slot, 6);
-    let addr = b.ins().iadd(buf, soff);
-    let fres = b.ins().load(types::I64, MemFlagsData::new(), addr, 0);
-    b.ins().jump(merge, &[fres.into()]);
-    // SLOW (boxed int list): the two-return helper (value spans the full i64 range).
-    b.switch_to_block(slow_blk);
-    let freev = b.ins().iconst(types::I64, lk.is_owned_handle() as i64);
-    let call = b.ins().call(h.index_int, &[ec.ctx, lv, iv, freev]);
-    let sval = b.inst_results(call)[0];
-    let scode = b.inst_results(call)[1];
-    let bad = b.ins().icmp_imm_s(IntCC::NotEqual, scode, 0);
-    ec.fault_if(b, bad, 5);
-    b.ins().jump(merge, &[sval.into()]);
-    b.switch_to_block(merge);
-    let res = b.block_params(merge)[0];
-    ub_push(b, vars, fvars, kinds, res, Kind::Int)
-}
-
-/// Plain `Op::Index` — string-list element read: a flat list yields base+idx as a BORROWED
-/// slot handle (zero copy, zero alloc); a boxed list goes through the helper.
-#[allow(clippy::too_many_arguments)] // emit plumbing
-pub(super) fn arm_index_str_list(
-    b: &mut FunctionBuilder,
-    ec: &Ec,
-    h: &UbHelperRefs,
-    vars: &[Variable],
-    fvars: &[Variable],
-    kinds: &mut Vec<Kind>,
-    proven: bool,
-) -> Result<(), JitError> {
-    let (iv, ik) = ub_pop(b, vars, fvars, kinds)?;
-    let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
-    if ik != Kind::Int || !matches!(lk, Kind::StrList(_)) {
-        return Err(JitError::Unsupported(format!(
-            "unboxed Index operand kinds ({lk:?}[{ik:?}])"
-        )));
-    }
-    let merge = b.create_block();
-    b.append_block_param(merge, types::I64);
-    let flat_blk = b.create_block();
-    let slow_blk = b.create_block();
-    let flat_bit = b.ins().band_imm_s(lv, UB_TAG_FLAT);
-    b.ins().brif(flat_bit, flat_blk, &[], slow_blk, &[]);
-    // INLINE (flat list): unsigned bounds check (a negative idx is a huge u64 — same
-    // reject as the VM's `usize::try_from`), then base+idx is a BORROWED slot handle —
-    // zero copy, zero alloc. Out-of-range → code 5 → the VM redo renders the canonical
-    // "list index out of range".
-    b.switch_to_block(flat_blk);
-    // Task-9 v2: a range-PROVEN in-bounds index (interval ⊆ [0, len)) drops the bounds branch.
-    if !proven {
-        let cnt_raw = b.ins().ushr_imm_s(lv, 40);
-        let cnt = b.ins().band_imm_s(cnt_raw, 0xFFFFF);
-        let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
-        ec.fault_if(b, oob, 5);
-    }
-    let base = b.ins().band_imm_s(lv, UB_IDX_MASK);
-    let slot = b.ins().iadd(base, iv);
-    let fres = b.ins().bor_imm_s(slot, UB_TAG_SLOT);
-    b.ins().jump(merge, &[fres.into()]);
-    // SLOW (boxed list): the helper (element clone into a slot / untagged temp).
-    b.switch_to_block(slow_blk);
-    let freev = b.ins().iconst(types::I64, lk.is_owned_handle() as i64);
-    let call = b.ins().call(h.index, &[ec.ctx, lv, iv, freev]);
-    let sres = b.inst_results(call)[0];
-    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
-    ec.fault_if(b, bad, 5);
-    b.ins().jump(merge, &[sres.into()]);
-    b.switch_to_block(merge);
-    let res = b.block_params(merge)[0];
-    ub_push(b, vars, fvars, kinds, res, Kind::Str(Own::Owned))
-}
-
 /// `Op::IterElems` — the for-in normalization (B1): a BORROWED flat-able Str/Int list handle
 /// IS its element snapshot (sealed lists are immutable within this subset), so the arm is an
 /// identity re-push — ZERO instructions. Analyze admits only the borrowed list kinds here.
@@ -807,7 +704,10 @@ pub(super) fn list_append_acc(
     b.append_block_param(merge, types::I64);
     let fast0 = b.create_block();
     let slow_blk = b.create_block();
-    let acl_bit = b.ins().band_imm_s(av, UB_TAG_ACL);
+    // In-place push requires ACL set AND SHARED clear — a SHARED (memo-owned, immutable)
+    // record must go to the helper, which COPIES it into a fresh record.
+    let acl_shared = b.ins().band_imm_s(av, UB_TAG_ACL | UB_TAG_SHARED);
+    let acl_bit = b.ins().icmp_imm_s(IntCC::Equal, acl_shared, UB_TAG_ACL);
     b.ins().brif(acl_bit, fast0, &[], slow_blk, &[]);
     // INLINE: cap-checked in-place push of one raw i64 element.
     b.switch_to_block(fast0);
