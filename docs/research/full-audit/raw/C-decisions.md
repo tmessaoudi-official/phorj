@@ -3026,7 +3026,16 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   range skip. Total-Int FIRST-WINS strict fold (`sgt`/`slt`, the kernel's parity-affecting
   tie-break); empty → the `??` default (≡ `null ?? default`). Window-less uses stay VM-bound
   (fail closed) — the broader nullable-Kind lever REMAINS OPEN, queued. 6 tests
-  `src/jit/tests/extreme_by.rs`. Scorecard UPDATE 7. NEXT: `setdifference`/`setunion`.
+  `src/jit/tests/extreme_by.rs`. Scorecard UPDATE 7. (15)(16) `setdifference` 0.45×→40.33× /
+  `setunion` 0.66×→60.82× (2026-07-23): MEMOIZED flat-set ops — the mapmerge discipline (pure
+  functions of the pinned handle pair; per-(a,b,op) memo in SEPARATE inline entry ranges
+  24..32/32..40 + full `memo_setop` backing; results are fresh sealed flat sets via the
+  extracted single-writer `seal_set_keys`; order-free bucket tables are sound because every
+  admitted IntSet consumer is order-insensitive and set kinds never escape the graph). Narrow
+  `Kind::SetList` (MakeList over IntSet + FLAT_SET-guarded Index) admits `bs[i%4]`; `Set.size`
+  inline. setintersection 1.40× / listcontains 1.99× re-verified same run. 5 tests
+  `src/jit/tests/set_ops.rs` + `handles/sets_ext.rs` + `emit_unboxed/verticals_set.rs`.
+  Scorecard UPDATE 8. NEXT: `jsonround`/`deepjson`.
   ⚠ **HARD FLAG (2026-07-23): `maxBy`/`minBy` (0.19–0.20×) are BLOCKED on a representation
   lever — dev to rule.** They return `T?`, and the unboxed `Kind` enum (Int/Float/Bool/Str/…/IntList)
   has NO nullable/optional variant, so the element result cannot stay unboxed. Options: (i) add an
