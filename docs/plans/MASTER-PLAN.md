@@ -123,10 +123,12 @@ DX north-star (DEC-319) governs prioritization: smooth/intuitive tooling, strict
 compromise; if you can't, hard flag").** Bar = VM+JIT faster than php-8.5.8+opcache-JIT, per feature
 (`scripts/microbench.sh`; docker-less local-php mode added). Full measured scorecard + root-cause +
 remaining losses: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md` (the pointed-to detail —
-not a fork). State: **27 WIN / 18 LOSS**, then **listcontains 0.06×→1.97× CLOSED** (JIT unboxed
-vertical). **17 losses remain**, each its own vertical/representation slice, in order:
+not a fork). State: **27 WIN / 18 LOSS**, then CLOSED so far: **listcontains 0.06×→1.97×** (flat-int
+scan vertical) + **sumby 0.34×→~17×** (hofpipe vertical extended with a checked accumulator). **16
+losses remain**, each its own vertical/representation slice, in order:
+- HOF folds `maxby`/`minby`/`listreduce` (0.19–0.30×) — the sibling hofpipe folds (sumby's family;
+  `maxBy`/`minBy` track element+key first-wins → `T?`, `reduce` threads a seed + 2-arg callback).
 - `mapkeys`/`mapvalues`/`mapmerge` (0.09–0.12×) — Map key/value MATERIALIZATION vertical → `verticals/map.rs`.
-- HOF folds `sumby`/`maxby`/`minby`/`listreduce` (0.19–0.34×) — accumulator vertical → `verticals/hof.rs`.
 - string-scan `isemail`/`isurl`/`stringcontains` (0.16–0.24×) — inline substring-scan vertical.
 - JSON `jsonround`/`deepjson`, Set ops, `dbwork`, float near-ties `floatmul`/`floatloop`.
 - **COVERAGE (dev ask):** ADD micros until the suite covers 100% of phorj's php-comparable surface, so

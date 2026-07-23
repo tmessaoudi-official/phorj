@@ -7,7 +7,19 @@
 
 use super::*;
 
-/// `List.map` / `List.count` with a STATIC lambda (the hofpipe vertical): ONE native loop —
+/// Which List higher-order op the shared `arm_list_hof` loop is emitting. All three walk the
+/// input identically (one direct call per element); they differ only in the accumulator:
+/// `Map` seeds/extends an ACL int-list builder; `Count` sums the raw 0/1 predicate result with a
+/// WRAPPING `iadd` (bounded by list length — cannot overflow); `Sum` sums the int projection with
+/// a CHECKED `sadd_overflow` (an overflow → code-5 VM redo → `list_sum_by`'s exact fault).
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum ListHof {
+    Map,
+    Count,
+    Sum,
+}
+
+/// `List.map` / `List.count` / `List.sumBy` with a STATIC lambda (the hofpipe vertical): ONE loop —
 /// a uniform `(addr, stride)` walk over the input (flat list: 64-byte slots, raw i64 at
 /// bytes 0..8; ACL builder: packed 8-byte i64s; a boxed list → code 5, redo on VM — the
 /// disclosed v1 gap), a DIRECT call per element (`Fn`, or `FnCap1` with the capture word
@@ -26,8 +38,9 @@ pub(super) fn arm_list_hof(
     fvars: &[Variable],
     kinds: &mut Vec<Kind>,
     info: &UbGraphInfo,
-    is_map: bool,
+    hof: ListHof,
 ) -> Result<(), JitError> {
+    let is_map = hof == ListHof::Map;
     let (fv, fk) = ub_pop(b, vars, fvars, kinds)?;
     let (f, has_cap) = match fk {
         Kind::Fn(f) => (f, false),
@@ -131,10 +144,18 @@ pub(super) fn arm_list_hof(
         None,
     )?;
     let (rv, _rk) = ub_pop(b, vars, fvars, kinds)?;
-    let acc1 = if is_map {
-        list_append_acc(b, ec, h, acc, rv)?
-    } else {
-        b.ins().iadd(acc, rv) // Bool results are 0/1 i64 words — the sum IS the count
+    let acc1 = match hof {
+        ListHof::Map => list_append_acc(b, ec, h, acc, rv)?,
+        // Bool results are 0/1 i64 words — the wrapping sum IS the count (bounded, cannot overflow).
+        ListHof::Count => b.ins().iadd(acc, rv),
+        ListHof::Sum => {
+            // CHECKED sum of the int projection: an overflow carry → code-5 VM redo, which re-runs
+            // `list_sum_by` and renders its exact `"integer overflow in List.sumBy"` fault. The
+            // no-overflow case (every shipped example / bench) stays a single `sadd_overflow`.
+            let (sum, ovf) = b.ins().sadd_overflow(acc, rv);
+            ec.fault_if(b, ovf, 5);
+            sum
+        }
     };
     let addr1 = b.ins().iadd(addr, stride);
     let rem1 = b.ins().iadd_imm_s(rem, -1);

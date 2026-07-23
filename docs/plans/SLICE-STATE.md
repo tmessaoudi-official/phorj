@@ -65,15 +65,20 @@ PHP-parity with NO open design question. Nothing needing a ruling.
 
 **⚠ HARD FLAG (2026-07-23, dev directive "everything must beat php; if you can't reach it, hard
 flag"): VM+JIT vs php-8.5.8+JIT micro scorecard = 18/48 LOSSES**, several 3–16× (listcontains 0.06×,
-mapkeys/values 0.09×, HOF folds + string-scan + JSON). **1 CLOSED 2026-07-23: `listcontains`
-0.06× → 1.97× WIN** via a `List.contains` JIT unboxed vertical (inline flat-int scan, byte-identical;
-`src/jit/emit_unboxed/list_contains.rs` + `tests/listcontains.rs`). **17 losses remain** — same
-pattern (HAMT extraction / HOF folds / string-scan / JSON), each its own vertical slice. CAMPAIGN
-SSOT = **DEC-332** + MASTER-PLAN §0 (perf WIN-OR-FLAG + 100%-coverage + M-DECOMP); detail in
-`docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. **M-DECOMP progress:
-`analyze/natives.rs` DONE** (analyze.rs 2869 → analyze/mod.rs 2683 + natives.rs 194; behavior-preserving,
-gate-green; new vertical predicates land in natives.rs now). **NEXT: `emit_unboxed/verticals/` folder**
-→ then `mapkeys`/`mapvalues` vertical. (No divergent doc —
+mapkeys/values 0.09×, HOF folds + string-scan + JSON). **2 CLOSED 2026-07-23:** (1) `listcontains`
+0.06× → 1.97× WIN via a `List.contains` JIT unboxed vertical (inline flat-int scan, byte-identical;
+`src/jit/emit_unboxed/list_contains.rs` + `tests/listcontains.rs`); (2) `sumby` 0.34× → **~17× WIN**
+via extending the `map`/`count` hofpipe vertical to `List.sumBy` (checked `sadd_overflow` accumulator,
+overflow → code-5 VM redo → exact `"integer overflow in List.sumBy"` fault; 14.9M vs 254M ns, byte-
+identical, `src/jit/tests/sumby.rs`). **16 losses remain** — the sibling folds `maxby`/`minby`/
+`listreduce`/`listfilter` are the SAME hofpipe family (disproves the stale "folds can't be won by
+verticals" note — the win IS the dispatch-elimination), then the `mapkeys`/`values`/`merge` HAMT +
+string-scan + JSON clusters. CAMPAIGN SSOT = **DEC-332** + MASTER-PLAN §0 (perf WIN-OR-FLAG +
+100%-coverage + M-DECOMP); detail in `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`.
+**M-DECOMP progress: `analyze/natives.rs` DONE** (analyze.rs 2869 → analyze/mod.rs 2683 + natives.rs
+194); **`arm_list_hof` DONE** (verticals.rs 1264 → 1111 + new `verticals_hof.rs`, Inv 13, behavior-
+preserving, gate-green — the fold-accumulator headroom). **NEXT: `maxBy`/`minBy` + `listReduce`
+verticals** (the sibling hofpipe folds) → then `mapkeys`/`mapvalues`. (No divergent doc —
 ex-`architecture-decomp.plan.md` folded into MASTER-PLAN.) Full report + root-cause +
 architectural-fix list: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. Root cause:
 per-element native calls over boxed immutable `Value` collections + HAMT key/value extraction (JIT

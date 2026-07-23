@@ -12,6 +12,7 @@ use crate::value::Value;
 
 mod boxed;
 mod listcontains;
+mod sumby;
 mod unboxed_flow;
 mod unboxed_int;
 mod verticals;

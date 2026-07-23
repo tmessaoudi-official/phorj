@@ -103,7 +103,9 @@ pub(super) fn collect_functions_unboxed(
                 Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => uses_handles = true,
                 // hofpipe: the HOF loop arms direct-call the compiled lambda per element.
                 Op::CallNative(id, 2)
-                    if unboxed_native_is_list_map(*id) || unboxed_native_is_list_count(*id) =>
+                    if unboxed_native_is_list_map(*id)
+                        || unboxed_native_is_list_count(*id)
+                        || unboxed_native_is_list_sum_by(*id) =>
                 {
                     uses_handles = true;
                     has_call = true;

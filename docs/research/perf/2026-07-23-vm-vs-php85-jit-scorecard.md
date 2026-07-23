@@ -13,6 +13,20 @@ existing `Set.contains` vertical. Measured: VM 892ms -> 26ms (~34x faster), flip
 listmap 8.59x unchanged). **17 losses remain** — same pattern (Map/Set HAMT extraction, HOF folds,
 string-scan, JSON), each its own vertical / representation slice.
 
+## UPDATE 2026-07-23 (2) — 2 of 18 CLOSED: `sumby` 0.34x -> ~17x WIN
+Extended the existing `List.map`/`count` **hofpipe vertical** to `List.sumBy` (the same inline native
+loop — one direct call per element, no VM re-entry — with a CHECKED `sadd_overflow` accumulator; an
+overflow carry -> code-5 VM redo reproduces `list_sum_by`'s exact `"integer overflow in List.sumBy"`
+fault byte-for-byte). This directly disproves the stale 2026-07-20 note that "re-entrant HOF folds
+cannot be won by verticals" — the win comes precisely from eliminating the per-element re-entrant
+dispatch. Measured (phg-JIT vs php-8.5.8+JIT, opcache.jit=tracing confirmed on): **14.9M ns vs 254M
+ns = ~17x WIN**, checksums identical (`20000000`). Byte-identity proven (JIT == VM == tree-walker;
+differential 172/172; new `src/jit/tests/sumby.rs` — delivery `hits>0` + capture/negative/empty edges
++ the overflow redo). Enabler: `arm_list_hof` M-Decomp-extracted `verticals.rs` -> `verticals_hof.rs`
+(Inv 13) to make room for the fold accumulator modes. **16 losses remain** — the sibling folds
+(`maxby`/`minby`/`listreduce`) and `listfilter` are the same hofpipe family (next verticals); the
+`mapkeys`/`mapvalues`/`mapmerge` HAMT-extraction + string-scan + JSON clusters are their own slices.
+
 ## Methodology (and its one caveat)
 
 - `scripts/microbench.sh`, K=5, interleaved + core-pinned (`taskset`), output-identity gated

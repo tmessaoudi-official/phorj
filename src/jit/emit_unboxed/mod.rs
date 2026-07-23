@@ -1078,24 +1078,23 @@ pub(super) fn build_body_unboxed(
                 arm_list_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 2)
-                if unboxed_native_is_list_map(*id) || unboxed_native_is_list_count(*id) =>
+                if unboxed_native_is_list_map(*id)
+                    || unboxed_native_is_list_count(*id)
+                    || unboxed_native_is_list_sum_by(*id) =>
             {
-                // The hofpipe vertical: a STATIC-lambda `List.map`/`List.count` lowers to a
-                // native loop (inline element loads over flat/ACL, a direct call per element,
-                // an ACL builder output for map / a register sum for count).
+                // The hofpipe vertical: a STATIC-lambda `List.map`/`count`/`sumBy` → one native
+                // loop (inline element loads, a direct call per element; ACL builder for map, a
+                // register sum for count, a CHECKED register sum for sumBy).
                 let h = ub_ref(ub_refs.as_ref(), "List HOF")?;
+                let hof = if unboxed_native_is_list_map(*id) {
+                    ListHof::Map
+                } else if unboxed_native_is_list_sum_by(*id) {
+                    ListHof::Sum
+                } else {
+                    ListHof::Count
+                };
                 arm_list_hof(
-                    &mut b,
-                    &ec,
-                    h,
-                    &fn_refs,
-                    ctx,
-                    depth,
-                    &vars,
-                    &fvars,
-                    &mut kinds,
-                    info,
-                    unboxed_native_is_list_map(*id),
+                    &mut b, &ec, h, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, info, hof,
                 )?;
             }
             Op::CallNative(id, 2)

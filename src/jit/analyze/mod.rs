@@ -1637,14 +1637,14 @@ pub(super) fn unboxed_analyze(
                     }
                 }
                 Op::CallNative(id, 2)
-                    if unboxed_native_is_list_map(*id) || unboxed_native_is_list_count(*id) =>
+                    if unboxed_native_is_list_map(*id)
+                        || unboxed_native_is_list_count(*id)
+                        || unboxed_native_is_list_sum_by(*id) =>
                 {
-                    // The hofpipe vertical: a STATIC-target lambda (capture-free `Fn` or
-                    // one-int-capture `FnCap1`) over an int list lowers to a native loop with
-                    // a direct call per element. `map` needs an Int-returning transform (the
-                    // output is an ACL int-list builder); `count` a Bool/Int predicate.
-                    // v1: HOF loops don't route thrown payloads out of the loop body — a
-                    // throwing graph stays on the VM (fail closed).
+                    // The hofpipe vertical: a STATIC lambda (`Fn`/`FnCap1`) over an int list → a
+                    // native loop, one direct call per element. Int-returning transform for map
+                    // (→ ACL builder) / sumBy (→ checked sum); Bool/Int for count. A throwing
+                    // graph stays on the VM (fail closed, v1 — no thrown payload out of the loop).
                     if info.thrown_class.is_some() {
                         return Err(JitError::Unsupported(
                             "unboxed: List HOF in a throwing graph (deferred)".to_string(),
@@ -1659,8 +1659,7 @@ pub(super) fn unboxed_analyze(
                             )))
                         }
                     };
-                    // `arity` folds captures in (frame = [caps.., args..]) — the HOF passes
-                    // exactly one element arg, so declared params must be 1.
+                    // `arity` folds captures in (frame = [caps.., args..]) — HOF passes 1 arg, params == 1.
                     if program.functions[f].arity - program.functions[f].n_captures != 1 {
                         return Err(JitError::Unsupported(
                             "unboxed: List HOF lambda arity != 1 (VM renders any fault)"
@@ -1668,8 +1667,9 @@ pub(super) fn unboxed_analyze(
                         ));
                     }
                     let rk = info.ret_of(f);
-                    // map: Int only; count: Bool or Int.
-                    if rk != Kind::Int && (is_map || rk != Kind::Bool) {
+                    // map/sumBy: Int only; count: Bool or Int.
+                    let int_only = is_map || unboxed_native_is_list_sum_by(*id);
+                    if rk != Kind::Int && (int_only || rk != Kind::Bool) {
                         return Err(JitError::Unsupported(format!(
                             "unboxed: List HOF lambda return kind {rk:?} (deferred)"
                         )));

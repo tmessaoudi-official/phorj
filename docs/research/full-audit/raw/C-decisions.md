@@ -2977,6 +2977,10 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   box. (d) M-DECOMP campaign: shrink the 79 over-hard-cap files (Invariant 13), JIT-first (the giants
   throttle perf verticals), behavior-preserving cohesion splits, gate-green. Roadmap + sequencing +
   loss list live in MASTER-PLAN §0 (SSOT); measured detail in
-  `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. SHIPPED so far: `listcontains`
-  0.06×→1.97× (JIT `List.contains` vertical). NO divergent doc — the ex-`architecture-decomp.plan.md`
+  `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. SHIPPED so far: (1) `listcontains`
+  0.06×→1.97× (JIT `List.contains` vertical); (2) `sumby` 0.34×→~17× (the `map`/`count` hofpipe
+  vertical extended to `List.sumBy` — checked `sadd_overflow` accumulator, overflow→code-5 VM redo→
+  exact `"integer overflow in List.sumBy"` fault; enabler = `arm_list_hof` M-Decomp `verticals.rs`→
+  `verticals_hof.rs`). This disproves the earlier "re-entrant folds can't be won by verticals" note —
+  the win IS the per-element dispatch elimination. NO divergent doc — the ex-`architecture-decomp.plan.md`
   is folded into MASTER-PLAN.

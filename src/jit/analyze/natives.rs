@@ -48,6 +48,17 @@ pub(crate) fn unboxed_native_is_list_count(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.List" && nf.name == "count" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.List.sumBy` (the fold vertical: a STATIC-lambda `sumBy`
+/// lowers to the same native loop as `count`, but the running register is a CHECKED sum of the
+/// int-returning projection — `sadd_overflow` + code-5 VM redo on carry, so an overflowing sum
+/// reproduces `list_sum_by`'s exact `"integer overflow in List.sumBy"` fault byte-for-byte, while
+/// the common no-overflow case stays fully inline)?
+pub(crate) fn unboxed_native_is_list_sum_by(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "sumBy" && nf.pure)
+}
+
 /// Is native-registry entry `id` `Core.Map.has` (the maphas vertical: the mapget inline bucket
 /// probe returning a Bool `present?` instead of the value — a HIT is `true`, an empty bucket is a
 /// clean `false` (NOT a fault, unlike `m[k]`); canon-0 keys / non-flat maps punt to the
