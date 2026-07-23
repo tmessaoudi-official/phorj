@@ -11,6 +11,7 @@ use super::*;
 
 mod concat;
 mod enums;
+mod list_contains;
 mod objects;
 mod scalar;
 mod verticals;
@@ -982,23 +983,22 @@ pub(super) fn build_body_unboxed(
                 }
                 arm_concat(&mut b, &ec, h, &vars, &fvars, &mut kinds, *cn)?;
             }
-            // ---- P-2c numeric conversions: fully inline, no helper, no handle space ------------
             Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => {
-                // The maphas vertical: the mapget inline bucket probe returning a Bool `present?`
-                // (HIT → true, empty bucket → clean false, no fault); helper for canon-0 / non-flat.
+                // maphas vertical: the mapget bucket probe → Bool `present?`; helper for canon-0/non-flat.
                 let h = ub_ref(ub_refs.as_ref(), "Map.has")?;
                 arm_maphas(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => {
-                // FORK-D setcontains vertical (Set.of): SEAL a fresh owned flat int list into an
-                // int-keyed packed HASH table (via rt_u_set_seal) so Set.contains probes in O(1).
+                // setcontains vertical (Set.of): SEAL a fresh owned flat int list into a packed HASH table.
                 let h = ub_ref(ub_refs.as_ref(), "Set.of")?;
                 arm_set_of(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 2) if unboxed_native_is_set_contains(*id) => {
-                // FORK-D setcontains vertical: an inline O(1) packed-bucket probe of the int-hash set
-                // returning a Bool `member?` (HIT → true, empty bucket → clean false); non-flat → code-5.
+                // setcontains vertical: inline O(1) packed-bucket probe → Bool `member?`; non-flat → code-5.
                 arm_setcontains(&mut b, &ec, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 2) if unboxed_native_is_list_contains(*id) => {
+                list_contains::arm_listcontains(&mut b, &ec, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => {
                 // The generic pure-native bridge — mirrors the analyze arm; the helper calls

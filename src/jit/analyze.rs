@@ -400,6 +400,17 @@ pub(super) fn unboxed_native_is_set_contains(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.Set" && nf.name == "contains" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.List.contains` (the listcontains vertical: an inline linear
+/// scan of the flat int block — byte-identical to the interpreter's `Vec<Value::Int>` membership; a
+/// HIT is `true`, an exhausted scan a clean `false`, never a fault; a non-flat (boxed) int list punts
+/// to a code-5 VM redo)? Unlike `Set.contains` (a hash probe over a sealed set), this is a plain
+/// linear scan — `IntList` is a flat `count<<40 | base` array, not a hash table.
+pub(super) fn unboxed_native_is_list_contains(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "contains" && nf.pure)
+}
+
 /// Is `id` one of the pure 2-arg natives routed through the GENERIC `rt_u_native2` bridge
 /// (which calls the registered native itself — single-sourced semantics)? Cheap name gate for
 /// the match guards; the shape table is [`unboxed_native_bridge2`].
@@ -1918,6 +1929,29 @@ pub(super) fn unboxed_analyze(
                         other => {
                             return Err(JitError::Unsupported(format!(
                                 "unboxed Set.contains receiver kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Bool);
+                }
+                Op::CallNative(id, 2) if unboxed_native_is_list_contains(*id) => {
+                    // The listcontains vertical: an `Int` needle over an `IntList` → `Bool` (member?).
+                    // The list is a QUERY — NOT consumed (mirrors Set.contains); a miss is a clean
+                    // `false`, never a fault. Any Own is fine (the emit reads the flat block, frees
+                    // nothing); a non-int / non-flat list falls to the code-5 VM redo in the emit.
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed List.contains needle kind {other:?}"
+                            )))
+                        }
+                    }
+                    match kinds.pop() {
+                        Some(Kind::IntList(_)) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed List.contains receiver kind {other:?}"
                             )))
                         }
                     }

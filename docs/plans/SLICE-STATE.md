@@ -65,7 +65,10 @@ PHP-parity with NO open design question. Nothing needing a ruling.
 
 **⚠ HARD FLAG (2026-07-23, dev directive "everything must beat php; if you can't reach it, hard
 flag"): VM+JIT vs php-8.5.8+JIT micro scorecard = 18/48 LOSSES**, several 3–16× (listcontains 0.06×,
-mapkeys/values 0.09×, HOF folds + string-scan + JSON). Full report + root-cause +
+mapkeys/values 0.09×, HOF folds + string-scan + JSON). **1 CLOSED 2026-07-23: `listcontains`
+0.06× → 1.97× WIN** via a `List.contains` JIT unboxed vertical (inline flat-int scan, byte-identical;
+`src/jit/emit_unboxed/list_contains.rs` + `tests/listcontains.rs`). **17 losses remain** — same
+pattern (HAMT extraction / HOF folds / string-scan / JSON), each its own vertical slice. Full report + root-cause +
 architectural-fix list: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. Root cause:
 per-element native calls over boxed immutable `Value` collections + HAMT key/value extraction (JIT
 can't inline the native boundary). **CAVEAT/contradiction:** measured vs a FROM-SOURCE php (docker

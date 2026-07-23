@@ -11,6 +11,7 @@ use crate::chunk::BytecodeProgram;
 use crate::value::Value;
 
 mod boxed;
+mod listcontains;
 mod unboxed_flow;
 mod unboxed_int;
 mod verticals;

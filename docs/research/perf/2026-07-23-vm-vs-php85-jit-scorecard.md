@@ -4,6 +4,15 @@
 > can't reach it, hard flag."** This report is that flag. Under the baseline described below, **18 of
 > 48 micros LOSE** to php+JIT — several by 3–16×. They are surfaced here, not silently accepted.
 
+## UPDATE 2026-07-23 — 1 of 18 CLOSED: `listcontains` 0.06x -> 1.97x WIN
+Added a **`List.contains` JIT unboxed vertical** (inline linear scan of the flat int block,
+byte-identical to the interpreter's `list_contains`; non-flat list -> code-5 VM redo), mirroring the
+existing `Set.contains` vertical. Measured: VM 892ms -> 26ms (~34x faster), flipping the worst loss
+(0.06x) to a 1.97x WIN. Byte-identity proven (JIT == VM == tree-walker checksums; differential
+172/172; new `src/jit/tests/listcontains.rs`). No regression (setcontains 1.02x, listindex 1.51x,
+listmap 8.59x unchanged). **17 losses remain** — same pattern (Map/Set HAMT extraction, HOF folds,
+string-scan, JSON), each its own vertical / representation slice.
+
 ## Methodology (and its one caveat)
 
 - `scripts/microbench.sh`, K=5, interleaved + core-pinned (`taskset`), output-identity gated
