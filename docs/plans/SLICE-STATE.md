@@ -63,6 +63,16 @@ enum variant returned the scoped PHP class `Color_Green` vs the interpreter's `G
 **TONIGHT (dev directive, asleep): work ONLY on 100%-clear, already-specced items** — perf, sugar,
 PHP-parity with NO open design question. Nothing needing a ruling.
 
+**⚠ HARD FLAG (2026-07-23, dev directive "everything must beat php; if you can't reach it, hard
+flag"): VM+JIT vs php-8.5.8+JIT micro scorecard = 18/48 LOSSES**, several 3–16× (listcontains 0.06×,
+mapkeys/values 0.09×, HOF folds + string-scan + JSON). Full report + root-cause +
+architectural-fix list: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. Root cause:
+per-element native calls over boxed immutable `Value` collections + HAMT key/value extraction (JIT
+can't inline the native boundary). **CAVEAT/contradiction:** measured vs a FROM-SOURCE php (docker
+image blocked here) — contradicts the recorded jsonround/dbwork "wins"; RECONCILE on the dev box vs
+the official docker baseline. NOT fixed (architectural, dev to prioritize; no speculative patch —
+Rule 14). New: `microbench.sh` gained a docker-less local-php mode (`MICROBENCH_PHP_BIN`).
+
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
 ▶▶ **NEXT CONTEXT RESUMES HERE (2026-07-22, all four DEC-329 rulings in hand):**
 (a) **Log-v2 processors** (DEC-329.4, SMALL — do first): out-of-contract tail ` | ts=<epoch-ms> pid=<pid>`.

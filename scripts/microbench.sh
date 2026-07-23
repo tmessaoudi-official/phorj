@@ -45,10 +45,22 @@ for arg in "$@"; do
   esac
 done
 
-command -v docker >/dev/null 2>&1 || {
-  echo "microbench: docker required (real release-php baseline)" >&2
+# PHP baseline source: docker (default, the CI/dev box) OR a LOCAL php binary. Set MICROBENCH_PHP_BIN
+# to a real release php WITH opcache/JIT to run without docker (e.g. a container that has no docker or
+# where image pulls are blocked); MICROBENCH_PHP_OPCACHE points at its opcache.so when JIT ships as a
+# shared zend_extension (a from-source CLI build). The local path pins the same core as the phg side.
+LOCAL_PHP="${MICROBENCH_PHP_BIN:-}"
+OPCACHE_ARG=""
+[[ -n "$LOCAL_PHP" && -n "${MICROBENCH_PHP_OPCACHE:-}" ]] && OPCACHE_ARG="-dzend_extension=${MICROBENCH_PHP_OPCACHE}"
+if [[ -z "$LOCAL_PHP" ]]; then
+  command -v docker >/dev/null 2>&1 || {
+    echo "microbench: docker required (real release-php baseline) — or set MICROBENCH_PHP_BIN to a local php+JIT" >&2
+    exit 2
+  }
+elif [[ ! -x "$LOCAL_PHP" ]]; then
+  echo "microbench: MICROBENCH_PHP_BIN='$LOCAL_PHP' is not executable" >&2
   exit 2
-}
+fi
 [[ -x "$BIN" ]] || {
   echo "microbench: binary not found at $BIN — run: cargo build --release" >&2
   exit 2
@@ -83,9 +95,12 @@ fi
 # Phases 1+2 — INTERLEAVED, PINNED sampling (see the header): one long-lived pinned php
 # container; per feature, K rounds of (pinned phg sample, pinned php sample), best-of-K each.
 CPU="${MICROBENCH_CPU:-$(($(nproc) - 1))}"
-CONTAINER="$(docker run -d --rm --cpuset-cpus="$CPU" -v "$MICRO:/w:ro" "$PHP_IMAGE" sleep infinity)"
-cleanup_container() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
-trap cleanup_container EXIT
+CONTAINER=""
+cleanup_container() { [[ -n "$CONTAINER" ]] && docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
+if [[ -z "$LOCAL_PHP" ]]; then
+  CONTAINER="$(docker run -d --rm --cpuset-cpus="$CPU" -v "$MICRO:/w:ro" "$PHP_IMAGE" sleep infinity)"
+  trap cleanup_container EXIT
+fi
 
 declare -A vm_ns vm_sum php_ns php_sum
 for name in "${features[@]}"; do
@@ -98,8 +113,12 @@ for name in "${features[@]}"; do
     ns="$(printf '%s' "$line" | cut -f2)"
     vcs="$(printf '%s' "$line" | cut -f3)"
     if [[ -z "$vbest" || "$ns" -lt "$vbest" ]]; then vbest="$ns"; fi
-    # shellcheck disable=SC2086 # JIT_FLAGS is a deliberate word-split flag list
-    pline="$(docker exec "$CONTAINER" php $JIT_FLAGS "/w/$name.php" 2>/dev/null)"
+    # shellcheck disable=SC2086 # JIT_FLAGS / OPCACHE_ARG are deliberate word-split flag lists
+    if [[ -n "$LOCAL_PHP" ]]; then
+      pline="$(taskset -c "$CPU" "$LOCAL_PHP" $OPCACHE_ARG $JIT_FLAGS "$MICRO/$name.php" 2>/dev/null)"
+    else
+      pline="$(docker exec "$CONTAINER" php $JIT_FLAGS "/w/$name.php" 2>/dev/null)"
+    fi
     pns="$(printf '%s' "$pline" | cut -f2)"
     pcs="$(printf '%s' "$pline" | cut -f3)"
     if [[ -z "$pbest" || "$pns" -lt "$pbest" ]]; then pbest="$pns"; fi
