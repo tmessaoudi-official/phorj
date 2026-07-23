@@ -95,6 +95,25 @@ adoption review validated ~10/14 themes as already covered and added four ruled 
   composer `files` entry; idempotent rebuilds; host-parity gated (`tests/build_php.rs`). v2 queue:
   `phg stubs`, `phg watch`; the `phpInterop` namespace-prefix knob is a PENDING adjudication
   (register DEC-320 build note).
+
+**WEB / ENTRY / PARITY CLUSTER (DEC-331 — decision round D1–D10 COMPLETE 2026-07-23, dev-ruled
+interactively; full rulings in the register, cursor in SLICE-STATE). SPEC-FIRST per D10b — specs
+before any build; speccing wave ON HOLD (resume with the dev).** Build cluster, in order (D10a):
+- **(1) `#[Invoke]` + `#[ToString]`** — attribute-designated conventional methods (overloadable
+  `#[Invoke]`, VM-safe via existing overload dispatch; strict zero-param/`string` `#[ToString]`;
+  both stay directly callable). PHP leg: multi-`#[Invoke]` owes a LADDER call (`__invoke` is 1/class).
+- **(2) Rich Request v1** — immutable, eager/lazy config switch (`Http.ServeConfig.requestParsing`),
+  `.get`+`.getAll`, files/multipart IN v1, `body.json():Json?`, case-insensitive headers; replaces
+  the thin `Core.Http.Request`.
+- **(3) `#[Entry(kind: Cli|Web|Desktop|Mobile|Worker|Embedded)]`** + per-type `#[Config]`-injected
+  typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
+  contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`.
+- **Separate QUEUED design slices:** labeled `break`/`continue` (safe nested-loop escape; raw goto
+  stays rejected), typed LSB (`Self` return). **ON HOLD (spec with dev):** `eval` (sandboxed-subset
+  only), ArrayAccess (`#[ArrayGet]`/`#[ArraySet]` candidate).
+- **Env:** real PHP 8.5.8 built from source in-container (D10d); `toolchain.env` container-aware. The
+  8.5.8 oracle surfaced + FIXED a DEC-329.3 byte-identity regression (`Reflect.className` on an enum
+  variant: PHP `Color_Green` vs interp `Green`).
 - **Concurrency v2 = real parallelism (DEC-322)** — DESIGN slice (multi-core + structured scopes +
   bounded channels + cancellation; forks adjudicated at design time). Runtime feature-pack neighborhood.
 - **Release channels (DEC-323)** — ✅ SHIPPED (nightly prerelease CI + SEMVER/SECURITY channel docs).
