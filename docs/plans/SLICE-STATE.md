@@ -153,7 +153,9 @@ from the rulings: Core.Sandbox BUILDS in v1; ArrayAccess adopted (REOPEN flag) w
 Any→`mixed` top of all values, Object→`object` erased root class over classes+enums+functions,
 both member-less, `#[ToString]` re-confirmed, `new Object()`→`\stdClass`, `instanceof
 Object`→`is_object`; spec `2026-07-23-any-object-top-types.md`). NEW QUEUED: DEC-334
-runtime-config catalog (php.ini-equivalent, multi-round research with dev). ONE OPEN
+runtime-config catalog (php.ini-equivalent, multi-round research with dev); DEC-336
+extensionless `#!`-shebang sources + perpetual editor/LSP currency (100%-clear, build after
+the slice-1 `#[Invoke]`/`#[ToString]` tonight). ONE OPEN
 SCHEDULING POINT: where the FIVE design-slice builds
 (labeled/LSB/ArrayAccess/Sandbox/Any-Object) sit relative to DEC-333 — dev slots at pickup. Next PERF
 slice = Json-ADT JIT (jsonround/deepjson flips — enum cells with
