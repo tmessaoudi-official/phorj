@@ -114,15 +114,18 @@ dedicated zero-alloc helpers running the natives' exact kernels (`String.contain
 16..24, inline ~8-op probe, full-HashMap backing; pinned-ness from the RUNTIME word —
 `SLOT`+!`OWNED` or untagged `<n_pinned` — a kind-level gate measured DEAD at 0.48×, the runtime
 gate is the whole flip). 6 tests `src/jit/tests/string_scan.rs`; scorecard UPDATE 6.
-**6 losses remain. PERF NEXT: `maxBy`/`minBy`** (dev GO on the lever — non-empty-`??` peephole
-first, nullable kind if needed) →
-then string-scan. **⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable
-arena-kind** — they return `T?` and
-the unboxed `Kind` enum has no optional variant, so the element result can't stay unboxed; dev to rule
-the representation lever (add `Int?` kind / non-empty-`??` peephole / accept flag) — NOT a night call
-(recorded in MASTER-PLAN §0 + DEC-332). NOTE dev's latest message ("flip them ALL, real wins, any
-well-thought method, no compromise") reads as a GO on picking the lever — plan: try the non-empty-`??`
-peephole first (narrow, sound), escalate to the nullable kind if the bench shape needs it. (No divergent doc —
+**THEN `maxBy` 0.19×→8.13× / `minBy` 0.20×→8.18× CLOSED (the HARD FLAG, same day):** the ruled
+??-fusion lever — `extreme_by_coalesce_window` recognizes `maxBy/minBy(xs,f) ?? <int>` (the
+exact Coalesce desugar, external-jump-free) and all four passes (leaders/collect/analyze/emit)
+consume it as ONE unit → a total-Int first-wins strict fold, empty→default; identity selectors
+seeded via call_sigs; window-less uses stay on the VM (fail closed). 6 tests
+`src/jit/tests/extreme_by.rs`; scorecard UPDATE 7. **4 losses remain. PERF NEXT:
+`setdifference`/`setunion`** →
+then string-scan. **`maxBy`/`minBy` HARD FLAG RESOLVED 2026-07-23** (was: blocked on a nullable arena kind; the
+dev's "flip them ALL, any well-thought method" was taken as the GO it reads as): the ??-fusion
+window shipped and both flipped to ~8.1× WINs — see the PERF block above. The broader
+nullable-Kind lever stays OPEN (window-less `maxBy`/`minBy` still VM-bound; queued behind the
+remaining 4 losses). (No divergent doc —
 ex-`architecture-decomp.plan.md` folded into MASTER-PLAN.) Full report + root-cause +
 architectural-fix list: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. Root cause:
 per-element native calls over boxed immutable `Value` collections + HAMT key/value extraction (JIT

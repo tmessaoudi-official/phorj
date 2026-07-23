@@ -3016,7 +3016,17 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   recyclable words never key the memo (poison hazard), they compute per call. Validate keys
   `(s, -(which+1))` — negative words are never handles, no cross-vertical collisions.
   `handles/strings_ext.rs` + `emit_unboxed/scan.rs` + 6 tests `src/jit/tests/string_scan.rs`.
-  Scorecard UPDATE 6. NEXT: `maxBy`/`minBy` (dev GO: `??` peephole first).
+  Scorecard UPDATE 6. (13)(14) `maxby` 0.19×→8.13× / `minby` 0.20×→8.18× (2026-07-23) — **the
+  HARD FLAG closed by the ruled ??-fusion lever** (dev's "flip them all, any well-thought
+  method" = the GO): `extreme_by_coalesce_window` (jit/mod.rs) recognizes the exact Coalesce
+  desugar after the call (external-jump-free), and all FOUR passes consume it as one unit —
+  `leaders` suppresses the window's jump (no orphan blocks), collect skips the six ops (incl.
+  `Const(Null)`), analyze `admit_extreme_by` + `ip += 6` (seeding the selector's param kinds
+  via call_sigs — identity selectors never resolve otherwise), emit `arm_list_extreme_by` +
+  range skip. Total-Int FIRST-WINS strict fold (`sgt`/`slt`, the kernel's parity-affecting
+  tie-break); empty → the `??` default (≡ `null ?? default`). Window-less uses stay VM-bound
+  (fail closed) — the broader nullable-Kind lever REMAINS OPEN, queued. 6 tests
+  `src/jit/tests/extreme_by.rs`. Scorecard UPDATE 7. NEXT: `setdifference`/`setunion`.
   ⚠ **HARD FLAG (2026-07-23): `maxBy`/`minBy` (0.19–0.20×) are BLOCKED on a representation
   lever — dev to rule.** They return `T?`, and the unboxed `Kind` enum (Int/Float/Bool/Str/…/IntList)
   has NO nullable/optional variant, so the element result cannot stay unboxed. Options: (i) add an

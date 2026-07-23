@@ -196,6 +196,32 @@ poison it) — they compute per call, still zero-alloc. Byte-identity: 6 tests i
 >8-pair direct-mapped eviction rounds, interpolated OWNED haystacks exercising the unpinned leg)
 + the differential.
 
+## UPDATE 7 (2026-07-23, later): maxby / minby FLIPPED — the ??-fusion window closes the HARD FLAG
+
+| feature | before | after | how |
+|---|---|---|---|
+| maxby | 0.19× | **8.13× WIN** (185.8M → 22.9M ns) | `?? <int>`-fused total fold, inline selector call per element |
+| minby | 0.20× | **8.18× WIN** (190.4M → 23.3M ns) | same, `slt` compare |
+
+The HARD FLAG is closed by the ruled first lever (dev GO 2026-07-23: "flip them all, any
+well-thought method"): `maxBy`/`minBy` return `T?` and the unboxed Kind set has no optional —
+but the bench shape (and the natural consumer shape) is `List.maxBy(xs, f) ?? default`, and
+FUSED with its `??` the result is a TOTAL Int. `extreme_by_coalesce_window` (jit/mod.rs)
+recognizes the exact Coalesce desugar (`GetLocal(s); Const(Null); Eq; JumpIfFalse(+3);
+Const(int); SetLocal(s)`) right after the call, verifies no external jump lands inside, and all
+FOUR passes consume it as one unit: `leaders` suppresses the window's own jump (no orphan
+Cranelift blocks), collect skips the six desugar ops (incl. the otherwise-unsupported
+`Const(Null)`), analyze admits `admit_extreme_by` then `ip += 6`, emit runs
+`arm_list_extreme_by` then range-skips. The fold is the hofpipe walk + one direct selector call
+per element with a FIRST-WINS strict compare (`sgt`/`slt` — the kernel's parity-affecting
+tie-break) and `select(count != 0, best, default)` — an empty list yields the default, exactly
+`null ?? default`. Admission seeds the selector's param kinds via `call_sigs` (an IDENTITY
+selector `x => x` otherwise never resolves past Unknown in the fixpoint). A window-less
+`maxBy`/`minBy` stays on the VM (fail closed — the nullable-Kind lever remains open if a
+window-less hot shape ever matters). Byte-identity: 6 tests in `src/jit/tests/extreme_by.rs`
+(hits>0 both shapes, tie-break first-wins, runtime-empty receiver → default, window-less VM
+fallback parity, selector-overflow fault parity) + the differential.
+
 ## Interpreter matrix (dev ask 2026-07-23): phg without JIT vs php without opcache/JIT
 
 Same harness, new knobs (`MICROBENCH_PHG_ARGS='--no-jit'|'--tree-walker'`, `MICROBENCH_PHP_JIT=0`).
