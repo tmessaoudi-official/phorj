@@ -3035,7 +3035,17 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `Kind::SetList` (MakeList over IntSet + FLAT_SET-guarded Index) admits `bs[i%4]`; `Set.size`
   inline. setintersection 1.40× / listcontains 1.99× re-verified same run. 5 tests
   `src/jit/tests/set_ops.rs` + `handles/sets_ext.rs` + `emit_unboxed/verticals_set.rs`.
-  Scorecard UPDATE 8. NEXT: `jsonround`/`deepjson`.
+  Scorecard UPDATE 8. (17)(18) `jsonround` 0.32× / `deepjson` 0.92× (2026-07-23) — **MEASURED
+  ANATOMY → HARD FLAG, lever queued (DEC-269)**: the natives are not the bottleneck
+  (validate_json = 146ns per 70-byte doc, 200k-iter Rust timing; JIT≡no-JIT on the bench —
+  nothing in the bodies is in the unboxed subset; decomposition shows even FREE natives leave
+  VM-dispatch time ≈ php's entire budget, so no native work can flip them). The ONLY lever is
+  the Json-ADT JIT slice: enum cells with STRING/MAP/LIST payloads over the W7 Dyn machinery,
+  `Map<string,Dyn>`, `JsonLazy` as an unboxed citizen — multi-session, QUEUED, dev to
+  prioritize. Shipped anyway: `skip_string` bulk-run scan (principled; deepjson 0.90→0.92).
+  **DEC-332 CAMPAIGN CLOSE: 16/18 flipped to WINs in one day; 2 hard-flagged with anatomy +
+  queued lever; floatmul 0.99×/floatloop 0.82× (fully-JIT'd codegen constant factor) queued;
+  dev-box reconciliation run owed.** Scorecard UPDATE 9.
   ⚠ **HARD FLAG (2026-07-23): `maxBy`/`minBy` (0.19–0.20×) are BLOCKED on a representation
   lever — dev to rule.** They return `T?`, and the unboxed `Kind` enum (Int/Float/Bool/Str/…/IntList)
   has NO nullable/optional variant, so the element result cannot stay unboxed. Options: (i) add an

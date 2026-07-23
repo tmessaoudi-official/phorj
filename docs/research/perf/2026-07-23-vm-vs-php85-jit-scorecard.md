@@ -245,6 +245,34 @@ run: `setintersection` 1.40× WIN (untouched), `listcontains` 1.99× WIN (holds)
 results answering `Set.contains` + chained ops, disjoint/subset/empty-result edges) + the
 differential.
 
+## UPDATE 9 (2026-07-23, later): jsonround / deepjson — MEASURED ANATOMY → HARD FLAG, lever queued
+
+| feature | ratio | verdict |
+|---|---|---|
+| jsonround | 0.32× | ⚠ HARD FLAG — VM-dispatch-bound, lever queued |
+| deepjson | 0.92× | ⚠ HARD FLAG (near-tie) — same anatomy |
+
+**The natives are NOT the bottleneck — measured, not assumed:** `validate_json` (the DEC-294
+lazy parse's whole cost at `Json.parse`) runs 200k × 70-byte docs in **29.2ms = 146ns/doc**;
+JIT vs `--no-jit` on jsonround is 754.8M vs 757.0M ns (the JIT never enters — nothing in the
+bench body is in the unboxed subset). Decomposition of jsonround's 754.8M/200k: parse-only loop
+277.4M, stringify+build loop 223.6M, match/extract remainder ~254M — **even with FREE natives
+the remaining VM-dispatch time (~254M) ≈ php's ENTIRE budget (239M)**, so no native
+optimization can flip it. A `skip_string` bulk-run scan (shipped — principled, helps any
+big-string doc) moved deepjson only 0.90×→0.92× (noise-level), confirming the same anatomy:
+both benches are bounded by boxed VM dispatch around enum matches with NON-INT payloads
+(`Json.Object(Map<string,Json>)`, `Json.String(s)`, …), `Map.get` over heterogeneous maps, and
+per-iteration enum construction.
+
+**The queued lever (the only one that flips these):** extend the unboxed subset to the Json-ADT
+shape — enum cells with STRING/MAP/LIST payloads (the W7 Dyn machinery already crosses
+(payload, tag) word pairs; the extension is payload-kind coverage + match arms over them +
+`Map<string, Dyn>` handling + `JsonLazy` as an unboxed citizen). Multi-session architectural
+slice; recorded here per DEC-269 (anatomy + queued lever = acceptable DoD after lever
+exhaustion — dev to prioritize). Float near-ties `floatmul` 0.99× / `floatloop` 0.82× remain
+separately queued (JIT float-codegen constant factor — a Cranelift-level inspection, previously
+measured JIT ~95× over no-JIT, i.e. fully JIT'd already).
+
 ## Interpreter matrix (dev ask 2026-07-23): phg without JIT vs php without opcache/JIT
 
 Same harness, new knobs (`MICROBENCH_PHG_ARGS='--no-jit'|'--tree-walker'`, `MICROBENCH_PHP_JIT=0`).

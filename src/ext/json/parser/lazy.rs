@@ -85,12 +85,22 @@ impl JParser<'_> {
     }
 
     /// Mirror of [`JParser::string`]'s acceptance (same escape + control-char + `\u` surrogate-pair
-    /// rules), but without building the `String`.
+    /// rules), but without building the `String`. The hot inner loop BULK-SKIPS the run of plain
+    /// bytes (not `"`, not `\`, not a control byte — the same three classes the match below
+    /// dispatches on, so acceptance is bit-identical) with a direct slice scan: the skip-scan runs
+    /// once at `Json.parse` (whole-doc validation) and again per materialized level (child
+    /// delimitation), so its per-byte cost is the lazy path's floor.
     fn skip_string(&mut self) -> Option<()> {
         if self.bump() != Some(b'"') {
             return None;
         }
         loop {
+            while let Some(&b) = self.b.get(self.i) {
+                if b == b'"' || b == b'\\' || b < 0x20 {
+                    break;
+                }
+                self.i += 1;
+            }
             match self.peek()? {
                 b'"' => {
                     self.i += 1;
