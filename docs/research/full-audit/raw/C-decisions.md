@@ -2982,5 +2982,11 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   vertical extended to `List.sumBy` — checked `sadd_overflow` accumulator, overflow→code-5 VM redo→
   exact `"integer overflow in List.sumBy"` fault; enabler = `arm_list_hof` M-Decomp `verticals.rs`→
   `verticals_hof.rs`). This disproves the earlier "re-entrant folds can't be won by verticals" note —
-  the win IS the per-element dispatch elimination. NO divergent doc — the ex-`architecture-decomp.plan.md`
-  is folded into MASTER-PLAN.
+  the win IS the per-element dispatch elimination. NEXT: `listReduce` (unboxed-clean, seed + 2-arg
+  callback). ⚠ **HARD FLAG (2026-07-23): `maxBy`/`minBy` (0.19–0.20×) are BLOCKED on a representation
+  lever — dev to rule.** They return `T?`, and the unboxed `Kind` enum (Int/Float/Bool/Str/…/IntList)
+  has NO nullable/optional variant, so the element result cannot stay unboxed. Options: (i) add an
+  `Int?`-style nullable arena kind (broadest — also unblocks other nullable-returning natives); (ii)
+  restrict the vertical to a provably-non-empty list feeding `??` (narrow peephole, no new kind); (iii)
+  accept the flag. Not a night call (Invariant 15-adjacent representation choice). NO divergent doc —
+  the ex-`architecture-decomp.plan.md` is folded into MASTER-PLAN.

@@ -126,8 +126,13 @@ remaining losses: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md` (
 not a fork). State: **27 WIN / 18 LOSS**, then CLOSED so far: **listcontains 0.06×→1.97×** (flat-int
 scan vertical) + **sumby 0.34×→~17×** (hofpipe vertical extended with a checked accumulator). **16
 losses remain**, each its own vertical/representation slice, in order:
-- HOF folds `maxby`/`minby`/`listreduce` (0.19–0.30×) — the sibling hofpipe folds (sumby's family;
-  `maxBy`/`minBy` track element+key first-wins → `T?`, `reduce` threads a seed + 2-arg callback).
+- `listreduce` (0.30×) — hofpipe fold, unboxed-clean (result type = seed type `U`=Int; seed operand +
+  2-arg `(acc,elem)` callback); NEXT vertical.
+- ⚠ `maxby`/`minby` (0.19–0.20×) — **BLOCKED on a representation lever (HARD FLAG, dev to rule):** they
+  return `T?` and the unboxed `Kind` enum has NO nullable/optional variant, so the element result can't
+  stay unboxed. Options (dev): add an `Int?`-style nullable arena kind (broadest, also unblocks other
+  nullable-returning natives) · restrict the vertical to a provably-non-empty list feeding `??` (narrow
+  peephole) · accept the flag. NOT a night decision.
 - `mapkeys`/`mapvalues`/`mapmerge` (0.09–0.12×) — Map key/value MATERIALIZATION vertical → `verticals/map.rs`.
 - string-scan `isemail`/`isurl`/`stringcontains` (0.16–0.24×) — inline substring-scan vertical.
 - JSON `jsonround`/`deepjson`, Set ops, `dbwork`, float near-ties `floatmul`/`floatloop`.

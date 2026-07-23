@@ -77,8 +77,12 @@ string-scan + JSON clusters. CAMPAIGN SSOT = **DEC-332** + MASTER-PLAN §0 (perf
 100%-coverage + M-DECOMP); detail in `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`.
 **M-DECOMP progress: `analyze/natives.rs` DONE** (analyze.rs 2869 → analyze/mod.rs 2683 + natives.rs
 194); **`arm_list_hof` DONE** (verticals.rs 1264 → 1111 + new `verticals_hof.rs`, Inv 13, behavior-
-preserving, gate-green — the fold-accumulator headroom). **NEXT: `maxBy`/`minBy` + `listReduce`
-verticals** (the sibling hofpipe folds) → then `mapkeys`/`mapvalues`. (No divergent doc —
+preserving, gate-green — the fold-accumulator headroom). **NEXT: `listReduce` vertical** (unboxed-clean:
+result = seed type `U`=Int, seed operand + 2-arg `(acc,elem)` callback) → then `mapkeys`/`mapvalues`.
+**⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable arena-kind** — they return `T?` and
+the unboxed `Kind` enum has no optional variant, so the element result can't stay unboxed; dev to rule
+the representation lever (add `Int?` kind / non-empty-`??` peephole / accept flag) — NOT a night call
+(recorded in MASTER-PLAN §0 + DEC-332). (No divergent doc —
 ex-`architecture-decomp.plan.md` folded into MASTER-PLAN.) Full report + root-cause +
 architectural-fix list: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. Root cause:
 per-element native calls over boxed immutable `Value` collections + HAMT key/value extraction (JIT

@@ -23,9 +23,12 @@ dispatch. Measured (phg-JIT vs php-8.5.8+JIT, opcache.jit=tracing confirmed on):
 ns = ~17x WIN**, checksums identical (`20000000`). Byte-identity proven (JIT == VM == tree-walker;
 differential 172/172; new `src/jit/tests/sumby.rs` — delivery `hits>0` + capture/negative/empty edges
 + the overflow redo). Enabler: `arm_list_hof` M-Decomp-extracted `verticals.rs` -> `verticals_hof.rs`
-(Inv 13) to make room for the fold accumulator modes. **16 losses remain** — the sibling folds
-(`maxby`/`minby`/`listreduce`) and `listfilter` are the same hofpipe family (next verticals); the
-`mapkeys`/`mapvalues`/`mapmerge` HAMT-extraction + string-scan + JSON clusters are their own slices.
+(Inv 13) to make room for the fold accumulator modes. **16 losses remain.** NEXT: `listreduce` (0.30x)
+— unboxed-clean (result = seed type `U`; seed operand + 2-arg `(acc,elem)` callback). ⚠ **`maxby`/`minby`
+(0.19–0.20x) are BLOCKED (HARD FLAG, dev to rule):** they return `T?` and the unboxed `Kind` enum has NO
+nullable variant, so the element result can't stay unboxed — needs a representation lever (add an `Int?`
+arena kind / restrict to non-empty-`??` peephole / accept the flag). Then the `mapkeys`/`mapvalues`/
+`mapmerge` HAMT-extraction + string-scan + JSON clusters, each its own slice.
 
 ## Methodology (and its one caveat)
 
