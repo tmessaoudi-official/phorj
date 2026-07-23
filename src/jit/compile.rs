@@ -271,9 +271,23 @@ impl Compiled {
                 &const_map,
                 &info,
             )?;
+            // Debug lens: `PHORJ_JIT_DISASM=1` prints each unboxed function's native disassembly
+            // to stderr (the codegen-constant-factor investigations' ground truth — the floatloop/
+            // floatmul near-ties are readable only at this level). Zero cost when unset.
+            let want_disasm = std::env::var_os("PHORJ_JIT_DISASM").is_some_and(|v| v == "1");
+            cl_ctx.set_disasm(want_disasm);
             module
                 .define_function(func_ids[fi].expect("declared above"), &mut cl_ctx)
                 .map_err(|e| JitError::Codegen(format!("define unboxed fn {fi}: {e}")))?;
+            if want_disasm {
+                if let Some(code) = cl_ctx.compiled_code() {
+                    eprintln!(
+                        "==== unboxed fn {fi} ({}) ====\n{}",
+                        program.functions[fi].name,
+                        code.vcode.as_deref().unwrap_or("<no vcode captured>")
+                    );
+                }
+            }
             module.clear_context(&mut cl_ctx);
             if fi == entry_idx {
                 entry_ret_kind = ret_kind;
