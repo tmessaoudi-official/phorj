@@ -3,10 +3,11 @@
 ## ▶▶ RESUME HERE (updated 2026-07-23, pre-compact) — read this block FIRST, then keep going
 
 **CURRENT STATE + NEXT WORK: jump to the "LIVE CURSOR" block in the 2026-07-23 session log
-below.** Speccing wave COMPLETE AND RULED (7 specs in `docs/specs/2026-07-23-*.md`, all P-points
+below.** Speccing wave COMPLETE AND RULED (8 specs in `docs/specs/2026-07-23-*.md`, all P-points
 answered — build-ready); then the DEC-331 build cluster, then the DEC-333 roadmap (Json-ADT
 JIT → AOT M1-M3 → full A+C+D interpreter campaign). New: DEC-334 config-catalog campaign
-QUEUED. The perf campaign is CLOSED at 44 WIN / 4 LOSS (dev-box
+QUEUED + DEC-335 two-tier top types `Any`+`Object` RULED (spec frozen, build queued with the
+design slices). The perf campaign is CLOSED at 44 WIN / 4 LOSS (dev-box
 canonical, scorecard UPDATE 10).
 
 **BRANCH:** `master` (single-dev, direct-to-master). **origin/master tip at writing:** `66c9375`
