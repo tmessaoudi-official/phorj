@@ -273,6 +273,34 @@ exhaustion — dev to prioritize). Float near-ties `floatmul` 0.99× / `floatloo
 separately queued (JIT float-codegen constant factor — a Cranelift-level inspection, previously
 measured JIT ~95× over no-JIT, i.e. fully JIT'd already).
 
+## UPDATE 10 (2026-07-23, latest): DEV-BOX RECONCILIATION — the canonical ledger is 44 WIN / 4 LOSS
+
+The dev ran the full 48-micro suite on the dev box (the canonical baseline this report's caveat
+asked for). Result: **44 WIN / 4 LOSS** — every one of today's 16 flips HOLDS there, and the
+reconciliation flips three container-pessimistic rows to WINs by itself: **floatloop 1.02× WIN,
+floatmul 1.04× WIN** (the "near-tie" codegen work is NOT needed), **dbwork 1.03× WIN** (the
+from-source-php contradiction resolved). mapkeys 1.17× / mapvalues 1.07× (the thin container
+margins) hold. The four remaining dev-box losses:
+
+| loss | dev-box ratio | anatomy / next lever |
+|---|---|---|
+| jsonround | 0.31× | matches the container → UPDATE 9's queued Json-ADT JIT slice |
+| deepjson | 0.95× | same anatomy, near-tie — the Json-ADT slice closes it |
+| listcontains | 0.85× | see the reverted-lever note below — needs STABLE-BOX diagnosis |
+| mapget | 0.96× | NEW near-tie (was 1.54× on the old container table) — same queue |
+
+**listcontains memo lever attempted and REVERTED (2026-07-23, evidence-based):** a pinned-pair
+memo (flat-list word × int needle, the string-memo pattern) measured **0.25×** — the bench's 12
+rotating pairs thrash the 8 direct-mapped lines, and the per-miss install call costs ~3× the
+plain 12-element scan (which is already near-optimal in-cache at ~9ns). Reverted to the shipped
+scan; a cross-receiver parity test was kept (`jit_listcontains_two_lists_same_needles_stay_exact`).
+Candidate levers for the stable-box session: packed (8-byte-stride) flat int lists for scans
+(the 64-byte slot stride touches one cache line per element — a layout slice), or an
+associative/larger memo region. ⚠ Container measurement noise is now DISQUALIFYING for close
+margins: php's own leg swung 19.1M → 30.3M → 52.9M ns across identical listcontains runs today
+— close-margin perf work happens on the dev box only. New tool for that session:
+`PHORJ_JIT_DISASM=1` prints each unboxed function's native disassembly to stderr.
+
 ## Interpreter matrix (dev ask 2026-07-23): phg without JIT vs php without opcache/JIT
 
 Same harness, new knobs (`MICROBENCH_PHG_ARGS='--no-jit'|'--tree-walker'`, `MICROBENCH_PHP_JIT=0`).

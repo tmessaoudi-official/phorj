@@ -128,10 +128,13 @@ bodies is in the unboxed subset; even FREE natives leave VM-dispatch time ≈ ph
 budget). The ONLY flip lever is the **Json-ADT JIT slice** (enum cells with string/map/list
 payloads over the W7 Dyn machinery + `Map<string,Dyn>` + `JsonLazy` unboxed) — multi-session,
 QUEUED, dev to prioritize. A principled `skip_string` bulk-run scan shipped anyway (helps any
-big-string doc). Scorecard UPDATE 9. **CAMPAIGN CLOSE: 16 of 18 flipped to WINs today; 2
-hard-flagged with measured anatomy + queued lever; float near-ties floatmul 0.99×/floatloop
-0.82× queued separately (Cranelift codegen constant factor). PERF NEXT (dev to rule): the
-Json-ADT slice, the float codegen pass, or the dev-box reconciliation run** →
+big-string doc). Scorecard UPDATE 9. **CAMPAIGN CLOSE: 16 of 18 flipped to WINs today. DEV-BOX
+RECONCILIATION LANDED (dev ran all 48 micros): canonical ledger = 44 WIN / 4 LOSS — floats +
+dbwork are WINs there (no codegen work needed); remaining: jsonround 0.31×/deepjson 0.95× (the
+queued Json-ADT JIT slice) + listcontains 0.85×/mapget 0.96× (stable-box diagnosis only — a
+memo lever was tried and REVERTED on measured evidence, scorecard UPDATE 10; container noise
+now disqualifies close-margin work). PERF NEXT (dev to rule): the Json-ADT slice or the
+stable-box listcontains/mapget session (`PHORJ_JIT_DISASM=1` shipped for it)** →
 then string-scan. **`maxBy`/`minBy` HARD FLAG RESOLVED 2026-07-23** (was: blocked on a nullable arena kind; the
 dev's "flip them ALL, any well-thought method" was taken as the GO it reads as): the ??-fusion
 window shipped and both flipped to ~8.1× WINs — see the PERF block above. The broader

@@ -77,3 +77,30 @@ fn jit_listcontains_found_miss_negative_edges_match_the_oracle() {
         "listcontains edge semantics"
     );
 }
+
+#[test]
+fn jit_listcontains_two_lists_same_needles_stay_exact() {
+    // Two DIFFERENT lists probed with the SAME rotating needles in one loop — a guard against
+    // any future caching/memo lever cross-hitting between receivers (a memo attempt here was
+    // REVERTED 2026-07-23: 12 rotating pairs thrashed the 8 direct-mapped lines and the
+    // per-miss install call cost 3x the plain scan — see the scorecard's listcontains note).
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        function bench(int iters): int {\n\
+          List<int> a = [1, 2, 3, 4, 5, 6, 7, 8];\n\
+          List<int> b = [2, 4, 6, 8, 10, 12, 14, 16];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            if (List.contains(a, i % 10)) { acc = acc + 1; }\n\
+            if (List.contains(b, i % 10)) { acc = acc + 100; }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "memo eviction rounds must stay exact");
+}

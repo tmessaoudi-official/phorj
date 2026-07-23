@@ -3045,7 +3045,16 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   prioritize. Shipped anyway: `skip_string` bulk-run scan (principled; deepjson 0.90→0.92).
   **DEC-332 CAMPAIGN CLOSE: 16/18 flipped to WINs in one day; 2 hard-flagged with anatomy +
   queued lever; floatmul 0.99×/floatloop 0.82× (fully-JIT'd codegen constant factor) queued;
-  dev-box reconciliation run owed.** Scorecard UPDATE 9.
+  dev-box reconciliation run owed.** Scorecard UPDATE 9. (19) DEV-BOX RECONCILIATION LANDED
+  (2026-07-23, dev ran all 48 micros): **canonical ledger = 44 WIN / 4 LOSS** — all 16 flips
+  hold; floatloop 1.02×/floatmul 1.04×/dbwork 1.03× WIN on the dev box (near-tie codegen work
+  CLOSED as unnecessary); remaining: jsonround 0.31×/deepjson 0.95× (the queued Json-ADT
+  slice) + listcontains 0.85×/mapget 0.96× (STABLE-BOX diagnosis only — a pinned-pair memo
+  lever measured 0.25× and was REVERTED same-day: 12 rotating pairs thrash the 8 direct-mapped
+  lines, per-miss install ≈ 3× the near-optimal scan; candidate lever = packed-stride flat
+  lists; container php-leg noise measured 19.1→30.3→52.9M ns on identical runs =
+  disqualifying). `PHORJ_JIT_DISASM=1` (per-fn native disassembly to stderr) shipped for the
+  stable-box session. Scorecard UPDATE 10.
   ⚠ **HARD FLAG (2026-07-23): `maxBy`/`minBy` (0.19–0.20×) are BLOCKED on a representation
   lever — dev to rule.** They return `T?`, and the unboxed `Kind` enum (Int/Float/Bool/Str/…/IntList)
   has NO nullable/optional variant, so the element result cannot stay unboxed. Options: (i) add an
