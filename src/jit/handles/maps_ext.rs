@@ -239,6 +239,63 @@ pub(in crate::jit) extern "C" fn rt_u_map_values(ctx: *mut UbCtx, map: i64, free
         }
         return ctx.alloc(Value::List(std::rc::Rc::new(out)));
     }
+    // AMB builder record (a `Map.map`/`Map.filter` result or a live mapinsert builder): walk the
+    // RANKS (insertion order), probe the table per canon for the value. UN-memoized (the record
+    // is mutable/recycled — memoizing it would alias a dead buffer); the output is a fresh
+    // recycled ACL builder, so a per-iteration `Map.values(mapped)` costs no arena growth.
+    if map & UB_TAG_AMB != 0 {
+        let idx = (map & UB_IDX_MASK) as usize;
+        if idx >= UB_ACC_CAP {
+            return -1;
+        }
+        let mut w8 = [0u8; 8];
+        w8.copy_from_slice(&ctx.acc_bufs[idx][0..8]);
+        let tsize = 1usize << u64::from_le_bytes(w8);
+        w8.copy_from_slice(&ctx.acc_bufs[idx][8..16]);
+        let count = u64::from_le_bytes(w8) as usize;
+        let mut vals = Vec::with_capacity(count);
+        for i in 0..count {
+            let roff = 16 + tsize * 16 + i * 8;
+            w8.copy_from_slice(&ctx.acc_bufs[idx][roff..roff + 8]);
+            let canon = u64::from_le_bytes(w8);
+            let hoff = (canon as usize - 1) * UB_SLOT_SIZE + UB_SLOT_HASH_OFF;
+            w8.copy_from_slice(&ctx.buf_storage[hoff..hoff + 8]);
+            let hash = u64::from_le_bytes(w8);
+            let mut t = (hash as usize) & (tsize - 1);
+            loop {
+                let eoff = 16 + t * 16;
+                w8.copy_from_slice(&ctx.acc_bufs[idx][eoff..eoff + 8]);
+                let ec = u64::from_le_bytes(w8);
+                if ec == canon {
+                    w8.copy_from_slice(&ctx.acc_bufs[idx][eoff + 8..eoff + 16]);
+                    vals.push(i64::from_le_bytes(w8));
+                    break;
+                }
+                if ec == 0 {
+                    return -1; // defensive — a rank without a table entry
+                }
+                t = (t + 1) & (tsize - 1);
+            }
+        }
+        if let Some(out_idx) = ctx.acc_take_record() {
+            ctx.acc_grow_to(out_idx, (count * 8).max(64));
+            ctx.acc_recs[out_idx].len = 0;
+            for v in &vals {
+                ctx.acc_push(out_idx, &v.to_le_bytes());
+            }
+            if free_map != 0 {
+                ctx.release(map);
+            }
+            return UB_TAG_ACL | out_idx as i64;
+        }
+        let h = ctx.alloc(Value::List(std::rc::Rc::new(
+            vals.into_iter().map(Value::Int).collect(),
+        )));
+        if free_map != 0 {
+            ctx.release(map);
+        }
+        return h;
+    }
     let out: Vec<Value> = match ctx.handles.get(map as usize) {
         Some(Value::Map(m)) if ub_is_untagged(map) => m.iter().map(|(_, v)| v.clone()).collect(),
         _ => return -1,
@@ -324,6 +381,86 @@ pub(in crate::jit) extern "C" fn rt_u_map_merge(
         ctx.release(b);
     }
     h
+}
+
+/// `Map.map`/`Map.filter` output seed (the DEC-332 mapfilter/mapmap flips): take an AMB builder
+/// record sized for `n` entries (the parent flat map's pair count — survivors never exceed it),
+/// zero the table, count = 0. Table sizing mirrors [`rt_u_map_builder_set`]'s convert leg
+/// (`max(16, (2(n+1)).next_pow2)` — load ≤ 1/2 with one-set headroom), so a later `m[k] = v`
+/// onto the result extends it through the SAME layout. A fresh record per loop iteration is
+/// RECYCLED by the consumer's release — never sealed, so a hot loop cannot exhaust the arena
+/// (the mapmerge bring-up cliff, avoided by construction here). `-1` = record pool exhausted
+/// (→ code 5, byte-identical VM redo).
+pub(in crate::jit) extern "C" fn rt_u_map_ext_new(ctx: *mut UbCtx, n: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    if !(0..1 << 12).contains(&n) {
+        return -1;
+    }
+    let Some(idx) = ctx.acc_take_record() else {
+        return -1;
+    };
+    let tsize = usize::max(16, (2 * (n as usize + 1)).next_power_of_two());
+    ctx.acc_grow_to(idx, 16 + tsize * 16 + n as usize * 8);
+    let lg = tsize.trailing_zeros() as u64;
+    ctx.acc_bufs[idx][0..8].copy_from_slice(&lg.to_le_bytes());
+    ctx.acc_bufs[idx][8..16].copy_from_slice(&0u64.to_le_bytes());
+    ctx.acc_bufs[idx][16..16 + tsize * 16].fill(0);
+    ctx.acc_recs[idx].len = (16 + tsize * 16) as u64;
+    UB_TAG_AMB | idx as i64
+}
+
+/// Append pair `(parent key slot, val)` to an [`rt_u_map_ext_new`] record: canon + hash are READ
+/// from the parent's bump-pinned key slot (the seal already adopt-or-registered them — no
+/// interning, no hashing here), rank appended, table hole-inserted. Parent keys are unique, so
+/// every probe finds a hole (canon match is defensively an overwrite, mirroring builder-set).
+/// The emit loop pushes ≤ `n` survivors into an `n`-sized record — capacity is preflighted, the
+/// grow below only ever extends the rank tail. `-1` = bad handle (→ code 5, VM redo).
+pub(in crate::jit) extern "C" fn rt_u_map_ext_push(
+    ctx: *mut UbCtx,
+    amb: i64,
+    kslot: i64,
+    val: i64,
+) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let idx = (amb & UB_IDX_MASK) as usize;
+    if amb & UB_TAG_AMB == 0 || idx >= UB_ACC_CAP {
+        return -1;
+    }
+    let koff = kslot as usize * UB_SLOT_SIZE;
+    let mut w8 = [0u8; 8];
+    w8.copy_from_slice(&ctx.buf_storage[koff + UB_SLOT_HASH_OFF..koff + UB_SLOT_HASH_OFF + 8]);
+    let hash = u64::from_le_bytes(w8);
+    w8.copy_from_slice(&ctx.buf_storage[koff + UB_SLOT_CANON_OFF..koff + UB_SLOT_CANON_OFF + 8]);
+    let canon1 = u64::from_le_bytes(w8);
+    if canon1 == 0 {
+        return -1; // seal always canonizes flat keys — defensive
+    }
+    w8.copy_from_slice(&ctx.acc_bufs[idx][0..8]);
+    let tsize = 1usize << u64::from_le_bytes(w8);
+    w8.copy_from_slice(&ctx.acc_bufs[idx][8..16]);
+    let count = u64::from_le_bytes(w8) as usize;
+    let mut t = (hash as usize) & (tsize - 1);
+    loop {
+        let eoff = 16 + t * 16;
+        w8.copy_from_slice(&ctx.acc_bufs[idx][eoff..eoff + 8]);
+        let ec = u64::from_le_bytes(w8);
+        if ec == canon1 {
+            ctx.acc_bufs[idx][eoff + 8..eoff + 16].copy_from_slice(&val.to_le_bytes());
+            return 0;
+        }
+        if ec == 0 {
+            ctx.acc_bufs[idx][eoff..eoff + 8].copy_from_slice(&canon1.to_le_bytes());
+            ctx.acc_bufs[idx][eoff + 8..eoff + 16].copy_from_slice(&val.to_le_bytes());
+            break;
+        }
+        t = (t + 1) & (tsize - 1);
+    }
+    ctx.acc_grow_to(idx, 16 + tsize * 16 + (count + 1) * 8);
+    let roff = 16 + tsize * 16 + count * 8;
+    ctx.acc_bufs[idx][roff..roff + 8].copy_from_slice(&canon1.to_le_bytes());
+    ctx.acc_bufs[idx][8..16].copy_from_slice(&((count as u64) + 1).to_le_bytes());
+    ctx.acc_recs[idx].len = (16 + tsize * 16 + (count + 1) * 8) as u64;
+    0
 }
 
 /// `Map.size` slow leg — the emit arm inlines FLAT (count bits) and AMB (record count word);
