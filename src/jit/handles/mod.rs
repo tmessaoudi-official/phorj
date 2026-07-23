@@ -3,6 +3,13 @@
 
 use super::*;
 
+mod list_builders;
+mod maps_ext;
+mod symbols;
+pub(super) use list_builders::*;
+pub(super) use maps_ext::*;
+pub(super) use symbols::*;
+
 // ===========================================================================================
 // P-2a handle space (+ P-2a-inline): the per-run side state + `rt_u_*` helpers that let the
 // UNBOXED codegen run string/collection verticals (Concat / list Index / `String.length`)
@@ -75,6 +82,12 @@ pub(super) const UB_TAG_AMB: i64 = 1 << 57;
 /// count (bits 40..60) can also cover bit 56, but the FLAT tag dispatches FIRST on every
 /// ladder, so an ACL-branch check never sees a flat word.
 pub(super) const UB_TAG_ACLS: i64 = 1 << 56;
+/// SHARED marker for a MEMO-owned builder record (set alongside `UB_TAG_ACL[|ACLS]` by the map
+/// materialization verticals — `maps_ext.rs`): the memo table owns the record, so a consumer
+/// release is a NO-OP (the [`UbCtx::release`] gate) and the in-place list-append paths must COPY
+/// into a fresh record instead of extending (`rt_u_list_acc_append` / the inline `list_append_acc`
+/// exclusion). Bit 55 is below every dispatch tag and above the 40-bit index — never ambiguous.
+pub(super) const UB_TAG_SHARED: i64 = 1 << 55;
 /// Accumulator record-table capacity. Records are pre-allocated (`acc_base` must never move);
 /// live accumulators correspond to compile-time accumulator SITES — a handful at most.
 /// Exhaustion falls back to the plain concat path (correct, slower).
@@ -147,6 +160,10 @@ pub(super) struct UbCtx {
     /// offset 40: base of the accumulator record table (`UB_ACC_CAP` × 24-byte [`AccRec`]s —
     /// points into `acc_recs`, pre-allocated so it never moves).
     acc_base: *mut AccRec,
+    /// offset 48: base of the map-materialization MEMO table (16 × 3-word entries — see
+    /// `maps_ext.rs`; points into `memo_storage`, pre-allocated so it never moves). Probed
+    /// INLINE by the `Map.keys`/`values`/`merge` emit arms; 0-words mean "empty".
+    memo_base: *mut i64,
     // --- Rust-only (helpers may touch; inline IR must not) ---
     /// Boxed-`Value` handles (untagged): long consts, heap concat results.
     handles: Vec<Value>,
@@ -176,6 +193,15 @@ pub(super) struct UbCtx {
     acc_free: Vec<u32>,
     /// Next never-used accumulator record index (grows toward `UB_ACC_CAP`).
     acc_next: u32,
+    /// Owns the memo words `memo_base` points into (fixed 48-word length — 16 × 3).
+    memo_storage: Vec<i64>,
+    /// FULL keys/values memo behind the direct-mapped inline table: map handle → `(keys_h,
+    /// values_h)` (0 = that side not built yet). An inline-cache eviction re-installs from
+    /// here instead of rebuilding — record/arena growth is bounded by DISTINCT maps.
+    memo_kv: std::collections::HashMap<i64, (i64, i64)>,
+    /// FULL merge memo behind the inline pair table: `(a, b)` → merged flat-map handle. Same
+    /// discipline — an eviction re-installs, NEVER re-seals (the rebuild-per-iteration cliff).
+    memo_merge: std::collections::HashMap<(i64, i64), i64>,
     /// `bump` right after const seeding — the pinned-const arena prefix. Everything at or past
     /// it is per-run state that [`UbCtx::reset_for_run`] reclaims (the ctx-reuse lever).
     const_bump: u64,
@@ -229,6 +255,7 @@ impl UbCtx {
                 cap: 0,
             })
             .collect();
+        let mut memo_storage = vec![0i64; 48];
         UbCtx {
             buf: buf_storage.as_mut_ptr(),
             free_stack: free_storage.as_mut_ptr(),
@@ -236,6 +263,7 @@ impl UbCtx {
             bump,
             cap: UB_SLOT_CAP as u64,
             acc_base: acc_recs.as_mut_ptr(),
+            memo_base: memo_storage.as_mut_ptr(),
             handles,
             free: Vec::new(),
             n_pinned,
@@ -246,6 +274,9 @@ impl UbCtx {
             acc_bufs: vec![Vec::new(); UB_ACC_CAP],
             acc_free: Vec::new(),
             acc_next: 0,
+            memo_storage,
+            memo_kv: std::collections::HashMap::new(),
+            memo_merge: std::collections::HashMap::new(),
             const_bump: bump,
         }
     }
@@ -274,6 +305,12 @@ impl UbCtx {
             self.acc_free.push(i);
             self.acc_recs[i as usize].len = 0;
         }
+        // Map-materialization memos: entries key on THIS run's map handles (bump slots the
+        // reset just reclaimed) — clearing is CORRECTNESS, not hygiene: a stale hit on a
+        // re-sealed base would alias a different map's slots.
+        self.memo_storage.fill(0);
+        self.memo_kv.clear();
+        self.memo_merge.clear();
     }
 
     /// The compile-time handles for `const_values`, mirroring [`UbCtx::new`] exactly (same walk,
@@ -496,6 +533,12 @@ impl UbCtx {
         } else if h & UB_TAG_FLAT != 0 {
             // Flat-list slots are bump-pinned for the run (built once per call) — no recycling.
         } else if h & (UB_TAG_ACC | UB_TAG_ACL | UB_TAG_AMB) != 0 {
+            // A SHARED record is MEMO-owned (maps_ext): live handles to it may exist anywhere,
+            // so a consumer release must NOT recycle it — the memo (or the per-run reset) is
+            // its sole lifecycle owner.
+            if h & UB_TAG_SHARED != 0 {
+                return;
+            }
             // Recycle the RECORD (string accumulator or list builder — same pool), keep its
             // buffer: a reconverted accumulator/builder (the reset pattern) reuses the grown
             // capacity — php's buffer-reuse trick.
@@ -1033,136 +1076,6 @@ pub(super) extern "C" fn rt_u_list_len(ctx: *mut UbCtx, h: i64) -> i64 {
     }
 }
 
-/// FUSED list-builder append (`xs = List.append(xs, v)`, the listappend vertical) — the SLOW
-/// leg of the inline ACL fast path. (1) lhs already an ACL record → capacity growth
-/// (doubling) + push; (2) lhs a flat/boxed INT list → CONVERT: take a record (recycled ones
-/// reuse their grown buffer), copy the elements in as raw i64s, push, release the consumed
-/// lhs, return `ACL|idx`; (3) record table exhausted → general clone-append fallback (boxed
-/// result, same MOVE semantics — correct bytes at degraded speed, never a code-5 redo
-/// storm). Only reachable from proven accumulator sites, so the lhs is always consumed.
-pub(super) extern "C" fn rt_u_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -> i64 {
-    let ctx = unsafe { &mut *ctx };
-    if a & UB_TAG_ACL != 0 {
-        let idx = (a & UB_IDX_MASK) as usize;
-        if idx >= UB_ACC_CAP {
-            return -1;
-        }
-        let need = ctx.acc_recs[idx].len as usize + 8;
-        ctx.acc_grow_to(idx, need);
-        ctx.acc_push(idx, &v.to_le_bytes());
-        return a;
-    }
-    // Conversion leg: collect the current elements (flat arena slots or a boxed int list).
-    let elems: Vec<i64> = if a & UB_TAG_FLAT != 0 && a & UB_TAG_SLOT == 0 {
-        let n = ((a >> 40) & 0xFFFFF) as usize;
-        let base = (a & UB_IDX_MASK) as usize;
-        (0..n)
-            .map(|i| {
-                let off = (base + i) * UB_SLOT_SIZE;
-                let mut b8 = [0u8; 8];
-                b8.copy_from_slice(&ctx.buf_storage[off..off + 8]);
-                i64::from_le_bytes(b8)
-            })
-            .collect()
-    } else {
-        match ctx.handles.get(a as usize) {
-            Some(Value::List(xs)) => {
-                let ints: Option<Vec<i64>> = xs
-                    .iter()
-                    .map(|e| match e {
-                        Value::Int(n) => Some(*n),
-                        _ => None,
-                    })
-                    .collect();
-                match ints {
-                    Some(v) => v,
-                    None => return -1,
-                }
-            }
-            _ => return -1,
-        }
-    };
-    let Some(idx) = ctx.acc_take_record() else {
-        // Pool exhausted — fall back to the general clone-append (raw i64 elements are
-        // plain words: nothing extra to release).
-        return rt_u_list_append_clone(ctx, a, v, 0b100);
-    };
-    ctx.acc_grow_to(idx, ((elems.len() + 1) * 8).max(64));
-    ctx.acc_recs[idx].len = 0;
-    for e in &elems {
-        ctx.acc_push(idx, &e.to_le_bytes());
-    }
-    ctx.acc_push(idx, &v.to_le_bytes());
-    ctx.release(a);
-    UB_TAG_ACL | idx as i64
-}
-
-/// L2a: the STR-list twin of [`rt_u_list_acc_append`] — the record stores element WORDS the
-/// record then OWNS (the qualify-loop `out = List.append(out, q)` shape pushes q's word,
-/// ZERO clones). (1) lhs already a STR record (`ACL|ACLS`) → grow + push the word; an INT
-/// record here is analyze/emit drift → `-1`. (2) lhs a FLAT str list → convert: the
-/// elements' BORROWED SLOT WORDS go in as-is (the slots are bump-pinned for the run — no
-/// copies, and their releases no-op); lhs a BOXED str list → one owned arena word per
-/// element (a one-time conversion cost). (3) pool exhaustion → general clone-append
-/// fallback (boxed result, never a code-5 redo storm); non-str element → `-1` (code 5,
-/// redo on VM). Only reachable from proven accumulator sites, so the lhs is consumed.
-pub(super) extern "C" fn rt_u_str_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -> i64 {
-    let ctx = unsafe { &mut *ctx };
-    if a & UB_TAG_ACL != 0 {
-        if a & UB_TAG_ACLS == 0 {
-            return -1;
-        }
-        let idx = (a & UB_IDX_MASK) as usize;
-        if idx >= UB_ACC_CAP {
-            return -1;
-        }
-        let need = ctx.acc_recs[idx].len as usize + 8;
-        ctx.acc_grow_to(idx, need);
-        ctx.acc_push(idx, &v.to_le_bytes());
-        return a;
-    }
-    let words: Vec<i64> = if a & UB_TAG_FLAT != 0 && a & UB_TAG_SLOT == 0 {
-        let n = ((a >> 40) & 0xFFFFF) as usize;
-        let base = (a & UB_IDX_MASK) as usize;
-        (0..n).map(|i| (base + i) as i64 | UB_TAG_SLOT).collect()
-    } else {
-        let strs: Vec<Value> = match ctx.handles.get(a as usize) {
-            Some(Value::List(xs)) => {
-                let all: Option<Vec<Value>> = xs
-                    .iter()
-                    .map(|e| match e {
-                        s @ Value::Str(_) => Some(s.clone()),
-                        _ => None,
-                    })
-                    .collect();
-                match all {
-                    Some(vs) => vs,
-                    None => return -1,
-                }
-            }
-            _ => return -1,
-        };
-        strs.into_iter().map(|s| ctx.alloc(s)).collect()
-    };
-    let Some(idx) = ctx.acc_take_record() else {
-        // Pool exhausted — fall back to the general clone-append (boxed result, same
-        // MOVE semantics: elem word + lhs consumed). Correct bytes at degraded speed,
-        // NEVER a code-5 redo storm — mirrors rt_u_acc_append's plain-concat fallback.
-        for w in words {
-            ctx.release(w); // boxed-lhs materialization made owned words; slot words no-op
-        }
-        return rt_u_list_append_clone(ctx, a, v, 0b111);
-    };
-    ctx.acc_grow_to(idx, ((words.len() + 1) * 8).max(64));
-    ctx.acc_recs[idx].len = 0;
-    for w in &words {
-        ctx.acc_push(idx, &w.to_le_bytes());
-    }
-    ctx.acc_push(idx, &v.to_le_bytes());
-    ctx.release(a);
-    UB_TAG_ACL | UB_TAG_ACLS | idx as i64
-}
-
 pub(super) extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
     let n = match ctx.str_bytes(h) {
@@ -1250,58 +1163,17 @@ pub(super) extern "C" fn rt_u_map_seal(ctx: *mut UbCtx, map: i64) -> i64 {
         ctx.release(map);
         return ctx.alloc(Value::Map(std::rc::Rc::new(deduped)));
     };
-    let n = entries.len() as i64;
-    // Bucket-table sizing: load factor ≤ 1/2, minimum 4 buckets (an empty map still terminates
-    // its probe on an empty bucket). The table lives in the slots right after the 2n pairs.
-    // PACKED entries (the mapget vertical): each bucket is 16 bytes `{canon: u64, value: i64}`
-    // (canon 0 = empty — a real canon is never 0), so the inline probe's hit is TWO adjacent
-    // loads in one cache line (was a 3-deep dependent chain: bucket u32 → pair canon → value).
-    let tsize = usize::max(4, (2 * n as usize).next_power_of_two());
-    let tslots = (tsize * 16).div_ceil(UB_SLOT_SIZE) as u64; // 16-byte entries / 64-byte slots
-    if n >= 1 << 12 || ctx.bump + 2 * n as u64 + tslots > ctx.cap {
-        ctx.release(map);
-        return ctx.alloc(Value::Map(std::rc::Rc::new(deduped)));
-    }
-    let base = ctx.bump as i64;
+    // The pair/table WRITER is shared with `Map.merge` — extracted to `maps_ext::seal_flat_entries`
+    // (count/arena guards included; `None` → boxed fallback).
     let owned: Vec<(Vec<u8>, u64, i64)> = entries
         .iter()
         .map(|(s, v)| (s.as_bytes().to_vec(), s.cached_hash(), *v))
         .collect();
-    let mut table = vec![(0u64, 0i64); tsize];
-    for (bytes, hash, val) in owned.iter() {
-        // Key slot: len + bytes + ZERO tail (the inline probe's whole-word compares) + hash +
-        // canon (adopt-or-register — a flat key slot is bump-pinned, registry-safe).
-        let kslot = ctx.bump as usize;
-        let koff = kslot * UB_SLOT_SIZE;
-        ctx.buf_storage[koff] = bytes.len() as u8;
-        ctx.buf_storage[koff + 1..koff + 1 + bytes.len()].copy_from_slice(bytes);
-        ctx.buf_storage[koff + 1 + bytes.len()..koff + UB_SLOT_HASH_OFF].fill(0);
-        ctx.buf_storage[koff + UB_SLOT_HASH_OFF..koff + UB_SLOT_HASH_OFF + 8]
-            .copy_from_slice(&hash.to_le_bytes());
-        let canon1 = *ctx.interned.entry(bytes.clone()).or_insert(kslot as u32) as u64 + 1;
-        ctx.buf_storage[koff + UB_SLOT_CANON_OFF..koff + UB_SLOT_CANON_OFF + 8]
-            .copy_from_slice(&canon1.to_le_bytes());
-        // Value slot: the raw i64, LE, bytes 0..8 (the rest is never read).
-        let voff = koff + UB_SLOT_SIZE;
-        ctx.buf_storage[voff..voff + 8].copy_from_slice(&val.to_le_bytes());
-        ctx.bump += 2;
-        // Open-addressed insert (keys are already deduped — every insert finds a hole; canons
-        // are distinct because canon equality ⇔ byte equality, and never 0).
-        let mut t = (*hash as usize) & (tsize - 1);
-        while table[t].0 != 0 {
-            t = (t + 1) & (tsize - 1);
-        }
-        table[t] = (canon1, *val);
-    }
-    let toff = ctx.bump as usize * UB_SLOT_SIZE;
-    for (i, (c, v)) in table.iter().enumerate() {
-        ctx.buf_storage[toff + 16 * i..toff + 16 * i + 8].copy_from_slice(&c.to_le_bytes());
-        ctx.buf_storage[toff + 16 * i + 8..toff + 16 * i + 16].copy_from_slice(&v.to_le_bytes());
-    }
-    ctx.bump += tslots;
     ctx.release(map);
-    let log2 = tsize.trailing_zeros() as i64;
-    UB_TAG_FLAT_MAP | (n << UB_MAP_CNT_SHIFT) | (log2 << UB_MAP_LOG_SHIFT) | base
+    match seal_flat_entries(ctx, &owned) {
+        Some(h) => h,
+        None => ctx.alloc(Value::Map(std::rc::Rc::new(deduped))),
+    }
 }
 
 /// FORK-D — the setcontains vertical's BUILDING helper: seal `Set.of(List<int>)` into an int-keyed
@@ -2245,6 +2117,10 @@ pub(super) struct UbHelperIds {
     pub(super) clone_value: FuncId,
     pub(super) list_append_dyn: FuncId,
     pub(super) str_list_acc_append: FuncId,
+    pub(super) map_keys: FuncId,
+    pub(super) map_values: FuncId,
+    pub(super) map_merge: FuncId,
+    pub(super) map_size: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -2277,4 +2153,8 @@ pub(super) struct UbHelperRefs {
     pub(super) clone_value: FuncRef,
     pub(super) list_append_dyn: FuncRef,
     pub(super) str_list_acc_append: FuncRef,
+    pub(super) map_keys: FuncRef,
+    pub(super) map_values: FuncRef,
+    pub(super) map_merge: FuncRef,
+    pub(super) map_size: FuncRef,
 }

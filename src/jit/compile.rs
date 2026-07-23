@@ -164,41 +164,7 @@ impl Compiled {
             JITBuilder::with_flags(&[("opt_level", "speed")], default_libcall_names())
                 .map_err(|e| JitError::Codegen(format!("JITBuilder: {e}")))?;
         if uses_handles {
-            builder.symbol("rt_u_list_new", rt_u_list_new as *const u8);
-            builder.symbol("rt_u_list_push", rt_u_list_push as *const u8);
-            builder.symbol("rt_u_list_seal", rt_u_list_seal as *const u8);
-            builder.symbol("rt_u_index", rt_u_index as *const u8);
-            builder.symbol("rt_u_concat", rt_u_concat as *const u8);
-            builder.symbol("rt_u_str_len", rt_u_str_len as *const u8);
-            builder.symbol("rt_u_free", rt_u_free as *const u8);
-            builder.symbol("rt_u_map_push_pair", rt_u_map_push_pair as *const u8);
-            builder.symbol("rt_u_map_seal", rt_u_map_seal as *const u8);
-            builder.symbol("rt_u_set_seal", rt_u_set_seal as *const u8);
-            builder.symbol("rt_u_map_get", rt_u_map_get as *const u8);
-            builder.symbol("rt_u_map_has", rt_u_map_has as *const u8);
-            builder.symbol("rt_u_list_push_int", rt_u_list_push_int as *const u8);
-            builder.symbol("rt_u_index_int", rt_u_index_int as *const u8);
-            builder.symbol("rt_u_int_to_str", rt_u_int_to_str as *const u8);
-            builder.symbol("rt_u_concat_mix", rt_u_concat_mix as *const u8);
-            builder.symbol("rt_u_acc_append", rt_u_acc_append as *const u8);
-            builder.symbol("rt_u_list_len", rt_u_list_len as *const u8);
-            builder.symbol("rt_u_list_acc_append", rt_u_list_acc_append as *const u8);
-            builder.symbol("rt_u_map_builder_set", rt_u_map_builder_set as *const u8);
-            builder.symbol("rt_u_map_builder_seed", rt_u_map_builder_seed as *const u8);
-            builder.symbol("rt_u_list_acc_reseed", rt_u_list_acc_reseed as *const u8);
-            builder.symbol("rt_u_list_builder_new", rt_u_list_builder_new as *const u8);
-            builder.symbol(
-                "rt_u_list_append_clone",
-                rt_u_list_append_clone as *const u8,
-            );
-            builder.symbol("rt_u_native2", rt_u_native2 as *const u8);
-            builder.symbol("rt_u_str_eq", rt_u_str_eq as *const u8);
-            builder.symbol("rt_u_clone_value", rt_u_clone_value as *const u8);
-            builder.symbol("rt_u_list_append_dyn", rt_u_list_append_dyn as *const u8);
-            builder.symbol(
-                "rt_u_str_list_acc_append",
-                rt_u_str_list_acc_append as *const u8,
-            );
+            register_ub_symbols(&mut builder);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -343,6 +309,10 @@ impl Compiled {
                     let s = make_sig(&module, &[ptr, types::I64, types::I64], Some(types::I64));
                     declare(&mut module, "rt_u_str_list_acc_append", &s)?
                 },
+                map_keys: declare(&mut module, "rt_u_map_keys", &sig3)?,
+                map_values: declare(&mut module, "rt_u_map_values", &sig3)?,
+                map_merge: declare(&mut module, "rt_u_map_merge", &sig4)?,
+                map_size: declare(&mut module, "rt_u_map_size", &sig3)?,
             })
         } else {
             None

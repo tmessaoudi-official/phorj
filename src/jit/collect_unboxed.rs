@@ -95,6 +95,15 @@ pub(super) fn collect_functions_unboxed(
                 Op::CallNative(id, 1) if unboxed_native_is_to_string(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => uses_handles = true,
+                // Map materialization verticals (mapkeys/mapvalues/mapmerge/mapsize flips).
+                Op::CallNative(id, 1)
+                    if unboxed_native_is_map_keys(*id)
+                        || unboxed_native_is_map_values(*id)
+                        || unboxed_native_is_map_size(*id) =>
+                {
+                    uses_handles = true
+                }
+                Op::CallNative(id, 2) if unboxed_native_is_map_merge(*id) => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_set_contains(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_list_contains(*id) => {
