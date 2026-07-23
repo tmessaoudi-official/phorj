@@ -31,7 +31,8 @@ pub(super) fn arm_make_list(
         && kinds[d - n..]
             .iter()
             .all(|k| matches!(k, Kind::StrIntMap(_)));
-    if !(all_str || all_int || all_map) {
+    let all_set = n > 0 && kinds[d - n..].iter().all(|k| matches!(k, Kind::IntSet(_)));
+    if !(all_str || all_int || all_map || all_set) {
         return Err(JitError::Unsupported(format!(
             "unboxed MakeList element kinds {:?}",
             &kinds[d - n..]
@@ -45,7 +46,7 @@ pub(super) fn arm_make_list(
     for j in 0..n {
         let depth_j = d - n + j;
         let ev = b.use_var(vars[depth_j]);
-        let pc = if all_int || all_map {
+        let pc = if all_int || all_map || all_set {
             b.ins().call(h.list_push_int, &[ec.ctx, list_h, ev])
         } else {
             let freev = b
@@ -74,6 +75,8 @@ pub(super) fn arm_make_list(
             Kind::IntList(Own::Owned)
         } else if all_map {
             Kind::MapList(Own::Owned)
+        } else if all_set {
+            Kind::SetList(Own::Owned)
         } else {
             Kind::StrList(Own::Owned)
         },
@@ -430,126 +433,6 @@ pub(super) fn arm_maphas(
     let bad = b.ins().icmp_imm_s(IntCC::NotEqual, scode, 0);
     ec.fault_if(b, bad, 5);
     b.ins().jump(merge, &[spresent.into()]);
-    b.switch_to_block(merge);
-    let res = b.block_params(merge)[0];
-    ub_push(b, vars, fvars, kinds, res, Kind::Bool)
-}
-
-/// `Core.Set.of(List<int>)` — the FORK-D setcontains vertical's producer. SEALS a FRESH OWNED flat
-/// int-list into an int-keyed packed OPEN-ADDRESSED hash table (via [`rt_u_set_seal`]) so
-/// `Set.contains` probes in O(1) — the prior linear-scan vertical could not beat php's C `in_array`.
-/// Returns a [`UB_TAG_FLAT_SET`] handle (base → the bucket table). Owned-ONLY input is the
-/// double-free gate (a Borrowed copy would alias its source local); `analyze` enforces the same, so
-/// this reject is defensive. A `-1` from the helper (non-int element, too-large, arena exhaustion) →
-/// code 5, the WHOLE call redoes on the VM (which builds a real `Value::Set` — byte-identical).
-pub(super) fn arm_set_of(
-    b: &mut FunctionBuilder,
-    ec: &Ec,
-    h: &UbHelperRefs,
-    vars: &[Variable],
-    fvars: &[Variable],
-    kinds: &mut Vec<Kind>,
-) -> Result<(), JitError> {
-    let (v, k) = ub_pop(b, vars, fvars, kinds)?;
-    if !matches!(k, Kind::IntList(Own::Owned)) {
-        return Err(JitError::Unsupported(format!(
-            "unboxed Set.of operand kind {k:?} (only a fresh Owned IntList)"
-        )));
-    }
-    let call = b.ins().call(h.set_seal, &[ec.ctx, v]);
-    let sealed = b.inst_results(call)[0];
-    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sealed, 0);
-    ec.fault_if(b, bad, 5);
-    ub_push(b, vars, fvars, kinds, sealed, Kind::IntSet(Own::Owned))
-}
-
-/// `Core.Set.contains(Set<int>, int)` — the FORK-D setcontains vertical: an INLINE O(1) probe of the
-/// int-keyed packed hash table built by [`rt_u_set_seal`]. Mirrors [`arm_maphas`] but keyed by a raw
-/// `i64` with a SEPARATE occupancy word (an int key of 0 is a valid member, unlike a map's never-0
-/// canon, so the probe tests OCCUPANCY FIRST — an empty bucket's zero key-word must never false-hit a
-/// needle of 0). A HIT pushes `1`; an empty bucket pushes `0` (a CLEAN false — a membership test never
-/// faults). The set is a QUERY — NOT consumed (mirrors `Map.has`); the needle is a raw scalar, so
-/// there is nothing to free (simpler than the map probe). A non-flat (boxed / seal-failed) set is
-/// undecidable here → code 5, the whole call redoes on the VM byte-identically.
-///
-/// SAFETY: the flat handle's table lives in `[base, base + tslots)` arena slots, written whole by the
-/// seal and never mutated after; the probe reads only `{occupied, key}` at `tbase + t·16` for
-/// `t < tsize`, in bounds by the same cap check that bounded the seal's writes — no new `unsafe` here
-/// (the arena-buffer base load is the identical `ec.stable` pattern the map probe uses).
-pub(super) fn arm_setcontains(
-    b: &mut FunctionBuilder,
-    ec: &Ec,
-    vars: &[Variable],
-    fvars: &[Variable],
-    kinds: &mut Vec<Kind>,
-) -> Result<(), JitError> {
-    let (needle, nk) = ub_pop(b, vars, fvars, kinds)?;
-    let (sv, sk) = ub_pop(b, vars, fvars, kinds)?;
-    if nk != Kind::Int || !matches!(sk, Kind::IntSet(_)) {
-        return Err(JitError::Unsupported(format!(
-            "unboxed Set.contains operand kinds ({sk:?}, {nk:?})"
-        )));
-    }
-    let merge = b.create_block();
-    b.append_block_param(merge, types::I64); // 1 = present, 0 = absent
-    let flat_blk = b.create_block();
-    let slow_blk = b.create_block();
-    // FLAT-sealed set → inline probe; a boxed (seal-failed) set → helper-less code-5 redo.
-    let flat_bit = b.ins().band_imm_s(sv, UB_TAG_FLAT);
-    b.ins().brif(flat_bit, flat_blk, &[], slow_blk, &[]);
-    // FAST: O(1) packed-bucket probe. `base` (low 40) is the table start; `log2` (bits 52..57) sizes
-    // it. fibonacci high bits pick the first bucket; the walk terminates on an empty bucket (load
-    // factor ≤ 1/2 guarantees one exists). Each 16-byte bucket is `{occupied: u64, key: i64}`.
-    b.switch_to_block(flat_blk);
-    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let base = b.ins().band_imm_s(sv, UB_IDX_MASK);
-    let boff = b.ins().ishl_imm_s(base, 6);
-    let tbase = b.ins().iadd(buf, boff);
-    let lg_raw = b.ins().ushr_imm_s(sv, UB_MAP_LOG_SHIFT);
-    let lg = b.ins().band_imm_s(lg_raw, 0x1F);
-    let one = b.ins().iconst(types::I64, 1);
-    let tsize = b.ins().ishl(one, lg);
-    let mask = b.ins().iadd_imm_s(tsize, -1);
-    // fibonacci high bits: t0 = (needle · MULT) >>u (64 − log2). Identical bits to the seal's build
-    // (i64 imul low-64 == u64 wrapping_mul; ushr == logical shift).
-    let hprod = b.ins().imul_imm_s(needle, UB_SET_HASH_MULT);
-    let c64 = b.ins().iconst(types::I64, 64);
-    let sh = b.ins().isub(c64, lg); // 64 − log2
-    let t0 = b.ins().ushr(hprod, sh);
-    let head = b.create_block();
-    b.append_block_param(head, types::I64); // bucket index
-    let cont = b.create_block();
-    let step = b.create_block();
-    b.ins().jump(head, &[t0.into()]);
-    b.switch_to_block(head);
-    let t = b.block_params(head)[0];
-    let btoff = b.ins().ishl_imm_s(t, 4);
-    let baddr = b.ins().iadd(tbase, btoff);
-    // OCCUPANCY FIRST: an empty bucket (occupied 0) is a genuine ABSENT (clean false, never a fault),
-    // and its key word is 0 — testing occupancy before the key is what stops a needle of 0
-    // false-hitting an empty bucket.
-    let occ = b.ins().load(types::I64, MemFlagsData::new(), baddr, 0);
-    let zerov = b.ins().iconst(types::I64, 0);
-    b.ins().brif(occ, cont, &[], merge, &[zerov.into()]);
-    b.switch_to_block(cont);
-    let key = b.ins().load(types::I64, MemFlagsData::new(), baddr, 8);
-    let eq = b.ins().icmp(IntCC::Equal, key, needle);
-    let onev = b.ins().iconst(types::I64, 1);
-    b.ins().brif(eq, merge, &[onev.into()], step, &[]);
-    b.switch_to_block(step);
-    let t1 = b.ins().iadd_imm_s(t, 1);
-    let tw = b.ins().band(t1, mask);
-    b.ins().jump(head, &[tw.into()]);
-    // SLOW: UNREACHABLE BY CONSTRUCTION — kept as a defensive terminator. `rt_u_set_seal` returns
-    // either a FLAT-tagged handle or `-1` (which faults at `Set.of`, so the seal never yields a boxed
-    // set), and `Kind::IntSet` is produced ONLY by `arm_set_of` (borrowed copies keep the same word),
-    // so every live IntSet handle has the FLAT bit and `flat_bit` always takes `flat_blk`. If a future
-    // change ever routed a non-flat set here, this code-5 redoes the whole call on the VM byte-identically.
-    b.switch_to_block(slow_blk);
-    let always = b.ins().iconst(types::I64, 1);
-    ec.fault_if(b, always, 5);
-    let unreach = b.ins().iconst(types::I64, 0);
-    b.ins().jump(merge, &[unreach.into()]); // unreachable terminator (fault_if diverges)
     b.switch_to_block(merge);
     let res = b.block_params(merge)[0];
     ub_push(b, vars, fvars, kinds, res, Kind::Bool)
@@ -1008,4 +891,54 @@ pub(super) fn emit_release(b: &mut FunctionBuilder, ec: &Ec, h: &UbHelperRefs, v
     b.ins().call(h.free, &[ec.ctx, v]);
     b.ins().jump(cont, &[]);
     b.switch_to_block(cont);
+}
+
+/// The `xs = [v]` BUILDER-RESEED body (the MakeList peephole in the dispatch loop): reuse the
+/// live builder record at slot `s` via `rt_u_list_acc_reseed` instead of bump-sealing a fresh
+/// flat list per cycle (bump slots never recycle — the 1M-iteration arena cliff). The caller
+/// skips the consumed `SetLocal`.
+pub(super) fn arm_list_reseed(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    s: usize,
+) -> Result<(), JitError> {
+    let (vv, _) = ub_pop(b, vars, fvars, kinds)?;
+    let old = b.use_var(vars[s]);
+    let call = b.ins().call(h.list_acc_reseed, &[ec.ctx, old, vv]);
+    let sres = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
+    ec.fault_if(b, bad, 5);
+    b.def_var(vars[s], sres);
+    kinds[s] = Kind::IntList(Own::Owned);
+    Ok(())
+}
+
+/// The `m = [k => v]` BUILDER-RESEED body — the map twin of [`arm_list_reseed`] (same cliff,
+/// `rt_u_map_builder_seed`). The caller skips the consumed `SetLocal`.
+pub(super) fn arm_map_reseed(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    s: usize,
+) -> Result<(), JitError> {
+    let (vv, _) = ub_pop(b, vars, fvars, kinds)?;
+    let (iv, ik) = ub_pop(b, vars, fvars, kinds)?;
+    let old = b.use_var(vars[s]);
+    let call = b.ins().call(h.map_builder_seed, &[ec.ctx, old, iv, vv]);
+    let sres = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
+    ec.fault_if(b, bad, 5);
+    b.def_var(vars[s], sres);
+    kinds[s] = Kind::StrIntMap(Own::Owned);
+    if ik.is_owned_handle() {
+        emit_release(b, ec, h, iv);
+    }
+    Ok(())
 }

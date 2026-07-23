@@ -121,6 +121,14 @@ pub(super) fn collect_functions_unboxed(
                     uses_handles = true
                 }
                 Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => uses_handles = true,
+                // Set-op verticals (setdifference/setunion flips).
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_set_union(*id)
+                        || unboxed_native_is_set_difference(*id) =>
+                {
+                    uses_handles = true
+                }
+                Op::CallNative(id, 1) if unboxed_native_is_set_size(*id) => uses_handles = true,
                 // String-scan verticals (stringcontains/isemail/isurl flips).
                 Op::CallNative(id, 2) if unboxed_native_is_str_contains(*id) => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_validate_which(*id).is_some() => {

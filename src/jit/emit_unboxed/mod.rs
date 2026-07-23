@@ -22,6 +22,7 @@ mod scan;
 mod verticals;
 mod verticals_hof;
 mod verticals_map;
+mod verticals_set;
 
 use call_plumbing::*;
 use concat::*;
@@ -35,6 +36,7 @@ use scan::*;
 use verticals::*;
 use verticals_hof::*;
 use verticals_map::*;
+use verticals_set::*;
 
 /// Resolve the handle-op helper refs, or fail with the canonical collect-drift diagnostic
 /// (a handle op reached codegen although `collect_functions_unboxed` admitted no helpers).
@@ -440,14 +442,7 @@ pub(super) fn build_body_unboxed(
                     if let Some(Op::SetLocal(s)) = code.get(ip + 1) {
                         if matches!(kinds.get(*s), Some(Kind::IntList(Own::Owned))) {
                             let h = ub_ref(ub_refs.as_ref(), "MakeList(reseed)")?;
-                            let (vv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                            let old = b.use_var(vars[*s]);
-                            let call = b.ins().call(h.list_acc_reseed, &[ec.ctx, old, vv]);
-                            let sres = b.inst_results(call)[0];
-                            let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
-                            ec.fault_if(&mut b, bad, 5);
-                            b.def_var(vars[*s], sres);
-                            kinds[*s] = Kind::IntList(Own::Owned);
+                            arm_list_reseed(&mut b, &ec, h, &vars, &fvars, &mut kinds, *s)?;
                             skip_ip = Some(ip + 1);
                             continue;
                         }
@@ -468,18 +463,7 @@ pub(super) fn build_body_unboxed(
                         if let Some(Op::SetLocal(s)) = code.get(ip + 1) {
                             if matches!(kinds.get(*s), Some(Kind::StrIntMap(Own::Owned))) {
                                 let h = ub_ref(ub_refs.as_ref(), "MakeMap(reseed)")?;
-                                let (vv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                                let (iv, ik) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                                let old = b.use_var(vars[*s]);
-                                let call = b.ins().call(h.map_builder_seed, &[ec.ctx, old, iv, vv]);
-                                let sres = b.inst_results(call)[0];
-                                let bad = b.ins().icmp_imm_s(IntCC::SignedLessThan, sres, 0);
-                                ec.fault_if(&mut b, bad, 5);
-                                b.def_var(vars[*s], sres);
-                                kinds[*s] = Kind::StrIntMap(Own::Owned);
-                                if ik.is_owned_handle() {
-                                    emit_release(&mut b, &ec, h, iv);
-                                }
+                                arm_map_reseed(&mut b, &ec, h, &vars, &fvars, &mut kinds, *s)?;
                                 skip_ip = Some(ip + 1);
                                 continue;
                             }
@@ -524,6 +508,14 @@ pub(super) fn build_body_unboxed(
                 ) =>
             {
                 arm_index_map_list(&mut b, &ec, &vars, &fvars, &mut kinds, proven_ops[ip])?;
+            }
+            Op::Index
+                if matches!(
+                    kinds.get(kinds.len().wrapping_sub(2)),
+                    Some(Kind::SetList(_))
+                ) =>
+            {
+                arm_index_set_list(&mut b, &ec, &vars, &fvars, &mut kinds, proven_ops[ip])?;
             }
             Op::Index => {
                 let h = ub_ref(ub_refs.as_ref(), "Index")?;
@@ -741,6 +733,17 @@ pub(super) fn build_body_unboxed(
                 arm_list_hof(
                     &mut b, &ec, h, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, info, hof,
                 )?;
+            }
+            Op::CallNative(id, 2)
+                if unboxed_native_is_set_union(*id) || unboxed_native_is_set_difference(*id) =>
+            {
+                let h = ub_ref(ub_refs.as_ref(), "Set op")?;
+                let is_union = unboxed_native_is_set_union(*id);
+                arm_set_op(&mut b, &ec, h, &vars, &fvars, &mut kinds, is_union)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_set_size(*id) => {
+                let h = ub_ref(ub_refs.as_ref(), "Set.size")?;
+                arm_set_size(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::CallNative(id, 2) if unboxed_native_is_str_contains(*id) => {
                 // The stringcontains flip: zero-alloc byte scan, same str::contains kernel.
@@ -1166,44 +1169,32 @@ pub(super) fn build_body_unboxed(
                 kinds[*slot] = k;
             }
             Op::Call(callee) => {
-                // Self OR cross-function call: pop the callee's `arity` args per its FINAL
-                // ABI param kinds (a Dyn param takes TWO words), then the shared direct-call
-                // emission (depth guard + native call + fault propagation).
-                let arity = program.functions[*callee].arity;
-                let pks = abi_param_kinds(program, info, *callee);
-                let cargs = pop_call_args(
+                // Arm body in `call_plumbing.rs` (M-Decomp); the throw-site resolves here.
+                let ts = if info.thrown_class.is_some() {
+                    Some(ThrowSite {
+                        program,
+                        info,
+                        h: ub_ref(ub_refs.as_ref(), "throw dispatch")?,
+                        pad: throw_site(ip, &blocks, &leader_state)?,
+                    })
+                } else {
+                    None
+                };
+                arm_call(
                     &mut b,
                     &ec,
                     ub_refs.as_ref(),
-                    &vars,
-                    &fvars,
-                    &evars,
-                    &mut kinds,
-                    arity,
-                    &pks,
-                )?;
-                emit_call_to(
-                    &mut b,
-                    &ec,
                     &fn_refs,
                     ctx,
                     depth,
                     &vars,
                     &fvars,
+                    &evars,
                     &mut kinds,
+                    program,
+                    info,
                     *callee,
-                    cargs,
-                    info.ret_of(*callee),
-                    if info.thrown_class.is_some() {
-                        Some(ThrowSite {
-                            program,
-                            info,
-                            h: ub_ref(ub_refs.as_ref(), "throw dispatch")?,
-                            pad: throw_site(ip, &blocks, &leader_state)?,
-                        })
-                    } else {
-                        None
-                    },
+                    ts,
                 )?;
             }
             // Closure vertical: a capture-free `MakeClosure` is fully STATIC — the target rides

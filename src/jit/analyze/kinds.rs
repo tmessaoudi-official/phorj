@@ -1,7 +1,9 @@
 //! The unboxed KIND LATTICE (M-Decomp from `analyze/mod.rs`, Invariant 13): the compile-time
 //! operand kinds ([`Kind`]), handle ownership ([`Own`]), the `GetLocal` borrow rule
 //! ([`borrowed_copy`]) and the merge-edge join ([`join_kind`]). Bodies moved verbatim (self-
-//! contained — no imports needed).
+//! contained except [`JitError`] for the `MakeList` admission).
+
+use super::JitError;
 
 /// The kind of a compile-time operand-stack entry. The bytecode is type-erased, so this is tracked to
 /// map `Return` correctly WITHOUT a type source: `Const`/arithmetic/`Neg` → `Int`, comparisons/`Not`
@@ -66,6 +68,12 @@ pub(in crate::jit) enum Kind {
     /// COPIES). Never a param / call-arg / return (rejected like `IntSet`); a non-flat word at
     /// `Index` (a boxed map element) is code 5 — the byte-identical VM redo.
     MapList(Own),
+    /// A `List<Set<int>>` handle (the setdifference/setunion rotating-operand shape
+    /// `bs[i % 4]`): the exact [`Kind::MapList`] discipline over SET handle words — produced
+    /// ONLY by `MakeList` over `IntSet` operands, consumed ONLY by `Index` (runtime FLAT_SET
+    /// tag guard on the loaded word; a sealed flat set is immutable + bump-pinned, so an OWNED
+    /// aliased copy is sound). Never a param / call-arg / return.
+    SetList(Own),
     /// An enum value with AT MOST ONE `Int` payload (the enum vertical), realized as TWO i64
     /// register words: the payload in the I64 space (`vars[d]`, filler 0 for a zero-payload
     /// variant) and the VARIANT TAG (its `enum_descs` index) in the tag space (`evars[d]`).
@@ -173,6 +181,7 @@ impl Kind {
                 | Kind::IntList(_)
                 | Kind::IntSet(_)
                 | Kind::MapList(_)
+                | Kind::SetList(_)
                 | Kind::DynList(_)
                 | Kind::Inst(..)
         )
@@ -187,6 +196,7 @@ impl Kind {
                 | Kind::IntList(Own::Owned)
                 | Kind::IntSet(Own::Owned)
                 | Kind::MapList(Own::Owned)
+                | Kind::SetList(Own::Owned)
                 | Kind::DynList(Own::Owned)
                 | Kind::Inst(_, Own::Owned)
         )
@@ -202,6 +212,7 @@ pub(in crate::jit) fn borrowed_copy(k: Kind) -> Kind {
         Kind::IntList(o) => Kind::IntList(o.borrow_of()),
         Kind::IntSet(o) => Kind::IntSet(o.borrow_of()),
         Kind::MapList(o) => Kind::MapList(o.borrow_of()),
+        Kind::SetList(o) => Kind::SetList(o.borrow_of()),
         Kind::StrIntMap(o) => Kind::StrIntMap(o.borrow_of()),
         Kind::Inst(c, o) => Kind::Inst(c, o.borrow_of()),
         Kind::DynList(o) => Kind::DynList(o.borrow_of()),
@@ -236,9 +247,45 @@ pub(in crate::jit) fn join_kind(a: Kind, b: Kind) -> Option<Kind> {
         (Kind::IntList(x), Kind::IntList(y)) => join_own(x, y).map(Kind::IntList),
         (Kind::IntSet(x), Kind::IntSet(y)) => join_own(x, y).map(Kind::IntSet),
         (Kind::MapList(x), Kind::MapList(y)) => join_own(x, y).map(Kind::MapList),
+        (Kind::SetList(x), Kind::SetList(y)) => join_own(x, y).map(Kind::SetList),
         (Kind::Inst(c1, x), Kind::Inst(c2, y)) if c1 == c2 => {
             join_own(x, y).map(|o| Kind::Inst(c1, o))
         }
         _ => None,
     }
+}
+
+/// Admit `MakeList(n)` into the unboxed subset: element kinds select the list flavor —
+/// all-`Str` → `StrList`, all-`Int` → `IntList` (P-2c), all-`StrIntMap` → [`Kind::MapList`],
+/// all-`IntSet` → [`Kind::SetList`]; anything else (mixed, floats, nested) is default-denied.
+/// Mirrors `emit_unboxed/verticals.rs::arm_make_list`'s stack effects exactly.
+pub(in crate::jit) fn admit_make_list(kinds: &mut Vec<Kind>, n: usize) -> Result<(), JitError> {
+    let d = kinds.len();
+    if n > d {
+        return Err(JitError::Codegen("unboxed MakeList underflow".to_string()));
+    }
+    let all_str = kinds[d - n..].iter().all(|k| matches!(k, Kind::Str(_)));
+    let all_int = n > 0 && kinds[d - n..].iter().all(|k| *k == Kind::Int);
+    let all_map = n > 0
+        && kinds[d - n..]
+            .iter()
+            .all(|k| matches!(k, Kind::StrIntMap(_)));
+    let all_set = n > 0 && kinds[d - n..].iter().all(|k| matches!(k, Kind::IntSet(_)));
+    if !(all_str || all_int || all_map || all_set) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed MakeList element kinds {:?}",
+            &kinds[d - n..]
+        )));
+    }
+    kinds.truncate(d - n);
+    kinds.push(if all_int {
+        Kind::IntList(Own::Owned)
+    } else if all_map {
+        Kind::MapList(Own::Owned)
+    } else if all_set {
+        Kind::SetList(Own::Owned)
+    } else {
+        Kind::StrList(Own::Owned)
+    });
+    Ok(())
 }

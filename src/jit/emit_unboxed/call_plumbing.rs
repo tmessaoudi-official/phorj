@@ -328,3 +328,43 @@ pub(super) fn arm_call_value(
         ts,
     )
 }
+
+/// `Op::Call` — self OR cross-function direct call: pop the callee's `arity` args per its
+/// FINAL ABI param kinds (a Dyn param takes TWO words), then the shared direct-call emission
+/// (depth guard + native call + fault propagation). Body moved verbatim from the dispatch
+/// loop (M-Decomp, Invariant 13).
+#[allow(clippy::too_many_arguments)] // emit plumbing
+pub(super) fn arm_call(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    ub_refs: Option<&UbHelperRefs>,
+    fn_refs: &[Option<FuncRef>],
+    ctx: ClValue,
+    depth: ClValue,
+    vars: &[Variable],
+    fvars: &[Variable],
+    evars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
+    callee: usize,
+    ts: Option<ThrowSite>,
+) -> Result<(), JitError> {
+    let arity = program.functions[callee].arity;
+    let pks = abi_param_kinds(program, info, callee);
+    let cargs = pop_call_args(b, ec, ub_refs, vars, fvars, evars, kinds, arity, &pks)?;
+    emit_call_to(
+        b,
+        ec,
+        fn_refs,
+        ctx,
+        depth,
+        vars,
+        fvars,
+        kinds,
+        callee,
+        cargs,
+        info.ret_of(callee),
+        ts,
+    )
+}
