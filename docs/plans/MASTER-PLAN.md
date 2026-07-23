@@ -119,6 +119,31 @@ before any build; speccing wave ON HOLD (resume with the dev).** Build cluster, 
 - **Release channels (DEC-323)** — ✅ SHIPPED (nightly prerelease CI + SEMVER/SECURITY channel docs).
 DX north-star (DEC-319) governs prioritization: smooth/intuitive tooling, strictness intact, more OOP.
 
+**PERF — WIN-OR-FLAG vs php+JIT (DEC-332, dev mandate 2026-07-23: "everything must beat php, no
+compromise; if you can't, hard flag").** Bar = VM+JIT faster than php-8.5.8+opcache-JIT, per feature
+(`scripts/microbench.sh`; docker-less local-php mode added). Full measured scorecard + root-cause +
+remaining losses: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md` (the pointed-to detail —
+not a fork). State: **27 WIN / 18 LOSS**, then **listcontains 0.06×→1.97× CLOSED** (JIT unboxed
+vertical). **17 losses remain**, each its own vertical/representation slice, in order:
+- `mapkeys`/`mapvalues`/`mapmerge` (0.09–0.12×) — Map key/value MATERIALIZATION vertical → `verticals/map.rs`.
+- HOF folds `sumby`/`maxby`/`minby`/`listreduce` (0.19–0.34×) — accumulator vertical → `verticals/hof.rs`.
+- string-scan `isemail`/`isurl`/`stringcontains` (0.16–0.24×) — inline substring-scan vertical.
+- JSON `jsonround`/`deepjson`, Set ops, `dbwork`, float near-ties `floatmul`/`floatloop`.
+- **COVERAGE (dev ask):** ADD micros until the suite covers 100% of phorj's php-comparable surface, so
+  the "beats php" claim is exhaustive (WIN-OR-FLAG on every covered feature). Reconcile the from-source
+  baseline vs the official docker `php:8.5-cli` on the dev box.
+
+**M-DECOMP CAMPAIGN — shrink the 79 over-hard-cap files into a better architecture (Invariant 13).**
+JIT-FIRST because the giants (`analyze.rs` 2869, `emit_unboxed/mod.rs` 1988, `handles.rs` 2280,
+`verticals.rs` 1264) throttle every new perf vertical. Behavior-preserving cohesion splits, gate-green
+(byte-identity is the safety net). Sequenced:
+1. `emit_unboxed/verticals/` FOLDER (set/map/list/index/hof) + `analyze/natives.rs` — the enabler; new
+   perf verticals land here with headroom (do before/with the next perf loss).
+2. `analyze/{kind,pass}.rs`, `handles/` (by helper family), `tests/verticals/` (mirror emit).
+3. Priority-2 giants (`desugar_db.rs` 3144, `cli/explain.rs` 1998, `runtime_php.rs` 1366,
+   `preludes.rs` 1196, `vm/exec.rs` 1053, `loader/mod.rs` 1029) → split-as-you-go per Invariant 13.
+The prior standalone `architecture-decomp.plan.md` is FOLDED here (Invariant 19 — no divergent doc).
+
 **CORE PARITY PUSH (confirmed order):**
 0. **§4 recompute** — free credit for already-shipped-uncounted work; establishes true %.
 1. **Full TOP-20 stdlib (FN leg 37→~70%, the +13pp move):** filesystem breadth (~40 rows) →

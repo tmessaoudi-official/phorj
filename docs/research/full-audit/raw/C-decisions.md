@@ -2968,3 +2968,15 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `Http.ServeConfig` + serve{} + inbound rustls TLS + retire `respond`. Separate QUEUED design slices:
   labeled break/continue, typed LSB. ON HOLD (spec tomorrow): eval, ArrayAccess. Env: PHP 8.5.8 built
   from source in-container (D10d).
+
+- **DEC-332 — PERF WIN-OR-FLAG vs php+JIT + M-DECOMP campaign (dev mandate 2026-07-23).** (a) Every
+  php-comparable feature's VM+JIT path MUST beat php-8.5.8+opcache-JIT; a loss is HARD-FLAGGED, never
+  silently accepted (extends the G-8 bar to an absolute). (b) COVERAGE: grow the `bench/micro` suite
+  until it covers 100% of phorj's php-comparable surface, so "beats php" is exhaustive. (c) Baseline
+  reconciliation owed: from-source php (docker blocked here) vs official `docker php:8.5-cli` on the dev
+  box. (d) M-DECOMP campaign: shrink the 79 over-hard-cap files (Invariant 13), JIT-first (the giants
+  throttle perf verticals), behavior-preserving cohesion splits, gate-green. Roadmap + sequencing +
+  loss list live in MASTER-PLAN §0 (SSOT); measured detail in
+  `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. SHIPPED so far: `listcontains`
+  0.06×→1.97× (JIT `List.contains` vertical). NO divergent doc — the ex-`architecture-decomp.plan.md`
+  is folded into MASTER-PLAN.

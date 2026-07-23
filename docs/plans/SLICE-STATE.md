@@ -68,7 +68,11 @@ flag"): VM+JIT vs php-8.5.8+JIT micro scorecard = 18/48 LOSSES**, several 3–16
 mapkeys/values 0.09×, HOF folds + string-scan + JSON). **1 CLOSED 2026-07-23: `listcontains`
 0.06× → 1.97× WIN** via a `List.contains` JIT unboxed vertical (inline flat-int scan, byte-identical;
 `src/jit/emit_unboxed/list_contains.rs` + `tests/listcontains.rs`). **17 losses remain** — same
-pattern (HAMT extraction / HOF folds / string-scan / JSON), each its own vertical slice. Full report + root-cause +
+pattern (HAMT extraction / HOF folds / string-scan / JSON), each its own vertical slice. CAMPAIGN
+SSOT = **DEC-332** + MASTER-PLAN §0 (perf WIN-OR-FLAG + 100%-coverage + M-DECOMP); detail in
+`docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. **NEXT: `emit_unboxed/verticals/` folder
++ `analyze/natives.rs`** (M-Decomp enabler) → then `mapkeys`/`mapvalues` vertical. (No divergent doc —
+ex-`architecture-decomp.plan.md` folded into MASTER-PLAN.) Full report + root-cause +
 architectural-fix list: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. Root cause:
 per-element native calls over boxed immutable `Value` collections + HAMT key/value extraction (JIT
 can't inline the native boundary). **CAVEAT/contradiction:** measured vs a FROM-SOURCE php (docker
