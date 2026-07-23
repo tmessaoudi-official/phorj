@@ -97,8 +97,12 @@ adoption review validated ~10/14 themes as already covered and added four ruled 
   (register DEC-320 build note).
 
 **WEB / ENTRY / PARITY CLUSTER (DEC-331 — decision round D1–D10 COMPLETE 2026-07-23, dev-ruled
-interactively; full rulings in the register, cursor in SLICE-STATE). SPEC-FIRST per D10b — specs
-before any build; speccing wave ON HOLD (resume with the dev).** Build cluster, in order (D10a):
+interactively; full rulings in the register, cursor in SLICE-STATE). SPEC-FIRST per D10b —
+**SPECCING WAVE COMPLETE (2026-07-23): all seven specs FROZEN in `docs/specs/2026-07-23-*.md`
+(the three cluster slices below + labeled-break-continue + typed-lsb + eval-position +
+array-access), each with an explicit PENDING list — dev rules on each spec, then the cluster
+builds in D10a order, then the DEC-333 perf roadmap (the ruled interleave).**
+Build cluster, in order (D10a):
 - **(1) `#[Invoke]` + `#[ToString]`** — attribute-designated conventional methods (overloadable
   `#[Invoke]`, VM-safe via existing overload dispatch; strict zero-param/`string` `#[ToString]`;
   both stay directly callable). PHP leg: multi-`#[Invoke]` owes a LADDER call (`__invoke` is 1/class).
@@ -108,9 +112,10 @@ before any build; speccing wave ON HOLD (resume with the dev).** Build cluster, 
 - **(3) `#[Entry(kind: Cli|Web|Desktop|Mobile|Worker|Embedded)]`** + per-type `#[Config]`-injected
   typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
   contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`.
-- **Separate QUEUED design slices:** labeled `break`/`continue` (safe nested-loop escape; raw goto
-  stays rejected), typed LSB (`Self` return). **ON HOLD (spec with dev):** `eval` (sandboxed-subset
-  only), ArrayAccess (`#[ArrayGet]`/`#[ArraySet]` candidate).
+- **Separate QUEUED design slices (specs frozen, same wave):** labeled `break`/`continue`
+  (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self` return), `eval`
+  (position spec: rejection + substitutes + use-case-gated `Core.Sandbox` avenue), ArrayAccess
+  (`#[ArrayGet]`/`#[ArraySet]`).
 - **Env:** real PHP 8.5.8 built from source in-container (D10d); `toolchain.env` container-aware. The
   8.5.8 oracle surfaced + FIXED a DEC-329.3 byte-identity regression (`Reflect.className` on an enum
   variant: PHP `Color_Green` vs interp `Green`).
