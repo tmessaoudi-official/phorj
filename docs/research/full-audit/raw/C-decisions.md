@@ -2940,5 +2940,13 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     `#[ToString]` is used in string context (more correct than PHP's runtime warning); PHP leg emits
     `__toString`. **Both `#[Invoke]` and `#[ToString]` methods stay NORMALLY CALLABLE by their own name**
     — the attribute adds the call/stringify sugar, it does not restrict the direct method call.
-  - **D10+ (PENDING):** parity scheduling (generators/iterators, LSB, etc.), build order, spec-first,
-    env/php — recorded here as each locks.
+  - **D10 (PARTIAL 2026-07-23).** LOCKED: **D10a** build order = Invokable/toString → Rich Request →
+    Entry-config+serve{}+TLS (+D5 respond migration) — smallest self-contained first, riskiest last.
+    **D10b** SPEC-FIRST for EVERYTHING — a frozen `docs/specs/` spec for all three slices (incl.
+    invoke/toString), dev rules on each spec before any code. **D10d** BUILD PHP 8.5 FROM SOURCE in this
+    container now (~15 min; php.net reachable; org proxy 403s the PPA so no apt for php) + make
+    `toolchain.env` container-aware (graceful fallback to on-PATH php8.5 when the stack path is absent,
+    loud warn if neither). **D10c PENDING re-ask** — dev wants to RECONSIDER a rejected feature but has
+    not yet named which (references / goto / eval / `__get`/`__set`/`__call` / destructors / LSB /
+    ArrayAccess); generators/iterators-marathon-next + the other rejections staying out is otherwise
+    confirmed by implication, pending the one to revisit.
