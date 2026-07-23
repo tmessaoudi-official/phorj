@@ -23,8 +23,15 @@ dispatch. Measured (phg-JIT vs php-8.5.8+JIT, opcache.jit=tracing confirmed on):
 ns = ~17x WIN**, checksums identical (`20000000`). Byte-identity proven (JIT == VM == tree-walker;
 differential 172/172; new `src/jit/tests/sumby.rs` — delivery `hits>0` + capture/negative/empty edges
 + the overflow redo). Enabler: `arm_list_hof` M-Decomp-extracted `verticals.rs` -> `verticals_hof.rs`
-(Inv 13) to make room for the fold accumulator modes. **16 losses remain.** NEXT: `listreduce` (0.30x)
-— unboxed-clean (result = seed type `U`; seed operand + 2-arg `(acc,elem)` callback). ⚠ **`maxby`/`minby`
+(Inv 13) to make room for the fold accumulator modes.
+
+## UPDATE 2026-07-23 (3) — 3 of 18 CLOSED: `listreduce` 0.30x -> 11.29x WIN
+Added `arm_list_reduce` (the arity-3 fold): the same inline `(addr,stride)` walk (shared via the new
+`ub_list_walk_setup` helper, extracted behavior-preservingly from `arm_list_hof`), accumulator SEEDED
+from the 3rd operand, each step a direct `f(acc, elem)` call (`acc` prepended). No fold-level overflow
+guard — arithmetic lives in the user lambda's own checked ops. Measured phg-JIT 17.6M vs php+JIT 199M
+= **11.29x WIN**, byte-identical (JIT==VM==tree-walker; new tests in `src/jit/tests/sumby.rs`). **15
+losses remain.** ⚠ **`maxby`/`minby`
 (0.19–0.20x) are BLOCKED (HARD FLAG, dev to rule):** they return `T?` and the unboxed `Kind` enum has NO
 nullable variant, so the element result can't stay unboxed — needs a representation lever (add an `Int?`
 arena kind / restrict to non-empty-`??` peephole / accept the flag). Then the `mapkeys`/`mapvalues`/

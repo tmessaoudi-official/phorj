@@ -110,6 +110,11 @@ pub(super) fn collect_functions_unboxed(
                     uses_handles = true;
                     has_call = true;
                 }
+                // hofpipe fold: `List.reduce(xs, seed, f)` — arity-3, same inline loop + direct call.
+                Op::CallNative(id, 3) if unboxed_native_is_list_reduce(*id) => {
+                    uses_handles = true;
+                    has_call = true;
+                }
                 // P-2c numeric conversions: pure, handle-free, fully inline.
                 Op::CallNative(id, 1)
                     if unboxed_native_is_to_float(*id) || unboxed_native_is_truncate(*id) =>

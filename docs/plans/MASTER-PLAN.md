@@ -124,17 +124,16 @@ compromise; if you can't, hard flag").** Bar = VM+JIT faster than php-8.5.8+opca
 (`scripts/microbench.sh`; docker-less local-php mode added). Full measured scorecard + root-cause +
 remaining losses: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md` (the pointed-to detail —
 not a fork). State: **27 WIN / 18 LOSS**, then CLOSED so far: **listcontains 0.06×→1.97×** (flat-int
-scan vertical) + **sumby 0.34×→~17×** (hofpipe vertical extended with a checked accumulator). **16
-losses remain**, each its own vertical/representation slice, in order:
-- `listreduce` (0.30×) — hofpipe fold, unboxed-clean (result type = seed type `U`=Int; seed operand +
-  2-arg `(acc,elem)` callback); NEXT vertical.
+scan vertical) + **sumby 0.34×→~17×** (hofpipe vertical + checked accumulator) + **listreduce
+0.30×→11.29×** (`arm_list_reduce` arity-3 fold, shared `ub_list_walk_setup`). **15 losses remain**,
+each its own vertical/representation slice, in order:
+- `mapkeys`/`mapvalues`/`mapmerge` (0.09–0.12×) — Map key/value MATERIALIZATION vertical → `verticals/map.rs` (NEXT).
+- string-scan `isemail`/`isurl`/`stringcontains` (0.16–0.24×) — inline substring-scan vertical.
 - ⚠ `maxby`/`minby` (0.19–0.20×) — **BLOCKED on a representation lever (HARD FLAG, dev to rule):** they
   return `T?` and the unboxed `Kind` enum has NO nullable/optional variant, so the element result can't
   stay unboxed. Options (dev): add an `Int?`-style nullable arena kind (broadest, also unblocks other
   nullable-returning natives) · restrict the vertical to a provably-non-empty list feeding `??` (narrow
   peephole) · accept the flag. NOT a night decision.
-- `mapkeys`/`mapvalues`/`mapmerge` (0.09–0.12×) — Map key/value MATERIALIZATION vertical → `verticals/map.rs`.
-- string-scan `isemail`/`isurl`/`stringcontains` (0.16–0.24×) — inline substring-scan vertical.
 - JSON `jsonround`/`deepjson`, Set ops, `dbwork`, float near-ties `floatmul`/`floatloop`.
 - **COVERAGE (dev ask):** ADD micros until the suite covers 100% of phorj's php-comparable surface, so
   the "beats php" claim is exhaustive (WIN-OR-FLAG on every covered feature). Reconcile the from-source

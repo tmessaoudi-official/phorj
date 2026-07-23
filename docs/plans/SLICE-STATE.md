@@ -65,21 +65,19 @@ PHP-parity with NO open design question. Nothing needing a ruling.
 
 **⚠ HARD FLAG (2026-07-23, dev directive "everything must beat php; if you can't reach it, hard
 flag"): VM+JIT vs php-8.5.8+JIT micro scorecard = 18/48 LOSSES**, several 3–16× (listcontains 0.06×,
-mapkeys/values 0.09×, HOF folds + string-scan + JSON). **2 CLOSED 2026-07-23:** (1) `listcontains`
-0.06× → 1.97× WIN via a `List.contains` JIT unboxed vertical (inline flat-int scan, byte-identical;
-`src/jit/emit_unboxed/list_contains.rs` + `tests/listcontains.rs`); (2) `sumby` 0.34× → **~17× WIN**
-via extending the `map`/`count` hofpipe vertical to `List.sumBy` (checked `sadd_overflow` accumulator,
-overflow → code-5 VM redo → exact `"integer overflow in List.sumBy"` fault; 14.9M vs 254M ns, byte-
-identical, `src/jit/tests/sumby.rs`). **16 losses remain** — the sibling folds `maxby`/`minby`/
-`listreduce`/`listfilter` are the SAME hofpipe family (disproves the stale "folds can't be won by
-verticals" note — the win IS the dispatch-elimination), then the `mapkeys`/`values`/`merge` HAMT +
-string-scan + JSON clusters. CAMPAIGN SSOT = **DEC-332** + MASTER-PLAN §0 (perf WIN-OR-FLAG +
-100%-coverage + M-DECOMP); detail in `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`.
+mapkeys/values 0.09×, HOF folds + string-scan + JSON). **3 CLOSED 2026-07-23:** (1) `listcontains`
+0.06× → 1.97× WIN (`List.contains` flat-int scan vertical); (2) `sumby` 0.34× → **~17× WIN** (the
+`map`/`count` hofpipe vertical extended to `List.sumBy` — checked `sadd_overflow` accumulator, overflow
+→ code-5 VM redo → exact `"integer overflow in List.sumBy"` fault; 14.9M vs 254M ns); (3) `listreduce`
+0.30× → **11.29× WIN** (`arm_list_reduce`, the arity-3 fold — seed operand + 2-arg `(acc,elem)` call,
+shared `ub_list_walk_setup` helper; 17.6M vs 199M ns). All byte-identical (JIT≡VM≡tree-walker;
+`src/jit/tests/sumby.rs`). **15 losses remain.** CAMPAIGN SSOT = **DEC-332** + MASTER-PLAN §0 (perf
+WIN-OR-FLAG + 100%-coverage + M-DECOMP); detail in `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`.
 **M-DECOMP progress: `analyze/natives.rs` DONE** (analyze.rs 2869 → analyze/mod.rs 2683 + natives.rs
-194); **`arm_list_hof` DONE** (verticals.rs 1264 → 1111 + new `verticals_hof.rs`, Inv 13, behavior-
-preserving, gate-green — the fold-accumulator headroom). **NEXT: `listReduce` vertical** (unboxed-clean:
-result = seed type `U`=Int, seed operand + 2-arg `(acc,elem)` callback) → then `mapkeys`/`mapvalues`.
-**⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable arena-kind** — they return `T?` and
+250); **`arm_list_hof`/`arm_list_reduce` DONE** (verticals.rs 1264 → 1111 + new `verticals_hof.rs`, Inv
+13, behavior-preserving, gate-green). **NEXT: `mapkeys`/`mapvalues`** (Map key/value materialization
+vertical) → then string-scan. **⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable
+arena-kind** — they return `T?` and
 the unboxed `Kind` enum has no optional variant, so the element result can't stay unboxed; dev to rule
 the representation lever (add `Int?` kind / non-empty-`??` peephole / accept flag) — NOT a night call
 (recorded in MASTER-PLAN §0 + DEC-332). (No divergent doc —

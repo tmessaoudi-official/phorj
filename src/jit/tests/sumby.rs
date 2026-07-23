@@ -104,3 +104,78 @@ fn jit_sumby_overflow_faults_byte_identically_to_the_oracle() {
         _ => panic!("sumby overflow: both must fault; jit={jit:?}, oracle={oracle:?}"),
     }
 }
+
+#[test]
+fn phg_run_hook_hits_the_jit_on_the_listreduce_vertical() {
+    // The `bench/micro/listreduce.phg` shape: `List.reduce(xs, seed, (a,x) => a + x)` in a hot loop —
+    // a 2-arg fold SEEDED from a data-dependent value. The `arm_list_reduce` vertical must JIT AND
+    // match the interpreter oracle; `hits>0` is load-bearing (a silent VM fallback would false-green).
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        function bench(int iters): int {\n\
+          List<int> xs = [1, 2, 3, 4, 5, 6, 7, 8];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            int seed = i % 7;\n\
+            int total = List.reduce(xs, seed, function(int a, int x) => a + x);\n\
+            acc = acc + total;\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "listreduce jit output must match the oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual listreduce jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the listreduce vertical must actually hit the JIT — else the perf flip is unproven"
+    );
+}
+
+#[test]
+fn jit_listreduce_seed_empty_and_negative_edges_match_the_oracle() {
+    // Edge coverage: the SEED threads out unchanged on an EMPTY list (0-element loop skip), a
+    // NEGATIVE-producing fold (i64, not unsigned), and a non-`a+x` combiner (`a - x`). Byte-identity
+    // + exact value.
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        function bench(int iters): int {\n\
+          List<int> xs = [10, 0 - 3, 5];\n\
+          List<int> empty = new List<int>();\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            acc = acc + List.reduce(xs, 100, function(int a, int x) => a - x);\n\
+            acc = acc + List.reduce(empty, 7, function(int a, int x) => a + x);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        #[Entry] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
+    assert_eq!(jit_out, oracle, "listreduce edges must match the oracle");
+    // per iter: (100 - 10 - (-3) - 5) = 88, plus empty→seed 7 = 95. × 1000 = 95000.
+    assert_eq!(
+        jit_out.trim(),
+        (95000).to_string(),
+        "listreduce edge semantics"
+    );
+}

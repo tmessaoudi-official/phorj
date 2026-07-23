@@ -57,50 +57,7 @@ pub(super) fn arm_list_hof(
             "unboxed List HOF receiver kind {lk:?}"
         )));
     }
-    // Representation dispatch → uniform (addr0, count, stride).
-    let setup = b.create_block();
-    b.append_block_param(setup, types::I64); // addr0
-    b.append_block_param(setup, types::I64); // count
-    b.append_block_param(setup, types::I64); // stride
-    let flat_blk = b.create_block();
-    let chk_acl = b.create_block();
-    let acl_blk = b.create_block();
-    let bad_blk = b.create_block();
-    let flat_bit = b.ins().band_imm_s(lv, UB_TAG_FLAT);
-    b.ins().brif(flat_bit, flat_blk, &[], chk_acl, &[]);
-    b.switch_to_block(flat_blk);
-    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
-    let base = b.ins().band_imm_s(lv, UB_IDX_MASK);
-    let boff = b.ins().ishl_imm_s(base, 6);
-    let faddr = b.ins().iadd(buf, boff);
-    let fcnt_raw = b.ins().ushr_imm_s(lv, 40);
-    let fcnt = b.ins().band_imm_s(fcnt_raw, 0xFFFFF);
-    let s64 = b.ins().iconst(types::I64, 64);
-    b.ins()
-        .jump(setup, &[faddr.into(), fcnt.into(), s64.into()]);
-    b.switch_to_block(chk_acl);
-    let acl_bit = b.ins().band_imm_s(lv, UB_TAG_ACL);
-    b.ins().brif(acl_bit, acl_blk, &[], bad_blk, &[]);
-    b.switch_to_block(acl_blk);
-    let abase = b.ins().load(types::I64, ec.stable, ec.ctx, 40);
-    let ridx = b.ins().band_imm_s(lv, UB_IDX_MASK);
-    let roff = b.ins().imul_imm_s(ridx, 24);
-    let prec = b.ins().iadd(abase, roff);
-    let aptr = b.ins().load(types::I64, MemFlagsData::new(), prec, 0);
-    let alenb = b.ins().load(types::I64, MemFlagsData::new(), prec, 8);
-    let acnt = b.ins().ushr_imm_s(alenb, 3);
-    let s8 = b.ins().iconst(types::I64, 8);
-    b.ins().jump(setup, &[aptr.into(), acnt.into(), s8.into()]);
-    // Boxed int list: code 5 — the VM redo runs the canonical higher-order native.
-    b.switch_to_block(bad_blk);
-    let always = b.ins().iconst(types::I64, 1);
-    ec.fault_if(b, always, 5);
-    let z = b.ins().iconst(types::I64, 0);
-    b.ins().jump(setup, &[z.into(), z.into(), z.into()]); // unreachable terminator
-    b.switch_to_block(setup);
-    let addr0 = b.block_params(setup)[0];
-    let count = b.block_params(setup)[1];
-    let stride = b.block_params(setup)[2];
+    let (addr0, count, stride) = ub_list_walk_setup(b, ec, lv);
     // Output seed: map → a fresh ACL builder; count → a zero register.
     let acc0 = if is_map {
         let call = b.ins().call(h.list_builder_new, &[ec.ctx]);
@@ -179,4 +136,148 @@ pub(super) fn arm_list_hof(
             Kind::Int
         },
     )
+}
+
+/// Resolve an `IntList` handle `lv` to a uniform `(addr0, count, stride)` walk and leave the builder
+/// positioned in the merged `setup` block: a FLAT handle → `(buf + base<<6, count-bits, 64)`; an ACL
+/// builder record → `(ptr, len>>3, 8)`; a boxed list → code 5 (VM redo, the disclosed v1 gap). Shared
+/// by every hofpipe arm (`arm_list_hof`'s map/count/sum + `arm_list_reduce`).
+fn ub_list_walk_setup(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    lv: ClValue,
+) -> (ClValue, ClValue, ClValue) {
+    let setup = b.create_block();
+    b.append_block_param(setup, types::I64); // addr0
+    b.append_block_param(setup, types::I64); // count
+    b.append_block_param(setup, types::I64); // stride
+    let flat_blk = b.create_block();
+    let chk_acl = b.create_block();
+    let acl_blk = b.create_block();
+    let bad_blk = b.create_block();
+    let flat_bit = b.ins().band_imm_s(lv, UB_TAG_FLAT);
+    b.ins().brif(flat_bit, flat_blk, &[], chk_acl, &[]);
+    b.switch_to_block(flat_blk);
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let base = b.ins().band_imm_s(lv, UB_IDX_MASK);
+    let boff = b.ins().ishl_imm_s(base, 6);
+    let faddr = b.ins().iadd(buf, boff);
+    let fcnt_raw = b.ins().ushr_imm_s(lv, 40);
+    let fcnt = b.ins().band_imm_s(fcnt_raw, 0xFFFFF);
+    let s64 = b.ins().iconst(types::I64, 64);
+    b.ins()
+        .jump(setup, &[faddr.into(), fcnt.into(), s64.into()]);
+    b.switch_to_block(chk_acl);
+    let acl_bit = b.ins().band_imm_s(lv, UB_TAG_ACL);
+    b.ins().brif(acl_bit, acl_blk, &[], bad_blk, &[]);
+    b.switch_to_block(acl_blk);
+    let abase = b.ins().load(types::I64, ec.stable, ec.ctx, 40);
+    let ridx = b.ins().band_imm_s(lv, UB_IDX_MASK);
+    let roff = b.ins().imul_imm_s(ridx, 24);
+    let prec = b.ins().iadd(abase, roff);
+    let aptr = b.ins().load(types::I64, MemFlagsData::new(), prec, 0);
+    let alenb = b.ins().load(types::I64, MemFlagsData::new(), prec, 8);
+    let acnt = b.ins().ushr_imm_s(alenb, 3);
+    let s8 = b.ins().iconst(types::I64, 8);
+    b.ins().jump(setup, &[aptr.into(), acnt.into(), s8.into()]);
+    // Boxed int list: code 5 — the VM redo runs the canonical higher-order native.
+    b.switch_to_block(bad_blk);
+    let always = b.ins().iconst(types::I64, 1);
+    ec.fault_if(b, always, 5);
+    let z = b.ins().iconst(types::I64, 0);
+    b.ins().jump(setup, &[z.into(), z.into(), z.into()]); // unreachable terminator
+    b.switch_to_block(setup);
+    (
+        b.block_params(setup)[0],
+        b.block_params(setup)[1],
+        b.block_params(setup)[2],
+    )
+}
+
+/// `List.reduce(xs, seed, f)` with a STATIC 2-arg lambda (the fold vertical): the same inline
+/// `(addr, stride)` walk as `arm_list_hof`, but the accumulator is SEEDED from the `seed` operand and
+/// each step calls `f(acc, elem)` — the running `acc` is PREPENDED to the element (an `FnCap1` capture
+/// word goes first: `[cap, acc, elem]`). No fold-level overflow guard: any arithmetic lives inside the
+/// user lambda, compiled with its own checked ops. Result kind = the seed's kind `U` (Int in this v1
+/// subset — analyze fails closed otherwise). A boxed list → code 5 (VM redo).
+#[allow(clippy::too_many_arguments)] // emit plumbing
+pub(super) fn arm_list_reduce(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    fn_refs: &[Option<FuncRef>],
+    ctx: ClValue,
+    depth: ClValue,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    info: &UbGraphInfo,
+) -> Result<(), JitError> {
+    // Push order (xs, seed, f) → pop f, then seed, then xs.
+    let (fv, fk) = ub_pop(b, vars, fvars, kinds)?;
+    let (f, has_cap) = match fk {
+        Kind::Fn(f) => (f, false),
+        Kind::FnCap1(f) => (f, true),
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed List.reduce callee kind {other:?}"
+            )))
+        }
+    };
+    let (seed, _sk) = ub_pop(b, vars, fvars, kinds)?; // U = Int (analyze-guaranteed)
+    let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
+    if !matches!(lk, Kind::IntList(_)) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed List.reduce receiver kind {lk:?}"
+        )));
+    }
+    let (addr0, count, stride) = ub_list_walk_setup(b, ec, lv);
+    // The loop: `acc` seeded from `seed`; a 0-element list returns the seed unchanged.
+    let header = b.create_block();
+    b.append_block_param(header, types::I64); // addr
+    b.append_block_param(header, types::I64); // remaining
+    b.append_block_param(header, types::I64); // acc
+    let bodyb = b.create_block();
+    let exitb = b.create_block();
+    b.append_block_param(exitb, types::I64);
+    b.ins()
+        .jump(header, &[addr0.into(), count.into(), seed.into()]);
+    b.switch_to_block(header);
+    let addr = b.block_params(header)[0];
+    let rem = b.block_params(header)[1];
+    let acc = b.block_params(header)[2];
+    b.ins().brif(rem, bodyb, &[], exitb, &[acc.into()]);
+    b.switch_to_block(bodyb);
+    let elem = b.ins().load(types::I64, MemFlagsData::new(), addr, 0);
+    let cargs = if has_cap {
+        vec![fv, acc, elem]
+    } else {
+        vec![acc, elem]
+    };
+    emit_call_to(
+        b,
+        ec,
+        fn_refs,
+        ctx,
+        depth,
+        vars,
+        fvars,
+        kinds,
+        f,
+        cargs,
+        info.ret_of(f),
+        None,
+    )?;
+    // New acc = the callback result (no fold-level arithmetic → no overflow guard here).
+    let (rv, _rk) = ub_pop(b, vars, fvars, kinds)?;
+    let addr1 = b.ins().iadd(addr, stride);
+    let rem1 = b.ins().iadd_imm_s(rem, -1);
+    b.ins()
+        .jump(header, &[addr1.into(), rem1.into(), rv.into()]);
+    b.switch_to_block(exitb);
+    let res = b.block_params(exitb)[0];
+    if lk.is_owned_handle() {
+        emit_release(b, ec, h, lv);
+    }
+    ub_push(b, vars, fvars, kinds, res, Kind::Int)
 }

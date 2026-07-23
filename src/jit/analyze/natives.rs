@@ -59,6 +59,70 @@ pub(crate) fn unboxed_native_is_list_sum_by(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.List" && nf.name == "sumBy" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.List.reduce` (the fold vertical: the same inline walk as
+/// `sumBy`/`count`, but the accumulator is SEEDED from the 3rd operand and each step calls the 2-arg
+/// `f(acc, elem)`; the running `acc` threads through with no fold-level overflow guard — arithmetic
+/// lives inside the user lambda's own checked ops. Result kind = the seed type `U`, Int in v1)?
+pub(crate) fn unboxed_native_is_list_reduce(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "reduce" && nf.pure)
+}
+
+/// Admit a `List.reduce(xs, seed, f)` (arity-3 `CallNative`) into the unboxed subset, threading the
+/// operand `kinds` stack: pop `f` (a static `Fn`/`FnCap1` with 2 declared params `(acc, elem)` after
+/// captures), pop the `seed` (`U`=Int in v1), pop the `IntList` receiver, push the `Int` result. Any
+/// mismatch / throwing graph → `Err` (fail closed, the VM runs the boxed native). Lives here (natives
+/// headroom) so the grandfathered `analyze/mod.rs` arm stays a one-liner (Invariant 13).
+pub(crate) fn admit_list_reduce(
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    if info.thrown_class.is_some() {
+        return Err(JitError::Unsupported(
+            "unboxed: List.reduce in a throwing graph (deferred)".into(),
+        ));
+    }
+    let f = match kinds.pop() {
+        Some(Kind::Fn(f)) | Some(Kind::FnCap1(f)) => f,
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed List.reduce callee kind {other:?} (deferred)"
+            )))
+        }
+    };
+    if program.functions[f].arity - program.functions[f].n_captures != 2 {
+        return Err(JitError::Unsupported(
+            "unboxed: List.reduce lambda arity != 2 (VM renders any fault)".into(),
+        ));
+    }
+    if info.ret_of(f) != Kind::Int {
+        return Err(JitError::Unsupported(format!(
+            "unboxed: List.reduce lambda return kind {:?} (deferred)",
+            info.ret_of(f)
+        )));
+    }
+    match kinds.pop() {
+        Some(Kind::Int) => {} // seed U = Int
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed List.reduce seed kind {other:?} (deferred)"
+            )))
+        }
+    }
+    match kinds.pop() {
+        Some(Kind::IntList(_)) => {}
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed List.reduce receiver kind {other:?}"
+            )))
+        }
+    }
+    kinds.push(Kind::Int);
+    Ok(())
+}
+
 /// Is native-registry entry `id` `Core.Map.has` (the maphas vertical: the mapget inline bucket
 /// probe returning a Bool `present?` instead of the value — a HIT is `true`, an empty bucket is a
 /// clean `false` (NOT a fault, unlike `m[k]`); canon-0 keys / non-flat maps punt to the

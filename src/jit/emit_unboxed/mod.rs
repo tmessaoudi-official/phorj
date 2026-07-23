@@ -57,8 +57,7 @@ impl Ec {
 
     /// ovf-spec: OR a boolean overflow `flag` (i8, 0/1 from `*_overflow` / an `is_min` compare)
     /// into the sticky Variable — no branch, so the hot no-overflow path costs only the OR.
-    /// Zero-extends to i64. Only called for an UNPROVEN speculated op, so `sticky` is `Some`
-    /// here (`needs_sticky`).
+    /// Zero-extends to i64. Only called for an UNPROVEN speculated op, so `sticky` is `Some` (`needs_sticky`).
     fn accumulate_sticky(&self, b: &mut FunctionBuilder, flag: ClValue) {
         let sv = self
             .sticky
@@ -69,8 +68,8 @@ impl Ec {
         b.def_var(sv, next);
     }
 
-    /// P-2a-inline: push an owned arena slot's index onto the inline free stack (the caller has
-    /// already established `v` is slot-tagged with OWNED set). 5 memory ops, no call.
+    /// P-2a-inline: push an owned arena slot's index onto the inline free stack (caller has already
+    /// established `v` is slot-tagged with OWNED set). 5 memory ops, no call.
     fn slot_push(&self, b: &mut FunctionBuilder, v: ClValue) {
         let fsp = b.ins().load(types::I64, self.stable, self.ctx, 8);
         let ft = b.ins().load(types::I64, MemFlagsData::new(), self.ctx, 16);
@@ -82,9 +81,8 @@ impl Ec {
         b.ins().store(MemFlagsData::new(), ft1, self.ctx, 16);
     }
 
-    /// P-2a-inline: recycle a slot-tagged operand IFF its runtime OWNED bit is set (a flat-list
-    /// element or pinned const is compile-time Owned but runtime-borrowed — the free is a no-op).
-    /// Used only where the operand is already known slot-tagged (the inline fast paths).
+    /// P-2a-inline: recycle a slot-tagged operand IFF its runtime OWNED bit is set (a flat-list element
+    /// / pinned const is compile-time Owned but runtime-borrowed → no-op free). Only at known-slot sites.
     fn slot_free_if_owned(&self, b: &mut FunctionBuilder, v: ClValue) {
         let owned_bit = b.ins().band_imm_s(v, UB_TAG_OWNED);
         let push_blk = b.create_block();
@@ -96,10 +94,9 @@ impl Ec {
         b.switch_to_block(cont);
     }
 
-    /// Allocate a fresh arena SLOT inline (the P-2a-inline concat ladder, shared by
-    /// `MakeInstance`): pop the inline free stack if non-empty, else bump — a full arena is
-    /// code 5 (redo on VM; exhaustion is a fallback, never a user-visible fault). Returns the
-    /// slot INDEX (untagged).
+    /// Allocate a fresh arena SLOT inline (the P-2a-inline concat ladder, shared by `MakeInstance`):
+    /// pop the inline free stack if non-empty, else bump — a full arena is code 5 (redo on VM;
+    /// exhaustion is a fallback, never a user-visible fault). Returns the slot INDEX (untagged).
     fn slot_alloc(&self, b: &mut FunctionBuilder) -> ClValue {
         let alloc_done = b.create_block();
         b.append_block_param(alloc_done, types::I64);
@@ -158,12 +155,11 @@ fn emit_arg_clone(
     let merge = b.create_block();
     b.append_block_param(merge, types::I64);
     let clone_blk = b.create_block();
-    // Second pass-through: a runtime-BORROWED slot word (`x == SLOT` without OWNED) — the
-    // only producers are const-interned words and bump-pinned flat elements, both pinned
-    // for the whole run and release-no-op, so "ownership" over them is vacuous (exactly
-    // the `emit_release` no-op leg). An OWNED slot / untagged heap word falls through to
-    // the real clone. This is what spares the per-step `this.tableName`/`this.tableAlias`
-    // const-string clones in a builder chain.
+    // Second pass-through: a runtime-BORROWED slot word (`x == SLOT` without OWNED) — the only
+    // producers are const-interned words and bump-pinned flat elements, both pinned for the whole
+    // run and release-no-op, so "ownership" over them is vacuous (the `emit_release` no-op leg). An
+    // OWNED slot / untagged heap word falls through to the real clone — this spares the per-step
+    // `this.tableName`/`this.tableAlias` const-string clones in a builder chain.
     let chk_slot = b.create_block();
     if repr != 2 {
         // FLAT is a list-word encoding only.
@@ -392,9 +388,8 @@ fn emit_call_to(
         }
     }
     b.switch_to_block(cont);
-    // The callee's fixpoint-recorded return kind (Int for pure-int graphs; an instance-returning
-    // ctor hands its OWNED arena handle across — the ownership-transfer contract). A Float return
-    // travels as its i64 bits over the uniform ABI → bitcast back into the F64 space here.
+    // The callee's fixpoint return kind (Int for pure-int; an instance-returning ctor hands its OWNED
+    // handle across). A Float return travels as i64 bits over the uniform ABI → bitcast back to F64.
     let value = if ret == Kind::Float {
         b.ins().bitcast(types::F64, MemFlagsData::new(), value)
     } else {
@@ -435,10 +430,9 @@ pub(super) fn build_body_unboxed(
     let n = code.len();
     let reach = reachable(code);
 
-    // Param slots read as `Int` iff proven int by usage (so a bare-param `Return`, e.g. fib's base case,
-    // types correctly); otherwise `Unknown` → a bare return of one is rejected. A method body's slot 0
-    // is the injected receiver (`this` — a BORROWED instance handle from the fixpoint facts). These seed
-    // the entry stack for the analysis, which then fixes every leader's (depth, kinds) and the max depth.
+    // Param slots read as `Int` iff proven int by usage (bare-param `Return`, e.g. fib's base case);
+    // else `Unknown` → a bare return of one is rejected. Method slot 0 = injected receiver (`this`, a
+    // BORROWED handle). These seed the entry stack; the analysis then fixes every (depth, kinds) + max.
     let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity, &func.dyn_params);
     let single_use = single_use_params(func);
     // Innermost active catch pad per ip (lexical try ranges) — drives Throw + call-site
@@ -1095,6 +1089,13 @@ pub(super) fn build_body_unboxed(
                 };
                 arm_list_hof(
                     &mut b, &ec, h, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, info, hof,
+                )?;
+            }
+            Op::CallNative(id, 3) if unboxed_native_is_list_reduce(*id) => {
+                // hofpipe fold: `List.reduce(xs, seed, f)` — seed operand + 2-arg `(acc,elem)` call.
+                let h = ub_ref(ub_refs.as_ref(), "List.reduce")?;
+                arm_list_reduce(
+                    &mut b, &ec, h, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, info,
                 )?;
             }
             Op::CallNative(id, 2)

@@ -1688,10 +1688,12 @@ pub(super) fn unboxed_analyze(
                         Kind::Int
                     });
                 }
+                Op::CallNative(id, 3) if unboxed_native_is_list_reduce(*id) => {
+                    admit_list_reduce(program, info, &mut kinds)?;
+                }
                 Op::CallNative(id, 2) if unboxed_native_is_map_has(*id) => {
-                    // The maphas vertical (mirrors the `Op::Index` map arm, minus the value):
-                    // a `Str` key over a `StrIntMap` → `Bool` (key present?). The map is a
-                    // QUERY — it is NOT consumed (only the key is, if owned).
+                    // The maphas vertical (mirrors `Op::Index` map arm minus the value): a `Str` key
+                    // over a `StrIntMap` → `Bool` (present?); the map is a QUERY, not consumed.
                     match kinds.pop() {
                         Some(Kind::Str(_)) => {}
                         other => {
@@ -1711,11 +1713,9 @@ pub(super) fn unboxed_analyze(
                     kinds.push(Kind::Bool);
                 }
                 Op::CallNative(id, 1) if unboxed_native_is_set_of(*id) => {
-                    // The setcontains vertical (Set.of): re-tag a FRESH OWNED flat int list as an
-                    // IntSet membership store. Owned-ONLY is the double-free gate (a Borrowed copy
-                    // would alias its source local — a double-free on a boxed list at teardown);
-                    // dedup is irrelevant to the sole consumer (Set.contains). Non-Owned / non-int
-                    // list → VM fallback.
+                    // The setcontains vertical (Set.of): re-tag a FRESH OWNED flat int list as an IntSet
+                    // store. Owned-ONLY is the double-free gate (a Borrowed copy aliases its source
+                    // local); dedup is irrelevant to the sole consumer (Set.contains). Else → VM.
                     match kinds.pop() {
                         Some(Kind::IntList(Own::Owned)) => {}
                         other => {
