@@ -41,7 +41,7 @@
 762	src/jit/range_acc.rs
 674	src/jit/tests/unboxed_flow.rs
 511	src/jit/tests/unboxed_int.rs
-2423	src/jit/tests/verticals.rs
+2084	src/jit/tests/verticals.rs
 670	src/lift/parser/exprs.rs
 559	src/lift/parser_tests.rs
 1089	src/loader/mod.rs
