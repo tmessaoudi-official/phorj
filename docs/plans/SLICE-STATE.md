@@ -133,8 +133,13 @@ RECONCILIATION LANDED (dev ran all 48 micros): canonical ledger = 44 WIN / 4 LOS
 dbwork are WINs there (no codegen work needed); remaining: jsonround 0.31×/deepjson 0.95× (the
 queued Json-ADT JIT slice) + listcontains 0.85×/mapget 0.96× (stable-box diagnosis only — a
 memo lever was tried and REVERTED on measured evidence, scorecard UPDATE 10; container noise
-now disqualifies close-margin work). PERF NEXT (dev to rule): the Json-ADT slice or the
-stable-box listcontains/mapget session (`PHORJ_JIT_DISASM=1` shipped for it)** →
+now disqualifies close-margin work). **DEC-333 RULED (2026-07-23, pre-compact,
+all six locked): NEXT SLICE = Json-ADT JIT (jsonround/deepjson flips — enum cells with
+string/map/list payloads via W7 Dyn, `Map<string,Dyn>`, `JsonLazy` unboxed), then AOT M1-M3
+(`phg build --native`), then the FULL A+C+D interpreter campaign (--no-jit contract: beat
+PLAIN php; tree-walker inherit-only, oracle stays simple). `MICROBENCH_DOCKER_BOTH=1` shipped
+(dev to validate with one run — then it is the canonical close-margin protocol). Stable-box
+listcontains/mapget diagnosis dev-side, `PHORJ_JIT_DISASM=1` ready.** →
 then string-scan. **`maxBy`/`minBy` HARD FLAG RESOLVED 2026-07-23** (was: blocked on a nullable arena kind; the
 dev's "flip them ALL, any well-thought method" was taken as the GO it reads as): the ??-fusion
 window shipped and both flipped to ~8.1× WINs — see the PERF block above. The broader
