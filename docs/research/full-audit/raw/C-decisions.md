@@ -2991,6 +2991,28 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   slices (labeled/LSB/ArrayAccess/Sandbox — FIVE since DEC-335 added Any/Object) build
   relative to the DEC-333 roadmap — the ruled order so far is D10a cluster → DEC-333.
 
+- **DEC-336 — EXTENSIONLESS `#!`-SHEBANG SOURCES + PERPETUAL EDITOR/LSP CURRENCY (dev-directed
+  2026-07-23, mid-session) — QUEUED (build after the DEC-331 slice-1 `#[Invoke]`/`#[ToString]`
+  tonight; 100%-clear, no open design fork — recorded so it is reopenable/reviewable).** Dev
+  directive (verbatim intent): "the lsp/editors vscode and phpstorm need to always be up to date,
+  and need to support files with no extensions but with a shebang `phg`, and flawless
+  autocompletion and project discovery." Scope: (1) **extensionless script sources** — a file
+  with NO `.phg` extension but a first-line `#!` shebang whose interpreter line names `phg`
+  (`#!/usr/bin/env phg`, `#!.../phg run`) is a valid phorj source. Planned approach (verify at
+  build, Rule 11): the tokenizer skips a single leading `#!…\n` line (PHP/bash/python precedent —
+  a shebang is source-invisible), and the CLI + LSP treat `.phg`-extension OR first-line-`#!phg`
+  as phorj. Transpile of a shebang'd source: PHP's own leading `#!` line is stripped by its lexer
+  too, so the LADDER stays tier-1 (surface at build if a wrinkle appears). (2) **editor
+  association** — VS Code language `firstLine` regex `^#!.*\bphg\b` + PhpStorm/LSP4IJ analog so
+  extensionless shebang files light up (DEC-181 both-editors-same-change). (3) **currency
+  invariant reaffirmed** — Invariant 17 (`phg check` ≡ LSP diagnostics) + DEC-181 already bind
+  every language/tooling slice to update both editors in the same change; this DEC makes "editors
+  always up to date" an explicit standing check at each slice's DoD. Autocomplete + project
+  discovery are already comprehensive (SLICE-STATE LSP block) — this slice extends those code
+  paths to recognize extensionless shebang buffers, not a rebuild. Build-time PENDING (dev may
+  weigh in, else defaulted + recorded): exact shebang-match regex breadth; whether `phg run` on an
+  extensionless file needs an explicit `--lang`/stdin affordance. Deliverable joins the tooling
+  wave; docs (FEATURES/examples/editors README) same-change per Inv 9/17.
 - **DEC-335 — TWO-TIER TOP TYPES `Any` + `Object` (dev-initiated + RULED 2026-07-23, three
   AskUserQuestion rounds) — SPEC FROZEN (`docs/specs/2026-07-23-any-object-top-types.md`),
   BUILD QUEUED with the design slices.** Dev proposal: "a global parent Object everything
