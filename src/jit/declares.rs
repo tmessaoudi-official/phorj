@@ -119,5 +119,7 @@ pub(super) fn declare_ub_helper_ids(
         map_size: declare(module, "rt_u_map_size", &sig3)?,
         map_ext_new: declare(module, "rt_u_map_ext_new", &sig2)?,
         map_ext_push: declare(module, "rt_u_map_ext_push", &sig4)?,
+        str_contains: declare(module, "rt_u_str_contains", &sig4)?,
+        validate: declare(module, "rt_u_validate", &sig4)?,
     })
 }

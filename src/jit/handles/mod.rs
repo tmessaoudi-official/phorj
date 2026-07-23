@@ -6,10 +6,12 @@ use super::*;
 mod helper_refs;
 mod list_builders;
 mod maps_ext;
+mod strings_ext;
 mod symbols;
 pub(in crate::jit) use helper_refs::*;
 pub(super) use list_builders::*;
 pub(super) use maps_ext::*;
+pub(super) use strings_ext::*;
 pub(super) use symbols::*;
 
 // ===========================================================================================
@@ -195,7 +197,8 @@ pub(super) struct UbCtx {
     acc_free: Vec<u32>,
     /// Next never-used accumulator record index (grows toward `UB_ACC_CAP`).
     acc_next: u32,
-    /// Owns the memo words `memo_base` points into (fixed 48-word length — 16 × 3).
+    /// Owns the memo words `memo_base` points into (fixed 72-word length — 24 × 3: map
+    /// entries 0..16, string-predicate entries 16..24 — see `strings_ext.rs`).
     memo_storage: Vec<i64>,
     /// FULL keys/values memo behind the direct-mapped inline table: map handle → `(keys_h,
     /// values_h)` (0 = that side not built yet). An inline-cache eviction re-installs from
@@ -204,6 +207,9 @@ pub(super) struct UbCtx {
     /// FULL merge memo behind the inline pair table: `(a, b)` → merged flat-map handle. Same
     /// discipline — an eviction re-installs, NEVER re-seals (the rebuild-per-iteration cliff).
     memo_merge: std::collections::HashMap<(i64, i64), i64>,
+    /// FULL string-predicate memo behind the direct-mapped lines (entries 16..24): keys are
+    /// PINNED words only (see `strings_ext::word_is_pinned_str`), value = result + 1.
+    memo_str: std::collections::HashMap<(i64, i64), i64>,
     /// `bump` right after const seeding — the pinned-const arena prefix. Everything at or past
     /// it is per-run state that [`UbCtx::reset_for_run`] reclaims (the ctx-reuse lever).
     const_bump: u64,
@@ -257,7 +263,7 @@ impl UbCtx {
                 cap: 0,
             })
             .collect();
-        let mut memo_storage = vec![0i64; 48];
+        let mut memo_storage = vec![0i64; 72];
         UbCtx {
             buf: buf_storage.as_mut_ptr(),
             free_stack: free_storage.as_mut_ptr(),
@@ -279,6 +285,7 @@ impl UbCtx {
             memo_storage,
             memo_kv: std::collections::HashMap::new(),
             memo_merge: std::collections::HashMap::new(),
+            memo_str: std::collections::HashMap::new(),
             const_bump: bump,
         }
     }
@@ -313,6 +320,7 @@ impl UbCtx {
         self.memo_storage.fill(0);
         self.memo_kv.clear();
         self.memo_merge.clear();
+        self.memo_str.clear();
     }
 
     /// The compile-time handles for `const_values`, mirroring [`UbCtx::new`] exactly (same walk,
@@ -1076,18 +1084,6 @@ pub(super) extern "C" fn rt_u_list_len(ctx: *mut UbCtx, h: i64) -> i64 {
         Some(Value::List(xs)) => xs.len() as i64,
         _ => -1,
     }
-}
-
-pub(super) extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
-    let ctx = unsafe { &mut *ctx };
-    let n = match ctx.str_bytes(h) {
-        Some(bytes) => bytes.len() as i64,
-        None => return -1,
-    };
-    if free != 0 {
-        ctx.release(h);
-    }
-    n
 }
 
 /// Append one `key => value` pair to a still-building map scratch (an UNTAGGED, uniquely-owned
@@ -1882,36 +1878,6 @@ pub(super) extern "C" fn rt_u_clone_value(ctx: *mut UbCtx, h: i64, repr: i64) ->
         _ => return -1,
     };
     ctx.alloc(v)
-}
-
-/// String equality for the unboxed `Op::Eq`/`Op::Ne` on two string operands — the shared
-/// [`Value::eq_val`] kernel (single-sourced, so `==` on strings can never drift from the VM).
-/// Returns 0/1; `-1` = defensive non-string operand (code 5).
-pub(super) extern "C" fn rt_u_str_eq(ctx: *mut UbCtx, a: i64, b: i64, meta: i64) -> i64 {
-    let ctx = unsafe { &mut *ctx };
-    let get = |ctx: &UbCtx, h: i64| -> Option<Value> {
-        match ctx.str_bytes(h) {
-            Some(bytes) => match std::str::from_utf8(bytes) {
-                Ok(s) => Some(Value::Str(crate::phstr::PhStr::new(s))),
-                Err(_) => None,
-            },
-            None => match ctx.handles.get(h as usize) {
-                Some(v @ Value::Str(_)) => Some(v.clone()),
-                _ => None,
-            },
-        }
-    };
-    let (Some(va), Some(vb)) = (get(ctx, a), get(ctx, b)) else {
-        return -1;
-    };
-    let eq = va.eq_val(&vb) as i64;
-    if meta & 1 != 0 {
-        ctx.release(a);
-    }
-    if meta & 2 != 0 {
-        ctx.release(b);
-    }
-    eq
 }
 
 /// The GENERAL (non-accumulator) `List.append` — full PHP value semantics via a clone: any

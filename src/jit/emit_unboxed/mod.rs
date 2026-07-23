@@ -11,127 +11,30 @@ use super::*;
 
 mod call_plumbing;
 mod concat;
+mod ec;
 mod enums;
 mod index_lists;
 mod list_contains;
 mod objects;
 mod refs;
 mod scalar;
+mod scan;
 mod verticals;
 mod verticals_hof;
 mod verticals_map;
 
 use call_plumbing::*;
 use concat::*;
+use ec::*;
 use enums::*;
 use index_lists::*;
 use objects::*;
 use refs::*;
 use scalar::*;
+use scan::*;
 use verticals::*;
 use verticals_hof::*;
 use verticals_map::*;
-
-/// Copy-able per-function emit context shared by every op arm: the `UbCtx` pointer, the
-/// stable-header memflags, and the (optional) shared fault-exit / speculation-sticky handles.
-/// Replaces the closures the pre-decomposition monolith captured, so arms can live in sibling
-/// files. All fields are Copy; methods take the builder explicitly.
-#[derive(Clone, Copy)]
-struct Ec {
-    /// The per-run [`UbCtx`] pointer (entry param 0; null for a pure-numeric graph).
-    ctx: ClValue,
-    /// `notrap + can_move` flags for loads of RUN-INVARIANT `UbCtx` header fields (arena base @0,
-    /// free-stack @8, capacity @32 — never stored; mutable `free_top` @16 / `bump` @24 keep defaults).
-    stable: MemFlagsData,
-    /// The shared fault-exit block (`Some` iff `needs_fault_exit`).
-    fault_exit: Option<Block>,
-    /// The speculation sticky Variable (`Some` iff `needs_sticky`).
-    sticky: Option<Variable>,
-}
-
-impl Ec {
-    /// Emit "if `flag` (i8, nonzero) then fault with `code` else continue in a fresh block".
-    /// Only ever called on a path that needs the fault-exit (div/rem/call/depth or a sticky
-    /// redo), so `fault_exit` is guaranteed `Some` here (`needs_fault_exit`).
-    fn fault_if(&self, b: &mut FunctionBuilder, flag: ClValue, code: i64) {
-        let fx = self
-            .fault_exit
-            .expect("fault_if requires a fault-exit block (needs_fault_exit)");
-        let cv = b.ins().iconst(types::I64, code);
-        let cont = b.create_block();
-        b.ins().brif(flag, fx, &[cv.into()], cont, &[]);
-        b.switch_to_block(cont);
-    }
-
-    /// ovf-spec: OR a boolean overflow `flag` (i8, 0/1 from `*_overflow` / an `is_min` compare)
-    /// into the sticky Variable — no branch, so the hot no-overflow path costs only the OR.
-    /// Zero-extends to i64. Only called for an UNPROVEN speculated op, so `sticky` is `Some` (`needs_sticky`).
-    fn accumulate_sticky(&self, b: &mut FunctionBuilder, flag: ClValue) {
-        let sv = self
-            .sticky
-            .expect("accumulate_sticky requires the sticky var (needs_sticky)");
-        let cur = b.use_var(sv);
-        let ext = b.ins().uextend(types::I64, flag);
-        let next = b.ins().bor(cur, ext);
-        b.def_var(sv, next);
-    }
-
-    /// P-2a-inline: push an owned arena slot's index onto the inline free stack (caller has already
-    /// established `v` is slot-tagged with OWNED set). 5 memory ops, no call.
-    fn slot_push(&self, b: &mut FunctionBuilder, v: ClValue) {
-        let fsp = b.ins().load(types::I64, self.stable, self.ctx, 8);
-        let ft = b.ins().load(types::I64, MemFlagsData::new(), self.ctx, 16);
-        let slot = b.ins().band_imm_s(v, UB_IDX_MASK);
-        let foff = b.ins().ishl_imm_s(ft, 2);
-        let faddr = b.ins().iadd(fsp, foff);
-        b.ins().istore32(MemFlagsData::new(), slot, faddr, 0);
-        let ft1 = b.ins().iadd_imm_s(ft, 1);
-        b.ins().store(MemFlagsData::new(), ft1, self.ctx, 16);
-    }
-
-    /// P-2a-inline: recycle a slot-tagged operand IFF its runtime OWNED bit is set (a flat-list element
-    /// / pinned const is compile-time Owned but runtime-borrowed → no-op free). Only at known-slot sites.
-    fn slot_free_if_owned(&self, b: &mut FunctionBuilder, v: ClValue) {
-        let owned_bit = b.ins().band_imm_s(v, UB_TAG_OWNED);
-        let push_blk = b.create_block();
-        let cont = b.create_block();
-        b.ins().brif(owned_bit, push_blk, &[], cont, &[]);
-        b.switch_to_block(push_blk);
-        self.slot_push(b, v);
-        b.ins().jump(cont, &[]);
-        b.switch_to_block(cont);
-    }
-
-    /// Allocate a fresh arena SLOT inline (the P-2a-inline concat ladder, shared by `MakeInstance`):
-    /// pop the inline free stack if non-empty, else bump — a full arena is code 5 (redo on VM;
-    /// exhaustion is a fallback, never a user-visible fault). Returns the slot INDEX (untagged).
-    fn slot_alloc(&self, b: &mut FunctionBuilder) -> ClValue {
-        let alloc_done = b.create_block();
-        b.append_block_param(alloc_done, types::I64);
-        let pop_blk = b.create_block();
-        let bump_blk = b.create_block();
-        let ft = b.ins().load(types::I64, MemFlagsData::new(), self.ctx, 16);
-        b.ins().brif(ft, pop_blk, &[], bump_blk, &[]);
-        b.switch_to_block(pop_blk);
-        let ft1 = b.ins().iadd_imm_s(ft, -1);
-        b.ins().store(MemFlagsData::new(), ft1, self.ctx, 16);
-        let fsp = b.ins().load(types::I64, self.stable, self.ctx, 8);
-        let foff = b.ins().ishl_imm_s(ft1, 2);
-        let faddr = b.ins().iadd(fsp, foff);
-        let popped = b.ins().uload32(MemFlagsData::new(), faddr, 0);
-        b.ins().jump(alloc_done, &[popped.into()]);
-        b.switch_to_block(bump_blk);
-        let bp = b.ins().load(types::I64, MemFlagsData::new(), self.ctx, 24);
-        let cap = b.ins().load(types::I64, self.stable, self.ctx, 32);
-        let full = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, bp, cap);
-        self.fault_if(b, full, 5);
-        let bp1 = b.ins().iadd_imm_s(bp, 1);
-        b.ins().store(MemFlagsData::new(), bp1, self.ctx, 24);
-        b.ins().jump(alloc_done, &[bp.into()]);
-        b.switch_to_block(alloc_done);
-        b.block_params(alloc_done)[0]
-    }
-}
 
 /// Resolve the handle-op helper refs, or fail with the canonical collect-drift diagnostic
 /// (a handle op reached codegen although `collect_functions_unboxed` admitted no helpers).
@@ -832,6 +735,17 @@ pub(super) fn build_body_unboxed(
                 arm_list_hof(
                     &mut b, &ec, h, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, info, hof,
                 )?;
+            }
+            Op::CallNative(id, 2) if unboxed_native_is_str_contains(*id) => {
+                // The stringcontains flip: zero-alloc byte scan, same str::contains kernel.
+                let h = ub_ref(ub_refs.as_ref(), "String.contains")?;
+                arm_str_contains(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_validate_which(*id).is_some() => {
+                // The isemail/isurl flips: arena bytes -> the exact validator kernels.
+                let h = ub_ref(ub_refs.as_ref(), "Validation")?;
+                let which = unboxed_native_validate_which(*id).expect("guard");
+                arm_validate(&mut b, &ec, h, &vars, &fvars, &mut kinds, which)?;
             }
             Op::CallNative(id, 2)
                 if unboxed_native_is_map_map(*id) || unboxed_native_is_map_filter(*id) =>

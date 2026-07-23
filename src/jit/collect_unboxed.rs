@@ -110,6 +110,11 @@ pub(super) fn collect_functions_unboxed(
                     uses_handles = true
                 }
                 Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => uses_handles = true,
+                // String-scan verticals (stringcontains/isemail/isurl flips).
+                Op::CallNative(id, 2) if unboxed_native_is_str_contains(*id) => uses_handles = true,
+                Op::CallNative(id, 1) if unboxed_native_validate_which(*id).is_some() => {
+                    uses_handles = true
+                }
                 // hofpipe: the HOF loop arms direct-call the compiled lambda per element.
                 Op::CallNative(id, 2)
                     if unboxed_native_is_list_map(*id)

@@ -237,15 +237,38 @@ pub(crate) fn unboxed_native_is_list_contains(id: usize) -> bool {
 
 /// Is `id` one of the pure 2-arg natives routed through the GENERIC `rt_u_native2` bridge
 /// (which calls the registered native itself — single-sourced semantics)? Cheap name gate for
-/// the match guards; the shape table is [`unboxed_native_bridge2`].
+/// the match guards; the shape table is [`unboxed_native_bridge2`]. `String.contains` LEFT this
+/// set for the dedicated scan vertical (the stringcontains flip — the bridge paid two boxed
+/// `Value` materializations per call).
 pub(crate) fn unboxed_native_is_bridge2(id: usize) -> bool {
     crate::native::registry().get(id).is_some_and(|nf| {
         nf.pure
             && matches!(
                 (nf.module, nf.name),
-                ("Core.String", "join" | "contains" | "splitOnce") | ("Core.List", "drop")
+                ("Core.String", "join" | "splitOnce") | ("Core.List", "drop")
             )
     })
+}
+
+/// Is native-registry entry `id` `Core.String.contains` (the stringcontains flip: a dedicated
+/// zero-alloc byte read + the native's exact `str::contains` kernel — replaces the generic
+/// bridge2 route for this native)?
+pub(crate) fn unboxed_native_is_str_contains(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.String" && nf.name == "contains" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.Validation.isEmail`/`isUrl` (the isemail/isurl flips:
+/// arena bytes → the exact hand-rolled anchored-validator kernels)? Returns the helper's
+/// `which` selector (0 = email, 1 = url).
+pub(crate) fn unboxed_native_validate_which(id: usize) -> Option<i64> {
+    let nf = crate::native::registry().get(id)?;
+    match (nf.module, nf.name, nf.pure) {
+        ("Core.Validation", "isEmail", true) => Some(0),
+        ("Core.Validation", "isUrl", true) => Some(1),
+        _ => None,
+    }
 }
 
 /// The bridge-2 shape table: given the native and the two COMPILE-TIME operand kinds
@@ -256,9 +279,6 @@ pub(crate) fn unboxed_native_bridge2(id: usize, a: &Kind, b: &Kind) -> Option<(i
     match ((nf.module, nf.name), a, b) {
         (("Core.String", "join"), Kind::StrList(_), Kind::Str(_)) => {
             Some((3 | (2 << 3) | (2 << 6), Kind::Str(Own::Owned)))
-        }
-        (("Core.String", "contains"), Kind::Str(_), Kind::Str(_)) => {
-            Some((2 | (2 << 3), Kind::Bool))
         }
         (("Core.String", "splitOnce"), Kind::Str(_), Kind::Str(_)) => {
             Some((2 | (2 << 3) | (3 << 6), Kind::StrList(Own::Owned)))
@@ -271,6 +291,28 @@ pub(crate) fn unboxed_native_bridge2(id: usize, a: &Kind, b: &Kind) -> Option<(i
         }
         _ => None,
     }
+}
+
+/// Admit a string-consuming Bool predicate (`String.contains` arity 2 / `Validation.isEmail`/
+/// `isUrl` arity 1): pop `n_args` `Str` operands (QUERIES), push `Bool`. Fail closed on any
+/// non-string operand kind (VM fallback).
+pub(crate) fn admit_str_predicate(
+    kinds: &mut Vec<Kind>,
+    n_args: usize,
+    what: &str,
+) -> Result<(), JitError> {
+    for _ in 0..n_args {
+        match kinds.pop() {
+            Some(Kind::Str(_)) => {}
+            other => {
+                return Err(JitError::Unsupported(format!(
+                    "unboxed {what} operand kind {other:?}"
+                )))
+            }
+        }
+    }
+    kinds.push(Kind::Bool);
+    Ok(())
 }
 
 /// Is native-registry entry `id` `Core.Conversion.toString` (INT operand only in this subset —
