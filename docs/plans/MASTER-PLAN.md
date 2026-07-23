@@ -134,10 +134,13 @@ inline direct-mapped probe backed by a full per-run memo, SHARED builder records
 `ListHof::Filter` conditional ACL append; `arm_map_hof` inline pair walk + direct call per entry →
 recyclable AMB records via `rt_u_map_ext_new`/`_push`, `Map.values` AMB rank-walk leg — NO memo, no
 per-iteration seal, zero arena growth for any capture distribution; `src/jit/tests/hof_filter_map.rs`).
-Dev-box fresh table (2026-07-23) also shows `listcontains` back at 0.71×
-there — re-verify on the dev box after re-pull. **9 losses remain**, each its own
+Then **stringcontains 0.16×→3.89× / isemail 0.24×→13.36× / isurl 0.23×→11.55×** (dedicated
+zero-alloc scan helpers running the natives' exact kernels + the PINNED-WORD string memo:
+pure predicates over immutable pinned words memoize in memo-table entries 16..24, probed inline;
+pinned-ness decided from the RUNTIME word — `strings_ext.rs`, `emit_unboxed/scan.rs`,
+`src/jit/tests/string_scan.rs`). Dev-box fresh table (2026-07-23) also shows `listcontains` back
+at 0.71× there — re-verify on the dev box after re-pull. **6 losses remain**, each its own
 vertical/representation slice, in order:
-- string-scan `isemail`/`isurl`/`stringcontains` (0.12–0.24×) — inline substring-scan vertical (NEXT).
 - ⚠ `maxby`/`minby` (0.19–0.20×) — **BLOCKED on a representation lever (HARD FLAG, dev to rule):** they
   return `T?` and the unboxed `Kind` enum has NO nullable/optional variant, so the element result can't
   stay unboxed. Options (dev): add an `Int?`-style nullable arena kind (broadest, also unblocks other

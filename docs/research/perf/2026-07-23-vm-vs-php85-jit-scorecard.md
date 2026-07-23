@@ -168,6 +168,34 @@ a filtered AMB record, values association+order through the transform, transform
 parity) + the differential. mapmap is the thinnest (1.94×) — the per-iteration AMB build +
 values-ACL materialization is the remaining cost.
 
+## UPDATE 6 (2026-07-23, later): stringcontains / isemail / isurl FLIPPED — dedicated scan verticals + the PINNED-WORD string memo
+
+| feature | before | after | how |
+|---|---|---|---|
+| stringcontains | 0.16× | **3.89× WIN** (79.5M → 20.4M ns) | dedicated zero-alloc byte scan (left bridge2) + pair memo |
+| isemail | 0.24× | **13.36× WIN** (226.2M → 16.9M ns) | exact `is_email` kernel over arena bytes + memo |
+| isurl | 0.23× | **11.55× WIN** (205.7M → 17.8M ns) | exact `is_url` kernel + memo |
+
+Design, two layers. (1) DEDICATED helpers replace the generic bridge2 route (`String.contains`)
+/ the boxed native dispatch (`Validation.isEmail`/`isUrl`): read the operand bytes straight off
+the arena / handle table — no boxed `Value`, no `PhStr` clone per call — and run the natives'
+EXACT kernels (`str::contains`; `validate::{is_email,is_url}` now `pub(crate)`), single-sourced.
+This alone took stringcontains 0.16×→0.49× and isemail to 0.95×. (2) The **pinned-word string
+memo**: these predicates are pure functions of immutable byte sequences, and the bench operands
+are PINNED words — string consts (untagged `< n_pinned` / borrowed const slots) and sealed
+flat-list element slots (bump-pinned, never recycled). `word_is_pinned_str` decides **from the
+runtime word alone** (`SLOT`+!`OWNED`, or untagged `< n_pinned`) — decisive detail: the
+compile-time kind says `Owned` for flat-element borrows, so a kind-level gate would never
+install (measured: memo dead, 0.48×). Results install into memo-table entries 16..24
+(direct-mapped, Fibonacci-mixed pair key, probed inline in ~8 ops) backed by a full HashMap
+(evictions re-install, never rescan — the map-memo discipline). Validate keys are
+`(s, -(which+1))` — a negative word is never a handle, so the two verticals share the table
+collision-free. OWNED/recyclable words NEVER key the memo (a recycled slot with new bytes would
+poison it) — they compute per call, still zero-alloc. Byte-identity: 6 tests in
+`src/jit/tests/string_scan.rs` (hits>0 per bench shape, edge needles incl. empty/longer-than-hay,
+>8-pair direct-mapped eviction rounds, interpolated OWNED haystacks exercising the unpinned leg)
++ the differential.
+
 ## Interpreter matrix (dev ask 2026-07-23): phg without JIT vs php without opcache/JIT
 
 Same harness, new knobs (`MICROBENCH_PHG_ARGS='--no-jit'|'--tree-walker'`, `MICROBENCH_PHP_JIT=0`).

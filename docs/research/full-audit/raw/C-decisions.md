@@ -3005,7 +3005,18 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   AMB rank-walk leg. Zero arena growth per iteration by construction — the UPDATE-4 cliff cannot
   exist here for ANY capture distribution. 9 tests `src/jit/tests/hof_filter_map.rs` (incl.
   get/builder-set compat on filtered records + transform-overflow fault parity). Scorecard
-  UPDATE 5. NEXT: string-scan `stringcontains`/`isemail`/`isurl`.
+  UPDATE 5. (10)(11)(12) `stringcontains` 0.16×→3.89× / `isemail` 0.24×→13.36× / `isurl`
+  0.23×→11.55× (2026-07-23): dedicated zero-alloc scan helpers (bytes straight off the arena,
+  the natives' EXACT kernels — `String.contains` left the bridge2 route; `validate::{is_email,
+  is_url}` exposed pub(crate)) + the PINNED-WORD STRING MEMO: pure predicates over immutable
+  words memoize in memo-table entries 16..24 (inline ~8-op direct-mapped probe, Fibonacci pair
+  mixing, full-HashMap backing, eviction re-installs); pinned-ness decided from the RUNTIME
+  word alone (`SLOT`+!`OWNED` / untagged `<n_pinned`) — the compile-time kind says Owned for
+  flat-element borrows, so a kind-gated memo never installs (measured dead: 0.48×); OWNED/
+  recyclable words never key the memo (poison hazard), they compute per call. Validate keys
+  `(s, -(which+1))` — negative words are never handles, no cross-vertical collisions.
+  `handles/strings_ext.rs` + `emit_unboxed/scan.rs` + 6 tests `src/jit/tests/string_scan.rs`.
+  Scorecard UPDATE 6. NEXT: `maxBy`/`minBy` (dev GO: `??` peephole first).
   ⚠ **HARD FLAG (2026-07-23): `maxBy`/`minBy` (0.19–0.20×) are BLOCKED on a representation
   lever — dev to rule.** They return `T?`, and the unboxed `Kind` enum (Int/Float/Bool/Str/…/IntList)
   has NO nullable/optional variant, so the element result cannot stay unboxed. Options: (i) add an
