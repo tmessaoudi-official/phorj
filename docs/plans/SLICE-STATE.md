@@ -108,7 +108,14 @@ of `jit/tests/verticals.rs` (keep 1–469; `instance_and_string_verticals.rs` �
 (inline pair walk, direct call per entry, recyclable AMB records via `rt_u_map_ext_new`/`_push`;
 `Map.values` gained an AMB rank-walk leg). NO memo (data-dependent captures), no per-iteration
 seal — zero arena growth by construction. 9 tests `src/jit/tests/hof_filter_map.rs`; scorecard
-UPDATE 5. **9 losses remain. PERF NEXT: string-scan `stringcontains`/`isemail`/`isurl`** →
+UPDATE 5. **THEN string-scan CLOSED same day (0.16×→3.89× / 0.24×→13.36× / 0.23×→11.55×):**
+dedicated zero-alloc helpers running the natives' exact kernels (`String.contains` left bridge2;
+`validate::{is_email,is_url}` now pub(crate)) + the PINNED-WORD string memo (memo entries
+16..24, inline ~8-op probe, full-HashMap backing; pinned-ness from the RUNTIME word —
+`SLOT`+!`OWNED` or untagged `<n_pinned` — a kind-level gate measured DEAD at 0.48×, the runtime
+gate is the whole flip). 6 tests `src/jit/tests/string_scan.rs`; scorecard UPDATE 6.
+**6 losses remain. PERF NEXT: `maxBy`/`minBy`** (dev GO on the lever — non-empty-`??` peephole
+first, nullable kind if needed) →
 then string-scan. **⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable
 arena-kind** — they return `T?` and
 the unboxed `Kind` enum has no optional variant, so the element result can't stay unboxed; dev to rule
