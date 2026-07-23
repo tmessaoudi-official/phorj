@@ -71,7 +71,19 @@ mapkeys/values 0.09×, HOF folds + string-scan + JSON). **3 CLOSED 2026-07-23:**
 → code-5 VM redo → exact `"integer overflow in List.sumBy"` fault; 14.9M vs 254M ns); (3) `listreduce`
 0.30× → **11.29× WIN** (`arm_list_reduce`, the arity-3 fold — seed operand + 2-arg `(acc,elem)` call,
 shared `ub_list_walk_setup` helper; 17.6M vs 199M ns). All byte-identical (JIT≡VM≡tree-walker;
-`src/jit/tests/sumby.rs`). **15 losses remain.** CAMPAIGN SSOT = **DEC-332** + MASTER-PLAN §0 (perf
+`src/jit/tests/sumby.rs`). **+3 MORE CLOSED (same day, after dev re-sign):** (4) `mapkeys` 0.08× →
+**1.07× WIN** (768.6M→55.6M ns) + (5) `mapvalues` 0.08× → **1.07× WIN** (726.3M→53.6M) + (6)
+`mapmerge` 0.10× → **2.01× WIN** (440.9M→23.0M) — MEMOIZED map-materialization verticals: sealed
+flat maps are immutable+bump-pinned ⇒ keys/values/merge memoize per handle/pair; inline
+direct-mapped memo probe (Fibonacci-mixed) backed by a FULL per-run memo (eviction re-installs,
+NEVER rebuilds — the rebuild-per-iteration arena cliff found+fixed in bring-up); SHARED (bit 55)
+records (consumer release no-op, appends copy); narrow `Kind::MapList` for `maps[i%3]`; `Map.size`
+inline. Files: `handles/maps_ext.rs` + `emit_unboxed/verticals_map.rs` + `analyze/natives_map.rs`
++ 7 tests in `jit/tests/map_materialize.rs`. mapkeys/values margins THIN (1.07×) — dev-box
+re-verify owed. **12 losses remain** (dev's fresh 2026-07-23 table also shows `listcontains` 0.71×
+on THEIR box — recheck owed). **INTERPRETER MATRIX shipped (dev ask):** `MICROBENCH_PHG_ARGS` +
+`MICROBENCH_PHP_JIT=0` knobs; VM-nojit 1/48, tree-walker 0/48 vs plain php — recorded in the
+scorecard §"Interpreter matrix". CAMPAIGN SSOT = **DEC-332** + MASTER-PLAN §0 (perf
 WIN-OR-FLAG + 100%-coverage + M-DECOMP); detail in `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`.
 **M-DECOMP CAMPAIGN (Inv 13 / DEC-332(d), dev-requested 2026-07-23 "shrink big files, better
 architecture/folders, no compromises"): 79 files over the 500 hard cap; behavior-preserving cohesion
@@ -82,14 +94,23 @@ splits, gate-green, one commit per file, JIT-first.** DONE so far (all pushed): 
 of the delivery block** — keep 1–469 (core hook + basic verticals); `instance_and_string_verticals.rs`
 ← 470–818; `map_set_verticals.rs` ← 819–1097; `interpolation_and_accumulators.rs` ← 1099–1411. CARVE
 RULE (2 bugs hit this session): start each carve at the leading `#[test]`/`// ---` (not the `fn`), and
-PRUNE the source file's now-unused cross-file `use` (ub_int/ub_float/vm_float) after moving. Then the
-JIT engine giants (`analyze/mod.rs` 2683, `handles.rs` 2280, `emit_unboxed/mod.rs` 1988), then
-`checker/desugar_db.rs` 3144, `cli/explain.rs` 1998, and the tail (see `sort -rn scripts/size-baseline.txt`).
-**PERF NEXT (separate track): `mapkeys`/`mapvalues`** (Map key/value materialization vertical) → then string-scan. **⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable
+PRUNE the source file's now-unused cross-file `use` (ub_int/ub_float/vm_float) after moving.
+**JIT-giant carves LANDED with the map-vertical slice (2026-07-23):** `handles.rs` → `handles/`
+dir (`mod.rs` 2161 + `maps_ext.rs` + `list_builders.rs` + `symbols.rs`); `analyze/kinds.rs`
+(mod.rs 2683→2488); `emit_unboxed/index_lists.rs` + `refs.rs` (verticals.rs→1011, mod.rs held
+at 1988); `compile.rs` 620→590. Baselines ratcheted. STILL NEXT: the 3-way delivery-block carve
+of `jit/tests/verticals.rs` (keep 1–469; `instance_and_string_verticals.rs` ← 470–818;
+`map_set_verticals.rs` ← 819–1097; `interpolation_and_accumulators.rs` ← 1099–1411), then
+`analyze/mod.rs` 2488, `handles/mod.rs` 2161, `emit_unboxed/mod.rs` 1988, `checker/desugar_db.rs`
+3144, `cli/explain.rs` 1998, and the tail (see `sort -rn scripts/size-baseline.txt`).
+**PERF NEXT (separate track): `listfilter`/`mapfilter`/`mapmap`** (HOF filter/map verticals) →
+then string-scan. **⚠ `maxBy`/`minBy` HARD-FLAGGED (2026-07-23): BLOCKED on a nullable
 arena-kind** — they return `T?` and
 the unboxed `Kind` enum has no optional variant, so the element result can't stay unboxed; dev to rule
 the representation lever (add `Int?` kind / non-empty-`??` peephole / accept flag) — NOT a night call
-(recorded in MASTER-PLAN §0 + DEC-332). (No divergent doc —
+(recorded in MASTER-PLAN §0 + DEC-332). NOTE dev's latest message ("flip them ALL, real wins, any
+well-thought method, no compromise") reads as a GO on picking the lever — plan: try the non-empty-`??`
+peephole first (narrow, sound), escalate to the nullable kind if the bench shape needs it. (No divergent doc —
 ex-`architecture-decomp.plan.md` folded into MASTER-PLAN.) Full report + root-cause +
 architectural-fix list: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. Root cause:
 per-element native calls over boxed immutable `Value` collections + HAMT key/value extraction (JIT

@@ -125,19 +125,31 @@ compromise; if you can't, hard flag").** Bar = VM+JIT faster than php-8.5.8+opca
 remaining losses: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md` (the pointed-to detail —
 not a fork). State: **27 WIN / 18 LOSS**, then CLOSED so far: **listcontains 0.06×→1.97×** (flat-int
 scan vertical) + **sumby 0.34×→~17×** (hofpipe vertical + checked accumulator) + **listreduce
-0.30×→11.29×** (`arm_list_reduce` arity-3 fold, shared `ub_list_walk_setup`). **15 losses remain**,
-each its own vertical/representation slice, in order:
-- `mapkeys`/`mapvalues`/`mapmerge` (0.09–0.12×) — Map key/value MATERIALIZATION vertical → `verticals/map.rs` (NEXT).
-- string-scan `isemail`/`isurl`/`stringcontains` (0.16–0.24×) — inline substring-scan vertical.
+0.30×→11.29×** (`arm_list_reduce` arity-3 fold, shared `ub_list_walk_setup`) + **mapkeys
+0.08×→1.07× / mapvalues 0.08×→1.07× / mapmerge 0.10×→2.01×** (MEMOIZED map-materialization
+verticals: sealed flat maps are immutable+bump-pinned so keys/values/merge results memoize —
+inline direct-mapped probe backed by a full per-run memo, SHARED builder records, narrow
+`Kind::MapList` for the rotating-operand shape; `emit_unboxed/verticals_map.rs` +
+`handles/maps_ext.rs`). Dev-box fresh table (2026-07-23) also shows `listcontains` back at 0.71×
+there — re-verify on the dev box after re-pull. **12 losses remain**, each its own
+vertical/representation slice, in order:
+- `listfilter`/`mapfilter`/`mapmap` (0.23–0.32×) — HOF filter/map verticals over
+  IntList/flat-map (the listmap/hofpipe pattern + the new map walk) (NEXT).
+- string-scan `isemail`/`isurl`/`stringcontains` (0.12–0.24×) — inline substring-scan vertical.
 - ⚠ `maxby`/`minby` (0.19–0.20×) — **BLOCKED on a representation lever (HARD FLAG, dev to rule):** they
   return `T?` and the unboxed `Kind` enum has NO nullable/optional variant, so the element result can't
   stay unboxed. Options (dev): add an `Int?`-style nullable arena kind (broadest, also unblocks other
   nullable-returning natives) · restrict the vertical to a provably-non-empty list feeding `??` (narrow
   peephole) · accept the flag. NOT a night decision.
-- JSON `jsonround`/`deepjson`, Set ops, `dbwork`, float near-ties `floatmul`/`floatloop`.
+- JSON `jsonround`/`deepjson`, Set ops (`setdifference`/`setunion`), float near-ties
+  `floatmul`/`floatloop`, and the dev-box `listcontains` 0.71× recheck.
 - **COVERAGE (dev ask):** ADD micros until the suite covers 100% of phorj's php-comparable surface, so
   the "beats php" claim is exhaustive (WIN-OR-FLAG on every covered feature). Reconcile the from-source
   baseline vs the official docker `php:8.5-cli` on the dev box.
+- **INTERPRETER MATRIX (dev ask 2026-07-23):** `microbench.sh` grew `MICROBENCH_PHG_ARGS` +
+  `MICROBENCH_PHP_JIT=0` knobs; the VM-`--no-jit`-vs-plain-php and tree-walker-vs-plain-php sweeps
+  are recorded in the scorecard §"Interpreter matrix" — headline: without the JIT phorj loses
+  nearly everywhere (VM 1/48, tree-walker 0/48); the JIT-by-default engine IS the perf story.
 
 **M-DECOMP CAMPAIGN — shrink the 79 over-hard-cap files into a better architecture (Invariant 13).**
 JIT-FIRST because the giants (`analyze.rs` 2869, `emit_unboxed/mod.rs` 1988, `handles.rs` 2280,
