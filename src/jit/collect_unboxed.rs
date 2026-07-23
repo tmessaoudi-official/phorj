@@ -47,6 +47,17 @@ pub(super) fn collect_functions_unboxed(
         }
         let code = &func.chunk.code;
         let reach = reachable(code);
+        // The ??-fused maxBy/minBy windows: their six desugar ops (incl. the otherwise
+        // unsupported `Const(Null)`/`Eq`-on-null) are consumed by the fused vertical — skip
+        // them here exactly as analyze (`ip += 6`) and emit (`skip_ip`) do.
+        let mut fused = vec![false; code.len()];
+        for ip in 0..code.len() {
+            if reach[ip]
+                && crate::jit::extreme_by_coalesce_window(code, &func.chunk.consts, ip).is_some()
+            {
+                fused[ip + 1..=ip + 6].fill(true);
+            }
+        }
         // Float slice v1 is LEAF-only: the `Op::Call` arm models a callee's return as `Int`, so a float
         // value flowing through a call would mis-decode (a callee returning float, or a float arg). A
         // function that both touches floats AND calls is rejected (sound over-rejection; cross-function
@@ -61,7 +72,7 @@ pub(super) fn collect_functions_unboxed(
         let mut iter_srcs: Vec<usize> = Vec::new();
         let mut writes: Vec<usize> = Vec::new();
         for (ip, op) in code.iter().enumerate() {
-            if !reach[ip] {
+            if !reach[ip] || fused[ip] {
                 continue;
             }
             match op {
@@ -128,6 +139,14 @@ pub(super) fn collect_functions_unboxed(
                 // Map HOFs (mapmap/mapfilter flips): inline pair walk + direct call per entry.
                 Op::CallNative(id, 2)
                     if unboxed_native_is_map_map(*id) || unboxed_native_is_map_filter(*id) =>
+                {
+                    uses_handles = true;
+                    has_call = true;
+                }
+                // The ??-fused maxBy/minBy fold (window-gated in analyze; a window-less use
+                // fails analysis and the whole graph stays on the VM).
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_list_max_by(*id) || unboxed_native_is_list_min_by(*id) =>
                 {
                     uses_handles = true;
                     has_call = true;

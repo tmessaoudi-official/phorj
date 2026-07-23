@@ -12,6 +12,7 @@ use crate::value::Value;
 
 mod accumulator_elision;
 mod boxed;
+mod extreme_by;
 mod hof_filter_map;
 mod listcontains;
 mod map_materialize;

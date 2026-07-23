@@ -268,3 +268,63 @@ pub(super) fn emit_call_to(
     };
     ub_push(b, vars, fvars, kinds, value, ret)
 }
+
+/// `Op::CallValue` on a static `Fn` (the closurecall vertical's call site): peek the target
+/// UNDER the args so the callee's ABI param kinds drive the arg pop (a Dyn param takes a
+/// (payload, tag) pair even when this site passes a concrete scalar), then the shared direct
+/// call. Body moved verbatim from the dispatch loop (M-Decomp, Invariant 13).
+#[allow(clippy::too_many_arguments)] // emit plumbing
+pub(super) fn arm_call_value(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    ub_refs: Option<&UbHelperRefs>,
+    fn_refs: &[Option<FuncRef>],
+    ctx: ClValue,
+    depth: ClValue,
+    vars: &[Variable],
+    fvars: &[Variable],
+    evars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
+    argc: usize,
+    ts: Option<ThrowSite>,
+) -> Result<(), JitError> {
+    let fk_peek = *kinds
+        .get(kinds.len().wrapping_sub(argc + 1))
+        .ok_or_else(|| {
+            JitError::Codegen("unboxed: CallValue underflow past analyze".to_string())
+        })?;
+    let Kind::Fn(f_peek) = fk_peek else {
+        return Err(JitError::Unsupported(format!(
+            "unboxed: CallValue on {fk_peek:?} (deferred)"
+        )));
+    };
+    let pks = abi_param_kinds(program, info, f_peek);
+    let cargs = pop_call_args(b, ec, ub_refs, vars, fvars, evars, kinds, argc, &pks)?;
+    let (_fv, fk) = ub_pop(b, vars, fvars, kinds)?;
+    let Kind::Fn(f) = fk else {
+        return Err(JitError::Unsupported(format!(
+            "unboxed: CallValue on {fk:?} (deferred)"
+        )));
+    };
+    if program.functions[f].arity != argc {
+        return Err(JitError::Codegen(
+            "unboxed: CallValue arity mismatch past analyze".to_string(),
+        ));
+    }
+    emit_call_to(
+        b,
+        ec,
+        fn_refs,
+        ctx,
+        depth,
+        vars,
+        fvars,
+        kinds,
+        f,
+        cargs,
+        info.ret_of(f),
+        ts,
+    )
+}

@@ -104,6 +104,31 @@ pub(crate) fn admit_map_hof(
     Ok(())
 }
 
+/// Admit `Map.has(m, k)` (the maphas vertical — mirrors the `Op::Index` map arm minus the
+/// value): pop the `Str` key then the `StrIntMap` receiver (a QUERY, not consumed), push
+/// `Bool`. Lives here (natives headroom) so the grandfathered `analyze/mod.rs` arm stays a
+/// one-liner (Invariant 13).
+pub(crate) fn admit_map_has(kinds: &mut Vec<Kind>) -> Result<(), JitError> {
+    match kinds.pop() {
+        Some(Kind::Str(_)) => {}
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed Map.has key kind {other:?}"
+            )))
+        }
+    }
+    match kinds.pop() {
+        Some(Kind::StrIntMap(_)) => {}
+        other => {
+            return Err(JitError::Unsupported(format!(
+                "unboxed Map.has receiver kind {other:?}"
+            )))
+        }
+    }
+    kinds.push(Kind::Bool);
+    Ok(())
+}
+
 /// Admit a 1-arg map-consuming native (`keys` / `values` / `size`): pop the `StrIntMap`
 /// receiver (a QUERY — mirrors `Map.has`), push `out`.
 pub(crate) fn admit_map_query1(

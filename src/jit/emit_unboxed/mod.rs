@@ -277,7 +277,7 @@ pub(super) fn build_body_unboxed(
 
     // One Cranelift block per reachable leader — the SAME leader set `unboxed_analyze` used, so the two
     // views of the block structure can never drift.
-    let is_leader = leaders(code, &reach);
+    let is_leader = leaders(code, &reach, &func.chunk.consts);
     // L2b: the field-TAKE mask for an owned-`this` method — the SAME shared function the
     // analyze walk used (mirror-safe by construction).
     let this_taken: Option<Vec<Option<usize>>> = match param_kinds.first() {
@@ -358,10 +358,16 @@ pub(super) fn build_body_unboxed(
         if !reach[ip] {
             continue;
         }
-        // A fused two-op arm (the accumulator peephole) already emitted this op's effect.
-        if skip_ip == Some(ip) {
-            skip_ip = None;
-            continue;
+        // A fused multi-op arm (the accumulator peephole / the ??-fused extreme fold) already
+        // emitted every effect up to and including `skip_ip` — skip without block bookkeeping
+        // (`leaders` minted no blocks inside a fused window).
+        if let Some(n) = skip_ip {
+            if ip <= n {
+                if ip == n {
+                    skip_ip = None;
+                }
+                continue;
+            }
         }
         if ip != 0 {
             if let Some(blk) = blocks[ip] {
@@ -746,6 +752,22 @@ pub(super) fn build_body_unboxed(
                 let h = ub_ref(ub_refs.as_ref(), "Validation")?;
                 let which = unboxed_native_validate_which(*id).expect("guard");
                 arm_validate(&mut b, &ec, h, &vars, &fvars, &mut kinds, which)?;
+            }
+            Op::CallNative(id, 2)
+                if unboxed_native_is_list_max_by(*id) || unboxed_native_is_list_min_by(*id) =>
+            {
+                // The ??-FUSED extreme fold (analyze admitted the full Coalesce window): one
+                // straight-line total fold, then skip the six consumed desugar ops.
+                let (is_max, default) = extreme_by_coalesce_window(code, &func.chunk.consts, ip)
+                    .ok_or_else(|| {
+                        JitError::Codegen("unboxed: fused extreme window vanished".to_string())
+                    })?;
+                let h = ub_ref(ub_refs.as_ref(), "List extremeBy")?;
+                arm_list_extreme_by(
+                    &mut b, &ec, h, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, info, is_max,
+                    default,
+                )?;
+                skip_ip = Some(ip + 6);
             }
             Op::CallNative(id, 2)
                 if unboxed_native_is_map_map(*id) || unboxed_native_is_map_filter(*id) =>
@@ -1211,64 +1233,33 @@ pub(super) fn build_body_unboxed(
             // `CallValue` on a static `Fn(f)`: pop the args, pop the (filler) callee word, then
             // the SAME direct-call emission as `Op::Call` — no indirection, no closure object.
             Op::CallValue(argc) => {
-                // The static `Fn` target is UNDER the args — peek it so the callee's ABI
-                // param kinds drive the arg pop (a Dyn param takes a (payload, tag) pair
-                // even when THIS site passes a concrete scalar).
-                let fk_peek = *kinds
-                    .get(kinds.len().wrapping_sub(*argc + 1))
-                    .ok_or_else(|| {
-                        JitError::Codegen("unboxed: CallValue underflow past analyze".to_string())
-                    })?;
-                let Kind::Fn(f_peek) = fk_peek else {
-                    return Err(JitError::Unsupported(format!(
-                        "unboxed: CallValue on {fk_peek:?} (deferred)"
-                    )));
+                // Arm body in `call_plumbing.rs` (M-Decomp); the throw-site is resolved here
+                // (it needs the loop-local blocks/leader tables).
+                let ts = if info.thrown_class.is_some() {
+                    Some(ThrowSite {
+                        program,
+                        info,
+                        h: ub_ref(ub_refs.as_ref(), "throw dispatch")?,
+                        pad: throw_site(ip, &blocks, &leader_state)?,
+                    })
+                } else {
+                    None
                 };
-                let pks = abi_param_kinds(program, info, f_peek);
-                let cargs = pop_call_args(
+                arm_call_value(
                     &mut b,
                     &ec,
                     ub_refs.as_ref(),
-                    &vars,
-                    &fvars,
-                    &evars,
-                    &mut kinds,
-                    *argc,
-                    &pks,
-                )?;
-                let (_fv, fk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                let Kind::Fn(f) = fk else {
-                    return Err(JitError::Unsupported(format!(
-                        "unboxed: CallValue on {fk:?} (deferred)"
-                    )));
-                };
-                if program.functions[f].arity != *argc {
-                    return Err(JitError::Codegen(
-                        "unboxed: CallValue arity mismatch past analyze".to_string(),
-                    ));
-                }
-                emit_call_to(
-                    &mut b,
-                    &ec,
                     &fn_refs,
                     ctx,
                     depth,
                     &vars,
                     &fvars,
+                    &evars,
                     &mut kinds,
-                    f,
-                    cargs,
-                    info.ret_of(f),
-                    if info.thrown_class.is_some() {
-                        Some(ThrowSite {
-                            program,
-                            info,
-                            h: ub_ref(ub_refs.as_ref(), "throw dispatch")?,
-                            pad: throw_site(ip, &blocks, &leader_state)?,
-                        })
-                    } else {
-                        None
-                    },
+                    program,
+                    info,
+                    *argc,
+                    ts,
                 )?;
             }
             // Object vertical (flat arena instances) — arm bodies live in `objects.rs`.
