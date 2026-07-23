@@ -139,15 +139,14 @@ zero-alloc scan helpers running the natives' exact kernels + the PINNED-WORD str
 pure predicates over immutable pinned words memoize in memo-table entries 16..24, probed inline;
 pinned-ness decided from the RUNTIME word — `strings_ext.rs`, `emit_unboxed/scan.rs`,
 `src/jit/tests/string_scan.rs`). Dev-box fresh table (2026-07-23) also shows `listcontains` back
-at 0.71× there — re-verify on the dev box after re-pull. **6 losses remain**, each its own
-vertical/representation slice, in order:
-- ⚠ `maxby`/`minby` (0.19–0.20×) — **BLOCKED on a representation lever (HARD FLAG, dev to rule):** they
-  return `T?` and the unboxed `Kind` enum has NO nullable/optional variant, so the element result can't
-  stay unboxed. Options (dev): add an `Int?`-style nullable arena kind (broadest, also unblocks other
-  nullable-returning natives) · restrict the vertical to a provably-non-empty list feeding `??` (narrow
-  peephole) · accept the flag. NOT a night decision.
-- JSON `jsonround`/`deepjson`, Set ops (`setdifference`/`setunion`), float near-ties
-  `floatmul`/`floatloop`, and the dev-box `listcontains` 0.71× recheck.
+at 0.71× there — re-verify on the dev box after re-pull. Then **maxby 0.19×→8.13× / minby
+0.20×→8.18×** (the HARD FLAG closed by the ruled ??-fusion lever: `extreme_by_coalesce_window`
+fuses `maxBy/minBy(xs,f) ?? <int>` into a total-Int first-wins fold across all four passes;
+window-less uses stay on the VM, the nullable-Kind lever stays open). **4 losses remain**, each
+its own vertical/representation slice, in order:
+- Set ops `setdifference` (0.45×) / `setunion` (0.66×) (NEXT).
+- JSON `jsonround` (0.32×) / `deepjson` (0.90×), float near-ties `floatmul` (0.99×) /
+  `floatloop` (0.82×), and the dev-box `listcontains` 0.71× recheck.
 - **COVERAGE (dev ask):** ADD micros until the suite covers 100% of phorj's php-comparable surface, so
   the "beats php" claim is exhaustive (WIN-OR-FLAG on every covered feature). Reconcile the from-source
   baseline vs the official docker `php:8.5-cli` on the dev box.
