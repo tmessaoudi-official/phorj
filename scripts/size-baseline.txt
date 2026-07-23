@@ -32,7 +32,7 @@
 690	src/interpreter/call.rs
 518	src/interpreter/expr.rs
 548	src/interpreter/mod.rs
-3196	src/jit/analyze.rs
+2683	src/jit/analyze/mod.rs
 639	src/jit/boxed.rs
 620	src/jit/compile.rs
 1988	src/jit/emit_unboxed/mod.rs

@@ -70,8 +70,10 @@ mapkeys/values 0.09×, HOF folds + string-scan + JSON). **1 CLOSED 2026-07-23: `
 `src/jit/emit_unboxed/list_contains.rs` + `tests/listcontains.rs`). **17 losses remain** — same
 pattern (HAMT extraction / HOF folds / string-scan / JSON), each its own vertical slice. CAMPAIGN
 SSOT = **DEC-332** + MASTER-PLAN §0 (perf WIN-OR-FLAG + 100%-coverage + M-DECOMP); detail in
-`docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. **NEXT: `emit_unboxed/verticals/` folder
-+ `analyze/natives.rs`** (M-Decomp enabler) → then `mapkeys`/`mapvalues` vertical. (No divergent doc —
+`docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. **M-DECOMP progress:
+`analyze/natives.rs` DONE** (analyze.rs 2869 → analyze/mod.rs 2683 + natives.rs 194; behavior-preserving,
+gate-green; new vertical predicates land in natives.rs now). **NEXT: `emit_unboxed/verticals/` folder**
+→ then `mapkeys`/`mapvalues` vertical. (No divergent doc —
 ex-`architecture-decomp.plan.md` folded into MASTER-PLAN.) Full report + root-cause +
 architectural-fix list: `docs/research/perf/2026-07-23-vm-vs-php85-jit-scorecard.md`. Root cause:
 per-element native calls over boxed immutable `Value` collections + HAMT key/value extraction (JIT
