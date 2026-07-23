@@ -156,7 +156,10 @@ prioritize; anatomy in UPDATE 9, DEC-269 pattern); `listcontains` 0.85× + `mapg
 STABLE-BOX diagnosis only (a memo lever was tried and REVERTED on measured evidence — UPDATE
 10; candidate: packed-stride flat-list layout slice; container noise now disqualifies
 close-margin work there — `PHORJ_JIT_DISASM=1` shipped for that session).
-**RULED ROADMAP (DEC-333, 2026-07-23 — all six locked): (1) Json-ADT JIT slice (NEXT: flips
+**RULED ROADMAP (DEC-333 + the DEC-331 interleave, 2026-07-23): FIRST the DEC-331 build
+cluster once its frozen specs are dev-ruled (`docs/specs/2026-07-23-*.md`, seven specs —
+D10a order: Invoke/ToString → Rich Request → Entry-kinds/serve/TLS), THEN the perf roadmap:
+(1) Json-ADT JIT slice (flips
 jsonround/deepjson — enum cells with string/map/list payloads via W7 Dyn, `Map<string,Dyn>`,
 `JsonLazy` unboxed); (2) AOT full M1-M3 (`phg build --native`: ObjectModule seam → phorj-rt
 static lib with the embedded-VM code-5 fallback → linked binary + a native differential leg);
