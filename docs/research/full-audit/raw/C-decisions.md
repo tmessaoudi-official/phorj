@@ -2996,7 +2996,16 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   `compile.rs` symbol-block extraction — baselines ratcheted. AND the dev-asked INTERPRETER
   MATRIX: `microbench.sh` `MICROBENCH_PHG_ARGS`/`MICROBENCH_PHP_JIT=0` knobs; VM-nojit 1/48,
   tree-walker 0/48 vs plain php (scorecard §"Interpreter matrix") — the JIT-by-default engine is
-  the perf product. NEXT: `listfilter`/`mapfilter`/`mapmap` (HOF verticals).
+  the perf product. (7)(8)(9) `listfilter` 0.22×→9.78× / `mapfilter` 0.23×→4.44× / `mapmap`
+  0.29×→1.94× (2026-07-23): INLINE HOF verticals — data-dependent captures mean nothing memoizes;
+  the lever is the hofpipe one (direct Cranelift call per element — php pays closure dispatch, we
+  don't) + RECYCLABLE result records, never a seal: `ListHof::Filter` (conditional
+  `list_append_acc`), `arm_map_hof` (inline flat-pair walk → AMB record via
+  `rt_u_map_ext_new`/`_push`, canon+hash read off the parent's pinned key slots), `Map.values`
+  AMB rank-walk leg. Zero arena growth per iteration by construction — the UPDATE-4 cliff cannot
+  exist here for ANY capture distribution. 9 tests `src/jit/tests/hof_filter_map.rs` (incl.
+  get/builder-set compat on filtered records + transform-overflow fault parity). Scorecard
+  UPDATE 5. NEXT: string-scan `stringcontains`/`isemail`/`isurl`.
   ⚠ **HARD FLAG (2026-07-23): `maxBy`/`minBy` (0.19–0.20×) are BLOCKED on a representation
   lever — dev to rule.** They return `T?`, and the unboxed `Kind` enum (Int/Float/Bool/Str/…/IntList)
   has NO nullable/optional variant, so the element result cannot stay unboxed. Options: (i) add an
