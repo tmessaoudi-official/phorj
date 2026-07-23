@@ -36,7 +36,7 @@
 639	src/jit/boxed.rs
 620	src/jit/compile.rs
 1988	src/jit/emit_unboxed/mod.rs
-1264	src/jit/emit_unboxed/verticals.rs
+1111	src/jit/emit_unboxed/verticals.rs
 2280	src/jit/handles.rs
 762	src/jit/range_acc.rs
 674	src/jit/tests/unboxed_flow.rs

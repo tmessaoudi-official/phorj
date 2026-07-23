@@ -15,12 +15,14 @@ mod list_contains;
 mod objects;
 mod scalar;
 mod verticals;
+mod verticals_hof;
 
 use concat::*;
 use enums::*;
 use objects::*;
 use scalar::*;
 use verticals::*;
+use verticals_hof::*;
 
 /// Copy-able per-function emit context shared by every op arm: the `UbCtx` pointer, the
 /// stable-header memflags, and the (optional) shared fault-exit / speculation-sticky handles.
@@ -30,10 +32,8 @@ use verticals::*;
 struct Ec {
     /// The per-run [`UbCtx`] pointer (entry param 0; null for a pure-numeric graph).
     ctx: ClValue,
-    /// `notrap + can_move` flags for loads of RUN-INVARIANT `UbCtx` header fields — the arena
-    /// base (offset 0), the free-stack base (8), the capacity (32); nothing ever stores to them
-    /// during a run, so GVN/LICM collapses the per-op re-loads and hoists them out of hot loops
-    /// (the mutable header fields — `free_top` at 16, `bump` at 24 — keep the default flags).
+    /// `notrap + can_move` flags for loads of RUN-INVARIANT `UbCtx` header fields (arena base @0,
+    /// free-stack @8, capacity @32 — never stored; mutable `free_top` @16 / `bump` @24 keep defaults).
     stable: MemFlagsData,
     /// The shared fault-exit block (`Some` iff `needs_fault_exit`).
     fault_exit: Option<Block>,
