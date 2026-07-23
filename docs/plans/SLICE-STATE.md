@@ -42,12 +42,22 @@ v2 = REAL PARALLELISM design slice QUEUED); **(d) Claude-config bootstrap** comm
 **ENV note:** php in this container is 8.4 WITHOUT bcmath (uninstallable, org proxy) → decimal
 conformance PHP leg self-blocks here (pre-existing, passes on dev's 8.5 box); `PHORJ_PHP=/usr/bin/php`.
 
-**CURRENT SLICE (2026-07-22, interactive design — DEC-331):** the dev is ruling the web/entry/parity
-slices one decision at a time (Invariant 15). Rulings land in **DEC-331** (register) — the single
-canonical home, no side plan doc (Invariant 19). **D1 LOCKED:** `#[Entry(kind: Type)]` + per-type
-`#[Config]`-injected typed-parameter config, precedence CLI>env>`#[Config]`>`phorj.json`>attr. D4+
-(ServeConfig contract, web-model reconcile, inbound TLS, Rich Request, Invokable/toString) PENDING.
-Nothing builds until the design is fully ruled.
+**DEC-331 DECISION ROUND COMPLETE (D1–D10, 2026-07-23) — all rulings in the register (SSOT, no side
+doc, Inv 19).** SPECCING WAVE ON HOLD (dev asleep; resume specs tomorrow). Build cluster (spec-first
+per D10b, order D10a): (1) `#[Invoke]` + `#[ToString]`; (2) Rich Request v1 (incl. files); (3)
+`#[Entry(kind:)]` + `Http.ServeConfig` + serve{} + inbound rustls TLS + retire `respond`. Separate
+QUEUED design slices: labeled break/continue, typed LSB. ON HOLD (spec tomorrow): eval, ArrayAccess.
+**NONE of DEC-331 builds tonight** — all need specs first.
+
+**ENV WIN (2026-07-23, DEC-331 D10d): real PHP 8.5.8 built from source in-container** (`bcmath`+
+`mbstring`; org proxy 403s the PPA so apt-php impossible, stack path absent here). This session's
+oracle: `PHORJ_PHP=<scratchpad>/php85/php-8.5.8/sapi/cli/php` (EPHEMERAL — rebuild via
+`scripts` scratchpad `build-php85.sh` after a container reset). `toolchain.env` now CONTAINER-AWARE
+(stack path primary → on-PATH `php8.5` fallback → loud warn; explicit `PHORJ_PHP` always wins). The
+2 formerly env-skipped legs (decimal.phg, as-primitives.phg) now RUN here.
+
+**TONIGHT (dev directive, asleep): work ONLY on 100%-clear, already-specced items** — perf, sugar,
+PHP-parity with NO open design question. Nothing needing a ruling.
 
 **NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
 ▶▶ **NEXT CONTEXT RESUMES HERE (2026-07-22, all four DEC-329 rulings in hand):**

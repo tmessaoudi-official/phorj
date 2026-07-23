@@ -2950,3 +2950,21 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
     not yet named which (references / goto / eval / `__get`/`__set`/`__call` / destructors / LSB /
     ArrayAccess); generators/iterators-marathon-next + the other rejections staying out is otherwise
     confirmed by implication, pending the one to revisit.
+  - **D10c (LOCKED 2026-07-23) — rejection reconsideration.** **Labeled `break`/`continue`** → QUEUED
+    spec-first design slice (the safe, structured, fully-typeable "goto for nested-loop escape"; phorj
+    has only unlabeled break/continue today; RAW goto stays rejected). **Typed LSB (`Self` return type)**
+    → QUEUED spec-first design slice (base static/factory resolves to the called subclass, no PHP
+    self::/static:: four-way confusion). **eval** → ON HOLD, spec tomorrow (full eval rejected — breaks
+    the closed-language/no-RCE/soundness guarantee; safe substitutes = `#[Config]`, extension SPI,
+    read-only `Core.Reflection`, compile-time expansion, `#[Invoke]`; a sandboxed typed sub-interpreter
+    is the only open avenue, needs a concrete use case). **ArrayAccess `obj[key]`** → ON HOLD, spec
+    tomorrow (candidate: `#[ArrayGet]`/`#[ArraySet]` attributes, consistent with the attribute-conventional
+    model). Safer-and-stricter map for the rest (mostly already shipped, NOT reopened): destructors →
+    `using`/`Closable` (DEC-203); references `&$x` → value/handle + `mutable` + explicit returns;
+    `__get`/`__set` → typed accessors or `#[ArrayGet/Set]`; `__call` → `#[Invoke]` + overloading.
+
+  **DEC-331 DECISION ROUND COMPLETE (D1–D10, 2026-07-23).** Build cluster (spec-first per D10b, order
+  per D10a): (1) `#[Invoke]` + `#[ToString]`; (2) Rich Request v1 (incl. files); (3) `#[Entry(kind:)]` +
+  `Http.ServeConfig` + serve{} + inbound rustls TLS + retire `respond`. Separate QUEUED design slices:
+  labeled break/continue, typed LSB. ON HOLD (spec tomorrow): eval, ArrayAccess. Env: PHP 8.5.8 built
+  from source in-container (D10d).
