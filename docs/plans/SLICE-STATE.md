@@ -1,9 +1,15 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶▶ RESUME HERE (post-compaction 2026-07-20) — read this block FIRST, then keep going
+## ▶▶ RESUME HERE (updated 2026-07-23, pre-compact) — read this block FIRST, then keep going
 
-**BRANCH:** `master` (single-dev, direct-to-master). **origin/master tip:** `9814dbd` (UNSIGNED here) — the
-dev re-signs with their GPG key on their box after each push, so on resume the remote tip may have a NEW SHA.
+**CURRENT STATE + NEXT WORK: jump to the "LIVE CURSOR — DEC-333" block in the 2026-07-23
+session log below** (DEC-331 speccing wave first, then the DEC-333 roadmap: Json-ADT JIT → AOT
+M1-M3 → full A+C+D interpreter campaign). The perf campaign is CLOSED at 44 WIN / 4 LOSS
+(dev-box canonical, scorecard UPDATE 10).
+
+**BRANCH:** `master` (single-dev, direct-to-master). **origin/master tip at writing:** `66c9375`
+(UNSIGNED here) — the dev re-signs with their GPG key on their box after each push, so on resume
+the remote tip may have a NEW SHA.
 **⚠ FIRST ACTION on resume:** `git fetch origin && git reset --hard origin/master` (adopt the dev's history —
 local can go stale after a dev re-sign/force-push).
 
@@ -80,7 +86,8 @@ NEVER rebuilds — the rebuild-per-iteration arena cliff found+fixed in bring-up
 records (consumer release no-op, appends copy); narrow `Kind::MapList` for `maps[i%3]`; `Map.size`
 inline. Files: `handles/maps_ext.rs` + `emit_unboxed/verticals_map.rs` + `analyze/natives_map.rs`
 + 7 tests in `jit/tests/map_materialize.rs`. mapkeys/values margins THIN (1.07×) — dev-box
-re-verify owed. **12 losses remain** (dev's fresh 2026-07-23 table also shows `listcontains` 0.71×
+re-verify owed. **12 losses remain** *(historical mid-campaign count — final state: 44 WIN / 4 LOSS,
+see the LIVE CURSOR block)* (dev's fresh 2026-07-23 table also shows `listcontains` 0.71×
 on THEIR box — recheck owed). **INTERPRETER MATRIX shipped (dev ask):** `MICROBENCH_PHG_ARGS` +
 `MICROBENCH_PHP_JIT=0` knobs; VM-nojit 1/48, tree-walker 0/48 vs plain php — recorded in the
 scorecard §"Interpreter matrix". CAMPAIGN SSOT = **DEC-332** + MASTER-PLAN §0 (perf
@@ -133,8 +140,9 @@ RECONCILIATION LANDED (dev ran all 48 micros): canonical ledger = 44 WIN / 4 LOS
 dbwork are WINs there (no codegen work needed); remaining: jsonround 0.31×/deepjson 0.95× (the
 queued Json-ADT JIT slice) + listcontains 0.85×/mapget 0.96× (stable-box diagnosis only — a
 memo lever was tried and REVERTED on measured evidence, scorecard UPDATE 10; container noise
-now disqualifies close-margin work). **DEC-333 RULED (2026-07-23, pre-compact,
-all six locked): NEXT SLICE = Json-ADT JIT (jsonround/deepjson flips — enum cells with
+now disqualifies close-margin work). ▶▶ **LIVE CURSOR — DEC-333 RULED (2026-07-23, pre-compact,
+all six locked). IMMEDIATE NEXT: the DEC-331 SPECCING WAVE (the 'spec tomorrow' hold — see the
+2026-07-23 session-log block above), THEN the builds. Next PERF slice = Json-ADT JIT (jsonround/deepjson flips — enum cells with
 string/map/list payloads via W7 Dyn, `Map<string,Dyn>`, `JsonLazy` unboxed), then AOT M1-M3
 (`phg build --native`), then the FULL A+C+D interpreter campaign (--no-jit contract: beat
 PLAIN php; tree-walker inherit-only, oracle stays simple). `MICROBENCH_DOCKER_BOTH=1` shipped
@@ -153,8 +161,9 @@ image blocked here) — contradicts the recorded jsonround/dbwork "wins"; RECONC
 the official docker baseline. NOT fixed (architectural, dev to prioritize; no speculative patch —
 Rule 14). New: `microbench.sh` gained a docker-less local-php mode (`MICROBENCH_PHP_BIN`).
 
-**NEXT-TASK QUEUE (ordered; dev said "keep going to 100%"):**
-▶▶ **NEXT CONTEXT RESUMES HERE (2026-07-22, all four DEC-329 rulings in hand):**
+**BACKLOG QUEUE (historical detail, 2026-07-22 ordering — the LIVE cursor is the single ▶▶
+block above: DEC-331 speccing wave, then the DEC-333 roadmap; items below stay valid as the
+backlog ledger, ✅ marks done):**
 (a) **Log-v2 processors** (DEC-329.4, SMALL — do first): out-of-contract tail ` | ts=<epoch-ms> pid=<pid>`.
     Surface pinned: `LineFormatter(bool processInfo = false)` (shipped default-params make it additive);
     `JsonFormatter(bool processInfo = false)` adds `"ts"`/`"pid"` keys AFTER the fixed contract keys.
