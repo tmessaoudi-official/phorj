@@ -139,6 +139,44 @@ pub(in crate::jit) enum Kind {
     /// stays denied (aliasing). Returning an instance = OWNERSHIP TRANSFER, allowed only under
     /// the ctor-shaped gate in the `Return` arm.
     Inst(usize, Own),
+    /// DEC-333 Json-ADT: a `Core.Json` enum value as a TWO-word register pair — payload in the I64
+    /// space (`vars[d]`), RUNTIME tag in the enum-tag space (`evars[d]`): relative variant indices
+    /// 0..6 (Null,Bool,Int,Float,String,Array,Object per the prelude order) + 7 = phorj null (a
+    /// `Json?` absent). Payload by tag: 0/7 filler, 1 bool, 2 i64, 3 f64-bits, 4 str handle, 5
+    /// `JList` handle, 6 `JMap` handle. [`JRef`] is the compile-time variant refinement (flow-
+    /// sensitive, set by the `MatchTag` peephole on the matched edge). Release is TAG-GATED and
+    /// mandatory (per-iteration values, unlike the read-once leak-ok `Dyn`): tags 4/5/6 free the
+    /// payload word, others no-op. Only the injected `Core.Json` ADT (`canonical_json`) is ever
+    /// typed `Json`; a user look-alike enum stays on `EnumInt`/VM.
+    // DEC-333: constructed by the op arms in the next increment — the lattice/membership arms land
+    // first (green, universally declined). `allow` removed when the analyze/emit arms construct these.
+    #[allow(dead_code)]
+    Json(JRef, Own),
+    /// DEC-333: an untagged `UbCtx` handle to a boxed `Value::Map` (`Map<string,Json>`; values may
+    /// be `Value::JsonLazy`). Same ownership discipline as the other handle kinds.
+    #[allow(dead_code)]
+    JMap(Own),
+    /// DEC-333: an untagged `UbCtx` handle to a boxed `Value::List` (`List<Json>`).
+    #[allow(dead_code)]
+    JList(Own),
+    /// DEC-333: a compile-time-only marker for `Const(Value::Null)`, admitted ONLY when the very
+    /// next op is `Eq`/`Ne` (collect gate) so it is OPERAND-TRANSIENT — produced by `Const(Null)`,
+    /// consumed by an immediate `Eq`/`Ne`-vs-`Json`, never stored/returned/merged (`SetLocal`/
+    /// `Return` decline; `join_kind(NullMark, ·) → None`, checked before the `a==b` fast-path). The
+    /// runtime word is filler `0` (never a handle — declining paths are wrong-bytes-safe, no free).
+    #[allow(dead_code)]
+    NullMark,
+}
+
+/// DEC-333: compile-time variant refinement of a [`Kind::Json`] cell — `Any` (unknown variant) or
+/// `V(rel)` for a proven relative tag `0..=6`. Set on the matched (fall-through) edge of a
+/// `GetLocal(s); MatchTag(t); JumpIfFalse` peephole; `GetEnumField(0)` needs a concrete `V(t)` (it
+/// declines on `Any`). Joins widen to `Any` at any merge (see `join_jref`).
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[allow(dead_code)] // DEC-333: constructed by the refinement peephole in the next increment
+pub(in crate::jit) enum JRef {
+    Any,
+    V(u8),
 }
 
 /// Compile-time ownership of a handle operand — see [`Kind::Str`]. Part of `Kind`'s equality, so the
@@ -184,9 +222,13 @@ impl Kind {
                 | Kind::SetList(_)
                 | Kind::DynList(_)
                 | Kind::Inst(..)
+                | Kind::JMap(_)
+                | Kind::JList(_)
         )
     }
-    /// Is this operand an OWNED handle (must be freed by its consumer)?
+    /// Is this operand an OWNED handle (must be freed by its consumer)? DEC-333: a `Json(_, Owned)`
+    /// pair counts (so teardown/`Pop`/`SetLocal`-overwrite visit it) — its release is TAG-GATED in
+    /// `release_kinded` (only tags 4/5/6 free the payload word; the evars tag threads in there).
     pub(in crate::jit) fn is_owned_handle(self) -> bool {
         matches!(
             self,
@@ -199,6 +241,9 @@ impl Kind {
                 | Kind::SetList(Own::Owned)
                 | Kind::DynList(Own::Owned)
                 | Kind::Inst(_, Own::Owned)
+                | Kind::JMap(Own::Owned)
+                | Kind::JList(Own::Owned)
+                | Kind::Json(_, Own::Owned)
         )
     }
 }
@@ -216,6 +261,11 @@ pub(in crate::jit) fn borrowed_copy(k: Kind) -> Kind {
         Kind::StrIntMap(o) => Kind::StrIntMap(o.borrow_of()),
         Kind::Inst(c, o) => Kind::Inst(c, o.borrow_of()),
         Kind::DynList(o) => Kind::DynList(o.borrow_of()),
+        // DEC-333: a GetLocal copy of a Json pair / JMap / JList borrows (the slot keeps
+        // ownership). The catch-all `other => other` would return an Owned copy → double-free.
+        Kind::Json(r, o) => Kind::Json(r, o.borrow_of()),
+        Kind::JMap(o) => Kind::JMap(o.borrow_of()),
+        Kind::JList(o) => Kind::JList(o.borrow_of()),
         other => other,
     }
 }
@@ -227,6 +277,13 @@ pub(in crate::jit) fn borrowed_copy(k: Kind) -> Kind {
 /// owned local) never joins with `Owned`; `Borrowed ⊔ ConstBorrow` joins to `Borrowed` (neither
 /// side frees). Anything else → `None` (VM fallback).
 pub(in crate::jit) fn join_kind(a: Kind, b: Kind) -> Option<Kind> {
+    // DEC-333 [R6-safety-1]: a NullMark must NEVER survive a merge — reject BEFORE the `a==b`
+    // fast-path, else `join_kind(NullMark, NullMark)` returns `Some(NullMark)` and the mandated
+    // `→None` breaks. NullMark is operand-transient (produced by Const(Null), consumed by an
+    // immediate Eq/Ne), so it is never legitimately live at a leader; a merge ⇒ VM fallback.
+    if matches!(a, Kind::NullMark) || matches!(b, Kind::NullMark) {
+        return None;
+    }
     if a == b {
         return Some(a);
     }
@@ -251,7 +308,24 @@ pub(in crate::jit) fn join_kind(a: Kind, b: Kind) -> Option<Kind> {
         (Kind::Inst(c1, x), Kind::Inst(c2, y)) if c1 == c2 => {
             join_own(x, y).map(|o| Kind::Inst(c1, o))
         }
+        // DEC-333: two Json pairs join with a widened variant refinement (`V(a)⊔V(b)→Any` unless
+        // identical — the identical case is caught by the `a==b` fast-path above); JMap/JList join
+        // like the other handle families.
+        (Kind::Json(rx, ox), Kind::Json(ry, oy)) => {
+            join_own(ox, oy).map(|o| Kind::Json(join_jref(rx, ry), o))
+        }
+        (Kind::JMap(x), Kind::JMap(y)) => join_own(x, y).map(Kind::JMap),
+        (Kind::JList(x), Kind::JList(y)) => join_own(x, y).map(Kind::JList),
         _ => None,
+    }
+}
+
+/// DEC-333: join two [`Kind::Json`] variant refinements — equal concrete tags stay, anything else
+/// widens to `Any` (the merge cannot prove one variant).
+fn join_jref(a: JRef, b: JRef) -> JRef {
+    match (a, b) {
+        (JRef::V(x), JRef::V(y)) if x == y => JRef::V(x),
+        _ => JRef::Any,
     }
 }
 
