@@ -25,6 +25,9 @@ pub(super) fn compile_program_with(
     // Enum pre-pass: one `EnumDesc` per variant + the two-way `VariantIndex` construction and
     // `match` resolve through (P4-2; DEC-329.3).
     let mut enum_descs: Vec<EnumDesc> = Vec::new();
+    // DEC-333 Json-ADT JIT: the descriptor base of the canonical injected `Core.Json`, stamped in
+    // the enum arm below (three conjuncts — injected + name + shape). See `BytecodeProgram::canonical_json`.
+    let mut canonical_json: Option<u32> = None;
     let mut variants = VariantIndex::default();
     // M-RT S8: each trait becomes a synthetic method-bearing decl so its methods are registered and
     // compiled under the trait name; `class_method_origins` then aliases every using class's trait
@@ -76,6 +79,17 @@ pub(super) fn compile_program_with(
                 order.push(f);
             }
             Item::Enum(e) => {
+                // DEC-333 [R4-corr-2]: stamp canonical_json ONLY for the injected Core.Json —
+                // `injected` alone is true for RoundingMode/Option/Result, so name + the exact
+                // 7-variant prelude shape (Null/Bool/Int/Float/String/Array/Object; arities
+                // 0,1,1,1,1,1,1) are required conjuncts. Recorded at the base BEFORE its variants push.
+                if canonical_json.is_none()
+                    && e.injected
+                    && e.name.as_str() == "Json"
+                    && is_canonical_json_shape(&e.variants)
+                {
+                    canonical_json = Some(enum_descs.len() as u32);
+                }
                 for v in &e.variants {
                     variants.insert(
                         &e.name,
@@ -685,6 +699,7 @@ pub(super) fn compile_program_with(
         class_descs,
         names,
         methods,
+        canonical_json,
         // The single shared runtime subtype oracle (M-RT S6c.3) — parent classes AND interfaces —
         // same algorithm as the interpreter, so the VM's `Op::IsInstance`/match/overload-dispatch
         // against a class ancestor (not just an interface) is byte-identical.
@@ -694,4 +709,25 @@ pub(super) fn compile_program_with(
         overloads,
         method_overloads,
     })
+}
+
+/// DEC-333: does this variant list match the canonical injected `Core.Json` shape EXACTLY —
+/// the seven variants in prelude order with their arities? One of the three conjuncts gating
+/// `BytecodeProgram::canonical_json` (alongside `injected` provenance + the `Json` name), so a
+/// user look-alike or a drifted prelude never mis-stamps the fact the JIT trusts for tag mapping.
+fn is_canonical_json_shape(variants: &[crate::ast::EnumVariant]) -> bool {
+    const EXPECT: [(&str, usize); 7] = [
+        ("Null", 0),
+        ("Bool", 1),
+        ("Int", 1),
+        ("Float", 1),
+        ("String", 1),
+        ("Array", 1),
+        ("Object", 1),
+    ];
+    variants.len() == EXPECT.len()
+        && variants
+            .iter()
+            .zip(EXPECT)
+            .all(|(v, (name, arity))| v.name == name && v.fields.len() == arity)
 }

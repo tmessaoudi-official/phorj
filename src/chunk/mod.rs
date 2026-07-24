@@ -251,4 +251,14 @@ pub struct BytecodeProgram {
     /// over the set by the argument values; absent ⇒ the single-method `methods` entry. Empty in the
     /// common program.
     pub method_overloads: HashMap<(String, String), usize>,
+    /// The `enum_descs` base index of the canonical injected `Core.Json` ADT, when this program
+    /// contains it (`None` otherwise). Stamped by the compiler pre-pass ONLY for the enum that is
+    /// BOTH `injected` (prelude-provenance — a user `enum Json` never is) AND named `Json` AND
+    /// matches the 7-variant prelude shape; the three conjuncts are load-bearing because `injected`
+    /// alone is true for every prelude enum (RoundingMode/Option/Result). The Json-ADT JIT slice
+    /// (DEC-333) reads this to map absolute variant descriptor indices to relative tags 0..6
+    /// (Null,Bool,Int,Float,String,Array,Object) — never shape-sniffing `enum_descs`, which cannot
+    /// distinguish a same-named same-arity user look-alike. `u32` base; the 7 variants are
+    /// contiguous from it in prelude order.
+    pub canonical_json: Option<u32>,
 }

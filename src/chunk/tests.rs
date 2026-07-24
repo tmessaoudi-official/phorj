@@ -70,6 +70,7 @@ fn validate_accepts_a_well_formed_program() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert_eq!(prog.validate(), Ok(()));
 }
@@ -101,6 +102,7 @@ fn validate_rejects_out_of_range_const() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     let err = prog.validate().unwrap_err();
     assert!(err.contains("invalid bytecode"), "{err}");
@@ -134,6 +136,7 @@ fn validate_rejects_out_of_range_call_and_bad_main() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert!(prog.validate().unwrap_err().contains("call target 7"));
 
@@ -151,6 +154,7 @@ fn validate_rejects_out_of_range_call_and_bad_main() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert!(bad_main.validate().unwrap_err().contains("main index 0"));
 }
@@ -182,6 +186,7 @@ fn validate_rejects_out_of_range_enum_desc() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     let err = prog.validate().unwrap_err();
     assert!(err.contains("enum descriptor index 3"), "{err}");
@@ -214,6 +219,7 @@ fn validate_rejects_out_of_range_class_and_field() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert!(prog
         .validate()
@@ -245,6 +251,7 @@ fn validate_rejects_out_of_range_class_and_field() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
 
@@ -274,6 +281,7 @@ fn validate_rejects_out_of_range_class_and_field() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert!(prog3.validate().unwrap_err().contains("field-name index 7"));
 
@@ -303,6 +311,7 @@ fn validate_rejects_out_of_range_class_and_field() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert!(prog4.validate().unwrap_err().contains("static index 2"));
 }
@@ -334,6 +343,7 @@ fn validate_rejects_out_of_range_native() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert!(prog.validate().unwrap_err().contains("native index 9999"));
 }
@@ -368,6 +378,7 @@ fn validate_rejects_out_of_range_closure() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     let err = prog.validate().unwrap_err();
     assert!(err.contains("closure target 4"), "{err}");
@@ -405,6 +416,7 @@ fn validate_accepts_unchecked_no_index_ops() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert!(prog.validate().is_ok());
 }
@@ -435,6 +447,7 @@ fn bytecode_program_holds_functions_and_main_index() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert_eq!(prog.functions[prog.main].name, "main");
     assert_eq!(prog.functions[0].arity, 0);

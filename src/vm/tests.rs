@@ -136,6 +136,7 @@ fn run_chunk(chunk: Chunk) -> Result<String, String> {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     Vm::new(&program).run().map_err(|d| d.to_string())
 }
@@ -375,6 +376,7 @@ fn call_runs_a_second_function_and_returns() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
 }
@@ -424,6 +426,7 @@ fn make_enum_then_match_tag_and_get_field() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert_eq!(Vm::new(&program).run().unwrap(), "true\n7\n");
 }
@@ -473,6 +476,7 @@ fn match_tag_is_false_for_a_different_variant() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert_eq!(Vm::new(&program).run().unwrap(), "false\n");
 }
@@ -517,6 +521,7 @@ fn make_instance_then_get_field() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     assert_eq!(Vm::new(&program).run().unwrap(), "3\n");
 }
@@ -557,6 +562,7 @@ fn get_field_absent_faults_like_interpreter() {
         static_inits: Vec::new(),
         overloads: Vec::new(),
         method_overloads: std::collections::HashMap::new(),
+        canonical_json: None,
     };
     let err = Vm::new(&program).run().unwrap_err().to_string();
     assert!(err.contains("no field `tag` on `Empty`"), "{err}");
