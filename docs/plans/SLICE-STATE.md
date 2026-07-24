@@ -2,6 +2,18 @@
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going
 
+**⚖️ DEV RULING (AskUserQuestion, 2026-07-24) — NEXT-WORK ORDER for the big continuous session:**
+**(1) DEC-331 SLICE 3 FIRST** — `#[Entry(kind:)]` + `Http.ServeConfig` + `serve{}` + inbound rustls
+TLS + retire `respond` (spec: `docs/specs/2026-07-23-entry-kinds-serve-tls.md`). This is the
+"entry-per-type" the dev asked about. **(2) THEN the JIT loss-flips** — RESUME the in-flight
+Json-ADT slice at its emit/analyze arms (helpers 5a/5b-i/ii/iii already committed behind
+`#[allow(dead_code)]` gates — a clean pause point, no broken state), flipping `jsonround`+`deepjson`;
+then `queryparse ~0.12x`, `listcontains 0.82x` (dev-box re-probe), `floatmul 0.93x`, `dbwork 1.00x`.
+**(3) THEN AOT** (DEC-333 (b)) — still gated by JIT-WINS-ALL (unchanged). Dev also asked to compact /
+start FRESH before slice 3 (substantial slice — project rule). Small playground housekeeping
+(package-manager section + `main.js:422` entry-snippet that drops `#[Entry]` + the vendoring-verb /
+manifest doc drift) is a separate warm-up, decision pending.
+
 **✅ DEC-331 SLICE 1 (`#[Invoke]` + `#[ToString]`) BUILT + byte-identity green (2026-07-24)** — see
 the DEC-331 slice-1 register row + spec §8. Shipped: direct `x(args)` invoke calls (overloaded),
 `#[ToString]` in interpolation + `Conversion.toString`, transpile `__toString` delegate, lift
