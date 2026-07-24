@@ -18,10 +18,12 @@ size-gate green; full `--all-features` suite green.
 **PERF RE-RULING (dev, 2026-07-24 mid-slice-2 — supersedes the DEC-333 phase order):** the JIT must
 WIN ALL micro benches BEFORE the AOT perf hunt/refactor starts. Dev-box scorecard at ruling: 44 WIN /
 5 LOSS — `jsonround 0.31x`, `listcontains 0.82x` (regressed on the dev box vs the container flip),
-`floatmul 0.93x`, `deepjson 0.94x`, `dbwork 1.00x`. Order is now: finish slice 2 (in flight) →
-**flip the 5 losses** (the Json-ADT JIT slice covers jsonround/deepjson; listcontains needs a
-regression re-probe on the dev box) → slice 1b/3 per D10a → THEN DEC-333 AOT M1-M3. Recorded in the
-register as the DEC-333 amendment row.
+`floatmul 0.93x`, `deepjson 0.94x`, `dbwork 1.00x`. Order is now: finish slice 2 → **flip the
+losses** (the Json-ADT JIT slice covers jsonround/deepjson; listcontains needs a regression re-probe
+on the dev box) → slice 1b/3 per D10a → THEN DEC-333 AOT M1-M3. Recorded in the register as the
+DEC-333 amendment row. **UPDATE (slice 2 DONE):** the count is now **6** — slice 2 added the
+HARD-FLAGGED `queryparse` loss; the live list is in the NEXT WORK block below (this block is the
+ruling-time snapshot, 44 WIN / 5 LOSS as the dev stated it).
 
 **✅ DEC-331 SLICE 2 — RICH REQUEST v1: BUILT + 3-leg byte-identity green (2026-07-24).** Record of
 truth: spec §8 BUILD STATUS + the register's SLICE-2 BUILD row (build deviations, the PENDING
