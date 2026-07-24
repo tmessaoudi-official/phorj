@@ -260,7 +260,17 @@ wrapped (or the invariant re-asserted locally), never inherited transitively.
 - Any new UbCtx state joins reset_for_run (none planned; checklist).
 
 ## collect_unboxed gates
-Accept: Const(Value::Null) → NullMark (NEW accept — full differential gates the widening),
+Accept: Const(Value::Null) → NullMark ONLY WHEN THE VERY NEXT OP IS Eq/Ne [R6-corr-1 NARROWED:
+a GLOBAL Const(Null) accept admits NullMark into contexts the operand-transient invariant
+declares impossible — list/tuple DESTRUCTURE (compiler/stmt/core.rs:278,:321) emits Const(Null)
+as binder-slot PLACEHOLDERS that stay live across leaders, never adjacent to Eq/Ne. The
+peephole accept `Const(Null)` iff `code[ip+1]` is Op::Eq|Op::Ne makes the invariant true BY
+CONSTRUCTION: every other Const(Null) (destructure placeholders, any non-comparison null) keeps
+today's VM fallback (unchanged behavior, fail-closed). This is a scope NARROWING — strictly
+safer than v6]. Belt-and-suspenders: SetLocal/GetLocal/Call/CallMethod-arg arms still explicitly
+decline a NullMark operand, and the join_kind NullMark→None arm is ordered BEFORE the `a==b`
+short-circuit at kinds.rs:230 [R6-safety-1: else join_kind(NullMark,NullMark) returns
+Some(NullMark) via the fast-path and the mandated →None unit test fails].
 CallNative json ids (uses_handles), MakeEnum canonical range arity ≤1, Index/List.length
 already op-accepted (kind-gated in analyze).
 
