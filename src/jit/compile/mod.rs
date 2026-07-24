@@ -150,12 +150,31 @@ impl Compiled {
         // Transitive op-subset eligibility + the set of functions to compile (reachable-only),
         // plus the cross-function fixpoint facts (ret kinds, method `this` injection).
         let (order, uses_handles, info) = resolve_unboxed_graph(program, entry_idx)?;
-        // The ENTRY's return crosses back into the boxed world — `run_unboxed` decodes only
-        // Int/Float. An instance-returning entry stays on the VM.
-        if matches!(info.ret_of(entry_idx), Kind::Inst(..)) {
-            return Err(JitError::Unsupported(
-                "unboxed: entry returns an instance (deferred)".to_string(),
-            ));
+        // The ENTRY's return crosses back into the boxed world through the 2-return ABI
+        // `(value, code)`, decoded by `run_unboxed` (run.rs). It decodes ONLY these kinds:
+        // Int/Float/Bool as the raw value word, and Str/StrList/IntList/DynList as a ctx handle
+        // it materializes. EVERYTHING ELSE — an instance, an EnumInt/Dyn register-PAIR (whose tag
+        // word has nowhere to travel in a 2-return ABI), a Json-ADT node, a Set/Map/MapList
+        // handle — has no decode: `run_unboxed`'s `_ => Value::Int` default would silently
+        // mis-decode the payload word as a plain Int. Gate to the decodable set BEFORE building,
+        // so the byte-identical VM fallback is provably the only path for the rest. [DEC-333 —
+        // EnumInt/Dyn entry returns became reachable once the str-param seed let string-matching
+        // functions like `firstOne(string): Option<int>` compile; before, they declined on the
+        // Unknown str param.]
+        let entry_ret = info.ret_of(entry_idx);
+        if !matches!(
+            entry_ret,
+            Kind::Int
+                | Kind::Float
+                | Kind::Bool
+                | Kind::Str(_)
+                | Kind::StrList(_)
+                | Kind::IntList(_)
+                | Kind::DynList(_)
+        ) {
+            return Err(JitError::Unsupported(format!(
+                "unboxed: entry return kind {entry_ret:?} has no VM-hook decode (deferred)"
+            )));
         }
 
         // `opt_level=speed` (P-2a): the default `none` leaves the register shuffles around the
@@ -236,10 +255,31 @@ impl Compiled {
         };
         // The VM hook seeds the ENTRY with one Value per arity slot — a Dyn entry param has
         // no tag source there (deferred; callees inside the graph are the Dyn consumers).
-        if abi_param_kinds(program, &info, entry_idx).contains(&Kind::Dyn) {
+        let entry_pks = abi_param_kinds(program, &info, entry_idx);
+        if entry_pks.contains(&Kind::Dyn) {
             return Err(JitError::Unsupported(
                 "unboxed: entry with a union (Dyn) param (deferred)".to_string(),
             ));
+        }
+        // DEC-333 [R2-B4] entry-param ABI gate: `run_unboxed` marshals exactly these kinds —
+        // Int/Float/Bool as raw words, Str(Borrowed) as a fresh untagged ctx handle the body
+        // borrows. `Unknown` is ALSO one word and safe: a comparison-only int param (e.g.
+        // `while (i < iters)`) is never *proven* Int by the arith-only proof pass, so it reaches
+        // here `Unknown` and is passed as its raw i64 arg word (the pre-DEC-333 behavior, relied
+        // on by the existing int benches); and a `GetLocal` of an `Unknown` used as a container
+        // DECLINES at the `Index`/handle op, so it never dereferences a bogus word. What this
+        // gate DOES kill (the R2-B4 silent-zero) is a HANDLE-typed entry param — `Str(Owned)`,
+        // a list/map/instance, or a Json-ADT kind — whose container arg would hit the hook's
+        // `_ => 0`: those have no scalar marshalling and now decline BEFORE `make_fn_sig`.
+        for pk in &entry_pks {
+            if !matches!(
+                pk,
+                Kind::Int | Kind::Float | Kind::Bool | Kind::Str(Own::Borrowed) | Kind::Unknown
+            ) {
+                return Err(JitError::Unsupported(format!(
+                    "unboxed: entry param kind {pk:?} has no VM-hook marshalling (deferred)"
+                )));
+            }
         }
         let mut func_ids: Vec<Option<FuncId>> = vec![None; program.functions.len()];
         for &fi in &order {

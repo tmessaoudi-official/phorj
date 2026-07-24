@@ -27,14 +27,14 @@
 1438	src/cli/preludes.rs
 872	src/cli/tests.rs
 505	src/compiler/cty.rs
-697	src/compiler/program.rs
+734	src/compiler/program.rs
 772	src/format/printer/exprs.rs
 690	src/interpreter/call.rs
 518	src/interpreter/expr.rs
 548	src/interpreter/mod.rs
-2435	src/jit/analyze/mod.rs
+2462	src/jit/analyze/mod.rs
 639	src/jit/boxed.rs
-1641	src/jit/emit_unboxed/mod.rs
+1658	src/jit/emit_unboxed/mod.rs
 944	src/jit/emit_unboxed/verticals.rs
 1982	src/jit/handles/mod.rs
 762	src/jit/range_acc.rs
@@ -75,4 +75,4 @@
 668	src/value/mod.rs
 1053	src/vm/exec.rs
 624	src/vm/mod.rs
-563	src/vm/tests.rs
+576	src/vm/tests.rs

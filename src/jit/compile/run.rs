@@ -73,26 +73,15 @@ impl Compiled {
             value: i64,
             code: i64,
         }
-        // Bool args are represented as 0/1 i64 (see `Kind` — bool params are only consumed in bool
-        // contexts natively). A non-int/bool arg can't reach an eligible unboxed function.
-        let ia: Vec<i64> = args
-            .iter()
-            .map(|v| match v {
-                Value::Int(n) => *n,
-                Value::Bool(b) => *b as i64,
-                // A float arg travels as its f64 BITS through the uniform i64 ABI (decoded back at the
-                // callee's float ops via bitcast). Matches the `Kind::Float` bits-in-I64 representation.
-                Value::Float(f) => f.to_bits() as i64,
-                _ => 0,
-            })
-            .collect();
         let d0: i64 = start_depth as i64; // live-frames-including-this-entry (see doc above)
 
         // P-2a: the per-run handle table — built iff the graph uses handle ops (its pinned prefix
         // is the interned string consts); a pure-numeric graph gets a null pointer nothing
         // dereferences. REUSED across calls (built lazily once, reset ON ENTRY — the ctx-reuse
         // lever: per-call construction made many-call handle graphs slower than `--no-jit`). The
-        // entry reset also means a fault path leaks nothing into the VM redo.
+        // entry reset also means a fault path leaks nothing into the VM redo. Built BEFORE the arg
+        // words: a Str entry arg (DEC-333) marshals INTO this ctx, so the ctx must exist first
+        // [R2-safety-F2 — `ia` used to be frozen before the ctx and could only carry scalars].
         let mut cached: Option<Box<UbCtx>> = if self.uses_handles {
             let mut c = self
                 .ub_ctx_cache
@@ -104,6 +93,30 @@ impl Compiled {
         } else {
             None
         };
+
+        // Bool args are 0/1 i64; float args travel as their f64 BITS through the uniform i64 ABI
+        // (decoded back at the callee's float ops via bitcast — the `Kind::Float` representation).
+        // A Str arg (DEC-333 entry-param ABI) marshals into a FRESH untagged ctx handle (allocated
+        // PAST `n_pinned`, so no const collision — `reset_for_run` truncated to `n_pinned` above):
+        // the body reads it via `str_bytes` (untagged-safe) and NEVER releases it (the entry str
+        // param compiles `Str(Borrowed)`; the handle is reclaimed by the next entry's reset). The
+        // compile-time entry gate guarantees only Int/Float/Bool/Str(Borrowed) reach here, so `_`
+        // is unreachable for eligible entries — 0 is a never-dereferenced defensive filler.
+        let ia: Vec<i64> = args
+            .iter()
+            .map(|v| match v {
+                Value::Int(n) => *n,
+                Value::Bool(b) => *b as i64,
+                Value::Float(f) => f.to_bits() as i64,
+                Value::Str(_) => match cached.as_deref_mut() {
+                    Some(ctx) => ctx.alloc(v.clone()),
+                    // No ctx ⇒ the graph uses no handle ops ⇒ this str param is unused (a used
+                    // str param forces `uses_handles`); the word is never dereferenced.
+                    None => 0,
+                },
+                _ => 0,
+            })
+            .collect();
         let ub_ctx: *mut UbCtx = cached
             .as_deref_mut()
             .map_or(std::ptr::null_mut(), std::ptr::from_mut);

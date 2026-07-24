@@ -82,7 +82,13 @@ pub(super) fn build_body_unboxed(
     // Param slots read as `Int` iff proven int by usage (bare-param `Return`, e.g. fib's base case);
     // else `Unknown` → a bare return of one is rejected. Method slot 0 = injected receiver (`this`, a
     // BORROWED handle). These seed the entry stack; the analysis then fixes every (depth, kinds) + max.
-    let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity, &func.dyn_params);
+    let param_kinds: Vec<Kind> = info.param_kinds(
+        func_idx,
+        proven,
+        func.arity,
+        &func.dyn_params,
+        &func.str_params,
+    );
     let single_use = single_use_params(func);
     // Innermost active catch pad per ip (lexical try ranges) — drives Throw + call-site
     // code-6 dispatch.
@@ -160,6 +166,17 @@ pub(super) fn build_body_unboxed(
                         | Op::MakeInstance(_)
                         | Op::GetField(_)
                         | Op::Fault(_)
+                        // STRING `Op::Eq`/`Op::Ne` emit a defensive bad-handle `fault_if` (the
+                        // `Eq(str)` helper arm, :1058); int/float/bool Eq/Ne go to `arm_cmp` and
+                        // emit no fault, so for those this over-counts a fault-exit block that is
+                        // unreferenced (terminated + DCE'd by opt_level=speed — same tolerance the
+                        // CallNative/GetField/MakeList entries above already rely on). Counting it
+                        // here is REQUIRED once a str operand can reach an `Eq`: DEC-333's entry
+                        // str-param seed makes `match (s) { "1" => … }` (firstOne) compile, and a
+                        // string-Eq-only function has NO other counted op — the missing block was
+                        // a `fault_if`-without-fault-exit panic.
+                        | Op::Eq
+                        | Op::Ne
                 )
         });
 

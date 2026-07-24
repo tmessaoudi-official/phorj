@@ -62,16 +62,43 @@ so hashes churn; each item below is green + pushed, verify via `git log`):**
   so the variants decline EVERYWHERE by default — universal-decline was FREE, zero match breakage;
   each future op arm lights ONE path in isolation. Variants carry a temporary `#[allow(dead_code)]`
   (REMOVE when the constructing arms land in step 5).
-**NEXT — step (5), the constructing codegen block (per the plan below; removes the dead_code
-allows as kinds go live):** read `canonical_json` into `UbGraphInfo` (with `entry_idx` for the
-str_params root-only seed [R3-comp-F1]); the `GetLocal;MatchTag;JumpIfFalse` refinement peephole
+- (5a) DONE — **ENTRY STR-PARAM ABI** (the deepjson prerequisite [R1-P0 / R3-comp-F1 / R2-B6 /
+  R2-safety-F2 / R2-B4]): `UbGraphInfo.entry_idx` field; `param_kinds` seeds declared-`string`
+  params of the ROOT ONLY to `Str(Borrowed)` (guarded on Unknown; internal callees keep their
+  `param_over` str kinds); `run_unboxed` reordered to build the ctx FIRST, then marshal each
+  `Value::Str` entry arg into a FRESH untagged handle (past `n_pinned`, reclaimed by the next
+  reset) the body borrows via the untagged-safe `str_bytes` and never releases; compile-time
+  entry-PARAM gate (allow Int/Float/Bool/Str(Borrowed)/**Unknown** — Unknown is the pre-DEC-333
+  raw-word scalar behavior the existing int benches rely on; a container/handle-TYPED entry param
+  declines, killing the `_ => 0` silent-zero); and a precise entry-RETURN gate = exactly
+  run_unboxed's decodable set {Int,Float,Bool,Str,StrList,IntList,DynList}, replacing the old
+  Inst-only + Json-family gates. **TWO latent bugs SURFACED by the seed (both fixed here, both
+  pre-existing hazards the seed merely made reachable):** (i) string `Op::Eq`/`Op::Ne` emit a
+  `fault_if` (Eq(str) helper, emit :1058) but were NOT in `needs_fault_exit` → a string-Eq-only
+  function (`firstOne`'s `match (s) {"1" => …}`, guide/variant-imports.phg) panicked
+  `fault_if requires a fault-exit block` — Eq/Ne now counted (int/float/bool Eq/Ne make a dead
+  block, DCE'd, same tolerance the CallNative/GetField entries rely on); (ii) `Return(EnumInt)`
+  was accepted by analyze's `other => other` default but the 2-return ABI drops the tag word →
+  an EnumInt-returning ENTRY (now reachable: `firstOne(string): Option<int>`) would mis-decode
+  the payload as a plain Int — the positive entry-return gate declines it → VM fallback (correct).
+  Tests: `src/jit/tests/json_adt.rs` (entry str marshal hits + empty/long edges, redos==0).
+  Size-baseline reconciled (disclosed, slice-1 precedent): program.rs 697→734 + vm/tests.rs
+  563→576 (from increments 2–3, previously un-bumped) + analyze/mod.rs 2435→2462 +
+  emit_unboxed/mod.rs 1641→1658 (this increment). Gate: lib 1955 + differential 174 + conformance
+  green (VM≡tree-walker; PHP leg skipped — a JIT change can't touch the transpile leg), clippy
+  (jit-on + --no-default-features) + fmt + size-gate + release build clean. **NOTE: NO Json kind
+  is constructed yet — 5a is pure entry-ABI + the two fixes; the `#[allow(dead_code)]` on the Kind
+  variants STAYS until 5b.**
+**NEXT — step (5b), the constructing codegen block (per the plan below; removes the dead_code
+allows as kinds go live):** read `canonical_json` into `UbGraphInfo`;
+the `GetLocal;MatchTag;JumpIfFalse` refinement peephole
 (edge-split in propagate); the analyze+emit arms MakeEnum(canonical range, arity≤1) / MatchTag /
 GetEnumField(0) (Owned→DECLINE) / Op::Index-on-JList (BEFORE the arm_index_str_list catch-all) /
 Core.List.length-JList / Core.Map.get-JMap / Eq-Ne(Json,NullMark) / GetLocal-SetLocal-Pop of Json
 (tag-gated, clone-before-release) / Call-CallMethod Json args (top-level pk==Json branch) /
 3-return internal ABI (make_fn_sig ret-kind + emit_call_to evars/results[2] + fault-exit/Return
-arity) / entry gates + str marshal in compile/run.rs / join_unknown_bottom Json arms; then
-`src/jit/handles/json_ext.rs` helpers (5-site wiring + cfg-json stubs); then tests
+arity) / join_unknown_bottom Json arms (entry gates + str marshal in compile/run.rs are DONE in
+5a); then `src/jit/handles/json_ext.rs` helpers (5-site wiring + cfg-json stubs); then tests
 (src/jit/tests/json_adt.rs); then the WIN-OR-FLAG perf measurement. v7 plan below is COMPLETE — no
 gate rounds owed (6C MAXIMAL panel owed AFTER the build). Baseline measured this container:
 jsonround 0.30x, deepjson 0.90x (php-8.5.8+opcache local, scratchpad build — rebuild via

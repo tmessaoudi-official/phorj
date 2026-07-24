@@ -302,7 +302,11 @@ pub(super) fn resolve_unboxed_graph(
     entry_idx: usize,
 ) -> Result<(Vec<usize>, bool, UbGraphInfo), JitError> {
     let (mut order, mut uses_handles) = collect_functions_unboxed(program, entry_idx)?;
-    let mut info = UbGraphInfo::new(program.functions.len(), program.class_descs.len());
+    let mut info = UbGraphInfo::new(
+        program.functions.len(),
+        program.class_descs.len(),
+        entry_idx,
+    );
     let cap = program.functions.len() + 3;
     for _round in 0..cap {
         let mut changed = false;
@@ -320,6 +324,7 @@ pub(super) fn resolve_unboxed_graph(
                 &proven,
                 program.functions[fi].arity,
                 &program.functions[fi].dyn_params,
+                &program.functions[fi].str_params,
             );
             let mut disc = UbDiscovery::default();
             let rk = match unboxed_analyze(program, fi, &pk, &info, &mut disc) {

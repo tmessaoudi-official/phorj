@@ -33,6 +33,7 @@ pub(super) fn abi_param_kinds(
         &proven,
         program.functions[fi].arity,
         &program.functions[fi].dyn_params,
+        &program.functions[fi].str_params,
     )
 }
 
@@ -523,16 +524,23 @@ pub(super) struct UbGraphInfo {
     /// The graph-wide THROWN class (v1: a single throwable class per graph, else fallback) —
     /// types every catch pad's incoming value.
     pub(super) thrown_class: Option<usize>,
+    /// The graph's ENTRY function index. The `str_params` seed (declared-`string` params →
+    /// `Str(Borrowed)`) applies ROOT-ONLY: seeding an internal callee would clobber its
+    /// call-site-proven `Str(Owned)` args (the moved-in ownership → a leak). Internal callees
+    /// receive their str kinds from `param_over` (call-site facts); only the root, whose args
+    /// arrive marshalled by `run_unboxed`, is seeded here. [DEC-333 R3-comp-F1 / R2-B6]
+    pub(super) entry_idx: usize,
 }
 
 impl UbGraphInfo {
-    pub(super) fn new(n: usize, n_classes: usize) -> Self {
+    pub(super) fn new(n: usize, n_classes: usize, entry_idx: usize) -> Self {
         Self {
             ret_kinds: vec![None; n],
             this_inst: vec![None; n],
             field_kinds: vec![None; n_classes],
             param_over: vec![None; n],
             thrown_class: None,
+            entry_idx,
         }
     }
     /// The kind a `GetField` of ctor-push-position `j` on class `c` yields (`None` = the
@@ -561,6 +569,7 @@ impl UbGraphInfo {
         proven: &[Option<Kind>],
         arity: usize,
         dyn_params: &[bool],
+        str_params: &[bool],
     ) -> Vec<Kind> {
         let mut pk: Vec<Kind> = (0..arity)
             .map(|s| proven.get(s).copied().flatten().unwrap_or(Kind::Unknown))
@@ -599,6 +608,24 @@ impl UbGraphInfo {
             if *is_dyn {
                 if let Some(slot) = pk.get_mut(s) {
                     *slot = Kind::Dyn;
+                }
+            }
+        }
+        // DEC-333 [R3-comp-F1 / R2-B6]: seed declared-`string` params of the ROOT function to
+        // `Str(Borrowed)`. Root-only — `run_unboxed` marshals the entry's args into fresh
+        // untagged ctx handles the body borrows (never releases); an internal callee gets its
+        // str kinds from `param_over` (call-site ownership), so seeding it would demote a
+        // proven `Str(Owned)` and leak the moved-in word. Guarded on `Unknown` so a call-site
+        // or usage proof (never `Str` in practice for a declared-string param, but defensive)
+        // is never overwritten — the fail-closed direction.
+        if func_idx == self.entry_idx {
+            for (s, is_str) in str_params.iter().enumerate() {
+                if *is_str {
+                    if let Some(slot) = pk.get_mut(s) {
+                        if *slot == Kind::Unknown {
+                            *slot = Kind::Str(Own::Borrowed);
+                        }
+                    }
                 }
             }
         }
