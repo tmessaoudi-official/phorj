@@ -18,7 +18,38 @@ size-gate green; full `--all-features` suite green.
 **NEXT WORK (dev-ruled 2026-07-24, pre-compact): ▶ DEC-331 SLICE 2 — RICH REQUEST v1** (spec
 `docs/specs/2026-07-23-rich-request.md`, RULED + BUILD-READY — read it FIRST). Slice 1b
 (invoke-as-callable-value) stays QUEUED behind it; then slice 3 (Entry-kinds/serve/TLS), then the
-DEC-333 perf roadmap. (DEC-331 slice 1 + DEC-336 both shipped this night.) **CURRENT STATE:** jump to the "LIVE CURSOR" block below. Speccing wave
+DEC-333 perf roadmap. (DEC-331 slice 1 + DEC-336 both shipped this night.)
+
+**SLICE 2 BUILD PLAN (approved-for-build 2026-07-24, autonomous; Inv 19 — mirrored here BEFORE the
+work starts; final record lands in the register + spec §BUILD STATUS at ship):**
+1. `src/native/http.rs` (NEW, std-only, always-on `Core.Native.Http`): `parseQuery(string)` →
+   `Map<string, List<string>>` (form-decode `+`/`%XX`, FIRST-WINS order, dup keys accumulate),
+   `parseMultipart(bytes, string boundary)` → `List<MultipartPart>?` (null = malformed; hand-built
+   `Value::Instance` per the Regex-carrier precedent), `spill(bytes): string` + `readSpill(string):
+   bytes` (256 KiB ruled threshold). Each native carries a `php:` mapping (`__phorj_http_*`); helper
+   bodies land in `transpile/runtime_php.rs`. NO ext/uri dependency (uri is feature-gated; Http is not).
+2. Prelude (`src/cli/http_prelude*`, Inv-13 split): rich `Request` (method/path/query/headers/cookies/
+   form/files/body/attributes) + `ParamBag`/`HeaderBag`/`AttrBag`/`FileBag`/`RequestBody`/`UploadedFile`/
+   `MultipartPart` — pure-phorj bag logic over native-parsed data (transpiles as class shape for free).
+   EAGER-validating `Request.parse(bytes): Request?` (null on malformed/oversize → the untouched respond
+   bridge 400s = D8a's ruled Eager default; the `RequestParsing.Lazy` switch ships with `ServeConfig` in
+   slice 3 — sequencing note, reopenable). Memoized `.json(): Json?` via `private mutable` cache;
+   json fragment cfg-gated on feature `json` (playground no-default-features keeps working). `Request.fake
+   (method, target)` + immutable withers (`withHeader`/`withCookie`/`withBody`) that REBUILD through the
+   same parse path (one parsing story). Route params → `attributes` bag (PSR-7 convention; `param()`
+   kept as a delegate); `Router.handle` sets attributes (drops `withParams`); session prelude migrates
+   `req.header("Cookie")` → `req.cookies`.
+3. `CORE_MODULES`: Http row `bare_types` += new class names; new `Core.Native.Http` row; Json row
+   RELOCATED after Http (forward-fold transitivity; verified no earlier row imports Core.Json).
+4. Examples: migrate the 8 `import Core.Http` web examples; NEW `examples/web/rich_request.phg`
+   (every bag, deterministic, 3-leg differential) + README row.
+5. Tests: native unit tests (decode edges, multipart small/spill/oversize/malformed), serve.rs
+   regression, differential auto-gates. Docs same-change: FEATURES, CHANGELOG, spec §8 BUILD STATUS,
+   KNOWN_ISSUES (spill tmp-file cleanup), register row, MASTER-PLAN tick.
+**Recorded deviations (dev to review):** `Body`→`RequestBody` (FS-taxonomy capture precedent /
+DEC-202); `Request.parse` stays public until slice 3 retires respond; lazy mode sequenced to slice 3;
+superglobal lift mapping DEFERRED (needs ambient→parameter transform design; the lifter recognizes no
+superglobals today, so spec §4's "where already recognized" is vacuously satisfied — KNOWN_ISSUES row). **CURRENT STATE:** jump to the "LIVE CURSOR" block below. Speccing wave
 COMPLETE (8 specs, all P-points answered). DEC-334 config-catalog QUEUED; DEC-335 `Any`+`Object`
 RULED (build queued). Perf campaign CLOSED at 44 WIN / 4 LOSS (dev-box canonical, scorecard UPDATE 10).
 
