@@ -41,13 +41,50 @@ work starts; final record lands in the register + spec §BUILD STATUS at ship):*
    `req.header("Cookie")` → `req.cookies`.
 3. `CORE_MODULES`: Http row `bare_types` += new class names; new `Core.Native.Http` row; Json row
    RELOCATED after Http (forward-fold transitivity; verified no earlier row imports Core.Json).
-4. Examples: migrate the 8 `import Core.Http` web examples; NEW `examples/web/rich_request.phg`
-   (every bag, deterministic, 3-leg differential) + README row.
-5. Tests: native unit tests (decode edges, multipart small/spill/oversize/malformed), serve.rs
-   regression, differential auto-gates. Docs same-change: FEATURES, CHANGELOG, spec §8 BUILD STATUS,
-   KNOWN_ISSUES (spill tmp-file cleanup), register row, MASTER-PLAN tick.
+4. Examples: migrate the 8 `import Core.Http` web examples **+ `examples/session/counter.phg` +
+   the 5 `conformance/web/*.phg` (old 5-arg ctor / `.header()` → `Request.fake` + bags; regen `.out`
+   goldens) + regen the playground curated set (`playground/web/gen_examples.py`)**; NEW
+   `examples/web/rich_request.phg` (every bag, deterministic, 3-leg differential — MUST member-import
+   or `Http.`-qualify every bare bag type per `E-INJECTED-TYPE-BARE`; body fixture stays < 256 KiB so
+   it NEVER spills; NOT added to the playground curated set — it needs feature `json`) + README row.
+5. Tests: native unit tests (decode edges, multipart small/spill/oversize/malformed + a part-count
+   cap), per-bag behavior assertions (first-wins/getAll/case-insensitive headers/default overloads —
+   `conformance/web/rich-request-bags.phg` + golden), serve.rs + **tests/session.rs** regression,
+   differential auto-gates. Docs same-change: FEATURES, CHANGELOG, spec §8 BUILD STATUS, KNOWN_ISSUES
+   (spill tmp-file cleanup), register row, MASTER-PLAN tick, **UNIFIED-SPEC injected-type table row +
+   `explain.rs` `E-INJECTED-TYPE-BARE` help text (line-neutral — the file is at its Inv-13 baseline)**.
+
+**PANEL-MANDATED GUARDRAILS (3C round 1 — DEC-268 panel findings folded in before build):**
+- **Body-size cap in v1 (D8c):** `pub const DEFAULT_MAX_BODY_SIZE: usize = 8_388_608` single-sourced
+  in `src/native/http.rs`; `Request.parse` REJECTS an oversize body (eager → null → the bridge's 400).
+  Folds into `ServeConfig.maxBodySize` in slice 3 (same constant, one source).
+- **Canonical fault strings (spec §5) single-sourced NOW** (`pub const` beside the cap, Invariant 4):
+  `"request body exceeds maxBodySize"` / `"malformed multipart body"` — runtime-REACHABLE only in
+  slice 3's lazy mode (eager returns null, per spec §5); disclosed deviation, not silent.
+- **Eager never faults:** every eager parse failure (malformed head/multipart, oversize) resolves to
+  `Request.parse → null`, NEVER a fault — the bridge can only 400 the null branch (a fault = 500).
+- **Spill determinism (Inv 10):** the spill path is NEVER phorj-observable (`UploadedFile` exposes no
+  path member); spill fires only > 256 KiB so no differential example can reach it; a unit test
+  asserts the rich_request fixture stays under threshold.
+- **CRLF/header-injection guard (DEC-242 safe-by-default bar):** `Request.fake` + the rebuild withers
+  FAULT on CR/LF in header names or values (the rebuild-then-reparse path must not be an injection
+  primitive); multipart part COUNT capped by a single-sourced const (over-cap = malformed → null);
+  decoded `%00` passes through as data (strings are binary-safe on all 3 legs) — documented.
+- **`.json()` feature story:** the method is ALWAYS in the prelude (no vanishing surface);
+  `Core.Native.Http.jsonParse` is always registered — with feature `json` it delegates to the real
+  parser; without (playground/no-default-features) it faults with a flag-naming message (DEC-273
+  spirit: never a runtime surprise without the flag named). FEATURES.md documents the conditional.
+- **Inv-13 pre-splits FIRST:** M-Decomp `src/transpile/runtime_php.rs` (8 lines under its 1374
+  baseline) BEFORE adding `__phorj_http_*` bodies (new `transpile/runtime_php/` sub-module or a
+  dedicated http helpers file); `src/native/mod.rs` is AT its 588 baseline — registration lines must
+  be netted out (split the registry build list) — size-gate green is part of the slice gate.
+
 **Recorded deviations (dev to review):** `Body`→`RequestBody` (FS-taxonomy capture precedent /
-DEC-202); `Request.parse` stays public until slice 3 retires respond; lazy mode sequenced to slice 3;
+DEC-202); `Request.parse` stays public until slice 3 retires respond; lazy mode sequenced to slice 3
+**and spec §6's eager-vs-lazy parity test moves with it**; spec §5 canonical fault strings ship as
+single-sourced consts but become runtime-reachable only with lazy (slice 3); `Router.handle` now
+SETS route params via the mutable `attributes` bag — it mutates its argument (Rc-observable) instead
+of returning a `withParams` copy (PSR-7 attributes convention + the ruled mutable-attributes model);
 superglobal lift mapping DEFERRED (needs ambient→parameter transform design; the lifter recognizes no
 superglobals today, so spec §4's "where already recognized" is vacuously satisfied — KNOWN_ISSUES row). **CURRENT STATE:** jump to the "LIVE CURSOR" block below. Speccing wave
 COMPLETE (8 specs, all P-points answered). DEC-334 config-catalog QUEUED; DEC-335 `Any`+`Object`
