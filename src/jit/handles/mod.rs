@@ -4,12 +4,14 @@
 use super::*;
 
 mod helper_refs;
+mod json_ext;
 mod list_builders;
 mod maps_ext;
 mod sets_ext;
 mod strings_ext;
 mod symbols;
 pub(in crate::jit) use helper_refs::*;
+pub(super) use json_ext::*;
 pub(super) use list_builders::*;
 pub(super) use maps_ext::*;
 pub(super) use sets_ext::*;
@@ -359,6 +361,22 @@ impl UbCtx {
             self.handles.push(v);
             (self.handles.len() - 1) as i64
         }
+    }
+
+    /// DEC-333 [R2-safety-F1]: the json-only minting path. Untagged `handles` entries are
+    /// UNBOUNDED (unlike the arena's `UB_SLOT_CAP` slots), so a runaway Json graph — one that
+    /// mints a fresh handle per node per iteration without the differential's release plumbing
+    /// keeping pace — would OOM rather than fault. Cap the LIVE untagged count
+    /// (`handles.len() - free.len()`) at `4 * UB_SLOT_CAP`; over it, return `-1` so the caller
+    /// faults to code 5 (redo on VM). The shared [`Self::alloc`] stays infallible (bounding it
+    /// would turn non-json `rt_u_native2` hits into bad handles — the v2 hazard this replaces).
+    #[allow(dead_code)] // called by json_ext (feature `json`); unused in --no-default-features.
+    pub(super) fn alloc_json(&mut self, v: Value) -> i64 {
+        let live = self.handles.len().saturating_sub(self.free.len());
+        if live >= 4 * UB_SLOT_CAP {
+            return -1;
+        }
+        self.alloc(v)
     }
 
     /// Materialize ANY int/str list handle (flat slots, ACL builder record, boxed) into a fresh

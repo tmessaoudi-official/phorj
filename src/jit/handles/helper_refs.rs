@@ -48,6 +48,7 @@ pub(in crate::jit) struct UbHelperIds {
     pub(in crate::jit) validate: FuncId,
     pub(in crate::jit) set_diff: FuncId,
     pub(in crate::jit) set_union: FuncId,
+    pub(in crate::jit) json_parse: FuncId,
 }
 
 pub(in crate::jit) struct UbHelperRefs {
@@ -90,4 +91,6 @@ pub(in crate::jit) struct UbHelperRefs {
     pub(in crate::jit) validate: FuncRef,
     pub(in crate::jit) set_diff: FuncRef,
     pub(in crate::jit) set_union: FuncRef,
+    #[allow(dead_code)] // read by the 5b Json emit arms; unused until they land.
+    pub(in crate::jit) json_parse: FuncRef,
 }

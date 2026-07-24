@@ -123,5 +123,12 @@ pub(super) fn declare_ub_helper_ids(
         validate: declare(module, "rt_u_validate", &sig4)?,
         set_diff: declare(module, "rt_u_set_diff", &sig4)?,
         set_union: declare(module, "rt_u_set_union", &sig4)?,
+        // DEC-333: rt_u_json_parse(ctx, str_handle, free) -> (payload, tag) — the two-i64
+        // return shape (mirrors sig_map_get: 3 params, 2 returns).
+        json_parse: {
+            let mut s = make_sig(module, &[ptr, types::I64, types::I64], Some(types::I64));
+            s.returns.push(AbiParam::new(types::I64));
+            declare(module, "rt_u_json_parse", &s)?
+        },
     })
 }

@@ -51,4 +51,5 @@ pub(in crate::jit) fn register_ub_symbols(builder: &mut JITBuilder) {
     builder.symbol("rt_u_validate", rt_u_validate as *const u8);
     builder.symbol("rt_u_set_diff", rt_u_set_diff as *const u8);
     builder.symbol("rt_u_set_union", rt_u_set_union as *const u8);
+    builder.symbol("rt_u_json_parse", rt_u_json_parse as *const u8);
 }

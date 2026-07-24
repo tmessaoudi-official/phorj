@@ -50,5 +50,6 @@ pub(super) fn declare_ub_refs(
         validate: m.declare_func_in_func(ids.validate, f),
         set_diff: m.declare_func_in_func(ids.set_diff, f),
         set_union: m.declare_func_in_func(ids.set_union, f),
+        json_parse: m.declare_func_in_func(ids.json_parse, f),
     }
 }

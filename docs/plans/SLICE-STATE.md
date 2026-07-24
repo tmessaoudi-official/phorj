@@ -92,9 +92,24 @@ so hashes churn; each item below is green + pushed, verify via `git log`):**
 - (5b-i) DONE — `UbGraphInfo.canonical_json: Option<u32>` threaded from `program.canonical_json`
   (via `UbGraphInfo::new`); `#[allow(dead_code)]` until the arms read it. No behavior change (no
   arm constructs/reads a Json kind yet); build + jit 156 + differential green.
+- (5b-ii) DONE — `src/jit/handles/json_ext.rs`: **`rt_u_json_parse(ctx, str_handle, free) ->
+  (payload, tag)`** (the first Json helper) + `UbCtx::alloc_json` (the R2-safety-F1 LIVE-handle
+  mint cap → `-1`/code 5) + full 5-site wiring (helper_refs ×2 / declares 2-i64 sig / symbols /
+  refs) + `cfg(not(json))` runtime-dead stub sharing the one signature. Encodes a materialized
+  Json root to the (payload,tag) pair: Object→(JMap handle,6) / Array→(JList handle,5) /
+  String→(str handle,4) / scalars inline (Int 2, Float-bits 3, Bool 1) / JSON `null`→(0,0) /
+  malformed→(0,7 phorj-null). NO-PANIC: `str_bytes`/`get`/`first()`, defensive→ tag -1; uses the
+  pub(crate) `json_parse_str` + `materialize_if_lazy` + `build_map`-backed nodes. Unreferenced by
+  any emit arm yet (`#[allow(dead_code)]` on the FuncRef/const/struct) → byte-identity untouched.
+  Tests: 6 direct helper unit tests in json_ext.rs (object/array/scalars/null/malformed/string).
+  Gate: build + clippy (jit-on + --no-default-features) + fmt + size-gate + lib 1961 +
+  differential 174, all green. Size-baseline reconciled: handles/mod.rs 1982→2000 (this) +
+  analyze/mod.rs 2462→2476 (from 5b-i, previously un-bumped — same size-gate-skip slip as
+  increments 2-3; now green).
 **NEXT — step (5b), the constructing codegen block (per the plan below; removes the dead_code
 allows as kinds go live). `canonical_json` + `entry_idx` are now in `UbGraphInfo` (5b-i/5a).
-Remaining:** the runtime helpers `src/jit/handles/json_ext.rs` (rt_u_json_parse/map_get/list_len/
+Remaining:** the rest of the runtime helpers `src/jit/handles/json_ext.rs` (rt_u_json_parse DONE
+5b-ii; still: map_get/list_len/
 list_get/stringify/clone + jmap build; the (payload,tag) pair encoding — container payloads are
 untagged handles to boxed `Value::Map`/`Value::List`; call `json_parse_str` (pub(crate)) +
 `build_map` + `materialize_if_lazy`; NO-PANIC, `-1`/`code:5` sentinels; 5-site wiring
