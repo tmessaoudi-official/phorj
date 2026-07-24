@@ -1,0 +1,62 @@
+// Conformance: rich-Request bag semantics (DEC-331 slice 2) — first-wins + getAll, case-insensitive
+// HeaderBag vs case-SENSITIVE ParamBag keys, getOrDefault, first-`=` cookie split, wither rebuild
+// fidelity (%2B / + / mixed-case), and Router route-params via the MUTABLE attributes bag observed
+// on all three legs. Fault-free and json-free by design (the conformance PHP leg requires exit 0).
+package Main;
+
+import Core.Output;
+import Core.Bytes;
+import Core.String;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.Router;
+import Core.Runtime.Entry;
+
+function row(string label, string value): void {
+    Output.printLine("{label}: {value}");
+}
+
+#[Entry]
+function main(): void {
+    // First-wins + getAll + has + getOrDefault on the query bag.
+    Request q = Request.fake("GET", "/s?k=first&k=second&other=1");
+    row("first-wins", q.query.get("k") ?? "-");
+    row("all", String.join(q.query.getAll("k"), ","));
+    row("has", "{q.query.has(\"k\")}/{q.query.has(\"missing\")}");
+    row("default", q.query.getOrDefault("missing", "fallback"));
+    // Percent/plus fidelity THROUGH the wither rebuild: a%2Bb stays a+b, a+b decodes to a space.
+    Request enc = Request
+        .fake("POST", "/f")
+        .withHeader("content-type", "application/x-www-form-urlencoded")
+        .withBody(Bytes.fromString("plus=a%2Bb&space=a+b&nul=%00x"));
+    row("pct-plus", enc.form.get("plus") ?? "-");
+    row("pct-space", enc.form.get("space") ?? "-");
+    row("nul-len", "{String.length(enc.form.get(\"nul\") ?? \"\")}");
+    // HeaderBag is case-INSENSITIVE; ParamBag keys are case-SENSITIVE.
+    Request h = Request.fake("GET", "/h?Key=upper&key=lower").withHeader("X-Mixed-Case", "yes");
+    row("hdr-lower", h.headers.get("x-mixed-case") ?? "-");
+    row("hdr-upper", h.headers.get("X-MIXED-CASE") ?? "-");
+    row("qry-Key", h.query.get("Key") ?? "-");
+    row("qry-key", h.query.get("key") ?? "-");
+    // Cookies: names case-SENSITIVE, values split on the FIRST '=' only (JWT-shaped sids).
+    Request c = Request.fake("GET", "/c").withCookie("Sid", "a=b=c").withCookie("sid", "lower");
+    row("cookie-Sid", c.cookies.get("Sid") ?? "-");
+    row("cookie-sid", c.cookies.get("sid") ?? "-");
+    // Route params flow through the MUTABLE attributes bag (PSR-7 shape): the mutation done by
+    // Router.handle is observable on the SAME request value afterwards — on every leg.
+    Request routed = Request.fake("GET", "/users/42/posts/hello");
+    Router rt = new Router(
+        new List<Route>(),
+        new List<(Request, (Request) => Response) => Response>()
+    ).route(
+        "GET",
+        "/users/\{id\}/posts/\{slug\}",
+        function(Request rq): Response { return Response.text(200, "u={rq.param(\"id\") ?? \"-\"} s={rq.param(\"slug\") ?? \"-\"}"); }
+    );
+    Response resp = rt.handle(routed);
+    row("routed", Bytes.toString(resp.body) ?? "-");
+    row("post-handle-attr", routed.attributes.get("id") ?? "-");
+    // Middleware scratch on the same bag.
+    routed.attributes.set("traceId", "T-9");
+    row("scratch", routed.attributes.getOrDefault("traceId", "-"));
+}

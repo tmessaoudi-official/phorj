@@ -11,45 +11,6 @@ import Core.Bytes;
 import Core.String;
 import Core.List;
 import Core.Regex;
-class Request {
-  constructor(public string method, public string path, public bytes body, private List<string> headerLines, private List<string> attrs) {}
-  function header(string name): string? {
-    for (string line in this.headerLines) {
-      if (String.contains(line, ":")) {
-        List<string> kv = String.splitOnce(line, ":");
-        string key = String.trim(kv[0]);
-        if (key == name) { return String.trim(kv[1]); }
-      }
-    }
-    return null;
-  }
-  function param(string name): string? {
-    mutable int i = 0;
-    int n = List.length(this.attrs);
-    while (i + 1 < n) {
-      if (this.attrs[i] == name) { return this.attrs[i + 1]; }
-      i += 2;
-    }
-    return null;
-  }
-  function withParams(List<string> p): Request {
-    return new Request(this.method, this.path, this.body, this.headerLines, p);
-  }
-  static function parse(bytes raw): Request? {
-    int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
-    if (sep < 0) { return null; }
-    bytes headBytes = Bytes.slice(raw, 0, sep);
-    bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
-    string head = Bytes.toString(headBytes) ?? "";
-    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-    List<string> lines = String.split(head, nl);
-    string requestLine = lines[0];
-    List<string> rl = String.split(requestLine, " ");
-    string method = rl[0];
-    string path = rl[1];
-    return new Request(method, path, body, lines, new List<string>());
-  }
-}
 // DEC-242 — the cookie VALUE type (developer-ruled: class ONLY, no flat twin). Immutable
 // builders (the Response precedent; named args don't exist, so the approved `partitioned = true`
 // spelling maps to `.partitioned(true)` — disclosed in the register). Secure defaults ON,
@@ -260,8 +221,17 @@ class Router {
     if (best < 0) { return Response.text(404, "Not Found: {req.method} {req.path}"); }
     Route chosen = this.table[best];
     List<string> params = Router.extractParams(chosen.pattern, req.path);
+    // DEC-331 slice 2: route params land in the MUTABLE attributes bag (PSR-7 convention; the
+    // one documented mutable bag) — `req.param(name)` reads them back. NB this mutates the
+    // caller's request (Rc-shared handle) — recorded deviation from the old `withParams` copy.
+    mutable int pi = 0;
+    int pn = List.length(params);
+    while (pi + 1 < pn) {
+      req.attributes.set(params[pi], params[pi + 1]);
+      pi += 2;
+    }
     var composed = Router.compose(this.mws, chosen.handler);
-    return composed(req.withParams(params));
+    return composed(req);
   }
 }
 "#;

@@ -1284,8 +1284,8 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-INJECTED-TYPE-BARE" => {
             "E-INJECTED-TYPE-BARE — a compiler-injected Core type was used bare without importing it.\n\n\
-             The multi-type Core modules inject several types: `Core.Http` → `Request`/`Response`/\n\
-             `Route`/`Router` (and the `#[Route]` attribute), `Core.Time` → `Duration`/`Date`/`Instant`,\n\
+             The multi-type Core modules inject several types: `Core.Http` → `Request`/`Response`/`Route`/`Router`\n\
+             + the bags (`ParamBag`/`HeaderBag`/`AttrBag`/`FileBag`/`RequestBody`/`UploadedFile`/`MultipartPart`) + `#[Route]`, `Core.Time` → `Duration`/`Date`/`Instant`,\n\
              `Core.Decimal` → `RoundingMode`. These are names you never wrote, so — like injected enum\n\
              variants (\"nothing in the wind\") — a bare use is only allowed when you explicitly\n\
              member-import it: `import Core.Http.Router;` then `Router` is bare. Otherwise write it\n\

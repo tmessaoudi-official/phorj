@@ -1362,5 +1362,6 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        self.emit_http_runtime_helpers(); // `__phorj_http_*` family (own gate; runtime_php_http.rs)
     }
 }

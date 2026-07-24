@@ -31,15 +31,9 @@ class Session {
     return new Session(NativeSession.acquire(cand, ttlSeconds));
   }
   private static function cookieSid(Request req): string {
-    string? cookies = req.header("Cookie");
-    if (var c = cookies) {
-      List<string> parts = String.split(c, ";");
-      for (string part in parts) {
-        string p = String.trim(part);
-        if (String.startsWith(p, "phorjsid=")) { return String.removePrefix(p, "phorjsid="); }
-      }
-    }
-    return "";
+    // DEC-331 slice 2: read through the rich Request's cookie bag (names case-SENSITIVE,
+    // values split on the FIRST `=` — byte-identical to the old hand-rolled Cookie-header scan).
+    return req.cookies.get("phorjsid") ?? "";
   }
   function id(): string { return this.sid; }
   function get(string key): string? { return NativeSession.get(this.sid, key); }

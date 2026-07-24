@@ -39,9 +39,7 @@ function home(Request req): Response {
 }
 
 function show(Router rt, string method, string path): void {
-    Response resp = rt.handle(
-        new Request(method, path, b"", new List<string>(), new List<string>())
-    );
+    Response resp = rt.handle(Request.fake(method, path));
     int st = resp.status;
     string body = Bytes.toString(resp.body) ?? "?";
     Output.printLine("{method} {path} -> {st}: {body}");

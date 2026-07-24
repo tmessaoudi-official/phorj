@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-331 slice 2: Rich `Request` v1 (bags + files + body.json), replacing the thin Core.Http Request
+
+The stdlib `Request` is now the PSR-7-shaped rich value: `method`/`path` (percent-decoded) plus
+`query`/`headers` (case-INSENSITIVE)/`cookies` (first-`=` split)/`form` (urlencoded + multipart
+fields)/`files` (`UploadedFile` w/ 256 KiB temp-spill behind deterministic handles)/`attributes`
+(the ONE mutable bag — middleware scratch + route params; `Router.handle` writes them, `param()`
+delegates) and `body` (`bytes()`/`text()`/memoized `json(): Json?`). Bags share
+`get`/`getOrDefault`/`getAll`/`has` — repeated keys are FIRST-wins (parameter-pollution-safe).
+Eager `Request.parse(bytes)` returns null on malformed/oversize (the serve bridge 400s);
+`Request.fake(method, target)` + `withHeader`/`withCookie`/`withBody` rebuild through the SAME
+parse from the original raw pieces (CR/LF in a header faults — no injection primitive). Wire
+parsing runs in new std-only `Core.Native.Http` natives shared by both engines; the PHP leg gets
+the mirrored `__phorj_http_*` helpers — byte-identical on interp, VM, and real PHP 8.5
+(differential example + 3-leg conformance golden + CRLF fault-parity + native unit tests).
+Deviations recorded in spec §8 (`RequestBody`/`getOrDefault` naming forced by language rules;
+lazy mode + `RequestParsing` ship with slice 3's ServeConfig; body cap inert under serve;
+`queryparse` bench HARD-FLAGGED ~8x loss → the flip-all-losses campaign). `Core.Json`'s registry
+row moved after `Core.Http` (forward-fold transitivity); `VirtualModule.src` became multi-fragment
+`srcs` (Inv-13 prelude split).
+
 ### Added — DEC-331 slice 1: `#[Invoke]` + `#[ToString]` — attribute-designated conventional methods
 
 No magic method names — callability and stringification ride an attribute on an ordinary method.

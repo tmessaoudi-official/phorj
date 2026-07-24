@@ -119,9 +119,13 @@ Build cluster, in order (D10a):
   interpolation + `Conversion.toString`, transpile `__toString` delegate + lift, all guards. **Slice
   1b DEFERRED** (reopenable — register row + spec §8): function-type assignability, PHP `__invoke`
   emission + multi-invoke `__phorj_invoke_dispatch` shim (the owed LADDER call), lift `__invoke`.
-- **(2) Rich Request v1** — immutable, eager/lazy config switch (`Http.ServeConfig.requestParsing`),
-  `.get`+`.getAll`, files/multipart IN v1, `body.json():Json?`, case-insensitive headers; replaces
-  the thin `Core.Http.Request`.
+- **(2) Rich Request v1 — ✅ SLICE 2 BUILT (2026-07-24, 3-leg byte-identity green)** — bags
+  (first-wins `.get`+`.getAll`+`getOrDefault`, case-insensitive headers), files/multipart w/
+  256 KiB spill, memoized `body.json():Json?`, eager `Request.parse` + `Request.fake`/withers;
+  REPLACES the thin `Core.Http.Request` (examples/conformance/session migrated). **The
+  eager/LAZY switch (`Http.ServeConfig.requestParsing`) ships with slice 3's ServeConfig** —
+  deferral + build deviations recorded (spec §8 + register). `queryparse` bench = HARD-FLAGGED
+  loss (joins the flip-all-losses campaign).
 - **(3) `#[Entry(kind: Cli|Web|Desktop|Mobile|Worker|Embedded)]`** + per-type `#[Config]`-injected
   typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
   contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`.

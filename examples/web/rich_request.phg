@@ -1,0 +1,97 @@
+// Rich Request v1 (DEC-331 slice 2) — every bag of the new `Core.Http` Request, socket-free.
+//
+// `Request` replaces the old thin value: `method`/`path` (percent-decoded, query stripped) plus
+// six BAGS — `query`, `headers` (case-INSENSITIVE), `cookies`, `form` (urlencoded + multipart
+// fields), `files` (multipart uploads), `attributes` (the one MUTABLE bag: middleware scratch +
+// route params) — and `body` (`bytes()` / `text()` / `json(): Json?`, memoized). Bags share the
+// API `get(k): string?` / `getOrDefault(k, fallback)` / `getAll(k): List<...>` / `has(k)`;
+// repeated keys are FIRST-wins with `getAll` for the rest (parameter-pollution-safe).
+// `Request.parse(bytes)` is the eager wire constructor (null on malformed/oversize → the serve
+// bridge's 400); `Request.fake(method, target)` + `withHeader`/`withCookie`/`withBody` build
+// requests for tests by REBUILDING through the same parse (one parsing story; CR/LF in a header
+// faults — the builder is not an injection primitive). Byte-identical on interp, VM, and real PHP.
+package Main;
+
+import Core.Output;
+import Core.Bytes;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Json;
+import Core.Runtime.Entry;
+
+// The handler under test: echo a cross-section of every bag as plain text lines.
+function handle(Request req): Response {
+    string page = req.query.getOrDefault("page", "1");
+    int tags = List.length(req.query.getAll("tag"));
+    string ua = req.headers.get("user-agent") ?? "(none)";
+    string sid = req.cookies.get("phorjsid") ?? "(none)";
+    string name = req.form.get("name") ?? "(none)";
+    mutable string upload = "(none)";
+    if (var f = req.files.get("avatar")) {
+        upload = "{f.name} {f.size}B {f.contentType}";
+    }
+    mutable string parsed = "(not json)";
+    if (var doc = req.body.json()) {
+        parsed = match (doc) {
+            Json.Array(items) => "array[{List.length(items)}]",
+            default => "other"
+        };
+    }
+    string trace = req.attributes.get("traceId") ?? "(none)";
+    return Response.text(
+        200,
+        "page={page} tags={tags} ua={ua} sid={sid} name={name} upload={upload} json={parsed} trace={trace}"
+    );
+}
+
+function show(Request req): void {
+    Response resp = handle(req);
+    Output.printLine(Bytes.toString(resp.body) ?? "(binary)");
+}
+
+#[Entry]
+function main(): void {
+    // Query bag: first-wins + getAll; case-insensitive headers; cookie bag (value keeps its '=').
+    show(
+        Request
+            .fake("GET", "/search?page=2&tag=a&tag=b&page=9")
+            .withHeader("User-Agent", "phorj-demo")
+            .withCookie("phorjsid", "sid=abc")
+    );
+    // Urlencoded form: '+' decodes to space, %XX decodes, duplicate keys accumulate.
+    show(
+        Request
+            .fake("POST", "/submit")
+            .withHeader("content-type", "application/x-www-form-urlencoded")
+            .withBody(Bytes.fromString("name=ada+lovelace%21&tag=x&tag=y"))
+    );
+    // Multipart: one field + one file upload (boundary from the content-type header).
+    string crlf = Bytes.toString(b"\x0d\x0a") ?? "";
+    string mp = "--D7{crlf}Content-Disposition: form-data; name=\"name\"{crlf}{crlf}grace{crlf}--D7{crlf}Content-Disposition: form-data; name=\"avatar\"; filename=\"pic.png\"{crlf}Content-Type: image/png{crlf}{crlf}PNGBYTES{crlf}--D7--";
+    show(
+        Request
+            .fake("POST", "/upload")
+            .withHeader("content-type", "multipart/form-data; boundary=D7")
+            .withBody(Bytes.fromString(mp))
+    );
+    // JSON body (memoized `body.json()`), plus the mutable attributes bag (middleware scratch).
+    Request j = Request.fake("POST", "/api").withBody(Bytes.fromString("[10, 20, 30]"));
+    j.attributes.set("traceId", "T-42");
+    show(j);
+    // The wire side: `Request.parse` on raw bytes (decoded path), and malformed → null (→ 400
+    // under `phg serve`'s bridge). An oversize body parses to null the same way (eager, D8a).
+    bytes raw = b"GET /caf%C3%A9?ok=1 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
+    if (var req = Request.parse(raw)) {
+        Output.printLine(
+            "wire path={req.path} ok={req.query.get(\"ok\") ?? \"-\"} host={req.headers.getOrDefault(\"HOST\", \"-\")}"
+        );
+    }
+    mutable string bad = "parsed";
+    if (var nope = Request.parse(b"not an http request")) {
+        bad = "parsed";
+    } else {
+        bad = "null";
+    }
+    Output.printLine("malformed={bad}");
+}

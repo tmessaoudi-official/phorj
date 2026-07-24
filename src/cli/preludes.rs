@@ -558,9 +558,11 @@ pub(super) struct VirtualModule {
     /// The `module_of` return value for this row's `bare_types` (the dotted module below `Core.`),
     /// e.g. `"Http"`, `"Time"`, `"Runtime.Integer"`. Only meaningful when `bare_types` is non-empty.
     qualifier: &'static str,
-    /// The prelude source to inject when the module is imported; `None` for attribute-only modules
-    /// (`Core.DependencyInjection`/`Core.Runtime*`) that contribute to `module_of` but inject no enum/class prelude.
-    src: Option<&'static str>,
+    /// The prelude source FRAGMENTS to inject (in order) when the module is imported; empty for
+    /// attribute-only modules (`Core.DependencyInjection`/`Core.Runtime*`) that contribute to
+    /// `module_of` but inject no enum/class prelude. Plural since DEC-331 slice 2: `Core.Http`
+    /// splits its source across two consts (Inv-13) — the fold treats the fragments as one prelude.
+    srcs: &'static [&'static str],
     /// The conditionally-injected `respond` serve-bridge source (Http only) — appended when the
     /// program defines `handle` and no `respond`. The one honest residual special-case.
     respond_bridge: Option<&'static str>,
@@ -601,18 +603,13 @@ pub(crate) fn core_module_bound_names(path: &[String]) -> Option<Vec<String>> {
 }
 
 pub(super) const CORE_MODULES: &[VirtualModule] = &[
-    VirtualModule {
-        module: &["Core", "Json"],
-        qualifier: "Json",
-        src: Some(JSON_PRELUDE),
-        respond_bridge: None,
-        member_gated: false,
-        bare_types: &[],
-    },
+    // NOTE (DEC-331 slice 2): the `Core.Json` row moved AFTER `Core.Http` — the Http prelude is
+    // now its sole transitive importer (`RequestBody.json(): Json?`), and the forward-fold only
+    // injects a later row from an earlier row's imports (the SessionModule→Http precedent).
     VirtualModule {
         module: &["Core", "Decimal"],
         qualifier: "Decimal",
-        src: Some(ROUNDING_MODE_PRELUDE),
+        srcs: &[ROUNDING_MODE_PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &["RoundingMode"],
@@ -620,7 +617,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Option"],
         qualifier: "Option",
-        src: Some(OPTION_PRELUDE),
+        srcs: &[OPTION_PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[],
@@ -628,7 +625,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Result"],
         qualifier: "Result",
-        src: Some(RESULT_PRELUDE),
+        srcs: &[RESULT_PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[],
@@ -637,7 +634,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "DebugModule"],
         qualifier: "DebugModule",
-        src: Some(crate::ext::debug_prelude::PRELUDE),
+        srcs: &[crate::ext::debug_prelude::PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Debug", "Dumped"],
@@ -646,7 +643,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "Debug"],
         qualifier: "Native.Debug",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -656,7 +653,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "SessionModule"],
         qualifier: "SessionModule",
-        src: Some(crate::ext::session_prelude::PRELUDE),
+        srcs: &[crate::ext::session_prelude::PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Session"],
@@ -665,7 +662,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "Session"],
         qualifier: "Native.Session",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -674,7 +671,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Input"],
         qualifier: "Input",
-        src: Some(INPUT_PRELUDE),
+        srcs: &[INPUT_PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Input", "InputLines"],
@@ -683,7 +680,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "Input"],
         qualifier: "Native.Input",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -691,17 +688,53 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Http"],
         qualifier: "Http",
-        src: Some(crate::cli::http_prelude::HTTP_PRELUDE),
+        // Two fragments (Inv-13 split): the classic surface + the DEC-331 slice-2 rich Request.
+        srcs: &[
+            crate::cli::http_prelude::HTTP_PRELUDE,
+            crate::cli::http_request_prelude::REQUEST_PRELUDE,
+        ],
         respond_bridge: Some(HTTP_RESPOND_BRIDGE),
         member_gated: true,
         bare_types: &[
-            "Cookie", "Request", "Response", "Route", "Router", "SameSite",
+            "AttrBag",
+            "Cookie",
+            "FileBag",
+            "HeaderBag",
+            "MultipartPart",
+            "ParamBag",
+            "Request",
+            "RequestBody",
+            "Response",
+            "Route",
+            "Router",
+            "SameSite",
+            "UploadedFile",
         ],
+    },
+    // `Core.Native.Http` — the INTERNAL rich-Request wire natives (std-only baseline, always
+    // compiled; DEC-331 slice 2).
+    VirtualModule {
+        module: &["Core", "Native", "Http"],
+        qualifier: "Native.Http",
+        srcs: &[],
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    // `Core.Json` — AFTER Http since DEC-331 slice 2 (see the note at the array head): the Http
+    // prelude's `import Core.Json` transitively injects the enum for `body.json(): Json?`.
+    VirtualModule {
+        module: &["Core", "Json"],
+        qualifier: "Json",
+        srcs: &[JSON_PRELUDE],
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
     },
     VirtualModule {
         module: &["Core", "Regex"],
         qualifier: "Regex",
-        src: Some(crate::ext::regex_prelude::PRELUDE),
+        srcs: &[crate::ext::regex_prelude::PRELUDE],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -709,7 +742,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Time"],
         qualifier: "Time",
-        src: Some(TIME_PRELUDE),
+        srcs: &[TIME_PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Duration", "Date", "Instant"],
@@ -718,7 +751,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "UriModule"],
         qualifier: "UriModule",
-        src: Some(crate::ext::uri_prelude::PRELUDE),
+        srcs: &[crate::ext::uri_prelude::PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
@@ -741,7 +774,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "DatabaseModule"],
         qualifier: "DatabaseModule",
-        src: Some(crate::ext::database_prelude::PRELUDE),
+        srcs: &[crate::ext::database_prelude::PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
@@ -776,7 +809,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "IteratorModule"],
         qualifier: "IteratorModule",
-        src: Some(ITERATOR_PRELUDE),
+        srcs: &[ITERATOR_PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Iterator"],
@@ -787,7 +820,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Mail"],
         qualifier: "Mail",
-        src: Some(crate::ext::mail_prelude::PRELUDE),
+        srcs: &[crate::ext::mail_prelude::PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
@@ -818,7 +851,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "FileSystemModule"],
         qualifier: "FileSystemModule",
-        src: Some(FS_PRELUDE),
+        srcs: &[FS_PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
@@ -837,7 +870,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "FileSystem"],
         qualifier: "Native.FileSystem",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -846,7 +879,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "HttpClientModule"],
         qualifier: "HttpClientModule",
-        src: Some(crate::ext::http_client_prelude::PRELUDE),
+        srcs: &[crate::ext::http_client_prelude::PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
@@ -873,7 +906,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Secret"],
         qualifier: "Secret",
-        src: Some(SECRET_PRELUDE),
+        srcs: &[SECRET_PRELUDE],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -883,7 +916,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Deque"],
         qualifier: "Deque",
-        src: Some(DEQUE_PRELUDE),
+        srcs: &[DEQUE_PRELUDE],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -894,7 +927,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "PriorityQueue"],
         qualifier: "PriorityQueue",
-        src: Some(PRIORITY_QUEUE_PRELUDE),
+        srcs: &[PRIORITY_QUEUE_PRELUDE],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -905,7 +938,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "Database"],
         qualifier: "Native.Database",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -914,7 +947,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "HttpClient"],
         qualifier: "Native.HttpClient",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -924,7 +957,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "Mail"],
         qualifier: "Native.Mail",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -933,7 +966,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Runtime", "Integer"],
         qualifier: "Runtime.Integer",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &["UncheckedOverflow"],
@@ -941,7 +974,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Runtime"],
         qualifier: "Runtime",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         // DEC-191: `#[Entry]` is import-gated (wind rule), like the UncheckedOverflow precedent one
@@ -951,7 +984,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "DependencyInjection"],
         qualifier: "DependencyInjection",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &["Injectable", "Provides", "Transient"],
@@ -965,7 +998,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Log"],
         qualifier: "Log",
-        src: Some(crate::native::log::PRELUDE),
+        srcs: &[crate::native::log::PRELUDE],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[
@@ -986,7 +1019,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "Log"],
         qualifier: "Native.Log",
-        src: None,
+        srcs: &[],
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -1079,7 +1112,9 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
     use crate::ast::Item;
     let mut cur: std::borrow::Cow<'_, Program> = std::borrow::Cow::Borrowed(prog);
     for m in CORE_MODULES {
-        let Some(src) = m.src else { continue };
+        if m.srcs.is_empty() {
+            continue;
+        }
         let p = cur.as_ref();
         let gated_in = if m.member_gated {
             imports_module_or_member(p, m.module)
@@ -1093,11 +1128,15 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
         if !gated_in {
             continue;
         }
-        let Ok(parsed) = lex_parse(src) else {
-            continue; // unreachable: registry preludes are valid
-        };
+        let mut parsed_items: Vec<Item> = Vec::new();
+        for src in m.srcs {
+            let Ok(parsed) = lex_parse(src) else {
+                continue; // unreachable: registry preludes are valid
+            };
+            parsed_items.extend(parsed.items);
+        }
         let mut prepend: Vec<Item> = Vec::new();
-        for it in parsed.items {
+        for it in parsed_items {
             let absent = match &it {
                 Item::Import { path, .. } => !p.items.iter().any(|x| {
                     matches!(x, Item::Import { path: xp, .. } if xp.join(".") == path.join("."))
@@ -1122,7 +1161,15 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
                     .any(|x| matches!(x, Item::Interface(y) if y.name == i.name)),
                 _ => false,
             };
-            if absent {
+            // Multi-fragment preludes may repeat an import across fragments — dedupe within the
+            // batch too (the absent-check above only sees the pre-injection program).
+            let dup_in_batch = match &it {
+                Item::Import { path, .. } => prepend.iter().any(|x| {
+                    matches!(x, Item::Import { path: xp, .. } if xp.join(".") == path.join("."))
+                }),
+                _ => false,
+            };
+            if absent && !dup_in_batch {
                 let mut it = it;
                 if let Item::Enum(e) = &mut it {
                     e.injected = true;

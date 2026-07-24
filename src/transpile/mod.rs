@@ -226,13 +226,13 @@ struct Transpiler {
     /// Set when a `Core.Reflection.interfaces`/`parents`/… call is emitted — defines the
     /// `__phorj_reflect_of($v, $kind)` helper + its static table once per file.
     uses_reflect_tables: bool,
-    /// Set when `Core.Json.stringify` / `stringifyPretty` / `parse` is emitted — each defines its
-    /// `__phorj_json_*` recursive helper once per file (the gated-helper pattern, set in
-    /// `emit_member_call` because a native's `php` closure has no `&mut self`). The helpers walk the
-    /// injected `Json` enum's PHP class hierarchy (scoped variant classes `Json_Int`/`Json_Bool`/…) so the
-    /// PHP leg matches interp/VM byte-for-byte; floats route through `__phorj_float` (positional,
-    /// not native json's scientific), so `uses_float` is implied by an encode.
+    /// Set when `Core.Json.stringify`/`stringifyPretty`/`parse` is emitted — each defines its
+    /// `__phorj_json_*` recursive helper once per file (gated-helper pattern, set in
+    /// `emit_member_call`); walks the injected `Json` enum's scoped PHP variant classes; floats
+    /// route via `__phorj_float` (implies `uses_float`).
     uses_json_encode: bool,
+    /// Per `Core.Native.Http` native emitted (DEC-331 s2) — gates the `__phorj_http_*` family.
+    uses_http: bool,
     uses_json_pretty: bool,
     uses_json_decode: bool,
     uses_json_parse_lines: bool,
@@ -255,15 +255,13 @@ struct Transpiler {
     uses_result_get_or_else: bool,
     uses_result_or_else: bool,
     uses_result_to_option: bool,
-    /// Set when `Core.Text.parseInt` is emitted — defines `__phorj_parse_int` once per file. The
-    /// helper mirrors Rust's `i64::from_str` (optional sign, base-10 digits, i64 range, no surrounding
-    /// whitespace) and returns `null` (Phorj `None`) otherwise — including on i64 overflow, which
-    /// PHP's `(int)` cast would silently clamp.
+    /// Set when `Core.Text.parseInt` is emitted — defines `__phorj_parse_int` once per file,
+    /// mirroring Rust's `i64::from_str` (sign, base-10, i64 range, no surrounding whitespace);
+    /// `null` otherwise — incl. i64 overflow, which PHP's `(int)` cast would silently clamp.
     uses_text_parse_int: bool,
-    /// Set when `Core.List.sort` / `sortWith` is emitted — defines the matching `__phorj_sort*`
-    /// helper once per file. Both copy the list before `usort` (Phorj lists are immutable); `sort`
-    /// uses a `<=>`/`strcmp` type-dispatched comparator (string by byte, NOT PHP's numeric-string
-    /// `<=>`) to match Rust's natural order, `sortWith` defers to the user closure.
+    /// Set when `Core.List.sort`/`sortWith` is emitted — the matching `__phorj_sort*` helper, once
+    /// per file; copies before `usort` (immutability); `sort` = a `<=>`/`strcmp` type-dispatched
+    /// comparator (byte order, not PHP numeric-string — Rust's natural order), `sortWith` = closure.
     uses_list_sort: bool,
     uses_list_sort_with: bool,
     /// Set when `Core.List.takeWhile` / `dropWhile` is emitted — gates the matching
@@ -470,6 +468,7 @@ mod matches;
 mod names;
 mod program_emit;
 mod runtime_php;
+mod runtime_php_http;
 mod runtime_tables;
 pub mod split;
 mod stmt;
@@ -516,6 +515,7 @@ impl Transpiler {
             class_tables: crate::native::ClassTables::default(),
             uses_reflect_tables: false,
             uses_json_encode: false,
+            uses_http: false,
             uses_json_pretty: false,
             uses_json_decode: false,
             uses_json_parse_lines: false,

@@ -2024,6 +2024,22 @@ fn dec255_runtime_faults_also_fault_on_php() {
     );
 }
 
+/// DEC-331 slice 2 — the rich Request's fail-loud surfaces fault identically on all three legs:
+/// CR/LF injected into a wither (the rebuild-then-reparse path must never smuggle a header), and
+/// the rebuild-no-longer-parses panic. Oversize/malformed wire input is the NULL path (eager
+/// parse → null, covered by `conformance/web/rich-request-bags.phg` + the example), never a fault.
+#[test]
+fn rich_request_wither_guards_fault_identically() {
+    // LF in a header VALUE → the CR/LF guard panics before any rebuild.
+    agree_err_php(
+        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry] function main() -> void { string lf = Bytes.toString(b"\x0a") ?? ""; Request r = Request.fake("GET", "/x").withHeader("x-evil", "a{lf}injected: 1"); Output.printLine(r.method); }"#,
+    );
+    // CR in a header NAME → same guard.
+    agree_err_php(
+        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry] function main() -> void { string cr = Bytes.toString(b"\x0d") ?? ""; Request r = Request.fake("GET", "/x").withHeader("bad{cr}name", "v"); Output.printLine(r.method); }"#,
+    );
+}
+
 /// Pathological nesting must fault *identically* on both backends (M2 P3.5 Wave 0, Task 0.4).
 /// The recursive-descent parser caps nesting depth, so deeply-nested parens / unary chains return
 /// a clean parse `Diagnostic` instead of a native stack overflow (SIGABRT). Both backends share the same
@@ -3203,6 +3219,11 @@ const TIER1_PHP: &[&str] = &[
     "strtr",
     "strtoupper",
     "substr",
+    // core standard (ext/standard, no shared extension): the DEC-331 s2 `__phorj_http_*` helpers —
+    // hexdec for %XX decode, tempnam/sys_get_temp_dir for the body spill store.
+    "hexdec",
+    "tempnam",
+    "sys_get_temp_dir",
     "substr_count",
     "trim",
     "ucfirst",

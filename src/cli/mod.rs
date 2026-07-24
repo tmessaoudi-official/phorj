@@ -21,6 +21,7 @@ mod explain_config;
 mod explain_invoke;
 mod format_cmd;
 pub(crate) mod http_prelude;
+pub(crate) mod http_request_prelude;
 pub mod pm;
 mod rewrite_new;
 mod test_runner;
