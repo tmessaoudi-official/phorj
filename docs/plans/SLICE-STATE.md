@@ -36,22 +36,28 @@ IN-FLIGHT block below (the one canonical home)**. Then slice 1b + slice 3 (D10a 
 (Slice 1 + DEC-336 + slice 2 all shipped this night.)
 
 **▶ IN FLIGHT — JSON-ADT JIT SLICE (DEC-333 (a) + the JIT-WINS-ALL re-ruling). PLAN v4 BELOW,
-3C GATE IN PROGRESS (DEC-268 MAXIMAL): 3 fresh-context 3-lens panel rounds run, ~40 findings
+3C GATE IN PROGRESS (DEC-268 MAXIMAL): 4 fresh-context 3-lens panel rounds run, ~44 findings
 found and ALL FOLDED into v4 (highlights: str-entry-param ABI was missing entirely — deepjson
 would never have JIT'd; SetLocal clone-BEFORE-release ordering; tag-threaded release plumbing
 via emit_release_pair; canonical_json compiler fact replaces unsound (name,arity) sniffing;
 emit_call_to 3-return tag threading; json-only mint cap — unbounded handle leaks were OOM not
-code-5). REMAINING BEFORE BUILD: rounds 4-5 must BOTH be clean (two-consecutive-clean; cap 5 —
-if round 4 or 5 finds anything, the cap escalates to the dev via ask-human per DEC-268). A
-fresh session resumes by: (1) re-reading the plan below, (2) running panel round 4 (3 read-only
-adversarial reviewers: correctness+regression / memory-safety+promises / completeness+blast-
-radius, verifying the v4 folds against the code), (3) if clean → round 5, (4) if both clean →
-build in the plan's order (compile.rs M-Decomp split FIRST). Baseline measured this container:
+code-5). GATE STATUS: round 4 ran (3 reviewers) → NOT clean: 2 MEDIUM (RoundingMode
+injected-collision; NullMark reaching Return — both would-be miscompiles) + 2 LOW
+(GetEnumField-Owned husk; materialize no-panic) — ALL FOLDED into v5 [R4-*]. Clean counter
+RESET. REMAINING BEFORE BUILD: rounds 5-6 must BOTH be clean (two-consecutive-clean; cap 5 —
+escalates to the dev via ask-human per DEC-268). A fresh session resumes by: (1) re-reading
+the plan below, (2) running the next panel round (3 read-only reviewers: correctness+regression
+/ memory-safety+promises / completeness+blast-radius, verifying the v5 folds against the code),
+(3) if clean → one more confirming round, (4) if both clean → build in the plan's order
+(compile.rs M-Decomp split FIRST — boundary identified: run+run_unboxed → src/jit/compile/run.rs,
+compile+compile_unboxed+Drop stay in compile/mod.rs). Baseline measured this container:
 jsonround 0.30x, deepjson 0.90x (php-8.5.8+opcache local, scratchpad build — rebuild via
 build-php85.sh after container reset).**
 
 # Json-ADT JIT slice — build plan v4 (DEC-333 (a); targets jsonround 0.30x / deepjson 0.90x)
-# v4 = round-3 findings folded (marked [R3-*]); v2/v3 folds retained ([R1-*]/[R2-*]).
+# v5 = round-4 findings folded ([R4-*]: RoundingMode injected-collision + NullMark-return miscompiles,
+# GetEnumField-Owned husk, materialize no-panic). v1-v4 folds retained ([R1..R3-*]).
+# v4 = round-3 findings folded ([R3-*]); v2/v3 folds retained ([R1-*]/[R2-*]).
 
 ## Goal
 Extend the JIT unboxed subset so the two bench bodies (and any Json-shaped hot code) compile to
@@ -77,7 +83,13 @@ repeated parse; php pays it every iteration).
   (per-iteration values; Dyn's leak doctrine does NOT apply). Json(_, Owned) in is_owned_handle;
   Json in is_handle.
 - `Kind::JMap(Own)` / `JList(Own)`: untagged handles to boxed Value::Map/List (JsonLazy inside).
-- `Kind::NullMark`: Const(Value::Null) marker; Eq/Ne vs Json → icmp tag ==/!= 7; an OWNED Json
+- `Kind::NullMark`: Const(Value::Null) marker; Eq/Ne vs Json → icmp tag ==/!= 7. RETURN/ENTRY
+  GATE [R4-corr-1: the Const(Null)→NullMark accept is GLOBAL, so a function with a top-level
+  `return null` would carry NullMark as its ret kind and run_unboxed decodes the filler word 0
+  as Int(0) — wrong bytes where the VM returns null]: NullMark joins the Return decline list
+  (mirrors the existing IntSet :2374 / MapList :2380 return declines) AND the compile.rs
+  entry-ret gate; confirm SetLocal-then-return + MakeMap-value consumers decline too
+  (GetEnumField/MatchTag/Call-into-Dyn already reject it). An OWNED Json
   operand gets tag-gated release-on-consume [R1-F6] — this release is the FIFTH evars site,
   emitted INSIDE the new Json-Eq/Ne arm placed BEFORE the generic arm_cmp dispatch
   (emit mod.rs:1060; the str-Eq precedent at :1044 releases via its own meta-mask, not
@@ -96,8 +108,13 @@ stamped by the compiler pre-pass ONLY for the injected `Core.Json` enum (the che
 `injected` + true field types; EnumDesc carries neither). The provenance PLUMBING is explicit
 work [R3-safety-F3]: the `injected` flag lives on the AST `Item::Enum` — the enum_descs
 pre-pass (compiler/program.rs:78-99) reads it there and stamps the fact; nothing may fall back
-to shape inference. A user-declared look-alike `enum Json`
-never sets it → all arms decline (the v2 (name,arity) sniffing was a miscompile hole). Unit
+to shape inference. STAMP CONDITION [R4-corr-2: `injected` is TRUE for EVERY injected enum —
+RoundingMode/Option/Result — so `injected` ALONE would stamp the first injected enum and
+miscompile e.g. RoundingMode's MakeEnum/MatchTag as Json variants]: the fact is stamped iff
+`injected && e.name == "Json" && <the 7-variant (name,arity) shape matches the prelude>` — all
+three conjuncts. A user-declared look-alike `enum Json`
+never sets it (no `injected`) → all arms decline (the v2 (name,arity) sniffing was a miscompile
+hole; `injected`-only was the R4 collision). Unit
 test pins the helper-side variant→0..6 mapping + payload representation against the prelude;
 compile-setup debug_assert pins fact-order == prelude-order. json_base>0 (a preceding enum
 shifts descriptor indices) gets a dedicated unit test [R2: benches have base=0 — the rel-tag
@@ -160,7 +177,12 @@ region. GetEnumField on Any declines. Non-Json JumpIfFalse behavior byte-identic
 - MatchTag on Json: icmp tag vs rel(idx) → Bool (tag 7 false everywhere — VM-identical; Fault
   backstop → code 5). Wildcard/default arms emit no test — no new ops [R2: json-api's intOf
   shape is a new real JIT target; test added].
-- GetEnumField(0) on Json(V(t)): payload with variant kind; Borrowed→Borrowed, Owned→TRANSFER.
+- GetEnumField(0) on Json(V(t)): payload with variant kind; Borrowed→Borrowed. Owned pair →
+  DECLINE [R4-comp-1: the Owned→TRANSFER arm had no husk-neutralization — a transferred payload
+  whose husk cell is still live at the match-collapse SetLocal(m_slot) would double-free; and
+  the arm is effectively DEAD because GetEnumField is emitted ONLY by the match desugar, which
+  always extracts from a BORROWED GetLocal(m_slot) copy (register_bindings). Fail-closed decline
+  removes the double-free risk with zero coverage loss].
 - Eq/Ne (Json, NullMark) either order (VM equivalence verified: eq_val Enum-vs-Null = false,
   Null-vs-Null = true → icmp tag==7 exact [R2-A1]).
 - GetLocal/SetLocal of Json: copy/store BOTH words. SetLocal ORDER: (1) clone popped Borrowed
@@ -196,7 +218,12 @@ compile error [R2-safety-F5c]; stubs are runtime-dead — Core.Json imports are 
 DISABLED without the feature, and canonical_json is never stamped)
 Two-i64-return (payload, tag), tag<0 = fault → code 5. NO-PANIC discipline (extern "C"):
 bounds-check before slicing; Rc::get_mut → -1; whole-doc validate_json BEFORE minting lazy
-children (keeps materialize_lazy's .expect unreachable); no OnceCell re-entrancy.
+children (keeps materialize_lazy's .expect unreachable); no OnceCell re-entrancy. EXTENDED
+[R4-safety-1]: the discipline covers EVERY materialize_lazy call site — not just parse but the
+map_get / GetEnumField-on-container helpers that force one level — since materialize_lazy
+carries `.expect("re-parse cannot fail")` (lazy.rs:308); a future skip/materialize drift
+panicking there would abort across the extern "C" boundary (vs a clean VM unwind). Each site is
+wrapped (or the invariant re-asserted locally), never inherited transitively.
 - rt_u_json_parse(ctx, s, free): validate; invalid → tag 7; valid → eager ONE-level materialize
   (children lazy — materialize_one semantics). PARSE-ARG FREE CONTRACT [R3-safety-F1]: free =
   compile-time-ownership (Owned ⇒ 1 — `Json.parse(a + b)` reaches here with an Owned Concat
