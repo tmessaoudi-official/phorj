@@ -89,7 +89,13 @@ repeated parse; php pays it every iteration).
   as Int(0) — wrong bytes where the VM returns null]: NullMark joins the Return decline list
   (mirrors the existing IntSet :2374 / MapList :2380 return declines) AND the compile.rs
   entry-ret gate; confirm SetLocal-then-return + MakeMap-value consumers decline too
-  (GetEnumField/MatchTag/Call-into-Dyn already reject it). An OWNED Json
+  (GetEnumField/MatchTag/Call-into-Dyn already reject it). OPERAND-TRANSIENT INVARIANT
+  [R5-corr-1: the `Json? x; if(c) x=parse(s); else x=null` shape could otherwise merge a NullMark
+  into a Json slot via join_kind and mis-decode the filler word]: NullMark is produced ONLY by
+  Const(Null) and consumed ONLY by an immediately-following Eq/Ne-vs-Json in the SAME block;
+  SetLocal(NullMark) declines, Return(NullMark) declines (above), and `join_kind(NullMark, ·) →
+  None` so a NullMark can never survive to a leader/merge (the if/else-null shape declines,
+  fail-closed) — unit-tested as a mandatory join arm. An OWNED Json
   operand gets tag-gated release-on-consume [R1-F6] — this release is the FIFTH evars site,
   emitted INSIDE the new Json-Eq/Ne arm placed BEFORE the generic arm_cmp dispatch
   (emit mod.rs:1060; the str-Eq precedent at :1044 releases via its own meta-mask, not
