@@ -37,7 +37,7 @@ function logging(Request req, (Request) => Response next): Response {
 // `next`, so the protected handler is not reached).
 function requireAuth(Request req, (Request) => Response next): Response {
     var n = next;
-    if ((req.header("Authorization") ?? "") == "") {
+    if ((req.headers.get("Authorization") ?? "") == "") {
         return Response.text(401, "unauthorized");
     }
     return n(req);

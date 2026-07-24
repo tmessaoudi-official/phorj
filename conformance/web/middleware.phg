@@ -4,6 +4,7 @@ package Main;
 
 import Core.Output;
 import Core.Bytes;
+import Core.String;
 import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Router;
@@ -25,14 +26,20 @@ function tag(Request req, (Request) => Response next): Response {
 
 function requireAuth(Request req, (Request) => Response next): Response {
     var n = next;
-    if ((req.header("Authorization") ?? "") == "") {
+    if ((req.headers.get("Authorization") ?? "") == "") {
         return Response.text(401, "no");
     }
     return n(req);
 }
 
 function show(Router rt, string method, string path, List<string> headers): void {
-    Response resp = rt.handle(new Request(method, path, b"", headers, new List<string>()));
+    // Rich Request (DEC-331 s2): raw "K: V" fixture lines become withHeader() rebuilds.
+    mutable Request req = Request.fake(method, path);
+    for (string h in headers) {
+        List<string> kv = String.splitOnce(h, ":");
+        req = req.withHeader(String.trim(kv[0]), String.trim(kv[1]));
+    }
+    Response resp = rt.handle(req);
     int st = resp.status;
     string body = Bytes.toString(resp.body) ?? "?";
     Output.printLine("{method} {path} -> {st} {body}");

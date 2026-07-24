@@ -29,9 +29,7 @@ function root(Request req): Response {
 }
 
 function show(Router rt, string path): void {
-    Response resp = rt.handle(
-        new Request("GET", path, b"", new List<string>(), new List<string>())
-    );
+    Response resp = rt.handle(Request.fake("GET", path));
     int st = resp.status;
     Output.printLine("{path} -> {st} " + (Bytes.toString(resp.body) ?? "?"));
 }

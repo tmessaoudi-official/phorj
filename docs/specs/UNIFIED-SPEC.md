@@ -447,7 +447,7 @@ teaching it is wrong); the four `E-TYPE-IMPORT-*` codes re-homed as `E-IMPORT-BU
 | `Core.Regex` | `Regex` class | `Regex` | compliant as-is |
 | `Core.Secret` | `Secret<T>` class | `Secret` | compliant as-is |
 | `Core.Decimal` | `RoundingMode` enum | `Decimal` | member ⇒ `Decimal.RoundingMode` (or member-import) |
-| `Core.Http` | `Request`,`Response`,`Route`,`Router` (+ `#[Route]`) | `Http` | members ⇒ `Http.X` / `#[Http.Route]` |
+| `Core.Http` | `Request`,`Response`,`Route`,`Router`,`ParamBag`,`HeaderBag`,`AttrBag`,`FileBag`,`RequestBody`,`UploadedFile`,`MultipartPart`,`Cookie`,`SameSite` (+ `#[Route]`) | `Http` | members ⇒ `Http.X` / `#[Http.Route]` (bags: DEC-331 s2) |
 | `Core.Time` | `Duration`,`Date`,`Instant` | `Time` | members ⇒ `Time.X` |
 
 Rules for the multi-type modules: **default = qualified by leaf** (`Http.Router`, `Time.Duration`,

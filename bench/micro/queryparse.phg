@@ -1,0 +1,35 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+import Core.Http.Request;
+
+// Microbench (DEC-331 slice 2): the rich Request's query parse — target split + form decode +
+// first-wins accumulation — via `Request.parse` on a fixed raw request. Checksum = the decoded
+// value lengths + tag count, so the parse cannot be dead-code-eliminated on either leg.
+function bench(int iters): int {
+    bytes raw = b"GET /s?page=2&tag=a+b&tag=c%21&q=hello%20world&eq=1=2 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        if (var req = Request.parse(raw)) {
+            acc = acc + String.length(req.query.getOrDefault("q", ""))
+                + List.length(req.query.getAll("tag"))
+                + String.length(req.query.getOrDefault("eq", ""));
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    int iters = 200000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("queryparse\t{d + guard}\t{acc}");
+}

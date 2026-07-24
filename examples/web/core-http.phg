@@ -4,7 +4,7 @@
 // (examples/web/handler.phg). Core.Http promotes them to the standard library: `import Core.Http;`
 // gives you the `Request` and `Response` types with a static-method API —
 //   * `Request.parse(bytes) -> Request?`   — parse a raw HTTP/1.1 request (null if malformed)
-//   * `req.header(name) -> string?`        — look up a header
+//   * `req.headers.get(name) -> string?`   — case-insensitive header lookup (rich Request, DEC-331)
 //   * `Response.text(status, body)`        — a text/plain response
 //   * `resp.serialize() -> bytes`          — render to the HTTP/1.1 wire form
 // The application is a single `handle(Request) -> Response`. Under `phg serve`, Core.Http injects a
@@ -22,7 +22,7 @@ import Core.Runtime.Entry;
 // The whole application: greet by path, echoing the Host header.
 #[Entry]
 function handle(Request req): Response {
-    string host = req.header("Host") ?? "world";
+    string host = req.headers.get("Host") ?? "world";
     return Response.text(200, "Hello {req.path} (host {host})");
 }
 
@@ -35,7 +35,7 @@ function main(): void {
         string m = req.method;
         string p = req.path;
         Output.printLine("method={m} path={p}");
-        Output.printLine("host={req.header(\"Host\") ?? \"(none)\"}");
+        Output.printLine("host={req.headers.get(\"Host\") ?? \"(none)\"}");
         // Run the handler and serialize the response to the wire form.
         Response resp = handle(req);
         bytes wire = resp.serialize();

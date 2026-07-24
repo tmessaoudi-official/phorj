@@ -3026,7 +3026,31 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   args all confirmed safe). Accepted as certified on one exhaustive clean confirmation round (a
   disclosed proportionate deviation from strict two-consecutive-clean: R3 re-reviewed the last change
   on an otherwise-unchanged tree + all objective gates green + B1 has a differential regression test).
-- **DEC-336 — EXTENSIONLESS `#!`-SHEBANG SOURCES + PERPETUAL EDITOR/LSP CURRENCY (dev-directed
+- **DEC-331 SLICE-2 BUILD (2026-07-24, autonomous overnight): RICH REQUEST v1 — BUILT, 3-leg
+  byte-identity green (interp ≡ VM ≡ transpiled PHP on php-8.5.8).** Full record in spec §8
+  (`docs/specs/2026-07-23-rich-request.md`) — the canonical build-status home; this row is the
+  register anchor. Architecture: prelude-phorj bags over std-only `Core.Native.Http` wire natives
+  (parseQuery/decodePath/parseMultipart/stashBody/readSpill/jsonParse — one `eval` body, both
+  engines; `__phorj_http_*` PHP twins mirrored line-for-line), the FS/session prelude pattern.
+  **PRE-WORK CERTIFICATION (DEC-268): 4 panel rounds** — R1 3-lens (1 P0 conformance-scope + 7 P1:
+  caps/spill/CRLF/fault-strings/Inv-13 pre-splits/session-scope/catalog-staleness — ALL folded),
+  R2 3-lens (wither raw-rebuild fidelity, ParamBag case-sensitivity/first-`=`, response-side CRLF
+  → PENDING, part-cap disclosure, cap-inert-under-serve, Json-order wording — ALL folded), R3
+  combined (oversize=null-parity correction + 2 wording), R4 (1 LOW enumeration nit) — accepted
+  certified with the slice-1-precedent disclosed proportionate deviation (severity monotonically
+  collapsed to a text nit; no unresolved findings; 4/5 rounds). **Decisions made in build (dev to
+  review):** `Body`→`RequestBody` + `.get(k, default)`→`getOrDefault` (forced by DEC-202 capture
+  discipline / `E-OVERLOAD-RETURN`); empty-body+multipart-CT parses to empty bags (builder
+  pass-through state); part cap 1024 = malformed; spill via deterministic int handles (path never
+  a phorj value); `Router.handle` mutates its argument (attributes route params, PSR-7);
+  `VirtualModule.src`→`srcs` multi-fragment; Json registry row relocated after Http. **PENDING dev
+  adjudication:** Response-side CRLF guard (`Response.withHeader`/`Cookie.render` are the unguarded
+  outbound sink — hardening changes shipped surface). **HARD-FLAGGED loss (DEC-332):**
+  `bench/micro/queryparse` ~8x vs idiomatic full-parse PHP — queued FIRST-CLASS in the dev-re-ruled
+  flip-all-losses campaign (candidate: nativized/JIT-vertical `Request.parse`). Deferred-to-slice-3:
+  lazy mode + `RequestParsing` + eager-vs-lazy parity test + canonical-fault-string reachability
+  (consts shipped + test-pinned now). KNOWN_ISSUES: spill tmp cleanup, cap-inert-under-serve,
+  superglobal-lift deferral, pre-existing no-default-features Regex check failure.
   2026-07-23) — ✅ BUILT 2026-07-24.** Scope narrowed on investigation: the RUNTIME side was ALREADY
   done (DEC-282 — the tokenizer skips a byte-0 `#!` line; `phg run ./bin/console` works on an
   extensionless file; `tests/cli.rs::shebang_line_is_skipped_and_bare_file_dispatches_to_run`). This

@@ -119,6 +119,32 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
   Real count is **492 all-features / 465 default** (see C-decisions §2026-07-20 AUDIT CORRECTION). Bench coverage
   is therefore 40/465 (~8.6%), not 40/286. Correct at each touch.
 
+## RICHREQ-2026-07-24 — rich Request v1 build limitations (DEC-331 slice 2; all recorded, reopenable)
+
+1. **Spill temp files leak until process exit** — spilled bodies (> 256 KiB) write
+   `phorj-spill-*` files under the OS temp dir, addressed by deterministic in-process handles
+   (never by path, Inv 10). Nothing deletes them mid-run; the OS tmp reaper (or process exit) is
+   the cleanup today. Slice 3's serve loop should clean per-response.
+2. **The 8 MiB body cap is INERT under serve** — `DEFAULT_MAX_BODY_SIZE` equals the transport
+   frame cap `MAX_REQUEST` (head+body), so a served body can never reach it; the eager
+   oversize→null→400 branch is reachable only via `Request.fake`/direct `Request.parse`. Worse: a
+   wire-oversize request is frame-TRUNCATED and therefore reads as *malformed*, not *oversize*.
+   Slice 3 (`ServeConfig.maxBodySize`) must reconcile frame-cap vs body-cap semantics and the
+   oversize-vs-malformed fault boundary.
+3. **Superglobal lift mappings deferred** — the lifter recognizes no `$_GET`/`$_POST`/`$_FILES`/
+   `getallheaders()` today (verified), so spec §4's "where already recognized" is vacuously
+   satisfied. A faithful mapping needs an ambient→parameter transform (the enclosing function must
+   gain a `Request` param) — a design slice of its own.
+4. **`Response`-side CRLF is unguarded** — the slice hardens the REQUEST rebuild path
+   (fake/withers fault on CR/LF), but `Response.withHeader`/`Cookie.render` still interpolate
+   unchecked — the actual outbound injection sink. Guarding them changes shipped surface behavior
+   → PENDING dev adjudication (register).
+5. **`phg check` of `Core.Http` programs under `--no-default-features` fails on the REGEX
+   natives** (`Router.constraintOk` → `Regex.compile`; regex is feature-gated) — PRE-EXISTING
+   (the old prelude made the same call), surfaced while verifying the slice's no-json story. The
+   new `body.json()` itself is safe: the `Json` TYPE always injects and
+   `Core.Native.Http.jsonParse` is always registered (flag-naming fault without feature `json`).
+
 ## F-032 — overloaded interface-method visibility not checked at declaration (FLAGGED 2026-07-16, DEC-251(c) build)
 
 `E-IFACE-VIS` (DEC-251(c) — a class implementing a public interface method as private/protected is

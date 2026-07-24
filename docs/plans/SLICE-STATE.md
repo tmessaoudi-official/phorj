@@ -23,10 +23,14 @@ WIN ALL micro benches BEFORE the AOT perf hunt/refactor starts. Dev-box scorecar
 regression re-probe on the dev box) → slice 1b/3 per D10a → THEN DEC-333 AOT M1-M3. Recorded in the
 register as the DEC-333 amendment row.
 
-**NEXT WORK (dev-ruled 2026-07-24, pre-compact): ▶ DEC-331 SLICE 2 — RICH REQUEST v1** (spec
-`docs/specs/2026-07-23-rich-request.md`, RULED + BUILD-READY — read it FIRST). Slice 1b
-(invoke-as-callable-value) stays QUEUED behind it; then slice 3 (Entry-kinds/serve/TLS), then the
-DEC-333 perf roadmap. (DEC-331 slice 1 + DEC-336 both shipped this night.)
+**✅ DEC-331 SLICE 2 — RICH REQUEST v1: BUILT + 3-leg byte-identity green (2026-07-24).** Record of
+truth: spec §8 BUILD STATUS + the register's SLICE-2 BUILD row (build deviations, the PENDING
+Response-side-CRLF adjudication, the HARD-FLAGGED `queryparse` loss). **NEXT WORK (per the same-day
+dev perf re-ruling above): ▶ FLIP THE JIT LOSSES** — now 6 rows: `jsonround 0.31x`, `listcontains
+0.82x` (dev-box re-probe owed), `floatmul 0.93x`, `deepjson 0.94x`, `dbwork 1.00x`, **`queryparse
+~0.12x` (NEW this slice — candidate: nativized/JIT-vertical `Request.parse`)**. The Json-ADT JIT
+slice (DEC-333 (a)) covers jsonround/deepjson. Then slice 1b + slice 3 (D10a order), then AOT.
+(Slice 1 + DEC-336 + slice 2 all shipped this night.)
 
 **SLICE 2 BUILD PLAN (approved-for-build 2026-07-24, autonomous; Inv 19 — mirrored here BEFORE the
 work starts; final record lands in the register + spec §BUILD STATUS at ship):**

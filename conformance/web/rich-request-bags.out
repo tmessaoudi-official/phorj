@@ -1,0 +1,16 @@
+first-wins: first
+all: first,second
+has: true/false
+default: fallback
+pct-plus: a+b
+pct-space: a b
+nul-len: 2
+hdr-lower: yes
+hdr-upper: yes
+qry-Key: upper
+qry-key: lower
+cookie-Sid: a=b=c
+cookie-sid: lower
+routed: u=42 s=hello
+post-handle-attr: 42
+scratch: T-9

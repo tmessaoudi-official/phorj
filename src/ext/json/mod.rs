@@ -9,5 +9,6 @@ mod parser;
 mod tests;
 
 pub use natives::json_natives;
+pub(crate) use natives::json_parse_str;
 pub use natives::materialize_if_lazy;
 pub use parser::materialize_lazy;

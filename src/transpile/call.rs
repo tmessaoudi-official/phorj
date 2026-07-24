@@ -194,6 +194,14 @@ impl Transpiler {
                         if nat.module == "Core.Ini" && nat.name == "parse" {
                             self.uses_ini_parse = true;
                         }
+                        if nat.module == "Core.Native.Http" {
+                            // The whole `__phorj_http_*` family is one gated block (DEC-331 s2);
+                            // `jsonParse` additionally rides `__phorj_json_decode` (one parser).
+                            self.uses_http = true;
+                            if nat.name == "jsonParse" {
+                                self.uses_json_decode = true;
+                            }
+                        }
                         if nat.module == "Core.Option" {
                             match nat.name {
                                 "map" => self.uses_option_map = true,

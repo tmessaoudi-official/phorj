@@ -1,7 +1,8 @@
 # SPEC — Rich Request v1, incl. file uploads (DEC-331 D8, build slice 2 of 3)
 
-> Status: **SPEC RULED (dev, 2026-07-23) — BUILD-READY.** Elaborates D8a (eager+lazy switch),
-> D8b (first-wins + getAll), D8c (files in v1), D8d (the six confirmed defaults).
+> Status: **SPEC RULED (dev, 2026-07-23). SLICE 2 BUILT + 3-leg byte-identity-green (2026-07-24);
+> the LAZY mode + its ServeConfig switch ship with slice 3 — see §8 BUILD STATUS.** Elaborates
+> D8a (eager+lazy switch), D8b (first-wins + getAll), D8c (files in v1), D8d (the six defaults).
 
 ## 1. Surface
 
@@ -41,10 +42,12 @@ migrate in the same change, D8d):
 | `cookies` | `ParamBag` | |
 | `form` | `ParamBag` | urlencoded + multipart fields |
 | `files` | `FileBag` | `get(k): UploadedFile?`, `getAll(k)` |
-| `body` | `Body` | `.bytes(): Bytes`, `.text(): string`, `.json(): Json?` |
-| `attributes` | `AttrBag` | `string -> string`, middleware scratch |
+| `body` | `Body` | `.bytes(): Bytes`, `.text(): string`, `.json(): Json?` — **built as `RequestBody`** (a bare `Body` would capture user classes; the FS-taxonomy/DEC-202 precedent) |
+| `attributes` | `AttrBag` | `string -> string`, middleware scratch **+ route params (PSR-7 convention; Router.handle writes them)** |
 
-Uniform bag API (D8d): `.get(k): string?` / `.get(k, default): string` / `.has(k): bool` /
+Uniform bag API (D8d): `.get(k): string?` / `.get(k, default): string` — **built as
+`getOrDefault(k, fallback)`: phorj's `E-OVERLOAD-RETURN` rule forbids return-type-differing
+overloads (the `Core.Map.getOrDefault` precedent)** — / `.has(k): bool` /
 `.all(): Map<string, List<string>>`. Query/form values are always `string` — the caller
 coerces. `UploadedFile { name, size: int, contentType: string, bytes(): Bytes }` with
 temp-spill above a threshold and `ServeConfig.maxBodySize` enforcement (D8c).
@@ -93,3 +96,37 @@ program, both modes, identical output); migration of existing `examples/web/*`.
   threshold and the ServeConfig fields become rows in that catalog.
 - **P2 → `Request.fake(...)` ships in v1** (handler unit tests without a socket).
 - **P3 → mutable `req.attributes.set(k, v)`** — the ONE documented mutable bag.
+
+## 8. BUILD STATUS (2026-07-24 — autonomous slice, DEC-268 panel-certified plan)
+
+**SLICE 2 BUILT + 3-leg byte-identity-green** (`phg run` ≡ `--tree-walker` ≡ transpiled PHP on
+php-8.5.8): the full §2 surface — bags (first-wins + `getAll`, case-insensitive `HeaderBag` vs
+case-SENSITIVE ParamBag keys, cookies split on the FIRST `=`), `files` (multipart w/ per-part
+256 KiB temp-spill behind deterministic int HANDLES — the path never enters a phorj value, Inv 10),
+memoized `body.json()` via the always-registered `Core.Native.Http.jsonParse` (feature `json` off →
+flag-naming fault, never a vanished method), eager `Request.parse` (malformed/oversize → null → the
+untouched respond bridge's 400), `Request.fake` + `withHeader`/`withCookie`/`withBody` withers that
+REBUILD from the ORIGINAL raw target/header lines/body through the same parse (decode is never
+round-tripped; CR/LF in header names/values FAULTS — DEC-242 bar). Route params → `attributes`
+(PSR-7; `param()` delegates; `Router.handle` now MUTATES its argument — recorded deviation from the
+old `withParams` copy). Gates: `examples/web/rich_request.phg` (differential),
+`conformance/web/rich-request-bags.phg` (3-leg golden incl. the mutation-observability case), CRLF
+`agree_err_php` fault-parity, native unit tests (decode edges, multipart small/over-cap/malformed/
+filename-vs-name, stash thresholds, canonical-string pins).
+
+**Build deviations (recorded, dev to review):** `Body`→`RequestBody` + `get(k, default)`→
+`getOrDefault` (both forced by language rules — see §2 annotations); `Request.parse` stays public
+until slice 3 retires `respond` (the bridge + examples need it); a multipart content-type with an
+EMPTY body parses to empty form/files (the fake/wither builder passes through that state; no body ≠
+malformed body); multipart part cap 1024 (over-cap = malformed, deliberately); body cap
+`DEFAULT_MAX_BODY_SIZE` = 8 MiB == the transport frame cap, so it is INERT under serve in slice 2
+(reachable via fake/parse only; slice 3 reconciles frame-vs-body semantics — KNOWN_ISSUES).
+
+**DEFERRED to slice 3 (with `ServeConfig`):** the `RequestParsing.Eager|Lazy` switch (§3) + the §6
+eager-vs-lazy parity test; the §5 canonical fault strings ship NOW as single-sourced consts
+(`src/native/http.rs`, test-pinned) but become runtime-reachable only in lazy mode. **DEFERRED
+(recorded):** superglobal lift mappings (§4) — the lifter recognizes no superglobals today, so
+"where already recognized" is vacuously satisfied; a faithful lift needs an ambient→parameter
+transform design. **PERF (WIN-OR-FLAG):** `bench/micro/queryparse` lands with the slice and is a
+HARD-FLAGGED ~8x loss vs an idiomatic PHP full-request parse — queued in the dev-re-ruled
+flip-all-losses campaign (next after this slice), candidate fix = a nativized/JIT-vertical parse.

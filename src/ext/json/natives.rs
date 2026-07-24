@@ -179,6 +179,13 @@ fn json_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// Shared parse entry for `Core.Native.Http.jsonParse` (the rich Request's `body.json()`,
+/// DEC-331 slice 2): byte-identical acceptance to `Json.parse` — lazy node on valid, null on
+/// malformed — so "one stringification story" has one PARSING story too.
+pub(crate) fn json_parse_str(s: &str, out: &mut String) -> Result<Value, String> {
+    json_parse(&[Value::Str(s.into())], out)
+}
+
 /// Owned-value form of [`materialize_lazy`]: if `v` is a lazy Json node, materialize one level;
 /// otherwise return it unchanged. For deconstruction sites that already own the value (VM ops).
 pub fn materialize_if_lazy(v: Value) -> Value {
