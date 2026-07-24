@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-331 slice 1: `#[Invoke]` + `#[ToString]` — attribute-designated conventional methods
+
+No magic method names — callability and stringification ride an attribute on an ordinary method.
+`#[Invoke]` makes a class instance callable as `x(args)` (overloaded `#[Invoke]` methods dispatch by
+arity/type; the methods stay directly callable by name). `#[ToString]` designates the ONE method a
+class stringifies through — run automatically in string interpolation (`"{obj}"`) AND by
+`Conversion.toString(obj)` (one stringification story). The checker records span-keyed decisions and
+a new OUTERMOST pass `resolve_invoke_tostring` rewrites them to ordinary (overloaded) method calls on
+the live post-fill AST — including inside field initializers — so `interpreter ≡ VM ≡ transpiled PHP`
+by construction, with zero backend changes on the call paths. The transpiler emits a native
+delegating PHP `__toString`; the lifter maps PHP `__toString` → `#[ToString] toString`. Guards:
+`E-ATTRIBUTE-TARGET`, `E-TOSTRING-SIGNATURE`, `E-TOSTRING-DUPLICATE`, `E-INVOKE-DUPLICATE`,
+`E-NO-TOSTRING`, `E-NOT-CALLABLE`, `E-INVOKE-DEFAULTS` (exact-arity resolution — default/variadic
+params on `#[Invoke]` are slice-1b), all with `phg explain` entries; roles inherit with the method
+(class + trait). Example `examples/guide/invoke-tostring.phg`. Deferred to slice 1b: function-type
+assignability, PHP `__invoke` emission + the multi-invoke dispatch shim, lift `__invoke`.
+
+### Added — DEC-336: extensionless `#!…phg` shebang sources light up in the editors
+
+An executable phorj source with no extension and a `#!/usr/bin/env phg` first line (the tokenizer
+already skips the shebang; `phg run ./bin/console` already works — DEC-282) is now recognized by the
+editors: the VS Code extension's `phorj` language gains a `firstLine` match (`^#!.*\bphg\b`) so such
+files get full language-server intelligence (the client selects by language id, not a `*.phg` glob),
+a TextMate shebang highlight rule, and PhpStorm/LSP4IJ README guidance for extensionless entries.
+vscode extension `0.4.0` → `0.5.0`.
+
 ### Fixed — `Reflect.className` on an enum variant: PHP leg ≠ interpreter (DEC-329.3 fallout)
 
 `Reflect.className(variant)` returned the enum-scoped PHP class name (`Color_Green`) on the
