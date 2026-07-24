@@ -26,8 +26,11 @@ work starts; final record lands in the register + spec §BUILD STATUS at ship):*
    `Map<string, List<string>>` (form-decode `+`/`%XX`, FIRST-WINS order, dup keys accumulate),
    `parseMultipart(bytes, string boundary)` → `List<MultipartPart>?` (null = malformed; hand-built
    `Value::Instance` per the Regex-carrier precedent), `spill(bytes): string` + `readSpill(string):
-   bytes` (256 KiB ruled threshold). Each native carries a `php:` mapping (`__phorj_http_*`); helper
-   bodies land in `transpile/runtime_php.rs`. NO ext/uri dependency (uri is feature-gated; Http is not).
+   bytes` (256 KiB ruled threshold), **and `jsonParse(bytes): Json?`** (two-mode: with feature `json`
+   it delegates to the real parser; without, it faults naming the flag — see the `.json()` guardrail;
+   so `http.rs` is std-only in its no-feature baseline). Each native carries a `php:` mapping
+   (`__phorj_http_*`); helper bodies land in `transpile/runtime_php.rs`. NO ext/uri dependency (uri
+   is feature-gated; Http is not).
 2. Prelude (`src/cli/http_prelude*`, Inv-13 split): rich `Request` (method/path/query/headers/cookies/
    form/files/body/attributes) + `ParamBag`/`HeaderBag`/`AttrBag`/`FileBag`/`RequestBody`/`UploadedFile`/
    `MultipartPart` — pure-phorj bag logic over native-parsed data (transpiles as class shape for free).
