@@ -24,7 +24,7 @@ class Holder {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // `var name = …` is still the inference keyword (here `label` is inferred `string`).
     var label = tagged("phorj");

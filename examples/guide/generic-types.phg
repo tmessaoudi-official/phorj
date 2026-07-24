@@ -43,7 +43,7 @@ class Pair<A, B> {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var bi = new Box(7);
     // Box<int>  — T inferred from `7`

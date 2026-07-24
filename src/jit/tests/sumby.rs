@@ -25,7 +25,7 @@ fn phg_run_hook_hits_the_jit_on_the_sumby_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -70,7 +70,7 @@ fn jit_sumby_capture_free_negative_and_empty_edges_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
     assert_eq!(jit_out, oracle, "sumby edges must match the oracle");
@@ -90,7 +90,7 @@ fn jit_sumby_overflow_faults_byte_identically_to_the_oracle() {
           List<int> xs = [9000000000000000000, 9000000000000000000];\n\
           return List.sumBy(xs, function(int x) => x);\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{f()}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{f()}\"); }";
     let jit = crate::cli::cmd_run(SRC);
     let oracle = crate::cli::cmd_treewalk(SRC);
     match (&jit, &oracle) {
@@ -125,7 +125,7 @@ fn phg_run_hook_hits_the_jit_on_the_listreduce_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -168,7 +168,7 @@ fn jit_listreduce_seed_empty_and_negative_edges_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
     assert_eq!(jit_out, oracle, "listreduce edges must match the oracle");

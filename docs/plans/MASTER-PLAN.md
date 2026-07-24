@@ -133,6 +133,15 @@ Build cluster, in order (D10a):
   `break`/`continue` (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self`
   return), `eval` (position spec: rejection + substitutes; `Core.Sandbox` builds in v1),
   ArrayAccess (`#[ArrayGet]`/`#[ArraySet]`), **two-tier top types `Any`+`Object` (DEC-335)**.
+- **Import & visibility design cluster (dev-ruled AskUserQuestion, 2026-07-24; specs are SSOT,
+  SLICE-STATE carries the live pointer):** **Q-A wildcard/group imports**
+  (`docs/specs/2026-07-24-wildcard-imports.md` — `import X.Y.*` / `{A,B}` / `except {…}`, eager
+  collisions, compile-time expansion → per-symbol PHP `use`, `E-IMPORT-UNKNOWN`); **Q-B
+  visibility-model completeness** (`docs/specs/2026-07-24-visibility-model.md` — package HIERARCHY,
+  `internal` REDEFINED = package + descendants on both axes, member `internal` added, folds the
+  G4 P0 static-field visibility spine-fix); build Q-A → Q-B. **Q-C global completeness sweep**
+  (own research pass re-synthesizing the full-audit + roadmap-completeness + full-reopen audits +
+  a fresh `/gaps` → one ranked completeness register).
 - **Env:** real PHP 8.5.8 built from source in-container (D10d); `toolchain.env` container-aware. The
   8.5.8 oracle surfaced + FIXED a DEC-329.3 byte-identity regression (`Reflect.className` on an enum
   variant: PHP `Color_Green` vs interp `Green`).

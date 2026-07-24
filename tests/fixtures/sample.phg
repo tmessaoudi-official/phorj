@@ -17,7 +17,7 @@ class Greeter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 
 function main(): void {
     Greeter g = new Greeter("Tak");

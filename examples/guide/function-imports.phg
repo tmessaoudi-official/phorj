@@ -22,7 +22,7 @@ import Core.Math.max;
 import Core.List;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Bare member-imported calls (printLine, and clean = String.trim aliased).
     printLine(clean("  hello  "));

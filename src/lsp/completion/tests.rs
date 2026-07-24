@@ -198,7 +198,7 @@ fn general_completion_survives_the_mid_typing_parse_error() {
     // keywords, which VSCode's prefix filter turned into an EMPTY popup ("no autocomplete"). The
     // repaired parse (cursor line blanked) must keep top-level symbols, locals, and the imported
     // module qualifiers alive.
-    let src = "package Main;\n\nimport Core.Output;\n\nfunction helper() -> int { return 1; }\n\n#[Entry]\nfunction main() -> void {\n    var greeting = \"hi\";\n    Out\n}\n";
+    let src = "package Main;\n\nimport Core.Output;\n\nfunction helper() -> int { return 1; }\n\n#[Entry(kind: Cli)]\nfunction main() -> void {\n    var greeting = \"hi\";\n    Out\n}\n";
     let off = src.find("    Out").unwrap() + "    Out".len();
     let got = labels(&complete(
         src,

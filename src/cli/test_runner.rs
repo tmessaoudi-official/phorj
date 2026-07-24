@@ -160,18 +160,17 @@ fn synthesize_main(program: &Program, body: &[Stmt], span: Span) -> Program {
         .collect();
     items.push(Item::Function(FunctionDecl {
         modifiers: Vec::new(),
-        // DEC-191: the synthetic test entry is attribute-declared like every entry.
-        attrs: vec![crate::ast::Attribute {
-            name: "Entry".to_string(),
-            args: Vec::new(),
-            // Zero span = the synthetic marker the import-gate exempts (no user wrote this).
-            span: crate::token::Span {
+        // DEC-331 D1: the synthetic test entry is a CLI driver — `#[Entry(kind: Cli)]`.
+        // Zero span = the synthetic marker the import-gate exempts (no user wrote this).
+        attrs: vec![crate::ast::entry_attr(
+            "Cli",
+            crate::token::Span {
                 start: 0,
                 len: 0,
                 line: 0,
                 col: 0,
             },
-        }],
+        )],
         vis: Visibility::Public,
         name: "main".into(),
         type_params: Vec::new(),

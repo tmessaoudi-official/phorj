@@ -50,7 +50,7 @@ function show(Request req): void {
     Output.printLine(Bytes.toString(resp.body) ?? "(binary)");
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Query bag: first-wins + getAll; case-insensitive headers; cookie bag (value keeps its '=').
     show(

@@ -22,7 +22,7 @@ function labelled(int n): (int, string) {
     return (n, if (n == 1) { "one" } else { "many" });
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Construct + destructure. `lo`/`hi` are `int` (from the tuple positions), so they add as ints.
     var (lo, hi) = minMax(9, 4);

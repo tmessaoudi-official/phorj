@@ -78,7 +78,7 @@ fn debug_repl_steps_inspects_and_continues() {
     use std::process::Stdio;
     let prog = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
                 function add(int a, int b) -> int {\n  int sum = a + b;\n  return sum;\n}\n\
-                #[Entry] function main() -> void {\n  int x = 3;\n  int y = add(x, 4);\n  Output.printLine(\"y = {y}\");\n}\n";
+                #[Entry(kind: Cli)] function main() -> void {\n  int x = 3;\n  int y = add(x, 4);\n  Output.printLine(\"y = {y}\");\n}\n";
     let path = std::env::temp_dir().join(format!("phg_dbg_{}.phg", std::process::id()));
     std::fs::write(&path, prog).expect("write program");
 
@@ -197,7 +197,7 @@ fn check_json_error_emits_diagnostic_array_exit_1_no_stderr() {
             "check",
             "--json",
             "-e",
-            "package Main; import Core.Runtime.Entry; #[Entry] function main()-> void { var x = nope; }",
+            "package Main; import Core.Runtime.Entry; #[Entry(kind: Cli)] function main()-> void { var x = nope; }",
         ])
         .output()
         .expect("spawn phg");
@@ -263,7 +263,7 @@ fn run_reads_program_from_stdin() {
             br#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
-#[Entry] function main() -> void { Output.printLine("{1 + 2}"); }"#,
+#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 + 2}"); }"#,
         )
         .unwrap();
     let out = child.wait_with_output().expect("wait");
@@ -281,7 +281,7 @@ fn run_eval_inline_code() {
                 r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
-#[Entry] function main() -> void { Output.printLine("{2 * 3}"); }"#,
+#[Entry(kind: Cli)] function main() -> void { Output.printLine("{2 * 3}"); }"#,
             ])
             .output()
             .expect("spawn phorj");
@@ -297,7 +297,7 @@ fn run_double_dash_then_path_is_a_file() {
         r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
-#[Entry] function main() -> void { Output.printLine("ok"); }"#,
+#[Entry(kind: Cli)] function main() -> void { Output.printLine("ok"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", "--", path.to_str().unwrap()])
@@ -339,7 +339,7 @@ fn lex_subcommand_dumps_tokens_exit_0() {
 fn transpile_ill_typed_exits_1_with_type_error() {
     let path = write_temp(
         "ill_typed",
-        r#"package Main; import Core.Runtime.Entry; #[Entry] function main() -> void { int x = "no"; }"#,
+        r#"package Main; import Core.Runtime.Entry; #[Entry(kind: Cli)] function main() -> void { int x = "no"; }"#,
     );
     let out = Command::new(BIN)
         .args(["transpile", path.to_str().unwrap()])
@@ -357,7 +357,7 @@ fn run_runtime_error_exits_1() {
         r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
-#[Entry] function main() -> void { Output.printLine("{1 / 0}"); }"#,
+#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", path.to_str().unwrap()])
@@ -375,7 +375,7 @@ fn vm_leg_simple_program_exits_0() {
         r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
-#[Entry] function main() -> void { Output.printLine("{1 + 1}"); }"#,
+#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 + 1}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", path.to_str().unwrap()])
@@ -393,7 +393,7 @@ fn vm_leg_runtime_error_exits_1() {
         r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
-#[Entry] function main() -> void { Output.printLine("{1 / 0}"); }"#,
+#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", path.to_str().unwrap()])
@@ -466,7 +466,7 @@ fn mi_super_method_transpiles_to_a_trait_alias() {
          open class A { open function m(): string { return \"A\"; } }\n\
          open class B { open function m(): string { return \"B\"; } }\n\
          class C extends A, B { function m(): string { return \"{parent(A).m()}+{parent(B).m()}+C\"; } }\n\
-         #[Entry] function main(): void { C c = new C(); Output.printLine(c.m()); }\n",
+         #[Entry(kind: Cli)] function main(): void { C c = new C(); Output.printLine(c.m()); }\n",
     )
     .unwrap();
     let out = Command::new(BIN)
@@ -500,7 +500,7 @@ fn mi_transitive_parent_jump_is_a_clean_transpile_error() {
          open class A extends G { open function m(): string { return \"A\"; } }\n\
          open class B { open function m(): string { return \"B\"; } }\n\
          class C extends A, B { function m(): string { return \"{parent(G).m()}+C\"; } }\n\
-         #[Entry] function main(): void { C c = new C(); Output.printLine(c.m()); }\n",
+         #[Entry(kind: Cli)] function main(): void { C c = new C(); Output.printLine(c.m()); }\n",
     )
     .unwrap();
     // run still works (MI-aware resolution).
@@ -564,7 +564,7 @@ fn shebang_line_is_skipped_and_bare_file_dispatches_to_run() {
     std::fs::write(
         &path,
         "#!/usr/bin/env phg\npackage Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Core.List;\n\
-         #[Entry]\nfunction main(List<string> args) -> int {\n\
+         #[Entry(kind: Cli)]\nfunction main(List<string> args) -> int {\n\
            Output.printLine(\"n={List.length(args)}\");\n\
            for (string a in args) { Output.printLine(a); }\n\
            return 0;\n}\n",

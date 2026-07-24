@@ -15,7 +15,7 @@ class Box<T> {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("{identity(42)}");
     Output.printLine(identity("hi"));

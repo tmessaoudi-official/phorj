@@ -24,7 +24,7 @@ fn task9_proves_affine_accumulator_with_param_bound_guard() {
         function bench(int iters): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < iters) { acc = acc + (i * 3 - 1); i = i + 1; }\n\
           return acc; }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("the intadd shape must be provable");
     let proven = acc.proven.iter().filter(|&&p| p).count();
@@ -57,7 +57,7 @@ fn task9_proves_const_map_accumulator_and_expression_remi() {
             i = i + 1;\n\
           }\n\
           return acc; }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(3000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(3000)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("const-collection accumulator must prove");
     assert!(acc.proven.iter().filter(|&&p| p).count() >= 4);
@@ -80,7 +80,7 @@ fn task9_guard_decline_beyond_g_stays_byte_identical() {
         function bench(int iters): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < iters) { acc = acc + 5000000000000; i = i + 1; }\n\
           return acc; }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1048577)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1048577)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("const-growth accumulator must prove");
     assert_eq!(
@@ -106,7 +106,7 @@ fn task9_rejects_unbounded_growth_and_overflow_faults_identically() {
         function bench(int iters): int { mutable int acc = 9000000000000000000; mutable int i = 0;\n\
           while (i < iters) { acc = acc + 20000000000000; i = i + 1; }\n\
           return acc; }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(20000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(20000)}\"); }";
     let program = compile_source(SRC);
     assert!(
         acc_elision(&program, "bench").is_none(),
@@ -131,7 +131,7 @@ fn task9_rejects_computed_bound_and_body_branches() {
           while (i < lim) { acc = acc + 1; i = i + 1; } return acc; }\n\
         function branchy(int n): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < n) { if (i > 2) { acc = acc + 2; } i = i + 1; } return acc; }\n\
-        #[Entry] function main(): void { Output.printLine(\"{computed(5)} {branchy(9)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{computed(5)} {branchy(9)}\"); }";
     let program = compile_source(SRC);
     assert!(
         acc_elision(&program, "computed").is_none(),
@@ -171,7 +171,7 @@ fn phg_run_hook_hits_the_jit_on_for_in_iteration() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(500)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(500)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -214,7 +214,7 @@ fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("the nested for-in shape must prove (v2)");
     let proven = acc.proven.iter().filter(|&&p| p).count();
@@ -274,7 +274,7 @@ fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(

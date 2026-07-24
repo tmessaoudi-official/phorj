@@ -43,7 +43,7 @@ class Duck extends Bird, Swimmer {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Duck d = new Duck();
     Output.printLine(d.describe());

@@ -121,7 +121,7 @@ fn entries_may_declare_throws() {
     // DEC-191 (supersedes the Batch-1 D restriction): a throwing entry is LEGAL — an escaped
     // fault is the ruled behavior (exit 1 / HTTP 500), like any unhandled fault.
     let ok = errors_of(&format!(
-        "{ERRDEF} #[Entry] function main() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }}"
+        "{ERRDEF} #[Entry(kind: Cli)] function main() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }}"
     ));
     assert!(ok.is_empty(), "throwing entry must be clean, got {ok:?}");
 }

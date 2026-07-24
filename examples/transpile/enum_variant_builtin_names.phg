@@ -24,7 +24,7 @@ function describe(Event e): string {
     };
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     List<Event> events = [
         new RuntimeException("boom"),

@@ -42,7 +42,7 @@ class Greeter {
 
 // `hello` resolves to English's
 // keep French's `bye` as `goodbyeFr`; `bye` then falls to English
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Greeter g = new Greeter();
     Output.printLine(g.hello());

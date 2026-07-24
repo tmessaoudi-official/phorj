@@ -49,7 +49,7 @@ class Stepped extends Counter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine(new Animal().describe());
     // animal

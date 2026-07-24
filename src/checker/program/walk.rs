@@ -190,11 +190,12 @@ impl Checker {
         // classes + functions are collected, with no `this` — so an initializer may call a function or
         // read another static.
         self.check_static_inits(program);
-        // DEC-191: entries are declared by `#[Entry]` (the magic `main`/`handle` names are
-        // retired — FULLY BREAKING, developer-ruled). Validate every attributed candidate here:
-        // an instance-method `#[Entry]` is a target error; a signature matching neither role is
-        // `E-ENTRY-SIG`; more than one entry OF THE SAME ROLE is `E-MULTIPLE-ENTRY` (one CLI +
-        // one web may coexist — `phg run` and `phg serve` each pick theirs).
+        // DEC-331 D1: entries are declared by `#[Entry(kind: Cli|Web)]` — the ROLE is declared,
+        // not inferred (bare `#[Entry]` is retired, FULLY BREAKING). Validate every attributed
+        // candidate here: an instance-method `#[Entry]` is `E-ENTRY-TARGET`; a missing/unknown/
+        // reserved `kind:` is `E-ENTRY-KIND-{REQUIRED,UNKNOWN,RESERVED}`; a signature that
+        // disagrees with the declared kind is `E-ENTRY-SIG`; more than one entry OF THE SAME KIND
+        // is `E-DUPLICATE-ENTRY-KIND` (one Cli + one Web may coexist — run/serve each pick theirs).
         {
             let mut cli_seen = false;
             let mut web_seen = false;
@@ -203,15 +204,6 @@ impl Checker {
                     let Some(attr) = f.attrs.iter().find(|a| crate::ast::is_entry_attr(a)) else {
                         return;
                     };
-                    if !attr.args.is_empty() {
-                        self.err_coded(
-                            attr.span,
-                            "`#[Entry]` takes no arguments — the role is inferred from the signature"
-                                .to_string(),
-                            "E-ATTRIBUTE-ARGS",
-                            Some("write it bare: `#[Entry]`".into()),
-                        );
-                    }
                     if instance_method {
                         self.err_coded(
                             attr.span,
@@ -222,40 +214,80 @@ impl Checker {
                         );
                         return;
                     }
-                    match crate::ast::entry_role(f) {
-                        None => {
+                    // DEC-331 D1: the role comes from the declared `kind:`, not the signature.
+                    // Bare `#[Entry]` / unknown / reserved kinds are hard errors; an active kind
+                    // still must AGREE with the signature shape (`entry_role` is now the validator).
+                    let role = match crate::ast::parse_entry_kind(attr) {
+                        crate::ast::EntryKind::Missing => {
                             self.err_coded(
-                                f.span,
-                                format!(
-                                    "`#[Entry]` function `{}` matches no entry role — CLI is `(): void`, `(): int`, `(List<string>): void|int`; web is `(Request): Response`",
-                                    f.name
-                                ),
-                                "E-ENTRY-SIG",
-                                Some("adjust the signature to one of the entry shapes".into()),
+                                attr.span,
+                                "`#[Entry]` requires a `kind:` — the entry role is declared, not inferred"
+                                    .to_string(),
+                                "E-ENTRY-KIND-REQUIRED",
+                                Some("write `#[Entry(kind: Cli)]` for a `phg run` entry, or `#[Entry(kind: Web)]` for `phg serve`".into()),
                             );
+                            return;
                         }
-                        Some(crate::ast::EntryRole::Cli) => {
-                            if cli_seen {
-                                self.err_coded(
-                                    f.span,
-                                    "multiple CLI entry points — more than one `#[Entry]` with a CLI signature".to_string(),
-                                    "E-MULTIPLE-ENTRY",
-                                    Some("a program has at most one CLI entry (and at most one web entry) — remove the extras".into()),
-                                );
-                            }
+                        crate::ast::EntryKind::Unknown(n) => {
+                            self.err_coded(
+                                attr.span,
+                                format!("unknown entry kind `{n}` — active kinds are `Cli` and `Web`; `Desktop`/`Mobile`/`Worker`/`Embedded` are reserved"),
+                                "E-ENTRY-KIND-UNKNOWN",
+                                Some("use `#[Entry(kind: Cli)]` or `#[Entry(kind: Web)]`".into()),
+                            );
+                            return;
+                        }
+                        crate::ast::EntryKind::Reserved(n) => {
+                            self.err_coded(
+                                attr.span,
+                                format!("entry kind `{n}` is reserved but not yet implemented — the active kinds are `Cli` and `Web`"),
+                                "E-ENTRY-KIND-RESERVED",
+                                Some("use `#[Entry(kind: Cli)]` or `#[Entry(kind: Web)]` for now".into()),
+                            );
+                            return;
+                        }
+                        crate::ast::EntryKind::Active(role) => role,
+                    };
+                    // The declared kind must AGREE with the signature shape.
+                    if crate::ast::entry_role(f) != Some(role) {
+                        let (kind_name, shape) = match role {
+                            crate::ast::EntryRole::Cli => (
+                                "Cli",
+                                "`(): void`, `(): int`, or `(List<string>): void|int`",
+                            ),
+                            crate::ast::EntryRole::Web => ("Web", "`(Request): Response`"),
+                        };
+                        self.err_coded(
+                            f.span,
+                            format!(
+                                "`#[Entry(kind: {kind_name})]` function `{}`'s signature doesn't match — a `{kind_name}` entry is {shape}",
+                                f.name
+                            ),
+                            "E-ENTRY-SIG",
+                            Some("adjust the signature to the declared kind's shape".into()),
+                        );
+                        return;
+                    }
+                    // At most one entry per kind (DEC-331 §3.1).
+                    let (dup, kind_name) = match role {
+                        crate::ast::EntryRole::Cli => {
+                            let d = cli_seen;
                             cli_seen = true;
+                            (d, "Cli")
                         }
-                        Some(crate::ast::EntryRole::Web) => {
-                            if web_seen {
-                                self.err_coded(
-                                    f.span,
-                                    "multiple web entry points — more than one `#[Entry]` with a `(Request): Response` signature".to_string(),
-                                    "E-MULTIPLE-ENTRY",
-                                    Some("a program has at most one web entry (and at most one CLI entry) — remove the extras".into()),
-                                );
-                            }
+                        crate::ast::EntryRole::Web => {
+                            let d = web_seen;
                             web_seen = true;
+                            (d, "Web")
                         }
+                    };
+                    if dup {
+                        self.err_coded(
+                            f.span,
+                            format!("duplicate `#[Entry(kind: {kind_name})]` — a program has at most one entry per kind"),
+                            "E-DUPLICATE-ENTRY-KIND",
+                            Some("remove the extra entry, or give it a different kind".into()),
+                        );
                     }
                 };
                 match item {

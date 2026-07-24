@@ -24,7 +24,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathmax_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -68,7 +68,7 @@ fn jit_mathmax_negative_operands_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -110,7 +110,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathmin_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -154,7 +154,7 @@ fn jit_mathmin_negative_operands_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -197,7 +197,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathsign_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -240,7 +240,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathabs_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -283,7 +283,7 @@ fn jit_mathabs_i64_min_funnels_to_redo_not_wrap() {
            while (i < 1) { acc = Math.abs(imin); i = i + 1; }\n\
            return acc;\n\
          }\n\
-         #[Entry] function main() -> void {}",
+         #[Entry(kind: Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "abs1");
     match Compiled::compile_unboxed(&program, f)
@@ -325,7 +325,7 @@ fn jit_mathabs_i64_min_fault_matches_the_vm() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("abs(i64::MIN) must fault on the jit path");
     let oracle_err =
         crate::cli::cmd_treewalk(SRC).expect_err("abs(i64::MIN) must fault on the oracle");

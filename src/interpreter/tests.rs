@@ -26,8 +26,8 @@ fn interpreter_fault_carries_call_stack() {
 fn with_pkg(src: &str) -> String {
     // DEC-191: inject `#[Entry]` before a bare `function main` (same convenience as
     // `cli::tests::wp`) so the interpreter unit programs need no per-case ceremony.
-    let src = if src.contains("function main") && !src.contains("#[Entry]") {
-        src.replacen("function main", "#[Entry] function main", 1)
+    let src = if src.contains("function main") && !src.contains("#[Entry") {
+        src.replacen("function main", "#[Entry(kind: Cli)] function main", 1)
     } else {
         src.to_string()
     };
@@ -38,7 +38,7 @@ fn with_pkg(src: &str) -> String {
     };
     // DEC-191 addendum: import-gated attribute — inject the import AFTER the package segment
     // (imports may not precede `package`); same-line, preserving line numbers.
-    if src.contains("#[Entry]") && !src.contains("Core.Runtime.Entry") {
+    if src.contains("#[Entry") && !src.contains("Core.Runtime.Entry") {
         let i = src.find(';').expect("package decl ends with ;");
         format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
     } else {
@@ -267,7 +267,7 @@ function main() -> void { Output.printLine("{9223372036854775807 + 1}"); }"#;
 #[test]
 fn missing_main_is_runtime_error() {
     let e = run(r#"function other() -> void {}"#).unwrap_err();
-    assert!(e.message.contains("#[Entry]"), "{}", e.message);
+    assert!(e.message.contains("#[Entry"), "{}", e.message);
 }
 
 // ---- lambda tests (M3 S3, Task 3 — interpreter-only) ----

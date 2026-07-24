@@ -12,7 +12,7 @@ import App.Text.shout as yell;
 import App.Text.addUp;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Bare cross-package function calls (banner, and yell = App.Text.shout aliased).
     printLine(banner("Function imports"));

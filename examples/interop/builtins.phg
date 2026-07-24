@@ -23,7 +23,7 @@ declare function abs(int n): int;
 
 declare function max(int a, int b): int;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine(strtoupper("hello"));
     // HELLO

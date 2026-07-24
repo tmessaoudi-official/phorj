@@ -1,4 +1,4 @@
-605	src/ast/class_hierarchy.rs
+467	src/ast/class_hierarchy.rs
 800	src/ast/walk.rs
 573	src/checker/assign.rs
 684	src/checker/calls/core.rs

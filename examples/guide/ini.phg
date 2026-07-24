@@ -16,7 +16,7 @@ import Core.Ini;
 import Core.Map;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     string config = "; app config\n" + "name = phorj\n" + "debug = on\n" + "\n" + "[server]\n" + "host = 0.0.0.0\n" + "port = 8080\n" + "# the DB section\n" + "[db]\n" + "dsn = host=localhost;port=5432";
     // stays the string "on", never coerced to a bool

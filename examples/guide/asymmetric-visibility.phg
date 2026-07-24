@@ -32,7 +32,7 @@ class Wallet {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Counter c = new Counter();
     c.bump();

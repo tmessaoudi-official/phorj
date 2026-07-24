@@ -1,7 +1,8 @@
 // Typed configuration with `#[Config]` + entry injection (DEC-318).
 //
-// A `#[Config]`-attributed zero-arg function is the program's typed-config PROVIDER; the `#[Entry]`
-// function declares a parameter of that type and the compiler injects the provider's result — no
+// A `#[Config]`-attributed zero-arg function is the program's typed-config PROVIDER; the
+// `#[Entry(kind: Cli)]` function declares a parameter of that type and the compiler injects the
+// provider's result — no
 // container, no reflection, no config-file parser. Config is plain phorj code, so it is type-checked,
 // refactorable, and completion-aware like everything else — and because the injection desugars to an
 // ordinary call BEFORE any backend runs, it is pure and byte-identical across interp / VM / PHP.
@@ -22,7 +23,7 @@ function appConfig(): AppConfig {
     return new AppConfig("demo-app", 4, false);
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(AppConfig config): void {
     // `config` arrives injected: the compiler rewrote this entry to call `appConfig()` first.
     Output.printLine("app     = {config.appName}");

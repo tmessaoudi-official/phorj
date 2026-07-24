@@ -29,7 +29,7 @@ fn range_analysis_proves_strict_lt_plus_one_counter() {
     let program = compile_source(
         "package Main; import Core.Runtime.Entry;\n\
          function count(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; } return i; }\n\
-         #[Entry] function main() -> void {}",
+         #[Entry(kind: Cli)] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "count"),
@@ -60,7 +60,7 @@ fn range_analysis_rejects_le_ne_and_wrong_slot_guards() {
          function le(int n)    -> int { mutable int i = 0; while (i <= n)   { i = i + 1; } return i; }\n\
          function ne(int n)    -> int { mutable int i = 0; while (i != n)   { i = i + 1; } return i; }\n\
          function wrong(int n) -> int { mutable int i = 0; while (n < 100)  { i = i + 1; } return i; }\n\
-         #[Entry] function main() -> void {}",
+         #[Entry(kind: Cli)] function main() -> void {}",
     );
     for name in ["le", "ne", "wrong"] {
         assert_eq!(
@@ -97,7 +97,7 @@ fn range_analysis_rejects_double_write_and_nested_loop() {
            }\n\
            return i;\n\
          }\n\
-         #[Entry] function main() -> void {}",
+         #[Entry(kind: Cli)] function main() -> void {}",
     );
     // The soundness-critical assertion is that NEITHER counter is proven (both keep their overflow
     // guards). `dbl`/`nest` are not necessarily unboxed-eligible (the block-local `j` / statement shape
@@ -128,7 +128,7 @@ fn range_analysis_float_counted_loop_matches_vm_and_drops_guard() {
            while (i < iters) { acc = acc * r + 0.5; i = i + 1; }\n\
            return acc;\n\
          }\n\
-         #[Entry] function main() -> void {}",
+         #[Entry(kind: Cli)] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "bench"),
@@ -165,7 +165,7 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
     let program = compile_source(
         "package Main; import Core.Runtime.Entry;\n\
          function f(int n) -> int { mutable int s = 1; mutable int i = 0; while (i < n) { s = s * 3; i = i + 1; } return s; }\n\
-         #[Entry] function main() -> void {}",
+         #[Entry(kind: Cli)] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "f"),
@@ -209,7 +209,7 @@ fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
          function wsub(int a, int b) -> int { return a - b; }\n\
          #[UncheckedOverflow]\n\
          function wmul(int a, int b) -> int { return a * b; }\n\
-         #[Entry] function main() -> void {}",
+         #[Entry(kind: Cli)] function main() -> void {}",
     );
     // The overflow edges that WOULD fault in a checked function must WRAP here (no redo, no fault).
     let cases: &[(&str, i64, i64, i64)] = &[
@@ -255,7 +255,7 @@ fn qualified_unchecked_overflow_attribute_is_recognized_and_wraps_on_the_vm() {
          import Core.Runtime.Integer;\n\
          #[Integer.UncheckedOverflow]\n\
          function wadd(int a, int b) -> int { return a + b; }\n\
-         #[Entry] function main() -> void {}",
+         #[Entry(kind: Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "wadd");
     assert!(
@@ -283,7 +283,7 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
         import Core.Runtime.Integer.UncheckedOverflow;\n\
         function inner(int n) -> int { return n + 1; }\n\
         #[UncheckedOverflow] function outer(int n) -> int { return inner(n); }\n\
-        #[Entry] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
     let a_jit = crate::cli::cmd_run(A);
     let a_oracle = crate::cli::cmd_treewalk(A);
     match (&a_jit, &a_oracle) {
@@ -301,7 +301,7 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
         import Core.Runtime.Integer.UncheckedOverflow;\n\
         #[UncheckedOverflow] function inner(int n) -> int { return n + 1; }\n\
         function outer(int n) -> int { return inner(n); }\n\
-        #[Entry] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
     let b_jit = crate::cli::cmd_run(B).expect("wrapping inner returns a value");
     let b_oracle = crate::cli::cmd_treewalk(B).expect("wrapping inner returns a value");
     assert_eq!(
@@ -332,7 +332,7 @@ fn phg_run_hook_hits_the_jit_on_the_int_list_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "int-list vertical must match the oracle");
@@ -358,7 +358,7 @@ fn jit_int_list_oob_fault_matches_the_vm() {
           List<int> xs = [10, 20];\n\
           return xs[5];\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
     let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
     assert!(
@@ -377,7 +377,7 @@ fn jit_int_list_negative_values_and_index_edges_match_the_oracle() {
           List<int> xs = [0 - 5, 7, 0 - 9223372036854775807];\n\
           return xs[0] + xs[1] + xs[2] % 1000;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "negative int-list values must match");

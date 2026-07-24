@@ -535,19 +535,12 @@ impl Parser {
                 name.push('.');
                 name.push_str(&seg);
             }
+            // Attribute args reuse the call argument parser, so both positional string-literal
+            // patterns (`#[Route("GET", r"/users/{id}")]`) AND named args (`#[Entry(kind: Web)]`,
+            // DEC-331 D1) parse uniformly. Named args land as `Expr::NamedArg`; the checker reads
+            // them structurally (never as runtime expressions — attribute args are not type-checked).
             let args = if self.eat(&TokenKind::LParen) {
-                let mut args = Vec::new();
-                if !self.check(&TokenKind::RParen) {
-                    loop {
-                        args.push(self.parse_expr()?);
-                        if !self.eat(&TokenKind::Comma) {
-                            break;
-                        }
-                        if self.check(&TokenKind::RParen) {
-                            break; // trailing comma
-                        }
-                    }
-                }
+                let args = self.parse_arg_list()?;
                 self.expect(&TokenKind::RParen, "')' to close attribute arguments")?;
                 args
             } else {

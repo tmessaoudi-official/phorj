@@ -50,7 +50,7 @@ fn phg_run_hook_hits_the_jit_on_the_setdifference_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "setdifference vertical");
 }
 
@@ -77,7 +77,7 @@ fn phg_run_hook_hits_the_jit_on_the_setunion_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "setunion vertical");
 }
 
@@ -99,7 +99,7 @@ fn jit_set_ops_same_pair_both_ops_never_alias() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "set ops no-alias");
 }
 
@@ -130,7 +130,7 @@ fn jit_set_op_results_answer_contains_and_chain() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "set ops contains/chain");
 }
 
@@ -154,6 +154,6 @@ fn jit_set_difference_disjoint_subset_and_empty_results() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "set ops edges");
 }

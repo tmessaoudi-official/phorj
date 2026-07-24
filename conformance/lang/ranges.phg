@@ -5,7 +5,7 @@ package Main;
 import Core.Output;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Exclusive: 0,1,2,3 (4 elements, upper bound excluded).
     mutable int exc = 0;

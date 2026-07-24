@@ -16,7 +16,7 @@ package Main;
 import Core.Output;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): int {
     Output.printLine("starting up");
     Output.printLine("work done");

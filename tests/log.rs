@@ -65,7 +65,7 @@ import Core.Log.ChannelConfig;
 import Core.Log.LogConfig;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {{
     Log.configure(new LogConfig([
         new ChannelConfig("default", [
@@ -193,7 +193,7 @@ import Core.Log.FileHandler;
 import Core.Log.ChannelConfig;
 import Core.Log.LogConfig;
 import Core.Runtime.Entry;
-#[Entry] function main(): void {{
+#[Entry(kind: Cli)] function main(): void {{
     Log.configure(new LogConfig([
         new ChannelConfig("app", [
             new FileHandler("{dir}/line.log", new Level.Debug(), new LineFormatter(true)),

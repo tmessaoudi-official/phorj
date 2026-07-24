@@ -19,7 +19,7 @@ import Core.List;
 import Core.PriorityQueue;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // An empty queue of alert channels; higher priority = more urgent.
     var alerts = new PriorityQueue(new List<string>());

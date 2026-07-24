@@ -9,7 +9,7 @@ import Core.Output;
 import Acme.Banner;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     string bar = Banner.rule(10);
     Output.printLine(bar);

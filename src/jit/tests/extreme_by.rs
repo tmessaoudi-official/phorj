@@ -42,7 +42,7 @@ fn phg_run_hook_hits_the_jit_on_the_maxby_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "maxby vertical");
 }
 
@@ -62,7 +62,7 @@ fn phg_run_hook_hits_the_jit_on_the_minby_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "minby vertical");
 }
 
@@ -87,7 +87,7 @@ fn jit_extreme_by_tie_break_is_first_wins() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "extreme-by tie-break");
 }
 
@@ -109,7 +109,7 @@ fn jit_extreme_by_empty_receiver_takes_the_coalesce_default() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "extreme-by empty default");
 }
 
@@ -125,7 +125,7 @@ fn maxby_outside_the_fusion_window_still_runs_correctly_on_the_vm() {
           int? best = List.maxBy(xs, function(int x) => x);\n\
           return best ?? -1;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{pick()}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{pick()}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
     assert_eq!(jit_out, oracle, "window-less maxBy must match the oracle");
@@ -148,7 +148,7 @@ fn jit_extreme_by_selector_overflow_faults_byte_identically_to_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(3)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(3)}\"); }";
     let jit = crate::cli::cmd_run(SRC).expect_err("overflowing selector must fault");
     let oracle = crate::cli::cmd_treewalk(SRC).expect_err("oracle must fault");
     assert_eq!(jit, oracle, "fault strings must be byte-identical");

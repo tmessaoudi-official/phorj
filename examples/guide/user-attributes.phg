@@ -34,7 +34,7 @@ function handle(): void {
     Output.printLine("handled");
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Product p = new Product("Widget");
     Output.printLine(p.name);

@@ -20,7 +20,7 @@ function grade(int score): string {
     };
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var small = accumulateFiveNumbers(1, 2, 3, 4, 5);
     var firstOperandValue = 10;

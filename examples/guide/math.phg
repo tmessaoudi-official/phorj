@@ -9,7 +9,7 @@ import Core.Runtime.Entry;
 // `int`. Every finite float renders byte-identically across all three backends (the transpiler's
 // `__phorj_float` helper reproduces Rust's shortest-round-trip `f64` Display) — see
 // `examples/guide/floats.phg` for the full magnitude/precision showcase.
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // float math
     float root = Math.sqrt(16.0);

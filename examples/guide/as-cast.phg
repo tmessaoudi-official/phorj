@@ -49,7 +49,7 @@ function noisy(): Shape {
     return new Circle(7);
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Shape c = new Circle(3);
     Shape sq = new Square(4);

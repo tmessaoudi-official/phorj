@@ -21,7 +21,7 @@ fn seeded_random_is_deterministic_and_run_matches_vm() {
 import Core.Runtime.Entry;
 import Core.Output;
 import Core.Random;
-#[Entry] function main() -> void {
+#[Entry(kind: Cli)] function main() -> void {
     Random.seed(42);
     for (int i in 0..5) {
         Output.printLine("{Random.intBetween(1, 6)}");
@@ -57,7 +57,7 @@ fn distinct_seeds_diverge_across_backends_consistently() {
 import Core.Runtime.Entry;
 import Core.Output;
 import Core.Random;
-#[Entry] function main() -> void {{
+#[Entry(kind: Cli)] function main() -> void {{
     Random.seed({seed});
     Output.printLine("{{Random.nextInt()}}");
 }}"#

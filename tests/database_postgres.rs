@@ -37,7 +37,7 @@ import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 
-#[Entry] function main(): void {{
+#[Entry(kind: Cli)] function main(): void {{
     try {{
         Database db = new Database("{dsn}");
         discard db.prepare("DROP TABLE IF EXISTS phorj_pg_it").exec();

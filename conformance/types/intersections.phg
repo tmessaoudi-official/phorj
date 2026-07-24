@@ -26,7 +26,7 @@ function describe(Named & Aged who): string {
     return "{who.name()} is {who.age()}";
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine(describe(new Person("Ada", 36)));
 }

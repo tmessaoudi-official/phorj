@@ -22,7 +22,7 @@ class Counter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var c = new Counter(5);
     var read = c.reader();

@@ -12,7 +12,7 @@ import Core.Output;
 import Core.String;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // padLeft / padRight: format a number column.
     var id = String.padLeft("7", 4, "0");

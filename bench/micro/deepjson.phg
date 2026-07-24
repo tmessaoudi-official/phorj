@@ -76,7 +76,7 @@ function bench(string doc, int iters): int {
     return acc;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // A paginated user-list response: status + meta + a `data` array of 12 six-field records. The
     // handler reads ~4 fields; the other ~80 leaf values are parsed-but-unread (the lazy win surface).

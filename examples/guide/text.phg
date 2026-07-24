@@ -10,7 +10,7 @@ import Core.Runtime.Entry;
 //
 // Note: bind call results to locals before interpolating — the interpolation sub-lexer does not
 // nest string literals inside `{…}` (same constraint as guide/strings.phg).
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     string greeting = "Hello, Phorj";
     int n = String.length(greeting);

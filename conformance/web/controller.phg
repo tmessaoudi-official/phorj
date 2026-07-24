@@ -34,7 +34,7 @@ function show(Router rt, string path): void {
     Output.printLine("{path} -> {st} " + (Bytes.toString(resp.body) ?? "?"));
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Router rt = Http.autoRouter();
     show(rt, "/");

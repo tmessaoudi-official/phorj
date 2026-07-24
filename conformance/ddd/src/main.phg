@@ -10,7 +10,7 @@ import Ordering.OrderLine;
 import Ordering.Order;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Product widget = new Product(1, "Widget", new Money(250));
     Product gadget = new Product(2, "Gadget", new Money(125));

@@ -11,7 +11,7 @@ import Core.Json;
 import Acme.Meta;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Json doc = new Json.Object(
         [

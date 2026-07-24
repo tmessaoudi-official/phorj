@@ -14,7 +14,7 @@ class Rect {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Rect r = new Rect(3, 4);
     Output.printLine("area = {r.area()}");

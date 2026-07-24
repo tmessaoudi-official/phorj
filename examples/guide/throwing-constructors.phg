@@ -37,7 +37,7 @@ function makePercentage(int p): Percentage throws RangeError {
     return new Percentage(p)?;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     try {
         Percentage ok = new Percentage(75);

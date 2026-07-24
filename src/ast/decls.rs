@@ -61,17 +61,16 @@ pub struct FunctionDecl {
 pub fn synth_empty_main() -> Item {
     Item::Function(FunctionDecl {
         modifiers: Vec::new(),
-        // DEC-191: the synthetic entry carries #[Entry] — the compiler resolves by attribute now.
-        attrs: vec![Attribute {
-            name: "Entry".to_string(),
-            args: Vec::new(),
-            span: Span {
+        // DEC-331 D1: the synthetic inert entry is CLI-shaped — `#[Entry(kind: Cli)]`.
+        attrs: vec![crate::ast::entry_attr(
+            "Cli",
+            Span {
                 start: 0,
                 len: 0,
                 line: 0,
                 col: 0,
             },
-        }],
+        )],
         vis: Visibility::Public,
         name: "main".to_string(),
         type_params: Vec::new(),

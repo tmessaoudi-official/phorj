@@ -38,7 +38,7 @@ class Account {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Temp t = new Temp(100.0);
     Output.printLine("100C is {t.fahrenheit}F");

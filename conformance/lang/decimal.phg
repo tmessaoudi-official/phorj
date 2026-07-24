@@ -6,7 +6,7 @@ import Core.Decimal;
 import Core.Decimal.RoundingMode;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     decimal price = 19.99d;
     decimal total = price * 3d;

@@ -16,7 +16,7 @@ fn vm_fault_carries_call_stack() {
     let program = compile_source(
         "package Main;\nimport Core.Runtime.Entry;\n\
              function f() -> int { var xs = [1]; return xs[5]; }\n\
-             #[Entry] function main() -> void { var r = f(); }",
+             #[Entry(kind: Cli)] function main() -> void { var r = f(); }",
     );
     let err = Vm::new(&program).run().unwrap_err();
     assert_eq!(err.frames.len(), 2, "callee + main: {:?}", err.frames);
@@ -30,8 +30,8 @@ fn interp_and_vm_traces_match() {
     for src in [
         "package Main;\nimport Core.Runtime.Entry;\n\
              function g() -> int { var xs = [1]; return xs[9]; }\n\
-             #[Entry] function main() -> void { var r = g(); }",
-        "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main() -> void { var x = 1 / 0; }",
+             #[Entry(kind: Cli)] function main() -> void { var r = g(); }",
+        "package Main;\nimport Core.Runtime.Entry;\n#[Entry(kind: Cli)] function main() -> void { var x = 1 / 0; }",
     ] {
         let unit = crate::loader::load_loose_src(src).unwrap();
         let checked = crate::cli::check_and_expand(&unit.program, &unit.diag_src).unwrap();
@@ -55,7 +55,7 @@ fn run_entry_matches_call_named() {
          import Core.Output;\n\
          function twice(int x) -> int { Output.printLine(\"tick\"); return x * 2 + 1; }\n\
          function passthrough(bytes b) -> bytes { return b; }\n\
-         #[Entry] function main() -> void {}";
+         #[Entry(kind: Cli)] function main() -> void {}";
     let unit = crate::loader::load_loose_src(src).unwrap();
     let checked = crate::cli::check_and_expand(&unit.program, &unit.diag_src).unwrap();
     let program = crate::compiler::compile(&checked).unwrap();

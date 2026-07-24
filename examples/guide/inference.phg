@@ -15,7 +15,7 @@ function boiling(): Celsius {
     return 100;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // `var`: the binding's type is inferred from its initializer, yet stays fully static —
     // `label` is a string, `lo`/`hi`/`range` are ints, checked like any explicit annotation.

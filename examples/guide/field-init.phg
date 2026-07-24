@@ -24,7 +24,7 @@ class Parcel {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Parcel t = new Parcel("alpha");
     Output.printLine(t.summary());

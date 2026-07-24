@@ -28,7 +28,7 @@ class Mapper<T> {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Mapper<int> m = new Mapper(
         function(int n): int throws BadInputError { int doubled = parsePositive(n)?; return doubled + 1; }

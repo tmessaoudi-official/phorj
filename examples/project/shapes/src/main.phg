@@ -22,7 +22,7 @@ function paintName(Paint p): string {
     return match (p) { Red() => "red", Green() => "green", Blue() => "blue" };
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Rect r = new Rect(3, 4);
     // instantiate an imported class

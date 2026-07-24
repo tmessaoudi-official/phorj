@@ -33,7 +33,7 @@ function describeShipment(Shipment s): string {
     };
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Payment p = new Payment.Pending(1250);
     Shipment s = new Shipment.Pending("DHL");

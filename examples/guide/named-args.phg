@@ -23,7 +23,7 @@ class Box {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // FREE FUNCTION — only the required arg by name; both defaults apply.
     Output.printLine(greet(name: "Ada"));

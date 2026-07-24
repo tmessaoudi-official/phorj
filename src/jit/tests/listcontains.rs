@@ -23,7 +23,7 @@ fn phg_run_hook_hits_the_jit_on_the_listcontains_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -66,7 +66,7 @@ fn jit_listcontains_found_miss_negative_edges_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
     assert_eq!(jit_out, oracle, "listcontains edges must match the oracle");
@@ -99,7 +99,7 @@ fn jit_listcontains_two_lists_same_needles_stay_exact() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "memo eviction rounds must stay exact");

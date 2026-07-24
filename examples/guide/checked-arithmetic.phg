@@ -15,7 +15,7 @@ function safeSum(int a, int b): int {
     return Math.tryAdd(a, b) ?? 0;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("{Math.tryAdd(2, 3) ?? 0}");
     // 5

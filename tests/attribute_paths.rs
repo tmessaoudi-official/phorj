@@ -38,7 +38,7 @@ fn entry_fully_qualified_no_import_selects_the_entry_point() {
 package Main;
 import Core.Output;
 
-#[Core.Runtime.Entry]
+#[Core.Runtime.Entry(kind: Cli)]
 function main(): void {
     Output.printLine("qualified-entry");
 }
@@ -54,7 +54,7 @@ package Main;
 import Core.Output;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("bare-entry");
 }

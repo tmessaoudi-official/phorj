@@ -15,7 +15,7 @@ function pick(bool present): Box? {
     return null;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     int a = pick(true)?.value ?? -1;
     int b = pick(false)?.value ?? -1;

@@ -22,7 +22,7 @@ open class Limits {
 class Sub extends Limits {
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("{Limits.MAX}");
     // 100

@@ -32,7 +32,7 @@ class LoudGreeter extends Greeter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     LoudGreeter g = new LoudGreeter();
     Output.printLine(g.greet());

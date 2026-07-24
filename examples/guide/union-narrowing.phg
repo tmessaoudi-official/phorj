@@ -36,7 +36,7 @@ function squareIfInt(int | string v): int {
 
 // Narrowing composes with everything else: here a `List` of a union type is iterated, and each
 // element is discriminated in turn.
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine(render(42));
     Output.printLine(render(3.14));

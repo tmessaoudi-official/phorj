@@ -9,6 +9,12 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
     print_program(&phorj)
 }
 
+/// DEC-331 D1: the lifted entry is always a CLI script (PHP has no entry-role concept), so it
+/// carries `#[Entry(kind: Cli)]` — the role is declared, never inferred.
+fn entry_cli_attr() -> crate::ast::Attribute {
+    crate::ast::entry_attr("Cli", SP)
+}
+
 /// Lift a parsed PHP program into a Phorj program (`package Main; import Core.Runtime.Entry;`).
 pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     // DEC-312: reset the per-lift native-module recorder (never leak across runs on this thread).
@@ -28,11 +34,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
                     has_main = true;
                     // DEC-191: a PHP `main` is the entry INTENT — the lifted draft attributes it
                     // so it actually runs (entries are attribute-declared, never name-magic).
-                    lifted.attrs.push(crate::ast::Attribute {
-                        name: "Entry".to_string(),
-                        args: Vec::new(),
-                        span: SP,
-                    });
+                    lifted.attrs.push(entry_cli_attr());
                 }
                 items.push(Item::Function(lifted));
             }
@@ -54,12 +56,8 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         }
         items.push(Item::Function(FunctionDecl {
             modifiers: Vec::new(),
-            // DEC-191: the synthesized entry carries #[Entry] (attribute-declared, no name magic).
-            attrs: vec![crate::ast::Attribute {
-                name: "Entry".to_string(),
-                args: Vec::new(),
-                span: SP,
-            }],
+            // DEC-191: the synthesized entry carries #[Entry(kind: Cli)] (attribute-declared).
+            attrs: vec![entry_cli_attr()],
             vis: crate::ast::Visibility::Public,
             name: "main".into(),
             type_params: Vec::new(),

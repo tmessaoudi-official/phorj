@@ -12,7 +12,7 @@ import Core.Output;
 import Core.List;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var xs = [10, 20, 30, 40, 50];
     // slice: a window; negative offset counts from the end.

@@ -19,7 +19,7 @@ import Core.Output;
 import Core.String;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // %s formats any scalar; %d an int; the values are a (possibly heterogeneous) list, by position.
     Output.printLine(String.format("%s owes %d coins", ["Ada", 3]));

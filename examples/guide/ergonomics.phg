@@ -4,7 +4,7 @@ import Core.Output;
 import Core.Runtime.Entry;
 
 // M3 S1 "core ergonomics": list indexing, integer ranges, and expression `if`.
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Indexing: read elements out of a list by position.
     List<int> xs = [10, 20, 30];

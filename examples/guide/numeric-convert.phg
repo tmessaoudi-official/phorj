@@ -21,7 +21,7 @@ import Core.Math;
 import Core.Conversion;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // --- Float predicates. The special values are detected, not printed (printing NAN/INF would
     // diverge between Rust and PHP rendering). The bool results ARE byte-identical.

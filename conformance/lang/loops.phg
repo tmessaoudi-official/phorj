@@ -5,7 +5,7 @@ package Main;
 import Core.Output;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // while: test before each iteration; compound-assign accumulates.
     mutable int i = 0;

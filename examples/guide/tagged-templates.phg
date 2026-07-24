@@ -31,7 +31,7 @@ class Bracket {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     string a = "one";
     string b = "two";

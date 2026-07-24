@@ -5,7 +5,7 @@ import Core.Runtime.Entry;
 
 // M-mut.3 — condition loops, made useful by mutation: `while`, `do-while`, C-style `for`,
 // while-let, plus `break` and `continue`. Every loop lowers to plain jumps (no new opcode).
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // `while`: test before each iteration.
     mutable int i = 0;

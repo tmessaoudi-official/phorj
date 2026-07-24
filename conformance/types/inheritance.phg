@@ -25,7 +25,7 @@ class Cat extends Animal {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Animal a = new Dog();
     Animal b = new Cat();

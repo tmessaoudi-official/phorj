@@ -12,7 +12,7 @@ import Core.Output;
 import Core.Random;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // A fixed seed makes the stream reproducible — the same seed always replays the same rolls.
     Random.seed(2026);

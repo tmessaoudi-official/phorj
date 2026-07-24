@@ -18,7 +18,7 @@ function emptyInts(): List<int> {
     return new List<int>();
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     List<string> names = new List<string>();
     Map<string, int> counts = new Map<string, int>();

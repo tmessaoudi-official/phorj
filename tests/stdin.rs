@@ -32,7 +32,7 @@ import Core.Runtime.Entry;
 import Core.Output;
 import Core.Input;
 import Core.String;
-#[Entry] function main(): void {
+#[Entry(kind: Cli)] function main(): void {
     string all = Input.readAll();
     Output.printLine("len={String.length(all)}");
     Output.printLine(all);
@@ -47,7 +47,7 @@ import Core.Runtime.Entry;
 import Core.Output;
 import Core.Input;
 import Core.Bytes;
-#[Entry] function main(): void {
+#[Entry(kind: Cli)] function main(): void {
     bytes b = Input.readAllBytes();
     Output.printLine("{Bytes.length(b)}");
 }"#;
@@ -62,7 +62,7 @@ import Core.Runtime.Entry;
 import Core.Output;
 import Core.Input;
 import Core.String;
-#[Entry] function main(): void {
+#[Entry(kind: Cli)] function main(): void {
     mutable int n = 0;
     while (true) {
         string? l = Input.readLine();
@@ -90,7 +90,7 @@ fn lines_iterator_is_foreach_able_and_lazy_past_eof() {
 import Core.Runtime.Entry;
 import Core.Output;
 import Core.Input;
-#[Entry] function main(): void {
+#[Entry(kind: Cli)] function main(): void {
     for (string line in Input.lines()) {
         Output.printLine("> {line}");
     }
@@ -106,7 +106,7 @@ fn read_all_after_read_line_gets_the_remainder() {
 import Core.Runtime.Entry;
 import Core.Output;
 import Core.Input;
-#[Entry] function main(): void {
+#[Entry(kind: Cli)] function main(): void {
     string? first = Input.readLine();
     Output.printLine("first={first ?? "-"}");
     Output.printLine("rest=[{Input.readAll()}]");
@@ -124,7 +124,7 @@ fn is_interactive_is_false_under_a_pipe() {
 import Core.Runtime.Entry;
 import Core.Output;
 import Core.Input;
-#[Entry] function main(): void {
+#[Entry(kind: Cli)] function main(): void {
     Output.printLine("{Input.isInteractive()}");
 }"#;
     // An override models piped (non-tty) stdin.
@@ -137,7 +137,7 @@ fn input_is_import_gated() {
     let src = r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
-#[Entry] function main(): void { Output.printLine(Input.readAll()); }"#;
+#[Entry(kind: Cli)] function main(): void { Output.printLine(Input.readAll()); }"#;
     let err = cmd_treewalk(src).unwrap_err();
     assert!(
         err.contains("Input"),

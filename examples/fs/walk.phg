@@ -18,7 +18,7 @@ import Core.FileSystemModule.FileSystemNotFoundError;
 import Core.FileSystemModule.FileSystemError;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     try {
         string root = "{FileSystem.tempDir()}/phorj-fs-demo";

@@ -4,7 +4,7 @@ package Main;
 import Core.Output;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("{2 + 3 * 4}");
     Output.printLine("{(2 + 3) * 4}");

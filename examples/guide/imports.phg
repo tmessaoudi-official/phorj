@@ -18,7 +18,7 @@ import Core.Time.Instant;
 import Core.Time.Duration;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Functions: module-qualified calls.
     string shout = String.upperCase("phorj imports");

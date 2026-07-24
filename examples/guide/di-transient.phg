@@ -56,7 +56,7 @@ class App {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     App app = inject<App>();
     Output.printLine(app.report());

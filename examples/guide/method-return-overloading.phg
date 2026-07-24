@@ -33,7 +33,7 @@ class Config {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Config c = new Config("prod");
     // Each selector names which overload's return type the call must produce.

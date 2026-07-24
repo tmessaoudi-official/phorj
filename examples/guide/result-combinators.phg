@@ -30,7 +30,7 @@ function parse(string s): Result<int, string> {
     };
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // map — transform a Success payload; a Failure passes through untouched.
     Output.printLine("{parse(\"2\").map(function(int x) => x * 10).getOrElse(0)}");

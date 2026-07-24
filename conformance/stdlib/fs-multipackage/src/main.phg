@@ -8,7 +8,7 @@ import Core.Output;
 import Storage;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("root " + Storage.describeRoot());
     Output.printLine("ghost " + Storage.describeGhost());

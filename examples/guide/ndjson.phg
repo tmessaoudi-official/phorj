@@ -12,7 +12,7 @@ import Core.Output;
 import Core.Json;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Build three records and dump them as NDJSON (one compact JSON value per line).
     List<Json> records = [

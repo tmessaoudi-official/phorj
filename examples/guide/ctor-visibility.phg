@@ -28,7 +28,7 @@ class Counter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var a = Counter.zero;
     var b = a.next().next();

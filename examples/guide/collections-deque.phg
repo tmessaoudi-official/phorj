@@ -19,7 +19,7 @@ import Core.List;
 import Core.Deque;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Empty deque of strings — `T` = string is inferred from the `List<string>` seed.
     var d = new Deque(new List<string>());

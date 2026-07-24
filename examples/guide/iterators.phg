@@ -45,7 +45,7 @@ function total(Iterator<int> it): int {
     return sum;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     for (int x in new Countdown(3)) {
         Output.printLine("{x}");

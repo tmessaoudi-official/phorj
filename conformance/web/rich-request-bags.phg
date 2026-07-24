@@ -16,7 +16,7 @@ function row(string label, string value): void {
     Output.printLine("{label}: {value}");
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // First-wins + getAll + has + getOrDefault on the query bag.
     Request q = Request.fake("GET", "/s?k=first&k=second&other=1");

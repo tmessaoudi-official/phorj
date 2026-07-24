@@ -69,7 +69,7 @@ class Formatter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine(describe(42));
     Output.printLine(describe("hi"));

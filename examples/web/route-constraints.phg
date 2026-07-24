@@ -37,7 +37,7 @@ function show(Router rt, string method, string path): void {
     Output.printLine("{method} {path} -> {st}: {body}");
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Router rt = new Router(
         new List<Route>(),

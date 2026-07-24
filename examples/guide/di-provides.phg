@@ -38,7 +38,7 @@ class Repo {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Repo r = inject<Repo>();
     Output.printLine(r.status());

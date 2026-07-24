@@ -18,7 +18,7 @@ import Core.List;
 import Core.Process;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(List<string> args): int {
     Output.printLine("argc = {List.length(args)}");
     for (string s in args) {

@@ -13,7 +13,7 @@ import Core.DebugModule.Debug;
 import Acme.Widget;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Widget w = new Widget(41);
     Output.printLine("widget: {w.bumped()}");

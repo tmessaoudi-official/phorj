@@ -31,7 +31,7 @@ class Account {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var a = new Account("ada", 100);
     Output.printLine(a.describe());

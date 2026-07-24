@@ -33,7 +33,7 @@ class Util {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var u = new Util();
     // `identity` reused at three different concrete types — one method definition, no duplication.

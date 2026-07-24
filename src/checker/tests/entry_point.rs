@@ -100,38 +100,83 @@ fn instance_method_named_main_is_not_an_entry() {
 }
 
 #[test]
-fn top_level_and_class_static_entry_is_multiple() {
-    // DEC-191: multiplicity is per attributed ROLE, not per name — two CLI entries collide.
-    let src = "#[Entry] function main(): void { } class App { #[Entry] static function main(): void { } }";
-    assert!(has(src, "E-MULTIPLE-ENTRY"), "{:?}", errors_of(src));
+fn top_level_and_class_static_entry_is_duplicate_kind() {
+    // DEC-331 D1: multiplicity is per declared KIND — two `Cli` entries collide.
+    let src = "#[Entry(kind: Cli)] function main(): void { } class App { #[Entry(kind: Cli)] static function main(): void { } }";
+    assert!(has(src, "E-DUPLICATE-ENTRY-KIND"), "{:?}", errors_of(src));
 }
 
 #[test]
-fn two_class_static_entries_is_multiple() {
+fn two_class_static_entries_is_duplicate_kind() {
     let src =
-        "class A { #[Entry] static function main(): void { } } class B { #[Entry] static function main(): void { } }";
-    assert!(has(src, "E-MULTIPLE-ENTRY"), "{:?}", errors_of(src));
+        "class A { #[Entry(kind: Cli)] static function main(): void { } } class B { #[Entry(kind: Cli)] static function main(): void { } }";
+    assert!(has(src, "E-DUPLICATE-ENTRY-KIND"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn cli_and_web_entries_may_coexist() {
-    // DEC-191: one CLI + one web entry in one program is legal — run/serve pick their role.
+    // DEC-331 D1: one Cli + one Web entry in one program is legal — run/serve pick their kind.
     let src = "import Core.Http.Request; import Core.Http.Response; \
-               #[Entry] function cli(): void { } \
-               #[Entry] function web(Request r): Response { return Response.text(\"ok\"); }";
-    assert!(!has(src, "E-MULTIPLE-ENTRY"), "{:?}", errors_of(src));
+               #[Entry(kind: Cli)] function cli(): void { } \
+               #[Entry(kind: Web)] function web(Request r): Response { return Response.text(\"ok\"); }";
+    assert!(!has(src, "E-DUPLICATE-ENTRY-KIND"), "{:?}", errors_of(src));
+    assert!(!has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn entry_on_instance_method_is_target_error() {
-    let src = "class App { #[Entry] function run(): void { } }";
+    let src = "class App { #[Entry(kind: Cli)] function run(): void { } }";
     assert!(has(src, "E-ENTRY-TARGET"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn entry_with_unmatched_signature_is_sig_error() {
-    let src = "#[Entry] function main(int x): void { }";
+    let src = "#[Entry(kind: Cli)] function main(int x): void { }";
     assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
+}
+
+// ── DEC-331 D1: `#[Entry(kind:)]` is required; kind must be recognized & match the signature ──
+
+#[test]
+fn bare_entry_without_kind_is_required_error() {
+    let src = "#[Entry] function main(): void { }";
+    assert!(has(src, "E-ENTRY-KIND-REQUIRED"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn unknown_entry_kind_is_unknown_error() {
+    let src = "#[Entry(kind: Banana)] function main(): void { }";
+    assert!(has(src, "E-ENTRY-KIND-UNKNOWN"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn reserved_entry_kind_is_reserved_error() {
+    for k in ["Desktop", "Mobile", "Worker", "Embedded"] {
+        let src = format!("#[Entry(kind: {k})] function main(): void {{ }}");
+        assert!(
+            has(&src, "E-ENTRY-KIND-RESERVED"),
+            "{k}: {:?}",
+            errors_of(&src)
+        );
+    }
+}
+
+#[test]
+fn web_kind_on_cli_signature_is_sig_error() {
+    // Declared `kind: Web` but the signature is CLI-shaped — the kind↔signature disagreement.
+    let src = "#[Entry(kind: Web)] function main(): void { }";
+    assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn well_formed_cli_and_web_kinds_are_clean() {
+    assert!(!has(
+        "#[Entry(kind: Cli)] function main(): void { }",
+        "E-ENTRY-KIND-REQUIRED"
+    ));
+    let web = "import Core.Http.Request; import Core.Http.Response; \
+               #[Entry(kind: Web)] function h(Request r): Response { return Response.text(\"ok\"); }";
+    assert!(!has(web, "E-ENTRY-SIG"), "{:?}", errors_of(web));
 }
 
 #[test]

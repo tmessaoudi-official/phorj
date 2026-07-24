@@ -11,7 +11,7 @@ import Core.Bytes;
 import Core.Hash;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var data = Bytes.fromString("Hello, Phorj!");
     Output.printLine("crc32:  {Hash.crc32(data)}");

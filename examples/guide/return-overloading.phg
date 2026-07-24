@@ -32,7 +32,7 @@ function port(): int {
     return read("port");
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // A typed binding resolves the overload from the declared type — no selector (C2 sink).
     int p = port();

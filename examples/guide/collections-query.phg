@@ -13,7 +13,7 @@ import Core.List;
 import Core.Map;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // --- Core.List: reverse (generic) + sum (concrete List<int> -> int) ---
     var nums = [1, 2, 3, 4, 5];

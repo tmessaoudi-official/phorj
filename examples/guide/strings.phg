@@ -7,7 +7,7 @@ function greet(string who): string {
     return "Hello, {who}!";
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     string name = "Phorj";
     int n = 3;

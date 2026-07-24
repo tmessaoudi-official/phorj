@@ -18,7 +18,7 @@ function pad(string s, int width = 6, string fill = " "): string {
     return String.padLeft(s, width, fill);
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine(greet("World"));
     // Hello, World!  (default greeting)

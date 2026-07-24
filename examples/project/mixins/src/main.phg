@@ -20,7 +20,7 @@ class Speaker {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var s = new Speaker(7, "ada");
     Output.printLine(s.announce(s.name));

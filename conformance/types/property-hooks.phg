@@ -26,7 +26,7 @@ class Account {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Account a = new Account(50);
     Output.printLine("balance {a.balance} empty {a.isEmpty}");

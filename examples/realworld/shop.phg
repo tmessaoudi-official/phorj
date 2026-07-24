@@ -28,7 +28,7 @@ function bulk(int unit, int n): int {
     return unit + bulk(unit, n - 1);
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     List<Item> cart = [
         new Item("Widget", 1000, new None()),

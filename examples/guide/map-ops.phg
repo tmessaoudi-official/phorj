@@ -14,7 +14,7 @@ import Core.Output;
 import Core.Map;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var ages = ["alice" => 30, "bob" => 25];
     // get: present → value (via `??` to unwrap the optional), absent → fallback.

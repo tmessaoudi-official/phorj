@@ -23,7 +23,7 @@ class MathUtil {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("square(5) = {MathUtil.square(5)}");
     Output.printLine("describe = {MathUtil.describe()}");

@@ -25,7 +25,7 @@ function weight(Box b): int {
     return 1 + (match (b) { Small(n) => n, Big(n) => n * 10 });
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     int base = 100;
     // expression position: a literal match used as the left operand of `+` → native `match ($subj)`

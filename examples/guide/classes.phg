@@ -22,7 +22,7 @@ class Car {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Car c = new Car("Phorj", new Engine(250));
     Output.printLine("{c.makeOf()} has {c.horsepower()} hp");

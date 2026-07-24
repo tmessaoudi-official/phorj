@@ -31,7 +31,7 @@ class Banner {
     string caption = "bias={new Adder(3)}";
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Adder a = new Adder(10);
     // `a(5)` selects the arity-1 #[Invoke]; `a(1, 2)` the arity-2 one; `a.add(5)` is the same

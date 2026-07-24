@@ -23,7 +23,7 @@ function adder(int n): (int) => int {
     return function(int x) => x + n;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var add10 = function(int x) => x + 10;
     // expression-body lambda (return type inferred)

@@ -80,7 +80,7 @@ fn install_git_dependency_then_loader_resolves_it() {
     // An app that requires it by git.
     let app = ws.join("app");
     std::fs::create_dir_all(&app).unwrap();
-    std::fs::write(app.join("main.phg"), "package Main;\n\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Acme.Greet;\n\n#[Entry]\nfunction main(): void {\n  Output.printLine(Greet.hello());\n}\n").unwrap();
+    std::fs::write(app.join("main.phg"), "package Main;\n\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Acme.Greet;\n\n#[Entry(kind: Cli)]\nfunction main(): void {\n  Output.printLine(Greet.hello());\n}\n").unwrap();
 
     let source = SourceSpec::Git {
         url: repo.to_string_lossy().to_string(),

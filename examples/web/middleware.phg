@@ -56,7 +56,7 @@ function show(Router rt, bytes raw): void {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // `logging` applies to every route; the `/admin` group adds `requireAuth` to just its routes.
     Router rt = new Router(

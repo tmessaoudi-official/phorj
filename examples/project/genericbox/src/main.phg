@@ -8,7 +8,7 @@ import Acme.Containers.Box;
 import Acme.Containers.Pair;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var bi = new Box(7);
     // Box<int>  — T inferred from `7`

@@ -16,8 +16,8 @@ fn run(src: &str) -> Result<String, String> {
 fn with_pkg(src: &str) -> String {
     // DEC-191: inject the `#[Entry]` attribute before a bare `function main(` (same convenience
     // as `cli::tests::wp`) so the VM unit programs need no per-case ceremony.
-    let src = if src.contains("function main") && !src.contains("#[Entry]") {
-        src.replacen("function main", "#[Entry] function main", 1)
+    let src = if src.contains("function main") && !src.contains("#[Entry") {
+        src.replacen("function main", "#[Entry(kind: Cli)] function main", 1)
     } else {
         src.to_string()
     };
@@ -28,7 +28,7 @@ fn with_pkg(src: &str) -> String {
     };
     // DEC-191 addendum: import-gated attribute — inject the import AFTER the package segment
     // (imports may not precede `package`); same-line, preserving line numbers.
-    if src.contains("#[Entry]") && !src.contains("Core.Runtime.Entry") {
+    if src.contains("#[Entry") && !src.contains("Core.Runtime.Entry") {
         let i = src.find(';').expect("package decl ends with ;");
         format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
     } else {
@@ -101,7 +101,7 @@ function main() -> void { Output.printLine("{1 / 0}"); }"#)
 #[test]
 fn missing_main_is_compile_error() {
     let e = run(r#"function other() -> void {}"#).unwrap_err();
-    assert!(e.contains("#[Entry]"), "{e}");
+    assert!(e.contains("#[Entry"), "{e}");
 }
 
 #[test]

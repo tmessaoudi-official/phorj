@@ -28,7 +28,7 @@ function countAfter(string tag, int ...codes): int {
     return n;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("sum(1,2,3) = {sum(1, 2, 3)}");
     Output.printLine("sum() = {sum()}");

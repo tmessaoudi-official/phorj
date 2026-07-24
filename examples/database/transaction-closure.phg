@@ -56,7 +56,7 @@ class Attempts {
 
 // (The extra line above #[Entry] is deliberate: it sidesteps a LATENT span-collision bug
 // between user-code and injected-prelude rewrite keys — tracked in KNOWN_ISSUES §span-collision.)
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

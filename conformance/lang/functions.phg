@@ -16,7 +16,7 @@ function applyTwice(int x, (int) => int f): int {
     return f(f(x));
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine("{fact(5)}");
     Output.printLine(greet("Ada"));

@@ -20,7 +20,7 @@ class Counter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     mutable Counter c = new Counter(10);
     // Direct field set.

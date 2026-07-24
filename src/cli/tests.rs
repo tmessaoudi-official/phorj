@@ -9,8 +9,8 @@ fn wp(src: &str) -> String {
     // DEC-191: the run-path tests need an attributed entry — inject `#[Entry]` before a bare
     // `function main(` so the ~1000 inline programs don't each repeat the ceremony. A test that
     // writes its own `#[Entry]` (or has no main) is passed through untouched.
-    let src = if src.contains("function main(") && !src.contains("#[Entry]") {
-        src.replacen("function main(", "#[Entry] function main(", 1)
+    let src = if src.contains("function main(") && !src.contains("#[Entry") {
+        src.replacen("function main(", "#[Entry(kind: Cli)] function main(", 1)
     } else {
         src.to_string()
     };
@@ -21,7 +21,7 @@ fn wp(src: &str) -> String {
     };
     // DEC-191 addendum: the attribute is import-gated — inject its import once too, AFTER the
     // package segment (imports may not precede `package`); same-line, preserving line numbers.
-    if src.contains("#[Entry]") && !src.contains("Core.Runtime.Entry") {
+    if src.contains("#[Entry") && !src.contains("Core.Runtime.Entry") {
         let i = src.find(';').expect("package decl ends with ;");
         format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
     } else {
@@ -51,7 +51,7 @@ class Greeter {
     function greet(): string { return "Hello {this.name}"; }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Greeter g = new Greeter("Tak");
     Output.printLine(g.greet());
@@ -178,7 +178,7 @@ fn library_file_without_main_checks_and_transpiles_but_run_errors_clearly() {
     );
     let run_err = cmd_treewalk(&lib).unwrap_err();
     assert!(
-        run_err.contains("no entry point") && run_err.contains("#[Entry]"),
+        run_err.contains("no entry point") && run_err.contains("#[Entry"),
         "run error: {run_err}"
     );
     let vm_err = cmd_run(&lib).unwrap_err();

@@ -22,7 +22,7 @@ function announce(string msg): void {
     Output.printLine(msg);
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     int sum = add(2, 3);
     // used — bound to a typed local

@@ -35,7 +35,7 @@ function report(Result<int, string> r): string {
     return match (r) { Success(v) => "ok {v}", Failure(e) => "err {e}" };
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var some = new Some(7);
     // Option<int> — T inferred from `7`

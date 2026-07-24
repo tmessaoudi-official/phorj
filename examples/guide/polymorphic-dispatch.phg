@@ -32,7 +32,7 @@ class Cat implements Speaker {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     mutable int acc = 0;
     mutable int i = 0;

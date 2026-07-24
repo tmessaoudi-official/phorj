@@ -44,7 +44,7 @@ fn phg_run_hook_hits_the_jit_on_the_listfilter_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "listfilter vertical");
 }
 
@@ -66,7 +66,7 @@ fn jit_listfilter_survivors_keep_order_and_values() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "listfilter order/values");
 }
 
@@ -85,7 +85,7 @@ fn jit_listfilter_all_rejected_is_an_empty_list() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "listfilter empty survivors");
 }
 
@@ -110,7 +110,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapfilter_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "mapfilter vertical");
 }
 
@@ -135,7 +135,7 @@ fn jit_mapfilter_result_answers_gets_and_builder_sets() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "mapfilter get/set compat");
 }
 
@@ -154,7 +154,7 @@ fn jit_mapfilter_all_rejected_is_an_empty_map() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "mapfilter empty survivors");
 }
 
@@ -181,7 +181,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapmap_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "mapmap vertical");
 }
 
@@ -205,7 +205,7 @@ fn jit_mapmap_preserves_key_association_and_order() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "mapmap association/order");
 }
 
@@ -227,7 +227,7 @@ fn jit_mapmap_transform_overflow_faults_byte_identically_to_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(3)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(3)}\"); }";
     let jit = crate::cli::cmd_run(SRC).expect_err("overflowing transform must fault");
     let oracle = crate::cli::cmd_treewalk(SRC).expect_err("oracle must fault");
     assert_eq!(jit, oracle, "fault strings must be byte-identical");

@@ -69,7 +69,7 @@ function shout(string? name): string {
     return name + "!";
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Output.printLine(classify(21));
     // int:42

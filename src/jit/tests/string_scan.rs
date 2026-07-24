@@ -45,7 +45,7 @@ fn phg_run_hook_hits_the_jit_on_the_stringcontains_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
     assert_jit_hits(SRC, "stringcontains vertical");
 }
 
@@ -70,7 +70,7 @@ fn jit_stringcontains_edge_needles_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(600)}\"); }";
     assert_jit_hits(SRC, "stringcontains edges");
 }
 
@@ -101,7 +101,7 @@ fn phg_run_hook_hits_the_jit_on_the_isemail_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
     assert_jit_hits(SRC, "isemail vertical");
 }
 
@@ -130,7 +130,7 @@ fn phg_run_hook_hits_the_jit_on_the_isurl_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
     assert_jit_hits(SRC, "isurl vertical");
 }
 
@@ -162,7 +162,7 @@ fn jit_string_memo_survives_direct_mapped_collisions() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
     assert_jit_hits(SRC, "string memo collisions");
 }
 
@@ -185,6 +185,6 @@ fn jit_stringcontains_still_works_through_interpolated_owned_strings() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(600)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(600)}\"); }";
     assert_jit_hits(SRC, "stringcontains owned haystack");
 }

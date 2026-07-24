@@ -30,7 +30,7 @@ import Core.Output;
 import Core.FileSystemModule;
 import Core.FileSystemModule.FileSystem;
 import Core.FileSystemModule.FileSystemError;
-#[Entry] function main(): void {{
+#[Entry(kind: Cli)] function main(): void {{
   try {{
     FileSystem.createDir("{root}/a/b");
     FileSystem.writeText("{root}/a/one.txt", "hello");
@@ -73,7 +73,7 @@ import Core.FileSystemModule.FileSystemNotFoundError;
 import Core.FileSystemModule.FileSystemDirNotEmptyError;
 import Core.FileSystemModule.FileSystemPermissionDeniedError;
 import Core.FileSystemModule.FileSystemError;
-#[Entry] function main(): void {{
+#[Entry(kind: Cli)] function main(): void {{
   try {{
     try {{
       discard FileSystem.readText("{root}/absent.txt");
@@ -114,7 +114,7 @@ fn fs_transpiles_and_matches_the_backends_on_php() {
 import Core.Runtime.Entry;
 import Core.Output;
 import Core.FileSystemModule;
-#[Entry] function main(): void { Output.printLine("x"); }
+#[Entry(kind: Cli)] function main(): void { Output.printLine("x"); }
 "#;
     let php_src = cmd_transpile(src).expect("FS import transpiles (DEC-313)");
     assert!(
@@ -142,7 +142,7 @@ import Core.FileSystemModule.FileSystemNotFoundError;
 import Core.FileSystemModule.FileSystemDirNotEmptyError;
 import Core.FileSystemModule.FileSystemPermissionDeniedError;
 import Core.FileSystemModule.FileSystemError;
-#[Entry] function main(): void {{
+#[Entry(kind: Cli)] function main(): void {{
   try {{
     try {{
       discard FileSystem.readText("{root}/absent.txt");

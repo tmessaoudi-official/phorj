@@ -17,7 +17,7 @@ import Core.Runtime.Entry;
 import Core.Output;
 import Core.Runtime;
 function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }
-#[Entry] function main() -> void {
+#[Entry(kind: Cli)] function main() -> void {
     Runtime.resetPeakMemory();
     int t0 = Runtime.monotonicNanos();
     int r = fib(25);

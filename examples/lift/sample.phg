@@ -15,7 +15,7 @@ open class Counter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     mutable var c = new Counter(41);
     Output.print(greet("Phorj"));

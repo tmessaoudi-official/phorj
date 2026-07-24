@@ -18,7 +18,7 @@ class Person {
     constructor(public string name, public int age) {}
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     List<Person> people = [
         new Person("Ada", 30),

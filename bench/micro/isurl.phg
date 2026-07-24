@@ -30,7 +30,7 @@ function bench(int iters): int {
     return acc;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     int iters = 3000000;
     int warm = bench(iters);

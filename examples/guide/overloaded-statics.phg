@@ -36,7 +36,7 @@ open class Color {
 class Swatch extends Color {
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Color a = Color.of(128);
     // -> of(int)

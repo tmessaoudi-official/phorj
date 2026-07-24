@@ -11,7 +11,7 @@ import Core.Bytes;
 import Core.Encoding;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     var data = Bytes.fromString("Hello, Phorj!");
     // Encode to base64 and hex.

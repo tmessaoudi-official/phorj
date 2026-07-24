@@ -9,9 +9,11 @@ use crate::token::Span;
 // using `crate::ast::{free_vars, class_implements, ...}` unchanged.
 mod class_hierarchy;
 mod class_layout;
+mod entry;
 mod walk;
 pub use class_hierarchy::*;
 pub use class_layout::*;
+pub use entry::*;
 pub use walk::*;
 
 /// Type annotations (e.g. `int`, `List<Shape>`, `T?`).

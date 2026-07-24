@@ -54,7 +54,7 @@ function build(): App {
     return inject();
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // EXPLICIT target type.
     App app = inject<App>();

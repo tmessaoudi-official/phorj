@@ -6,7 +6,7 @@ import Core.Time.Date;
 import Core.Time.Instant;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     Date d = Date.of(2023, 11, 14);
     Output.printLine("{d.toString()}");

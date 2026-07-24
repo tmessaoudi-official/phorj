@@ -46,6 +46,26 @@ manifest is a deliberate all-source-kinds illustration ("this demo uses a local 
 multi-file/vendored FS in wasm so `package-manager/`, `project/*`, `interop/*` examples actually RUN
 in the browser (its own slice; touches `gen_examples.py` + `main.js` + the wasm wrapper).
 
+**⚖️ QUEUED — IMPORT & VISIBILITY DESIGN CLUSTER (dev ruled AskUserQuestion, 2026-07-24; specs are the
+SSOT — this is a pointer per Inv 19, not a duplicate):**
+- **QUEUED Q-A — Wildcard & group imports** — spec `docs/specs/2026-07-24-wildcard-imports.md`
+  (**RULED — BUILD-READY**). Forms `import X.Y.*;` + `import X.Y.{A,B};` + `except {…}`;
+  eager-collision error (`E-IMPORT-AMBIGUOUS`); public+internal binding, shallow (no sub-packages),
+  no bare `Core.*`; group-only aliasing; empty/absent-except = hard errors; compile-time expansion
+  (Inv 5) → sorted per-symbol PHP `use`; format sorts members; `W-UNUSED-IMPORT` (wildcard-scoped);
+  **`E-IMPORT-UNKNOWN`**. New codes: E-IMPORT-AMBIGUOUS/WILDCARD-STDLIB-ROOT/WILDCARD-ALIAS/
+  WILDCARD-EMPTY/EXCEPT-UNKNOWN/IMPORT-UNKNOWN + W-UNUSED-IMPORT.
+- **QUEUED Q-B — Visibility-model completeness** — spec `docs/specs/2026-07-24-visibility-model.md`
+  (RULED). Package HIERARCHY (dotted-prefix ancestor); `internal` REDEFINED = package + descendants,
+  reused on BOTH axes; member `internal` added; **folds the G4 P0 static-field visibility fix**
+  (run≡vm≢PHP break). Built AFTER Q-A.
+- **QUEUED Q-C — Global completeness sweep** (dev asked "what else did we miss/misrepresent") — own
+  research pass: re-synthesize `docs/research/full-audit/` + `roadmap-completeness/` +
+  `2026-07-16-full-reopen-audit.md` + a fresh `/gaps` sweep → ONE ranked completeness register.
+  Scope/approach ruled before it builds. (G5 static-method-via-instance is a candidate finding.)
+- **Sequencing note:** these are QUEUED behind the CURRENT S3 work (S3.1 in flight). Build order
+  within the cluster: Q-A → Q-B; Q-C is research (can run independently).
+
 **✅ DEC-331 SLICE 1 (`#[Invoke]` + `#[ToString]`) BUILT + byte-identity green (2026-07-24)** — see
 the DEC-331 slice-1 register row + spec §8. Shipped: direct `x(args)` invoke calls (overloaded),
 `#[ToString]` in interpolation + `Conversion.toString`, transpile `__toString` delegate, lift

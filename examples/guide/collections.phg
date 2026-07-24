@@ -11,7 +11,7 @@ class Point {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     List<int> nums = [10, 20, 30];
     int count = List.length(nums);

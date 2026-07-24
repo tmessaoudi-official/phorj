@@ -31,7 +31,7 @@ class Greeter {
     }
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     // Direct static calls on the class.
     Output.printLine("square(6) = {MathUtil.square(6)}");

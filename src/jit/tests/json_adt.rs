@@ -51,7 +51,7 @@ fn jit_entry_string_param_marshals_and_hits() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(\\\"hello, marshalled world\\\", 4)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(\\\"hello, marshalled world\\\", 4)}\"); }";
     let out = assert_jit_hits(SRC, "entry str-param marshal");
     // "hello, marshalled world" = 23 bytes (past the 22-byte inline cap, but an entry arg is an
     // untagged handle regardless of length) × 4 iterations = 92.
@@ -73,6 +73,6 @@ fn jit_entry_string_param_empty_and_length_edges() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry] function main(): void { Output.printLine(\"{bench(\\\"\\\", \\\"a fairly long string well past twenty-two bytes\\\", 3)}\"); }";
+        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(\\\"\\\", \\\"a fairly long string well past twenty-two bytes\\\", 3)}\"); }";
     assert_jit_hits(SRC, "entry str-param empty + long");
 }

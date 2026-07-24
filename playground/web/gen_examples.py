@@ -55,7 +55,7 @@ DEFAULT = """package Main;
 import Core.Output;
 import Core.Runtime.Entry;
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     List<string> who = ["world", "Phorj"];
     for (string w in who) {

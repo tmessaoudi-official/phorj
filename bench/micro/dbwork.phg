@@ -36,7 +36,7 @@ function bench(Database db, int iters): int throws DatabaseError {
     return acc;
 }
 
-#[Entry]
+#[Entry(kind: Cli)]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");
