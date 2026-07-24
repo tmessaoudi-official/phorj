@@ -3019,8 +3019,16 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   BUMPED to current rather than churn unrelated existing code (DEC-262 "existing files as M-Decomp
   reaches them" — the shrink campaign owns them). Dev may revert + demand full extraction.
 - **DEC-336 — EXTENSIONLESS `#!`-SHEBANG SOURCES + PERPETUAL EDITOR/LSP CURRENCY (dev-directed
-  2026-07-23, mid-session) — QUEUED (build after the DEC-331 slice-1 `#[Invoke]`/`#[ToString]`
-  tonight; 100%-clear, no open design fork — recorded so it is reopenable/reviewable).** Dev
+  2026-07-23) — ✅ BUILT 2026-07-24.** Scope narrowed on investigation: the RUNTIME side was ALREADY
+  done (DEC-282 — the tokenizer skips a byte-0 `#!` line; `phg run ./bin/console` works on an
+  extensionless file; `tests/cli.rs::shebang_line_is_skipped_and_bare_file_dispatches_to_run`). This
+  slice added the EDITOR association: VS Code language `firstLine` `^#!.*\bphg\b` (an extensionless
+  `#!…phg` file is recognized as `phorj`; the LSP selects by language id + activates `onLanguage:phorj`,
+  so diagnostics/completion attach automatically — no `*.phg` glob dependency), a TextMate shebang
+  highlight rule, vscode `0.4.0`→`0.5.0`, and PhpStorm/LSP4IJ README guidance (filename-pattern
+  mapping for extensionless entries). Autocomplete + project discovery were already comprehensive
+  (SLICE-STATE LSP block). Editors-always-current (Inv 17 + DEC-181) reaffirmed. Original directive
+  text preserved below.** Dev
   directive (verbatim intent): "the lsp/editors vscode and phpstorm need to always be up to date,
   and need to support files with no extensions but with a shebang `phg`, and flawless
   autocompletion and project discovery." Scope: (1) **extensionless script sources** — a file

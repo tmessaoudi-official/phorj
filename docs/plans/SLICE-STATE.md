@@ -7,14 +7,16 @@ the DEC-331 slice-1 register row + spec §8. Shipped: direct `x(args)` invoke ca
 `#[ToString]` in interpolation + `Conversion.toString`, transpile `__toString` delegate, lift
 `__toString`→`#[ToString]`, all guards + `phg explain`, example + 14 tests. **DEFERRED → slice 1b**
 (reopenable): function-type assignability, transpile PHP `__invoke` + multi-invoke shim, lift
-`__invoke`. **DEC-336 scoped down:** shebang LEXING already done (DEC-282); only editor `firstLine`
-association (vscode/phpstorm) remains — the NEXT clear build. **⚠ Inv-13 judgment call (dev review):**
+`__invoke`. **✅ DEC-336 BUILT (2026-07-24):** shebang lexing + extensionless `phg run` were already done
+(DEC-282); this slice added the editor association — VS Code `firstLine` `^#!.*\bphg\b` (LSP attaches
+by language id, so extensionless `#!…phg` files get full diagnostics/completion), TextMate shebang
+rule, vscode 0.5.0, PhpStorm/LSP4IJ README. **⚠ Inv-13 judgment call (dev review):**
 5 grandfathered files' `size-baseline.txt` entries bumped for irreducible integration lines after 7
 clean M-Decomp extractions (register row). Verified here (php-8.4 oracle): fmt + clippy(both) +
 size-gate green; full `--all-features` suite green.
 
-**NEXT WORK:** DEC-336 editor-association slice → then DEC-331 slice 2 (Rich Request) / slice 1b →
-then the DEC-333 roadmap. **CURRENT STATE:** jump to the "LIVE CURSOR" block below. Speccing wave
+**NEXT WORK:** DEC-331 slice 2 (Rich Request v1) or slice 1b (invoke-as-callable-value) → then the
+DEC-333 perf roadmap. (DEC-331 slice 1 + DEC-336 both shipped this night.) **CURRENT STATE:** jump to the "LIVE CURSOR" block below. Speccing wave
 COMPLETE (8 specs, all P-points answered). DEC-334 config-catalog QUEUED; DEC-335 `Any`+`Object`
 RULED (build queued). Perf campaign CLOSED at 44 WIN / 4 LOSS (dev-box canonical, scorecard UPDATE 10).
 
