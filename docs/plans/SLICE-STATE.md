@@ -15,6 +15,14 @@ rule, vscode 0.5.0, PhpStorm/LSP4IJ README. **⚠ Inv-13 judgment call (dev revi
 clean M-Decomp extractions (register row). Verified here (php-8.4 oracle): fmt + clippy(both) +
 size-gate green; full `--all-features` suite green.
 
+**PERF RE-RULING (dev, 2026-07-24 mid-slice-2 — supersedes the DEC-333 phase order):** the JIT must
+WIN ALL micro benches BEFORE the AOT perf hunt/refactor starts. Dev-box scorecard at ruling: 44 WIN /
+5 LOSS — `jsonround 0.31x`, `listcontains 0.82x` (regressed on the dev box vs the container flip),
+`floatmul 0.93x`, `deepjson 0.94x`, `dbwork 1.00x`. Order is now: finish slice 2 (in flight) →
+**flip the 5 losses** (the Json-ADT JIT slice covers jsonround/deepjson; listcontains needs a
+regression re-probe on the dev box) → slice 1b/3 per D10a → THEN DEC-333 AOT M1-M3. Recorded in the
+register as the DEC-333 amendment row.
+
 **NEXT WORK (dev-ruled 2026-07-24, pre-compact): ▶ DEC-331 SLICE 2 — RICH REQUEST v1** (spec
 `docs/specs/2026-07-23-rich-request.md`, RULED + BUILD-READY — read it FIRST). Slice 1b
 (invoke-as-callable-value) stays QUEUED behind it; then slice 3 (Entry-kinds/serve/TLS), then the
