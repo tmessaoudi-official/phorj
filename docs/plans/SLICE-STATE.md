@@ -48,17 +48,32 @@ completeness CLEAN, correctness 1 LOW (NullMark operand-transient, folded); roun
 immediate-Eq/Ne-only, v7). At cap-5 the dev RULED (AskUserQuestion): "one confirming round, then
 build" → round 6 done, findings folded, BUILD STARTED.
 
-**▶▶ BUILD PROGRESS (green + pushed increments, DEC-333 Json-ADT):**
-- (1) `85d1994` — compile.rs M-Decomp split → compile/{mod,run}.rs (Inv 13, pre-feature).
-- (2) `4a96c86` — `BytecodeProgram.canonical_json` compiler fact (injected&&name&&shape stamp).
-- (3) `6604aff` — `Function.str_params` entry-ABI fact (is_string_type, root-only seed intent).
-**NEXT (the interdependent codegen block — one large commit, breaks ~15 exhaustive matches at
-once, recompiles only when all decline-arms land):** src/jit/analyze/kinds.rs — add
-`Kind::{Json(JRef,Own), JMap(Own), JList(Own), NullMark}` + the mandatory join_kind (NullMark
-arm BEFORE the a==b short-circuit), borrowed_copy, is_handle, is_owned_handle, join_unknown_bottom
-arms; then the analyze/emit/collect/compile arms per the plan below; then json_ext.rs helpers
-(5-site wiring); then tests; then the WIN-OR-FLAG perf measurement. A fresh session resumes from
-the plan below (v7 is complete — no more gate rounds owed). Baseline measured this container:
+**▶▶ BUILD PROGRESS — DEC-333 Json-ADT (described by CONTENT, not SHA: the dev re-signs history,
+so hashes churn; each item below is green + pushed, verify via `git log`):**
+- (1) DONE — compile.rs M-Decomp split → `src/jit/compile/{mod,run}.rs` (Inv 13, pre-feature;
+  run+run_unboxed in run.rs, compile/compile_unboxed/Drop in mod.rs).
+- (2) DONE — `BytecodeProgram.canonical_json: Option<u32>` fact (stamp = injected && name=="Json"
+  && 7-variant shape, in compiler/program.rs; helper `is_canonical_json_shape`).
+- (3) DONE — `Function.str_params` entry-ABI fact (recognizer `is_string_type`; dyn_params twin).
+- (4) DONE — `Kind::{Json(JRef,Own), JMap(Own), JList(Own), NullMark}` + `JRef` + FULL lattice in
+  analyze/kinds.rs: join_kind (NullMark→None BEFORE the a==b fast-path; Json V⊔V→Any via
+  join_jref; JMap/JList), borrowed_copy, is_handle (+JMap/JList), is_owned_handle (+JMap/JList
+  Owned, Json(_,Owned)). KEY FACT: every exhaustive Kind match in the tree is catch-all-terminated,
+  so the variants decline EVERYWHERE by default — universal-decline was FREE, zero match breakage;
+  each future op arm lights ONE path in isolation. Variants carry a temporary `#[allow(dead_code)]`
+  (REMOVE when the constructing arms land in step 5).
+**NEXT — step (5), the constructing codegen block (per the plan below; removes the dead_code
+allows as kinds go live):** read `canonical_json` into `UbGraphInfo` (with `entry_idx` for the
+str_params root-only seed [R3-comp-F1]); the `GetLocal;MatchTag;JumpIfFalse` refinement peephole
+(edge-split in propagate); the analyze+emit arms MakeEnum(canonical range, arity≤1) / MatchTag /
+GetEnumField(0) (Owned→DECLINE) / Op::Index-on-JList (BEFORE the arm_index_str_list catch-all) /
+Core.List.length-JList / Core.Map.get-JMap / Eq-Ne(Json,NullMark) / GetLocal-SetLocal-Pop of Json
+(tag-gated, clone-before-release) / Call-CallMethod Json args (top-level pk==Json branch) /
+3-return internal ABI (make_fn_sig ret-kind + emit_call_to evars/results[2] + fault-exit/Return
+arity) / entry gates + str marshal in compile/run.rs / join_unknown_bottom Json arms; then
+`src/jit/handles/json_ext.rs` helpers (5-site wiring + cfg-json stubs); then tests
+(src/jit/tests/json_adt.rs); then the WIN-OR-FLAG perf measurement. v7 plan below is COMPLETE — no
+gate rounds owed (6C MAXIMAL panel owed AFTER the build). Baseline measured this container:
 jsonround 0.30x, deepjson 0.90x (php-8.5.8+opcache local, scratchpad build — rebuild via
 build-php85.sh after container reset).**
 

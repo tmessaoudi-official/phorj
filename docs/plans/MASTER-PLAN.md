@@ -172,8 +172,8 @@ narrow `Kind::SetList` for `bs[i%4]`, inline `Set.size`; setintersection 1.40× 
 4 LOSS** (dev ran the full 48-micro suite on the dev box — scorecard UPDATE 10). All 16 flips
 HOLD there; floatloop 1.02×/floatmul 1.04×/dbwork 1.03× are WINs on the dev box (no codegen
 work needed); mapkeys 1.17×/mapvalues 1.07× hold. Remaining 4, with levers: `jsonround` 0.31×
-+ `deepjson` 0.95× → the **Json-ADT JIT slice — IN FLIGHT (2026-07-24): plan v4 + 3C
-gate state live in SLICE-STATE's IN-FLIGHT block (the one canonical home)** (enum cells with string/map/list
++ `deepjson` 0.95× → the **Json-ADT JIT slice — IN FLIGHT (2026-07-24): the full plan + 3C
+gate outcome + live build cursor are in SLICE-STATE's IN-FLIGHT block (the one canonical home — read there, not here)** (enum cells with string/map/list
 payloads via W7 Dyn + `Map<string,Dyn>` + `JsonLazy` unboxed — multi-session, dev to
 prioritize; anatomy in UPDATE 9, DEC-269 pattern); `listcontains` 0.85× + `mapget` 0.96× →
 STABLE-BOX diagnosis only (a memo lever was tried and REVERTED on measured evidence — UPDATE
@@ -183,7 +183,7 @@ close-margin work there — `PHORJ_JIT_DISASM=1` shipped for that session).
 cluster — its specs are dev-ruled (`docs/specs/2026-07-23-*.md`, eight specs incl. DEC-335 —
 D10a order: Invoke/ToString → Rich Request → Entry-kinds/serve/TLS), THEN the perf roadmap:
 (1) Json-ADT JIT slice (flips
-jsonround/deepjson — IN FLIGHT, plan v4 mirrored in SLICE-STATE); (2) AOT full M1-M3 (`phg build --native`: ObjectModule seam → phorj-rt
+jsonround/deepjson — IN FLIGHT, full plan + build cursor in SLICE-STATE); (2) AOT full M1-M3 (`phg build --native`: ObjectModule seam → phorj-rt
 static lib with the embedded-VM code-5 fallback → linked binary + a native differential leg);
 (3) Interpreter campaign FULL A+C+D (NaN-boxed Value + register bytecode/typed-op
 specialization + superinstructions) with the locked `--no-jit` CONTRACT: beat PLAIN php —
