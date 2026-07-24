@@ -530,10 +530,23 @@ pub(super) struct UbGraphInfo {
     /// receive their str kinds from `param_over` (call-site facts); only the root, whose args
     /// arrive marshalled by `run_unboxed`, is seeded here. [DEC-333 R3-comp-F1 / R2-B6]
     pub(super) entry_idx: usize,
+    /// The `enum_descs` base index of the injected canonical `Core.Json` ADT, iff the program
+    /// stamped [`BytecodeProgram::canonical_json`] (three-conjunct: `injected` + name `Json` +
+    /// the 7-variant prelude shape). `None` = no canonical Json in the program (a user look-alike
+    /// `enum Json` never sets it). The Json-ADT op arms read THIS to map a `MakeEnum`/`MatchTag`
+    /// descriptor index to its relative tag 0..6 (Null..Object) — never by sniffing `enum_descs`
+    /// shape. [DEC-333 R2-safety-F5 / R4-corr-2]
+    #[allow(dead_code)] // read by the 5b Json-ADT arms; kept dead until they land.
+    pub(super) canonical_json: Option<u32>,
 }
 
 impl UbGraphInfo {
-    pub(super) fn new(n: usize, n_classes: usize, entry_idx: usize) -> Self {
+    pub(super) fn new(
+        n: usize,
+        n_classes: usize,
+        entry_idx: usize,
+        canonical_json: Option<u32>,
+    ) -> Self {
         Self {
             ret_kinds: vec![None; n],
             this_inst: vec![None; n],
@@ -541,6 +554,7 @@ impl UbGraphInfo {
             param_over: vec![None; n],
             thrown_class: None,
             entry_idx,
+            canonical_json,
         }
     }
     /// The kind a `GetField` of ctor-push-position `j` on class `c` yields (`None` = the

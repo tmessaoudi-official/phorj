@@ -306,6 +306,7 @@ pub(super) fn resolve_unboxed_graph(
         program.functions.len(),
         program.class_descs.len(),
         entry_idx,
+        program.canonical_json,
     );
     let cap = program.functions.len() + 3;
     for _round in 0..cap {

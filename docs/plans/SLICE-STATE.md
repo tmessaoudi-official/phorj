@@ -89,8 +89,16 @@ so hashes churn; each item below is green + pushed, verify via `git log`):**
   (jit-on + --no-default-features) + fmt + size-gate + release build clean. **NOTE: NO Json kind
   is constructed yet — 5a is pure entry-ABI + the two fixes; the `#[allow(dead_code)]` on the Kind
   variants STAYS until 5b.**
+- (5b-i) DONE — `UbGraphInfo.canonical_json: Option<u32>` threaded from `program.canonical_json`
+  (via `UbGraphInfo::new`); `#[allow(dead_code)]` until the arms read it. No behavior change (no
+  arm constructs/reads a Json kind yet); build + jit 156 + differential green.
 **NEXT — step (5b), the constructing codegen block (per the plan below; removes the dead_code
-allows as kinds go live):** read `canonical_json` into `UbGraphInfo`;
+allows as kinds go live). `canonical_json` + `entry_idx` are now in `UbGraphInfo` (5b-i/5a).
+Remaining:** the runtime helpers `src/jit/handles/json_ext.rs` (rt_u_json_parse/map_get/list_len/
+list_get/stringify/clone + jmap build; the (payload,tag) pair encoding — container payloads are
+untagged handles to boxed `Value::Map`/`Value::List`; call `json_parse_str` (pub(crate)) +
+`build_map` + `materialize_if_lazy`; NO-PANIC, `-1`/`code:5` sentinels; 5-site wiring
+helper_refs/declares/symbols/refs + cfg(not(json)) stubs; `alloc_json` mint cap); THEN
 the `GetLocal;MatchTag;JumpIfFalse` refinement peephole
 (edge-split in propagate); the analyze+emit arms MakeEnum(canonical range, arity≤1) / MatchTag /
 GetEnumField(0) (Owned→DECLINE) / Op::Index-on-JList (BEFORE the arm_index_str_list catch-all) /
