@@ -5,7 +5,7 @@
 973	src/checker/calls/methods.rs
 676	src/checker/calls/overloads.rs
 760	src/checker/collect/interfaces.rs
-754	src/checker/collect/types_decls.rs
+772	src/checker/collect/types_decls.rs
 3144	src/checker/desugar_db.rs
 740	src/checker/desugar_di/walker.rs
 534	src/checker/desugar_router.rs
@@ -14,7 +14,7 @@
 619	src/checker/matches.rs
 760	src/checker/mod.rs
 593	src/checker/overloads.rs
-514	src/checker/program/walk.rs
+519	src/checker/program/walk.rs
 560	src/checker/resolve_variant_imports.rs
 652	src/checker/rewrite_generics.rs
 543	src/checker/stmt/core.rs
@@ -23,7 +23,7 @@
 667	src/checker/tests/throws.rs
 680	src/checker/tests/unions.rs
 1998	src/cli/explain.rs
-888	src/cli/pipeline.rs
+899	src/cli/pipeline.rs
 1438	src/cli/preludes.rs
 872	src/cli/tests.rs
 505	src/compiler/cty.rs
@@ -65,10 +65,10 @@
 635	src/serve/transport.rs
 563	src/tokenizer/strings.rs
 699	src/tokenizer/tests.rs
-542	src/transpile/classes.rs
+543	src/transpile/classes.rs
 686	src/transpile/classes_synth.rs
 757	src/transpile/expr.rs
-757	src/transpile/mod.rs
+758	src/transpile/mod.rs
 1374	src/transpile/runtime_php.rs
 596	src/types.rs
 526	src/value/decimal.rs

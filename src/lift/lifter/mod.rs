@@ -32,6 +32,7 @@ const SP: Span = Span {
 /// and prints (L3). Any stage's error propagates as a `lift …` / `printer: …` string.
 mod decls;
 mod exprs;
+mod magic;
 pub use decls::*;
 use exprs::*;
 

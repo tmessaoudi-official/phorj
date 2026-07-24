@@ -177,6 +177,21 @@ impl Attribute {
     pub fn is_route(&self) -> bool {
         attr_path_matches(&self.name, "Core.Http.Route")
     }
+
+    /// True iff this is the `#[Invoke]` callability marker (DEC-331 D9a) — a class instance carrying
+    /// `#[Invoke]` method(s) is callable as `x(args)`. Canonical `Core.Runtime.Invoke`, every import
+    /// form via [`attr_path_matches`]; NOT import-gated (bare `#[Invoke]` is legal with no import — the
+    /// frozen-spec surface). SINGLE SOURCE for checker validation + the `resolve_invoke_tostring` lowering.
+    pub fn is_invoke(&self) -> bool {
+        attr_path_matches(&self.name, "Core.Runtime.Invoke")
+    }
+
+    /// True iff this is the `#[ToString]` stringify marker (DEC-331 D9b) — the one method a class
+    /// stringifies through (interpolation, `Conversion.toString`); strict zero-param → `string`, one
+    /// per class. Canonical `Core.Runtime.ToString`, every import form; NOT import-gated. SINGLE SOURCE.
+    pub fn is_to_string(&self) -> bool {
+        attr_path_matches(&self.name, "Core.Runtime.ToString")
+    }
 }
 
 /// One variant of an enum, with optional associated data fields (`Circle(float radius)`).

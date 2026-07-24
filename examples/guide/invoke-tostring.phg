@@ -1,0 +1,38 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Conversion;
+
+// Attribute-designated conventional methods (DEC-331 D9). `#[Invoke]` makes instances *callable*
+// as `adder(x)` — and overloaded `#[Invoke]` methods dispatch by arity/type; the methods stay
+// directly callable by name too. `#[ToString]` designates the ONE method a class stringifies
+// through, used automatically in interpolation and by `Conversion.toString` (one stringification
+// story). No magic method names — the behaviour rides an attribute on an ordinary method.
+class Adder {
+    constructor(public int bias) {}
+    #[Invoke]
+    function add(int x): int {
+        return x + this.bias;
+    }
+    #[Invoke]
+    function addPair(int x, int y): int {
+        return x + y + this.bias;
+    }
+    #[ToString]
+    function describe(): string {
+        return "Adder(+{this.bias})";
+    }
+}
+
+#[Entry]
+function main(): void {
+    Adder a = new Adder(10);
+    // `a(5)` selects the arity-1 #[Invoke]; `a(1, 2)` the arity-2 one; `a.add(5)` is the same
+    // method called directly. `{a}` and `Conversion.toString(a)` both run #[ToString].
+    Output.printLine("{a(5)}");
+    Output.printLine("{a(1, 2)}");
+    Output.printLine("{a.add(5)}");
+    Output.printLine("{a}");
+    Output.printLine(Conversion.toString(a));
+}

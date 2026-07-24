@@ -11,6 +11,16 @@ fn fmt(src: &str) -> String {
     format(src).unwrap_or_else(|e| panic!("fmt failed: {e:?}\n--- src ---\n{src}"))
 }
 
+#[test]
+fn invoke_and_tostring_attributes_round_trip() {
+    // DEC-331 D9: `#[Invoke]`/`#[ToString]` survive formatting (they are ordinary method attributes).
+    let src = "package Main;\nclass Adder {\nconstructor(public int bias) {}\n#[Invoke] function add(int x): int { return x + this.bias; }\n#[ToString] function describe(): string { return \"A\"; }\n}\n";
+    let out = fmt(src);
+    assert!(out.contains("#[Invoke]"), "lost #[Invoke]:\n{out}");
+    assert!(out.contains("#[ToString]"), "lost #[ToString]:\n{out}");
+    assert_eq!(out, fmt(&out), "not idempotent:\n{out}");
+}
+
 /// `fmt` is idempotent: a second pass changes nothing.
 fn assert_idempotent(src: &str) {
     let once = fmt(src);

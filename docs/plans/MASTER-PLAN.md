@@ -114,9 +114,11 @@ perpetual editor/LSP currency** (100%-clear tooling slice: a `#!…phg` first li
 extensionless file a valid source; VS Code/PhpStorm `firstLine` association; editors always
 current — Inv 17 + DEC-181 reaffirmed).**
 Build cluster, in order (D10a):
-- **(1) `#[Invoke]` + `#[ToString]`** — attribute-designated conventional methods (overloadable
-  `#[Invoke]`, VM-safe via existing overload dispatch; strict zero-param/`string` `#[ToString]`;
-  both stay directly callable). PHP leg: multi-`#[Invoke]` owes a LADDER call (`__invoke` is 1/class).
+- **(1) `#[Invoke]` + `#[ToString]` — ✅ SLICE 1 BUILT (2026-07-24, byte-identity green)** — direct
+  `x(args)` invoke calls (overloadable, VM-safe via existing overload dispatch), `#[ToString]` in
+  interpolation + `Conversion.toString`, transpile `__toString` delegate + lift, all guards. **Slice
+  1b DEFERRED** (reopenable — register row + spec §8): function-type assignability, PHP `__invoke`
+  emission + multi-invoke `__phorj_invoke_dispatch` shim (the owed LADDER call), lift `__invoke`.
 - **(2) Rich Request v1** — immutable, eager/lazy config switch (`Http.ServeConfig.requestParsing`),
   `.get`+`.getAll`, files/multipart IN v1, `body.json():Json?`, case-insensitive headers; replaces
   the thin `Core.Http.Request`.

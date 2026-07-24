@@ -326,7 +326,9 @@ mod tests {
         let prog = crate::parser::Parser::new(toks)
             .parse_program()
             .expect("parse");
-        let (.., table) = crate::checker::check_resolutions(&prog).expect("checks clean");
+        // DEC-331: the invoke/tostring bundle is the last tuple element; `_` absorbs it so `table`
+        // still binds `variant_resolutions`.
+        let (.., table, _) = crate::checker::check_resolutions(&prog).expect("checks clean");
         (prog, table)
     }
 

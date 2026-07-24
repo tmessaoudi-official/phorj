@@ -2991,6 +2991,33 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   slices (labeled/LSB/ArrayAccess/Sandbox — FIVE since DEC-335 added Any/Object) build
   relative to the DEC-333 roadmap — the ruled order so far is D10a cluster → DEC-333.
 
+- **DEC-331 slice 1 — `#[Invoke]` + `#[ToString]` BUILT (2026-07-23, autonomous) — byte-identity
+  green on all three legs.** Shipped (spec §8): `#[Invoke]` direct calls `x(args)` (overloaded,
+  dispatch by arity/type; methods stay directly callable) + `#[ToString]` in interpolation AND
+  `Conversion.toString` (one stringification story) — the checker records span-keyed decisions and a
+  new OUTERMOST pass `resolve_invoke_tostring` rewrites them to ordinary method calls on the LIVE
+  post-fill AST, so interp ≡ VM ≡ transpiled PHP by construction (zero backend changes for the call
+  paths). Transpile emits a delegating PHP `__toString`; lift maps PHP `__toString` → `#[ToString]
+  toString`. Guards: `E-ATTRIBUTE-TARGET` / `E-TOSTRING-SIGNATURE` / `E-TOSTRING-DUPLICATE` /
+  `E-INVOKE-DUPLICATE` / `E-NO-TOSTRING` / `E-NOT-CALLABLE`, all with `phg explain` entries; roles
+  inherit with the method (class + trait). Example `examples/guide/invoke-tostring.phg`; 12 checker
+  tests + transpile snapshot + lift test. **Resolution rule (recorded):** `#[Invoke]` marks a method
+  NAME callable (all overloads of a marked name participate); the call picks the first arity/type
+  match in declaration order (deterministic — no runtime re-dispatch, the rewrite names one concrete
+  method). **`E-INVOKE-DEFAULTS` (new decision):** an `#[Invoke]` method may NOT have default/variadic
+  params in slice 1 (exact-arity resolution → no silent divergence from the direct call, the footgun
+  the correctness review caught); honoring defaults via the `x(…)` sugar is slice 1b. **DEFERRED to
+  slice 1b** (coupled "instance as a first-class callable VALUE" cluster, recorded/reopenable):
+  function-type assignability (spec §3.3), transpile PHP `__invoke` (single delegate + multi-invoke
+  `__phorj_invoke_dispatch` shim, spec §7 P1), lift `__invoke`→`#[Invoke]`. **7 new M-Decomp modules**
+  extracted en route (`checker::{resolutions,calls::invoke,calls::format,program::attributes_invoke,
+  rewrite_invoke_tostring}`, `cli::explain_invoke`, `lift::lifter::magic`, `transpile::magic_php`).
+  **Invariant-13 JUDGMENT CALL (flag for dev review):** after those extractions, 5 grandfathered
+  already-over-cap files retained small IRREDUCIBLE integration-line growth (pass wiring, tuple
+  destructure, trait-check call, module decl, ClassInfo accumulators — ~36 lines total across
+  types_decls/walk/pipeline/classes/transpile-mod); their `scripts/size-baseline.txt` entries were
+  BUMPED to current rather than churn unrelated existing code (DEC-262 "existing files as M-Decomp
+  reaches them" — the shrink campaign owns them). Dev may revert + demand full extraction.
 - **DEC-336 — EXTENSIONLESS `#!`-SHEBANG SOURCES + PERPETUAL EDITOR/LSP CURRENCY (dev-directed
   2026-07-23, mid-session) — QUEUED (build after the DEC-331 slice-1 `#[Invoke]`/`#[ToString]`
   tonight; 100%-clear, no open design fork — recorded so it is reopenable/reviewable).** Dev

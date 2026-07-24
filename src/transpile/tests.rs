@@ -14,6 +14,20 @@ fn empty_program_emits_php_open_tag() {
 }
 
 #[test]
+fn tostring_class_emits_delegating_php_magic_method() {
+    // DEC-331 D9b: a `#[ToString]` method makes the class emit a native PHP `__toString` that
+    // delegates to it — so the object stringifies idiomatically in a PHP host and lifts back.
+    let out = php(
+        "class C { constructor(public int n) {} #[ToString] function describe(): string { return \"c\"; } }",
+    );
+    assert!(out.contains("function __toString(): string {"), "{out}");
+    assert!(out.contains("return $this->describe();"), "{out}");
+    // A class WITHOUT `#[ToString]` gets no such delegate.
+    let plain = php("class D { constructor(public int n) {} }");
+    assert!(!plain.contains("__toString"), "{plain}");
+}
+
+#[test]
 fn free_function_with_params_and_arithmetic() {
     let out = php("function add(int a, int b) -> int { int c = a + b; return c; }");
     assert!(out.contains("function add(int $a, int $b): int {"), "{out}");

@@ -188,6 +188,7 @@ impl Transpiler {
         }
         let prev = self.cur_class_fields.replace(fields);
         self.emit_class_members(c, &promoted_names, is_error, false)?;
+        self.emit_tostring_delegate(c)?; // DEC-331 D9b (magic_php.rs)
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");

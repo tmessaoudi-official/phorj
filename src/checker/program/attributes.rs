@@ -205,6 +205,12 @@ impl Checker {
             if attr.is_config() {
                 continue;
             }
+            // DEC-331 D9: `#[Invoke]`/`#[ToString]` — instance-method markers. Per-method legality
+            // (target + strict `#[ToString]` signature) validated here; class-level uniqueness in
+            // `check_invoke_tostring_class`. Handled ⇒ KNOWN (never `E-UNKNOWN-ATTRIBUTE`).
+            if self.check_invoke_tostring_attr(attr, f) {
+                continue;
+            }
             // DEC-194 2b-3: a user-defined attribute (`#[Tag]`, where `Tag` carries `#[Attribute]`) is a
             // legal use on a function/method (valid on all targets this slice); validated against its ctor.
             if self.check_user_attribute_use(attr) {

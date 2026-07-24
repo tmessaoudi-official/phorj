@@ -1,14 +1,22 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶▶ RESUME HERE (updated 2026-07-23, pre-compact) — read this block FIRST, then keep going
+## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going
 
-**CURRENT STATE + NEXT WORK: jump to the "LIVE CURSOR" block in the 2026-07-23 session log
-below.** Speccing wave COMPLETE AND RULED (8 specs in `docs/specs/2026-07-23-*.md`, all P-points
-answered — build-ready); then the DEC-331 build cluster, then the DEC-333 roadmap (Json-ADT
-JIT → AOT M1-M3 → full A+C+D interpreter campaign). New: DEC-334 config-catalog campaign
-QUEUED + DEC-335 two-tier top types `Any`+`Object` RULED (spec frozen, build queued with the
-design slices). The perf campaign is CLOSED at 44 WIN / 4 LOSS (dev-box
-canonical, scorecard UPDATE 10).
+**✅ DEC-331 SLICE 1 (`#[Invoke]` + `#[ToString]`) BUILT + byte-identity green (2026-07-24)** — see
+the DEC-331 slice-1 register row + spec §8. Shipped: direct `x(args)` invoke calls (overloaded),
+`#[ToString]` in interpolation + `Conversion.toString`, transpile `__toString` delegate, lift
+`__toString`→`#[ToString]`, all guards + `phg explain`, example + 14 tests. **DEFERRED → slice 1b**
+(reopenable): function-type assignability, transpile PHP `__invoke` + multi-invoke shim, lift
+`__invoke`. **DEC-336 scoped down:** shebang LEXING already done (DEC-282); only editor `firstLine`
+association (vscode/phpstorm) remains — the NEXT clear build. **⚠ Inv-13 judgment call (dev review):**
+5 grandfathered files' `size-baseline.txt` entries bumped for irreducible integration lines after 7
+clean M-Decomp extractions (register row). Verified here (php-8.4 oracle): fmt + clippy(both) +
+size-gate green; full `--all-features` suite green.
+
+**NEXT WORK:** DEC-336 editor-association slice → then DEC-331 slice 2 (Rich Request) / slice 1b →
+then the DEC-333 roadmap. **CURRENT STATE:** jump to the "LIVE CURSOR" block below. Speccing wave
+COMPLETE (8 specs, all P-points answered). DEC-334 config-catalog QUEUED; DEC-335 `Any`+`Object`
+RULED (build queued). Perf campaign CLOSED at 44 WIN / 4 LOSS (dev-box canonical, scorecard UPDATE 10).
 
 **BRANCH:** `master` (single-dev, direct-to-master). **origin/master tip at writing:** `66c9375`
 (UNSIGNED here) — the dev re-signs with their GPG key on their box after each push, so on resume

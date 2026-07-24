@@ -270,6 +270,8 @@ impl Checker {
                 static_vis: HashMap::new(),
                 method_vis: HashMap::new(),
                 static_methods: std::collections::HashSet::new(),
+                invoke_methods: Vec::new(),
+                to_string_method: None,
             },
         );
         use crate::ast::Modifier;
@@ -341,6 +343,9 @@ impl Checker {
         let mut methods: HashMap<String, Vec<FnSig>> = HashMap::new();
         let mut static_methods: std::collections::HashSet<String> =
             std::collections::HashSet::new();
+        // DEC-331 D9: harvested `#[Invoke]`/`#[ToString]` roles (validated in `check_attributes`).
+        let mut invoke_methods: Vec<String> = Vec::new();
+        let mut to_string_method: Option<String> = None;
         let mut hooks: HashMap<String, HookInfo> = HashMap::new();
         let mut ctor = Vec::new();
         let mut ctor_defaults: Vec<Option<crate::ast::Expr>> = Vec::new();
@@ -675,6 +680,17 @@ impl Checker {
                     if f.modifiers.contains(&Modifier::Static) {
                         static_methods.insert(f.name.clone());
                     }
+                    // DEC-331 D9: harvest `#[Invoke]`/`#[ToString]` roles (validated in check_attributes).
+                    if f.attrs.iter().any(crate::ast::Attribute::is_invoke)
+                        && !invoke_methods.contains(&f.name)
+                    {
+                        invoke_methods.push(f.name.clone());
+                    }
+                    if f.attrs.iter().any(crate::ast::Attribute::is_to_string)
+                        && to_string_method.is_none()
+                    {
+                        to_string_method = Some(f.name.clone());
+                    }
                 }
                 // A property hook (M-mut.7b): record its declared type and which accessors it
                 // provides. The body is type-checked in phase 2 (`check_program`), with `this` and
@@ -731,6 +747,8 @@ impl Checker {
         info.static_vis = static_vis;
         info.method_vis = method_vis;
         info.static_methods = static_methods;
+        info.invoke_methods = invoke_methods;
+        info.to_string_method = to_string_method;
         info.mutable_fields = mutable_fields;
         info.set_vis = set_vis;
         info.static_set_vis = static_set_vis;

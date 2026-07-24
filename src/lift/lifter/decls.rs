@@ -264,6 +264,10 @@ impl Lifter {
                 span: SP,
             });
         }
+        // DEC-331 D9: `__toString`→`#[ToString]` (etc.) lifts via `lift_magic_method`; `None` ⇒ ordinary.
+        if let Some(res) = self.lift_magic_method(m) {
+            return res;
+        }
         let params = lift_params(&m.params)?;
         for p in &params {
             declared.insert(p.name.clone());

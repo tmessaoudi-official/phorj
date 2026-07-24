@@ -465,6 +465,7 @@ mod fs_php;
 mod functions;
 mod kinds;
 mod log_php;
+mod magic_php;
 mod matches;
 mod names;
 mod program_emit;
