@@ -51,5 +51,8 @@ pub(super) fn declare_ub_refs(
         set_diff: m.declare_func_in_func(ids.set_diff, f),
         set_union: m.declare_func_in_func(ids.set_union, f),
         json_parse: m.declare_func_in_func(ids.json_parse, f),
+        json_map_get: m.declare_func_in_func(ids.json_map_get, f),
+        json_list_len: m.declare_func_in_func(ids.json_list_len, f),
+        json_list_get: m.declare_func_in_func(ids.json_list_get, f),
     }
 }

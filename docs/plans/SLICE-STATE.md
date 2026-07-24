@@ -106,15 +106,23 @@ so hashes churn; each item below is green + pushed, verify via `git log`):**
   differential 174, all green. Size-baseline reconciled: handles/mod.rs 1982→2000 (this) +
   analyze/mod.rs 2462→2476 (from 5b-i, previously un-bumped — same size-gate-skip slip as
   increments 2-3; now green).
+- (5b-iii) DONE — the container-READ helpers in json_ext.rs (deepjson's `topString`/`firstRecord`
+  read path): **`rt_u_json_map_get(ctx, jmap, key, free_mask) -> (payload, tag)`** (linear
+  `HKey::Str` scan; miss → tag 7; hit materializes one level + encodes; fresh handle, no interior
+  alias; `free_mask & 1` releases the key), **`rt_u_json_list_len(ctx, jlist) -> i64`** (bad → -1),
+  **`rt_u_json_list_get(ctx, jlist, idx) -> (payload, tag)`** (OOB/negative → tag -1 → code 5, VM
+  index-fault parity). All reuse `encode_json_value`; full 5-site wiring + cfg(not(json)) stubs.
+  +3 unit tests (map hit-scalar/hit-string/miss, list len/get/OOB/negative, nested
+  Object→Array→len). Gate: build + clippy (both) + fmt + size-gate + json_ext 9 + jit 165 +
+  differential 174, all green. json_ext.rs now 417 lines → a soft-cap WARN (advisory, gate
+  passes); SPLIT it (`json_ext/{mod,containers}.rs` or move tests out) when stringify/clone push it
+  toward the 500 hard cap [Inv 13 M-Decomp].
 **NEXT — step (5b), the constructing codegen block (per the plan below; removes the dead_code
-allows as kinds go live). `canonical_json` + `entry_idx` are now in `UbGraphInfo` (5b-i/5a).
-Remaining:** the rest of the runtime helpers `src/jit/handles/json_ext.rs` (rt_u_json_parse DONE
-5b-ii; still: map_get/list_len/
-list_get/stringify/clone + jmap build; the (payload,tag) pair encoding — container payloads are
-untagged handles to boxed `Value::Map`/`Value::List`; call `json_parse_str` (pub(crate)) +
-`build_map` + `materialize_if_lazy`; NO-PANIC, `-1`/`code:5` sentinels; 5-site wiring
-helper_refs/declares/symbols/refs + cfg(not(json)) stubs; `alloc_json` mint cap); THEN
-the `GetLocal;MatchTag;JumpIfFalse` refinement peephole
+allows as kinds go live). `canonical_json` + `entry_idx` are in `UbGraphInfo` (5b-i/5a); the
+parse + container-read helpers are DONE (5b-ii/iii). Remaining:** the WRITE-path helpers
+(rt_u_json_stringify / rt_u_json_clone / jmap scratch build+seal for `MakeMap` Json-values — the
+jsonround round-trip), THEN split json_ext.rs if it nears 500;
+THEN the `GetLocal;MatchTag;JumpIfFalse` refinement peephole
 (edge-split in propagate); the analyze+emit arms MakeEnum(canonical range, arity≤1) / MatchTag /
 GetEnumField(0) (Owned→DECLINE) / Op::Index-on-JList (BEFORE the arm_index_str_list catch-all) /
 Core.List.length-JList / Core.Map.get-JMap / Eq-Ne(Json,NullMark) / GetLocal-SetLocal-Pop of Json

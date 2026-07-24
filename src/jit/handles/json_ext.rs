@@ -17,6 +17,8 @@
 //! never stamped and no compiled graph reaches these — the stub only keeps `symbols.rs` linking).
 
 use super::*;
+#[cfg(feature = "json")]
+use crate::value::HKey;
 
 /// Relative tag for phorj `null` — the `Json?` None (failed parse / missing key), one past the 7
 /// canonical `Core.Json` variants (Null..Object = 0..6).
@@ -149,6 +151,89 @@ fn encode_json_value(ctx: &mut UbCtx, v: Value) -> UbJsonRet {
     }
 }
 
+/// `Core.Map.get(obj, key)` on a JMap handle (a Json `Object`'s payload) → the value as a
+/// `(payload, tag)` Json pair. Linear `HKey::Str` scan mirroring the VM's `map_get`; a MISS →
+/// phorj null (tag 7 — `Map.get` returns `Json?`, so `?? Json.Null` coalesces downstream). Every
+/// non-filler payload is minted into a FRESH handle (via `encode_json_value` → `alloc_json`),
+/// never aliasing the map's interior. `free_mask & 1` releases the key handle (compile-time
+/// ownership: a Borrowed/ConstBorrow key passes 0).
+#[cfg(feature = "json")]
+pub(in crate::jit) extern "C" fn rt_u_json_map_get(
+    ctx: *mut UbCtx,
+    map_h: i64,
+    key_h: i64,
+    free_mask: i64,
+) -> UbJsonRet {
+    let ctx = unsafe { &mut *ctx };
+    let fault = UbJsonRet {
+        payload: 0,
+        tag: -1,
+    };
+    let key: String = match ctx.str_bytes(key_h) {
+        Some(b) => match std::str::from_utf8(b) {
+            Ok(s) => s.to_owned(),
+            Err(_) => return fault,
+        },
+        None => match ctx.handles.get(key_h as usize) {
+            Some(Value::Str(s)) => s.as_str().to_owned(),
+            _ => return fault,
+        },
+    };
+    if free_mask & 1 != 0 {
+        ctx.release(key_h);
+    }
+    // Clone the matching VALUE out so the immutable `handles` borrow ends before the mint.
+    let found: Option<Value> = match ctx.handles.get(map_h as usize) {
+        Some(Value::Map(m)) => m
+            .iter()
+            .find(|(k, _)| matches!(k, HKey::Str(ks) if ks.as_str() == key))
+            .map(|(_, v)| v.clone()),
+        _ => return fault,
+    };
+    match found {
+        Some(v) => encode_json_value(ctx, crate::ext::json::materialize_if_lazy(v)),
+        None => UbJsonRet {
+            payload: 0,
+            tag: JSON_TAG_PHNULL,
+        },
+    }
+}
+
+/// `Core.List.length(arr)` on a JList handle (a Json `Array`'s payload) → the element count as a
+/// plain `i64`; a bad handle → `-1` (→ code 5).
+#[cfg(feature = "json")]
+pub(in crate::jit) extern "C" fn rt_u_json_list_len(ctx: *mut UbCtx, list_h: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    match ctx.handles.get(list_h as usize) {
+        Some(Value::List(xs)) => i64::try_from(xs.len()).unwrap_or(-1),
+        _ => -1,
+    }
+}
+
+/// `arr[idx]` on a JList handle → the element as a `(payload, tag)` Json pair (fresh handle for a
+/// container/string child). Out-of-bounds (or a negative index) → `tag: -1` → code 5 (the VM
+/// raises an index fault there, so redo-on-VM reproduces the exact, correctly-ordered message).
+#[cfg(feature = "json")]
+pub(in crate::jit) extern "C" fn rt_u_json_list_get(
+    ctx: *mut UbCtx,
+    list_h: i64,
+    idx: i64,
+) -> UbJsonRet {
+    let ctx = unsafe { &mut *ctx };
+    let fault = UbJsonRet {
+        payload: 0,
+        tag: -1,
+    };
+    let elem: Value = match ctx.handles.get(list_h as usize) {
+        Some(Value::List(xs)) => match usize::try_from(idx).ok().and_then(|i| xs.get(i)) {
+            Some(v) => v.clone(),
+            None => return fault, // OOB / negative → code 5 (VM index fault)
+        },
+        _ => return fault,
+    };
+    encode_json_value(ctx, crate::ext::json::materialize_if_lazy(elem))
+}
+
 /// `cfg(not(feature = "json"))` runtime-dead stub — keeps `register_ub_symbols` linking when the
 /// Json extension is compiled out. Never reached at runtime (a Core.Json import is
 /// E-EXTENSION-DISABLED without the feature, so `canonical_json` is never stamped and no graph
@@ -159,6 +244,36 @@ pub(in crate::jit) extern "C" fn rt_u_json_parse(
     _ctx: *mut UbCtx,
     _s: i64,
     _free: i64,
+) -> UbJsonRet {
+    UbJsonRet {
+        payload: 0,
+        tag: -1,
+    }
+}
+
+#[cfg(not(feature = "json"))]
+pub(in crate::jit) extern "C" fn rt_u_json_map_get(
+    _ctx: *mut UbCtx,
+    _map_h: i64,
+    _key_h: i64,
+    _free_mask: i64,
+) -> UbJsonRet {
+    UbJsonRet {
+        payload: 0,
+        tag: -1,
+    }
+}
+
+#[cfg(not(feature = "json"))]
+pub(in crate::jit) extern "C" fn rt_u_json_list_len(_ctx: *mut UbCtx, _list_h: i64) -> i64 {
+    -1
+}
+
+#[cfg(not(feature = "json"))]
+pub(in crate::jit) extern "C" fn rt_u_json_list_get(
+    _ctx: *mut UbCtx,
+    _list_h: i64,
+    _idx: i64,
 ) -> UbJsonRet {
     UbJsonRet {
         payload: 0,
@@ -241,5 +356,62 @@ mod tests {
             Some(b"hello world".as_slice()),
             "the payload is a readable str handle"
         );
+    }
+
+    #[test]
+    fn map_get_hit_scalar_string_and_miss() {
+        let mut ctx = UbCtx::new(&[]);
+        let doc = ctx.alloc(Value::Str(PhStr::new("{\"a\": 42, \"b\": \"hi\"}")));
+        let root = rt_u_json_parse(&mut ctx as *mut UbCtx, doc, 0);
+        assert_eq!(root.tag, 6);
+        let jmap = root.payload;
+        let ka = ctx.alloc(Value::Str(PhStr::new("a")));
+        let ra = rt_u_json_map_get(&mut ctx as *mut UbCtx, jmap, ka, 0);
+        assert_eq!((ra.tag, ra.payload), (2, 42), "\"a\" → Int 42");
+        let kb = ctx.alloc(Value::Str(PhStr::new("b")));
+        let rb = rt_u_json_map_get(&mut ctx as *mut UbCtx, jmap, kb, 0);
+        assert_eq!(rb.tag, 4, "\"b\" → String");
+        assert_eq!(ctx.str_bytes(rb.payload), Some(b"hi".as_slice()));
+        let kz = ctx.alloc(Value::Str(PhStr::new("z")));
+        let rz = rt_u_json_map_get(&mut ctx as *mut UbCtx, jmap, kz, 0);
+        assert_eq!(rz.tag, JSON_TAG_PHNULL, "missing key → phorj null (tag 7)");
+    }
+
+    #[test]
+    fn list_len_get_and_oob() {
+        let mut ctx = UbCtx::new(&[]);
+        let doc = ctx.alloc(Value::Str(PhStr::new("[10, 20, 30]")));
+        let root = rt_u_json_parse(&mut ctx as *mut UbCtx, doc, 0);
+        assert_eq!(root.tag, 5);
+        let jlist = root.payload;
+        assert_eq!(rt_u_json_list_len(&mut ctx as *mut UbCtx, jlist), 3);
+        let e0 = rt_u_json_list_get(&mut ctx as *mut UbCtx, jlist, 0);
+        assert_eq!((e0.tag, e0.payload), (2, 10), "xs[0] → Int 10");
+        assert_eq!(
+            rt_u_json_list_get(&mut ctx as *mut UbCtx, jlist, 2).payload,
+            30
+        );
+        assert!(
+            rt_u_json_list_get(&mut ctx as *mut UbCtx, jlist, 3).tag < 0,
+            "OOB → code-5 fault"
+        );
+        assert!(
+            rt_u_json_list_get(&mut ctx as *mut UbCtx, jlist, -1).tag < 0,
+            "negative index → code-5 fault"
+        );
+    }
+
+    #[test]
+    fn map_get_returns_nested_container_lazily() {
+        // {"data": [1, 2]} — get "data" → Array (tag 5), whose length is readable. This is the
+        // deepjson `firstRecord` shape (Object → Map.get("data") → Array → xs[0]).
+        let mut ctx = UbCtx::new(&[]);
+        let doc = ctx.alloc(Value::Str(PhStr::new("{\"data\": [1, 2]}")));
+        let root = rt_u_json_parse(&mut ctx as *mut UbCtx, doc, 0);
+        let jmap = root.payload;
+        let kd = ctx.alloc(Value::Str(PhStr::new("data")));
+        let rd = rt_u_json_map_get(&mut ctx as *mut UbCtx, jmap, kd, 0);
+        assert_eq!(rd.tag, 5, "\"data\" → Array");
+        assert_eq!(rt_u_json_list_len(&mut ctx as *mut UbCtx, rd.payload), 2);
     }
 }

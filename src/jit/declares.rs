@@ -130,5 +130,15 @@ pub(super) fn declare_ub_helper_ids(
             s.returns.push(AbiParam::new(types::I64));
             declare(module, "rt_u_json_parse", &s)?
         },
+        // rt_u_json_map_get(ctx, map, key, free_mask) -> (payload, tag): 4 params, 2 returns.
+        json_map_get: declare(module, "rt_u_json_map_get", &sig_map_get)?,
+        // rt_u_json_list_len(ctx, list) -> i64: 2 params, 1 return.
+        json_list_len: declare(module, "rt_u_json_list_len", &sig2)?,
+        // rt_u_json_list_get(ctx, list, idx) -> (payload, tag): 3 params, 2 returns.
+        json_list_get: {
+            let mut s = make_sig(module, &[ptr, types::I64, types::I64], Some(types::I64));
+            s.returns.push(AbiParam::new(types::I64));
+            declare(module, "rt_u_json_list_get", &s)?
+        },
     })
 }
