@@ -41,16 +41,24 @@ found and ALL FOLDED into v4 (highlights: str-entry-param ABI was missing entire
 would never have JIT'd; SetLocal clone-BEFORE-release ordering; tag-threaded release plumbing
 via emit_release_pair; canonical_json compiler fact replaces unsound (name,arity) sniffing;
 emit_call_to 3-return tag threading; json-only mint cap — unbounded handle leaks were OOM not
-code-5). GATE STATUS: round 4 ran (3 reviewers) → NOT clean: 2 MEDIUM (RoundingMode
-injected-collision; NullMark reaching Return — both would-be miscompiles) + 2 LOW
-(GetEnumField-Owned husk; materialize no-panic) — ALL FOLDED into v5 [R4-*]. Clean counter
-RESET. REMAINING BEFORE BUILD: rounds 5-6 must BOTH be clean (two-consecutive-clean; cap 5 —
-escalates to the dev via ask-human per DEC-268). A fresh session resumes by: (1) re-reading
-the plan below, (2) running the next panel round (3 read-only reviewers: correctness+regression
-/ memory-safety+promises / completeness+blast-radius, verifying the v5 folds against the code),
-(3) if clean → one more confirming round, (4) if both clean → build in the plan's order
-(compile.rs M-Decomp split FIRST — boundary identified: run+run_unboxed → src/jit/compile/run.rs,
-compile+compile_unboxed+Drop stay in compile/mod.rs). Baseline measured this container:
+code-5). GATE CLOSED (6 panel rounds; ~46 findings, all folded — plan v7): round 5 = safety+
+completeness CLEAN, correctness 1 LOW (NullMark operand-transient, folded); round 6 (confirming)
+= completeness CLEAN + split-boundary validated, safety 1 LOW (join_kind arm order), correctness
+1 MEDIUM (global Const(Null)→NullMark admits destructure placeholders — NARROWED to
+immediate-Eq/Ne-only, v7). At cap-5 the dev RULED (AskUserQuestion): "one confirming round, then
+build" → round 6 done, findings folded, BUILD STARTED.
+
+**▶▶ BUILD PROGRESS (green + pushed increments, DEC-333 Json-ADT):**
+- (1) `85d1994` — compile.rs M-Decomp split → compile/{mod,run}.rs (Inv 13, pre-feature).
+- (2) `4a96c86` — `BytecodeProgram.canonical_json` compiler fact (injected&&name&&shape stamp).
+- (3) `6604aff` — `Function.str_params` entry-ABI fact (is_string_type, root-only seed intent).
+**NEXT (the interdependent codegen block — one large commit, breaks ~15 exhaustive matches at
+once, recompiles only when all decline-arms land):** src/jit/analyze/kinds.rs — add
+`Kind::{Json(JRef,Own), JMap(Own), JList(Own), NullMark}` + the mandatory join_kind (NullMark
+arm BEFORE the a==b short-circuit), borrowed_copy, is_handle, is_owned_handle, join_unknown_bottom
+arms; then the analyze/emit/collect/compile arms per the plan below; then json_ext.rs helpers
+(5-site wiring); then tests; then the WIN-OR-FLAG perf measurement. A fresh session resumes from
+the plan below (v7 is complete — no more gate rounds owed). Baseline measured this container:
 jsonround 0.30x, deepjson 0.90x (php-8.5.8+opcache local, scratchpad build — rebuild via
 build-php85.sh after container reset).**
 
