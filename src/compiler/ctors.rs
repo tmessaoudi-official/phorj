@@ -110,6 +110,7 @@ pub(super) fn compile_constructor<'a>(
             n_captures: 0,    // constructors are never closures
             unchecked: false, // `#[UncheckedOverflow]` is free-function-only (parser rejects it on methods/ctors)
             dyn_params: all_params.iter().map(|p| is_scalar_union(&p.ty)).collect(),
+            str_params: all_params.iter().map(|p| is_string_type(&p.ty)).collect(),
             chunk: comp.chunk,
         },
         comp.extra_functions,
@@ -196,6 +197,9 @@ pub(super) fn compile_method<'a>(
             // Slot-aligned with the frame: slot 0 = `this` (never a union), params at 1..
             dyn_params: std::iter::once(false)
                 .chain(f.params.iter().map(|p| is_scalar_union(&p.ty)))
+                .collect(),
+            str_params: std::iter::once(false)
+                .chain(f.params.iter().map(|p| is_string_type(&p.ty)))
                 .collect(),
             chunk: comp.chunk,
         },

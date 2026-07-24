@@ -174,6 +174,14 @@ pub struct Function {
     /// never land, so the later chain sites that would prove the union are never reached).
     /// Interp/VM/transpiler ignore it. Empty ⇒ no union params (the common case).
     pub dyn_params: Vec<bool>,
+    /// DEC-333 Json-ADT (entry-str ABI): `true` per frame slot whose DECLARED param type is
+    /// exactly `string`. Slot-aligned exactly like [`Self::dyn_params`] (method slot 0 `this`
+    /// is `false`; lambdas record none). Compiler-stamped checker fact, read ONLY by the unboxed
+    /// JIT and ONLY for the graph ROOT (the entry has no in-graph caller to prove its param
+    /// kinds, and `run_unboxed` can now marshal a `Value::Str` arg into a Borrowed handle) —
+    /// internal callees derive Str kinds from the call-site fixpoint, so seeding them here would
+    /// clobber a proven-Owned arg ([R2-B6]). Interp/VM/transpiler ignore it. Empty ⇒ none.
+    pub str_params: Vec<bool>,
     pub chunk: Chunk,
 }
 

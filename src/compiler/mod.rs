@@ -347,6 +347,13 @@ pub(crate) fn is_scalar_union(ty: &Type) -> bool {
     }
 }
 
+/// DEC-333: is this param's DECLARED type exactly `string`? The recognizer behind
+/// `Function::str_params` — the entry-str-param seed the Json-ADT JIT reads for the graph root
+/// (a root has no call site to prove its param kinds). Sibling of [`is_scalar_union`].
+pub(crate) fn is_string_type(ty: &Type) -> bool {
+    matches!(ty, Type::Named { name, args, .. } if args.is_empty() && name.as_str() == "string")
+}
+
 fn resolve_cty(ty: &Type) -> CTy {
     match ty {
         Type::Named { name, args, .. } => match name.as_str() {

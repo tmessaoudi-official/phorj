@@ -120,6 +120,7 @@ fn run_chunk(chunk: Chunk) -> Result<String, String> {
             arity: 0,
             n_captures: 0,
             dyn_params: Vec::new(),
+            str_params: Vec::new(),
 
             unchecked: false,
             chunk,
@@ -350,6 +351,7 @@ fn call_runs_a_second_function_and_returns() {
                 arity: 0,
                 n_captures: 0,
                 dyn_params: Vec::new(),
+                str_params: Vec::new(),
 
                 unchecked: false,
                 chunk: m,
@@ -359,6 +361,7 @@ fn call_runs_a_second_function_and_returns() {
                 arity: 1,
                 n_captures: 0,
                 dyn_params: Vec::new(),
+                str_params: Vec::new(),
 
                 unchecked: false,
                 chunk: f,
@@ -405,6 +408,7 @@ fn make_enum_then_match_tag_and_get_field() {
             arity: 0,
             n_captures: 0,
             dyn_params: Vec::new(),
+            str_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -447,6 +451,7 @@ fn match_tag_is_false_for_a_different_variant() {
             arity: 0,
             n_captures: 0,
             dyn_params: Vec::new(),
+            str_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -501,6 +506,7 @@ fn make_instance_then_get_field() {
             arity: 0,
             n_captures: 0,
             dyn_params: Vec::new(),
+            str_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -542,6 +548,7 @@ fn get_field_absent_faults_like_interpreter() {
             arity: 0,
             n_captures: 0,
             dyn_params: Vec::new(),
+            str_params: Vec::new(),
 
             unchecked: false,
             chunk: c,

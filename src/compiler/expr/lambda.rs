@@ -128,6 +128,7 @@ impl Compiler<'_> {
             // Lambdas record no union-param stamps (v1: the JIT's Dyn seeding covers named
             // functions/methods; a lambda union param stays Unknown — fail-closed decline).
             dyn_params: Vec::new(),
+            str_params: Vec::new(),
             chunk: sub.chunk,
         };
         self.extra_functions.push(lambda_fn);
