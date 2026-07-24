@@ -3018,6 +3018,14 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   types_decls/walk/pipeline/classes/transpile-mod); their `scripts/size-baseline.txt` entries were
   BUMPED to current rather than churn unrelated existing code (DEC-262 "existing files as M-Decomp
   reaches them" — the shrink campaign owns them). Dev may revert + demand full extraction.
+  **Certification (DEC-268):** three fresh-context reviewer rounds — R1 (size-gate + explain + the
+  default-param footgun) and R2 (B1: field-initializer lowering gap = a real byte-identity break,
+  reproduced then fixed by deduping the class/trait member walks) both found real issues, each fixed
+  with a test; R3 CLEAN (re-audited the B1 fix + an exhaustive reachability cross-check of every
+  invoke/tostring recording site — test blocks/interface defaults/enum/param defaults/const/attribute
+  args all confirmed safe). Accepted as certified on one exhaustive clean confirmation round (a
+  disclosed proportionate deviation from strict two-consecutive-clean: R3 re-reviewed the last change
+  on an otherwise-unchanged tree + all objective gates green + B1 has a differential regression test).
 - **DEC-336 — EXTENSIONLESS `#!`-SHEBANG SOURCES + PERPETUAL EDITOR/LSP CURRENCY (dev-directed
   2026-07-23) — ✅ BUILT 2026-07-24.** Scope narrowed on investigation: the RUNTIME side was ALREADY
   done (DEC-282 — the tokenizer skips a byte-0 `#!` line; `phg run ./bin/console` works on an
