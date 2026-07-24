@@ -3111,6 +3111,13 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   validates with one run. (f) Stable-box `listcontains` 0.85×/`mapget` 0.96× diagnosis stays
   queued dev-side (DEC-332 UPDATE 10). Roadmap mirrored in MASTER-PLAN §0 + SLICE-STATE (Inv
   19, same change).
+  **AMENDMENT (dev, 2026-07-24 — mid-slice-2 directive): JIT WINS ALL BEFORE AOT.** The dev-box
+  scorecard at ruling = 44 WIN / 5 LOSS (`jsonround 0.31x`, `listcontains 0.82x` — REGRESSED on
+  the dev box despite the container flip, needs a dev-box re-probe —, `floatmul 0.93x`,
+  `deepjson 0.94x`, `dbwork 1.00x`). Ruled order now: finish DEC-331 slice 2 (in flight) →
+  **flip all 5 losses** (the (a) Json-ADT JIT slice covers jsonround/deepjson) → D10a remainder
+  (slice 1b, slice 3) → ONLY THEN the AOT M1-M3 hunt/refactor. SLICE-STATE carries the live
+  mirror (same change).
 - **DEC-332 — PERF WIN-OR-FLAG vs php+JIT + M-DECOMP campaign (dev mandate 2026-07-23).** (a) Every
   php-comparable feature's VM+JIT path MUST beat php-8.5.8+opcache-JIT; a loss is HARD-FLAGGED, never
   silently accepted (extends the G-8 bar to an absolute). (b) COVERAGE: grow the `bench/micro` suite
