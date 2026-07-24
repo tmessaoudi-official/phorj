@@ -33,8 +33,10 @@ work starts; final record lands in the register + spec §BUILD STATUS at ship):*
    `MultipartPart` — pure-phorj bag logic over native-parsed data (transpiles as class shape for free).
    EAGER-validating `Request.parse(bytes): Request?` (null on malformed/oversize → the untouched respond
    bridge 400s = D8a's ruled Eager default; the `RequestParsing.Lazy` switch ships with `ServeConfig` in
-   slice 3 — sequencing note, reopenable). Memoized `.json(): Json?` via `private mutable` cache;
-   json fragment cfg-gated on feature `json` (playground no-default-features keeps working). `Request.fake
+   slice 3 — sequencing note, reopenable). Memoized `.json(): Json?` via `private mutable` cache —
+   the method is ALWAYS in the prelude and calls only the always-registered `Core.Native.Http.jsonParse`
+   (see the `.json()` feature-story guardrail; NO cfg-gated prelude fragment — round-3 correction:
+   the `Json` TYPE is always injected, only the parser ext is feature-gated). `Request.fake
    (method, target)` + immutable withers (`withHeader`/`withCookie`/`withBody`) that REBUILD through the
    same parse path (one parsing story). Route params → `attributes` bag (PSR-7 convention; `param()`
    kept as a delegate); `Router.handle` sets attributes (drops `withParams`); session prelude migrates
@@ -113,11 +115,18 @@ work starts; final record lands in the register + spec §BUILD STATUS at ship):*
 - **Migration precision:** the `.body`→`.body.bytes()` rewrite set is EMPTY (all in-scope `.body`
   hits are `resp.body`, unchanged); handler.phg / server.phg / json-api.phg define their OWN local
   Request and are NOT touched.
-- **3-leg parity tests added:** the bags conformance golden includes a route-param-via-attributes
-  case (Router.handle's mutable-bag write observed identically on interp/VM/PHP — conformance runs
-  all 3 legs and requires exit 0, so it stays fault-free and avoids `.json()`); the CRLF wither
-  fault + oversize get a differential-style 3-leg FAULT-parity test (agree_err pattern — faults
-  cannot live in conformance goldens).
+- **3-leg parity tests added (round-3 corrected):** the bags conformance golden includes a
+  route-param-via-attributes case (Router.handle's mutable-bag write observed identically on
+  interp/VM/PHP — conformance runs all 3 legs and requires exit 0, so it stays fault-free and avoids
+  `.json()`); the CRLF wither fault gets a 3-leg FAULT-parity test (`agree_err_php` pattern — faults
+  cannot live in conformance goldens); oversize/malformed are NULL paths in slice 2 (eager never
+  faults; the canonical oversize string is unreachable until slice-3 lazy) so they get 3-leg
+  OUTPUT-parity coverage (`agree_out_php`-style: parse → null observed identically), NOT fault tests.
+- **MultipartPart carrier contract (round-3):** the native's hand-built `Value::Instance` must use
+  `class: "MultipartPart"` and a field-name SET exactly equal to the injected prelude class's
+  declared fields (the checker cannot catch a mismatch — it surfaces only as a runtime field-miss;
+  the bag assertions + rich_request example are the gate). One comment at the native cites the
+  prelude declaration as the contract's other half.
 - **Perf doctrine (WIN-OR-FLAG):** new micro bench pair `bench/micro/queryparse.{phg,php}`
   (native parseQuery vs idiomatic PHP) lands with the slice — no silent bench skip.
 - **Docs completeness:** MASTER-PLAN slice-(2) line annotated (eager/lazy switch → slice 3, not a
