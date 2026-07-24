@@ -246,19 +246,7 @@ fn throws_mode_propagate_is_recorded_for_erasure() {
         "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
              function g() -> void throws BadInputError {{ f()?; }} function main() -> void {{}}"
     ));
-    let (
-        _warns,
-        subst,
-        _ufcs,
-        _ovl,
-        _reified,
-        _pipes,
-        _fills,
-        _for_iters,
-        _for_binds,
-        _tuple_binds,
-        _variants,
-    ) = check_resolutions(&p).expect("checks clean");
+    let (_warns, subst, ..) = check_resolutions(&p).expect("checks clean");
     assert_eq!(
         subst.len(),
         1,

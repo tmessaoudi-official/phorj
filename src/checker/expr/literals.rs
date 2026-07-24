@@ -14,8 +14,8 @@ impl Checker {
                     Ty::Int | Ty::Float | Ty::Decimal | Ty::Bool | Ty::String | Ty::Error
                 );
                 if !ok {
-                    let sp = Self::expr_span(e);
-                    self.err(sp, format!("type `{t}` cannot be interpolated into a string (only primitives auto-stringify in M1)"));
+                    // DEC-331 D9b: an object interpolates iff its class has `#[ToString]`; else E-NO-TOSTRING.
+                    self.check_string_context_hole(&t, e);
                 }
             }
         }

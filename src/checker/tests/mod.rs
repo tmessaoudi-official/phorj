@@ -21,6 +21,7 @@ mod injected_result_option;
 mod interfaces;
 mod intersections;
 mod intrinsic_imports;
+mod invoke_tostring;
 mod loops;
 mod matching;
 mod mtest;

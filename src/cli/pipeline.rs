@@ -143,6 +143,8 @@ pub fn check_and_expand_reified(
             tuple_binds,
             // DEC-329.3: span.start → owning enum, consumed by `qualify_variants` below.
             variant_enums,
+            // DEC-331 D9: (invoke-call targets, tostring string-context targets) for the outermost pass.
+            invoke_tostring,
         )) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
@@ -176,6 +178,11 @@ pub fn check_and_expand_reified(
             // independent of every expression rewrite above; its generated hasNext/next pulls
             // are plain method calls needing no further pass on any backend.
             Ok((
+                // DEC-331 D9: `resolve_invoke_tostring` runs OUTERMOST (after every other rewrite) on
+                // the final LIVE nodes — `x(args)`→`x.<invoke>(args)`, string-context object→`<x>.<toStr>()`
+                // (see the pass; live-node timing sidesteps the default-fill staleness that keeps it out
+                // of the check-time rewrite maps).
+                crate::checker::resolve_invoke_tostring(
                 // DEC-329.3: `qualify_variants` runs OUTERMOST (splice-back passes keep source
                 // spans), rewriting every variant use to its canonical enum-qualified form.
                 crate::checker::qualify_variants(
@@ -223,6 +230,9 @@ pub fn check_and_expand_reified(
                     &tuple_binds,
                 )),
                 &variant_enums,
+                ),
+                &invoke_tostring.0,
+                &invoke_tostring.1,
                 ),
                 reified,
             ))
@@ -570,6 +580,7 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
             _for_binds,
             _tuple_binds,
             _variant_enums,
+            _invoke_tostring,
         )) => (crate::diagnostic::diagnostics_json(&[], &warnings), false),
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),
     })

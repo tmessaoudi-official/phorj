@@ -62,6 +62,16 @@ impl Checker {
                 for sm in &tinfo.static_methods {
                     child.static_methods.insert(sm.clone());
                 }
+                // DEC-331 D9: a trait method carrying `#[Invoke]`/`#[ToString]` flattens its role into
+                // the using class too (a no-op unless the trait declares one). Own roles win.
+                for im in &tinfo.invoke_methods {
+                    if !child.invoke_methods.contains(im) {
+                        child.invoke_methods.push(im.clone());
+                    }
+                }
+                if child.to_string_method.is_none() {
+                    child.to_string_method = tinfo.to_string_method.clone();
+                }
                 // Wave 1.1: trait members flatten INTO the using class, so their visibility is
                 // re-owned to `cls` (PHP `use` semantics — a trait's `private` member is accessible
                 // from the using class, unlike an inherited `private` parent member). Own members win.
@@ -205,6 +215,18 @@ impl Checker {
             // aliases the dispatch entry, and the interpreter walks ancestors). Mirrors `methods`.
             for sm in &parent_info.static_methods {
                 child.static_methods.insert(sm.clone());
+            }
+            // DEC-331 D9: `#[Invoke]`/`#[ToString]` roles inherit with the method (spec §2). A parent's
+            // `#[Invoke]` names extend the child's callable set (union, deduped); a child inheriting a
+            // parent's `#[ToString]` gets it only when it declares none of its own (an override keeps
+            // the role via its own declaration — harvested in `collect_class`). Mirrors `methods`.
+            for im in &parent_info.invoke_methods {
+                if !child.invoke_methods.contains(im) {
+                    child.invoke_methods.push(im.clone());
+                }
+            }
+            if child.to_string_method.is_none() {
+                child.to_string_method = parent_info.to_string_method.clone();
             }
             // Wave 1.1: inherit member visibility, **preserving the declaring owner** (like consts) —
             // so an inherited `private` member is checked against the parent (not visible from the

@@ -1978,7 +1978,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              declares an `int`/`string` backing type). Declare a backing type, e.g.\n\
              `enum Suit: string { Hearts = \"H\" }`.\n"
         }
-        _ => return super::explain_config::text(code).map(str::to_string), // M-Decomp sub-catalogs
+        _ => return super::explain_invoke::sub_catalog(code).map(str::to_string), // M-Decomp sub-catalogs
     };
     Some(body.to_string())
 }

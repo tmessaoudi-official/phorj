@@ -31,6 +31,7 @@ mod rewrite_fills;
 mod rewrite_foreach;
 mod rewrite_generics;
 mod rewrite_html;
+mod rewrite_invoke_tostring;
 mod rewrite_new;
 mod rewrite_pipe;
 mod rewrite_ufcs;
@@ -50,6 +51,7 @@ pub use rewrite_fills::apply_default_fills;
 pub use rewrite_foreach::{lower_foreach_iter, materialize_for_binds, materialize_tuple_binds};
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
+pub use rewrite_invoke_tostring::resolve_invoke_tostring;
 pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
 pub use rewrite_pipe::{lower_pipes, materialize_pipe_params};
 pub use rewrite_ufcs::rewrite_ufcs;
@@ -65,9 +67,11 @@ mod expr;
 mod matches;
 mod program;
 mod reflect;
+mod resolutions;
 mod resolve;
 mod stmt;
 mod throws;
+pub use resolutions::check_resolutions;
 
 // Stateless helpers live in `common`; this glob re-exposes them to `mod.rs`'s own bodies AND
 // (transitively, via each cluster's `use super::*`) to every sibling cluster file.
@@ -233,6 +237,12 @@ struct ClassInfo {
     /// name (`ClassName.method(args)`) with no receiver; a *non*-static method called that way is
     /// `E-STATIC-CALL`. Inherited alongside `methods`. A subset of `methods`' keys.
     static_methods: std::collections::HashSet<String>,
+    /// DEC-331 D9a: instance methods carrying `#[Invoke]` (decl order, deduped) — a non-empty set makes
+    /// the class callable via `x(args)`. Inherited with the methods (subclass/trait keep the role).
+    invoke_methods: Vec<String>,
+    /// DEC-331 D9b: the single `#[ToString]` method (at most one, `E-TOSTRING-DUPLICATE`) — the class's
+    /// stringification in string context. Inherited with the method; `None` ⇒ `E-NO-TOSTRING`.
+    to_string_method: Option<String>,
 }
 
 /// A property hook's declared type and which accessors it provides (M-mut.7b).
@@ -334,6 +344,8 @@ impl ClassInfo {
             static_vis: HashMap::new(),
             method_vis: HashMap::new(),
             static_methods: std::collections::HashSet::new(),
+            invoke_methods: Vec::new(),
+            to_string_method: None,
         }
     }
 }
@@ -627,6 +639,14 @@ pub struct Checker {
     /// the VM compiler's `resolve_cty` and the transpiler's kind analysis see a concrete type —
     /// leaving `Infer` in a backend-bound param is exactly the interp ≠ VM CTy-operand trap.
     pipe_param_resolutions: HashMap<usize, Ty>,
+    /// DEC-331 D9: resolved rewrite decisions for `resolve_invoke_tostring` (keyed by `span.start`).
+    /// `invoke_call_targets`: a `x(args)` `Call` span → the chosen `#[Invoke]` method name (→ rewritten
+    /// `x.<name>(args)`). `to_string_targets`: a string-context expression span (interpolation hole or
+    /// `Conversion.toString` arg) → the class's `#[ToString]` method name (→ wrapped `<expr>.<name>()`).
+    /// Both applied on the LIVE post-fill AST, so backends see plain method calls — byte-identity by
+    /// construction. Empty for programs using neither sugar.
+    invoke_call_targets: HashMap<usize, String>,
+    to_string_targets: HashMap<usize, String>,
     /// Method declaration sites accumulated during collection — `(class, method, decl span, resolved
     /// params, resolved ret)` — so [`Self::finalize_method_overloads`] can emit a span-keyed rename for
     /// each member of a return-overload method set (reusing [`Self::overload_def_renames`], the same map
@@ -685,72 +705,6 @@ pub fn check_tests(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>
     let c = run_checker_mode(program, true);
     if c.errors.is_empty() {
         Ok(c.warnings)
-    } else {
-        Err(c.errors)
-    }
-}
-
-/// Like [`check`], but on success also returns the `html"…"` desugarings keyed by literal
-/// `Span.start` — fed to [`resolve_html`] so the backend-facing program is `Expr::Html`-free. Used
-/// by the interp/VM/transpile pipeline ([`crate::cli::check_and_expand`]); plain [`check`] (e.g.
-/// `phg check`) ignores the map since it never reaches a backend.
-#[allow(clippy::type_complexity)]
-pub fn check_resolutions(
-    program: &Program,
-) -> Result<
-    (
-        Vec<Diagnostic>,
-        HashMap<usize, crate::ast::Expr>,
-        HashMap<usize, crate::ast::Expr>,
-        HashMap<usize, String>,
-        HashMap<usize, Ty>,
-        HashMap<usize, Ty>,
-        HashMap<usize, crate::ast::Expr>,
-        std::collections::HashSet<usize>,
-        HashMap<usize, (Option<Ty>, Option<Ty>)>,
-        HashMap<usize, Vec<Ty>>,
-        HashMap<usize, String>,
-    ),
-    Vec<Diagnostic>,
-> {
-    let c = run_checker(program);
-    if c.errors.is_empty() {
-        // Merge the Reflect `typeName` substitutions into the call-rewrite map applied by
-        // `rewrite_ufcs`. Keys are disjoint (a `typeName` site is a native member call, never UFCS);
-        // ONE combined pass makes the two sugars compose when nested either way — the single walker
-        // re-resolves embedded original subtrees regardless of nesting direction.
-        let mut calls = c.ufcs_resolutions;
-        calls.extend(c.reflect_resolutions);
-        // M4/DEC-249 default-parameter fills return SEPARATELY (never merged into the rewrite_ufcs
-        // map): a fill is a CHECK-TIME clone spliced back FIRST — before resolve_html/unwrap_new
-        // erase nodes — or a lambda argument's already-erased nodes restore stale (the
-        // db.transaction(fn) regression). `apply_default_fills` runs ahead of every other rewrite.
-        // M4 as-matrix: primitive-cast → native-conversion-call substitutions, keyed by the `Cast`
-        // node's span (the `as` token — disjoint from every call/UFCS/fill/reflect span). Applied by
-        // the same `rewrite_ufcs` walker (its `Cast` arm now consults this map).
-        calls.extend(c.cast_resolutions);
-        // M-RT Slice C1: resolved overload-selector call-site rewrites join the same call-rewrite map
-        // (keys are the `OverloadSelect` node spans — disjoint from every call/UFCS/fill/reflect/cast
-        // span). The definition renames are returned separately (they rename items, not call sites).
-        calls.extend(c.overload_resolutions);
-        Ok((
-            c.warnings,
-            c.html_resolutions,
-            calls,
-            c.overload_def_renames,
-            c.reified_operands,
-            // DEC-239: contextual pipe-lambda param resolutions, materialized into the AST by
-            // `materialize_pipe_params` (LAST in the pipeline's rewrite chain).
-            c.pipe_param_resolutions,
-            c.default_fills,
-            // DEC-257: foreach-over-Iterator spans, lowered to while-pulls by `lower_foreach_iter`.
-            c.for_iter_lowerings,
-            // DEC-280: inferred foreach-binding types, written into the AST by `materialize_for_binds`.
-            c.for_bind_resolutions,
-            // DEC-288: inferred tuple-destructure binder types, written by `materialize_tuple_binds`.
-            c.tuple_bind_resolutions,
-            c.variant_resolutions, // DEC-329.3 (see field doc)
-        ))
     } else {
         Err(c.errors)
     }

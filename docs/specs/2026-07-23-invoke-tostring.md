@@ -1,6 +1,7 @@
 # SPEC — `#[Invoke]` + `#[ToString]` (DEC-331 D9, build slice 1 of 3)
 
-> Status: **SPEC RULED (dev, 2026-07-23) — BUILD-READY.**
+> Status: **SPEC RULED (dev, 2026-07-23). SLICE 1 BUILT + byte-identity-green (2026-07-23);
+> a coupled cluster DEFERRED to slice 1b — see §8 BUILD STATUS.**
 > Rulings elaborated here: D9a (attribute-marked callability), D9b (`#[ToString]`), D9c
 > (overloaded invoke). All open points RULED — see §7.
 
@@ -14,8 +15,7 @@ import Core.Output;
 import Core.Runtime.Entry;
 
 class Adder {
-    int bias;
-    function construct(int bias) { this.bias = bias; }
+    constructor(public int bias) {}
 
     #[Invoke]
     function add(int x): int { return x + this.bias; }
@@ -99,3 +99,38 @@ shim dispatch.
   `__invoke(...$args)` + the shim; single-`#[Invoke]` emits native `__invoke`.
 - **P2 → yes, everywhere**: `Conversion.toString(obj)` lowers to the same `#[ToString]` call —
   one stringification story.
+
+## 8. BUILD STATUS (2026-07-23 — autonomous slice)
+
+**SLICE 1 — BUILT + byte-identity-green** (`phg run` ≡ `phg run --tree-walker` ≡ transpiled PHP,
+verified on the example + the `a(5) + 1` CTy-operand case):
+- `#[Invoke]` direct calls `x(args)` → checker resolves the overload set and rewrites to
+  `x.<method>(args)` (new pass `checker::resolve_invoke_tostring`, runs OUTERMOST on the live AST);
+  overloaded `#[Invoke]` methods dispatch by arity/type.
+- `#[ToString]` in interpolation holes AND `Conversion.toString(x)` → rewritten to `<expr>.<method>()`
+  (spec §2 P2, one stringification story). `E-NO-TOSTRING` when an object hits string context without one.
+- Guards: `E-ATTRIBUTE-TARGET`, `E-TOSTRING-SIGNATURE`, `E-TOSTRING-DUPLICATE`, `E-INVOKE-DUPLICATE`,
+  plus `E-NOT-CALLABLE` (a class value with no `#[Invoke]`) and reused `E-OVERLOAD-NO-MATCH`.
+- Transpile emits a native delegating PHP `__toString`; lift maps PHP `__toString` → `#[ToString] toString`.
+- Roles inherit with the method (subclass + trait). Example `examples/guide/invoke-tostring.phg`;
+  12 checker tests + transpile snapshot + lift test.
+- Resolution note (recorded): `#[Invoke]` marks a method NAME callable (all overloads of a marked name
+  participate); the call picks the FIRST arity/type match in declaration order (deterministic — there is
+  no runtime re-dispatch, the rewrite names one concrete method, so all backends run the checker's pick).
+
+**SLICE 1b — DEFERRED (coupled "instance as a first-class callable VALUE" cluster; recorded so it is
+reopenable, dev to schedule):**
+- **Function-type assignability** (spec §2 D9a / §3.3): a class with exactly one matching `#[Invoke]`
+  assignable to a `(T…) -> U` function type (route handlers/callbacks). Needs a `ty_assignable`
+  `(Named, Function)` arm + a coercion mechanism (a lambda-wrap at the coercion site, uniform across
+  backends). NOT load-bearing for slice 1 (the example makes no assignability claim).
+- **Transpile PHP `__invoke`** (single delegate) + the MULTI-`#[Invoke]` `__phorj_invoke_dispatch`
+  arity/type shim (spec §4 / §7 P1) — only observable once an instance is used AS a PHP callable
+  (i.e. behind the assignability above); slice-1 direct calls transpile as ordinary `$x->method(args)`.
+- **Lift PHP `__invoke` → `#[Invoke]`** (spec §4) — deferred with the emit side to keep transpile/lift
+  symmetric; consequence: a phorj `#[Invoke]` class does NOT round-trip through transpile→lift in slice 1
+  (`#[ToString]` DOES). The §6 "transpile snapshot incl. the multi-invoke shim dispatch" test is owed to 1b.
+
+**Known slice-1 limitations (recorded):** an interface-/enum-typed receiver used as `x(args)` or in
+string context reports `E-NOT-CALLABLE`/`E-NO-TOSTRING` with class-oriented wording (over-rejection,
+never unsound); class-level `#[ToString]`/`#[Invoke]` uniqueness is enforced for classes and traits.

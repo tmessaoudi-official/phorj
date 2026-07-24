@@ -162,7 +162,7 @@ fn variant_resolutions_side_table_maps_uses_to_owning_enums() {
     let prog = crate::parser::Parser::new(toks)
         .parse_program()
         .expect("parse");
-    let (.., table) = crate::checker::check_resolutions(&prog).expect("checks clean");
+    let (.., table, _) = crate::checker::check_resolutions(&prog).expect("checks clean");
     assert!(
         table.values().any(|e| e == "Shape"),
         "construction + pattern resolutions recorded: {table:?}"

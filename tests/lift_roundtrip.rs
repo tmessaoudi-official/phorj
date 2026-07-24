@@ -126,6 +126,27 @@ fn roundtrip(php: &str, label: &str, php_src: &str) {
 }
 
 #[test]
+fn lift_recognizes_tostring_as_attribute() {
+    // DEC-331 D9b: PHP `__toString` lifts to a phorj `#[ToString]` method named `toString`
+    // (the reverse of the transpiler's `__toString` delegate). Pure lift — no php needed.
+    let php = "<?php class M { public function __construct(public int $c) {} \
+               public function __toString(): string { return \"m\"; } }";
+    let phorj = lift::lifter::lift_source(php).expect("lift ok");
+    assert!(
+        phorj.contains("#[ToString]"),
+        "expected #[ToString] in:\n{phorj}"
+    );
+    assert!(
+        phorj.contains("function toString()"),
+        "expected a `toString` method in:\n{phorj}"
+    );
+    assert!(
+        !phorj.contains("__toString"),
+        "the PHP magic name must be gone:\n{phorj}"
+    );
+}
+
+#[test]
 fn lift_roundtrip_preserves_behavior() {
     let Some(php) = php_or_gate("lift_roundtrip_preserves_behavior") else {
         return;
