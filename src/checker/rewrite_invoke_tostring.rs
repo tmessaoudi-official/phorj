@@ -425,6 +425,39 @@ pub fn resolve_invoke_tostring(
         stmts.into_iter().map(|s| rstmt(s, inv, ts)).collect()
     }
 
+    // Rewrite every member that can hold an invoke/tostring site. Shared by classes AND traits (a
+    // trait flattens into using classes and its bodies reach both backends). Method/ctor/hook bodies
+    // AND field initializers are all walked — a field init like `string s = "{obj}";` records a
+    // `#[ToString]` target at check time, so it MUST be lowered here too (else interp/VM fault while
+    // the PHP leg's `__toString` prints — a byte-identity break; the sibling passes recurse fields too).
+    fn rmembers(members: &mut [ClassMember], inv: &Names, ts: &Names) {
+        for m in members {
+            match m {
+                ClassMember::Method(f) => {
+                    let body = std::mem::take(&mut f.body);
+                    f.body = rblock(body, inv, ts);
+                }
+                ClassMember::Constructor { body, .. } => {
+                    let b = std::mem::take(body);
+                    *body = rblock(b, inv, ts);
+                }
+                ClassMember::Hook { get, set, .. } => {
+                    if let Some(e) = get.take() {
+                        *get = Some(rexpr(e, inv, ts));
+                    }
+                    if let Some((p, body)) = set.take() {
+                        *set = Some((p, rblock(body, inv, ts)));
+                    }
+                }
+                ClassMember::Field { init, .. } => {
+                    if let Some(e) = init.take() {
+                        *init = Some(rexpr(e, inv, ts));
+                    }
+                }
+            }
+        }
+    }
+
     let items = program
         .items
         .into_iter()
@@ -434,54 +467,11 @@ pub fn resolve_invoke_tostring(
                 Item::Function(f)
             }
             Item::Class(mut c) => {
-                for m in &mut c.members {
-                    match m {
-                        ClassMember::Method(f) => {
-                            let body = std::mem::take(&mut f.body);
-                            f.body = rblock(body, invoke, tostring);
-                        }
-                        ClassMember::Constructor { body, .. } => {
-                            let b = std::mem::take(body);
-                            *body = rblock(b, invoke, tostring);
-                        }
-                        ClassMember::Hook { get, set, .. } => {
-                            if let Some(e) = get.take() {
-                                *get = Some(rexpr(e, invoke, tostring));
-                            }
-                            if let Some((p, body)) = set.take() {
-                                *set = Some((p, rblock(body, invoke, tostring)));
-                            }
-                        }
-                        ClassMember::Field { .. } => {}
-                    }
-                }
+                rmembers(&mut c.members, invoke, tostring);
                 Item::Class(c)
             }
-            // Trait method/ctor/hook bodies reach BOTH backends (interp registers them, the
-            // transpiler emits `emit_trait`), so a `#[Invoke]` call / `#[ToString]` hole inside one
-            // must be lowered too — same member walk as a class.
             Item::Trait(mut t) => {
-                for m in &mut t.members {
-                    match m {
-                        ClassMember::Method(f) => {
-                            let body = std::mem::take(&mut f.body);
-                            f.body = rblock(body, invoke, tostring);
-                        }
-                        ClassMember::Constructor { body, .. } => {
-                            let b = std::mem::take(body);
-                            *body = rblock(b, invoke, tostring);
-                        }
-                        ClassMember::Hook { get, set, .. } => {
-                            if let Some(e) = get.take() {
-                                *get = Some(rexpr(e, invoke, tostring));
-                            }
-                            if let Some((p, body)) = set.take() {
-                                *set = Some((p, rblock(body, invoke, tostring)));
-                            }
-                        }
-                        ClassMember::Field { .. } => {}
-                    }
-                }
+                rmembers(&mut t.members, invoke, tostring);
                 Item::Trait(t)
             }
             other => other,

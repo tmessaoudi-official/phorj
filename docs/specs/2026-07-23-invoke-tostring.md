@@ -131,6 +131,13 @@ reopenable, dev to schedule):**
   symmetric; consequence: a phorj `#[Invoke]` class does NOT round-trip through transpile→lift in slice 1
   (`#[ToString]` DOES). The §6 "transpile snapshot incl. the multi-invoke shim dispatch" test is owed to 1b.
 
+String context is lowered EVERYWHERE it is recorded — method/ctor/hook bodies AND field initializers
+(`string s = "{obj}";`), on classes and traits — so the byte-identity spine holds uniformly. (The
+field-initializer case was a real gap caught by the round-2 review and fixed before ship.)
+
 **Known slice-1 limitations (recorded):** an interface-/enum-typed receiver used as `x(args)` or in
 string context reports `E-NOT-CALLABLE`/`E-NO-TOSTRING` with class-oriented wording (over-rejection,
 never unsound); class-level `#[ToString]`/`#[Invoke]` uniqueness is enforced for classes and traits.
+A class that acquires `#[ToString]` ONLY via a `use`d trait gets no PHP `__toString` delegate emitted
+(the emitter scans the class's own members) — phorj-internal string context still works via the
+named-method rewrite; only external PHP-host coercion (`echo $obj`) is affected. Slice-1b follow-up.

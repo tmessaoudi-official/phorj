@@ -25,6 +25,12 @@ class Adder {
     }
 }
 
+// `#[ToString]` also fires in a FIELD INITIALIZER's string — the interpolation is lowered before
+// every backend, so this reads identically on the interpreter, VM, and transpiled PHP.
+class Banner {
+    string caption = "bias={new Adder(3)}";
+}
+
 #[Entry]
 function main(): void {
     Adder a = new Adder(10);
@@ -35,4 +41,5 @@ function main(): void {
     Output.printLine("{a.add(5)}");
     Output.printLine("{a}");
     Output.printLine(Conversion.toString(a));
+    Output.printLine(new Banner().caption);
 }

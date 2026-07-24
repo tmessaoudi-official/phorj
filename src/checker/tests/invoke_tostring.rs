@@ -74,7 +74,8 @@ fn two_invoke_methods_same_signature_is_duplicate() {
 fn invoke_method_with_default_param_is_rejected() {
     // DEC-331 slice 1: `#[Invoke]` uses exact-arity resolution, so a default/variadic param is
     // rejected (no silent divergence from the direct call). Honoring defaults is slice 1b.
-    let errs = errors_of("class C { #[Invoke] function m(int x, int y = 0): int { return x + y; } }");
+    let errs =
+        errors_of("class C { #[Invoke] function m(int x, int y = 0): int { return x + y; } }");
     assert!(has(&errs, "E-INVOKE-DEFAULTS"), "{errs:?}");
 }
 
@@ -111,6 +112,16 @@ fn invoke_call_with_no_matching_overload_is_no_match() {
         "{ADDER} function main(): void {{ Adder a = new Adder(1); string bad = \"x\"; int r = a(bad); }}"
     ));
     assert!(has(&errs, "E-OVERLOAD-NO-MATCH"), "{errs:?}");
+}
+
+#[test]
+fn trait_with_two_tostring_methods_is_duplicate() {
+    // Fix #2: uniqueness is enforced on traits too (they flatten into using classes).
+    let errs = errors_of(
+        "trait T { #[ToString] function a(): string { return \"\"; } \
+                   #[ToString] function b(): string { return \"\"; } }",
+    );
+    assert!(has(&errs, "E-TOSTRING-DUPLICATE"), "{errs:?}");
 }
 
 #[test]
