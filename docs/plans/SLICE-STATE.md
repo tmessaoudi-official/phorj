@@ -317,6 +317,47 @@ wrapped (or the invariant re-asserted locally), never inherited transitively.
 - 5-site lockstep (helper_refs/declares/symbols/refs/json_ext) unconditional via the stubs.
 - Any new UbCtx state joins reset_for_run (none planned; checklist).
 
+### 5b API POINTERS (runtime scan, VERIFIED 2026-07-24 — so 5b is implementable from repo state alone, Inv 19)
+Kind::Json is a REGISTER PAIR (payload word `vars[d]`, tag word `evars[d]`); rel tags Null=0 Bool=1
+Int=2 Float=3 String=4 Array=5 Object=6, 7 = phorj null (the `Json?` None). Payload per tag: 0/7
+filler; 1 bool(0/1); 2 i64; 3 f64-bits; 4 str handle; 5 JList handle; 6 JMap handle. JList/JMap
+(`Kind::JList/JMap`) = UNTAGGED `ctx.handles` indices boxing `Value::List`/`Value::Map` (whose
+elements/values are `Value::JsonLazy` children) — minted via `ctx.alloc(...)`; the register-pair
+`EnumInt` vertical CANNOT represent container Json nodes (they must be boxed handles).
+- **Value shapes** (`src/value/types.rs`): `Value::Enum(Rc<EnumVal>)` :155; `EnumVal{ty:Rc<str>,
+  variant:Rc<str>, payload:Payload}` :364; `Payload::{Zero, One(Value), Many(Vec<Value>)}` :304
+  (methods `first()->Option<&Value>`, `as_slice()`, `Index` — NEVER `[]` a `Zero`; use `first()`).
+  `Value::Map(Rc<Vec<(HKey,Value)>>)` :147 (insertion-ordered, NOT a hashmap); `HKey::{Int,Bool,
+  Str(PhStr)}` :377. `Value::List(Rc<Vec<Value>>)` :141. `Value::JsonLazy(Rc<LazyJson>)` :162
+  (cfg json); `LazyJson{src:PhStr,start:usize,cached:OnceCell<Value>}` :104.
+  A Json Object node = `Enum{variant:"Object", payload:One(Value::Map(..))}`; Array =
+  `Enum{variant:"Array", payload:One(Value::List(..))}`.
+- **Callable-from-`src/jit/` entry points**: `crate::ext::json::...::json_parse_str(s:&str,
+  out:&mut String)->Result<Value,String>` is **pub(crate)** (`ext/json/natives.rs:185`) — returns
+  `Ok(JsonLazy)` on valid / `Ok(Value::Null)` on malformed; USE THIS for rt_u_json_parse (do NOT
+  reach for `validate_json`, which is `pub(in crate::ext::json)` — NOT visible here).
+  `materialize_if_lazy(Value)->Value` (`ext/json/natives.rs:191`, pub) forces one level;
+  `materialize_lazy(&LazyJson)->Value` (`ext/json/parser/lazy.rs:298`, pub) — its `.expect` is
+  `lazy.rs:308`, reachable only on an internal validate/build divergence (never on user-malformed
+  input → that's `Null` at parse). `crate::value::build_map(Vec<(Value,Value)>)->Result<Vec<(HKey,
+  Value)>,String>` (`value/collections.rs:40`, pub; dedup = first-position/last-value). Json
+  variant NAME→order SSOT: `JSON_VARIANTS` `ext/json/natives.rs:31` (Null..Object).
+- **Helper patterns to mirror** (`src/jit/handles/mod.rs`): `rt_u_map_push_pair` :1100 (scratch
+  `Value::List` append via `Rc::get_mut→ -1`); `rt_u_map_seal` :1143 (`build_map` then
+  `ctx.alloc(Value::Map(Rc::new(..)))`); `rt_u_map_get` :1198 with `#[repr(C)] UbMapGetRet{value,
+  code}` :1188 (2×i64 return; `code:5`=redo-VM). Every helper's 1st line `let ctx=unsafe{&mut
+  *ctx};`; defensive→ `-1`/`code:5`; reads via `ctx.handles.get(h as usize)` / `ctx.str_bytes(h)`;
+  `ctx.alloc(v)` :354; `ctx.release(h)`; `seal_flat_entries` `maps_ext.rs:90` (pub(in crate::jit)).
+- **5-site wiring** (representative `map_push_pair`): `handles/helper_refs.rs` UbHelperIds :19 +
+  UbHelperRefs :61 · `src/jit/declares.rs` :49 (sig helpers :28-40) · `handles/symbols.rs` :16 ·
+  `emit_unboxed/refs.rs` :21 · impl in `handles/mod.rs`. New two-i64 helper needs its own
+  `#[repr(C)]` ret struct + a bespoke sig pushing a 2nd `AbiParam::new(I64)` onto `.returns`.
+- **UB tags** (`handles/mod.rs`, all pub(super)): SLOT `1<<62` :48, FLAT `1<<61` :50, OWNED
+  `1<<60` :52, ACC `1<<59`, IDX_MASK `(1<<40)-1` :128, SLOT_SIZE 64 :144, SLOT_CAP 4096 :147.
+- **alloc_json mint cap** [R2-safety-F1]: a json-only `alloc_json(v)` on UbCtx capping LIVE
+  untagged count (`handles.len()-free.len()`) at `4*UB_SLOT_CAP` → `-1`→code 5; shared `alloc()`
+  stays infallible (turning rt_u_native2 hits into bad handles was the v2 hazard this replaces).
+
 ## collect_unboxed gates
 Accept: Const(Value::Null) → NullMark ONLY WHEN THE VERY NEXT OP IS Eq/Ne [R6-corr-1 NARROWED:
 a GLOBAL Const(Null) accept admits NullMark into contexts the operand-transient invariant
