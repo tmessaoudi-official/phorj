@@ -15,7 +15,9 @@ rule, vscode 0.5.0, PhpStorm/LSP4IJ README. **⚠ Inv-13 judgment call (dev revi
 clean M-Decomp extractions (register row). Verified here (php-8.4 oracle): fmt + clippy(both) +
 size-gate green; full `--all-features` suite green.
 
-**NEXT WORK:** DEC-331 slice 2 (Rich Request v1) or slice 1b (invoke-as-callable-value) → then the
+**NEXT WORK (dev-ruled 2026-07-24, pre-compact): ▶ DEC-331 SLICE 2 — RICH REQUEST v1** (spec
+`docs/specs/2026-07-23-rich-request.md`, RULED + BUILD-READY — read it FIRST). Slice 1b
+(invoke-as-callable-value) stays QUEUED behind it; then slice 3 (Entry-kinds/serve/TLS), then the
 DEC-333 perf roadmap. (DEC-331 slice 1 + DEC-336 both shipped this night.) **CURRENT STATE:** jump to the "LIVE CURSOR" block below. Speccing wave
 COMPLETE (8 specs, all P-points answered). DEC-334 config-catalog QUEUED; DEC-335 `Any`+`Object`
 RULED (build queued). Perf campaign CLOSED at 44 WIN / 4 LOSS (dev-box canonical, scorecard UPDATE 10).
