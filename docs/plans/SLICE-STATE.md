@@ -14,6 +14,22 @@ start FRESH before slice 3 (substantial slice — project rule). Small playgroun
 (package-manager section + `main.js:422` entry-snippet that drops `#[Entry]` + the vendoring-verb /
 manifest doc drift) is a separate warm-up, decision pending.
 
+**⚖️ SLICE-3 BUILD SEQUENCING (dev ruled AskUserQuestion, 2026-07-24 post-compact) — INCREMENTAL, each
+sub-slice green + byte-identity + committed, SSOT updated in-change (Inv 19):**
+- **S3.1** — `#[Entry(kind:)]` syntax + checker: bare `#[Entry]`→`E-ENTRY-KIND-REQUIRED` (retire DEC-191
+  inference), Cli/Web active + Desktop/Mobile/Worker/Embedded reserved, `E-DUPLICATE-ENTRY-KIND`;
+  **migrate ALL shipped `#[Entry]` examples/fixtures to add `kind:` in the same slice** (else the
+  differential/conformance suite breaks). Breaking change #1. No new deps.
+- **S3.2** — `Http.ServeConfig` stdlib class + `#[Config]`-provider-by-TYPE resolution + precedence
+  chain (CLI flag > env > #[Config] > phorj.json static > attr default) (D1/D4). Builds on shipped DEC-318.
+- **S3.3** — `Http.serve(cfg, handler)` HTTP runtime + **retire `respond` (breaking #2)** + migrate
+  `examples/web/*` + site-mode `index.phg` (D5). Typed `(Request):Response` is THE handler.
+- **S3.4** — role-mismatch UX: `run`→Cli / `serve`→Web + `E-NO-ENTRY-FOR-ROLE` + TTY prompt / non-TTY
+  error, symmetric both directions (D6/P3).
+- **S3.5** — inbound TLS via **rustls**, feature-gated `http-server-tls` + UNIFIED-SPEC external-deps row
+  (same change) + `serve_tls.phg` README walkthrough (D7/P2). Last: isolates the new dep + all-features gate.
+  **← CURRENT: S3.1 in flight (Phase 2 grounding).**
+
 **✅ PLAYGROUND WARM-UP DONE (dev ruled Option 1, 2026-07-24):** three fixes — (1) `main.js:422`
 editor-fallback snippet now mirrors `gen_examples.py`'s DEFAULT exactly (restored `import
 Core.Runtime.Entry;` + `#[Entry]`; it had dropped both despite a "keep in sync" comment — a bare
