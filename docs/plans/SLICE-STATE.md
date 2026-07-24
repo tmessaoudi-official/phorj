@@ -79,12 +79,61 @@ work starts; final record lands in the register + spec §BUILD STATUS at ship):*
   dedicated http helpers file); `src/native/mod.rs` is AT its 588 baseline — registration lines must
   be netted out (split the registry build list) — size-gate green is part of the slice gate.
 
+**3C ROUND-2 AMENDMENTS (panel re-review of the amended plan — all folded in before build):**
+- **Wither fidelity (HIGH):** `Request.fake` + withers rebuild from the ORIGINAL RAW target, raw
+  header lines, and raw body (kept as private fields) — NEVER from decoded bags (decode→re-encode is
+  non-idempotent: `a%2Bb` would corrupt to `a b`). Round-trip fidelity tests: `a%2Bb`, `a+b`, `%00`,
+  mixed-case keys.
+- **ParamBag fidelity:** query/form/cookie KEYS are case-SENSITIVE (never lowercased — ONLY HeaderBag
+  is case-insensitive); cookie pairs split on the FIRST `=` only (values may contain `=` — JWT/base64
+  sids); per-pair whitespace trimmed exactly as the old session parse; quoting preserved verbatim;
+  duplicate names first-wins. tests/session.rs extended with mixed-case cookie name + `=`-in-value.
+- **Wither CRLF fault under serve — accepted + disclosed:** a middleware calling
+  `req.withHeader(name, v)` with CRLF faults (→500 under serve). Deliberate: unvalidated CRLF into a
+  header constructor is a programming error; fail-loud beats silent header splitting. NOT in tension
+  with "eager never faults" (that guardrail covers PARSE of hostile wire input; withers are code).
+- **Response-side CRLF asymmetry → PENDING dev question (register):** `Response.withHeader` /
+  `Cookie.render` are TODAY unguarded (the actual outbound injection sink). Guarding them changes
+  shipped surface behavior → dev adjudication, not autonomous; KNOWN_ISSUES row meanwhile.
+- **Caps recorded:** `pub const SPILL_THRESHOLD = 262_144` + `pub const MULTIPART_MAX_PARTS = 1024`
+  (PHP `max_input_vars`-shaped) single-sourced beside `DEFAULT_MAX_BODY_SIZE`; over-cap parts are
+  DELIBERATELY classified malformed (recorded); all three consts become DEC-334 catalog rows.
+- **Body cap inert under serve (disclosed):** `DEFAULT_MAX_BODY_SIZE` == the transport frame cap
+  `MAX_REQUEST` (head+body), so via serve a body can never reach it — reachable only via
+  fake/direct parse in slice 2; frame-layer truncation makes a wire-oversize body look MALFORMED
+  (not oversize). Comment at the const site + KNOWN_ISSUES row; slice 3 (ServeConfig) must reconcile
+  frame-cap vs body-cap semantics and the oversize-vs-malformed fault boundary.
+- **Json ordering (clarified):** the Http prelude becomes the SOLE `import Core.Json` importer;
+  relocation puts the importED row after the importER (forward-fold reads the accumulated program —
+  verified vs `inject_core_modules`; the SessionModule→Http precedent). `RequestBody.json()`'s body
+  references ONLY the always-registered `Core.Native.Http.jsonParse`, never feature-gated
+  `Json.parse` — plus a `#[cfg(not(feature="json"))]`-gated check test + one manual no-default-
+  features `phg check` smoke of a Core.Http program recorded in the ship notes (no CI gate RUNS
+  tests no-json today — recorded honestly).
+- **Migration precision:** the `.body`→`.body.bytes()` rewrite set is EMPTY (all in-scope `.body`
+  hits are `resp.body`, unchanged); handler.phg / server.phg / json-api.phg define their OWN local
+  Request and are NOT touched.
+- **3-leg parity tests added:** the bags conformance golden includes a route-param-via-attributes
+  case (Router.handle's mutable-bag write observed identically on interp/VM/PHP — conformance runs
+  all 3 legs and requires exit 0, so it stays fault-free and avoids `.json()`); the CRLF wither
+  fault + oversize get a differential-style 3-leg FAULT-parity test (agree_err pattern — faults
+  cannot live in conformance goldens).
+- **Perf doctrine (WIN-OR-FLAG):** new micro bench pair `bench/micro/queryparse.{phg,php}`
+  (native parseQuery vs idiomatic PHP) lands with the slice — no silent bench skip.
+- **Docs completeness:** MASTER-PLAN slice-(2) line annotated (eager/lazy switch → slice 3, not a
+  bare tick); `examples/README.md` core-http row prose updated (`req.header(name)` →
+  `req.headers.get`); spec §2 table annotated with the `Body`→`RequestBody` build rename;
+  `src/cli/http_prelude.rs` (267 lines, NOT grandfathered → 500 hard cap) added to the
+  pre-split-FIRST list (multi-const/multi-file prelude split).
+
 **Recorded deviations (dev to review):** `Body`→`RequestBody` (FS-taxonomy capture precedent /
 DEC-202); `Request.parse` stays public until slice 3 retires respond; lazy mode sequenced to slice 3
 **and spec §6's eager-vs-lazy parity test moves with it**; spec §5 canonical fault strings ship as
 single-sourced consts but become runtime-reachable only with lazy (slice 3); `Router.handle` now
 SETS route params via the mutable `attributes` bag — it mutates its argument (Rc-observable) instead
 of returning a `withParams` copy (PSR-7 attributes convention + the ruled mutable-attributes model);
+wither CRLF fault-on-programming-error (accepted disposition above); Response-side CRLF guard =
+PENDING dev question; multipart part cap 1024 + spill 256 KiB + body cap 8 MiB as recorded consts;
 superglobal lift mapping DEFERRED (needs ambient→parameter transform design; the lifter recognizes no
 superglobals today, so spec §4's "where already recognized" is vacuously satisfied — KNOWN_ISSUES row). **CURRENT STATE:** jump to the "LIVE CURSOR" block below. Speccing wave
 COMPLETE (8 specs, all P-points answered). DEC-334 config-catalog QUEUED; DEC-335 `Any`+`Object`
