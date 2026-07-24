@@ -2081,6 +2081,18 @@ fn rich_request_multipart_agrees_on_all_legs() {
         "if (var r = Request.parse(body)) { Output.printLine(\"nonutf8=parsed\"); } else { Output.printLine(\"nonutf8=null\"); } }",
     );
     agree_out_php(non_utf8, "nonutf8=null\n", "multipart-nonutf8");
+    // The SPILL round-trip on the PHP leg (6C round-2): a body above SPILL_THRESHOLD (262144)
+    // takes the tempnam/file_put_contents branch on BOTH legs; reading it back through `body.text()`
+    // and printing its length is deterministic (the temp PATH never surfaces, Inv 10; the handle is
+    // a sequential index). This is the first PHP-leg exercise of `__phorj_http_stash_body`/`read`.
+    let spill = concat!(
+        "import Core.Output; import Core.Bytes; import Core.Http.Request; ",
+        "#[Entry] function main() -> void { ",
+        "string big = String.repeat(\"ab\", 200000); ", // 400000 B > 262144 → spills
+        "Request r = Request.fake(\"POST\", \"/u\").withBody(Bytes.fromString(big)); ",
+        "Output.printLine(\"spilled-len={String.length(r.body.text())}\"); }",
+    );
+    agree_out_php(spill, "spilled-len=400000\n", "multipart-spill-roundtrip");
 }
 
 /// Pathological nesting must fault *identically* on both backends (M2 P3.5 Wave 0, Task 0.4).
