@@ -39,6 +39,17 @@ attributes). No VSCode required — the directory is just a standard TextMate-co
 3. Apply. Open any `.phg` file: diagnostics appear inline (identical to `phg check`), and hover,
    go-to-definition (`Ctrl/Cmd+Click`), completion, structure view (document symbols), find-usages
    (references), rename, and reformat (`phg format`) all work through the server.
+
+### Extensionless `#!…phg` shebang files (executable entries)
+
+A phorj source may be an extensionless executable with a `#!/usr/bin/env phg` first line (the
+tokenizer skips the shebang; `phg run ./bin/console` works). To light these up in PhpStorm:
+
+- **Highlighting:** `Settings → Editor → File Types → Phorj` (or the TextMate bundle) → add a
+  filename pattern for your entry (e.g. `console`), or register the name under the TextMate bundle.
+- **Language server:** in the LSP4IJ mapping above, add a **File name pattern** for your extensionless
+  entries (e.g. `console`, `bin/*`) → language id `phorj`, so the same `phg lsp` attaches. (LSP4IJ
+  matches by name pattern; add each executable entry, or a `bin/*`-style glob.)
    - **Completion** (the `.` trigger character is advertised, so it fires as you type) offers:
      `import Core.` → the importable Core module paths; `List.` / `Output.` → that Core module's
      members; plus in-scope top-level symbols, locals/params, and keywords. It is **parse-tolerant**

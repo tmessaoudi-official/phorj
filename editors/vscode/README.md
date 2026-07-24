@@ -2,9 +2,12 @@
 
 A thin client that connects VS Code to the Phorj language server (`phg lsp`), plus a TextMate grammar
 for syntax highlighting. The language *intelligence* lives entirely in the server; this extension
-registers the `phorj` language (`*.phg`), ships the grammar (`syntaxes/phorj.tmLanguage.json`), and
-launches the server over stdio. (The same grammar + server power the JetBrains/PhpStorm setup — see
-`../phpstorm/README.md`.)
+registers the `phorj` language (`*.phg`, **and extensionless files whose first line is a `#!…phg`
+shebang** — the `./bin/console`-style executable entry, via the language's `firstLine` match), ships
+the grammar (`syntaxes/phorj.tmLanguage.json`), and launches the server over stdio. Because the
+client selects documents by language id (not a `*.phg` glob), a shebang'd extensionless file gets the
+full server (diagnostics, completion, hover, …) exactly like a `.phg` file. (The same grammar +
+server power the JetBrains/PhpStorm setup — see `../phpstorm/README.md`.)
 
 ## Features
 

@@ -3,6 +3,7 @@
   "name": "Phorj",
   "scopeName": "source.phorj",
   "patterns": [
+    { "include": "#shebang" },
     { "include": "#comments" },
     { "include": "#strings" },
     { "include": "#attributes" },
@@ -15,6 +16,11 @@
     { "include": "#operators" }
   ],
   "repository": {
+    "shebang": {
+      "patterns": [
+        { "name": "comment.line.number-sign.shebang.phorj", "match": "\\A#!.*$" }
+      ]
+    },
     "comments": {
       "patterns": [
         { "name": "comment.line.double-slash.phorj", "match": "//.*$" },
