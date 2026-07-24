@@ -14,6 +14,22 @@ start FRESH before slice 3 (substantial slice — project rule). Small playgroun
 (package-manager section + `main.js:422` entry-snippet that drops `#[Entry]` + the vendoring-verb /
 manifest doc drift) is a separate warm-up, decision pending.
 
+**✅ PLAYGROUND WARM-UP DONE (dev ruled Option 1, 2026-07-24):** three fixes — (1) `main.js:422`
+editor-fallback snippet now mirrors `gen_examples.py`'s DEFAULT exactly (restored `import
+Core.Runtime.Entry;` + `#[Entry]`; it had dropped both despite a "keep in sync" comment — a bare
+`main` would boot an entry-less program; verified `phg run` → `Hello, world!`/`Hello, Phorj!`);
+(2) `examples/README.md:234,309` retired-verb drift fixed (`phg vendor` → `phg add --git`/`phg
+install`; `phg vendor` is RETIRED per help.rs:173 / DEC-282→DEC-316); (3) `playground/README.md`
+gained a "single-file only" note (multi-file examples — package-manager/project/interop — are
+repo-only in the wasm sandbox). RE-EVALUATED NOT-A-BUG (untouched): package-manager/README's 3-dep
+manifest is a deliberate all-source-kinds illustration ("this demo uses a local path"), self-consistent.
+**⚑ FOUND, OUT OF SCOPE (dev to rule):** `src/cli/explain.rs:1065,1208` teach `-> void`/`-> int`
+(arrow) for REGULAR functions, but Inv 12 + all examples use `: T` (arrow is only for foreign
+`declare` sigs) — stale error-text syntax, small fix owed.
+**QUEUED SLICE (dev ruled Option 3 = "later"):** full **multi-file playground support** — a virtual
+multi-file/vendored FS in wasm so `package-manager/`, `project/*`, `interop/*` examples actually RUN
+in the browser (its own slice; touches `gen_examples.py` + `main.js` + the wasm wrapper).
+
 **✅ DEC-331 SLICE 1 (`#[Invoke]` + `#[ToString]`) BUILT + byte-identity green (2026-07-24)** — see
 the DEC-331 slice-1 register row + spec §8. Shipped: direct `x(args)` invoke calls (overloaded),
 `#[ToString]` in interpolation + `Conversion.toString`, transpile `__toString` delegate, lift

@@ -14,6 +14,12 @@ banner — a best-effort, review-required scaffold for the Tier-1 PHP subset.
 It is auto-deployed to GitHub Pages on every push to `master`, so the live site always runs the latest
 `phg`.
 
+> **Single-file only.** The sidebar auto-loads every *single-file* example from `examples/` (see
+> `web/gen_examples.py`). Multi-file examples — `examples/package-manager/`, `examples/project/*`,
+> `examples/interop/*` — cannot run in the single-file wasm sandbox (no multi-file/vendored virtual
+> FS yet), so they live in the repo only; clone and run them with `phg run`. (Making them runnable
+> here is a tracked future slice — a virtual multi-file FS in wasm.)
+
 ## How it works
 
 - The Phorj pipeline is compiled to WebAssembly. The core `phorj` crate is unchanged and stays
