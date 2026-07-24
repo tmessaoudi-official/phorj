@@ -73,6 +73,13 @@ fn quoted_param(header: &str, key: &str) -> Option<String> {
     None
 }
 
+/// RFC 7230 OWS = space + htab ONLY — trimmed identically here and in the PHP twin
+/// (`trim($x, " \t")`), so header parsing can never diverge on a Unicode-vs-ASCII whitespace edge
+/// (the F2b byte-identity break the 6C panel caught: Rust `str::trim()` ≠ PHP `trim()`).
+fn ows_trim(s: &str) -> &str {
+    s.trim_matches([' ', '\t'])
+}
+
 /// Parse the head of one part (everything before its `\r\n\r\n`). Header names are matched
 /// case-insensitively (HTTP rule); a part without a Content-Disposition `name` is malformed.
 fn parse_part_head(head: &str) -> Option<(String, String, String)> {
@@ -83,8 +90,8 @@ fn parse_part_head(head: &str) -> Option<(String, String, String)> {
         let Some((h, v)) = line.split_once(':') else {
             continue;
         };
-        let key = h.trim().to_ascii_lowercase();
-        let v = v.trim();
+        let key = ows_trim(h).to_ascii_lowercase();
+        let v = ows_trim(v);
         if key == "content-disposition" {
             name = quoted_param(v, "name");
             if let Some(f) = quoted_param(v, "filename") {

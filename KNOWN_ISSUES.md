@@ -121,6 +121,15 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
 
 ## RICHREQ-2026-07-24 — rich Request v1 build limitations (DEC-331 slice 2; all recorded, reopenable)
 
+0. **6C-hardened (2026-07-24, all fixed in the same slice):** the multipart PHP twin now mirrors
+   the Rust oracle exactly — a UTF-8 gate on the part head (F1), RFC-7230 OWS trim (space+htab
+   only, not PHP `trim()` nor Rust `str::trim()`) (F2b), and a `[; \t]` boundary char class (not
+   PCRE `\s`) (F2a); `Request.fake`/`rebuild` now CR/LF-guard the method AND target, not just
+   header name/value (F3 — the rebuild path is no longer an injection primitive via `fake`'s
+   target). Locked by `rich_request_multipart_agrees_on_all_legs` (3-leg parity, incl. the first
+   PHP-leg multipart exercise) + the extended CRLF `agree_err_php`. The PHP spill IO path (tempnam/
+   file_put_contents) still lacks a differential leg (deterministic fs testing is the blocker) —
+   the Rust side is unit-tested and the contract matches on inspection; residual gap noted below.
 1. **Spill temp files leak until process exit** — spilled bodies (> 256 KiB) write
    `phorj-spill-*` files under the OS temp dir, addressed by deterministic in-process handles
    (never by path, Inv 10). Nothing deletes them mid-run; the OS tmp reaper (or process exit) is

@@ -2038,6 +2038,49 @@ fn rich_request_wither_guards_fault_identically() {
     agree_err_php(
         r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry] function main() -> void { string cr = Bytes.toString(b"\x0d") ?? ""; Request r = Request.fake("GET", "/x").withHeader("bad{cr}name", "v"); Output.printLine(r.method); }"#,
     );
+    // CRLF in the fake TARGET → the request-line guard faults (6C: the rebuild path must not be an
+    // injection primitive even via `fake`'s target).
+    agree_err_php(
+        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry] function main() -> void { string crlf = Bytes.toString(b"\x0d\x0a") ?? ""; Request r = Request.fake("GET", "/x{crlf}Evil: 1"); Output.printLine(r.method); }"#,
+    );
+}
+
+/// DEC-331 slice 2 (6C hardening) — multipart parsing agrees on all three legs for the byte-level
+/// edges the panel flagged: a well-formed ASCII body parses identically (exercises the PHP twin
+/// `__phorj_http_parse_multipart` — previously untested on the PHP leg), and a part-head with a
+/// non-UTF-8 byte is rejected identically (was a Rust-only reject → F1).
+#[test]
+fn rich_request_multipart_agrees_on_all_legs() {
+    // Well-formed multipart (field + file): the field value + file name/size/type print the same
+    // on interp, VM, and transpiled PHP — the first PHP-leg exercise of the multipart twin.
+    let well_formed = concat!(
+        "import Core.Output; import Core.Bytes; import Core.Http.Request; ",
+        "#[Entry] function main() -> void { ",
+        "string crlf = Bytes.toString(b\"\\x0d\\x0a\") ?? \"\"; ",
+        "string mp = \"--Z{crlf}Content-Disposition: form-data; name=\\\"who\\\"{crlf}{crlf}ada{crlf}",
+        "--Z{crlf}Content-Disposition: form-data; name=\\\"f\\\"; filename=\\\"a.bin\\\"{crlf}",
+        "Content-Type: text/plain{crlf}{crlf}DATA{crlf}--Z--\"; ",
+        "Request r = Request.fake(\"POST\", \"/u\").withHeader(\"content-type\", \"multipart/form-data; boundary=Z\").withBody(Bytes.fromString(mp)); ",
+        "string up = \"-\"; ",
+        "if (var f = r.files.get(\"f\")) { Output.printLine(\"who={r.form.get(\\\"who\\\") ?? \\\"-\\\"} f={f.name}/{f.size}/{f.contentType}\"); } ",
+        "else { Output.printLine(\"no file\"); } }",
+    );
+    agree_out_php(
+        well_formed,
+        "who=ada f=a.bin/4/text/plain\n",
+        "multipart-well-formed",
+    );
+    // A non-UTF-8 byte (0xFF) in the part head → rejected on ALL legs (F1): parse → null.
+    let non_utf8 = concat!(
+        "import Core.Output; import Core.Bytes; import Core.Http.Request; ",
+        "#[Entry] function main() -> void { ",
+        "string crlf = Bytes.toString(b\"\\x0d\\x0a\") ?? \"\"; ",
+        "bytes head = Bytes.fromString(\"POST /u HTTP/1.1{crlf}content-type: multipart/form-data; boundary=Z{crlf}{crlf}--Z{crlf}Content-Disposition: form-data; name=\\\"f\\\"; filename=\"); ",
+        "bytes body = Bytes.concat(head, Bytes.concat(b\"\\x22\\xff\\x22\", Bytes.fromString(\"{crlf}{crlf}x{crlf}--Z--\"))); ",
+        "string label = \"parsed\"; ",
+        "if (var r = Request.parse(body)) { Output.printLine(\"nonutf8=parsed\"); } else { Output.printLine(\"nonutf8=null\"); } }",
+    );
+    agree_out_php(non_utf8, "nonutf8=null\n", "multipart-nonutf8");
 }
 
 /// Pathological nesting must fault *identically* on both backends (M2 P3.5 Wave 0, Task 0.4).

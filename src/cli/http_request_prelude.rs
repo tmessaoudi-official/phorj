@@ -227,6 +227,11 @@ class Request {
     }
   }
   private static function rebuild(string method, string target, List<string> headerLines, bytes body): Request {
+    // The request line is `{method} {target} HTTP/1.1` — a CR/LF in EITHER field is a
+    // request-line/header-injection primitive through the rebuild-then-reparse path (a `fake`
+    // target smuggled a header past the header-only guard — 6C finding). Guard both fail-loud.
+    Request.guardHeaderText(method);
+    Request.guardHeaderText(target);
     string nl = Bytes.toString(b"\x0d\x0a") ?? "";
     string joined = String.join(headerLines, nl);
     string head = if (joined == "") { "{method} {target} HTTP/1.1{nl}{nl}" }

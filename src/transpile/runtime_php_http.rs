@@ -66,21 +66,28 @@ impl Transpiler {
         self.line("if ($he === false) { return null; }");
         self.line("$cs = $he + 4; $ce = strpos($body, $delim, $cs);");
         self.line("if ($ce === false) { return null; }");
+        self.line("$head = substr($body, $hs, $he - $hs);");
+        // F1: the Rust twin gates the head on valid UTF-8 (`from_utf8().ok()?`) — mirror it, or a
+        // non-UTF-8 part header would parse on PHP and 400 on interp/VM (byte-identity break).
+        self.line("if (preg_match('//u', $head) !== 1) { return null; }");
         self.line("$name = null; $file = ''; $ctype = '';");
-        self.line("foreach (explode(\"\\r\\n\", substr($body, $hs, $he - $hs)) as $line) {");
+        self.line("foreach (explode(\"\\r\\n\", $head) as $line) {");
         self.indent += 1;
         self.line("$ci = strpos($line, ':'); if ($ci === false) { continue; }");
+        // F2b: OWS trim = space + htab ONLY (RFC 7230), matching the Rust `ows_trim` — NOT PHP
+        // `trim()` (which also strips \n\r\0\x0B) nor Rust `str::trim()` (Unicode whitespace).
         self.line(
-            "$key = strtolower(trim(substr($line, 0, $ci))); $val = trim(substr($line, $ci + 1));",
+            "$key = strtolower(trim(substr($line, 0, $ci), \" \\t\")); $val = trim(substr($line, $ci + 1), \" \\t\");",
         );
         self.line("if ($key === 'content-disposition') {");
         self.indent += 1;
-        // The (?:^|[;\s]) guard = the Rust boundary-char rule (never read `filename` as `name`).
+        // F2a: the boundary char class is space/htab/`;` ONLY (the Rust `matches!` arm), NOT PCRE
+        // `\s` (which also matches \n\r\f\v).
         self.line(
-            "if (preg_match('/(?:^|[;\\s])name=\"([^\"]*)\"/', $val, $m)) { $name = $m[1]; }",
+            "if (preg_match('/(?:^|[; \\t])name=\"([^\"]*)\"/', $val, $m)) { $name = $m[1]; }",
         );
         self.line(
-            "if (preg_match('/(?:^|[;\\s])filename=\"([^\"]*)\"/', $val, $m)) { $file = $m[1]; }",
+            "if (preg_match('/(?:^|[; \\t])filename=\"([^\"]*)\"/', $val, $m)) { $file = $m[1]; }",
         );
         self.indent -= 1;
         self.line("} elseif ($key === 'content-type') { $ctype = $val; }");
