@@ -3374,3 +3374,48 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   (annotated `✅ SUPERSEDED by DEC-338`). At the 5-round cap without two-consecutive-clean, the developer ruled
   (AskUserQuestion) KEEP PANELLING past the cap; each round's doc findings were fixed and re-panelled until two
   consecutive fully-clean rounds were reached before commit.
+
+## DEC-339 … DEC-355 — GLOBAL REVIEW 2026-07-25: seventeen open adjudications (ALL **PENDING**)
+
+**Provenance.** The developer ran his own review pass, produced ~15 findings, and asked (2026-07-25) for
+them to be verified against real code, widened into a global project review, and prepared as an agenda he
+could rule on interactively — explicitly instructing that **no questions be asked and no decisions taken
+while he slept**. This block is therefore the Invariant-15 record: every fork is PENDING with a
+recommendation, none is ruled.
+
+**Canonical homes (Invariant 19, no duplicated content):** the *decision identity + status* is this table;
+the *analysis, minimal repro, per-option after-state and the why* live in
+`docs/research/2026-07-25-completeness-register.md` §2 (agenda IDs `GR-1`…`GR-17`, which map 1:1 to
+DEC-339…DEC-355 in order); the *raw evidence* lives in `docs/research/2026-07-25-global-review/`.
+This also discharges the already-RULED **DV-5** pass (`docs/specs/2026-07-24-visibility-model.md`).
+
+| DEC | GR | Question (one line) | Recommended (not ruled) | Status |
+|---|---|---|---|---|
+| DEC-339 | GR-1 | **P0** — shadowing a live outer local/param in ANY nested block mistranspiles (phorj has block scope, PHP has none): how to restore Invariant-1 byte-identity? | Alpha-rename shadowed locals in the transpiler + add a differential example covering every block form | **PENDING** |
+| DEC-340 | GR-2 | **P1 data loss** — `db.transaction(fn)` auto-rollback pops only ONE savepoint level, leaving an outer tx open with writes a later `commit()` persists | Unwind to depth 0 + add `rollbackAll()` | **PENDING** |
+| DEC-341 | GR-3 | TextMate grammar: `"begin": "\\b(b|r)?\""` makes every plain string start at its CLOSING quote (81/383 `.phg` files end mid-span) | Full 5-rule string section (leakage → 0/383) + a `vscode-textmate` pre-push gate | **PENDING** |
+| DEC-342 | GR-4 | UFCS receiver completion is empty (`line.` → 0 items) while `String.` over-suggests without the import — add completion, and gate it on the import? | Add `catalog::ufcs_members(recv_ty)` AND import-gate both directions (rule the two together) | **PENDING** |
+| DEC-343 | GR-5 | Loop forms: both `for…in` and `foreach…as` live; DEC-248 ruled `for (T x in xs)` retired but `E-RETIRED-FORIN` was never built; corpus is 87 vs 8 | Amend DEC-248 to "keep both" + close Conflict C-2 + add cross-form hints | **PENDING** |
+| DEC-344 | GR-6 | `main` is still forced into the entry signature by name (`type_bodies.rs:347`) despite DEC-331's attribute-declared entries | Remove the name special-case; delete dead `E-MULTIPLE-MAIN` + its stale `explain` entry | **PENDING** |
+| DEC-345 | GR-7 | `package` validators are skipped by the no-user-imports fast path (`loader/entry.rs:53-66`), so enforcement follows the import graph, not the file | Fix the A6 entry-root bug FIRST, then validate on the fast path; hatch = `#[Loose] package Foo.Bar;` | **PENDING** |
+| DEC-346 | GR-8 | Execute the already-ruled DEC-326 UFCS promotion: 2223 qualified sites in examples, 1231 of them `Output.printLine` (55.4%) | Tooling first, then the 391 zero-judgement sites; **rule `Output.printLine` before any codemod** | **PENDING** |
+| DEC-347 | GR-9 | File reads are whole-slurp (200 MB for `readAll`) while `Input.lines()` already streams at 23.7 MB RSS | `FileSystem.lines(path): Iterator<string>` over an offset-chunk native, no file handle | **PENDING** |
+| DEC-348 | GR-10 | No filesystem locking at all; the presumed dependency blocker is FALSE (std has file locks on the pinned rustc, and they interop with PHP `flock()`) | Scoped `withLock`/`tryWithLock`, whole-file, advisory — Windows semantics remain `[Unverified]` | **PENDING** |
+| DEC-349 | GR-11 | A no-modification clone already works as `p with { }`; bless it, and fix the lift refusal (live Invariant-17 gap) | Bless + document the existing form, add NO new syntax; lift must refuse loudly when `__clone` exists | **PENDING** |
+| DEC-350 | GR-12 | The DB type named `Database` is provably ONE connection (no pool anywhere); rename to `Connection`, and unsuffix `Core.DatabaseModule`? | `Core.Database.Connection` — rename type AND drop the `Module` suffix (DEC-278's rationale dissolves) | **PENDING** |
+| DEC-351 | GR-13 | `Statement` binds append and never reset, so a bind-in-a-loop fails on iteration 2; `bindNamed` silently last-wins and is ~75× slower at 8000 iters | Reset binds per execution; make both bind styles behave alike; fix the quadratic path | **PENDING** |
+| DEC-352 | GR-14 | "Visibility/access in blocks inside a function" admits FIVE distinct features — which was meant? | Read as **named local functions, WITHOUT access modifiers** (every peer language forbids modifiers there); NO to locals-visibility, local classes, capture lists | **PENDING** |
+| DEC-353 | GR-15 | `#[Entry]` requires TWO explicit imports for compiler-**injected** types; a minimal program is 6 lines, 4 of them ceremony (PHP: 2) | Auto-provide the injected `Core.Runtime.{Entry,EntryKind}` symbols | **PENDING** |
+| DEC-354 | GR-16 | Claude global bundle: which of the 199 files to import? (re-opens the 2026-07-22 bulk exclusion of "~43 machine-specific skills" + permission lists) | The 14-item package: 11 skills + `precompact-handoff` + adapted `refs/SKILLS.md` + deny/ask tiers + `disk-reclaim.sh`. **Hard OUT: all 57 `mcp/**` files** (corporate artifacts, public repo) | **PENDING** |
+| DEC-355 | GR-17 | `->` return syntax still parses though ruled retired (W2-4): 87 `.phg` + 2068 `.rs` fixtures across 90 files | Schedule it — `phg format` ALREADY normalizes `->`→`:`; separate fn-type/prose arrows first or the sweep corrupts docs | **PENDING** |
+
+**Cross-cutting structural finding (not itself a decision).** Six of the items above share ONE root cause:
+**a ruling was made, only partially built, and the docs were never reconciled** (DEC-248, DEC-326, DEC-331,
+DEC-208, DEC-282, plus dead `E-MULTIPLE-MAIN`). Recommended systemic fix, folded into DEC-343/DEC-344
+rather than a separate slice: **a mechanical gate asserting that every diagnostic code named in a register
+row exists in `src/`, or the row is marked PARTIAL.** That single check would have caught both
+`E-RETIRED-FORIN` (ruled, absent) and `E-MULTIPLE-MAIN` (explained, unreachable).
+
+**Second corollary worth recording:** the differential harness's coverage **is** the example corpus
+(`tests/differential.rs` globs `examples/**/*.phg`), so any feature without an example has **zero**
+byte-identity coverage. That is precisely how DEC-339's P0 survived — block scoping has no example.

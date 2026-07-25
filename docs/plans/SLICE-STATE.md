@@ -1,5 +1,54 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## 🔴 CURRENT CURSOR (2026-07-25 night) — GLOBAL REVIEW DONE, 17 RULINGS AWAIT THE DEVELOPER
+
+**What happened:** the developer reviewed the project himself, produced ~15 findings, and asked for them to
+be challenged/verified against real code, widened into a global review, and prepared as an interactive
+agenda — while he slept, with **no questions and no decisions taken** (Invariant 15 honoured: 0 rulings made).
+
+**READ THIS FIRST, IN THIS ORDER:**
+1. `docs/research/2026-07-25-completeness-register.md` — the synthesized ranked register. §0 = the P0,
+   §1 = verdicts on all 15 of his findings, **§2 = the 17-item agenda (`GR-1`…`GR-17`), ready to ask
+   one at a time**, §3 = the cross-cutting root cause, §4 = what needs no ruling, §5 = honest limits.
+2. `docs/research/full-audit/raw/C-decisions.md` — **DEC-339…DEC-355**, all PENDING (identity + status only;
+   analysis lives in the register — Invariant 19, one canonical home each).
+3. `docs/research/2026-07-25-global-review/` — 13 raw per-topic evidence reports (every claim `file:line`
+   + evidence-graded). Committed because the container is ephemeral.
+
+**This discharges the already-RULED DV-5** research pass (`docs/specs/2026-07-24-visibility-model.md`:
+*"global completeness sweep is its OWN research pass … synthesized into ONE ranked completeness register"*).
+
+### ⚠ THE P0 — fix before any feature work (DEC-339 / GR-1)
+Shadowing a live outer local **or parameter** inside ANY nested block (bare / `if` / `for` / `while` /
+nested) **breaks the Invariant-1 byte-identity spine**: phorj has true lexical block scoping, PHP has none,
+so the emitter's plain `$a = …` clobbers the outer binding.
+`int a = 1; if (true) { int a = 2; } print(a)` → vm `1`, tree-walker `1`, **php `2`**. Six shapes verified on
+all three legs. **Why the gate missed it:** `tests/differential.rs` globs `examples/**/*.phg` and no example
+shadows — so block scoping has ZERO spine coverage. Recommended fix: alpha-rename shadowed locals in the
+transpiler + a differential example covering every block form. **Needs a ruling only because option B
+(reject via `E-SHADOW-LOCAL`) is a legitimate surface choice.**
+
+### Corrections to beliefs recorded elsewhere in this file
+- **`SLICE-STATE.md:1022` "LSP AUTOCOMPLETE — DONE + COMPREHENSIVE" is measurably FALSE for UFCS** —
+  `line.` on a `string` returns **0 items** (already the LSP audit's punch-list rows #1/#2, P1, unbuilt).
+- **Nothing was retired from the loop syntax.** `for`…`in` AND `foreach`…`as` both work; only crossed forms
+  error. DEC-248 ruled `for (T x in xs)` retired but `E-RETIRED-FORIN` was **never built** (0 hits in `src/`).
+- **`main` is still reserved** by the checker (`type_bodies.rs:347`) despite DEC-331 — `#[Entry]` frees the
+  name only partially.
+- **A no-op clone already works**: `p with { }` (shallow, transpiles to bare `clone($p)`) — but the **lifter
+  refuses it**, a live Invariant-17 gap.
+
+### Dominant failure mode identified (act on this, not just the symptoms)
+**Ruled → partially built → docs never reconciled** explains 6 of the 17 items (DEC-248, DEC-326, DEC-331,
+DEC-208, DEC-282, dead `E-MULTIPLE-MAIN`). Recommended systemic gate: **every diagnostic code named in a
+decision-register row must exist in `src/`, or the row is marked PARTIAL.**
+
+### Needs NO ruling — safe to execute autonomously once approved to proceed
+Grammar fix + gate (GR-3) · `CLAUDE.md:9` dependency correction (**says "four" vetted exceptions; actual is
+14 optional deps across ~11 approved domains**) · stale-label fixes (a spec header says "NOT BUILT" about a
+certified feature; `SLICE-STATE:1022`) · UFCS diagnostic span anchored at `1:9` instead of the call site ·
+the block-scoping differential example.
+
 ## ✅ INV-13 DEBT CLEANUP — DONE (2026-07-25, dev-ruled), unblocks DEC-338 push
 **Why:** the pre-push size-gate (`scripts/size-gate.sh`, Inv 13) blocked ALL pushes — origin/master had
 **13 pre-existing breaches** (prior pushes bypassed via `--no-verify`). Dev ruled (AskUserQuestion): fix the debt
