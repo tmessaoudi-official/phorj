@@ -54,8 +54,9 @@ SYSCALL_IMPORTS = (
 DEFAULT = """package Main;
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<string> who = ["world", "Phorj"];
     for (string w in who) {

@@ -419,7 +419,7 @@ async function boot() {
   // on the first run. Mirrors gen_examples.py's DEFAULT (keep the two in sync).
   const defaultEx = examples.find((e) => e.name === "hello (default)");
   let initialDoc = (defaultEx && defaultEx.src) ||
-    'package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\n\n#[Entry(kind: Cli)]\nfunction main(): void {\n    List<string> who = ["world", "Phorj"];\n    for (string w in who) {\n        Output.printLine("Hello, {w}!");\n    }\n}\n';
+    'package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void {\n    List<string> who = ["world", "Phorj"];\n    for (string w in who) {\n        Output.printLine("Hello, {w}!");\n    }\n}\n';
   if (location.hash.length > 2) {
     try {
       const decoded = await decodeSource(location.hash.slice(1));

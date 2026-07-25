@@ -3297,5 +3297,8 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   test prepend-helpers inject the `EntryKind` import; new checker coverage for the three error paths.
   Full all-features gate green (nextest + clippy ×3 + fmt + release), DEC-268 panel certified.
 - **Currency (Inv 17).** Transpile (erased), lift (emits qualified form + import), formatter (round-trips),
-  LSP (checker≡diagnostics; `EntryKind` surfaces via CORE_MODULES bare_types). LSP attribute-arg completion
-  suggesting `EntryKind.Cli` inside `#[Entry(kind:` is a follow-up on the existing LSP punch-list.
+  LSP (checker≡diagnostics; `EntryKind` surfaces via CORE_MODULES bare_types), playground (the `playground/web`
+  example corpus — `examples.js` regenerated from the migrated `examples/*.phg` via `gen_examples.py`, plus the
+  hardcoded `main.js` fallback + `gen_examples.py` DEFAULT — since the wasm-compiled checker validates it too).
+  LSP attribute-arg completion suggesting `EntryKind.Cli` inside `#[Entry(kind:` is a follow-up on the existing
+  LSP punch-list.
