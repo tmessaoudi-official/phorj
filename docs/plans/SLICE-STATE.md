@@ -1,5 +1,26 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## 🌙 AUTONOMOUS OVERNIGHT RUN (2026-07-25, dynamic /loop) — READ FIRST if resuming
+
+**Mode:** user asleep, ruled "work non-stop through specced/100%-clear parts, no questions, no stop
+until I explicitly stop you; commit+push whenever green and correct; record any fork/ambiguity as
+PENDING and move on (Inv 15)."
+**HARD CONSTRAINT:** the `php-8.5.8` byte-identity oracle was LOST in a container restart →
+Inv-1 byte-identity + WIN-OR-FLAG perf are UNVERIFIABLE until it is rebuilt.
+**IN FLIGHT:** rebuilding php-8.5.8 from source (bg; log `scratchpad/php-build.log`; installs to
+`/stack/tools/phpbrew/php/php-8.5.8` so `PHORJ_PHP` default resolves). Feasibility verified
+(gcc/make/autoconf/bison/re2c/libxml2/sqlite3.h present, root, network up).
+**NEXT (after oracle green):** (1) Q-A wildcard/group imports — spec
+`docs/specs/2026-07-24-wildcard-imports.md` (RULED, BUILD-READY), TDD + DEC-268 panel → commit+push;
+(2) Q-B visibility-model `docs/specs/2026-07-24-visibility-model.md` (RULED) incl. G4 static-field
+fix; (3) continue the ruled queue.
+**AST grounding:** `Item::Import { path: Vec<String>, alias: Option<String>, span }`
+@ `src/ast/decls.rs:455`; expand wildcard/group/except → per-symbol `Import` in `cli::check_and_expand`
+(Inv 5) so backends/PHP never see sugar. Plan: extend `Import` to carry the sugar; add the new
+E-/W- codes per spec §catalog.
+**Pushed:** `origin/master @ 04d2cdc` (specs `6186e01` + S3.1 checkpoint `04d2cdc`). If reclaimed,
+that is the last durable state; resume from this block.
+
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going
 
 **⚖️ DEV RULING (AskUserQuestion, 2026-07-24) — NEXT-WORK ORDER for the big continuous session:**
