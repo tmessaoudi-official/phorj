@@ -92,17 +92,36 @@ pub fn entry_kind_form(attr: &Attribute) -> EntryKindForm {
 /// Flatten a pure `Ident`/`Ident.Ident.…` member chain to a dotted string (`Core.Runtime.EntryKind`),
 /// or `None` if any node is not a plain dotted member access. Used to read the `kind:` qualifier.
 fn flatten_dotted_path(e: &Expr) -> Option<String> {
-    match e {
-        Expr::Ident(n, _) => Some(n.clone()),
-        Expr::Member {
-            object,
-            name,
-            safe: false,
-            sep: crate::ast::MemberSep::Dot,
-            ..
-        } => Some(format!("{}.{}", flatten_dotted_path(object)?, name)),
-        _ => None,
+    // Walk the member chain ITERATIVELY, never recursively. `#[Entry(kind:)]` args bypass BOTH
+    // depth guards — attribute args are never routed through `check_expr` (so `MAX_EXPR_DEPTH`
+    // never fires) and member access parses left-associatively (so the parser's `MAX_NEST_DEPTH`
+    // counts the whole chain as one). A recursive walk therefore overflowed the native stack on a
+    // pathological `kind: a.a.a.…` chain (reproduced: `phg check` aborted at ~200k segments) —
+    // exactly the left-associative-chain hazard `src/limits.rs` documents. Iterative accumulation
+    // is O(depth) heap, never stack.
+    let mut rev: Vec<&str> = Vec::new();
+    let mut cur: &Expr = e;
+    loop {
+        match cur {
+            Expr::Ident(n, _) => {
+                rev.push(n.as_str());
+                break;
+            }
+            Expr::Member {
+                object,
+                name,
+                safe: false,
+                sep: crate::ast::MemberSep::Dot,
+                ..
+            } => {
+                rev.push(name.as_str());
+                cur = object;
+            }
+            _ => return None,
+        }
     }
+    rev.reverse();
+    Some(rev.join("."))
 }
 
 /// The fully-qualified spelling of the entry-kind enum (`Core.Runtime.EntryKind`) — the self-gating

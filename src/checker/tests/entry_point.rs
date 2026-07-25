@@ -230,6 +230,35 @@ fn single_class_static_main_is_not_multiple() {
 }
 
 #[test]
+fn deep_dotted_kind_chain_does_not_overflow_the_stack() {
+    // DEC-337 safety (no-new-panic invariant): a pathological `#[Entry(kind: a.a.a.…)]` chain
+    // reaches `entry_kind_form`/`flatten_dotted_path` via the attribute-arg path, which bypasses
+    // both depth guards (attr args are never `check_expr`'d, so `MAX_EXPR_DEPTH` never fires; member
+    // access parses left-associatively, so the parser's `MAX_NEST_DEPTH` counts the chain once). A
+    // recursive flattening overflowed the native stack (reproduced: the release `phg check` aborted
+    // at ~200k segments on the 8 MiB main stack). It is now iterative. Run a 50k chain on an 8 MiB
+    // thread (the unoptimised debug build has larger frames, so a recursive regression aborts well
+    // below 200k here); the iterative form classifies it cleanly (a 50k-segment qualifier is not
+    // `EntryKind` → E-ENTRY-KIND-UNKNOWN).
+    let ok = std::thread::Builder::new()
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| {
+            let chain = vec!["a"; 50_000].join(".");
+            let src = format!(
+                "import Core.Runtime.EntryKind; #[Entry(kind: {chain})] function main(): void {{ }}"
+            );
+            has(&src, "E-ENTRY-KIND-UNKNOWN")
+        })
+        .expect("spawn checker thread")
+        .join()
+        .expect("deep `kind:` chain must not overflow the stack");
+    assert!(
+        ok,
+        "deep dotted `kind:` chain should classify as E-ENTRY-KIND-UNKNOWN, not crash"
+    );
+}
+
+#[test]
 fn entry_diagnostics_quote_the_qualified_form_not_bare() {
     // DEC-337: even for a VALIDLY-declared entry, the E-ENTRY-SIG and E-DUPLICATE-ENTRY-KIND
     // message text must quote `#[Entry(kind: EntryKind.Cli)]` — never the now-rejected bare form

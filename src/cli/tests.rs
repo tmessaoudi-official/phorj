@@ -26,13 +26,25 @@ fn wp(src: &str) -> String {
     // DEC-191 addendum: the attribute is import-gated — inject its import once too, AFTER the
     // package segment (imports may not precede `package`); same-line, preserving line numbers.
     // DEC-337: `kind: EntryKind.Cli` is import-gated too — inject the `EntryKind` import alongside.
-    if src.contains("#[Entry") && !src.contains("Core.Runtime.Entry") {
-        let i = src.find(';').expect("package decl ends with ;");
-        format!(
-            "{} import Core.Runtime.Entry; import Core.Runtime.EntryKind;{}",
-            &src[..=i],
-            &src[i + 1..]
-        )
+    if src.contains("#[Entry") {
+        // Inject whichever of the two entry imports the source doesn't already declare. Match the
+        // exact `import …;` statement, NOT a bare substring: `Core.Runtime.Entry` is a prefix of
+        // `Core.Runtime.EntryKind`, so a substring test misfires on an EntryKind-only source
+        // (would skip the needed `Core.Runtime.Entry` import → spurious E-UNIMPORTED). All current
+        // inline sources carry neither import, so both are injected — behaviour unchanged for them.
+        let mut inject = String::new();
+        if !src.contains("import Core.Runtime.Entry;") {
+            inject.push_str(" import Core.Runtime.Entry;");
+        }
+        if !src.contains("import Core.Runtime.EntryKind;") {
+            inject.push_str(" import Core.Runtime.EntryKind;");
+        }
+        if inject.is_empty() {
+            src
+        } else {
+            let i = src.find(';').expect("package decl ends with ;");
+            format!("{}{}{}", &src[..=i], inject, &src[i + 1..])
+        }
     } else {
         src
     }
