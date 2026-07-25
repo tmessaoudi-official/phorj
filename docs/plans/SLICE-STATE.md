@@ -7,9 +7,15 @@ until I explicitly stop you; commit+push whenever green and correct; record any 
 PENDING and move on (Inv 15)."
 **HARD CONSTRAINT:** the `php-8.5.8` byte-identity oracle was LOST in a container restart →
 Inv-1 byte-identity + WIN-OR-FLAG perf are UNVERIFIABLE until it is rebuilt.
-**IN FLIGHT:** rebuilding php-8.5.8 from source (bg; log `scratchpad/php-build.log`; installs to
-`/stack/tools/phpbrew/php/php-8.5.8` so `PHORJ_PHP` default resolves). Feasibility verified
-(gcc/make/autoconf/bison/re2c/libxml2/sqlite3.h present, root, network up).
+**✅ DONE (2026-07-25 00:20):** php-8.5.8 oracle REBUILT from source (`/stack/tools/phpbrew/php/php-8.5.8`,
+opcache+mbstring+bcmath+sqlite3/pdo). Found+fixed a real **S3.1 lift regression** (Inv 17): the lift
+printer dropped attribute ARGS → emitted bare `#[Entry]`, which DEC-331's checker rejects; now renders
+`#[Entry(kind: Cli)]` (`src/lift/printer/items.rs`, via the existing `self.expr` NamedArg path).
+**FULL `--all-features` GATE GREEN incl. PHP byte-identity** → **S3.1 (#34) COMPLETE.**
+**⚠ DISK GOTCHA (learned):** the per-session disk allowance (~38G) fills fast — `target/debug` was 26G
+(deps 19G + incremental 6.2G) + the 489M php-src build tree → `No space left on device` surfaced as
+spurious `build --release`/`build.rs` reds. Fix: `rm -rf` php-src + `target/debug/incremental` +
+`target/release` (regenerable) to reclaim GBs without a full cold recompile. Watch `df -h /` between builds.
 **NEXT (after oracle green):** (1) Q-A wildcard/group imports — spec
 `docs/specs/2026-07-24-wildcard-imports.md` (RULED, BUILD-READY), TDD + DEC-268 panel → commit+push;
 (2) Q-B visibility-model `docs/specs/2026-07-24-visibility-model.md` (RULED) incl. G4 static-field

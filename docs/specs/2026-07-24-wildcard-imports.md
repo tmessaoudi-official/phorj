@@ -8,11 +8,23 @@
 
 ## Problem
 
-phorj today has only single-member imports: `import X.Y.Z;` (brings bare `Z`), value-leaf
-(`import Core.Output.printLine;`), and alias (`import A.B as C;`). There is no way to bring several
-members at once. Same-package cross-file symbols are ALREADY implicitly visible (no import) —
-[Verified: `src/loader/mod.rs:67` "Same file → always legal. Same package, different file → legal
-unless `private`"] — so wildcard/group imports are a CROSS-package convenience only.
+phorj today has single-member imports (`import X.Y.Z;`, value-leaf, alias `import A.B as C;`) AND —
+**[Verified 2026-07-25 against `src/parser/items/decls.rs:222` `parse_import_group`]** — the GROUP
+form `import P.{ a, b as c };` (DEC-186) already exists, expanded to one `Item::Import` per member at
+PARSE time, with per-member aliasing and an empty-`{}` guard (`E-IMPORT-GROUP-EMPTY`). Same-package
+cross-file symbols are ALREADY implicitly visible (no import) [Verified: `src/loader/mod.rs:67`].
+
+> **BUILD RE-SCOPE (2026-07-25, autonomous — corrects this spec's original premise):** the `{A,B}`
+> group form is DONE (DEC-186). The genuinely-missing Q-A surface is: **(1) wildcard `import X.Y.*;`**,
+> **(2) `except { … }`**, and **(3) the diagnostics** `E-IMPORT-AMBIGUOUS` / `E-WILDCARD-STDLIB-ROOT`
+> / `E-WILDCARD-ALIAS` / `E-WILDCARD-EMPTY` / `E-EXCEPT-UNKNOWN` / `E-IMPORT-UNKNOWN` /
+> `W-UNUSED-IMPORT`. **Pipeline placement:** group expansion is purely syntactic (parser); wildcard
+> `*` needs the target package's member set + visibility, which the LOADER already indexes
+> (`index_packages`/`peek_package`, `vis_violation` mod.rs:69) — so `*`/`except` expand in the loader
+> (or a loader-fed `check_and_expand` step), producing plain per-symbol `Item::Import`s before any
+> backend (Inv 5). This is an implementation-placement call (not a user-visible design fork); the
+> ruled semantics (D1–D5, catalog) are unchanged. `E-WILDCARD-EMPTY` = wildcard binds zero NEW names
+> (distinct from the pre-existing `E-IMPORT-GROUP-EMPTY` = literal empty `{}`).
 
 ## Cross-language survey (META-7, Inv 16)
 
