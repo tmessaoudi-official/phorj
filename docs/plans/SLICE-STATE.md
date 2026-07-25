@@ -51,9 +51,11 @@ sort, and Inv-13 file-size debt (5 grandfathered files over baseline already on 
 a real soundness hole) + P3 (set-vis wider) (`82ef418`); rounds 2-3 clean (two consecutive feature-clean
 rounds). One pre-existing gap tracked: P-Q-B-1 (overloaded interface-method vis narrowing — reproduces
 with `private`, dev to rule; comment corrected `7ac9627`).
-**✅ DV-3 follow-up DONE (2026-07-25):** `internal` on ctor-promoted params now supported — single-sourced
-the 12 promotion detectors via `Modifier::is_member_visibility()` (drift-proof); transpile `vis()` maps
-`Internal`→PHP `public` (promoted param needs the keyword). Byte-identical; E-INTERNAL-PROMOTION removed.
+**✅ DV-3 follow-up DONE + DEC-268-CERTIFIED (2026-07-25, tip 43a115d):** `internal` on ctor-promoted
+params supported — single-sourced the 12 promotion detectors via `Modifier::is_member_visibility()`
+(drift-proof); transpile `vis()` maps `Internal`→PHP `public` (promoted param needs the keyword).
+Byte-identical; E-INTERNAL-PROMOTION removed. Panel: round 1 both-clean; round 2 caught a stale
+examples/README row (fixed); closing round clean.
 **FOLLOW-UPS (dev-owned):** P-Q-B-1 (overloaded iface-vis, dev ruling); P-Q-A-5 Inv-13 file-size debt.
 **NEXT:** Q-C global completeness sweep (DV-5 research pass) — synthesize the existing audits + a fresh
 `/gaps` into one ranked completeness register.
