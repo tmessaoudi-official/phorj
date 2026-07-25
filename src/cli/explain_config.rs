@@ -8,7 +8,7 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
             "E-CONFIG-SIG — a `#[Config]` provider with the wrong shape.\n\n\
              A typed-config provider (DEC-318) is a top-level function with NO parameters and a\n\
              concrete return type: `#[Config] function appConfig() -> AppConfig { ... }`. The\n\
-             runtime injects its result into `#[Entry(kind: Cli)] function main(config: AppConfig)`.\n"
+             runtime injects its result into `#[Entry(kind: EntryKind.Cli)] function main(config: AppConfig)`.\n"
         }
         "E-CONFIG-DUP" => {
             "E-CONFIG-DUP — two `#[Config]` providers return the same type.\n\n\
@@ -18,7 +18,7 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
         }
         "E-CONFIG-MISSING" => {
             "E-CONFIG-MISSING — the entry asks for a config type nobody provides.\n\n\
-             `#[Entry(kind: Cli)] function main(config: T)` needs a matching `#[Config] function ... -> T`\n\
+             `#[Entry(kind: EntryKind.Cli)] function main(config: T)` needs a matching `#[Config] function ... -> T`\n\
              in the project (DEC-318). Declare one:\n\n\
                  import Core.Runtime.Config;\n\
                  #[Config] function appConfig() -> T { return new T(...); }\n"

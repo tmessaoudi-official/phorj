@@ -18,8 +18,9 @@ package Main;
 import Core.Output;
 import Core.Option;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Option<int> some = new Option.Some(5);
     Option<int> none = new Option.None();

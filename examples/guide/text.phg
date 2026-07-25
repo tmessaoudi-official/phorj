@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M3 Track B Wave 2 — the `Core.String` stdlib module. Each function erases to a PHP string builtin
 // (`strlen`/`strtoupper`/`explode`/`implode`/`strReplace`/…). ASCII text keeps the Rust backends
@@ -10,7 +11,7 @@ import Core.Runtime.Entry;
 //
 // Note: bind call results to locals before interpolating — the interpolation sub-lexer does not
 // nest string literals inside `{…}` (same constraint as guide/strings.phg).
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     string greeting = "Hello, Phorj";
     int n = String.length(greeting);

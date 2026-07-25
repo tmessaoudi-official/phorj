@@ -16,6 +16,7 @@ package Main;
 import Core.Output;
 import Core.List;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A generic identity function.
 function identity<T>(T x): T {
@@ -43,7 +44,7 @@ class Maker {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Explicit type arguments (turbofish):
     Output.printLine("{identity<int>(5)}");

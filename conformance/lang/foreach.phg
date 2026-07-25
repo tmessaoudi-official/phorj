@@ -4,8 +4,9 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<string> langs = ["Phorj", "PHP", "TypeScript"];
     // Value form — `w` is inferred as `string` from the iterable.

@@ -8,6 +8,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `open` is required to allow extension (Phorj classes are final by default).
 open class Shape {
@@ -31,7 +32,7 @@ class Widget {
     use Tagged;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Called on the subclass — resolves Shape.describe.
     Output.printLine(Triangle.describe(3));

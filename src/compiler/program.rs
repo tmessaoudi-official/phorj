@@ -134,7 +134,7 @@ pub(super) fn compile_program_with(
     // `ast::entry_point` resolver, also consumed by the interpreter; `E-MULTIPLE-MAIN` guarantees ≤1).
     // The entry *index* needs the methods table, built below, so only the metadata is computed here.
     let (entry_class, entry_decl) = crate::ast::entry_for(program, crate::ast::EntryRole::Cli).ok_or_else(|| {
-        "no entry point: running needs an `#[Entry(kind: Cli)]` function (DEC-331). A library or web file \
+        "no entry point: running needs an `#[Entry(kind: EntryKind.Cli)]` function (DEC-331). A library or web file \
              still type-checks and transpiles — use `phg check` / `phg transpile`"
             .to_string()
     })?;

@@ -353,7 +353,7 @@ fn run_program_main(
     let (entry_class, main) = match crate::ast::entry_for(program, crate::ast::EntryRole::Cli) {
         Some(e) => e,
         None => return Err(Diagnostic::runtime(
-            "no entry point: running needs an `#[Entry(kind: Cli)]` function (DEC-331). A library or web file \
+            "no entry point: running needs an `#[Entry(kind: EntryKind.Cli)]` function (DEC-331). A library or web file \
                  still type-checks and transpiles — use `phg check` / `phg transpile`",
         )),
     };

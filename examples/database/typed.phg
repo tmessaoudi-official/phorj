@@ -19,6 +19,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A row class: every field is a PROMOTED constructor parameter, so its name IS the column name.
 // `nickname` is optional (`string?`), so a NULL nickname column maps to `null` instead of throwing.
@@ -26,7 +27,7 @@ class User {
     constructor(public string name, public int age, public string? nickname) {}
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

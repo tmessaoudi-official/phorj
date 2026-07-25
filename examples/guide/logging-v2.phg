@@ -24,8 +24,9 @@ import Core.Log.StreamHandler;
 import Core.Log.ChannelConfig;
 import Core.Log.LogConfig;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Log.configure(
         new LogConfig(

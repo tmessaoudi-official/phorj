@@ -10,8 +10,9 @@ import Core.Output;
 import Core.Json;
 import Acme.Meta;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Json doc = new Json.Object(
         [

@@ -12,8 +12,9 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     int n = 7;
     // lossless widening / stringify → total (no `?`)

@@ -104,7 +104,7 @@ impl Checker {
                 "every file must declare a package (e.g. `package Main;`) as its first line",
                 "E-NO-PACKAGE",
                 Some(
-                    "add `package Main; import Core.Runtime.Entry;` at the top of the file".into(),
+                    "add `package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;` at the top of the file".into(),
                 ),
             );
         } else if program.package[0] == "Core" {
@@ -191,7 +191,7 @@ impl Checker {
         // classes + functions are collected, with no `this` — so an initializer may call a function or
         // read another static.
         self.check_static_inits(program);
-        // DEC-331 D1: entries are declared by `#[Entry(kind: Cli|Web)]` — the ROLE is declared,
+        // DEC-331 D1 / DEC-337: entries are declared by `#[Entry(kind: EntryKind.Cli|Web)]` — the ROLE is declared,
         // not inferred (bare `#[Entry]` is retired, FULLY BREAKING). Validate every attributed
         // candidate here: an instance-method `#[Entry]` is `E-ENTRY-TARGET`; a missing/unknown/
         // reserved `kind:` is `E-ENTRY-KIND-{REQUIRED,UNKNOWN,RESERVED}`; a signature that
@@ -200,6 +200,15 @@ impl Checker {
         {
             let mut cli_seen = false;
             let mut web_seen = false;
+            // DEC-337: `EntryKind` is import-gated — a qualified `EntryKind.<Variant>` kind requires
+            // the member import `import Core.Runtime.EntryKind;` (or the whole-module `Core.Runtime`).
+            let entrykind_imported = program.items.iter().any(|it| {
+                matches!(it, Item::Import { path, .. } if
+                    path.first().map(String::as_str) == Some("Core")
+                    && path.get(1).map(String::as_str) == Some("Runtime")
+                    && (path.len() == 2
+                        || (path.len() == 3 && path[2] == crate::ast::ENTRY_KIND_ENUM)))
+            });
             for item in &program.items {
                 let mut check_entry = |f: &crate::ast::FunctionDecl, instance_method: bool| {
                     let Some(attr) = f.attrs.iter().find(|a| crate::ast::is_entry_attr(a)) else {
@@ -215,6 +224,75 @@ impl Checker {
                         );
                         return;
                     }
+                    // DEC-337: the kind must be the QUALIFIED injected variant `EntryKind.<Variant>`,
+                    // never "in the wind" — enforce the surface form + import before classifying the
+                    // variant name. A bare `kind: Cli` is `E-INJECTED-VARIANT-BARE` (the same rule that
+                    // governs `Option.Some`); a wrong qualifier is `E-ENTRY-KIND-UNKNOWN`; an
+                    // unimported `EntryKind` is `E-UNIMPORTED`. `Missing` falls through to the
+                    // `E-ENTRY-KIND-REQUIRED` arm below.
+                    match crate::ast::entry_kind_form(attr) {
+                        crate::ast::EntryKindForm::Missing => {}
+                        crate::ast::EntryKindForm::Malformed => {
+                            self.err_coded(
+                                attr.span,
+                                "`#[Entry]`'s `kind:` must be an `EntryKind` variant".to_string(),
+                                "E-ENTRY-KIND-REQUIRED",
+                                Some("write `#[Entry(kind: EntryKind.Cli)]` or `#[Entry(kind: EntryKind.Web)]`".into()),
+                            );
+                            return;
+                        }
+                        crate::ast::EntryKindForm::Bare(n) => {
+                            // `kind: EntryKind` — the enum NAME with no variant — is a missing
+                            // variant, not a bare variant; suggesting `EntryKind.EntryKind` would
+                            // be nonsensical, so route it to the missing-kind diagnostic instead.
+                            if n == crate::ast::ENTRY_KIND_ENUM {
+                                self.err_coded(
+                                    attr.span,
+                                    "`kind:` names the `EntryKind` enum but no variant".to_string(),
+                                    "E-ENTRY-KIND-REQUIRED",
+                                    Some("write `#[Entry(kind: EntryKind.Cli)]` or `#[Entry(kind: EntryKind.Web)]`".into()),
+                                );
+                                return;
+                            }
+                            self.err_coded(
+                                attr.span,
+                                format!("`{n}` is an injected `EntryKind` variant and must be written qualified as `EntryKind.{n}`"),
+                                "E-INJECTED-VARIANT-BARE",
+                                Some(format!("write `#[Entry(kind: EntryKind.{n})]` and `import Core.Runtime.EntryKind;`")),
+                            );
+                            return;
+                        }
+                        crate::ast::EntryKindForm::Qualified { qual, name } => {
+                            // Two accepted qualifiers, mirroring the `#[Entry]` attribute's forms:
+                            // the short `EntryKind` (member-imported) and the self-gating
+                            // fully-qualified `Core.Runtime.EntryKind` (needs no import).
+                            let is_short = qual == crate::ast::ENTRY_KIND_ENUM;
+                            let is_fq = qual == crate::ast::ENTRY_KIND_ENUM_FQ;
+                            if !is_short && !is_fq {
+                                self.err_coded(
+                                    attr.span,
+                                    format!("unknown entry-kind qualifier `{qual}` — the kind is an `EntryKind` variant"),
+                                    "E-ENTRY-KIND-UNKNOWN",
+                                    Some(format!("write `#[Entry(kind: EntryKind.{name})]`")),
+                                );
+                                return;
+                            }
+                            // The short form is import-gated ("nothing in the wind"); the
+                            // fully-qualified form is self-gating (no import), like `#[Core.Runtime.Entry]`.
+                            // A compiler-SYNTHESIZED entry (zero span — the test-runner's driver, a
+                            // lifted draft) is exempt too: the user never wrote it, so the wind rule
+                            // doesn't apply (the same exemption the `#[Entry]` marker itself carries).
+                            if is_short && !entrykind_imported && attr.span.line != 0 {
+                                self.err_coded(
+                                    attr.span,
+                                    "`EntryKind` is used without importing it".to_string(),
+                                    "E-UNIMPORTED",
+                                    Some("add `import Core.Runtime.EntryKind;` (or import the whole module `import Core.Runtime;`)".into()),
+                                );
+                                return;
+                            }
+                        }
+                    }
                     // DEC-331 D1: the role comes from the declared `kind:`, not the signature.
                     // Bare `#[Entry]` / unknown / reserved kinds are hard errors; an active kind
                     // still must AGREE with the signature shape (`entry_role` is now the validator).
@@ -225,7 +303,7 @@ impl Checker {
                                 "`#[Entry]` requires a `kind:` — the entry role is declared, not inferred"
                                     .to_string(),
                                 "E-ENTRY-KIND-REQUIRED",
-                                Some("write `#[Entry(kind: Cli)]` for a `phg run` entry, or `#[Entry(kind: Web)]` for `phg serve`".into()),
+                                Some("write `#[Entry(kind: EntryKind.Cli)]` for a `phg run` entry, or `#[Entry(kind: EntryKind.Web)]` for `phg serve`".into()),
                             );
                             return;
                         }
@@ -234,7 +312,7 @@ impl Checker {
                                 attr.span,
                                 format!("unknown entry kind `{n}` — active kinds are `Cli` and `Web`; `Desktop`/`Mobile`/`Worker`/`Embedded` are reserved"),
                                 "E-ENTRY-KIND-UNKNOWN",
-                                Some("use `#[Entry(kind: Cli)]` or `#[Entry(kind: Web)]`".into()),
+                                Some("use `#[Entry(kind: EntryKind.Cli)]` or `#[Entry(kind: EntryKind.Web)]`".into()),
                             );
                             return;
                         }
@@ -243,7 +321,7 @@ impl Checker {
                                 attr.span,
                                 format!("entry kind `{n}` is reserved but not yet implemented — the active kinds are `Cli` and `Web`"),
                                 "E-ENTRY-KIND-RESERVED",
-                                Some("use `#[Entry(kind: Cli)]` or `#[Entry(kind: Web)]` for now".into()),
+                                Some("use `#[Entry(kind: EntryKind.Cli)]` or `#[Entry(kind: EntryKind.Web)]` for now".into()),
                             );
                             return;
                         }

@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A shopping cart with per-item discounts.
 enum Discount { None, Percent(int pct), Flat(int cents) }
@@ -28,7 +29,7 @@ function bulk(int unit, int n): int {
     return unit + bulk(unit, n - 1);
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<Item> cart = [
         new Item("Widget", 1000, new None()),

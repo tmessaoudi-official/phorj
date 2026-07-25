@@ -17,6 +17,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A one-field generic container. `T` flows through the promoted constructor field and the methods.
 class Box<T> {
@@ -43,7 +44,7 @@ class Pair<A, B> {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var bi = new Box(7);
     // Box<int>  — T inferred from `7`

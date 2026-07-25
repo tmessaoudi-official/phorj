@@ -11,6 +11,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Method reuse, including a `private` helper only other trait methods can call.
 trait Loud {
@@ -58,7 +59,7 @@ class Employee {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Employee e = new Employee(1000);
     // Paid's constructor runs: annual = 1000 * 12 = 12000

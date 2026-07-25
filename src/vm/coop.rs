@@ -133,7 +133,7 @@ mod tests {
     fn litmus_spawned_recver_succeeds_only_when_deferred() {
         let src = r#"
 package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 
 function consume(Channel<int> ch): int {
@@ -142,7 +142,7 @@ function consume(Channel<int> ch): int {
     return v;
 }
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> t = spawn consume(ch);
     ch.send(42);
@@ -159,7 +159,7 @@ function consume(Channel<int> ch): int {
     fn main_recv_blocks_until_spawned_producer_sends() {
         let src = r#"
 package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 
 function produce(Channel<int> ch): int {
@@ -167,7 +167,7 @@ function produce(Channel<int> ch): int {
     return 1;
 }
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> p = spawn produce(ch);
     int v = ch.receive();

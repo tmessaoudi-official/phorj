@@ -4,8 +4,9 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Exclusive: 0,1,2,3 (4 elements, upper bound excluded).
     mutable int exc = 0;

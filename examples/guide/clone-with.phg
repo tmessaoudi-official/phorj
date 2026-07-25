@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M-mut.4a — `obj with { field = value, … }`: a functional update that produces a FRESH instance
 // copying `obj` with the named fields replaced. The constructor is NOT re-run, and the source
@@ -13,7 +14,7 @@ class Point {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Point origin = new Point(0, 0);
     // Override one field — `origin` is untouched.

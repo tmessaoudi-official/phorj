@@ -20,8 +20,9 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

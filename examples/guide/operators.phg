@@ -3,10 +3,11 @@ package Main;
 import Core.Output;
 import Core.Math;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Arithmetic, comparison, logical, and unary operators.
 // Integer arithmetic is overflow-checked (a real overflow faults cleanly on both backends).
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     int a = 7;
     int b = 3;

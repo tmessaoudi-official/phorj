@@ -33,7 +33,7 @@ fn mail_file_transport_round_trip_on_both_backends() {
     let dir = outbox("file");
     let src = format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Mailer;
@@ -41,7 +41,7 @@ import Core.Mail.Email;
 import Core.Mail.Address;
 import Core.Mail.FileTransport;
 import Core.Mail.MailError;
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     Mailer m = new Mailer(new FileTransport("{dir}"));
     Email e = new Email()
@@ -83,7 +83,7 @@ import Core.Mail.MailError;
 #[test]
 fn mail_null_transport_and_send_all_count() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Mailer;
@@ -91,7 +91,7 @@ import Core.Mail.Email;
 import Core.Mail.Address;
 import Core.Mail.NullTransport;
 import Core.Mail.MailError;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Mailer m = new Mailer(new NullTransport());
     Email a = new Email().from(Address.of("x@y.io")).to(Address.of("u@y.io")).subject("a").text("1");
@@ -107,13 +107,13 @@ import Core.Mail.MailError;
 #[test]
 fn mail_invalid_address_is_typed_and_catchable_at_construction() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Address;
 import Core.Mail.InvalidAddressError;
 import Core.Mail.MailError;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Address bad = new Address("evil@x.y
 Bcc: victim@z.w", "");
@@ -131,7 +131,7 @@ Bcc: victim@z.w", "");
 #[test]
 fn mail_missing_from_is_message_build_failed() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Mailer;
@@ -140,7 +140,7 @@ import Core.Mail.Address;
 import Core.Mail.NullTransport;
 import Core.Mail.MessageBuildFailedError;
 import Core.Mail.MailError;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Mailer m = new Mailer(new NullTransport());
     Email e = new Email().to(Address.of("u@y.io")).subject("s").text("b");
@@ -160,11 +160,11 @@ import Core.Mail.MailError;
 #[test]
 fn mail_program_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.NullTransport;
-#[Entry(kind: Cli)] function main(): void { Output.printLine("x"); }
+#[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-MAIL, got PHP: {php:?}"),
@@ -191,7 +191,7 @@ fn mail_smtp_round_trip_against_mailpit() {
         .expect("PHORJ_MAILPIT_SMTP must be host:port");
     let src = format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Mailer;
@@ -199,7 +199,7 @@ import Core.Mail.Email;
 import Core.Mail.Address;
 import Core.Mail.SmtpConfig;
 import Core.Mail.MailError;
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     Mailer m = new Mailer(new SmtpConfig("{host}", {port}));
     Email e = new Email()

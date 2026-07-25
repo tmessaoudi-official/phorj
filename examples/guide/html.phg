@@ -11,6 +11,7 @@ package Main;
 import Core.Output;
 import Core.Html;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Wave-1 style: hand-written markup wrapped with Html.raw; the dynamic value escaped.
 function field(string label, string value): Html {
@@ -33,7 +34,7 @@ function card(string title, Html bodyHtml): Html {
     return html"<section>\n    <h2>{title}</h2>\n    {bodyHtml}\n  </section>";
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     string name = "Tom & \"Jerry\"";
     string bio = "<script>alert(1)</script>";

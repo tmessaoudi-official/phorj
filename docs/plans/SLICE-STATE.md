@@ -11,6 +11,7 @@ Inv-1 byte-identity + WIN-OR-FLAG perf are UNVERIFIABLE until it is rebuilt.
 opcache+mbstring+bcmath+sqlite3/pdo). Found+fixed a real **S3.1 lift regression** (Inv 17): the lift
 printer dropped attribute ARGS → emitted bare `#[Entry]`, which DEC-331's checker rejects; now renders
 `#[Entry(kind: Cli)]` (`src/lift/printer/items.rs`, via the existing `self.expr` NamedArg path).
+  *(SUPERSEDED by DEC-337 below: the lifter now emits the qualified `#[Entry(kind: EntryKind.Cli)]` + `import Core.Runtime.EntryKind;`.)*
 **FULL `--all-features` GATE GREEN incl. PHP byte-identity** → **S3.1 (#34) COMPLETE.**
 **⚠ DISK GOTCHA (learned):** the per-session disk allowance (~38G) fills fast — `target/debug` was 26G
 (deps 19G + incremental 6.2G) + the 489M php-src build tree → `No space left on device` surfaced as
@@ -57,10 +58,21 @@ params supported — single-sourced the 12 promotion detectors via `Modifier::is
 Byte-identical; E-INTERNAL-PROMOTION removed. Panel: round 1 both-clean; round 2 caught a stale
 examples/README row (fixed); closing round clean.
 **FOLLOW-UPS (dev-owned):** P-Q-B-1 (overloaded iface-vis, dev ruling); P-Q-A-5 Inv-13 file-size debt.
+**✅ DEC-337 — `#[Entry(kind:)]` NO-LONGER-IN-THE-WIND — DONE (2026-07-25):** dev flagged `kind: Cli`/`Web`
+as bare magic identifiers (rule violation). RULED interactively (injected `Core.Runtime.EntryKind` enum,
+QUALIFIED `EntryKind.Cli`, separate import, reserved kinds = real variants). Built: parser reader
+(`entry_kind_form` flattens qualifier chain, supports short + self-gating fully-qualified forms), checker
+enforcement (bare→`E-INJECTED-VARIANT-BARE`, unimported→`E-UNIMPORTED`, bad-qual→`E-ENTRY-KIND-UNKNOWN`;
+synthetic zero-span entries exempt), `Core.Runtime` prelude bare_type, synthetic `entry_attr`+lifter emit
+qualified form + import. Migrated ~340 `.phg` + ~815 inline `.rs`/playground fixtures + 3 shared prepend
+helpers; new checker coverage (bare/unimported/bad-qual/whole-module). Compile-time-only marker (Inv 5) →
+byte-identical (differential 174/174, VM≡TW≡php-8.5.8). Full all-features gate GREEN (nextest + clippy
+×3 + fmt + release). Register: DEC-337. LSP attribute-arg completion (`EntryKind.` variants) = follow-up
+on the existing LSP punch-list.
 **NEXT:** Q-C global completeness sweep (DV-5 research pass) — synthesize the existing audits + a fresh
 `/gaps` into one ranked completeness register.
-**Pushed:** `origin/master @ 66f940b` — all of Q-A + Q-B (DV-1/2/3 + ctor-promoted-param follow-up, all
-DEC-268-certified) + the LSP dotted-import-completion dup fix are on origin; tree clean.
+**Pushed:** `origin/master @ <pending DEC-337 commit>` — all of Q-A + Q-B (DV-1/2/3 + ctor-promoted-param
+follow-up) + LSP dup fix + DEC-337 entry-kind, all DEC-268-certified; tree clean.
 If reclaimed, resume from this block.
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going

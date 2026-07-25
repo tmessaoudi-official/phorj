@@ -13,6 +13,7 @@ import Core.Output;
 import Core.String;
 import Core.List;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // "Extend" string — the receiver is just the first parameter.
 function shout(string s): string {
@@ -38,7 +39,7 @@ function total(Basket b): int {
     return List.sum(b.items);
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("abc".shout());
     Output.printLine("{5.doubled()}");

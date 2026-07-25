@@ -9,8 +9,9 @@ import Core.List;
 import Core.Math;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<int> xs = [10, 20, 30, 40];
     // List.length(...) as the left operand of every arithmetic form.

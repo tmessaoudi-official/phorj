@@ -20,8 +20,9 @@ package Main;
 import Core.Output;
 import Core.Conversion;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Stringify any scalar.
     Output.printLine(Conversion.toString(42));

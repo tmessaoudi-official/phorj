@@ -34,11 +34,12 @@ fn run_both(src: &str) -> String {
 #[test]
 fn entry_fully_qualified_no_import_selects_the_entry_point() {
     // `#[Core.Runtime.Entry]` — fully qualified, self-gating: NO `import Core.Runtime.Entry;`.
+    // DEC-337: the kind matches — the fully-qualified `Core.Runtime.EntryKind.Cli` is self-gating too.
     let src = r#"
 package Main;
 import Core.Output;
 
-#[Core.Runtime.Entry(kind: Cli)]
+#[Core.Runtime.Entry(kind: Core.Runtime.EntryKind.Cli)]
 function main(): void {
     Output.printLine("qualified-entry");
 }
@@ -52,9 +53,9 @@ fn entry_bare_after_leaf_import_still_selects_the_entry_point() {
     let src = r#"
 package Main;
 import Core.Output;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("bare-entry");
 }

@@ -7,8 +7,9 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     string cafe = "café";
     // 5 bytes (the é is 2 bytes of UTF-8) but 4 codepoints.

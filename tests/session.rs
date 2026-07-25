@@ -24,7 +24,7 @@ fn both(src: &str, expected: &str) {
 #[test]
 fn session_cookie_round_trip_persistence_and_fixation_defense() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.String;
 import Core.Bytes;
@@ -67,7 +67,7 @@ function secondRequest(string sid): void {
   }
 }
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   string sid = firstRequest();
   Output.printLine("sid32 {String.length(sid) == 32}");
   secondRequest(sid);
@@ -84,7 +84,7 @@ function secondRequest(string sid): void {
 #[test]
 fn session_unknown_cookie_id_gets_a_fresh_session() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.String;
 import Core.Bytes;
@@ -93,7 +93,7 @@ import Core.SessionModule.Session;
 import Core.Http;
 import Core.Http.Request;
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   string raw = "GET / HTTP/1.1\r\nHost: x\r\nCookie: phorjsid=deadbeefdeadbeefdeadbeefdeadbeef\r\n\r\n";
   Request? r = Request.parse(Bytes.fromString(raw));
   if (var req = r) {
@@ -110,10 +110,10 @@ import Core.Http.Request;
 #[test]
 fn session_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.SessionModule;
-#[Entry(kind: Cli)] function main(): void { Output.printLine("x"); }
+#[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-SESSION, got PHP: {php:?}"),

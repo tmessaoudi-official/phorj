@@ -11,7 +11,7 @@ fn phg_run_hook_hits_the_jit_on_the_sumby_vertical() {
     // bump)` in a hot `while` — an `FnCap1` projection (captures `bump`) summed with the checked
     // accumulator. Must JIT through the `Op::Call` hook AND stay byte-identical to the interpreter;
     // a silent VM fallback would false-green the byte-identity assert, so `hits>0` is load-bearing.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -25,7 +25,7 @@ fn phg_run_hook_hits_the_jit_on_the_sumby_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -53,7 +53,7 @@ fn jit_sumby_capture_free_negative_and_empty_edges_match_the_oracle() {
     // Edge coverage through the inline fold (in a hot loop so the vertical fires): a capture-free
     // `Fn` projection, a NEGATIVE element and a negating projection (i64 sum, not unsigned), and an
     // EMPTY list → 0 (the 0-element loop-header skip). Byte-identity + exact value.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -70,7 +70,7 @@ fn jit_sumby_capture_free_negative_and_empty_edges_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
     assert_eq!(jit_out, oracle, "sumby edges must match the oracle");
@@ -83,14 +83,14 @@ fn jit_sumby_overflow_faults_byte_identically_to_the_oracle() {
     // The checked accumulator's overflow path: two near-`i64::MAX` elements whose SUM overflows.
     // The interpreter's `checked_add` faults "integer overflow in List.sumBy"; the JIT's
     // `sadd_overflow` carry → code 5 → VM redo reproduces the SAME fault, never a silent wrap.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function f(): int {\n\
           List<int> xs = [9000000000000000000, 9000000000000000000];\n\
           return List.sumBy(xs, function(int x) => x);\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{f()}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{f()}\"); }";
     let jit = crate::cli::cmd_run(SRC);
     let oracle = crate::cli::cmd_treewalk(SRC);
     match (&jit, &oracle) {
@@ -110,7 +110,7 @@ fn phg_run_hook_hits_the_jit_on_the_listreduce_vertical() {
     // The `bench/micro/listreduce.phg` shape: `List.reduce(xs, seed, (a,x) => a + x)` in a hot loop —
     // a 2-arg fold SEEDED from a data-dependent value. The `arm_list_reduce` vertical must JIT AND
     // match the interpreter oracle; `hits>0` is load-bearing (a silent VM fallback would false-green).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -125,7 +125,7 @@ fn phg_run_hook_hits_the_jit_on_the_listreduce_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -153,7 +153,7 @@ fn jit_listreduce_seed_empty_and_negative_edges_match_the_oracle() {
     // Edge coverage: the SEED threads out unchanged on an EMPTY list (0-element loop skip), a
     // NEGATIVE-producing fold (i64, not unsigned), and a non-`a+x` combiner (`a - x`). Byte-identity
     // + exact value.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -168,7 +168,7 @@ fn jit_listreduce_seed_empty_and_negative_edges_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
     assert_eq!(jit_out, oracle, "listreduce edges must match the oracle");

@@ -11,8 +11,9 @@ import Core.UriModule.UriError;
 import Core.UriModule.UriMalformedError;
 import Core.UriModule.UriBadSchemeError;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
         Uri u = Uri.parse("https://user:pw@Example.COM:8080/a/../b/./c?x=1&y=2#frag");

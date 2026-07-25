@@ -17,6 +17,7 @@ import Core.List;
 import Core.Map;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // One narrowing helper, reused everywhere a union element is consumed — `match` binds each arm at
 // its concrete type (`n` is an `int`, `s` is a `string`).
@@ -41,7 +42,7 @@ function makeTokens(): List<int | string> {
     return [1, "two", 3];
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     for (int | string tok in makeTokens()) {
         Output.printLine("token " + describe(tok));

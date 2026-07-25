@@ -75,7 +75,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-PKG-PATH" => {
             "E-PKG-PATH — a file's `package` does not match its location.\n\n\
              In a project, the directory under the source root IS the package (folder = path, Go's\n\
-             model): `src/app/util/*.phg` must declare `package app.util;`. `package Main; import Core.Runtime.Entry;` is exempt\n\
+             model): `src/app/util/*.phg` must declare `package app.util;`. `package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;` is exempt\n\
              (runnable anywhere). Move the file, or fix its package to match the directory.\n"
         }
         "E-FILE-NAME" => {
@@ -167,15 +167,20 @@ pub fn explain_text(code: &str) -> Option<String> {
              `(set)` modifier or widen the read visibility (DEC-241).\n"
         }
         "E-ENTRY-KIND-REQUIRED" => {
-            "E-ENTRY-KIND-REQUIRED — `#[Entry]` written without a `kind:`.\n\n\
-             The entry role is DECLARED, not inferred (DEC-331 D1): write `#[Entry(kind: Cli)]`\n\
-             for a `phg run` entry, or `#[Entry(kind: Web)]` for `phg serve`. Bare `#[Entry]` (the\n\
-             old DEC-191 signature-inference form) is no longer accepted.\n"
+            "E-ENTRY-KIND-REQUIRED — `#[Entry]` without a usable `EntryKind` variant.\n\n\
+             The entry role is DECLARED, not inferred (DEC-331 D1): write `#[Entry(kind: EntryKind.Cli)]`\n\
+             for a `phg run` entry, or `#[Entry(kind: EntryKind.Web)]` for `phg serve`. This fires when the\n\
+             `kind:` is missing entirely (bare `#[Entry]` — the retired DEC-191 signature-inference form),\n\
+             when `kind:` is not an `EntryKind` variant at all (e.g. a literal), or when it names the\n\
+             `EntryKind` enum with no variant (`kind: EntryKind` — add `.Cli`/`.Web`).\n"
         }
         "E-ENTRY-KIND-UNKNOWN" => {
-            "E-ENTRY-KIND-UNKNOWN — `#[Entry(kind: …)]` with an unrecognized kind name.\n\n\
-             The active kinds are `Cli` and `Web`; `Desktop`/`Mobile`/`Worker`/`Embedded` are\n\
-             reserved (recognized, not yet built). Use `#[Entry(kind: Cli)]` or `#[Entry(kind: Web)]`.\n"
+            "E-ENTRY-KIND-UNKNOWN — `#[Entry(kind: …)]` that does not name a known `EntryKind` variant.\n\n\
+             This fires two ways: the qualifier is not `EntryKind` (nor the fully-qualified\n\
+             `Core.Runtime.EntryKind`) — e.g. `kind: Foo.Cli` — or the variant name is unrecognized —\n\
+             e.g. `kind: EntryKind.Banana`. The active kinds are `Cli` and `Web`;\n\
+             `Desktop`/`Mobile`/`Worker`/`Embedded` are reserved (recognized, not yet built).\n\
+             Use `#[Entry(kind: EntryKind.Cli)]` or `#[Entry(kind: EntryKind.Web)]`.\n"
         }
         "E-ENTRY-KIND-RESERVED" => {
             "E-ENTRY-KIND-RESERVED — `#[Entry(kind: …)]` naming a reserved-but-unbuilt kind.\n\n\
@@ -192,7 +197,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-ENTRY-TARGET" => {
             "E-ENTRY-TARGET — `#[Entry]` on an instance method.\n\n\
              An entry runs before any instance exists. Put `#[Entry(kind: …)]` on a top-level function\n\
-             or a class `static` method: `class App { #[Entry(kind: Cli)] static function run(): void { … } }`.\n"
+             or a class `static` method: `class App { #[Entry(kind: EntryKind.Cli)] static function run(): void { … } }`.\n"
         }
         "E-DUPLICATE-ENTRY-KIND" => {
             "E-DUPLICATE-ENTRY-KIND — more than one `#[Entry]` of the same kind.\n\n\
@@ -1292,10 +1297,12 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-INJECTED-VARIANT-BARE" => {
             "E-INJECTED-VARIANT-BARE — a compiler-injected enum's variant was used bare.\n\n\
-             `import Core.Json;` injects the `Json` enum (and `Core.Decimal` injects `RoundingMode`).\n\
+             `import Core.Json;` injects the `Json` enum, `Core.Decimal` injects `RoundingMode`, and\n\
+             `import Core.Runtime.EntryKind;` injects `EntryKind` (the `#[Entry(kind:)]` role).\n\
              Their variants are names you never wrote, so — unlike a user-declared enum — they must be\n\
              reached *qualified* (\"nothing in the wind\"): write `new Json.Object(…)` / `new Json.Int(…)`\n\
-             to construct and `Json.Object(es) => …` to match, never the bare `Object(…)`. A user enum's\n\
+             to construct and `Json.Object(es) => …` to match, never the bare `Object(…)`; and write\n\
+             `#[Entry(kind: EntryKind.Cli)]`, never the bare `#[Entry(kind: Cli)]`. A user enum's\n\
              own variants stay bare (`new Some(7)`).\n"
         }
         "E-INJECTED-TYPE-BARE" => {
@@ -1899,7 +1906,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              `Core.Assert.assert` and `Core.Abort.{ panic, todo, unreachable }`).\n"
         }
         "E-UNIMPORTED" => {
-            "E-UNIMPORTED — a fault intrinsic is called without a covering import (DEC-196 Q3).\n\n\
+            "E-UNIMPORTED — a name is used without a covering import (DEC-196 Q3; DEC-337).\n\n\
              The four fault intrinsics live in two reserved modules — `Core.Assert` (`assert`) and\n\
              `Core.Abort` (`panic`/`todo`/`unreachable`) — and follow the two-mode import discipline:\n\
              \n\
@@ -1909,7 +1916,9 @@ pub fn explain_text(code: &str) -> Option<String> {
                  (groups work: `import Core.Abort.{ panic, todo };`).\n\
              \n\
              A bare `assert(...)` needs the member import; a qualified `Assert.assert(...)` needs the\n\
-             module import. Add the matching import to the file.\n"
+             module import. The same code covers the `#[Entry(kind: EntryKind.Cli)]` role: a qualified\n\
+             `EntryKind.Cli` needs `import Core.Runtime.EntryKind;` (or the whole module\n\
+             `import Core.Runtime;`). Add the matching import to the file.\n"
         }
         "E-IMPORT-BUILTIN" => {
             "E-IMPORT-BUILTIN — an `import` names a built-in type.\n\n\

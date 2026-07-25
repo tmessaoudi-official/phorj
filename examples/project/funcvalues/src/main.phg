@@ -7,8 +7,9 @@ import Core.Output;
 import Core.List;
 import Acme.Calc;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var ys = Calc.doubleAll([1, 2, 3]);
     // [2, 4, 6]

@@ -9,6 +9,7 @@ import Core.IteratorModule;
 import Core.IteratorModule.Iterator;
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Countdown implements Iterator<int> {
     constructor(private mutable int n) {}
@@ -45,7 +46,7 @@ function total(Iterator<int> it): int {
     return sum;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     for (int x in new Countdown(3)) {
         Output.printLine("{x}");

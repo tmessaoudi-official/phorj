@@ -13,6 +13,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 enum Status { Code(int n) }
 
@@ -154,7 +155,7 @@ function action(Light l): string {
     return match (l) { Red() => "stop", Yellow() => "stop", Green() => "go" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(classify(new Code(503)));
     Output.printLine(classify(new Code(404)));

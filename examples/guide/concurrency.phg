@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Green threads (M6 W4 / S4.3) — uncolored COOPERATIVE concurrency. `spawn` starts a green task, typed
 // `Channel<T>` FIFOs communicate between tasks, and `join` collects a task's result. No `async`/`await`
@@ -52,7 +53,7 @@ function interleave(): int {
     return total;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // 1. spawn + join — start a task, then collect its value.
     Task<int> t = spawn square(9);

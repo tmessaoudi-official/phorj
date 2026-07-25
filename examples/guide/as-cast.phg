@@ -13,6 +13,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 interface Shape {
     function area(): int;
@@ -49,7 +50,7 @@ function noisy(): Shape {
     return new Circle(7);
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Shape c = new Circle(3);
     Shape sq = new Square(4);

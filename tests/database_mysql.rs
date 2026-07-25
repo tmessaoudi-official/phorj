@@ -32,7 +32,7 @@ fn program(dsn: &str) -> String {
     format!(
         r#"
 package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -41,7 +41,7 @@ import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
     try {{
         Database db = new Database("{dsn}");
         discard db.prepare("DROP TABLE IF EXISTS phorj_my_it").exec();

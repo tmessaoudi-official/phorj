@@ -10,8 +10,9 @@ import Core.Output;
 import Core.Bytes;
 import Core.Hash;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var data = Bytes.fromString("Hello, Phorj!");
     Output.printLine("crc32:  {Hash.crc32(data)}");

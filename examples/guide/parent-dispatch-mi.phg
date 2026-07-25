@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Super/parent dispatch under MULTIPLE INHERITANCE (M-RT super/parent, B2).
 //
@@ -43,7 +44,7 @@ class Duck extends Bird, Swimmer {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Duck d = new Duck();
     Output.printLine(d.describe());

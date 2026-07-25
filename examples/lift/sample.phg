@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function greet(string name): string {
     return "Hello, {name}!";
@@ -15,7 +16,7 @@ open class Counter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     mutable var c = new Counter(41);
     Output.print(greet("Phorj"));

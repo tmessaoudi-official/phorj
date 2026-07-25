@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M-mut.6 — shared-mutable instance fields: `o.f = e`. Instances are HANDLES (like PHP/Java
 // objects), not value types: two bindings to the same instance share one cell, so a write through
@@ -20,7 +21,7 @@ class Counter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     mutable Counter c = new Counter(10);
     // Direct field set.

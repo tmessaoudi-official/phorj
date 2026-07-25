@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Variant patterns (with bindings) over a payload + zero-payload enum.
 // Zero-payload variants use call form `JNull()` to construct AND to match —
@@ -22,7 +23,7 @@ function sign(int n): string {
     return match (n) { 0 => "zero", x => "nonzero {x}" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<Json> vals = [new JNull(), new JBool(true), new JNum(42), new JStr("hi")];
     for (Json j in vals) {

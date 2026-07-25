@@ -26,7 +26,7 @@ function bench(int iters): int {
     return acc + List.length(xs);
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     int iters = 1000000;
     int warm = bench(iters);

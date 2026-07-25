@@ -6,6 +6,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class MathUtil {
     static function square(int n): int {
@@ -24,7 +25,7 @@ class Counter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // `::` for class-level (static) access…
     int sq = MathUtil::square(6);

@@ -28,7 +28,7 @@ fn assert_jit_hits(src: &str, label: &str) -> String {
 fn phg_run_hook_hits_the_jit_on_the_stringcontains_vertical() {
     // The exact `bench/micro/stringcontains.phg` shape: constant haystack, rotating needles
     // (hits and misses), the checksum counts hits.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -45,7 +45,7 @@ fn phg_run_hook_hits_the_jit_on_the_stringcontains_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
     assert_jit_hits(SRC, "stringcontains vertical");
 }
 
@@ -53,7 +53,7 @@ fn phg_run_hook_hits_the_jit_on_the_stringcontains_vertical() {
 fn jit_stringcontains_edge_needles_match_the_oracle() {
     // Empty needle (always true), needle == haystack, needle LONGER than the haystack
     // (always false), and a needle crossing the 22-byte slot/untagged representation line.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -70,7 +70,7 @@ fn jit_stringcontains_edge_needles_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(600)}\"); }";
     assert_jit_hits(SRC, "stringcontains edges");
 }
 
@@ -78,7 +78,7 @@ fn jit_stringcontains_edge_needles_match_the_oracle() {
 fn phg_run_hook_hits_the_jit_on_the_isemail_vertical() {
     // The exact `bench/micro/isemail.phg` shape: two valid, four invalid probes (consecutive
     // dots, no @, dotless domain), several longer than the 22-byte slot cap.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.Validation;\n\
@@ -101,13 +101,13 @@ fn phg_run_hook_hits_the_jit_on_the_isemail_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
     assert_jit_hits(SRC, "isemail vertical");
 }
 
 #[test]
 fn phg_run_hook_hits_the_jit_on_the_isurl_vertical() {
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.Validation;\n\
@@ -130,7 +130,7 @@ fn phg_run_hook_hits_the_jit_on_the_isurl_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1800)}\"); }";
     assert_jit_hits(SRC, "isurl vertical");
 }
 
@@ -139,7 +139,7 @@ fn jit_string_memo_survives_direct_mapped_collisions() {
     // 12 distinct (hay, needle) pairs + interleaved isEmail probes share the 8-entry
     // direct-mapped memo region: colliding lines EVICT and re-install from the full memo —
     // results must stay exact through every eviction round.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -162,7 +162,7 @@ fn jit_string_memo_survives_direct_mapped_collisions() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
     assert_jit_hits(SRC, "string memo collisions");
 }
 
@@ -170,7 +170,7 @@ fn jit_string_memo_survives_direct_mapped_collisions() {
 fn jit_stringcontains_still_works_through_interpolated_owned_strings() {
     // An OWNED haystack built per iteration (interpolation → accumulator record) exercises the
     // helper's ACC-record byte read + the free_mask release of an owned operand.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -185,6 +185,6 @@ fn jit_stringcontains_still_works_through_interpolated_owned_strings() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(600)}\"); }";
     assert_jit_hits(SRC, "stringcontains owned haystack");
 }

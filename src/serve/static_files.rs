@@ -194,7 +194,7 @@ pub fn resolve_site_dir(dir: &Path) -> Result<(PathBuf, PathBuf), String> {
     if !entry.is_file() {
         return Err(format!(
             "phg serve: `{}` has no `public/index.phg` — the one web entry (an \
-             #[Entry(kind: Web)] function taking a Request) must live there",
+             #[Entry(kind: EntryKind.Web)] function taking a Request) must live there",
             dir.display()
         ));
     }

@@ -19,6 +19,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Circle {
     constructor(public int radius) {}
@@ -69,7 +70,7 @@ function shout(string? name): string {
     return name + "!";
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(classify(21));
     // int:42

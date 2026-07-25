@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M-mut.7b — property hooks: a member that looks like a field but runs code on read (`get`) and/or
 // on write (`set`). A hook is *virtual* — it has no storage of its own; its body reads and writes
@@ -38,7 +39,7 @@ class Account {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Temp t = new Temp(100.0);
     Output.printLine("100C is {t.fahrenheit}F");

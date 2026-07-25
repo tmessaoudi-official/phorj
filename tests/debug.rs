@@ -30,13 +30,13 @@ fn both_exit(src: &str, expected_out: &str, expected_code: i64) {
 #[test]
 fn dump_prints_passes_through_and_captures() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.String;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
 class User { constructor(public string name, public int age) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   int doubled = Debug.dump(21).value() * 2;
   Output.printLine("doubled {doubled}");
   string snap = Debug.dump(new User("Ada", 36)).text();
@@ -54,10 +54,10 @@ class User { constructor(public string name, public int age) {} }
 #[test]
 fn runtime_exit_is_clean_and_carries_the_code() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Runtime;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Output.printLine("before");
   Runtime.exit(3);
   Output.printLine("unreachable");
@@ -69,11 +69,11 @@ import Core.Runtime;
 #[test]
 fn dd_dumps_then_exits_one() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Output.printLine("checking");
   Debug.dd([1, 2]);
   Output.printLine("unreachable");
@@ -86,10 +86,10 @@ import Core.DebugModule.Debug;
 #[test]
 fn exit_zero_is_success() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Runtime;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Output.printLine("done early");
   Runtime.exit(0);
 }
@@ -103,11 +103,11 @@ import Core.Runtime;
 #[test]
 fn debug_transpiles_with_the_twin_renderer() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
-#[Entry(kind: Cli)] function main(): void { discard Debug.dump([1, 2]); }
+#[Entry(kind: EntryKind.Cli)] function main(): void { discard Debug.dump([1, 2]); }
 "#;
     let php = cmd_transpile(src).expect("Core.DebugModule transpiles now");
     assert!(php.contains("__phorj_debug_render"), "twin missing:\n{php}");

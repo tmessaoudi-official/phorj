@@ -6,6 +6,7 @@ package Main;
 import Core.Output;
 import Acme.Zoo.Animal;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `Dog` inherits `Animal`'s constructor (so `new Dog("rex")` sets `name`) and its `name` field.
 open class Dog extends Animal {
@@ -22,7 +23,7 @@ class Puppy extends Dog {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(new Dog("rex").speak());
     Output.printLine(new Puppy("milo").speak());

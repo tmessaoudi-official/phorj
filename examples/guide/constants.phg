@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Feature A — `const` class constants. A `const` member is a compile-time, immutable, class-name-only
 // constant with member visibility. Unlike a PHP property default it lives on the class (never the
@@ -22,7 +23,7 @@ open class Limits {
 class Sub extends Limits {
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("{Limits.MAX}");
     // 100

@@ -12,13 +12,14 @@ import Core.Output;
 import Core.List;
 import Core.Map;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // The type argument supplies the element type directly — no expected-type context required.
 function emptyInts(): List<int> {
     return new List<int>();
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<string> names = new List<string>();
     Map<string, int> counts = new Map<string, int>();

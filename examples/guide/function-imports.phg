@@ -21,8 +21,9 @@ import Core.Math.abs;
 import Core.Math.max;
 import Core.List;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Bare member-imported calls (printLine, and clean = String.trim aliased).
     printLine(clean("  hello  "));

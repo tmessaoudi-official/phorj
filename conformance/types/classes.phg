@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Rect {
     constructor(public int w, public int h) {}
@@ -14,7 +15,7 @@ class Rect {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Rect r = new Rect(3, 4);
     Output.printLine("area = {r.area()}");

@@ -9,6 +9,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // The classic: returns its argument unchanged, at whatever type it was called with.
 function identity<T>(T x): T {
@@ -35,7 +36,7 @@ function lastOfTwo<T>(T a, T b): T {
     return b;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // `identity` reused at three different concrete types — one definition, no duplication.
     int n = identity(7);

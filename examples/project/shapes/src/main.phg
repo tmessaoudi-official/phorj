@@ -11,6 +11,7 @@ import Acme.Geometry.Shape;
 import Acme.Geometry.Rect;
 import Acme.Geometry.Paint;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Typed by an imported INTERFACE — any implementer flows in (nominal subtyping, cross-package).
 function describe(Shape s): int {
@@ -22,7 +23,7 @@ function paintName(Paint p): string {
     return match (p) { Red() => "red", Green() => "green", Blue() => "blue" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Rect r = new Rect(3, 4);
     // instantiate an imported class

@@ -9,6 +9,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 declare class DateTimeImmutable {
     constructor(string datetime);
@@ -16,7 +17,7 @@ declare class DateTimeImmutable {
     static function createFromFormat(string fmt, string datetime): DateTimeImmutable;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Construct + instance method.
     DateTimeImmutable d = new DateTimeImmutable("2023-11-14 22:13:20");

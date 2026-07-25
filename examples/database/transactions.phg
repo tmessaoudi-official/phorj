@@ -28,6 +28,7 @@ import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A tiny helper: prepare + exec one write. Both `prepare` and `exec` can throw `DatabaseError`, so each is
 // propagated with `?` (and the function declares `throws DatabaseError`).
@@ -89,7 +90,7 @@ function nested(Database db): void throws DatabaseError {
     db.commit()?;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `#[Entry(kind:)]` is an injected `EntryKind` enum variant (2026-07-25, DEC-337, DEC-268-certified)
+- The entry role is now a QUALIFIED, import-gated enum variant — `import Core.Runtime.EntryKind;` then
+  `#[Entry(kind: EntryKind.Cli)]` / `#[Entry(kind: EntryKind.Web)]`. Previously `kind: Cli` was a bare
+  magic identifier "in the wind" (no import, unresolved); it is now `E-INJECTED-VARIANT-BARE`, consistent
+  with every other injected variant (`Option.Some`, …). An unimported `EntryKind.Cli` is `E-UNIMPORTED`;
+  the fully-qualified `Core.Runtime.EntryKind.Cli` is self-gating (no import), mirroring `#[Core.Runtime.Entry]`.
+  Reserved kinds (Desktop/Mobile/Worker/Embedded) are real variants (`E-ENTRY-KIND-RESERVED`). `EntryKind`
+  is a compile-time-only marker (Inv 5) — erased before every backend, so byte-identity is unchanged.
+  All ~340 shipped examples + the transpiler/lifter/formatter/LSP updated in the same change (Inv 17).
+
 ### Added — Q-A wildcard & group imports (2026-07-25, DEC-268-certified)
 - `import Pkg.*;` binds every PUBLIC member of a package at once (cross-package); `import Pkg.{ A, B as C };`
   group form (DEC-186); `import Pkg.* except { X };` drops names; an explicit import wins over a wildcard.

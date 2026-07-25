@@ -9,6 +9,7 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function describe(string s): string {
     if (var n = String.parseInt(s)) {
@@ -17,7 +18,7 @@ function describe(string s): string {
     return "{s} -> (not an int)";
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(describe("42"));
     // 42 -> 42

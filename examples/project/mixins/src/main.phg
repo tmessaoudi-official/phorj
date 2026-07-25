@@ -7,6 +7,7 @@ import Core.Output;
 import Acme.Mixins.Loud;
 import Acme.Mixins.Identified;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Speaker {
     use Loud;
@@ -20,7 +21,7 @@ class Speaker {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var s = new Speaker(7, "ada");
     Output.printLine(s.announce(s.name));

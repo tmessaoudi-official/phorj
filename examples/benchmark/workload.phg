@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A focused profiling workload for `phg benchmark` and `phg disassemble`. It mixes the two cost
 // centers the M2 backends care about: CPU-bound recursion (large call volume) and heap allocation
@@ -40,7 +41,7 @@ function fib(int n): int {
     return fib(n - 1) + fib(n - 2);
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // CPU-bound: ~8k calls at depth ~18. (`bench` runs the whole program 101× — kept modest so a
     // casual `phg benchmark` stays a few seconds, not a minute. The VM's speedup ratio is

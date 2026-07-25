@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Engine {
     constructor(private int power) {}
@@ -22,7 +23,7 @@ class Car {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Car c = new Car("Phorj", new Engine(250));
     Output.printLine("{c.makeOf()} has {c.horsepower()} hp");

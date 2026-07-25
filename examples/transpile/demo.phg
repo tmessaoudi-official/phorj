@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // This program is also in the byte-identity sweep. `phg transpile` turns it into
 // runnable PHP 8.x — the only Phorj↔PHP-ecosystem path (output, not input).
@@ -18,7 +19,7 @@ function area(Shape s): float {
     return match (s) { Circle(r) => 3.14159 * r * r, Square(side) => side * side };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Named n = new Named("demo");
     Output.printLine("{n.labelOf()}: circle area = {area(new Circle(2.0))}");

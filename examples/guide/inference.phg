@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `type` alias: a domain-specific name for a primitive. It is compile-time only — the checker
 // resolves `Celsius` to `int`, and it is fully erased from the transpiled PHP.
@@ -15,7 +16,7 @@ function boiling(): Celsius {
     return 100;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // `var`: the binding's type is inferred from its initializer, yet stays fully static —
     // `label` is a string, `lo`/`hi`/`range` are ints, checked like any explicit annotation.

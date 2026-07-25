@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function dbl(int x): int {
     return x * 2;
@@ -23,7 +24,7 @@ function adder(int n): (int) => int {
     return function(int x) => x + n;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var add10 = function(int x) => x + 10;
     // expression-body lambda (return type inferred)

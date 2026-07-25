@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function identity<T>(T x): T {
     return x;
@@ -15,7 +16,7 @@ class Box<T> {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("{identity(42)}");
     Output.printLine(identity("hi"));

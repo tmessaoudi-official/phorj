@@ -3270,3 +3270,32 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
 - **LSP fix (66f940b).** Dotted import-path completion carried only a `label`, so accepting `Core.Output`
   after typing `Core.` inserted `Core.Core.Output`; import items now carry a `textEdit` replacing the whole
   typed path. (Broader LSP intuitiveness punch-list: `docs/research/2026-07-25-lsp-completion-audit.md`.)
+
+## DEC-337 — `#[Entry(kind:)]` kind is an injected `EntryKind` enum variant (2026-07-25, RULED + BUILT)
+
+- **Problem.** `#[Entry(kind: Cli)]` (DEC-331) read `Cli`/`Web` as a BARE magic identifier — string-matched
+  in `parse_entry_kind`, never imported, never resolved. This violated the "nothing in the wind" invariant
+  the language enforces everywhere else (injected variants like `Option.Some` are `E-INJECTED-VARIANT-BARE`
+  when bare). Flagged by the developer.
+- **Ruling (interactive, all sub-forks dev-chosen).** The kind is an injected enum `Core.Runtime.EntryKind`
+  { Cli, Web, Desktop, Mobile, Worker, Embedded }, reached QUALIFIED — `#[Entry(kind: EntryKind.Cli)]`.
+  Sub-decisions: (1) **separate import** `import Core.Runtime.EntryKind;` (NOT bundled into
+  `Core.Runtime.Entry`); (2) **reserved kinds are real variants** (Desktop/… resolve, then
+  `E-ENTRY-KIND-RESERVED`, preserving the active/reserved/unknown tiers). Recommended option (mirror the
+  `Option.Some`/`Result.Success` injected-variant precedent) chosen.
+- **Enforcement.** Bare `kind: Cli` → `E-INJECTED-VARIANT-BARE`; qualified but unimported `EntryKind.Cli`
+  → `E-UNIMPORTED`; wrong qualifier → `E-ENTRY-KIND-UNKNOWN`. Two accepted spellings, mirroring the
+  `#[Entry]` attribute's own forms: short `EntryKind.Cli` (member-import-gated) and fully-qualified
+  self-gating `Core.Runtime.EntryKind.Cli` (no import, like `#[Core.Runtime.Entry]`). Compiler-synthesized
+  entries (test-runner driver, lifted drafts — zero span) are exempt from the import-gate.
+- **Compile-time only (Inv 5).** `EntryKind` is a pure marker bare_type under `Core.Runtime` (empty prelude
+  source) — never a runtime enum; the attribute arg is erased before any backend, so the PHP leg never sees
+  it. Byte-identity (VM ≡ tree-walker ≡ php-8.5.8) unaffected — held across all 340 migrated examples.
+- **Scope built.** Parser reader (`entry_kind_form` flattens the qualifier chain), checker enforcement,
+  `Core.Runtime` prelude bare_type, synthetic `entry_attr` + lifter emit the qualified form + import;
+  ~340 `.phg` examples/conformance/bench + ~815 inline `.rs`/playground fixtures migrated; the 3 shared
+  test prepend-helpers inject the `EntryKind` import; new checker coverage for the three error paths.
+  Full all-features gate green (nextest + clippy ×3 + fmt + release), DEC-268 panel certified.
+- **Currency (Inv 17).** Transpile (erased), lift (emits qualified form + import), formatter (round-trips),
+  LSP (checker≡diagnostics; `EntryKind` surfaces via CORE_MODULES bare_types). LSP attribute-arg completion
+  suggesting `EntryKind.Cli` inside `#[Entry(kind:` is a follow-up on the existing LSP punch-list.

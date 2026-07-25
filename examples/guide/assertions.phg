@@ -20,6 +20,7 @@ import Core.Output;
 // `import Core.Assert;` (the whole module) enables the qualified form `Assert.assert(cond)`.
 import Core.Assert.assert;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Preconditions: guard the argument range, then use it. Both asserts hold for every call below.
 function percent(int n): int {
@@ -28,7 +29,7 @@ function percent(int n): int {
     return n;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("percent = {percent(50)}");
     // Passing asserts are no-ops — execution continues past them.

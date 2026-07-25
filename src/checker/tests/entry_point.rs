@@ -102,36 +102,36 @@ fn instance_method_named_main_is_not_an_entry() {
 #[test]
 fn top_level_and_class_static_entry_is_duplicate_kind() {
     // DEC-331 D1: multiplicity is per declared KIND — two `Cli` entries collide.
-    let src = "#[Entry(kind: Cli)] function main(): void { } class App { #[Entry(kind: Cli)] static function main(): void { } }";
+    let src = "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Cli)] function main(): void { } class App { #[Entry(kind: EntryKind.Cli)] static function main(): void { } }";
     assert!(has(src, "E-DUPLICATE-ENTRY-KIND"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn two_class_static_entries_is_duplicate_kind() {
     let src =
-        "class A { #[Entry(kind: Cli)] static function main(): void { } } class B { #[Entry(kind: Cli)] static function main(): void { } }";
+        "import Core.Runtime.EntryKind; class A { #[Entry(kind: EntryKind.Cli)] static function main(): void { } } class B { #[Entry(kind: EntryKind.Cli)] static function main(): void { } }";
     assert!(has(src, "E-DUPLICATE-ENTRY-KIND"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn cli_and_web_entries_may_coexist() {
     // DEC-331 D1: one Cli + one Web entry in one program is legal — run/serve pick their kind.
-    let src = "import Core.Http.Request; import Core.Http.Response; \
-               #[Entry(kind: Cli)] function cli(): void { } \
-               #[Entry(kind: Web)] function web(Request r): Response { return Response.text(\"ok\"); }";
+    let src = "import Core.Runtime.EntryKind; import Core.Http.Request; import Core.Http.Response; \
+               #[Entry(kind: EntryKind.Cli)] function cli(): void { } \
+               #[Entry(kind: EntryKind.Web)] function web(Request r): Response { return Response.text(\"ok\"); }";
     assert!(!has(src, "E-DUPLICATE-ENTRY-KIND"), "{:?}", errors_of(src));
     assert!(!has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn entry_on_instance_method_is_target_error() {
-    let src = "class App { #[Entry(kind: Cli)] function run(): void { } }";
+    let src = "class App { #[Entry(kind: EntryKind.Cli)] function run(): void { } }";
     assert!(has(src, "E-ENTRY-TARGET"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn entry_with_unmatched_signature_is_sig_error() {
-    let src = "#[Entry(kind: Cli)] function main(int x): void { }";
+    let src = "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Cli)] function main(int x): void { }";
     assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
 
@@ -145,14 +145,17 @@ fn bare_entry_without_kind_is_required_error() {
 
 #[test]
 fn unknown_entry_kind_is_unknown_error() {
-    let src = "#[Entry(kind: Banana)] function main(): void { }";
+    let src =
+        "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Banana)] function main(): void { }";
     assert!(has(src, "E-ENTRY-KIND-UNKNOWN"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn reserved_entry_kind_is_reserved_error() {
     for k in ["Desktop", "Mobile", "Worker", "Embedded"] {
-        let src = format!("#[Entry(kind: {k})] function main(): void {{ }}");
+        let src = format!(
+            "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.{k})] function main(): void {{ }}"
+        );
         assert!(
             has(&src, "E-ENTRY-KIND-RESERVED"),
             "{k}: {:?}",
@@ -164,19 +167,60 @@ fn reserved_entry_kind_is_reserved_error() {
 #[test]
 fn web_kind_on_cli_signature_is_sig_error() {
     // Declared `kind: Web` but the signature is CLI-shaped — the kind↔signature disagreement.
-    let src = "#[Entry(kind: Web)] function main(): void { }";
+    let src =
+        "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Web)] function main(): void { }";
     assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
 
 #[test]
 fn well_formed_cli_and_web_kinds_are_clean() {
     assert!(!has(
-        "#[Entry(kind: Cli)] function main(): void { }",
+        "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Cli)] function main(): void { }",
         "E-ENTRY-KIND-REQUIRED"
     ));
-    let web = "import Core.Http.Request; import Core.Http.Response; \
-               #[Entry(kind: Web)] function h(Request r): Response { return Response.text(\"ok\"); }";
+    let web = "import Core.Runtime.EntryKind; import Core.Http.Request; import Core.Http.Response; \
+               #[Entry(kind: EntryKind.Web)] function h(Request r): Response { return Response.text(\"ok\"); }";
     assert!(!has(web, "E-ENTRY-SIG"), "{:?}", errors_of(web));
+}
+
+// ── DEC-337: `kind:` is an injected `EntryKind` variant — qualified + imported, never in the wind ──
+
+#[test]
+fn bare_kind_is_injected_variant_bare_error() {
+    // A bare `kind: Cli` (unqualified injected variant) is rejected — write `EntryKind.Cli`.
+    let src = "import Core.Runtime.EntryKind; #[Entry(kind: Cli)] function main(): void { }";
+    assert!(has(src, "E-INJECTED-VARIANT-BARE"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn bare_enum_name_as_kind_is_missing_variant_not_bogus_self_qualify() {
+    // `kind: EntryKind` — the enum NAME with no variant — reports a MISSING variant, not a bare
+    // variant needing `EntryKind.EntryKind` (which would be nonsensical).
+    let src = "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind)] function main(): void { }";
+    assert!(has(src, "E-ENTRY-KIND-REQUIRED"), "{:?}", errors_of(src));
+    assert!(!has(src, "E-INJECTED-VARIANT-BARE"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn qualified_kind_without_import_is_unimported_error() {
+    // `EntryKind.Cli` used without `import Core.Runtime.EntryKind;` — nothing in the wind.
+    let src = "#[Entry(kind: EntryKind.Cli)] function main(): void { }";
+    assert!(has(src, "E-UNIMPORTED"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn wrong_kind_qualifier_is_unknown_error() {
+    // `Foo.Cli` — a qualifier other than `EntryKind` — is not a valid entry kind.
+    let src = "import Core.Runtime.EntryKind; #[Entry(kind: Foo.Cli)] function main(): void { }";
+    assert!(has(src, "E-ENTRY-KIND-UNKNOWN"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn whole_module_runtime_import_enables_qualified_kind() {
+    // `import Core.Runtime;` (whole-module) also binds `EntryKind` — no E-UNIMPORTED.
+    let src = "import Core.Runtime; #[Entry(kind: EntryKind.Cli)] function main(): void { }";
+    assert!(!has(src, "E-UNIMPORTED"), "{:?}", errors_of(src));
+    assert!(!has(src, "E-INJECTED-VARIANT-BARE"), "{:?}", errors_of(src));
 }
 
 #[test]

@@ -13,6 +13,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Counter {
     constructor(private int n) {}
@@ -28,7 +29,7 @@ class Counter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var a = Counter.zero;
     var b = a.next().next();

@@ -23,6 +23,7 @@ import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Router;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Handlers are plain `(Request) -> Response` functions — registered as first-class values below.
 function home(Request req): Response {
@@ -78,7 +79,7 @@ function show(Router rt, bytes raw): void {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Router rt = app();
     // CRLFs as explicit `\x0d\x0a` (deterministic, no file/socket).

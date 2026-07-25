@@ -15,6 +15,7 @@ import Core.String;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Wallet {
     constructor(public string tier, public int cents) {}
@@ -24,7 +25,7 @@ class User {
     constructor(public string name, public int age, public List<string> tags, public Wallet wallet) {}
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     User u = new User("Ada", 36, ["math", "engines"], new Wallet("gold", 1250));
     // Pass-through: inspect a value MID-EXPRESSION without restructuring the code.

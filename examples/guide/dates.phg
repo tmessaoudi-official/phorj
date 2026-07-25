@@ -10,8 +10,9 @@ import Core.Time;
 import Core.Time.Date;
 import Core.Time.Instant;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Date d = Date.of(2023, 11, 14);
     Output.printLine("date     = {d.toString()}");

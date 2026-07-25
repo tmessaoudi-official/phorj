@@ -46,8 +46,8 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
     // S2b bare form. The loader resolves it against the imported package's mangled symbol.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
-         #[Entry(kind: Cli)] function main() -> void {\n    Output.printLine(\"{Util.compute(20)}\");\n}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Util;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Output.printLine(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -65,8 +65,8 @@ fn import_alias_resolves_qualified_call() {
     // `import Acme.Util as U;` binds the leaf `u`; the call qualifies on the alias.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util as U;\n\
-         #[Entry(kind: Cli)] function main() -> void {\n    Output.printLine(\"{U.compute(20)}\");\n}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Util as U;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Output.printLine(\"{U.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -85,8 +85,8 @@ fn same_package_cross_file_bare_call_resolves() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
-         #[Entry(kind: Cli)] function main() -> void {\n    Output.printLine(\"{Util.outer(20)}\");\n}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Util;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Output.printLine(\"{Util.outer(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/outer.phg",
@@ -108,9 +108,9 @@ fn unqualified_cross_package_call_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Util;\n\
          // Util referenced for the unused-import scan\n\
-         #[Entry(kind: Cli)] function main() -> void {\n    Output.printLine(\"{compute(20)}\");\n}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Output.printLine(\"{compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -134,8 +134,8 @@ fn internal_member_is_visible_from_descendant_package() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Acme.Lib.Widget;\nimport Acme.Lib.Sub.Helper;\n\
-         #[Entry(kind: Cli)] function main(): void { Widget w = new Widget(); Helper h = new Helper(); Output.printLine(\"{h.use(w)}\"); }",
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Acme.Lib.Widget;\nimport Acme.Lib.Sub.Helper;\n\
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Widget w = new Widget(); Helper h = new Helper(); Output.printLine(\"{h.use(w)}\"); }",
     );
     tmp.write(
         "src/Acme/Lib/Widget.phg",
@@ -160,8 +160,8 @@ fn internal_promoted_ctor_param_field_is_enforced_cross_package() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Acme.Lib.Widget;\n\
-         #[Entry(kind: Cli)] function main(): void { Widget w = new Widget(9); Output.printLine(\"{w.secret}\"); }",
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Acme.Lib.Widget;\n\
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Widget w = new Widget(9); Output.printLine(\"{w.secret}\"); }",
     );
     tmp.write(
         "src/Acme/Lib/Widget.phg",
@@ -179,8 +179,8 @@ fn internal_member_is_not_visible_from_unrelated_package() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Acme.Lib.Widget;\n\
-         #[Entry(kind: Cli)] function main(): void { Widget w = new Widget(); Output.printLine(\"{w.secret()}\"); }",
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Acme.Lib.Widget;\n\
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Widget w = new Widget(); Output.printLine(\"{w.secret()}\"); }",
     );
     tmp.write(
         "src/Acme/Lib/Widget.phg",
@@ -198,8 +198,8 @@ fn library_package_type_is_usable_cross_package() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util.Shape;\n\
-         #[Entry(kind: Cli)] function main() -> void {\n    Shape s = new Shape(5);\n    Output.printLine(\"{s.w}\");\n}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Util.Shape;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Shape s = new Shape(5);\n    Output.printLine(\"{s.w}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/Shape.phg",
@@ -219,7 +219,7 @@ fn import_type_unknown_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util.Nope;\n// Nope referenced for the unused-import scan\n#[Entry(kind: Cli)] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Acme.Util.Nope;\n// Nope referenced for the unused-import scan\n#[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/Shape.phg",
@@ -235,7 +235,7 @@ fn import_type_conflict_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.A.Shape;\nimport Acme.B.Shape;\n// Shape referenced for the unused-import scan\n#[Entry(kind: Cli)] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Acme.A.Shape;\nimport Acme.B.Shape;\n// Shape referenced for the unused-import scan\n#[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/A/Shape.phg",
@@ -255,7 +255,7 @@ fn import_type_builtin_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util.List;\n// List referenced for the unused-import scan\n#[Entry(kind: Cli)] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Acme.Util.List;\n// List referenced for the unused-import scan\n#[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
@@ -273,7 +273,7 @@ fn import_type_shadow_is_rejected() {
     // `Acme.Util` module-import leaf `Util`. The shadow guard keeps the two import kinds disjoint.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util;\nimport Acme.Types.Util;\n// Util referenced for the unused-import scan\n#[Entry(kind: Cli)] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Acme.Util;\nimport Acme.Types.Util;\n// Util referenced for the unused-import scan\n#[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
@@ -292,8 +292,8 @@ fn multi_package_transpiles_to_brace_namespaces() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
-         #[Entry(kind: Cli)] function main() -> void {\n    Output.printLine(\"{Util.compute(20)}\");\n}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Util;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Output.printLine(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -317,8 +317,8 @@ fn folder_path_violation_is_reported() {
     // declaration-keyed), and loading it then trips the folder = package validation.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Bad;\n\
-         // Bad referenced for the unused-import scan\n#[Entry(kind: Cli)] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Acme.Bad;\n\
+         // Bad referenced for the unused-import scan\n#[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/x.phg",
@@ -350,8 +350,8 @@ fn manifestless_sibling_package_resolves_by_folder() {
     );
     let entry = tmp.write(
         "x.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Util;\n\
-         #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{Util.double(21)}\"); }",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Util;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{Util.double(21)}\"); }",
     );
     let unit = loader::load(&entry).expect("sibling package resolves");
     let out = phorj::cli::treewalk_program(&unit).expect("runs");
@@ -363,8 +363,8 @@ fn manifestless_unresolved_import_is_module_not_found() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "x.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Bogus;\n\
-         #[Entry(kind: Cli)] function main() -> void { Bogus.f(); }",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Bogus;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { Bogus.f(); }",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-MODULE-NOT-FOUND"), "got: {err}");
@@ -390,9 +390,9 @@ fn manifestless_bin_console_reaches_src_and_vendor_and_local() {
     );
     let entry = tmp.write(
         "bin/console.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Commands;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Commands;\n\
          import Model.Article;\nimport Acme.Strutil;\n\
-         #[Entry(kind: Cli)] function main() -> void {\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n\
            Output.printLine(Commands.banner());\n\
            Article a = new Article(\"hello\");\n\
            Output.printLine(a.title);\n\
@@ -409,8 +409,8 @@ fn manifestless_import_main_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "x.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Main;\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Main;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-IMPORT-MAIN"), "got: {err}");
@@ -421,8 +421,8 @@ fn manifestless_duplicate_import_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "x.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Core.Output;\n\
-         #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"x\"); }",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Core.Output;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"x\"); }",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-DUP-IMPORT"), "got: {err}");
@@ -438,9 +438,9 @@ fn cross_package_trait_composition_runs_byte_identically() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
-         #[Entry(kind: Cli)] function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(\"{p.name}: {p.hello()}\");\n}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(\"{p.name}: {p.hello()}\");\n}",
     );
     tmp.write(
         "src/Acme/Mix/Greet.phg",
@@ -458,9 +458,9 @@ fn cross_package_trait_transpiles_to_namespaced_trait() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
-         #[Entry(kind: Cli)] function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(p.hello());\n}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(p.hello());\n}",
     );
     tmp.write(
         "src/Acme/Mix/Greet.phg",
@@ -480,9 +480,9 @@ fn cross_package_trait_used_as_type_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          function f(Greet x) -> void { Output.printLine(\"no\"); }\n\
-         #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"hi\"); }",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"hi\"); }",
     );
     tmp.write(
         "src/Acme/Mix/Greet.phg",
@@ -501,8 +501,8 @@ fn cross_package_call_inside_map_literal_resolves() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
-         #[Entry(kind: Cli)] function main() -> void {\n  Map<string, int> m = [\"k\" => Util.compute(20)];\n  Output.printLine(\"{m[\\\"k\\\"]}\");\n}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Util;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n  Map<string, int> m = [\"k\" => Util.compute(20)];\n  Output.printLine(\"{m[\\\"k\\\"]}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -521,9 +521,9 @@ fn cross_package_inheritance_and_parent_calls_run_byte_identically() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
          class Dog extends Animal {\n  open function speak() -> string { return \"woof/\" + parent(Animal).speak(); }\n}\n\
-         #[Entry(kind: Cli)] function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
     );
     tmp.write(
         "src/Acme/Zoo/Animal.phg",
@@ -541,9 +541,9 @@ fn cross_package_inheritance_transpiles_to_qualified_extends() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
          class Dog extends Animal {\n  open function speak() -> string { return parent.speak(); }\n}\n\
-         #[Entry(kind: Cli)] function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
     );
     tmp.write(
         "src/Acme/Zoo/Animal.phg",
@@ -566,7 +566,7 @@ fn project_reserved_core_package_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry(kind: Cli)] function main() -> void { Output.printLine(\"hi\"); }",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"hi\"); }",
     );
     // Lives at the folder that matches its (reserved) package, so E-PKG-PATH passes and the
     // reserved-root rule is what fires.
@@ -586,7 +586,7 @@ fn project_lowercase_package_decl_is_rejected() {
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\n#[Entry(kind: Cli)] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n#[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     // Folder matches the (lowercase) package, so E-PKG-PATH passes and E-PKG-CASE is what fires.
     tmp.write(

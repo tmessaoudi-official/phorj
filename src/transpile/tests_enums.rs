@@ -17,7 +17,7 @@ fn parse_only(src: &str) -> crate::ast::Program {
     let src = if src.trim_start().starts_with("package ") {
         src.to_string()
     } else {
-        format!("package Main; import Core.Runtime.Entry; {src}")
+        format!("package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; {src}")
     };
     let tokens = lex(&src).expect("lex");
     Parser::new(tokens).parse_program().expect("parse")

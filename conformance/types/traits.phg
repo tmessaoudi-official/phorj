@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 trait Greet {
     function hello(): string {
@@ -21,7 +22,7 @@ class Robot {
     use Taggable;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Robot r = new Robot();
     Output.printLine(r.hello());

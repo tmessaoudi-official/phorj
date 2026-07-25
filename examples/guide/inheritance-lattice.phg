@@ -14,6 +14,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 open class Animal {
     open function name(): string {
@@ -44,7 +45,7 @@ function describe(Animal a): string {
     return a.name();
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Duck d = new Duck();
     // (1) `instanceof` against every ancestor in the lattice — all true.

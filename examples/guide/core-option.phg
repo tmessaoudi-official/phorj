@@ -17,6 +17,7 @@ package Main;
 import Core.Output;
 import Core.Option;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A variant that mentions no `T` (`None`) can't infer it — annotate the binding to fix `Option<int>`.
 function describe(Option<int> o): string {
@@ -33,7 +34,7 @@ function firstPositive(List<int> xs): Option<int> {
     return new Option.None();
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var some = new Option.Some(7);
     // Option<int> — T inferred from `7`

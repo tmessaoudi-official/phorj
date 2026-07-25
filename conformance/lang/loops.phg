@@ -4,8 +4,9 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // while: test before each iteration; compound-assign accumulates.
     mutable int i = 0;

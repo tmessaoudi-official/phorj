@@ -15,6 +15,7 @@ package Main;
 import Core.Output;
 import Core.Result;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A dedicated error enum as the `E` payload — richer than a bare string, still exhaustively matchable.
 enum ParseFault { Missing, NotANumber(string text) }
@@ -42,7 +43,7 @@ function report(Result<int, ParseFault> r): string {
     };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(report(parsePositive("2")));
     // ok 2

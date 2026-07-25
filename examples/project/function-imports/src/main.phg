@@ -11,8 +11,9 @@ import App.Text.banner;
 import App.Text.shout as yell;
 import App.Text.addUp;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Bare cross-package function calls (banner, and yell = App.Text.shout aliased).
     printLine(banner("Function imports"));

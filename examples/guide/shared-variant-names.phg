@@ -13,6 +13,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Two domains that naturally share lifecycle vocabulary — no renaming gymnastics required.
 enum Payment { Pending(int cents), Settled(int cents) }
@@ -33,7 +34,7 @@ function describeShipment(Shipment s): string {
     };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Payment p = new Payment.Pending(1250);
     Shipment s = new Shipment.Pending("DHL");

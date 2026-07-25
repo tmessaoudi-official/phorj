@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Must-use returns (M-must-use Slice A): every non-`void`/`empty` result must be used — bound,
 // returned, or passed on. To keep only a side effect and drop the value, discard it explicitly with
@@ -22,7 +23,7 @@ function announce(string msg): void {
     Output.printLine(msg);
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     int sum = add(2, 3);
     // used — bound to a typed local

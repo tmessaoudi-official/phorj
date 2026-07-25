@@ -29,7 +29,7 @@ fn assert_jit_hits(src: &str, label: &str) -> String {
 fn phg_run_hook_hits_the_jit_on_the_listfilter_vertical() {
     // The exact `bench/micro/listfilter.phg` shape: a data-dependent predicate (`bump` flips
     // the surviving parity each iteration) so the survivor set cannot be folded or memoized.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -44,7 +44,7 @@ fn phg_run_hook_hits_the_jit_on_the_listfilter_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "listfilter vertical");
 }
 
@@ -52,7 +52,7 @@ fn phg_run_hook_hits_the_jit_on_the_listfilter_vertical() {
 fn jit_listfilter_survivors_keep_order_and_values() {
     // The filtered ACL builder must hold the ORIGINAL elements in input order — indexed reads
     // (not just the length) prove element identity survives the conditional-append loop.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -66,13 +66,13 @@ fn jit_listfilter_survivors_keep_order_and_values() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "listfilter order/values");
 }
 
 #[test]
 fn jit_listfilter_all_rejected_is_an_empty_list() {
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -85,7 +85,7 @@ fn jit_listfilter_all_rejected_is_an_empty_list() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "listfilter empty survivors");
 }
 
@@ -94,7 +94,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapfilter_vertical() {
     // The exact `bench/micro/mapfilter.phg` shape: a data-dependent value predicate over a
     // constant sealed flat map; the survivor CARDINALITY (`Map.size` over the AMB record) folds
     // into the checksum. A fresh record per iteration — recycled, never sealed.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Map;\n\
         function bench(int iters): int {\n\
@@ -110,7 +110,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapfilter_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "mapfilter vertical");
 }
 
@@ -120,7 +120,7 @@ fn jit_mapfilter_result_answers_gets_and_builder_sets() {
     // `arm_index_map` AMB leg) and a subsequent `m[k] = v` set must extend it through
     // `rt_u_map_builder_set` — layout compatibility between `rt_u_map_ext_*` and the
     // mapinsert vertical is exactly what this asserts.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Map;\n\
         function bench(int iters): int {\n\
@@ -135,13 +135,13 @@ fn jit_mapfilter_result_answers_gets_and_builder_sets() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "mapfilter get/set compat");
 }
 
 #[test]
 fn jit_mapfilter_all_rejected_is_an_empty_map() {
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Map;\n\
         function bench(int iters): int {\n\
@@ -154,7 +154,7 @@ fn jit_mapfilter_all_rejected_is_an_empty_map() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "mapfilter empty survivors");
 }
 
@@ -163,7 +163,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapmap_vertical() {
     // The exact `bench/micro/mapmap.phg` shape: a data-dependent value transform, then
     // `Map.values` over the AMB result (the un-memoized AMB leg — a fresh recycled ACL per
     // iteration) indexed per iteration.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.Map;\n\
@@ -181,7 +181,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapmap_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "mapmap vertical");
 }
 
@@ -189,7 +189,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapmap_vertical() {
 fn jit_mapmap_preserves_key_association_and_order() {
     // Keys keep their values' association through the transform: indexed gets by KEY (the AMB
     // table probe) and `Map.values` order (the rank walk) must both match the oracle.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.Map;\n\
@@ -205,7 +205,7 @@ fn jit_mapmap_preserves_key_association_and_order() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "mapmap association/order");
 }
 
@@ -213,7 +213,7 @@ fn jit_mapmap_preserves_key_association_and_order() {
 fn jit_mapmap_transform_overflow_faults_byte_identically_to_the_oracle() {
     // The transform's checked add overflows mid-loop → code-5 VM redo renders the canonical
     // interpreter fault (the unboxed graph is pure, so the whole-callee redo is exact).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Map;\n\
         function bench(int iters): int {\n\
@@ -227,7 +227,7 @@ fn jit_mapmap_transform_overflow_faults_byte_identically_to_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(3)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(3)}\"); }";
     let jit = crate::cli::cmd_run(SRC).expect_err("overflowing transform must fault");
     let oracle = crate::cli::cmd_treewalk(SRC).expect_err("oracle must fault");
     assert_eq!(jit, oracle, "fault strings must be byte-identical");

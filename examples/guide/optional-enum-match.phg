@@ -6,6 +6,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 enum Status { Active, Suspended(string reason), Deleted(int daysAgo) }
 
@@ -42,7 +43,7 @@ function label(Status? s): string {
     return match (s) { Active() => "OK", default => "attention" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     for (int id in [0, 1, 2, 3]) {
         Output.printLine(

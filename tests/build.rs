@@ -263,7 +263,7 @@ fn build_rejects_ill_typed_program() {
     let bad = std::env::temp_dir().join(format!("phorj_bad_{}.phg", std::process::id()));
     std::fs::write(
         &bad,
-        "#[Entry(kind: Cli)] function main() -> void { int x = \"no\"; }",
+        "#[Entry(kind: EntryKind.Cli)] function main() -> void { int x = \"no\"; }",
     )
     .unwrap();
     let out_bin = std::env::temp_dir().join(format!("phorj_bad_out_{}", std::process::id()));

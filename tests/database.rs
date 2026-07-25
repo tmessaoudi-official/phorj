@@ -66,13 +66,13 @@ fn db_typed_example_runs_on_both_backends() {
 fn typed_program(body: &str) -> String {
     format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class User {{ constructor(public string name, public int age) {{}} }}
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
@@ -100,7 +100,7 @@ fn db_query_into_propagates_with_question_mark() {
     // The idiomatic `throws DatabaseError` helper: `queryInto()?` in a non-`try` propagating context —
     // the sink type is still inferred through the `?`.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -111,7 +111,7 @@ function loadAll(Statement s): List<User> throws DatabaseError {
   List<User> u = s.queryInto()?;
   return u;
 }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
@@ -194,13 +194,13 @@ fn db_query_into_null_into_non_optional_throws() {
 fn db_query_into_optional_field_admits_null() {
     // A `string?` field: a NULL column maps to `null`, a present value maps through.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Row2 { constructor(public string name, public int? age) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, age INTEGER)").exec();
@@ -233,7 +233,7 @@ fn db_nested_example_runs_on_both_backends() {
 fn nested_program(rows: &str, body: &str) -> String {
     format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Map;
 import Core.DatabaseModule;
@@ -243,7 +243,7 @@ class Country {{ constructor(public string code, public string name) {{}} }}
 class Customer {{ constructor(public int id, public string name, public Country country) {{}} }}
 class Order {{ constructor(public int id, public int total, public Customer customer) {{}} }}
 class Sale {{ constructor(public string product, public Order order, public Country? shipTo) {{}} }}
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE countries(code TEXT, name TEXT)").exec();
@@ -298,14 +298,14 @@ fn db_nested_required_partial_null_throws() {
     // A REQUIRED nested `Order` with a NULL `order.total` column is NOT a null-parent — the strict
     // `getInt` on the non-optional subfield throws (this is what distinguishes required from optional).
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Order { constructor(public int id, public int total) {} }
 class Sale { constructor(public string product, public Order order) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE sales(product TEXT, oid INTEGER, ototal INTEGER)").exec();
@@ -326,13 +326,13 @@ fn db_hydrate_cycle_is_rejected() {
     // A self-referential row class cannot be eagerly whole-graph hydrated (unbounded) → compile error,
     // not a compiler stack overflow. The optional back-reference is still caught (cycle check on entry).
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Employee { constructor(public string name, public Employee? manager) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     List<Employee> es = db.prepare("SELECT name FROM e").queryInto();
@@ -404,14 +404,14 @@ fn db_query_map_entity_value_hydrates_by_field_name() {
     // Map<int, User>: value is a hydrated entity (by field name from the whole row); key is the first
     // column. Extra columns (the id key) are ignored by the entity mapping.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Map;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class User { constructor(public string name, public int age) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE users(id INTEGER, name TEXT, age INTEGER)").exec();
@@ -446,14 +446,14 @@ fn db_naming_snake_to_camel_maps_camel_fields() {
     // `.namingStrategy(new Naming.SnakeToCamel())` makes a `userName` field read the `user_name`
     // column and `firstName` read `first_name` — the desugar bakes the snake_case column literal in.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class Member { constructor(public string userName, public string firstName) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE members(user_name TEXT, first_name TEXT)").exec();
@@ -473,13 +473,13 @@ fn db_naming_default_exact_needs_exact_column() {
     // The strict-exact DEFAULT is unchanged: with no `namingStrategy`, a camelCase field looks up a
     // camelCase column, so a snake_case column is a runtime `no column` DatabaseError (not a naming bug).
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Member { constructor(public string userName) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE members(user_name TEXT)").exec();
@@ -500,7 +500,7 @@ fn db_naming_snake_to_camel_nested_entity() {
     // The transform applies PER dotted segment: a nested `homeAddress.streetName` reads the alias
     // `"home_address.street_name"` (segment `home_address` from the field, `.street_name` from the sub).
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -508,7 +508,7 @@ import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class Address { constructor(public string streetName) {} }
 class Member { constructor(public string userName, public Address homeAddress) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(user_name TEXT, street_name TEXT)").exec();
@@ -527,7 +527,7 @@ fn db_naming_query_map_entity_value_under_strategy() {
     // `queryMap` with an ENTITY value hydrates it by field name, so the strategy applies to the value
     // fields; the key (first column) and any scalar are read by position and are unaffected.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Map;
 import Core.DatabaseModule;
@@ -535,7 +535,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class Member { constructor(public string userName, public string firstName) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(id INTEGER, user_name TEXT, first_name TEXT)").exec();
@@ -557,14 +557,14 @@ fn db_naming_runtime_argument_dispatches_on_the_field() {
     // copy-builder storing it in the statement's `naming` field, and the desugar emits both baked
     // helper variants plus a field dispatcher (the old E-DB-NAMING-NOT-CONST rejection is retired).
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class U { constructor(public string userName) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     Naming n = new Naming.SnakeToCamel();
@@ -582,7 +582,7 @@ fn db_naming_stored_statement_split_keeps_the_strategy() {
     // silently revert to `Exact`. DEC-258: the strategy rides the Statement VALUE, so the split
     // form dispatches correctly at run time.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -590,7 +590,7 @@ import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class U { constructor(public string userName) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     Statement s = db.prepare("SELECT 'ada' AS user_name").namingStrategy(new Naming.SnakeToCamel());
@@ -607,14 +607,14 @@ fn db_naming_connection_level_strategy_is_baked_when_traceable() {
     // DEC-258 tier 1: `new Database(dsn, new Naming.SnakeToCamel())` visible in the same function
     // → every hydration through it maps snake columns with zero runtime dispatch.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class U { constructor(public string userName) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:", new Naming.SnakeToCamel());
     List<U> us = db.prepare("SELECT 'lin' AS user_name").queryInto();
@@ -631,7 +631,7 @@ fn db_naming_connection_through_parameter_dispatches_on_the_field() {
     // hydration dispatches on the field the Database value carries. Both strategies through the
     // SAME helper site prove the dispatch is real.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -649,7 +649,7 @@ function loadExact(Database db): List<U> throws DatabaseError {
   List<U> us = s.queryInto()?;
   return us;
 }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database snake = new Database("sqlite::memory:", new Naming.SnakeToCamel());
     Database exact = new Database("sqlite::memory:");
@@ -666,14 +666,14 @@ fn db_naming_unknown_variant_is_still_a_type_error() {
     // `new Naming.Bogus()` never becomes a silent runtime fallback — the construction itself is
     // rejected by the checker (no such variant on the injected enum).
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class U { constructor(public string userName) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     List<U> us = db.prepare("SELECT 1 AS user_name").namingStrategy(new Naming.Bogus()).queryInto();
@@ -711,7 +711,7 @@ fn db_transactions_example_runs_on_both_backends() {
 fn tx_program(body: &str) -> String {
     format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -731,7 +731,7 @@ function run(Database db, string sql): void throws DatabaseError {{
 function act(Database db): void throws DatabaseError {{
   {body}
 }}
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)").exec();
@@ -902,7 +902,7 @@ fn db_transaction_closure_nested_is_a_savepoint() {
 fn retry_program(body: &str) -> String {
     format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -921,7 +921,7 @@ function run(Database db, string sql): void throws DatabaseError {{ Statement s 
 function act(Database db, Tries tries): void throws DatabaseError {{
   {body}
 }}
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)").exec();
@@ -1011,14 +1011,14 @@ fn db_writes_example_runs_on_both_backends() {
 fn writes_program(body: &str) -> String {
     format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.List;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE people(id INTEGER PRIMARY KEY, name TEXT, city TEXT)").exec();
@@ -1057,14 +1057,14 @@ fn db_execute_many_rolls_back_whole_batch_on_error() {
     // Rows are homogeneous (all string) — a phorj list literal must share one element type, so a
     // mixed-column bulk row needs per-row typed bindings; here a TEXT primary key gives the collision.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.List;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(k TEXT PRIMARY KEY, v TEXT)").exec();
@@ -1150,7 +1150,7 @@ fn db_mapping_example_runs_on_both_backends() {
 #[test]
 fn db_maps_enum_by_variant_name() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1158,7 +1158,7 @@ import Core.DatabaseModule.DatabaseError;
 enum Status { Active(), Suspended() }
 class Acct { constructor(public string name, public Status status) {} }
 function label(Status s): string { return match (s) { Active() => "A", Suspended() => "S" }; }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
@@ -1176,14 +1176,14 @@ function label(Status s): string { return match (s) { Active() => "A", Suspended
 #[test]
 fn db_maps_enum_unknown_value_throws() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 enum Status { Active(), Suspended() }
 class Acct { constructor(public string name, public Status status) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
@@ -1203,7 +1203,7 @@ class Acct { constructor(public string name, public Status status) {} }
 #[test]
 fn db_maps_optional_enum_admits_null() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1211,7 +1211,7 @@ import Core.DatabaseModule.DatabaseError;
 enum Status { Active() }
 class Acct { constructor(public string name, public Status? status) {} }
 function show(Status? s): string { if (var x = s) { return "active"; } return "none"; }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
@@ -1230,13 +1230,13 @@ function show(Status? s): string { if (var x = s) { return "active"; } return "n
 #[test]
 fn db_maps_decimal_exactly() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Money { constructor(public decimal a, public decimal b) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(a TEXT, b TEXT)").exec();
@@ -1255,13 +1255,13 @@ class Money { constructor(public decimal a, public decimal b) {} }
 #[test]
 fn db_maps_decimal_from_integer_and_real_columns() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Nums { constructor(public decimal i, public decimal half, public decimal tenth) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(i INTEGER, half REAL, tenth REAL)").exec();
@@ -1278,13 +1278,13 @@ class Nums { constructor(public decimal i, public decimal half, public decimal t
 #[test]
 fn db_maps_decimal_null_into_non_optional_throws() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Money { constructor(public decimal amount) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(amount TEXT)").exec();
@@ -1304,13 +1304,13 @@ class Money { constructor(public decimal amount) {} }
 #[test]
 fn db_maps_decimal_invalid_text_throws() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Money { constructor(public decimal amount) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(amount TEXT)").exec();
@@ -1330,7 +1330,7 @@ class Money { constructor(public decimal amount) {} }
 #[test]
 fn db_maps_json_and_optional_admits_null() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Json;
 import Core.DatabaseModule;
@@ -1338,7 +1338,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Doc { constructor(public Json body, public Json? note) {} }
 function showNote(Json? j): string { if (var x = j) { return Json.stringify(x); } return "-"; }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE d(body TEXT, note TEXT)").exec();
@@ -1356,14 +1356,14 @@ function showNote(Json? j): string { if (var x = j) { return Json.stringify(x); 
 #[test]
 fn db_maps_invalid_json_throws() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Json;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Doc { constructor(public Json body) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE d(body TEXT)").exec();
@@ -1384,7 +1384,7 @@ class Doc { constructor(public Json body) {} }
 #[test]
 fn db_maps_enum_decimal_json_inside_nested_entity() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Json;
 import Core.DatabaseModule;
@@ -1394,7 +1394,7 @@ enum Tier { Gold(), Silver() }
 class Wallet { constructor(public Tier tier, public decimal balance, public Json flags) {} }
 class User { constructor(public string name, public Wallet wallet) {} }
 function tierName(Tier t): string { return match (t) { Gold() => "gold", Silver() => "silver" }; }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE u(name TEXT, tier TEXT, balance TEXT, flags TEXT)").exec();
@@ -1412,14 +1412,14 @@ function tierName(Tier t): string { return match (t) { Gold() => "gold", Silver(
 #[test]
 fn db_maps_enum_with_payload_variant_is_rejected() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 enum Shape { Circle(float radius), Square() }
 class Row4 { constructor(public string name, public Shape shape) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     List<Row4> rows = db.prepare("SELECT name, shape FROM t").queryInto();
@@ -1476,7 +1476,7 @@ fn db_query_map_turbofish_with_var_binding() {
 #[test]
 fn db_query_into_turbofish_propagates_with_question_mark() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1487,7 +1487,7 @@ function loadAll(Statement s): List<User> throws DatabaseError {
   var u = s.queryInto<User>()?;
   return u;
 }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
@@ -1549,8 +1549,8 @@ fn db_program_transpile_is_a_clean_ladder_error() {
 /// transpile that slipped past would be a silently-diverging PHP program, not a refusal.
 #[test]
 fn raw_native_database_import_transpile_is_a_clean_ladder_error() {
-    let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Core.Native.Database;\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"unreachable\"); }\n";
+    let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Core.Native.Database;\n\
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"unreachable\"); }\n";
     match phorj::cli::cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-DB, but transpile succeeded: {php:?}"),
         Err(e) => assert!(
@@ -1702,13 +1702,13 @@ fn db_get_string_list_on_non_array_column_is_clean_error() {
 #[test]
 fn db_query_into_list_field_routes_to_array_accessor() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Tagged { constructor(public string name, public List<string> tags) {} }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, tags TEXT)").exec();

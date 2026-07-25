@@ -13,8 +13,9 @@ package Main;
 import Core.Output;
 import Core.Map;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var ages = ["alice" => 30, "bob" => 25];
     // get: present → value (via `??` to unwrap the optional), absent → fallback.

@@ -11,8 +11,9 @@ import Core.Output;
 import Core.String;
 import Core.List;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // ASCII `String.upper` can't touch these; the Unicode tier maps the full tables.
     Output.printLine(String.unicodeUpper("straße"));

@@ -16,6 +16,7 @@ import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Router;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function home(Request req): Response {
     return Response.text(200, "home");
@@ -56,7 +57,7 @@ function show(Router rt, bytes raw): void {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // `logging` applies to every route; the `/admin` group adds `requireAuth` to just its routes.
     Router rt = new Router(

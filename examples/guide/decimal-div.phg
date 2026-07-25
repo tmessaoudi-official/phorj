@@ -10,8 +10,9 @@ import Core.Output;
 import Core.Decimal;
 import Core.Decimal.RoundingMode;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Round the tie value 2.345 to scale 2 under every mode (the third digit is an exact half).
     decimal tie = 2.345d;

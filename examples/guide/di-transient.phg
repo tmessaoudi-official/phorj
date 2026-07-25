@@ -17,6 +17,7 @@ import Core.DependencyInjection.Injectable;
 import Core.DependencyInjection.Transient;
 import Core.DependencyInjection.inject;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // SHARED (default) — mutable state makes the sharing observable.
 #[Injectable]
@@ -56,7 +57,7 @@ class App {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     App app = inject<App>();
     Output.printLine(app.report());

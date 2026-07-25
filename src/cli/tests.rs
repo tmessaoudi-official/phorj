@@ -10,7 +10,11 @@ fn wp(src: &str) -> String {
     // `function main(` so the ~1000 inline programs don't each repeat the ceremony. A test that
     // writes its own `#[Entry]` (or has no main) is passed through untouched.
     let src = if src.contains("function main(") && !src.contains("#[Entry") {
-        src.replacen("function main(", "#[Entry(kind: Cli)] function main(", 1)
+        src.replacen(
+            "function main(",
+            "#[Entry(kind: EntryKind.Cli)] function main(",
+            1,
+        )
     } else {
         src.to_string()
     };
@@ -21,16 +25,21 @@ fn wp(src: &str) -> String {
     };
     // DEC-191 addendum: the attribute is import-gated — inject its import once too, AFTER the
     // package segment (imports may not precede `package`); same-line, preserving line numbers.
+    // DEC-337: `kind: EntryKind.Cli` is import-gated too — inject the `EntryKind` import alongside.
     if src.contains("#[Entry") && !src.contains("Core.Runtime.Entry") {
         let i = src.find(';').expect("package decl ends with ;");
-        format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
+        format!(
+            "{} import Core.Runtime.Entry; import Core.Runtime.EntryKind;{}",
+            &src[..=i],
+            &src[i + 1..]
+        )
     } else {
         src
     }
 }
 
 const SAMPLE: &str = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 
 enum Shape {
@@ -51,7 +60,7 @@ class Greeter {
     function greet(): string { return "Hello {this.name}"; }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Greeter g = new Greeter("Tak");
     Output.printLine(g.greet());
@@ -516,6 +525,34 @@ fn explain_covers_visibility_codes() {
     assert!(p.contains("`private`") && p.contains(".phg"), "{p}");
     let i = explain_text("E-VIS-INTERNAL").expect("E-VIS-INTERNAL has an explanation");
     assert!(i.contains("`internal`") && i.contains("package"), "{i}");
+}
+
+#[test]
+fn explain_covers_entry_kind_codes() {
+    // DEC-331 D1 + DEC-337: the `#[Entry(kind: EntryKind.…)]` diagnostics self-document via `phg explain`.
+    for code in [
+        "E-ENTRY-KIND-REQUIRED",
+        "E-ENTRY-KIND-UNKNOWN",
+        "E-ENTRY-KIND-RESERVED",
+        "E-ENTRY-SIG",
+        "E-ENTRY-TARGET",
+        "E-DUPLICATE-ENTRY-KIND",
+        "E-INJECTED-VARIANT-BARE",
+    ] {
+        let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
+        assert!(body.starts_with(code), "{body}");
+    }
+    // E-ENTRY-KIND-UNKNOWN fires from TWO sites (walk.rs): a wrong qualifier (`Foo.Cli`) and an
+    // unrecognized variant name (`EntryKind.Banana`) — the explain must describe BOTH (DEC-337).
+    let unknown = explain_text("E-ENTRY-KIND-UNKNOWN").unwrap();
+    assert!(
+        unknown.contains("qualifier"),
+        "must describe the wrong-qualifier emission path: {unknown}"
+    );
+    assert!(
+        unknown.contains("Banana"),
+        "must describe the unknown-variant-name emission path: {unknown}"
+    );
 }
 
 #[test]

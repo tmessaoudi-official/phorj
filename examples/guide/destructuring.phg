@@ -21,6 +21,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Point {
     constructor(public int x, public int y) {}
@@ -49,7 +50,7 @@ function swap(int a, int b): string {
     return "{first},{second}";
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var p = new Point(3, 4);
     Output.printLine(describe(p));

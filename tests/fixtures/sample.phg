@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 enum Shape { Circle(float radius), Rect(float w, float h) }
 
@@ -17,7 +18,7 @@ class Greeter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 
 function main(): void {
     Greeter g = new Greeter("Tak");

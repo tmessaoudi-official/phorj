@@ -11,6 +11,7 @@ package Main;
 // binding, shown as the disambiguation pattern.
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 import Acme.Geometry.* except { Paint };
 import Acme.Geometry.Paint;
 
@@ -24,7 +25,7 @@ function paintName(Paint p): string {
     return match (p) { Red() => "red", Green() => "green", Blue() => "blue" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // `Rect` came from the wildcard; construct + use it.
     Rect r = new Rect(3, 4);

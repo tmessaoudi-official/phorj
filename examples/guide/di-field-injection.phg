@@ -9,6 +9,7 @@ import Core.Output;
 import Core.DependencyInjection.Injectable;
 import Core.DependencyInjection.inject;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 #[Injectable]
 class Clock {
@@ -36,7 +37,7 @@ class App {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     App app = inject<App>();
     Output.printLine(app.run());

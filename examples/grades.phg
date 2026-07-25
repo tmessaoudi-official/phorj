@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 enum Grade { Pass(int score), Fail(int score) }
 
@@ -23,7 +24,7 @@ class Counter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Counter c = new Counter(100);
     int t = c.add(23);

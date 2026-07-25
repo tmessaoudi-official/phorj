@@ -11,8 +11,9 @@ package Main;
 import Core.Output;
 import Core.Json;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Build three records and dump them as NDJSON (one compact JSON value per line).
     List<Json> records = [

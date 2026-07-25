@@ -13,6 +13,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 interface Speaker {
     function say(): int;
@@ -32,7 +33,7 @@ class Cat implements Speaker {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     mutable int acc = 0;
     mutable int i = 0;

@@ -21,6 +21,7 @@ import Core.String;
 import Core.Http.Response;
 import Core.Http.Cookie;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Render a response's wire form as one clean ASCII line (CRLFs shown as " | ").
 function wireLine(Response resp): string {
@@ -31,7 +32,7 @@ function wireLine(Response resp): string {
     return "({n}B) {oneLine}";
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // A plain text/plain response with an explicit status.
     Response t = Response.text(200, "hello");

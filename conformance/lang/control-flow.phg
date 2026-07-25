@@ -3,12 +3,13 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function classify(int n): string {
     return if (n < 0) { "neg" } else { if (n == 0) { "zero" } else { "pos" } };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     mutable int sum = 0;
     for (int i in 1..=5) {

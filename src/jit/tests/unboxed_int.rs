@@ -8,7 +8,7 @@ use super::*;
 fn proven_rem_by_pow2_masks_and_matches_the_oracle() {
     // P-2c: `i % 4` with a proven non-negative induction dividend lowers to a single `band` —
     // values must stay byte-identical to the interpreter oracle across the whole range walk.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           mutable int acc = 0;\n\
@@ -19,7 +19,7 @@ fn proven_rem_by_pow2_masks_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "masked rem must match the oracle");
@@ -37,7 +37,7 @@ fn proven_rem_by_pow2_masks_and_matches_the_oracle() {
 fn negative_dividend_rem_is_unproven_and_matches_the_oracle() {
     // A negative-init counter must NOT be masked (`-7 % 4 == -3`, mask would give 1): the proof
     // requires init ≥ 0, so this stays checked `srem` — byte-identical to the oracle either way.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           mutable int acc = 0;\n\
@@ -48,7 +48,7 @@ fn negative_dividend_rem_is_unproven_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(9)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(9)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -59,7 +59,7 @@ fn negative_dividend_rem_is_unproven_and_matches_the_oracle() {
 
 #[test]
 fn non_pow2_rem_stays_checked_and_matches_the_oracle() {
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           mutable int acc = 0;\n\
@@ -70,7 +70,7 @@ fn non_pow2_rem_stays_checked_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(100)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(100)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "%3 must match the oracle");
@@ -81,9 +81,9 @@ fn unboxed_arithmetic_matches_vm_oracle() {
     // Pure int arithmetic through native registers (no boxed Vec, no helper calls). Checked against
     // the VM oracle across sign combinations.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function calc(int a, int b) -> int { return a * b + a - b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "calc");
     for (a, b) in [(6_i64, 7_i64), (0, 0), (-3, 5), (5, -3), (1000000, 1000000)] {
@@ -101,9 +101,9 @@ fn unboxed_if_else_and_comparison_match_vm_oracle() {
     // Comparison (Lt) → JumpIfFalse → distinguishable int Consts per branch (a swapped edge changes
     // the result). Exercises native icmp + control flow, all int-returning.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function pick(int a) -> int { if (a < 10) { return 111; } else { return 222; } }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "pick");
     for a in [3_i64, 9, 10, 42, -1] {
@@ -120,9 +120,9 @@ fn unboxed_bool_param_is_handled_natively() {
     // A `bool` PARAM (arrives as 0/1 i64, consumed only in a bool context — `if (b)`) is fine in the
     // unboxed path even though a bool *return* is rejected. Both int-returning branches checked.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function choose(bool b, int n) -> int { if (b) { return n + 1; } return n + 2; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "choose");
     for (b, n) in [(true, 5_i64), (false, 5), (true, -1), (false, 100)] {
@@ -141,9 +141,9 @@ fn unboxed_overflow_funnels_to_vm_redo() {
     // renders FAULT_INT_OVERFLOW). This asserts the low-level funnel; the end-to-end kernel-string
     // parity is covered by `ovf_spec_*` below. (Also proves the wrapping mul did NOT crash the process.)
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function mul(int a, int b) -> int { return a * b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "mul");
     match Compiled::compile_unboxed(&program, f)
@@ -162,10 +162,10 @@ fn unboxed_div_zero_and_mod_zero_both_funnel_to_redo() {
     // transposition risk therefore MOVES to the VM redo — its DISTINCTNESS is asserted end-to-end in
     // `ovf_spec_div_zero_and_mod_zero_render_distinct_faults` below. Here: both must funnel (no trap).
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function divi(int a, int b) -> int { return a / b; }\n\
          function modi(int a, int b) -> int { return a % b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     for name in ["divi", "modi"] {
         let f = func_index(&program, name);
@@ -189,11 +189,11 @@ fn unboxed_min_over_neg_one_and_neg_min_funnel_to_redo_without_trapping() {
     // neg via the sticky flag since `ineg` wraps); the VM redo then renders FAULT_INT_OVERFLOW (asserted
     // end-to-end below). A process crash here would fail the test by aborting, not by a bad assertion.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function divi(int a, int b) -> int { return a / b; }\n\
          function modi(int a, int b) -> int { return a % b; }\n\
          function neg(int a) -> int { return -a; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     for (name, args) in [
         ("divi", vec![Value::Int(i64::MIN), Value::Int(-1)]),
@@ -220,11 +220,11 @@ fn unboxed_rejects_non_int_return() {
     // in the subset: `ret_kind` records Bool and `run_unboxed` decodes `Value::Bool`, so it
     // must COMPILE and stay byte-identical to the oracle.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function isSmall(int n) -> bool { return n < 10; }\n\
          function identity(int n) -> int { return n; }\n\
          function retb(bool b, int n) -> bool { if (n > 0) { return b; } return b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     for name in ["identity", "retb"] {
         let f = func_index(&program, name);
@@ -257,9 +257,9 @@ fn unboxed_straightline_mutable_local_matches_vm() {
     // Locals are Cranelift Variables; the slot-kind pre-pass proves `a` int (every assignment is int),
     // so `return a` is accepted. Oracle-checked.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function f(int x) -> int { mutable int a = x * 2; a = a + 3; return a; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     for x in [0_i64, 1, -4, 100, -100] {
@@ -285,9 +285,9 @@ fn jit_overflow_before_div_zero_faults_with_overflow_not_div_zero() {
     // the overflow was only recorded in the sticky flag) would break this; funnelling every fault to a
     // VM redo is what keeps it correct.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function f(int a, int b) -> int { return a * a / b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     let args = vec![Value::Int(4_000_000_000), Value::Int(0)]; // 4e9 * 4e9 = 1.6e19 > i64::MAX
@@ -321,9 +321,9 @@ fn jit_transient_cancelling_overflow_still_faults() {
     // forces a VM redo preserves this; a naive wrapping rewrite would silently return the wrapped 0.
     // Distinct params (b, c) defeat any CSE so both multiplies are genuinely emitted.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function f(int a, int b, int c) -> int { return a * b - a * c; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     let args = vec![
@@ -383,10 +383,10 @@ fn ovf_spec_overflow_in_loop_redoes_to_byte_identical_fault() {
     // The loop var must be initialized from a CONSTANT (proven int) — a bare param is not proven-int
     // unless used as an arith operand, so `spin(int seed){ i = seed; ...}` is ineligible. Arity-0 form
     // (the advisor's exact counterexample) keeps `i` proven-int and unboxed-eligible.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function spin() -> int { mutable int i = 1; while (i != 0) { i = i * 3; } return i; }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{spin()}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{spin()}\"); }";
     assert_unboxed_eligible(SRC, "spin");
     let jit = crate::cli::cmd_run(SRC);
     let oracle = crate::cli::cmd_treewalk(SRC);
@@ -408,10 +408,10 @@ fn ovf_spec_overflow_before_div_zero_orders_correctly() {
     // OVERFLOW (a*a precedes /b) and never reaches the divide. The JIT sets sticky at a*a, then its
     // div-zero branch trips — but it emits code 5 (redo), NOT div-zero, so the VM redo reproduces the
     // true first fault: overflow. A design that emitted div-zero directly would fail here.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function f(int a, int b) -> int { return a * a / b; }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{f(4000000000, 0)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{f(4000000000, 0)}\"); }";
     assert_unboxed_eligible(SRC, "f");
     let jit = crate::cli::cmd_run(SRC);
     let oracle = crate::cli::cmd_treewalk(SRC);
@@ -432,10 +432,10 @@ fn ovf_spec_transient_cancelling_overflow_still_faults() {
     // `a * b - a * c` with b == c: under wrapping the products cancel to 0, but the VM faults at the
     // first (checked) `a * b`. The sticky flag forces a redo even though the wrapped result is a clean 0
     // — a naive wrapping rewrite would silently return 0.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function f(int a, int b, int c) -> int { return a * b - a * c; }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{f(4000000000, 4000000000, 4000000000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{f(4000000000, 4000000000, 4000000000)}\"); }";
     assert_unboxed_eligible(SRC, "f");
     let jit = crate::cli::cmd_run(SRC);
     let oracle = crate::cli::cmd_treewalk(SRC);
@@ -456,14 +456,14 @@ fn ovf_spec_div_zero_and_mod_zero_render_distinct_faults() {
     // The b1 code→string transposition risk (2↔3) moved from `run_unboxed` (now both → code 5) to the
     // VM redo — so assert the DISTINCTNESS end-to-end: a pure div-by-zero (no prior overflow) renders
     // FAULT_DIV_ZERO and a pure mod-by-zero renders FAULT_MOD_ZERO, each byte-identical to the oracle.
-    const DIV: &str = "package Main; import Core.Runtime.Entry;\n\
+    const DIV: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function dz(int a, int b) -> int { return a / b; }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{dz(1, 0)}\"); }";
-    const MOD: &str = "package Main; import Core.Runtime.Entry;\n\
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{dz(1, 0)}\"); }";
+    const MOD: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function mz(int a, int b) -> int { return a % b; }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{mz(1, 0)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{mz(1, 0)}\"); }";
     assert_unboxed_eligible(DIV, "dz");
     assert_unboxed_eligible(MOD, "mz");
     for (src, kernel, label) in [
@@ -489,10 +489,10 @@ fn ovf_spec_div_zero_and_mod_zero_render_distinct_faults() {
 fn ovf_spec_non_overflowing_loop_returns_the_checked_value() {
     // The happy path: a loop that never overflows must return the SAME value as the VM (wrapping ==
     // checked when no carry ever fires; sticky stays 0 → Return selects code 0 → the real value).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function sumsq(int n) -> int { mutable int s = 0; mutable int i = 1; while (i <= n) { s = s + i * i; i = i + 1; } return s; }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{sumsq(100)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{sumsq(100)}\"); }";
     assert_unboxed_eligible(SRC, "sumsq");
     let jit = crate::cli::cmd_run(SRC).expect("no-overflow loop must succeed under jit");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");

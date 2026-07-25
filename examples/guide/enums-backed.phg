@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // DEC-302 backed enums (PHP 8.1) — an enum whose every variant carries a scalar value.
 // `: string` / `: int` declares the backing type; each variant assigns a literal of that type.
@@ -9,7 +10,7 @@ enum Suit: string { Hearts = "H", Spades = "S", Diamonds = "D", Clubs = "C" }
 
 enum Priority: int { Low = 1, Medium = 5, High = 9 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // `.value` reads a variant's backing scalar. `Enum.from(x)` maps a value back to its variant
     // (faulting on no match); the result is a normal enum value.

@@ -22,6 +22,7 @@ import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 import Core.DatabaseModule.SerializationFailureError;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // prepare + exec one write; both can throw, so each is `?`-propagated.
 function run(Database db, string sql): void throws DatabaseError {
@@ -56,7 +57,7 @@ class Attempts {
 
 // (The extra line above #[Entry] is deliberate: it sidesteps a LATENT span-collision bug
 // between user-code and injected-prelude rewrite keys — tracked in KNOWN_ISSUES §span-collision.)
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

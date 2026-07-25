@@ -10,6 +10,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function sum(int ...nums): int {
     mutable int total = 0;
@@ -28,7 +29,7 @@ function countAfter(string tag, int ...codes): int {
     return n;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("sum(1,2,3) = {sum(1, 2, 3)}");
     Output.printLine("sum() = {sum()}");

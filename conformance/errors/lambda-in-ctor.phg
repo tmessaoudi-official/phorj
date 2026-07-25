@@ -6,6 +6,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class BadInputError implements Error {
     constructor(public string message) {}
@@ -28,7 +29,7 @@ class Mapper<T> {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Mapper<int> m = new Mapper(
         function(int n): int throws BadInputError { int doubled = parsePositive(n)?; return doubled + 1; }

@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A-62 — `"""…"""` multi-line text blocks (Java/Swift/Kotlin style). The opening `"""` is followed
 // by a newline; the closing `"""` sits on its own line and its column sets the dedent baseline.
@@ -9,7 +10,7 @@ import Core.Runtime.Entry;
 // just like in a normal `"…"` string. A bare `"` inside the block is literal. Text blocks lex to the
 // same segments a single-line string would, so all three backends + the transpiled PHP stay
 // byte-identical.
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     string name = "Ada";
     int unread = 3;

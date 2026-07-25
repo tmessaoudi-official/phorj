@@ -48,13 +48,13 @@ fn http_get_reads_status_headers_and_body_on_both_backends() {
     let port = fixture(vec![resp.clone(), resp]);
     let src = format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.HttpClientModule;
 import Core.HttpClientModule.HttpClient;
 import Core.HttpClientModule.HttpResponse;
 import Core.HttpClientModule.HttpClientError;
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     HttpClient c = new HttpClient();
     discard c.timeout(5000);
@@ -90,14 +90,14 @@ fn http_post_sends_body_and_typed_timeout_fires() {
     });
     let src = format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.HttpClientModule;
 import Core.HttpClientModule.HttpClient;
 import Core.HttpClientModule.HttpResponse;
 import Core.HttpClientModule.HttpTimeoutError;
 import Core.HttpClientModule.HttpClientError;
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     HttpClient c = new HttpClient();
     HttpResponse r = c.post("http://127.0.0.1:{port}/make", "application/json", "\{{\"a\": 1\}}");
@@ -120,10 +120,10 @@ import Core.HttpClientModule.HttpClientError;
 #[test]
 fn http_client_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.HttpClientModule;
-#[Entry(kind: Cli)] function main(): void { Output.printLine("x"); }
+#[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-HTTPCLIENT, got PHP: {php:?}"),

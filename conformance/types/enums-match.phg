@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 enum Shape { Circle(int radius), Rect(int w, int h), Unit }
 
@@ -14,7 +15,7 @@ function sign(int n): string {
     return match (n) { 0 => "zero", x when x > 0 => "pos", default => "neg" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("{area(new Circle(2))}");
     Output.printLine("{area(new Rect(3, 5))}");

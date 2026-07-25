@@ -14,6 +14,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Absent-or-present. `Some` carries a `T`; `None` carries nothing.
 enum Option<T> { None, Some(T value) }
@@ -35,7 +36,7 @@ function report(Result<int, string> r): string {
     return match (r) { Success(v) => "ok {v}", Failure(e) => "err {e}" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var some = new Some(7);
     // Option<int> — T inferred from `7`

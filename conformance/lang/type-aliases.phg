@@ -4,6 +4,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 type Celsius = int;
 
@@ -27,7 +28,7 @@ function total(Scores xs): int {
     return sum;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Celsius lo = freezing();
     Celsius hi = 100;

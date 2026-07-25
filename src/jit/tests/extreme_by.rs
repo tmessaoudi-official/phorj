@@ -28,7 +28,7 @@ fn assert_jit_hits(src: &str, label: &str) -> String {
 fn phg_run_hook_hits_the_jit_on_the_maxby_vertical() {
     // The exact `bench/micro/maxby.phg` shape: data-dependent selector `(x + bump) % 7`, the
     // `?? 0` fusion window, the checksum folds the returned ELEMENT (not the key).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -42,13 +42,13 @@ fn phg_run_hook_hits_the_jit_on_the_maxby_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "maxby vertical");
 }
 
 #[test]
 fn phg_run_hook_hits_the_jit_on_the_minby_vertical() {
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -62,7 +62,7 @@ fn phg_run_hook_hits_the_jit_on_the_minby_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "minby vertical");
 }
 
@@ -72,7 +72,7 @@ fn jit_extreme_by_tie_break_is_first_wins() {
     // The fold must return the FIRST element achieving the extreme key (7 for min-key... the
     // max key 2 is first achieved by 2; the min key 0 by 3) — the interpreter's strict
     // replace-on-better fold. Any last-wins drift changes the checksum.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -87,7 +87,7 @@ fn jit_extreme_by_tie_break_is_first_wins() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "extreme-by tie-break");
 }
 
@@ -95,7 +95,7 @@ fn jit_extreme_by_tie_break_is_first_wins() {
 fn jit_extreme_by_empty_receiver_takes_the_coalesce_default() {
     // A runtime-EMPTY receiver (filter rejects everything) must yield the `??` default — the
     // fused fold's `count == 0` select leg, byte-identical to `null ?? 42`.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -109,7 +109,7 @@ fn jit_extreme_by_empty_receiver_takes_the_coalesce_default() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "extreme-by empty default");
 }
 
@@ -117,7 +117,7 @@ fn jit_extreme_by_empty_receiver_takes_the_coalesce_default() {
 fn maxby_outside_the_fusion_window_still_runs_correctly_on_the_vm() {
     // No `??` — the nullable result stays un-JITtable (fail closed) and the whole function
     // runs on the VM: output parity is the contract, a JIT hit is NOT asserted.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function pick(): int {\n\
@@ -125,7 +125,7 @@ fn maxby_outside_the_fusion_window_still_runs_correctly_on_the_vm() {
           int? best = List.maxBy(xs, function(int x) => x);\n\
           return best ?? -1;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{pick()}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{pick()}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
     assert_eq!(jit_out, oracle, "window-less maxBy must match the oracle");
@@ -135,7 +135,7 @@ fn maxby_outside_the_fusion_window_still_runs_correctly_on_the_vm() {
 fn jit_extreme_by_selector_overflow_faults_byte_identically_to_the_oracle() {
     // The selector's checked add overflows mid-fold → code-5 VM redo renders the canonical
     // interpreter fault (pure graph — the whole-callee redo is exact).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -148,7 +148,7 @@ fn jit_extreme_by_selector_overflow_faults_byte_identically_to_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(3)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(3)}\"); }";
     let jit = crate::cli::cmd_run(SRC).expect_err("overflowing selector must fault");
     let oracle = crate::cli::cmd_treewalk(SRC).expect_err("oracle must fault");
     assert_eq!(jit, oracle, "fault strings must be byte-identical");

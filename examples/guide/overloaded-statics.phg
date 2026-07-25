@@ -10,6 +10,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `open` so the subclass below can inherit the overloaded static factory.
 open class Color {
@@ -36,7 +37,7 @@ open class Color {
 class Swatch extends Color {
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Color a = Color.of(128);
     // -> of(int)

@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `match` in EXPRESSION position (M11) — usable as a sub-expression, not only as a whole
 // `return`/`var =` statement. Transpile (Track 1): a *literal* match lowers to a native PHP
@@ -25,7 +26,7 @@ function weight(Box b): int {
     return 1 + (match (b) { Small(n) => n, Big(n) => n * 10 });
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     int base = 100;
     // expression position: a literal match used as the left operand of `+` → native `match ($subj)`

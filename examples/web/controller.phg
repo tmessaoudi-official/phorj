@@ -15,6 +15,7 @@ import Core.Http.Response;
 import Core.Http.Route;
 import Core.Http.Router;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A controller: a class grouping related static route handlers.
 class UserController {
@@ -45,7 +46,7 @@ function show(Router rt, string method, string path): void {
     Output.printLine("{method} {path} -> {st}: {body}");
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Collects home() + every #[Route] static method of UserController.
     Router rt = Http.autoRouter();

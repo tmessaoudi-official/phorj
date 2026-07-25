@@ -21,7 +21,7 @@ function bench(int iters, float r): float {
     return acc;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     int iters = 2000000;
     float r = 1.0000001;

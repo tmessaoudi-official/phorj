@@ -18,15 +18,16 @@ import Core.String;
 import Core.Http.Request;
 import Core.Http.Response;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // The whole application: greet by path, echoing the Host header.
-#[Entry(kind: Web)]
+#[Entry(kind: EntryKind.Web)]
 function handle(Request req): Response {
     string host = req.headers.get("Host") ?? "world";
     return Response.text(200, "Hello {req.path} (host {host})");
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     string nl = Bytes.toString(b"\x0d\x0a") ?? "";
     // A canonical raw request, built from a `b"…"` literal with explicit CRLFs (deterministic).

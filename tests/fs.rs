@@ -25,12 +25,12 @@ fn fs_files_dirs_listings_and_walk_round_trip() {
     let root = scratch("main");
     let src = format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.FileSystemModule;
 import Core.FileSystemModule.FileSystem;
 import Core.FileSystemModule.FileSystemError;
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     FileSystem.createDir("{root}/a/b");
     FileSystem.writeText("{root}/a/one.txt", "hello");
@@ -65,7 +65,7 @@ fn fs_errors_are_typed_and_catchable() {
     let root = scratch("err");
     let src = format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.FileSystemModule;
 import Core.FileSystemModule.FileSystem;
@@ -73,7 +73,7 @@ import Core.FileSystemModule.FileSystemNotFoundError;
 import Core.FileSystemModule.FileSystemDirNotEmptyError;
 import Core.FileSystemModule.FileSystemPermissionDeniedError;
 import Core.FileSystemModule.FileSystemError;
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     try {{
       discard FileSystem.readText("{root}/absent.txt");
@@ -111,10 +111,10 @@ import Core.FileSystemModule.FileSystemError;
 #[test]
 fn fs_transpiles_and_matches_the_backends_on_php() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.FileSystemModule;
-#[Entry(kind: Cli)] function main(): void { Output.printLine("x"); }
+#[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine("x"); }
 "#;
     let php_src = cmd_transpile(src).expect("FS import transpiles (DEC-313)");
     assert!(
@@ -134,7 +134,7 @@ import Core.FileSystemModule;
     let root = scratch("php");
     let prog = format!(
         r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.FileSystemModule;
 import Core.FileSystemModule.FileSystem;
@@ -142,7 +142,7 @@ import Core.FileSystemModule.FileSystemNotFoundError;
 import Core.FileSystemModule.FileSystemDirNotEmptyError;
 import Core.FileSystemModule.FileSystemPermissionDeniedError;
 import Core.FileSystemModule.FileSystemError;
-#[Entry(kind: Cli)] function main(): void {{
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
   try {{
     try {{
       discard FileSystem.readText("{root}/absent.txt");

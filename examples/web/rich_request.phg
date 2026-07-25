@@ -19,6 +19,7 @@ import Core.Http.Request;
 import Core.Http.Response;
 import Core.Json;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // The handler under test: echo a cross-section of every bag as plain text lines.
 function handle(Request req): Response {
@@ -50,7 +51,7 @@ function show(Request req): void {
     Output.printLine(Bytes.toString(resp.body) ?? "(binary)");
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Query bag: first-wins + getAll; case-insensitive headers; cookie bag (value keeps its '=').
     show(

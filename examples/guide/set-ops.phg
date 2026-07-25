@@ -10,8 +10,9 @@ package Main;
 import Core.Output;
 import Core.Set;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var a = Set.of([1, 2, 3]);
     var b = Set.of([2, 3, 4]);

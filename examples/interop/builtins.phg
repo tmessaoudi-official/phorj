@@ -9,6 +9,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Foreign PHP standard-library functions (their real PHP names — snake_case is fine here).
 declare function strtoupper(string s): string;
@@ -23,7 +24,7 @@ declare function abs(int n): int;
 
 declare function max(int a, int b): int;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(strtoupper("hello"));
     // HELLO

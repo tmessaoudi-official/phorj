@@ -6,8 +6,9 @@ import Core.Output;
 import Core.Set;
 import Core.Map;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Set<int> base = Set.of([1, 2, 3]);
     Set<int> grown = Set.add(Set.add(base, 4), 2);

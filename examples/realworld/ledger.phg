@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A bank ledger. Phorj values are immutable, so `apply` returns a *new* Account
 // rather than mutating in place — state evolves by binding fresh names.
@@ -40,7 +41,7 @@ function grow(int cents, int years): int {
     return grow(cents + cents * 5 / 100, years - 1);
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Account a0 = new Account("Ada", 1000);
     Account a1 = a0.apply(new Deposit(500));

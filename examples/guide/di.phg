@@ -19,6 +19,7 @@ import Core.Output;
 import Core.DependencyInjection.Injectable;
 import Core.DependencyInjection.inject;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 interface Greeter {
     function greet(): string;
@@ -54,7 +55,7 @@ function build(): App {
     return inject();
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // EXPLICIT target type.
     App app = inject<App>();

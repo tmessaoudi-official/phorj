@@ -2,10 +2,11 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M-mut.1 — mutable locals + reassignment.
 // Bindings are IMMUTABLE by default; only a `mutable` binding may be reassigned.
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // A mutable counter, reassigned twice.
     mutable int counter = 0;

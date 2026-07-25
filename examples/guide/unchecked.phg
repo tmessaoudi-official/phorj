@@ -4,6 +4,7 @@ import Core.Output;
 import Core.Runtime.Integer.UncheckedOverflow;
 import Core.Runtime.Integer;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow) opts a WHOLE function into two's-complement WRAPPING integer
 // arithmetic: `+ - *` and unary `-` wrap on overflow (like C/Rust) instead of faulting. The DEFAULT —
@@ -42,7 +43,7 @@ function wrapAtMaxQualified(int start): int {
 }
 
 // identical behaviour — the qualified form is the same attribute
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("{wrapAtMax(9223372036854775807)}");
     // -9223372036854775808 (wrapped, no fault)

@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A library catalogue. Note zero-payload variants (`Available`, `Lost`) are
 // *constructed* with call form — `Available()` — but matched bare.
@@ -30,7 +31,7 @@ function fee(float days): float {
     return days * 0.25;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<Book> shelf = [
         new Book("The Rust Book", new Available()),

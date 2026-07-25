@@ -11,21 +11,103 @@ pub fn is_entry_attr(a: &crate::ast::Attribute) -> bool {
     a.is_entry()
 }
 
-/// Build a synthetic `#[Entry(kind: <kind>)]` attribute (DEC-331 D1) at `span`. Single constructor
-/// for every place the compiler/lifter/test-runner synthesizes an entry, so the `kind:` named-arg
-/// shape is written once. `kind` is a bare identifier (`"Cli"` / `"Web"`).
+/// Build a synthetic `#[Entry(kind: EntryKind.<kind>)]` attribute (DEC-331 D1) at `span`. Single
+/// constructor for every place the compiler/lifter/test-runner synthesizes an entry, so the `kind:`
+/// named-arg shape is written once. The kind is the QUALIFIED injected-enum variant
+/// (`EntryKind.Cli` / `EntryKind.Web`) — never a bare identifier ("nothing in the wind", DEC-337).
 #[must_use]
 pub fn entry_attr(kind: &str, span: Span) -> Attribute {
     Attribute {
         name: "Entry".to_string(),
         args: vec![Expr::NamedArg {
             name: "kind".to_string(),
-            value: Box::new(Expr::Ident(kind.to_string(), span)),
+            value: Box::new(Expr::Member {
+                object: Box::new(Expr::Ident("EntryKind".to_string(), span)),
+                name: kind.to_string(),
+                safe: false,
+                sep: crate::ast::MemberSep::Dot,
+                span,
+            }),
             span,
         }],
         span,
     }
 }
+
+/// The injected enum whose variants name every `#[Entry]` kind (DEC-337). Import-gated under
+/// `Core.Runtime` (like `Entry`/`Config`); reached QUALIFIED (`EntryKind.Cli`), never bare.
+pub const ENTRY_KIND_ENUM: &str = "EntryKind";
+
+/// DEC-337: the surface FORM the `kind:` argument was written in. Distinct from [`EntryKind`]
+/// (which classifies the variant NAME) — this drives the checker's qualification + import
+/// enforcement so `Cli`/`Web` are never "in the wind": a bare `kind: Cli` is `E-INJECTED-VARIANT-BARE`,
+/// a wrong qualifier is `E-ENTRY-KIND-UNKNOWN`, and an unimported `EntryKind` is `E-UNIMPORTED`.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum EntryKindForm {
+    /// No `kind:` argument (bare `#[Entry]`, or args without a `kind:`).
+    Missing,
+    /// `kind: Cli` — an injected variant written UNQUALIFIED.
+    Bare(String),
+    /// `kind: <qual>.<name>` — the qualified form; `qual` must be `EntryKind`.
+    Qualified { qual: String, name: String },
+    /// A `kind:` value that is neither a bare ident nor an `A.B` member (e.g. a literal).
+    Malformed,
+}
+
+/// Read the surface form of an `#[Entry]`'s `kind:` argument (DEC-337). Structural read only. The
+/// qualifier chain is flattened to a dotted string, so both the member-imported short form
+/// (`EntryKind.Cli`, `qual = "EntryKind"`) and the self-gating fully-qualified form
+/// (`Core.Runtime.EntryKind.Cli`, `qual = "Core.Runtime.EntryKind"`) are recognized — mirroring how
+/// the `#[Entry]` attribute accepts both the bare-after-import and fully-qualified spellings.
+pub fn entry_kind_form(attr: &Attribute) -> EntryKindForm {
+    for a in &attr.args {
+        if let Expr::NamedArg {
+            name: key, value, ..
+        } = a
+        {
+            if key == "kind" {
+                return match value.as_ref() {
+                    Expr::Ident(v, _) => EntryKindForm::Bare(v.clone()),
+                    Expr::Member {
+                        object,
+                        name,
+                        safe: false,
+                        sep: crate::ast::MemberSep::Dot,
+                        ..
+                    } => match flatten_dotted_path(object) {
+                        Some(qual) => EntryKindForm::Qualified {
+                            qual,
+                            name: name.clone(),
+                        },
+                        None => EntryKindForm::Malformed,
+                    },
+                    _ => EntryKindForm::Malformed,
+                };
+            }
+        }
+    }
+    EntryKindForm::Missing
+}
+
+/// Flatten a pure `Ident`/`Ident.Ident.…` member chain to a dotted string (`Core.Runtime.EntryKind`),
+/// or `None` if any node is not a plain dotted member access. Used to read the `kind:` qualifier.
+fn flatten_dotted_path(e: &Expr) -> Option<String> {
+    match e {
+        Expr::Ident(n, _) => Some(n.clone()),
+        Expr::Member {
+            object,
+            name,
+            safe: false,
+            sep: crate::ast::MemberSep::Dot,
+            ..
+        } => Some(format!("{}.{}", flatten_dotted_path(object)?, name)),
+        _ => None,
+    }
+}
+
+/// The fully-qualified spelling of the entry-kind enum (`Core.Runtime.EntryKind`) — the self-gating
+/// qualifier that needs no import, parallel to the fully-qualified `#[Core.Runtime.Entry]` attribute.
+pub const ENTRY_KIND_ENUM_FQ: &str = "Core.Runtime.EntryKind";
 
 /// DEC-331 D1: the ROLE an `#[Entry]` function plays, DECLARED by its `kind:` (never inferred, never
 /// name-magic). The signature must agree with the declared kind ([`entry_role`] validates the shape).
@@ -88,30 +170,23 @@ pub enum EntryKind {
     Active(EntryRole),
 }
 
-/// Read an `#[Entry]` attribute's declared `kind:`. The kind is the single named argument
-/// `kind: <Ident>` (DEC-331 D1); a missing/misshapen `kind:` resolves to [`EntryKind::Missing`] so
-/// the checker emits `E-ENTRY-KIND-REQUIRED`. Structural read only — attribute args are never
-/// type-checked, so the bare identifier (`Cli`/`Web`) is safe to read as [`Expr::Ident`].
+/// Classify an `#[Entry]` attribute's declared `kind:` by its variant NAME (DEC-331 D1 / DEC-337).
+/// The kind is written `kind: EntryKind.<Variant>` (qualified injected enum); the variant name is
+/// read from either the qualified or a bare form so backends resolve the role regardless of surface
+/// spelling — the checker separately enforces the qualified+imported form ([`entry_kind_form`]).
+/// A missing/misshapen `kind:` resolves to [`EntryKind::Missing`] (→ `E-ENTRY-KIND-REQUIRED`).
+/// Structural read only — attribute args are never type-checked.
 pub fn parse_entry_kind(attr: &Attribute) -> EntryKind {
-    let mut name: Option<&str> = None;
-    for a in &attr.args {
-        if let Expr::NamedArg {
-            name: key, value, ..
-        } = a
-        {
-            if key == "kind" {
-                if let Expr::Ident(v, _) = value.as_ref() {
-                    name = Some(v.as_str());
-                }
-            }
-        }
-    }
-    match name {
-        None => EntryKind::Missing,
-        Some("Cli") => EntryKind::Active(EntryRole::Cli),
-        Some("Web") => EntryKind::Active(EntryRole::Web),
-        Some(n) if RESERVED_ENTRY_KINDS.contains(&n) => EntryKind::Reserved(n.to_string()),
-        Some(n) => EntryKind::Unknown(n.to_string()),
+    let name = match entry_kind_form(attr) {
+        EntryKindForm::Missing | EntryKindForm::Malformed => return EntryKind::Missing,
+        EntryKindForm::Bare(n) => n,
+        EntryKindForm::Qualified { name, .. } => name,
+    };
+    match name.as_str() {
+        "Cli" => EntryKind::Active(EntryRole::Cli),
+        "Web" => EntryKind::Active(EntryRole::Web),
+        n if RESERVED_ENTRY_KINDS.contains(&n) => EntryKind::Reserved(n.to_string()),
+        n => EntryKind::Unknown(n.to_string()),
     }
 }
 

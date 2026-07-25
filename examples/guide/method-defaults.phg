@@ -8,6 +8,7 @@ package Main;
 import Core.Output;
 import Core.List;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 open class Greeter {
     constructor(public string name) {}
@@ -34,7 +35,7 @@ class LoudGreeter extends Greeter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Greeter g = new Greeter("g1");
     Output.printLine(g.greet());

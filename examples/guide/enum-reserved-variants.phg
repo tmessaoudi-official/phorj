@@ -12,6 +12,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `Int`, `Float`, `Bool`, `Null` would each be an illegal PHP class name without mangling.
 enum Node { Null, Bool(bool value), Int(int value), Float(float value), Str(string value) }
@@ -40,7 +41,7 @@ function render(Tok t): string {
     };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(describe(new Null()));
     // null

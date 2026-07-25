@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.List;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Point {
     constructor(private int x, private int y) {}
@@ -11,7 +12,7 @@ class Point {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<int> nums = [10, 20, 30];
     int count = List.length(nums);

@@ -13,6 +13,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 trait English {
     function hello(): string {
@@ -42,7 +43,7 @@ class Greeter {
 
 // `hello` resolves to English's
 // keep French's `bye` as `goodbyeFr`; `bye` then falls to English
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Greeter g = new Greeter();
     Output.printLine(g.hello());

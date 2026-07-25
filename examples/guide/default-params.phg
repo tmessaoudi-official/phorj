@@ -7,6 +7,7 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // One default: `greeting` falls back to "Hello" when omitted.
 function greet(string name, string greeting = "Hello"): string {
@@ -18,7 +19,7 @@ function pad(string s, int width = 6, string fill = " "): string {
     return String.padLeft(s, width, fill);
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(greet("World"));
     // Hello, World!  (default greeting)

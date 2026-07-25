@@ -39,7 +39,7 @@ fn jit_entry_string_param_marshals_and_hits() {
     // is marshalled into a fresh untagged ctx handle at `run_unboxed`; the loop body reads it via
     // the untagged-safe `String.length` slow path. A loop-containing entry compiles EAGERLY on the
     // first call, so the single `bench(...)` from `main` hits the JIT with a REAL `Value::Str` arg.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(string doc, int iters): int {\n\
@@ -51,7 +51,7 @@ fn jit_entry_string_param_marshals_and_hits() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(\\\"hello, marshalled world\\\", 4)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(\\\"hello, marshalled world\\\", 4)}\"); }";
     let out = assert_jit_hits(SRC, "entry str-param marshal");
     // "hello, marshalled world" = 23 bytes (past the 22-byte inline cap, but an entry arg is an
     // untagged handle regardless of length) × 4 iterations = 92.
@@ -61,7 +61,7 @@ fn jit_entry_string_param_marshals_and_hits() {
 #[test]
 fn jit_entry_string_param_empty_and_length_edges() {
     // Empty string (len 0) and a >22-byte string, both as entry args — parity + hits, no redo.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(string a, string b, int iters): int {\n\
@@ -73,6 +73,6 @@ fn jit_entry_string_param_empty_and_length_edges() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(\\\"\\\", \\\"a fairly long string well past twenty-two bytes\\\", 3)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(\\\"\\\", \\\"a fairly long string well past twenty-two bytes\\\", 3)}\"); }";
     assert_jit_hits(SRC, "entry str-param empty + long");
 }

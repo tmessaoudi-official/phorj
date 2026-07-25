@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M-mut.7 — `static` class fields: program-lifetime state that belongs to the class, not to any one
 // instance. Accessed as `ClassName.field` (Phorj uses `.` everywhere, not `::`). A static field is
@@ -17,7 +18,7 @@ class Counter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Each `new Counter()` bumps the shared static; we want only that side effect, so the instance
     // is explicitly `discard`-ed (must-use rule).

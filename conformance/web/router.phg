@@ -9,6 +9,7 @@ import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Router;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function home(Request req): Response {
     return Response.text(200, "home");
@@ -30,7 +31,7 @@ function show(Router rt, string method, string path): void {
     Output.printLine("{method} {path} -> {st} {body}");
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Router rt = new Router(
         new List<Route>(),

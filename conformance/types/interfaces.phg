@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 interface Speaker {
     function speak(): string;
@@ -24,7 +25,7 @@ function announce(Speaker s): string {
     return "says {s.speak()}";
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(announce(new Dog()));
     Output.printLine(announce(new Cat()));

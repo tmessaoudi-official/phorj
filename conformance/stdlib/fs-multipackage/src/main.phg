@@ -7,8 +7,9 @@ package Main;
 import Core.Output;
 import Storage;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("root " + Storage.describeRoot());
     Output.printLine("ghost " + Storage.describeGhost());

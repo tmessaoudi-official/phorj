@@ -1,16 +1,20 @@
-// #[Entry(kind: …)] (DEC-331) — entries are declared by ATTRIBUTE, never by a magic name, and the
-// ROLE is declared, not inferred: `kind: Cli` = the `phg run` entry (`(): void`, `(): int`, or
-// `(List<string>): void|int`); `kind: Web` = the `phg serve` handler (`(Request): Response`). One
-// of each may coexist. The signature must match the declared kind. An `int` return IS the process
+// #[Entry(kind: EntryKind.…)] (DEC-331, DEC-337) — entries are declared by ATTRIBUTE, never by a
+// magic name, and the ROLE is declared, not inferred. The kind is an injected enum variant, reached
+// QUALIFIED and import-gated ("nothing in the wind") — `import Core.Runtime.EntryKind;`, then
+// `kind: EntryKind.Cli` = the `phg run` entry (`(): void`, `(): int`, or `(List<string>): void|int`);
+// `kind: EntryKind.Web` = the `phg serve` handler (`(Request): Response`). A bare `kind: Cli` is
+// rejected (`E-INJECTED-VARIANT-BARE`), like every other injected variant (`Option.Some`, …). One of
+// each role may coexist. The signature must match the declared kind. An `int` return IS the process
 // exit status (0–255); `void` exits 0 on a clean run. Entries may declare `throws` — an escaped
 // fault exits 1 (or answers HTTP 500 on the web role).
 package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class App {
-    #[Entry(kind: Cli)]
+    #[Entry(kind: EntryKind.Cli)]
     static function run(): int {
         // The entry can live on a class as a static method — the name is yours to choose.
         Output.printLine("attributed entry, chosen name, int exit");

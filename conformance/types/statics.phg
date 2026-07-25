@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 open class Money {
     constructor(public int cents) {}
@@ -20,7 +21,7 @@ open class Money {
 class Wallet extends Money {
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(Money.of(5).show());
     Output.printLine(Money.of(5, 25).show());

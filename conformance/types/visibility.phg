@@ -6,6 +6,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 open class Account {
     constructor(private mutable int balance, protected string owner) {}
@@ -33,7 +34,7 @@ class Savings extends Account {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Savings s = new Savings(100, "Ada");
     s.deposit(50);

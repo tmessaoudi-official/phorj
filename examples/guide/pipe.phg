@@ -6,6 +6,7 @@ package Main;
 import Core.Output;
 import Core.Math;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function inc(int x): int {
     return x + 1;
@@ -37,7 +38,7 @@ function loud(): int {
     return 4;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Plain application and chains: `x |> f` is `f(x)`, left-associative.
     Output.printLine("{5 |> inc}");

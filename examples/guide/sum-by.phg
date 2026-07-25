@@ -10,8 +10,9 @@ import Core.Output;
 import Core.List;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Projection String -> int: total number of characters across all words (5 + 4 + 5).
     List<string> words = ["alpha", "beta", "gamma"];

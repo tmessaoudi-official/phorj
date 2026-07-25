@@ -20,6 +20,7 @@ import Core.Bytes;
 import Core.String;
 import Core.Http.Response;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Render a response's wire form as one clean ASCII line (CRLFs shown as " | ").
 function wireLine(Response resp): string {
@@ -30,7 +31,7 @@ function wireLine(Response resp): string {
     return "({n}B) {oneLine}";
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // A direct print — goes straight to STDOUT, as always.
     Output.printLine("before: direct to stdout");

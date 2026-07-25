@@ -6,6 +6,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Account {
     constructor(public mutable int raw) {}
@@ -26,7 +27,7 @@ class Account {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Account a = new Account(50);
     Output.printLine("balance {a.balance} empty {a.isEmpty}");

@@ -5,8 +5,9 @@ import Core.Output;
 import Core.List;
 import Core.Map;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Map<string, int> ages = ["alice" => 30, "bob" => 25, "carol" => 41];
     int alice = ages["alice"];

@@ -19,12 +19,12 @@ fn acc_elision(program: &BytecodeProgram, name: &str) -> Option<super::AccElisio
 fn task9_proves_affine_accumulator_with_param_bound_guard() {
     // The intadd shape: `acc = acc + (i * 3 - 1)` — the site AddI, the affine MulI/SubI and
     // the counter AddI must ALL be proven; the runtime param bound needs ONE entry guard.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < iters) { acc = acc + (i * 3 - 1); i = i + 1; }\n\
           return acc; }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("the intadd shape must be provable");
     let proven = acc.proven.iter().filter(|&&p| p).count();
@@ -43,7 +43,7 @@ fn task9_proves_affine_accumulator_with_param_bound_guard() {
 fn task9_proves_const_map_accumulator_and_expression_remi() {
     // The mapget/listindex shapes in one: a const-map value accumulator plus an
     // expression-dividend `% 8` (provably non-negative → the band lowering).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"a\" => 10, \"b\" => 20, \"c\" => 30, \"d\" => 40];\n\
@@ -57,7 +57,7 @@ fn task9_proves_const_map_accumulator_and_expression_remi() {
             i = i + 1;\n\
           }\n\
           return acc; }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(3000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(3000)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("const-collection accumulator must prove");
     assert!(acc.proven.iter().filter(|&&p| p).count() >= 4);
@@ -75,12 +75,12 @@ fn task9_guard_decline_beyond_g_stays_byte_identical() {
     // and the output must be byte-identical. `acc = acc + 5e12` forces the ladder down to
     // G = 2^20 (5e12·2^31 and 5e12·2^24 overflow i64; 5e12·2^20 = 5.24e18 fits), so
     // iters = 2^20 + 1 crosses the guard while still running quickly on the VM leg.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < iters) { acc = acc + 5000000000000; i = i + 1; }\n\
           return acc; }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1048577)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1048577)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("const-growth accumulator must prove");
     assert_eq!(
@@ -101,12 +101,12 @@ fn task9_rejects_unbounded_growth_and_overflow_faults_identically() {
     // `acc = acc + 20000000000000` (2e13): even G = 2^20 gives 2.1e19 > i64::MAX — the pass
     // must REJECT (checked emission stays), and a genuine overflow must fault identically on
     // both legs (the sticky redo → the VM's canonical fault).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int { mutable int acc = 9000000000000000000; mutable int i = 0;\n\
           while (i < iters) { acc = acc + 20000000000000; i = i + 1; }\n\
           return acc; }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(20000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(20000)}\"); }";
     let program = compile_source(SRC);
     assert!(
         acc_elision(&program, "bench").is_none(),
@@ -125,13 +125,13 @@ fn task9_rejects_unbounded_growth_and_overflow_faults_identically() {
 fn task9_rejects_computed_bound_and_body_branches() {
     // A COMPUTED loop bound (not a param, not a const) and an `if` inside the body are both
     // out of the v1 scope — the pass must fail closed on each.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function computed(int n): int { int lim = n * 2; mutable int acc = 0; mutable int i = 0;\n\
           while (i < lim) { acc = acc + 1; i = i + 1; } return acc; }\n\
         function branchy(int n): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < n) { if (i > 2) { acc = acc + 2; } i = i + 1; } return acc; }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{computed(5)} {branchy(9)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{computed(5)} {branchy(9)}\"); }";
     let program = compile_source(SRC);
     assert!(
         acc_elision(&program, "computed").is_none(),
@@ -152,7 +152,7 @@ fn phg_run_hook_hits_the_jit_on_for_in_iteration() {
     // `Len` — a BORROWED flat list handle IS its element snapshot (identity, zero
     // instructions) and `Len` reads the count from the handle bits. Covers int-list AND
     // str-list iteration, byte-identity, and hits>0.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -171,7 +171,7 @@ fn phg_run_hook_hits_the_jit_on_for_in_iteration() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(500)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(500)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -200,7 +200,7 @@ fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
     // `Len(iter)` of a compile-time-known list. v2 must prove the accumulator sites, the
     // inner+outer counters AND the in-bounds `Index` (its bounds branch drops); byte
     // identity must hold, including at the entry-guard decline.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
@@ -214,7 +214,7 @@ fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("the nested for-in shape must prove (v2)");
     let proven = acc.proven.iter().filter(|&&p| p).count();
@@ -249,7 +249,7 @@ fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
     // (`out = List.append(out, q)` where q is a fresh OWNED string) consumes each element
     // WORD into a str-word record (zero clones), materializes through List.drop + join,
     // and the record + its owned words release at steady state across 2000 iterations.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -274,7 +274,7 @@ fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(

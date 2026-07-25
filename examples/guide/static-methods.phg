@@ -8,6 +8,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class MathUtil {
     mutable static int calls = 0;
@@ -23,7 +24,7 @@ class MathUtil {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("square(5) = {MathUtil.square(5)}");
     Output.printLine("describe = {MathUtil.describe()}");

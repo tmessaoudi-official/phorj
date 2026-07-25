@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `phg format` lays out from the AST at a 100-column budget (DEC-187): a construct that fits stays on
 // one line; one that overflows breaks deterministically. The same source always canonicalises to the
@@ -20,7 +21,7 @@ function grade(int score): string {
     };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var small = accumulateFiveNumbers(1, 2, 3, 4, 5);
     var firstOperandValue = 10;

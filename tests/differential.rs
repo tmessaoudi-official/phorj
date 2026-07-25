@@ -50,7 +50,11 @@ fn with_pkg(src: &str) -> String {
     // (imports may not precede `package`); same-line, preserving line numbers.
     if src.contains("#[Entry") && !src.contains("Core.Runtime.Entry") {
         let i = src.find(';').expect("package decl ends with ;");
-        format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
+        format!(
+            "{} import Core.Runtime.Entry; import Core.Runtime.EntryKind;{}",
+            &src[..=i],
+            &src[i + 1..]
+        )
     } else {
         src
     }
@@ -258,15 +262,15 @@ fn interpolation_fault_line_matches_between_backends() {
     // (source, true line of the fault). Each faults inside a `"{…}"` on a line != 1.
     let cases: &[(&str, usize)] = &[
         (
-            "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry(kind: Cli)] function main() -> void {\n    var xs = [1];\n    Output.printLine(\"v = {xs[9]}\");\n}",
+            "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n#[Entry(kind: EntryKind.Cli)] function main() -> void {\n    var xs = [1];\n    Output.printLine(\"v = {xs[9]}\");\n}",
             5,
         ),
         (
-            "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry(kind: Cli)] function main() -> void {\n    Output.printLine(\"v = {1 / 0}\");\n}",
+            "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n#[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Output.printLine(\"v = {1 / 0}\");\n}",
             4,
         ),
         (
-            "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry(kind: Cli)] function main() -> void {\n    int? n = null;\n    Output.printLine(\"v = {n!}\");\n}",
+            "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n#[Entry(kind: EntryKind.Cli)] function main() -> void {\n    int? n = null;\n    Output.printLine(\"v = {n!}\");\n}",
             5,
         ),
     ];
@@ -290,46 +294,46 @@ fn interpolation_fault_line_matches_between_backends() {
 const P2_PROGRAMS: &[&str] = &[
     // literals + interpolation
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("hello"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("hello"); }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{42}"); Output.printLine("{3.14}"); Output.printLine("{true}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{42}"); Output.printLine("{3.14}"); Output.printLine("{true}"); }"#,
     // int + float arithmetic (formatting parity: 12.0 -> "12")
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 + 2 * 3 - 4}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{1 + 2 * 3 - 4}"); }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{2.0 * 3.0}"); Output.printLine("{7.5 / 2.5}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{2.0 * 3.0}"); Output.printLine("{7.5 / 2.5}"); }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{7 % 3}"); Output.printLine("{7.5 % 2.0}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{7 % 3}"); Output.printLine("{7.5 % 2.0}"); }"#,
     // comparison + equality + logical short-circuit
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 < 2}"); Output.printLine("{2 <= 2}"); Output.printLine("{3 > 4}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{1 < 2}"); Output.printLine("{2 <= 2}"); Output.printLine("{3 > 4}"); }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 == 1}"); Output.printLine("{1 != 2}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{1 == 1}"); Output.printLine("{1 != 2}"); }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 < 2 && 2 < 3}"); Output.printLine("{1 > 2 || 3 > 2}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{1 < 2 && 2 < 3}"); Output.printLine("{1 > 2 || 3 > 2}"); }"#,
     // unary
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{-5}"); Output.printLine("{!false}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{-5}"); Output.printLine("{!false}"); }"#,
     // locals (int + float + string + bool)
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { int x = 10; float y = 2.5; Output.printLine("{x}"); Output.printLine("{y}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { int x = 10; float y = 2.5; Output.printLine("{x}"); Output.printLine("{y}"); }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { string s = "hi"; bool b = true; Output.printLine("{s}"); Output.printLine("{b}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { string s = "hi"; bool b = true; Output.printLine("{s}"); Output.printLine("{b}"); }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { int a = 3; int b = 4; Output.printLine("{a * a + b * b}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { int a = 3; int b = 4; Output.printLine("{a * a + b * b}"); }"#,
     // if / else
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { if (1 < 2) { Output.printLine("a"); } else { Output.printLine("b"); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { if (1 < 2) { Output.printLine("a"); } else { Output.printLine("b"); } }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { int n = 5; if (n > 3) { Output.printLine("big"); } Output.printLine("end"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { int n = 5; if (n > 3) { Output.printLine("big"); } Output.printLine("end"); }"#,
     // for-in over list literals
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { List<int> xs = [1, 2, 3]; for (int x in xs) { Output.printLine("{x}"); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { List<int> xs = [1, 2, 3]; for (int x in xs) { Output.printLine("{x}"); } }"#,
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { for (float f in [1.5, 2.5]) { Output.printLine("{f * 2.0}"); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { for (float f in [1.5, 2.5]) { Output.printLine("{f * 2.0}"); } }"#,
     // nested blocks + for body locals
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { for (int x in [10, 20]) { int y = x + 1; Output.printLine("{y}"); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { for (int x in [10, 20]) { int y = x + 1; Output.printLine("{y}"); } }"#,
     // NB: `println` is single-arg only (the checker enforces it) — no multi-arg case here.
 ];
 
@@ -352,7 +356,7 @@ enum Shape { Circle(float r), Square(float s) }
 function area(Shape s): float {
     return match s { Circle(r) => 3.0 * r * r, Square(x) => x * x };
 }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Shape c = new Shape.Circle(2.0);
     Shape q = new Shape.Square(3.0);
     Output.printLine("{area(c)}");
@@ -362,7 +366,7 @@ function area(Shape s): float {
     agree(
         r#"import Core.Output;
 enum Opt<T> { Some(T value), None }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Opt<int> a = new Opt.Some(7);
     int n = match a { Some(v) => v, None() => 0 };
     Output.printLine("{n}");
@@ -375,7 +379,7 @@ enum Shape { Circle(float r), Square(float s) }
 function area(Shape s): float {
     return match s { Shape.Circle(r) => 3.0 * r * r, Shape.Square(x) => x * x };
 }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Output.printLine("{area(new Shape.Circle(2.0))}");
     Output.printLine("{area(new Shape.Square(3.0))}");
 }"#,
@@ -397,7 +401,7 @@ open class Animal {
 class Dog extends Animal {
     function kind() -> string { return "dog"; }
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Dog d = new Dog();
     Output.printLine(d.speak());
     Output.printLine(d.kind());
@@ -424,7 +428,7 @@ open class Flyer {
     open function soar() -> string { return "soars"; }
 }
 class Duck extends Swimmer, Flyer {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Duck d = new Duck();
     Output.printLine(d.move()); // first parent
     Output.printLine(d.soar()); // SECOND parent — the latent divergence
@@ -444,7 +448,7 @@ open class Base { open function tag() -> string { return "base"; } }
 open class Left extends Base {}
 open class Right extends Base {}
 class Mid extends Left, Right {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Mid m = new Mid();
     Output.printLine(m.tag());
     Base b = m;
@@ -466,7 +470,7 @@ open class Flyer { open function move() -> string { return "flies"; } }
 class Duck extends Swimmer, Flyer {
     use Flyer.move
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Duck d = new Duck();
     Output.printLine(d.move()); // Flyer's, per the resolution clause
 }"#,
@@ -485,7 +489,7 @@ open class Flyer { open function move() -> string { return "flies"; } }
 class Duck extends Swimmer, Flyer {
     rename Flyer.move as glide
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Duck d = new Duck();
     Output.printLine(d.move());  // Swimmer's (the remaining source)
     Output.printLine(d.glide()); // Flyer's, under the new name
@@ -509,7 +513,7 @@ class Square extends Shape {
     constructor(public int side) {}
     function area() -> int { return this.side * this.side; }
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Square s = new Square(3);
     Output.printLine("{s.area()}");
     Output.printLine(s.describe()); // describe() dispatches to Square.area()
@@ -586,7 +590,7 @@ fn s6c_single_parent_ctor_inheritance_is_byte_identical() {
         r#"import Core.Output;
 open class Named { constructor(public string name) {} }
 class Greeter extends Named {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Greeter g = new Greeter("Ada");
     Output.printLine(g.name);
 }"#,
@@ -604,7 +608,7 @@ fn quote_meta_only_program_emits_its_php_helper() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Regex;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(Regex.quoteMeta("a.b+c"));
 }"#,
         "a\\.b\\+c\n",
@@ -624,7 +628,7 @@ fn regex_replace_callback_typed_match_and_null_group() {
         r#"import Core.Output;
 import Core.Regex;
 import Core.String;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     var re = Regex.compile("(?<k>\\w+)=(?<v>\\d+)");
     Output.printLine(Regex.replaceCallback(re, "a=1 b=22", function(RegexMatch m): string {
         return "{String.upperCase(m.group("k") ?? "?")}:{m.group("v") ?? "?"}";
@@ -692,7 +696,7 @@ fn validation_email_url_byte_identical_across_backends() {
     let mut src = String::from(
         "import Core.Output;\nimport Core.Validation;\n\
          function r(bool ok) -> void { Output.printLine(\"{ok}\"); }\n\
-         #[Entry(kind: Cli)] function main() -> void {\n",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n",
     );
     let mut expected = String::new();
     for (fun, cases) in [("isEmail", email), ("isUrl", url)] {
@@ -715,7 +719,7 @@ fn named_args_free_fn_reorder_and_defaults() {
     agree_out_php(
         r#"import Core.Output;
 function greet(string name, string greeting = "Hello", bool loud = false) -> string { return "{greeting}, {name}"; }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(greet(name: "Ada"));
     Output.printLine(greet("Bob", greeting: "Hi"));
     Output.printLine(greet(greeting: "Hey", name: "Cy"));
@@ -732,7 +736,7 @@ fn string_capitalize_words_and_translate_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.String;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(String.capitalizeWords("hello world  foo-bar baz"));
     Output.printLine(String.translate("hello", "el", "ip"));
     Output.printLine(String.translate("aabbcc", "abc", "xyz"));
@@ -751,7 +755,7 @@ fn list_difference_intersection_is_byte_identical() {
         r#"import Core.Output;
 import Core.List;
 import Core.String;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     List<string> a = ["a", "b", "b", "c", "d"];
     List<string> b = ["b", "d", "e"];
     Output.printLine(String.join(List.difference(a, b), ","));
@@ -772,7 +776,7 @@ fn string_chunk_codepoint_is_byte_identical() {
         r#"import Core.Output;
 import Core.String;
 import Core.List;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(String.join(String.chunk("abcde", 2), "|"));
     Output.printLine(String.join(String.chunk("café", 2), "|"));
     Output.printLine("empty={List.length(String.chunk("", 3))} big={String.join(String.chunk("ab", 5), "|")}");
@@ -789,7 +793,7 @@ fn set_is_superset_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Set;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Set<int> big = Set.of([1, 2, 3, 4]);
     Set<int> small = Set.of([2, 3]);
     Output.printLine("{Set.isSuperset(big, small)}|{Set.isSuperset(small, big)}|{Set.isSuperset(big, big)}");
@@ -810,7 +814,7 @@ fn set_contains_int_hash_edges_are_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Set;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Set<int> s0 = Set.of([0, 0, 7, 2, 0 - 5, 100, 3, 9, 15, 42]);
     Set<int> s1 = Set.of([1, 3, 5]);
     Output.printLine("{Set.contains(s0, 0)}|{Set.contains(s1, 0)}|{Set.contains(s0, 0 - 5)}|{Set.contains(s0, 999)}|{Set.size(s0)}");
@@ -829,7 +833,7 @@ fn list_sort_descending_is_byte_identical() {
         r#"import Core.Output;
 import Core.List;
 import Core.String;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     List<int> ns = List.sortDescending([3, 1, 4, 1, 5, 9, 2]);
     Output.printLine("{ns[0]},{ns[1]},{ns[6]}");
     Output.printLine(String.join(List.sortDescending(["banana", "apple", "cherry"]), ","));
@@ -848,7 +852,7 @@ fn list_none_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.List;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     List<int> xs = [2, 4, 6];
     Output.printLine("{List.none(xs, function(int x) => x % 2 == 1)}|{List.none(xs, function(int x) => x > 5)}|{List.none(new List<int>(), function(int x) => true)}");
 }"#,
@@ -865,7 +869,7 @@ fn list_product_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.List;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine("{List.product([2, 3, 4])}|{List.product([5])}|{List.product([7, 0, 9])}|{List.product(new List<int>())}");
     // Invariant 7: the int result is a first-class arithmetic operand (CTy must type it).
     int r = List.product([2, 3]) + 1;
@@ -888,7 +892,7 @@ fn list_min_by_max_by_tie_break_is_first_wins_byte_identical() {
         r#"import Core.Output;
 import Core.List;
 class Person { constructor(public string name, public int age) {} }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     List<Person> ps = [new Person("Ada", 41), new Person("Bea", 25), new Person("Cy", 25), new Person("Dov", 41)];
     Output.printLine("min={List.minBy(ps, function(Person p) => p.age)?.name ?? "?"}");
     Output.printLine("max={List.maxBy(ps, function(Person p) => p.age)?.name ?? "?"}");
@@ -908,7 +912,7 @@ fn map_contains_value_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Map;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Map<string, int> m = ["a" => 1, "b" => 2, "c" => 3];
     Output.printLine("{Map.containsValue(m, 2)}|{Map.containsValue(m, 9)}");
     Map<string, string> e = new Map<string, string>();
@@ -929,7 +933,7 @@ fn deque_double_ended_is_byte_identical() {
         r#"import Core.Output;
 import Core.List;
 import Core.Deque;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     var d = new Deque(new List<string>());
     d.pushBack("mid");
     d.pushFront("first");
@@ -957,7 +961,7 @@ fn priority_queue_max_first_is_byte_identical() {
         r#"import Core.Output;
 import Core.List;
 import Core.PriorityQueue;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     var pq = new PriorityQueue(new List<string>());
     pq.insert("email", 1);
     pq.insert("pager", 9);
@@ -982,7 +986,7 @@ fn math_tail_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Math;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine("{Math.hypot(3.0, 4.0)}");
     Output.printLine("{Math.log2(8.0)}");
     Output.printLine("{Math.asin(0.5)}");
@@ -1003,7 +1007,7 @@ fn math_tail_nan_inf_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Math;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine("{Math.asin(2.0)}");
     Output.printLine("{Math.log2(0.0)}");
     Output.printLine("{Math.log1p(-1.0)}");
@@ -1021,7 +1025,7 @@ fn named_args_constructor_reorder_and_defaults() {
         r#"import Core.Output;
 class Point { constructor(public int x, public int y = 0, public string label = "p") {}
              function show() -> string { return "{this.label}({this.x},{this.y})"; } }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(new Point(x: 1).show());
     Output.printLine(new Point(3, label: "q").show());
     Output.printLine(new Point(y: 9, x: 2, label: "r").show());
@@ -1039,7 +1043,7 @@ fn named_args_method_reorder_and_defaults() {
         r#"import Core.Output;
 class Calc { function add(int a, int b = 10, int c = 100) -> int { return a + b + c; }
              static function make(string tag = "d") -> string { return tag; } }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Calc k = new Calc();
     Output.printLine("{k.add(a: 1)}");
     Output.printLine("{k.add(c: 3, a: 1, b: 2)}");
@@ -1059,7 +1063,7 @@ fn variadic_free_fn_collects_trailing_args() {
     agree_out_php(
         r#"import Core.Output;
 function sum(int ...nums) -> int { mutable int t = 0; for (int n in nums) { t = t + n; } return t; }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine("{sum(1, 2, 3)}");
     Output.printLine("{sum()}");
     Output.printLine("{sum(10, 20)}");
@@ -1082,7 +1086,7 @@ open class Counter {
     function value() -> int { return this.n; }
 }
 class Tally extends Counter {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Tally t = new Tally(7);
     Output.printLine("{t.value()}");
 }"#,
@@ -1095,7 +1099,7 @@ class Tally extends Counter {}
 open class Root { constructor(public int id) {} }
 open class Mid extends Root {}
 class Leaf extends Mid {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Leaf l = new Leaf(42);
     Output.printLine("{l.id}");
 }"#,
@@ -1116,7 +1120,7 @@ fn s6c_multi_parent_ctor_is_byte_identical() {
 open class Named { constructor(public string name) {} }
 open class Aged { constructor(public int age) {} }
 class Person extends Named, Aged {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Person p = new Person("Ada", 36);
     Output.printLine("{p.name} is {p.age}");
 }"#,
@@ -1132,7 +1136,7 @@ open class Scored {
     constructor(int score) { this.doubled = score * 2; }
 }
 class Player extends Named, Scored {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Player p = new Player("Bo", 21);
     Output.printLine("{p.name} {p.doubled}");
 }"#,
@@ -1155,7 +1159,7 @@ fn s6c_instanceof_across_lattice_is_byte_identical() {
         r#"import Core.Output;
 open class Animal {}
 class Dog extends Animal {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Dog d = new Dog();
     Output.printLine("{d instanceof Animal} {d instanceof Dog}");
 }"#,
@@ -1169,7 +1173,7 @@ open class Swimmer { open function move() -> string { return "swims"; } }
 open class Flyer { open function soar() -> string { return "soars"; } }
 class Duck extends Swimmer, Flyer {}
 function describe(Swimmer s) -> string { return s.move(); }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Duck d = new Duck();
     Output.printLine(describe(d));
     Output.printLine("{d instanceof Swimmer} {d instanceof Flyer}");
@@ -1183,7 +1187,7 @@ function describe(Swimmer s) -> string { return s.move(); }
 open class A {}
 open class B {}
 class C extends A {}
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     C c = new C();
     Output.printLine("{c instanceof A} {c instanceof B}");
 }"#,
@@ -1198,7 +1202,7 @@ class C extends A {}
 fn s0_var_inference_is_byte_identical() {
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
             var x = 21;
             var s = "n=";
             Output.printLine("{s}{x + x}");
@@ -1213,7 +1217,7 @@ fn s0_var_inference_from_call_and_match_inits() {
     agree(
         r#"import Core.Output;
 function dbl(int n) -> int { return n * 2; }
-        #[Entry(kind: Cli)] function main() -> void {
+        #[Entry(kind: EntryKind.Cli)] function main() -> void {
             var a = dbl(10);
             var b = match a { 20 => 100, n => n };
             Output.printLine("{a + b}");
@@ -1229,7 +1233,7 @@ fn s0_type_alias_is_byte_identical() {
         r#"import Core.Output;
 type Count = int;
         function tally(Count n) -> Count { return n + 1; }
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine("{tally(41)}"); }"#,
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{tally(41)}"); }"#,
     );
 }
 
@@ -1240,12 +1244,12 @@ type Count = int;
 fn s1_indexing_is_byte_identical() {
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { List<int> xs = [10, 20, 30]; Output.printLine("{xs[0]} {xs[2]}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { List<int> xs = [10, 20, 30]; Output.printLine("{xs[0]} {xs[2]}"); }"#,
     );
     // an index expression on a list literal, with the index coming from a loop variable
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { for (int i in [0, 1, 2]) { Output.printLine("{[5, 6, 7][i]}"); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { for (int i in [0, 1, 2]) { Output.printLine("{[5, 6, 7][i]}"); } }"#,
     );
 }
 
@@ -1253,7 +1257,7 @@ fn s1_indexing_is_byte_identical() {
 fn s1_index_oob_faults_identically() {
     agree_err(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { List<int> xs = [1, 2]; Output.printLine("{xs[5]}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { List<int> xs = [1, 2]; Output.printLine("{xs[5]}"); }"#,
     );
 }
 
@@ -1268,7 +1272,7 @@ fn math_clamp_min_gt_max_faults_identically() {
     agree_err(
         r#"import Core.Output;
 import Core.Math;
-#[Entry(kind: Cli)] function main(): void { int c = Math.clamp(5, 10, 0); Output.printLine("{c}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main(): void { int c = Math.clamp(5, 10, 0); Output.printLine("{c}"); }"#,
     );
 }
 
@@ -1280,16 +1284,16 @@ import Core.Math;
 fn s1_index_result_in_arithmetic_is_byte_identical() {
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { List<int> xs = [10, 20]; Output.printLine("{xs[0] + 1}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { List<int> xs = [10, 20]; Output.printLine("{xs[0] + 1}"); }"#,
     );
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { List<float> fs = [1.5, 2.5]; Output.printLine("{fs[0] + fs[1]}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { List<float> fs = [1.5, 2.5]; Output.printLine("{fs[0] + fs[1]}"); }"#,
     );
     // index result of a range-materialized list, used arithmetically
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { var xs = 0..5; Output.printLine("{xs[2] * 10}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { var xs = 0..5; Output.printLine("{xs[2] * 10}"); }"#,
     );
 }
 
@@ -1300,30 +1304,30 @@ fn s1_index_result_in_arithmetic_is_byte_identical() {
 fn s1_ranges_are_byte_identical() {
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { for (int i in 0..3) { Output.printLine("{i}"); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { for (int i in 0..3) { Output.printLine("{i}"); } }"#,
     ); // 0,1,2
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { for (int i in 1..=3) { Output.printLine("{i}"); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { for (int i in 1..=3) { Output.printLine("{i}"); } }"#,
     ); // 1,2,3
        // empty range (start >= end): the body never runs on either backend
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { for (int i in 5..5) { Output.printLine("{i}"); } Output.printLine("done"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { for (int i in 5..5) { Output.printLine("{i}"); } Output.printLine("done"); }"#,
     );
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { for (int i in 5..2) { Output.printLine("{i}"); } Output.printLine("empty"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { for (int i in 5..2) { Output.printLine("{i}"); } Output.printLine("empty"); }"#,
     );
     // a range bound to a `var` (typed `List<int>`), then iterated
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { var xs = 0..3; for (int i in xs) { Output.printLine("{i + 1}"); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { var xs = 0..3; for (int i in xs) { Output.printLine("{i + 1}"); } }"#,
     );
     // range bounds from expressions
     agree(
         r#"import Core.Output;
-function lo() -> int { return 2; } #[Entry(kind: Cli)] function main() -> void { for (int i in lo()..lo() + 3) { Output.printLine("{i}"); } }"#,
+function lo() -> int { return 2; } #[Entry(kind: EntryKind.Cli)] function main() -> void { for (int i in lo()..lo() + 3) { Output.printLine("{i}"); } }"#,
     );
 }
 
@@ -1335,23 +1339,23 @@ fn s1_expression_if_is_byte_identical() {
     // value-position in a `var` initializer, then used arithmetically (specialization parity)
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { var x = if (1 < 2) { 10 } else { 20 }; Output.printLine("{x + x}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { var x = if (1 < 2) { 10 } else { 20 }; Output.printLine("{x + x}"); }"#,
     );
     // in return position, both branches taken across two calls
     agree(
         r#"import Core.Output;
 function pick(bool b) -> int { return if (b) { 1 } else { 2 }; }
-           #[Entry(kind: Cli)] function main() -> void { Output.printLine("{pick(true)} {pick(false)}"); }"#,
+           #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{pick(true)} {pick(false)}"); }"#,
     );
     // as a call argument (string-typed branches), inside a range loop
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { for (int i in 0..3) { Output.printLine(if (i == 1) { "one" } else { "x" }); } }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { for (int i in 0..3) { Output.printLine(if (i == 1) { "one" } else { "x" }); } }"#,
     );
     // nested / float branches
     agree(
         r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { float r = if (true) { 1.5 } else { 2.5 }; Output.printLine("{r * 2.0}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { float r = if (true) { 1.5 } else { 2.5 }; Output.printLine("{r * 2.0}"); }"#,
     );
 }
 
@@ -1361,43 +1365,43 @@ function pick(bool b) -> int { return if (b) { 1 } else { 2 }; }
 const P3_PROGRAMS: &[&str] = &[
     // single call used in interpolation
     r#"import Core.Output;
-function inc(int n) -> int { return n + 1; } #[Entry(kind: Cli)] function main() -> void { Output.printLine("{inc(41)}"); }"#,
+function inc(int n) -> int { return n + 1; } #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{inc(41)}"); }"#,
     // multiple params + call inside arithmetic
     r#"import Core.Output;
 function add(int a, int b) -> int { return a + b; }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{add(2, 3) * 10}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{add(2, 3) * 10}"); }"#,
     // recursion (classic fib)
     r#"import Core.Output;
 function fib(int n) -> int {
            if (n < 2) { return n; }
            return fib(n - 1) + fib(n - 2);
        }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{fib(12)}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{fib(12)}"); }"#,
     // return in a branch vs fall-through
     r#"import Core.Output;
 function sign(int n) -> int { if (n < 0) { return -1; } return 1; }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{sign(-9)}"); Output.printLine("{sign(4)}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{sign(-9)}"); Output.printLine("{sign(4)}"); }"#,
     // mutual recursion (forward reference: isEven calls isOdd declared later)
     r#"import Core.Output;
 function isEven(int n) -> bool { if (n == 0) { return true; } return isOdd(n - 1); }
        function isOdd(int n) -> bool { if (n == 0) { return false; } return isEven(n - 1); }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{isEven(10)}"); Output.printLine("{isOdd(7)}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{isEven(10)}"); Output.printLine("{isOdd(7)}"); }"#,
     // nested calls
     r#"import Core.Output;
 function sq(int n) -> int { return n * n; }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{sq(sq(2))}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{sq(sq(2))}"); }"#,
     // float-returning function in float arithmetic
     r#"import Core.Output;
 function half(float x) -> float { return x / 2.0; }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{half(5.0) + 1.0}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{half(5.0) + 1.0}"); }"#,
     // void function (no return type) called for its side effect
     r#"import Core.Output;
 function greet(string who) -> void { Output.printLine("hi, {who}"); }
-       #[Entry(kind: Cli)] function main() -> void { greet("Phorj"); greet("world"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { greet("Phorj"); greet("world"); }"#,
     // call used as a statement (return value discarded)
     r#"import Core.Output;
 function noisy(int n) -> int { Output.printLine("got {n}"); return n; }
-       #[Entry(kind: Cli)] function main() -> void { noisy(42); Output.printLine("done"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { noisy(42); Output.printLine("done"); }"#,
 ];
 
 #[test]
@@ -1420,12 +1424,12 @@ enum Grade { Pass(int score), Fail(int score), }
                Fail(s) => "FAIL ({s})",
            };
        }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine(describe(new Pass(90))); Output.printLine(describe(new Fail(40))); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(describe(new Pass(90))); Output.printLine(describe(new Fail(40))); }"#,
     // no-payload variants matched with `()` (DEC-209 — bare `Red` in a pattern is rejected), catch-all
     // `default` arm, `match` in var-decl-init position
     r#"import Core.Output;
 enum Color { Red, Green, Blue, }
-       #[Entry(kind: Cli)] function main() -> void {
+       #[Entry(kind: EntryKind.Cli)] function main() -> void {
            Color c = Green;
            string name = match c { Red() => "red", Green() => "green", default => "other", };
            Output.printLine(name);
@@ -1435,21 +1439,21 @@ enum Color { Red, Green, Blue, }
 function label(int n) -> string {
            return match n { 0 => "zero", 1 => "one", x => "many ({x})", };
        }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine(label(0)); Output.printLine(label(1)); Output.printLine(label(7)); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(label(0)); Output.printLine(label(1)); Output.printLine(label(7)); }"#,
     // bool literal patterns
     r#"import Core.Output;
 function yn(bool b) -> string { return match b { true => "Y", false => "N", }; }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine(yn(true)); Output.printLine(yn(false)); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(yn(true)); Output.printLine(yn(false)); }"#,
     // string literal patterns + wildcard
     r#"import Core.Output;
 function kind(string s) -> string {
            return match s { "a" => "first", "b" => "second", default => "rest", };
        }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine(kind("a")); Output.printLine(kind("b")); Output.printLine(kind("z")); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(kind("a")); Output.printLine(kind("b")); Output.printLine(kind("z")); }"#,
     // enum value flows through a local and equality (`==` on enums) before matching
     r#"import Core.Output;
 enum Dir { N, S, }
-       #[Entry(kind: Cli)] function main() -> void {
+       #[Entry(kind: EntryKind.Cli)] function main() -> void {
            Dir d = N;
            Output.printLine("{d == N}");
            string t = match d { N() => "north", S() => "south", };
@@ -1459,7 +1463,7 @@ enum Dir { N, S, }
     // stack (exercises the compiler's operand-height tracking for the scrutinee slot).
     r#"import Core.Output;
 function g(int n) -> int { return 1 + match n { 0 => 10, default => 20 }; }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{g(0)}"); Output.printLine("{g(5)}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{g(0)}"); Output.printLine("{g(5)}"); }"#,
     // nested `match` whose inner arm references the *outer* arm's binding (re-extraction across
     // two live scrutinees — the hardest binding/height case in P4a).
     r#"import Core.Output;
@@ -1469,7 +1473,7 @@ enum Pair { P(int a, int b), }
                P(a, b) => match a { 0 => "first=zero b={b}", default => "a={a} b={b}", },
            };
        }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine(f(new P(0, 9))); Output.printLine(f(new P(5, 2))); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(f(new P(0, 9))); Output.printLine(f(new P(5, 2))); }"#,
 ];
 
 #[test]
@@ -1485,37 +1489,37 @@ const P4B_PROGRAMS: &[&str] = &[
     // promoted fields; field reads in interpolation
     r#"import Core.Output;
 class Point { constructor(public int x, public int y) {} }
-       #[Entry(kind: Cli)] function main() -> void { Point p = new Point(3, 4); Output.printLine("{p.x},{p.y}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Point p = new Point(3, 4); Output.printLine("{p.x},{p.y}"); }"#,
     // field read flowing through a typed local, then used as an arithmetic operand
     r#"import Core.Output;
 class Point { constructor(public int x, public int y) {} }
-       #[Entry(kind: Cli)] function main() -> void { Point p = new Point(3, 4); int s = p.x; Output.printLine("{s + p.y}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Point p = new Point(3, 4); int s = p.x; Output.printLine("{s + p.y}"); }"#,
     // constructor *body* runs for side effects (a `println` in the ctor), using a promoted param
     r#"import Core.Output;
 class Greeter { constructor(public string name) { Output.printLine("made {name}"); } }
-       #[Entry(kind: Cli)] function main() -> void { Greeter g = new Greeter("Ada"); Output.printLine("hello {g.name}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Greeter g = new Greeter("Ada"); Output.printLine("hello {g.name}"); }"#,
     // a no-constructor class builds an empty instance; structural instance equality
     r#"import Core.Output;
 class Empty {}
-       #[Entry(kind: Cli)] function main() -> void { Empty a = new Empty(); Empty b = new Empty(); Output.printLine("{a == b}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Empty a = new Empty(); Empty b = new Empty(); Output.printLine("{a == b}"); }"#,
     // instance equality is structural over fields (same class + equal fields)
     r#"import Core.Output;
 class P { constructor(public int x) {} }
-       #[Entry(kind: Cli)] function main() -> void { P a = new P(1); P b = new P(1); P c = new P(2); Output.printLine("{a == b} {a == c}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { P a = new P(1); P b = new P(1); P c = new P(2); Output.printLine("{a == b} {a == c}"); }"#,
     // only *promoted* params become fields (the bare `seed` param is not a field)
     r#"import Core.Output;
 class Acc { constructor(public int total, int seed) {} }
-       #[Entry(kind: Cli)] function main() -> void { Acc a = new Acc(10, 99); Output.printLine("{a.total}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Acc a = new Acc(10, 99); Output.printLine("{a.total}"); }"#,
     // a field read as a call argument
     r#"import Core.Output;
 class Box { constructor(public int v) {} }
        function dbl(int n) -> int { return n * 2; }
-       #[Entry(kind: Cli)] function main() -> void { Box b = new Box(21); Output.printLine("{dbl(b.v)}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Box b = new Box(21); Output.printLine("{dbl(b.v)}"); }"#,
     // a bare `return;` in the ctor body is an early exit, but the promoted instance is *still*
     // returned (interpreter parity) — exercises the synthetic ctor's epilogue redirect.
     r#"import Core.Output;
 class C { constructor(public int x) { if (x > 0) { return; } Output.printLine("nonpos"); } }
-       #[Entry(kind: Cli)] function main() -> void { C a = new C(5); Output.printLine("{a.x}"); C b = new C(0); Output.printLine("{b.x}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { C a = new C(5); Output.printLine("{a.x}"); C b = new C(0); Output.printLine("{b.x}"); }"#,
 ];
 
 #[test]
@@ -1535,7 +1539,7 @@ fn p4b_field_miss_faults_identically() {
     agree_err(
         r#"import Core.Output;
 class Box { public int tag; constructor(public int x) {} }
-           #[Entry(kind: Cli)] function main() -> void { Box b = new Box(5); Output.printLine("{b.tag}"); }"#,
+           #[Entry(kind: EntryKind.Cli)] function main() -> void { Box b = new Box(5); Output.printLine("{b.tag}"); }"#,
     );
 }
 
@@ -1547,12 +1551,12 @@ class Box { public int tag; constructor(public int x) {} }
 /// `agree_err` is FaultKind-based, but this keeps the classification clean).
 #[test]
 fn convert_truncate_round_out_of_range_faults_identically() {
-    agree_err("import Core.Output; import Core.Conversion; #[Entry(kind: Cli)] function main() -> void { int n = Conversion.truncate(1.0e30); Output.printLine(\"{n}\"); }");
-    agree_err("import Core.Output; import Core.Conversion; #[Entry(kind: Cli)] function main() -> void { int n = Conversion.round(-1.0e30); Output.printLine(\"{n}\"); }");
+    agree_err("import Core.Output; import Core.Conversion; #[Entry(kind: EntryKind.Cli)] function main() -> void { int n = Conversion.truncate(1.0e30); Output.printLine(\"{n}\"); }");
+    agree_err("import Core.Output; import Core.Conversion; #[Entry(kind: EntryKind.Cli)] function main() -> void { int n = Conversion.round(-1.0e30); Output.printLine(\"{n}\"); }");
     // Boundary case (advisor-flagged): `2^63` is the exclusive upper bound — both legs use the same
     // `9.2233720368547758E18` cutoff, so `truncate(2^63)` faults identically (the in-range value one
     // ULP below, `9223372036854774784.0`, converts to the same int on all three backends — verified).
-    agree_err("import Core.Output; import Core.Conversion; #[Entry(kind: Cli)] function main() -> void { int n = Conversion.truncate(9223372036854775808.0); Output.printLine(\"{n}\"); }");
+    agree_err("import Core.Output; import Core.Conversion; #[Entry(kind: EntryKind.Cli)] function main() -> void { int n = Conversion.truncate(9223372036854775808.0); Output.printLine(\"{n}\"); }");
 }
 
 /// Output-parity pass 2026-07-05: `String.split(s, "")` (empty separator) faults on both Rust backends
@@ -1561,7 +1565,7 @@ fn convert_truncate_round_out_of_range_faults_identically() {
 /// chars (byte-identity-gated via `examples/guide/text.phg`).
 #[test]
 fn split_empty_separator_faults_identically() {
-    agree_err("import Core.Output; import Core.String; import Core.List; #[Entry(kind: Cli)] function main() -> void { var xs = String.split(\"abc\", \"\"); Output.printLine(\"{xs.length()}\"); }");
+    agree_err("import Core.Output; import Core.String; import Core.List; #[Entry(kind: EntryKind.Cli)] function main() -> void { var xs = String.split(\"abc\", \"\"); Output.printLine(\"{xs.length()}\"); }");
 }
 
 /// P4c: instance methods + `this`. Method dispatch is on the receiver's runtime class; a method
@@ -1572,26 +1576,26 @@ const P4C_PROGRAMS: &[&str] = &[
     // a method reads a *bare* field (`total` resolves to `this.total`) + a param
     r#"import Core.Output;
 class Counter { constructor(private int total) {} function add(int n) -> int { return total + n; } }
-       #[Entry(kind: Cli)] function main() -> void { Counter c = new Counter(100); Output.printLine("{c.add(23)}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Counter c = new Counter(100); Output.printLine("{c.add(23)}"); }"#,
     // a method calls another method via `this`, and reads a field via `this.`
     r#"import Core.Output;
 class C { constructor(public int x) {}
            function dbl() -> int { return this.x + this.x; }
            function quad() -> int { int d = this.dbl(); return d + d; } }
-       #[Entry(kind: Cli)] function main() -> void { C c = new C(5); Output.printLine("{c.quad()}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { C c = new C(5); Output.printLine("{c.quad()}"); }"#,
     // mixed bare-field + explicit-`this` field reads in one expression
     r#"import Core.Output;
 class P { constructor(public int x, public int y) {} function sum() -> int { return x + this.y; } }
-       #[Entry(kind: Cli)] function main() -> void { P p = new P(3, 4); Output.printLine("{p.sum()}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { P p = new P(3, 4); Output.printLine("{p.sum()}"); }"#,
     // recursion *through* a method (`this.fact(n - 1)`)
     r#"import Core.Output;
 class F { constructor(public int base) {}
            function fact(int n) -> int { if (n <= 1) { return 1; } return n * this.fact(n - 1); } }
-       #[Entry(kind: Cli)] function main() -> void { F f = new F(0); Output.printLine("{f.fact(5)}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { F f = new F(0); Output.printLine("{f.fact(5)}"); }"#,
     // a void (no-return) method invoked as a statement, twice (side effects + Unit result)
     r#"import Core.Output;
 class Logger { constructor(public string tag) {} function log() -> void { Output.printLine("log {tag}"); } }
-       #[Entry(kind: Cli)] function main() -> void { Logger l = new Logger("X"); l.log(); l.log(); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Logger l = new Logger("X"); l.log(); l.log(); }"#,
 ];
 
 #[test]
@@ -1893,7 +1897,7 @@ fn all_example_projects_match_between_backends() {
 fn namespaced_console_println_matches_between_backends() {
     agree(
         r#"import Core.Output;
-             #[Entry(kind: Cli)] function main() -> void { Output.printLine("hello"); Output.printLine("{2 + 2}"); }"#,
+             #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("hello"); Output.printLine("{2 + 2}"); }"#,
     );
 }
 
@@ -1907,27 +1911,27 @@ const WAVE4_PROGRAMS: &[&str] = &[
     // (A) field of an arbitrary instance local, used as an arithmetic operand
     r#"import Core.Output;
 class Point { constructor(public int x, public int y) {} }
-       #[Entry(kind: Cli)] function main() -> void { Point p = new Point(7, 4); Output.printLine("{p.x + 1}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Point p = new Point(7, 4); Output.printLine("{p.x + 1}"); }"#,
     // (B) method-call result used arithmetically
     r#"import Core.Output;
 class C { constructor(public int x) {} function get() -> int { return this.x; } }
-       #[Entry(kind: Cli)] function main() -> void { C c = new C(5); Output.printLine("{c.get() + 1}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { C c = new C(5); Output.printLine("{c.get() + 1}"); }"#,
     // (C) nested field read `a.inner.x` — a class-typed field's field
     r#"import Core.Output;
 class Inner { constructor(public int x) {} }
        class Outer { constructor(public Inner inner) {} }
-       #[Entry(kind: Cli)] function main() -> void { Outer a = new Outer(new Inner(10)); Output.printLine("{a.inner.x + 1}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Outer a = new Outer(new Inner(10)); Output.printLine("{a.inner.x + 1}"); }"#,
     // (D) a class-typed enum payload, bound in `match` and read arithmetically
     r#"import Core.Output;
 class Point { constructor(public int x) {} }
        enum Opt { Some(Point p), Zero(int z), }
        function f(Opt o) -> int { return match o { Some(p) => p.x + 1, Zero(z) => z, }; }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{f(new Some(new Point(41)))}"); Output.printLine("{f(new Zero(0))}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{f(new Some(new Point(41)))}"); Output.printLine("{f(new Zero(0))}"); }"#,
     // (E) a free function returning an instance, then a field of the result, used arithmetically
     r#"import Core.Output;
 class Point { constructor(public int x) {} }
        function mk() -> Point { return new Point(3); }
-       #[Entry(kind: Cli)] function main() -> void { Output.printLine("{mk().x + 1}"); }"#,
+       #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{mk().x + 1}"); }"#,
 ];
 
 #[test]
@@ -1945,36 +1949,36 @@ fn wave4_programs_match_between_backends() {
 const ERR_PROGRAMS: &[&str] = &[
     // integer overflow: negating i64::MIN
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { int x = -9223372036854775807 - 1; Output.printLine("{-x}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { int x = -9223372036854775807 - 1; Output.printLine("{-x}"); }"#,
     // integer overflow: i64::MAX + 1
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{9223372036854775807 + 1}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{9223372036854775807 + 1}"); }"#,
     // division by zero
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { int z = 0; Output.printLine("{1 / z}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { int z = 0; Output.printLine("{1 / z}"); }"#,
     // modulo by zero
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { int z = 0; Output.printLine("{1 % z}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { int z = 0; Output.printLine("{1 % z}"); }"#,
     // float division by zero — faults like int /0 (no IEEE inf), byte-identical interp/VM
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { float z = 0.0; Output.printLine("{1.0 / z}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { float z = 0.0; Output.printLine("{1.0 / z}"); }"#,
     // float modulo by zero — faults like int %0 (PHP fmod would give NAN; we throw)
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { float z = 0.0; Output.printLine("{1.0 % z}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { float z = 0.0; Output.printLine("{1.0 % z}"); }"#,
     // decimal bare `/` non-terminating quotient — exact-or-fault faults on both backends
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { decimal z = 3d; Output.printLine("{1d / z}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { decimal z = 3d; Output.printLine("{1d / z}"); }"#,
     // decimal bare `/` by zero — faults on both backends
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { decimal z = 0d; Output.printLine("{1d / z}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { decimal z = 0d; Output.printLine("{1d / z}"); }"#,
     // decimal `%` by zero — faults on both backends
     r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { decimal z = 0d; Output.printLine("{1d % z}"); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { decimal z = 0d; Output.printLine("{1d % z}"); }"#,
     // unbounded recursion: trips the shared `MAX_CALL_DEPTH` guard on both backends.
     // Before Task 0.3 the interpreter recursed on the native stack and SIGABRTed (exit 134)
     // while the VM cleanly reported "stack overflow" — a parity divergence in the fault path.
     r#"import Core.Output;
-function rec(int n) -> int { return rec(n) + 1; } #[Entry(kind: Cli)] function main() -> void { Output.printLine("{rec(0)}"); }"#,
+function rec(int n) -> int { return rec(n) + 1; } #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{rec(0)}"); }"#,
 ];
 
 #[test]
@@ -1993,34 +1997,34 @@ fn error_parity_between_backends() {
 fn dec255_runtime_faults_also_fault_on_php() {
     // slice A — list index out of range → `__phorj_index` throws (was: null + Warning, exit 0).
     agree_err_php(
-        r#"import Core.Output; #[Entry(kind: Cli)] function main() -> void { var xs = [1, 2, 3]; Output.printLine("{xs[5]}"); }"#,
+        r#"import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { var xs = [1, 2, 3]; Output.printLine("{xs[5]}"); }"#,
     );
     // slice B-operators — int `+`/`*`/unary-neg overflow → `__phorj_checked_add/mul/neg` throw.
     agree_err_php(
-        r#"import Core.Output; #[Entry(kind: Cli)] function main() -> void { Output.printLine("{9223372036854775807 + 1}"); }"#,
+        r#"import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{9223372036854775807 + 1}"); }"#,
     );
     agree_err_php(
-        r#"import Core.Output; #[Entry(kind: Cli)] function main() -> void { Output.printLine("{9223372036854775807 * 2}"); }"#,
+        r#"import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{9223372036854775807 * 2}"); }"#,
     );
     agree_err_php(
-        r#"import Core.Output; #[Entry(kind: Cli)] function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{-min}"); }"#,
+        r#"import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{-min}"); }"#,
     );
     // slice B-natives — int-returning natives whose PHP builtin promotes on overflow → `__phorj_checked_int`.
     agree_err_php(
-        r#"import Core.Output; import Core.Math; #[Entry(kind: Cli)] function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.abs(min)}"); }"#,
+        r#"import Core.Output; import Core.Math; #[Entry(kind: EntryKind.Cli)] function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.abs(min)}"); }"#,
     );
     agree_err_php(
-        r#"import Core.Output; import Core.Math; #[Entry(kind: Cli)] function main() -> void { Output.printLine("{Math.integerPower(10, 100)}"); }"#,
+        r#"import Core.Output; import Core.Math; #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{Math.integerPower(10, 100)}"); }"#,
     );
     agree_err_php(
-        r#"import Core.Output; import Core.List; #[Entry(kind: Cli)] function main() -> void { Output.printLine("{List.sum([9223372036854775807, 1])}"); }"#,
+        r#"import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{List.sum([9223372036854775807, 1])}"); }"#,
     );
     // slice B-natives — gcd/lcm overflow → `is_float` guards inside `__phorj_gcd`/`__phorj_lcm`.
     agree_err_php(
-        r#"import Core.Output; import Core.Math; #[Entry(kind: Cli)] function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.gcd(min, 0)}"); }"#,
+        r#"import Core.Output; import Core.Math; #[Entry(kind: EntryKind.Cli)] function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.gcd(min, 0)}"); }"#,
     );
     agree_err_php(
-        r#"import Core.Output; import Core.Math; #[Entry(kind: Cli)] function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.lcm(min, 1)}"); }"#,
+        r#"import Core.Output; import Core.Math; #[Entry(kind: EntryKind.Cli)] function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.lcm(min, 1)}"); }"#,
     );
 }
 
@@ -2032,16 +2036,16 @@ fn dec255_runtime_faults_also_fault_on_php() {
 fn rich_request_wither_guards_fault_identically() {
     // LF in a header VALUE → the CR/LF guard panics before any rebuild.
     agree_err_php(
-        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry(kind: Cli)] function main() -> void { string lf = Bytes.toString(b"\x0a") ?? ""; Request r = Request.fake("GET", "/x").withHeader("x-evil", "a{lf}injected: 1"); Output.printLine(r.method); }"#,
+        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry(kind: EntryKind.Cli)] function main() -> void { string lf = Bytes.toString(b"\x0a") ?? ""; Request r = Request.fake("GET", "/x").withHeader("x-evil", "a{lf}injected: 1"); Output.printLine(r.method); }"#,
     );
     // CR in a header NAME → same guard.
     agree_err_php(
-        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry(kind: Cli)] function main() -> void { string cr = Bytes.toString(b"\x0d") ?? ""; Request r = Request.fake("GET", "/x").withHeader("bad{cr}name", "v"); Output.printLine(r.method); }"#,
+        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry(kind: EntryKind.Cli)] function main() -> void { string cr = Bytes.toString(b"\x0d") ?? ""; Request r = Request.fake("GET", "/x").withHeader("bad{cr}name", "v"); Output.printLine(r.method); }"#,
     );
     // CRLF in the fake TARGET → the request-line guard faults (6C: the rebuild path must not be an
     // injection primitive even via `fake`'s target).
     agree_err_php(
-        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry(kind: Cli)] function main() -> void { string crlf = Bytes.toString(b"\x0d\x0a") ?? ""; Request r = Request.fake("GET", "/x{crlf}Evil: 1"); Output.printLine(r.method); }"#,
+        r#"import Core.Output; import Core.Bytes; import Core.Http.Request; #[Entry(kind: EntryKind.Cli)] function main() -> void { string crlf = Bytes.toString(b"\x0d\x0a") ?? ""; Request r = Request.fake("GET", "/x{crlf}Evil: 1"); Output.printLine(r.method); }"#,
     );
 }
 
@@ -2055,7 +2059,7 @@ fn rich_request_multipart_agrees_on_all_legs() {
     // on interp, VM, and transpiled PHP — the first PHP-leg exercise of the multipart twin.
     let well_formed = concat!(
         "import Core.Output; import Core.Bytes; import Core.Http.Request; ",
-        "#[Entry(kind: Cli)] function main() -> void { ",
+        "#[Entry(kind: EntryKind.Cli)] function main() -> void { ",
         "string crlf = Bytes.toString(b\"\\x0d\\x0a\") ?? \"\"; ",
         "string mp = \"--Z{crlf}Content-Disposition: form-data; name=\\\"who\\\"{crlf}{crlf}ada{crlf}",
         "--Z{crlf}Content-Disposition: form-data; name=\\\"f\\\"; filename=\\\"a.bin\\\"{crlf}",
@@ -2073,7 +2077,7 @@ fn rich_request_multipart_agrees_on_all_legs() {
     // A non-UTF-8 byte (0xFF) in the part head → rejected on ALL legs (F1): parse → null.
     let non_utf8 = concat!(
         "import Core.Output; import Core.Bytes; import Core.Http.Request; ",
-        "#[Entry(kind: Cli)] function main() -> void { ",
+        "#[Entry(kind: EntryKind.Cli)] function main() -> void { ",
         "string crlf = Bytes.toString(b\"\\x0d\\x0a\") ?? \"\"; ",
         "bytes head = Bytes.fromString(\"POST /u HTTP/1.1{crlf}content-type: multipart/form-data; boundary=Z{crlf}{crlf}--Z{crlf}Content-Disposition: form-data; name=\\\"f\\\"; filename=\"); ",
         "bytes body = Bytes.concat(head, Bytes.concat(b\"\\x22\\xff\\x22\", Bytes.fromString(\"{crlf}{crlf}x{crlf}--Z--\"))); ",
@@ -2087,7 +2091,7 @@ fn rich_request_multipart_agrees_on_all_legs() {
     // a sequential index). This is the first PHP-leg exercise of `__phorj_http_stash_body`/`read`.
     let spill = concat!(
         "import Core.Output; import Core.Bytes; import Core.Http.Request; ",
-        "#[Entry(kind: Cli)] function main() -> void { ",
+        "#[Entry(kind: EntryKind.Cli)] function main() -> void { ",
         "string big = String.repeat(\"ab\", 200000); ", // 400000 B > 262144 → spills
         "Request r = Request.fake(\"POST\", \"/u\").withBody(Bytes.fromString(big)); ",
         "Output.printLine(\"spilled-len={String.length(r.body.text())}\"); }",
@@ -2103,13 +2107,13 @@ fn rich_request_multipart_agrees_on_all_legs() {
 #[test]
 fn deep_nesting_faults_identically() {
     let parens = format!(
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void {{ int x = {}1{}; Output.printLine(\"{{x}}\"); }}",
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void {{ int x = {}1{}; Output.printLine(\"{{x}}\"); }}",
         "(".repeat(5000),
         ")".repeat(5000),
     );
     agree_err(&parens);
     let unary = format!(
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void {{ bool b = {}true; Output.printLine(\"{{b}}\"); }}",
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void {{ bool b = {}true; Output.printLine(\"{{b}}\"); }}",
         "!".repeat(5000),
     );
     agree_err(&unary);
@@ -2117,7 +2121,7 @@ fn deep_nesting_faults_identically() {
     // limit but produces a deeply left-leaning AST. The checker's depth guard (the gate both
     // backends share) must fault it identically rather than letting a walker overflow its stack.
     let chain = format!(
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void {{ int x = 1{}; Output.printLine(\"{{x}}\"); }}",
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void {{ int x = 1{}; Output.printLine(\"{{x}}\"); }}",
         "+1".repeat(20_000),
     );
     agree_err(&chain);
@@ -2128,7 +2132,7 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
     // Task 1 foundation: `null` is a real runtime value and a non-null `T` widens to `T?`.
     // (Observing the null *value* needs the unwrap operators from later S2 tasks.) The exact-output
     // assertion is deliberate: `agree` alone passes vacuously if both backends share a rejection.
-    let src = "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? x = null; int? y = 5; Output.printLine(\"optionals ok\"); }";
+    let src = "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? x = null; int? y = 5; Output.printLine(\"optionals ok\"); }";
     assert_eq!(
         cmd_treewalk(&with_pkg(src)).as_deref(),
         Ok("optionals ok\n")
@@ -2139,11 +2143,11 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
 #[test]
 fn s2_coalesce_is_byte_identical() {
     // `??`: a null lhs falls through to the default; a present value is kept.
-    let src = "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? x = null; Output.printLine(\"{x ?? 7}\"); int? y = 9; Output.printLine(\"{y ?? 0}\"); }";
+    let src = "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? x = null; Output.printLine(\"{x ?? 7}\"); int? y = 9; Output.printLine(\"{y ?? 0}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(src)).as_deref(), Ok("7\n9\n"));
     agree(src);
     // Short-circuit: the default (a printing call) must not run when the lhs is non-null.
-    let sc = "import Core.Output; function side() -> int { Output.printLine(\"SIDE\"); return 0; } #[Entry(kind: Cli)] function main() -> void { int? y = 9; Output.printLine(\"{y ?? side()}\"); }";
+    let sc = "import Core.Output; function side() -> int { Output.printLine(\"SIDE\"); return 0; } #[Entry(kind: EntryKind.Cli)] function main() -> void { int? y = 9; Output.printLine(\"{y ?? side()}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(sc)).as_deref(), Ok("9\n"));
     agree(sc);
 }
@@ -2156,16 +2160,16 @@ fn s2_safe_access_is_byte_identical() {
     // visibility enforcement); the method cases read `v` internally regardless.
     let cls = "class Box { constructor(public int v) {} function vOf() -> int { return this.v; } function plus(int n) -> int { return this.v + n; } }";
     let field = cls.to_string()
-        + "import Core.Output;  #[Entry(kind: Cli)] function main() -> void { Box? a = null; Output.printLine(\"{(a?.v) ?? -1}\"); Box? b = new Box(7); Output.printLine(\"{(b?.v) ?? -1}\"); }";
+        + "import Core.Output;  #[Entry(kind: EntryKind.Cli)] function main() -> void { Box? a = null; Output.printLine(\"{(a?.v) ?? -1}\"); Box? b = new Box(7); Output.printLine(\"{(b?.v) ?? -1}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));
     agree(&field);
     let method = cls.to_string()
-        + "import Core.Output;  #[Entry(kind: Cli)] function main() -> void { Box? a = null; Output.printLine(\"{(a?.vOf()) ?? -1}\"); Box? b = new Box(9); Output.printLine(\"{(b?.vOf()) ?? -1}\"); }";
+        + "import Core.Output;  #[Entry(kind: EntryKind.Cli)] function main() -> void { Box? a = null; Output.printLine(\"{(a?.vOf()) ?? -1}\"); Box? b = new Box(9); Output.printLine(\"{(b?.vOf()) ?? -1}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(&method)).as_deref(), Ok("-1\n9\n"));
     agree(&method);
     // short-circuit: a safe call on a null receiver must NOT evaluate its arguments (no "SIDE").
     let sc = cls.to_string()
-        + "import Core.Output;  function side() -> int { Output.printLine(\"SIDE\"); return 0; } #[Entry(kind: Cli)] function main() -> void { Box? a = null; Output.printLine(\"{(a?.plus(side())) ?? -1}\"); }";
+        + "import Core.Output;  function side() -> int { Output.printLine(\"SIDE\"); return 0; } #[Entry(kind: EntryKind.Cli)] function main() -> void { Box? a = null; Output.printLine(\"{(a?.plus(side())) ?? -1}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(&sc)).as_deref(), Ok("-1\n"));
     agree(&sc);
 }
@@ -2175,17 +2179,17 @@ fn s2_if_let_is_byte_identical() {
     // `if (var x = opt)`: the then-branch runs (with `x` bound to the non-null inner) only when the
     // optional is present; otherwise the else-branch runs.
     let present =
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? o = 5; if (var x = o) { Output.printLine(\"got {x}\"); } else { Output.printLine(\"none\"); } }";
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? o = 5; if (var x = o) { Output.printLine(\"got {x}\"); } else { Output.printLine(\"none\"); } }";
     assert_eq!(cmd_treewalk(&with_pkg(present)).as_deref(), Ok("got 5\n"));
     agree(present);
     let absent =
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? o = null; if (var x = o) { Output.printLine(\"got {x}\"); } else { Output.printLine(\"none\"); } }";
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? o = null; if (var x = o) { Output.printLine(\"got {x}\"); } else { Output.printLine(\"none\"); } }";
     assert_eq!(cmd_treewalk(&with_pkg(absent)).as_deref(), Ok("none\n"));
     agree(absent);
     // The smart-cast inner is a real arithmetic operand: `x + 1` must specialize identically on both
     // backends (guards the interp↔VM operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? o = 41; if (var x = o) { Output.printLine(\"{x + 1}\"); } else { Output.printLine(\"none\"); } }";
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? o = 41; if (var x = o) { Output.printLine(\"{x + 1}\"); } else { Output.printLine(\"none\"); } }";
     assert_eq!(cmd_treewalk(&with_pkg(arith)).as_deref(), Ok("42\n"));
     agree(arith);
 }
@@ -2194,13 +2198,13 @@ fn s2_if_let_is_byte_identical() {
 fn s2_force_unwrap_is_byte_identical() {
     // `opt!` on a present optional yields the inner value, identically on both backends.
     let present =
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? o = 5; Output.printLine(\"{o!}\"); }";
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? o = 5; Output.printLine(\"{o!}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(present)).as_deref(), Ok("5\n"));
     agree(present);
     // The unwrapped value is a real arithmetic operand: `o! + 1` must specialize identically
     // (guards the interp↔VM operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? o = 41; Output.printLine(\"{o! + 1}\"); }";
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? o = 41; Output.printLine(\"{o! + 1}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(arith)).as_deref(), Ok("42\n"));
     agree(arith);
 }
@@ -2208,7 +2212,8 @@ fn s2_force_unwrap_is_byte_identical() {
 #[test]
 fn s2_force_unwrap_null_faults_identically() {
     // `opt!` on null is a clean fault with the SAME FaultKind on both backends (no crash, no UB).
-    let src = "#[Entry(kind: Cli)] function main() -> void { int? o = null; int x = o!; }";
+    let src =
+        "#[Entry(kind: EntryKind.Cli)] function main() -> void { int? o = null; int x = o!; }";
     agree_err(src); // FaultKind::ForceUnwrap on both
 }
 
@@ -2218,27 +2223,27 @@ fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
     // that slot is the receiver's frame position (`height-1`), so live transients from an earlier
     // segment must not shift it. The interpreter is the oracle; the VM must match (not fault).
     let two_coalesce =
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? a = 5; int? b = null; Output.printLine(\"{a ?? -1} {b ?? -1}\"); }";
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? a = 5; int? b = null; Output.printLine(\"{a ?? -1} {b ?? -1}\"); }";
     assert_eq!(
         cmd_treewalk(&with_pkg(two_coalesce)).as_deref(),
         Ok("5 -1\n")
     );
     agree(two_coalesce);
 
-    let two_force = "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int? a = 1; int? b = 2; Output.printLine(\"{a!} {b!}\"); }";
+    let two_force = "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int? a = 1; int? b = 2; Output.printLine(\"{a!} {b!}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(two_force)).as_deref(), Ok("1 2\n"));
     agree(two_force);
 
     let cls =
         "class Box { constructor(private int v) {} function get() -> int { return this.v; } }";
     let two_safe = cls.to_string()
-        + "import Core.Output;  #[Entry(kind: Cli)] function main() -> void { Box? a = new Box(7); Box? b = null; Output.printLine(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
+        + "import Core.Output;  #[Entry(kind: EntryKind.Cli)] function main() -> void { Box? a = new Box(7); Box? b = null; Output.printLine(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(&two_safe)).as_deref(), Ok("7 -1\n"));
     agree(&two_safe);
 
     // Mixed + nested: a coalesce whose default is itself a safe-access-coalesce, beside a force.
     let mixed = cls.to_string()
-        + "import Core.Output;  #[Entry(kind: Cli)] function main() -> void { Box? a = null; int? b = 9; Output.printLine(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
+        + "import Core.Output;  #[Entry(kind: EntryKind.Cli)] function main() -> void { Box? a = null; int? b = 9; Output.printLine(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(&mixed)).as_deref(), Ok("9 9\n"));
     agree(&mixed);
 }
@@ -2248,7 +2253,7 @@ fn s2_match_over_optional_is_byte_identical() {
     // `match opt { null => …, v => … }`: the null arm fires on null, the binding arm narrows `v` to
     // the non-null inner `int` (used here as an arithmetic operand — guards the operand-type gap).
     let src = "import Core.Output; function f(int? o) -> int { return match o { null => -1, v => v + 1 }; } \
-               #[Entry(kind: Cli)] function main() -> void { int? a = null; int? b = 7; Output.printLine(\"{f(a)}\"); Output.printLine(\"{f(b)}\"); }";
+               #[Entry(kind: EntryKind.Cli)] function main() -> void { int? a = null; int? b = 7; Output.printLine(\"{f(a)}\"); Output.printLine(\"{f(b)}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(src)).as_deref(), Ok("-1\n8\n"));
     agree(src);
 }
@@ -2258,35 +2263,35 @@ fn s2_match_over_optional_is_byte_identical() {
 #[test]
 fn lambdas_agree() {
     // Basic lambda var call
-    agree("import Core.Output; #[Entry(kind: Cli)] function main() -> void { var d = function(int x) => x*2; Output.printLine(\"{d(5)}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { var d = function(int x) => x*2; Output.printLine(\"{d(5)}\"); }");
     // Lambda capturing TWO enclosing vars (slot-ordering trigger — invariant #8)
-    agree("import Core.Output; #[Entry(kind: Cli)] function main() -> void { var a=10; var b=100; var f=function(int x)=>x+a+b; Output.printLine(\"{f(1)}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { var a=10; var b=100; var f=function(int x)=>x+a+b; Output.printLine(\"{f(1)}\"); }");
     // Higher-order user function (lambda passed as argument)
-    agree("import Core.Output; function twice(int x,(int)->int f)->int{return f(f(x));} #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{twice(3, function(int n)=>n+1)}\"); }");
+    agree("import Core.Output; function twice(int x,(int)->int f)->int{return f(f(x));} #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{twice(3, function(int n)=>n+1)}\"); }");
     // Lambda call inside string interpolation (height-sensitive — F13)
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { var inc=function(int x)=>x+1; Output.printLine(\"{inc(1)} {inc(2)}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { var inc=function(int x)=>x+1; Output.printLine(\"{inc(1)} {inc(2)}\"); }");
     // Lambda call inside a match arm (height-sensitive — F13)
-    agree("import Core.Output; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{pick(new A(), function(int x)=>x*10)}\"); }");
+    agree("import Core.Output; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{pick(new A(), function(int x)=>x*10)}\"); }");
     // Zero-param lambda
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { var greet=function()=>42; Output.printLine(\"{greet()}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { var greet=function()=>42; Output.printLine(\"{greet()}\"); }");
 }
 
 #[test]
 fn lambda_call_errors_agree() {
     // Arity mismatch: lambda expects 1 arg, called with 2
-    agree_err("import Core.Output; #[Entry(kind: Cli)] function main()-> void { var f=function(int x)=>x; Output.printLine(\"{f(1,2)}\"); }");
+    agree_err("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { var f=function(int x)=>x; Output.printLine(\"{f(1,2)}\"); }");
 }
 
 #[test]
 fn statement_body_lambda_agrees() {
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { var base=100; var f = function(int x) -> int { var y = x*2; return y + base; }; Output.printLine(\"{f(3)}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { var base=100; var f = function(int x) -> int { var y = x*2; return y + base; }; Output.printLine(\"{f(3)}\"); }");
     // 106
 }
 
 #[test]
 fn statement_body_lambda_needs_return_type() {
     let errs = check_errs(
-        "package Main; import Core.Runtime.Entry; #[Entry(kind: Cli)] function main()-> void { var f = function(int x) { return x; }; }",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Cli)] function main()-> void { var f = function(int x) { return x; }; }",
     );
     assert!(
         errs.iter().any(|e| e.message.contains("explicit `-> T`")),
@@ -2296,7 +2301,7 @@ fn statement_body_lambda_needs_return_type() {
 
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
-    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Output; #[Entry(kind: Cli)] function main()-> void { var base=100; var f = function(int x) -> int { return x + base; }; Output.printLine(\"{f(3)}\"); }");
+    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { var base=100; var f = function(int x) -> int { return x + base; }; Output.printLine(\"{f(3)}\"); }");
     // DEC-255: `x` (int param) + `base` (int local) → `__phorj_checked_add` (overflow faults).
     assert!(
         php.contains("function($x) use ($base)")
@@ -2308,47 +2313,47 @@ fn transpiles_statement_lambda_with_use_clause() {
 #[test]
 fn pipe_agrees() {
     // `5 |> dbl |> inc` == inc(dbl(5)) == 11 (left-associative)
-    agree("import Core.Output; function dbl(int x)->int{return x*2;} function inc(int x)->int{return x+1;} #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{5 |> dbl |> inc}\"); }");
+    agree("import Core.Output; function dbl(int x)->int{return x*2;} function inc(int x)->int{return x+1;} #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{5 |> dbl |> inc}\"); }");
     // inline lambda on the right: `3 |> function(int v) => v + 10` == 13
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { var add=function(int a,int b)->int{return a+b;}; Output.printLine(\"{3 |> function(int v) => v + 10}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { var add=function(int a,int b)->int{return a+b;}; Output.printLine(\"{3 |> function(int v) => v + 10}\"); }");
     // precedence: `1 + 2 |> dbl` == dbl(1+2) == 6
-    agree("import Core.Output; function dbl(int x)->int{return x*2;} #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{1 + 2 |> dbl}\"); }");
+    agree("import Core.Output; function dbl(int x)->int{return x*2;} #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{1 + 2 |> dbl}\"); }");
 }
 
 #[test]
 fn mutation_reassign_agrees() {
     // M-mut.1: mutable locals + reassignment, byte-identical on both backends.
     // Plain reassignment.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int x = 1; x = 2; Output.printLine(\"{x}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int x = 1; x = 2; Output.printLine(\"{x}\"); }");
     // Reassign from the variable's own value.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int x = 1; x = x + 5; Output.printLine(\"{x}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int x = 1; x = x + 5; Output.printLine(\"{x}\"); }");
     // `mutable var` (inferred type) reassignment.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable var x = 10; x = x * 3; Output.printLine(\"{x}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable var x = 10; x = x * 3; Output.printLine(\"{x}\"); }");
     // Two-binding SCALAR case (F13): a scalar copies, so reassigning `b` must not change `a`.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { int a = 10; mutable int b = a; b = 99; Output.printLine(\"{a} {b}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { int a = 10; mutable int b = a; b = 99; Output.printLine(\"{a} {b}\"); }");
     // Reassignment inside a loop body (accumulator).
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int sum = 0; for (int n in 1..=3) { sum = sum + n; } Output.printLine(\"{sum}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int sum = 0; for (int n in 1..=3) { sum = sum + n; } Output.printLine(\"{sum}\"); }");
 }
 
 #[test]
 fn mutation_compound_assign_agrees() {
     // M-mut.2: compound-assign + ++/-- + ??= desugar to `Stmt::Assign`, byte-identical on both.
     // The five op= forms as accumulators.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int x = 10; x += 5; x -= 3; x *= 2; Output.printLine(\"{x}\"); }"); // 24
-                                                                                                                                                        // Integer `/=` routes through the intdiv kernel (F7): 24 / 5 = 4 (truncating), NOT float 4.8.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int x = 24; x /= 5; Output.printLine(\"{x}\"); }"); // 4
-                                                                                                                                        // `%=` with a NEGATIVE dividend — PHP's sign-follows-dividend (spec §8 #3): -7 % 3 = -1.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int x = 0 - 7; x %= 3; Output.printLine(\"{x}\"); }"); // -1
-                                                                                                                                           // `%=` positive dividend, negative divisor: 7 % -3 = 1 (sign follows dividend).
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int x = 7; x %= 0 - 3; Output.printLine(\"{x}\"); }"); // 1
-                                                                                                                                           // `??=` on an optional: assigns only when null.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int? a = null; a ??= 7; mutable int? b = 3; b ??= 9; Output.printLine(\"{a ?? -1} {b ?? -1}\"); }"); // 7 3
-                                                                                                                                                                                         // Statement `++`/`--` counter.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int n = 0; n++; n++; n++; n--; Output.printLine(\"{n}\"); }"); // 2
-                                                                                                                                                   // Two-binding SCALAR observe (F13): a compound op on `b` must not touch `a` (value-copy).
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { int a = 5; mutable int b = a; b += 100; Output.printLine(\"{a} {b}\"); }"); // 5 105
-                                                                                                                                                        // Compound-assign inside a loop accumulator.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int sum = 0; for (int i in 1..=5) { sum += i; } Output.printLine(\"{sum}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int x = 10; x += 5; x -= 3; x *= 2; Output.printLine(\"{x}\"); }"); // 24
+                                                                                                                                                                  // Integer `/=` routes through the intdiv kernel (F7): 24 / 5 = 4 (truncating), NOT float 4.8.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int x = 24; x /= 5; Output.printLine(\"{x}\"); }"); // 4
+                                                                                                                                                  // `%=` with a NEGATIVE dividend — PHP's sign-follows-dividend (spec §8 #3): -7 % 3 = -1.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int x = 0 - 7; x %= 3; Output.printLine(\"{x}\"); }"); // -1
+                                                                                                                                                     // `%=` positive dividend, negative divisor: 7 % -3 = 1 (sign follows dividend).
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int x = 7; x %= 0 - 3; Output.printLine(\"{x}\"); }"); // 1
+                                                                                                                                                     // `??=` on an optional: assigns only when null.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int? a = null; a ??= 7; mutable int? b = 3; b ??= 9; Output.printLine(\"{a ?? -1} {b ?? -1}\"); }"); // 7 3
+                                                                                                                                                                                                   // Statement `++`/`--` counter.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int n = 0; n++; n++; n++; n--; Output.printLine(\"{n}\"); }"); // 2
+                                                                                                                                                             // Two-binding SCALAR observe (F13): a compound op on `b` must not touch `a` (value-copy).
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { int a = 5; mutable int b = a; b += 100; Output.printLine(\"{a} {b}\"); }"); // 5 105
+                                                                                                                                                                  // Compound-assign inside a loop accumulator.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int sum = 0; for (int i in 1..=5) { sum += i; } Output.printLine(\"{sum}\"); }");
     // 15
 }
 
@@ -2356,17 +2361,17 @@ fn mutation_compound_assign_agrees() {
 fn mutation_element_set_agrees() {
     // M-mut.5: value-type element set xs[i]=e / m[k]=e — byte-identical on both backends.
     // List element set.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable List<int> xs = [1, 2, 3]; xs[1] = 20; Output.printLine(\"{xs[0]} {xs[1]} {xs[2]}\"); }"); // 1 20 3
-                                                                                                                                                                              // Compound element set rides the M-mut.2 desugar.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable List<int> xs = [1, 2, 3]; xs[0] += 100; xs[2] *= 5; Output.printLine(\"{xs[0]} {xs[2]}\"); }"); // 101 15
-                                                                                                                                                                                    // COPY-ON-WRITE value semantics (the P0 catcher, F13): mutating `ys` must not touch `xs`.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable List<int> xs = [1, 2]; mutable List<int> ys = xs; ys[0] = 999; Output.printLine(\"{xs[0]} {ys[0]}\"); }"); // 1 999
-                                                                                                                                                                                               // Map update (existing key) + insert (new key), insertion-ordered.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable Map<string, int> m = [\"a\" => 1]; m[\"a\"] = 10; m[\"b\"] = 20; Output.printLine(\"{m[\"a\"]} {m[\"b\"]}\"); }"); // 10 20
-                                                                                                                                                                                                       // Map COW: a copy is independent.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable Map<string, int> m = [\"a\" => 1]; mutable Map<string, int> n = m; n[\"a\"] = 99; Output.printLine(\"{m[\"a\"]} {n[\"a\"]}\"); }"); // 1 99
-                                                                                                                                                                                                                        // Set element in a loop (accumulate into a list).
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable List<int> xs = [0, 0, 0]; for (mutable int i = 0; i < 3; i++) { xs[i] = i * i; } Output.printLine(\"{xs[0]} {xs[1]} {xs[2]}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable List<int> xs = [1, 2, 3]; xs[1] = 20; Output.printLine(\"{xs[0]} {xs[1]} {xs[2]}\"); }"); // 1 20 3
+                                                                                                                                                                                        // Compound element set rides the M-mut.2 desugar.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable List<int> xs = [1, 2, 3]; xs[0] += 100; xs[2] *= 5; Output.printLine(\"{xs[0]} {xs[2]}\"); }"); // 101 15
+                                                                                                                                                                                              // COPY-ON-WRITE value semantics (the P0 catcher, F13): mutating `ys` must not touch `xs`.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable List<int> xs = [1, 2]; mutable List<int> ys = xs; ys[0] = 999; Output.printLine(\"{xs[0]} {ys[0]}\"); }"); // 1 999
+                                                                                                                                                                                                         // Map update (existing key) + insert (new key), insertion-ordered.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable Map<string, int> m = [\"a\" => 1]; m[\"a\"] = 10; m[\"b\"] = 20; Output.printLine(\"{m[\"a\"]} {m[\"b\"]}\"); }"); // 10 20
+                                                                                                                                                                                                                 // Map COW: a copy is independent.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable Map<string, int> m = [\"a\" => 1]; mutable Map<string, int> n = m; n[\"a\"] = 99; Output.printLine(\"{m[\"a\"]} {n[\"a\"]}\"); }"); // 1 99
+                                                                                                                                                                                                                                  // Set element in a loop (accumulate into a list).
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable List<int> xs = [0, 0, 0]; for (mutable int i = 0; i < 3; i++) { xs[i] = i * i; } Output.printLine(\"{xs[0]} {xs[1]} {xs[2]}\"); }");
     // 0 1 4
 }
 
@@ -2376,7 +2381,7 @@ fn b1_for_in_over_set_agrees() {
     // the shared `value::iter_elements` kernel (`Op::IterElems` on the VM) — byte-identical interp ≡ VM.
     agree(
         "import Core.Output; import Core.Set; \
-         #[Entry(kind: Cli)] function main() -> void { \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { \
              Set<int> s = Set.of([3, 1, 3, 2, 1]); \
              mutable int total = 0; \
              for (int x in s) { total = total + x; } \
@@ -2386,7 +2391,7 @@ fn b1_for_in_over_set_agrees() {
     // A list still iterates identically through the same normalized path.
     agree(
         "import Core.Output; \
-         #[Entry(kind: Cli)] function main() -> void { mutable int t = 0; for (int x in [10, 20, 30]) { t = t + x; } Output.printLine(\"{t}\"); }",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { mutable int t = 0; for (int x in [10, 20, 30]) { t = t + x; } Output.printLine(\"{t}\"); }",
     );
 }
 
@@ -2394,7 +2399,7 @@ fn b1_for_in_over_set_agrees() {
 fn mutation_element_set_oob_faults_agree() {
     // M-mut.5: an out-of-range list element SET faults identically on both Rust backends
     // (FaultKind::IndexOob). NOT PHP-gated — PHP would *extend* the array instead (KNOWN_ISSUES).
-    agree_err("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable List<int> xs = [1, 2]; xs[5] = 9; Output.printLine(\"unreached\"); }");
+    agree_err("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable List<int> xs = [1, 2]; xs[5] = 9; Output.printLine(\"unreached\"); }");
 }
 
 #[test]
@@ -2402,16 +2407,16 @@ fn mutation_instance_field_set_agrees() {
     // M-mut.6: shared-mutable instance field set `o.f = e` — handle semantics, byte-identical on
     // interp/VM + real PHP (`agree` is the 3-way oracle).
     // Basic field set + read-back.
-    agree("import Core.Output; class P { constructor(public mutable int x) {} } #[Entry(kind: Cli)] function main()-> void { P p = new P(1); p.x = 42; Output.printLine(\"{p.x}\"); }"); // 42
-                                                                                                                                                                                         // HANDLE semantics (the P0 catcher, F13): mutate via one binding, observe via the alias — BOTH
-                                                                                                                                                                                         // see it (the opposite of value-type COW). This is the value/handle slip a 2-binding test catches.
-    agree("import Core.Output; class P { constructor(public mutable int x) {} } #[Entry(kind: Cli)] function main()-> void { P p = new P(1); P q = p; p.x = 99; Output.printLine(\"{p.x} {q.x}\"); }"); // 99 99
-                                                                                                                                                                                                        // `this.f = e` inside a method, visible through the original binding across calls.
-    agree("import Core.Output; class C { constructor(public mutable int n) {} function bump() -> int { this.n = this.n + 1; return this.n; } } #[Entry(kind: Cli)] function main()-> void { C c = new C(10); c.bump(); c.bump(); Output.printLine(\"{c.n}\"); }"); // 12
-                                                                                                                                                                                                                                                                   // A declared (non-promoted) `mutable` field initialized in the ctor body via `this.f = e`.
-    agree("import Core.Output; class B { mutable int v; constructor(int seed) { this.v = seed * 2; } function get() -> int { return this.v; } } #[Entry(kind: Cli)] function main()-> void { B b = new B(5); b.v = b.v + 1; Output.printLine(\"{b.get()}\"); }"); // 11
-                                                                                                                                                                                                                                                                  // Field set on an instance reached through another field (`a.b.c = e`) — handle semantics all the way.
-    agree("import Core.Output; class Inner { constructor(public mutable int v) {} } class Outer { constructor(public Inner inner) {} } #[Entry(kind: Cli)] function main()-> void { Outer o = new Outer(new Inner(1)); o.inner.v = 7; Output.printLine(\"{o.inner.v}\"); }");
+    agree("import Core.Output; class P { constructor(public mutable int x) {} } #[Entry(kind: EntryKind.Cli)] function main()-> void { P p = new P(1); p.x = 42; Output.printLine(\"{p.x}\"); }"); // 42
+                                                                                                                                                                                                   // HANDLE semantics (the P0 catcher, F13): mutate via one binding, observe via the alias — BOTH
+                                                                                                                                                                                                   // see it (the opposite of value-type COW). This is the value/handle slip a 2-binding test catches.
+    agree("import Core.Output; class P { constructor(public mutable int x) {} } #[Entry(kind: EntryKind.Cli)] function main()-> void { P p = new P(1); P q = p; p.x = 99; Output.printLine(\"{p.x} {q.x}\"); }"); // 99 99
+                                                                                                                                                                                                                  // `this.f = e` inside a method, visible through the original binding across calls.
+    agree("import Core.Output; class C { constructor(public mutable int n) {} function bump() -> int { this.n = this.n + 1; return this.n; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { C c = new C(10); c.bump(); c.bump(); Output.printLine(\"{c.n}\"); }"); // 12
+                                                                                                                                                                                                                                                                             // A declared (non-promoted) `mutable` field initialized in the ctor body via `this.f = e`.
+    agree("import Core.Output; class B { mutable int v; constructor(int seed) { this.v = seed * 2; } function get() -> int { return this.v; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { B b = new B(5); b.v = b.v + 1; Output.printLine(\"{b.get()}\"); }"); // 11
+                                                                                                                                                                                                                                                                            // Field set on an instance reached through another field (`a.b.c = e`) — handle semantics all the way.
+    agree("import Core.Output; class Inner { constructor(public mutable int v) {} } class Outer { constructor(public Inner inner) {} } #[Entry(kind: EntryKind.Cli)] function main()-> void { Outer o = new Outer(new Inner(1)); o.inner.v = 7; Output.printLine(\"{o.inner.v}\"); }");
     // 7
 }
 
@@ -2420,11 +2425,11 @@ fn mutation_static_field_agrees() {
     // M-mut.7: program-lifetime `static mutable` class fields, read/written as `ClassName.field` —
     // byte-identical interp/VM + real PHP. A static is shared across all instances (one program-level
     // slot), so a counter incremented in the constructor accumulates across constructions.
-    agree("import Core.Output; class Counter { static mutable int total = 0; constructor() { Counter.total = Counter.total + 1; } } #[Entry(kind: Cli)] function main()-> void { new Counter(); new Counter(); new Counter(); Output.printLine(\"{Counter.total}\"); }"); // 3
-                                                                                                                                                                                                                                                                          // Direct read/write from a free function; an immutable static string too.
-    agree("import Core.Output; class Cfg { static mutable int n = 10; static string name = \"cfg\"; } #[Entry(kind: Cli)] function main()-> void { Cfg.n = Cfg.n + 5; Output.printLine(\"{Cfg.name}={Cfg.n}\"); }"); // cfg=15
-                                                                                                                                                                                                                     // A static read used as an arithmetic operand inside a method (the CTy-operand path).
-    agree("import Core.Output; class C { static mutable int k = 1; function step() -> int { C.k = C.k * 2; return C.k + 1; } } #[Entry(kind: Cli)] function main()-> void { C c = new C(); Output.printLine(\"{c.step()} {c.step()}\"); }");
+    agree("import Core.Output; class Counter { static mutable int total = 0; constructor() { Counter.total = Counter.total + 1; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { new Counter(); new Counter(); new Counter(); Output.printLine(\"{Counter.total}\"); }"); // 3
+                                                                                                                                                                                                                                                                                    // Direct read/write from a free function; an immutable static string too.
+    agree("import Core.Output; class Cfg { static mutable int n = 10; static string name = \"cfg\"; } #[Entry(kind: EntryKind.Cli)] function main()-> void { Cfg.n = Cfg.n + 5; Output.printLine(\"{Cfg.name}={Cfg.n}\"); }"); // cfg=15
+                                                                                                                                                                                                                               // A static read used as an arithmetic operand inside a method (the CTy-operand path).
+    agree("import Core.Output; class C { static mutable int k = 1; function step() -> int { C.k = C.k * 2; return C.k + 1; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { C c = new C(); Output.printLine(\"{c.step()} {c.step()}\"); }");
     // 3 5
 }
 
@@ -2434,27 +2439,27 @@ fn mutation_property_hooks_agrees() {
     // set intercepts a write (typically mutating a backing `mutable` field). Byte-identical on
     // interp/VM + real PHP (the synthetic-method VM lowering ≡ the PHP 8.4 property hook).
     // A read-only computed hook reads a backing field.
-    agree("import Core.Output; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } #[Entry(kind: Cli)] function main()-> void { C c = new C(21); Output.printLine(\"{c.doubled}\"); }"); // 42
-                                                                                                                                                                                                                             // A get used as an arithmetic operand — the CTy-operand path (`o.hook + 1` must specialize on the VM).
-    agree("import Core.Output; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } #[Entry(kind: Cli)] function main()-> void { C c = new C(21); Output.printLine(\"{c.doubled + 1}\"); }"); // 43
-                                                                                                                                                                                                                                 // A set writes a backing field; observe through both the hook (get) and the raw field.
-    agree("import Core.Output; class C { constructor(public mutable int raw) {} int half { get => this.raw; set(int v) { this.raw = v / 2; } } } #[Entry(kind: Cli)] function main()-> void { C c = new C(0); c.half = 10; Output.printLine(\"{c.raw} {c.half}\"); }"); // 5 5
-                                                                                                                                                                                                                                                                        // HANDLE semantics through a hook: set via one binding, observe via the alias.
-    agree("import Core.Output; class C { constructor(public mutable int raw) {} int v { get => this.raw; set(int n) { this.raw = n; } } } #[Entry(kind: Cli)] function main()-> void { C c = new C(1); C d = c; c.v = 99; Output.printLine(\"{d.v}\"); }"); // 99
-                                                                                                                                                                                                                                                            // A float computed property with exactly-representable values (Celsius↔Fahrenheit round-trip).
-    agree("import Core.Output; class Temp { constructor(public mutable float celsius) {} float fahrenheit { get => this.celsius * 9.0 / 5.0 + 32.0; set(float f) { this.celsius = (f - 32.0) * 5.0 / 9.0; } } } #[Entry(kind: Cli)] function main()-> void { Temp t = new Temp(100.0); Output.printLine(\"{t.fahrenheit}\"); t.fahrenheit = 32.0; Output.printLine(\"{t.celsius}\"); }");
+    agree("import Core.Output; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { C c = new C(21); Output.printLine(\"{c.doubled}\"); }"); // 42
+                                                                                                                                                                                                                                       // A get used as an arithmetic operand — the CTy-operand path (`o.hook + 1` must specialize on the VM).
+    agree("import Core.Output; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { C c = new C(21); Output.printLine(\"{c.doubled + 1}\"); }"); // 43
+                                                                                                                                                                                                                                           // A set writes a backing field; observe through both the hook (get) and the raw field.
+    agree("import Core.Output; class C { constructor(public mutable int raw) {} int half { get => this.raw; set(int v) { this.raw = v / 2; } } } #[Entry(kind: EntryKind.Cli)] function main()-> void { C c = new C(0); c.half = 10; Output.printLine(\"{c.raw} {c.half}\"); }"); // 5 5
+                                                                                                                                                                                                                                                                                  // HANDLE semantics through a hook: set via one binding, observe via the alias.
+    agree("import Core.Output; class C { constructor(public mutable int raw) {} int v { get => this.raw; set(int n) { this.raw = n; } } } #[Entry(kind: EntryKind.Cli)] function main()-> void { C c = new C(1); C d = c; c.v = 99; Output.printLine(\"{d.v}\"); }"); // 99
+                                                                                                                                                                                                                                                                      // A float computed property with exactly-representable values (Celsius↔Fahrenheit round-trip).
+    agree("import Core.Output; class Temp { constructor(public mutable float celsius) {} float fahrenheit { get => this.celsius * 9.0 / 5.0 + 32.0; set(float f) { this.celsius = (f - 32.0) * 5.0 / 9.0; } } } #[Entry(kind: EntryKind.Cli)] function main()-> void { Temp t = new Temp(100.0); Output.printLine(\"{t.fahrenheit}\"); t.fahrenheit = 32.0; Output.printLine(\"{t.celsius}\"); }");
     // 212 then 0
 }
 
 #[test]
 fn mutation_clone_with_agrees() {
     // M-mut.4a: `obj with { f = e }` — fresh instance, source unchanged, byte-identical on both.
-    agree("import Core.Output; class P { constructor(public int x, public int y) {} } #[Entry(kind: Cli)] function main()-> void { P p = new P(1, 2); P q = p with { x = 9 }; Output.printLine(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2
-    agree("import Core.Output; class P { constructor(public int x, public int y) {} } #[Entry(kind: Cli)] function main()-> void { P p = new P(1, 2); P q = p with { x = 7, y = 8 }; Output.printLine(\"{q.x} {q.y}\"); }"); // 7 8
-                                                                                                                                                                                                                             // A method works on the cloned instance (the clone is a real instance; the ctor was not re-run).
-    agree("import Core.Output; class P { constructor(public int x, public int y) {} function sum() -> int { return this.x + this.y; } } #[Entry(kind: Cli)] function main()-> void { P p = new P(1, 2); P q = p with { x = 10 }; Output.printLine(\"{q.sum()}\"); }"); // 12
-                                                                                                                                                                                                                                                                       // The override value may reference the source's own fields.
-    agree("import Core.Output; class P { constructor(public int x, public int y) {} } #[Entry(kind: Cli)] function main()-> void { P p = new P(3, 4); P q = p with { x = p.x + p.y }; Output.printLine(\"{q.x} {q.y}\"); }");
+    agree("import Core.Output; class P { constructor(public int x, public int y) {} } #[Entry(kind: EntryKind.Cli)] function main()-> void { P p = new P(1, 2); P q = p with { x = 9 }; Output.printLine(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2
+    agree("import Core.Output; class P { constructor(public int x, public int y) {} } #[Entry(kind: EntryKind.Cli)] function main()-> void { P p = new P(1, 2); P q = p with { x = 7, y = 8 }; Output.printLine(\"{q.x} {q.y}\"); }"); // 7 8
+                                                                                                                                                                                                                                       // A method works on the cloned instance (the clone is a real instance; the ctor was not re-run).
+    agree("import Core.Output; class P { constructor(public int x, public int y) {} function sum() -> int { return this.x + this.y; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { P p = new P(1, 2); P q = p with { x = 10 }; Output.printLine(\"{q.sum()}\"); }"); // 12
+                                                                                                                                                                                                                                                                                 // The override value may reference the source's own fields.
+    agree("import Core.Output; class P { constructor(public int x, public int y) {} } #[Entry(kind: EntryKind.Cli)] function main()-> void { P p = new P(3, 4); P q = p with { x = p.x + p.y }; Output.printLine(\"{q.x} {q.y}\"); }");
     // 7 4
 }
 
@@ -2462,43 +2467,43 @@ fn mutation_clone_with_agrees() {
 fn mutation_condition_loops_agree() {
     // M-mut.3: while / do-while / C-for / while-let / break / continue, byte-identical on both.
     // Plain while accumulator.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int i = 0; mutable int s = 0; while (i < 4) { s += i; i += 1; } Output.printLine(\"{s}\"); }"); // 6
-                                                                                                                                                                                    // do-while runs the body once even when the condition is false up front.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int n = 10; do { Output.printLine(\"once\"); n += 1; } while (n < 5); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int i = 0; mutable int s = 0; while (i < 4) { s += i; i += 1; } Output.printLine(\"{s}\"); }"); // 6
+                                                                                                                                                                                              // do-while runs the body once even when the condition is false up front.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int n = 10; do { Output.printLine(\"once\"); n += 1; } while (n < 5); }");
     // continue skips, break stops.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int i = 0; mutable int hit = 0; while (true) { i += 1; if (i == 2) { continue; } if (i >= 5) { break; } hit += 1; } Output.printLine(\"{hit}\"); }"); // i=1,3,4 → 3
-                                                                                                                                                                                                                                          // C-style for with continue + break.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int sum = 0; for (mutable int k = 0; k < 6; k++) { if (k == 1) { continue; } if (k == 5) { break; } sum += k; } Output.printLine(\"{sum}\"); }"); // 0+2+3+4=9
-                                                                                                                                                                                                                                      // Nested C-for: an inner break exits only the inner loop.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int t = 0; for (mutable int a = 0; a < 3; a += 1) { for (mutable int b = 0; b < 9; b += 1) { if (b == 2) { break; } t += 1; } } Output.printLine(\"{t}\"); }"); // 3*2=6
-                                                                                                                                                                                                                                                    // while-let drains an optional.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int? o = 7; while (var v = o) { Output.printLine(\"{v}\"); o = null; } Output.printLine(\"done\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int i = 0; mutable int hit = 0; while (true) { i += 1; if (i == 2) { continue; } if (i >= 5) { break; } hit += 1; } Output.printLine(\"{hit}\"); }"); // i=1,3,4 → 3
+                                                                                                                                                                                                                                                    // C-style for with continue + break.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int sum = 0; for (mutable int k = 0; k < 6; k++) { if (k == 1) { continue; } if (k == 5) { break; } sum += k; } Output.printLine(\"{sum}\"); }"); // 0+2+3+4=9
+                                                                                                                                                                                                                                                // Nested C-for: an inner break exits only the inner loop.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int t = 0; for (mutable int a = 0; a < 3; a += 1) { for (mutable int b = 0; b < 9; b += 1) { if (b == 2) { break; } t += 1; } } Output.printLine(\"{t}\"); }"); // 3*2=6
+                                                                                                                                                                                                                                                              // while-let drains an optional.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int? o = 7; while (var v = o) { Output.printLine(\"{v}\"); o = null; } Output.printLine(\"done\"); }");
     // break inside a for-in (the existing range loop) exits it.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int last = 0; for (int x in 1..=10) { if (x == 4) { break; } last = x; } Output.printLine(\"{last}\"); }"); // 3
-                                                                                                                                                                                                // continue inside a for-in skips one iteration.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int s = 0; for (int x in 1..=5) { if (x == 3) { continue; } s += x; } Output.printLine(\"{s}\"); }"); // 1+2+4+5=12
-                                                                                                                                                                                          // for(;;) terminated by break.
-    agree("import Core.Output; #[Entry(kind: Cli)] function main()-> void { mutable int c = 0; for (;;) { c += 1; if (c == 3) { break; } } Output.printLine(\"{c}\"); }");
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int last = 0; for (int x in 1..=10) { if (x == 4) { break; } last = x; } Output.printLine(\"{last}\"); }"); // 3
+                                                                                                                                                                                                          // continue inside a for-in skips one iteration.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int s = 0; for (int x in 1..=5) { if (x == 3) { continue; } s += x; } Output.printLine(\"{s}\"); }"); // 1+2+4+5=12
+                                                                                                                                                                                                    // for(;;) terminated by break.
+    agree("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { mutable int c = 0; for (;;) { c += 1; if (c == 3) { break; } } Output.printLine(\"{c}\"); }");
     // 3
 }
 
 #[test]
 fn named_fn_ref_as_value_agrees() {
     // named fn defined BEFORE use
-    agree("import Core.Output; function dbl(int x)->int{return x*2;} function twice(int x,(int)->int f)->int{return f(f(x));} #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{twice(2, dbl)}\"); }"); // 8
-                                                                                                                                                                                                                       // named fn defined AFTER use (forward reference)
-    agree("import Core.Output; function apply(int x,(int)->int f)->int{return f(x);} function callsLater(int n)->int{ return apply(n, bump); } function bump(int x)->int{return x+5;} #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{callsLater(10)}\"); }");
+    agree("import Core.Output; function dbl(int x)->int{return x*2;} function twice(int x,(int)->int f)->int{return f(f(x));} #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{twice(2, dbl)}\"); }"); // 8
+                                                                                                                                                                                                                                 // named fn defined AFTER use (forward reference)
+    agree("import Core.Output; function apply(int x,(int)->int f)->int{return f(x);} function callsLater(int n)->int{ return apply(n, bump); } function bump(int x)->int{return x+5;} #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{callsLater(10)}\"); }");
     // 15
     // A bare named function bound to a `var`, then called THROUGH the local. The compiler infers
     // the local's `CTy::Fn` from the named-fn reference so the call dispatches via `CallValue`
     // (without the inference the VM rejected `f(5)` as "not a function").
-    agree("import Core.Output; function dbl(int x)->int{return x*2;} #[Entry(kind: Cli)] function main()-> void { var f=dbl; Output.printLine(\"{f(5)}\"); }");
+    agree("import Core.Output; function dbl(int x)->int{return x*2;} #[Entry(kind: EntryKind.Cli)] function main()-> void { var f=dbl; Output.printLine(\"{f(5)}\"); }");
     // 10
 }
 
 #[test]
 fn transpiles_lambda_literal_call_target() {
-    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Output; #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{3 |> function(int v) => v + 100}\"); }");
+    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{3 |> function(int v) => v + 100}\"); }");
     // DEC-255: `v` (int param) + `100` (int literal) → `__phorj_checked_add` (overflow faults).
     assert!(
         php.contains("(fn($v) => __phorj_checked_add($v, 100))(3)"),
@@ -2514,7 +2519,7 @@ fn call_of_general_expression_callee_agrees_and_transpiles() {
     // target") — a three-backend inconsistency on the byte-identity spine (Wave 1.4 audit).
     let src =
         "import Core.Output; function adder() -> (int) -> int { return function(int x) => x + 1; } \
-               #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{adder()(41)}\"); }";
+               #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{adder()(41)}\"); }";
     agree(src); // interp ≡ VM  → 42
     let php = transpile_ok(&with_pkg(src));
     assert!(php.contains("(adder())(41)"), "{php}");
@@ -2523,15 +2528,15 @@ fn call_of_general_expression_callee_agrees_and_transpiles() {
 #[test]
 fn higher_order_natives_agree() {
     // map / filter / reduce with inline lambdas (results shown via List.sum — PHP can't echo arrays).
-    agree("import Core.Output; import Core.List; #[Entry(kind: Cli)] function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); Output.printLine(\"{List.sum(d)}\"); }"); // 12
-    agree("import Core.Output; import Core.List; #[Entry(kind: Cli)] function main()-> void { var e=List.filter([1,2,3,4], function(int x)=>x%2==0); Output.printLine(\"{List.sum(e)}\"); }"); // 6
-    agree("import Core.Output; import Core.List; #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{List.reduce([1,2,3,4], 1, function(int a,int x)=>a*x)}\"); }"); // 24
-                                                                                                                                                                                  // A lambda capturing an enclosing local, passed to a native (capture window parity, invariant #8).
-    agree("import Core.Output; import Core.List; #[Entry(kind: Cli)] function main()-> void { var k=10; var s=List.map([1,2,3], function(int x)=>x*k); Output.printLine(\"{List.sum(s)}\"); }"); // 60
-                                                                                                                                                                                                 // A bare NAMED function reference (zero-capture closure) passed straight to a native.
-    agree("import Core.Output; import Core.List; function dbl(int x)->int{return x*2;} #[Entry(kind: Cli)] function main()-> void { var d=List.map([1,2,3], dbl); Output.printLine(\"{List.sum(d)}\"); }"); // 12
-                                                                                                                                                                                                            // RE-ENTRANCY: a native called from inside another native's closure (map nested in reduce's fn).
-    agree("import Core.Output; import Core.List; #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{List.reduce([1,2,3], 0, function(int a,int x)=>a + List.sum(List.map([x], function(int y)=>y*y)))}\"); }");
+    agree("import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); Output.printLine(\"{List.sum(d)}\"); }"); // 12
+    agree("import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main()-> void { var e=List.filter([1,2,3,4], function(int x)=>x%2==0); Output.printLine(\"{List.sum(e)}\"); }"); // 6
+    agree("import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{List.reduce([1,2,3,4], 1, function(int a,int x)=>a*x)}\"); }"); // 24
+                                                                                                                                                                                            // A lambda capturing an enclosing local, passed to a native (capture window parity, invariant #8).
+    agree("import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main()-> void { var k=10; var s=List.map([1,2,3], function(int x)=>x*k); Output.printLine(\"{List.sum(s)}\"); }"); // 60
+                                                                                                                                                                                                           // A bare NAMED function reference (zero-capture closure) passed straight to a native.
+    agree("import Core.Output; import Core.List; function dbl(int x)->int{return x*2;} #[Entry(kind: EntryKind.Cli)] function main()-> void { var d=List.map([1,2,3], dbl); Output.printLine(\"{List.sum(d)}\"); }"); // 12
+                                                                                                                                                                                                                      // RE-ENTRANCY: a native called from inside another native's closure (map nested in reduce's fn).
+    agree("import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{List.reduce([1,2,3], 0, function(int a,int x)=>a + List.sum(List.map([x], function(int y)=>y*y)))}\"); }");
     // 14
 }
 
@@ -2540,13 +2545,13 @@ fn higher_order_native_closure_fault_agrees() {
     // A fault raised *inside* a closure run by a native must propagate byte-identically on both
     // backends (interpreter `call_closure` ⇄ VM re-entrant `call_closure_value`). Can't be a runnable
     // example (every example must produce identical Ok output) — lives here as a fault-parity case.
-    agree_err("import Core.Output; import Core.List; #[Entry(kind: Cli)] function main()-> void { var d=List.map([1,2,3], function(int x)=>x/0); Output.printLine(\"{List.sum(d)}\"); }");
+    agree_err("import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main()-> void { var d=List.map([1,2,3], function(int x)=>x/0); Output.printLine(\"{List.sum(d)}\"); }");
     // DivZero on both
 }
 
 #[test]
 fn transpiles_higher_order_natives() {
-    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Output; import Core.List; #[Entry(kind: Cli)] function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); var e=List.filter(d, function(int x)=>x>2); Output.printLine(\"{List.reduce(e, 0, function(int a,int x)=>a+x)}\"); }");
+    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); var e=List.filter(d, function(int x)=>x>2); Output.printLine(\"{List.reduce(e, 0, function(int a,int x)=>a+x)}\"); }");
     // DEC-255: `x*2` (int) → `__phorj_checked_mul`; `a+x` in reduce → `__phorj_checked_add`.
     assert!(
         php.contains("array_map(fn($x) => __phorj_checked_mul($x, 2),"),
@@ -2561,12 +2566,12 @@ fn generic_methods_agree() {
     // A generic method (`<T>` on a method of a non-generic class) inferred from arguments must run
     // byte-identically on both backends — the type variable is erased before either backend, like a
     // generic free function (M-RT generics-all). `identity` reused at three concrete types.
-    agree("import Core.Output; class U { function id<T>(T x)->T { return x; } } #[Entry(kind: Cli)] function main()-> void { var u=new U(); Output.printLine(\"{u.id(7)} {u.id(\\\"hi\\\")} {u.id(true)}\"); }"); // 7 hi true
-                                                                                                                                                                                                                  // `T` inferred from a `List<T>` argument; the fallback shares it.
-    agree("import Core.Output; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } #[Entry(kind: Cli)] function main()-> void { var u=new U(); Output.printLine(\"{u.firstOr([10,20], -1)} {u.firstOr(new List<int>(), 99)}\"); }"); // 10 99
-                                                                                                                                                                                                                                                                                 // A type parameter inside a function-typed parameter, and the closure invoked in the method body
-                                                                                                                                                                                                                                                                                 // (exercises the VM's re-entrant closure path from inside a generic method).
-    agree("import Core.Output; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } #[Entry(kind: Cli)] function main()-> void { var u=new U(); Output.printLine(\"{u.applyTwice(5, function(int v)=>v+1)}\"); }");
+    agree("import Core.Output; class U { function id<T>(T x)->T { return x; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { var u=new U(); Output.printLine(\"{u.id(7)} {u.id(\\\"hi\\\")} {u.id(true)}\"); }"); // 7 hi true
+                                                                                                                                                                                                                            // `T` inferred from a `List<T>` argument; the fallback shares it.
+    agree("import Core.Output; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } #[Entry(kind: EntryKind.Cli)] function main()-> void { var u=new U(); Output.printLine(\"{u.firstOr([10,20], -1)} {u.firstOr(new List<int>(), 99)}\"); }"); // 10 99
+                                                                                                                                                                                                                                                                                           // A type parameter inside a function-typed parameter, and the closure invoked in the method body
+                                                                                                                                                                                                                                                                                           // (exercises the VM's re-entrant closure path from inside a generic method).
+    agree("import Core.Output; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } #[Entry(kind: EntryKind.Cli)] function main()-> void { var u=new U(); Output.printLine(\"{u.applyTwice(5, function(int v)=>v+1)}\"); }");
     // 7
 }
 
@@ -2578,13 +2583,13 @@ fn overloaded_free_functions_agree() {
            function d(int n)->string { return \"int:{n}\"; } \
            function d(string s)->string { return \"str:{s}\"; } \
            function d(bool b)->string { return \"bool:{b}\"; } \
-           #[Entry(kind: Cli)] function main()-> void { Output.printLine(d(42)); Output.printLine(d(\"hi\")); Output.printLine(d(true)); }");
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(d(42)); Output.printLine(d(\"hi\")); Output.printLine(d(true)); }");
     // Arity overloads.
     agree(
         "import Core.Output; \
            function add(int a)->int { return a; } \
            function add(int a, int b)->int { return a+b; } \
-           #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{add(5)} {add(5,6)}\"); }",
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{add(5)} {add(5,6)}\"); }",
     );
     // Class + interface overloads with most-specific dispatch: a `Circle` value picks `area(Circle)`,
     // a `Square` (only a `Shape`) picks the `area(Shape)` fallback — same choice on both backends.
@@ -2594,7 +2599,7 @@ fn overloaded_free_functions_agree() {
            class Square implements Shape { constructor(public int s) {} } \
            function area(Circle c)->int { return c.r*c.r*3; } \
            function area(Shape s)->int { return 0; } \
-           #[Entry(kind: Cli)] function main()-> void { Circle c=new Circle(2); Square q=new Square(4); Output.printLine(\"{area(c)} {area(q)}\"); }");
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { Circle c=new Circle(2); Square q=new Square(4); Output.printLine(\"{area(c)} {area(q)}\"); }");
 }
 
 #[test]
@@ -2610,7 +2615,7 @@ fn overloaded_methods_agree() {
              function show(string s)->string { return \"{this.tag}/str:{s}\"; } \
              function show(Circle c)->string { return \"{this.tag}/circle:{c.r}\"; } \
            } \
-           #[Entry(kind: Cli)] function main()-> void { Printer p=new Printer(\"P\"); \
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { Printer p=new Printer(\"P\"); \
              Output.printLine(p.show(7)); Output.printLine(p.show(\"hi\")); Output.printLine(p.show(new Circle(3))); }");
 }
 
@@ -2628,7 +2633,7 @@ fn overloaded_methods_return_type_agree() {
              function read(string k)->bool { return true; } \
              function read(string k)->string { return \"{this.tag}:{k}\"; } \
            } \
-           #[Entry(kind: Cli)] function main()-> void { Config c=new Config(\"C\"); \
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { Config c=new Config(\"C\"); \
              int i = <int>c.read(\"a\"); bool b = <bool>c.read(\"b\"); string s = <string>c.read(\"c\"); \
              Output.printLine(\"{i} {b} {s}\"); }",
         "42 true C:c\n",
@@ -2644,7 +2649,7 @@ fn overloaded_methods_return_type_agree() {
              function get()->string { return \"v={this.v}\"; } \
              function describe()->string { return <string>this.get(); } \
            } \
-           #[Entry(kind: Cli)] function main()-> void { Box b=new Box(9); \
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { Box b=new Box(9); \
              Output.printLine(\"{<int>b.get()} / {b.describe()}\"); }",
         "9 / v=9\n",
         "method_return_overload_this_and_interp",
@@ -2663,7 +2668,7 @@ fn ambiguous_overloaded_call_faults_on_both_backends() {
                class Both implements A, B { constructor(public int v) {} } \
                function pick(A x, B y)->int { return 1; } \
                function pick(B x, A y)->int { return 2; } \
-               #[Entry(kind: Cli)] function main()-> void { Both b=new Both(0); Output.printLine(\"{pick(b, b)}\"); }",
+               #[Entry(kind: EntryKind.Cli)] function main()-> void { Both b=new Both(0); Output.printLine(\"{pick(b, b)}\"); }",
     );
 }
 
@@ -2677,7 +2682,7 @@ fn generic_method_result_echoing_param_is_vm_operand() {
     agree_out_php(
         "import Core.Output; \
            class U { constructor() {} function pick<T>(T a, T b)->T { return a; } } \
-           #[Entry(kind: Cli)] function main()-> void { U u=new U(); int n = u.pick(7, 8) + 1; Output.printLine(\"{n}\"); }",
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { U u=new U(); int n = u.pick(7, 8) + 1; Output.printLine(\"{n}\"); }",
         "8\n",
         "generic_method_echo_first_arg",
     );
@@ -2685,7 +2690,7 @@ fn generic_method_result_echoing_param_is_vm_operand() {
     agree_out_php(
         "import Core.Output; \
            class U { constructor() {} function snd<T>(T a, T b)->T { return b; } } \
-           #[Entry(kind: Cli)] function main()-> void { U u=new U(); float f = u.snd(1.0, 2.5) * 2.0; Output.printLine(\"{f}\"); }",
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { U u=new U(); float f = u.snd(1.0, 2.5) * 2.0; Output.printLine(\"{f}\"); }",
         "5\n",
         "generic_method_echo_second_arg_float",
     );
@@ -2701,7 +2706,7 @@ fn generic_class_member_results_are_vm_operands() {
     agree_out_php(
         "import Core.Output; \
            class Box<T> { constructor(public T value) {} function get()->T { return this.value; } } \
-           #[Entry(kind: Cli)] function main()-> void { Box<int> b=new Box(10); \
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { Box<int> b=new Box(10); \
              int viaMethod = b.get() + 1; int viaField = b.value + 2; \
              Output.printLine(\"{viaMethod} {viaField}\"); }",
         "11 12\n",
@@ -2712,7 +2717,7 @@ fn generic_class_member_results_are_vm_operands() {
     agree_out_php(
         "import Core.Output; import Core.List; \
            class Bag<T> { constructor(public List<T> items) {} function all()->List<T> { return this.items; } } \
-           #[Entry(kind: Cli)] function main()-> void { Bag<int> g=new Bag([4, 5, 6]); \
+           #[Entry(kind: EntryKind.Cli)] function main()-> void { Bag<int> g=new Bag([4, 5, 6]); \
              int s = List.sum(g.all()) + 1; Output.printLine(\"{s}\"); }",
         "16\n",
         "generic_method_list_return_operand",
@@ -2723,7 +2728,7 @@ fn generic_class_member_results_are_vm_operands() {
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.
-    let php = transpile_ok("package Main; import Core.Runtime.Entry; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } #[Entry(kind: Cli)] function main()-> void { var u=new U(); var n = u.id(1); var m = u.applyTwice(2, function(int v)=>v+1); }");
+    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } #[Entry(kind: EntryKind.Cli)] function main()-> void { var u=new U(); var n = u.id(1); var m = u.applyTwice(2, function(int v)=>v+1); }");
     assert!(php.contains("function id(mixed $x): mixed"), "{php}");
     assert!(
         php.contains("function applyTwice(mixed $x, \\Closure $f): mixed"),
@@ -2737,18 +2742,18 @@ fn escaping_and_nested_lambdas_agree() {
     // param, then it is called after the function has returned. Captures live in the closure's Rc,
     // so both backends must agree. (Guards the trailing-lambda-block layout: a lambda defined in a
     // function *before* `main` must not shift `main`'s entry index.)
-    agree("import Core.Output; function mk(int a)->(int)->int{ return function(int b)=>a+b; } #[Entry(kind: Cli)] function main()-> void { var f=mk(10); Output.printLine(\"{f(5)}\"); }"); // 15
-                                                                                                                                                                                            // Escaping closure capturing a `var` local of the enclosing function (not a param).
-    agree("import Core.Output; function mk(int z)->(int)->int{ var a=z*2; return function(int b)=>a+b; } #[Entry(kind: Cli)] function main()-> void { var f=mk(10); Output.printLine(\"{f(5)}\"); }"); // 25
-                                                                                                                                                                                                       // Lexically NESTED lambda: a lambda whose body defines and returns another capturing lambda.
-    agree("import Core.Output; function mk(int a)->(int)->int{ var outer=function(int b)->(int)->int{ return function(int c)=>a+b+c; }; return outer(a); } #[Entry(kind: Cli)] function main()-> void { var f=mk(100); Output.printLine(\"{f(11)}\"); }"); // 100+100+11 = 211
-                                                                                                                                                                                                                                                           // Two functions defined before `main`, the first bearing a lambda — exercises the entry-index
-                                                                                                                                                                                                                                                           // and Op::Call stability under the trailing-lambda block (a regression would call the wrong fn).
-    agree("import Core.Output; function a(int x)->int{ var inc=function(int n)=>n+1; return inc(x); } function b(int x)->int{ return x*10; } #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{a(4)} {b(4)}\"); }");
+    agree("import Core.Output; function mk(int a)->(int)->int{ return function(int b)=>a+b; } #[Entry(kind: EntryKind.Cli)] function main()-> void { var f=mk(10); Output.printLine(\"{f(5)}\"); }"); // 15
+                                                                                                                                                                                                      // Escaping closure capturing a `var` local of the enclosing function (not a param).
+    agree("import Core.Output; function mk(int z)->(int)->int{ var a=z*2; return function(int b)=>a+b; } #[Entry(kind: EntryKind.Cli)] function main()-> void { var f=mk(10); Output.printLine(\"{f(5)}\"); }"); // 25
+                                                                                                                                                                                                                 // Lexically NESTED lambda: a lambda whose body defines and returns another capturing lambda.
+    agree("import Core.Output; function mk(int a)->(int)->int{ var outer=function(int b)->(int)->int{ return function(int c)=>a+b+c; }; return outer(a); } #[Entry(kind: EntryKind.Cli)] function main()-> void { var f=mk(100); Output.printLine(\"{f(11)}\"); }"); // 100+100+11 = 211
+                                                                                                                                                                                                                                                                     // Two functions defined before `main`, the first bearing a lambda — exercises the entry-index
+                                                                                                                                                                                                                                                                     // and Op::Call stability under the trailing-lambda block (a regression would call the wrong fn).
+    agree("import Core.Output; function a(int x)->int{ var inc=function(int n)=>n+1; return inc(x); } function b(int x)->int{ return x*10; } #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{a(4)} {b(4)}\"); }");
     // 5 40
     // A lambda inside a METHOD body (capturing a method param) — the constructor/method compile
     // loops number their lambdas from the same trailing block, so this guards that path too.
-    agree("import Core.Output; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=function(int x)->int{ return x*k; }; return f(this.v); } } #[Entry(kind: Cli)] function main()-> void { var b=new Box(7); Output.printLine(\"{b.scaledBy(3)}\"); }");
+    agree("import Core.Output; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=function(int x)->int{ return x*k; }; return f(this.v); } } #[Entry(kind: EntryKind.Cli)] function main()-> void { var b=new Box(7); Output.printLine(\"{b.scaledBy(3)}\"); }");
     // 21
 }
 
@@ -2759,25 +2764,25 @@ fn html_literal_sugar_agrees() {
     // glob test below adds run ≡ php on examples/guide/html.phg.)
     // A string hole auto-escapes; literal chunks pass through.
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { var n="a&<b>"; Output.printLine(Html.render(html"<h1>{n}</h1>")); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { var n="a&<b>"; Output.printLine(Html.render(html"<h1>{n}</h1>")); }"#,
     ); // <h1>a&amp;&lt;b&gt;</h1>
        // A primitive hole stringifies then escapes.
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { var n=42; Output.printLine(Html.render(html"<p>{n}</p>")); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { var n=42; Output.printLine(Html.render(html"<p>{n}</p>")); }"#,
     ); // <p>42</p>
        // An Html hole embeds verbatim (no double-escape).
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { var inner=Html.text("a&b"); Output.printLine(Html.render(html"<div>{inner}</div>")); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { var inner=Html.text("a&b"); Output.printLine(Html.render(html"<div>{inner}</div>")); }"#,
     ); // <div>a&amp;b</div>
        // A nested html"…" as an Html hole — recursion through resolve_html.
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { var n="x"; var inner=html"<b>{n}</b>"; Output.printLine(Html.render(html"<p>{inner}</p>")); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { var n="x"; var inner=html"<b>{n}</b>"; Output.printLine(Html.render(html"<p>{inner}</p>")); }"#,
     ); // <p><b>x</b></p>
        // Multi-line literal (spans lines for free, like a plain string).
-    agree("import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { var n=\"z\"; Output.printLine(Html.render(html\"<ul>\n  <li>{n}</li>\n</ul>\")); }");
+    agree("import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { var n=\"z\"; Output.printLine(Html.render(html\"<ul>\n  <li>{n}</li>\n</ul>\")); }");
     // A literal with no holes is still Html.
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { Output.printLine(Html.render(html"<hr/>")); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(Html.render(html"<hr/>")); }"#,
     ); // <hr/>
 }
 
@@ -2785,10 +2790,12 @@ fn html_literal_sugar_agrees() {
 fn html_literal_bad_hole_rejected_by_both() {
     // A non-renderable hole type (an enum value) is `E-HTML-HOLE` — rejected on both backends.
     agree_err(
-        r#"import Core.Html; enum E { A() } #[Entry(kind: Cli)] function main()-> void { var p = html"<h1>{new A()}</h1>"; }"#,
+        r#"import Core.Html; enum E { A() } #[Entry(kind: EntryKind.Cli)] function main()-> void { var p = html"<h1>{new A()}</h1>"; }"#,
     );
     // `html"…"` without `import Core.Html;` is `E-HTML-IMPORT` — rejected on both backends.
-    agree_err(r#"#[Entry(kind: Cli)] function main()-> void { var p = html"<h1>x</h1>"; }"#);
+    agree_err(
+        r#"#[Entry(kind: EntryKind.Cli)] function main()-> void { var p = html"<h1>x</h1>"; }"#,
+    );
 }
 
 #[test]
@@ -2796,7 +2803,7 @@ fn transpiles_html_literal_to_kernel_calls() {
     // The desugaring targets only Wave-1/2 natives, so the PHP is the kernel emission: literal
     // chunks as strings, a string hole through htmlspecialchars(ENT_QUOTES), all joined by implode.
     let php = transpile_ok(
-        r#"package Main; import Core.Runtime.Entry; import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { var n="x"; Output.printLine(Html.render(html"<h1>{n}</h1>")); }"#,
+        r#"package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { var n="x"; Output.printLine(Html.render(html"<h1>{n}</h1>")); }"#,
     );
     assert!(php.contains("implode('', ["), "{php}");
     assert!(
@@ -2811,19 +2818,19 @@ fn named_tag_helpers_agree() {
     // so it inherits parity. (interp ≡ VM here; the glob test adds run ≡ php on the guide example.)
     // Content element: attribute value escaped, text child escaped.
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { Output.printLine(Html.render(Html.a([Html.attr("href","/?x=1&y=2")],[Html.text("A & B")]))); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(Html.render(Html.a([Html.attr("href","/?x=1&y=2")],[Html.text("A & B")]))); }"#,
     ); // <a href="/?x=1&amp;y=2">A &amp; B</a>
        // Empty attr list built with `new List<Attr>()` (DEC-214); tags nest.
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { Output.printLine(Html.render(Html.ul(new List<Attr>(),[Html.li(new List<Attr>(),[Html.text("x")])]))); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(Html.render(Html.ul(new List<Attr>(),[Html.li(new List<Attr>(),[Html.text("x")])]))); }"#,
     ); // <ul><li>x</li></ul>
        // A void (self-closing) element.
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { Output.printLine(Html.render(Html.hr(new List<Attr>()))); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(Html.render(Html.hr(new List<Attr>()))); }"#,
     ); // <hr/>
        // A tag helper and the equivalent el() call produce identical bytes.
     agree(
-        r#"import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { Output.printLine(Html.render(Html.p(new List<Attr>(),[Html.text("hi")]))); Output.printLine(Html.render(Html.el("p",new List<Attr>(),[Html.text("hi")]))); }"#,
+        r#"import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(Html.render(Html.p(new List<Attr>(),[Html.text("hi")]))); Output.printLine(Html.render(Html.el("p",new List<Attr>(),[Html.text("hi")]))); }"#,
     ); // <p>hi</p>\n<p>hi</p>
 }
 
@@ -2831,7 +2838,7 @@ fn named_tag_helpers_agree() {
 fn transpiles_named_tag_to_baked_php() {
     // A named tag erases to the same baked closure the kernel uses, with the tag compiled in (no $t).
     let php = transpile_ok(
-        r#"package Main; import Core.Runtime.Entry; import Core.Output; import Core.Html; #[Entry(kind: Cli)] function main()-> void { Output.printLine(Html.render(Html.div(new List<Attr>(),[Html.text("x")]))); }"#,
+        r#"package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Html; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(Html.render(Html.div(new List<Attr>(),[Html.text("x")]))); }"#,
     );
     assert!(php.contains("'<div'"), "{php}");
     assert!(php.contains("'</div>'"), "{php}");
@@ -2940,8 +2947,8 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
 /// directly to read the non-zero status.
 #[test]
 fn main_exit_code_is_byte_identical_across_backends() {
-    let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
-               #[Entry(kind: Cli)] function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n}";
+    let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n\
+               #[Entry(kind: EntryKind.Cli)] function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n}";
     let run = cmd_treewalk_exit(src).expect("run ok");
     let vm = cmd_run_exit(src).expect("vm ok");
     assert_eq!(run, vm, "interp vs VM (stdout, exit)");
@@ -2970,8 +2977,8 @@ fn main_exit_code_is_byte_identical_across_backends() {
 /// `\Main\main()`); `run_php` asserts exit-0, so php is driven directly to read the non-zero status.
 #[test]
 fn class_static_main_exit_code_is_byte_identical_across_backends() {
-    let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
-               class App {\n  #[Entry(kind: Cli)] static function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n  }\n}";
+    let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n\
+               class App {\n  #[Entry(kind: EntryKind.Cli)] static function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n  }\n}";
     let run = cmd_treewalk_exit(src).expect("run ok");
     let vm = cmd_run_exit(src).expect("vm ok");
     assert_eq!(run, vm, "interp vs VM (stdout, exit)");
@@ -3011,7 +3018,7 @@ open class Flyer { open function move() -> string { return "flies"; } }
 class Duck extends Swimmer, Flyer {
     rename Flyer.move as glide
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Duck d = new Duck();
     Output.printLine(d.move());
     Output.printLine(d.glide());
@@ -3575,7 +3582,7 @@ fn transpiled_examples_use_only_tier1_php_functions() {
 fn m7_emitter_uses_correctness_helpers() {
     // P0-1 (int `/` ⇒ `intdiv`, never bare `/`) + P0-4 (int `%` ⇒ native `%`) — both literal-int.
     let div = transpile_ok(
-        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{7 / 2}\"); Output.printLine(\"{5 % 2}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{7 / 2}\"); Output.printLine(\"{5 % 2}\"); }",
     );
     assert!(div.contains("intdiv(7, 2)"), "{div}");
     assert!(div.contains("5 % 2"), "{div}");
@@ -3585,7 +3592,7 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     // P0-4 float path: float `%` ⇒ `fmod` (PHP's `%` int-casts — the divergence); float `/` ⇒ native.
     let fl = transpile_ok(
-        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry(kind: Cli)] function main()-> void { float a=5.5; float b=2.0; Output.printLine(\"{a % b}\"); Output.printLine(\"{a / b}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { float a=5.5; float b=2.0; Output.printLine(\"{a % b}\"); Output.printLine(\"{a / b}\"); }",
     );
     assert!(fl.contains("fmod($a, $b)"), "{fl}");
     assert!(fl.contains("$a / $b"), "{fl}");
@@ -3594,7 +3601,7 @@ fn m7_emitter_uses_correctness_helpers() {
     // bare `/`. The helper branches on operand types at PHP-runtime, so it stays correct (intdiv for
     // ints). This guards that the safe fallback survives all the T6 specialization layers.
     let fb = transpile_ok(
-        "package Main; import Core.Runtime.Entry; import Core.Output; function id<T>(T x) -> T { return x; } #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{id(7) / id(2)}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; function id<T>(T x) -> T { return x; } #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{id(7) / id(2)}\"); }",
     );
     assert!(
         fb.contains("__phorj_div(id(7), id(2))")
@@ -3604,14 +3611,14 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     // P0-3: a bool interpolation hole renders `"true"/"false"` inline (PHP's `(string)bool` ⇒ `1`/``).
     let b = transpile_ok(
-        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{1 < 2}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{1 < 2}\"); }",
     );
     assert!(b.contains("\"true\" : \"false\""), "{b}");
     // P0-2: a compound operand keeps its grouping (no PHP re-association). DEC-255: int `-` is
     // `__phorj_checked_sub`, so `a - (b - c)` nests the calls — the nesting preserves grouping
     // inherently (no operator precedence to re-associate). The boolean `!(a < b)` is unchanged.
     let p = transpile_ok(
-        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry(kind: Cli)] function main()-> void { int a=1; int b=2; int c=3; Output.printLine(\"{a - (b - c)}\"); Output.printLine(\"{!(a < b)}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { int a=1; int b=2; int c=3; Output.printLine(\"{a - (b - c)}\"); Output.printLine(\"{!(a < b)}\"); }",
     );
     assert!(
         p.contains("__phorj_checked_sub($a, __phorj_checked_sub($b, $c))"),
@@ -3620,7 +3627,7 @@ fn m7_emitter_uses_correctness_helpers() {
     assert!(p.contains("!($a < $b)"), "{p}");
     // QW-13: ranges route through the empty/reversed-safe helper (PHP range() descends; Phorj ⇒ []).
     let r = transpile_ok(
-        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry(kind: Cli)] function main()-> void { for (int i in 5..2) { Output.printLine(\"{i}\"); } }",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { for (int i in 5..2) { Output.printLine(\"{i}\"); } }",
     );
     assert!(r.contains("__phorj_range(5, 2, false)"), "{r}");
 }
@@ -3629,7 +3636,7 @@ fn m7_emitter_uses_correctness_helpers() {
 /// leg is gated by the oracle over the division-bearing examples.)
 #[test]
 fn m7_int_division_truncates_toward_zero() {
-    let src = "import Core.Output; #[Entry(kind: Cli)] function main()-> void { Output.printLine(\"{7 / 2} {-7 / 2} {7 / -2} {-7 / -2}\"); }";
+    let src = "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{7 / 2} {-7 / 2} {7 / -2} {-7 / -2}\"); }";
     assert_eq!(cmd_treewalk(&with_pkg(src)).as_deref(), Ok("3 -3 -3 3\n"));
     agree(src);
 }
@@ -3640,12 +3647,12 @@ fn m7_int_division_truncates_toward_zero() {
 #[test]
 fn m7_large_range_faults_identically() {
     agree_err(
-        "import Core.Output; #[Entry(kind: Cli)] function main()-> void { for (int i in 0..2000000000) { Output.printLine(\"{i}\"); } }",
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { for (int i in 0..2000000000) { Output.printLine(\"{i}\"); } }",
     );
-    agree_err("import Core.Output; #[Entry(kind: Cli)] function main()-> void { var xs = 0..=2000000000; Output.printLine(\"{xs[0]}\"); }");
+    agree_err("import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { var xs = 0..=2000000000; Output.printLine(\"{xs[0]}\"); }");
     // The exactly-at-cap boundary is also a fault (span >= MAX_RANGE_LEN), while a small range is fine.
     agree(
-        "import Core.Output; #[Entry(kind: Cli)] function main()-> void { var xs = 0..1000; Output.printLine(\"{xs[999]}\"); }",
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { var xs = 0..1000; Output.printLine(\"{xs[999]}\"); }",
     );
 }
 
@@ -3655,7 +3662,7 @@ fn m7_large_range_faults_identically() {
 #[test]
 fn m7_int_min_div_neg_one_faults_identically() {
     agree_err(
-        "import Core.Output; #[Entry(kind: Cli)] function main()-> void { int x = -9223372036854775807 - 1; Output.printLine(\"{x / -1}\"); }",
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { int x = -9223372036854775807 - 1; Output.printLine(\"{x / -1}\"); }",
     );
 }
 
@@ -3663,13 +3670,13 @@ fn m7_int_min_div_neg_one_faults_identically() {
 /// `FaultMsg` body → same `FaultKind::Panic`). `assert(true)` is a no-op, so the program completes.
 #[test]
 fn faults_panic_intrinsics_agree() {
-    agree_err(r#"#[Entry(kind: Cli)] function main()-> void { panic("boom"); }"#);
-    agree_err("#[Entry(kind: Cli)] function main()-> void { todo(); }");
-    agree_err("#[Entry(kind: Cli)] function main()-> void { unreachable(); }");
-    agree_err(r#"#[Entry(kind: Cli)] function main()-> void { assert(2 < 1, "nope"); }"#);
-    agree_err("#[Entry(kind: Cli)] function main()-> void { assert(false); }");
+    agree_err(r#"#[Entry(kind: EntryKind.Cli)] function main()-> void { panic("boom"); }"#);
+    agree_err("#[Entry(kind: EntryKind.Cli)] function main()-> void { todo(); }");
+    agree_err("#[Entry(kind: EntryKind.Cli)] function main()-> void { unreachable(); }");
+    agree_err(r#"#[Entry(kind: EntryKind.Cli)] function main()-> void { assert(2 < 1, "nope"); }"#);
+    agree_err("#[Entry(kind: EntryKind.Cli)] function main()-> void { assert(false); }");
     agree(
-        r#"import Core.Output; #[Entry(kind: Cli)] function main()-> void { assert(1 < 2, "ok"); Output.printLine("done"); }"#,
+        r#"import Core.Output; #[Entry(kind: EntryKind.Cli)] function main()-> void { assert(1 < 2, "ok"); Output.printLine("done"); }"#,
     );
 }
 
@@ -3678,7 +3685,7 @@ fn faults_panic_intrinsics_agree() {
 #[test]
 fn never_intrinsic_satisfies_return_totality() {
     agree_err(
-        r#"function bad() -> int { panic("never returns"); } #[Entry(kind: Cli)] function main()-> void { var x = bad(); }"#,
+        r#"function bad() -> int { panic("never returns"); } #[Entry(kind: EntryKind.Cli)] function main()-> void { var x = bad(); }"#,
     );
 }
 
@@ -3706,7 +3713,7 @@ fn error_base_type_reserved_and_implementable() {
     assert!(
         check_errs(
             r#"class PError implements Error { constructor(public string message) {} }
-#[Entry(kind: Cli)] function main() -> void { PError p = new PError("x"); if (p instanceof Error) { } }"#
+#[Entry(kind: EntryKind.Cli)] function main() -> void { PError p = new PError("x"); if (p instanceof Error) { } }"#
         )
         .is_empty(),
         "instanceof Error must type-check"
@@ -3725,7 +3732,7 @@ fn error_subtype_value_is_byte_identical() {
     let src = with_pkg(
         r#"import Core.Output;
 class BadInputError implements Error { constructor(public string message) {} }
-#[Entry(kind: Cli)] function main() -> void { BadInputError e = new BadInputError("bad input"); Output.printLine(e.message); }"#,
+#[Entry(kind: EntryKind.Cli)] function main() -> void { BadInputError e = new BadInputError("bad input"); Output.printLine(e.message); }"#,
     );
     let tree = cmd_treewalk(&src);
     let vm = cmd_run(&src);
@@ -3753,7 +3760,7 @@ fn throw_caught_and_finally_runs_on_both_backends() {
     agree(&format!(
         "{ERR_HDR} \
          function parse(int n) -> int throws E1 {{ if (n < 0) {{ throw new E1(\"neg\"); }} return n + 1; }} \
-         #[Entry(kind: Cli)] function main() -> void {{ \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {{ \
            try {{ \
              var a = parse(5); Output.printLine(\"a={{a}}\"); \
              var b = parse(0 - 3); Output.printLine(\"unreached\"); \
@@ -3773,7 +3780,7 @@ fn return_through_finally_and_nested_rethrow_agree() {
            try {{ if (n < 0) {{ throw new E1(\"inner\"); }} return n; }} \
            finally {{ Output.printLine(\"fin {{n}}\"); }} \
          }} \
-         #[Entry(kind: Cli)] function main() -> void {{ \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {{ \
            try {{ var a = pick(2); Output.printLine(\"a={{a}}\"); var b = pick(0 - 1); }} \
            catch (E1 e) {{ Output.printLine(\"outer {{e.message}}\"); }} \
          }}"
@@ -3789,7 +3796,7 @@ fn multiple_and_union_catch_dispatch_agree() {
          function risky(int n) -> int throws E1 | E2 {{ \
            if (n == 1) {{ throw new E1(\"one\"); }} if (n == 2) {{ throw new E2(\"two\"); }} return n; \
          }} \
-         #[Entry(kind: Cli)] function main() -> void {{ for (int i in [1, 2, 3]) {{ \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {{ for (int i in [1, 2, 3]) {{ \
            try {{ var r = risky(i); Output.printLine(\"ok {{r}}\"); }} \
            catch (E1 e) {{ Output.printLine(\"E1 {{e.message}}\"); }} \
            catch (E2 e) {{ Output.printLine(\"E2 {{e.message}}\"); }} \
@@ -3803,7 +3810,7 @@ fn break_and_continue_through_finally_agree() {
     // handler) before transferring — byte-identical on both backends.
     agree(&format!(
         "{ERR_HDR} \
-         #[Entry(kind: Cli)] function main() -> void {{ for (int i in [1, 2, 3, 4]) {{ \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {{ for (int i in [1, 2, 3, 4]) {{ \
            try {{ \
              if (i == 3) {{ break; }} if (i == 2) {{ continue; }} Output.printLine(\"body {{i}}\"); \
            }} finally {{ Output.printLine(\"fin {{i}}\"); }} \
@@ -3818,7 +3825,7 @@ fn propagate_throws_with_question_mark_agrees() {
         "{ERR_HDR} \
          function f() -> int throws E1 {{ throw new E1(\"x\"); }} \
          function g() -> int throws E1 {{ return f()?; }} \
-         #[Entry(kind: Cli)] function main() -> void {{ try {{ var n = g(); }} catch (E1 e) {{ Output.printLine(\"g threw {{e.message}}\"); }} }}"
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {{ try {{ var n = g(); }} catch (E1 e) {{ Output.printLine(\"g threw {{e.message}}\"); }} }}"
     ));
 }
 
@@ -3828,7 +3835,7 @@ fn panic_bypasses_catch_on_both_backends() {
     // enclosing `catch` and aborts identically on both backends (panics are uncatchable by design).
     agree_err(&format!(
         "{ERR_HDR} \
-         #[Entry(kind: Cli)] function main() -> void {{ var xs = [1, 0, 2]; \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {{ var xs = [1, 0, 2]; \
            try {{ for (int x in xs) {{ var q = 10 / x; Output.printLine(\"q {{q}}\"); }} }} \
            catch (E1 e) {{ Output.printLine(\"nope\"); }} }}"
     ));
@@ -3842,7 +3849,7 @@ fn s8_trait_method_reuse_is_byte_identical() {
         "import Core.Output;
 trait Loud { function shout(string s) -> string { return s; } function greet() -> string { return this.shout(\"hi\"); } }
 class Crier { use Loud; }
-#[Entry(kind: Cli)] function main() -> void { Output.printLine(new Crier().greet()); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(new Crier().greet()); }",
         "hi\n",
         "s8_trait_method_reuse",
     );
@@ -3856,7 +3863,7 @@ fn s8_trait_mutable_field_is_byte_identical() {
         "import Core.Output;
 trait Counter { mutable int n; function bump() -> void { this.n = this.n + 1; } function read() -> int { return this.n; } }
 class C { use Counter; constructor() { this.n = 0; } }
-#[Entry(kind: Cli)] function main() -> void { C c = new C(); c.bump(); c.bump(); c.bump(); Output.printLine(\"{c.read()}\"); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { C c = new C(); c.bump(); c.bump(); c.bump(); Output.printLine(\"{c.read()}\"); }",
         "3\n",
         "s8_trait_mutable_field",
     );
@@ -3871,7 +3878,7 @@ fn s8_trait_static_is_per_using_class_copy() {
 trait Counted { static mutable int total = 0; }
 class E { use Counted; }
 class F { use Counted; }
-#[Entry(kind: Cli)] function main() -> void { E.total = 5; F.total = 9; Output.printLine(\"{E.total} {F.total}\"); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { E.total = 5; F.total = 9; Output.printLine(\"{E.total} {F.total}\"); }",
         "5 9\n",
         "s8_trait_static_per_class",
     );
@@ -3885,7 +3892,7 @@ fn s8_trait_private_method_is_byte_identical() {
         "import Core.Output;
 trait Loud { private function amp(string s) -> string { return \"{s}!\"; } function shout(string s) -> string { return this.amp(s); } }
 class C { use Loud; }
-#[Entry(kind: Cli)] function main() -> void { Output.printLine(new C().shout(\"hi\")); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(new C().shout(\"hi\")); }",
         "hi!\n",
         "s8_trait_private_method",
     );
@@ -3899,7 +3906,7 @@ fn s8_trait_constructor_promotion_is_byte_identical() {
         "import Core.Output;
 trait Stamped { constructor(public int id) {} }
 class Doc { use Stamped; }
-#[Entry(kind: Cli)] function main() -> void { Doc d = new Doc(7); Output.printLine(\"{d.id}\"); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Doc d = new Doc(7); Output.printLine(\"{d.id}\"); }",
         "7\n",
         "s8_trait_ctor_promotion",
     );
@@ -3913,7 +3920,7 @@ fn s8_trait_constructor_body_is_byte_identical() {
         "import Core.Output;
 trait Paid { mutable int annual; constructor(int monthly) { this.annual = monthly * 12; } }
 class Emp { use Paid; }
-#[Entry(kind: Cli)] function main() -> void { Emp e = new Emp(1000); Output.printLine(\"{e.annual}\"); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Emp e = new Emp(1000); Output.printLine(\"{e.annual}\"); }",
         "12000\n",
         "s8_trait_ctor_body",
     );
@@ -3927,7 +3934,7 @@ fn s8_trait_get_hook_is_byte_identical() {
         "import Core.Output;
 trait Labeled { mutable string raw; string display { get => \"<{this.raw}>\"; } }
 class Tag { use Labeled; constructor() { this.raw = \"x\"; } }
-#[Entry(kind: Cli)] function main() -> void { Tag t = new Tag(); Output.printLine(t.display); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Tag t = new Tag(); Output.printLine(t.display); }",
         "<x>\n",
         "s8_trait_get_hook",
     );
@@ -3940,7 +3947,7 @@ fn s8_trait_get_set_hook_is_byte_identical() {
         "import Core.Output;
 trait Clamped { mutable int raw; int value { get => this.raw; set(int v) { this.raw = v * 2; } } }
 class Box { use Clamped; constructor() { this.raw = 0; } }
-#[Entry(kind: Cli)] function main() -> void { Box b = new Box(); b.value = 5; Output.printLine(\"{b.value}\"); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Box b = new Box(); b.value = 5; Output.printLine(\"{b.value}\"); }",
         "10\n",
         "s8_trait_get_set_hook",
     );
@@ -3954,7 +3961,7 @@ fn s8_trait_abstract_requirement_satisfied_is_byte_identical() {
         "import Core.Output;
 trait Greeter { abstract function name() -> string; function hello() -> string { return this.name(); } }
 class Person { use Greeter; function name() -> string { return \"Ada\"; } }
-#[Entry(kind: Cli)] function main() -> void { Output.printLine(new Person().hello()); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(new Person().hello()); }",
         "Ada\n",
         "s8_trait_abstract_requirement",
     );
@@ -3975,7 +3982,7 @@ function classify(Code c) -> string {
         Num(n) => \"other ({n})\",
     };
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(classify(new Num(503)));
     Output.printLine(classify(new Num(404)));
     Output.printLine(classify(new Num(200)));
@@ -3994,7 +4001,7 @@ fn backed_enum_value_cases_from_tryfrom_byte_identical() {
         "import Core.Output;
 enum Suit: string { Hearts = \"H\", Spades = \"S\", Clubs = \"C\" }
 enum Priority: int { Low = 1, High = 9 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Suit s = Suit.from(\"S\");
     Output.printLine(s.value);
     for (Suit c in Suit.cases()) { Output.printLine(c.value); }
@@ -4016,7 +4023,7 @@ fn backed_enum_int_value_is_arithmetic_operand() {
     agree_out_php(
         "import Core.Output;
 enum Priority: int { Low = 1, High = 9 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     int a = Priority.from(9).value + 1;
     Priority p = Priority.from(1);
     int b = p.value * 10;
@@ -4037,7 +4044,7 @@ enum Direction { North, South, East, West }
 function nm(Direction d) -> string {
     return match d { North() => \"N\", South() => \"S\", East() => \"E\", West() => \"W\" };
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     for (Direction d in Direction.cases()) { Output.printLine(nm(d)); }
 }",
         "N\nS\nE\nW\n",
@@ -4053,7 +4060,7 @@ function nm(Direction d) -> string {
 fn backed_enum_from_miss_faults_all_backends() {
     agree_err_php(
         "enum Suit: string { Hearts = \"H\", Spades = \"S\" }
-#[Entry(kind: Cli)] function main() -> void { Suit s = Suit.from(\"Z\"); }",
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Suit s = Suit.from(\"Z\"); }",
     );
 }
 
@@ -4072,7 +4079,7 @@ function describe(Circle | Square sh) -> string {
         Square s => \"square\",
     };
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(describe(new Circle(2.0)));
     Output.printLine(describe(new Circle(0.5)));
     Output.printLine(describe(new Square(3.0)));
@@ -4089,7 +4096,7 @@ function describe(Circle | Square sh) -> string {
 fn number_literal_formats_byte_identical() {
     agree_out_php(
         "import Core.Output;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     int mask = 0xFF;
     int flags = 0b1010;
     int perms = 0o17;
@@ -4109,7 +4116,7 @@ fn number_literal_formats_byte_identical() {
 fn bitwise_operators_byte_identical() {
     agree_out_php(
         "import Core.Output;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     int a = 0b1100;
     int b = 0b1010;
     Output.printLine(\"{a & b} {a | b} {a ^ b} {a << 2} {a >> 1} {~a} {(a & b) + 1}\");
@@ -4125,7 +4132,7 @@ fn bitwise_operators_byte_identical() {
 fn console_print_byte_identical() {
     agree_out_php(
         "import Core.Output;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.print(\"a\");
     Output.print(\"b\");
     Output.printLine(\"c\");
@@ -4155,7 +4162,7 @@ function areaOf(Circle | Square sh) -> float {
 function originSum(Line l) -> int {
     return match l { Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x, default => 0, };
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     float a = areaOf(new Circle(2.5));
     float b = areaOf(new Square(4.0));
     int d = originSum(new Line(new Point(1, 2), new Point(10, 20)));
@@ -4186,7 +4193,7 @@ function greet(int id) -> string {
         return \"denied\";
     }
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(greet(1));
     Output.printLine(greet(2));
     Output.printLine(greet(3));
@@ -4209,7 +4216,7 @@ function dim(Circle | Square s) -> float {
     if (!(s instanceof Circle)) { return s.side; }
     return s.r;
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     float a = dim(new Circle(2.5));
     float b = dim(new Square(4.0));
     Output.printLine(\"a={a} b={b}\");
@@ -4231,7 +4238,7 @@ class Square { constructor(public float side) {} }
 function dim(Circle | Square s) -> float {
     if (s instanceof Circle) { return s.r; } else { return s.side; }
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     float a = dim(new Circle(2.5));
     float b = dim(new Square(4.0));
     Output.printLine(\"a={a} b={b}\");
@@ -4257,7 +4264,7 @@ enum Boxed { W(Shape inner) }
 function f(Boxed b) -> float {
     return match b { W(Circle c) => c.r + 1.0, W(Square s) => s.side, default => 0.0, };
 }
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     float a = f(new W(new Circle(2.5)));
     float b = f(new W(new Square(4.0)));
     Output.printLine(\"a={a} b={b}\");
@@ -4278,7 +4285,7 @@ fn p3_byte_safe_stdlib_byte_identical() {
 import Core.String;
 import Core.Math;
 import Core.List;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     string sw = if (String.startsWith(\"hello\", \"he\")) { \"yes\" } else { \"no\" };
     string ew = if (String.endsWith(\"hello\", \"lo\")) { \"yes\" } else { \"no\" };
     string rep = String.repeat(\"ab\", 3);
@@ -4303,7 +4310,7 @@ fn m_num_s2_decimal_div_by_zero_faults_identically() {
     // helper throws the same body — but a fault is not a runnable example (Ok-only rule), so this is a
     // interp ≡ VM parity check, not a 3-way one.
     agree_err(
-        "import Core.Decimal; #[Entry(kind: Cli)] function main() -> void { decimal r = Decimal.divide(10.00d, 0d, 2, new HalfUp()); }",
+        "import Core.Decimal; #[Entry(kind: EntryKind.Cli)] function main() -> void { decimal r = Decimal.divide(10.00d, 0d, 2, new HalfUp()); }",
     );
 }
 
@@ -4312,10 +4319,10 @@ fn m_num_s2_decimal_scale_out_of_range_faults_identically() {
     // A negative `scale` faults `decimal scale out of range` on both backends (FaultKind::Other, but
     // the body is byte-identical so `agree_err` is satisfied).
     agree_err(
-        "import Core.Decimal; #[Entry(kind: Cli)] function main() -> void { decimal r = Decimal.divide(10.00d, 3d, -1, new HalfUp()); }",
+        "import Core.Decimal; #[Entry(kind: EntryKind.Cli)] function main() -> void { decimal r = Decimal.divide(10.00d, 3d, -1, new HalfUp()); }",
     );
     agree_err(
-        "import Core.Decimal; #[Entry(kind: Cli)] function main() -> void { decimal r = Decimal.round(2.345d, -1, new HalfUp()); }",
+        "import Core.Decimal; #[Entry(kind: EntryKind.Cli)] function main() -> void { decimal r = Decimal.round(2.345d, -1, new HalfUp()); }",
     );
 }
 
@@ -4323,7 +4330,7 @@ fn m_num_s2_decimal_scale_out_of_range_faults_identically() {
 fn m_num_s2_decimal_div_overflow_faults_identically() {
     // A target scale that overflows 10^k before the division faults `decimal overflow` on both.
     agree_err(
-        "import Core.Decimal; #[Entry(kind: Cli)] function main() -> void { decimal r = Decimal.divide(1d, 3d, 200, new HalfUp()); }",
+        "import Core.Decimal; #[Entry(kind: EntryKind.Cli)] function main() -> void { decimal r = Decimal.divide(1d, 3d, 200, new HalfUp()); }",
     );
 }
 
@@ -4334,7 +4341,7 @@ fn m6w4_spawn_join_agrees() {
     // `spawn <call>` returns a `Task<T>`; `join` collects the result. Step-2 eager, byte-identical.
     agree(
         "import Core.Output; function sq(int n) -> int { return n*n; } \
-         #[Entry(kind: Cli)] function main() -> void { Task<int> t = spawn sq(7); Output.printLine(\"{t.join()}\"); }",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { Task<int> t = spawn sq(7); Output.printLine(\"{t.join()}\"); }",
     );
 }
 
@@ -4344,7 +4351,7 @@ fn m6w4_fork_join_arithmetic_agrees() {
     // on both backends (the polymorphic arithmetic path; no specialized op needed for parity).
     agree(
         "import Core.Output; function id(int n) -> int { return n; } \
-         #[Entry(kind: Cli)] function main() -> void { Task<int> a = spawn id(2); Task<int> b = spawn id(3); \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { Task<int> a = spawn id(2); Task<int> b = spawn id(3); \
          Output.printLine(\"{a.join() + b.join()}\"); }",
     );
 }
@@ -4353,7 +4360,7 @@ fn m6w4_fork_join_arithmetic_agrees() {
 fn m6w4_channel_send_recv_agrees() {
     // A typed channel: send three, receive three in FIFO order; byte-identical on both backends.
     agree(
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { Channel<int> ch = Channel.create(); \
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { Channel<int> ch = Channel.create(); \
          ch.send(1); ch.send(2); ch.send(3); \
          Output.printLine(\"{ch.recv()} {ch.recv()} {ch.recv()}\"); }",
     );
@@ -4362,7 +4369,7 @@ fn m6w4_channel_send_recv_agrees() {
 #[test]
 fn m6w4_channel_carries_strings_agrees() {
     agree(
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { Channel<string> ch = Channel.create(); \
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { Channel<string> ch = Channel.create(); \
          ch.send(\"a\"); ch.send(\"b\"); Output.printLine(\"{ch.recv()}{ch.recv()}\"); }",
     );
 }
@@ -4370,7 +4377,7 @@ fn m6w4_channel_carries_strings_agrees() {
 #[test]
 fn m6w4_recv_empty_faults_identically() {
     // `recv` on an empty channel faults the same on both backends (no scheduler to yield to in step 2).
-    agree_err("#[Entry(kind: Cli)] function main() -> void { Channel<int> ch = Channel.create(); int x = ch.recv(); }");
+    agree_err("#[Entry(kind: EntryKind.Cli)] function main() -> void { Channel<int> ch = Channel.create(); int x = ch.recv(); }");
 }
 
 #[test]
@@ -4382,7 +4389,7 @@ fn m6w4_spawned_call_fault_agrees() {
     // fault-kind parity; the trace-text parity is verified at the CLI level (the rendered trace).
     agree_err(
         "function risky(int n) -> int { return 100 / n; } \
-         #[Entry(kind: Cli)] function main() -> void { Task<int> t = spawn risky(0); int r = t.join(); }",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { Task<int> t = spawn risky(0); int r = t.join(); }",
     );
 }
 
@@ -4396,7 +4403,7 @@ fn m6w4_cooperative_cutover_interleaves_identically() {
     agree(
         "import Core.Output; \
          function consume(Channel<int> ch) -> int { int v = ch.recv(); Output.printLine(\"got {v}\"); return v; } \
-         #[Entry(kind: Cli)] function main() -> void { \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { \
              Channel<int> ch = Channel.create(); \
              Task<int> t = spawn consume(ch); \
              ch.send(42); \
@@ -4409,7 +4416,7 @@ fn m6w4_cooperative_cutover_interleaves_identically() {
     agree(
         "import Core.Output; \
          function produce(Channel<int> ch) -> int { ch.send(99); return 1; } \
-         #[Entry(kind: Cli)] function main() -> void { \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { \
              Channel<int> ch = Channel.create(); \
              Task<int> p = spawn produce(ch); \
              int v = ch.recv(); \
@@ -4424,7 +4431,7 @@ fn m6w4_cooperative_cutover_interleaves_identically() {
 fn m6w4_spawn_is_a_usable_identifier() {
     // `spawn` is contextual: still usable as an ordinary variable name when not leading a call.
     agree(
-        "import Core.Output; #[Entry(kind: Cli)] function main() -> void { int spawn = 5; Output.printLine(\"{spawn}\"); }",
+        "import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int spawn = 5; Output.printLine(\"{spawn}\"); }",
     );
 }
 
@@ -4458,7 +4465,7 @@ function serve(Http.Router rt, bytes raw): void {
   }
 }
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Http.Router rt = Http.autoRouter();
   serve(rt, b"GET / HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");
 }"#,
@@ -4472,12 +4479,12 @@ fn s1_qualified_form_checks_and_runs_identically_to_member_import() {
     // The `Http.Router` QUALIFIED annotation (S1 collapse) and the member-imported bare `Router`
     // (S2) name the same type and must produce identical check + run + vm output. Both are legal
     // under S2 enforcement; a plain `import Core.Http` + bare `Router` would now be E-INJECTED-TYPE-BARE.
-    let member = "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http; import Core.Http.Router;\n\
+    let member = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Http; import Core.Http.Router;\n\
         function useRouter(Router rt): int { return 0; }\n\
-        #[Entry(kind: Cli)] function main(): void { Router rt = Http.autoRouter(); Output.printLine(\"{useRouter(rt)}\"); }";
-    let qualified = "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http;\n\
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Router rt = Http.autoRouter(); Output.printLine(\"{useRouter(rt)}\"); }";
+    let qualified = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Http;\n\
         function useRouter(Http.Router rt): int { return 0; }\n\
-        #[Entry(kind: Cli)] function main(): void { Http.Router rt = Http.autoRouter(); Output.printLine(\"{useRouter(rt)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Http.Router rt = Http.autoRouter(); Output.printLine(\"{useRouter(rt)}\"); }";
     assert!(
         cli::cmd_check(member).is_ok(),
         "member-import form must check clean"
@@ -4508,7 +4515,7 @@ import Core.Time;
 
 function label(Time.Duration d): string { return "{d.toMilliseconds()}ms"; }
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Time.Duration d = Duration.milliseconds(250);
   Output.printLine(label(d));
 }"#,
@@ -4527,7 +4534,7 @@ fn s2a_http_member_import_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Http.Response;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Response r = Response.text(200, "hi");
   Output.printLine("{r.status}");
 }"#,
@@ -4541,7 +4548,7 @@ fn s2a_time_member_import_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Time.Duration;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Duration d = Duration.milliseconds(250);
   Output.printLine("{d.toMilliseconds()}ms");
 }"#,
@@ -4556,8 +4563,8 @@ fn s2a_time_instant_member_import_is_self_contained() {
     // member-import of just `Instant` must still make it work (self-contained, hidden internal). The
     // clock is non-deterministic, so assert only that it checks + runs identically on both backends.
     let src =
-        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Time.Instant;\n\
-        #[Entry(kind: Cli)] function main(): void { Instant n = Instant.now(); Output.printLine(\"ok\"); }";
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Time.Instant;\n\
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Instant n = Instant.now(); Output.printLine(\"ok\"); }";
     assert!(
         cli::cmd_check(src).is_ok(),
         "member-imported Instant must check"
@@ -4574,9 +4581,9 @@ fn s2a_time_instant_member_import_is_self_contained() {
 #[test]
 fn s2c_bare_injected_type_annotation_is_rejected() {
     let e = cli::cmd_check(
-        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Http;\n\
          function f(Router rt): void { Output.printLine(\"x\"); }\n\
-         #[Entry(kind: Cli)] function main(): void { Output.printLine(\"x\"); }",
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"x\"); }",
     )
     .unwrap_err();
     assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
@@ -4586,9 +4593,9 @@ fn s2c_bare_injected_type_annotation_is_rejected() {
 #[test]
 fn s2c_bare_route_attribute_is_rejected() {
     let e = cli::cmd_check(
-        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http; import Core.Http.Request; import Core.Http.Response;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Http; import Core.Http.Request; import Core.Http.Response;\n\
          #[Route(\"GET\", \"/\")] function home(Request req): Response { return Response.text(200, \"hi\"); }\n\
-         #[Entry(kind: Cli)] function main(): void { Output.printLine(\"x\"); }",
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"x\"); }",
     )
     .unwrap_err();
     // Request/Response are member-imported; only the bare `#[Route]` remains a violation.
@@ -4600,9 +4607,9 @@ fn s2c_bare_route_attribute_is_rejected() {
 fn s2c_member_import_satisfies_enforcement() {
     // The migrated form: member-import makes the bare type legal.
     assert!(cli::cmd_check(
-        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http.Router;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Http.Router;\n\
          function f(Router rt): void { Output.printLine(\"x\"); }\n\
-         #[Entry(kind: Cli)] function main(): void { Output.printLine(\"x\"); }",
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"x\"); }",
     )
     .is_ok());
 }
@@ -4611,9 +4618,9 @@ fn s2c_member_import_satisfies_enforcement() {
 fn s2c_qualified_form_satisfies_enforcement() {
     // The qualified form (needs the module import for the `Http` qualifier) is also legal.
     assert!(cli::cmd_check(
-        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; import Core.Http;\n\
          function f(Http.Router rt): void { Output.printLine(\"x\"); }\n\
-         #[Entry(kind: Cli)] function main(): void { Output.printLine(\"x\"); }",
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"x\"); }",
     )
     .is_ok());
 }
@@ -4622,10 +4629,10 @@ fn s2c_qualified_form_satisfies_enforcement() {
 fn s2c_user_type_shadows_injected_name() {
     // A user's own `Router` (no Core.Http import) is unaffected by the injected-type rule.
     assert!(cli::cmd_check(
-        "package Main; import Core.Runtime.Entry; import Core.Output;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output;\n\
          class Router { constructor() {} }\n\
          function f(Router rt): void { Output.printLine(\"x\"); }\n\
-         #[Entry(kind: Cli)] function main(): void { Router r = new Router(); f(r); }",
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Router r = new Router(); f(r); }",
     )
     .is_ok());
 }
@@ -4643,7 +4650,7 @@ import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;
 #[Http.Route("GET", "/")] function home(Request req): Response { return Response.text(200, "home"); }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Http.Router rt = Http.autoRouter();
   if (var q = Request.parse(b"GET / HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a")) {
     Output.printLine("{rt.handle(q).status}");
@@ -4659,7 +4666,7 @@ fn s2d_qualified_construction_is_byte_identical() {
     agree_out_php(
         r#"import Core.Output;
 import Core.Time;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   Time.Duration d = new Time.Duration(250);
   Output.printLine("{d.toMilliseconds()}ms");
 }"#,
@@ -4683,7 +4690,7 @@ enum A { Dup(int x) }
 enum B { Dup(string y) }
 function tagA(A a): string { return match (a) { A.Dup(x) => "A:{x}" }; }
 function tagB(B b): string { return match (b) { B.Dup(y) => "B:{y}" }; }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   A a = new A.Dup(7);
   B b = new B.Dup("s");
   discard Debug.dump(a);
@@ -4718,7 +4725,7 @@ function driver(int x): MyRes {
   int v = half(x)?;
   return new MyRes.Success(v + 100);
 }
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
   discard Debug.dump(driver(8));
   discard Debug.dump(driver(3));
 }"#;

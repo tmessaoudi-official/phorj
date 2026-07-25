@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M-RT method & function overloading — DYNAMIC multiple dispatch. Several functions (or methods) may
 // share a name with distinct parameter signatures; the RUNTIME types of the arguments select the
@@ -69,7 +70,7 @@ class Formatter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(describe(42));
     Output.printLine(describe("hi"));

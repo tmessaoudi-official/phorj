@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M3 S2 "null safety": optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, and `match` over
 // `T?`. A non-optional `T` can never hold `null` — the checker enforces it (TypeScript
@@ -25,7 +26,7 @@ function describe(int? o): string {
     return match (o) { null => "absent", v => "present {v}" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // A `T?` holds a value or `null`; a non-optional `T` widens to `T?`.
     int? some = 7;

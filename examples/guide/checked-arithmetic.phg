@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Math;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // The DEFAULT for integer overflow is FAIL-FAST: it is a fatal fault, never a silent wrong number (PHP
 // quietly promotes an overflowing int to float — Phorj refuses to). When you want to HANDLE overflow
@@ -15,7 +16,7 @@ function safeSum(int a, int b): int {
     return Math.tryAdd(a, b) ?? 0;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("{Math.tryAdd(2, 3) ?? 0}");
     // 5

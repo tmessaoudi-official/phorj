@@ -11,8 +11,9 @@ import Core.Output;
 import Core.Csv;
 import Core.List;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Parse a row whose middle field is quoted and contains the separator.
     var fields = Csv.parse("id,\"Doe, Jane\",42");

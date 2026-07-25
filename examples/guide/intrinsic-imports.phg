@@ -28,6 +28,7 @@ import Core.Assert;
 import Core.Abort.panic;
 import Core.Abort.unreachable;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Qualified `assert` (whole-module import). Checked on every call; the invariant holds here.
 function half(int n): int {
@@ -56,7 +57,7 @@ function describe(bool flag): string {
     unreachable();
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("half(10)       = {half(10)}");
     Output.printLine("positive(7)    = {positive(7)}");

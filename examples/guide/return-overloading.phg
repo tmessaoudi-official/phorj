@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Return-type overloading (M-RT Slice C): several functions may share a name AND parameter signature,
 // differing only in RETURN type. PHP has no overloading and cannot see the caller's expected type at
@@ -32,7 +33,7 @@ function port(): int {
     return read("port");
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // A typed binding resolves the overload from the declared type — no selector (C2 sink).
     int p = port();

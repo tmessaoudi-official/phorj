@@ -28,7 +28,7 @@ class Greeter {
     }
 }
 
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Greeter g = Greeter("Tak");
     Output.printLine(g.greet());
 
@@ -56,7 +56,7 @@ fn di_inject_in_field_initializer_runs_not_panics() {
     // Regression (DI v1 6C): `inject<T>()` in a FIELD INITIALIZER (not a function body) must be
     // expanded by `desugar_di` — else it survives to the backend and panics `unreachable!`. `desugar_di`
     // walks all expression positions, so this runs and prints the injected value.
-    let src = "package Main;\nimport Core.Runtime.Entry;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.DependencyInjection.Injectable;\n\
         import Core.DependencyInjection.inject;\n\
@@ -66,7 +66,7 @@ fn di_inject_in_field_initializer_runs_not_panics() {
             constructor() {}\n\
             function n(): int { return this.db.n(); }\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void {\n\
+        #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
             Svc s = new Svc();\n\
             Output.printLine(\"{s.n()}\");\n\
         }\n";
@@ -85,13 +85,13 @@ fn di_field_injection_synthesizes_constructor_when_absent() {
     // Slice 3: an injectable with an injected field and NO explicit constructor — `fold_injected_fields`
     // must SYNTHESIZE a constructor (the `None` arm) with the promoted param, so the field is wired and
     // set at construction. Exercises the synthesis branch end-to-end (field actually reads back).
-    let src = "package Main;\nimport Core.Runtime.Entry;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.DependencyInjection.Injectable;\n\
         import Core.DependencyInjection.inject;\n\
         #[Injectable] class Clock { constructor() {} function n(): int { return 3; } }\n\
         #[Injectable] class Logger { private Clock clock; function m(): int { return this.clock.n(); } }\n\
-        #[Entry(kind: Cli)] function main(): void { Logger l = inject<Logger>(); Output.printLine(\"{l.m()}\"); }\n";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Logger l = inject<Logger>(); Output.printLine(\"{l.m()}\"); }\n";
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
@@ -106,7 +106,7 @@ fn di_transient_is_fresh_per_use_but_shares_its_dependency() {
     // one instance threaded to both (its `tick()` runs 1 then 2 → "1 2"). The exact output distinguishes
     // correct behavior from BOTH failure modes (transient wrongly shared → "1 2 …"; shared dep wrongly
     // transient → "… 1 1").
-    let src = "package Main;\nimport Core.Runtime.Entry;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.DependencyInjection.Injectable;\n\
         import Core.DependencyInjection.Transient;\n\
@@ -114,7 +114,7 @@ fn di_transient_is_fresh_per_use_but_shares_its_dependency() {
         #[Injectable] class Counter { private mutable int n; constructor() { this.n = 0; } function tick(): int { this.n = this.n + 1; return this.n; } }\n\
         #[Injectable] #[Transient] class Worker { private mutable int local; constructor(private Counter counter) { this.local = 0; } function own(): int { this.local = this.local + 1; return this.local; } function shared(): int { return this.counter.tick(); } }\n\
         #[Injectable] class App { constructor(private Worker w1, private Worker w2) {} function report(): string { return \"own {this.w1.own()} {this.w2.own()} shared {this.w1.shared()} {this.w2.shared()}\"; } }\n\
-        #[Entry(kind: Cli)] function main(): void { App app = inject<App>(); Output.printLine(app.report()); }\n";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { App app = inject<App>(); Output.printLine(app.report()); }\n";
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
@@ -127,14 +127,14 @@ fn di_transient_root_inlines_construction() {
     // Slice 4b: `inject<Transient>()` where the ROOT is transient — exercises the `root.transient` emit
     // branch (the factory must inline `return new Worker(diDb)` with the shared `Db` hoisted, and NO
     // dangling `diWorker` var). Runs and reads the shared dep back.
-    let src = "package Main;\nimport Core.Runtime.Entry;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.DependencyInjection.Injectable;\n\
         import Core.DependencyInjection.Transient;\n\
         import Core.DependencyInjection.inject;\n\
         #[Injectable] class Db { constructor() {} function n(): int { return 9; } }\n\
         #[Injectable] #[Transient] class Worker { constructor(private Db db) {} function go(): int { return this.db.n(); } }\n\
-        #[Entry(kind: Cli)] function main(): void { Worker w = inject<Worker>(); Output.printLine(\"{w.go()}\"); }\n";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Worker w = inject<Worker>(); Output.printLine(\"{w.go()}\"); }\n";
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
@@ -151,7 +151,7 @@ fn program_without_main_errors() {
 #[test]
 fn division_by_zero_does_not_panic() {
     let e = run(r#"import Core.Output;
-#[Entry(kind: Cli)] function main() -> void { Output.printLine("{1 / 0}"); }"#)
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{1 / 0}"); }"#)
     .unwrap_err();
     assert!(e.message.contains("division by zero"), "{}", e.message);
 }

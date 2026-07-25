@@ -27,9 +27,9 @@ fn range_analysis_proves_strict_lt_plus_one_counter() {
     // The canonical counted loop `while (i < n) { i = i + 1; }`: strict `<`, `+1`, single writer, guard
     // on the induction slot at the loop header → PROVEN (exactly one). Byte-identical to the VM oracle.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function count(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; } return i; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "count"),
@@ -56,11 +56,11 @@ fn range_analysis_rejects_le_ne_and_wrong_slot_guards() {
     // so each keeps its overflow guard: `<=` (`+1` at `i64::MAX` would overflow), `!=` (not `<`), and a
     // guard on a DIFFERENT slot than the increment (`n < 100` guards `n`, not `i`). None may be proven.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function le(int n)    -> int { mutable int i = 0; while (i <= n)   { i = i + 1; } return i; }\n\
          function ne(int n)    -> int { mutable int i = 0; while (i != n)   { i = i + 1; } return i; }\n\
          function wrong(int n) -> int { mutable int i = 0; while (n < 100)  { i = i + 1; } return i; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     for name in ["le", "ne", "wrong"] {
         assert_eq!(
@@ -86,7 +86,7 @@ fn range_analysis_rejects_double_write_and_nested_loop() {
     // guarded body contains an inner back-edge → condition (4) fails → outer not proven; the inner `!=`
     // counter is not proven either → zero proven total.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function dbl(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; i = i + 1; } return i; }\n\
          function nest(int n) -> int {\n\
            mutable int i = 0;\n\
@@ -97,7 +97,7 @@ fn range_analysis_rejects_double_write_and_nested_loop() {
            }\n\
            return i;\n\
          }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     // The soundness-critical assertion is that NEITHER counter is proven (both keep their overflow
     // guards). `dbl`/`nest` are not necessarily unboxed-eligible (the block-local `j` / statement shape
@@ -121,14 +121,14 @@ fn range_analysis_float_counted_loop_matches_vm_and_drops_guard() {
     // ONLY int-arith op → it is proven AND `needs_sticky` becomes false → all sticky machinery is gone.
     // Correctness = bit-exact float result vs the VM oracle (the WIN itself is measured separately).
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function bench(int iters, float r) -> float {\n\
            mutable float acc = 0.0;\n\
            mutable int i = 0;\n\
            while (i < iters) { acc = acc * r + 0.5; i = i + 1; }\n\
            return acc;\n\
          }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "bench"),
@@ -163,9 +163,9 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
     // multiply must STILL funnel to the VM redo — proving dropping the counter's guard did not drop the
     // accumulator's (3^40 > i64::MAX, so the VM faults overflow around i=39).
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function f(int n) -> int { mutable int s = 1; mutable int i = 0; while (i < n) { s = s * 3; i = i + 1; } return s; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "f"),
@@ -201,7 +201,7 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
 #[test]
 fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          import Core.Runtime.Integer.UncheckedOverflow;\n\
          #[UncheckedOverflow]\n\
          function wadd(int a, int b) -> int { return a + b; }\n\
@@ -209,7 +209,7 @@ fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
          function wsub(int a, int b) -> int { return a - b; }\n\
          #[UncheckedOverflow]\n\
          function wmul(int a, int b) -> int { return a * b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     // The overflow edges that WOULD fault in a checked function must WRAP here (no redo, no fault).
     let cases: &[(&str, i64, i64, i64)] = &[
@@ -251,11 +251,11 @@ fn qualified_unchecked_overflow_attribute_is_recognized_and_wraps_on_the_vm() {
     // faulting — the VM reads that same flag, so a wrap proves end-to-end recognition on the VM path (the
     // interpreter reads the same predicate via `attrs_unchecked`; the shipped example covers interp ≡ VM).
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          import Core.Runtime.Integer;\n\
          #[Integer.UncheckedOverflow]\n\
          function wadd(int a, int b) -> int { return a + b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "wadd");
     assert!(
@@ -278,12 +278,12 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
 
     // (1) `#[UncheckedOverflow]` outer calling a CHECKED inner: the checked inner must STILL fault on overflow
     // even though the caller wraps — the callee's own flag governs, not the caller's.
-    const A: &str = "package Main; import Core.Runtime.Entry;\n\
+    const A: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Runtime.Integer.UncheckedOverflow;\n\
         function inner(int n) -> int { return n + 1; }\n\
         #[UncheckedOverflow] function outer(int n) -> int { return inner(n); }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
     let a_jit = crate::cli::cmd_run(A);
     let a_oracle = crate::cli::cmd_treewalk(A);
     match (&a_jit, &a_oracle) {
@@ -296,12 +296,12 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
 
     // (2) reverse — a CHECKED outer calling an `#[UncheckedOverflow]` inner: the inner WRAPS (its own flag),
     // and re-entering the checked outer afterward must restore checking (the save/restore).
-    const B: &str = "package Main; import Core.Runtime.Entry;\n\
+    const B: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Runtime.Integer.UncheckedOverflow;\n\
         #[UncheckedOverflow] function inner(int n) -> int { return n + 1; }\n\
         function outer(int n) -> int { return inner(n); }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
     let b_jit = crate::cli::cmd_run(B).expect("wrapping inner returns a value");
     let b_oracle = crate::cli::cmd_treewalk(B).expect("wrapping inner returns a value");
     assert_eq!(
@@ -319,7 +319,7 @@ fn phg_run_hook_hits_the_jit_on_the_int_list_vertical() {
     // P-2c DELIVERY-PATH proof: the exact `bench/micro/listindex.phg` shape — an all-int
     // `MakeList` (seals FLAT as raw i64 slots) with a data-dependent `Index` — must JIT through
     // the hook AND stay byte-identical to the interpreter oracle.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
@@ -332,7 +332,7 @@ fn phg_run_hook_hits_the_jit_on_the_int_list_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "int-list vertical must match the oracle");
@@ -352,13 +352,13 @@ fn phg_run_hook_hits_the_jit_on_the_int_list_vertical() {
 #[test]
 fn jit_int_list_oob_fault_matches_the_vm() {
     // Out-of-range on a flat int list → code 5 → the VM redo renders the canonical bounds fault.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(): int {\n\
           List<int> xs = [10, 20];\n\
           return xs[5];\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
     let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
     assert!(
@@ -371,13 +371,13 @@ fn jit_int_list_oob_fault_matches_the_vm() {
 #[test]
 fn jit_int_list_negative_values_and_index_edges_match_the_oracle() {
     // Negative VALUES flow through the raw-i64 slots untouched; index 0 and len-1 both hit.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(): int {\n\
           List<int> xs = [0 - 5, 7, 0 - 9223372036854775807];\n\
           return xs[0] + xs[1] + xs[2] % 1000;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "negative int-list values must match");

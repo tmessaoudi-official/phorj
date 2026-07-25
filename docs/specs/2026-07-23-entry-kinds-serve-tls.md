@@ -26,16 +26,22 @@ function serveConfig(): Http.ServeConfig {
 #[Config]
 function appSettings(): AppSettings { return new AppSettings("hello"); }
 
-#[Entry(kind: Web)]
+#[Entry(kind: EntryKind.Web)]
 function web(Http.ServeConfig cfg, AppSettings app): void {
     Http.serve(cfg, function(Request req): Response {
         return Response.text("{app.greeting} {req.path}");
     });
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function tool(): void { /* the same program can also ship a CLI role */ }
 ```
+
+> **DEC-337 (2026-07-25):** the kind is an INJECTED enum variant `Core.Runtime.EntryKind`, reached
+> QUALIFIED and import-gated — `import Core.Runtime.EntryKind;` then `kind: EntryKind.Cli`. A bare
+> `kind: Cli` is `E-INJECTED-VARIANT-BARE` (nothing in the wind, like `Option.Some`); an unimported
+> `EntryKind.Cli` is `E-UNIMPORTED`; the fully-qualified `Core.Runtime.EntryKind.Cli` is self-gating.
+> Reserved kinds are real variants (`E-ENTRY-KIND-RESERVED`). Compile-time-only marker (Inv 5).
 
 ## 2. Rulings elaborated (all locked)
 

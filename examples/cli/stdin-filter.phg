@@ -16,8 +16,9 @@ import Core.Output;
 import Core.Input;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     if (Input.isInteractive()) {
         Output.printLine("pipe me data:  cat file | phg run stdin-filter.phg");

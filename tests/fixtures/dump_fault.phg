@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Secret;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function compute(int n): int {
     int doubled = n * 2;
@@ -11,7 +12,7 @@ function compute(int n): int {
     return xs[n] + doubled;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 
 function main(): void {
     Output.printLine("{compute(5)}");

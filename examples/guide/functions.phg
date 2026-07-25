@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Functions in Phorj: typed parameters and a return type.
 // A function with no `-> T` (like `main`) returns nothing.
@@ -30,7 +31,7 @@ function banner(string title): void {
     Output.printLine("== {title} ==");
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     banner("functions");
     Output.printLine("add(2, 3) = {add(2, 3)}");

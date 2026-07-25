@@ -14,6 +14,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A checked exception (implements the built-in `Error` marker so it is throwable/catchable).
 class NegativeInputError implements Error {
@@ -38,7 +39,7 @@ function applyOr(int x, int fallback, (int) => int throws NegativeInputError op)
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // A THROWING lambda: it declares `throws NegativeInputError`, so the `throw` in its body discharges
     // against that clause. Its inferred type is `(int) => int throws NegativeInputError`.

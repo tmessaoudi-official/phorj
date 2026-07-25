@@ -7,11 +7,11 @@ use super::*;
 fn phg_run_hook_actually_hits_the_jit() {
     // A silent 100%-fallback to the VM would pass every byte-identity check identically and prove
     // nothing — so this asserts the hit counter is non-zero, i.e. the native path genuinely ran.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }
 \
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{fib(10)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{fib(10)}\"); }";
     // Byte-identity: the jit-wired run must match the interpreter oracle (Invariant 2).
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
@@ -44,7 +44,7 @@ fn phg_run_hook_hits_the_jit_on_an_int_loop() {
     // `bench/micro/intadd.phg` shape.) Byte-identity alone can't prove the flip — a silent VM fallback
     // false-greens it — so this asserts the hit counter fires, i.e. the widened subset genuinely runs
     // native at the CLI.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters) -> int {\n\
           mutable int acc = 0;\n\
@@ -52,7 +52,7 @@ fn phg_run_hook_hits_the_jit_on_an_int_loop() {
           while (i < iters) { acc = acc + (i * 3 - 1); i = i + 1; }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main() -> void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -81,7 +81,7 @@ fn phg_run_hook_hits_the_jit_on_the_string_vertical() {
     // string consts, `MakeList`, varying `Index`, `Concat`, `String.length`, `Pop` — must JIT
     // through the `Op::Call` hook AND stay byte-identical to the interpreter oracle. 1000
     // iterations also exercise the `UbCtx` free-list steady state (temps are recycled, not grown).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -95,7 +95,7 @@ fn phg_run_hook_hits_the_jit_on_the_string_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -127,7 +127,7 @@ fn phg_run_hook_hits_the_jit_on_the_listappend_vertical() {
     // release ladder recycles the record, keeping its grown buffer). Must JIT through the
     // `Op::Call` hook AND stay byte-identical to the interpreter oracle. 2000 iterations
     // cross the 256 reset boundary several times, proving record recycling reaches steady state.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -144,7 +144,7 @@ fn phg_run_hook_hits_the_jit_on_the_listappend_vertical() {
           }\n\
           return acc + List.length(xs);\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -177,7 +177,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapinsert_vertical() {
     // reset recycles the record (grown buffer kept). Must JIT through the `Op::Call` hook
     // AND stay byte-identical to the interpreter oracle. 2000 iterations cross the 64-step
     // reset boundary many times, proving record recycling reaches steady state.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           List<string> keys = [\"alpha\", \"beta\", \"gamma\", \"delta\", \"epsi\", \"zeta\", \"eta\", \"theta\"];\n\
@@ -195,7 +195,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapinsert_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -226,7 +226,7 @@ fn phg_run_hook_hits_the_jit_on_the_hofpipe_vertical() {
     // `List.count` with a capture-free Bool predicate consuming that owned ACL (record
     // recycled at the release). The varying capture `k` proves the capture is live. Must JIT
     // through the `Op::Call` hook AND stay byte-identical to the interpreter oracle.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -241,7 +241,7 @@ fn phg_run_hook_hits_the_jit_on_the_hofpipe_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -272,7 +272,7 @@ fn phg_run_hook_hits_the_jit_on_the_forin_pointer_walk() {
     // header Lt one unsigned compare, `xs[j]` ONE load, `j+1` a `+64` bump. Must JIT through
     // the `Op::Call` hook AND stay byte-identical to the interpreter oracle (including the
     // empty-list edge: start == end skips the loop like `0 < 0`).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
@@ -286,7 +286,7 @@ fn phg_run_hook_hits_the_jit_on_the_forin_pointer_walk() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -315,7 +315,7 @@ fn phg_run_hook_hits_the_jit_on_general_list_append() {
     // does not apply and the clone helper carries full PHP value semantics: `xs` must stay
     // 3 elements forever while each `ys` is a fresh 4-element list (read back via the boxed
     // Index helper). Also exercises the str-list variant. hits > 0 + byte-identity.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -331,7 +331,7 @@ fn phg_run_hook_hits_the_jit_on_general_list_append() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -359,7 +359,7 @@ fn phg_run_hook_hits_the_jit_on_the_native_bridge2_and_str_eq() {
     // The generic pure-native bridge (join / contains / splitOnce / drop route through the
     // REGISTERED natives — single-sourced kernels) + string `==`/`!=` via the `eq_val` helper.
     // Every result folds into the checksum; hits > 0 + byte-identity.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -388,7 +388,7 @@ fn phg_run_hook_hits_the_jit_on_the_native_bridge2_and_str_eq() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -417,7 +417,7 @@ fn phg_run_hook_hits_the_jit_on_handle_args_and_builder_returns() {
     // const into a free fn; a str arg into a METHOD), and the builder-method return shape —
     // `this` (an Inst param) in, a FRESH Owned instance out (the relaxed transfer gate: an
     // Owned Inst provably comes from the callee's own MakeInstance). hits > 0 + byte-identity.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -443,7 +443,7 @@ fn phg_run_hook_hits_the_jit_on_handle_args_and_builder_returns() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -470,7 +470,7 @@ fn phg_run_hook_hits_the_jit_on_handle_args_and_builder_returns() {
 fn phg_run_hook_hits_the_jit_on_bool_consts_and_to_string() {
     // Bool consts (`mutable bool flag = true`) + `Conversion.toString(int)` (the interpolation
     // renderer's exact bytes) in the unboxed subset. hits > 0 + byte-identity.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         import Core.Conversion;\n\
@@ -491,7 +491,7 @@ fn phg_run_hook_hits_the_jit_on_bool_consts_and_to_string() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -516,7 +516,7 @@ fn phg_run_hook_hits_the_jit_on_list_fields() {
     // W-slice: HANDLE-LIST instance fields — a List<string> ctor arg MOVES into the field
     // word; GetField borrows it (List.length over the borrow); the per-iteration reassignment
     // releases the instance AND its list field (steady state across 2000 fresh instances).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         class Row {\n\
@@ -535,7 +535,7 @@ fn phg_run_hook_hits_the_jit_on_list_fields() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -565,7 +565,7 @@ fn phg_run_hook_hits_the_jit_on_wide_two_slot_instances() {
     // the B-slot index, 7..14 in B. Mixed int/str/list fields exercise routed loads/stores
     // AND the wide release (B recycled before A) across 2000 fresh instances. The high-index
     // fields (8, 9, 10) live in slot B — reading them proves the two-hop addressing.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -589,7 +589,7 @@ fn phg_run_hook_hits_the_jit_on_wide_two_slot_instances() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -623,7 +623,7 @@ fn phg_run_hook_hits_the_jit_on_union_dyn_params() {
     // iterations — the sqlbuild builder shape end to end). No float arm here: a float
     // CONST in a calling function still trips the v1 "float subset is leaf-only" gate
     // (a separate lever); the Dyn float tag (1) is wired and waits on that gate.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         class Q {\n\
@@ -643,7 +643,7 @@ fn phg_run_hook_hits_the_jit_on_union_dyn_params() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -671,7 +671,7 @@ fn phg_run_hook_takes_list_fields_from_dying_temp_receivers() {
     // to exclude Str fields only, so the taken list word was freed under the reader:
     // recycled-slot reuse could hand the consumer a different live value — wrong bytes,
     // not just a redo). Steady state over 2000 temps proves take + skip + no leak.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -687,7 +687,7 @@ fn phg_run_hook_takes_list_fields_from_dying_temp_receivers() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -717,7 +717,7 @@ fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would
     // mutate or recycle the record IN PLACE under the walker). The whole function must
     // decline (fall back to the VM) and stay byte-identical — snapshot semantics preserved.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -734,7 +734,7 @@ fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(50)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(50)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -760,7 +760,7 @@ fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
 fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
     // The `Concat` helper routes through the single-sourced `PhStr::concat` kernel: exercise BOTH
     // representations (short → inline, long → heap) and multibyte UTF-8 through the jit-wired run.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -774,7 +774,7 @@ fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(64)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(64)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -788,7 +788,7 @@ fn jit_string_vertical_index_fault_matches_the_vm() {
     // An out-of-range `Index` inside the JIT'd vertical returns the fault sentinel → code 5 → the
     // hook falls back to the VM, which renders the canonical fault. The jit-wired run must fail with
     // the SAME fault body as the interpreter (byte-identical failure behaviour, Invariant 1).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -802,7 +802,7 @@ fn jit_string_vertical_index_fault_matches_the_vm() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(5)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(5)}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
     let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
     assert!(
@@ -821,7 +821,7 @@ fn phg_run_hook_hits_the_jit_on_the_map_vertical() {
     // string keys → int values (seals FLAT), a flat key list, and a string-subscripted `Index`
     // (the inline hash-probe) — must JIT through the `Op::Call` hook AND stay byte-identical to
     // the interpreter oracle. 1000 iterations exercise the probe across all four keys.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"a\" => 10, \"b\" => 20, \"c\" => 30, \"d\" => 40];\n\
@@ -835,7 +835,7 @@ fn phg_run_hook_hits_the_jit_on_the_map_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -865,7 +865,7 @@ fn phg_run_hook_hits_the_jit_on_the_maphas_vertical() {
     // `if` (the inline bucket probe returning a Bool). Two of the six probes ("e"/"f") MISS — those
     // exercise the NEW fast-path empty-bucket→false codegen that has no precedent in mapget (which
     // faults there). Must JIT through the `Op::Call` hook AND stay byte-identical to the oracle.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Map;\n\
         function bench(int iters): int {\n\
@@ -879,7 +879,7 @@ fn phg_run_hook_hits_the_jit_on_the_maphas_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -909,7 +909,7 @@ fn maphas_vertical_slow_path_canon0_key_matches_the_oracle() {
     // ("x"+"y" ⇒ absent) must be byte-identical to the oracle — the miss exercises the helper's
     // `present:0, code:0` clean-false answer (not a code-5 redo). Also proves the fast path is not
     // silently the only correct answer.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Map;\n\
         function bench(int iters): int {\n\
@@ -923,7 +923,7 @@ fn maphas_vertical_slow_path_canon0_key_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(50)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(50)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -958,7 +958,7 @@ fn phg_run_hook_hits_the_jit_on_the_setcontains_vertical() {
     // iterations — the miss exercises the exhausted-scan→CLEAN-false codegen. Must JIT through the
     // `Op::Call` hook AND stay byte-identical to the interpreter oracle. A silent VM fallback would
     // false-green the byte-identity assert, so `hits>0` is the load-bearing check (proves the flip).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Set;\n\
         function bench(int iters): int {\n\
@@ -971,7 +971,7 @@ fn phg_run_hook_hits_the_jit_on_the_setcontains_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1008,7 +1008,7 @@ fn jit_setcontains_zero_dedup_and_collision_edges_match_the_oracle() {
     // s0 CONTAINS 0 (and negatives); s1 does NOT. The needle `i % 5` sweeps {0,1,2,3,4} so 0 is
     // probed against BOTH sets every 5 iterations. Duplicate literals (0,0 / 7,7) prove dedup. The
     // 10-distinct-element s0 rounds to a 32-bucket table with collisions across the walk.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Set;\n\
         function bench(int iters): int {\n\
@@ -1026,7 +1026,7 @@ fn jit_setcontains_zero_dedup_and_collision_edges_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(200)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(200)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1068,7 +1068,7 @@ fn jit_setcontains_oversized_set_falls_back_to_vm_and_matches_the_oracle() {
         .collect::<Vec<_>>()
         .join(", ");
     let src = String::from(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          import Core.Output;\n\
          import Core.Set;\n\
          function f(): int {\n\
@@ -1081,7 +1081,7 @@ fn jit_setcontains_oversized_set_falls_back_to_vm_and_matches_the_oracle() {
            if (Set.contains(s, 9999)) { acc = acc + 1; }\n\
            return acc;\n\
          }\n\
-         #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{f()}\"); }";
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{f()}\"); }";
     let jit_out =
         crate::cli::cmd_run(&src).expect("jit-wired run ok (falls back to VM on the seal)");
     let oracle = crate::cli::cmd_treewalk(&src).expect("interpreter oracle ok");
@@ -1102,7 +1102,7 @@ fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
     // while >22-byte totals (the MIN/MAX bodies) take the fused helper: BOTH paths exercise
     // in ONE loop. The `check` map probe makes `acc` depend on the EXACT rendered bytes (a
     // wrong render misses the key and faults on the JIT leg only → outputs diverge → caught).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -1122,7 +1122,7 @@ fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1153,7 +1153,7 @@ fn phg_run_hook_hits_the_jit_on_the_string_accumulator() {
     // buffer reuse at each reset. `String.length(s)` reads the record len inline. The `check`
     // map probe pins the EXACT accumulated bytes early (byte-identity through the ACC path),
     // and the length-fold covers every append thereafter.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -1174,7 +1174,7 @@ fn phg_run_hook_hits_the_jit_on_the_string_accumulator() {
           }\n\
           return acc + String.length(s);\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1207,7 +1207,7 @@ fn phg_run_hook_hits_the_jit_on_the_chain_accumulator() {
     // the chain), and the length-fold covers every statement thereafter. Before the chain
     // arm this shape leaked one builder record per statement (the accumulator_site
     // positional hole) and re-boxed the WHOLE accumulated string per statement.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -1228,7 +1228,7 @@ fn phg_run_hook_hits_the_jit_on_the_chain_accumulator() {
           }\n\
           return acc + String.length(s);\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1258,7 +1258,7 @@ fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
     // lookup routes through the helper into the canonical `map_index` kernel. Byte-identity must
     // hold on that path too (long AND short keys mixed — the short one also stays boxed here,
     // exercising the helper's slot-key + boxed-map combination).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"a-deliberately-long-key-over-22-bytes\" => 7, \"b\" => 20];\n\
@@ -1272,7 +1272,7 @@ fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(64)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(64)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "boxed-map lookup must match the oracle");
@@ -1283,13 +1283,13 @@ fn jit_map_vertical_duplicate_keys_dedup_like_the_kernel() {
     // Duplicate literal keys are legal (checker only type-checks them): `build_map`'s PHP
     // semantics — FIRST position, LAST value — must survive the flat seal. `m[\"a\"]` must read 2,
     // never 1, on all backends.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(): int {\n\
           Map<string, int> m = [\"a\" => 1, \"b\" => 5, \"a\" => 2];\n\
           return m[\"a\"] * 100 + m[\"b\"];\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "dedup semantics must match the oracle");
@@ -1303,7 +1303,7 @@ fn jit_map_vertical_duplicate_keys_dedup_like_the_kernel() {
 fn jit_map_vertical_larger_map_walks_buckets_and_matches_the_oracle() {
     // 12 pairs → a 32-bucket table: exercises the open-addressed walk (collisions + wraparound)
     // across every key, byte-identical to the oracle.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"k0\" => 1, \"k1\" => 2, \"k2\" => 3, \"k3\" => 4,\n\
@@ -1320,7 +1320,7 @@ fn jit_map_vertical_larger_map_walks_buckets_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(240)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(240)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "bucket-walk lookup must match the oracle");
@@ -1335,13 +1335,13 @@ fn jit_map_vertical_missing_key_fault_matches_the_vm() {
     // A missing key in a FLAT map exhausts the inline probe → code 5 → the hook falls back to the
     // VM, which renders the canonical `\"map key not found\"` fault — byte-identical failure
     // behaviour (Invariant 1).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(): int {\n\
           Map<string, int> m = [\"a\" => 10];\n\
           return m[\"zzz\"];\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
     let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
     assert!(
@@ -1359,7 +1359,7 @@ fn jit_map_vertical_concat_key_probes_through_the_helper() {
     // An inline-concat result carries hash 0 (\"unavailable\") — the inline probe must PUNT to the
     // helper (which compares bytes), never miss-fault a present key. `\"a\" + \"b\"` == \"ab\" is in
     // the map; the lookup must succeed with the right value on the jit-wired path.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"ab\" => 11, \"cd\" => 22];\n\
@@ -1373,7 +1373,7 @@ fn jit_map_vertical_concat_key_probes_through_the_helper() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(64)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(64)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1393,10 +1393,10 @@ fn jit_stack_overflow_threshold_matches_the_oracle() {
     use crate::limits::MAX_CALL_DEPTH;
     for n in (MAX_CALL_DEPTH - 3)..=(MAX_CALL_DEPTH + 2) {
         let src = format!(
-            "package Main; import Core.Runtime.Entry;\n\
+            "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
              import Core.Output;\n\
              function countdown(int n) -> int {{ if (n <= 0) {{ return 0; }} return countdown(n - 1); }}\n\
-             #[Entry(kind: Cli)] function main() -> void {{ Output.printLine(\"{{countdown({n})}}\"); }}"
+             #[Entry(kind: EntryKind.Cli)] function main() -> void {{ Output.printLine(\"{{countdown({n})}}\"); }}"
         );
         let jit = crate::cli::cmd_run(&src);
         let oracle = crate::cli::cmd_treewalk(&src);

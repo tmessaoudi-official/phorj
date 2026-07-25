@@ -2,13 +2,14 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A-6 — PHP-familiar `foreach (xs as x)` iteration, kept alongside Phorj's typed `for (T x in xs)`.
 // The element type is INFERRED from the iterable (no `var`/type needed), and an optional
 // `with int i` adds a 0-based position counter — the thing you'd otherwise hand-roll with a
 // separate `mutable int i = 0;`. Both forms desugar to the same for-in, so all three backends and
 // the transpiled PHP (`foreach ($xs as $x)`) stay byte-identical.
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<string> langs = ["Phorj", "PHP", "TypeScript"];
     // Value form — `w` is inferred as `string` from `langs: List<string>`.

@@ -10,7 +10,7 @@ fn phg_run_hook_hits_the_jit_on_the_listcontains_vertical() {
     // i % 12)` in a hot `while` — the needle both HITS (present values) and MISSES (exhausted scan →
     // CLEAN false). Must JIT through the `Op::Call` hook AND stay byte-identical to the interpreter;
     // a silent VM fallback would false-green the byte-identity assert, so `hits>0` is load-bearing.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -23,7 +23,7 @@ fn phg_run_hook_hits_the_jit_on_the_listcontains_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -50,7 +50,7 @@ fn phg_run_hook_hits_the_jit_on_the_listcontains_vertical() {
 fn jit_listcontains_found_miss_negative_edges_match_the_oracle() {
     // Edge coverage through the inline scan (in a hot loop so the vertical fires): a NEGATIVE element
     // (i64 compare, not unsigned), FIRST + LAST positions present, and an absent needle → clean false.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -66,7 +66,7 @@ fn jit_listcontains_found_miss_negative_edges_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1200)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
     assert_eq!(jit_out, oracle, "listcontains edges must match the oracle");
@@ -84,7 +84,7 @@ fn jit_listcontains_two_lists_same_needles_stay_exact() {
     // any future caching/memo lever cross-hitting between receivers (a memo attempt here was
     // REVERTED 2026-07-23: 12 rotating pairs thrashed the 8 direct-mapped lines and the
     // per-miss install call cost 3x the plain scan — see the scorecard's listcontains note).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -99,7 +99,7 @@ fn jit_listcontains_two_lists_same_needles_stay_exact() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "memo eviction rounds must stay exact");

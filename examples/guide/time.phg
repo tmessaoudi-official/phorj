@@ -11,8 +11,9 @@ import Core.Time;
 import Core.Time.Duration;
 import Core.Time.Instant;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Pin the clock so `now()` is deterministic (2023-11-14T22:13:20Z = 1700000000000 ms).
     Time.freeze(1700000000000);

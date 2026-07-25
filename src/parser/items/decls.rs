@@ -605,7 +605,7 @@ impl Parser {
                 name.push_str(&seg);
             }
             // Attribute args reuse the call argument parser, so both positional string-literal
-            // patterns (`#[Route("GET", r"/users/{id}")]`) AND named args (`#[Entry(kind: Web)]`,
+            // patterns (`#[Route("GET", r"/users/{id}")]`) AND named args (`#[Entry(kind: EntryKind.Web)]`,
             // DEC-331 D1) parse uniformly. Named args land as `Expr::NamedArg`; the checker reads
             // them structurally (never as runtime expressions — attribute args are not type-checked).
             let args = if self.eat(&TokenKind::LParen) {

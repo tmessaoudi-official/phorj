@@ -11,6 +11,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A checked exception (implements the built-in `Error` marker so it is throwable/catchable).
 class RangeError implements Error {
@@ -37,7 +38,7 @@ function makePercentage(int p): Percentage throws RangeError {
     return new Percentage(p)?;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
         Percentage ok = new Percentage(75);

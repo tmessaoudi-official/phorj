@@ -11,6 +11,7 @@ import Core.Http.Response;
 import Core.Http.Route;
 import Core.Http.Router;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Api {
     #[Route("GET", "/ping")]
@@ -34,7 +35,7 @@ function show(Router rt, string path): void {
     Output.printLine("{path} -> {st} " + (Bytes.toString(resp.body) ?? "?"));
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Router rt = Http.autoRouter();
     show(rt, "/");

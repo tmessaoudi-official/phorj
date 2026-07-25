@@ -9,6 +9,7 @@ package Main;
 // under real PHP.
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Variants: RuntimeException (SPL), ArrayObject (SPL container), Exception (engine-core),
 // DateInterval (date) all collide with PHP builtins and are mangled; Plain is ordinary.
@@ -24,7 +25,7 @@ function describe(Event e): string {
     };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     List<Event> events = [
         new RuntimeException("boom"),

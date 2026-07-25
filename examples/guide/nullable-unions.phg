@@ -6,6 +6,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Circle {
     constructor(public int r) {}
@@ -33,7 +34,7 @@ function describe((Circle | Square)? shape): string {
     };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(describe(lookup(0)));
     Output.printLine(describe(lookup(1)));

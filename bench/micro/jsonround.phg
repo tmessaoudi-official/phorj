@@ -56,7 +56,7 @@ function bench(int iters): int {
     return acc;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     int iters = 200000;
     int warm = bench(iters);

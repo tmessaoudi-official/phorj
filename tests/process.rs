@@ -21,11 +21,11 @@ fn process_args_are_visible_to_the_program() {
     let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_process_args(vec!["hello".into(), "world".into()]);
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Process;
 import Core.List;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     var a = Process.arguments();
     Output.printLine("n={List.length(a)}");
     for (string s in a) { Output.printLine(s); }
@@ -49,10 +49,10 @@ fn env_natives_under_controlled_environment() {
 
     // get → value | null (composes with `??`).
     let get_src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Environment;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     Output.printLine(Environment.get("PHORJ_IT_PRESENT") ?? "<unset>");
     Output.printLine(Environment.get("PHORJ_IT_DEFINITELY_UNSET_XYZ") ?? "<unset>");
 }"#;
@@ -60,11 +60,11 @@ import Core.Environment;
 
     // all → a Map keyed by every env var; the set var is present, and keys come back sorted.
     let all_src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Environment;
 import Core.Map;
-#[Entry(kind: Cli)] function main() -> void {
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
     var e = Environment.all();
     Output.printLine("has={Map.has(e, \"PHORJ_IT_PRESENT\")}");
 }"#;
@@ -80,9 +80,9 @@ fn main_int_return_is_the_exit_code() {
     // `main(): int` — the returned int is the process exit code; stdout is unaffected, and both
     // backends agree on (stdout, exit).
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
-#[Entry(kind: Cli)] function main(): int {
+#[Entry(kind: EntryKind.Cli)] function main(): int {
     Output.printLine("done");
     return 7;
 }"#;
@@ -93,9 +93,9 @@ import Core.Output;
 #[test]
 fn main_void_exits_zero() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
-#[Entry(kind: Cli)] function main(): void { Output.printLine("hi"); }"#;
+#[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine("hi"); }"#;
     assert_eq!(cmd_treewalk_exit(src).unwrap(), ("hi\n".to_string(), 0));
     assert_eq!(cmd_run_exit(src).unwrap(), ("hi\n".to_string(), 0));
 }
@@ -106,10 +106,10 @@ fn main_receives_argv_as_a_parameter() {
     let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_process_args(vec!["a".into(), "bb".into(), "ccc".into()]);
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.List;
-#[Entry(kind: Cli)] function main(List<string> args): int {
+#[Entry(kind: EntryKind.Cli)] function main(List<string> args): int {
     for (string s in args) { Output.printLine(s); }
     return List.length(args);
 }"#;

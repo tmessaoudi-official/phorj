@@ -11,6 +11,7 @@ import Core.Output;
 import Core.List;
 import Core.Map;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A function can return a tuple: its type is written `(A, B)`.
 function minMax(int a, int b): (int, int) {
@@ -22,7 +23,7 @@ function labelled(int n): (int, string) {
     return (n, if (n == 1) { "one" } else { "many" });
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Construct + destructure. `lo`/`hi` are `int` (from the tuple positions), so they add as ints.
     var (lo, hi) = minMax(9, 4);

@@ -17,6 +17,7 @@ package Main;
 import Core.Output;
 import Core.Json;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Render a parsed JSON value's top-level shape — demonstrates matching every variant.
 function shapeOf(Json j): string {
@@ -31,7 +32,7 @@ function shapeOf(Json j): string {
     };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Build a JSON document with the enum constructors. `Json` is compiler-injected, so its variants
     // are reached QUALIFIED (`Json.Object`, never a bare `Object` — "nothing in the wind").

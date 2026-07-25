@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function fact(int n): int {
     return if (n <= 1) { 1 } else { n * fact(n - 1) };
@@ -16,7 +17,7 @@ function applyTwice(int x, (int) => int f): int {
     return f(f(x));
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine("{fact(5)}");
     Output.printLine(greet("Ada"));

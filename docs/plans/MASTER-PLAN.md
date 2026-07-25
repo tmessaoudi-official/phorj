@@ -126,7 +126,8 @@ Build cluster, in order (D10a):
   eager/LAZY switch (`Http.ServeConfig.requestParsing`) ships with slice 3's ServeConfig** —
   deferral + build deviations recorded (spec §8 + register). `queryparse` bench = HARD-FLAGGED
   loss (joins the flip-all-losses campaign).
-- **(3) `#[Entry(kind: Cli|Web|Desktop|Mobile|Worker|Embedded)]`** + per-type `#[Config]`-injected
+- **(3) `#[Entry(kind: EntryKind.{Cli|Web|Desktop|Mobile|Worker|Embedded})]`** (DEC-337: injected enum
+  variant, qualified + import-gated, never in the wind) + per-type `#[Config]`-injected
   typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
   contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`.
 - **Separate QUEUED design slices (specs frozen, same wave + DEC-335):** labeled

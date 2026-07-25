@@ -18,6 +18,7 @@ import Core.Http.Response;
 import Core.Http.Route;
 import Core.Http.Router;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 #[Route("GET", "/")]
 function home(Request req): Response {
@@ -61,7 +62,7 @@ function show(Router rt, bytes raw): void {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // `Http.autoRouter()` lowers to the explicit registration of every `#[Route]` handler above.
     Router rt = Http.autoRouter();

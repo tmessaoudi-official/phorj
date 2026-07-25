@@ -12,8 +12,9 @@ package Main;
 import Core.Output;
 import Core.Path;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var p = "/var/log/app.log";
     Output.printLine("path          = {p}");

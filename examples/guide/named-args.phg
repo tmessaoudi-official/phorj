@@ -10,6 +10,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 function greet(string name, string greeting = "Hello", bool loud = false): string {
     string base = "{greeting}, {name}";
@@ -23,7 +24,7 @@ class Box {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // FREE FUNCTION — only the required arg by name; both defaults apply.
     Output.printLine(greet(name: "Ada"));

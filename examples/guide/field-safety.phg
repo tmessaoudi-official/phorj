@@ -11,6 +11,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Account {
     constructor(public string owner, int opening) {
@@ -31,7 +32,7 @@ class Account {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var a = new Account("ada", 100);
     Output.printLine(a.describe());

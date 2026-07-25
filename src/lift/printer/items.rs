@@ -66,8 +66,8 @@ impl Printer {
 
     pub(super) fn function(&mut self, f: &FunctionDecl) -> Result<(), String> {
         // DEC-191 / DEC-331: print item attributes WITH their arguments. The synthesized entry now
-        // carries `#[Entry(kind: Cli)]` (kind is REQUIRED since DEC-331 — bare `#[Entry]` is rejected
-        // by the checker), so the printer must render args; `self.expr` handles `NamedArg` (`kind: Cli`).
+        // carries `#[Entry(kind: EntryKind.Cli)]` (kind is REQUIRED since DEC-331 — bare `#[Entry]` is rejected
+        // by the checker), so the printer must render args; `self.expr` handles `NamedArg` (`kind: EntryKind.Cli`).
         for attr in &f.attrs {
             if attr.args.is_empty() {
                 self.line(&format!("#[{}]", attr.name));

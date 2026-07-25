@@ -6,6 +6,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 interface Renderer {
     function render(int n): string;
@@ -30,7 +31,7 @@ function show(Renderer & Printer rp): void {
     Output.printLine(rp.render("hey"));
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     show(new Both());
 }

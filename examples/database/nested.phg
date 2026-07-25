@@ -20,6 +20,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Every field is a PROMOTED constructor parameter, so its name IS its (possibly dotted) column name.
 class Country {
@@ -40,7 +41,7 @@ class Sale {
 
 // `order` is a REQUIRED nested entity (depth 4: order.customer.country.*); `shipTo` is an OPTIONAL
 // nested entity — `null` when the LEFT JOIN finds no shipping country.
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

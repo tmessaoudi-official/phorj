@@ -6,9 +6,9 @@ use super::*;
 #[test]
 fn jits_int_arithmetic_and_matches_vm_oracle() {
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function calc(int a, int b) -> int { return a * b + a - b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "calc");
     let args = vec![Value::Int(6), Value::Int(7)];
@@ -30,9 +30,9 @@ fn jits_int_arithmetic_and_matches_vm_oracle() {
 #[test]
 fn jit_overflow_faults_with_the_shared_kernel_string() {
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function mul(int a, int b) -> int { return a * b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "mul");
     let args = vec![Value::Int(i64::MAX), Value::Int(2)];
@@ -50,9 +50,9 @@ fn jit_overflow_faults_with_the_shared_kernel_string() {
 #[test]
 fn jit_division_by_zero_faults_like_the_kernel() {
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function divi(int a, int b) -> int { return a / b; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "divi");
 
@@ -77,14 +77,14 @@ fn jits_while_loop_matches_vm_oracle() {
     // A `while` loop exercises a back-edge (`Jump` to the loop header) and `SetLocal` on a mutable —
     // the heart of the memory-operand-stack control-flow design.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function sumTo(int n) -> int {\n\
            mutable int s = 0;\n\
            mutable int i = 1;\n\
            while (i <= n) { s = s + i; i = i + 1; }\n\
            return s;\n\
          }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "sumTo");
     for n in [0_i64, 1, 5, 10] {
@@ -102,9 +102,9 @@ fn jits_if_else_selects_the_correct_branch() {
     // Distinguishable per-branch return values (111 vs 222) so a swapped JumpIfFalse true/false edge
     // is caught — not just "no fault" (advisor trap 3). Both edges are checked against the oracle.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function pick(int a) -> int { if (a < 10) { return 111; } else { return 222; } }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "pick");
     for a in [3_i64, 9, 10, 42] {
@@ -124,7 +124,7 @@ fn jits_comparisons_and_not_match_the_vm_oracle() {
     // result and is caught, not just "no fault". The arg pairs hit BOTH edges of every comparison,
     // all checked against the VM oracle.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function cmps(int a, int b) -> int {\n\
            mutable int r = 0;\n\
            if (a > b) { r = r + 1; }\n\
@@ -134,7 +134,7 @@ fn jits_comparisons_and_not_match_the_vm_oracle() {
            if (!(a < b)) { r = r + 16; }\n\
            return r;\n\
          }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "cmps");
     for (a, b) in [(5_i64, 3_i64), (3, 5), (4, 4), (-1, -1), (7, -2)] {
@@ -152,9 +152,9 @@ fn jits_function_with_an_unused_param() {
     // `b` is never referenced, but the stack must still be seeded with BOTH args (locals are stack
     // slots seeded from the arguments) — otherwise `GetLocal(0)` reads a slot the seed never created.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function firstArg(int a, int b) -> int { return a; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "firstArg");
     let jit = jit_int(&program, f, &[Value::Int(7), Value::Int(99)]);
@@ -170,9 +170,9 @@ fn jit_neg_overflow_faults_with_the_shared_kernel_string() {
     // Negating `i64::MIN` is a clean `"integer overflow"` via the shared `int_neg` kernel, never a
     // panic — byte-identical to `exec.rs`.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function neg(int a) -> int { return -a; }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "neg");
     match compile_and_run(&program, f, &[Value::Int(i64::MIN)]).expect("neg is eligible") {
@@ -190,10 +190,10 @@ fn non_int_function_is_default_denied() {
     // A body with output (`CallNative`/`Const` of a string) is outside the int-arith subset — the
     // default-deny predicate must reject it so callers fall back to the VM.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          import Core.Output;\n\
          function greet() -> void { Output.printLine(\"hi\"); }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "greet");
     assert!(
@@ -213,12 +213,12 @@ fn jits_recursive_fib_matches_vm_oracle() {
     // rides the native self-call path (FuncId resolved at finalize) + the shared value stack. Every
     // value is checked against the VM oracle across the base-case edge (n < 2) and the recursive one.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function fib(int n) -> int {\n\
            if (n < 2) { return n; }\n\
            return fib(n - 1) + fib(n - 2);\n\
          }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "fib");
     for n in [0_i64, 1, 2, 3, 5, 10, 15] {
@@ -237,10 +237,10 @@ fn jits_cross_function_call_matches_vm_oracle() {
     // call, not just self-recursion), proving the multi-function module + the (pop arity, push result)
     // net stack effect composes for a non-recursive callee.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function add1(int x) -> int { return x + 1; }\n\
          function useAdd(int x) -> int { return add1(x) + add1(x); }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "useAdd");
     for x in [0_i64, 1, 7, -3] {
@@ -259,13 +259,13 @@ fn jits_self_recursive_and_cross_call_together() {
     // of the fib and useAdd paths, which they exercise only separately. The machinery is uniform, but
     // this proves the two call kinds compose in one frame. Checked against the VM oracle.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function base(int n) -> int { return n + 100; }\n\
          function rec(int n) -> int {\n\
            if (n < 1) { return base(n); }\n\
            return rec(n - 1) + base(n);\n\
          }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "rec");
     for n in [0_i64, 1, 2, 4, 8] {
@@ -284,10 +284,10 @@ fn jit_propagates_a_callee_fault() {
     // post-call status check (`status != 0` → fault-exit) unchanged — the distinct b2 branch from the
     // depth cap. Checked against the VM oracle's rendering, like the direct div-by-zero test.
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function boom(int a, int b) -> int { return a / b; }\n\
          function callsBoom(int a) -> int { return boom(a, 0); }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "callsBoom");
     let vm_fault = crate::vm::Vm::new(&program)
@@ -320,12 +320,12 @@ fn measures_fib_native_jit_vs_vm() {
     // memory (the mandate's other column) is deferred to the proper `phg benchmark` JIT wiring.
     use std::time::Instant;
     let program = compile_source(
-        "package Main;\nimport Core.Runtime.Entry;\n\
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          function fib(int n) -> int {\n\
            if (n < 2) { return n; }\n\
            return fib(n - 1) + fib(n - 2);\n\
          }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "fib");
     const N: i64 = 30;
@@ -382,9 +382,9 @@ fn jit_deep_recursion_faults_like_the_vm_stack_overflow() {
     // frames fit, and asserts INSIDE the closure because `Value`/`JitRun` hold `Rc` (not `Send`) — the
     // program is rebuilt in-thread and only two `String`s cross the join. The fault is oracle-checked
     // against the VM (the string is a bare literal, not single-sourced, so drift must be caught here).
-    const SRC: &str = "package Main;\nimport Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         function forever(int n) -> int { return forever(n + 1); }\n\
-        #[Entry(kind: Cli)] function main() -> void {}";
+        #[Entry(kind: EntryKind.Cli)] function main() -> void {}";
     let handle = std::thread::Builder::new()
         .stack_size(64 * 1024 * 1024)
         .spawn(|| {

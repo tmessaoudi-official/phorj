@@ -10,6 +10,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class MathUtil {
     static function square(int n): int {
@@ -31,7 +32,7 @@ class Greeter {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Direct static calls on the class.
     Output.printLine("square(6) = {MathUtil.square(6)}");

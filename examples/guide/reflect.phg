@@ -17,6 +17,7 @@ import Core.Reflection;
 import Core.Set;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 class Point {
     constructor(public int x, public int y) {}
@@ -46,7 +47,7 @@ function dbl(int n): int {
     return n * 2;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Scalars report their PHP-visible kind.
     Output.printLine("int    -> {Reflection.kind(42)}");

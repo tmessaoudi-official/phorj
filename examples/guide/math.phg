@@ -3,13 +3,14 @@ package Main;
 import Core.Output;
 import Core.Math;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M3 Track B Wave 2 — the `Core.Math` stdlib module. Each function erases to the PHP builtin of
 // the same name. Float ops (`sqrt`/`pow`/`floor`/`ceil`) return `float`; `abs`/`min`/`max` are
 // `int`. Every finite float renders byte-identically across all three backends (the transpiler's
 // `__phorj_float` helper reproduces Rust's shortest-round-trip `f64` Display) — see
 // `examples/guide/floats.phg` for the full magnitude/precision showcase.
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // float math
     float root = Math.sqrt(16.0);

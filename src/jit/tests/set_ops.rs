@@ -29,7 +29,7 @@ fn assert_jit_hits(src: &str, label: &str) -> String {
 fn phg_run_hook_hits_the_jit_on_the_setdifference_vertical() {
     // The exact `bench/micro/setdifference.phg` shape: constant `a`, rotating `bs[i % 4]`
     // (a SetList index), the survivor CARDINALITY folds into the checksum.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.Set;\n\
@@ -50,13 +50,13 @@ fn phg_run_hook_hits_the_jit_on_the_setdifference_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "setdifference vertical");
 }
 
 #[test]
 fn phg_run_hook_hits_the_jit_on_the_setunion_vertical() {
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.Set;\n\
@@ -77,7 +77,7 @@ fn phg_run_hook_hits_the_jit_on_the_setunion_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(1600)}\"); }";
     assert_jit_hits(SRC, "setunion vertical");
 }
 
@@ -85,7 +85,7 @@ fn phg_run_hook_hits_the_jit_on_the_setunion_vertical() {
 fn jit_set_ops_same_pair_both_ops_never_alias() {
     // difference(a, b) AND union(a, b) on the SAME pair in one loop: the two ops memoize in
     // SEPARATE entry ranges (24..32 vs 32..40) — an aliased line would swap counts (2 vs 12).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Set;\n\
         function bench(int iters): int {\n\
@@ -99,7 +99,7 @@ fn jit_set_ops_same_pair_both_ops_never_alias() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "set ops no-alias");
 }
 
@@ -107,7 +107,7 @@ fn jit_set_ops_same_pair_both_ops_never_alias() {
 fn jit_set_op_results_answer_contains_and_chain() {
     // A memoized RESULT is a real sealed flat set: `Set.contains` probes it inline, and it can
     // be an OPERAND of the next op (chained difference-of-union).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Set;\n\
         function bench(int iters): int {\n\
@@ -130,14 +130,14 @@ fn jit_set_op_results_answer_contains_and_chain() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "set ops contains/chain");
 }
 
 #[test]
 fn jit_set_difference_disjoint_subset_and_empty_results() {
     // Edges: b ⊇ a (empty difference), disjoint (full difference), and union with a subset.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Set;\n\
         function bench(int iters): int {\n\
@@ -154,6 +154,6 @@ fn jit_set_difference_disjoint_subset_and_empty_results() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     assert_jit_hits(SRC, "set ops edges");
 }

@@ -16,6 +16,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // The common case: a side-effecting function returns `void` — nothing to capture.
 function note(string msg): void {
@@ -27,7 +28,7 @@ function note(string msg): void {
 function doNothing(): empty {
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     note("start");
     // Hold the empty value — the explicit escape from E-VOID-CAPTURE.

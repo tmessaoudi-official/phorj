@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M-faults Slice 2 — checked exceptions: `throws`, `throw`, `try`/`catch`/`finally`, and `?`-throws
 // propagation. A thrown type must implement the built-in `Error` marker (transpiles to a PHP class
@@ -54,7 +55,7 @@ class Validator {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Multiple `catch` clauses dispatch by type; `finally` runs on every path (ok, caught, or
     // propagated). `?`-throws inside `doubled` surfaces the exception here.

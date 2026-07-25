@@ -12,8 +12,9 @@ package Main;
 import Core.Output;
 import Core.UriModule.Uri;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var query = "name=Café & Co?";
     var form = Uri.encodeForm(query);

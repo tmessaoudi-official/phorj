@@ -6,11 +6,11 @@
 //!
 //! ```text
 //!   #[Config] function appConfig() -> AppConfig { return new AppConfig(...); }
-//!   #[Entry(kind: Cli)]  function main(config: AppConfig) -> void { ... }
+//!   #[Entry(kind: EntryKind.Cli)]  function main(config: AppConfig) -> void { ... }
 //! ```
 //! desugars the entry to
 //! ```text
-//!   #[Entry(kind: Cli)]  function main() -> void { AppConfig config = appConfig(); ... }
+//!   #[Entry(kind: EntryKind.Cli)]  function main() -> void { AppConfig config = appConfig(); ... }
 //! ```
 //!
 //! A PRE-CHECK desugar (mirrors [`crate::checker::desugar_di`] / `desugar_db`): the rewrite happens
@@ -250,14 +250,14 @@ mod tests {
         })
     }
 
-    const BASE: &str = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Runtime.Config;\n\
+    const BASE: &str = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Runtime.Config;\n\
                         class AppConfig { }\n";
 
     #[test]
     fn injects_provider_call_and_drops_the_param() {
         let src = format!(
             "{BASE}#[Config] function appConfig(): AppConfig {{ return new AppConfig(); }}\n\
-             #[Entry(kind: Cli)] function main(AppConfig config): void {{ }}\n"
+             #[Entry(kind: EntryKind.Cli)] function main(AppConfig config): void {{ }}\n"
         );
         let prog = run(&src).expect("desugar ok");
         let main = prog
@@ -287,8 +287,9 @@ mod tests {
 
     #[test]
     fn missing_provider_is_e_config_missing() {
-        let src =
-            format!("{BASE}#[Entry(kind: Cli)] function main(AppConfig config): void {{ }}\n");
+        let src = format!(
+            "{BASE}#[Entry(kind: EntryKind.Cli)] function main(AppConfig config): void {{ }}\n"
+        );
         assert_eq!(run(&src).unwrap_err(), vec!["E-CONFIG-MISSING"]);
     }
 
@@ -297,7 +298,7 @@ mod tests {
         let src = format!(
             "{BASE}#[Config] function a(): AppConfig {{ return new AppConfig(); }}\n\
              #[Config] function b(): AppConfig {{ return new AppConfig(); }}\n\
-             #[Entry(kind: Cli)] function main(AppConfig config): void {{ }}\n"
+             #[Entry(kind: EntryKind.Cli)] function main(AppConfig config): void {{ }}\n"
         );
         assert_eq!(run(&src).unwrap_err(), vec!["E-CONFIG-DUP"]);
     }
@@ -317,7 +318,7 @@ mod tests {
         // even with a provider present.
         let src = format!(
             "{BASE}#[Config] function appConfig(): AppConfig {{ return new AppConfig(); }}\n\
-             #[Entry(kind: Cli)] function main(List<string> args): void {{ }}\n"
+             #[Entry(kind: EntryKind.Cli)] function main(List<string> args): void {{ }}\n"
         );
         let prog = run(&src).expect("ok");
         let main = prog
@@ -341,7 +342,7 @@ mod tests {
 
     #[test]
     fn no_config_no_candidate_is_identity() {
-        let src = "package Main;\nimport Core.Runtime.Entry;\n#[Entry(kind: Cli)] function main(): void { }\n";
+        let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n#[Entry(kind: EntryKind.Cli)] function main(): void { }\n";
         let prog = run(src).expect("ok");
         let main = prog
             .items

@@ -17,13 +17,14 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `+` composes naturally and chains left-to-right, like any binary operator.
 function fullName(string first, string last): string {
     return first + " " + last;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Concatenation — literals, a call result, and a bound variable all compose.
     string who = fullName("Ada", "Lovelace");

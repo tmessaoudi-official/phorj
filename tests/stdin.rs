@@ -28,11 +28,11 @@ fn both_with_input(src: &str, input: &[u8], expected: &str) {
 #[test]
 fn read_all_returns_the_whole_pipe() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Input;
 import Core.String;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     string all = Input.readAll();
     Output.printLine("len={String.length(all)}");
     Output.printLine(all);
@@ -43,11 +43,11 @@ import Core.String;
 #[test]
 fn read_all_bytes_is_exact() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Input;
 import Core.Bytes;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     bytes b = Input.readAllBytes();
     Output.printLine("{Bytes.length(b)}");
 }"#;
@@ -58,11 +58,11 @@ import Core.Bytes;
 #[test]
 fn read_line_strips_one_terminator_and_nulls_at_eof() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Input;
 import Core.String;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     mutable int n = 0;
     while (true) {
         string? l = Input.readLine();
@@ -87,10 +87,10 @@ import Core.String;
 #[test]
 fn lines_iterator_is_foreach_able_and_lazy_past_eof() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Input;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     for (string line in Input.lines()) {
         Output.printLine("> {line}");
     }
@@ -103,10 +103,10 @@ import Core.Input;
 #[test]
 fn read_all_after_read_line_gets_the_remainder() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Input;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     string? first = Input.readLine();
     Output.printLine("first={first ?? "-"}");
     Output.printLine("rest=[{Input.readAll()}]");
@@ -121,10 +121,10 @@ import Core.Input;
 #[test]
 fn is_interactive_is_false_under_a_pipe() {
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 import Core.Input;
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Output.printLine("{Input.isInteractive()}");
 }"#;
     // An override models piped (non-tty) stdin.
@@ -135,9 +135,9 @@ import Core.Input;
 fn input_is_import_gated() {
     // Nothing in the wind: without `import Core.Input;` the `Input` name does not exist.
     let src = r#"package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
-#[Entry(kind: Cli)] function main(): void { Output.printLine(Input.readAll()); }"#;
+#[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(Input.readAll()); }"#;
     let err = cmd_treewalk(src).unwrap_err();
     assert!(
         err.contains("Input"),

@@ -6,8 +6,9 @@ package Main;
 import Core.Output;
 import Acme.Strutil;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Qualified calls into the vendored dependency (leaf-qualified, exactly like core.*).
     Output.printLine(Strutil.banner("Phorj deps"));

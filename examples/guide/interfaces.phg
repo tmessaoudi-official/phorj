@@ -8,6 +8,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A contract: anything that can speak.
 interface Speaker {
@@ -40,7 +41,7 @@ function announce(Speaker s): string {
     return s.speak();
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var d = new Dog("Rex");
     var r = new Robot();

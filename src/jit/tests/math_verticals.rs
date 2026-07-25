@@ -12,7 +12,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathmax_vertical() {
     // is byte-identical to the interpreter's `i64::max` kernel; a silent VM fallback would false-green
     // the byte-identity assert, so `hits>0` is the load-bearing check (proves the perf flip fired).
     // Deterministic output only (checksum via printLine — no monotonicNanos timing field).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Math;\n\
         function bench(int iters): int {\n\
@@ -24,7 +24,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathmax_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -56,7 +56,7 @@ fn jit_mathmax_negative_operands_match_the_oracle() {
     // and under `umax` a negative i64 reads as a huge unsigned value → the wrong branch). Byte-
     // identity against the interpreter oracle (authoritative signed `i64::max`) discriminates, and
     // `hits>0` keeps a silent VM fallback from false-greening it.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Math;\n\
         function bench(int iters): int {\n\
@@ -68,7 +68,7 @@ fn jit_mathmax_negative_operands_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -98,7 +98,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathmin_vertical() {
     // so nothing constant-folds and the native call cannot be hoisted. The inline Cranelift `smin`
     // is byte-identical to the interpreter's `i64::min` kernel; a silent VM fallback would false-green
     // the byte-identity assert, so `hits>0` is the load-bearing check (proves the perf flip fired).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Math;\n\
         function bench(int iters): int {\n\
@@ -110,7 +110,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathmin_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -142,7 +142,7 @@ fn jit_mathmin_negative_operands_match_the_oracle() {
     // and under `umin` a negative i64 reads as a huge unsigned value → the wrong branch). Byte-
     // identity against the interpreter oracle (authoritative signed `i64::min`) discriminates, and
     // `hits>0` keeps a silent VM fallback from false-greening it.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Math;\n\
         function bench(int iters): int {\n\
@@ -154,7 +154,7 @@ fn jit_mathmin_negative_operands_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -185,7 +185,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathsign_vertical() {
     // the branchless `pos - neg` materialization is exercised. The inline result is byte-identical to
     // the interpreter's `i64::from(n>0) - i64::from(n<0)` kernel; a silent VM fallback would false-
     // green the byte-identity assert, so `hits>0` is the load-bearing check.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Math;\n\
         function bench(int iters): int {\n\
@@ -197,7 +197,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathsign_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -228,7 +228,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathabs_vertical() {
     // reaches i64::MIN (no fault here — the fault edge has its own tests below). The inline
     // Cranelift `iabs` is byte-identical to the interpreter's `checked_abs` kernel for every in-range
     // operand; `hits>0` keeps a silent VM fallback from false-greening the byte-identity assert.
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Math;\n\
         function bench(int iters): int {\n\
@@ -240,7 +240,7 @@ fn phg_run_hook_hits_the_jit_on_the_mathabs_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -274,7 +274,7 @@ fn jit_mathabs_i64_min_funnels_to_redo_not_wrap() {
     // Int-kind LOCAL (`-9223372036854775807 - 1`), not a bare param: a bare param reads as `Unknown`
     // kind (bytecode carries no param types) and the arm would decline it before the guard is reached.
     let program = compile_source(
-        "package Main; import Core.Runtime.Entry;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
          import Core.Math;\n\
          function abs1() -> int {\n\
            mutable int acc = 0;\n\
@@ -283,7 +283,7 @@ fn jit_mathabs_i64_min_funnels_to_redo_not_wrap() {
            while (i < 1) { acc = Math.abs(imin); i = i + 1; }\n\
            return acc;\n\
          }\n\
-         #[Entry(kind: Cli)] function main() -> void {}",
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {}",
     );
     let f = func_index(&program, "abs1");
     match Compiled::compile_unboxed(&program, f)
@@ -312,7 +312,7 @@ fn jit_mathabs_i64_min_fault_matches_the_vm() {
     // the VM, which renders the canonical `checked_abs` fault. `phg run` (JIT-wired) and the
     // interpreter oracle must BOTH fault with the same "integer overflow in Math.abs" string —
     // interp ≡ JIT fault parity (the whole point of the abs care; a wrapped value would NOT fault).
-    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         import Core.Math;\n\
         function bench(int iters): int {\n\
@@ -325,7 +325,7 @@ fn jit_mathabs_i64_min_fault_matches_the_vm() {
           }\n\
           return acc;\n\
         }\n\
-        #[Entry(kind: Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("abs(i64::MIN) must fault on the jit path");
     let oracle_err =
         crate::cli::cmd_treewalk(SRC).expect_err("abs(i64::MIN) must fault on the oracle");

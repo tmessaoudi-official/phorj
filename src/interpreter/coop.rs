@@ -156,11 +156,9 @@ pub fn run_cooperative_interp(program: &Program) -> Result<(String, i64), Diagno
     // Resolve `main` (top-level or class-static) exactly like the synchronous entry.
     let (entry_class, main) = match crate::ast::entry_for(program, crate::ast::EntryRole::Cli) {
         Some(e) => e,
-        None => {
-            return Err(Diagnostic::runtime(
-                "no entry point: running needs an `#[Entry(kind: Cli)]` function (DEC-331)",
-            ))
-        }
+        None => return Err(Diagnostic::runtime(
+            "no entry point: running needs an `#[Entry(kind: EntryKind.Cli)]` function (DEC-331)",
+        )),
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
     let args = if names.is_empty() {
@@ -225,7 +223,7 @@ mod tests {
     fn litmus_spawned_recver_succeeds_only_when_deferred() {
         let src = r#"
 package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 
 function consume(Channel<int> ch): int {
@@ -234,7 +232,7 @@ function consume(Channel<int> ch): int {
     return v;
 }
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> t = spawn consume(ch);
     ch.send(42);
@@ -253,7 +251,7 @@ function consume(Channel<int> ch): int {
     fn main_recv_blocks_until_spawned_producer_sends() {
         let src = r#"
 package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 
 function produce(Channel<int> ch): int {
@@ -261,7 +259,7 @@ function produce(Channel<int> ch): int {
     return 1;
 }
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> p = spawn produce(ch);
     int v = ch.receive();
@@ -280,12 +278,12 @@ function produce(Channel<int> ch): int {
     fn fork_join_and_buffered_channels_match_eager_output() {
         let src = r#"
 package Main;
-import Core.Runtime.Entry;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
 
 function square(int n): int { return n * n; }
 
-#[Entry(kind: Cli)] function main(): void {
+#[Entry(kind: EntryKind.Cli)] function main(): void {
     Task<int> t = spawn square(9);
     Output.printLine("9 squared = {t.join()}");
     Channel<string> words = Channel.create();

@@ -11,6 +11,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 declare function intdiv(int a, int b): int;
 
@@ -18,7 +19,7 @@ declare class DivisionByZeroError implements Error {
     function getMessage(): string;
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // intdiv(10, 0) raises PHP's \DivisionByZeroError — caught by name.
     try {

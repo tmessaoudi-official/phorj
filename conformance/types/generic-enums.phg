@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 enum Option<T> { None, Some(T value) }
 
@@ -10,7 +11,7 @@ function describe(Option<int> o): string {
     return match (o) { Some(n) => "some {n}", None() => "none" };
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(describe(new Some(7)));
     Option<int> z = new None();

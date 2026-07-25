@@ -4,6 +4,7 @@ import Core.Output;
 import Core.Set;
 import Core.Map;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Stdlib breadth — Set + Map ergonomics (on top of Set algebra + Map query):
 //   * Core.Set:  add(s, x) / remove(s, x) -> Set<T> (immutable; no-op if present/absent),
@@ -12,7 +13,7 @@ import Core.Runtime.Entry;
 //                merge(a, b) -> Map<K,V>  (b's value wins a shared key, at a's position),
 //                map(m, (V)->W) -> Map<K,W> / filter(m, (V)->bool) -> Map<K,V>  (over VALUES, keys kept).
 // Pure + higher-order; byte-identical on both backends and real PHP. No new Op/Value.
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // --- Set ergonomics ---
     Set<int> base = Set.of([1, 2, 3]);

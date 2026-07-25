@@ -10,7 +10,7 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
 }
 
 /// DEC-331 D1: the lifted entry is always a CLI script (PHP has no entry-role concept), so it
-/// carries `#[Entry(kind: Cli)]` — the role is declared, never inferred.
+/// carries `#[Entry(kind: EntryKind.Cli)]` — the role is declared, never inferred.
 fn entry_cli_attr() -> crate::ast::Attribute {
     crate::ast::entry_attr("Cli", SP)
 }
@@ -56,7 +56,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         }
         items.push(Item::Function(FunctionDecl {
             modifiers: Vec::new(),
-            // DEC-191: the synthesized entry carries #[Entry(kind: Cli)] (attribute-declared).
+            // DEC-191: the synthesized entry carries #[Entry(kind: EntryKind.Cli)] (attribute-declared).
             attrs: vec![entry_cli_attr()],
             vis: crate::ast::Visibility::Public,
             name: "main".into(),
@@ -74,13 +74,25 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
 
     // Prepend `import Core.Output;` if any `echo` was lifted.
     let mut final_items = Vec::new();
-    // DEC-191 addendum: the lifted draft's #[Entry] needs its import (wind rule).
+    // DEC-191 addendum: the lifted draft's #[Entry] needs its import (wind rule). DEC-337: the
+    // `kind: EntryKind.Cli` variant is import-gated too — emit its import alongside `Entry`.
     let emitted_entry = items
         .iter()
         .any(|i| matches!(i, Item::Function(f) if f.attrs.iter().any(crate::ast::is_entry_attr)));
     if emitted_entry {
         final_items.push(Item::Import {
             path: vec!["Core".into(), "Runtime".into(), "Entry".into()],
+            alias: None,
+            wildcard: false,
+            except: Vec::new(),
+            span: SP,
+        });
+        final_items.push(Item::Import {
+            path: vec![
+                "Core".into(),
+                "Runtime".into(),
+                crate::ast::ENTRY_KIND_ENUM.into(),
+            ],
             alias: None,
             wildcard: false,
             except: Vec::new(),

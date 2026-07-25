@@ -17,7 +17,11 @@ fn with_pkg(src: &str) -> String {
     // DEC-191: inject the `#[Entry]` attribute before a bare `function main(` (same convenience
     // as `cli::tests::wp`) so the VM unit programs need no per-case ceremony.
     let src = if src.contains("function main") && !src.contains("#[Entry") {
-        src.replacen("function main", "#[Entry(kind: Cli)] function main", 1)
+        src.replacen(
+            "function main",
+            "#[Entry(kind: EntryKind.Cli)] function main",
+            1,
+        )
     } else {
         src.to_string()
     };
@@ -27,10 +31,15 @@ fn with_pkg(src: &str) -> String {
         format!("package Main; {src}")
     };
     // DEC-191 addendum: import-gated attribute — inject the import AFTER the package segment
-    // (imports may not precede `package`); same-line, preserving line numbers.
+    // (imports may not precede `package`); same-line, preserving line numbers. DEC-337: the
+    // `kind: EntryKind.Cli` variant is import-gated too — inject `EntryKind` alongside `Entry`.
     if src.contains("#[Entry") && !src.contains("Core.Runtime.Entry") {
         let i = src.find(';').expect("package decl ends with ;");
-        format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
+        format!(
+            "{} import Core.Runtime.Entry; import Core.Runtime.EntryKind;{}",
+            &src[..=i],
+            &src[i + 1..]
+        )
     } else {
         src
     }

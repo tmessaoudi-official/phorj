@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // Parent-constructor forwarding (M-RT super/parent, B1b — single inheritance).
 //
@@ -61,7 +62,7 @@ class Derived extends Base {
 }
 
 // `string kind = kind;` must read the OUTER `kind`
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Dog d = new Dog("husky");
     Output.printLine(d.describe());

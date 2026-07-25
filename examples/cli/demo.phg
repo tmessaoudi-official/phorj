@@ -2,11 +2,12 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A tiny program used by ../cli/README.md to demonstrate the phorj CLI:
 // source forms (file / stdin / inline), inspection (check / parse / lex),
 // the diagnostic dictionary (explain), and clean compile/runtime faults.
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     int n = 6;
     Output.printLine("phorj CLI demo");

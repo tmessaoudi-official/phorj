@@ -10,6 +10,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // `var` as a parameter name.
 function tagged(string var): string {
@@ -24,7 +25,7 @@ class Holder {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // `var name = …` is still the inference keyword (here `label` is inferred `string`).
     var label = tagged("phorj");

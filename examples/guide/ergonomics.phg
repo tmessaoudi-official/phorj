@@ -2,9 +2,10 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // M3 S1 "core ergonomics": list indexing, integer ranges, and expression `if`.
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Indexing: read elements out of a list by position.
     List<int> xs = [10, 20, 30];

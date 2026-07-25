@@ -10,6 +10,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // A stateless utility — no fields, no constructor (instantiated as `Util()`).
 class Util {
@@ -33,7 +34,7 @@ class Util {
     }
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var u = new Util();
     // `identity` reused at three different concrete types — one method definition, no duplication.

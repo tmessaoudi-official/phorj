@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 interface Named {
     function name(): string;
@@ -26,7 +27,7 @@ function describe(Named & Aged who): string {
     return "{who.name()} is {who.age()}";
 }
 
-#[Entry(kind: Cli)]
+#[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Output.printLine(describe(new Person("Ada", 36)));
 }
