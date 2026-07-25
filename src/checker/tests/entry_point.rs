@@ -229,6 +229,45 @@ fn single_class_static_main_is_not_multiple() {
     assert!(!has(src, "E-MULTIPLE-MAIN"), "{:?}", errors_of(src));
 }
 
+#[test]
+fn entry_diagnostics_quote_the_qualified_form_not_bare() {
+    // DEC-337: even for a VALIDLY-declared entry, the E-ENTRY-SIG and E-DUPLICATE-ENTRY-KIND
+    // message text must quote `#[Entry(kind: EntryKind.Cli)]` — never the now-rejected bare form
+    // (the checker would otherwise suggest a spelling it itself rejects as E-INJECTED-VARIANT-BARE).
+    let sig =
+        "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Web)] function main(): void { }";
+    let sig_msg = errors_of(sig)
+        .into_iter()
+        .find(|e| e.code == Some("E-ENTRY-SIG"))
+        .expect("E-ENTRY-SIG fires")
+        .message;
+    assert!(
+        sig_msg.contains("EntryKind."),
+        "must quote qualified form: {sig_msg}"
+    );
+    assert!(
+        !sig_msg.contains("kind: Web)"),
+        "must not quote bare form: {sig_msg}"
+    );
+
+    let dup =
+        "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Cli)] function main(): void { } \
+               class App { #[Entry(kind: EntryKind.Cli)] static function main(): void { } }";
+    let dup_msg = errors_of(dup)
+        .into_iter()
+        .find(|e| e.code == Some("E-DUPLICATE-ENTRY-KIND"))
+        .expect("E-DUPLICATE-ENTRY-KIND fires")
+        .message;
+    assert!(
+        dup_msg.contains("EntryKind."),
+        "must quote qualified form: {dup_msg}"
+    );
+    assert!(
+        !dup_msg.contains("kind: Cli)"),
+        "must not quote bare form: {dup_msg}"
+    );
+}
+
 // ── DEC-329.3 commit A: variant-use resolution ───────────────────────────────────────────────────
 
 #[test]

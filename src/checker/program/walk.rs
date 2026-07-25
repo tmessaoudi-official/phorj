@@ -339,7 +339,7 @@ impl Checker {
                         self.err_coded(
                             f.span,
                             format!(
-                                "`#[Entry(kind: {kind_name})]` function `{}`'s signature doesn't match — a `{kind_name}` entry is {shape}",
+                                "`#[Entry(kind: EntryKind.{kind_name})]` function `{}`'s signature doesn't match — a `{kind_name}` entry is {shape}",
                                 f.name
                             ),
                             "E-ENTRY-SIG",
@@ -363,7 +363,7 @@ impl Checker {
                     if dup {
                         self.err_coded(
                             f.span,
-                            format!("duplicate `#[Entry(kind: {kind_name})]` — a program has at most one entry per kind"),
+                            format!("duplicate `#[Entry(kind: EntryKind.{kind_name})]` — a program has at most one entry per kind"),
                             "E-DUPLICATE-ENTRY-KIND",
                             Some("remove the extra entry, or give it a different kind".into()),
                         );
