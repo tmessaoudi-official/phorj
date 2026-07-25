@@ -568,7 +568,7 @@ fn empty_import_group_is_a_parse_error() {
 fn parses_wildcard_import() {
     // Q-A: `import X.Y.*;` parses to a single wildcard `Item::Import` whose path is the PACKAGE PREFIX
     // (the loader expands it later). No alias, no except.
-    match item("import Core.Http.*;") {
+    match item("import Acme.Http.*;") {
         Item::Import {
             path,
             alias,
@@ -576,7 +576,7 @@ fn parses_wildcard_import() {
             except,
             ..
         } => {
-            assert_eq!(path, vec!["Core", "Http"]);
+            assert_eq!(path, vec!["Acme", "Http"]);
             assert_eq!(alias, None);
             assert!(wildcard, "expected a wildcard import");
             assert!(except.is_empty());
@@ -606,7 +606,7 @@ fn parses_wildcard_import_with_except() {
 #[test]
 fn wildcard_import_alias_is_a_parse_error() {
     // Q-A: `import X.* as Y;` is E-WILDCARD-ALIAS — a flat wildcard has no single name to bind.
-    assert!(parser("package Main; import Core.Http.* as H;")
+    assert!(parser("package Main; import Acme.Http.* as H;")
         .parse_program()
         .is_err());
 }

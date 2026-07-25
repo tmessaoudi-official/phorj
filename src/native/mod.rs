@@ -439,6 +439,21 @@ pub fn index_of(module: &str, name: &str) -> Option<usize> {
         .position(|n| n.module == module && n.name == name)
 }
 
+/// Q-A wildcard imports — the immediate native member names of `module` (EXACT full-path match, e.g.
+/// `"Core.Http"` → its function leaves), sorted + deduped; empty when `module` names no native module.
+/// The loader uses this to expand `import Core.Sub.*;`. Distinct from `lsp::catalog::module_members`,
+/// which matches by LAST dotted segment for editor completion.
+pub(crate) fn module_members(module: &str) -> Vec<String> {
+    let mut names: Vec<String> = registry()
+        .iter()
+        .filter(|n| n.module == module)
+        .map(|n| n.name.to_string())
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
 /// A native parameter's **default value** (M4 default parameters). A tiny literal enum kept separate
 /// from the ~50 `NativeFn` literals (only `Core.Text.parseFloat` carries a default today, so a
 /// per-native field would be near-pure churn): [`native_defaults`] returns the defaults for a native's

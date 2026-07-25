@@ -164,6 +164,24 @@ package-agnostic and can't reference cross-package wildcards.
 E-IMPORT-AMBIGUOUS in `src/cli/explain.rs` (the `every_emitted_diagnostic_code_has_an_explanation`
 test enforces this). TDD in `src/loader/tests.rs` + `tests/project.rs` fixtures.
 
+## ⬚ PENDING (dev to rule — surfaced during the step-2 build, 2026-07-25)
+
+- ⬚ **P-Q-A-1 — Core-submodule wildcards (`import Core.Http.*`) DEFERRED.** [Verified during build]
+  the loader's native/prelude pre-pass intercepts `Core.*` imports BEFORE the wildcard-expansion hook,
+  so a Core wildcard never reaches it (a naive attempt silently binds nothing — a false positive).
+  Rather than ship silent-wrong behavior, `Core.*` wildcards (bare AND submodule) are **parser-rejected**
+  for now (`E-WILDCARD-STDLIB-ROOT`: bare = "floods stdlib"; submodule = "not yet supported — import
+  explicitly"). Proper Core-submodule support needs native-registry expansion wired through the prelude
+  pass — a follow-up slice. **User/vendored-package wildcards work fully.** (D4 allowed Core.Sub.*; this
+  narrows it pending the follow-up.)
+- ⬚ **P-Q-A-2 — `*` binds PUBLIC-only cross-package (not "public+internal" as D3's shorthand said).**
+  [Verified: `loader::vis_violation` mod.rs:69 — a cross-package `internal` member is `E-VIS-INTERNAL`,
+  i.e. NOT individually importable]. Implemented per the spec's own **unifying principle** ("every
+  member you'd be allowed to import individually" = `vis_violation`-legal): cross-package `*` binds
+  public only; same-package would bind public+internal but is already implicitly visible. D3's literal
+  "public+internal" wording conflicts with the actual rule for cross-package internal — flagging for
+  dev confirmation (the principled behavior is the safe/consistent one).
+
 ## Backends / invariants checklist (for the eventual build)
 
 - Inv 5: expand before backends (compile-time sugar).  Inv 10: sorted expansion.  Inv 17: transpile

@@ -101,6 +101,102 @@ fn project_load_reports_stats() {
     assert!(summary.contains("whole project"), "got: {summary}");
 }
 
+// --- Q-A wildcard imports ---------------------------------------------
+
+#[test]
+fn wildcard_expands_public_cross_package_members() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Shapes.*;\n\
+         #[Entry(kind: Cli)] function main() -> void { int a = area(); int p = perimeter(); }",
+    );
+    tmp.write(
+        "src/Acme/Shapes/shapes.phg",
+        "package Acme.Shapes;\nfunction area() -> int { return 1; }\nfunction perimeter() -> int { return 2; }",
+    );
+    let u = load(&entry).expect("wildcard should expand + both members resolve");
+    assert_eq!(u.program.package, ["Main"]);
+}
+
+#[test]
+fn wildcard_core_submodule_is_deferred() {
+    // Q-A: Core-submodule wildcards are a deferred follow-up (parser-rejected for now — see spec
+    // "Core wildcard" PENDING). Import Core members explicitly meanwhile.
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry;\nimport Core.Output.*;\n\
+         #[Entry(kind: Cli)] function main() -> void {}",
+    );
+    let err = load(&entry).unwrap_err();
+    assert!(err.contains("not yet supported"), "got: {err}");
+}
+
+#[test]
+fn wildcard_bare_core_root_is_rejected() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry;\nimport Core.*;\n\
+         #[Entry(kind: Cli)] function main() -> void {}",
+    );
+    let err = load(&entry).unwrap_err();
+    assert!(err.contains("standard library"), "got: {err}");
+}
+
+#[test]
+fn wildcard_except_removing_all_is_empty() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Shapes.* except { area, perimeter };\n\
+         #[Entry(kind: Cli)] function main() -> void {}",
+    );
+    tmp.write(
+        "src/Acme/Shapes/shapes.phg",
+        "package Acme.Shapes;\nfunction area() -> int { return 1; }\nfunction perimeter() -> int { return 2; }",
+    );
+    let err = load(&entry).unwrap_err();
+    assert!(err.contains("E-WILDCARD-EMPTY"), "got: {err}");
+}
+
+#[test]
+fn wildcard_except_unknown_is_rejected() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Shapes.* except { Nope };\n\
+         #[Entry(kind: Cli)] function main() -> void { int a = area(); }",
+    );
+    tmp.write(
+        "src/Acme/Shapes/shapes.phg",
+        "package Acme.Shapes;\nfunction area() -> int { return 1; }",
+    );
+    let err = load(&entry).unwrap_err();
+    assert!(err.contains("E-EXCEPT-UNKNOWN"), "got: {err}");
+}
+
+#[test]
+fn wildcard_ambiguous_collision_is_rejected() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.A.*;\nimport Acme.B.*;\n\
+         #[Entry(kind: Cli)] function main() -> void {}",
+    );
+    tmp.write(
+        "src/Acme/A/a.phg",
+        "package Acme.A;\nfunction thing() -> void {}",
+    );
+    tmp.write(
+        "src/Acme/B/b.phg",
+        "package Acme.B;\nfunction thing() -> void {}",
+    );
+    let err = load(&entry).unwrap_err();
+    assert!(err.contains("E-IMPORT-AMBIGUOUS"), "got: {err}");
+}
+
 #[test]
 fn loose_load_has_no_stats() {
     let u = load_loose_src(

@@ -280,6 +280,24 @@ impl Parser {
         prefix: Vec<String>,
         sp: Span,
     ) -> Result<Item, Diagnostic> {
+        // Q-A: reject `Core.*` wildcards HERE (the parser), before the loader's native/prelude
+        // pre-pass intercepts Core imports. Bare `Core.*` would flood the file with the whole
+        // stdlib; a Core-SUBMODULE wildcard (`Core.Http.*`) is a deferred follow-up (needs native-
+        // registry expansion wired through the prelude pass). Import members explicitly meanwhile.
+        if prefix.first().map(String::as_str) == Some("Core") {
+            let p = prefix.join(".");
+            let msg = if prefix.len() == 1 {
+                "`import Core.*;` is not allowed — it would bind the entire standard library; \
+                 import a specific member (e.g. `import Core.Output.printLine;`)"
+                    .to_string()
+            } else {
+                format!(
+                    "wildcard import of the standard-library module `{p}` (`import {p}.*;`) is not \
+                     yet supported — import its members explicitly (e.g. `import {p}.member;`)"
+                )
+            };
+            return Err(self.error(&msg).with_code("E-WILDCARD-STDLIB-ROOT"));
+        }
         let mut except: Vec<String> = Vec::new();
         if matches!(self.peek(), TokenKind::Ident(s) if s == "except") {
             self.advance(); // consume contextual `except`

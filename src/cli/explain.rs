@@ -1323,6 +1323,30 @@ pub fn explain_text(code: &str) -> Option<String> {
              (`import X.Member as Y;`), or use a group (`import X.{ Member as Y };`). Namespace-object\n\
              binding (`import X.* as ns;` giving `ns.Member`) is a separate, not-yet-supported feature.\n"
         }
+        "E-WILDCARD-STDLIB-ROOT" => {
+            "E-WILDCARD-STDLIB-ROOT — a bare `import Core.*;` is not allowed.\n\n\
+             `Core` is the whole standard-library root; a wildcard there would flood the file with\n\
+             every module and member. Import a specific SUBMODULE instead (`import Core.Http.*;`,\n\
+             `import Core.List.*;`) or a single member (`import Core.Output.printLine;`).\n"
+        }
+        "E-WILDCARD-EMPTY" => {
+            "E-WILDCARD-EMPTY — a wildcard import `import X.*;` bound no names.\n\n\
+             The package exports nothing this file can import (cross-package: only `public` members\n\
+             are reachable), or an `except { … }` / an explicit import removed them all. Delete the\n\
+             wildcard, or import the specific member(s) you meant.\n"
+        }
+        "E-EXCEPT-UNKNOWN" => {
+            "E-EXCEPT-UNKNOWN — an `except { … }` clause named a member the package does not have.\n\n\
+             `import X.* except { A };` may only exclude names that `X.*` would actually bind. A typo\n\
+             or a removed/renamed member trips this. Fix the name, or drop it from the `except` list.\n"
+        }
+        "E-IMPORT-AMBIGUOUS" => {
+            "E-IMPORT-AMBIGUOUS — two wildcard imports would bind the same name.\n\n\
+             If `import A.*;` and `import B.*;` both export `Thing`, the reference `Thing` is ambiguous.\n\
+             Phorj rejects this eagerly (whether or not `Thing` is used). Disambiguate by importing the\n\
+             one you want explicitly (`import A.Thing;` — an explicit import wins over a wildcard), or\n\
+             exclude it from one side (`import B.* except { Thing };`).\n"
+        }
         "E-RESULT-TOOPTION-NEEDS-OPTION" => {
             "E-RESULT-TOOPTION-NEEDS-OPTION — `Result.toOption` was used without importing `Core.Option`.\n\n\
              `Result.toOption(r)` (or `r.toOption()`) bridges a `Result<T, E>` to an `Option<T>` —\n\

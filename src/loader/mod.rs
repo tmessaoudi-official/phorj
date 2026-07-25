@@ -93,6 +93,136 @@ fn vis_word(vis: Visibility) -> &'static str {
     }
 }
 
+/// Q-A — the member names a `import <pkg>.*` binds: native registry leaves for a `Core.*` submodule,
+/// else the Pass-1 index entries declared in `pkg` that `vis_violation` would let THIS file import
+/// individually (public cross-package; public+internal same-package — the spec's unifying principle,
+/// "every member you'd be allowed to import individually"). Sorted + deduped (Inv 10 determinism).
+fn wildcard_members(
+    pkg: &str,
+    referrer_file: &Path,
+    referrer_pkg: &str,
+    prov_fns: &HashMap<(String, String), DefInfo>,
+    prov_types: &HashMap<(String, String), DefInfo>,
+) -> Vec<String> {
+    if pkg == "Core" || pkg.starts_with("Core.") {
+        return crate::native::module_members(pkg);
+    }
+    let mut names: Vec<String> = Vec::new();
+    for prov in [prov_fns, prov_types] {
+        for ((p, name), info) in prov {
+            if p == pkg && vis_violation(info, referrer_file, referrer_pkg).is_none() {
+                names.push(name.clone());
+            }
+        }
+    }
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Q-A — expand every wildcard import (`import X.Y.*;`) in each parsed program into per-member
+/// `Item::Import`s BEFORE Pass-2 (compile-time sugar, Inv 5, so backends/PHP never see `*`). An
+/// EXPLICIT import of a name wins over a wildcard (D2 escape hatch — the wildcard drops that leaf).
+/// Diagnostics: `E-WILDCARD-STDLIB-ROOT` (bare `Core.*`), `E-EXCEPT-UNKNOWN` (an `except` name the
+/// package lacks), `E-WILDCARD-EMPTY` (binds nothing), `E-IMPORT-AMBIGUOUS` (two wildcards → same leaf).
+fn expand_wildcard_imports(
+    parsed: &mut [(PathBuf, Program)],
+    prov_fns: &HashMap<(String, String), DefInfo>,
+    prov_types: &HashMap<(String, String), DefInfo>,
+) -> Result<(), String> {
+    for (file, prog) in parsed.iter_mut() {
+        // Names bound by EXPLICIT (non-wildcard) imports — these win over any wildcard (D2).
+        let explicit: std::collections::HashSet<String> = prog
+            .items
+            .iter()
+            .filter_map(|it| match it {
+                Item::Import {
+                    path,
+                    alias,
+                    wildcard: false,
+                    ..
+                } => Some(
+                    alias
+                        .clone()
+                        .unwrap_or_else(|| path.last().cloned().unwrap_or_default()),
+                ),
+                _ => None,
+            })
+            .collect();
+        let referrer_pkg = prog.package.join(".");
+        let mut out: Vec<Item> = Vec::with_capacity(prog.items.len());
+        // leaf → the wildcard package that bound it, for cross-wildcard ambiguity detection.
+        let mut wildcard_bound: HashMap<String, String> = HashMap::new();
+        for item in std::mem::take(&mut prog.items) {
+            let Item::Import {
+                path,
+                wildcard: true,
+                except,
+                span,
+                ..
+            } = &item
+            else {
+                out.push(item);
+                continue;
+            };
+            let (path, except, span) = (path.clone(), except.clone(), *span);
+            if path.len() == 1 && path[0] == "Core" {
+                return Err(format!(
+                    "{}: `import Core.*;` is not allowed — it would bind the entire standard library; \
+                     import a specific submodule (e.g. `import Core.Http.*;`) or a member \
+                     [E-WILDCARD-STDLIB-ROOT]",
+                    file.display()
+                ));
+            }
+            let pkg = path.join(".");
+            let members = wildcard_members(&pkg, file, &referrer_pkg, prov_fns, prov_types);
+            for ex in &except {
+                if !members.contains(ex) {
+                    return Err(format!(
+                        "{}: `import {pkg}.* except {{ … }}` excludes `{ex}`, but `{pkg}` has no such \
+                         member [E-EXCEPT-UNKNOWN]",
+                        file.display()
+                    ));
+                }
+            }
+            let mut bound = 0usize;
+            for name in members {
+                if except.contains(&name) || explicit.contains(&name) {
+                    continue; // excepted, or an explicit import already binds it (D2)
+                }
+                if let Some(prev) = wildcard_bound.insert(name.clone(), pkg.clone()) {
+                    return Err(format!(
+                        "{}: `{name}` is brought by both `import {prev}.*` and `import {pkg}.*` — \
+                         wildcard imports may not bind the same name; import it explicitly \
+                         (`import {pkg}.{name};`) or exclude it (`except {{ {name} }}`) \
+                         [E-IMPORT-AMBIGUOUS]",
+                        file.display()
+                    ));
+                }
+                let mut mpath = path.clone();
+                mpath.push(name);
+                out.push(Item::Import {
+                    path: mpath,
+                    alias: None,
+                    wildcard: false,
+                    except: Vec::new(),
+                    span,
+                });
+                bound += 1;
+            }
+            if bound == 0 {
+                return Err(format!(
+                    "{}: `import {pkg}.*` binds no names — `{pkg}` exports nothing importable here \
+                     (or `except`/an explicit import removed them all) [E-WILDCARD-EMPTY]",
+                    file.display()
+                ));
+            }
+        }
+        prog.items = out;
+    }
+    Ok(())
+}
+
 /// A loaded compilation unit: the (possibly merged) program plus the source text used to render
 /// type-error carets. `diag_src` is the single file's source in loose mode (full carets) or empty
 /// for a merged multi-file unit, where no single source aligns — diagnostics then print message +
@@ -369,7 +499,16 @@ fn collect_unified_decls(roots: &SearchRoots) -> Result<Vec<PathBuf>, String> {
 fn check_unused_imports(prog: &Program, src: &str, file: &Path) -> Result<(), String> {
     let mut imports: Vec<(&Vec<String>, Vec<String>)> = Vec::new();
     for item in &prog.items {
-        if let Item::Import { path, alias, .. } = item {
+        // Q-A: wildcard imports (`import X.*;`) bind many names, not one — the hard whole-word
+        // unused-scan doesn't apply (a softer W-UNUSED-IMPORT is the wildcard/group story, step 4).
+        // Their expanded per-member imports are created AFTER this check, so they never reach here.
+        if let Item::Import {
+            path,
+            alias,
+            wildcard: false,
+            ..
+        } = item
+        {
             let names = match alias {
                 Some(a) => vec![a.clone()],
                 None => {
@@ -623,6 +762,11 @@ fn assemble(
         }
         parsed.push((file.clone(), prog));
     }
+
+    // Q-A — expand wildcard imports (`import X.*;`) to per-member imports NOW, using the Pass-1 index
+    // (user/vendored, gated by `vis_violation`) or the native registry (`Core.*`). Compile-time sugar
+    // (Inv 5): Pass-2 and every backend see only plain per-symbol `Item::Import`s.
+    expand_wildcard_imports(&mut parsed, &prov_fns, &prov_types)?;
 
     // M8.5 S3b — ambient `*.d.phg` declaration files: a file of foreign `declare`s carrying no package,
     // loaded into the project (the `.d.ts` analog). Parsed + validated (no package, all foreign) but
