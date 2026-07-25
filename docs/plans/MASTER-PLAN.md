@@ -134,9 +134,12 @@ Build cluster, in order (D10a):
   return), `eval` (position spec: rejection + substitutes; `Core.Sandbox` builds in v1),
   ArrayAccess (`#[ArrayGet]`/`#[ArraySet]`), **two-tier top types `Any`+`Object` (DEC-335)**.
 - **Import & visibility design cluster (dev-ruled AskUserQuestion, 2026-07-24; specs are SSOT,
-  SLICE-STATE carries the live pointer):** **Q-A wildcard/group imports**
+  SLICE-STATE carries the live pointer):** **Q-A wildcard/group imports ✅ DONE (2026-07-25,
+  DEC-268 two-clean-round panel certified)**
   (`docs/specs/2026-07-24-wildcard-imports.md` — `import X.Y.*` / `{A,B}` / `except {…}`, eager
-  collisions, compile-time expansion → per-symbol PHP `use`, `E-IMPORT-UNKNOWN`); **Q-B
+  collisions, compile-time expansion → per-symbol PHP `use`, `E-IMPORT-UNKNOWN`; deferrals
+  P-Q-A-1 Core-submodule wildcards, P-Q-A-3 W-UNUSED-IMPORT, P-Q-A-4 group-`{}` sort, P-Q-A-5
+  Inv-13 file-size debt — all dev-owned follow-ups); **Q-B
   visibility-model completeness** (`docs/specs/2026-07-24-visibility-model.md` — package HIERARCHY,
   `internal` REDEFINED = package + descendants on both axes, member `internal` added, folds the
   G4 P0 static-field visibility spine-fix); build Q-A → Q-B. **Q-C global completeness sweep**

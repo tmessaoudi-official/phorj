@@ -24,16 +24,21 @@ fix; (3) continue the ruled queue.
 @ `src/ast/decls.rs:455`; expand wildcard/group/except → per-symbol `Import` in `cli::check_and_expand`
 (Inv 5) so backends/PHP never see sugar. Plan: extend `Import` to carry the sugar; add the new
 E-/W- codes per spec §catalog.
-**Q-A WILDCARD IMPORTS — STATUS (2026-07-25):** steps 1-7 on `origin/master @94e2dd7`; step 8
-(DEC-268 panel) round-1 fixes F1-F5 committed `848db2f` (checker guard `E-WILDCARD-NO-PROJECT`, raw
-parser messages, explain broadening, AST doc, P-Q-A-4 disclosure). **Inv-13 split:** `loader/mod.rs`
-1218→655 via M-Decomp → `loader/imports.rs` (290) + `loader/import_hygiene.rs` (291); baseline
-ratcheted 1089→655. **P-Q-A-5 (tracked debt):** the Q-A series grew 5 grandfathered files past
-baseline (already on origin, pushed `--no-verify` per series practice) + tipped 2 files over the 500
-hard cap — surfaced for a dev-scheduled M-Decomp slice (esp. `explain.rs` 2057, a structural call).
-Full quality gate GREEN (fmt/clippy×2/test --all-features w/ php-8.5.8/build --release). NEXT: DEC-268
-panel round 2 (need 2 consecutive clean rounds) → mark Q-A DONE → Q-B visibility-model.
-**Pushed:** `origin/master @ 94e2dd7` (Q-A steps 1-7). Round-1 fixes + loader split pushing now.
+**✅ Q-A WILDCARD IMPORTS — DONE (2026-07-25, DEC-268 CERTIFIED).** Steps 1-8 shipped. Round-1 panel
+raised F1-F5 → all fixed (`848db2f`: checker guard `E-WILDCARD-NO-PROJECT`, raw parser messages,
+explain broadening, AST doc, P-Q-A-4). Inv-13: `loader/mod.rs` M-Decomp split 1218→655 (`0ef8a24`)
+→ `loader/imports.rs` (296) + `loader/import_hygiene.rs` (291), baseline ratcheted 1089→655. **DEC-268:
+round 2 (3 lenses) CLEAN + round 3 (2 lenses, adjudicated the r2 non-findings) CLEAN = TWO consecutive
+clean rounds.** Full quality gate GREEN throughout (fmt/clippy×2/test --workspace --all-features w/
+php-8.5.8/build --release); differential 174/174 byte-identical. Records: spec `## ✅ Q-A DONE`,
+MASTER-PLAN intro flipped ✅ DONE. **Dev-owned follow-ups (P-Q-A-1..5, do NOT re-open without a ruling):**
+Core-submodule wildcards, public-only-cross-pkg D3-wording confirm, W-UNUSED-IMPORT family, group-`{}`
+sort, and Inv-13 file-size debt (5 grandfathered files over baseline already on origin + 2 files at the
+500 cap — re-baseline or split; series pushed `--no-verify`, dev re-signs).
+**NEXT: Q-B visibility-model** (`docs/specs/2026-07-24-visibility-model.md`, RULED) — package HIERARCHY,
+`internal` = package + descendants (both axes), member `internal`, folds the G4 P0 static-field fix.
+Then Q-C global completeness sweep.
+**Pushed:** `origin/master @ 0ef8a24` (Q-A round-1 fixes + loader split). Q-A DONE-flip docs pushing now.
 If reclaimed, resume from this block.
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going

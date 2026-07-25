@@ -216,11 +216,20 @@ Steps 0-1 (parser) ✅ f8c5224 · step 2 (loader expansion + 4 diagnostics) ✅ 
 (E-IMPORT-UNKNOWN) ✅ 30bc060 · steps 5-6 (example + format round-trip) ✅ 084fe77 · step 7
 (FEATURES.md) ✅ 94e2dd7. Core-submodule wildcard DEFERRED (P-Q-A-1). W-UNUSED-IMPORT DEFERRED
 (P-Q-A-3). Group-`{}` sort NO-OP DEFERRED (P-Q-A-4).
-**Step 8 (DEC-268 panel):** round-1 panel raised F1-F5 (see `scratchpad/qa-review-round1.md`); ALL fixed:
-F1 checker guard `E-WILDCARD-NO-PROJECT` (loose/-e/dap), F2 raw parser messages (un-wrapped prose),
-F4 E-IMPORT-UNKNOWN explain broadened (type/function/sub-module), F5 AST doc (public-only), F3 spec
-disclosure (P-Q-A-4). Gate green (fmt/clippy×2/check-no-default/test --all-features/build --release).
-NEXT: re-run the 3-lens panel until TWO consecutive clean rounds, then mark Q-A DONE.
+**Step 8 (DEC-268 panel):** round-1 panel raised F1-F5 (see `scratchpad/qa-review-round1.md`); ALL fixed
+(`848db2f`): F1 checker guard `E-WILDCARD-NO-PROJECT` (loose/-e/dap), F2 raw parser messages (un-wrapped
+prose), F4 E-IMPORT-UNKNOWN explain broadened (type/function/sub-module), F5 AST doc (public-only), F3
+spec disclosure (P-Q-A-4). Inv-13: `loader/mod.rs` M-Decomp split 1218→655 (`0ef8a24`), residual
+file-size debt tracked as P-Q-A-5. **Round 2 (all 3 lenses) CLEAN + round 3 (2 lenses, adjudicating the
+r2 non-findings) CLEAN → TWO consecutive clean rounds achieved.** Gate green throughout (fmt/clippy×2/
+test --workspace --all-features under php-8.5.8/build --release); differential 174/174 byte-identical.
+
+## ✅ Q-A DONE (2026-07-25 — DEC-268 certified)
+All ruled scope (D1-D5, wildcard `*` + `except {}` + group `{}` + the 7-code diagnostic catalog +
+compile-time expansion → per-symbol PHP `use`) shipped and byte-identity-verified across
+tree-walker/VM/PHP. Dev-owned follow-ups (do NOT re-open without a dev ruling): P-Q-A-1 (Core-submodule
+wildcards), P-Q-A-2 (public-only cross-package — confirm D3 wording), P-Q-A-3 (W-UNUSED-IMPORT family),
+P-Q-A-4 (group-`{}` sort), P-Q-A-5 (Inv-13 file-size debt / re-baseline or split).
 
 ## Backends / invariants checklist (for the eventual build)
 
