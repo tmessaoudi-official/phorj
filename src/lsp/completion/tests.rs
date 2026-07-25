@@ -19,6 +19,50 @@ fn labels(resp: &str) -> Vec<String> {
 // The key regression this slice fixes: completion on an INCOMPLETE buffer (parse fails) must still
 // work — before 2026-07-20 every case below returned `[]` because `symbol_at` required a parse.
 
+/// Extract each item's `textEdit.newText` (or None if the item has no textEdit).
+fn text_edits(resp: &str) -> Vec<(String, String)> {
+    // Pair each label with its textEdit newText by scanning item objects.
+    let mut out = Vec::new();
+    for item in resp.split("{\"label\":\"").skip(1) {
+        let label = item.split('"').next().unwrap_or("").to_string();
+        if let Some(i) = item.find("\"newText\":\"") {
+            let nt = item[i + "\"newText\":\"".len()..]
+                .split('"')
+                .next()
+                .unwrap_or("")
+                .to_string();
+            out.push((label, nt));
+        }
+    }
+    out
+}
+
+#[test]
+fn import_completion_replaces_typed_path_not_appends() {
+    // Regression (user-reported): typing `import Core.` then accepting `Core.Output` must yield
+    // `Core.Output`, NOT `Core.Core.Output`. Each import item carries a textEdit that REPLACES the
+    // already-typed `Core.` — verify the range spans `Core.` and newText is the full label.
+    let src = "package Main;\nimport Core.\n";
+    let offset = src.find("Core.").unwrap() + "Core.".len();
+    let resp = complete(src, offset, None, None, &std::collections::HashMap::new());
+    // Every import item newText equals its label (the full path — the client replaces the typed span).
+    let edits = text_edits(&resp);
+    assert!(!edits.is_empty(), "expected textEdit items, got: {resp}");
+    for (label, new_text) in &edits {
+        assert_eq!(
+            label, new_text,
+            "newText must be the full label (no dup prefix)"
+        );
+    }
+    // The replace range must start at the `C` of `Core.` on line 1 (char 7 = after `import `), end at
+    // the cursor (char 12 = after `Core.`) — so `Core.` is replaced, not appended after.
+    assert!(
+        resp.contains("\"start\":{\"line\":1,\"character\":7}")
+            && resp.contains("\"end\":{\"line\":1,\"character\":12}"),
+        "import textEdit range must span the typed `Core.` (line 1, chars 7..12): {resp}"
+    );
+}
+
 #[test]
 fn import_context_lists_core_modules() {
     let src = "package Main;\nimport Core.\n";

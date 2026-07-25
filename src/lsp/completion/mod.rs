@@ -30,6 +30,33 @@ fn completion_item(label: &str, kind: u32, detail: &str) -> String {
     )
 }
 
+/// Like [`completion_item`] but carries an explicit `textEdit` that REPLACES the already-typed
+/// dotted-path prefix (`[start_char, end_char)` on `line`) with the full `label`. Dotted import paths
+/// (`Core.Output`) need this: `.` is a word boundary, so a plain label item would make the client
+/// insert the full label AFTER the typed `Core.`, yielding `Core.Core.Output`. The range spans the
+/// whole typed path, so the newText lands cleanly regardless of how many segments are already typed.
+/// `filterText` is set to the label so the client filters the (multi-segment) candidate correctly.
+#[allow(clippy::too_many_arguments)]
+fn completion_item_edit(
+    label: &str,
+    kind: u32,
+    detail: &str,
+    line: u32,
+    start_char: u32,
+    end_char: u32,
+    new_text: &str,
+) -> String {
+    format!(
+        "{{\"label\":\"{}\",\"kind\":{kind},\"detail\":\"{}\",\"filterText\":\"{}\",\
+         \"textEdit\":{{\"range\":{{\"start\":{{\"line\":{line},\"character\":{start_char}}},\
+         \"end\":{{\"line\":{line},\"character\":{end_char}}}}},\"newText\":\"{}\"}}}}",
+        super::escape(label),
+        super::escape(detail),
+        super::escape(label),
+        super::escape(new_text),
+    )
+}
+
 /// The completion context inferred from the text immediately before the cursor.
 enum Ctx {
     /// Completing an import path: the partial dotted text after `import `.
@@ -50,15 +77,32 @@ pub(super) fn complete(
     uri: Option<&str>,
     docs: &HashMap<String, String>,
 ) -> String {
+    // Cursor position for `textEdit` ranges, derived from `offset`. Import lines are ASCII, so the
+    // byte column equals the LSP UTF-16 character column there (the only place a range is emitted).
+    let end = offset.min(text.len());
+    let line = text[..end].bytes().filter(|&b| b == b'\n').count() as u32;
+    let line_start = text[..end].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    let character = (end - line_start) as u32;
     let items: Vec<String> = match context(text, offset) {
         Ctx::Import(prefix) => {
             // Core modules (from the registry) + the user's own project packages (from the loader's
             // project scan of src/vendor/entry-local/views) — the single-source-of-truth enumeration
             // for `import X.`. Project scan runs only for `file://` URIs; anything else degrades to Core.
+            //
+            // Each item carries a `textEdit` that REPLACES the already-typed dotted path
+            // (`[start_char, character)`) with the full label — so accepting `Core.Output` after typing
+            // `Core.` yields `Core.Output`, not `Core.Core.Output` (`.` is a client word boundary).
+            let start_char = character.saturating_sub(prefix.len() as u32);
+            let edit = |label: &str, detail: &str| {
+                completion_item_edit(
+                    label, 9, /* Module */
+                    detail, line, start_char, character, label,
+                )
+            };
             let mut items: Vec<String> = catalog::core_module_paths()
                 .into_iter()
                 .filter(|p| prefix.is_empty() || p.starts_with(&prefix))
-                .map(|p| completion_item(&p, 9 /* Module */, "core module"))
+                .map(|p| edit(&p, "core module"))
                 .collect();
             let project_pkgs = uri
                 .and_then(super::uri_to_path)
@@ -66,7 +110,7 @@ pub(super) fn complete(
                 .unwrap_or_default();
             for p in &project_pkgs {
                 if prefix.is_empty() || p.starts_with(prefix.as_str()) {
-                    items.push(completion_item(p, 9 /* Module */, "project package"));
+                    items.push(edit(p, "project package"));
                 }
             }
             items

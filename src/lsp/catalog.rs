@@ -64,7 +64,10 @@ fn collect_members(members: &[ClassMember]) -> Vec<(String, u32)> {
             }
             ClassMember::Constructor { params, .. } => {
                 for p in params {
-                    if !p.modifiers.is_empty() {
+                    // A ctor param is a real instance FIELD iff it carries a visibility modifier
+                    // (promotion) — single-sourced with the checker/backends. A `mutable`-only or plain
+                    // param is a constructor local, not a completable member.
+                    if p.modifiers.iter().any(|m| m.is_member_visibility()) {
                         out.push((p.name.clone(), 5));
                     }
                 }
