@@ -197,6 +197,14 @@ prioritize; anatomy in UPDATE 9, DEC-269 pattern); `listcontains` 0.85× + `mapg
 STABLE-BOX diagnosis only (a memo lever was tried and REVERTED on measured evidence — UPDATE
 10; candidate: packed-stride flat-list layout slice; container noise now disqualifies
 close-margin work there — `PHORJ_JIT_DISASM=1` shipped for that session).
+**PERF-FLIP CAMPAIGN RE-RULED (2026-07-25, dev via AskUserQuestion — 3-agent root-cause of the 4
+losses):** order = **queryparse → #33 → listcontains**. `queryparse` 0.10× → **DEC-338: nativize
+`Request.parse`** (one Rust `Core.Native.Http.parseRequest` + a `__phorj_http_parse_request` PHP
+helper, Inv-16 trade dev-accepted) → est. 0.8-1.5×, flips on the VM; BUILD-READY, live step-cursor in
+SLICE-STATE § queryparse-nativize (the one canonical home — read there). `jsonround`/`deepjson` = the
+in-flight Json-ADT JIT slice #33 (unchanged). `listcontains` 0.86× = the packed-i64+SIMD layout slice
+(marginal at n=8). AOT verdict (dev asked): partial for queryparse dispatch only (→0.3×, not a flip),
+rides #33's codegen (no add), zero for listcontains — cold-start win, not the flip mechanism here.
 **RULED ROADMAP (DEC-333 + the DEC-331 interleave, 2026-07-23): FIRST the DEC-331 build
 cluster — its specs are dev-ruled (`docs/specs/2026-07-23-*.md`, eight specs incl. DEC-335 —
 D10a order: Invoke/ToString → Rich Request → Entry-kinds/serve/TLS), THEN the perf roadmap:

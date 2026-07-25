@@ -181,6 +181,32 @@ A PINNED dev-box/docker re-measure is OWED to canonicalize (the committed `bench
 the dev-box scorecard predate this and are stale); no flip was attempted here (the pinned-evidence
 harness is unavailable in-container — the flips are the DEC-333/perf "big work" slices, dev-greenlit).
 
+**▶▶ PERF FLIP CAMPAIGN — dev-ruled 2026-07-25 (4 losses, order: queryparse → #33 → listcontains).**
+Canonical dev-box microbench = **47 WIN / 4 LOSS**: queryparse 0.10×, jsonround 0.31×, listcontains 0.86×,
+deepjson 0.99×. 3-agent root-cause done; all 4 flippable (no structural wall), cheap levers exhausted.
+AOT verdict: helps ONLY queryparse dispatch (partial →0.3×, not a flip); rides the same unboxed codegen as
+#33 (no add); zero for listcontains. Rigorous WIN-OR-FLAG needs the dev-box docker harness.
+
+**§ queryparse-nativize (DEC-338, CURRENT slice, BUILD-READY — resumable step list):**
+Flip `queryparse` 0.10× by nativizing `Request.parse` into one Rust native `Core.Native.Http.parseRequest(
+bytes) -> Request?` + a `__phorj_http_parse_request` PHP helper (Inv-16 trade, dev-ruled). Est. →0.8-1.5×,
+flips on the VM. Feasibility precedented by `src/native/http/multipart.rs:41-56` (hand-built `Value::Instance`).
+Steps: (1) Rust `native_parse_request` in `src/native/http.rs` (split to `http/request.rs` if >300 lines,
+Inv-13), reusing `query::{parse_query_pairs,decode_path}`, `multipart::parse_multipart`, `spill::stash_body`;
+replicate the prelude logic at `http_request_prelude.rs:136-205,242-291` (headerPairs first-`:` lowercase-key;
+cookiePairs first-`=` case-sensitive; boundaryOf; multipartFields) and hand-build the graph — Request(12
+fields, set by NAME not ctor order), ParamBag×3/HeaderBag/FileBag/RequestBody(memo defaults null/false)/
+AttrBag(empty)/UploadedFile. (2) register `parseRequest` with `php:` → `__phorj_http_parse_request({raw})`.
+(3) emit the PHP helper beside the other `__phorj_http_*` (grep transpile runtime for `__phorj_http_parse_query`);
+match transpiled class field names/visibility. (4) rewire prelude `Request.parse` body → `return
+NativeHttp.parseRequest(raw);`. (5) GATE: `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features` +
+clippy×2 + fmt + release; byte-identity via `examples/web/rich_request.phg` + request tests + differential
+(VM≡TW≡php-8.5.8); `phg run bench/micro/queryparse.phg` VM-ns before/after (direction only in-container).
+(6) DEC-268 MAXIMAL panel, two clean rounds. (7) commit + push; **dev confirms ratio on dev-box harness.**
+Risks: ClassLayout stores by sorted name (set every field by name); RequestBody memo defaults; utf8-lossy
+match on head/body toString; `Request?` none-vs-Instance; PHP helper graph must match transpiled classes.
+Then → **#33** Json-ADT JIT slice (jsonround+deepjson), then listcontains packed-i64+SIMD (marginal at n=8).
+
 **✅ DEC-331 SLICE 2 — RICH REQUEST v1: BUILT + 3-leg byte-identity green (2026-07-24).** Record of
 truth: spec §8 BUILD STATUS + the register's SLICE-2 BUILD row (build deviations, the PENDING
 Response-side-CRLF adjudication, the HARD-FLAGGED `queryparse` loss). **NEXT WORK (per the same-day

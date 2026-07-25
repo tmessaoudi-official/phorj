@@ -3317,3 +3317,26 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   hardcoded `main.js` fallback + `gen_examples.py` DEFAULT — since the wasm-compiled checker validates it too).
   LSP attribute-arg completion suggesting `EntryKind.Cli` inside `#[Entry(kind:` is a follow-up on the existing
   LSP punch-list.
+
+## DEC-338 — nativize `Request.parse` to flip the `queryparse` 0.10× perf loss (2026-07-25, RULED, BUILD-READY)
+
+- **Problem.** `queryparse` is the worst perf loss in the suite: VM 2,532M ns vs php-8.5+JIT 245M = **0.10×**
+  (dev-box microbench). 3-agent root-cause: `Request.parse` (`src/cli/http_request_prelude.rs:136-205`) is an
+  INTERPRETED prelude orchestrator firing ~35 native calls + ~10 instance allocations per iteration on the
+  boxed VM; split ≈ **50% VM dispatch / 35% object-graph allocation / 15% actual native parse** (the parse
+  Rust `src/native/http/query.rs` is already ≈ PHP's C). PHP JIT-compiles its equivalent and does less work.
+- **Ruling (dev via AskUserQuestion, 2026-07-25).** Nativize the orchestrator into ONE Rust native
+  `Core.Native.Http.parseRequest(bytes) -> Request?` that head-splits, builds the header map, parses query,
+  cookies, form/multipart, decodes the path, stashes the body, and hand-builds the whole `Request` instance
+  graph — collapsing ~35 `CallNative` + ~200 bytecode ops into ONE dispatch. Est. **0.10× → ~0.8-1.5×**, flips
+  even on the VM (no JIT/AOT dependency). **Inv-16 trade accepted:** a `__phorj_http_parse_request` PHP runtime
+  helper mirrors it on the transpile leg (the established `__phorj_http_*` pattern), so parse logic lives in the
+  Rust native + PHP helper rather than single-source phorj prelude — surfaced and dev-ruled per Inv 16.
+- **AOT note.** AOT alone reaches only ~0.3× on queryparse (removes dispatch but cannot unbox the escaping
+  `Rc` object graph) — NOT a substitute for the nativize. AOT is complementary (stack for the last increment).
+- **Byte-identity.** VM ≡ tree-walker ≡ php-8.5.8 must hold across the whole Request surface (differential +
+  `examples/web/rich_request.phg` + request unit tests are the gate). The build feasibility (hand-built
+  `Value::Instance` graphs) is precedented by the multipart native (`src/native/http/multipart.rs:41-56`).
+- **Campaign order.** queryparse (this) → Json-ADT JIT slice #33 (jsonround+deepjson) → assess listcontains.
+- **Status.** RULED, BUILD-READY (2026-07-25) — not yet built. Live build cursor + the resumable step list
+  live in `docs/plans/SLICE-STATE.md` (§ queryparse-nativize); roadmap pointer in `MASTER-PLAN.md`.
