@@ -231,15 +231,17 @@ fn single_class_static_main_is_not_multiple() {
 
 #[test]
 fn deep_dotted_kind_chain_does_not_overflow_the_stack() {
-    // DEC-337 safety (no-new-panic invariant): a pathological `#[Entry(kind: a.a.a.…)]` chain
-    // reaches `entry_kind_form`/`flatten_dotted_path` via the attribute-arg path, which bypasses
-    // both depth guards (attr args are never `check_expr`'d, so `MAX_EXPR_DEPTH` never fires; member
-    // access parses left-associatively, so the parser's `MAX_NEST_DEPTH` counts the chain once). A
-    // recursive flattening overflowed the native stack (reproduced: the release `phg check` aborted
-    // at ~200k segments on the 8 MiB main stack). It is now iterative. Run a 50k chain on an 8 MiB
-    // thread (the unoptimised debug build has larger frames, so a recursive regression aborts well
-    // below 200k here); the iterative form classifies it cleanly (a 50k-segment qualifier is not
-    // `EntryKind` → E-ENTRY-KIND-UNKNOWN).
+    // Guards `flatten_dotted_path` (the entry `kind:` qualifier reader) against unbounded
+    // per-segment recursion. A pathological `#[Entry(kind: a.a.a.…)]` chain reaches it via the
+    // attribute-arg path, which bypasses both depth guards (attr args are never `check_expr`'d, so
+    // `MAX_EXPR_DEPTH` never fires; member access parses left-associatively, so the parser's
+    // `MAX_NEST_DEPTH` counts the chain once). This test drives the checker `check()` path (collect +
+    // check_program), where the now-iterative flatten is the walker, and asserts a 50k chain
+    // classifies cleanly instead of aborting (50k not `EntryKind` → E-ENTRY-KIND-UNKNOWN). On an
+    // 8 MiB thread a recursive-flatten regression aborts here (debug frames overflow well below 200k).
+    // SCOPE: this does NOT cover the full `phg check`/run pipeline, whose first pass
+    // `enforce_injected::walk_expr` has its own pre-existing guard-free recursion over the same chain
+    // (the general deep-chain hazard in KNOWN_ISSUES.md) — closing that is out of DEC-337 scope.
     let ok = std::thread::Builder::new()
         .stack_size(8 * 1024 * 1024)
         .spawn(|| {

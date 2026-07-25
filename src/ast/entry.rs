@@ -95,10 +95,13 @@ fn flatten_dotted_path(e: &Expr) -> Option<String> {
     // Walk the member chain ITERATIVELY, never recursively. `#[Entry(kind:)]` args bypass BOTH
     // depth guards — attribute args are never routed through `check_expr` (so `MAX_EXPR_DEPTH`
     // never fires) and member access parses left-associatively (so the parser's `MAX_NEST_DEPTH`
-    // counts the whole chain as one). A recursive walk therefore overflowed the native stack on a
-    // pathological `kind: a.a.a.…` chain (reproduced: `phg check` aborted at ~200k segments) —
-    // exactly the left-associative-chain hazard `src/limits.rs` documents. Iterative accumulation
-    // is O(depth) heap, never stack.
+    // counts the whole chain as one). Keeping this flattening iterative removes ONE unbounded
+    // per-segment recursion on a pathological `kind: a.a.a.…` chain (iterative accumulation is
+    // O(depth) heap, never stack). It is NOT the only one, and does not by itself close the full
+    // `phg check`/run abort: `enforce_injected::walk_expr` runs first in that pipeline and recurses
+    // the same chain guard-free, so a truly pathological input still overflows there — the
+    // pre-existing, GENERAL deep-left-associative-chain hazard `src/limits.rs` documents and
+    // `KNOWN_ISSUES.md` tracks (it hits ordinary deep member expressions too, not just entry kinds).
     let mut rev: Vec<&str> = Vec::new();
     let mut cur: &Expr = e;
     loop {

@@ -155,6 +155,36 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    new `body.json()` itself is safe: the `Json` TYPE always injects and
    `Core.Native.Http.jsonParse` is always registered (flag-naming fault without feature `json`).
 
+## STACKDEPTH-deep-member-chain — pathological deep left-associative expressions SIGABRT the checker (PRE-EXISTING, surfaced 2026-07-25 DEC-337 review)
+
+**Severity: P2 — pathological adversarial input only; no real program hits it.** A deeply nested
+left-associative expression — a member chain `a.a.a.…` (~50–100k+ segments), and the same shape in
+any position — overflows the native stack and aborts (`SIGABRT`, `thread 'main' has overflowed its
+stack`) during `phg check`/`run`. Reproduced: `discard a.a.…(200k).a;` in an ordinary function body
+aborts, exactly like `#[Entry(kind: a.a.…)]` does — it is NOT entry-specific.
+
+**Root cause [Verified: reproduced + traced].** Member access is parsed ITERATIVELY (a postfix loop
+in `src/parser/exprs/climb.rs`), so a long chain is built without tripping the parser's
+`MAX_NEST_DEPTH`. Several checker passes then walk expressions with per-segment native recursion and
+NO depth guard — notably `src/checker/enforce_injected.rs` `walk_expr` (the `Expr::Member { object,
+.. } => self.walk_expr(object)` arm, run first via `src/cli/pipeline.rs` `enforce_injected_discipline`).
+The main checker's `check_expr` DOES guard at `MAX_EXPR_DEPTH` (`src/limits.rs`), but attribute args
+are never `check_expr`'d and `enforce_injected` runs before it, so the guard is bypassed. `limits.rs`
+already documents this left-associative-chain class as a known limitation.
+
+**DEC-337 relationship (NOT a regression).** DEC-337 made the entry `kind:` an injected member
+expression, so `#[Entry(kind: EntryKind.Cli)]` now flows through these walkers like any member
+expression — at the SAME depth threshold as ordinary code, no entry-specific lower bound. The DEC-337
+commit additionally made `flatten_dotted_path` (`src/ast/entry.rs`, the `kind:` reader) iterative,
+removing one such recursion on that path; the general `enforce_injected`/expr-walker recursion is
+pre-existing and unchanged.
+
+**Fix (deferred — general robustness slice, not DEC-337).** Add a shared depth guard to (or make
+iterative) the checker's expression walkers (`enforce_injected::walk_expr` first; audit
+`qualify_variants`, `rewrite_html`, `collect`, and the recursive `Drop` of the deep AST), bailing
+with a clean diagnostic at a bound consistent with `MAX_EXPR_DEPTH` instead of overflowing. Tracked;
+awaiting prioritisation.
+
 ## F-032 — overloaded interface-method visibility not checked at declaration (FLAGGED 2026-07-16, DEC-251(c) build)
 
 `E-IFACE-VIS` (DEC-251(c) — a class implementing a public interface method as private/protected is
