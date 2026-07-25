@@ -26,7 +26,14 @@ impl Checker {
             );
         }
         let read = MemberVis::of(modifiers);
-        let wider = matches!((read, sv), (MemberVis::Private, MemberVis::Protected));
+        // Wider = the set scope is NOT a subset of the read scope (writes escaping reads). `protected`
+        // (class + subclasses in ANY package) escapes both `private` (class-only) and `internal`
+        // (package-subtree — an out-of-package subclass can't read but a `protected(set)` lets it write).
+        let wider = matches!(
+            (read, sv),
+            (MemberVis::Private, MemberVis::Protected)
+                | (MemberVis::Internal, MemberVis::Protected)
+        );
         if wider {
             self.err_coded(
                 span,

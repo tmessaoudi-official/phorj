@@ -125,6 +125,14 @@ Ordered lattice `Private < Internal < Public` (exprs.rs:396). **No inheritance/s
   `_not_visible_from_unrelated_package` (project), `internal_member_within_same_package_is_visible` +
   `internal_on_promoted_ctor_param_is_rejected` (loose). Example `project/member-internal/` (Inv 9,
   byte-identity gated) + README + `explain E-INTERNAL-PROMOTION`. Full gate green.
+  **DEC-268 round-1 panel found + fixed 2 full-set-coverage misses on non-exhaustive `matches!`:**
+  **P1** — an interface method implemented `internal` bypassed `E-IFACE-VIS` (`interfaces.rs`), letting
+  the boundary be dodged by upcasting to the interface → now rejected like private/protected; **P3** —
+  `internal` + `protected(set)` wasn't flagged `E-SET-VIS-WIDER` (`types_decls.rs`, an out-of-package
+  subclass could write what it can't read) → now flagged. Both with regression tests. (Pre-existing,
+  out-of-scope: double-visibility token combos like `protected internal` type-check by precedence
+  rather than being rejected — same as `public private` today; a strict-combo-rejection follow-up if
+  desired.)
 - ⬚ **DV-3 follow-up — `internal` on constructor-promoted params.** Thread `Modifier::Internal` through
   the 11 promotion `matches!(Public|Private|Protected)` sites (transpile `is_promoted`/`program_emit`,
   `ast/class_layout`, `native`, `desugar_db`/`di`, `collect`), emitting the promoted field as PHP

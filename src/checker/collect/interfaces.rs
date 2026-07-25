@@ -732,13 +732,19 @@ impl Checker {
                                 if overloads == 1
                                     && matches!(
                                         impl_vis,
-                                        Some(MemberVis::Private) | Some(MemberVis::Protected)
+                                        Some(MemberVis::Private)
+                                            | Some(MemberVis::Protected)
+                                            | Some(MemberVis::Internal)
                                     )
                                 {
-                                    let kind = if impl_vis == Some(MemberVis::Private) {
-                                        "private"
-                                    } else {
-                                        "protected"
+                                    // Q-B DV-3: `internal` is ALSO a reduction below the public
+                                    // interface contract — else the member-`internal` boundary is
+                                    // bypassable by upcasting to the interface (the concrete-call path
+                                    // does enforce it, so the two would disagree).
+                                    let kind = match impl_vis {
+                                        Some(MemberVis::Private) => "private",
+                                        Some(MemberVis::Internal) => "internal",
+                                        _ => "protected",
                                     };
                                     self.err_coded(
                                         c.span,

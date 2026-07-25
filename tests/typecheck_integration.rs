@@ -515,6 +515,30 @@ fn internal_on_promoted_ctor_param_is_rejected() {
     assert!(has_code(&errs, "E-INTERNAL-PROMOTION"), "{errs:?}");
 }
 
+#[test]
+fn interface_method_implemented_internal_is_rejected() {
+    // Q-B DV-3 panel P1: an interface method is a PUBLIC contract — implementing it `internal` would
+    // let a caller bypass the package-subtree boundary by upcasting to the interface. Rejected like
+    // private/protected (E-IFACE-VIS).
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
+        interface Shape { function area(): int; }\n\
+        class Box implements Shape { constructor() {} internal function area(): int { return 1; } }\n\
+        #[Entry(kind: Cli)] function main() -> void {}\n";
+    let errs = check_src(src).expect_err("internal interface impl is rejected");
+    assert!(has_code(&errs, "E-IFACE-VIS"), "{errs:?}");
+}
+
+#[test]
+fn internal_read_with_protected_set_is_wider() {
+    // Q-B DV-3 panel P3: `protected(set)` on an `internal` member lets an out-of-package subclass
+    // WRITE what it cannot READ — the set scope escapes the read scope (E-SET-VIS-WIDER).
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
+        class Box { internal protected(set) mutable int x = 0; constructor() {} }\n\
+        #[Entry(kind: Cli)] function main() -> void {}\n";
+    let errs = check_src(src).expect_err("internal + protected(set) is wider");
+    assert!(has_code(&errs, "E-SET-VIS-WIDER"), "{errs:?}");
+}
+
 // ── M-RT S2.2: method return-type overloading ─────────────────────────────────────────────────
 
 #[test]
