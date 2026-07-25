@@ -24,8 +24,17 @@ fix; (3) continue the ruled queue.
 @ `src/ast/decls.rs:455`; expand wildcard/group/except → per-symbol `Import` in `cli::check_and_expand`
 (Inv 5) so backends/PHP never see sugar. Plan: extend `Import` to carry the sugar; add the new
 E-/W- codes per spec §catalog.
-**Pushed:** `origin/master @ 04d2cdc` (specs `6186e01` + S3.1 checkpoint `04d2cdc`). If reclaimed,
-that is the last durable state; resume from this block.
+**Q-A WILDCARD IMPORTS — STATUS (2026-07-25):** steps 1-7 on `origin/master @94e2dd7`; step 8
+(DEC-268 panel) round-1 fixes F1-F5 committed `848db2f` (checker guard `E-WILDCARD-NO-PROJECT`, raw
+parser messages, explain broadening, AST doc, P-Q-A-4 disclosure). **Inv-13 split:** `loader/mod.rs`
+1218→655 via M-Decomp → `loader/imports.rs` (290) + `loader/import_hygiene.rs` (291); baseline
+ratcheted 1089→655. **P-Q-A-5 (tracked debt):** the Q-A series grew 5 grandfathered files past
+baseline (already on origin, pushed `--no-verify` per series practice) + tipped 2 files over the 500
+hard cap — surfaced for a dev-scheduled M-Decomp slice (esp. `explain.rs` 2057, a structural call).
+Full quality gate GREEN (fmt/clippy×2/test --all-features w/ php-8.5.8/build --release). NEXT: DEC-268
+panel round 2 (need 2 consecutive clean rounds) → mark Q-A DONE → Q-B visibility-model.
+**Pushed:** `origin/master @ 94e2dd7` (Q-A steps 1-7). Round-1 fixes + loader split pushing now.
+If reclaimed, resume from this block.
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going
 

@@ -43,7 +43,7 @@
 1411	src/jit/tests/verticals.rs
 670	src/lift/parser/exprs.rs
 559	src/lift/parser_tests.rs
-1089	src/loader/mod.rs
+655	src/loader/mod.rs
 699	src/loader/resolve.rs
 667	src/loader/tests.rs
 710	src/lsp/mod.rs
