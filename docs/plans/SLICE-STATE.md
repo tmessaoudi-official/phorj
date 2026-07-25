@@ -172,6 +172,14 @@ on the dev box) → slice 1b/3 per D10a → THEN DEC-333 AOT M1-M3. Recorded in 
 DEC-333 amendment row. **UPDATE (slice 2 DONE):** the count is now **6** — slice 2 added the
 HARD-FLAGGED `queryparse` loss; the live list is in the NEXT WORK block below (this block is the
 ruling-time snapshot, 44 WIN / 5 LOSS as the dev stated it).
+**⚠ UPDATE (2026-07-25, container re-bench — NON-RIGOROUS: single-shot, no docker/core-pinning, so
+NOT a canonical figure):** on this container vs php-8.5.8, `floatmul` (2.96×), `dbwork` (1.07×) and
+`listcontains` (3.50×) all now MEASURE AS WINS — only **3 confirmed-remaining losses**: `queryparse`
+(~0.15×, worst), `jsonround` (~0.30×), `deepjson` (~0.75×), all structural JSON/parse verticals
+(Json-ADT slice #33 covers jsonround/deepjson; queryparse needs a `Request.parse` native/JIT vertical).
+A PINNED dev-box/docker re-measure is OWED to canonicalize (the committed `bench/*-baseline.json` +
+the dev-box scorecard predate this and are stale); no flip was attempted here (the pinned-evidence
+harness is unavailable in-container — the flips are the DEC-333/perf "big work" slices, dev-greenlit).
 
 **✅ DEC-331 SLICE 2 — RICH REQUEST v1: BUILT + 3-leg byte-identity green (2026-07-24).** Record of
 truth: spec §8 BUILD STATUS + the register's SLICE-2 BUILD row (build deviations, the PENDING
