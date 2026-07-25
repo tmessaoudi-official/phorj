@@ -1,9 +1,11 @@
 # SPEC (RULED — BUILT, 2026-07-25) — Visibility / access model completeness
 
-> Status: **RULED 2026-07-24; BUILT 2026-07-25.** DV-1+DV-2 shipped (`de75201`); DV-3 (member
-> `internal`) shipped; DV-4 verified already-fixed (W0-2). One bounded follow-up remains (`internal` on
-> constructor-promoted params — see BUILD STATUS). DV-5 (global completeness sweep) is a separate
-> research pass, not this build. Spawned from the
+> Status: **RULED 2026-07-24; BUILT + DEC-268-CERTIFIED 2026-07-25.** DV-1+DV-2 shipped (`de75201`);
+> DV-3 (member `internal`) shipped + certified (round 1 found+fixed P1 iface-vis bypass / P3 set-vis
+> wider; rounds 2-3 clean — two consecutive feature-clean rounds); DV-4 verified already-fixed (W0-2).
+> Two dev-owned follow-ups remain: `internal` on constructor-promoted params (bounded build), and
+> P-Q-B-1 (overloaded interface-method vis narrowing — pre-existing, dev to rule). DV-5 (global
+> completeness sweep) is a separate research pass, not this build. Spawned from the
 > wildcard-import design when the developer spotted the visibility matrix was incomplete/asymmetric.
 > Per Inv 15 (design is the developer's) + Inv 19 (records live in-repo, ZERO divergence): mirrored
 > as a QUEUED slice in `docs/plans/MASTER-PLAN.md` + `docs/plans/SLICE-STATE.md`.

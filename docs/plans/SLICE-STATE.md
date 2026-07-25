@@ -47,7 +47,12 @@ sort, and Inv-13 file-size debt (5 grandfathered files over baseline already on 
   + explain. Full gate green (fmt/clippy×2/test --all-features php-8.5.8/differential 174/format sweep/
   build --release).
 - ✅ **DV-4 (G4 static-field vis) — VERIFIED ALREADY FIXED [Rule 11]** (W0-2). Nothing to build.
-**FOLLOW-UPS (dev-owned):** `internal` on ctor-promoted params (DV-3 follow-up); P-Q-A-5 Inv-13 debt.
+**✅ Q-B DV-3 DEC-268-CERTIFIED (2026-07-25):** round-1 panel found+fixed P1 (interface-vis bypass,
+a real soundness hole) + P3 (set-vis wider) (`82ef418`); rounds 2-3 clean (two consecutive feature-clean
+rounds). One pre-existing gap tracked: P-Q-B-1 (overloaded interface-method vis narrowing — reproduces
+with `private`, dev to rule; comment corrected `7ac9627`).
+**FOLLOW-UPS (dev-owned):** `internal` on ctor-promoted params (DV-3 follow-up, ~11 promotion sites);
+P-Q-B-1 (overloaded iface-vis, dev ruling); P-Q-A-5 Inv-13 file-size debt.
 **NEXT:** Q-C global completeness sweep (DV-5 research pass) — synthesize the existing audits + a fresh
 `/gaps` into one ranked completeness register.
 **Pushed:** `origin/master @ de75201` (Q-A + Q-B DV-1/2). Q-B DV-3 + DONE docs pushing now.
