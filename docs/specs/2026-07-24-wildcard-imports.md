@@ -102,6 +102,37 @@ collision-prone; namespace-binding (`* as ns`) is collision-free but changes cal
   `E-WILDCARD-EMPTY` (binds nothing new), `E-EXCEPT-UNKNOWN` (excepts an absent name),
   `E-IMPORT-UNKNOWN` (import names a non-existent package/member), `W-UNUSED-IMPORT` (wildcard/group).
 
+## BUILD PLAN — TDD steps (autonomous, 2026-07-25; execute in order, gate+commit each)
+
+Ground truth: groups `{A,B}` DONE (parser `parse_import_group`, DEC-186). Loader has package→member
+surface (`index_packages` mod.rs:82; `known_type`/`known_function`/`prov_fns` + `vis_violation`
+mod.rs:69). `*` is `TokenKind::Star` (already tokenized for `*`). Expansion belongs in the LOADER
+(has members+visibility), producing per-symbol `Item::Import` before backends (Inv 5).
+
+1. **Parser — wildcard + except** (`parser/items/decls.rs::parse_import`): after `.`, accept `Star`
+   → a wildcard import; then optional contextual `except { a, b }` (reuse the group-list reader).
+   `import X.* as Y;` → `E-WILDCARD-ALIAS`. Represent as a new `Item::Import` shape (add
+   `wildcard: bool` + `except: Vec<String>`, or a sibling `Item::ImportWildcard{prefix,except,span}`).
+   Tests: parse `X.Y.*;`, `X.Y.* except {A};`, `X.* as Y` → E-WILDCARD-ALIAS.
+2. **Loader — expansion + diagnostics**: when assembling, expand each wildcard to the SORTED set of
+   public+internal immediate members of the target package (types+functions; NOT sub-packages, NOT
+   private); subtract `except`; emit per-member `Item::Import`. Diagnostics: bare `Core.*` →
+   `E-WILDCARD-STDLIB-ROOT`; zero-new-binding → `E-WILDCARD-EMPTY`; `except` name absent →
+   `E-EXCEPT-UNKNOWN` (did-you-mean); two wildcards → same leaf → `E-IMPORT-AMBIGUOUS`.
+   Tests (loader/tests.rs + project fixtures): each code fires; a clean `*` binds the expected set.
+3. **E-IMPORT-UNKNOWN** (G6): any import (single/group/`*`) naming a non-existent package/member →
+   error at the import line, used or not, in loose+project+vendored. (Widen existing resolve check.)
+4. **W-UNUSED-IMPORT** (wildcard/group scope): warn when a wildcard/group-bound name is never used.
+   (First unused-lint; scoped per the coherence note.)
+5. **`phg explain`**: register all 7 codes (E-IMPORT-AMBIGUOUS/WILDCARD-STDLIB-ROOT/WILDCARD-ALIAS/
+   WILDCARD-EMPTY/EXCEPT-UNKNOWN/IMPORT-UNKNOWN, W-UNUSED-IMPORT).
+6. **Transpile/lift**: auto (expansion → plain imports before backends); assert transpiled PHP shows
+   sorted per-symbol `use`; lift never emits `*`/`except`. **format**: sort `{}`/`except {}` members.
+7. **Example + README** (Inv 9): `examples/guide/wildcard-imports.phg` exercising `*`, `except`, and a
+   collision→explicit-fix; `examples/README.md` entry. Differential covers it (VM≡tree-walker≡PHP).
+8. **Gate + DEC-268 panel** (this feature IS substantial → full 3-lens fresh-context reviewer PANEL,
+   two clean rounds) → commit+push.
+
 ## Backends / invariants checklist (for the eventual build)
 
 - Inv 5: expand before backends (compile-time sugar).  Inv 10: sorted expansion.  Inv 17: transpile
