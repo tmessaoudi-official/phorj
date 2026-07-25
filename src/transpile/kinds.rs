@@ -213,3 +213,48 @@ impl Transpiler {
         }
     }
 }
+
+/// Map a checker [`Ty`] (a native's declared return type) to its [`OpKind`] (T6d), so a native-call
+/// result (`Text.upper(s)`, `List.length(xs)`) resolves as an operand. Mirrors [`kind_of_type`] over
+/// the `Ty` representation; anything non-scalar/non-container is `Other` (→ helper fallback).
+pub(super) fn opkind_of_ty(ty: &crate::types::Ty) -> OpKind {
+    use crate::types::Ty;
+    match ty {
+        Ty::Int => OpKind::Int,
+        Ty::Float => OpKind::Float,
+        Ty::Decimal => OpKind::Decimal,
+        Ty::String => OpKind::Str,
+        Ty::Bool => OpKind::Bool,
+        Ty::List(e) => OpKind::List(Box::new(opkind_of_ty(e))),
+        Ty::Map(k, v) => OpKind::Map(Box::new(opkind_of_ty(k)), Box::new(opkind_of_ty(v))),
+        Ty::Named(name, _) => OpKind::Class(name.clone()),
+        _ => OpKind::Other,
+    }
+}
+
+/// Map a (post-checker, resolved) type annotation to its scalar [`OpKind`]. Non-scalars (classes,
+/// `void`, optionals, …) are `Other` — their values aren't the arithmetic/display operands T6
+/// specializes, and the helper fallback covers any that slip through.
+pub(super) fn kind_of_type(ty: &Type) -> OpKind {
+    match ty {
+        Type::Named { name, args, .. } => match name.as_str() {
+            "int" => OpKind::Int,
+            "float" => OpKind::Float,
+            "decimal" => OpKind::Decimal,
+            "string" => OpKind::Str,
+            "bool" => OpKind::Bool,
+            // Containers carry their element kinds so an index read resolves as an operand (T6d).
+            "List" => OpKind::List(Box::new(args.first().map_or(OpKind::Other, kind_of_type))),
+            "Map" => OpKind::Map(
+                Box::new(args.first().map_or(OpKind::Other, kind_of_type)),
+                Box::new(args.get(1).map_or(OpKind::Other, kind_of_type)),
+            ),
+            // Non-arithmetic primitives — no native operand specialization.
+            "void" | "never" | "empty" | "bytes" | "Set" => OpKind::Other,
+            // A user-defined class/enum/interface name → `Class`, so field reads on a value of this
+            // type resolve through `class_field_kinds` (T6b).
+            other => OpKind::Class(other.to_string()),
+        },
+        _ => OpKind::Other,
+    }
+}

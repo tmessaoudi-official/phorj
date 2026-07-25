@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — Invariant-13 debt cleanup: 13 oversized files M-Decomp'd to <300 (2026-07-25)
+- Split 13 pre-existing size-gate breaches (parser/checker/cli/ast/lift/loader/transpile — sizes 504–2066)
+  into ~90 cohesive submodules, every resulting file <300 lines. Pure code movement / data reorg — no
+  behavioural change; `scripts/size-baseline.txt` was NOT touched (real splits, not baseline bumps). The
+  transpiler's `Transpiler` struct shrank via a `HelperGates` sub-struct (the ~65 `uses_*` gate flags →
+  `gates: HelperGates` in `src/transpile/gates.rs`); byte-identity preserved (differential green). `phg
+  explain` output is byte-identical (arms moved verbatim). Full ALL-FEATURES gate + `scripts/size-gate.sh`
+  green. (Remaining grandfathered-at-baseline files >300 are the standing Inv-13 burn-down, not breaches.)
+
 ### Changed — nativized `Request.parse` (targets the `queryparse` perf loss) (2026-07-25, DEC-338, DEC-268-certified)
 - The whole wire→`Request` parse is now one Rust native `Core.Native.Http.parseRequest(bytes): Request?`
   (`src/native/http/request.rs`) with a byte-identical PHP transpile twin `__phorj_http_parse_request`

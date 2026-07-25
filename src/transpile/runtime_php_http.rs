@@ -8,7 +8,7 @@ use super::Transpiler;
 
 impl Transpiler {
     pub(super) fn emit_http_runtime_helpers(&mut self) {
-        if !self.uses_http {
+        if !self.gates.uses_http {
             return;
         }
         // Component decode: '+'→space (form only), %XX (exactly two hex), invalid escape literal,
@@ -148,7 +148,7 @@ impl Transpiler {
         // SINGLE-SOURCED with `__phorj_text_trim` (Invariant 4): the one WS class const in runtime_php.rs.
         // The nativized parse path no longer emits `String.trim`, so this helper is self-contained — but
         // its char class is NOT a copy: it derives from the shared const so PHP-leg trim parity can't drift.
-        const WS: &str = super::runtime_php::PHP_TRIM_WS;
+        const WS: &str = super::PHP_TRIM_WS;
         self.line(&format!(
             "function __phorj_http_trim($s) {{ return preg_replace('/^{WS}+|{WS}+$/u', '', $s); }}"
         ));

@@ -37,7 +37,7 @@ impl Transpiler {
                 // DEC-255: negating an `int` overflows only at `i64::MIN` — phorj faults, bare PHP `-$x`
                 // silently promotes to float. Route an int negation through `__phorj_checked_neg`.
                 if matches!(op, UnaryOp::Neg) && self.expr_kind(expr) == OpKind::Int {
-                    self.uses_checked_arith = true;
+                    self.gates.uses_checked_arith = true;
                     let bs = if self.namespaced { "\\" } else { "" };
                     return Ok(format!("{bs}__phorj_checked_neg({inner})"));
                 }
@@ -80,27 +80,27 @@ impl Transpiler {
                         };
                         let helper = match op {
                             BinaryOp::Add => {
-                                self.uses_dec_add = true;
+                                self.gates.uses_dec_add = true;
                                 "__phorj_dec_add"
                             }
                             BinaryOp::Sub => {
-                                self.uses_dec_sub = true;
+                                self.gates.uses_dec_sub = true;
                                 "__phorj_dec_sub"
                             }
                             BinaryOp::Mul => {
-                                self.uses_dec_mul = true;
+                                self.gates.uses_dec_mul = true;
                                 "__phorj_dec_mul"
                             }
                             // Exact decimal `%` (2026-06-27): `bcmod` at `max(scales)`, zero divisor
                             // throws (matching the Rust `decimal_rem` fault).
                             BinaryOp::Rem => {
-                                self.uses_dec_rem = true;
+                                self.gates.uses_dec_rem = true;
                                 "__phorj_dec_rem"
                             }
                             // Exact-or-fault decimal `/` (2026-06-27): bcdiv + exactness check + strip
                             // to minimal form; non-terminating or zero divisor throws.
                             BinaryOp::Div => {
-                                self.uses_dec_div_exact = true;
+                                self.gates.uses_dec_div_exact = true;
                                 "__phorj_dec_div_exact"
                             }
                             _ => unreachable!("matched Add/Sub/Mul/Rem/Div above"),
@@ -123,7 +123,7 @@ impl Transpiler {
                             format!("{l} / {r}")
                         }
                         _ => {
-                            self.uses_div = true;
+                            self.gates.uses_div = true;
                             format!("{bs}__phorj_div({l}, {r})")
                         }
                     });
@@ -138,11 +138,11 @@ impl Transpiler {
                         // *throws* — PHP `fmod($x, 0.0)` returns `NAN`, but Phorj faults on any
                         // division by zero, so the helper guards `$b == 0` before the `fmod`.
                         OpKind::Float => {
-                            self.uses_rem = true;
+                            self.gates.uses_rem = true;
                             format!("{bs}__phorj_rem({l}, {r})")
                         }
                         _ => {
-                            self.uses_rem = true;
+                            self.gates.uses_rem = true;
                             format!("{bs}__phorj_rem({l}, {r})")
                         }
                     });
@@ -158,7 +158,7 @@ impl Transpiler {
                         return Ok(format!("{l} . {r}"));
                     }
                     if lk == OpKind::Int && rk == OpKind::Int {
-                        self.uses_checked_arith = true;
+                        self.gates.uses_checked_arith = true;
                         return Ok(format!("{bs}__phorj_checked_add({l}, {r})"));
                     }
                     if matches!(lk, OpKind::Int | OpKind::Float)
@@ -167,7 +167,7 @@ impl Transpiler {
                         let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
                         return Ok(format!("{l} + {r}"));
                     }
-                    self.uses_add = true;
+                    self.gates.uses_add = true;
                     return Ok(format!("{bs}__phorj_add({l}, {r})"));
                 }
                 // DEC-255: INT `-`/`*` overflow — phorj faults, bare PHP silently promotes to float.
@@ -177,7 +177,7 @@ impl Transpiler {
                     && self.expr_kind(lhs) == OpKind::Int
                     && self.expr_kind(rhs) == OpKind::Int
                 {
-                    self.uses_checked_arith = true;
+                    self.gates.uses_checked_arith = true;
                     let helper = if matches!(op, BinaryOp::Sub) {
                         "__phorj_checked_sub"
                     } else {
@@ -276,7 +276,7 @@ impl Transpiler {
                 // so `$xs[$i] = $v` stays a valid lvalue.
                 let o = self.emit_expr(object)?;
                 let i = self.emit_expr(index)?;
-                self.uses_index = true;
+                self.gates.uses_index = true;
                 Ok(format!("__phorj_index({o}, {i})"))
             }
             Expr::Str(parts, _) => self.emit_string(parts),
@@ -428,7 +428,7 @@ impl Transpiler {
             } => {
                 let s = self.emit_expr(start)?;
                 let e = self.emit_expr(end)?;
-                self.uses_range = true;
+                self.gates.uses_range = true;
                 let bs = if self.namespaced { "\\" } else { "" };
                 Ok(format!(
                     "{bs}__phorj_range({s}, {e}, {})",
@@ -638,11 +638,11 @@ impl Transpiler {
                 Self::paren_if_compound(e, code)
             ),
             OpKind::Float => {
-                self.uses_float = true;
+                self.gates.uses_float = true;
                 format!("{bs}__phorj_float({code})")
             }
             OpKind::Class(_) | OpKind::List(_) | OpKind::Map(..) | OpKind::Other => {
-                self.uses_str = true;
+                self.gates.uses_str = true;
                 format!("{bs}__phorj_str({code})")
             }
         }

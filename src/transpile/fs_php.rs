@@ -16,7 +16,7 @@ use super::*;
 
 impl Transpiler {
     pub(super) fn emit_fs_helpers(&mut self) {
-        if !self.uses_fs {
+        if !self.gates.uses_fs {
             return;
         }
         for line in FS_HELPERS.lines() {

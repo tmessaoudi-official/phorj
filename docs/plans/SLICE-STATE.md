@@ -1,5 +1,20 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ✅ INV-13 DEBT CLEANUP — DONE (2026-07-25, dev-ruled), unblocks DEC-338 push
+**Why:** the pre-push size-gate (`scripts/size-gate.sh`, Inv 13) blocked ALL pushes — origin/master had
+**13 pre-existing breaches** (prior pushes bypassed via `--no-verify`). Dev ruled (AskUserQuestion): fix the debt
+FIRST via real M-Decomp (NOT baseline edits — "don't cheat"), every resulting file STRICTLY **<300** (not just
+≤baseline/≤500), every commit green, THEN push. **RESULT:** all 13 split into ~90 cohesive <300-line files;
+`scripts/size-baseline.txt` **UNTOUCHED** (split-below-cap files now show as harmless "stale" notes, gate still
+OK). transpile/mod.rs (759→190) used a **HelperGates sub-struct** (dev-ruled, AskUserQuestion): the ~65 `uses_*`
+flags → `gates: HelperGates` (`src/transpile/gates.rs`), 196 `self.uses_X`→`self.gates.uses_X` renames across 7
+files, byte-identity preserved (pure data reorg). The shared PHP-trim `PHP_TRIM_WS` const moved to `transpile/mod.rs`
+(single-sourced) so neither runtime file grew past cap. **GATE GREEN:** `size-gate.sh` fails=0; full ALL-FEATURES
+suite (2033 + 174 differential, php-8.5.8 oracle) 0-failed; clippy ×2 + fmt + release clean. Task #40.
+**Residual (future burn-down, NOT breaches — grandfathered-at-baseline, don't block push):** `loader/resolve.rs`
+699, `transpile/{runtime_php.rs 1370, expr.rs 755, classes_synth.rs 686, classes.rs 543, program_emit.rs, stmt.rs,
+call.rs, matches.rs, tests.rs, runtime_tables.rs}` etc. — the standing "all files eventually <300" ratchet.
+
 ## 🌙 AUTONOMOUS OVERNIGHT RUN (2026-07-25, dynamic /loop) — READ FIRST if resuming
 
 **Mode:** user asleep, ruled "work non-stop through specced/100%-clear parts, no questions, no stop

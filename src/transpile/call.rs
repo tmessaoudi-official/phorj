@@ -145,25 +145,25 @@ impl Transpiler {
                         let nat = &crate::native::registry()[idx];
                         // `Output.capture` erases to the gated `__phorj_capture` helper (DEC-220-S3).
                         if nat.module == "Core.Output" && nat.name == "capture" {
-                            self.uses_capture = true;
+                            self.gates.uses_capture = true;
                         }
                         if nat.module == "Core.Native.Debug" && nat.name == "render" {
-                            self.uses_debug_render = true;
+                            self.gates.uses_debug_render = true;
                             // Scalars render through the interpolation kernel twin.
-                            self.uses_str = true;
+                            self.gates.uses_str = true;
                         }
                         if nat.module == "Core.String" && nat.name == "format" {
-                            self.uses_string_format = true;
+                            self.gates.uses_string_format = true;
                             // `__phorj_format`'s `%s` stringifies via `__phorj_str` (the same kernel
                             // interpolation uses), so gate it in too.
-                            self.uses_str = true;
+                            self.gates.uses_str = true;
                         }
                         if nat.module == "Core.Reflection" {
                             match nat.name {
-                                "kind" => self.uses_reflect_kind = true,
-                                "className" => self.uses_reflect_class_name = true,
+                                "kind" => self.gates.uses_reflect_kind = true,
+                                "className" => self.gates.uses_reflect_class_name = true,
                                 "interfaces" | "parents" | "methods" | "fields" => {
-                                    self.uses_reflect_tables = true;
+                                    self.gates.uses_reflect_tables = true;
                                 }
                                 _ => {}
                             }
@@ -172,99 +172,99 @@ impl Transpiler {
                             match nat.name {
                                 // `stringifyPretty` reuses `__phorj_json_encode` for scalars/empties,
                                 // so it gates both the pretty and the compact helper.
-                                "stringify" => self.uses_json_encode = true,
+                                "stringify" => self.gates.uses_json_encode = true,
                                 "stringifyPretty" => {
-                                    self.uses_json_pretty = true;
-                                    self.uses_json_encode = true;
+                                    self.gates.uses_json_pretty = true;
+                                    self.gates.uses_json_encode = true;
                                 }
-                                "parse" => self.uses_json_decode = true,
+                                "parse" => self.gates.uses_json_decode = true,
                                 // NDJSON: parseLines reuses __phorj_json_build (decode); stringifyLines
                                 // reuses __phorj_json_encode. Each gates its own line helper too.
                                 "parseLines" => {
-                                    self.uses_json_decode = true;
-                                    self.uses_json_parse_lines = true;
+                                    self.gates.uses_json_decode = true;
+                                    self.gates.uses_json_parse_lines = true;
                                 }
                                 "stringifyLines" => {
-                                    self.uses_json_encode = true;
-                                    self.uses_json_stringify_lines = true;
+                                    self.gates.uses_json_encode = true;
+                                    self.gates.uses_json_stringify_lines = true;
                                 }
                                 _ => {}
                             }
                         }
                         if nat.module == "Core.Ini" && nat.name == "parse" {
-                            self.uses_ini_parse = true;
+                            self.gates.uses_ini_parse = true;
                         }
                         if nat.module == "Core.Native.Http" {
                             // The whole `__phorj_http_*` family is one gated block (DEC-331 s2);
                             // `jsonParse` additionally rides `__phorj_json_decode` (one parser).
-                            self.uses_http = true;
+                            self.gates.uses_http = true;
                             if nat.name == "jsonParse" {
-                                self.uses_json_decode = true;
+                                self.gates.uses_json_decode = true;
                             }
                         }
                         if nat.module == "Core.Option" {
                             match nat.name {
-                                "map" => self.uses_option_map = true,
-                                "andThen" => self.uses_option_and_then = true,
-                                "filter" => self.uses_option_filter = true,
-                                "getOrElse" => self.uses_option_get_or_else = true,
-                                "ofNullable" => self.uses_option_of_nullable = true,
-                                "toNullable" => self.uses_option_to_nullable = true,
+                                "map" => self.gates.uses_option_map = true,
+                                "andThen" => self.gates.uses_option_and_then = true,
+                                "filter" => self.gates.uses_option_filter = true,
+                                "getOrElse" => self.gates.uses_option_get_or_else = true,
+                                "ofNullable" => self.gates.uses_option_of_nullable = true,
+                                "toNullable" => self.gates.uses_option_to_nullable = true,
                                 _ => {}
                             }
                         }
                         if nat.module == "Core.Result" {
                             match nat.name {
-                                "map" => self.uses_result_map = true,
-                                "mapErr" => self.uses_result_map_err = true,
-                                "andThen" => self.uses_result_and_then = true,
-                                "getOrElse" => self.uses_result_get_or_else = true,
-                                "orElse" => self.uses_result_or_else = true,
-                                "toOption" => self.uses_result_to_option = true,
+                                "map" => self.gates.uses_result_map = true,
+                                "mapErr" => self.gates.uses_result_map_err = true,
+                                "andThen" => self.gates.uses_result_and_then = true,
+                                "getOrElse" => self.gates.uses_result_get_or_else = true,
+                                "orElse" => self.gates.uses_result_or_else = true,
+                                "toOption" => self.gates.uses_result_to_option = true,
                                 // isSuccess/isFailure emit an inline `instanceof` (no helper).
                                 _ => {}
                             }
                         }
                         if nat.module == "Core.String" {
                             match nat.name {
-                                "parseInt" => self.uses_text_parse_int = true,
-                                "indexOf" => self.uses_text_index_of = true,
-                                "reverse" => self.uses_text_reverse = true,
-                                "trim" => self.uses_text_trim = true,
-                                "trimStart" => self.uses_text_trim_start = true,
-                                "trimEnd" => self.uses_text_trim_end = true,
-                                "parseFloat" => self.uses_text_parse_float = true,
-                                "chunk" => self.uses_text_chunk = true,
+                                "parseInt" => self.gates.uses_text_parse_int = true,
+                                "indexOf" => self.gates.uses_text_index_of = true,
+                                "reverse" => self.gates.uses_text_reverse = true,
+                                "trim" => self.gates.uses_text_trim = true,
+                                "trimStart" => self.gates.uses_text_trim_start = true,
+                                "trimEnd" => self.gates.uses_text_trim_end = true,
+                                "parseFloat" => self.gates.uses_text_parse_float = true,
+                                "chunk" => self.gates.uses_text_chunk = true,
                                 _ => {}
                             }
                         }
                         if nat.module == "Core.List" {
                             match nat.name {
-                                "sort" | "sortDescending" => self.uses_list_sort = true,
-                                "sortWith" => self.uses_list_sort_with = true,
-                                "takeWhile" => self.uses_list_take_while = true,
-                                "dropWhile" => self.uses_list_drop_while = true,
-                                "groupBy" => self.uses_list_group_by = true,
-                                "indexOf" => self.uses_list_index_of = true,
-                                "lastIndexOf" => self.uses_list_last_index_of = true,
-                                "unique" => self.uses_list_unique = true,
-                                "difference" => self.uses_list_difference = true,
-                                "intersection" => self.uses_list_intersection = true,
-                                "min" => self.uses_list_min = true,
-                                "max" => self.uses_list_max = true,
-                                "minBy" => self.uses_list_min_by = true,
-                                "maxBy" => self.uses_list_max_by = true,
-                                "find" => self.uses_list_find = true,
-                                "any" => self.uses_list_any = true,
-                                "none" => self.uses_list_none = true,
-                                "all" => self.uses_list_all = true,
+                                "sort" | "sortDescending" => self.gates.uses_list_sort = true,
+                                "sortWith" => self.gates.uses_list_sort_with = true,
+                                "takeWhile" => self.gates.uses_list_take_while = true,
+                                "dropWhile" => self.gates.uses_list_drop_while = true,
+                                "groupBy" => self.gates.uses_list_group_by = true,
+                                "indexOf" => self.gates.uses_list_index_of = true,
+                                "lastIndexOf" => self.gates.uses_list_last_index_of = true,
+                                "unique" => self.gates.uses_list_unique = true,
+                                "difference" => self.gates.uses_list_difference = true,
+                                "intersection" => self.gates.uses_list_intersection = true,
+                                "min" => self.gates.uses_list_min = true,
+                                "max" => self.gates.uses_list_max = true,
+                                "minBy" => self.gates.uses_list_min_by = true,
+                                "maxBy" => self.gates.uses_list_max_by = true,
+                                "find" => self.gates.uses_list_find = true,
+                                "any" => self.gates.uses_list_any = true,
+                                "none" => self.gates.uses_list_none = true,
+                                "all" => self.gates.uses_list_all = true,
                                 _ => {}
                             }
                         }
                         if nat.module == "Core.Map" {
                             match nat.name {
-                                "set" => self.uses_map_set = true,
-                                "remove" => self.uses_map_remove = true,
+                                "set" => self.gates.uses_map_set = true,
+                                "remove" => self.gates.uses_map_remove = true,
                                 _ => {}
                             }
                         }
@@ -272,17 +272,17 @@ impl Transpiler {
                         // `decimalToInt` each define their own edge-safe helper (M-NUM S3).
                         if nat.module == "Core.Conversion" {
                             match nat.name {
-                                "toString" => self.uses_str = true,
-                                "toInt" => self.uses_float_to_int = true,
-                                "truncate" => self.uses_trunc = true,
-                                "round" => self.uses_round = true,
-                                "decimalToInt" => self.uses_dec_to_int = true,
-                                "floatToIntExact" => self.uses_float_to_int_exact = true,
-                                "decimalToIntExact" => self.uses_dec_to_int_exact = true,
+                                "toString" => self.gates.uses_str = true,
+                                "toInt" => self.gates.uses_float_to_int = true,
+                                "truncate" => self.gates.uses_trunc = true,
+                                "round" => self.gates.uses_round = true,
+                                "decimalToInt" => self.gates.uses_dec_to_int = true,
+                                "floatToIntExact" => self.gates.uses_float_to_int_exact = true,
+                                "decimalToIntExact" => self.gates.uses_dec_to_int_exact = true,
                                 // `float as decimal` reuses the float-display + decimal-parse helpers.
                                 "floatToDecimal" => {
-                                    self.uses_str = true;
-                                    self.uses_dec_of = true;
+                                    self.gates.uses_str = true;
+                                    self.gates.uses_dec_of = true;
                                 }
                                 _ => {}
                             }
@@ -293,10 +293,10 @@ impl Transpiler {
                         // to a same-named PHP builtin (no helper).
                         if nat.module == "Core.Math" {
                             match nat.name {
-                                "gcd" => self.uses_math_gcd = true,
-                                "clamp" => self.uses_math_clamp = true,
-                                "lcm" => self.uses_math_lcm = true,
-                                "numberFormat" => self.uses_math_number_format = true,
+                                "gcd" => self.gates.uses_math_gcd = true,
+                                "clamp" => self.gates.uses_math_clamp = true,
+                                "lcm" => self.gates.uses_math_lcm = true,
+                                "numberFormat" => self.gates.uses_math_number_format = true,
                                 _ => {}
                             }
                         }
@@ -304,7 +304,7 @@ impl Transpiler {
                         // hand-rolled xorshift64 byte-identical to the Rust kernel (so seeded output
                         // matches across all backends — Random is no longer quarantined).
                         if nat.module == "Core.Random" {
-                            self.uses_rng = true;
+                            self.gates.uses_rng = true;
                         }
                         // `Core.Native.Uri` erases to the gated `__phorj_uri*` helpers (DEC-240): thin
                         // wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri` — the extension IS
@@ -317,37 +317,37 @@ impl Transpiler {
                                 "encodeForm" | "encodeComponent" | "decodeForm" | "decodeComponent"
                             )
                         {
-                            self.uses_uri = true;
+                            self.gates.uses_uri = true;
                         }
                         // `Core.Regex` erases to gated `__phorj_regex_*` helpers (Fork A, 2026-06-28):
                         // the injected `Regex` holds the bare pattern; the helpers build a
                         // collision-free `~…~u` PCRE form and delegate to `preg_*`.
                         if nat.module == "Core.Regex" {
-                            self.uses_regex = true;
+                            self.gates.uses_regex = true;
                         }
                         // `Core.Time` erases to gated `__phorj_now_*` helpers (M-TIME, 2026-06-28): a
                         // freezable process-global clock hand-rolled to match the Rust kernel, so a frozen
                         // program is byte-identical across all backends.
                         if nat.module == "Core.Time" {
-                            self.uses_clock = true;
+                            self.gates.uses_clock = true;
                         }
                         // `Core.Log` / `Core.Native.Log` (DEC-317 Log-v2) route through the gated
                         // `__phorj_log_*` helpers: a `$GLOBALS`-held channel config + an emit kernel
                         // hand-rolled to the same deterministic line/json contract as the Rust one.
                         if nat.module == "Core.Log" || nat.module == "Core.Native.Log" {
-                            self.uses_log = true;
+                            self.gates.uses_log = true;
                         }
                         // `Core.Native.FileSystem` (DEC-313) routes through the gated `__phorj_fs_*`
                         // helpers; the `FileSystemResult` wrap happens at the call site (R1).
                         if nat.module == "Core.Native.FileSystem" {
-                            self.uses_fs = true;
+                            self.gates.uses_fs = true;
                         }
                         // `Decimal.*` erases to gated `__phorj_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {
-                                "of" => self.uses_dec_of = true,
-                                "divide" => self.uses_dec_div = true,
-                                "round" => self.uses_dec_round = true,
+                                "of" => self.gates.uses_dec_of = true,
+                                "divide" => self.gates.uses_dec_div = true,
+                                "round" => self.gates.uses_dec_round = true,
                                 _ => {}
                             }
                         }
@@ -380,7 +380,7 @@ impl Transpiler {
                                     | ("Core.Math", "integerPower")
                                     | ("Core.List", "sum")
                             ) {
-                                self.uses_checked_int = true;
+                                self.gates.uses_checked_int = true;
                                 let bs = if self.namespaced { "\\" } else { "" };
                                 format!("{bs}__phorj_checked_int({php})")
                             } else {

@@ -43,20 +43,30 @@ use crate::parser::Parser;
 use crate::token::Span;
 use crate::tokenizer::lex;
 
-// Cohesion split (M-Decomp W3.2): resolution walkers + fs helpers in sibling files.
+// Cohesion split (M-Decomp): resolution walkers + fs helpers + the load pipeline / two-pass
+// assembly / data-type impls / visibility lattice live in sibling files. This root keeps only the
+// shared type definitions, the `mangle`/`pascal` name helpers, and the module wiring.
+mod assemble;
 mod discovery;
+mod entry;
 mod fs;
 mod import_hygiene;
 mod imports;
 mod resolve;
+mod unit;
+mod visibility;
 
+use assemble::*;
 use discovery::{discover_roots, index_packages, SearchRoots};
 /// Project-package enumeration for the LSP import-path completion (the `discovery` module is private).
 pub(crate) use discovery::{project_packages, project_phg_files};
+/// The loader's public entry points (defined in `entry`) re-exported at `crate::loader::…`.
+pub use entry::{discover_phg, load, load_loose_src, load_with_buffer};
 use fs::*;
 use import_hygiene::*;
 use imports::*;
 use resolve::*;
+use visibility::*;
 
 /// Provenance for one top-level definition: where it was declared and how visible it is. Built in
 /// Pass 1 (which still has per-file information) and consumed by the visibility lattice during Pass 2.
@@ -65,51 +75,6 @@ struct DefInfo {
     file: PathBuf,
     package: String,
     vis: Visibility,
-}
-
-/// Q-B DV-1: the package HIERARCHY relation — is `ancestor` the same package as `descendant`, or a
-/// dotted-prefix ANCESTOR of it? `Acme.App` is an ancestor-or-equal of `Acme.App` and `Acme.App.Sub`
-/// (and `Acme.App.Sub.Deep`), but NOT of `Acme.AppX` (a prefix that does not end on a `.` boundary is
-/// a different package) nor of `Acme` (that is the reverse direction). This is the single relation the
-/// subtree-`internal` visibility rule is built on.
-pub(super) fn pkg_is_ancestor_or_equal(ancestor: &str, descendant: &str) -> bool {
-    descendant == ancestor
-        || descendant
-            .strip_prefix(ancestor)
-            .is_some_and(|rest| rest.starts_with('.'))
-}
-
-/// The visibility lattice check. `None` ⇒ the reference is legal; `Some(code)` ⇒ the diagnostic code
-/// to report. Same file → always legal. `private` = this FILE only (any other file, even same package,
-/// is `E-VIS-PRIVATE`). `internal` (Q-B DV-2) = the declaring package AND its descendant packages
-/// (subtree, via [`pkg_is_ancestor_or_equal`]) — reaches DOWN the dotted hierarchy, never up or across
-/// to a sibling. `public` = everywhere.
-fn vis_violation(info: &DefInfo, referrer_file: &Path, referrer_pkg: &str) -> Option<&'static str> {
-    if info.file == referrer_file {
-        return None;
-    }
-    match info.vis {
-        Visibility::Public => None,
-        // File-scoped: a different file is always a violation, regardless of package.
-        Visibility::Private => Some("E-VIS-PRIVATE"),
-        // Subtree-scoped: legal iff the referrer's package is the declaring package or a descendant.
-        Visibility::Internal => {
-            if pkg_is_ancestor_or_equal(&info.package, referrer_pkg) {
-                None
-            } else {
-                Some("E-VIS-INTERNAL")
-            }
-        }
-    }
-}
-
-/// Render the visibility keyword for a diagnostic.
-fn vis_word(vis: Visibility) -> &'static str {
-    match vis {
-        Visibility::Public => "public",
-        Visibility::Internal => "internal",
-        Visibility::Private => "private",
-    }
 }
 
 /// A loaded compilation unit: the (possibly merged) program plus the source text used to render
@@ -138,26 +103,6 @@ pub struct Unit {
     pub item_files: std::collections::HashMap<String, PathBuf>,
 }
 
-impl Unit {
-    /// Attribute each runtime trace frame to its origin file via [`Unit::fn_files`] (no-op in loose
-    /// mode / for backend-synthesized method frames). Returns the source text to render the fault
-    /// caret against — the innermost frame's file source in project mode, else `diag_src`.
-    #[must_use]
-    pub fn attribute_frames(&self, diag: &mut Diagnostic) -> String {
-        for f in &mut diag.frames {
-            if f.file.is_none() {
-                f.file = self.fn_files.get(&f.function).cloned();
-            }
-        }
-        diag.frames
-            .first()
-            .and_then(|f| f.file.as_ref())
-            .and_then(|p| self.sources.get(p))
-            .cloned()
-            .unwrap_or_else(|| self.diag_src.clone())
-    }
-}
-
 /// Counts of what a project load assembled and handed to the checker — every `.phg` under the source
 /// root (first-party + vendored), merged and validated as one program.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -167,50 +112,6 @@ pub struct LoadStats {
     pub defs: usize,
 }
 
-impl LoadStats {
-    /// A one-line human summary for `phg check`'s success message.
-    pub fn summary(&self) -> String {
-        format!(
-            "OK — whole project type-checks clean: {} file{}, {} package{}, {} definition{} \
-             validated (every file + vendored deps)\n",
-            self.files,
-            plural(self.files),
-            self.packages,
-            plural(self.packages),
-            self.defs,
-            plural(self.defs),
-        )
-    }
-}
-
-fn plural(n: usize) -> &'static str {
-    if n == 1 {
-        ""
-    } else {
-        "s"
-    }
-}
-
-/// Recursively collect every `*.phg` under `dir` (sorted, deterministic). Public wrapper over the
-/// internal walker, used by the `phg test` runner (M-Test T3) to discover test files. An empty Vec
-/// for a non-directory or empty tree.
-pub fn discover_phg(dir: &Path) -> Result<Vec<PathBuf>, String> {
-    collect_phg(dir)
-}
-
-/// Load the entry at `path` — DEC-282, the unified manifest-less loader. A `phorj.toml` found by
-/// walk-up still selects the legacy project mode (retiring this release); otherwise the unified
-/// rule applies: app-root discovery (`src/`/`vendor/` as the walk-up marker), three ordered search
-/// roots (entry-local → `src/` → `vendor/`), and import-driven, declaration-indexed lazy loading —
-/// only packages the entry's import graph reaches are ever read.
-pub fn load(entry: &Path) -> Result<Unit, String> {
-    // Canonicalize so walk-up discovery works from a relative entry path; fall back to the raw path
-    // when it does not exist yet (the read below then yields the canonical "cannot read" error).
-    let canon = entry.canonicalize().ok();
-    let probe: &Path = canon.as_deref().unwrap_or(entry);
-    load_unified(probe)
-}
-
 /// One resolved import: (winning root index, root label, root path, the package's files, the
 /// package name) — the search loop's carrier (a named alias keeps clippy's type-complexity
 /// lint honest).
@@ -218,379 +119,6 @@ type RootHit = (usize, &'static str, PathBuf, Vec<PathBuf>, String);
 
 /// One indexed search root: (human label, root path, package → files declaration index).
 type SearchIndex = (&'static str, PathBuf, BTreeMap<String, Vec<PathBuf>>);
-
-/// DEC-282 — the unified load: parse the entry, then chase its user imports through the three
-/// ordered search roots (first match wins; a later root also holding the package gets a loud
-/// shadow warning), transitively, loading ONLY reached packages. The assembled sources then run
-/// through the same two-pass mangle/rewrite/merge machinery as before.
-fn load_unified(entry: &Path) -> Result<Unit, String> {
-    let entry_src = read_file(entry)?;
-    load_unified_src(entry, entry_src)
-}
-
-/// DEC-282/DEC-252 — the LSP seam: load `entry` under the unified rule but with `entry_src` as the
-/// entry's text (the editor's possibly-unsaved buffer) instead of the on-disk bytes; sibling
-/// packages still come from disk. This is what makes editor diagnostics ≡ `phg check` for
-/// multi-file programs.
-pub fn load_with_buffer(entry: &Path, entry_src: &str) -> Result<Unit, String> {
-    let canon = entry.canonicalize().ok();
-    let probe: &Path = canon.as_deref().unwrap_or(entry);
-    load_unified_src(probe, entry_src.to_string())
-}
-
-fn load_unified_src(entry: &Path, entry_src: String) -> Result<Unit, String> {
-    let entry_prog = parse_at(entry, &entry_src)?;
-    check_unused_imports(&entry_prog, &entry_src, entry)?;
-    let roots = discover_roots(entry);
-
-    // Fast path: no user imports AND no ambient `*.d.phg` declaration files under the roots →
-    // a self-contained script; skip all disk scanning. (An entry using only foreign `declare`s
-    // has no user imports but still needs its decl files ambient-merged — the assemble path.)
-    let mut queue: Vec<Vec<String>> = user_imports(&entry_prog, entry)?;
-    if queue.is_empty() && collect_unified_decls(&roots)?.is_empty() {
-        return Ok(Unit {
-            program: entry_prog,
-            diag_src: entry_src,
-            stats: None,
-            sources: std::collections::HashMap::new(),
-            fn_files: std::collections::HashMap::new(),
-            item_files: std::collections::HashMap::new(),
-        });
-    }
-
-    // The three ordered (name, root, index) search roots. Root 1 excludes root 2/3 subtrees.
-    let mut indexed: Vec<SearchIndex> = Vec::new();
-    {
-        let mut exclude: Vec<&Path> = Vec::new();
-        if let Some(s) = &roots.src_root {
-            exclude.push(s);
-        }
-        if let Some(v) = &roots.vendor_root {
-            exclude.push(v);
-        }
-        indexed.push((
-            "entry directory",
-            roots.entry_local.clone(),
-            index_packages(&roots.entry_local, &exclude),
-        ));
-    }
-    if let Some(s) = &roots.src_root {
-        indexed.push(("src/", s.clone(), index_packages(s, &[])));
-    }
-    if let Some(v) = &roots.vendor_root {
-        indexed.push(("vendor/", v.clone(), index_packages(v, &[])));
-    }
-
-    let mut sources: Vec<Source> =
-        vec![Source::first_party(entry.to_path_buf(), &roots.entry_local)];
-    let mut loaded: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    let mut parsed_cache: HashMap<PathBuf, Program> = HashMap::new();
-    while let Some(path) = queue.pop() {
-        // A dotted import names a package, or a member of one — resolve the longest matching
-        // prefix as the package (full path first, then the parent for `import Pkg.Member;`).
-        let full = path.join(".");
-        let parent = path[..path.len().saturating_sub(1)].join(".");
-        let mut hit: Option<RootHit> = None;
-        'outer: for want in [&full, &parent] {
-            if want.is_empty() {
-                continue;
-            }
-            for (i, (label, root, idx)) in indexed.iter().enumerate() {
-                if let Some(files) = idx.get(want.as_str()) {
-                    hit = Some((i, label, root.clone(), files.clone(), want.clone()));
-                    break 'outer;
-                }
-            }
-        }
-        let Some((win_i, _label, root, files, pkg)) = hit else {
-            let searched: Vec<String> = indexed
-                .iter()
-                .map(|(label, root, _)| format!("{} ({})", label, root.display()))
-                .collect();
-            return Err(format!(
-                "import `{}` does not resolve: no package `{}` (or `{}`) under any search root\n  searched: {}\n  hint: packages live in folders matching their name (folder = package) under the \
-                 entry's directory, `src/`, or `vendor/`; dependencies must already be on disk — \
-                 phg never downloads code [E-MODULE-NOT-FOUND]",
-                full,
-                full,
-                if parent.is_empty() { "-" } else { &parent },
-                searched.join(", ")
-            ));
-        };
-        // Shadow visibility: the same package in a LATER root too is legal (the specific root
-        // wins) but never silent.
-        for (label, root2, idx) in indexed.iter().skip(win_i + 1) {
-            if idx.contains_key(&pkg) {
-                eprintln!(
-                    "warning: package `{pkg}` in {} ({}) is shadowed by the more specific {} \
-                     ({}) [W-SHADOWED]",
-                    label,
-                    root2.display(),
-                    indexed[win_i].0,
-                    root.display()
-                );
-            }
-        }
-        if !loaded.insert(pkg.clone()) {
-            continue;
-        }
-        for f in files {
-            if parsed_cache.contains_key(&f) || same_file(&f, entry) {
-                continue;
-            }
-            let fsrc = read_file(&f)?;
-            let fprog = parse_at(&f, &fsrc)?;
-            check_unused_imports(&fprog, &fsrc, &f)?;
-            queue.extend(user_imports(&fprog, &f)?);
-            parsed_cache.insert(f.clone(), fprog);
-            let vendored = roots.vendor_root.as_ref().is_some_and(|v| f.starts_with(v));
-            sources.push(if vendored {
-                Source::vendored(f, &root)
-            } else {
-                Source::first_party(f, &root)
-            });
-        }
-    }
-    sources.sort_by(|a, b| a.file.cmp(&b.file));
-    sources.dedup_by(|a, b| a.file == b.file);
-    let decl_files = collect_unified_decls(&roots)?;
-    assemble(entry, sources, &decl_files, Some((entry, &entry_src)))
-}
-
-/// The unified decl sweep: `*.d.phg` DIRECTLY in the entry's directory (non-recursive — a folder
-/// of unrelated scripts must never inhale a nested project's foreign declares) plus everything
-/// under `src/` (the app's own ambient declarations), never under `vendor/`.
-fn collect_unified_decls(roots: &SearchRoots) -> Result<Vec<PathBuf>, String> {
-    let mut out: Vec<PathBuf> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&roots.entry_local) {
-        for e in entries.flatten() {
-            let p = e.path();
-            if p.is_file() && p.to_string_lossy().ends_with(".d.phg") {
-                out.push(p);
-            }
-        }
-    }
-    if let Some(sr) = &roots.src_root {
-        out.extend(collect_decl_phg(sr)?);
-    }
-    out.sort();
-    Ok(out)
-}
-
-/// Load a loose-mode program from source text (the `-e`/stdin path, and any single file with no
-/// project above it). Enforces the reserved `package Main;` — a dotted package needs a project.
-pub fn load_loose_src(src: &str) -> Result<Unit, String> {
-    let program = parse_one(src)?;
-    enforce_loose_main(&program)?;
-    Ok(Unit {
-        program,
-        diag_src: src.to_string(),
-        stats: None,
-        sources: std::collections::HashMap::new(),
-        fn_files: std::collections::HashMap::new(),
-        item_files: std::collections::HashMap::new(),
-    })
-}
-
-/// The shared two-pass assembly (DEC-282 factored it out of `load_project` so the unified loader
-/// reuses it verbatim): parse + validate every source, mangle non-`Main` definitions to globally
-/// unique names, rewrite call/type sites per file, merge into one flat [`Program`].
-/// `decl_files` is the pre-collected ambient `*.d.phg` set (the CALLER owns the sweep scope —
-/// the unified loader deliberately keeps the entry-local sweep NON-recursive so a directory of
-/// unrelated scripts never inhales a distant project's foreign declares).
-fn assemble(
-    entry: &Path,
-    sources: Vec<Source>,
-    decl_files: &[PathBuf],
-    buffer: Option<(&Path, &str)>,
-) -> Result<Unit, String> {
-    // Pass 1 — parse, validate, and index every top-level definition by (package, name) ⇒ mangled
-    // global name. Functions and types live in separate symbol tables (PHP namespaces functions and
-    // classes separately), so a `compute` function and a `Compute` type never collide. Library
-    // packages may now declare types (the old `E-PKG-TYPE` gate is retired — cross-package types).
-    let mut parsed: Vec<(PathBuf, Program)> = Vec::with_capacity(sources.len());
-    let mut defined: HashMap<(String, String), String> = HashMap::new();
-    let mut types: HashMap<(String, String), String> = HashMap::new();
-    // Declaration-visibility provenance (visibility modifiers): where each definition lives + its
-    // visibility, keyed by (package, name) like the rename tables. Consumed by the lattice in Pass 2.
-    let mut prov_fns: HashMap<(String, String), DefInfo> = HashMap::new();
-    let mut prov_types: HashMap<(String, String), DefInfo> = HashMap::new();
-    // Whole-project scope counters for `phg check`'s success summary.
-    let mut pkgset: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut defs: usize = 0;
-    // Trace-attribution maps (error-handling slice 1): per-file source + function → file.
-    let mut src_map: HashMap<PathBuf, String> = HashMap::new();
-    let mut fn_files: HashMap<String, PathBuf> = HashMap::new();
-    let mut item_files: HashMap<String, PathBuf> = HashMap::new();
-    for src_entry in &sources {
-        let file = &src_entry.file;
-        // The LSP buffer override (DEC-252): the entry's text may be the editor's unsaved buffer.
-        let src = match buffer {
-            Some((p, b)) if same_file(p, file) => b.to_string(),
-            _ => read_file(file)?,
-        };
-        src_map.insert(file.clone(), src.clone());
-        let prog = parse_at(file, &src)?;
-        validate_folder_path(&prog, file, &src_entry.root)?;
-        validate_package_decl(&prog, file)?;
-        validate_public_surface(&prog, file)?;
-        if src_entry.vendored && (prog.package.is_empty() || prog.package == ["Main"]) {
-            return Err(format!(
-                "{}: a vendored dependency is a library and cannot declare `package Main` \
-                 (it would collide with the consumer's entry) [E-VENDOR-MAIN]",
-                file.display()
-            ));
-        }
-        let pkg = prog.package.join(".");
-        pkgset.insert(if pkg.is_empty() {
-            "main".to_string()
-        } else {
-            pkg.clone()
-        });
-        for item in &prog.items {
-            let (name, is_type, vis) = match item {
-                Item::Function(f) => (&f.name, false, f.vis),
-                Item::Class(c) => (&c.name, true, c.vis),
-                Item::Enum(e) => (&e.name, true, e.vis),
-                Item::Interface(i) => (&i.name, true, i.vis),
-                // A trait is a public named symbol in the type namespace (it carries no visibility
-                // modifier — always public reuse). Register it so a cross-package `import type` +
-                // `use T;` can resolve and mangle it to its FQN, exactly like a class/interface.
-                Item::Trait(t) => (&t.name, true, crate::ast::Visibility::Public),
-                _ => continue,
-            };
-            let table = if is_type { &mut types } else { &mut defined };
-            if table
-                .insert((pkg.clone(), name.clone()), mangle(&prog.package, name))
-                .is_some()
-            {
-                return Err(format!(
-                    "{}: duplicate definition of `{}` in package `{}` \
-                     (a name must be unique within its package) [E-DUP-DEF]",
-                    file.display(),
-                    name,
-                    if pkg.is_empty() { "main" } else { &pkg }
-                ));
-            }
-            let prov = if is_type {
-                &mut prov_types
-            } else {
-                &mut prov_fns
-            };
-            prov.insert(
-                (pkg.clone(), name.clone()),
-                DefInfo {
-                    file: file.clone(),
-                    package: pkg.clone(),
-                    vis,
-                },
-            );
-            // A free function's trace frame is keyed by its compiled (mangled) name — map it to its
-            // file so a runtime trace can show `file:line` (methods/ctors are synthesized elsewhere).
-            if !is_type {
-                fn_files.insert(mangle(&prog.package, name), file.clone());
-            }
-            // DEC-320: every top-level definition (types too) → its declaring file, for the
-            // `phg build --php` sibling emit's per-item routing.
-            item_files.insert(mangle(&prog.package, name), file.clone());
-            defs += 1;
-        }
-        parsed.push((file.clone(), prog));
-    }
-
-    // Q-A — expand wildcard imports (`import X.*;`) to per-member imports NOW, using the Pass-1 index
-    // (user/vendored, gated by `vis_violation`) or the native registry (`Core.*`). Compile-time sugar
-    // (Inv 5): Pass-2 and every backend see only plain per-symbol `Item::Import`s.
-    expand_wildcard_imports(&mut parsed, &prov_fns, &prov_types)?;
-
-    // M8.5 S3b — ambient `*.d.phg` declaration files: a file of foreign `declare`s carrying no package,
-    // loaded into the project (the `.d.ts` analog). Parsed + validated (no package, all foreign) but
-    // NOT folder=path-validated and NOT indexed as package definitions; their foreign items merge
-    // ambiently into the unit (the checker's prebind makes merge order irrelevant) and are emitted by
-    // the transpiler as global `\Name` symbols. First-party only — vendored decl bundling is deferred.
-    // Excluded from `collect_phg`, so a decl file is never compiled as a package source.
-    let mut decl_items: Vec<Item> = Vec::new();
-    let mut decl_count = 0usize;
-    let mut decl_seen: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
-    for f in decl_files {
-        if !decl_seen.insert(f.clone()) {
-            continue;
-        }
-        let src = read_file(f)?;
-        let prog = parse_at(f, &src)?;
-        validate_decl_file(&prog, f)?;
-        src_map.insert(f.clone(), src);
-        decl_items.extend(prog.items);
-        decl_count += 1;
-    }
-
-    let stats = LoadStats {
-        files: sources.len() + decl_count,
-        packages: pkgset.len(),
-        defs,
-    };
-
-    // Pass 2 — resolve call sites per file, then flat-merge.
-    let mut merged_items: Vec<Item> = Vec::new();
-    // The merged unit runs as the entry's package (normally `main`); its span anchors any
-    // program-level diagnostic.
-    let mut unit_package: Vec<String> = vec!["Main".to_string()];
-    let mut unit_span = Span {
-        start: 0,
-        len: 0,
-        line: 0,
-        col: 0,
-    };
-
-    for (file, prog) in parsed {
-        if same_file(&file, entry) {
-            unit_package = prog.package.clone();
-            unit_span = prog.span;
-        }
-        // Q-A step 3 (G6): reject member imports naming a non-existent member (E-IMPORT-UNKNOWN).
-        validate_member_imports(&prog, &defined, &types, &pkgset, &file)?;
-        let user_imports = user_import_map(&prog.items, &types, &defined);
-        let type_imports = build_type_imports(&prog, &types, &prov_types, &user_imports, &file)?;
-        let function_imports =
-            build_function_imports(&prog, &defined, &prov_fns, &user_imports, &file)?;
-        let ctx = ResolveCtx {
-            package: prog.package.clone(),
-            user_imports,
-            defined: &defined,
-            types: &types,
-            type_imports,
-            function_imports,
-            file: &file,
-            prov_types: &prov_types,
-            prov_fns: &prov_fns,
-            violations: RefCell::new(Vec::new()),
-        };
-        for item in prog.items {
-            merged_items.push(resolve_item(item, &ctx));
-        }
-        // Surface the first visibility violation collected while resolving this file (the
-        // infallible `resolve_*` chain buffers them).
-        if let Some(first) = ctx.violations.into_inner().into_iter().next() {
-            return Err(first);
-        }
-    }
-
-    // Ambient foreign declarations merge unmangled (they are global PHP symbols — never namespaced).
-    merged_items.extend(decl_items);
-
-    Ok(Unit {
-        program: Program {
-            package: unit_package,
-            items: merged_items,
-            span: unit_span,
-        },
-        diag_src: String::new(),
-        stats: Some(stats),
-        sources: src_map,
-        fn_files,
-        item_files,
-    })
-}
 
 /// One source file in a project load, paired with the folder=path root it validates against and
 /// whether it came from the vendor tree (a vendored file must be a library — never `package Main`).

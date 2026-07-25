@@ -3,8 +3,12 @@
 
 use super::*;
 
+mod abstract_traits;
+mod class_graph;
+mod conformance;
 mod entry;
 mod functions;
 mod inherit;
 mod interfaces;
+mod overrides;
 mod types_decls;

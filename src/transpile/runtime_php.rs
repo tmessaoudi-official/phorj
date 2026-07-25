@@ -3,20 +3,13 @@
 
 use super::*;
 
-/// The Unicode White_Space PCRE character class used by every emitted PHP trim helper
-/// (`__phorj_text_trim`/`_start`/`_end` here AND `__phorj_http_trim` in `runtime_php_http.rs`).
-/// SINGLE SOURCE OF TRUTH (Invariant 4): exactly `char::is_whitespace`'s set, verified byte-identical
-/// to Rust `str::trim` across the multibyte + form-feed edges (UA-1.1) — NOT PHP's ASCII-ish `trim`.
-/// Both trim families must derive from this one literal so PHP-leg trim parity can never drift.
-pub(super) const PHP_TRIM_WS: &str = r"[\x{09}-\x{0D}\x{20}\x{85}\x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}]";
-
 impl Transpiler {
     /// The once-per-file runtime helpers (each gated by its `uses_*` flag). In flat mode they are
     /// top-level globals; in namespaced mode they are emitted inside the nameless block, so their
     /// fully-qualified names are `\__phorj_*` (which the call sites emit via the `bs` prefix). Each
     /// mirrors a Phorj value kernel / `as_display` so the PHP leg matches interp/VM byte-for-byte.
     pub(super) fn emit_runtime_helpers(&mut self) {
-        if self.uses_div {
+        if self.gates.uses_div {
             // Phorj `/`: int/int truncates toward zero (`intdiv`); float/float is real division.
             self.line("function __phorj_div($a, $b) {");
             self.indent += 1;
@@ -24,7 +17,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_rem {
+        if self.gates.uses_rem {
             // Phorj `%`: int/int integer modulo; float/float `fmod` (sign of dividend, like Rust `%`).
             // A zero divisor *throws* (Phorj faults on any division by zero): PHP `$a % 0` already
             // throws, but `fmod($a, 0.0)` would return `NAN`, so guard `$b == 0` first to agree.
@@ -35,7 +28,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_add {
+        if self.gates.uses_add {
             // Phorj `+` is overloaded: `string + string` concatenates, numbers add. The checker
             // guarantees both operands share a type, so `is_string($a)` selects the branch exactly
             // (PHP's `+` would TypeError on strings; `.` is its concat operator).
@@ -45,7 +38,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_str {
+        if self.gates.uses_str {
             // Mirror Value::as_display: bool ⇒ "true"/"false"; float ⇒ Rust `{}` formatting (via
             // __phorj_float); everything else PHP string cast. A naked `(string)$float` uses PHP's
             // `precision=14` and switches to scientific notation for large/small magnitudes — both
@@ -61,7 +54,10 @@ impl Transpiler {
         // `__phorj_float` is needed by `__phorj_str` AND directly by a statically-float interpolation
         // hole (T6) — so it is emitted whenever either is in play, independent of the `__phorj_str`
         // dispatch helper above.
-        if self.uses_str || self.uses_float || self.uses_json_encode || self.uses_math_number_format
+        if self.gates.uses_str
+            || self.gates.uses_float
+            || self.gates.uses_json_encode
+            || self.gates.uses_math_number_format
         {
             // Reproduce Rust's `f64` Display exactly (EV-6): the shortest decimal that round-trips to
             // the same double, in positional notation (never scientific, for any magnitude), with an
@@ -105,7 +101,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_range {
+        if self.gates.uses_range {
             // Phorj range: empty when start > hi; never descends (PHP `range()` descends — QW-13).
             self.line("function __phorj_range($a, $b, $inclusive) {");
             self.indent += 1;
@@ -114,7 +110,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_reflect_kind {
+        if self.gates.uses_reflect_kind {
             // `Reflect.kind` — the coarse, erasure-stable type tag, mirroring the Rust `reflect_kind`
             // arm exactly. Order is load-bearing: a PHP closure is BOTH `is_callable` and
             // `is_object`, so `is_callable` is tested first (Phorj closures ⇒ "callable", instances
@@ -135,11 +131,11 @@ impl Transpiler {
         // `Reflect.className` helper (DEC-329.3 variant-scoped-class parity) lives with the other
         // reflect emitters in `runtime_tables.rs`; the gate is inside.
         self.emit_class_name_helper();
-        if self.uses_reflect_tables {
+        if self.gates.uses_reflect_tables {
             self.emit_reflect_table();
         }
         self.emit_json_helpers();
-        if self.uses_text_parse_int {
+        if self.gates.uses_text_parse_int {
             // Mirror Rust's `i64::from_str`: `^[+-]?[0-9]+$`, in i64 range, no surrounding whitespace.
             // PHP's `(int)` clamps on overflow (≠ Rust's None), so detect overflow by re-deriving the
             // magnitude digits from the cast value and comparing to the input's (sign + leading zeros
@@ -156,7 +152,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_text_parse_float {
+        if self.gates.uses_text_parse_float {
             // Mirror the Rust `valid_float` grammar (strict / permissive), rejecting inf/nan, then cast.
             // PCRE only (tier-1, correct under `php -n`); `(float)` matches `f64::from_str` for the
             // accepted grammar (typical decimals; extreme-precision divergence is documented).
@@ -174,13 +170,13 @@ impl Transpiler {
         // call the matching `bc*` with that scale, then bounds-check the result's unscaled magnitude
         // against i128 range and `throw` the same `decimal overflow` body the Rust backends fault with
         // (the `agree_err` oracle classifies by body substring). BCMath is tier-1 (works under `php -n`).
-        if self.uses_dec_add
-            || self.uses_dec_sub
-            || self.uses_dec_mul
-            || self.uses_dec_rem
-            || self.uses_dec_div_exact
-            || self.uses_dec_div
-            || self.uses_dec_round
+        if self.gates.uses_dec_add
+            || self.gates.uses_dec_sub
+            || self.gates.uses_dec_mul
+            || self.gates.uses_dec_rem
+            || self.gates.uses_dec_div_exact
+            || self.gates.uses_dec_div
+            || self.gates.uses_dec_round
         {
             // Scale of a BCMath decimal string = digits after the dot (0 if none). Matches the Rust
             // kernel deriving scale from `(unscaled, scale)`; a `bc*` result is always normalized.
@@ -206,7 +202,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_add {
+        if self.gates.uses_dec_add {
             self.line("function __phorj_dec_add($a, $b) {");
             self.indent += 1;
             self.line("$s = max(__phorj_dec_scale($a), __phorj_dec_scale($b));");
@@ -214,7 +210,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_sub {
+        if self.gates.uses_dec_sub {
             self.line("function __phorj_dec_sub($a, $b) {");
             self.indent += 1;
             self.line("$s = max(__phorj_dec_scale($a), __phorj_dec_scale($b));");
@@ -222,7 +218,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_rem {
+        if self.gates.uses_dec_rem {
             // Exact decimal remainder (bare `%`): `bcmod` at `max(scales)`; a zero divisor throws,
             // matching the Rust `decimal_rem` fault ("any division by zero throws").
             self.line("function __phorj_dec_rem($a, $b) {");
@@ -235,7 +231,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_div_exact {
+        if self.gates.uses_dec_div_exact {
             // Exact-or-fault bare `decimal /`: divide at high precision, verify the quotient is exact
             // (bcmul back == dividend), strip trailing zeros to the canonical minimal form (matching
             // the Rust `decimal_div_exact` result), then i128-bound-check. A non-terminating quotient
@@ -260,7 +256,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_mul {
+        if self.gates.uses_dec_mul {
             self.line("function __phorj_dec_mul($a, $b) {");
             self.indent += 1;
             self.line("$s = __phorj_dec_scale($a) + __phorj_dec_scale($b);");
@@ -268,7 +264,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_of {
+        if self.gates.uses_dec_of {
             // `Decimal.of(s) -> decimal?`: validate the literal grammar (optional sign, digits with an
             // optional single fractional part — `12`, `12.34`, `.5`; NO exponent/underscore/whitespace)
             // with a PCRE, then bounds-check the i128 range; return the normalized string or null.
@@ -291,7 +287,7 @@ impl Transpiler {
         // mode matches interp/VM byte-for-byte. The `RoundingMode` enum value arrives as a PHP
         // object (`new HalfUp()` ⇒ an instance of the injected global class `HalfUp`); the helper reads
         // its short class name and switches on it, exactly as the Rust native reads `Value::Enum.variant`.
-        if self.uses_dec_div || self.uses_dec_round {
+        if self.gates.uses_dec_div || self.gates.uses_dec_round {
             // Unscaled integer-string of a decimal string: drop the dot. `"19.99"`→`"1999"`,
             // `"-2.5"`→`"-25"`, `"100"`→`"100"`. Matches `(unscaled, _)` in the Rust `(unscaled, scale)`.
             self.line("function __phorj_dec_unscaled($x) {");
@@ -365,7 +361,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_div {
+        if self.gates.uses_dec_div {
             // `Decimal.div(a, b, scale, mode)`: N = au*10^(sb+scale), D = bu*10^sa; round_div(N,D);
             // format at `scale`. scale<0 / b==0 throw the same bodies as the Rust kernel.
             self.line("function __phorj_dec_div($a, $b, $scale, $mode) {");
@@ -383,7 +379,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_round {
+        if self.gates.uses_dec_round {
             // `Decimal.round(d, scale, mode)`: up-scale is exact (u*10^Δ), down-scale rounds via
             // round_div(u, 10^Δ). scale<0 throws.
             self.line("function __phorj_dec_round($d, $scale, $mode) {");
@@ -407,7 +403,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_float_to_int {
+        if self.gates.uses_float_to_int {
             // `Convert.toInt($f) -> int?`: null on NaN/±∞/out-of-i64-range, else truncate toward zero.
             // The upper bound is the EXCLUSIVE `9.2233720368547758E18` (i64::MAX is not exactly f64-
             // representable); the lower bound is the exact i64::MIN as f64. Matches `value::float_to_int`,
@@ -423,7 +419,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_trunc {
+        if self.gates.uses_trunc {
             // `Convert.truncate($f) -> int`: truncate toward zero, FAULT on NaN/±∞/out-of-i64-range
             // (fault-parity pass — the raw `(int)` cast diverged: Rust saturates, PHP wraps + warns).
             // Same bounds as `__phorj_float_to_int`; throws instead of returning null. Mirrors the Rust
@@ -444,7 +440,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_round {
+        if self.gates.uses_round {
             // `Convert.round($f) -> int`: round half-away-from-zero (PHP `round()` default ≡ Rust
             // `f.round()`), then range-check the ROUNDED value; FAULT on NaN/±∞/out-of-i64-range.
             // Mirrors the Rust `convert_round`.
@@ -463,7 +459,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_to_int {
+        if self.gates.uses_dec_to_int {
             // `Convert.decimalToInt($s) -> int?`: the carrier string's integer part (before the dot),
             // truncated toward zero, or null if outside i64 range. Mirrors `value::decimal_to_int`
             // (i128 `unscaled / 10^scale`). Uses `bccomp` against the i64 bounds (BCMath is loaded for
@@ -480,7 +476,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_float_to_int_exact {
+        if self.gates.uses_float_to_int_exact {
             // `Convert.floatToIntExact($f) -> int?` (M4 `float as int`): integral-or-null, never a
             // silent truncate. Mirrors `value::float_to_int_exact` (`fmod==0` then the finite+range
             // guard of `__phorj_float_to_int`). `fmod(-3.0,1.0)` is `-0.0` (== 0.0 in PHP), so a
@@ -494,7 +490,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_dec_to_int_exact {
+        if self.gates.uses_dec_to_int_exact {
             // `Convert.decimalToIntExact($s) -> int?` (M4 `decimal as int`): integral-or-null. The
             // carrier always renders exactly `scale` fractional digits, so a non-zero fraction
             // (after stripping trailing zeros) means non-integral → null. Mirrors
@@ -516,7 +512,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_math_gcd {
+        if self.gates.uses_math_gcd {
             // `Math.gcd` — Euclid over the magnitudes (gmp is absent under `php -n`). Mirrors the Rust
             // `math_gcd` native body for every in-range input (the `i64::MIN` magnitude edge faults in
             // Phorj, never reached by a byte-identity example).
@@ -535,7 +531,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_math_clamp {
+        if self.gates.uses_math_clamp {
             // `Math.clamp` — faults on `lo > hi` to match the native (UA-1.7); the fault text need
             // not match Phorj's (a fault is never a byte-identity example — Invariant 9), only that
             // both legs fault. Otherwise `max($lo, min($v, $hi))`, exactly the old inline form.
@@ -548,7 +544,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_index {
+        if self.gates.uses_index {
             // DEC-255: a READ `xs[i]` / `m[k]` faults in phorj on an out-of-range index / missing key.
             // Bare PHP `$o[$k]` silently returns null + a Warning (exit 0) — this helper THROWS instead,
             // so the transpiled program faults identically (non-zero exit). One helper covers List and
@@ -567,7 +563,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_checked_arith {
+        if self.gates.uses_checked_arith {
             // DEC-255: phorj int arithmetic is checked (overflow faults). Bare PHP int `+`/`-`/`*`/neg
             // silently PROMOTES to float on overflow (exit 0), so these helpers detect that promotion
             // (`is_float` of an int-int result ⇒ overflow) and THROW, matching phorj's fault. In-range
@@ -589,7 +585,7 @@ impl Transpiler {
                 self.line("}");
             }
         }
-        if self.uses_checked_int {
+        if self.gates.uses_checked_int {
             // DEC-255: `Math.abs`/`Math.integerPower`/`List.sum` return an int in phorj and FAULT on
             // overflow; the equivalent PHP builtins (`abs`/`pow`/`array_sum`) silently PROMOTE to float
             // instead of erroring. This helper receives the builtin's result and THROWS on the promotion
@@ -602,7 +598,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_debug_render {
+        if self.gates.uses_debug_render {
             // DEC-238: the PHP TWIN of `ext/debug/natives.rs::render` — must mirror the pinned v1 format
             // byte-for-byte on the DETECTABLE domain (null/bool/int/float/string/list/map/instance/
             // enum/closure). ERASED-SHAPE DISCLOSURE (KNOWN_ISSUES): phorj Set/decimal/bytes erase to
@@ -700,7 +696,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_string_format {
+        if self.gates.uses_string_format {
             // `String.format` (W3-5/DEC-199) — PHP mirror of the strict `%`-sprintf renderer
             // `text_format`. Each directive's raw text is captured and DELEGATED to PHP's own `sprintf`
             // (so flag/width/precision + `%f` rounding are canonical PHP), with the value chosen to keep
@@ -792,7 +788,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_math_lcm {
+        if self.gates.uses_math_lcm {
             // `Math.lcm` — `|a|/gcd*|b|` over the magnitudes, inlining Euclid (so it needs no
             // `__phorj_gcd`). Mirrors the Rust `math_lcm` native for every in-range input; `lcm(_, 0)=0`.
             self.line("function __phorj_lcm($a, $b) {");
@@ -814,7 +810,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_math_number_format {
+        if self.gates.uses_math_number_format {
             // `Math.numberFormat($v, $d)` — digit-string rounding, mirroring `value::number_format`
             // byte-for-byte: round the *shortest-round-trip* decimal string (`__phorj_float`, identical
             // to Rust's `{}` Display) half-away-from-zero by carry — NOT `round($v * 10^$d)` — so the
@@ -868,7 +864,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_uri {
+        if self.gates.uses_uri {
             // `Core.UriModule` (DEC-240) — thin wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri`
             // (the transpile twin; the Rust kernel is pinned to it byte-for-byte). Fallible
             // operations catch `Uri\InvalidUriException` into the same `<<E>>`-sentinel messages
@@ -905,7 +901,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_rng {
+        if self.gates.uses_rng {
             // `Core.Random` — the SAME xorshift64 as the Rust kernel (`src/native/random.rs`), so a
             // seeded sequence is byte-identical across all backends. State persists in a by-reference
             // function-static (no global statement needed). `GOLDEN` is the signed-i64 reinterpretation
@@ -956,7 +952,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_clock {
+        if self.gates.uses_clock {
             // `Core.Time` — a freezable process-global clock matching the Rust kernel
             // (`src/native/time.rs`). The frozen value persists in by-reference function-statics (no
             // global statement). `nowMillis()` returns the frozen value when set, else `floor` of
@@ -990,7 +986,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_regex {
+        if self.gates.uses_regex {
             // `Core.Regex` (Fork A) — the injected `Regex` holds the BARE pattern; `__phorj_regex_delim`
             // wraps it in a collision-free PCRE delimiter + the `u` (Unicode) modifier, matching the
             // `regex`-crate backends on the regular subset. `\d\w\s` are Unicode in the crate and ASCII
@@ -1094,7 +1090,7 @@ impl Transpiler {
         // captured bytes. `ob_start`/`ob_get_clean` are the exact PHP analogue of the backends'
         // `out.split_off(start)` — the closure's `echo` (from `Output.*`) lands in the buffer, not the
         // page. Byte-identical for the happy path (a printing, returning closure).
-        if self.uses_capture {
+        if self.gates.uses_capture {
             self.line("function __phorj_capture($fn) {");
             self.indent += 1;
             self.line("ob_start();");
@@ -1103,7 +1099,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_sort {
+        if self.gates.uses_list_sort {
             // Natural ascending over a COPY (Phorj lists are immutable). String by byte (`strcmp`,
             // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via
             // `<=>` (≡ Rust numeric). `usort` is stable on PHP 8.0+ (≡ Rust `sort_by`).
@@ -1115,7 +1111,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_sort_with {
+        if self.gates.uses_list_sort_with {
             // Comparator sort over a COPY; the user closure returns the `<=>`-style int directly.
             self.line("function __phorj_sort_with($xs, $cmp) {");
             self.indent += 1;
@@ -1127,7 +1123,7 @@ impl Transpiler {
         }
         // `List.takeWhile` — the longest PREFIX all satisfying the predicate; stops at the first
         // failing element (≡ the native's `break`), re-indexed sequential.
-        if self.uses_list_take_while {
+        if self.gates.uses_list_take_while {
             self.line("function __phorj_take_while($xs, $f) {");
             self.indent += 1;
             self.line("$out = [];");
@@ -1138,7 +1134,7 @@ impl Transpiler {
         }
         // `List.dropWhile` — the SUFFIX after that prefix; once an element fails the predicate, it and
         // all after it are kept verbatim (the predicate stops running), matching the native.
-        if self.uses_list_drop_while {
+        if self.gates.uses_list_drop_while {
             self.line("function __phorj_drop_while($xs, $f) {");
             self.indent += 1;
             self.line("$out = [];");
@@ -1150,7 +1146,7 @@ impl Transpiler {
         }
         // `List.groupBy` — partition into groups keyed by `$f($x)`, first-seen key order, each group in
         // element order (≡ the native's first-seen Vec + per-group push → Map<U, List<T>>).
-        if self.uses_list_group_by {
+        if self.gates.uses_list_group_by {
             self.line("function __phorj_group_by($xs, $f) {");
             self.indent += 1;
             self.line("$out = [];");
@@ -1161,7 +1157,7 @@ impl Transpiler {
         }
         // `List.unique` — first-occurrence-order dedupe by strict equality (≡ Phorj value-equality;
         // NOT `array_unique`, which stringifies).
-        if self.uses_list_unique {
+        if self.gates.uses_list_unique {
             self.line("function __phorj_unique($xs) {");
             self.indent += 1;
             self.line("$out = [];");
@@ -1172,7 +1168,7 @@ impl Transpiler {
         }
         // `List.difference(a, b)` — a's elements NOT in b, preserving a's order + duplicates, by STRICT
         // value equality (`in_array(…, true)` ≡ Phorj eq_val; NOT PHP `array_diff`, which string-compares).
-        if self.uses_list_difference {
+        if self.gates.uses_list_difference {
             self.line("function __phorj_list_difference($a, $b) {");
             self.indent += 1;
             self.line("$out = [];");
@@ -1182,7 +1178,7 @@ impl Transpiler {
             self.line("}");
         }
         // `List.intersection(a, b)` — a's elements ALSO in b, preserving a's order + duplicates, strict.
-        if self.uses_list_intersection {
+        if self.gates.uses_list_intersection {
             self.line("function __phorj_list_intersection($a, $b) {");
             self.indent += 1;
             self.line("$out = [];");
@@ -1193,7 +1189,7 @@ impl Transpiler {
         }
         // `List.min` / `List.max` — byte-order compare (string via `strcmp`, NOT PHP `min`/`max`'s
         // numeric-string juggling), null for an empty list. Same `cmp` as `__phorj_sort`.
-        if self.uses_list_min {
+        if self.gates.uses_list_min {
             self.line("function __phorj_min($xs) {");
             self.indent += 1;
             self.line("if (!count($xs)) { return null; }");
@@ -1203,7 +1199,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_max {
+        if self.gates.uses_list_max {
             self.line("function __phorj_max($xs) {");
             self.indent += 1;
             self.line("if (!count($xs)) { return null; }");
@@ -1217,7 +1213,7 @@ impl Transpiler {
         // on ties (strict `<`/`>`). The selector fires once per element (a first-seen `$has` flag, never
         // a primed element-0 double-call) and the key is compared with the same `strcmp`/`<=>` dispatch
         // as `__phorj_min`/`_max` — byte-identical to the `list_min_by`/`_max_by` fold on both backends.
-        if self.uses_list_min_by {
+        if self.gates.uses_list_min_by {
             self.line("function __phorj_min_by($xs, $f) {");
             self.indent += 1;
             self.line("$best = null; $bk = null; $has = false;");
@@ -1226,7 +1222,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_max_by {
+        if self.gates.uses_list_max_by {
             self.line("function __phorj_max_by($xs, $f) {");
             self.indent += 1;
             self.line("$best = null; $bk = null; $has = false;");
@@ -1237,7 +1233,7 @@ impl Transpiler {
         }
         // `List.find` / `any` / `all` — SHORT-CIRCUITING (`foreach` + early `return`), so a
         // side-effecting predicate runs on exactly the same prefix as the Rust backends.
-        if self.uses_list_find {
+        if self.gates.uses_list_find {
             self.line("function __phorj_find($xs, $p) {");
             self.indent += 1;
             self.line("foreach ($xs as $x) { if ($p($x)) { return $x; } }");
@@ -1245,7 +1241,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_any {
+        if self.gates.uses_list_any {
             self.line("function __phorj_any($xs, $p) {");
             self.indent += 1;
             self.line("foreach ($xs as $x) { if ($p($x)) { return true; } }");
@@ -1253,7 +1249,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_all {
+        if self.gates.uses_list_all {
             self.line("function __phorj_all($xs, $p) {");
             self.indent += 1;
             self.line("foreach ($xs as $x) { if (!$p($x)) { return false; } }");
@@ -1261,7 +1257,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_none {
+        if self.gates.uses_list_none {
             self.line("function __phorj_none($xs, $p) {");
             self.indent += 1;
             self.line("foreach ($xs as $x) { if ($p($x)) { return false; } }");
@@ -1269,7 +1265,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_map_set {
+        if self.gates.uses_map_set {
             // A NEW map (Phorj maps are immutable). `$m` is passed by value, and PHP arrays are
             // copy-on-write, so assigning into it produces a fresh array — the caller's is untouched.
             self.line("function __phorj_map_set($m, $k, $v) {");
@@ -1279,7 +1275,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_map_remove {
+        if self.gates.uses_map_remove {
             self.line("function __phorj_map_remove($m, $k) {");
             self.indent += 1;
             self.line("unset($m[$k]);");
@@ -1287,7 +1283,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_index_of {
+        if self.gates.uses_list_index_of {
             // PHP `array_search($needle, $xs, true)` returns the int key or `false`; map `false` to
             // `null` for the `int?` return (strict `===` matches Phorj's `eq_val` for scalars).
             self.line("function __phorj_index_of($xs, $needle) {");
@@ -1297,7 +1293,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_list_last_index_of {
+        if self.gates.uses_list_last_index_of {
             // PHP `array_keys($xs, $needle, true)` returns every strict-matching key; the last one is
             // the last index (or `null` when none match) — the LAST-match companion to `__phorj_index_of`.
             self.line("function __phorj_last_index_of($xs, $needle) {");
@@ -1307,7 +1303,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_text_index_of {
+        if self.gates.uses_text_index_of {
             // PHP `strpos` returns the byte offset or `false` (note: 0 is a valid offset); map only
             // `false` to `null` for the `int?` return.
             self.line("function __phorj_text_index_of($s, $needle) {");
@@ -1317,7 +1313,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_text_reverse {
+        if self.gates.uses_text_reverse {
             // Reverse by Unicode code point to match Rust `str::chars().rev()` — NOT `strrev`, whose
             // byte reversal corrupts multibyte text (UA-1.2). `preg_split('//u')` yields code points
             // without mbstring (absent under `php -n`); empty string → empty array → "".
@@ -1334,7 +1330,7 @@ impl Transpiler {
         // phorj's `PhStr` is valid-UTF-8 by invariant, so byte chunks are unrepresentable anyway).
         // `preg_split('//u')` yields code points without mbstring; `array_chunk` throws `ValueError`
         // on `$n < 1`, matching the Rust native's fault; empty string → [] (PHP 8.5 `str_split("")`).
-        if self.uses_text_chunk {
+        if self.gates.uses_text_chunk {
             self.line("function __phorj_str_chunk($s, $n) {");
             self.indent += 1;
             self.line("$cps = $s === '' ? [] : preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY);");
@@ -1347,22 +1343,22 @@ impl Transpiler {
         // multibyte spaces (U+00A0/U+2028/U+3000/…) AND differs even in ASCII (Rust strips form-feed
         // U+000C but not NUL; PHP is the reverse). The class below is exactly that set (verified
         // byte-identical to `str::trim` across the multibyte + form-feed edges). UA-1.1.
-        const WS: &str = PHP_TRIM_WS; // single-sourced (module const) — shared with __phorj_http_trim
-        if self.uses_text_trim {
+        const WS: &str = super::PHP_TRIM_WS; // single-sourced (transpile::PHP_TRIM_WS) — shared with __phorj_http_trim
+        if self.gates.uses_text_trim {
             self.line("function __phorj_text_trim($s) {");
             self.indent += 1;
             self.line(&format!("return preg_replace('/^{WS}+|{WS}+$/u', '', $s);"));
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_text_trim_start {
+        if self.gates.uses_text_trim_start {
             self.line("function __phorj_text_trim_start($s) {");
             self.indent += 1;
             self.line(&format!("return preg_replace('/^{WS}+/u', '', $s);"));
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_text_trim_end {
+        if self.gates.uses_text_trim_end {
             self.line("function __phorj_text_trim_end($s) {");
             self.indent += 1;
             self.line(&format!("return preg_replace('/{WS}+$/u', '', $s);"));

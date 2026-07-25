@@ -11,7 +11,7 @@ use super::*;
 
 impl Transpiler {
     pub(super) fn emit_log_helpers(&mut self) {
-        if !self.uses_log {
+        if !self.gates.uses_log {
             return;
         }
         self.line("function __phorj_log_configure($cfg) {");

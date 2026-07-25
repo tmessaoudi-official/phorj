@@ -5,6 +5,9 @@ use super::*;
 
 mod attributes;
 mod attributes_invoke;
+mod entry_points;
+mod imports;
+mod static_inits;
 mod totality;
 mod type_bodies;
 mod walk;

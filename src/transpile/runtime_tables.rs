@@ -19,7 +19,7 @@ impl Transpiler {
         // would fall through to the object branch (the multi-package core.json bug). Qualify the
         // variant class references with `\Main\` when namespaced; empty (bare) when flat.
         let jp = if self.namespaced { "\\Main\\" } else { "" };
-        if self.uses_json_encode {
+        if self.gates.uses_json_encode {
             self.line("function __phorj_json_encode($j) {");
             self.indent += 1;
             self.line(&format!(
@@ -52,7 +52,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_json_pretty {
+        if self.gates.uses_json_pretty {
             self.line(
                 "function __phorj_json_encode_pretty($j) { return __phorj_json_pretty($j, 0); }",
             );
@@ -90,7 +90,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_json_decode {
+        if self.gates.uses_json_decode {
             self.line("function __phorj_json_decode($s) {");
             self.indent += 1;
             self.line("$d = json_decode($s);");
@@ -133,7 +133,7 @@ impl Transpiler {
         // NDJSON (JSON Lines). `parse_lines` reuses `__phorj_json_build` (gated via uses_json_decode);
         // `stringify_lines` reuses `__phorj_json_encode` (uses_json_encode). Split/join + the PHP
         // `trim()` default set match the Rust `json_parse_lines`/`json_stringify_lines` exactly.
-        if self.uses_json_parse_lines {
+        if self.gates.uses_json_parse_lines {
             self.line("function __phorj_json_parse_lines($s) {");
             self.indent += 1;
             self.line("$out = [];");
@@ -150,7 +150,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_json_stringify_lines {
+        if self.gates.uses_json_stringify_lines {
             self.line("function __phorj_json_stringify_lines($xs) {");
             self.indent += 1;
             self.line("$parts = [];");
@@ -163,7 +163,7 @@ impl Transpiler {
         // (NOT PHP `parse_ini_string`, whose type-coercion Phorj deliberately rejects). PHP `trim()`'s
         // default set matches the Rust `trim_matches`; overwriting an existing key keeps its position
         // (PHP array semantics == `build_map`). Returns a PHP array = the `Map<string,string>` value.
-        if self.uses_ini_parse {
+        if self.gates.uses_ini_parse {
             self.line("function __phorj_ini_parse($s) {");
             self.indent += 1;
             self.line("$out = [];");
@@ -188,21 +188,21 @@ impl Transpiler {
         // `Core.Option` combinators (Wave B B-2a) — over the injected `Option_Some`/`Option_None` PHP classes (no
         // builtin analog). The receiver is a param, so it is bound once (no double-eval of the call-site
         // argument expression). `map`/`filter` re-wrap; `andThen`'s `$f` itself returns an Option.
-        if self.uses_option_map {
+        if self.gates.uses_option_map {
             self.line("function __phorj_option_map($o, $f) {");
             self.indent += 1;
             self.line("return $o instanceof Option_Some ? new Option_Some($f($o->value)) : $o;");
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_option_and_then {
+        if self.gates.uses_option_and_then {
             self.line("function __phorj_option_and_then($o, $f) {");
             self.indent += 1;
             self.line("return $o instanceof Option_Some ? $f($o->value) : $o;");
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_option_filter {
+        if self.gates.uses_option_filter {
             self.line("function __phorj_option_filter($o, $f) {");
             self.indent += 1;
             self.line(
@@ -211,21 +211,21 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_option_get_or_else {
+        if self.gates.uses_option_get_or_else {
             self.line("function __phorj_option_get_or_else($o, $d) {");
             self.indent += 1;
             self.line("return $o instanceof Option_Some ? $o->value : $d;");
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_option_of_nullable {
+        if self.gates.uses_option_of_nullable {
             self.line("function __phorj_option_of_nullable($v) {");
             self.indent += 1;
             self.line("return $v === null ? new Option_None() : new Option_Some($v);");
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_option_to_nullable {
+        if self.gates.uses_option_to_nullable {
             self.line("function __phorj_option_to_nullable($o) {");
             self.indent += 1;
             self.line("return $o instanceof Option_Some ? $o->value : null;");
@@ -237,7 +237,7 @@ impl Transpiler {
         // double-eval). `map`/`mapErr` re-wrap the touched arm and pass the other through unchanged;
         // `andThen`/`orElse` bind (the `$f` itself returns a Result). `toOption` bridges to the Option
         // injection's classes. `isSuccess`/`isFailure` are emitted inline at the call site.
-        if self.uses_result_map {
+        if self.gates.uses_result_map {
             self.line("function __phorj_result_map($r, $f) {");
             self.indent += 1;
             self.line(
@@ -246,7 +246,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_result_map_err {
+        if self.gates.uses_result_map_err {
             self.line("function __phorj_result_map_err($r, $f) {");
             self.indent += 1;
             self.line(
@@ -255,28 +255,28 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_result_and_then {
+        if self.gates.uses_result_and_then {
             self.line("function __phorj_result_and_then($r, $f) {");
             self.indent += 1;
             self.line("return $r instanceof Result_Success ? $f($r->value) : $r;");
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_result_get_or_else {
+        if self.gates.uses_result_get_or_else {
             self.line("function __phorj_result_get_or_else($r, $d) {");
             self.indent += 1;
             self.line("return $r instanceof Result_Success ? $r->value : $d;");
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_result_or_else {
+        if self.gates.uses_result_or_else {
             self.line("function __phorj_result_or_else($r, $f) {");
             self.indent += 1;
             self.line("return $r instanceof Result_Success ? $r : $f($r->error);");
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_result_to_option {
+        if self.gates.uses_result_to_option {
             self.line("function __phorj_result_to_option($r) {");
             self.indent += 1;
             self.line("return $r instanceof Result_Success ? new Option_Some($r->value) : new Option_None();");
@@ -344,7 +344,7 @@ impl Transpiler {
     /// built from `variant_fields`; keys unique per the `E-TRANSPILE-VARIANT-COLLISION` guard) restores
     /// parity; a regular class is absent from the map and falls through unchanged. Tier-1 (`php -n`).
     pub(super) fn emit_class_name_helper(&mut self) {
-        if !self.uses_reflect_class_name {
+        if !self.gates.uses_reflect_class_name {
             return;
         }
         let mut rows: Vec<String> = self
