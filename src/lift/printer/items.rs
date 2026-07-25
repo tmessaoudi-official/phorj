@@ -65,10 +65,21 @@ impl Printer {
     // ── declarations ──
 
     pub(super) fn function(&mut self, f: &FunctionDecl) -> Result<(), String> {
-        // DEC-191: print item attributes (the lifter emits `#[Entry]` on entries; it never
-        // produces attribute ARGUMENTS, so the bare form suffices — extend if that changes).
+        // DEC-191 / DEC-331: print item attributes WITH their arguments. The synthesized entry now
+        // carries `#[Entry(kind: Cli)]` (kind is REQUIRED since DEC-331 — bare `#[Entry]` is rejected
+        // by the checker), so the printer must render args; `self.expr` handles `NamedArg` (`kind: Cli`).
         for attr in &f.attrs {
-            self.line(&format!("#[{}]", attr.name));
+            if attr.args.is_empty() {
+                self.line(&format!("#[{}]", attr.name));
+            } else {
+                let args = attr
+                    .args
+                    .iter()
+                    .map(|a| self.expr(a))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(", ");
+                self.line(&format!("#[{}({args})]", attr.name));
+            }
         }
         let mods = modifiers_str(&f.modifiers);
         let generics = if f.type_params.is_empty() {
