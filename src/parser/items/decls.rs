@@ -296,7 +296,7 @@ impl Parser {
                      yet supported — import its members explicitly (e.g. `import {p}.member;`)"
                 )
             };
-            return Err(self.error(&msg).with_code("E-WILDCARD-STDLIB-ROOT"));
+            return Err(self.error_msg(msg).with_code("E-WILDCARD-STDLIB-ROOT"));
         }
         let mut except: Vec<String> = Vec::new();
         if matches!(self.peek(), TokenKind::Ident(s) if s == "except") {
@@ -312,7 +312,7 @@ impl Parser {
         }
         if matches!(self.peek(), TokenKind::Ident(s) if s == "as") {
             return Err(self
-                .error(
+                .error_msg(
                     "a wildcard import `X.*` cannot be aliased (`* as Y`) — a flat wildcard has no \
                      single name to bind; import the member explicitly (`import X.Member as Y;`) \
                      or use a group (`import X.{ Member as Y };`)",

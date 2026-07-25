@@ -1335,6 +1335,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              are reachable), or an `except { … }` / an explicit import removed them all. Delete the\n\
              wildcard, or import the specific member(s) you meant.\n"
         }
+        "E-WILDCARD-NO-PROJECT" => {
+            "E-WILDCARD-NO-PROJECT — a wildcard import `import X.*;` was used outside a project.\n\n\
+             A wildcard is compile-time sugar the loader expands into per-member imports against a\n\
+             package graph. In single-file or `-e` mode there is no such graph — the reserved single\n\
+             `Main` package has nothing to wildcard-import — so the `*` cannot be expanded. Import the\n\
+             members explicitly (`import X.Member;`), or run inside a project (a `src/`-rooted tree)\n\
+             where `X` resolves.\n"
+        }
         "E-EXCEPT-UNKNOWN" => {
             "E-EXCEPT-UNKNOWN — an `except { … }` clause named a member the package does not have.\n\n\
              `import X.* except { A };` may only exclude names that `X.*` would actually bind. A typo\n\
@@ -1879,11 +1887,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              `declare`.\n"
         }
         "E-IMPORT-UNKNOWN" => {
-            "E-IMPORT-UNKNOWN — an `import` names a type a known package does not export.\n\n\
-             `import Acme.Geometry.Point [as P];` names a public type a package actually exports. This\n\
-             fires when the package is known (it exports other types) but not the named one — a mistyped\n\
-             type import. Check the package path and the type name. It also fires for a fault-intrinsic\n\
-             member import that names a non-member — `import Core.Abort.bogus;` (the intrinsics are\n\
+            "E-IMPORT-UNKNOWN — an `import` names a member (type, function, or sub-module) a known\n\
+             package does not export.\n\n\
+             `import Acme.Geometry.Point [as P];` names a public member a package actually exports —\n\
+             a type, a function, or (for a wildcard/group) a sub-module. This fires when the package is\n\
+             known (it exports other members) but not the named one: a mistyped type, function, or\n\
+             sub-module import, single (`import Acme.Geometry.Nope;`), grouped\n\
+             (`import Acme.Geometry.{ Point, Nope };`), or wildcard-`except` (`except { Nope }`). Check\n\
+             the package path and the member name. It also fires for a fault-intrinsic member import\n\
+             that names a non-member — `import Core.Abort.bogus;` (the intrinsics are\n\
              `Core.Assert.assert` and `Core.Abort.{ panic, todo, unreachable }`).\n"
         }
         "E-UNIMPORTED" => {

@@ -188,10 +188,26 @@ test enforces this). TDD in `src/loader/tests.rs` + `tests/project.rs` fixtures.
   per-expanded-member usage analysis and is the FIRST of the `W-UNUSED-*` family (audit M3 / C-unused-import)
   — better designed as one coherent lint slice than a wildcard-only one-off. Deferred; recorded here.
 
+- ⬚ **P-Q-A-4 — group-`{}` member sorting is a NO-OP (ruling (e) applies to `except {}` only).**
+  [Verified during build] a grouped import `import P.{ Zeta, Alpha };` is expanded into per-member
+  `Item::Import`s **at PARSE time** (DEC-186, `parse_import_group`), so the formatter never sees a
+  `{}` group — it sees two independent `import P.Zeta;` / `import P.Alpha;` lines and prints them in
+  source order (not sorted). Ruling (e)'s "sort `{}`/`except {}`" is therefore honored for `except {}`
+  (a wildcard tail the formatter DOES see and sorts) but is unimplementable for `{}` without moving
+  group expansion out of the parser into a post-format desugar — a larger change to DEC-186. Behavior
+  is still idempotent and byte-identity-safe (no correctness impact); only the cosmetic sort is absent.
+  Deferred pending a dev ruling on whether to re-home group expansion.
+
 ## BUILD STATUS (autonomous, 2026-07-25)
 Steps 0-1 (parser) ✅ f8c5224 · step 2 (loader expansion + 4 diagnostics) ✅ 6bf9c3b · step 3
-(E-IMPORT-UNKNOWN) ✅ 30bc060. Core-submodule wildcard DEFERRED (P-Q-A-1). W-UNUSED-IMPORT DEFERRED
-(P-Q-A-3). NEXT: step 5 example (Inv 9) → step 6 format sort → step 7 FEATURES.md → step 8 DEC-268 panel.
+(E-IMPORT-UNKNOWN) ✅ 30bc060 · steps 5-6 (example + format round-trip) ✅ 084fe77 · step 7
+(FEATURES.md) ✅ 94e2dd7. Core-submodule wildcard DEFERRED (P-Q-A-1). W-UNUSED-IMPORT DEFERRED
+(P-Q-A-3). Group-`{}` sort NO-OP DEFERRED (P-Q-A-4).
+**Step 8 (DEC-268 panel):** round-1 panel raised F1-F5 (see `scratchpad/qa-review-round1.md`); ALL fixed:
+F1 checker guard `E-WILDCARD-NO-PROJECT` (loose/-e/dap), F2 raw parser messages (un-wrapped prose),
+F4 E-IMPORT-UNKNOWN explain broadened (type/function/sub-module), F5 AST doc (public-only), F3 spec
+disclosure (P-Q-A-4). Gate green (fmt/clippy×2/check-no-default/test --all-features/build --release).
+NEXT: re-run the 3-lens panel until TWO consecutive clean rounds, then mark Q-A DONE.
 
 ## Backends / invariants checklist (for the eventual build)
 

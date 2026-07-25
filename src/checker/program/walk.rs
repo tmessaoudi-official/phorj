@@ -184,6 +184,7 @@ impl Checker {
                 }
             }
         }
+        self.check_no_surviving_wildcard_imports(program);
         self.check_variant_import_collisions(program);
         self.check_function_import_collisions(program);
         // Feature B-static: type-check every static field's (now arbitrary) initializer, after all
@@ -361,6 +362,43 @@ impl Checker {
         self.check_block(body);
         self.cur_ret = prev_ret;
         self.cur_class = prev_class;
+    }
+
+    /// Q-A guard: a wildcard import (`import X.*`) is compile-time sugar the LOADER expands into
+    /// per-member imports before the checker ever runs (Inv 5). In project mode none survive here. It
+    /// survives ONLY in loose mode (`-e` / stdin / dap read raw source and skip loader assembly),
+    /// where there is no package graph to expand against — the reserved single `Main` package has
+    /// nothing to wildcard-import. Rather than silently ignore it (an unexpanded `*` would bind
+    /// nothing), reject it loudly so the loose-mode user learns the feature needs a project.
+    pub(in crate::checker) fn check_no_surviving_wildcard_imports(
+        &mut self,
+        program: &crate::ast::Program,
+    ) {
+        use crate::ast::Item;
+        for item in &program.items {
+            if let Item::Import {
+                path,
+                wildcard: true,
+                span,
+                ..
+            } = item
+            {
+                let pkg = path.join(".");
+                self.err_coded(
+                    *span,
+                    format!(
+                        "wildcard import `import {pkg}.*;` is only available inside a project (a \
+                         package graph the loader can expand it against); it cannot be used in \
+                         single-file or `-e` mode"
+                    ),
+                    "E-WILDCARD-NO-PROJECT",
+                    Some(format!(
+                        "import the members explicitly (e.g. `import {pkg}.Member;`), or run this \
+                         inside a project so `{pkg}` resolves"
+                    )),
+                );
+            }
+        }
     }
 
     /// Feature B-static: type-check each class's static-field initializers (now arbitrary expressions,

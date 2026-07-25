@@ -480,6 +480,19 @@ fn has_code(errs: &[phorj::diagnostic::Diagnostic], code: &str) -> bool {
     errs.iter().any(|e| e.code == Some(code))
 }
 
+// ── Q-A: surviving-wildcard guard (loose mode) ────────────────────────────────────────────────
+
+#[test]
+fn wildcard_import_in_loose_mode_is_rejected() {
+    // Q-A round-1 review F1: a wildcard import is loader-expanded before the checker in project mode,
+    // so it survives to `check` ONLY in loose mode (`-e`/stdin/dap), where there is no package graph.
+    // The checker guard rejects it loudly instead of silently ignoring an unexpanded `*`.
+    let src = "package Main;\nimport Acme.Geometry.*;\n\
+        #[Entry(kind: Cli)] function main() -> void {}\n";
+    let errs = check_src(src).expect_err("a surviving wildcard is rejected in loose mode");
+    assert!(has_code(&errs, "E-WILDCARD-NO-PROJECT"), "{errs:?}");
+}
+
 // ── M-RT S2.2: method return-type overloading ─────────────────────────────────────────────────
 
 #[test]

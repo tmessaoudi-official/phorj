@@ -149,6 +149,14 @@ impl Parser {
         )
     }
 
+    /// Build a Diagnostic with a *verbatim* message at the current position — no `expected … found …`
+    /// wrapper. Use for full-sentence rejections that must read as prose (e.g. the wildcard-import
+    /// bans), where `error`'s wrapping would garble the sentence.
+    fn error_msg(&self, msg: impl Into<String>) -> Diagnostic {
+        let sp = self.peek_span();
+        Diagnostic::new(Stage::Parse, msg, sp.line, sp.col)
+    }
+
     /// Consume an identifier token, returning its name, or error with `what`.
     fn expect_ident(&mut self, what: &str) -> Result<String, Diagnostic> {
         match self.peek().clone() {

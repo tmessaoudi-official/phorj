@@ -606,9 +606,63 @@ fn parses_wildcard_import_with_except() {
 #[test]
 fn wildcard_import_alias_is_a_parse_error() {
     // Q-A: `import X.* as Y;` is E-WILDCARD-ALIAS — a flat wildcard has no single name to bind.
-    assert!(parser("package Main; import Acme.Http.* as H;")
+    let d = parser("package Main; import Acme.Http.* as H;")
         .parse_program()
-        .is_err());
+        .expect_err("alias on a wildcard is rejected");
+    assert_eq!(d.code, Some("E-WILDCARD-ALIAS"));
+    // F2 (round-1 review): the message must read as prose, NOT be mangled by `Parser::error`'s
+    // "expected … found …" wrapper.
+    assert!(
+        d.message
+            .starts_with("a wildcard import `X.*` cannot be aliased"),
+        "message garbled by the expected/found wrapper: {:?}",
+        d.message
+    );
+    assert!(
+        !d.message.contains("expected"),
+        "must not be wrapped: {:?}",
+        d.message
+    );
+}
+
+#[test]
+fn bare_core_wildcard_is_a_parse_error_with_prose() {
+    // Q-A / P-Q-A-1: bare `import Core.*;` is E-WILDCARD-STDLIB-ROOT (would flood the stdlib). F2:
+    // the full-sentence rejection must read as prose, not wrapped in "expected … found …".
+    let d = parser("package Main; import Core.*;")
+        .parse_program()
+        .expect_err("bare Core.* is rejected");
+    assert_eq!(d.code, Some("E-WILDCARD-STDLIB-ROOT"));
+    assert!(
+        d.message.starts_with("`import Core.*;` is not allowed"),
+        "message garbled: {:?}",
+        d.message
+    );
+    assert!(
+        !d.message.contains("expected"),
+        "must not be wrapped: {:?}",
+        d.message
+    );
+}
+
+#[test]
+fn core_submodule_wildcard_is_a_parse_error_with_prose() {
+    // P-Q-A-1: a Core SUBMODULE wildcard (`import Core.Http.*;`) is deferred → E-WILDCARD-STDLIB-ROOT
+    // with the "not yet supported" prose (F2: unwrapped).
+    let d = parser("package Main; import Core.Http.*;")
+        .parse_program()
+        .expect_err("Core submodule wildcard is deferred");
+    assert_eq!(d.code, Some("E-WILDCARD-STDLIB-ROOT"));
+    assert!(
+        d.message.contains("not yet supported"),
+        "expected the deferred-submodule prose: {:?}",
+        d.message
+    );
+    assert!(
+        !d.message.starts_with("expected"),
+        "must not be wrapped: {:?}",
+        d.message
+    );
 }
 
 #[test]
