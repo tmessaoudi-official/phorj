@@ -182,6 +182,17 @@ test enforces this). TDD in `src/loader/tests.rs` + `tests/project.rs` fixtures.
   "public+internal" wording conflicts with the actual rule for cross-package internal — flagging for
   dev confirmation (the principled behavior is the safe/consistent one).
 
+- ⬚ **P-Q-A-3 — `W-UNUSED-IMPORT` (step 4) DEFERRED to the W-UNUSED-* lint family.** Wildcard/group
+  imports are currently EXEMPT from the hard `E-UNUSED-IMPORT` (safe: `check_unused_imports` skips
+  `wildcard:true`; expanded members are created after that check). A soft `W-UNUSED-IMPORT` needs
+  per-expanded-member usage analysis and is the FIRST of the `W-UNUSED-*` family (audit M3 / C-unused-import)
+  — better designed as one coherent lint slice than a wildcard-only one-off. Deferred; recorded here.
+
+## BUILD STATUS (autonomous, 2026-07-25)
+Steps 0-1 (parser) ✅ f8c5224 · step 2 (loader expansion + 4 diagnostics) ✅ 6bf9c3b · step 3
+(E-IMPORT-UNKNOWN) ✅ 30bc060. Core-submodule wildcard DEFERRED (P-Q-A-1). W-UNUSED-IMPORT DEFERRED
+(P-Q-A-3). NEXT: step 5 example (Inv 9) → step 6 format sort → step 7 FEATURES.md → step 8 DEC-268 panel.
+
 ## Backends / invariants checklist (for the eventual build)
 
 - Inv 5: expand before backends (compile-time sugar).  Inv 10: sorted expansion.  Inv 17: transpile
