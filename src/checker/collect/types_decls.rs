@@ -491,15 +491,7 @@ impl Checker {
                     // (`abstract`/`static`/`const`/`open`/`mutable`) on a constructor is meaningless —
                     // reject it rather than silently dropping it (closes the §5 dropped-modifier gaps).
                     ctor_vis = MemberVis::of(modifiers);
-                    if modifiers.iter().any(|m| {
-                        !matches!(
-                            m,
-                            Modifier::Public
-                                | Modifier::Private
-                                | Modifier::Protected
-                                | Modifier::Internal
-                        )
-                    }) {
+                    if modifiers.iter().any(|m| !m.is_member_visibility()) {
                         self.err_coded(
                             *span,
                             "a constructor takes only a visibility modifier (`private`/`protected`/`internal`/`public`)".to_string(),
