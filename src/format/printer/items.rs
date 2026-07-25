@@ -69,11 +69,31 @@ impl Printer<'_> {
 
     pub(super) fn item(&mut self, item: &Item) -> Result<(), String> {
         match item {
-            Item::Import { path, alias, .. } => {
+            Item::Import {
+                path,
+                alias,
+                wildcard,
+                except,
+                ..
+            } => {
                 let path = path.join(".");
-                match alias {
-                    Some(a) => self.line(&format!("import {path} as {a};")),
-                    None => self.line(&format!("import {path};")),
+                if *wildcard {
+                    // Q-A: round-trip `import X.Y.*;` and `import X.Y.* except { A, B };` — the loader
+                    // expands wildcards, but the FORMATTER runs on the un-expanded AST. Sort the
+                    // `except` members alphabetically (canonical, deterministic — Inv 10).
+                    let mut ex = except.clone();
+                    ex.sort();
+                    let except_clause = if ex.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" except {{ {} }}", ex.join(", "))
+                    };
+                    self.line(&format!("import {path}.*{except_clause};"));
+                } else {
+                    match alias {
+                        Some(a) => self.line(&format!("import {path} as {a};")),
+                        None => self.line(&format!("import {path};")),
+                    }
                 }
                 Ok(())
             }

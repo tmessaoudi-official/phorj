@@ -1,0 +1,5 @@
+package Acme.Geometry;
+
+// An enum. Its variants become namespaced subclasses (`\Acme\Geometry\Green`), constructed and
+// matched cross-package by the bare variant call form `Green()`. One public type per file → `Paint.phg`.
+enum Paint { Red, Green, Blue }

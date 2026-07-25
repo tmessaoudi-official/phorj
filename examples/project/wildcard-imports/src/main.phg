@@ -1,0 +1,38 @@
+package Main;
+
+// Q-A WILDCARD & GROUP IMPORTS. `import Pkg.*;` binds every PUBLIC member of a library package at
+// once (cross-package convenience) — here the types `Shape`, `Rect`, `Paint` of `Acme.Geometry`.
+// It is pure compile-time sugar: the loader expands it to one per-member import (sorted) BEFORE any
+// backend, so the interpreter, VM, and transpiled PHP all see plain per-symbol imports — byte-identical.
+//
+// `except { … }` drops names from the wildcard set; an EXPLICIT import then wins over the wildcard
+// (the escape hatch: wildcard everything, except the one you want to bind differently, then import
+// it on its own line). Here we exclude `Paint` from the `*` and re-import it explicitly — the same
+// binding, shown as the disambiguation pattern.
+import Core.Output;
+import Core.Runtime.Entry;
+import Acme.Geometry.* except { Paint };
+import Acme.Geometry.Paint;
+
+// Typed by a wildcard-imported INTERFACE — any implementer flows in (cross-package nominal subtyping).
+function describe(Shape s): int {
+    return s.area();
+}
+
+// Matched over the explicitly-imported ENUM (bare variant call form, construct + pattern).
+function paintName(Paint p): string {
+    return match (p) { Red() => "red", Green() => "green", Blue() => "blue" };
+}
+
+#[Entry(kind: Cli)]
+function main(): void {
+    // `Rect` came from the wildcard; construct + use it.
+    Rect r = new Rect(3, 4);
+    int a = describe(r);
+    Output.printLine("area: {a}");
+    // `Shape` came from the wildcard too (instanceof against a cross-package interface).
+    Output.printLine("{r instanceof Shape}");
+    // `Paint`/`Green` came from the explicit re-import (excluded from the `*`).
+    Paint p = new Green();
+    Output.printLine("paint: {paintName(p)}");
+}
