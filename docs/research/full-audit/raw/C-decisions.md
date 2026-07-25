@@ -3235,3 +3235,38 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   restrict the vertical to a provably-non-empty list feeding `??` (narrow peephole, no new kind); (iii)
   accept the flag. Not a night call (Invariant 15-adjacent representation choice). NO divergent doc —
   the ex-`architecture-decomp.plan.md` is folded into MASTER-PLAN.
+
+## 2026-07-24 import & visibility cluster — RULED (developer via AskUserQuestion) + BUILT & DEC-268-certified 2026-07-25
+
+Canonical detail lives in the two frozen specs (`docs/specs/2026-07-24-wildcard-imports.md`,
+`docs/specs/2026-07-24-visibility-model.md`); recorded here per Inv 19 (register = a canonical home for
+every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean DEC-268 panel rounds)
+2026-07-25 (`origin/master` through `66f940b`).
+
+- **Q-A — wildcard & group imports (RULED D1–D5 + process; DONE+certified).** `import Pkg.*;` binds every
+  PUBLIC member of a package (cross-package) as compile-time sugar — the loader expands `*`/group `{}`/
+  `except {}` to sorted per-symbol imports before ANY backend (Inv 5, byte-identical); an explicit import
+  wins over a wildcard. 7-code catalog: `E-WILDCARD-STDLIB-ROOT`, `E-WILDCARD-EMPTY`, `E-EXCEPT-UNKNOWN`,
+  `E-WILDCARD-ALIAS`, `E-IMPORT-AMBIGUOUS`, `E-IMPORT-UNKNOWN`, `E-WILDCARD-NO-PROJECT` (loose-mode guard).
+  Deferrals (tracked in the spec §PENDING): P-Q-A-1 Core-submodule wildcards; P-Q-A-2 D3 "public+internal"
+  wording vs as-built public-only cross-package (awaits dev confirm); P-Q-A-3 soft `W-UNUSED-IMPORT`;
+  P-Q-A-4 group-`{}` sort no-op; P-Q-A-5 Inv-13 file-size debt.
+- **Q-B — visibility model completeness (RULED DV-1..DV-5; DV-1/2/3 + follow-up DONE+certified,
+  DV-4 verified already-fixed, DV-5 = separate research pass).** DV-1: a package HIERARCHY (dotted-prefix
+  ancestor relation). DV-2: `internal` REDEFINED to "this package + descendant packages" (subtree), not
+  the exact package. DV-3: member `internal` added (package-subtree-visible; fields/methods/consts/statics/
+  constructor + constructor-promoted params), CHECKER-enforced via the package derived from mangled names,
+  erasing to PHP `public` (byte-identical). DV-4: the G4 static-field-visibility P0 was found ALREADY fixed
+  (W0-2) — no work. DV-5: global completeness sweep is its own research pass (Q-C, not yet run). Promotion
+  detection single-sourced via `Modifier::is_member_visibility` (drift-proof). Pending dev ruling: P-Q-B-1
+  (overloaded interface-method visibility narrowing — pre-existing, reproduces with `private`; the
+  `overloads==1` guard on `E-IFACE-VIS` leaves >1-overload reduced-visibility impls reachable via a plain
+  interface-typed receiver).
+- **DEC-268 certification outcomes.** Both clusters passed the MAXIMAL ladder (fresh-context 3-lens panels,
+  two consecutive clean rounds). The panels caught + fixed, before ship: a real SOUNDNESS hole (`internal`
+  bypassable by upcasting to an interface — `E-IFACE-VIS` extended to `internal`), a set-visibility edge
+  (`internal` + `protected(set)` now `E-SET-VIS-WIDER`), and doc-currency slips. Byte-identity
+  (VM ≡ tree-walker ≡ php-8.5.8) held at every commit.
+- **LSP fix (66f940b).** Dotted import-path completion carried only a `label`, so accepting `Core.Output`
+  after typing `Core.` inserted `Core.Core.Output`; import items now carry a `textEdit` replacing the whole
+  typed path. (Broader LSP intuitiveness punch-list: `docs/research/2026-07-25-lsp-completion-audit.md`.)

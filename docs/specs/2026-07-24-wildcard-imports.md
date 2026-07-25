@@ -128,8 +128,9 @@ mod.rs:69). `*` is `TokenKind::Star` (already tokenized for `*`). Expansion belo
    WILDCARD-EMPTY/EXCEPT-UNKNOWN/IMPORT-UNKNOWN, W-UNUSED-IMPORT).
 6. **Transpile/lift**: auto (expansion → plain imports before backends); assert transpiled PHP shows
    sorted per-symbol `use`; lift never emits `*`/`except`. **format**: sort `{}`/`except {}` members.
-7. **Example + README** (Inv 9): `examples/guide/wildcard-imports.phg` exercising `*`, `except`, and a
-   collision→explicit-fix; `examples/README.md` entry. Differential covers it (VM≡tree-walker≡PHP).
+7. **Example + README** (Inv 9): shipped as the project `examples/project/wildcard-imports/` (wildcards
+   need a cross-package project, so it landed under `project/`, not `guide/`) exercising `*`, `except`,
+   and a collision→explicit-fix; `examples/README.md` entry. Differential covers it (VM≡tree-walker≡PHP).
 8. **Gate + DEC-268 panel** (this feature IS substantial → full 3-lens fresh-context reviewer PANEL,
    two clean rounds) → commit+push.
 

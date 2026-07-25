@@ -121,10 +121,12 @@ Ordered lattice `Private < Internal < Public` (exprs.rs:396). **No inheritance/s
   (const read, `enforce_member_vis`, `enforce_set_vis`, `enforce_ctor_vis`). Added `Modifier::Internal`
   + `MemberVis::Internal` + `parse_modifiers` support. Loose/`Main` → `""` package → same-package
   visible (sound). Transpile: `internal` erases to PHP `public` (empty read-vis, identical to a default
-  field) — byte-identity verified VM≡tree-walker≡PHP. Formatter round-trips `internal`. **v1 carve-out:**
-  `internal` on a constructor-PROMOTED param is `E-INTERNAL-PROMOTION` (supporting it needs the ~11
-  promotion-detection `matches!` sites across transpile/layout/native — a follow-up; a plain `internal`
-  field works). Tests: `internal_member_is_visible_from_descendant_package` +
+  field) — byte-identity verified VM≡tree-walker≡PHP. Formatter round-trips `internal`. **v1 carve-out
+  (SUPERSEDED 2026-07-25 — see the ctor-promoted-param follow-up below, now DONE; `E-INTERNAL-PROMOTION`
+  was removed):** `internal` on a constructor-PROMOTED param WAS `E-INTERNAL-PROMOTION` (supporting it
+  needs the ~11 promotion-detection `matches!` sites across transpile/layout/native — since single-sourced
+  via `Modifier::is_member_visibility` and shipped; a plain `internal` field also works). Tests:
+  `internal_member_is_visible_from_descendant_package` +
   `_not_visible_from_unrelated_package` (project), `internal_member_within_same_package_is_visible` +
   `internal_on_promoted_ctor_param_is_rejected` (loose). Example `project/member-internal/` (Inv 9,
   byte-identity gated) + README + `explain E-INTERNAL-PROMOTION`. Full gate green.

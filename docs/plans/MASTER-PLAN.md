@@ -144,8 +144,10 @@ Build cluster, in order (D10a):
   `internal` REDEFINED = package + descendants on both axes, member `internal` added, folds the
   G4 P0 static-field visibility spine-fix) — **✅ DONE 2026-07-25:** DV-1+DV-2 (package hierarchy +
   top-level `internal`=subtree) `de75201`; DV-3 (member `internal`, package-subtree via mangled-name
-  package derivation — no API threading needed); DV-4 (G4 static-field) verified already-fixed (W0-2).
-  Bounded follow-up: `internal` on ctor-promoted params. **Q-C global completeness sweep**
+  package derivation — no API threading needed); DV-4 (G4 static-field) verified already-fixed (W0-2);
+  `internal` on ctor-promoted params ✅ DONE+certified (single-sourced via `Modifier::is_member_visibility`,
+  `E-INTERNAL-PROMOTION` removed). Remaining dev-owned item: P-Q-B-1 (overloaded interface-method vis
+  narrowing — pre-existing, dev to rule). **Q-C global completeness sweep**
   (own research pass re-synthesizing the full-audit + roadmap-completeness + full-reopen audits +
   a fresh `/gaps` → one ranked completeness register).
 - **Env:** real PHP 8.5.8 built from source in-container (D10d); `toolchain.env` container-aware. The

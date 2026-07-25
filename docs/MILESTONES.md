@@ -219,14 +219,22 @@ adds in-place mutation **immutable-by-default, `mutable` opt-in**, with **no tra
 ## Visibility modifiers — ✅ COMPLETE (2026-06-21)
 
 Three-level declaration visibility on every top-level declaration (class, enum, interface, free
-function): `public` (default — cross-package), `internal` (this package's files), `private` (this
-`.phg` file). Lattice `file ⊂ package ⊂ public`. A dedicated `Visibility` enum (distinct from member
-`Modifier` visibility), parsed as a leading keyword, **loader-enforced and backend-erased** — applied
-at the loader's three resolution chokepoints before the merged program reaches any backend, so the
-`run ≡ runvm ≡ real PHP` spine is safe by construction (PHP has no file/package-private declarations).
-Codes `E-VIS-PRIVATE`/`E-VIS-INTERNAL` (with `phg explain`); example `examples/project/visibility/`.
-Design `docs/specs/2026-06-21-visibility-modifiers-design.md`. Deferred (KNOWN_ISSUES): visibility on
-`type` aliases / `import` re-exports; member-level `Modifier` visibility stays PHP-only-enforced.
+function): `public` (default — cross-package), `internal`, `private` (this `.phg` file). A dedicated
+`Visibility` enum (distinct from member `Modifier` visibility), parsed as a leading keyword,
+**loader-enforced and backend-erased** — applied at the loader's resolution chokepoints before the
+merged program reaches any backend, so the `run ≡ run --tree-walker ≡ real PHP` spine is safe by
+construction (PHP has no file/package-private declarations). Codes `E-VIS-PRIVATE`/`E-VIS-INTERNAL`
+(with `phg explain`); example `examples/project/visibility/`. Design
+`docs/specs/2026-06-21-visibility-modifiers-design.md`.
+
+**Q-B update (✅ 2026-07-25, DEC-268-certified — `docs/specs/2026-07-24-visibility-model.md`):** a package
+HIERARCHY was introduced and `internal` REDEFINED to "this package **+ descendant packages**" (subtree,
+via a dotted-prefix ancestor relation), not just the exact package. Member-level `internal` was added
+(fields/methods/consts/statics/constructor + constructor-promoted params), and member visibility is now
+**checker-enforced** (`E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY`/`E-CONST-VISIBILITY`/`E-CTOR-VISIBILITY`),
+not PHP-only — `internal` members erase to PHP `public` (byte-identical). Static-field visibility (G4)
+confirmed enforced. Example `examples/project/member-internal/`. Still deferred: visibility on `type`
+aliases / `import` re-exports; pending dev ruling P-Q-B-1 (overloaded interface-method vis narrowing).
 
 ## Error handling & stack traces — ✅ Slice 1 (2026-06-21) + Slice 2 SHIPPED
 

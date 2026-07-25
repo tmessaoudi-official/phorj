@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Q-A wildcard & group imports (2026-07-25, DEC-268-certified)
+- `import Pkg.*;` binds every PUBLIC member of a package at once (cross-package); `import Pkg.{ A, B as C };`
+  group form (DEC-186); `import Pkg.* except { X };` drops names; an explicit import wins over a wildcard.
+  Pure compile-time sugar — the loader expands to sorted per-symbol imports before any backend (Inv 5,
+  byte-identical). New diagnostics: `E-WILDCARD-STDLIB-ROOT`, `E-WILDCARD-EMPTY`, `E-EXCEPT-UNKNOWN`,
+  `E-WILDCARD-ALIAS`, `E-IMPORT-AMBIGUOUS`, `E-IMPORT-UNKNOWN`. Example `examples/project/wildcard-imports/`.
+
+### Added — Q-B visibility model completeness (2026-07-25, DEC-268-certified)
+- Package HIERARCHY (dotted-prefix ancestor relation); top-level `internal` REDEFINED to "this package +
+  descendant packages" (subtree); member `internal` added (fields/methods/consts/statics/constructor +
+  constructor-promoted params), checker-enforced via the package derived from mangled names, erasing to
+  PHP `public` (byte-identical). Static-field visibility (G4) confirmed enforced. Example
+  `examples/project/member-internal/`. Pending dev ruling: P-Q-B-1 (overloaded interface-method vis).
+
+### Fixed — LSP dotted import-path completion inserted a duplicated prefix
+- Typing `import Core.` and accepting `Core.Output` produced `Core.Core.Output` (`.` is a client word
+  boundary; items carried only a `label`). Import items now carry a `textEdit` replacing the whole typed
+  path. Also fixed a latent LSP catalog bug listing non-promoted ctor params as completable members.
+
 ### Added — DEC-331 slice 2: Rich `Request` v1 (bags + files + body.json), replacing the thin Core.Http Request
 
 The stdlib `Request` is now the PSR-7-shaped rich value: `method`/`path` (percent-decoded) plus

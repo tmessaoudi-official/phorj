@@ -59,7 +59,8 @@ examples/README row (fixed); closing round clean.
 **FOLLOW-UPS (dev-owned):** P-Q-B-1 (overloaded iface-vis, dev ruling); P-Q-A-5 Inv-13 file-size debt.
 **NEXT:** Q-C global completeness sweep (DV-5 research pass) — synthesize the existing audits + a fresh
 `/gaps` into one ranked completeness register.
-**Pushed:** `origin/master @ de75201` (Q-A + Q-B DV-1/2). Q-B DV-3 + DONE docs pushing now.
+**Pushed:** `origin/master @ 66f940b` — all of Q-A + Q-B (DV-1/2/3 + ctor-promoted-param follow-up, all
+DEC-268-certified) + the LSP dotted-import-completion dup fix are on origin; tree clean.
 If reclaimed, resume from this block.
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going
@@ -90,7 +91,7 @@ sub-slice green + byte-identity + committed, SSOT updated in-change (Inv 19):**
   error, symmetric both directions (D6/P3).
 - **S3.5** — inbound TLS via **rustls**, feature-gated `http-server-tls` + UNIFIED-SPEC external-deps row
   (same change) + `serve_tls.phg` README walkthrough (D7/P2). Last: isolates the new dep + all-features gate.
-  **← CURRENT: S3.1 in flight (Phase 2 grounding).**
+  *(HISTORICAL marker superseded — S3.1 is DONE; the live cursor is the top AUTONOMOUS block: NEXT = Q-C.)*
 
 **✅ PLAYGROUND WARM-UP DONE (dev ruled Option 1, 2026-07-24):** three fixes — (1) `main.js:422`
 editor-fallback snippet now mirrors `gen_examples.py`'s DEFAULT exactly (restored `import
@@ -125,8 +126,8 @@ SSOT — this is a pointer per Inv 19, not a duplicate):**
   research pass: re-synthesize `docs/research/full-audit/` + `roadmap-completeness/` +
   `2026-07-16-full-reopen-audit.md` + a fresh `/gaps` sweep → ONE ranked completeness register.
   Scope/approach ruled before it builds. (G5 static-method-via-instance is a candidate finding.)
-- **Sequencing note:** these are QUEUED behind the CURRENT S3 work (S3.1 in flight). Build order
-  within the cluster: Q-A → Q-B; Q-C is research (can run independently).
+- **Sequencing note (updated 2026-07-25):** Q-A ✅ + Q-B ✅ are DONE+certified. Q-C (research sweep)
+  remains and can run independently. (S3.1 is DONE; this note's original "S3.1 in flight" was stale.)
 
 **✅ DEC-331 SLICE 1 (`#[Invoke]` + `#[ToString]`) BUILT + byte-identity green (2026-07-24)** — see
 the DEC-331 slice-1 register row + spec §8. Shipped: direct `x(args)` invoke calls (overloaded),
