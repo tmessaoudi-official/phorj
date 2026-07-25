@@ -133,6 +133,37 @@ mod.rs:69). `*` is `TokenKind::Star` (already tokenized for `*`). Expansion belo
 8. **Gate + DEC-268 panel** (this feature IS substantial → full 3-lens fresh-context reviewer PANEL,
    two clean rounds) → commit+push.
 
+## STEP 2 DETAIL — loader expansion (grounded 2026-07-25; step 1 shipped f8c5224)
+
+**Hook point:** `src/loader/mod.rs` — AFTER Pass-1 builds the index (~line 613), BEFORE Pass-2 rewrite.
+Pass-1 yields: `defined: HashMap<(pkg,name)→mangled>` (functions), `types: HashMap<(pkg,name)→mangled>`,
+`prov_fns`/`prov_types: HashMap<(pkg,name)→DefInfo{vis}>`. Wildcard `Item::Import`s live in
+`parsed: Vec<(PathBuf, Program)>` items. Expand IN PLACE (replace each wildcard import with its
+per-member `Item::Import { path: prefix+[name], wildcard:false }` list) before Pass-2 rewrites items.
+
+**Two enumeration sources:**
+- **User/vendored package** (prefix P present in the index): members = `{ name : (P,name) ∈ defined∪types
+  AND vis(prov) ∈ {Public, Internal} }`. (Private is file-scoped, excluded.) Requires the wildcard to
+  trigger loading of package P (same as a normal `import P.Member` — the import-graph walk mod.rs:270).
+- **Native `Core.*` submodule** (e.g. `Core.Http`): members via the native registry — promote
+  `src/lsp/catalog.rs::module_members(qualifier)->Vec<String>` (currently `pub(super)`) to a
+  `pub(crate)` native enumerator (or add `native::module_members`), reuse it here.
+
+**Algorithm per wildcard import `{prefix, except}`:** (1) if `prefix == ["Core"]` → `E-WILDCARD-STDLIB-ROOT`.
+(2) resolve member set from the right source; (3) every `except` name must be IN the set else
+`E-EXCEPT-UNKNOWN` (did-you-mean); (4) subtract `except`; (5) SORT; (6) if the resulting NEW-binding set
+is empty → `E-WILDCARD-EMPTY`; (7) if any produced leaf collides with another wildcard's leaf (or an
+already-bound name) → `E-IMPORT-AMBIGUOUS`; (8) emit per-member imports.
+
+**All-paths guarantee:** the loader covers loose + project (the real cross-package programs). Add a
+**checker guard**: any `Item::Import { wildcard: true, .. }` that survives to the checker → internal
+error (defensive; expansion must have removed them). The raw `check_and_expand` snippet path is
+package-agnostic and can't reference cross-package wildcards.
+
+**Codes + explain:** register E-WILDCARD-STDLIB-ROOT / E-WILDCARD-EMPTY / E-EXCEPT-UNKNOWN /
+E-IMPORT-AMBIGUOUS in `src/cli/explain.rs` (the `every_emitted_diagnostic_code_has_an_explanation`
+test enforces this). TDD in `src/loader/tests.rs` + `tests/project.rs` fixtures.
+
 ## Backends / invariants checklist (for the eventual build)
 
 - Inv 5: expand before backends (compile-time sugar).  Inv 10: sorted expansion.  Inv 17: transpile
