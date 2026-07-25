@@ -198,6 +198,39 @@ fn wildcard_ambiguous_collision_is_rejected() {
 }
 
 #[test]
+fn import_unknown_member_is_rejected() {
+    // Q-A step 3 (G6): a member import naming nothing the package exports → E-IMPORT-UNKNOWN
+    // (used here so the earlier unused-import scan passes and we reach member validation).
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Shapes.bogus;\n\
+         #[Entry(kind: Cli)] function main() -> void { bogus(); }",
+    );
+    tmp.write(
+        "src/Acme/Shapes/shapes.phg",
+        "package Acme.Shapes;\nfunction area() -> int { return 1; }",
+    );
+    let err = load(&entry).unwrap_err();
+    assert!(err.contains("E-IMPORT-UNKNOWN"), "got: {err}");
+}
+
+#[test]
+fn import_valid_member_is_accepted() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Shapes.area;\n\
+         #[Entry(kind: Cli)] function main() -> void { int a = area(); }",
+    );
+    tmp.write(
+        "src/Acme/Shapes/shapes.phg",
+        "package Acme.Shapes;\nfunction area() -> int { return 1; }",
+    );
+    load(&entry).expect("a valid member import must load");
+}
+
+#[test]
 fn loose_load_has_no_stats() {
     let u = load_loose_src(
         "package Main; import Core.Runtime.Entry;\n#[Entry(kind: Cli)] function main() -> void {}",

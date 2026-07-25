@@ -812,6 +812,8 @@ fn assemble(
             unit_package = prog.package.clone();
             unit_span = prog.span;
         }
+        // Q-A step 3 (G6): reject member imports naming a non-existent member (E-IMPORT-UNKNOWN).
+        validate_member_imports(&prog, &defined, &types, &pkgset, &file)?;
         let user_imports = user_import_map(&prog.items, &types, &defined);
         let type_imports = build_type_imports(&prog, &types, &prov_types, &user_imports, &file)?;
         let function_imports =
@@ -1028,6 +1030,54 @@ fn build_function_imports(
         }
     }
     Ok(map)
+}
+
+/// Q-A step 3 (G6) — `E-IMPORT-UNKNOWN` for a member import naming nothing real. A member import
+/// `import a.b.C;` is valid iff `a.b.C` is itself a (sub-)package/module (in `pkgset`), OR `C` is a
+/// function (`defined`) or type (`types`) that package `a.b` exports. When `a.b` IS loaded but exports
+/// no such member, it's an error AT THE IMPORT LINE (used or not) — closing the silent-accept gap the
+/// two `build_*_imports` builders leave for lowercase / function-only-package members. A non-existent
+/// PACKAGE is already `E-MODULE-NOT-FOUND` (earlier); `Core.*` is native (skipped). `build_type_imports`
+/// still catches the uppercase-type-lookalike case with the same code.
+fn validate_member_imports(
+    prog: &Program,
+    defined: &HashMap<(String, String), String>,
+    types: &HashMap<(String, String), String>,
+    pkgset: &std::collections::HashSet<String>,
+    file: &Path,
+) -> Result<(), String> {
+    for item in &prog.items {
+        let Item::Import { path, .. } = item else {
+            continue;
+        };
+        if path.first().map(String::as_str) == Some("Core") {
+            continue; // native — resolved at the checker layer
+        }
+        let Some((leaf, pkg_segs)) = path.split_last().filter(|(_, p)| !p.is_empty()) else {
+            continue; // single-segment ⇒ a module import (E-MODULE-NOT-FOUND covers non-existence)
+        };
+        if is_builtin_type_leaf(leaf) {
+            continue; // a built-in type leaf — `build_type_imports` owns it (E-IMPORT-BUILTIN)
+        }
+        if pkgset.contains(&path.join(".")) {
+            continue; // the whole path is a (sub-)package — a module import
+        }
+        let pkg = pkg_segs.join(".");
+        if defined.contains_key(&(pkg.clone(), leaf.clone()))
+            || types.contains_key(&(pkg.clone(), leaf.clone()))
+        {
+            continue; // a real function or type member
+        }
+        if pkgset.contains(&pkg) {
+            return Err(format!(
+                "{}: package `{pkg}` exports no member `{leaf}` — no such function, type, or \
+                 sub-module (check the spelling, or that it is `public`) [E-IMPORT-UNKNOWN]",
+                file.display()
+            ));
+        }
+        // else: `pkg` itself never loaded — E-MODULE-NOT-FOUND already handled that; stay silent.
+    }
+    Ok(())
 }
 
 /// Build a file's **type-import map**: bare name (or `as` alias) ⇒ the mangled FQN of a cross-package
