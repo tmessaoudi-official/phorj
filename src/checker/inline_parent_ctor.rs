@@ -17,8 +17,7 @@
 //! occurrence is reachable here and the backends never see a `ParentCall{method:"constructor"}`.
 
 use crate::ast::{
-    own_field_initializers, CatchClause, ClassMember, CtorParam, Expr, Item, Modifier, Program,
-    Stmt,
+    own_field_initializers, CatchClause, ClassMember, CtorParam, Expr, Item, Program, Stmt,
 };
 use crate::token::Span;
 use std::collections::HashMap;
@@ -229,12 +228,7 @@ fn find_owner(start: &str, snap: &Snap) -> Option<String> {
 
 /// A ctor param is promoted to a field iff it carries a visibility modifier (mirrors `construct.rs`).
 fn is_promoted(p: &CtorParam) -> bool {
-    p.modifiers.iter().any(|m| {
-        matches!(
-            m,
-            Modifier::Public | Modifier::Private | Modifier::Protected
-        )
-    })
+    p.modifiers.iter().any(|m| m.is_member_visibility())
 }
 
 /// `this.<name> = <value>;`

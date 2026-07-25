@@ -515,24 +515,10 @@ impl Checker {
                         .iter()
                         .map(|p| {
                             let ty = self.resolve_type(&p.ty);
-                            // Q-B DV-3 v1: `internal` on a constructor-PROMOTED param is not yet
-                            // supported — it would have to thread through every promotion site
-                            // (transpile/layout/native), a follow-up. Reject it loudly rather than
-                            // silently treat the param as non-promoting. A plain `internal` field works.
-                            if p.modifiers.contains(&Modifier::Internal) {
-                                self.err_coded(
-                                    p.span,
-                                    format!("`internal` is not yet supported on a constructor-promoted parameter (`{}`)", p.name),
-                                    "E-INTERNAL-PROMOTION",
-                                    Some("declare it as a plain `internal` field and assign it in the constructor".into()),
-                                );
-                            }
-                            if p.modifiers.iter().any(|m| {
-                                matches!(
-                                    m,
-                                    Modifier::Public | Modifier::Private | Modifier::Protected
-                                )
-                            }) {
+                            // Q-B DV-3 follow-up: `internal` promotes like any visibility modifier
+                            // (single-sourced via `is_member_visibility`); it threads through every
+                            // promotion site and erases to PHP `public` on transpile.
+                            if p.modifiers.iter().any(Modifier::is_member_visibility) {
                                 promoted.push((
                                     p.name.clone(),
                                     ty.clone(),

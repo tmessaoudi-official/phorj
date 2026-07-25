@@ -296,12 +296,7 @@ fn str_literal(e: Option<&Expr>) -> String {
 }
 
 fn is_promoted(p: &CtorParam) -> bool {
-    p.modifiers.iter().any(|m| {
-        matches!(
-            m,
-            Modifier::Public | Modifier::Private | Modifier::Protected
-        )
-    })
+    p.modifiers.iter().any(|m| m.is_member_visibility())
 }
 
 /// Resolve a declared type annotation into the compiler's class-aware `CTy` (M2 Wave 4), derived

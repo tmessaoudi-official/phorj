@@ -204,14 +204,7 @@ impl ClassTables {
         // Each class's OWN method / instance-field names (before inheritance).
         let mut own_methods: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
         let mut own_fields: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
-        let promoted = |m: &[Modifier]| {
-            m.iter().any(|x| {
-                matches!(
-                    x,
-                    Modifier::Public | Modifier::Private | Modifier::Protected
-                )
-            })
-        };
+        let promoted = |m: &[Modifier]| m.iter().any(|x| x.is_member_visibility());
         for item in &program.items {
             if let Item::Class(c) = item {
                 let methods = own_methods.entry(c.name.as_str()).or_default();

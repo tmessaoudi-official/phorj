@@ -70,8 +70,8 @@
 
 use crate::ast::{
     ctor_plan, BinaryOp, CatchClause, ClassMember, CollKind, CtorParam, Expr, FunctionDecl, Item,
-    LambdaBody, MatchArm, MemberSep, Modifier, Param, Pattern, Program, Stmt, StrPart, Type,
-    UnaryOp, Visibility,
+    LambdaBody, MatchArm, MemberSep, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+    Visibility,
 };
 use crate::diagnostic::{Diagnostic, Stage};
 use crate::token::Span;
@@ -324,12 +324,7 @@ enum FieldKind {
 /// True iff a constructor parameter is a promoted field (carries a visibility modifier) — the S2
 /// invariant that makes "parameter name == field name == column name" hold.
 fn is_promoted(p: &CtorParam) -> bool {
-    p.modifiers.iter().any(|m| {
-        matches!(
-            m,
-            Modifier::Public | Modifier::Private | Modifier::Protected
-        )
-    })
+    p.modifiers.iter().any(|m| m.is_member_visibility())
 }
 
 /// The S1 `Row` accessor for a hydrated field type: the non-nullable accessor for a scalar (`int`→

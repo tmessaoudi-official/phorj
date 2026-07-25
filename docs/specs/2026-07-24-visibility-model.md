@@ -3,8 +3,9 @@
 > Status: **RULED 2026-07-24; BUILT + DEC-268-CERTIFIED 2026-07-25.** DV-1+DV-2 shipped (`de75201`);
 > DV-3 (member `internal`) shipped + certified (round 1 found+fixed P1 iface-vis bypass / P3 set-vis
 > wider; rounds 2-3 clean — two consecutive feature-clean rounds); DV-4 verified already-fixed (W0-2).
-> Two dev-owned follow-ups remain: `internal` on constructor-promoted params (bounded build), and
-> P-Q-B-1 (overloaded interface-method vis narrowing — pre-existing, dev to rule). DV-5 (global
+> DV-3's `internal`-on-constructor-promoted-params follow-up is now also DONE (single-sourced via
+> `Modifier::is_member_visibility`). One pre-existing item remains for a dev ruling: P-Q-B-1 (overloaded
+> interface-method vis narrowing). DV-5 (global
 > completeness sweep) is a separate research pass, not this build. Spawned from the
 > wildcard-import design when the developer spotted the visibility matrix was incomplete/asymmetric.
 > Per Inv 15 (design is the developer's) + Inv 19 (records live in-repo, ZERO divergence): mirrored
@@ -135,10 +136,18 @@ Ordered lattice `Private < Internal < Public` (exprs.rs:396). **No inheritance/s
   out-of-scope: double-visibility token combos like `protected internal` type-check by precedence
   rather than being rejected — same as `public private` today; a strict-combo-rejection follow-up if
   desired.)
-- ⬚ **DV-3 follow-up — `internal` on constructor-promoted params.** Thread `Modifier::Internal` through
-  the 11 promotion `matches!(Public|Private|Protected)` sites (transpile `is_promoted`/`program_emit`,
-  `ast/class_layout`, `native`, `desugar_db`/`di`, `collect`), emitting the promoted field as PHP
-  `public`. Small + mechanical but touches byte-identity-affecting emitters — a bounded follow-up slice.
+- ✅ **DV-3 follow-up — `internal` on constructor-promoted params — DONE (2026-07-25).** Instead of
+  editing the 12 scattered promotion `matches!(Public|Private|Protected)` sites by hand (the exact
+  drift the panel had just caught), SINGLE-SOURCED them: added `Modifier::is_member_visibility()`
+  (public/private/protected/internal) and routed every promotion detector through it (transpile
+  `is_promoted`, `ast/class_layout` ×2, `native`, `interpreter/construct`, `compiler`, `desugar_db`/`di`,
+  `inline_parent_ctor`, `collect`, `type_bodies` ×2). Transpile `vis()` now maps `Internal` → PHP
+  `public` EXPLICITLY (required — a promoted param needs a visibility keyword: `public int $x` promotes,
+  bare `int $x` is just an argument → would drop the field). The `E-INTERNAL-PROMOTION` rejection +
+  explain entry are removed. Byte-identity verified: `constructor(internal int x)` → `function
+  __construct(public int $x)`, VM≡tree-walker≡PHP. Cross-package enforcement holds (an unrelated package
+  reading the promoted internal field → E-FIELD-VISIBILITY). Tests: `internal_promoted_ctor_param_is_a_field`
+  (loose), `internal_promoted_ctor_param_field_is_enforced_cross_package` (project).
 - ⬚ **P-Q-B-1 (dev to rule) — overloaded interface-method visibility narrowing.** [Verified: Q-B DV-3
   round-2 panel] `E-IFACE-VIS` (`interfaces.rs`) only fires when the class provides a SINGLE overload
   of the interface method (`method_vis` records just the first overload's modifiers). With >1 overload,

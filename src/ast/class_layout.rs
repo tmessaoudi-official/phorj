@@ -97,12 +97,7 @@ pub fn class_field_conflicts(program: &Program) -> Vec<(String, String, Span)> {
                     }
                     ClassMember::Constructor { params, .. } => {
                         for p in params {
-                            if p.modifiers.iter().any(|m| {
-                                matches!(
-                                    m,
-                                    Modifier::Public | Modifier::Private | Modifier::Protected
-                                )
-                            }) {
+                            if p.modifiers.iter().any(|m| m.is_member_visibility()) {
                                 fs.insert(p.name.clone());
                             }
                         }
@@ -153,12 +148,7 @@ pub fn class_field_layout(program: &Program) -> std::collections::BTreeMap<Strin
                 }
                 ClassMember::Constructor { params, .. } => {
                     for p in params {
-                        if p.modifiers.iter().any(|m| {
-                            matches!(
-                                m,
-                                Modifier::Public | Modifier::Private | Modifier::Protected
-                            )
-                        }) {
+                        if p.modifiers.iter().any(|m| m.is_member_visibility()) {
                             v.push(p.name.clone());
                         }
                     }

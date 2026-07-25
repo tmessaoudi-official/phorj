@@ -76,14 +76,7 @@ impl<'c> Interp<'c> {
                 args.len()
             ));
         }
-        let promoted = |p: &CtorParam| {
-            p.modifiers.iter().any(|m| {
-                matches!(
-                    m,
-                    Modifier::Public | Modifier::Private | Modifier::Protected
-                )
-            })
-        };
+        let promoted = |p: &CtorParam| p.modifiers.iter().any(|m| m.is_member_visibility());
         // Promote every promoted param across the whole plan first (before any body runs), matching the
         // VM's `MakeInstance` populating all fields up front — so a parent body can read a field a later
         // parent promotes, identically on both backends. We still solely own `inst`, so `get_mut` skips

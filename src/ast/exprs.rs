@@ -392,6 +392,19 @@ pub enum Modifier {
     Abstract,
 }
 
+impl Modifier {
+    /// True for a member-visibility modifier (`public`/`private`/`protected`/`internal`) — the set that
+    /// marks a constructor parameter as PROMOTED to a field. SINGLE-SOURCED (Q-B DV-3 follow-up): every
+    /// promotion-detection site routes through this, so a new visibility variant can never again be
+    /// silently missed at one of the ~dozen `is_promoted` checks (the drift the DEC-268 panel caught).
+    pub fn is_member_visibility(&self) -> bool {
+        matches!(
+            self,
+            Modifier::Public | Modifier::Private | Modifier::Protected | Modifier::Internal
+        )
+    }
+}
+
 /// Declaration-level visibility on a top-level item (visibility modifiers). A NEW axis, distinct from
 /// the member-level `Modifier::{Public,Private,Protected}`. Ordered so `vis >= Visibility::Internal`
 /// reads as "at least package-visible": `Private` (this file only) < `Internal` (this package) <

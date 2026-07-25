@@ -154,6 +154,25 @@ fn internal_member_is_visible_from_descendant_package() {
 }
 
 #[test]
+fn internal_promoted_ctor_param_field_is_enforced_cross_package() {
+    // Q-B DV-3 follow-up: an `internal` constructor-PROMOTED param becomes an `internal` field, and its
+    // package-subtree visibility is enforced cross-package like any internal member (E-FIELD-VISIBILITY).
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Acme.Lib.Widget;\n\
+         #[Entry(kind: Cli)] function main(): void { Widget w = new Widget(9); Output.printLine(\"{w.secret}\"); }",
+    );
+    tmp.write(
+        "src/Acme/Lib/Widget.phg",
+        "package Acme.Lib;\npublic class Widget { constructor(internal int secret) {} }",
+    );
+    let unit = loader::load(&entry).expect("project loads");
+    let err = cli::check_program(&unit.program, &unit.diag_src).unwrap_err();
+    assert!(err.contains("E-FIELD-VISIBILITY"), "got: {err}");
+}
+
+#[test]
 fn internal_member_is_not_visible_from_unrelated_package() {
     // Q-B DV-3: `internal` reaches only the declaring package subtree — the unrelated entry package
     // `Main` may NOT call an `internal` member of `Acme.Lib` (E-METHOD-VISIBILITY).

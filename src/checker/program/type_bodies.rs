@@ -39,14 +39,7 @@ impl Checker {
                 _ => None,
             })
             .flatten()
-            .filter(|p| {
-                p.modifiers.iter().any(|md| {
-                    matches!(
-                        md,
-                        Modifier::Public | Modifier::Private | Modifier::Protected
-                    )
-                })
-            })
+            .filter(|p| p.modifiers.iter().any(|md| md.is_member_visibility()))
             .map(|p| p.name.clone())
             .collect();
         let instance_fields: std::collections::HashSet<String> = members
@@ -233,12 +226,7 @@ impl Checker {
             if let ClassMember::Constructor { params, body, .. } = m {
                 ctor_body = body;
                 for p in params {
-                    if p.modifiers.iter().any(|md| {
-                        matches!(
-                            md,
-                            Modifier::Public | Modifier::Private | Modifier::Protected
-                        )
-                    }) {
+                    if p.modifiers.iter().any(|md| md.is_member_visibility()) {
                         promoted.insert(p.name.as_str());
                     }
                 }

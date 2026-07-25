@@ -320,12 +320,7 @@ fn fold_injected_fields(
                             // Ensure the promoted param carries a visibility (promotion requires one);
                             // a field without an explicit visibility defaults to private.
                             let mut mods = modifiers.clone();
-                            if !mods.iter().any(|md| {
-                                matches!(
-                                    md,
-                                    Modifier::Public | Modifier::Private | Modifier::Protected
-                                )
-                            }) {
+                            if !mods.iter().any(|md| md.is_member_visibility()) {
                                 mods.insert(0, Modifier::Private);
                             }
                             injected.push(CtorParam {

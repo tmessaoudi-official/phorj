@@ -711,14 +711,10 @@ fn php_escape_bytes(bytes: &[u8]) -> String {
 }
 
 /// A ctor param is promoted (becomes a field) iff it carries a visibility modifier —
-/// matches the evaluator (EV-4) and the checker's `collect_class`.
+/// matches the evaluator (EV-4) and the checker's `collect_class`. Single-sourced via
+/// `Modifier::is_member_visibility` so `internal` (Q-B DV-3) promotes like the others.
 fn is_promoted(mods: &[Modifier]) -> bool {
-    mods.iter().any(|m| {
-        matches!(
-            m,
-            Modifier::Public | Modifier::Private | Modifier::Protected
-        )
-    })
+    mods.iter().any(Modifier::is_member_visibility)
 }
 
 /// PHP visibility keyword for a member's modifiers (empty string = no keyword). DEC-241: an
@@ -730,6 +726,11 @@ fn vis(mods: &[Modifier]) -> String {
     } else if mods.iter().any(|m| matches!(m, Modifier::Protected)) {
         "protected"
     } else if mods.iter().any(|m| matches!(m, Modifier::Public)) {
+        "public"
+    } else if mods.iter().any(|m| matches!(m, Modifier::Internal)) {
+        // Q-B DV-3: `internal` has no PHP analog → erases to `public`. Emitting the keyword EXPLICITLY
+        // (not "") is required for a PROMOTED param: `public int $x` is a promoted property, bare
+        // `int $x` is just a constructor argument — the latter would drop the field (byte-identity break).
         "public"
     } else {
         ""

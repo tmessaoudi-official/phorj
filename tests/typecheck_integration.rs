@@ -506,13 +506,14 @@ fn internal_member_within_same_package_is_visible() {
 }
 
 #[test]
-fn internal_on_promoted_ctor_param_is_rejected() {
-    // Q-B DV-3 v1: `internal` on a constructor-PROMOTED param is not yet supported (E-INTERNAL-PROMOTION).
+fn internal_promoted_ctor_param_is_a_field() {
+    // Q-B DV-3 follow-up: `internal` on a constructor-PROMOTED param now promotes to an `internal`
+    // field (single-package here, so it reads clean and the field exists — a plain non-promoted param
+    // would make `this.x` unknown).
     let src = "package Main;\nimport Core.Runtime.Entry;\n\
-        class Box { constructor(internal int x) {} }\n\
+        class Box { constructor(internal int x) {} function get(): int { return this.x; } }\n\
         #[Entry(kind: Cli)] function main() -> void {}\n";
-    let errs = check_src(src).expect_err("internal promoted param is rejected");
-    assert!(has_code(&errs, "E-INTERNAL-PROMOTION"), "{errs:?}");
+    assert!(check_src(src).is_ok(), "{:?}", check_src(src));
 }
 
 #[test]

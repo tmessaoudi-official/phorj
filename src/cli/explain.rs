@@ -1246,15 +1246,6 @@ pub fn explain_text(code: &str) -> Option<String> {
              `public`). `abstract`/`static`/`const`/`open`/`mutable` are meaningless on a constructor\n\
              and are rejected rather than silently dropped. Remove the offending modifier.\n"
         }
-        "E-INTERNAL-PROMOTION" => {
-            "E-INTERNAL-PROMOTION — `internal` was used on a constructor-promoted parameter.\n\n\
-             `internal` (package-subtree visibility, Q-B) is supported on a plain field, method, static,\n\
-             const, or constructor — but not yet on a constructor-PROMOTED parameter\n\
-             (`constructor(internal int x)`), which would have to thread the package-subtree meaning\n\
-             through every promotion site (transpile/layout). Until that follow-up lands, declare it as a\n\
-             plain `internal` field and assign it in the constructor body:\n\
-             `internal int x; constructor(int x) { this.x = x; }`.\n"
-        }
         "E-DUP-PARAM" => {
             "E-DUP-PARAM — two parameters share a name.\n\n\
              Every parameter of a function, method, or constructor must have a distinct name —\n\
