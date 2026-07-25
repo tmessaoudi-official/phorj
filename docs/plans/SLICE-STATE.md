@@ -35,10 +35,22 @@ MASTER-PLAN intro flipped ✅ DONE. **Dev-owned follow-ups (P-Q-A-1..5, do NOT r
 Core-submodule wildcards, public-only-cross-pkg D3-wording confirm, W-UNUSED-IMPORT family, group-`{}`
 sort, and Inv-13 file-size debt (5 grandfathered files over baseline already on origin + 2 files at the
 500 cap — re-baseline or split; series pushed `--no-verify`, dev re-signs).
-**NEXT: Q-B visibility-model** (`docs/specs/2026-07-24-visibility-model.md`, RULED) — package HIERARCHY,
-`internal` = package + descendants (both axes), member `internal`, folds the G4 P0 static-field fix.
-Then Q-C global completeness sweep.
-**Pushed:** `origin/master @ 0ef8a24` (Q-A round-1 fixes + loader split). Q-A DONE-flip docs pushing now.
+**Q-B VISIBILITY-MODEL — PARTIALLY BUILT (2026-07-25):**
+- ✅ **DV-1+DV-2 DONE (`de75201`)** — package hierarchy `pkg_is_ancestor_or_equal` + top-level
+  `internal` = package-subtree (loader `vis_violation`); descendant sees ancestor internals, not
+  siblings/ancestors. Differential 174/174 byte-identical; 49 loader tests green.
+- ✅ **DV-4 (G4 static-field vis) — VERIFIED ALREADY FIXED [Rule 11]** (W0-2: `static_vis` collected +
+  inherited + enforced at read `methods.rs:529` / write `assign.rs:214`; live probe rejects out-of-class
+  private static R/W). The spec's G4 ground-truth predated the fix. Nothing to build.
+- ⬚ **DV-3 (member `internal`) — QUEUED, the one remaining slice.** BLOCKER: the checker is
+  package-unaware post-merge (`ClassInfo` has no package; `check_program` gets no package map) — member
+  vis is checker-enforced but package is a loader concept. APPROACH fully written in the spec BUILD
+  STATUS (loader already has `DefInfo.package`; thread a name→package map into check_program + store
+  owner pkg on ClassInfo + `cur_package` + gate 5 member-vis sites + transpile-erase to PHP public).
+  ~200-300 lines, NOT sliceable green (half = soundness hole) → deferred to fresh context, not started
+  unfinishably at the tail of this session.
+**NEXT (fresh context):** build DV-3 (whole), then Q-C global completeness sweep (DV-5 research pass).
+**Pushed:** `origin/master @ de75201` (Q-A complete + Q-B DV-1/DV-2). Q-B status docs pushing now.
 If reclaimed, resume from this block.
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going

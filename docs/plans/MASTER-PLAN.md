@@ -142,7 +142,10 @@ Build cluster, in order (D10a):
   Inv-13 file-size debt — all dev-owned follow-ups); **Q-B
   visibility-model completeness** (`docs/specs/2026-07-24-visibility-model.md` — package HIERARCHY,
   `internal` REDEFINED = package + descendants on both axes, member `internal` added, folds the
-  G4 P0 static-field visibility spine-fix); build Q-A → Q-B. **Q-C global completeness sweep**
+  G4 P0 static-field visibility spine-fix) — **PARTIALLY BUILT 2026-07-25:** DV-1+DV-2 (package
+  hierarchy + top-level `internal`=subtree) ✅ `de75201`; DV-4 (G4 static-field) ✅ verified
+  already-fixed (W0-2); DV-3 (member `internal`) ⬚ QUEUED (checker package-threading, approach in
+  spec); build Q-A → Q-B. **Q-C global completeness sweep**
   (own research pass re-synthesizing the full-audit + roadmap-completeness + full-reopen audits +
   a fresh `/gaps` → one ranked completeness register).
 - **Env:** real PHP 8.5.8 built from source in-container (D10d); `toolchain.env` container-aware. The

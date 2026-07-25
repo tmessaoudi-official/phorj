@@ -1,6 +1,8 @@
-# SPEC (RULED — QUEUED for build, NOT YET BUILT) — Visibility / access model completeness
+# SPEC (RULED — PARTIALLY BUILT, 2026-07-25) — Visibility / access model completeness
 
-> Status: **RULED 2026-07-24 (dev, AskUserQuestion), QUEUED, NOT BUILT.** Spawned from the
+> Status: **RULED 2026-07-24; PARTIALLY BUILT 2026-07-25.** DV-1+DV-2 shipped (`de75201`); DV-4
+> verified already-fixed (W0-2); **DV-3 (member `internal`) QUEUED — the one remaining slice** (see
+> BUILD STATUS below for the identified approach + why it is deferred to fresh context). Spawned from the
 > wildcard-import design when the developer spotted the visibility matrix was incomplete/asymmetric.
 > Per Inv 15 (design is the developer's) + Inv 19 (records live in-repo, ZERO divergence): mirrored
 > as a QUEUED slice in `docs/plans/MASTER-PLAN.md` + `docs/plans/SLICE-STATE.md`.
@@ -90,6 +92,42 @@ Ordered lattice `Private < Internal < Public` (exprs.rs:396). **No inheritance/s
   candidate finding for that register.)
 - **G6 (cross-linked) — RULED: `E-IMPORT-UNKNOWN` belongs to the WILDCARD-IMPORT slice**, not here.
   Recorded in `2026-07-24-wildcard-imports.md`.
+
+## BUILD STATUS (autonomous, 2026-07-25)
+
+- ✅ **DV-1 + DV-2 DONE (`de75201`)** — package hierarchy relation `pkg_is_ancestor_or_equal`
+  (`loader/mod.rs`) + top-level `internal` REDEFINED to package-subtree. `vis_violation` gates
+  `internal` through the ancestor test; a descendant package reaches an ancestor's internals, siblings
+  and ancestors do not. Purely a loosening; top-level vis is loader-erased (no PHP/transpile change).
+  `wildcard_members` inherits it via the single-sourced `vis_violation`. Tests:
+  `internal_function_visible_from_descendant_package_is_allowed` (+ ancestor/sibling negatives). No
+  conformance/checker re-baseline was needed — every existing negative test uses `Main` as referrer
+  (never a descendant), so it stays correctly rejected.
+- ✅ **DV-4 (G4 static-field visibility) — VERIFIED ALREADY FIXED [Rule 11].** The spec's G4
+  ground-truth PREDATES the "W0-2" fix. Static-field vis IS collected (`static_vis`,
+  `collect/types_decls.rs:449`), threaded through inheritance (`collect/inherit.rs`), and ENFORCED at
+  read (`calls/methods.rs:529`) AND write (`assign.rs:214`). Live probe: an out-of-class `private
+  static` read and write both reject `E-FIELD-VISIBILITY`. No byte-identity break remains — run≡vm≡PHP
+  restored. Nothing to build here.
+- ⬚ **DV-3 (member `internal`) — QUEUED (the real remaining work; deferred to a fresh-context slice).**
+  Member `internal` is a PARSE ERROR today [Verified: `expected a type name, found Internal`]. The
+  BLOCKER is architectural: member visibility is enforced in the CHECKER on the loader-MERGED flat
+  program, but `ClassInfo` carries NO package and `check_program(&program, &diag_src)` receives no
+  package map — the checker is package-unaware post-merge (top-level `internal` works only because it
+  is enforced in the LOADER, pre-merge, where packages exist). Enforcing member-`internal` subtree
+  visibility needs package info in the checker. **APPROACH (identified, not yet built):** the loader
+  ALREADY has the data — `DefInfo.package` in `prov_fns`/`prov_types`. (1) add `Modifier::Internal`
+  (`ast/exprs.rs`) + parser support in `parse_modifiers`; (2) add `MemberVis::Internal`
+  (`checker/mod.rs:262`) + map it in `MemberVis::of`; (3) loader passes a `HashMap<mangled_name,
+  package>` into `check_program`; (4) checker stores the owner package on `ClassInfo` and sets a
+  `cur_package` when entering each function/method; (5) gate `internal` member access via
+  `pkg_is_ancestor_or_equal(owner_pkg, cur_pkg)` at the ~5 member-vis sites in `calls/methods.rs` +
+  `assign.rs` (loose mode: everyone is `Main`, so `internal` is trivially visible — byte-safe);
+  (6) transpile/lift: member `internal` ERASES to PHP `public` (document the rationale — PHP has no
+  package concept, Inv 17); (7) TDD + a runnable example (Inv 9) + `explain` entries. ~200-300 lines
+  across loader→checker interface + 5 sites; a half-enforced version (parse-accept without project-mode
+  subtree gating) is a SOUNDNESS HOLE, so it is NOT sliceable into smaller green commits — built whole
+  or not at all. Deferred here rather than started unfinishably at the tail of a long session.
 
 ## Invariants for the eventual build
 
