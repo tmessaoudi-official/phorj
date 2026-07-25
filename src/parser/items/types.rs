@@ -529,6 +529,8 @@ impl Parser {
                 }
                 TokenKind::Private => Modifier::Private,
                 TokenKind::Protected => Modifier::Protected,
+                // `internal` member (Q-B DV-3) — package-subtree-visible.
+                TokenKind::Internal => Modifier::Internal,
                 TokenKind::Const => Modifier::Const,
                 // `open` method — opts into override (M-RT S6); final-by-default otherwise.
                 TokenKind::Open => Modifier::Open,

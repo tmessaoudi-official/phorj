@@ -1,0 +1,16 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Acme.Lib.Widget;
+import Acme.Lib.Sub.Helper;
+
+// `Main` is an unrelated package: it may hold a `Widget` and pass it to `Helper` (a descendant of
+// `Acme.Lib`), which is the one allowed to call the `internal` `secret()`. `Main` itself calling
+// `w.secret()` directly would be an E-METHOD-VISIBILITY error.
+#[Entry(kind: Cli)]
+function main(): void {
+    Widget w = new Widget(21);
+    Helper h = new Helper();
+    Output.printLine("secret via descendant: {h.reveal(w)}");
+}

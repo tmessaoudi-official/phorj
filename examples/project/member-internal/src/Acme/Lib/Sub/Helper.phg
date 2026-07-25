@@ -1,0 +1,11 @@
+package Acme.Lib.Sub;
+
+import Acme.Lib.Widget;
+
+// A DESCENDANT package of `Acme.Lib` — so it may reach `Widget`'s `internal` member.
+class Helper {
+    constructor() {}
+    function reveal(Widget w): int {
+        return w.secret();
+    }
+}

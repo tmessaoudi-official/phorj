@@ -1,8 +1,9 @@
-# SPEC (RULED — PARTIALLY BUILT, 2026-07-25) — Visibility / access model completeness
+# SPEC (RULED — BUILT, 2026-07-25) — Visibility / access model completeness
 
-> Status: **RULED 2026-07-24; PARTIALLY BUILT 2026-07-25.** DV-1+DV-2 shipped (`de75201`); DV-4
-> verified already-fixed (W0-2); **DV-3 (member `internal`) QUEUED — the one remaining slice** (see
-> BUILD STATUS below for the identified approach + why it is deferred to fresh context). Spawned from the
+> Status: **RULED 2026-07-24; BUILT 2026-07-25.** DV-1+DV-2 shipped (`de75201`); DV-3 (member
+> `internal`) shipped; DV-4 verified already-fixed (W0-2). One bounded follow-up remains (`internal` on
+> constructor-promoted params — see BUILD STATUS). DV-5 (global completeness sweep) is a separate
+> research pass, not this build. Spawned from the
 > wildcard-import design when the developer spotted the visibility matrix was incomplete/asymmetric.
 > Per Inv 15 (design is the developer's) + Inv 19 (records live in-repo, ZERO divergence): mirrored
 > as a QUEUED slice in `docs/plans/MASTER-PLAN.md` + `docs/plans/SLICE-STATE.md`.
@@ -109,8 +110,26 @@ Ordered lattice `Private < Internal < Public` (exprs.rs:396). **No inheritance/s
   read (`calls/methods.rs:529`) AND write (`assign.rs:214`). Live probe: an out-of-class `private
   static` read and write both reject `E-FIELD-VISIBILITY`. No byte-identity break remains — run≡vm≡PHP
   restored. Nothing to build here.
-- ⬚ **DV-3 (member `internal`) — QUEUED (the real remaining work; deferred to a fresh-context slice).**
-  Member `internal` is a PARSE ERROR today [Verified: `expected a type name, found Internal`]. The
+- ✅ **DV-3 (member `internal`) — DONE (2026-07-25).** Solved WITHOUT the feared loader→checker API
+  threading: the merged program mangles every non-`Main` definition to `Pkg\…\Name`, so the checker
+  derives each class's package straight from the mangled name it already holds (`pkg_of_mangled`) and
+  tracks a `cur_package` (set at the class-body / free-function / static-init entry points). Member
+  `internal` visibility = `pkg_subtree_contains(owner_pkg, cur_package)` at the 4 member-vis sites
+  (const read, `enforce_member_vis`, `enforce_set_vis`, `enforce_ctor_vis`). Added `Modifier::Internal`
+  + `MemberVis::Internal` + `parse_modifiers` support. Loose/`Main` → `""` package → same-package
+  visible (sound). Transpile: `internal` erases to PHP `public` (empty read-vis, identical to a default
+  field) — byte-identity verified VM≡tree-walker≡PHP. Formatter round-trips `internal`. **v1 carve-out:**
+  `internal` on a constructor-PROMOTED param is `E-INTERNAL-PROMOTION` (supporting it needs the ~11
+  promotion-detection `matches!` sites across transpile/layout/native — a follow-up; a plain `internal`
+  field works). Tests: `internal_member_is_visible_from_descendant_package` +
+  `_not_visible_from_unrelated_package` (project), `internal_member_within_same_package_is_visible` +
+  `internal_on_promoted_ctor_param_is_rejected` (loose). Example `project/member-internal/` (Inv 9,
+  byte-identity gated) + README + `explain E-INTERNAL-PROMOTION`. Full gate green.
+- ⬚ **DV-3 follow-up — `internal` on constructor-promoted params.** Thread `Modifier::Internal` through
+  the 11 promotion `matches!(Public|Private|Protected)` sites (transpile `is_promoted`/`program_emit`,
+  `ast/class_layout`, `native`, `desugar_db`/`di`, `collect`), emitting the promoted field as PHP
+  `public`. Small + mechanical but touches byte-identity-affecting emitters — a bounded follow-up slice.
+- (historical) DV-3 was a PARSE ERROR before this slice [Verified: `expected a type name, found Internal`]. The
   BLOCKER is architectural: member visibility is enforced in the CHECKER on the loader-MERGED flat
   program, but `ClassInfo` carries NO package and `check_program(&program, &diag_src)` receives no
   package map — the checker is package-unaware post-merge (top-level `internal` works only because it

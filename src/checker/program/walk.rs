@@ -553,6 +553,7 @@ impl Checker {
     pub(in crate::checker) fn check_static_inits(&mut self, program: &crate::ast::Program) {
         use crate::ast::{ClassMember, Item, Modifier};
         let prev = self.cur_class.take();
+        let prev_pkg = std::mem::take(&mut self.cur_package);
         // A static initializer runs in its owning class's scope (so it may call that class's
         // `private`/`protected` constructor — the singleton pattern), but there is no instance, so
         // `this` is forbidden via `in_static_init` (Batch A).
@@ -560,6 +561,8 @@ impl Checker {
         for item in &program.items {
             let Item::Class(c) = item else { continue };
             self.cur_class = Some(c.name.clone());
+            // Q-B DV-3: a static initializer runs in its class's package (for `internal` gating).
+            self.cur_package = Self::pkg_of_mangled(&c.name).to_string();
             for m in &c.members {
                 if let ClassMember::Field {
                     modifiers,
@@ -588,5 +591,6 @@ impl Checker {
         }
         self.in_static_init = false;
         self.cur_class = prev;
+        self.cur_package = prev_pkg;
     }
 }

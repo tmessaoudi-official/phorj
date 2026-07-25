@@ -1,0 +1,13 @@
+package Acme.Lib;
+
+// Q-B member `internal` — package-subtree visibility. `secret` is reachable from `Acme.Lib` AND its
+// descendant packages (`Acme.Lib.Sub`, …), but NOT from an unrelated package like `Main` (that call
+// is E-METHOD-VISIBILITY — see examples/README.md). `internal` erases to PHP `public` on transpile
+// (PHP has no package concept), so every backend runs byte-identically.
+class Widget {
+    constructor(private int id) {}
+    internal function secret(): int {
+        // Package-subtree-visible: the compiler enforces the boundary; PHP sees an ordinary public method.
+        return this.id * 2;
+    }
+}

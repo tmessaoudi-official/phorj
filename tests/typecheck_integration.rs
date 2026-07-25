@@ -493,6 +493,28 @@ fn wildcard_import_in_loose_mode_is_rejected() {
     assert!(has_code(&errs, "E-WILDCARD-NO-PROJECT"), "{errs:?}");
 }
 
+// ── Q-B DV-3: member `internal` ───────────────────────────────────────────────────────────────
+
+#[test]
+fn internal_member_within_same_package_is_visible() {
+    // In loose/single-package mode everything shares the `Main` package, so an `internal` member is
+    // reachable (package-subtree includes the accessor). Checks clean.
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
+        class Box { constructor() {} internal function s(): int { return 1; } function u(): int { return this.s(); } }\n\
+        #[Entry(kind: Cli)] function main() -> void {}\n";
+    assert!(check_src(src).is_ok(), "{:?}", check_src(src));
+}
+
+#[test]
+fn internal_on_promoted_ctor_param_is_rejected() {
+    // Q-B DV-3 v1: `internal` on a constructor-PROMOTED param is not yet supported (E-INTERNAL-PROMOTION).
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
+        class Box { constructor(internal int x) {} }\n\
+        #[Entry(kind: Cli)] function main() -> void {}\n";
+    let errs = check_src(src).expect_err("internal promoted param is rejected");
+    assert!(has_code(&errs, "E-INTERNAL-PROMOTION"), "{errs:?}");
+}
+
 // ── M-RT S2.2: method return-type overloading ─────────────────────────────────────────────────
 
 #[test]

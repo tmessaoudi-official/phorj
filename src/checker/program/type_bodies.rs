@@ -16,6 +16,11 @@ impl Checker {
     ) {
         use crate::ast::{ClassMember, Modifier};
         let prev = self.cur_class.replace(type_name.to_string());
+        // Q-B DV-3: the package of every member body in this class, for `internal` member gating.
+        let prev_pkg = std::mem::replace(
+            &mut self.cur_package,
+            Self::pkg_of_mangled(type_name).to_string(),
+        );
         let prev_tp = std::mem::replace(&mut self.cur_class_type_params, type_params.to_vec());
         let prev_tpb = std::mem::replace(
             &mut self.cur_class_type_param_bounds,
@@ -202,6 +207,7 @@ impl Checker {
         self.cur_class_type_params = prev_tp;
         self.cur_class_type_param_bounds = prev_tpb;
         self.cur_class = prev;
+        self.cur_package = prev_pkg;
     }
 
     /// Definite-assignment pass (Soundness Batch D, finding #4): every **non-optional** instance field
@@ -357,6 +363,14 @@ impl Checker {
         let prev_ret = std::mem::replace(&mut self.cur_ret, ret.clone());
         let prev_throws = std::mem::replace(&mut self.cur_throws, throws);
         let prev_main = std::mem::replace(&mut self.cur_is_main, is_entry_main);
+        // Q-B DV-3: the current package for `internal` member gating — a method inherits the class's
+        // package (already set by the class-body chokepoint); a FREE function derives it from its own
+        // mangled name (`Pkg\…\fn` → `Pkg\…`, Main/loose → "").
+        let this_pkg = match &self.cur_class {
+            Some(c) => Self::pkg_of_mangled(c).to_string(),
+            None => Self::pkg_of_mangled(&f.name).to_string(),
+        };
+        let prev_pkg = std::mem::replace(&mut self.cur_package, this_pkg);
         // DEC-298: variadics are free-function-only in v1 — reject a variadic METHOD param (shared
         // logic with the lambda path). Free functions (`cur_class` none) are handled by `collect_function`.
         if self.cur_class.is_some() {
@@ -373,6 +387,7 @@ impl Checker {
         self.cur_ret = prev_ret;
         self.cur_throws = prev_throws;
         self.cur_is_main = prev_main;
+        self.cur_package = prev_pkg;
         self.active_type_params.clear();
         // Totality: a non-`unit` function must return (or diverge) on every path (M-RT totality
         // cluster). Run after the body walk so all signatures are visible to the divergence analysis.

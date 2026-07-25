@@ -358,6 +358,11 @@ pub enum Modifier {
     Public,
     Private,
     Protected,
+    /// `internal` on a class member (Q-B DV-3) — package-subtree-visible: reachable from the declaring
+    /// class's package AND its descendant packages (the same subtree meaning as top-level `internal`,
+    /// DV-2). Never class-only (that IS `private`). PHP has no package concept, so it ERASES to PHP
+    /// `public` on transpile (documented, Inv 17) — enforcement is checker-only, byte-identity-safe.
+    Internal,
     /// `private(set)` — asymmetric visibility (DEC-241): the field/static reads at its declared
     /// (read) visibility but may be ASSIGNED only inside the owning class. Only meaningful on a
     /// `mutable` member (an immutable one can't be assigned anywhere); transpiles 1:1 to PHP

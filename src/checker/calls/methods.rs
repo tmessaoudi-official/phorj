@@ -491,6 +491,7 @@ impl Checker {
                     if let Some(entry) = self.classes[cls].consts.get(name).cloned() {
                         let visible = match entry.vis {
                             MemberVis::Public => true,
+                            MemberVis::Internal => self.internal_member_visible(&entry.owner),
                             MemberVis::Private => {
                                 self.cur_class.as_deref() == Some(entry.owner.as_str())
                             }
@@ -500,23 +501,31 @@ impl Checker {
                                 .is_some_and(|c| self.is_subtype(c, &entry.owner)),
                         };
                         if !visible {
-                            let kind = if entry.vis == MemberVis::Private {
-                                "private"
-                            } else {
-                                "protected"
+                            let (kind, scope) = match entry.vis {
+                                MemberVis::Private => {
+                                    ("private", format!("inside `{}`", entry.owner))
+                                }
+                                MemberVis::Protected => (
+                                    "protected",
+                                    format!("inside `{}` and its subclasses", entry.owner),
+                                ),
+                                _ => (
+                                    "internal",
+                                    format!(
+                                        "inside `{}`'s package and its sub-packages",
+                                        entry.owner
+                                    ),
+                                ),
                             };
+                            let article = if kind == "internal" { "an" } else { "a" };
                             self.err_coded(
                                 span,
-                                format!("`{name}` is a {kind} constant of `{}`", entry.owner),
+                                format!(
+                                    "`{name}` is {article} {kind} constant of `{}`",
+                                    entry.owner
+                                ),
                                 "E-CONST-VISIBILITY",
-                                Some(format!(
-                                    "it is readable only {}",
-                                    if entry.vis == MemberVis::Private {
-                                        format!("inside `{}`", entry.owner)
-                                    } else {
-                                        format!("inside `{}` and its subclasses", entry.owner)
-                                    }
-                                )),
+                                Some(format!("it is readable only {scope}")),
                             );
                         }
                         return entry.ty;
@@ -727,6 +736,32 @@ impl Checker {
     /// DEC-241: enforce a member's asymmetric SET visibility at a WRITE site (`o.f = e`,
     /// `C.f = e`, a `with { f = … }` override). `entry` is the `set_vis`/`static_set_vis` row —
     /// absent means writes follow the ordinary read visibility (already enforced by the caller).
+    /// Q-B DV-3: the package prefix of a mangled name (`Pkg\Sub\Name` → `Pkg\Sub`; a bare `Name` → "").
+    /// The merged program mangles every non-`Main` definition to `Pkg\…\Name`, so this recovers the
+    /// declaring package straight from the name the checker already holds — no loader plumbing.
+    pub(in crate::checker) fn pkg_of_mangled(name: &str) -> &str {
+        match name.rfind('\\') {
+            Some(i) => &name[..i],
+            None => "",
+        }
+    }
+
+    /// Q-B DV-3: is `ancestor` the same package as `descendant`, or a `\`-boundary ancestor of it?
+    /// The subtree relation `internal` member visibility uses (backslash-separated to match the mangled
+    /// form). `"" ` is `Main`/loose — an ancestor only of itself, never of a namespaced package.
+    pub(in crate::checker) fn pkg_subtree_contains(ancestor: &str, descendant: &str) -> bool {
+        descendant == ancestor
+            || descendant
+                .strip_prefix(ancestor)
+                .is_some_and(|r| r.starts_with('\\'))
+    }
+
+    /// Q-B DV-3: is an `internal` member of `owner` (a mangled class name) reachable from the code
+    /// currently being checked? Legal iff the current package is the owner's package or a descendant.
+    fn internal_member_visible(&self, owner: &str) -> bool {
+        Self::pkg_subtree_contains(Self::pkg_of_mangled(owner), &self.cur_package)
+    }
+
     pub(in crate::checker) fn enforce_set_vis(
         &mut self,
         entry: Option<(MemberVis, String)>,
@@ -737,6 +772,7 @@ impl Checker {
         let cur = self.cur_class.clone();
         let allowed = match vis {
             MemberVis::Public => true,
+            MemberVis::Internal => self.internal_member_visible(&owner),
             MemberVis::Private => cur.as_deref() == Some(owner.as_str()),
             MemberVis::Protected => cur.as_deref().is_some_and(|c| self.is_subtype(c, &owner)),
         };
@@ -773,6 +809,7 @@ impl Checker {
         let cur = self.cur_class.clone();
         let visible = match vis {
             MemberVis::Public => true,
+            MemberVis::Internal => self.internal_member_visible(&owner),
             MemberVis::Private => cur.as_deref() == Some(owner.as_str()),
             MemberVis::Protected => cur.as_deref().is_some_and(|c| self.is_subtype(c, &owner)),
         };
@@ -784,14 +821,19 @@ impl Checker {
         } else {
             ("method", "E-METHOD-VISIBILITY")
         };
-        let (visword, scope) = if vis == MemberVis::Private {
-            ("private", format!("inside `{owner}`"))
-        } else {
-            ("protected", format!("inside `{owner}` and its subclasses"))
+        let (visword, scope) = match vis {
+            MemberVis::Private => ("private", format!("inside `{owner}`")),
+            MemberVis::Protected => ("protected", format!("inside `{owner}` and its subclasses")),
+            // Internal (public is early-returned above): package-subtree scope.
+            _ => (
+                "internal",
+                format!("inside `{owner}`'s package and its sub-packages"),
+            ),
         };
+        let article = if visword == "internal" { "an" } else { "a" };
         self.err_coded(
             span,
-            format!("`{name}` is a {visword} {kindword} of `{owner}`"),
+            format!("`{name}` is {article} {visword} {kindword} of `{owner}`"),
             code,
             Some(format!("it is accessible only {scope}")),
         );
@@ -814,16 +856,20 @@ impl Checker {
         let cur = self.cur_class.clone();
         let visible = match vis {
             MemberVis::Public => true,
+            MemberVis::Internal => self.internal_member_visible(&owner),
             MemberVis::Private => cur.as_deref() == Some(owner.as_str()),
             MemberVis::Protected => cur.as_deref().is_some_and(|c| self.is_subtype(c, &owner)),
         };
         if visible {
             return;
         }
-        let (visword, scope) = if vis == MemberVis::Private {
-            ("private", format!("inside `{owner}`"))
-        } else {
-            ("protected", format!("inside `{owner}` and its subclasses"))
+        let (visword, scope) = match vis {
+            MemberVis::Private => ("private", format!("inside `{owner}`")),
+            MemberVis::Protected => ("protected", format!("inside `{owner}` and its subclasses")),
+            _ => (
+                "internal",
+                format!("inside `{owner}`'s package and its sub-packages"),
+            ),
         };
         self.err_coded(
             span,

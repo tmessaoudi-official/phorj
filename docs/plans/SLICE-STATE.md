@@ -35,22 +35,22 @@ MASTER-PLAN intro flipped ✅ DONE. **Dev-owned follow-ups (P-Q-A-1..5, do NOT r
 Core-submodule wildcards, public-only-cross-pkg D3-wording confirm, W-UNUSED-IMPORT family, group-`{}`
 sort, and Inv-13 file-size debt (5 grandfathered files over baseline already on origin + 2 files at the
 500 cap — re-baseline or split; series pushed `--no-verify`, dev re-signs).
-**Q-B VISIBILITY-MODEL — PARTIALLY BUILT (2026-07-25):**
-- ✅ **DV-1+DV-2 DONE (`de75201`)** — package hierarchy `pkg_is_ancestor_or_equal` + top-level
-  `internal` = package-subtree (loader `vis_violation`); descendant sees ancestor internals, not
-  siblings/ancestors. Differential 174/174 byte-identical; 49 loader tests green.
-- ✅ **DV-4 (G4 static-field vis) — VERIFIED ALREADY FIXED [Rule 11]** (W0-2: `static_vis` collected +
-  inherited + enforced at read `methods.rs:529` / write `assign.rs:214`; live probe rejects out-of-class
-  private static R/W). The spec's G4 ground-truth predated the fix. Nothing to build.
-- ⬚ **DV-3 (member `internal`) — QUEUED, the one remaining slice.** BLOCKER: the checker is
-  package-unaware post-merge (`ClassInfo` has no package; `check_program` gets no package map) — member
-  vis is checker-enforced but package is a loader concept. APPROACH fully written in the spec BUILD
-  STATUS (loader already has `DefInfo.package`; thread a name→package map into check_program + store
-  owner pkg on ClassInfo + `cur_package` + gate 5 member-vis sites + transpile-erase to PHP public).
-  ~200-300 lines, NOT sliceable green (half = soundness hole) → deferred to fresh context, not started
-  unfinishably at the tail of this session.
-**NEXT (fresh context):** build DV-3 (whole), then Q-C global completeness sweep (DV-5 research pass).
-**Pushed:** `origin/master @ de75201` (Q-A complete + Q-B DV-1/DV-2). Q-B status docs pushing now.
+**✅ Q-B VISIBILITY-MODEL — DONE (2026-07-25):**
+- ✅ **DV-1+DV-2 (`de75201`)** — package hierarchy `pkg_is_ancestor_or_equal` + top-level `internal`
+  = package-subtree (loader `vis_violation`).
+- ✅ **DV-3 (member `internal`)** — solved WITHOUT loader→checker API threading: the checker derives
+  each class's package from its mangled name (`Pkg\…\Name` via `pkg_of_mangled`) + tracks `cur_package`;
+  gates the 4 member-vis sites via `pkg_subtree_contains`. `Modifier::Internal` + `MemberVis::Internal`
+  + parser. Transpile erases `internal`→PHP `public` (byte-identical VM≡TW≡PHP); formatter round-trips.
+  v1 carve-out: `internal` on a ctor-promoted param = `E-INTERNAL-PROMOTION` (bounded follow-up: thread
+  the 11 promotion `matches!` sites). Tests (2 project + 2 loose) + example `project/member-internal/`
+  + explain. Full gate green (fmt/clippy×2/test --all-features php-8.5.8/differential 174/format sweep/
+  build --release).
+- ✅ **DV-4 (G4 static-field vis) — VERIFIED ALREADY FIXED [Rule 11]** (W0-2). Nothing to build.
+**FOLLOW-UPS (dev-owned):** `internal` on ctor-promoted params (DV-3 follow-up); P-Q-A-5 Inv-13 debt.
+**NEXT:** Q-C global completeness sweep (DV-5 research pass) — synthesize the existing audits + a fresh
+`/gaps` into one ranked completeness register.
+**Pushed:** `origin/master @ de75201` (Q-A + Q-B DV-1/2). Q-B DV-3 + DONE docs pushing now.
 If reclaimed, resume from this block.
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going

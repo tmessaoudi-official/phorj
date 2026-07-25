@@ -45,6 +45,7 @@ impl Checker {
             in_constructor: false,
             parent_ctor_ok: false,
             cur_class: None,
+            cur_package: String::new(),
             depth: 0,
             loop_depth: 0,
             aliases: HashMap::new(),

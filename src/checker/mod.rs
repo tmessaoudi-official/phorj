@@ -261,6 +261,10 @@ struct HookInfo {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum MemberVis {
     Public,
+    /// Q-B DV-3: package-subtree-visible — reachable from the declaring class's package and its
+    /// descendant packages (the same subtree meaning as top-level `internal`). Enforced via the
+    /// package derived from mangled names; erases to PHP `public` (PHP has no package concept).
+    Internal,
     Protected,
     Private,
 }
@@ -286,6 +290,8 @@ impl MemberVis {
             MemberVis::Private
         } else if mods.contains(&Modifier::Protected) {
             MemberVis::Protected
+        } else if mods.contains(&Modifier::Internal) {
+            MemberVis::Internal
         } else {
             MemberVis::Public
         }
@@ -475,6 +481,11 @@ pub struct Checker {
     parent_ctor_ok: bool,
     /// class currently being checked (for `this` and bare field refs)
     cur_class: Option<String>,
+    /// Q-B DV-3: the PACKAGE of the code currently being checked, derived from the mangled name of the
+    /// enclosing class (methods) or free function — the mangled form is `Pkg\Sub\Name` (Main → bare),
+    /// so the package is the prefix before the last `\`. Empty string = the `Main`/loose package. Used
+    /// only to gate `internal` MEMBER access (package-subtree) via [`Self::pkg_subtree_contains`].
+    cur_package: String,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
     depth: usize,
     /// number of enclosing loops being checked (M-mut.3). `break`/`continue` are valid only when

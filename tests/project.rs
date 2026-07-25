@@ -128,6 +128,51 @@ fn unqualified_cross_package_call_is_rejected() {
 }
 
 #[test]
+fn internal_member_is_visible_from_descendant_package() {
+    // Q-B DV-3: an `internal` MEMBER (here a method) is package-subtree-visible — a class in the
+    // descendant package `Acme.Lib.Sub` may call it on a `Acme.Lib` value.
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Acme.Lib.Widget;\nimport Acme.Lib.Sub.Helper;\n\
+         #[Entry(kind: Cli)] function main(): void { Widget w = new Widget(); Helper h = new Helper(); Output.printLine(\"{h.use(w)}\"); }",
+    );
+    tmp.write(
+        "src/Acme/Lib/Widget.phg",
+        "package Acme.Lib;\npublic class Widget { constructor() {} internal function secret(): int { return 42; } }",
+    );
+    tmp.write(
+        "src/Acme/Lib/Sub/Helper.phg",
+        "package Acme.Lib.Sub;\nimport Acme.Lib.Widget;\npublic class Helper { constructor() {} function use(Widget w): int { return w.secret(); } }",
+    );
+    let unit = loader::load(&entry).expect("project loads");
+    assert!(
+        cli::check_program(&unit.program, &unit.diag_src).is_ok(),
+        "descendant package must reach an ancestor's internal member: {:?}",
+        cli::check_program(&unit.program, &unit.diag_src)
+    );
+}
+
+#[test]
+fn internal_member_is_not_visible_from_unrelated_package() {
+    // Q-B DV-3: `internal` reaches only the declaring package subtree — the unrelated entry package
+    // `Main` may NOT call an `internal` member of `Acme.Lib` (E-METHOD-VISIBILITY).
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Acme.Lib.Widget;\n\
+         #[Entry(kind: Cli)] function main(): void { Widget w = new Widget(); Output.printLine(\"{w.secret()}\"); }",
+    );
+    tmp.write(
+        "src/Acme/Lib/Widget.phg",
+        "package Acme.Lib;\npublic class Widget { constructor() {} internal function secret(): int { return 42; } }",
+    );
+    let unit = loader::load(&entry).expect("project loads");
+    let err = cli::check_program(&unit.program, &unit.diag_src).unwrap_err();
+    assert!(err.contains("E-METHOD-VISIBILITY"), "got: {err}");
+}
+
+#[test]
 fn library_package_type_is_usable_cross_package() {
     // The E-PKG-TYPE gate is retired (M-RT cross-package types): a library package may declare a
     // type, and `package Main` consumes it via `import type`, instantiating + reading a field.
