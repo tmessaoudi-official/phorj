@@ -3271,6 +3271,21 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   after typing `Core.` inserted `Core.Core.Output`; import items now carry a `textEdit` replacing the whole
   typed path. (Broader LSP intuitiveness punch-list: `docs/research/2026-07-25-lsp-completion-audit.md`.)
 
+## DEC-336 — extensionless `#!`-shebang sources + perpetual editor/LSP currency (2026-07-24, RULED + BUILT)
+
+- **Ruling (dev-directed, 100%-clear tooling slice).** A `#!…phg` first line makes an EXTENSIONLESS file a
+  valid Phorj source: the lexer skips a leading `#!` shebang line, and `phg run` accepts a path with no
+  `.phg` extension, so a `#!/usr/bin/env phg` script runs directly. Editors stay perpetually current
+  (Inv 17 + DEC-181 reaffirmed): VS Code / PhpStorm associate `#!`-shebang + extensionless files via a
+  `firstLine` rule, so a freshly-authored script is recognized without a rename.
+- **Built (2026-07-24).** Shebang lexing + extensionless `phg run` (some pieces pre-existed, completed
+  here); editor `firstLine` association; the always-current editor discipline (DEC-181) reaffirmed.
+  Task-tracker line: "Build DEC-336 shebang/extensionless + editor currency."
+- **Byte-identity.** Unaffected — a shebang line is lexer-skipped and never reaches any backend.
+- **Cross-refs.** MASTER-PLAN §0 D10a build cluster; SLICE-STATE "✅ DEC-336 BUILT (2026-07-24)". (This
+  row was reconstructed 2026-07-25: DEC-336 was BUILT and referenced in MASTER-PLAN + SLICE-STATE but had
+  been omitted from this register — Invariant-19 SSOT repair.)
+
 ## DEC-337 — `#[Entry(kind:)]` kind is an injected `EntryKind` enum variant (2026-07-25, RULED + BUILT)
 
 - **Problem.** `#[Entry(kind: Cli)]` (DEC-331) read `Cli`/`Web` as a BARE magic identifier — string-matched
