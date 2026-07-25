@@ -378,7 +378,10 @@ impl Checker {
         use crate::ast::Item;
         let mut bound_seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         for item in &program.items {
-            let Item::Import { path, alias, span } = item else {
+            let Item::Import {
+                path, alias, span, ..
+            } = item
+            else {
                 continue;
             };
             if path.len() != 3 || path[0] != "Core" {

@@ -455,6 +455,14 @@ pub enum Item {
     Import {
         path: Vec<String>,
         alias: Option<String>,
+        /// DEC-Q-A wildcard import `import X.Y.*;` — when true, `path` is the PACKAGE PREFIX (not a
+        /// member), and the loader expands this to one per-member `Item::Import` (public+internal,
+        /// shallow, sorted) BEFORE any backend (Inv 5). A wildcard never carries an `alias`
+        /// (`import X.* as Y` = `E-WILDCARD-ALIAS`). Plain imports set this `false`.
+        wildcard: bool,
+        /// DEC-Q-A `except { A, B }` on a wildcard — names removed from the expansion set before
+        /// binding. Empty for every non-wildcard import (and for a wildcard with no `except`).
+        except: Vec<String>,
         span: Span,
     },
     Function(FunctionDecl),

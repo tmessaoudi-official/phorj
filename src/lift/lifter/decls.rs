@@ -82,6 +82,8 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         final_items.push(Item::Import {
             path: vec!["Core".into(), "Runtime".into(), "Entry".into()],
             alias: None,
+            wildcard: false,
+            except: Vec::new(),
             span: SP,
         });
     }
@@ -89,6 +91,8 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         final_items.push(Item::Import {
             path: vec!["Core".into(), "Output".into()],
             alias: None,
+            wildcard: false,
+            except: Vec::new(),
             span: SP,
         });
     }
@@ -97,6 +101,8 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         final_items.push(Item::Import {
             path: module.split('.').map(str::to_string).collect(),
             alias: None,
+            wildcard: false,
+            except: Vec::new(),
             span: SP,
         });
     }

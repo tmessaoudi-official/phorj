@@ -565,6 +565,53 @@ fn empty_import_group_is_a_parse_error() {
 }
 
 #[test]
+fn parses_wildcard_import() {
+    // Q-A: `import X.Y.*;` parses to a single wildcard `Item::Import` whose path is the PACKAGE PREFIX
+    // (the loader expands it later). No alias, no except.
+    match item("import Core.Http.*;") {
+        Item::Import {
+            path,
+            alias,
+            wildcard,
+            except,
+            ..
+        } => {
+            assert_eq!(path, vec!["Core", "Http"]);
+            assert_eq!(alias, None);
+            assert!(wildcard, "expected a wildcard import");
+            assert!(except.is_empty());
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_wildcard_import_with_except() {
+    // Q-A: `import X.Y.* except { A, B };` — the except set is captured (multi-line + trailing comma ok).
+    match item("import Acme.Geometry.* except {\n  Circle,\n  Square,\n};") {
+        Item::Import {
+            path,
+            wildcard,
+            except,
+            ..
+        } => {
+            assert_eq!(path, vec!["Acme", "Geometry"]);
+            assert!(wildcard);
+            assert_eq!(except, vec!["Circle".to_string(), "Square".to_string()]);
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn wildcard_import_alias_is_a_parse_error() {
+    // Q-A: `import X.* as Y;` is E-WILDCARD-ALIAS — a flat wildcard has no single name to bind.
+    assert!(parser("package Main; import Core.Http.* as H;")
+        .parse_program()
+        .is_err());
+}
+
+#[test]
 fn variadic_param_parses_and_sets_the_flag() {
     // DEC-298: `int ...nums` parses (the `...` sits between element type and name) and sets
     // `Param.variadic`. Semantics (List<T> + call-collection) are the checker's job; the parser just

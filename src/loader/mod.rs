@@ -369,12 +369,7 @@ fn collect_unified_decls(roots: &SearchRoots) -> Result<Vec<PathBuf>, String> {
 fn check_unused_imports(prog: &Program, src: &str, file: &Path) -> Result<(), String> {
     let mut imports: Vec<(&Vec<String>, Vec<String>)> = Vec::new();
     for item in &prog.items {
-        if let Item::Import {
-            path,
-            alias,
-            span: _,
-        } = item
-        {
+        if let Item::Import { path, alias, .. } = item {
             let names = match alias {
                 Some(a) => vec![a.clone()],
                 None => {

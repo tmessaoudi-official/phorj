@@ -1316,6 +1316,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              (with an optional `as` alias per member, and a trailing comma allowed). An empty `{}`\n\
              imports nothing — delete the group, or fill in the members you meant to import.\n"
         }
+        "E-WILDCARD-ALIAS" => {
+            "E-WILDCARD-ALIAS — a wildcard import `import X.*` cannot be aliased (`* as Y`).\n\n\
+             A flat wildcard binds every public/internal member of `X` under its own name, so there is\n\
+             no single name for an alias to rename. Import the member explicitly to alias it\n\
+             (`import X.Member as Y;`), or use a group (`import X.{ Member as Y };`). Namespace-object\n\
+             binding (`import X.* as ns;` giving `ns.Member`) is a separate, not-yet-supported feature.\n"
+        }
         "E-RESULT-TOOPTION-NEEDS-OPTION" => {
             "E-RESULT-TOOPTION-NEEDS-OPTION — `Result.toOption` was used without importing `Core.Option`.\n\n\
              `Result.toOption(r)` (or `r.toOption()`) bridges a `Result<T, E>` to an `Option<T>` —\n\

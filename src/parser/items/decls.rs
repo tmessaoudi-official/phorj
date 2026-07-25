@@ -197,6 +197,12 @@ impl Parser {
             if self.check(&TokenKind::LBrace) {
                 return self.parse_import_group(path, sp);
             }
+            // A `*` after a `.` opens a wildcard import `import Prefix.*;` (Q-A) — the loader expands
+            // it to every public+internal immediate member (shallow), optionally minus an
+            // `except { … }` set. `import X.* as Y` is illegal (E-WILDCARD-ALIAS).
+            if self.eat(&TokenKind::Star) {
+                return self.parse_import_wildcard(path, sp);
+            }
             path.push(self.expect_ident("a module path segment after '.'")?);
         }
         let alias = if matches!(self.peek(), TokenKind::Ident(s) if s == "as") {
@@ -209,6 +215,8 @@ impl Parser {
         Ok(Item::Import {
             path,
             alias,
+            wildcard: false,
+            except: Vec::new(),
             // Vestigial since the unified-import spec: always false (the loader classifies by path).
             span: sp,
         })
@@ -252,12 +260,55 @@ impl Parser {
             Item::Import {
                 path,
                 alias,
+                wildcard: false,
+                except: Vec::new(),
                 span: sp,
             }
         });
         let first = imports.next().expect("group has ≥1 member");
         self.pending_items.extend(imports);
         Ok(first)
+    }
+
+    /// Parse a wildcard import's tail (the `*` was just consumed): an optional `except { a, b [,] }`
+    /// exclusion list, then `;`. Returns a single wildcard `Item::Import` whose `path` is the PACKAGE
+    /// PREFIX — the loader expands it to per-member imports (public+internal, shallow, sorted, minus
+    /// `except`). `except` and `as` are contextual (plain identifiers). `import X.* as Y;` is rejected
+    /// as `E-WILDCARD-ALIAS` — a flat wildcard has no single name to bind (use a group or re-import).
+    pub(in crate::parser) fn parse_import_wildcard(
+        &mut self,
+        prefix: Vec<String>,
+        sp: Span,
+    ) -> Result<Item, Diagnostic> {
+        let mut except: Vec<String> = Vec::new();
+        if matches!(self.peek(), TokenKind::Ident(s) if s == "except") {
+            self.advance(); // consume contextual `except`
+            self.expect(&TokenKind::LBrace, "'{' after 'except'")?;
+            while !self.check(&TokenKind::RBrace) {
+                except.push(self.expect_ident("a name in the 'except' list")?);
+                if !self.eat(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.expect(&TokenKind::RBrace, "'}' to close the 'except' list")?;
+        }
+        if matches!(self.peek(), TokenKind::Ident(s) if s == "as") {
+            return Err(self
+                .error(
+                    "a wildcard import `X.*` cannot be aliased (`* as Y`) — a flat wildcard has no \
+                     single name to bind; import the member explicitly (`import X.Member as Y;`) \
+                     or use a group (`import X.{ Member as Y };`)",
+                )
+                .with_code("E-WILDCARD-ALIAS"));
+        }
+        self.expect(&TokenKind::Semicolon, "';' after import")?;
+        Ok(Item::Import {
+            path: prefix,
+            alias: None,
+            wildcard: true,
+            except,
+            span: sp,
+        })
     }
 
     /// `type Name = Type;` — a top-level alias. Assumes the current token is `type`.
