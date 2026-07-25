@@ -69,10 +69,19 @@ helpers; new checker coverage (bare/unimported/bad-qual/whole-module). Compile-t
 byte-identical (differential 174/174, VM≡TW≡php-8.5.8). Full all-features gate GREEN (nextest + clippy
 ×3 + fmt + release). Register: DEC-337. LSP attribute-arg completion (`EntryKind.` variants) = follow-up
 on the existing LSP punch-list.
+**Follow-ups shipped this run (all pushed, DEC-268 MAXIMAL — 8 rounds; correctness+byte-identity clean
+throughout, docs-currency the only finding-class, all fixed):** `fed304b` E-ENTRY-SIG/-DUPLICATE message
+strings → qualified form; `d7add29` playground/web corpus migrated + `examples.js` regenerated; `3f3802e`
+`flatten_dotted_path` made ITERATIVE (defensive) + precise `wp` test-helper import guard + regression test;
+`dee608e` comment-scope correction. **Pre-existing hazard surfaced (NOT DEC-337-caused, tracked):** a
+general deep-left-associative-chain stack overflow (`enforce_injected::walk_expr` + other guard-free expr
+walkers; ordinary deep member exprs SIGABRT identically; `limits.rs`-documented) → `KNOWN_ISSUES.md`
+`STACKDEPTH-deep-member-chain`, deferred general-robustness slice.
 **NEXT:** Q-C global completeness sweep (DV-5 research pass) — synthesize the existing audits + a fresh
 `/gaps` into one ranked completeness register.
-**Pushed:** `origin/master @ <pending DEC-337 commit>` — all of Q-A + Q-B (DV-1/2/3 + ctor-promoted-param
-follow-up) + LSP dup fix + DEC-337 entry-kind, all DEC-268-certified; tree clean.
+**Pushed:** `origin/master @ dee608e` — all of Q-A + Q-B (DV-1/2/3 + ctor-promoted-param
+follow-up) + LSP dup fix + DEC-337 entry-kind (feature `8eee345` + 4 follow-ups through `dee608e`), all
+DEC-268-certified; full `--all-features` gate + php-8.5.8 oracle GREEN; tree clean.
 If reclaimed, resume from this block.
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going
