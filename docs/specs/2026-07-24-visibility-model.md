@@ -137,6 +137,17 @@ Ordered lattice `Private < Internal < Public` (exprs.rs:396). **No inheritance/s
   the 11 promotion `matches!(Public|Private|Protected)` sites (transpile `is_promoted`/`program_emit`,
   `ast/class_layout`, `native`, `desugar_db`/`di`, `collect`), emitting the promoted field as PHP
   `public`. Small + mechanical but touches byte-identity-affecting emitters — a bounded follow-up slice.
+- ⬚ **P-Q-B-1 (dev to rule) — overloaded interface-method visibility narrowing.** [Verified: Q-B DV-3
+  round-2 panel] `E-IFACE-VIS` (`interfaces.rs`) only fires when the class provides a SINGLE overload
+  of the interface method (`method_vis` records just the first overload's modifiers). With >1 overload,
+  a reduced-visibility impl (`private`/`protected`/`internal`) is reachable through a plain
+  interface-TYPED receiver (`Shape s = new Box(); s.m()`) with NO enforcement — the methods.rs
+  access-site backstop covers only the lone class member of an INTERSECTION type, not a plain interface
+  receiver. **Pre-existing and equal for all three reduced visibilities** (reproduces with `private`
+  overloads) — DV-3's `internal` merely inherits it, so it is NOT a DV-3 regression. Closing it needs
+  per-overload conformance tracking; the design question (must a whole overload SET be public to
+  implement an interface method?) is the developer's (Inv 15). The misleading "backstop" comment has
+  been corrected in place; recorded here as QUEUED.
 - (historical) DV-3 was a PARSE ERROR before this slice [Verified: `expected a type name, found Internal`]. The
   BLOCKER is architectural: member visibility is enforced in the CHECKER on the loader-MERGED flat
   program, but `ClassInfo` carries NO package and `check_program(&program, &diag_src)` receives no

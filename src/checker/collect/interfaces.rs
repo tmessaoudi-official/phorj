@@ -717,9 +717,17 @@ impl Checker {
                                 // `method_vis` records just the first-declared overload's modifiers, so
                                 // on an overload SET (e.g. a `private m()` beside a `public m(int)` that
                                 // is the one satisfying the interface) it can't tell which overload
-                                // conforms — checking the first would false-reject valid code. The
-                                // overloaded case is a documented deferral; the intersection access-site
-                                // enforcement (methods.rs) remains the backstop against an actual bypass.
+                                // conforms — checking the first would false-reject valid code.
+                                // KNOWN GAP (tracked, Q-B DV-3 panel — pre-existing, equal for
+                                // private/protected/internal): with >1 overload the reduced-visibility
+                                // impl is reachable through a plain interface-TYPED receiver
+                                // (`Shape s = new Box(); s.m()`) with NO enforcement — an interface is not
+                                // in `self.classes`, so the methods.rs access-site check finds no
+                                // `method_vis` (⇒ treated public). (The methods.rs backstop covers only
+                                // the lone CLASS member of an INTERSECTION type, not a plain interface
+                                // receiver.) Closing it needs per-overload conformance tracking; deferred
+                                // to a dev ruling (whether a whole overload set must be public). See the
+                                // visibility-model spec's PENDING.
                                 let overloads = self
                                     .classes
                                     .get(&c.name)
