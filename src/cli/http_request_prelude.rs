@@ -134,74 +134,13 @@ class Request {
   // The EAGER wire constructor: null = malformed or oversize (the respond bridge's 400), NEVER a
   // fault. Also the single path fake/withers rebuild through (one parsing story).
   static function parse(bytes raw): Request? {
-    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-    int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
-    if (sep < 0) { return null; }
-    bytes bodyBytes = Bytes.slice(raw, sep + 4, Bytes.length(raw));
-    string head = Bytes.toString(Bytes.slice(raw, 0, sep)) ?? "";
-    List<string> lines = String.split(head, nl);
-    List<string> rl = String.split(lines[0], " ");
-    if (List.length(rl) < 2) { return null; }
-    string method = rl[0];
-    string target = rl[1];
-    // Body stash decision is native-side, single-sourced with the caps: -2 oversize, -1 inline.
-    int stash = NativeHttp.stashBody(bodyBytes);
-    if (stash == -2) { return null; }
-    bytes inline = if (stash >= 0) { b"" } else { bodyBytes };
-    RequestBody body = new RequestBody(inline, stash);
-    // Header lines (everything after the request line) → lowercased-key bag.
-    List<string> headerLines = List.slice(lines, 1, List.length(lines));
-    Map<string, List<string>> headerMap = Request.headerPairs(headerLines);
-    HeaderBag headers = new HeaderBag(headerMap);
-    // Split the target into decoded path + query bag.
-    mutable string path = target;
-    mutable string queryString = "";
-    if (var q = String.indexOf(target, "?")) {
-      path = String.substring(target, 0, q);
-      queryString = String.substring(target, q + 1, String.length(target));
-    }
-    ParamBag query = new ParamBag(NativeHttp.parseQuery(queryString));
-    // Cookies: every `cookie` header, pairs split on `;`, FIRST `=` only, names case-SENSITIVE.
-    ParamBag cookies = new ParamBag(Request.cookiePairs(new HeaderBag(headerMap)));
-    // Form + files by content type (urlencoded + multipart, D8c/D8d).
-    string contentType = headers.get("content-type") ?? "";
-    mutable Map<string, List<string>> formMap = NativeHttp.parseQuery("");
-    mutable List<UploadedFile> fileItems = new List<UploadedFile>();
-    mutable List<string> fileFields = new List<string>();
-    if (String.startsWith(contentType, "application/x-www-form-urlencoded")) {
-      formMap = NativeHttp.parseQuery(Bytes.toString(bodyBytes) ?? "");
-    }
-    // An EMPTY body with a multipart content-type parses to empty form/files — there is no body
-    // to be malformed, and the fake/wither builder passes through this state legitimately
-    // (`withHeader("content-type", …)` before `withBody(…)`). Recorded build decision.
-    if (String.startsWith(contentType, "multipart/form-data") && Bytes.length(bodyBytes) > 0) {
-      string boundary = Request.boundaryOf(contentType);
-      if (boundary == "") { return null; }
-      if (var parts = NativeHttp.parseMultipart(bodyBytes, boundary)) {
-        // Field parts fold into the form bag structurally (body order = first-wins order; values
-        // verbatim — multipart field values are NOT urlencoded). File parts go through the same
-        // native stash decision as the whole body (per-part spill above the threshold).
-        formMap = Request.multipartFields(parts);
-        for (MultipartPart p in parts) {
-          if (p.fileName != "") {
-            int fh = NativeHttp.stashBody(p.content);
-            if (fh == -2) { return null; }
-            bytes finline = if (fh >= 0) { b"" } else { p.content };
-            UploadedFile upfile = new UploadedFile(p.fileName, Bytes.length(p.content), p.contentType, finline, fh);
-            fileItems = List.concat(fileItems, [upfile]);
-            fileFields = List.concat(fileFields, [p.name]);
-          }
-        }
-      } else {
-        return null;
-      }
-    }
-    return new Request(
-      method, NativeHttp.decodePath(path), query, headers, cookies,
-      new ParamBag(formMap), new FileBag(fileItems, fileFields), body,
-      new AttrBag(new Map<string, string>()),
-      target, headerLines, bodyBytes
-    );
+    // DEC-338: the entire wire→Request parse is nativized (Core.Native.Http.parseRequest) to flip the
+    // `queryparse` 0.10× loss — one Rust/PHP twin builds the whole bag graph per parse instead of the
+    // interpreter walking this body. Behaviour is byte-identical (null = malformed/oversize, the eager
+    // D8a contract — never a fault). `fake`/withers still rebuild THROUGH here, so the one parsing
+    // story is preserved. The former private helpers (headerPairs/cookiePairs/multipartFields/
+    // boundaryOf) moved wholesale into that native + its PHP twin.
+    return NativeHttp.parseRequest(raw);
   }
   // ---- fake + withers (the test-builder surface, §7 P2) ---------------------------------------
   static function fake(string method, string target): Request {
@@ -238,60 +177,6 @@ class Request {
       else { "{method} {target} HTTP/1.1{nl}{joined}{nl}{nl}" };
     if (var req = Request.parse(Bytes.concat(Bytes.fromString(head), body))) { return req; }
     panic("rebuilt request no longer parses (fake/withHeader/withBody produced a malformed request)");
-  }
-  private static function headerPairs(List<string> lines): Map<string, List<string>> {
-    mutable Map<string, List<string>> out = new Map<string, List<string>>();
-    for (string line in lines) {
-      if (String.contains(line, ":")) {
-        List<string> kv = String.splitOnce(line, ":");
-        string key = String.lowerCase(String.trim(kv[0]));
-        string value = String.trim(kv[1]);
-        List<string> prev = Map.get(out, key) ?? new List<string>();
-        out[key] = List.concat(prev, [value]);
-      }
-    }
-    return out;
-  }
-  private static function cookiePairs(HeaderBag headers): Map<string, List<string>> {
-    mutable Map<string, List<string>> out = new Map<string, List<string>>();
-    for (string line in headers.getAll("cookie")) {
-      for (string piece in String.split(line, ";")) {
-        string p = String.trim(piece);
-        if (p == "") { continue; }
-        mutable string k = p;
-        mutable string v = "";
-        if (var eq = String.indexOf(p, "=")) {
-          k = String.substring(p, 0, eq);
-          v = String.substring(p, eq + 1, String.length(p));
-        }
-        List<string> prev = Map.get(out, k) ?? new List<string>();
-        out[k] = List.concat(prev, [v]);
-      }
-    }
-    return out;
-  }
-  private static function multipartFields(List<MultipartPart> parts): Map<string, List<string>> {
-    mutable Map<string, List<string>> out = new Map<string, List<string>>();
-    for (MultipartPart p in parts) {
-      if (p.fileName == "") {
-        List<string> prev = Map.get(out, p.name) ?? new List<string>();
-        out[p.name] = List.concat(prev, [Bytes.toString(p.content) ?? ""]);
-      }
-    }
-    return out;
-  }
-  private static function boundaryOf(string contentType): string {
-    if (var b = String.indexOf(contentType, "boundary=")) {
-      string rest = String.substring(contentType, b + 9, String.length(contentType));
-      if (String.startsWith(rest, "\"")) {
-        string inner = String.substring(rest, 1, String.length(rest));
-        if (var q = String.indexOf(inner, "\"")) { return String.substring(inner, 0, q); }
-        return "";
-      }
-      if (var semi = String.indexOf(rest, ";")) { return String.trim(String.substring(rest, 0, semi)); }
-      return String.trim(rest);
-    }
-    return "";
   }
 }
 "#;

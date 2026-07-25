@@ -125,7 +125,8 @@ Build cluster, in order (D10a):
   REPLACES the thin `Core.Http.Request` (examples/conformance/session migrated). **The
   eager/LAZY switch (`Http.ServeConfig.requestParsing`) ships with slice 3's ServeConfig** —
   deferral + build deviations recorded (spec §8 + register). `queryparse` bench = HARD-FLAGGED
-  loss (joins the flip-all-losses campaign).
+  loss (joins the flip-all-losses campaign) — **✅ DEC-338 BUILT: 0.10×→~0.88× in-container (near-parity,
+  ~9× faster; WIN-vs-PHP not yet confirmed — dev-box ratio owed). See the perf-flip campaign block above.**
 - **(3) `#[Entry(kind: EntryKind.{Cli|Web|Desktop|Mobile|Worker|Embedded})]`** (DEC-337: injected enum
   variant, qualified + import-gated, never in the wind) + per-type `#[Config]`-injected
   typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
@@ -200,8 +201,10 @@ close-margin work there — `PHORJ_JIT_DISASM=1` shipped for that session).
 **PERF-FLIP CAMPAIGN RE-RULED (2026-07-25, dev via AskUserQuestion — 3-agent root-cause of the 4
 losses):** order = **queryparse → #33 → listcontains**. `queryparse` 0.10× → **DEC-338: nativize
 `Request.parse`** (one Rust `Core.Native.Http.parseRequest` + a `__phorj_http_parse_request` PHP
-helper, Inv-16 trade dev-accepted) → est. 0.8-1.5×, flips on the VM; BUILD-READY, live step-cursor in
-SLICE-STATE § queryparse-nativize (the one canonical home — read there). `jsonround`/`deepjson` = the
+helper, Inv-16 trade dev-accepted) → **✅ BUILT + DEC-268 CERTIFIED (2026-07-25)**: in-container
+DIRECTION ~0.88× (up from 0.10× — ~9× faster, near-parity but STILL <1.0×, i.e. NOT yet a WIN by
+WIN-OR-FLAG; checksum-identical on all 3 legs), exact WIN ratio owed on the dev-box docker harness
+(estimate 0.8–1.5× straddles 1.0×); details in the register (DEC-338) + SLICE-STATE § queryparse-nativize. `jsonround`/`deepjson` = the
 in-flight Json-ADT JIT slice #33 (unchanged). `listcontains` 0.86× = the packed-i64+SIMD layout slice
 (marginal at n=8). AOT verdict (dev asked): partial for queryparse dispatch only (→0.3×, not a flip),
 rides #33's codegen (no add), zero for listcontains — cold-start win, not the flip mechanism here.

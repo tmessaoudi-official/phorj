@@ -3318,7 +3318,7 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   LSP attribute-arg completion suggesting `EntryKind.Cli` inside `#[Entry(kind:` is a follow-up on the existing
   LSP punch-list.
 
-## DEC-338 — nativize `Request.parse` to flip the `queryparse` 0.10× perf loss (2026-07-25, RULED, BUILD-READY)
+## DEC-338 — nativize `Request.parse` to flip the `queryparse` 0.10× perf loss (2026-07-25, RULED + BUILT)
 
 - **Problem.** `queryparse` is the worst perf loss in the suite: VM 2,532M ns vs php-8.5+JIT 245M = **0.10×**
   (dev-box microbench). 3-agent root-cause: `Request.parse` (`src/cli/http_request_prelude.rs:136-205`) is an
@@ -3334,9 +3334,43 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   Rust native + PHP helper rather than single-source phorj prelude — surfaced and dev-ruled per Inv 16.
 - **AOT note.** AOT alone reaches only ~0.3× on queryparse (removes dispatch but cannot unbox the escaping
   `Rc` object graph) — NOT a substitute for the nativize. AOT is complementary (stack for the last increment).
-- **Byte-identity.** VM ≡ tree-walker ≡ php-8.5.8 must hold across the whole Request surface (differential +
-  `examples/web/rich_request.phg` + request unit tests are the gate). The build feasibility (hand-built
-  `Value::Instance` graphs) is precedented by the multipart native (`src/native/http/multipart.rs:41-56`).
+- **Byte-identity.** VM ≡ tree-walker ≡ php-8.5.8 must hold across the whole Request surface. The 3-leg gate is
+  the differential: `all_examples_transpile_and_match_php` (globs `examples/web/rich_request.phg`) + the
+  `rich_request_wither_guards_fault_identically` and `rich_request_multipart_agrees_on_all_legs` tests. The
+  native's own graph is additionally pinned by the fast oracle-independent unit tests
+  `parse_request_builds_the_expected_bag_graph` / `_urlencoded_form_body` / `_null_on_malformed`
+  (`src/native/http_tests.rs`). The build feasibility (hand-built `Value::Instance` graphs) is precedented by the
+  multipart native (`src/native/http/multipart.rs:41-56`).
 - **Campaign order.** queryparse (this) → Json-ADT JIT slice #33 (jsonround+deepjson) → assess listcontains.
-- **Status.** RULED, BUILD-READY (2026-07-25) — not yet built. Live build cursor + the resumable step list
-  live in `docs/plans/SLICE-STATE.md` (§ queryparse-nativize); roadmap pointer in `MASTER-PLAN.md`.
+- **Status.** RULED + BUILT (2026-07-25). Native `Core.Native.Http.parseRequest` in `src/native/http/request.rs`
+  (Inv-13 split; the whole head-split → header/query/cookie/form/multipart → path-decode → body-stash →
+  hand-built `Request` graph in ONE dispatch), PHP twin `__phorj_http_parse_request` in
+  `src/transpile/runtime_php_http.rs` (self-contained — carries its own `__phorj_http_trim` since the nativized
+  path no longer calls `String.trim`), prelude `Request.parse` now delegates (`return NativeHttp.parseRequest(raw)`),
+  the four dead private helpers (`headerPairs`/`cookiePairs`/`multipartFields`/`boundaryOf`) removed. The stash
+  contract is single-sourced (`stash_decision`, http.rs) across the whole body and each file part.
+- **Build gate (Verified).** Full ALL-FEATURES gate green: `cargo test --workspace --all-features` (oracle
+  `PHORJ_REQUIRE_PHP=1`, php-8.5.8) all pass incl. the differential `all_examples_transpile_and_match_php` +
+  the two `rich_request` 3-leg tests + the three new `parse_request_*` native unit tests; clippy `--all-features`
+  and `--no-default-features` clean; fmt clean; release built. **Perf direction (in-container, direction-only):** php-8.5.8 median ~1.725s vs phorj-VM
+  median ~1.97s = **~0.88×** — up from 0.10× (~9× faster) into the predicted 0.8–1.5× band, but still <1.0×,
+  i.e. NEAR-PARITY, NOT yet a WIN by the WIN-OR-FLAG bar; identical checksum `3200000` on all three legs. The
+  exact WIN ratio (whether it crosses 1.0×) is the dev-box docker microbench harness's to certify (median-of-N,
+  isolated) — this slice is BUILT + certified, but the campaign "flip" is NOT claimed complete until that lands.
+- **Kept, not pruned (build decision).** The granular sub-natives `parseQuery`/`parseMultipart`/`decodePath`/
+  `stashBody` lost their only phorj caller (the removed parse body) but are KEPT: their Rust kernels are reused
+  by `parseRequest` and their `__phorj_http_*` PHP twins are called by `__phorj_http_parse_request`, so the rows
+  stay symmetric with the live PHP helpers and remain the internal SPI for the queued slice-3 lazy path. Pruning
+  the registry rows is out of this perf-flip slice's scope.
+- **Certification.** DEC-268 MAXIMAL 3-lens fresh-context panel (correctness+regression / security+safety /
+  completeness+blast-radius), evidence-based, across multiple rounds: the CODE was unanimously clean in EVERY
+  pass (correctness, security incl. adversarial bounds/panic tracing, and completeness); ALL findings were
+  doc-only and progressively resolved — round 1: the BUILD-READY→BUILT flip + the keep/prune decision; round 2:
+  a coverage-phrasing overclaim (fixed by adding the `parse_request_*` unit tests + correcting the gate wording)
+  + residual stale "queryparse — next"/historical mentions; round 3: a stale 2026-07-24 "RESUME HERE" block
+  (annotated superseded) + a `✅ FLIPPED` status overclaim (0.88× is near-parity, still <1.0×, not a WIN by
+  WIN-OR-FLAG — reworded to "BUILT; WIN pending dev-box" everywhere); round 5: one non-blocking P2 — the
+  `docs/specs/2026-07-23-rich-request.md` perf paragraph still forward-referenced queryparse as a pending loss
+  (annotated `✅ SUPERSEDED by DEC-338`). At the 5-round cap without two-consecutive-clean, the developer ruled
+  (AskUserQuestion) KEEP PANELLING past the cap; each round's doc findings were fixed and re-panelled until two
+  consecutive fully-clean rounds were reached before commit.

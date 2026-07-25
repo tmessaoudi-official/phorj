@@ -130,3 +130,6 @@ eager-vs-lazy parity test; the §5 canonical fault strings ship NOW as single-so
 transform design. **PERF (WIN-OR-FLAG):** `bench/micro/queryparse` lands with the slice and is a
 HARD-FLAGGED ~8x loss vs an idiomatic PHP full-request parse — queued in the dev-re-ruled
 flip-all-losses campaign (next after this slice), candidate fix = a nativized/JIT-vertical parse.
+*(✅ SUPERSEDED by **DEC-338** (2026-07-25): the nativized `Request.parse` shipped — in-container
+0.10×→~0.88× (near-parity, ~9× faster; WIN-vs-PHP not yet confirmed, exact ratio owed on the dev-box
+harness). Canonical status: MASTER-PLAN + register DEC-338 + SLICE-STATE § queryparse-nativize.)*

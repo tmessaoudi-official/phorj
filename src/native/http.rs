@@ -12,9 +12,11 @@ use std::rc::Rc;
 
 mod multipart;
 mod query;
+mod request;
 mod spill;
 pub(crate) use multipart::parse_multipart;
 pub(crate) use query::{decode_path, parse_query_pairs};
+use request::native_parse_request;
 
 /// The slice-2 request-body cap (D8c "size caps in v1"; D4's `maxBodySize` default). NOTE: equal to
 /// the serve transport's whole-frame cap `MAX_REQUEST` (head+body), so via `phg serve` a body can
@@ -49,7 +51,7 @@ pub const FAULT_MALFORMED_MULTIPART: &str = "malformed multipart body";
 
 /// Build a phorj `Map<string, List<string>>` value from accumulated (key, values) pairs,
 /// preserving FIRST-occurrence key order (D8b first-wins) with duplicate values appended.
-fn pairs_to_map(pairs: Vec<(String, Vec<String>)>) -> Value {
+pub(super) fn pairs_to_map(pairs: Vec<(String, Vec<String>)>) -> Value {
     let entries: Vec<(HKey, Value)> = pairs
         .into_iter()
         .map(|(k, vs)| {
@@ -89,18 +91,21 @@ fn native_parse_multipart(args: &[Value], _: &mut String) -> Result<Value, Strin
 /// The body-stash decision, single-sourced with the limits (the prelude cannot read Rust consts):
 /// `-2` = body exceeds [`DEFAULT_MAX_BODY_SIZE`] (eager → the prelude returns null → 400);
 /// `-1` = at/below [`SPILL_THRESHOLD`], keep inline; `>= 0` = a spill handle. The PHP twin
-/// `__phorj_http_stash_body` implements the identical contract.
+/// `__phorj_http_stash_body` implements the identical contract. Shared by the `stashBody` native
+/// AND the nativized `parseRequest` (DEC-338), so both see one copy of the contract (Invariant 4).
+pub(super) fn stash_decision(b: &[u8]) -> Result<i64, String> {
+    if b.len() > DEFAULT_MAX_BODY_SIZE {
+        Ok(-2)
+    } else if b.len() <= SPILL_THRESHOLD {
+        Ok(-1)
+    } else {
+        spill::store(b)
+    }
+}
+
 fn native_stash_body(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Bytes(b)] => {
-            if b.len() > DEFAULT_MAX_BODY_SIZE {
-                Ok(Value::Int(-2))
-            } else if b.len() <= SPILL_THRESHOLD {
-                Ok(Value::Int(-1))
-            } else {
-                spill::store(b).map(Value::Int)
-            }
-        }
+        [Value::Bytes(b)] => stash_decision(b).map(Value::Int),
         _ => Err("Http.stashBody expects (bytes)".into()),
     }
 }
@@ -216,6 +221,20 @@ pub(crate) fn http_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(native_json_parse),
             lift_from: &[],
             php: |a| format!("__phorj_http_json_parse({})", parg(a, 0)),
+        },
+        // DEC-338: the whole wire→`Request` parse, nativized to flip the `queryparse` 0.10× loss
+        // (the phorj `Request.parse` was interpreter-bound per parse). Builds the full bag graph in
+        // Rust; the PHP twin `__phorj_http_parse_request` builds the identical object graph. `null` =
+        // malformed/oversize (the eager D8a contract — never a fault), so the respond bridge still 400s.
+        NativeFn {
+            module: "Core.Native.Http",
+            name: "parseRequest",
+            params: vec![Ty::Bytes],
+            ret: Ty::Optional(Box::new(Ty::Named("Request".into(), vec![]))),
+            pure: true,
+            eval: NativeEval::Pure(native_parse_request),
+            lift_from: &[],
+            php: |a| format!("__phorj_http_parse_request({})", parg(a, 0)),
         },
     ]
 }

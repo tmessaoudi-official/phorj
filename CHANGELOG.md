@@ -6,7 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-### Changed — `#[Entry(kind:)]` is an injected `EntryKind` enum variant (2026-07-25, DEC-337, DEC-268-certified)
+### Changed — nativized `Request.parse` (targets the `queryparse` perf loss) (2026-07-25, DEC-338, DEC-268-certified)
+- The whole wire→`Request` parse is now one Rust native `Core.Native.Http.parseRequest(bytes): Request?`
+  (`src/native/http/request.rs`) with a byte-identical PHP transpile twin `__phorj_http_parse_request`
+  (`src/transpile/runtime_php_http.rs`). The `Core.Http` prelude `Request.parse` now delegates
+  (`return NativeHttp.parseRequest(raw);`); its former private helpers `headerPairs`/`cookiePairs`/
+  `multipartFields`/`boundaryOf` were removed. Purely internal — `Request.parse`'s signature and
+  observable behaviour are unchanged (null = malformed/oversize, the eager D8a contract; never a fault),
+  so byte-identity holds VM ≡ tree-walker ≡ php-8.5.8 — the 3-leg gate is the differential (`rich_request`
+  tests + the `examples/web/rich_request.phg` glob), with the native's graph additionally pinned by the fast
+  `parse_request_*` unit tests. Perf DIRECTION in-container: `queryparse` ~0.10× → **~0.88×** (~9× faster,
+  near-parity but still <1.0× — NOT yet a WIN by WIN-OR-FLAG; whether it crosses 1.0× is certified on the
+  dev-box docker harness, estimate 0.8–1.5×).
 - The entry role is now a QUALIFIED, import-gated enum variant — `import Core.Runtime.EntryKind;` then
   `#[Entry(kind: EntryKind.Cli)]` / `#[Entry(kind: EntryKind.Web)]`. Previously `kind: Cli` was a bare
   magic identifier "in the wind" (no import, unresolved); it is now `E-INJECTED-VARIANT-BARE`, consistent

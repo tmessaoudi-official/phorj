@@ -3,6 +3,13 @@
 
 use super::*;
 
+/// The Unicode White_Space PCRE character class used by every emitted PHP trim helper
+/// (`__phorj_text_trim`/`_start`/`_end` here AND `__phorj_http_trim` in `runtime_php_http.rs`).
+/// SINGLE SOURCE OF TRUTH (Invariant 4): exactly `char::is_whitespace`'s set, verified byte-identical
+/// to Rust `str::trim` across the multibyte + form-feed edges (UA-1.1) — NOT PHP's ASCII-ish `trim`.
+/// Both trim families must derive from this one literal so PHP-leg trim parity can never drift.
+pub(super) const PHP_TRIM_WS: &str = r"[\x{09}-\x{0D}\x{20}\x{85}\x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}]";
+
 impl Transpiler {
     /// The once-per-file runtime helpers (each gated by its `uses_*` flag). In flat mode they are
     /// top-level globals; in namespaced mode they are emitted inside the nameless block, so their
@@ -1340,7 +1347,7 @@ impl Transpiler {
         // multibyte spaces (U+00A0/U+2028/U+3000/…) AND differs even in ASCII (Rust strips form-feed
         // U+000C but not NUL; PHP is the reverse). The class below is exactly that set (verified
         // byte-identical to `str::trim` across the multibyte + form-feed edges). UA-1.1.
-        const WS: &str = r"[\x{09}-\x{0D}\x{20}\x{85}\x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}]";
+        const WS: &str = PHP_TRIM_WS; // single-sourced (module const) — shared with __phorj_http_trim
         if self.uses_text_trim {
             self.line("function __phorj_text_trim($s) {");
             self.indent += 1;

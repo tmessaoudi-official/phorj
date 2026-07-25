@@ -86,6 +86,13 @@ If reclaimed, resume from this block.
 
 ## ▶▶ RESUME HERE (updated 2026-07-24, autonomous night) — read this block FIRST, then keep going
 
+> **⚠ SUPERSEDED (2026-07-25):** this 2026-07-24 next-work snapshot is HISTORICAL — the live cursor is
+> the `🌙 AUTONOMOUS OVERNIGHT RUN` block at the TOP of this file + the `▶▶ PERF FLIP CAMPAIGN` /
+> `✅ § queryparse-nativize` blocks below. Since it was written: S3.1 (#[Entry(kind:)]) DONE, DEC-337
+> DONE, Q-A/Q-B DONE, and **queryparse DEC-338 BUILT** (0.10×→~0.88× in-container; WIN-vs-PHP pending
+> the dev-box harness). The `queryparse ~0.12x`
+> next-work mention below is stale — kept for chronological record only.
+
 **⚖️ DEV RULING (AskUserQuestion, 2026-07-24) — NEXT-WORK ORDER for the big continuous session:**
 **(1) DEC-331 SLICE 3 FIRST** — `#[Entry(kind:)]` + `Http.ServeConfig` + `serve{}` + inbound rustls
 TLS + retire `respond` (spec: `docs/specs/2026-07-23-entry-kinds-serve-tls.md`). This is the
@@ -177,17 +184,35 @@ NOT a canonical figure):** on this container vs php-8.5.8, `floatmul` (2.96×), 
 `listcontains` (3.50×) all now MEASURE AS WINS — only **3 confirmed-remaining losses**: `queryparse`
 (~0.15×, worst), `jsonround` (~0.30×), `deepjson` (~0.75×), all structural JSON/parse verticals
 (Json-ADT slice #33 covers jsonround/deepjson; queryparse needs a `Request.parse` native/JIT vertical).
+*(✅ SUPERSEDED — queryparse's `Request.parse` native shipped as DEC-338 BUILT below; this is the pre-flip snapshot.)*
 A PINNED dev-box/docker re-measure is OWED to canonicalize (the committed `bench/*-baseline.json` +
 the dev-box scorecard predate this and are stale); no flip was attempted here (the pinned-evidence
 harness is unavailable in-container — the flips are the DEC-333/perf "big work" slices, dev-greenlit).
 
 **▶▶ PERF FLIP CAMPAIGN — dev-ruled 2026-07-25 (4 losses, order: queryparse → #33 → listcontains).**
+*(Progress: **queryparse — DEC-338 BUILT (below): 0.10×→~0.88× in-container, ~9× faster / near-parity;
+WIN-vs-PHP (>1.0×) NOT yet confirmed — exact ratio owed on the dev-box harness**; #33 next; listcontains after.)*
 Canonical dev-box microbench = **47 WIN / 4 LOSS**: queryparse 0.10×, jsonround 0.31×, listcontains 0.86×,
 deepjson 0.99×. 3-agent root-cause done; all 4 flippable (no structural wall), cheap levers exhausted.
 AOT verdict: helps ONLY queryparse dispatch (partial →0.3×, not a flip); rides the same unboxed codegen as
 #33 (no add); zero for listcontains. Rigorous WIN-OR-FLAG needs the dev-box docker harness.
 
-**§ queryparse-nativize (DEC-338, CURRENT slice, BUILD-READY — resumable step list):**
+**✅ § queryparse-nativize (DEC-338) — BUILT + DEC-268 CERTIFIED (2026-07-25).** Native
+`Core.Native.Http.parseRequest` (`src/native/http/request.rs`, Inv-13 split) + self-contained PHP twin
+`__phorj_http_parse_request` (`runtime_php_http.rs`, carries its own `__phorj_http_trim`) + prelude
+`Request.parse` delegates + 4 dead private helpers removed + `stash_decision` single-sourced. Full
+ALL-FEATURES gate green (oracle php-8.5.8): all tests incl. differential `all_examples_transpile_and_match_php`
++ both `rich_request` 3-leg tests; clippy ×2 + fmt + release clean. **Perf DIRECTION (in-container only):**
+php-8.5.8 ~1.725s vs phorj-VM ~1.97s = **~0.88×** (up from 0.10× — ~9× faster, near-parity but STILL <1.0×,
+i.e. not yet a WIN by WIN-OR-FLAG; exact ratio owed on the dev-box harness, estimate 0.8–1.5× straddles 1.0×);
+checksum `3200000` identical on all
+3 legs. **Exact ratio owed on the dev-box docker harness** (median-of-N, isolated). Sub-natives
+`parseQuery`/`parseMultipart`/`decodePath`/`stashBody` KEPT (Rust kernels reused by the native, PHP twins
+called by the new twin — internal SPI for slice-3 lazy). 3-lens panel: code unanimously clean; round-1 findings
+were only this doc flip + the keep decision. **NEXT → #33** Json-ADT JIT slice (jsonround+deepjson). Original
+resumable step list retained below for record:
+
+**§ queryparse-nativize (DEC-338 — BUILT; the resumable step list, for record):**
 Flip `queryparse` 0.10× by nativizing `Request.parse` into one Rust native `Core.Native.Http.parseRequest(
 bytes) -> Request?` + a `__phorj_http_parse_request` PHP helper (Inv-16 trade, dev-ruled). Est. →0.8-1.5×,
 flips on the VM. Feasibility precedented by `src/native/http/multipart.rs:41-56` (hand-built `Value::Instance`).
@@ -212,7 +237,9 @@ truth: spec §8 BUILD STATUS + the register's SLICE-2 BUILD row (build deviation
 Response-side-CRLF adjudication, the HARD-FLAGGED `queryparse` loss). **NEXT WORK (per the same-day
 dev perf re-ruling above): ▶ FLIP THE JIT LOSSES** — now 6 rows: `jsonround 0.31x`, `listcontains
 0.82x` (dev-box re-probe owed), `floatmul 0.93x`, `deepjson 0.94x`, `dbwork 1.00x`, **`queryparse
-~0.12x` (NEW this slice — candidate: nativized/JIT-vertical `Request.parse`)**. The Json-ADT JIT
+~0.12x` (NEW this slice — candidate: nativized/JIT-vertical `Request.parse`)** *(✅ SUPERSEDED — DEC-338 BUILT:
+0.10×→~0.88× in-container, near-parity (WIN-vs-PHP pending dev-box); see the `✅ § queryparse-nativize`
+block above)*. The Json-ADT JIT
 slice (DEC-333 (a)) covers jsonround/deepjson — **NOW IN FLIGHT: plan v4 + 3C gate state in the
 IN-FLIGHT block below (the one canonical home)**. Then slice 1b + slice 3 (D10a order), then AOT.
 (Slice 1 + DEC-336 + slice 2 all shipped this night.)
@@ -619,7 +646,7 @@ quality gate (--all-features, --no-default-features, fmt, size-gate, release bui
 regression sweep mapget/listcontains/sumby/mapmerge/stringlen; dev-box canonical; abort
 criterion above.
 
-## Out of scope (recorded): Http.jsonParse vertical (queryparse — next), Json class fields,
+## Out of scope (recorded): Http.jsonParse vertical (queryparse — ✅ BUILT via DEC-338, near-parity), Json class fields,
 Json in DynList, nested syntactic patterns, Eq(Json,Json), stringifyPretty/parseLines,
 parse-memoization, Throw-in-Json-ret frames, List<Json> params at entry (json-api summarize
 declines — fine).

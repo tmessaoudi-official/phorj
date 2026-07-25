@@ -161,6 +161,89 @@ fn canonical_fault_strings_are_pinned_to_the_spec() {
     assert_eq!(super::FAULT_MALFORMED_MULTIPART, "malformed multipart body");
 }
 
+/// Drive the DEC-338 `parseRequest` native directly (fast, oracle-independent — the 3-leg
+/// byte-identity gate is the differential `rich_request*` tests + the example glob; this pins the
+/// Rust native's own graph so a regression is caught in the fast pre-commit tier).
+fn parse_req(raw: &[u8]) -> Value {
+    let mut out = String::new();
+    super::native_parse_request(&[Value::Bytes(std::rc::Rc::new(raw.to_vec()))], &mut out)
+        .expect("parseRequest never faults on wire input")
+}
+
+/// First value for `key` in a bag's `Map<string, List<string>>` `data` field.
+fn bag_first(bag: &Value, key: &str) -> Option<String> {
+    let Value::Map(entries) = field(bag, "data") else {
+        panic!("bag.data is not a Map");
+    };
+    entries.iter().find_map(|(k, v)| match (k, v) {
+        (crate::value::HKey::Str(s), Value::List(items)) if s.as_str() == key => {
+            items.first().map(text)
+        }
+        _ => None,
+    })
+}
+
+/// Count of values under `key` in a bag's `data` map (0 if absent).
+fn bag_count(bag: &Value, key: &str) -> usize {
+    let Value::Map(entries) = field(bag, "data") else {
+        return 0;
+    };
+    entries
+        .iter()
+        .find_map(|(k, v)| match (k, v) {
+            (crate::value::HKey::Str(s), Value::List(items)) if s.as_str() == key => {
+                Some(items.len())
+            }
+            _ => None,
+        })
+        .unwrap_or(0)
+}
+
+#[test]
+fn parse_request_builds_the_expected_bag_graph() {
+    let req =
+        parse_req(b"GET /s?q=hi&tag=a&tag=b HTTP/1.1\r\nHost: example\r\nCookie: sid=42\r\n\r\n");
+    assert_eq!(text(&field(&req, "method")), "GET");
+    assert_eq!(text(&field(&req, "path")), "/s");
+    assert_eq!(text(&field(&req, "rawTarget")), "/s?q=hi&tag=a&tag=b");
+    let query = field(&req, "query");
+    assert_eq!(bag_first(&query, "q").as_deref(), Some("hi"));
+    assert_eq!(bag_count(&query, "tag"), 2); // first-wins key, duplicate values appended
+                                             // Header keys are lowercased (case-INSENSITIVE bag).
+    assert_eq!(
+        bag_first(&field(&req, "headers"), "host").as_deref(),
+        Some("example")
+    );
+    // Cookies: FIRST `=` split, names case-SENSITIVE, value verbatim.
+    assert_eq!(
+        bag_first(&field(&req, "cookies"), "sid").as_deref(),
+        Some("42")
+    );
+}
+
+#[test]
+fn parse_request_urlencoded_form_body() {
+    let req = parse_req(
+        b"POST /f HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\nname=ada&name=bob&x=1",
+    );
+    let form = field(&req, "form");
+    assert_eq!(bag_count(&form, "name"), 2);
+    assert_eq!(bag_first(&form, "x").as_deref(), Some("1"));
+}
+
+#[test]
+fn parse_request_null_on_malformed() {
+    // No CRLFCRLF head/body separator → null (the eager D8a contract, never a fault).
+    assert!(matches!(
+        parse_req(b"garbage without a header terminator"),
+        Value::Null
+    ));
+    // Head present but the request line has <2 tokens.
+    assert!(matches!(parse_req(b"GET\r\nHost: x\r\n\r\n"), Value::Null));
+    // Empty head (raw opens with the separator).
+    assert!(matches!(parse_req(b"\r\n\r\n"), Value::Null));
+}
+
 #[test]
 fn rich_request_example_fixture_never_spills() {
     // Panel guardrail (Inv 10): the differential example must stay under the spill threshold so
