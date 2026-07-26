@@ -416,6 +416,9 @@ closing `G5` in `docs/specs/2026-07-24-visibility-model.md` and dropping the fix
 
 ### 6.4 — Seven MORE rulings (GR-18 … GR-24), same Invariant-15 shape
 
+- ✅ **GR-18 RULED 2026-07-26 — `docs/specs/2026-07-26-ast-exhaustiveness.md` is canonical.** D **and** C ship as ONE
+  slice (D alone decays; C alone gates 18 known-broken sites); **B is a separately-ruled follow-up**, safe only after D.
+  `walk.rs:748` gets named no-op arms, not `unreachable!()`. Invariant 3's wording is widened to cover the three enums.
 - **GR-18 (DEC-356) — Extend mechanical exhaustiveness from `Op` to `Expr`/`Stmt`/`Pattern`.**
   37 `Expr` variants, 13 hand-rolled total rewriters in `src/checker/`, and **17 named catch-alls**
   (`leaf => leaf`, `other => other`) that compile cleanly and silently pass a new variant through.

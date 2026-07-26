@@ -42,12 +42,22 @@ put each question in the message body with context, examples, options, a recomme
   - Reproduced live: injected header **and a second body** while `Content-Length: 2` still describes the
     real one — a desync/smuggling shape, not only response splitting.
 
+- **GR-18 / DEC-356 (structural) — RULED 2026-07-26.** Fix all **18** catch-all sites (17 named
+  `other => other`/`leaf => leaf` across 10 checker files + `walk.rs:748`'s `_ => {}`) **AND** land the
+  probe-variant gate **as ONE slice** — D alone decays, C alone gates known-broken sites. **B (one shared
+  total visitor) is a separately-ruled follow-up**, safe only after D makes the blast radius enumerable.
+  `walk.rs:748` gets **named no-op arms, not `unreachable!()`**. **Invariant 3's wording is widened to name
+  `Expr`/`Stmt`/`Pattern`** in the same change.
+  **Canonical rule: `docs/specs/2026-07-26-ast-exhaustiveness.md`.** NOT YET BUILT.
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 
-**NEXT QUESTIONS in order:** GR-18 / DEC-356 (highest-value structural item) → GR-3 / DEC-341 (grammar
-rewrite, highest visible win per unit of effort) → the rest of §2/§6.4/§7.3/§8.4 per the register's FULL
-AGENDA INDEX.
+**NEXT QUESTIONS in order** (severity-first, not register order): GR-19 / DEC-357 (lambda capture-write
+silently lost — silent wrong behaviour) → GR-13 / DEC-351 (Statement bind lifecycle: reuse broken +
+~75× quadratic) → GR-27 / DEC-365 (the push-blocking microbench gate) → GR-3 / DEC-341 (grammar rewrite,
+highest visible win per unit of effort) → the rest of §2/§6.4/§7.3/§8.4 per the register's FULL AGENDA
+INDEX.
 
 **PROVISIONAL DEFAULT (asked 3×, not answered — developer may override at any time):** the **DEC-366
 lifter hoist rides in the DEC-339 slice**, since it is the same block-scope-vs-function-scope insight
