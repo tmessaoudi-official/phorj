@@ -5,8 +5,9 @@ plausible-looking change, and enforced somewhere concrete. Read this before touc
 the value kernels, or the `Op` set. (Companion to `docs/ARCHITECTURE.md` for the layout, and the
 frozen design records in `docs/specs/`.)
 
-## 1. Backend parity is the spine — `run` ≡ the VM, byte-identical
-The tree-walking interpreter (`phg run`) and the bytecode VM (`phg run`) must produce
+## 1. Backend parity is the spine — `run --tree-walker` ≡ `run` (the VM), byte-identical
+The tree-walking interpreter (`phg run --tree-walker`) and the bytecode VM (`phg run`, the
+default engine) must produce
 **identical stdout *and* identical failure behaviour** for every program. This is the project's
 central correctness contract.
 - **Enforced by** `tests/differential.rs`: `agree(src)` compares the `Ok` output; `agree_err(src)`
@@ -16,15 +17,15 @@ central correctness contract.
 - **Why it bites:** the original `Op::Neg` P0 (negating `i64::MIN`) hid in the gap that existed
   before `agree_err` — the Ok-only oracle never saw divergent *crashes*.
 - **Third surface (M2.5 `phg build`):** a standalone binary runs its **embedded source** through
-  `cli::cmd_the VM leg` at startup (the self-detect hook in `src/main.rs`), so its output MUST equal
-  `phg run <file>`. **Enforced by** `tests/build.rs::built_binary_matches_the VM leg`. The startup
-  hook must keep dispatching through `cmd_the VM leg` (never `cmd_run`) and must not transform the source
-  before execution — otherwise the distribution layer silently drifts off the spine while the
-  differential suite (which never builds a binary) stays green.
+  `cli::cmd_run_exit` at startup (the self-detect hook in `src/main.rs:32`), so its output MUST equal
+  `phg run <file>`. **Enforced by** `tests/build.rs::built_binary_matches_vm`. The startup
+  hook must keep dispatching through `cmd_run_exit` (the VM leg — never `cmd_treewalk_exit`) and must
+  not transform the source before execution — otherwise the distribution layer silently drifts off the
+  spine while the differential suite (which never builds a binary) stays green.
   - **Cross-targets (Phase 2):** the surface now spans cross-built binaries. The stub-cache key is the
     **FNV-1a-64 of the running phg binary's bytes**, so a rebuilt phorj ⇒ cache miss ⇒ fresh stub —
     a stale stub can never embed your source into an *old* VM. Cross-parity is gated by
-    `cross_musl_binary_matches_the VM leg` (native exec) and `cross_windows_section_round_trips` (PE section
+    `cross_musl_binary_matches_vm` (native exec) and `cross_windows_section_round_trips` (PE section
     round-trip). The object-file section readers (ELF/PE/Mach-O/fat) honor **EV-7**: every offset uses
     checked arithmetic, and malformed/adversarial images return `None`, never a panic or OOB read.
 
@@ -33,13 +34,14 @@ When the VM and the interpreter disagree, the **interpreter is right by definiti
 older, simpler implementation and the semantics of record. New VM behaviour is validated *against*
 the interpreter, never the reverse.
 
-## 3. Arithmetic & comparison are single-sourced in `value.rs`
+## 3. Arithmetic & comparison are single-sourced in `src/value/`
 The checked integer kernels (`int_add/sub/mul/div/rem/neg → Result<i64, String>`), the float
-kernels (`float_*`), and `compare_ord` live **once**, in `src/value.rs`. Both backends call them.
-- **Never** re-inline `checked_*` / `partial_cmp` / a fault string in `interpreter.rs` or `vm.rs` —
+kernels (`float_*`), and `compare_ord` live **once**, in `src/value/` (the checked kernels + canonical fault consts in
+`src/value/arith.rs`). Both backends call them.
+- **Never** re-inline `checked_*` / `partial_cmp` / a fault string in `src/interpreter/` or `src/vm/` —
   that re-opens the dual-implementation drift that caused the `Op::Neg` P0.
 - The three canonical fault bodies (`FAULT_DIV_ZERO`, `FAULT_MOD_ZERO`, `FAULT_INT_OVERFLOW`) are
-  `pub const` in `value.rs`; the `agree_err` oracle classifies on these exact bodies, so changing a
+  `pub const` in `src/value/arith.rs`; the `agree_err` oracle classifies on these exact bodies, so changing a
   body string is a parity-affecting change.
 
 **`int` is a fixed 64-bit signed integer (`i64`), pinned by design.** Unlike PHP's `int`, whose width
@@ -59,9 +61,9 @@ both runtimes agree. Don't introduce a second formatting path.
 ## 5. Adding an `Op` variant requires its match arm in the same commit
 A new `Op` touches **three** match surfaces, and as of M9 **all three are exhaustive (no `_`
 wildcard)** — so a missing arm is a *compile error*, never a silent hole:
-- `vm::Vm::exec_op` (`src/vm.rs`) — the per-op execution semantics (irreducibly per-`Op`).
-- `compiler::Compiler::stack_effect` (`src/compiler.rs`) — the net stack delta.
-- `BytecodeProgram::validate` (`src/chunk.rs`) — the operand-index bounds check (EV-7). Until M9
+- `vm::Vm::exec_op` (`src/vm/exec.rs:9`) — the per-op execution semantics (irreducibly per-`Op`).
+- `compiler::Compiler::stack_effect` (`src/compiler/emit.rs:75`) — the net stack delta.
+- `BytecodeProgram::validate` (`src/chunk/validate.rs:21`) — the operand-index bounds check (EV-7). Until M9
   this carried a `_ => None` wildcard, so a new index-carrying `Op` could silently skip its bounds
   check; it now enumerates every variant (index-checked arms via `.then(|| …)` + one explicit
   no-index `=> None` arm), matching the other two. **Do not reintroduce a `_` wildcard here** — it
@@ -97,7 +99,7 @@ VM debug symbols (scope IP ranges) and is scheduled **W5-13**.
 
 ## 8. Determinism — sort `HashMap`-derived lists before rendering
 Any user-facing list built from `HashMap`/`HashSet` iteration must be sorted before `join`, or the
-output varies with the hash seed. Live example: the non-exhaustive-`match` error in `checker.rs`
+output varies with the hash seed. Live example: the non-exhaustive-`match` error in `src/checker/`
 sorts the missing-variant list. New diagnostics that enumerate map keys must do the same.
 
 ## 9. The AST is untyped; backends re-derive types

@@ -143,7 +143,7 @@ walkers; ordinary deep member exprs SIGABRT identically; `limits.rs`-documented)
 `STACKDEPTH-deep-member-chain`, deferred general-robustness slice.
 **NEXT:** Q-C global completeness sweep (DV-5 research pass) — synthesize the existing audits + a fresh
 `/gaps` into one ranked completeness register.
-**Pushed:** `origin/master @ dee608e` — all of Q-A + Q-B (DV-1/2/3 + ctor-promoted-param
+**Pushed:** `origin/master` (SHA not pinned — `dee608e` was orphaned by the later history re-sign; see H34) — all of Q-A + Q-B (DV-1/2/3 + ctor-promoted-param
 follow-up) + LSP dup fix + DEC-337 entry-kind (feature `8eee345` + 4 follow-ups through `dee608e`), all
 DEC-268-certified; full `--all-features` gate + php-8.5.8 oracle GREEN; tree clean.
 If reclaimed, resume from this block.

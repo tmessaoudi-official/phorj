@@ -5,9 +5,15 @@
 > files under "Where things live". Boundary test before adding anything: *does Claude need
 > this to deliver correct code?* If not, it belongs in docs, not here.
 
-Phorj is a statically-typed, PHP-inspired language implemented in Rust (edition 2021; core is
-std-only with four vetted, feature-gated exceptions — `argon2`, `regex`, `ctrlc`, `corosensei` —
-per `docs/specs/UNIFIED-SPEC.md` §"External dependency policy"): lexer → parser → type-checker → tree-walking
+Phorj is a statically-typed, PHP-inspired language implemented in Rust (edition 2021; the core
+pipeline stays std-only, and **14 vetted, feature-gated crates** are admitted across the policy's
+approved domains — crypto `argon2`, `regex`, signals `ctrlc`, stackful coroutines `corosensei`,
+graphemes `unicode-segmentation`, TLS `rustls`+`webpki-roots`, SQL `rusqlite`/`postgres`/`mysql`,
+mail `lettre`, native codegen `cranelift`+`cranelift-jit`+`cranelift-module`. **`Cargo.toml` and
+`docs/specs/UNIFIED-SPEC.md` §"External dependency policy" are the SSOT — never restate a count here
+without re-deriving it from `Cargo.toml`;** the previous "four exceptions" wording had drifted to a
+~3× understatement, and the policy section itself warns that understated dependency claims "must not
+be repeated"): lexer → parser → type-checker → tree-walking
 interpreter (the reference oracle) + bytecode compiler/stack VM + Phorj→PHP transpiler, plus a
 PHP→Phorj lifter, LSP, formatter, test runner, and debugger. Single developer, commits direct to
 `master`, remote is GitHub (`tmessaoudi-official/phorj`). The binary is `phg`; sources are `.phg`.
@@ -87,10 +93,11 @@ asking, when the quality gate above is green. Limits:
 2. **The interpreter is the reference oracle.** When backends disagree, the interpreter is right
    by definition; validate the VM against it, never the reverse.
 3. **A new `Op` variant extends three exhaustive matches in the same commit:** `vm::exec_op`
-   (`src/vm/exec.rs`), `BytecodeProgram::validate` (`src/chunk.rs`), `compiler::stack_effect`
-   (`src/compiler/mod.rs`). All three are wildcard-free — never reintroduce a `_` arm.
-4. **Value kernels are single-sourced** in `src/value.rs` (checked int/float arithmetic,
-   `compare_ord`, canonical fault strings). Never re-inline them in a backend; fault bodies are
+   (`src/vm/exec.rs:9`), `BytecodeProgram::validate` (`src/chunk/validate.rs:21`),
+   `compiler::stack_effect` (`src/compiler/emit.rs:75`). All three are wildcard-free (verified
+   2026-07-25) — never reintroduce a `_` arm.
+4. **Value kernels are single-sourced** in `src/value/` — checked int/float arithmetic + the canonical
+   fault consts in `src/value/arith.rs`, `compare_ord` alongside. Never re-inline them in a backend; fault bodies are
    parity-affecting.
 5. **Compile-time-only sugar is expanded OUT of the AST before any backend** (type aliases,
    generics erasure, html — all via the single `cli::check_and_expand` chokepoint). New sugar
