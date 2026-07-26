@@ -100,6 +100,15 @@ independent grounds), and **DEC-370 as first drafted** (Claude's own phrasing �
 rule: *PHP's lack of a feature is never a reason against building it; the only PHP-shaped question is which
 Invariant-14 ladder case the transpile leg takes.*
 
+### 🔒 STANDING RULE — NO HIDDEN LOSSES (developer, 2026-07-26)
+**A failing or unmeasurable benchmark is never hidden.** SKIP-LOUD means *"unmeasurable here, verdict OWED"*,
+never *"passed"*; the gate must not report green for it. An owed verdict stays recorded as an open item until a
+valid measurement clears it — never dropped, never re-baselined via `--emit`. **If a valid measurement shows a
+real loss, the loss gets FIXED** (refactor, or implement the win) — spending the time is acceptable, suppressing
+is not. **Currently OWED (need a dev-box run): `floatloop`** (WIN->LOSS on a discarded-cpuset run) and
+**`queryparse`** (0.146 measured here vs DEC-338's ~0.88x — a ~6x disagreement, so **DEC-338's near-parity claim
+is UN-CERTIFIED**).
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 
