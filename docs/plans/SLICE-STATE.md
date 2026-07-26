@@ -21,9 +21,23 @@ put each question in the message body with context, examples, options, a recomme
   - **Owed before any migration:** measure how many existing `examples/`+`tests/` sites the rule breaks
     (not greppable — needs the diagnostic to exist first), and report the count before migrating.
 
-**NEXT QUESTIONS in order:** GR-2 / DEC-340 (P1 silent data loss, `db.transaction` auto-rollback) →
-GR-25 / DEC-363 (P1 security, HTTP response splitting on shipped `phg serve`) → GR-18 / DEC-356
-(highest-value structural item) → the rest of §2/§6.4/§7.3/§8.4 per the register's FULL AGENDA INDEX.
+- **GR-2 / DEC-340 (P1 data loss) — RULED 2026-07-26.** Auto-rollback unwinds to the **ENTRY depth**,
+  NOT to depth 0 (depth-0 would roll back a **caller-owned** outer transaction — rejected). Adds
+  `rollbackAll()` + `transactionDepth()`. **PHP leg: emit a `__phorj_*` savepoint helper** (the current
+  emitter is a placeholder comment; PDO `beginTransaction()` does not nest). **GR-26/DEC-364
+  (`using`/`defer`) is sequenced immediately after** as the structural fix.
+  **Canonical rule: `docs/specs/2026-07-26-transaction-depth-semantics.md`.** NOT YET BUILT.
+  - Reproduced live on both Rust backends: bal 100 → transaction reports rolled back → **999 persisted**
+    after a later `commit()`. The register's "leaves an outer tx open" framing was wrong — there is no
+    outer tx; the transaction's OWN level survives, so the trigger is ordinary code.
+
+**SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
+planned once against the full ruled set instead of being reshuffled per answer.
+
+**NEXT QUESTIONS in order:** GR-25 / DEC-363 (P1 security, HTTP response splitting on shipped
+`phg serve`) → GR-18 / DEC-356 (highest-value structural item) → the rest of §2/§6.4/§7.3/§8.4 per the
+register's FULL AGENDA INDEX. **Still unanswered:** whether the DEC-366 lifter hoist rides in the
+DEC-339 slice or gets its own.
 
 ## 🔵 PRIOR CURSOR (2026-07-25/26) — GLOBAL REVIEW DONE, 27 RULINGS PREPARED
 

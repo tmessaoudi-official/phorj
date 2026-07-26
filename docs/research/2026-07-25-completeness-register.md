@@ -98,6 +98,12 @@ the why. Ready to paste into `AskUserQuestion` one at a time.
 spine coverage. *Why A:* it fixes the bug without paying a language-surface tax for a compiler limitation.
 
 ### GR-2 — Database auto-rollback data loss *(DEC-340)* — **P1, silent data persistence**
+> ✅ **RULED 2026-07-26 — this section's "unwind to depth 0" was REJECTED.** Auto-rollback unwinds to the
+> **ENTRY depth** ("restore the depth I found"); depth-0 would roll back a **caller-owned** outer
+> transaction. This section's mechanism description is also wrong: the leak is *inside* the closure and it
+> is the transaction's **own** level that survives — there is no outer tx. **Do not act on the options
+> below** — canonical rule: `docs/specs/2026-07-26-transaction-depth-semantics.md`.
+
 **Q:** Fix `db.transaction(fn)` auto-rollback to unwind ALL depth, and add an explicit abort?
 - **(A) Auto-rollback unwinds to depth 0 + add `rollbackAll()` (RECOMMENDED)** → a leaked inner `begin()`
   can no longer leave writes live; `rollbackAll()` is one SQL statement at any depth.
