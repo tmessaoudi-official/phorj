@@ -43,6 +43,18 @@ transpiler + a differential example covering every block form. **Needs a ruling 
 DEC-208, DEC-282, dead `E-MULTIPLE-MAIN`). Recommended systemic gate: **every diagnostic code named in a
 decision-register row must exist in `src/`, or the row is marked PARTIAL.**
 
+### ⛔ PUSH IS BLOCKED FROM THIS CONTAINER (2026-07-26) — 5 commits committed, NOT pushed
+`pre-push`'s `microbench-gate` FAILS on a **docs-only** series: `floatloop` reports a WIN→LOSS flip
+(baseline 1.011 → 0.803) while the kernel prints *"cpuset … Cpuset discarded"* — so the CPU pinning this
+**absolute-ratio** gate depends on silently did not apply. Corroboration that it is measurement bias, not a
+regression: the whole near-parity cluster drifted down in lockstep (`dbwork` 1.004→0.960, `floatmul`
+1.002→0.980, `mapget` 1.152→0.996, `setcontains` 1.129→0.954) and the series changes **zero** `src/` files.
+All other gate legs passed (tests, clippy, fmt, release build). **Not bypassed:** no `--no-verify`
+(classifier-blocked), no `--emit` re-baseline ("don't cheat" applies here too). Ruling queued as
+**DEC-365 / GR-27** (recommend: SKIP-LOUD on a discarded cpuset, as the gate already does for absent docker).
+**⚠ Also: `queryparse` reads 0.146 in this harness vs DEC-338's recorded ~0.88× — a ~6× disagreement, so
+DEC-338's near-parity claim is NOT corroborated and its WIN stays un-certified** (register §8.3).
+
 ### Needs NO ruling — safe to execute autonomously once approved to proceed
 Grammar fix + gate (GR-3) · `CLAUDE.md:9` dependency correction (**says "four" vetted exceptions; actual is
 14 optional deps across ~11 approved domains**) · stale-label fixes (a spec header says "NOT BUILT" about a

@@ -553,3 +553,80 @@ and the **slurp-only file APIs** (deferred before the measurement showing whole-
 (~60–100 sub-bullets not lifted); `full-audit/raw/*` beyond `C-decisions.md` was not swept; and **the
 pinned dev-box microbench is still owed and only you can run it** — it decides whether the perf-flip
 campaign has 3 losses left or 1.
+
+---
+
+## 8. BLOCKER FOUND WHILE PUSHING: the pre-push microbench gate cannot pass in a remote container
+
+Discovered 2026-07-26 while pushing this **docs-only** series. Recorded because it blocks *every* push from
+a container and because it casts doubt on a recent perf claim.
+
+### 8.1 — What happened [all Verified]
+
+`git push` failed the `pre-push` hook at `microbench-gate` (the G-8 mandate ratchet). Every other gate leg
+passed: full test suite, clippy, fmt, `cargo build --release`. The blocking row:
+
+```
+FAIL floatloop: WIN->LOSS flip — baseline ratio 1.011 (WIN) now 0.803 (< 0.95 band): a G-8 mandate regression
+microbench-gate: 41 WIN / 8 loss vs release-php+JIT; 1 blocking regression(s)
+```
+
+**This cannot be caused by the series being pushed:** `git diff --stat origin/master..HEAD -- src/ tests/
+Cargo.toml` is **empty** — the five commits change only `.md` files.
+
+### 8.2 — Root cause: the harness's CPU pinning silently did not apply
+
+The harness emits, on this box:
+
+```
+WARNING: Your kernel does not support cpuset or the cgroup is not mounted. Cpuset discarded.
+```
+
+`microbench-gate.sh` compares **absolute** native-VM-vs-docker-php ratios, and its own header documents
+that this is the load-*sensitive* gate ("empirically 3-4x swings at load average ~7, with NO code change";
+"the pinned core is not isolated via `isolcpus`"). With the cpuset **discarded**, the pinning the harness
+relies on is gone, so absolute ratios are not comparable to a baseline captured on the dev box.
+
+**Corroborating evidence that this is measurement bias, not a regression:** the *entire* near-parity cluster
+drifted **down together** in the same run — `dbwork` 1.004→0.960, `floatmul` 1.002→0.980, `mapget`
+1.152→0.996, `setcontains` 1.129→0.954 (all reported as "near-parity wobble … within 0.95 noise band; not
+blocking"). `floatloop`'s baseline is **1.011** — a hair over 1.0 — so it is simply the cluster member whose
+margin was thinnest, and it tipped past the 0.95 threshold while its neighbours stopped just inside it.
+A genuine code regression would not move five unrelated micros in lockstep.
+
+### 8.3 — A perf claim that this harness does NOT corroborate
+
+The same run reports:
+
+```
+note queryparse: not in baseline (new) — ratio=0.146 (loss); run --emit to snapshot it
+```
+
+**DEC-338** recorded queryparse at **~0.88× ("NEAR-PARITY, NOT yet a WIN")** from an *in-container,
+direction-only* measurement, and explicitly deferred the canonical figure to "the dev-box docker microbench
+harness". This **is** a docker microbench, and it reads **0.146** — i.e. still a ~7× loss, a ~6× discrepancy
+far outside any noise band. Two readings are possible and I cannot separate them here: (a) the harness micro
+and DEC-338's ad-hoc program are not the same workload, or (b) the 0.88× reading was optimistic.
+**Either way, DEC-338's near-parity claim is NOT reproduced by the canonical harness, and the WIN remains
+un-certified.** The register's §5 already flags the dev-box microbench as owed; this sharpens it from
+"owed" to "owed and currently contradicted". [Verified: both numbers read from the harness output;
+the *interpretation* is [Inferred] because the two workloads were not diffed.]
+
+### 8.4 — GR-27 (DEC-365): what to do about the gate
+
+**Q:** How should the microbench gate behave where CPU pinning is unavailable?
+- **(A) Detect the discarded cpuset and SKIP-LOUD, exactly as the gate already does for absent docker
+  (RECOMMENDED)** → the gate already has the right precedent: *"docker absent — SKIP the G-8 mandate gate
+  (infra, not a regression)"*. A discarded cpuset is the same class of fact: infra, not a regression.
+  Cheap, honest, and keeps the gate meaningful where it *can* measure.
+- (B) Skip the microbench gate for commits that touch no `src/`/`tests/`/`Cargo.toml` → also correct, and
+  complementary to (A), but narrower: it wouldn't help a real code change made from a container.
+- (C) Raise the noise band below 1.05 → **not recommended**: it would mask genuine thin-margin regressions,
+  which is the opposite of the G-8 mandate's purpose.
+- (D) Re-baseline via `--emit` → **explicitly rejected.** That accepts a suspect measurement as truth and is
+  the same "just bump the baseline" move the developer forbade for the size gate ("don't cheat"). Not done.
+
+**What I did NOT do:** I did not push with `--no-verify` (classifier-blocked, and the project rule is to
+present the command rather than bypass), did not re-baseline, and did not hide the docker binary to trigger
+the existing skip path. The five commits are therefore **committed locally and NOT pushed**; the exact push
+command is in the handover.

@@ -3474,3 +3474,17 @@ on trustworthy inputs. DEC-362/GR-24's one-row-per-DEC guard is what stops it re
 presumed dependency blocker was never actually met, and the slurp-only file APIs, deferred before the
 measurement showing whole-file reads cost 200 MB), and **the pinned dev-box microbench remains owed —
 only the developer can run it**, and it decides whether the perf-flip campaign has 3 losses left or 1.
+
+## DEC-365 — pre-push microbench gate is unpassable in a remote container (2026-07-26, **PENDING**)
+
+| DEC | GR | Question | Recommended (not ruled) | Status |
+|---|---|---|---|---|
+| DEC-365 | GR-27 | The `pre-push` `microbench-gate` FAILS in the remote container on a **docs-only** series: `floatloop` reports a WIN→LOSS flip (baseline 1.011 → 0.803) while the kernel emits *"cpuset … Cpuset discarded"*, so the pinning this absolute-ratio gate depends on silently did not apply — and the whole near-parity cluster drifted down in lockstep (`dbwork` 1.004→0.960, `floatmul` 1.002→0.980, `mapget` 1.152→0.996, `setcontains` 1.129→0.954), which a real code regression would not do | **Detect the discarded cpuset and SKIP-LOUD**, exactly as the gate already does for absent docker ("infra, not a regression"); optionally also skip when a series touches no `src/`/`tests/`/`Cargo.toml`. **Do NOT re-baseline via `--emit`** — that would accept a suspect measurement as truth (the same "don't cheat" the developer ruled for the size gate) | **PENDING** |
+
+**Collateral finding (perf certification, analysis in the completeness register §8.3).** The same harness run
+reports **`queryparse` ratio = 0.146 (loss)**. DEC-338 recorded ~**0.88×** ("near-parity, NOT yet a WIN")
+from an in-container direction-only measurement and deferred the canonical number to the dev-box docker
+microbench. This IS a docker microbench and it disagrees by ~6×, far outside any noise band. Either the
+harness micro and DEC-338's ad-hoc program are different workloads, or the 0.88× was optimistic — not
+separable here. **DEC-338's near-parity claim is therefore NOT corroborated by the canonical harness and its
+WIN stays un-certified**; the owed dev-box run is now not merely owed but actively contradicted.
