@@ -50,14 +50,22 @@ put each question in the message body with context, examples, options, a recomme
   `Expr`/`Stmt`/`Pattern`** in the same change.
   **Canonical rule: `docs/specs/2026-07-26-ast-exhaustiveness.md`.** NOT YET BUILT.
 
+- **GR-19 / DEC-357 — RULED 2026-07-26.** Writing to a captured local is **REJECTED** at check time
+  (silently lost today: `total=0` on all three legs, no signal). NOT an Invariant-1 break — the legs agree;
+  it is a dead assignment that reads as live. Narrow by design: **by-value capture is already the documented
+  semantics** (`FEATURES.md:37`). Captured-**object**-field mutation stays **LEGAL** (the shipped
+  `transaction-closure.phg` pattern). **By-reference capture (`use (&$x)`) rejected as out of scope** — it
+  would contradict documented semantics and needs its own spec.
+  **Canonical rule: `docs/specs/2026-07-26-capture-write-rejection.md`.** NOT YET BUILT.
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 
-**NEXT QUESTIONS in order** (severity-first, not register order): GR-19 / DEC-357 (lambda capture-write
-silently lost — silent wrong behaviour) → GR-13 / DEC-351 (Statement bind lifecycle: reuse broken +
-~75× quadratic) → GR-27 / DEC-365 (the push-blocking microbench gate) → GR-3 / DEC-341 (grammar rewrite,
-highest visible win per unit of effort) → the rest of §2/§6.4/§7.3/§8.4 per the register's FULL AGENDA
-INDEX.
+**NEXT QUESTIONS in order** (severity-first, not register order): GR-13 / DEC-351 (Statement bind
+lifecycle: reuse broken + ~75× quadratic) → GR-27 / DEC-365 (the push-blocking microbench gate) →
+GR-21 / DEC-359 + GR-20 / DEC-358 (diagnostic ratchets) → GR-3 / DEC-341 (grammar rewrite) →
+GR-5/6/7/14/15/17 (language-surface forks) → GR-4/8 (UFCS) → GR-9/10/26 (I/O + scope guards) →
+GR-11/12/16/22/23/24 → the register's FULL AGENDA INDEX is the completeness check.
 
 **PROVISIONAL DEFAULT (asked 3×, not answered — developer may override at any time):** the **DEC-366
 lifter hoist rides in the DEC-339 slice**, since it is the same block-scope-vs-function-scope insight

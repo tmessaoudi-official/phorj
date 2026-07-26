@@ -430,6 +430,9 @@ closing `G5` in `docs/specs/2026-07-24-visibility-model.md` and dropping the fix
   dummy-variant CI check · (B) one shared total visitor (a real slice). *Why:* this is the single
   highest-value structural improvement found, and the project has already proven it can build this class of
   gate.
+- ✅ **GR-19 RULED 2026-07-26 — `docs/specs/2026-07-26-capture-write-rejection.md` is canonical.** Reject the write;
+  by-value capture is ALREADY documented (`FEATURES.md:37`), so this enforces stated semantics. Captured-OBJECT-field
+  mutation stays legal (the shipped `transaction-closure.phg` pattern). By-reference capture rejected as out of scope.
 - **GR-19 (DEC-357) — Lambda capture-write (I19).** Silently lost today. **Recommended: reject with a new
   diagnostic** (a silent wrong answer is the worst outcome; Invariant 14 forbids silent downgrades).
   Alternative: support by-reference capture — but that re-opens a PHP-parity question (`use (&$x)`).
