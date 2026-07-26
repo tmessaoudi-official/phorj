@@ -40,7 +40,7 @@ transpiler + a differential example covering every block form. **Needs a ruling 
   refuses it**, a live Invariant-17 gap.
 
 ### Dominant failure mode identified (act on this, not just the symptoms)
-**Ruled → partially built → docs never reconciled** explains 6 of the 17 items (DEC-248, DEC-326, DEC-331,
+**Ruled → partially built → docs never reconciled** explains 6 of the 27 items (DEC-248, DEC-326, DEC-331,
 DEC-208, DEC-282, dead `E-MULTIPLE-MAIN`). Recommended systemic gate: **every diagnostic code named in a
 decision-register row must exist in `src/`, or the row is marked PARTIAL.**
 

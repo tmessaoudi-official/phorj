@@ -3393,7 +3393,7 @@ This also discharges the already-RULED **DV-5** pass (`docs/specs/2026-07-24-vis
 |---|---|---|---|---|
 | DEC-339 | GR-1 | **P0** — shadowing a live outer local/param in ANY nested block mistranspiles (phorj has block scope, PHP has none): how to restore Invariant-1 byte-identity? | Alpha-rename shadowed locals in the transpiler + add a differential example covering every block form | **PENDING** |
 | DEC-340 | GR-2 | **P1 data loss** — `db.transaction(fn)` auto-rollback pops only ONE savepoint level, leaving an outer tx open with writes a later `commit()` persists | Unwind to depth 0 + add `rollbackAll()` | **PENDING** |
-| DEC-341 | GR-3 | TextMate grammar: `"begin": "\\b(b|r)?\""` makes every plain string start at its CLOSING quote (81/383 `.phg` files end mid-span) | Full 5-rule string section (leakage → 0/383) + a `vscode-textmate` pre-push gate | **PENDING** |
+| DEC-341 | GR-3 | TextMate grammar: `"begin": "\\b(b\|r)?\""` makes every plain string start at its CLOSING quote (81/383 `.phg` files end mid-span) | Full 5-rule string section (leakage → 0/383) + a `vscode-textmate` pre-push gate | **PENDING** |
 | DEC-342 | GR-4 | UFCS receiver completion is empty (`line.` → 0 items) while `String.` over-suggests without the import — add completion, and gate it on the import? | Add `catalog::ufcs_members(recv_ty)` AND import-gate both directions (rule the two together) | **PENDING** |
 | DEC-343 | GR-5 | Loop forms: both `for…in` and `foreach…as` live; DEC-248 ruled `for (T x in xs)` retired but `E-RETIRED-FORIN` was never built; corpus is 87 vs 8 | Amend DEC-248 to "keep both" + close Conflict C-2 + add cross-form hints | **PENDING** |
 | DEC-344 | GR-6 | `main` is still forced into the entry signature by name (`type_bodies.rs:347`) despite DEC-331's attribute-declared entries | Remove the name special-case; delete dead `E-MULTIPLE-MAIN` + its stale `explain` entry | **PENDING** |
@@ -3429,7 +3429,7 @@ from the developer's own 15 findings. Analysis in `docs/research/2026-07-25-comp
 
 | DEC | GR | Question (one line) | Recommended (not ruled) | Status |
 |---|---|---|---|---|
-| DEC-356 | GR-18 | Extend mechanical exhaustiveness from the `Op` set to `Expr`/`Stmt`/`Pattern`: 37 `Expr` variants, 13 hand-rolled total rewriters, **17 named catch-alls** that silently pass a new variant through — incl. `ast/walk.rs:748` `_ => {}` under a comment recording the bug already fired twice | Start with (D) fix the known catch-alls (one file), then (C) a dummy-variant CI check, then (B) a shared total visitor. **The single highest-value structural improvement found** | **PENDING** |
+| DEC-356 | GR-18 | Extend mechanical exhaustiveness from the `Op` set to `Expr`/`Stmt`/`Pattern` — 17 named catch-alls currently pass a new variant through silently. **Analysis + the three ranked options: register §6.4** | Start with the known catch-alls, then a dummy-variant CI check, then a shared total visitor. The single highest-value structural improvement found | **PENDING** |
 | DEC-357 | GR-19 | A lambda's write to a by-value-captured variable is **silently lost** — the only wrong-answer-with-no-error finding | Reject with a new diagnostic (Invariant 14 forbids silent downgrades); by-ref capture would re-open a PHP-parity question | **PENDING** |
 | DEC-358 | GR-20 | Type mismatch, arity, unknown method, non-exhaustive match, **every** parse/lex error and **every** runtime fault carry `code == None`, so `phg explain` is unreachable for them | A `code == None` ratchet with a shrinking allowlist, mirroring the existing `explain_ratchet` | **PENDING** |
 | DEC-359 | GR-21 | `10/0`, literal overflow and literal index-OOB all pass `check` — PHP parity where a WIN is available | Reject at check time (better-than-PHP gain); surface change, so it needs a ruling | **PENDING** |
@@ -3458,7 +3458,7 @@ restatements of DEC-339…DEC-362. Analysis: `docs/research/2026-07-25-completen
 
 | DEC | GR | Question (one line) | Recommended (not ruled) | Status |
 |---|---|---|---|---|
-| DEC-363 | GR-25 | The Response-side outbound sink has **no CRLF guard** (header-injection shape) | Add the guard — small, security-relevant | **PENDING** |
+| DEC-363 | GR-25 | **P1 SECURITY** — the Response-side outbound sink has **no CRLF guard**: `withHeader`/`withCookie` interpolate unvalidated into CRLF-joined header lines and `respond_once` returns handler bytes verbatim ⇒ HTTP **response splitting**, reproduced live (an injected header **and** a second body, no error) on a shipped `phg serve` | Copy the guard that the sibling *request* path already ships (`ext/http_client/natives.rs:112-118` + its `header_injection_is_rejected_at_the_gate` test). Analysis: register §7.3 | **PENDING** |
 | DEC-364 | GR-26 | Finish the `using`/`defer` scope-guard surface already ruled by DEC-203 (`using` + `Closable`) | **Sequence it BEFORE the file-streaming and file-locking slices** — every open slice in this review (DB transactions, locking, streaming handles) bumps into this same missing primitive, and landing them first means hand-rolled `try/finally` in each | **PENDING** |
 
 **Inventory headline (not a decision, but it changes how to run the agenda):** **40 stale status labels**
@@ -3479,7 +3479,7 @@ only the developer can run it**, and it decides whether the perf-flip campaign h
 
 | DEC | GR | Question | Recommended (not ruled) | Status |
 |---|---|---|---|---|
-| DEC-365 | GR-27 | The `pre-push` `microbench-gate` FAILS in the remote container on a **docs-only** series: `floatloop` reports a WIN→LOSS flip (baseline 1.011 → 0.803) while the kernel emits *"cpuset … Cpuset discarded"*, so the pinning this absolute-ratio gate depends on silently did not apply — and the whole near-parity cluster drifted down in lockstep (`dbwork` 1.004→0.960, `floatmul` 1.002→0.980, `mapget` 1.152→0.996, `setcontains` 1.129→0.954), which a real code regression would not do | **Detect the discarded cpuset and SKIP-LOUD**, exactly as the gate already does for absent docker ("infra, not a regression"); optionally also skip when a series touches no `src/`/`tests/`/`Cargo.toml`. **Do NOT re-baseline via `--emit`** — that would accept a suspect measurement as truth (the same "don't cheat" the developer ruled for the size gate) | **PENDING** |
+| DEC-365 | GR-27 | The `pre-push` `microbench-gate` FAILS in the remote container on a **docs-only** series (`floatloop` WIN→LOSS) because the kernel discards the cpuset this absolute-ratio gate depends on — the whole near-parity cluster drifted in lockstep, which a real regression would not do. **Measured ratios + full analysis: register §8** | Detect the discarded cpuset and **SKIP-LOUD**, exactly as the gate already does for absent docker. **Do NOT re-baseline via `--emit`** | **PENDING** |
 
 **Collateral finding (perf certification, analysis in the completeness register §8.3).** The same harness run
 reports **`queryparse` ratio = 0.146 (loss)**. DEC-338 recorded ~**0.88×** ("near-parity, NOT yet a WIN")

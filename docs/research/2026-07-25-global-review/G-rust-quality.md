@@ -654,14 +654,14 @@ intervening `//` note; `value/types.rs:336-348` are trivial accessors next to a 
 |---|---|---|
 | `todo!` / `unimplemented!` | **0** | **0** |
 | `panic!` | 18 | **0** — all 18 are inside in-file `#[cfg(test)] mod` blocks [Verified: read `value/mod.rs:215-230` (a test helper `assert_dec`), `checker/qualify_variants.rs:344-370`, `native/log/mod.rs:347`, `ext/session/natives.rs:314-363`] |
-| `unwrap()` | 217 | ⚠ **CORRECTED to 26** by the certification pass — this row said **≈20** from a census that excluded whole *files* containing `cfg(test)`, which drops production code in those files. Correct method: exclude test files and `cfg(test)` **blocks**, keep production code beside them → **26 production sites**. Six were therefore never read: `src/pm/resolve.rs:93`, `src/pm/manifest.rs:196`, `src/bundle/sha256.rs:29`, `:30`, `src/native/random.rs:147` (`draw.try_into().unwrap()`, in the RNG path). The 566-files / 154,817-lines figures are exact. |
+| `unwrap()` | 217 | ⚠ **CORRECTED to 26** by the certification pass — this row said **≈20** from a census that excluded whole *files* containing `cfg(test)`, which drops production code in those files. Correct method: exclude test files and `cfg(test)` **blocks**, keep production code beside them → **26 production sites**. Five were therefore never read: `src/pm/resolve.rs:93`, `src/pm/manifest.rs:196`, `src/bundle/sha256.rs:29`, `:30`, `src/native/random.rs:147` (`draw.try_into().unwrap()`, in the RNG path). The 566-files / 154,817-lines figures are exact. |
 | `unreachable!` | 80 | mostly guarded by a proven invariant, e.g. `vm/exec.rs:893` `_ => unreachable!("receiver kind changed within one op")` with the preceding comment *"`layout_ptr` above already proved this is an `Instance`"* |
 | `let _ =` | 88 | see G23 |
 | `#[allow(...)]` | **65** | see G22 |
 | `unsafe` outside `src/jit/` | **0 code sites** | see attestation A1 |
 
 **This is a genuinely clean bill on the loudest patterns.** Zero `todo!`, zero production `panic!`,
-and ~20 production `unwrap()` in 155k lines is exceptional discipline. The findings below are about
+and 26 production `unwrap()` in 155k lines is exceptional discipline. The findings below are about
 *justification density*, not volume.
 
 ### G22 — the 65 `#[allow(...)]` opt-outs: 35 are one clippy lint, 17 are retained dead code — P2
@@ -750,8 +750,8 @@ recorded in `self` rather than returned. That is the standard the other 87 shoul
   disproportionately because they *evade the audit surface* the developer explicitly asked to see
   in full — an opt-out that doesn't appear in the opt-out list is the worst kind.
 
-### G24 — ~20 production `unwrap()`, ~0 with a justification comment; 1 is a cross-module invariant with no test — P3
-[Verified: read every one of the ~20 sites]
+### G24 — 26 production `unwrap()` (⚠ this section originally said ~20 — CORRECTED by the certification pass; see the census row above), ~0 with a justification comment; 1 is a cross-module invariant with no test — P3
+[Verified for 21 of 26 sites — ⚠ CORRECTED: the original census excluded whole files containing `cfg(test)`, so **5 production sites were never read** (`pm/resolve.rs:93`, `pm/manifest.rs:196`, `bundle/sha256.rs:29`, `:30`, `native/random.rs:147`). This stamp does NOT cover those five.]
 
 Almost all are provably safe: `min()/max()` on a non-empty fixed array
 (`jit/range_acc.rs:108,280,305`), `from_utf8` on an ASCII-only scanner slice

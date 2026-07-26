@@ -49,7 +49,7 @@ Verdict column is the honest answer, not a restatement of the question.
 | 3 | "UFCS gives no autocomplete" | **CONFIRMED — but already on record** | `line.` on a `string` → **0 items**. Already the LSP audit's punch-list rows #1/#2 (P1) with the same root cause + same fix sketch. This run corroborated it; it is **known and unbuilt**, not new. |
 | 4 | "iterable `Core.Input` for any file size" | **HALF ALREADY DONE** | `Input.lines()` **already streams** — 88 MB / 2 M lines in **23.7 MB peak RSS** (measured), byte-identical on all 3 legs. The `Iterator<T>` protocol exists (DEC-257). **The gap is files only**: `FileSystem`/`File` are whole-slurp with no offset primitive, so users can't build the iterator. |
 | 5 | "wildcard import not fully supported?" | **BUILT + CERTIFIED; one gap** | `*`, `* except {}`, group `{}`, group aliasing, deep packages all work for user *and* vendored packages (27-row probe matrix). Missing ruled surface: **stdlib wildcards** — `import Core.Text.*;` is parser-rejected "not yet supported" (P-Q-A-1). |
-| 6 | ".phg parsed wrong in editors, light blue like a comment/string" | **CONFIRMED — root cause found (NEW)** | `phorj.tmLanguage.json:34` `"begin": "\\b(b|r)?\""` — `\b` before an *optional* group fails at opening quotes and matches closing ones, so **every plain string starts at its CLOSING quote**. **81/383** `.phg` files end inside an unterminated span; 188/266 examples have code punctuation scoped as string. A verified 5-rule rewrite takes leakage to **0/383**. (His `#`-as-comment guess was explicitly disproved.) |
+| 6 | ".phg parsed wrong in editors, light blue like a comment/string" | **CONFIRMED — root cause found (NEW)** | `phorj.tmLanguage.json:34` `"begin": "\\b(b\|r)?\""` — `\b` before an *optional* group fails at opening quotes and matches closing ones, so **every plain string starts at its CLOSING quote**. **81/383** `.phg` files end inside an unterminated span; 188/266 examples have code punctuation scoped as string. A verified 5-rule rewrite takes leakage to **0/383**. (His `#`-as-comment guess was explicitly disproved.) |
 | 7 | "did we retire `for..in` or `foreach..in`?" | **NOTHING was retired; both live** | `for`…`in` ✅ and `foreach`…`as` ✅; only the *crossed* forms error. The retirement he remembers is **DEC-248** (ruled `for (T x in xs)` retired behind `E-RETIRED-FORIN`) — **never built** (`grep E-RETIRED-FORIN src/` → 0). Conflict **C-2** open since 06-25. Census: **87 `for…in` vs 8 `foreach…as`** — the corpus overwhelmingly teaches the form that was ruled retired. |
 | 8 | "visibility/access in blocks inside a function?" | **AMBIGUOUS — 5 distinct features** | Bare blocks with real scoping already exist (and are the P0). Local functions, local classes, and visibility-on-locals are all parse errors. Every peer language with local functions **forbids access modifiers on them**. Needs disambiguation → **GR-14**. |
 | 9 | "should `Database` be `Connection`?" | **YES — and provably** | The object is **one connection**, not a pool or façade: single `Box<dyn DriverConn>`, connection-scoped `tx_depth`/`hook`/`timeout_ms`, `grep pool` empty, pooling listed "out of scope". 8 of 10 ecosystems call this `Connection`/`Conn`/`Client`; `Database`/`DB` is what Go and Laravel use for the *pool/manager* phorj does **not** have. Bonus: DEC-278's `Module` suffix exists only because module leaf and type were namesakes — renaming dissolves that, so `Core.Database` can go bare. |
@@ -74,7 +74,6 @@ dominant failure mode — see §3.
 > none is dropped: **§2 → GR-1…GR-17** (the developer's own findings) · **§6.4 → GR-18…GR-24** (the global
 > sweep; GR-18 is the single highest-value structural item found) · **§7.3 → GR-25, GR-26** (GR-25 is the
 > **P1 security** item) · **§8.4 → GR-27** (the push-blocking microbench gate).
-
 
 Each item: one-sentence question · minimal current-syntax repro · options with **recommended first** ·
 the why. Ready to paste into `AskUserQuestion` one at a time.
@@ -322,17 +321,18 @@ exactly how the GR-1 P0 survived. Worth stating as an explicit corollary to Inva
 
 ## 4. READY FOR AUTONOMOUS EXECUTION (no ruling needed)
 
-Work that is unambiguous once GR-1…GR-17 are ruled, or already needs no decision:
+Work that is unambiguous once `GR-1`…`GR-27` are ruled, or already needs no decision:
 
 1. **Grammar fix + gate** (GR-3 A) — mechanical, verified, no byte-identity surface.
-2. **`CLAUDE.md:9` dependency correction** — it claims "**four** vetted, feature-gated exceptions
-   (`argon2`, `regex`, `ctrlc`, `corosensei`)"; actual is **14** optional dependencies across ~11 approved
-   domains (`UNIFIED-SPEC.md:871+`). Since CLAUDE.md is the authority every session reads, this
-   understatement could make a future session wrongly reject a needed crate. Docs-only.
-3. **Stale-label corrections** — e.g. a spec header saying "NOT BUILT" about a certified feature (E1);
-   `SLICE-STATE.md:1022` "LSP AUTOCOMPLETE — DONE + COMPREHENSIVE" is measurably false for UFCS.
-4. **Diagnostic span fix** — some UFCS type errors anchor at `1:9` (`package Main;`) instead of the call site.
-5. **Differential example for block scoping** — required by GR-1 under either option.
+2. **Stale-label corrections** — e.g. a spec header saying "NOT BUILT" about a certified feature (E1);
+   SLICE-STATE's *"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"* claim is measurably false for UFCS.
+   *(Cited by quoted subject, not line number — this file's own edits have already drifted that anchor
+   from `:1022` to `:1083`, which is exactly the doc-rot GR-24's third guard addresses.)*
+3. **Diagnostic span fix** — some UFCS type errors anchor at `1:9` (`package Main;`) instead of the call
+   site; the certification pass reproduced it and identified the trigger as **string interpolation**.
+4. **Differential example for block scoping** — required by GR-1 under either option.
+
+*(The `CLAUDE.md` dependency correction that used to head this list was **applied** in part 3 — see §6.5.)*
 
 ---
 
@@ -539,12 +539,15 @@ Ranked by value ÷ effort, and deliberately precise about what is genuinely unam
 ### 7.3 — Two more rulings (GR-25, GR-26)
 
 - **GR-25 (DEC-363) — Response-side CRLF guard — `P1` SECURITY, treat as a top-10 item, not a small one.**
-  **Verified mechanism, end-to-end:** `src/cli/http_prelude.rs:52` `Response.withHeader(name, value)` and
-  `withCookie(c)` interpolate straight into a header line (`"{name}: {value}"`, `"Set-Cookie: {line}"`) with
-  **zero validation**, `serialize()` CRLF-joins them into the response head, and `src/serve/handlers.rs:189`
+  **Verified mechanism, end-to-end:** `src/cli/http_prelude.rs:71-73` `Response.withHeader(name, value)` and
+  `:74-77` `withCookie(c)` interpolate straight into a header line (`"{name}: {value}"`, `"Set-Cookie: {line}"`) with
+  **zero validation**, `serialize()` (`:91-99`) CRLF-joins them into the response head, and `src/serve/handlers.rs:189`
   `respond_once` returns the handler's bytes **verbatim** — so there is no Rust-side serializer that could
   re-validate. That is textbook **HTTP response splitting**, reachable from ordinary handler code on a
   shipped `phg serve`, and `withCookie` commonly carries user-derived values.
+  **Reproduced live by the certification pass** (`phg run`): `Response.text(200,"ok").withHeader("X-User",
+  "x\r\nX-Injected: yes\r\n\r\n<html>pwned</html>")` serialises to a head that terminates early and injects
+  both an extra header **and a second body** — no error, no validation.
   **The fix is already in-tree on the sibling path:** the *request* side rejects this at the gate
   (`src/ext/http_client/natives.rs:116` — *"header `{n}` contains a forbidden character"*, pinned by
   `src/ext/http_client/tests.rs:450 header_injection_is_rejected_at_the_gate`, which feeds `"a\r\nHost: evil"`).
