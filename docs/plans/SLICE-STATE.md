@@ -58,6 +58,32 @@ put each question in the message body with context, examples, options, a recomme
   would contradict documented semantics and needs its own spec.
   **Canonical rule: `docs/specs/2026-07-26-capture-write-rejection.md`.** NOT YET BUILT.
 
+- **DEC-368 — RULED 2026-07-26.** The capture-write rejection points at a prelude **`Mutable<T>`**
+  (`import Core.Mutable;`, `new Mutable(v)`/`get()`/`set(v)`, nothing else). **`Ref<T>` rejected** — PHP's
+  "reference" aliases a variable, this OWNS its value, and `new Ref(total)` silently copies in a way the
+  checker cannot catch. `List.reduce` already exists, so most mutable-capture uses are a missing-fold smell
+  and the real deliverable is the **diagnostic's routing**.
+  Rule: `docs/specs/2026-07-26-capture-write-rejection.md` §Companion. NOT YET BUILT.
+
+### ⚠ TERMINOLOGY CORRECTED BY THE DEVELOPER (2026-07-26) — DEC-369
+**Stop calling the shipped `green` feature "concurrency".** It is **cooperative-sequential**. Evidence:
+`src/green/sched.rs:25-32`'s trap set is `Yield`/`Recv`/`Join`/`Done` — **no I/O trap**, so a task doing
+file or socket I/O blocks the single OS thread and every other task waits. With the `Rc` heap already
+`!Send` (no parallelism), that is **no parallelism AND no I/O overlap ⇒ zero throughput benefit** — the
+only benefit is expressiveness. Scope of the mislabelling: **194** `concurren*` hits across docs+code,
+`src/green/mod.rs:1`, the internal `uses_concurrency()`, and **`CLAUDE.md` Invariant 14 names a
+`--sequential-concurrency` flag that does not exist in `src/`**. Recommended vocabulary (PENDING a
+ruling): user-facing = **"cooperative tasks"**, "coroutine" = the mechanism, and **"concurrent"/"parallel"
+RESERVED** for DEC-370.
+
+### 🆕 DEC-370 — REAL PARALLELISM REQUESTED (developer, 2026-07-26) — research pass owed
+Not a syntax question: the `Value` heap is `Rc`-based hence `!Send`. It is also the sharpest Invariant-14
+LADDER case yet — PHP has no faithful shared-memory threading (`ext-parallel`/`pthreads` are not baseline,
+`Fiber` is cooperative like today's `green`). **No options to be offered until** a cross-language scan
+(Invariant 16: Rust `Send`/`Sync`, Go, Erlang, JS workers, Java virtual threads, Swift actors) and a
+ladder analysis cost the `Rc`→`Arc` / actor / worker-process fork against the JIT and the byte-identity
+spine.
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 
