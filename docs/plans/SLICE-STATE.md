@@ -30,7 +30,7 @@ transpiler + a differential example covering every block form. **Needs a ruling 
 (reject via `E-SHADOW-LOCAL`) is a legitimate surface choice.**
 
 ### Corrections to beliefs recorded elsewhere in this file
-- **`SLICE-STATE.md:1022` "LSP AUTOCOMPLETE — DONE + COMPREHENSIVE" is measurably FALSE for UFCS** —
+- **SLICE-STATE's *"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"* claim is measurably FALSE for UFCS** —
   `line.` on a `string` returns **0 items** (already the LSP audit's punch-list rows #1/#2, P1, unbuilt).
 - **Nothing was retired from the loop syntax.** `for`…`in` AND `foreach`…`as` both work; only crossed forms
   error. DEC-248 ruled `for (T x in xs)` retired but `E-RETIRED-FORIN` was **never built** (0 hits in `src/`).
@@ -58,7 +58,7 @@ DEC-338's near-parity claim is NOT corroborated and its WIN stays un-certified**
 
 ### Needs NO ruling — safe to execute autonomously once approved to proceed
 Grammar fix + gate (GR-3) · stale-label fixes (a spec header says "NOT BUILT" about a
-certified feature; `SLICE-STATE:1022`) · UFCS diagnostic span anchored at `1:9` instead of the call site ·
+certified feature; SLICE-STATE's *"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"* claim) · UFCS diagnostic span anchored at `1:9` instead of the call site ·
 the block-scoping differential example.
 
 ## ✅ INV-13 DEBT CLEANUP — DONE (2026-07-25, dev-ruled), unblocks DEC-338 push

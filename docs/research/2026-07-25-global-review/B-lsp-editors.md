@@ -607,7 +607,7 @@ Already recorded in the SSOTs — cross-referenced so nothing here is double-tra
 - **B1 / B2** — UFCS member completion for primitive and container receivers. [Verified:
   `grep -i ufcs docs/plans/SLICE-STATE.md docs/plans/MASTER-PLAN.md KNOWN_ISSUES.md` returns only
   compiler-internal UFCS rows (`rewrite_ufcs`, `E-UFCS-AMBIGUOUS`, the UFCS-vs-import ruling) — nothing
-  about completion.] Note `SLICE-STATE.md:1022` asserts **"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"**;
+  about completion.] Note SLICE-STATE's *"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"* claim asserts **"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"**;
   that claim is measurably false for the language's *primary* stdlib call syntax.
 - **B4 / B5** — the `Ctx::General` fallthrough after a `.`.
 - **B6** — `parse_repaired` losing the cursor line's own declaration.
@@ -694,5 +694,5 @@ member list (B1) without a signature still leaves the developer guessing the arg
 5. **B6**, then the recorded B3 / prelude-members / attribute-arg follow-ups.
 6. Docs currency in the same changes (Invariant 17 / DEC-181): `editors/phpstorm/README.md:53-65`,
    `editors/vscode/README.md:46-47`, `editors/vscode/package.json` version, the
-   "LSP AUTOCOMPLETE — DONE + COMPREHENSIVE" claim at `docs/plans/SLICE-STATE.md:1022`, and the stale
+   "LSP AUTOCOMPLETE — DONE + COMPREHENSIVE" claim at `docs/plans/SLICE-STATE (cited by subject, not line — the anchor drifts)`, and the stale
    "LSP find-usages project-wide" queue entry at `SLICE-STATE.md:1015`.

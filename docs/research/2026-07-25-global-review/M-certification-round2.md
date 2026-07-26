@@ -81,7 +81,7 @@ An unescaped `|` inside the quoted regex `(b|r)` splits the GFM table cell (a co
 Three copies of the same analysis is three places to drift — and **N2 is that drift, already realised** on `DEC-363`. Either honour "identity + status only" and trim the rows, or drop the no-duplication claim; the current state asserts a discipline the artifacts do not keep.
 
 ### N8 — LOW · stale line pointers into `SLICE-STATE.md`
-`register:333` and `SLICE-STATE.md:33` both cite *"`SLICE-STATE.md:1022` "LSP AUTOCOMPLETE — DONE + COMPREHENSIVE""*. The claim is real but now lives at **`:1083`** [Verified: `grep -n 'AUTOCOMPLETE'`]. It *was* at `:1022` at commit `25053be` and has drifted 61 lines as parts 4/5/6 and the M1 fix prepended blocks [Verified: replayed `git show <sha>:docs/plans/SLICE-STATE.md | grep -n` across the last 8 commits touching the file — 954 → 980 → 1007 → 1022 → 32 → 33]. This is the doc-rot class `GR-24`/`DEC-362` proposes guards for; worth noting that it is *self-inflicted by the review's own edits* and will keep drifting, so line-anchored citations into `SLICE-STATE.md` should be replaced by heading anchors or quoted subjects (which is what `GR-24`'s third guard already recommends for SHAs).
+`register:333` and `SLICE-STATE.md:33` both cite *"SLICE-STATE's *"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"* claim"*. The claim is real but now lives at **`:1083`** [Verified: `grep -n 'AUTOCOMPLETE'`]. It *was* at `:1022` at commit `25053be` and has drifted 61 lines as parts 4/5/6 and the M1 fix prepended blocks [Verified: replayed `git show <sha>:docs/plans/SLICE-STATE.md | grep -n` across the last 8 commits touching the file — 954 → 980 → 1007 → 1022 → 32 → 33]. This is the doc-rot class `GR-24`/`DEC-362` proposes guards for; worth noting that it is *self-inflicted by the review's own edits* and will keep drifting, so line-anchored citations into `SLICE-STATE.md` should be replaced by heading anchors or quoted subjects (which is what `GR-24`'s third guard already recommends for SHAs).
 
 ### N9 — NIT · cosmetic artifact of the M1 insert
 `register:78-79` — the FULL AGENDA INDEX insert left a double blank line before "Each item: …". Renders identically; noted only for completeness.
@@ -137,7 +137,7 @@ fixed before the agenda is worked. Suggested single pass, all mechanical:
 6. **M1 residue** — `register:325` `GR-1…GR-17` → `GR-1…GR-27`; `SLICE-STATE.md:43` "6 of the 17 items" → "6 of the items".
 7. **M6 residue** — genericise `J-claude-bundle.md:157`.
 8. **N7** — decide: trim the analysis out of `DEC-356`/`DEC-365`, or drop the "no duplicated content" claim.
-9. **N8/N9** — de-line-anchor the `SLICE-STATE:1022` citations (→ `:1083` or a heading anchor); drop the extra blank line.
+9. **N8/N9** — de-line-anchor the SLICE-STATE's *"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"* claim citations (→ `:1083` or a heading anchor); drop the extra blank line.
 10. **Bonus (not a finding)** — add the interpolation trigger to `register:334`, since I proved it.
 
 Round 3 should re-verify these and then, if clean, count as clean **round 1 of 2**.

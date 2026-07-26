@@ -3,7 +3,8 @@
 **Status:** RESEARCH COMPLETE — **0 decisions taken** (Invariant 15). Every fork below is PENDING and
 carries a recommendation + the why. Ruling rows live in the decision register
 (`docs/research/full-audit/raw/C-decisions.md`, **DEC-339 … DEC-365** — 27 rows); this file holds the *analysis* and
-the ready-to-ask question text. One canonical home each — Invariant 19, no duplicated content.
+the ready-to-ask question text. One canonical home for each *analysis* — Invariant 19. (The `SLICE-STATE` cursor deliberately carries a short
+summary of §8's live push-blocker so a fresh context sees it immediately; that is the one intentional overlap.)
 
 **What produced it.** The developer reviewed the project himself, produced ~15 findings/questions, and
 asked for them to be challenged and verified against real code, widened into a global project review, and
@@ -274,7 +275,7 @@ explicit IN/OUT verdict with a reason**, per your "no silent omits" instruction.
 - (C) `/converge` alone → it is the single highest-value item: it *is* the DEC-268 ladder, currently
   hand-rolled from memory at every 3C/6C gate.
 **Highest-value single fact:** `precompact-handoff.sh` addresses a pain that hit **twice in this session**.
-**Hard OUT regardless:** all 57 `mcp/**` files — three corporate service `.env` files plus desktop-automation drivers, with zero relevance, and `phorj` is a **public** repo.
+**Hard OUT regardless:** all 57 `mcp/**` files — four corporate service `.env` files plus desktop-automation drivers, with zero relevance, and `phorj` is a **public** repo.
 **Sub-decisions:** the 4 `ask-human`/gate **Stop hooks** are held back (the container already runs its own
 `stop-hook-reply-gate.py` — double-gating risk); recommend instead rewording the framework's **false**
 claim that the question guard is "mechanically" enforced here.
@@ -494,7 +495,7 @@ also why heavy builds were avoided. **They are ready to apply on your word.**
 Full table in `2026-07-25-global-review/L-onhold-inventory.md` (95 rows, each with citations, a reality
 check, and a recommendation). This answers the "**all the specs we put on hold**" part of the ask.
 
-**Counts:** **95** deduplicated items — ~46 need a ruling (the 24 above + ~22 smaller) · **~30 ruled but
+**Counts:** **95** deduplicated items — ~46 need a ruling (the 24 presented above; GR-25…GR-27 follow in §7.3/§8.4, + ~22 smaller) · **~30 ruled but
 not built** · 17 deferred-with-a-reason (**3 rationales are now obsolete**) · ~22 known limitations ·
 and **40 stale labels**.
 
@@ -527,7 +528,9 @@ exactly what DEC-362/GR-24's one-row-per-DEC guard would prevent recurring.
 Ranked by value ÷ effort, and deliberately precise about what is genuinely unambiguous:
 
 1. **L-82 — `Core.Validation` trailing-`\n` divergence: reproduced, ONE-LINE `/D` fix.** The cheapest real
-   bug in the whole sweep.
+   bug in the whole sweep — and note it is a **THIRD live Invariant-1 (byte-identity) divergence**, alongside
+   §0's block-shadow P0 and §6.2's `I8` hook divergence. §0 and §6.2 should not be read as implying there are
+   only two. Already recorded in `KNOWN_ISSUES.md:335-345` and labelled 3-leg in `L-onhold-inventory.md` (L-82).
 2. **L-74 — an 8-item diagnostic-quality cluster.** Best overall value/effort ratio found.
 3. **GR-3 / DEC-341 — the grammar rewrite** (pre-verified: 81/383 files leaking → 0/383).
 4. **L-41 — resume task #33** (Json-ADT JIT) at the write-path helpers.
@@ -547,12 +550,14 @@ Ranked by value ÷ effort, and deliberately precise about what is genuinely unam
   shipped `phg serve`, and `withCookie` commonly carries user-derived values.
   **Reproduced live by the certification pass** (`phg run`): `Response.text(200,"ok").withHeader("X-User",
   "x\r\nX-Injected: yes\r\n\r\n<html>pwned</html>")` serialises to a head that terminates early and injects
-  both an extra header **and a second body** — no error, no validation.
+  both an extra header **and a second body** — no error, no validation. The head also still carries
+  `Content-Length: 2` while ~30 further bytes follow in the same response, so the primitive is a
+  request-smuggling/desync shape as well, not only response splitting.
   **The fix is already in-tree on the sibling path:** the *request* side rejects this at the gate
   (`src/ext/http_client/natives.rs:116` — *"header `{n}` contains a forbidden character"*, pinned by
   `src/ext/http_client/tests.rs:450 header_injection_is_rejected_at_the_gate`, which feeds `"a\r\nHost: evil"`).
   Recommended: copy that guard to the response side. *(Initially filed as "small" and ranked 25th — corrected
-  after the certification pass re-derived the mechanism; the request/response asymmetry is the aggravating fact.)
+  after the certification pass re-derived the mechanism; the request/response asymmetry is the aggravating fact.)*
 - **GR-26 (DEC-364) — `using` / `defer` scope-guard surface.** Flagged because **every** open slice in
   this review — DB transactions, file locking, streaming handles — keeps bumping into the same missing
   primitive. DEC-203 already ruled `using` + `Closable`; this is about finishing it. Recommended: treat it

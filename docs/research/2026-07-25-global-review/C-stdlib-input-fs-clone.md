@@ -914,7 +914,7 @@ chunk-based, not degrade the streaming contract; (b) the lift of PHP `clone` mus
 - **Topic 1** is `std::fs` + `std::io` only under every option.
 - **Topic 3** needs no code at all under the recommendation.
 
-**Stale-doc flag (P3):** `CLAUDE.md:8-9` claims *"four vetted, feature-gated exceptions — `argon2`,
+**Stale-doc flag (P3):** `CLAUDE.md:8-9` claims *"four vetted, feature-gated exceptions" [⚠ SUPERSEDED — FIXED in `b3e635e`, now "14 vetted, feature-gated crates — `argon2`,
 `regex`, `ctrlc`, `corosensei`"*. `Cargo.toml:127-180` declares **eleven** domains
 (+ `unicode-segmentation`, `rustls`, `webpki-roots`, `rusqlite`, `postgres`, `mysql`, `lettre`,
 `cranelift-*`), and `UNIFIED-SPEC.md:871-877` explicitly warns that stale dependency claims

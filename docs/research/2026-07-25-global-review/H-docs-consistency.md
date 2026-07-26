@@ -130,7 +130,7 @@ not (that is the actual gap).
 
 ---
 
-### H3 — `CLAUDE.md:9` says the core has **four** external deps; there are **14** [P1]
+### H3 — `CLAUDE.md:9` says the core has **four** external deps; there are **14** [P1] — **⚠ FIXED 2026-07-26 in `b3e635e`**
 
 > `CLAUDE.md:8-10` — "Phorj is a statically-typed, PHP-inspired language implemented in Rust
 > (edition 2021; core is std-only with **four** vetted, feature-gated exceptions — `argon2`,
