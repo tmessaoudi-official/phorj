@@ -65,7 +65,9 @@ put each question in the message body with context, examples, options, a recomme
   and the real deliverable is the **diagnostic's routing**.
   Rule: `docs/specs/2026-07-26-capture-write-rejection.md` §Companion. NOT YET BUILT.
 
-### ⚠ TERMINOLOGY CORRECTED BY THE DEVELOPER (2026-07-26) — DEC-369
+### ⚠ TERMINOLOGY — DEC-369 **RULED 2026-07-26**: user-facing = "cooperative tasks"; "coroutine" = mechanism only;
+**"concurrent"/"parallel" RESERVED for DEC-370.** Rename `uses_concurrency`->`uses_tasks`, sweep 194 hits, delete the
+nonexistent `--sequential-concurrency` flag from Invariant 14.
 **Stop calling the shipped `green` feature "concurrency".** It is **cooperative-sequential**. Evidence:
 `src/green/sched.rs:25-32`'s trap set is `Yield`/`Recv`/`Join`/`Done` — **no I/O trap**, so a task doing
 file or socket I/O blocks the single OS thread and every other task waits. With the `Rc` heap already
@@ -76,7 +78,7 @@ only benefit is expressiveness. Scope of the mislabelling: **194** `concurren*` 
 ruling): user-facing = **"cooperative tasks"**, "coroutine" = the mechanism, and **"concurrent"/"parallel"
 RESERVED** for DEC-370.
 
-### 🆕 DEC-370 — REAL PARALLELISM (developer request, 2026-07-26) — OPTIONS ON THE TABLE
+### 🆕 DEC-370 — REAL PARALLELISM **RULED 2026-07-26: (2) isolated tasks + copying channels (target) + (4) data-parallel combinators (first slice)**
 **PHP is NOT a constraint.** DEC-005 ("never delegate a capability to PHP"), DEC-058 ("this language should be
 equal or better than PHP") and **DEC-133's already-paved road** (`E-CONCURRENCY-NO-PHP` exists and works,
 `src/transpile/expr.rs:548`) make a native-only feature behind a transpile hard error the NORMAL ruled pattern.
@@ -88,7 +90,7 @@ stdlib combinators as the FIRST shippable slice.** (1) `Rc`->`Arc` shared memory
 every clone taxes the JIT hot path the perf campaign rests on; forces a GIL or a Rust-style `Send`/`Sync`
 discipline). (3) worker processes = a deployment shape, not the general model.
 
-### 🆕 DEC-371 — RATIONALE DECONTAMINATION (developer challenge, 2026-07-26)
+### 🆕 DEC-371 — RATIONALE DECONTAMINATION **RULED 2026-07-26 — approved as its own cleanup slice**
 Audit answer: **the doctrine is sound and was applied consistently** (DEC-005/058/097/151/133 all chose
 better-than-PHP or native-only). Contamination is **4 artifacts**: **DEC-037** (wildcards rejected for "PHP has
 no `use A\*`" — the false premise produced a decision later **reversed**, wildcards now shipped and certified),
