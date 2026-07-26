@@ -76,13 +76,27 @@ only benefit is expressiveness. Scope of the mislabelling: **194** `concurren*` 
 ruling): user-facing = **"cooperative tasks"**, "coroutine" = the mechanism, and **"concurrent"/"parallel"
 RESERVED** for DEC-370.
 
-### 🆕 DEC-370 — REAL PARALLELISM REQUESTED (developer, 2026-07-26) — research pass owed
-Not a syntax question: the `Value` heap is `Rc`-based hence `!Send`. It is also the sharpest Invariant-14
-LADDER case yet — PHP has no faithful shared-memory threading (`ext-parallel`/`pthreads` are not baseline,
-`Fiber` is cooperative like today's `green`). **No options to be offered until** a cross-language scan
-(Invariant 16: Rust `Send`/`Sync`, Go, Erlang, JS workers, Java virtual threads, Swift actors) and a
-ladder analysis cost the `Rc`→`Arc` / actor / worker-process fork against the JIT and the byte-identity
-spine.
+### 🆕 DEC-370 — REAL PARALLELISM (developer request, 2026-07-26) — OPTIONS ON THE TABLE
+**PHP is NOT a constraint.** DEC-005 ("never delegate a capability to PHP"), DEC-058 ("this language should be
+equal or better than PHP") and **DEC-133's already-paved road** (`E-CONCURRENCY-NO-PHP` exists and works,
+`src/transpile/expr.rs:548`) make a native-only feature behind a transpile hard error the NORMAL ruled pattern.
+The real constraint is runtime architecture: the `Value` heap is `Rc`-based hence `!Send`.
+**Recommended: (2) isolated tasks + copying channels** as the target architecture — keeps `Rc` and the JIT
+untouched (each task owns its heap, values copy at the channel boundary), reuses the already-backend-agnostic
+single-sourced scheduler kernel, and barely changes the `spawn`+channels surface — **with (4) data-parallel
+stdlib combinators as the FIRST shippable slice.** (1) `Rc`->`Arc` shared memory REJECTED (atomic refcount on
+every clone taxes the JIT hot path the perf campaign rests on; forces a GIL or a Rust-style `Send`/`Sync`
+discipline). (3) worker processes = a deployment shape, not the general model.
+
+### 🆕 DEC-371 — RATIONALE DECONTAMINATION (developer challenge, 2026-07-26)
+Audit answer: **the doctrine is sound and was applied consistently** (DEC-005/058/097/151/133 all chose
+better-than-PHP or native-only). Contamination is **4 artifacts**: **DEC-037** (wildcards rejected for "PHP has
+no `use A\*`" — the false premise produced a decision later **reversed**, wildcards now shipped and certified),
+**DEC-203** ("no PHP analog" as part of the `defer` rejection — strike it; `defer` re-opens inside DEC-364),
+**`KNOWN_ISSUES.md:1567`** (`this.field` rationale leads with PHP-faithfulness though the rule is right on
+independent grounds), and **DEC-370 as first drafted** (Claude's own phrasing — fixed). Recommended standing
+rule: *PHP's lack of a feature is never a reason against building it; the only PHP-shaped question is which
+Invariant-14 ladder case the transpile leg takes.*
 
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
