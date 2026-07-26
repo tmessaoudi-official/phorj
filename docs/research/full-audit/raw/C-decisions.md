@@ -3450,3 +3450,27 @@ Invariant 1** (self-referential property hook diverges `run` vs `run --tree-walk
 4 trace lines, invisible to `agree_err`'s body-substring matching), and **Invariant 17 currently
 unsatisfiable** for `p with { y = 9 }` (runs + transpiles, but `phg lift` fails on the transpiler's own
 output, and lift has no `E-TRANSPILE-*`-style escape hatch).
+
+## DEC-363 / DEC-364 — GLOBAL REVIEW 2026-07-25, third batch: the on-hold inventory (**PENDING**)
+
+From the deduplicated on-hold sweep (95 items) — the two that are genuinely new adjudications rather than
+restatements of DEC-339…DEC-362. Analysis: `docs/research/2026-07-25-completeness-register.md` §7.
+
+| DEC | GR | Question (one line) | Recommended (not ruled) | Status |
+|---|---|---|---|---|
+| DEC-363 | GR-25 | The Response-side outbound sink has **no CRLF guard** (header-injection shape) | Add the guard — small, security-relevant | **PENDING** |
+| DEC-364 | GR-26 | Finish the `using`/`defer` scope-guard surface already ruled by DEC-203 (`using` + `Closable`) | **Sequence it BEFORE the file-streaming and file-locking slices** — every open slice in this review (DB transactions, locking, streaming handles) bumps into this same missing primitive, and landing them first means hand-rolled `try/finally` in each | **PENDING** |
+
+**Inventory headline (not a decision, but it changes how to run the agenda):** **40 stale status labels**
+were found — **26 items recorded OPEN that are actually BUILT** (incl. tuples DEC-288, backed enums,
+DEC-312 `lift_from`, DEC-223 Mail, DEC-257 `Iterator`, DEC-313 FS, the `db.transaction` closure + retry
+surface, and P-Q-A-5's file-size debt now that the size gate reports `fails=0`) and **14 recorded DONE that
+are NOT** (incl. DEC-331 D2/D3/D5/D6/D7 marked "LOCKED" but unbuilt, DEC-247 DateTime, and the wildcard
+spec header that says "NOT YET BUILT" beside its own "✅ DONE"). **Recommendation: flip these 40 labels in
+one mechanical pass BEFORE working the agenda** — it needs no rulings and every later decision then rests
+on trustworthy inputs. DEC-362/GR-24's one-row-per-DEC guard is what stops it recurring.
+
+**Also recorded:** three deferrals whose stated rationale no longer holds (most notably file locking, whose
+presumed dependency blocker was never actually met, and the slurp-only file APIs, deferred before the
+measurement showing whole-file reads cost 200 MB), and **the pinned dev-box microbench remains owed —
+only the developer can run it**, and it decides whether the perf-flip campaign has 3 losses left or 1.

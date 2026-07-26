@@ -481,3 +481,75 @@ Only **documentation** was edited. The trivial fixes above (I7 ~1 line, I4 1 lin
 un-applied: they touch `src/`, which requires the full `--all-features` correctness gate to re-run, and the
 night's mandate was to *prepare* decisions, not to sequence code work. Disk headroom was ~6 GB, which is
 also why heavy builds were avoided. **They are ready to apply on your word.**
+
+---
+
+## 7. THE ON-HOLD INVENTORY — everything awaiting you, deduplicated
+
+Full table in `2026-07-25-global-review/L-onhold-inventory.md` (95 rows, each with citations, a reality
+check, and a recommendation). This answers the "**all the specs we put on hold**" part of the ask.
+
+**Counts:** **95** deduplicated items — ~46 need a ruling (the 24 above + ~22 smaller) · **~30 ruled but
+not built** · 17 deferred-with-a-reason (**3 rationales are now obsolete**) · ~22 known limitations ·
+and **40 stale labels**.
+
+### 7.1 — The headline: 40 stale status labels
+
+This is the single largest waste surface found, and it directly wastes *your* decision time.
+
+**26 items are recorded as OPEN but are actually BUILT** — so any agenda built from the current docs would
+have you re-deciding settled work: named args for ctors+methods · **tuples (DEC-288)** · backed enums ·
+`lift_from` (DEC-312) · **P-Q-A-5 file-size debt** (the size gate now reports `fails=0`) · CRAFT-2 ·
+DEC-255 helpers · DEC-223 Mail · DEC-238 debug twin · DEC-216 · `db.transaction` closure · the retry
+surface · empty-`[]` PART-2 · shebang `--lang` · DEC-336 · LSP find-usages · 2 of 3 lift-catch-up items ·
+the naming mega-slice · DEC-313 FS · DEC-257 `Iterator` · Deque/PriorityQueue · HOF `List.map/filter/reduce`
+· `E-TRANSPILE-FS` (retired) · Log-v2 processors · Totality's discharged gate · 8 of 9 plans-divergence findings.
+
+**14 are recorded as DONE but are NOT** — the more dangerous direction: the wildcard spec header says
+"NOT YET BUILT" beside its own "✅ DONE" · **DEC-331 D2/D3/D5/D6/D7 marked "LOCKED" but unbuilt** ·
+DEC-247 DateTime never built · "LSP AUTOCOMPLETE — DONE + COMPREHENSIVE" (false for UFCS) ·
+`E-MULTIPLE-MAIN` explained but never emitted · `E-RETIRED-FORIN` absent · W2-4 · CRAFT-1's 90→66 ·
+a citation pointing at the deleted `explain.rs` · a KNOWN_ISSUES 🔴 P0 heading for a fixed issue ·
+CLAUDE.md's dependency count · UNIFIED-SPEC "JIT not wired" · ADR-0005 naming the retired `phg vendor`
+with no ADR-0006. *(Two of these — the CLAUDE.md count and the KNOWN_ISSUES heading — were fixed tonight.)*
+
+**Recommendation:** before working the agenda, spend one pass flipping these 40 labels. It is mechanical,
+needs no rulings, and every subsequent decision you make gets more trustworthy inputs. This is also
+exactly what DEC-362/GR-24's one-row-per-DEC guard would prevent recurring.
+
+### 7.2 — Ready to build, no ruling needed (your autonomous hand-back batches)
+
+Ranked by value ÷ effort, and deliberately precise about what is genuinely unambiguous:
+
+1. **L-82 — `Core.Validation` trailing-`\n` divergence: reproduced, ONE-LINE `/D` fix.** The cheapest real
+   bug in the whole sweep.
+2. **L-74 — an 8-item diagnostic-quality cluster.** Best overall value/effort ratio found.
+3. **GR-3 / DEC-341 — the grammar rewrite** (pre-verified: 81/383 files leaking → 0/383).
+4. **L-41 — resume task #33** (Json-ADT JIT) at the write-path helpers.
+5. **L-37…L-40 — the S3.2–S3.5 chain.** Note `ServeConfig` currently exists only as a *comment*, and
+   `respond` is still live.
+6. **L-53** stdlib companions · **L-43** labeled break/continue · **L-44** typed LSB · **L-36**
+   `Core.DateTime` (its dependency ruling is already done) · **L-42** spread legs (a)+(b) only.
+
+### 7.3 — Two more rulings (GR-25, GR-26)
+
+- **GR-25 (DEC-363) — Response-side CRLF guard.** The outbound sink is unguarded (header-injection shape).
+  Recommended: guard it; small and security-relevant.
+- **GR-26 (DEC-364) — `using` / `defer` scope-guard surface.** Flagged because **every** open slice in
+  this review — DB transactions, file locking, streaming handles — keeps bumping into the same missing
+  primitive. DEC-203 already ruled `using` + `Closable`; this is about finishing it. Recommended: treat it
+  as an enabler and sequence it *before* GR-9/GR-10, so those land on top of a real guarantee rather than
+  hand-rolled `try/finally`.
+
+### 7.4 — Three deferrals whose stated reason no longer holds
+
+Flagged for re-examination rather than re-deferral (detail in the L report): notably **file-locking's
+dependency blocker** (std file locks are stable on the pinned toolchain — the policy clause was never met)
+and the **slurp-only file APIs** (deferred before the measurement showing whole-file reads cost 200 MB).
+
+### 7.5 — Honest limits of the inventory
+
+~14 KNOWN_ISSUES "deferred refinements" sections are catalogued at *section*, not bullet, granularity
+(~60–100 sub-bullets not lifted); `full-audit/raw/*` beyond `C-decisions.md` was not swept; and **the
+pinned dev-box microbench is still owed and only you can run it** — it decides whether the perf-flip
+campaign has 3 losses left or 1.
