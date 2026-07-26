@@ -553,6 +553,10 @@ Ranked by value ÷ effort, and deliberately precise about what is genuinely unam
 
 ### 7.3 — Two more rulings (GR-25, GR-26)
 
+- ✅ **GR-25 RULED 2026-07-26 — canonical rule now `docs/specs/2026-07-26-response-header-injection-guard.md`.**
+  Guard in the phorj **prelude** (panic-class fault) at `withHeader` + the **`Cookie` constructor`**, rejecting
+  CR/LF/**NUL** and `:` in names; **NUL added to the request side too**; `Http.isValidHeaderName`/`…Value` ship.
+  A Rust `respond_once` guard was REJECTED. Read the spec, not the recommendation below.
 - **GR-25 (DEC-363) — Response-side CRLF guard — `P1` SECURITY, treat as a top-10 item, not a small one.**
   **Verified mechanism, end-to-end:** `src/cli/http_prelude.rs:71-73` `Response.withHeader(name, value)` and
   `:74-77` `withCookie(c)` interpolate straight into a header line (`"{name}: {value}"`, `"Set-Cookie: {line}"`) with

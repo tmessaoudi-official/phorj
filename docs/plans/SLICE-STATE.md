@@ -31,13 +31,27 @@ put each question in the message body with context, examples, options, a recomme
     after a later `commit()`. The register's "leaves an outer tx open" framing was wrong — there is no
     outer tx; the transaction's OWN level survives, so the trigger is ordinary code.
 
+- **GR-25 / DEC-363 (P1 SECURITY) — RULED 2026-07-26.** Guard in the phorj **prelude**, **panic-class
+  fault**, at `Response.withHeader` (name + value) and the **`Cookie` constructor** (single chokepoint —
+  every builder re-constructs; 3 of 6 fields are injectable strings). Rejects **CR/LF/NUL** in values,
+  **`:`** in names. A Rust `respond_once` guard was REJECTED (`phg build --php` never runs it). Panic-class
+  settled by evidence: a handler fault is **a 500 on that request, never a panic** (`handlers.rs:143,186-188`)
+  ⇒ no DoS vector. Also ruled: **NUL added to the REQUEST side too**, and
+  **`Http.isValidHeaderName`/`isValidHeaderValue`** ship for the clean-400 path.
+  **Canonical rule: `docs/specs/2026-07-26-response-header-injection-guard.md`.** NOT YET BUILT.
+  - Reproduced live: injected header **and a second body** while `Content-Length: 2` still describes the
+    real one — a desync/smuggling shape, not only response splitting.
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 
-**NEXT QUESTIONS in order:** GR-25 / DEC-363 (P1 security, HTTP response splitting on shipped
-`phg serve`) → GR-18 / DEC-356 (highest-value structural item) → the rest of §2/§6.4/§7.3/§8.4 per the
-register's FULL AGENDA INDEX. **Still unanswered:** whether the DEC-366 lifter hoist rides in the
-DEC-339 slice or gets its own.
+**NEXT QUESTIONS in order:** GR-18 / DEC-356 (highest-value structural item) → GR-3 / DEC-341 (grammar
+rewrite, highest visible win per unit of effort) → the rest of §2/§6.4/§7.3/§8.4 per the register's FULL
+AGENDA INDEX.
+
+**PROVISIONAL DEFAULT (asked 3×, not answered — developer may override at any time):** the **DEC-366
+lifter hoist rides in the DEC-339 slice**, since it is the same block-scope-vs-function-scope insight
+from the inverse direction and Invariant 17 wants lift moving with the feature.
 
 ## 🔵 PRIOR CURSOR (2026-07-25/26) — GLOBAL REVIEW DONE, 27 RULINGS PREPARED
 
