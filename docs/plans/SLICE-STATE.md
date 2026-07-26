@@ -1,6 +1,31 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## 🔴 CURRENT CURSOR (2026-07-25/26) — GLOBAL REVIEW DONE, **27 RULINGS** AWAIT THE DEVELOPER
+## 🟢 CURRENT CURSOR (2026-07-26) — AGENDA IN PROGRESS: **GR-1 / DEC-339 RULED**, 26 rulings left
+
+The developer is working the 27-item agenda interactively, most-severe-first, in **plain text** (the
+`AskUserQuestion` dialog kept returning unanswered in this container — do NOT use it in this session;
+put each question in the message body with context, examples, options, a recommendation, and wait).
+
+**RULED so far:**
+- **GR-1 / DEC-339 (the P0) — RULED 2026-07-26.** Block scoping stays; **redeclaring a live local or
+  parameter binding is REJECTED** (same scope or enclosing), class fields never conflict, lambdas start
+  a new function. Enforced in the **checker**. Alpha-renaming was considered and **rejected**.
+  **Canonical rule + the full 23-row accepted/rejected case list:
+  `docs/specs/2026-07-26-block-scope-shadowing.md`.** NOT YET BUILT.
+  - Probing widened the P0 from **6 recorded shapes to 10** — new: the `for…in` loop *variable*,
+    `match` arm bindings, binding-`if`, `catch` bindings. Nested `for` reusing a counter **changes
+    control flow** (iteration count), not just printed output.
+  - Two adjacent breaches fell out and are recorded separately: **DEC-366** (`phg lift` emits
+    non-compiling phorj for function-scoped PHP — needs a hoist) and **DEC-367** (`implements Error`
+    + `getMessage()` → PHP `Fatal error: Cannot override final method`).
+  - **Owed before any migration:** measure how many existing `examples/`+`tests/` sites the rule breaks
+    (not greppable — needs the diagnostic to exist first), and report the count before migrating.
+
+**NEXT QUESTIONS in order:** GR-2 / DEC-340 (P1 silent data loss, `db.transaction` auto-rollback) →
+GR-25 / DEC-363 (P1 security, HTTP response splitting on shipped `phg serve`) → GR-18 / DEC-356
+(highest-value structural item) → the rest of §2/§6.4/§7.3/§8.4 per the register's FULL AGENDA INDEX.
+
+## 🔵 PRIOR CURSOR (2026-07-25/26) — GLOBAL REVIEW DONE, 27 RULINGS PREPARED
 
 **What happened:** the developer reviewed the project himself, produced ~15 findings, and asked for them to
 be challenged/verified against real code, widened into a global review, and prepared as an interactive

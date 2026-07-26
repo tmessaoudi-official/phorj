@@ -3391,7 +3391,7 @@ This also discharges the already-RULED **DV-5** pass (`docs/specs/2026-07-24-vis
 
 | DEC | GR | Question (one line) | Recommended (not ruled) | Status |
 |---|---|---|---|---|
-| DEC-339 | GR-1 | **P0** — shadowing a live outer local/param in ANY nested block mistranspiles (phorj has block scope, PHP has none): how to restore Invariant-1 byte-identity? | Alpha-rename shadowed locals in the transpiler + add a differential example covering every block form | **PENDING** |
+| DEC-339 | GR-1 | **P0** — shadowing a live outer local/param in ANY nested block mistranspiles (phorj has block scope, PHP has none): how to restore Invariant-1 byte-identity? | **RULED 2026-07-26 — REJECT redeclaration, do NOT alpha-rename.** A declaration is rejected if its name is already bound by a live **local or parameter** binding in the same function (same scope OR enclosing); class fields are never local bindings; a lambda starts a new function. Enforced in the **checker** (one chokepoint → all surfaces, Invariant 17), NOT the transpiler. The 2026-07-26 probing widened the blast radius from 6 recorded shapes to **10** (new: the `for…in` loop *variable*, `match` arm bindings, binding-`if`, `catch` bindings — one shape changes **control flow**). **Full 23-row accepted/rejected case list = `docs/specs/2026-07-26-block-scope-shadowing.md` (canonical).** The superseded alpha-rename recommendation is recorded there as rejected, with the reason: shadowing is ten declaration forms, so a renamer must be correct in ten places forever while the rule makes all ten unrepresentable | **RULED — build queued** |
 | DEC-340 | GR-2 | **P1 data loss** — `db.transaction(fn)` auto-rollback pops only ONE savepoint level, leaving an outer tx open with writes a later `commit()` persists | Unwind to depth 0 + add `rollbackAll()` | **PENDING** |
 | DEC-341 | GR-3 | TextMate grammar: `"begin": "\\b(b\|r)?\""` makes every plain string start at its CLOSING quote (81/383 `.phg` files end mid-span) | Full 5-rule string section (leakage → 0/383) + a `vscode-textmate` pre-push gate | **PENDING** |
 | DEC-342 | GR-4 | UFCS receiver completion is empty (`line.` → 0 items) while `String.` over-suggests without the import — add completion, and gate it on the import? | Add `catalog::ufcs_members(recv_ty)` AND import-gate both directions (rule the two together) | **PENDING** |
@@ -3488,3 +3488,14 @@ microbench. This IS a docker microbench and it disagrees by ~6×, far outside an
 harness micro and DEC-338's ad-hoc program are different workloads, or the 0.88× was optimistic — not
 separable here. **DEC-338's near-parity claim is therefore NOT corroborated by the canonical harness and its
 WIN stays un-certified**; the owed dev-box run is now not merely owed but actively contradicted.
+
+## DEC-366 / DEC-367 — two adjacent Invariant breaches found while probing DEC-339 (2026-07-26, **PENDING**)
+
+**Provenance.** Found while enumerating the DEC-339 case list on all three legs; both are independent of
+the shadowing rule and are recorded separately rather than folded into it (Invariant 19: one canonical
+home each). Analysis lives in `docs/specs/2026-07-26-block-scope-shadowing.md` §"Adjacent bugs".
+
+| DEC | Question | Recommended (not ruled) | Status |
+|---|---|---|---|
+| DEC-366 | **Live Invariant-17 gap** — `phg lift` emits **non-compiling** phorj for ordinary function-scoped PHP: a `$b` first assigned inside an `if` and read after it lifts to `mutable var b = 5;` *inside* the block plus `b = 7;` outside ⇒ `E-ASSIGN-UNKNOWN` + `E-UNKNOWN-IDENT` on the lifted draft. Same PHP-function-scope-vs-phorj-block-scope insight as DEC-339, from the inverse direction | **Hoist** the declaration to the outermost use when a lifted PHP variable is assigned in a nested block and read outside it. Whether this rides along in the DEC-339 slice or gets its own is the developer's call | **PENDING** |
+| DEC-367 | **Invariant-1 breach** — a phorj class `implements Error` that defines `getMessage()` transpiles to a PHP class extending `Exception` and overriding **`final Exception::getMessage()`** ⇒ `Fatal error` at runtime on the PHP leg, while both Rust backends run the program fine. `src/checker/common.rs:432` guards builtin *class-name* collisions but not final-*method* collisions | Extend the existing builtin-collision guard to final methods of the mapped PHP parent, rejecting at check time with a named diagnostic rather than dying at PHP runtime | **PENDING** |

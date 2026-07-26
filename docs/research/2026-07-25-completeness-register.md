@@ -80,6 +80,12 @@ Each item: one-sentence question · minimal current-syntax repro · options with
 the why. Ready to paste into `AskUserQuestion` one at a time.
 
 ### GR-1 — P0 block-shadow fix *(DEC-339)* — **decide first, everything else is cosmetic next to a wrong-output bug**
+> ✅ **RULED 2026-07-26 — this section's recommendation (alpha-rename) was REJECTED.** The ruling is
+> *reject redeclaration of a live local/parameter binding*, enforced in the **checker**. Later probing
+> also widened the blast radius from the 6 shapes below to **10**. **Do not act on the options in this
+> section** — the canonical rule and the full 23-row accepted/rejected case list live in
+> `docs/specs/2026-07-26-block-scope-shadowing.md`. Kept below as the historical agenda entry.
+
 **Q:** How should shadowing in nested blocks be made byte-identical?
 **Repro:** `int a = 1; if (true) { int a = 2; } Output.printLine("out={a}");` → vm/tw `out=1`, php `out=2`.
 - **(A) Alpha-rename shadowed locals in the transpiler (RECOMMENDED)** → emits `$a__b1` for the inner
