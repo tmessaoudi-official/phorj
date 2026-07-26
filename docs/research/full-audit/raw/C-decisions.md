@@ -3419,3 +3419,34 @@ row exists in `src/`, or the row is marked PARTIAL.** That single check would ha
 **Second corollary worth recording:** the differential harness's coverage **is** the example corpus
 (`tests/differential.rs` globs `examples/**/*.phg`), so any feature without an example has **zero**
 byte-identity coverage. That is precisely how DEC-339's P0 survived — block scoping has no example.
+
+## DEC-356 … DEC-362 — GLOBAL REVIEW 2026-07-25, second batch: the global sweep (ALL **PENDING**)
+
+Same provenance and same canonical-home split as DEC-339…DEC-355 above; these arose from the three
+*additional* sweeps (Rust source quality, docs consistency/Invariant-19, missing enforcement) rather than
+from the developer's own 15 findings. Analysis in `docs/research/2026-07-25-completeness-register.md` §6
+(agenda IDs `GR-18`…`GR-24`, mapped 1:1 in order).
+
+| DEC | GR | Question (one line) | Recommended (not ruled) | Status |
+|---|---|---|---|---|
+| DEC-356 | GR-18 | Extend mechanical exhaustiveness from the `Op` set to `Expr`/`Stmt`/`Pattern`: 37 `Expr` variants, 13 hand-rolled total rewriters, **17 named catch-alls** that silently pass a new variant through — incl. `ast/walk.rs:748` `_ => {}` under a comment recording the bug already fired twice | Start with (D) fix the known catch-alls (one file), then (C) a dummy-variant CI check, then (B) a shared total visitor. **The single highest-value structural improvement found** | **PENDING** |
+| DEC-357 | GR-19 | A lambda's write to a by-value-captured variable is **silently lost** — the only wrong-answer-with-no-error finding | Reject with a new diagnostic (Invariant 14 forbids silent downgrades); by-ref capture would re-open a PHP-parity question | **PENDING** |
+| DEC-358 | GR-20 | Type mismatch, arity, unknown method, non-exhaustive match, **every** parse/lex error and **every** runtime fault carry `code == None`, so `phg explain` is unreachable for them | A `code == None` ratchet with a shrinking allowlist, mirroring the existing `explain_ratchet` | **PENDING** |
+| DEC-359 | GR-21 | `10/0`, literal overflow and literal index-OOB all pass `check` — PHP parity where a WIN is available | Reject at check time (better-than-PHP gain); surface change, so it needs a ruling | **PENDING** |
+| DEC-360 | GR-22 | Unused **import** is a hard error while unused **local** is silent — inconsistent in both directions | Introduce a `W-UNUSED-*` warning tier and move unused-import into it (Go's hard-error choice is its most-complained-about feature). **Language-UX decision** | **PENDING** |
+| DEC-361 | GR-23 | Two backends re-inline the canonical `FaultMsg` (Invariant 4 breach) and `"non-exhaustive match at runtime"` has **already drifted** (PHP throws `UnhandledMatchError()` with no message); `differential.rs::classify` re-types all 12 fault bodies as its own literals so drift is **invisible, not merely untested** | Single-source the fault strings AND make `classify` derive from those same consts, so drift fails a test | **PENDING** |
+| DEC-362 | GR-24 | Documentation rot is the dominant defect class: 60+ dangling `src/` refs, 13 DEC ids with no register row, cursors pinning orphanable SHAs | Three mechanical guards: a markdown ref-checker in `pre-push`, a one-row-per-DEC check, and cursors recording ref+subject never a bare SHA | **PENDING** |
+
+**Records to CLOSE (verified fixed 2026-07-25, evidence in the register §6.3).** These are recorded as
+fixed so the open-item lists naming them can be pruned: private/protected **static-field visibility**
+(now `E-FIELD-VISIBILITY`); **static-method-via-instance** — the `G5` that
+`docs/specs/2026-07-24-visibility-model.md` still lists as OPEN (now `E-STATIC-VIA-INSTANCE`, whole
+static/instance matrix closed); **package-decl casing on CLI paths** (`E-PKG-CASE` fires);
+`E-ALIAS-CYCLE` uncoded + unused-cycle-passes (both halves); `E-OVERLOAD-SELECT-CONFLICT` (entry removed);
+and all 9 findings of the earlier same-day plans-divergence audit.
+
+**Two NEW correctness records worth their own tracking (analysis in §6.2):** a **second exception to
+Invariant 1** (self-referential property hook diverges `run` vs `run --tree-walker` — line 9 vs 17, 4099 vs
+4 trace lines, invisible to `agree_err`'s body-substring matching), and **Invariant 17 currently
+unsatisfiable** for `p with { y = 9 }` (runs + transpiles, but `phg lift` fails on the transpiler's own
+output, and lift has no `E-TRANSPILE-*`-style escape hatch).

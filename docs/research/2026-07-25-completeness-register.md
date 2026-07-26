@@ -345,3 +345,139 @@ Work that is unambiguous once GR-1…GR-17 are ruled, or already needs no decisi
 - **Windows lock semantics are `[Unverified]`** and cannot be verified without a Windows runner.
 - The `--all-features` correctness gate was **not** re-run tonight (no source changed); disk headroom was
   ~6 GB, which is why heavy builds were avoided.
+
+---
+
+## 6. GLOBAL SWEEP RESULTS (beyond the developer's 15 findings)
+
+Three additional sweeps ran: **G** Rust source quality/naming/structure/docs, **H** docs consistency +
+Invariant-19 divergence, **I** missing enforcement + incompleteness + better-than-PHP gaps. Full detail in
+`2026-07-25-global-review/{G-rust-quality,H-docs-consistency,I-gaps-enforcement}.md`.
+
+### 6.1 — Honest verdict on code quality (verified, not assumed)
+
+**The engineering core is genuinely high quality.** Independently checked and confirmed: **zero `unsafe`
+outside `src/jit/`** (the documented island), zero `todo!`/`unimplemented!`, zero production `panic!`,
+**~20 `unwrap()` in 155k lines**, all three Invariant-3 exhaustive matches truly wildcard-free, zero
+`checked_*` arithmetic outside `src/value/`, a clean Rust-API-guidelines sweep across all 566 files,
+uniform `set -eEuo pipefail` in scripts, and the size gate honestly green **with the baseline untouched**.
+The recent M-Decomp was real structural work, not accounting.
+
+**The dominant defect class is documentation rot, not code.** A newcomer's first three documents
+(ARCHITECTURE, INVARIANTS, ADR-0001) contained **6 verifiably false statements** between them, and ~50
+comment pointers led nowhere. Estimated cost to clear: ~4 hours mechanical + one CI check.
+
+**Second weakness — the discipline is asymmetric.** The `Op` set and the 305-code diagnostic registry are
+*mechanically* enforced (`explain_coverage.rs`/`explain_ratchet.rs` is the best fan-out gate in the repo).
+But the `Expr` set, the `Type` walk, the primitive-type table, and the cross-backend fault strings are
+enforced only by **comments asserting agreement** — and three fault strings have **already drifted** while
+the oracle cannot see it.
+
+### 6.2 — NEW parity/correctness findings (add to the P0 in §0)
+
+| ID | Sev | Finding |
+|---|---|---|
+| **I8** | **P1** | **A SECOND exception to Invariant 1**, which claims exactly one. A self-referential property hook diverges `run` vs `run --tree-walker`: **line 9 vs 17, 4099 vs 4 trace lines**. Hook-specific (plain recursion is byte-identical) and **invisible to `agree_err`** because that oracle matches on the fault *body* substring only. |
+| **I19** | **P1** | **The only wrong-answer-with-no-error finding**: a lambda's write to a by-value-captured variable is **silently lost**. Needs a ruling (error vs. document). |
+| **G27a/b** | **P1** | A canonical `FaultMsg` exists and two backends re-inline it (**Invariant 4** breach). `"non-exhaustive match at runtime"` has **already drifted** — PHP throws `UnhandledMatchError()` with *no message*. `transpile/call.rs:12-39` already does it correctly, so the right shape exists in-tree. |
+| **G26** | **P1** | `tests/differential.rs::classify` **re-types all 12 canonical fault bodies as its own literals**; anything unclassified falls to `Other(…)` including the VM's `"at N:"` prefix, so it **can never be asserted equal**. Fault-string drift is therefore *invisible*, not merely untested. |
+| **I1 / I7** | **P1** | **Invariant-10 (determinism) breaches:** `phg disassemble` yields 5 distinct outputs in 12 runs (`CallOverload` set ids from HashMap order); the flagship `did you mean` hint gives **3 different answers across 20 runs** (`nearest_name`'s `min_by_key` tie-break follows HashMap iteration order — `src/checker/plumbing.rs:160-167`, confirmed by reading it). Program output and transpiled PHP are **verified stable**, so the spine itself is intact. |
+| **H2** | **P1** | `INVARIANTS.md:74` says "**never** SIGABRT/panic" — reproduced **exit 134, stack overflow**. The stated 256 MB-worker mechanism doesn't cover that path, and unlike §7 there is no disclosed carve-out. |
+| **H9** | **P1** | **Invariant 17 is currently unsatisfiable**: `p with { y = 9 }` runs, transpiles to `clone($a,[…])`, and `phg lift` on *the transpiler's own output* fails. Lift has no `E-TRANSPILE-*`-style escape hatch to legitimise a gap. |
+
+### 6.3 — Previously-known findings now CONFIRMED FIXED (close these records)
+
+Verified fixed, so the open-item lists that still name them are stale: **P0 private/protected static-field
+visibility** (now `E-FIELD-VISIBILITY`) · **P1 static-method-via-instance — the `G5` the visibility spec
+still lists as open** (now `E-STATIC-VIA-INSTANCE`; the whole static/instance matrix is closed) · **P1
+package-decl casing dead on CLI paths** (`E-PKG-CASE` fires) · **P2 `E-ALIAS-CYCLE` uncoded + unused cycle
+passes** (both halves) · **P3 `E-OVERLOAD-SELECT-CONFLICT`** (entry removed) · and **all 9** findings of the
+earlier same-day plans-divergence audit. Separately, `DV-4`'s G4 was already verified fixed. **Recommend
+closing `G5` in `docs/specs/2026-07-24-visibility-model.md` and dropping the fixed rows from
+`KNOWN_ISSUES.md`.**
+
+### 6.4 — Seven MORE rulings (GR-18 … GR-24), same Invariant-15 shape
+
+- **GR-18 (DEC-356) — Extend mechanical exhaustiveness from `Op` to `Expr`/`Stmt`/`Pattern`.**
+  37 `Expr` variants, 13 hand-rolled total rewriters in `src/checker/`, and **17 named catch-alls**
+  (`leaf => leaf`, `other => other`) that compile cleanly and silently pass a new variant through.
+  `desugar_db.rs:67-69` literally *declares* "keep the rewriter TOTAL — a new expression-bearing AST node →
+  add its arm here" and then closes with `leaf => leaf`. Also `src/ast/walk.rs:748` has `_ => {}` in
+  `collect_pattern_bindings`, three lines under a comment recording that this exact bug **already fired
+  twice** and that under-reporting a capture "is a correctness bug".
+  Options: **(D) fix the known catch-alls now (one file, today) — RECOMMENDED first step** · (C) a
+  dummy-variant CI check · (B) one shared total visitor (a real slice). *Why:* this is the single
+  highest-value structural improvement found, and the project has already proven it can build this class of
+  gate.
+- **GR-19 (DEC-357) — Lambda capture-write (I19).** Silently lost today. **Recommended: reject with a new
+  diagnostic** (a silent wrong answer is the worst outcome; Invariant 14 forbids silent downgrades).
+  Alternative: support by-reference capture — but that re-opens a PHP-parity question (`use (&$x)`).
+- **GR-20 (DEC-358) — Uncoded-diagnostic ratchet (I14).** Type mismatch, arity, unknown method,
+  non-exhaustive match, **every** parse/lex error and **every** runtime fault carry `code == None`, so
+  `phg explain` is unreachable for them — and all 9 `conformance/diagnostics/` cases assert a code, so the
+  corpus is blind to it. **Recommended: a `code == None` ratchet with a shrinking allowlist**, mirroring
+  the existing `explain_ratchet`. Makes the backlog CI-visible instead of invisible.
+- **GR-21 (DEC-359) — Compile-time rejection of impossible literals (I17).** `10/0`, literal overflow, and
+  literal index-OOB all pass `check` today — PHP parity where a **win** is available. Recommended: reject at
+  check time (a clear better-than-PHP gain); needs a ruling because it is a surface change.
+- **GR-22 (DEC-360) — A `W-UNUSED-*` warning tier (I20).** Today an unused *import* is a **hard error**
+  while an unused *local* is **silent** — an inconsistency in both directions. Recommended: introduce a
+  warning tier and move unused-import into it (Go's hard-error choice is its most complained-about
+  feature). **This is a language-UX decision — yours.**
+- **GR-23 (DEC-361) — Fault-string single-sourcing + a drift-visible oracle (G26/G27).** Recommended: make
+  the backends consume the canonical `FaultMsg` (Invariant 4) **and** make `classify` derive from those
+  same consts rather than re-typing them, so drift fails a test instead of silently degrading.
+- **GR-24 (DEC-362) — Three mechanical doc guards (H).** Recommended: (1) a markdown reference-checker in
+  `pre-push` (would close G4/G16/G18/H48 — **60+ dangling `src/` refs** — permanently); (2) one-register-row-per-DEC
+  check (**13 DEC ids have no register row**; DEC-190's ruling exists on exactly one line repo-wide);
+  (3) cursors must record `origin/master` + subject, never a bare SHA.
+
+### 6.5 — Additional no-ruling items (extends §4)
+
+**Already fixed tonight in this pass** (committed): `INVARIANTS.md` §1 corruption + inversion · dangling
+module paths in `INVARIANTS.md` and `CLAUDE.md` Invariants 3/4 · the `CLAUDE.md` dependency understatement
+(4 → the real 14) · the orphaned push SHAs in both cursors.
+
+**Still outstanding, no decision required:**
+1. **H1 (P0 for first impressions) — the README's hero snippet and BOTH quickstart commands do not run**
+   (`no entry point: … #[Entry(kind: EntryKind.Cli)]`, exit 1). The very first thing a newcomer types fails.
+2. **I7 — ~1 line**: give `nearest_name`'s `min_by_key` a lexicographic tie-break. Removes user-visible
+   non-determinism from the flagship diagnostic surface.
+3. **I4 — 1-line swap**: `src/vm/coop.rs:123` → `parse_checked_program_reified` + `compile_with`
+   (**Invariant 6** breach; the doc comment there falsely claims it mirrors `cmd_run`), then delete the old
+   entry point so regression is impossible.
+4. **I2 / I3 — wrong diagnostics**: a nonexistent import is reported as `E-UNUSED-IMPORT` with the
+   unachievable advice "…or use it"; the reserved `Core.` root is still unenforced *and* now produces two
+   wrong errors, while `phg explain E-RESERVED-PACKAGE` teaches a lowercase root, the nonexistent
+   `Core.Console`, and an `E-PKG-CASE`-illegal remedy.
+5. **I15 — `phg check --json` emits plain text** for parse/lex/runtime errors, so a consumer gets a
+   `JSONDecodeError`. Breaks the interface `FEATURES.md:85` documents.
+6. **Stale status records**: `GA-CHECKLIST` scores rock 3 at **15%** citing three things that all shipped
+   (conformance corpus = 64 `.phg`; SEMVER/STABILITY/DEPRECATION.md) — **17 points of headroom on dead
+   premises**; MASTER-PLAN lists all six **shipped** security DECs as "do first", un-✅'d; ADR-0005 is still
+   `Accepted` describing the retired `phg vendor`, with no ADR-0006, breaking the ADR README's own
+   supersession rule; `KNOWN_ISSUES:675` still warns against a naming pattern the compiler already guards
+   (flagged 9 days ago by a prior audit and still there).
+7. **Invariant text vs reality**: Invariant 10 names the retired `phg vendor`; Invariant 14 names
+   `--sequential-concurrency` with **zero hits in `src/`**; `phg install/add/update/remove` ship but are
+   absent from `--help`.
+8. **G3 — ~500 lines of phorj live as Rust string literals** in `cli/preludes.rs`, and the fmt sweep globs
+   only `examples/` + `selftest/` — so the **stdlib's own public surface is the only phorj never
+   format-checked or `phg check`-ed**.
+9. **G5 — ARCHITECTURE.md omits `src/jit/` (21k lines, the 4th backend), `lsp/`, `lift/`, `pm/`, `bundle/`,
+   `format/`** — **31% of the codebase absent from the "one-page map"**, which also contradicts
+   `jit/mod.rs:63` on the backend count.
+10. **G31 — the primitive type-test table is written 5× across 4 modules**, held together by 5
+    cross-referencing comments. Adding `decimal` would diverge VM from interpreter **with no compile error**.
+11. **G19 — false module docs**: `green/mod.rs:13` says the executor hasn't shipped, two lines above
+    `pub mod exec;`; `serve/mod.rs:14-16` says green threads were superseded and need `unsafe` (both false).
+12. **I13 / I12 / I16 — coverage gaps**: shebang (DEC-336) shipped with **no example**; 11 README rows point
+    at a nonexistent `examples/db/`; `Core.UriModule` is 15/36 documented; FEATURES.md omits shipped
+    named-args, variadics and `#[Invoke]`; spread is **undisclosed** though both W4-1 siblings shipped.
+
+### 6.6 — Why no code was changed tonight
+
+Only **documentation** was edited. The trivial fixes above (I7 ~1 line, I4 1 line) were deliberately left
+un-applied: they touch `src/`, which requires the full `--all-features` correctness gate to re-run, and the
+night's mandate was to *prepare* decisions, not to sequence code work. Disk headroom was ~6 GB, which is
+also why heavy builds were avoided. **They are ready to apply on your word.**
