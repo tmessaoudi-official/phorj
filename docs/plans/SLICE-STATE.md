@@ -1,6 +1,6 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## 🔴 CURRENT CURSOR (2026-07-25 night) — GLOBAL REVIEW DONE, 17 RULINGS AWAIT THE DEVELOPER
+## 🔴 CURRENT CURSOR (2026-07-25/26) — GLOBAL REVIEW DONE, **27 RULINGS** AWAIT THE DEVELOPER
 
 **What happened:** the developer reviewed the project himself, produced ~15 findings, and asked for them to
 be challenged/verified against real code, widened into a global review, and prepared as an interactive
@@ -8,9 +8,10 @@ agenda — while he slept, with **no questions and no decisions taken** (Invaria
 
 **READ THIS FIRST, IN THIS ORDER:**
 1. `docs/research/2026-07-25-completeness-register.md` — the synthesized ranked register. §0 = the P0,
-   §1 = verdicts on all 15 of his findings, **§2 = the 17-item agenda (`GR-1`…`GR-17`), ready to ask
-   one at a time**, §3 = the cross-cutting root cause, §4 = what needs no ruling, §5 = honest limits.
-2. `docs/research/full-audit/raw/C-decisions.md` — **DEC-339…DEC-355**, all PENDING (identity + status only;
+   §1 = verdicts on all 15 of his findings, **the 27-item agenda `GR-1`…`GR-27`, ready to ask one at a
+   time — split across §2 (GR-1..17), §6.4 (GR-18..24), §7.3 (GR-25 P1 security, GR-26), §8.4 (GR-27);
+   read §2's FULL AGENDA INDEX first so none is dropped**, §3 = the cross-cutting root cause, §4 = what needs no ruling, §5 = honest limits.
+2. `docs/research/full-audit/raw/C-decisions.md` — **DEC-339…DEC-365** (27 rows), all PENDING (identity + status only;
    analysis lives in the register — Invariant 19, one canonical home each).
 3. `docs/research/2026-07-25-global-review/` — 13 raw per-topic evidence reports (every claim `file:line`
    + evidence-graded). Committed because the container is ephemeral.
@@ -56,8 +57,7 @@ All other gate legs passed (tests, clippy, fmt, release build). **Not bypassed:*
 DEC-338's near-parity claim is NOT corroborated and its WIN stays un-certified** (register §8.3).
 
 ### Needs NO ruling — safe to execute autonomously once approved to proceed
-Grammar fix + gate (GR-3) · `CLAUDE.md:9` dependency correction (**says "four" vetted exceptions; actual is
-14 optional deps across ~11 approved domains**) · stale-label fixes (a spec header says "NOT BUILT" about a
+Grammar fix + gate (GR-3) · stale-label fixes (a spec header says "NOT BUILT" about a
 certified feature; `SLICE-STATE:1022`) · UFCS diagnostic span anchored at `1:9` instead of the call site ·
 the block-scoping differential example.
 

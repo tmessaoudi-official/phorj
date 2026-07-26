@@ -2,7 +2,7 @@
 
 **Status:** RESEARCH COMPLETE — **0 decisions taken** (Invariant 15). Every fork below is PENDING and
 carries a recommendation + the why. Ruling rows live in the decision register
-(`docs/research/full-audit/raw/C-decisions.md`, **DEC-339 … DEC-355**); this file holds the *analysis* and
+(`docs/research/full-audit/raw/C-decisions.md`, **DEC-339 … DEC-365** — 27 rows); this file holds the *analysis* and
 the ready-to-ask question text. One canonical home each — Invariant 19, no duplicated content.
 
 **What produced it.** The developer reviewed the project himself, produced ~15 findings/questions, and
@@ -68,7 +68,13 @@ dominant failure mode — see §3.
 
 ---
 
-## 2. TOMORROW'S AGENDA — 17 rulings, ranked by (unblocking value ÷ decision cost)
+## 2. TOMORROW'S AGENDA — **27 rulings** (`GR-1`…`GR-27` ⇄ DEC-339…DEC-365), ranked by (unblocking value ÷ decision cost)
+
+> **FULL AGENDA INDEX — the 27 items are split across four sections of this file.** Read this index first so
+> none is dropped: **§2 → GR-1…GR-17** (the developer's own findings) · **§6.4 → GR-18…GR-24** (the global
+> sweep; GR-18 is the single highest-value structural item found) · **§7.3 → GR-25, GR-26** (GR-25 is the
+> **P1 security** item) · **§8.4 → GR-27** (the push-blocking microbench gate).
+
 
 Each item: one-sentence question · minimal current-syntax repro · options with **recommended first** ·
 the why. Ready to paste into `AskUserQuestion` one at a time.
@@ -269,8 +275,7 @@ explicit IN/OUT verdict with a reason**, per your "no silent omits" instruction.
 - (C) `/converge` alone → it is the single highest-value item: it *is* the DEC-268 ladder, currently
   hand-rolled from memory at every 3C/6C gate.
 **Highest-value single fact:** `precompact-handoff.sh` addresses a pain that hit **twice in this session**.
-**Hard OUT regardless:** all 57 `mcp/**` files — corporate tooling artifacts (`jira.env`, `confluence.env`,
-`gitlab.env`) with zero relevance, and `phorj` is a **public** repo.
+**Hard OUT regardless:** all 57 `mcp/**` files — three corporate service `.env` files plus desktop-automation drivers, with zero relevance, and `phorj` is a **public** repo.
 **Sub-decisions:** the 4 `ask-human`/gate **Stop hooks** are held back (the container already runs its own
 `stop-hook-reply-gate.py` — double-gating risk); recommend instead rewording the framework's **false**
 claim that the question guard is "mechanically" enforced here.
@@ -358,7 +363,7 @@ Invariant-19 divergence, **I** missing enforcement + incompleteness + better-tha
 
 **The engineering core is genuinely high quality.** Independently checked and confirmed: **zero `unsafe`
 outside `src/jit/`** (the documented island), zero `todo!`/`unimplemented!`, zero production `panic!`,
-**~20 `unwrap()` in 155k lines**, all three Invariant-3 exhaustive matches truly wildcard-free, zero
+**26 production `unwrap()` in 154,817 lines across 566 files**, all three Invariant-3 exhaustive matches truly wildcard-free, zero
 `checked_*` arithmetic outside `src/value/`, a clean Rust-API-guidelines sweep across all 566 files,
 uniform `set -eEuo pipefail` in scripts, and the size gate honestly green **with the baseline untouched**.
 The recent M-Decomp was real structural work, not accounting.
@@ -381,7 +386,7 @@ the oracle cannot see it.
 | **I19** | **P1** | **The only wrong-answer-with-no-error finding**: a lambda's write to a by-value-captured variable is **silently lost**. Needs a ruling (error vs. document). |
 | **G27a/b** | **P1** | A canonical `FaultMsg` exists and two backends re-inline it (**Invariant 4** breach). `"non-exhaustive match at runtime"` has **already drifted** — PHP throws `UnhandledMatchError()` with *no message*. `transpile/call.rs:12-39` already does it correctly, so the right shape exists in-tree. |
 | **G26** | **P1** | `tests/differential.rs::classify` **re-types all 12 canonical fault bodies as its own literals**; anything unclassified falls to `Other(…)` including the VM's `"at N:"` prefix, so it **can never be asserted equal**. Fault-string drift is therefore *invisible*, not merely untested. |
-| **I1 / I7** | **P1** | **Invariant-10 (determinism) breaches:** `phg disassemble` yields 5 distinct outputs in 12 runs (`CallOverload` set ids from HashMap order); the flagship `did you mean` hint gives **3 different answers across 20 runs** (`nearest_name`'s `min_by_key` tie-break follows HashMap iteration order — `src/checker/plumbing.rs:160-167`, confirmed by reading it). Program output and transpiled PHP are **verified stable**, so the spine itself is intact. |
+| **I1 / I7** | **P1** | **Invariant-10 (determinism) breaches:** `phg disassemble` is unstable across runs (≥5 distinct outputs; 5–6 observed per 20-run batch) (`CallOverload` set ids from HashMap order); the flagship `did you mean` hint gives **3 different answers across 20 runs** (`nearest_name`'s `min_by_key` tie-break follows HashMap iteration order — `src/checker/plumbing.rs:160-167`, confirmed by reading it). Program output and transpiled PHP are **verified stable**, so the spine itself is intact. |
 | **H2** | **P1** | `INVARIANTS.md:74` says "**never** SIGABRT/panic" — reproduced **exit 134, stack overflow**. The stated 256 MB-worker mechanism doesn't cover that path, and unlike §7 there is no disclosed carve-out. |
 | **H9** | **P1** | **Invariant 17 is currently unsatisfiable**: `p with { y = 9 }` runs, transpiles to `clone($a,[…])`, and `phg lift` on *the transpiler's own output* fails. Lift has no `E-TRANSPILE-*`-style escape hatch to legitimise a gap. |
 
@@ -533,8 +538,18 @@ Ranked by value ÷ effort, and deliberately precise about what is genuinely unam
 
 ### 7.3 — Two more rulings (GR-25, GR-26)
 
-- **GR-25 (DEC-363) — Response-side CRLF guard.** The outbound sink is unguarded (header-injection shape).
-  Recommended: guard it; small and security-relevant.
+- **GR-25 (DEC-363) — Response-side CRLF guard — `P1` SECURITY, treat as a top-10 item, not a small one.**
+  **Verified mechanism, end-to-end:** `src/cli/http_prelude.rs:52` `Response.withHeader(name, value)` and
+  `withCookie(c)` interpolate straight into a header line (`"{name}: {value}"`, `"Set-Cookie: {line}"`) with
+  **zero validation**, `serialize()` CRLF-joins them into the response head, and `src/serve/handlers.rs:189`
+  `respond_once` returns the handler's bytes **verbatim** — so there is no Rust-side serializer that could
+  re-validate. That is textbook **HTTP response splitting**, reachable from ordinary handler code on a
+  shipped `phg serve`, and `withCookie` commonly carries user-derived values.
+  **The fix is already in-tree on the sibling path:** the *request* side rejects this at the gate
+  (`src/ext/http_client/natives.rs:116` — *"header `{n}` contains a forbidden character"*, pinned by
+  `src/ext/http_client/tests.rs:450 header_injection_is_rejected_at_the_gate`, which feeds `"a\r\nHost: evil"`).
+  Recommended: copy that guard to the response side. *(Initially filed as "small" and ranked 25th — corrected
+  after the certification pass re-derived the mechanism; the request/response asymmetry is the aggravating fact.)
 - **GR-26 (DEC-364) — `using` / `defer` scope-guard surface.** Flagged because **every** open slice in
   this review — DB transactions, file locking, streaming handles — keeps bumping into the same missing
   primitive. DEC-203 already ruled `using` + `Closable`; this is about finishing it. Recommended: treat it

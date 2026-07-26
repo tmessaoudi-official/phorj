@@ -102,6 +102,22 @@ example becomes a negative/conformance test instead.
 
 ## Related follow-up discovered in the same probe
 
-`for (xs as int x)` is a **parse error**: `expected 'in' in for-loop header`. So the surviving loop form is
+> ## ⚠ CORRECTED — THE CONCLUSION BELOW WAS **WRONG**. Do not act on it.
+>
+> **Both loop forms are live.** Each keyword is locked to exactly one separator: **`for` … `in`** and
+> **`foreach` … `as`**. Only the *crossed* combinations are parse errors — which is all my probe actually
+> demonstrated. Verified by running all four: `for (int x in xs)` ✅ runs · `foreach (xs as int x)` ✅ runs ·
+> `foreach (int x in xs)` ✗ *"expected 'as' after the foreach iterable"* · `for (xs as int x)` ✗
+> *"expected 'in' in for-loop header"*. Independently re-confirmed by the certification pass.
+>
+> The retirement the developer remembers is **DEC-248** (it ruled `for (T x in xs)` retired behind
+> `E-RETIRED-FORIN`) — and that code has **0 occurrences in `src/`**, i.e. the ruling was never built.
+> Register **Conflict C-2** is the same open question. Census: **87 `for…in` vs 8 `foreach…as`**.
+>
+> Canonical answers: `K-inline-findings.md` **K-1** and the completeness register **§1 #7**; the ruling is
+> **GR-5 / DEC-343**. *(Kept visible rather than deleted so the reasoning failure stays auditable: a single
+> failing spelling proves that spelling invalid — never that its alternative is "the survivor".)*
+
+~~`for (xs as int x)` is a **parse error**: `expected 'in' in for-loop header`. So the surviving loop form is
 `for (item in collection)` and the `as` form is retired — this answers the developer's question #7
-directly (his recollection was inverted). [Verified: parse error text]
+directly (his recollection was inverted).~~ **[RETRACTED — see the correction above]**

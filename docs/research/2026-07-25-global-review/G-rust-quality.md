@@ -654,7 +654,7 @@ intervening `//` note; `value/types.rs:336-348` are trivial accessors next to a 
 |---|---|---|
 | `todo!` / `unimplemented!` | **0** | **0** |
 | `panic!` | 18 | **0** — all 18 are inside in-file `#[cfg(test)] mod` blocks [Verified: read `value/mod.rs:215-230` (a test helper `assert_dec`), `checker/qualify_variants.rs:344-370`, `native/log/mod.rs:347`, `ext/session/natives.rs:314-363`] |
-| `unwrap()` | 217 | **≈20** outside test code [Verified: per-file census excluding files containing `cfg(test)`, then read every remaining site] |
+| `unwrap()` | 217 | ⚠ **CORRECTED to 26** by the certification pass — this row said **≈20** from a census that excluded whole *files* containing `cfg(test)`, which drops production code in those files. Correct method: exclude test files and `cfg(test)` **blocks**, keep production code beside them → **26 production sites**. Six were therefore never read: `src/pm/resolve.rs:93`, `src/pm/manifest.rs:196`, `src/bundle/sha256.rs:29`, `:30`, `src/native/random.rs:147` (`draw.try_into().unwrap()`, in the RNG path). The 566-files / 154,817-lines figures are exact. |
 | `unreachable!` | 80 | mostly guarded by a proven invariant, e.g. `vm/exec.rs:893` `_ => unreachable!("receiver kind changed within one op")` with the preceding comment *"`layout_ptr` above already proved this is an `Instance`"* |
 | `let _ =` | 88 | see G23 |
 | `#[allow(...)]` | **65** | see G22 |
@@ -782,7 +782,9 @@ Three observations:
 
 - **RECOMMENDED:** fix (2) (mechanical, removes a redundant lookup in the compiler), add the
   one-line invariant comment to (3), and adopt `ident.rs:23-25`'s wording for the four tokenizer
-  `from_utf8` sites. Leave the rest — they are correct, and 20 justified unwraps in 155k lines is
+  `from_utf8` sites. Leave the rest — they are correct, and 26 justified unwraps in 155k lines is
+  ⚠ **(CORRECTED: read as 26, not 20 — and the 5 sites listed in the corrected census row above were NOT part of
+  the "read every remaining site" set, so this "they are correct" assurance does not yet cover them.)**
   not a debt.
 
 ### G25 — `scripts/microbench.sh:144,146` discards the PHP leg's stderr — P3
