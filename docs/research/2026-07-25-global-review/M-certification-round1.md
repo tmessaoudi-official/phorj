@@ -175,7 +175,7 @@ the canonical record). Same sweep should re-check the other bullets in that list
 ### M6 — **INFO** · The register names corporate MCP config filenames in a public repo, using "public repo" as the reason to exclude them
 
 **Register claims** (GR-16): *"**Hard OUT regardless:** all 57 `mcp/**` files — corporate tooling artifacts
-(three corporate service `.env` files) with zero relevance, and `phorj` is a **public** repo."*
+(`jira.env`, `confluence.env`, `gitlab.env`) with zero relevance, and `phorj` is a **public** repo."*
 
 **What I observed.** The security scan is otherwise **clean** — I grepped the whole committed
 `docs/research/2026-07-25-global-review/` tree plus the register for tokens (`ghp_`, `glpat-`, `xox[baprs]-`,

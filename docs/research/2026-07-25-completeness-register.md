@@ -495,7 +495,7 @@ also why heavy builds were avoided. **They are ready to apply on your word.**
 Full table in `2026-07-25-global-review/L-onhold-inventory.md` (95 rows, each with citations, a reality
 check, and a recommendation). This answers the "**all the specs we put on hold**" part of the ask.
 
-**Counts:** **95** deduplicated items — ~46 need a ruling (the 24 presented above; GR-25…GR-27 follow in §7.3/§8.4, + ~22 smaller) · **~30 ruled but
+**Counts:** **95** deduplicated items — ~46 need a ruling (the 27 agenda items + ~19 smaller; the category counts below overlap and are not additive to 95) · **~30 ruled but
 not built** · 17 deferred-with-a-reason (**3 rationales are now obsolete**) · ~22 known limitations ·
 and **40 stale labels**.
 

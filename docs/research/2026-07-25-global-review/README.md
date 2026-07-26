@@ -32,6 +32,33 @@ because the remote container is ephemeral and only committed state survives (**I
 | `K-inline-findings.md` | orchestrator's own probe findings + **two self-corrections** | #7 answer, ergonomics |
 | `L-onhold-inventory.md` | every PENDING decision / ruled-not-built spec / deferred item | "all the specs we put on hold" ask |
 
+## ⛔ THESE REPORTS ARE IMMUTABLE DATED SNAPSHOTS — check the register before actioning any row
+
+**Read this before acting on anything in this directory.** Each report is the evidence trail of a
+2026-07-25/26 investigation, and under the DEC-268 ladder the certification reports *are* the audit
+record. They are therefore **not back-annotated** when a finding is later fixed. Four certification
+rounds established that annotating them row-by-row actively causes damage: it produced a factually
+inverted sentence, a duplicated table cell, prose rendered as a file path, and — worst — it once
+**retro-edited a closed round's finding into a self-defeating paragraph**, destroying the ability to
+audit the chain. Those edits have been reverted and the reports restored to their pristine originals.
+
+**Consequences you must account for:**
+- A report row may say **STILL OPEN** for something already fixed. **The live surfaces are authoritative**:
+  `docs/research/2026-07-25-completeness-register.md` (analysis), `docs/research/full-audit/raw/C-decisions.md`
+  (ruling identity + status, `DEC-339`…`DEC-365`), and `docs/plans/SLICE-STATE.md` (the cursor).
+- A report may cite a **stale line number**. Line anchors into `SLICE-STATE.md` in particular drift
+  constantly (one moved `:1022` → `:1083` during this review alone). Cite by quoted subject, not by line —
+  which is exactly what **GR-24 / DEC-362**'s third guard proposes making mechanical.
+- Reports may quote filenames or figures that a later round corrected. Where a *factual* claim inside a
+  report was wrong, it carries an inline `⚠ CORRECTED` marker; where only its *status* went stale, see below.
+
+### Superseded rows — already fixed, do NOT action
+| Report row | Says | Reality |
+|---|---|---|
+| `L-onhold-inventory.md` `L-71` + its 40-stale-label table row · `H-docs-consistency.md` `H3` + its top-10 row · `C-stdlib-input-fs-clone.md` stale-doc flags | `CLAUDE.md` claims "four vetted, feature-gated exceptions"; **STILL OPEN**; *"present the exact diff for manual application"* | **FIXED in `b3e635e`.** `CLAUDE.md:8-16` now says **14 vetted, feature-gated crates**, enumerates them, and adds a never-restate-a-count-without-re-deriving rule. **Do not re-do this.** |
+| `SLICE-STATE`'s *"LSP AUTOCOMPLETE — DONE + COMPREHENSIVE"* claim, wherever cited by line | cited as `:1022` | The claim is real and still stale-as-a-claim, but it now lives at **`:1083`**; `:1022` holds unrelated prose. |
+| `P0-block-shadow-byte-identity.md` closing section | `foreach…as` "is retired" | **RETRACTED in place** — both loop forms are live (`for`…`in`, `foreach`…`as`); only crossed forms error. See `K-inline-findings.md` K-1 and register §1 #7. |
+
 ## How to read these
 
 - Every claim carries an **evidence grade** (`[Verified: …]` / `[Inferred: …]` / `[Unverified: …]` /
