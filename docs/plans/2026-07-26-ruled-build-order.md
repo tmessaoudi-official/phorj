@@ -85,6 +85,28 @@
 |---|---|
 | 6.1 | **DEC-370** real parallelism: **isolated tasks + copying channels** as the target, **data-parallel stdlib combinators** as the first shippable slice, `E-TRANSPILE-PARALLEL-NO-PHP` per DEC-133's precedent. **Owed measurements first:** copy-at-boundary cost, and per-thread instantiability of interpreter/VM state |
 
+## Wave 7 — the on-hold tail (DEC-379…386, ruled the same session)
+
+| # | Item |
+|---|---|
+| 7.1 | **DEC-379** close the `E-IFACE-VIS` overload bypass — a soundness hole, do it early |
+| 7.2 | **DEC-385** merge `Core.Text` into `Core.String`, deprecate the module — **must land BEFORE DEC-342's UFCS completion**, or `line.length()` fires the ambiguity error on ordinary code |
+| 7.3 | **DEC-384** stdlib submodule wildcards (`import Core.Http.*;`) — order the native pre-pass against the wildcard hook. `import Acme.*` already works; bare `Core.*` stays rejected |
+| 7.4 | **DEC-386** the cheap tail: close DEC-200 as already-ruled · `DateTime` gating consistent with DEC-353 · delete the group-`{}` sort no-op · deprecate `Core.File` · close the bundle's Q-J1…8 as superseded |
+| 7.5 | **DEC-383** rule forks (a) and (c) of the split lifetime block |
+
+## Wave 8 — the two research slices (do NOT start these at a low token budget)
+
+| # | Item |
+|---|---|
+| 8.1 | **DEC-380** chase the `jsonround` win. Name the blocking constraint, re-examine the proxy-based no-win verdict, cost a real `Value::JsonArena` / lazy-materialise / index-handle-instead-of-`Rc`, and revise a blocking invariant if that is what it takes. WIN-OR-FLAG + no-hidden-loss both apply |
+| 8.2 | **DEC-382** XML/DOM/XPath via a vetted crate — the 15th dependency, with the `Cargo.toml` + UNIFIED-SPEC policy row updated in the same change. **Best parity-per-effort item left** |
+
+## Still OPEN, deliberately unruled
+
+**L-19 · L-22 · L-25 · L-28 · L-31 · L-33 · L-86** — Claude had titles only and refused to invent
+recommendations; developer-approved to defer. L-31/L-19 look mechanical; **L-22 and L-33 look substantial.**
+
 ## Owed measurements (none of these are optional)
 
 1. **DEC-339** — how many `examples/`+`tests/` sites the redeclaration rule breaks. Needs the diagnostic to exist; report before migrating.

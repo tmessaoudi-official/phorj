@@ -34,7 +34,7 @@ module is imported **and** its first parameter accepts the receiver type.
 
 | Receiver | Contributing modules | Examples (import required) |
 |---|---|---|
-| `string` | **Core.String** (45), Core.Validation, Core.Path, Core.Regex, Core.Hash, Core.Encoding, Core.Conversion (20) | `line.trim()`, `email.isEmail()`, `p.basename()`, `s.matches(re)`, `s.sha256()`, `s.base64()`, `s.toInt()` |
+| `string` | **Core.String** (45), Core.Validation, Core.Path, Core.Regex, Core.Hash, Core.Encoding, Core.Conversion (20) — **plus `Core.Text` until DEC-385 merges it away; `Core.Text` is ASCII-oriented (`text.rs:35`), NOT a unicode tier — an earlier draft of this spec said otherwise and was wrong** | `line.trim()`, `email.isEmail()`, `p.basename()`, `s.matches(re)`, `s.sha256()`, `s.base64()`, `s.toInt()` |
 | `List<T>` | **Core.List** (44) | `xs.map(f)`, `xs.filter(p)`, `xs.reduce(0, f)`, `xs.sort()` |
 | `Map<K,V>` | **Core.Map** (14) | `m.keys()`, `m.merge(other)`, `m.get(k)` |
 | `Set<T>` | **Core.Set** (12) | `s.union(t)`, `s.contains(x)` |
