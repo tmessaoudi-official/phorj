@@ -149,6 +149,19 @@ rejected) · DEC-346 (A — tooling first, then the 391 zero-judgement sites; **
 QUALIFIED**, 55.4% of the corpus, and UFCS inverts subject/sink for output).
 Canonical: `docs/specs/2026-07-26-ufcs-lsp-companion.md`.
 
+**RULED 2026-07-26 (batch 4):** DEC-353 (A — auto-provide the injected `Entry`/`EntryKind`; requiring an import
+for a compiler-injected symbol is self-contradictory) · DEC-355 (A — retire the `->` RETURN-TYPE spelling;
+**`phg format` already normalizes it**, so the `.phg` half is a formatter sweep. **The LAMBDA arrow `=>` is NOT
+touched**) · DEC-360 (A — move unused-import into the warning tier + the `W-UNUSED-*` family. **Register framing
+corrected: a warning tier ALREADY exists, 12 `W-*` codes ship** — unused-import is the odd one out. Policy:
+warnings never fail `run`/`check`; **`--strict` promotes them and CI uses it**) · DEC-361 (A — single-source the
+fault strings AND make `differential.rs::classify` derive from those consts, since classify's own literals are
+what make the already-happened drift invisible) · **DEC-376** (phorj gets NO file-level `return` — that PHP idiom
+exists because PHP lacks a module system, and DEC-372 stays intact — **but foreign PHP file-return IS supported
+for interop now**, PHP-target-only behind `E-FOREIGN-RUNTIME`).
+**Verified in passing:** selective leaf import works for **functions** too — `import Config.App.settings;` then
+bare `settings()` — not only for types. Ships today, no ruling needed.
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 
