@@ -4,8 +4,9 @@
 > ruled set (Invariant 19). Each row's canonical rule lives in its own spec or its register row; nothing
 > is re-explained here. Identity + status: `docs/research/full-audit/raw/C-decisions.md`.
 >
-> **Provenance:** the developer ruled all 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) plus 13 more that
-> the ruling session's own probing surfaced (DEC-366…378), in one interactive pass on 2026-07-26.
+> **Provenance:** the developer ruled all 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) plus 21 more that
+> the ruling session's own probing and the on-hold tail surfaced (DEC-366…386), in one interactive pass on
+> 2026-07-26. Waves 0-6 cover DEC-339…378; **Wave 7 covers DEC-379…386**; Wave 8 is the two research slices.
 
 ## How the order was chosen
 

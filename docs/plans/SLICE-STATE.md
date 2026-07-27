@@ -6,7 +6,11 @@
 Wave 0 (unblock the workflow) through Wave 6 (real parallelism), plus the 5 **owed measurements**.
 
 All 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) were ruled interactively on 2026-07-26, **plus 13 more
-that the ruling session's own probing surfaced** (DEC-366…378). Nothing is built yet. Start at Wave 0.
+that the ruling session's own probing and the on-hold tail surfaced** (DEC-366…386 — the last eight are the
+L-report `decision-needed` tail: the `E-IFACE-VIS` bypass, chasing the `jsonround` win, the DEC-322 fold, XML via
+a vetted crate, the split lifetime block, stdlib wildcards, the `Core.Text`/`Core.String` merge, and the cheap
+tail). **Seven items stay deliberately unruled** (L-19/22/25/28/31/33/86 — titles only, developer-approved to
+defer). Nothing is built yet. Start at Wave 0.
 
 The developer is working the 27-item agenda interactively, most-severe-first, in **plain text** (the
 `AskUserQuestion` dialog kept returning unanswered in this container — do NOT use it in this session;
