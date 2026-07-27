@@ -6,7 +6,9 @@
 >
 > **Provenance:** the developer ruled all 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) plus 21 more that
 > the ruling session's own probing and the on-hold tail surfaced (DEC-366…386), in one interactive pass on
-> 2026-07-26. Waves 0-6 cover DEC-339…378; **Wave 7 covers DEC-379…386**; Wave 8 is the two research slices.
+> 2026-07-26; **DEC-387** was ruled during the 2026-07-27 build. Waves 0-6 cover DEC-339…378;
+> **Wave 7 covers DEC-379…386**; Wave 8 is the two research slices. **Wave 5.5 (DEC-354 + DEC-387) is
+> the only row BUILT so far** — built out of order at the developer's request; everything else is unbuilt.
 
 ## How the order was chosen
 
@@ -76,7 +78,7 @@
 | 5.2 | **DEC-341** the pre-verified 5-rule TextMate string section (81/383 → 0/383) **plus** the `vscode-textmate` pre-push gate |
 | 5.3 | **DEC-346** migrate the 391 zero-judgement UFCS sites — **`Output.printLine` stays qualified** |
 | 5.4 | **DEC-350** rename to `Core.Database.Connection`, drop the `Module` suffix |
-| 5.5 | **DEC-354** the narrowed Claude bundle: 7 skills, **allow-list-only** permissions, `precompact-handoff` only, no session-remember, no MCP |
+| 5.5 | ~~**DEC-354** the narrowed Claude bundle: 7 skills, **allow-list-only** permissions, `precompact-handoff` only, no session-remember, no MCP~~ — **BUILT 2026-07-27** (out of order, at the developer's request). Also produced **DEC-387** (`AskUserQuestion` FORBIDDEN — plain-text questions). One residual: `settings.json.pending` awaits the developer's local `apply-pending-settings.sh` run — see SLICE-STATE |
 | 5.6 | **DEC-369** vocabulary sweep: "cooperative tasks"; `uses_concurrency` → `uses_tasks`; delete Invariant 14's phantom flag; **"concurrent"/"parallel" reserved** |
 | 5.7 | **DEC-371** strike PHP-absence from the four contaminated rationales; mark DEC-037 superseded; re-open `defer` inside DEC-364; add the standing rule beside Invariant 16 |
 

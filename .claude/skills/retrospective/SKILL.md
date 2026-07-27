@@ -113,7 +113,7 @@ Proposed memory entries (N total):
     ...
 ```
 
-**Hard stop** — invoke the `ask-human` skill:
+**Hard stop** — ask in PLAIN TEXT (per `/ask-human`; `AskUserQuestion` is forbidden here), numbered options with the recommended one first, then STOP:
 - question: 'N discoveries ready to save. Which entries should be saved?'
 - options (adjust based on whether any PROMOTION CANDIDATEs are present):
   - 'Save all entries (Recommended)' — saves project-memory entries; PROMOTION CANDIDATEs also saved with a `run /memory-promote` reminder appended to the report

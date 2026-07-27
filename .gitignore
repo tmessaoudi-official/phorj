@@ -6,5 +6,10 @@
 # Machine-local cargo config (mold linker) — CI has no mold, so this must stay local (UA-0.2)
 /.cargo/config.toml
 
+# var/ holds throwaway session state: var/claude/{handoff,sleuth,inspections,reports} written by the
+# PreCompact hook and the review skills, plus var/phorj-app (the developer's live comparison app,
+# DEC-259 — never propose deleting it).
 /var
 outbox/
+# Backups left by scripts/claude-bootstrap/apply-pending-settings.sh — never commit one.
+.claude/settings.json.bak.*

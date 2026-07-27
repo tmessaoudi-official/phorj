@@ -1,287 +1,132 @@
 ---
 name: ask-human
 description: >
-  AskUserQuestion protocol — options, recommended first, max 4, yes/no.
+  PLAIN-TEXT question protocol — never AskUserQuestion. Context, a minimal failing example,
+  clear numbered options, a recommended option first with its reason, then STOP and wait.
 user-invocable: true
 model: sonnet
-allowed-tools: AskUserQuestion
 ---
+
+<!-- ═══════════════════════════════════════════════════════════════════════════════════
+  REWRITTEN 2026-07-27 (developer ruling, recorded under DEC-354). This skill previously
+  mandated `AskUserQuestion` and forbade prose questions. That is now INVERTED:
+
+    `AskUserQuestion` is FORBIDDEN in this project. It silently fails here — it returned
+    "the user did not answer" four separate times on 2026-07-26 while the developer was
+    actively at the keyboard, so a question asked that way can be lost with no trace and
+    the turn ends as if nothing was asked. A gate that cannot fire is worse than none.
+
+  The developer's instruction, verbatim: *"never use askUserQuestion — you must put the
+  context clearly with clear options and clear examples with a recommended option"*.
+═══════════════════════════════════════════════════════════════════════════════════ -->
 
 ## --help
 
 > If ARGUMENTS contains `--help`: output the text below verbatim, then STOP — do not execute any other steps.
 >
 > ```
-> /ask-human — AskUserQuestion protocol — options, recommended first, max 4, yes/no.
+> /ask-human — Plain-text question protocol: context + example + numbered options,
+>              recommended first with its reason, then stop and wait.
+>              AskUserQuestion is forbidden — it silently fails in this container.
 >
-> No flags — invoked automatically by Claude during the reasoning workflow.
+> No flags — invoked automatically by Claude whenever a decision belongs to the developer.
 > ```
 
 ---
 
-# Human-Friendly Question Protocol
+# Plain-text question protocol
 
-Every question asked to the user MUST follow this protocol. No free-text questions.
-No numbered lists. No "Please reply with A, B, or C." Always use `AskUserQuestion`.
+Every question to the developer is **ordinary text in the response**. No tool call, no dialog, no
+hidden state. Then **STOP**: end the turn and wait. Never assume an answer, never proceed on a
+default, never re-ask a different question because the first one went unanswered.
 
----
+## The five required parts
 
-## Core Rules
+| # | Part | Requirement |
+|---|---|---|
+| 1 | **Context** | What is being decided and *why it is being asked now* — one short paragraph. Enough that the developer needs no scrollback. |
+| 2 | **Example** | A **minimal concrete example** of the problem — for a language question, a runnable current-syntax program and its actual current output/error. Not a description of the program: the program. |
+| 3 | **Options** | Numbered, mutually exclusive, each with its own consequence. Ordinarily 2–4. |
+| 4 | **Recommendation** | **Option 1 is the recommended one**, marked `(recommended)`, with the reason it wins stated in the same breath. |
+| 5 | **Escape hatch** | A visible final option — *"none of these / challenge the premise"* — plus an explicit invitation to tweak any option. The developer must be able to answer *and* amend in one reply. |
 
-| Rule | Requirement |
-|------|------------|
-| **Always use options** | Never ask a free-text question if options can cover ≥80% of cases |
-| **First = Recommended** | The recommended option MUST be first. Label it `"Recommended"` at the end of the label text. |
-| **Other is automatic** | `AskUserQuestion` always appends a free-text "Other" option — never add it manually |
-| **Batch limit** | Max 4 questions per `AskUserQuestion` call — split larger sets into progressive rounds |
-| **Header = chip** | `header` max 12 characters — it shows as a chip above the question |
-| **No numbered lists** | Never output "1. Question\n2. Question" — call `AskUserQuestion` instead |
-
----
-
-## Pattern 1 — Single-Select with Recommendation
-
-Use when the user must pick exactly one option and you have a clear preference.
+## Shape
 
 ```
-AskUserQuestion({
-  questions: [{
-    question: "Which implementation approach do you prefer?",
-    header: "Approach",
-    multiSelect: false,
-    options: [
-      {
-        label: "Pragmatic (Recommended)",
-        description: "Balanced approach — good architecture, reasonable scope. Best for most features."
-      },
-      {
-        label: "Minimal",
-        description: "Maximum reuse, fewest files changed. Best when deadline is tight."
-      },
-      {
-        label: "Clean",
-        description: "Best long-term architecture, most maintainable. Best for core features."
-      }
-    ]
-  }]
-})
+## Question — <one-line subject>
+
+<Context: what is being decided, why now, what is blocked on it.>
+
+Today:
+
+    <minimal example — actual code, actual output/error>
+
+**Option 1 — <name> (recommended).** <What it does.> <Why it wins.>
+   After: <the after-state — the same example under this option>
+
+**Option 2 — <name>.** <What it does.> <Cost or risk that makes it second.>
+   After: <after-state>
+
+**Option 3 — none of these / challenge the premise.** <What you would want to hear.>
+
+I'll wait for your answer before doing anything else.
 ```
 
-**Rules**:
-- Recommended option → first in the array, label ends with `(Recommended)`
-- 2–4 options only (Other is auto-added)
-- `multiSelect: false` (default — can be omitted)
+## Non-negotiable rules
 
----
+- **Never `AskUserQuestion`.** Not as a fallback, not "just to try", not for a yes/no.
+- **Never a bare `?` with no options.** If a real choice exists, enumerate it. An unstructured
+  question makes the developer do the work of designing the options.
+- **Always a recommendation.** "What do you prefer?" with no lean is an abdication. State the
+  recommendation and why — the developer can then disagree cheaply.
+- **The after-state goes in the option.** Prose written *outside* the option list is easy to miss
+  while comparing options; put each option's consequence *inside* that option.
+- **One STOP per question set.** Batch related questions (3–4 is fine when the developer asked to
+  move faster), but end the turn after the batch — never answer your own question and continue.
+- **Never re-open a ruled decision** without new evidence, and say what the new evidence is.
+- **Challenge before accepting.** If the developer's proposal has a failure mode, say so in one or
+  two sentences *and still deliver what was asked* under a stated assumption if they reaffirm it.
 
-## Pattern 2 — Yes / No Confirmation
+## When this protocol is mandatory
 
-Use before any destructive or irreversible action, and before starting implementation after plan approval.
+- Any **user-visible language or design decision** (project CLAUDE.md Invariant 15 — the
+  ADJUDICATION RULE: those are the developer's, made interactively, never ruled alone).
+- Any **destructive or hard-to-reverse action** — and `git push`, which project rules keep behind an
+  explicit request even though `add`/`commit` are autonomous.
+- A **certification loop that hits its cap** (DEC-268: 5 rounds with findings still open → ask, never
+  silently proceed).
+- Any point where two readings of the request lead to **materially different work**.
 
-```
-AskUserQuestion({
-  questions: [{
-    question: "Proceed with the implementation plan above?",
-    header: "Confirm",
-    multiSelect: false,
-    options: [
-      {
-        label: "Yes, proceed (Recommended)",
-        description: "Start implementation with the approved plan."
-      },
-      {
-        label: "Ask advisor for review",
-        description: "Call advisor() for an independent second opinion before proceeding."
-      },
-      {
-        label: "No, revise",
-        description: "Go back and adjust the plan or approach."
-      }
-    ]
-  }]
-})
-```
+## When it is NOT needed
 
-**Rules**:
-- "Yes" is always first (positive action = recommended default)
-- Include an "Ask advisor for review" option for any significant implementation gate, architectural decision, or risky action — position it between Yes and No
-- When the user selects "Ask advisor for review", call `advisor()` immediately and present its findings before re-asking
-- "No" option label describes what happens next (not just "No")
-- Never use this pattern for destructive actions where "No" should be the safe default — invert the order in that case
+Routine judgement calls with an obvious default, and pure information questions. Asking about
+everything is its own failure — it converts the developer into a decision queue. Decide what you can
+defend, state the assumption, and keep moving.
 
----
-
-## Pattern 3 — Multi-Select (non-exclusive choices)
-
-Use when multiple answers can coexist (e.g. "which constraints apply?", "which areas to audit?").
+## Worked example
 
 ```
-AskUserQuestion({
-  questions: [{
-    question: "Which constraints apply to this change?",
-    header: "Constraints",
-    multiSelect: true,
-    options: [
-      {
-        label: "No breaking changes (Recommended)",
-        description: "Existing API contracts must stay intact."
-      },
-      {
-        label: "No new dependencies",
-        description: "Do not add any new npm/pip packages."
-      },
-      {
-        label: "Minimal diff",
-        description: "Change as few lines as possible."
-      },
-      {
-        label: "Zero behavior change",
-        description: "Pure refactor — no observable difference."
-      }
-    ]
-  }]
-})
+## Question — should `10 / 0` be a compile error?
+
+`phg check` currently accepts `10 / 0` and the fault only surfaces at runtime, identically on
+all three legs. PHP behaves the same way, so this is parity — but it is a free win we are
+leaving on the table, and it blocks nothing else.
+
+Today:
+
+    int x = 10 / 0;        // phg check: OK
+    // phg run:  fault: division by zero
+
+**Option 1 — reject it at check time (recommended).** A literal zero divisor is statically
+   provable, so this is a pure win with no false positives, and DEC-058 says equal-or-better
+   than PHP is the bar.
+   After: `phg check` → `error: division by zero [E-DIV-ZERO]`, caught before the program runs.
+
+**Option 2 — leave it as a runtime fault.** Keeps exact PHP parity and costs nothing to build.
+   After: unchanged — the bug ships and fires in production instead.
+
+**Option 3 — none of these / challenge the premise.** If you would rather this be a warning
+   than an error, or want it grouped with the other literal-fault checks, say so.
+
+I'll wait for your answer before doing anything else.
 ```
-
-**Rules**:
-- `multiSelect: true` when choices are not mutually exclusive
-- Still list the most common/recommended option first
-- Still limited to 4 options (Other is auto-added for free text)
-
----
-
-## Pattern 4 — Side-by-Side Preview (code or layout comparison)
-
-Use when the user needs to visually compare code snippets, config examples, or UI layouts.
-
-```
-AskUserQuestion({
-  questions: [{
-    question: "Which API response format do you prefer?",
-    header: "Format",
-    multiSelect: false,
-    options: [
-      {
-        label: "Flat (Recommended)",
-        description: "Simpler to consume on the frontend.",
-        preview: "{\n  \"id\": 1,\n  \"status\": \"pending\",\n  \"amount\": 100\n}"
-      },
-      {
-        label: "Nested",
-        description: "Groups related fields together.",
-        preview: "{\n  \"claim\": {\n    \"id\": 1,\n    \"status\": \"pending\"\n  },\n  \"payment\": {\n    \"amount\": 100\n  }\n}"
-      }
-    ]
-  }]
-})
-```
-
-**Rules**:
-- Only use `preview` when there is a concrete artifact to compare (code, layout, config)
-- Do NOT use `preview` for simple preference questions
-- `preview` is only supported for single-select (not multiSelect)
-- Preview content renders as markdown in a monospace box
-
----
-
-## Pattern 5 — Progressive Batching (max 4 per call)
-
-When you have more than 4 questions, split into logical rounds. Do NOT dump all questions at once.
-
-```
-# Round 1 — Scope and context (most critical first)
-AskUserQuestion({
-  questions: [
-    { question: "Which module is affected?", header: "Module", ... },
-    { question: "What is the expected outcome?", header: "Output", ... },
-    { question: "Any constraints?", header: "Constraints", ... }
-  ]
-})
-
-# Wait for answers, then Round 2 — only if needed
-AskUserQuestion({
-  questions: [
-    { question: "Should we create a feature branch?", header: "Branch", ... }
-  ]
-})
-```
-
-**Rules**:
-- Group by logical theme (scope → output → constraints → details)
-- Ask the most decision-critical questions first
-- Only ask follow-up questions if answers from Round 1 reveal new ambiguities
-- Never ask questions you could answer by reading the codebase — explore first
-
----
-
-## Pattern 6 — Stating Ambiguity (for sub-agents without AskUserQuestion)
-
-Sub-agents (e.g. architect) cannot use `AskUserQuestion`. When ambiguity exists, they state it inline with a default assumption. The supervisor then surfaces it to the user using Pattern 1 or 2.
-
-**Sub-agent output format**:
-```markdown
-> ⚠️ **Assumption**: The request mentions "status field" but does not specify
-> the source. I assumed it comes from the Mario API response.
-> **Default**: Use `claim.status` from the existing Mario payload.
-> **Alternative**: Fetch status from a dedicated `/status` endpoint.
-> Supervisor should confirm with user before implementation begins.
-```
-
-**Supervisor then asks**:
-```
-AskUserQuestion({
-  questions: [{
-    question: "The architect assumed status comes from the Mario API payload. Is that correct?",
-    header: "Assumption",
-    multiSelect: false,
-    options: [
-      { label: "Yes, use Mario payload (Recommended)", description: "claim.status from existing payload." },
-      { label: "No, use dedicated endpoint", description: "Fetch from a separate /status route." }
-    ]
-  }]
-})
-```
-
----
-
-## Navigation (automatic — no configuration needed)
-
-The Claude Code UI handles all navigation automatically:
-- **Arrow keys** → move between options
-- **Enter** → confirm selection
-- **Space** → toggle selection (multiSelect mode)
-- **First option** → pre-selected by default when the UI opens
-
-You do not need to configure this — just ensure the recommended option is always first.
-
----
-
-## Anti-patterns — Never Do These
-
-| Forbidden | Why | Use instead |
-|-----------|-----|-------------|
-| `"Please reply with A, B, or C"` | Not interactive, error-prone | `AskUserQuestion` with options |
-| Numbered question lists in prose | Non-interactive, user must type | `AskUserQuestion` with up to 4 questions |
-| `"Other"` as a manual option | Auto-added by `AskUserQuestion` | Remove it — it's always there |
-| Recommended option last | User defaults to first | Put recommended first |
-| 5+ options per question | Overloads the user | Max 4 options + auto Other |
-| Asking questions you can answer by reading files | Wastes user time | Read files first, then ask only what files can't answer |
-| Asking confirmation after a destructive action | Too late | Always ask BEFORE destructive actions |
-
----
-
-## Quick Reference
-
-```
-Single choice + recommendation   → Pattern 1 (multiSelect: false, first = recommended)
-Yes/No gate                       → Pattern 2 (Yes first, advisor option second, describe No action)
-Multiple constraints/preferences  → Pattern 3 (multiSelect: true)
-Code/layout comparison            → Pattern 4 (preview on options)
-More than 4 questions             → Pattern 5 (progressive rounds)
-Sub-agent ambiguity               → Pattern 6 (state assumption, supervisor asks)
-
-Advisor option                    → Include "Ask advisor for review" between Yes and No on any
-                                    significant gate; call advisor() when user selects it
-```
-
-$ARGUMENTS

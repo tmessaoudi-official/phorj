@@ -1,7 +1,7 @@
 ---
 name: converge
 spotlight: true
-description: Run the project's DEC-268 MAXIMAL certification ladder, or a deeper tunable convergence sweep, over an audit/migration/gate. Defaults ARE the phorj ladder: 3 adversarial evidence-based lenses, TWO consecutive fully-clean rounds, cap 5 rounds, certified by fresh-context reviewer subagents. Override with --cycles/--converge/--angles/--certify. Asks for approval in PLAIN TEXT before starting and reports progress every cycle. --auto runs autonomously to convergence or a hard cap.
+description: Run the project's DEC-268 MAXIMAL certification ladder, or a deeper tunable convergence sweep, over an audit/migration/gate. Defaults ARE the phorj ladder — 3 adversarial evidence-based lenses, TWO consecutive fully-clean rounds, cap 5 rounds, certified by fresh-context reviewer subagents. Override with --cycles/--converge/--angles/--certify. Asks for approval in PLAIN TEXT before starting and reports progress every cycle. --auto runs autonomously to convergence or a hard cap.
 user-invocable: true
 args: "[--cycles=N] [--converge=K] [--scope=dec268|3C|6C|custom] [--angles='angle1;angle2;angle3'] [--certify=reviewer|self] [--auto] [--auto-cap=N]"
 side-effects: None — read-only analysis loop; findings incorporated into conversation context only.
@@ -47,7 +47,7 @@ Runs a structured multi-angle convergence loop with explicit user approval of pa
 
 - `--cycles=N` — maximum total cycles before escalating (default: **5** — DEC-268's cap)
 - `--converge=K` — consecutive fully-clean cycles required to declare convergence (default: **2** — DEC-268's *two consecutive fully-clean rounds*; any finding resets the counter)
-- `--scope=dec268|3C|6C|custom` — which lens set to use (default: **`dec268`**). Naming kept for continuity with the angle *content* (expanding-context / adversarial / blast-radius) — this does not invoke CLAUDE.md's Phase 3C/6C mechanism, which is a separate, non-configurable implementation.
+- `--scope=dec268|3C|6C|custom` — which lens set to use (default: **`dec268`**). The `3C`/`6C` names describe the angle *content* (expanding-context / adversarial / blast-radius) and are kept for continuity; `dec268` is the project-mandated panel — running it here IS the 3C/6C gate, performed rather than remembered.
   - `dec268` (**default — the project's ratified ladder**): the 3-lens reviewer PANEL, each lens adversarial and **evidence-based** (the reviewer reads the actual diff/tests/specs itself, never the author's narrative): (1) **correctness + regression**, (2) **security + safety-promises**, (3) **completeness + blast-radius**. This is the tier project `CLAUDE.md` mandates at every 3C/6C gate, all task sizes.
   - `3C`: pre-implementation-style angles (expanding-context, adversarial, blast-radius)
   - `6C`: pre-completion-style angles (expanding-context on result, failure modes, callers/docs)
@@ -85,7 +85,7 @@ When `--scope=custom`, at least one angle must be designated `enumerate:`. This 
 
 The enumeration angle cannot be satisfied by memory or assumption. It must show the command that produced the member list.
 
-**Example** — for a dead-var audit across all compose files:
+**Example** — for an audit that must cover every shipped example (the differential harness's whole coverage surface):
 ```
 enumerate: run `ls examples/*/` to get the full example-dir list (N dirs found),
            then cross-check which dirs were grep'd in other angles this cycle

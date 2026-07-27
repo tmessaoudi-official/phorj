@@ -142,12 +142,17 @@ asking, when the quality gate above is green. Limits:
     claimed; (3) silent semantic downgrade: FORBIDDEN. Every exclusion is a tracked, tested,
     register-recorded artifact. (First application: concurrency — hard error +
     explicit `--sequential-concurrency` opt-in with warning.)
-15. **ADJUDICATION RULE** (ratified 2026-07-02 — governs design decisions). User-visible
+15. **ADJUDICATION RULE** (ratified 2026-07-02; question FORM amended 2026-07-27). User-visible
     language/design decisions are the developer's, made interactively — an autonomous session
     records them as PENDING questions, never rules on them. Every design question ships with a
-    minimal current-syntax failing program embedded IN the question text and the after-state in
-    per-option previews (prose outside the question dialog is invisible to the developer while
-    answering). Recommended option first, with the why.
+    minimal current-syntax failing program embedded IN the question text and the after-state stated
+    INSIDE each option (prose written outside the option list is missed while options are being
+    compared). Recommended option first, with the why, and a visible *"none of these / challenge the
+    premise"* escape. **`AskUserQuestion` is FORBIDDEN in this project** — it silently fails in the
+    remote container (it reported "the user did not answer" 4× on 2026-07-26 with the developer at
+    the keyboard), so questions asked that way can vanish with no trace. Every question is PLAIN
+    TEXT, then STOP and wait; never assume an answer, never proceed on a default. The protocol is
+    `.claude/skills/ask-human/SKILL.md`.
 
 16. **CROSS-LANGUAGE SCAN + BYTE-IDENTITY-IS-A-TOOL** (META-7, ratified 2026-07-16). Before
     designing anything meant to beat PHP, survey how other languages (Rust/Kotlin/Swift/TS/Go/C#…)

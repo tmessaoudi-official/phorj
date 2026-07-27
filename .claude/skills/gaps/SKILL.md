@@ -143,6 +143,16 @@ Spawn ONE agent to reflect on this command's own definition using the just-saved
 
 Show: Executive summary, full NOW table, Quick Wins table, counts of SOON/LATER.
 
-Invoke the `ask-human` skill: question 'N gaps found (Now: X | Soon: Y | Later: Z). Nothing has been changed — all findings are proposals. What would you like to act on?', options: 'Fix specific gaps — list IDs in notes (e.g. G1, G3) (Recommended)' / 'Show all Soon items' / 'Show a specific category — specify in notes (e.g. category B)' / 'Nothing — close the report'.
+**Ask in PLAIN TEXT** (per `/ask-human` — `AskUserQuestion` is forbidden here) and STOP:
+
+```
+N gaps found (Now: X | Soon: Y | Later: Z). Nothing has been changed — every finding above is
+a proposal.
+
+1. Fix specific gaps (recommended) — name the IDs, e.g. `G1, G3`.
+2. Show all Soon items.
+3. Show one category in full — name it, e.g. `category B`.
+4. Nothing — close the report.
+```
 
 *Never auto-fills anything. The user decides what to close.*

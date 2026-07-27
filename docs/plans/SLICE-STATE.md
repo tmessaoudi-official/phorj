@@ -1,20 +1,51 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-07-26) — **THE AGENDA IS FULLY RULED. BUILD ORDER IS THE NEXT ACTION.**
+## ✅ CURRENT CURSOR (2026-07-27) — **AGENDA FULLY RULED. WAVE 5.5 IS BUILT. NEXT: WAVE 0.**
 
 **READ FIRST: `docs/plans/2026-07-26-ruled-build-order.md`** — the single ordering of everything ruled,
 Wave 0 (unblock the workflow) through Wave 6 (real parallelism), plus the 5 **owed measurements**.
 
-All 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) were ruled interactively on 2026-07-26, **plus 13 more
-that the ruling session's own probing and the on-hold tail surfaced** (DEC-366…386 — the last eight are the
+### 🔴 ONE THING IS WAITING ON THE DEVELOPER (2026-07-27)
+
+`scripts/claude-bootstrap/settings.json.pending` is committed and **not yet applied**. Claude is
+**classifier-blocked** from writing `.claude/settings.json`, and the developer has no terminal in the
+container — so the change travels through the repo. On his own machine:
+
+```
+git pull && bash scripts/claude-bootstrap/apply-pending-settings.sh
+git add .claude/settings.json scripts/claude-bootstrap/settings.json.pending && git commit && git push
+```
+
+Until then the **PreCompact handoff hook is NOT wired** (the hook itself is built and tested — only the
+`settings.json` entry that fires it is missing) and the allow-list is still the old 6-entry one. The
+script deletes the pending file on success, so `settings.json.pending` existing = not yet applied.
+
+### ✅ BUILT 2026-07-27 — DEC-354 + DEC-387 (out of wave order, at the developer's request)
+
+- **DEC-354** — the narrowed Claude bundle. 7 adapted skills in `.claude/skills/` (`converge` defaults
+  ARE the DEC-268 tier; `sleuth` gained lens **K** for backend divergence; `sweep` gained
+  byte-identity / anti-bandaid / Op-triad / file-size dimensions; `cross-check`'s Jira mode deleted;
+  `aggregate-findings` retargeted off `~/.claude`), the deterministic **PreCompact handoff** hook +
+  `log-helpers.sh` + a 14-assertion test suite, and the allow-list-only settings (71 entries, no
+  `deny`, no `ask`) staged as the pending file above.
+- **DEC-387** — **`AskUserQuestion` is FORBIDDEN in this project.** Every question is PLAIN TEXT:
+  context → minimal concrete example → numbered options each carrying its own after-state →
+  recommended option FIRST with the reason → visible *"none of these / challenge the premise"* escape
+  → **STOP**. `ask-human` was INVERTED to be that protocol, `CLAUDE-global.md`'s four mandate sites
+  were rewritten, and project **Invariant 15** was amended. Nothing enforces it mechanically — the
+  Stop hook that claimed to is not installed and was ruled OUT.
+
+All 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) were ruled interactively on 2026-07-26, **plus 22 more
+that the ruling session's own probing, the on-hold tail and the 2026-07-27 build surfaced** (DEC-366…387 — the last eight are the
 L-report `decision-needed` tail: the `E-IFACE-VIS` bypass, chasing the `jsonround` win, the DEC-322 fold, XML via
 a vetted crate, the split lifetime block, stdlib wildcards, the `Core.Text`/`Core.String` merge, and the cheap
 tail). **Seven items stay deliberately unruled** (L-19/22/25/28/31/33/86 — titles only, developer-approved to
-defer). Nothing is built yet. Start at Wave 0.
+defer). **Wave 5.5 (DEC-354) is built; everything else is unbuilt. Start at Wave 0.**
 
-The developer is working the 27-item agenda interactively, most-severe-first, in **plain text** (the
-`AskUserQuestion` dialog kept returning unanswered in this container — do NOT use it in this session;
-put each question in the message body with context, examples, options, a recommendation, and wait).
+**STANDING RULE — DEC-387, project-wide, not session-scoped:** never `AskUserQuestion`. Put every
+question in the message body with context, a minimal concrete example, numbered options each stating
+its own after-state, the recommended option first with its reason, and a visible *"none of these /
+challenge the premise"* escape — then STOP and wait. The protocol is `.claude/skills/ask-human/SKILL.md`.
 
 **RULED so far:**
 - **GR-1 / DEC-339 (the P0) — RULED 2026-07-26.** Block scoping stays; **redeclaring a live local or

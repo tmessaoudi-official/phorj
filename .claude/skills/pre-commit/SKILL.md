@@ -37,7 +37,9 @@ args: "[--message=<draft-message>]"
 
 ## Step 0 — Precondition checks
 
-**Mandatory task gate**: invoke `ask-human` before Step 1 begins to confirm size and intent. Do not proceed until the user confirms.
+**Mandatory task gate**: before Step 1, state the task size and intent and ask in PLAIN TEXT to confirm or redirect (per `/ask-human`; `AskUserQuestion` is forbidden here — it silently fails). Do not proceed until the developer answers.
+
+**Note the project override**: phorj authorises autonomous `git add` + `git commit` for green, self-contained work (project CLAUDE.md, "Git autonomy") — so this skill's job here is the evidence table, not asking permission to commit. `git push` still needs an explicit request.
 
 **Git checks** (in order; stop at first failure):
 1. Verify `git` is installed: `command -v git` — if not found, report `ERROR: git not found in PATH — cannot run /pre-commit` and stop.

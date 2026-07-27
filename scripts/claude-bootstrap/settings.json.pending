@@ -1,0 +1,110 @@
+{
+  "permissions": {
+    "defaultMode": "auto",
+    "allow": [
+      "Bash(git:*)",
+      "Bash(cargo:*)",
+      "Bash(rustc:*)",
+      "Bash(rustup:*)",
+      "Bash(source scripts/toolchain.env:*)",
+      "Bash(scripts/:*)",
+      "Bash(./scripts/:*)",
+      "Bash(bash scripts/:*)",
+      "Bash(./target/release/phg:*)",
+      "Bash(./target/debug/phg:*)",
+      "Bash(target/release/phg:*)",
+      "Bash(php:*)",
+      "Bash(make:*)",
+      "Bash(docker:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(python3:*)",
+      "Bash(jq:*)",
+      "Bash(wasm-pack:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(cut:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(tr:*)",
+      "Bash(diff:*)",
+      "Bash(stat:*)",
+      "Bash(file:*)",
+      "Bash(du:*)",
+      "Bash(df:*)",
+      "Bash(tree:*)",
+      "Bash(xargs:*)",
+      "Bash(realpath:*)",
+      "Bash(dirname:*)",
+      "Bash(basename:*)",
+      "Bash(printf:*)",
+      "Bash(echo:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(ln:*)",
+      "Bash(chmod:*)",
+      "Bash(touch:*)",
+      "Bash(tar:*)",
+      "Bash(gzip:*)",
+      "Bash(curl:*)",
+      "Bash(env:*)",
+      "Bash(timeout:*)",
+      "Bash(nproc:*)",
+      "Bash(uname:*)",
+      "Bash(command:*)",
+      "Bash(which:*)",
+      "Bash(bash:*)",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "mcp__github"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}\"/scripts/claude-bootstrap/install.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}\"/scripts/claude-bootstrap/hooks/precompact-handoff.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}\"/scripts/claude-bootstrap/hooks/precompact-handoff.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

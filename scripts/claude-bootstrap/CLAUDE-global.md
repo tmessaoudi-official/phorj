@@ -10,6 +10,22 @@
       (Rule 13), the session-remember memory pipeline ("Memory System Toggles" — the phorj repo's
       SLICE-STATE.md + decision register are the continuity mechanism instead, per Invariant 19).
     • No dynamic workflows / agent teams (dev directive 2026-07-22) — inline + normal subagents.
+
+  DEC-354 AMENDMENTS (2026-07-27) — these EDIT the body rather than merely disclaiming it, because a
+  rule that points at machinery which does not exist here is worse than no rule:
+    • QUESTIONS ARE PLAIN TEXT. `AskUserQuestion` is FORBIDDEN in this project — it silently failed
+      four times on 2026-07-26 with the developer at the keyboard, so a question asked that way can
+      vanish. Every question is context + a minimal example + numbered options + a recommended option
+      first, then STOP. The `ask-human` skill (`.claude/skills/ask-human/`) now IS that protocol.
+      The claim that a Stop hook "mechanically" catches bare-`?` endings was FALSE here and is gone:
+      that hook was ruled OUT (it would double-gate against the container's own Stop hooks).
+    • `advisor()` does not exist in this environment, so the CERTIFICATION LADDER's reviewer-subagent
+      tier is the top rung here, not a fallback — and phorj's DEC-268 mandates the strict form
+      (3-lens PANEL, two consecutive fully-clean rounds, cap 5). `/converge` executes it mechanically.
+    • The skills are REPO-NATIVE under `.claude/skills/` (12 of them) and need no install; there is no
+      `~/.claude/refs/SKILLS.md` and no `~/.claude/skills/`.
+    • Plans always live in the REPO (`docs/plans/`) per project Invariant 19 — there is no
+      plan-location sentinel to ask about, and no `~/.claude/run/` statusline sentinels here.
   Installed to ~/.claude/CLAUDE.md by scripts/claude-bootstrap/install.sh (SessionStart hook).
 ═══════════════════════════════════════════════════════════════════════════════════════ -->
 # Global Reasoning Framework
@@ -22,8 +38,8 @@
 > **2.** Invoke `ask-human` skill to confirm or redirect.
 > Both run **before** tool calls, file reads, or exploration — even for tasks that look simple.
 > *"It looks small"* is the #1 rationalization for skipping this. Resist it.
-> *"Auto-mode says don't ask" is the #2 rationalization — and it is wrong. `defaultMode: auto` applies to mid-task clarifying questions, not this gate. User CLAUDE.md instructions are highest priority (see using-superpowers skill). There is no mode that skips this gate.*
-> **EVERY user-facing question — including the closing "what's next?" / "shall I commit?" — MUST use `AskUserQuestion`, never free-text.** A turn that ends with a bare `?` in prose is a violation (mechanically caught by the `ask-human-question-guard.sh` Stop hook). See "Presenting options and decisions".
+> *"Auto-mode says don't ask" is the #2 rationalization — and it is wrong. `defaultMode: auto` applies to mid-task clarifying questions, not this gate. User CLAUDE.md instructions are highest priority. There is no mode that skips this gate.*
+> **EVERY user-facing question — including the closing "what's next?" / "shall I commit?" — is asked in PLAIN TEXT: context, a minimal concrete example, numbered options, the recommended option FIRST with its reason, a visible "none of these / challenge the premise" escape, then STOP and wait.** `AskUserQuestion` is forbidden (it silently fails here). A turn that ends with a bare `?` and no options is a violation — nothing enforces this mechanically, so it is on you. See "Presenting options and decisions".
 
 ## Task Categorization Protocol
 
@@ -59,11 +75,11 @@ When in doubt, lean toward **Medium**. The user can say "just do it" to drop to 
 - Generate multiple approaches without filtering
 - Surface implicit requirements and assumptions
 - Consider: What could go wrong? What isn't being asked but should be?
-- **Narrow input signal**: if the task is anchored to one specific thing (a bug, feature name, component, scenario) — invoke `expanding-context` (if available) before committing to an approach. It runs silently and widens context across 23 dimensions. Skip if the user said "just do it."
+- **Narrow input signal**: if the task is anchored to one specific thing (a bug, feature name, component, scenario) — invoke `expanding-context` (present here: `.claude/skills/expanding-context/`) before committing to an approach. It runs silently and widens context across 23 dimensions. Skip if the user said "just do it."
 
 ### Phase 2: UNDERSTAND
 - Ask **targeted questions** to fill knowledge gaps from Phase 1
-- **All questions to the user MUST use `AskUserQuestion`** with structured options — never free-text questions or numbered prose lists. The tool's built-in "Other" is always the escape hatch.
+- **All questions to the user are PLAIN TEXT with structured options** — numbered, mutually exclusive, recommended one first with its reason, and a visible final "none of these / challenge the premise" option as the escape hatch. Never `AskUserQuestion` (it silently fails here); never a bare question with no options.
 - Read relevant code, trace execution paths, map dependencies
 - For broad exploration: propose parallel Explore subagents rather than sequential reads
 - **Bidirectionality rule — mandatory for any A-vs-B task** (comparison, gap analysis, audit, cross-check, "what do we have / what are we missing"): before any cross-checking begins, **explicitly state a complete inventory from each side independently** — two separate tool calls, two visible outputs:
@@ -85,7 +101,7 @@ When in doubt, lean toward **Medium**. The user can say "just do it" to drop to 
 Before Phase 5 (implement — whether that is code, agent spawning, or any other work), investigate yourself, then get an independent read before proceeding. This replaces the old self-graded 3-angle convergence loop: self-certification has a structural blind spot (the same model that produced the plan can't reliably find its own gaps by being told to try harder), so certification now comes from `advisor()` — a separate reviewer — while the investigation itself stays real, active work.
 
 **Investigate** (self-driven, three lenses — actually grep, actually read, actually reason; do not just recite these):
-- **Completeness**: invoke `expanding-context` (if available) for narrow-input tasks — 23-dimension scan applied to the current plan. For comparison/audit tasks: confirm both inventories (Phase 2's bidirectionality rule) were stated explicitly and cover all claim surfaces, not a scoped subset.
+- **Completeness**: invoke `expanding-context` (present here, repo-native) for narrow-input tasks — 23-dimension scan applied to the current plan. For comparison/audit tasks: confirm both inventories (Phase 2's bidirectionality rule) were stated explicitly and cover all claim surfaces, not a scoped subset.
 - **Adversarial**: *"What is the worst failure mode of this plan?"*
 - **Blast-radius**: *"What else is affected that I haven't accounted for?"*
 
@@ -218,7 +234,7 @@ Provide verification instructions scaled to task size:
 
 A task is **not complete** until all four dimensions are addressed. Skipping a dimension requires explicitly stating why it does not apply.
 
-7. **Test-driven by default — and tests MUST be executed.** For any task adding or changing behavior: write the failing test *before* the implementation. Invoke `superpowers:test-driven-development` at the start of implementation work. (If the skill is unavailable, apply TDD principles directly: write the failing test first, then implement — the skill adds discipline checkpoints, not new principles.) A passing test run at Phase 8 is the Coverage evidence above. This is the upstream fix — it makes the Coverage row structurally impossible to skip.
+7. **Test-driven by default — and tests MUST be executed.** For any task adding or changing behavior: write the failing test *before* the implementation. (The `superpowers:test-driven-development` skill is NOT installed here — apply TDD directly: write the failing test first, watch it fail, then implement. The skill added discipline checkpoints, not new principles.) A passing test run at Phase 8 is the Coverage evidence above. This is the upstream fix — it makes the Coverage row structurally impossible to skip.
  
    **Hard rule — no exceptions:** When a task writes or modifies test code, the tests MUST be *executed* (not just compiled) before the task is declared complete. Paste the actual runner output (test names + pass/fail counts) in the response. Saying "the tests compile" or "the tests should pass" is not evidence — it is a lie of omission. If tests cannot be run in the current environment, say so explicitly and explain why, then ask the user how to proceed. Never silently skip exécution.
 
@@ -318,7 +334,7 @@ Trigger words that signal `loop` is needed: *"keep doing"*, *"monitor"*, *"every
    <!-- written at Phase 4 approval -->
    ```
 
-   **Plan location sentinel** (`~/.claude/projects/<slug>/plan-location`): determines where all plans in this project go. Read it at Phase 4 before creating any plan. If missing (first plan in this project): ask the user with `AskUserQuestion` (options: `repo` | `global`), then write the sentinel immediately — `printf '%s\n' "<repo|global>" > ~/.claude/projects/<slug>/plan-location` — before writing the plan file. The sentinel is written once and read silently on every subsequent plan creation.
+   **Plan location — SETTLED for phorj, no sentinel and no question**: `repo`. Project Invariant 19 requires every plan and spec to live IN the repo (`docs/plans/`, the decision register, `docs/plans/SLICE-STATE.md`), because the container is reclaimed and only committed state survives. The `~/.claude/projects/<slug>/plan-location` sentinel described upstream does not exist here and must not be created — an out-of-repo plan file is explicitly NOT the record of truth.
 
    **Naming**: Derive `<topic>` from the task description at Phase 0/1. Announce the plan location early: *"Plan file: `<path>/<topic>.plan.md`"* where `<path>` is `docs/plans/` (repo) or `~/.claude/projects/<slug>/plans/` (global).
 
@@ -327,9 +343,9 @@ Trigger words that signal `loop` is needed: *"keep doing"*, *"monitor"*, *"every
    | Moment | Action |
    |--------|--------|
    | **Phase 0 session start** | Glob BOTH `docs/plans/*.plan.md` AND `~/.claude/projects/<slug>/plans/*.plan.md`. If found: read and announce — *"Restoring from `<path>/<topic>.plan.md` — N decisions from prior session."* This check is mandatory, not optional. **Then re-write the active-plan pointer** (see note below) to the restored plan's absolute path, so the statusline reflects it after a resume/compact. (The `session-start-banner.sh` SessionStart hook now also AUTO-INHERITS this on its own — an unattached session adopts the most-recent prior pointer for a plan in the same project — so a continued session shows `▸plan` even before you act; this manual step still applies when you restore a *different* plan than the inherited one.) |
-   | **After each `AskUserQuestion` answer that resolves a design/approach decision** | Append to `## Decisions Log` immediately — **before the next action**. This is a paired action, not a reminder. Does not apply to task-gate confirmations (size/proceed gates). |
-   | **Phase 4 plan approval** | Read sentinel at `~/.claude/projects/<slug>/plan-location`; if missing: ask user (AskUserQuestion: `repo` \| `global`), write sentinel. Write plan to the appropriate location. If `repo`: `mkdir -p docs/plans && git add docs/plans/<topic>.plan.md`. If `global`: `mkdir -p ~/.claude/projects/<slug>/plans/`. Do NOT commit autonomously — Rule 10 applies. **Then write the active-plan pointer**: `printf '%s\n' "<abs-path-to-plan-file>" > ~/.claude/run/active-plan-$CLAUDE_CODE_SESSION_ID` — renders `▸plan:<topic>` on statusline line 2 (see note below). |
-   | **Phase 8 completion** | Invoke `ask-human` — propose deleting the plan file, show exact deletion command (`git rm docs/plans/<topic>.plan.md` for repo; `rm ~/.claude/projects/<slug>/plans/<topic>.plan.md` for global). Proceed only if approved. **Always clear the active-plan pointer** regardless: `rm -f ~/.claude/run/active-plan-$CLAUDE_CODE_SESSION_ID`. |
+   | **After each answered question that resolves a design/approach decision** | Append to `## Decisions Log` immediately — **before the next action**. This is a paired action, not a reminder. Does not apply to task-gate confirmations (size/proceed gates). |
+   | **Phase 4 plan approval** | Write the plan to `docs/plans/<topic>.plan.md` and `git add` it (location is settled — see above). Committing is autonomous here per the project's git-autonomy override, but only when the quality gate is green. Mirror anything ruled into MASTER-PLAN + the decision register + SLICE-STATE in the SAME change (Invariant 19 — zero divergence). There is no active-plan statusline pointer in this container. |
+   | **Phase 8 completion** | Ask in plain text — propose deleting the plan file, show exact deletion command (`git rm docs/plans/<topic>.plan.md` for repo; `rm ~/.claude/projects/<slug>/plans/<topic>.plan.md` for global). Proceed only if approved. **Always clear the active-plan pointer** regardless: `rm -f ~/.claude/run/active-plan-$CLAUDE_CODE_SESSION_ID`. |
 
    **No exceptions**: A session that ends without a plan file when design decisions were made is a liability. The only valid exemption: state *"no plan file needed — no design/approach decisions made"* explicitly. That statement is itself the record.
 
@@ -364,7 +380,7 @@ Trigger words that signal `loop` is needed: *"keep doing"*, *"monitor"*, *"every
 
    **Exempted — never grade these:**
    - Phase markers (`── Phase N: PHASE NAME ──`) and independent-check output (`3C round N → …`)
-   - AskUserQuestion gate text and mechanical check-ins
+   - Question-gate text and mechanical check-ins
 
    **Relationship to other rules**: Rule 11 (verify proposals) defines *how* to check a claim; this rule defines *how to label* the result — every Rule 11 check ends in a Rule 18 grade. Rule 14 (root cause) is the fix-scoped case of this same discipline: a root cause must reach [Verified] here before Rule 14 permits writing a fix.
 
@@ -436,17 +452,19 @@ Commands in the `ask` list are prompted — Claude must propose backup + rollbac
 
 When asking the user to choose between approaches or giving options:
 
-- **Always use `AskUserQuestion`** for every question to the user — never free-text questions, never numbered prose lists. The built-in "Other" is the free-text escape hatch.
-- The `ask-human` skill is the mandatory implementation vehicle: invoke it for task categorization confirmations and **all** user-facing choices.
+- **Always ask in PLAIN TEXT** — `AskUserQuestion` is forbidden in this project (it silently fails here). Numbered options, mutually exclusive, with the consequence stated inside each option.
+- The `ask-human` skill is the mandatory implementation vehicle: it defines the plain-text shape (context → minimal example → options → recommendation first → escape hatch → STOP). Use it for task-categorization confirmations and **all** user-facing choices.
 - **Always** include an escape hatch for the user to refine or challenge: free-text notes on each option, an "Other" fallback, or an explicit "none of the above / challenge the premise" path.
 - Never present a multiple-choice without that escape. The user must be able to select AND annotate in the same step.
 
-**AskUserQuestion notes field**: The per-option `annotations`/`notes` field in `AskUserQuestion` is **NOT rendered** in the Claude Code UI — do not rely on it as the escape hatch. Always make the escape hatch a visible element: an auto-appended "Other" option, a visible numbered option, or a sentence in the question text itself.
-- **Zero exceptions — no "say go" shortcuts**: phrases like *"say 'go' to proceed"*, *"say yes to continue"*, *"shall I implement?"*, *"let me know if you want me to…"* are all questions and MUST be replaced with `AskUserQuestion`. This applies to: status confirmations, plan approvals, phase gates, casual check-ins, and any other moment where the user's input is sought. If it ends with `?` or implies a choice, it needs `AskUserQuestion`.
-    - **Mechanically enforced**: the `ask-human-question-guard.sh` Stop hook blocks any end-of-turn message whose final line is a free-text `?` when `AskUserQuestion` was not used that turn. If you hit that block, re-ask via `AskUserQuestion` — do not work around it (`QGUARD_OFF=1` exists only for the user).
+**The escape hatch must be VISIBLE**: a numbered "none of these / challenge the premise" option, plus an explicit invitation to amend any option in the reply. Never rely on a UI affordance to carry it.
+
+**Put each option's after-state INSIDE that option.** Prose written outside the option list is easy to miss while the developer is comparing options — and for a language/design question, the after-state is the thing being chosen.
+- **Zero exceptions — no bare "say go" shortcuts**: *"say 'go' to proceed"*, *"say yes to continue"*, *"shall I implement?"*, *"let me know if you want me to…"* are all questions, and each must come with the options and a recommendation. This applies to status confirmations, plan approvals, phase gates and casual check-ins alike. If it implies a choice, enumerate the choice.
+    - **NOT mechanically enforced here.** The upstream `ask-human-question-guard.sh` Stop hook was ruled OUT (DEC-354): it would double-gate against the container's own Stop hooks, and the framework's claim that the rule was "mechanically caught" was simply false in this environment. Nothing will stop you — the discipline is yours.
 
 **Skill execution handoffs**: When any skill instructs you to "offer a choice" or "ask which approach" (e.g., the writing-plans execution handoff) — translate that into an `ask-human` skill invocation. Skill template text is a
-description of intent, not a literal output script. The AskUserQuestion rule applies without exception, even when a skill suggests plain text output.
+description of intent, not a literal output script. The plain-text question protocol applies without exception — and note the inversion versus upstream: here, plain text IS the required form, not the thing to be replaced.
 
 **Execution mode recommendation**: When presenting subagent-driven vs inline execution options, recommend based on the specific plan — never copy a skill's hardcoded "(recommended)" label:
 - Recommend **Subagent-Driven** when: 6+ independent tasks, no classifier-blocked files involved (CLAUDE.md, settings.json are HARD BLOCKs for subagents too)
@@ -454,5 +472,5 @@ description of intent, not a literal output script. The AskUserQuestion rule app
 
 ## Global Skills Reference
 
-Full list of global slash skills (user-invocable): `~/.claude/refs/SKILLS.md`. Key skills also shown in `<system-reminder>` at each session start. Notable global skills not in every project CLAUDE.md: `/aggregate-findings`, `/adapt-project`, `/bootstrap`, `/inspect`, `/sleuth`, `/skill-audit`, `/templatize`, `/memory-off`, `/memory-on`.
+**Skills here are REPO-NATIVE** under `.claude/skills/` — read in place, nothing installed, no `~/.claude/refs/SKILLS.md` and no `~/.claude/skills/`. The 12 present (DEC-354 ruled 7 of the bundle's 48 IN; 5 predate it): `/ask-human` (the plain-text question protocol), `/converge` (the DEC-268 ladder, mechanised), `/sweep` (Phase 6), `/expanding-context` (Phase 1/3C), `/sleuth` (behavioural bug hunt + backend-divergence lens K), `/inspect` (10-lens health), `/cross-check` (spec validation), `/aggregate-findings` (cross-stage dedup), `/gaps`, `/handoff`, `/pre-commit`, `/retrospective`. Anything else named in this framework (`/mega-analysis`, `/audit`, `/bootstrap`, `/templatize`, `/memory-*`, `/adapt-project`, `/skill-audit`, `/recent`, `/forge`, `/qa-sweep`, `/validate-infra`, `/loop` as a global) is **NOT installed here** — `/loop` is provided by the host instead.
 
