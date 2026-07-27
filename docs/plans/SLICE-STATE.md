@@ -109,6 +109,14 @@ is not. **Currently OWED (need a dev-box run): `floatloop`** (WIN->LOSS on a dis
 **`queryparse`** (0.146 measured here vs DEC-338's ~0.88x — a ~6x disagreement, so **DEC-338's near-parity claim
 is UN-CERTIFIED**).
 
+**RULED 2026-07-26 (batch):** DEC-351 (A: reset binds per exec, unify positional/named, fix quadratic, fold in the
+MySQL-portable savepoint SQL + coverage) · DEC-359 (A: reject `10/0`, literal overflow, literal index-OOB at check
+time — index-OOB only when statically provable) · DEC-365 (A + NO-HIDDEN-LOSS above) · DEC-358 (A: `code == None`
+ratchet with a shrinking allowlist) · DEC-341 (A: pre-verified 5-rule grammar string section, 81/383 -> 0/383, PLUS a
+`vscode-textmate` pre-push gate — the gate is not optional) · DEC-343 (A: **amend DEC-248 to keep BOTH loop forms**,
+close Conflict C-2, add cross-form hints — DEC-248 SUPERSEDED on this point; the corpus voted 87:8 and the retirement
+went unbuilt for a month).
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 
