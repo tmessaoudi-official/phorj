@@ -135,6 +135,20 @@ offset-chunk native, no handle — `FileHandle` rejected, blocked by C4) · DEC-
 `tryWithLock`, whole-file advisory — **Windows semantics `[Unverified]`, no Windows CI, must be disclosed**).
 Both DEC-347 and DEC-348 sequence AFTER DEC-364.
 
+### 🧭 DEC-375 — STANDING BAR: THE LSP/EDITORS ARE THE EXPERT COMPANION (developer, 2026-07-26)
+**Flawless and fluent.** Complete/suggest wherever possible, **propose the imports a completion needs**, and
+make every diagnostic name the fix (with a quick-fix action), not just report a failure. Composes with
+Invariant 17 (`phg check` = LSP diagnostics) and DEC-181 (both editors, same change). Every editor-facing
+slice is measured against this.
+
+**RULED 2026-07-26 (UFCS cluster):** DEC-342 (A — receiver completion + import-gating BOTH directions; the
+LANGUAGE rule already works, verified: `line.trim()` needs `import Core.String`; the gap is editor-side.
+Covers EVERY receiver type, not just `string`. Adds the "exists in `Core.X` — add the import" diagnostic +
+quick-fix, fixes the `1:10` span. **UFCS ambiguity = an ERROR naming both candidates**, first-import-wins
+rejected) · DEC-346 (A — tooling first, then the 391 zero-judgement sites; **`Output.printLine` STAYS
+QUALIFIED**, 55.4% of the corpus, and UFCS inverts subject/sink for output).
+Canonical: `docs/specs/2026-07-26-ufcs-lsp-companion.md`.
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 
