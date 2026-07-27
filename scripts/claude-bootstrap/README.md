@@ -13,21 +13,42 @@ per-session (Invariant 19: only committed state survives).
 | `install.sh` | Idempotent `cp -u` into `~/.claude/` (never clobbers a newer user copy) | New |
 | `hooks/precompact-handoff.sh` | **PreCompact hook** — writes a deterministic handoff to `var/claude/handoff/` just before context compaction | Bundle hook, substantially adapted (DEC-354) |
 | `hooks/log-helpers.sh` | `log_obs()` structured logging, never fatal (Rule 13) | Bundle, + `mkdir -p` for the log dir |
-| `hooks/test-precompact-handoff.sh` | 14-assertion test suite for the hook — run it after any change | New |
+| `hooks/test-precompact-handoff.sh` | 26-assertion test suite for the hook — run it after any change | New |
 | `apply-pending-settings.sh` | Applies a `settings.json.pending` that Claude is classifier-blocked from writing (see below) | New |
+
+Two companion scripts live one level up in `scripts/`, written **instead of** importing bundle skills
+whose machinery does not exist here (DEC-388):
+
+| Script | What | Why native |
+|---|---|---|
+| `scripts/disk-reclaim.sh` | Frees rebuildable build artefacts. Dry run by default; `--tier=cache\|debug\|all`; `--yes` to apply. **Never touches `var/phorj-app`** (DEC-259). 19-assertion suite in `scripts/test-disk-reclaim.sh` | The bundle's `/cleanup` prunes Claude state; the real crisis here was `target/` at 22 GB on an 88%-full disk, which had already produced *spurious build reds* |
+| `scripts/validate-infra.sh` | `bash -n` over every tracked shell file + the git hooks, YAML parse over workflows, JSON parse over tracked JSON. Emits the Rule-7 Coverage table. **Wired into `pre-push`.** 18-assertion suite in `scripts/test-validate-infra.sh` | The bundle's `/validate-infra` is 212 lines of compose/hadolint/yamllint — and this repo has 0 Dockerfiles, 0 compose files, and none of those three tools on PATH |
 
 Runs automatically via the `SessionStart` hook in `.claude/settings.json`.
 
 ## Skills — repo-native, no install
 
-The 12 skills live under `.claude/skills/` and Claude Code reads them in place.
+The 13 skills live under `.claude/skills/` and Claude Code reads them in place.
 
 - **Ruled IN by DEC-354** (7 of the bundle's 48, each **adapted** — see each file's adaptation header):
   `/converge` (the DEC-268 ladder, mechanised — its defaults ARE the project tier), `/sweep`
   (Phase 6, plus byte-identity / anti-bandaid / Op-triad / file-size dimensions), `/expanding-context`,
   `/sleuth` (plus mandatory lens **K**, backend divergence), `/inspect`, `/cross-check` (Jira mode
   deleted), `/aggregate-findings`.
+- **Added by DEC-388, reversing DEC-354's drop:** `/forge`. It was dropped as "infra-shaped"; it is
+  architecture-shaped, and its **Chesterton's Fence** gate (challenge nothing that has a recorded WHY;
+  drop any finding that cannot name a principle + alternative + both costs) is *precise* here rather
+  than noisy, because phorj has the WHY corpus it looks for — 221 register rows, 18 frozen specs, a
+  210-line INVARIANTS. Adapted: `--quick` is the default tier, four mandatory Invariant lenses.
 - **Predating it:** `/ask-human`, `/gaps`, `/handoff`, `/pre-commit`, `/retrospective`.
+
+### Agent definitions
+
+`.claude/agents/backend-parity-reviewer.md` — the correctness+regression lens of DEC-268's mandated
+3-lens panel, encoding the triple-spine attack surface (coverage-first, the `Op` triad, single-sourced
+kernels, reified operands, the CTy trap, scratch slots, sugar expansion, transpile-AND-lift currency,
+the PHP-8.5 floor). Before this there was no `.claude/agents/` at all and the panel was improvised
+from memory at every gate. The other two lenses stay undefined on purpose — they are generic.
 
 ### Questions are PLAIN TEXT — `AskUserQuestion` is forbidden here
 
@@ -56,7 +77,15 @@ Ruled OUT with reasons — the full 199-file audit is
 - **The `deny` and `ask` permission tiers** — developer-ruled: in a remote container he has no
   terminal, so a `deny` blocks *him* too. Machine-level protections stay in his personal global
   settings, which this repo never touches.
-- **The other 41 skills, 34 `bin/` files, 3 refs** — config-portability and memory-pipeline machinery.
+- **`/recent`** — **obsolete**, not merely unwanted: the PreCompact hook already emits git state,
+  uncommitted paths and recent commits automatically.
+- **`/skill-audit`** — its "10+ skills" precondition is now met (13), but it audits *skills*; the audit
+  itself called that value circular.
+- **`/qa-sweep`** — **queued, CLI-mode-only, after Wave 0.** `phg` has 17 subcommands and no systematic
+  CLI QA; the browser half needs Playwright MCP, which is ruled OUT.
+- **`/mega-analysis` and a phorj-native `/full-review`** — deferred; `/aggregate-findings` already does
+  the synthesis half, and fanning out 8 review skills is the most expensive thing available.
+- **The other 39 skills, 34 `bin/` files, 3 refs** — config-portability and memory-pipeline machinery.
 
 ## `settings.json` — the hand-over loop
 
@@ -90,5 +119,5 @@ Contract: a PreCompact hook must never block compaction, so it **always exits 0*
 still logs a reason through `log_obs`. Verify with:
 
 ```bash
-bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 14 assertions
+bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 26 assertions
 ```

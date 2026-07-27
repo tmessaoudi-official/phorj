@@ -31,6 +31,14 @@ pending file existing = not yet applied.
   `aggregate-findings` retargeted off `~/.claude`), the deterministic **PreCompact handoff** hook +
   `log-helpers.sh` + a 14-assertion test suite, and the allow-list-only settings (71 entries, no
   `deny`, no `ask`) staged as the pending file above.
+- **DEC-388** — four bundle items DEC-386 had closed too broadly, reopened and built:
+  `scripts/disk-reclaim.sh` (dry-run default, 3 tiers, never touches `var/phorj-app`; measured 22 GB
+  `target/` on an 88%-full disk), **`/forge` — DEC-354's drop REVERSED** (it is architecture-shaped,
+  and its Chesterton's Fence gate is precise here because phorj HAS the WHY corpus it looks for),
+  `.claude/agents/backend-parity-reviewer.md` (DEC-268's panel was improvised at every gate; there
+  was no `.claude/agents/` at all), and `scripts/validate-infra.sh` **wired into pre-push** (native,
+  not the 212-line import whose Docker/yamllint/hadolint steps are all dead here).
+  Still queued: `/qa-sweep` CLI-mode-only, after Wave 0.
 - **DEC-387** — **`AskUserQuestion` is FORBIDDEN in this project.** Every question is PLAIN TEXT:
   context → minimal concrete example → numbered options each carrying its own after-state →
   recommended option FIRST with the reason → visible *"none of these / challenge the premise"* escape
