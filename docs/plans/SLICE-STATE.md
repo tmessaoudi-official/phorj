@@ -1,6 +1,12 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## 🟢 CURRENT CURSOR (2026-07-26) — AGENDA IN PROGRESS: **GR-1 / DEC-339 RULED**, 26 rulings left
+## ✅ CURRENT CURSOR (2026-07-26) — **THE AGENDA IS FULLY RULED. BUILD ORDER IS THE NEXT ACTION.**
+
+**READ FIRST: `docs/plans/2026-07-26-ruled-build-order.md`** — the single ordering of everything ruled,
+Wave 0 (unblock the workflow) through Wave 6 (real parallelism), plus the 5 **owed measurements**.
+
+All 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) were ruled interactively on 2026-07-26, **plus 13 more
+that the ruling session's own probing surfaced** (DEC-366…378). Nothing is built yet. Start at Wave 0.
 
 The developer is working the 27-item agenda interactively, most-severe-first, in **plain text** (the
 `AskUserQuestion` dialog kept returning unanswered in this container — do NOT use it in this session;

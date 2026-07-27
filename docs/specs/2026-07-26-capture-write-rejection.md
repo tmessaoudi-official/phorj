@@ -120,7 +120,7 @@ the foreign-interop boundary. A `ref x` operator was proposed and **REJECTED by 
 | `update(fn)` | Dropped — `List.reduce` covers accumulation; YAGNI |
 | `ref x` | **REJECTED** (ambiguous). Purely ergonomic anyway, and purely additive if ever revisited |
 | Implementation | Prelude, phorj source — no native code |
-| PHP leg, phorj-owned | Object box: `final class __phorj_Mutable { public $value; }` |
+| PHP leg, phorj-owned | **`final class Mutable`** — an ORDINARY transpiled prelude class, **no `__phorj_` helper** (corrected 2026-07-26: verified that prelude classes emit as `final class Regex` / `final class RegexMatch`, unprefixed) |
 | PHP leg, foreign boundary | **`&$var`** — a `Mutable<T>` param on a `declare function` maps to a by-ref arg (DEC-374) |
 | Task safety | **Not** synchronised — must not cross a task boundary once DEC-370 lands |
 | The capture-write diagnostic | Routes by shape: accumulation → `List.reduce`/`sumBy`/`count`; shared state → `Mutable<T>` |
@@ -130,6 +130,8 @@ with `b.value = b.value + 1` written from **inside a function and from the calle
 mutated value. So `.value` costs **zero new machinery**, and because it is a plain typed expression, *everything*
 that applies to `T` applies to it — arithmetic, UFCS, indexing, interpolation, passing to any function. A bespoke
 get/set pair is strictly worse.
+
+**No `__phorj_` helper is involved** (developer rule, DEC-377): `Mutable` is prelude *phorj source*, so it transpiles exactly like any other phorj class. An earlier draft of this spec wrongly said `final class __phorj_Mutable`; verified 2026-07-26 that prelude classes emit unprefixed (`final class Regex`).
 
 **Why NOT `&$param` for phorj-owned values** — two PHP shapes for one phorj value is the **DEC-329.3 bug class**
 (same value, different PHP shape ⇒ byte-identity regression). PHP references also cannot be a list element, an
