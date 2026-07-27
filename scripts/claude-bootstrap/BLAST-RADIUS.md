@@ -37,6 +37,17 @@ pgrep -a pattern      # verify matches before pkill -f pattern
 ```
 
 ### Protected paths — never auto-delete / never bundle
+
+> **phorj container note (DEC-354/DEC-387):** none of the machinery in this section exists here —
+> there is no `~/.claude/state/`, no `~/.claude/hooks/`, no bash firewall, no `ask`/`deny` tier
+> (the settings are **allow-list only** by ruling), and none of the named bypass sentinels or gate
+> hooks are installed. `ask-human-question-guard.sh` in particular was ruled OUT, and the tool it
+> guarded (`AskUserQuestion`) is now forbidden outright. Read the rest of this file for its
+> *reasoning* — the pre-flight blast-radius checks, backup-and-rollback discipline, and the
+> state-dependence insight all still apply — but not for its inventory of files. The real protections
+> here are: everything lives in git, `git status` is the pre-write check, and pushes need an explicit
+> request.
+
 `~/.claude/state/` and `~/.claude/projects/<slug>/state/` hold **persistent safety sentinels**: the
 bypass toggles (`ask-human-gate-bypass`, `ask-bash-firewall-bypass`, `ask-human-question-guard-bypass`)
 and the persistent `autonomous-3c-bypass`. They are removed ONLY by deliberate user action — each
