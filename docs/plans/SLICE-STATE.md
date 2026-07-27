@@ -117,6 +117,24 @@ ratchet with a shrinking allowlist) · DEC-341 (A: pre-verified 5-rule grammar s
 close Conflict C-2, add cross-form hints — DEC-248 SUPERSEDED on this point; the corpus voted 87:8 and the retirement
 went unbuilt for a month).
 
+### 🔗 THE ONE BY-REFERENCE FORM (DEC-368 amended + DEC-373/374, ruled 2026-07-26)
+**`Mutable<T>` is the single by-reference notion; `&$var` is only its PHP spelling at the foreign boundary.**
+Access is **`.value`** (a public mutable field — verified to work today with zero new machinery), which
+**replaces `get()`/`set()`**. A **`ref x` operator was REJECTED as ambiguous** (it was pure ergonomics and stays
+purely additive if ever revisited). PHP leg: object box `final class __phorj_Mutable { public $value; }` for
+phorj-owned values; **`&$var` ONLY at a foreign `declare function` call site**. Emitting `&$param` for
+phorj-owned values is REJECTED — two PHP shapes for one value is the DEC-329.3 bug class.
+Two verified gaps ruled fixable now: **DEC-373** — `phg lift` cannot parse `&$param` at all (`lift parse error:
+… found Amp`), so real PHP is unliftable; **DEC-374** — no by-ref param syntax for interop, so
+`preg_match($re, $s, &$matches)` and every PHP out-param idiom is uncallable.
+Canonical: `docs/specs/2026-07-26-capture-write-rejection.md` §Surface (amended) + §Usage.
+
+**RULED 2026-07-26 (I/O + guards cluster):** DEC-364 (A: build `using` FIRST — `defer` re-examined per DEC-371
+and still rejected on its real merits: LIFO + capture timing) · DEC-347 (A: `FileSystem.lines` over an
+offset-chunk native, no handle — `FileHandle` rejected, blocked by C4) · DEC-348 (A: scoped `withLock`/
+`tryWithLock`, whole-file advisory — **Windows semantics `[Unverified]`, no Windows CI, must be disclosed**).
+Both DEC-347 and DEC-348 sequence AFTER DEC-364.
+
 **SEQUENCING RULED (2026-07-26):** rule the WHOLE agenda first, build after — so the build order is
 planned once against the full ruled set instead of being reshuffled per answer.
 

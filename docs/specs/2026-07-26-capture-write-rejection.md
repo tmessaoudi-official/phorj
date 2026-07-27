@@ -107,6 +107,69 @@ routing, not the type.**
 | `Cell<T>` | Rejected. Rust jargon for interior mutability; the audience does not arrive knowing it. |
 | `Slot<T>` | Rejected. Most precise, zero baggage, but unfamiliar and it borrows from nothing the language already teaches. |
 
+### Surface — **AMENDED 2026-07-26 (developer-ruled, supersedes the get/set draft)**
+
+**ONE form.** `Mutable<T>` is the single by-reference notion in phorj; `&$var` is merely its PHP spelling at
+the foreign-interop boundary. A `ref x` operator was proposed and **REJECTED by the developer as ambiguous**.
+
+| Item | Ruling |
+|---|---|
+| Type | `Mutable<T>`, `import Core.Mutable;` |
+| Construction | `new Mutable(v)` — the only way to make one |
+| **Access** | **`.value`, a public mutable field — REPLACES `get()`/`set()`** |
+| `update(fn)` | Dropped — `List.reduce` covers accumulation; YAGNI |
+| `ref x` | **REJECTED** (ambiguous). Purely ergonomic anyway, and purely additive if ever revisited |
+| Implementation | Prelude, phorj source — no native code |
+| PHP leg, phorj-owned | Object box: `final class __phorj_Mutable { public $value; }` |
+| PHP leg, foreign boundary | **`&$var`** — a `Mutable<T>` param on a `declare function` maps to a by-ref arg (DEC-374) |
+| Task safety | **Not** synchronised — must not cross a task boundary once DEC-370 lands |
+| The capture-write diagnostic | Routes by shape: accumulation → `List.reduce`/`sumBy`/`count`; shared state → `Mutable<T>` |
+
+**Why `.value` and not `get`/`set`** — verified 2026-07-26: `class Box { constructor(public mutable int value) {} }`
+with `b.value = b.value + 1` written from **inside a function and from the caller** works today and prints the
+mutated value. So `.value` costs **zero new machinery**, and because it is a plain typed expression, *everything*
+that applies to `T` applies to it — arithmetic, UFCS, indexing, interpolation, passing to any function. A bespoke
+get/set pair is strictly worse.
+
+**Why NOT `&$param` for phorj-owned values** — two PHP shapes for one phorj value is the **DEC-329.3 bug class**
+(same value, different PHP shape ⇒ byte-identity regression). PHP references also cannot be a list element, an
+object field, or a return type, so they cannot express the type at all. `&` appears **only** where a foreign
+callee demands it, which is why it creates no second representation.
+
+### Usage — every case
+
+```phg
+import Core.Mutable;
+
+// 1. A counter you own
+Mutable<int> hits = new Mutable(0);
+hits.value = hits.value + 1;
+
+// 2. A function that mutates the caller's value
+function bump(Mutable<int> n): void { n.value = n.value + 1; }
+
+// 3. Report state out of a callback you do not control  <- the reason it exists
+Mutable<int> tries = new Mutable(0);
+db.transaction(function(): void throws DatabaseError { tries.value = tries.value + 1; });
+
+// 4. Stored, returned, collected — it is a real type
+class Session { mutable Mutable<int> hits; }
+List<Mutable<int>> counters = [new Mutable(0)];
+function makeCounter(): Mutable<int> { return new Mutable(0); }
+
+// 5. Collections: the BOX is shared; the collection inside stays immutable
+Mutable<List<int>> xs = new Mutable([1, 2]);
+xs.value = List.append(xs.value, 9);      // replaces the list — there is no in-place push
+
+// 6. Accumulation — use neither; the fold already ships
+int total = List.reduce(nums, 0, function(int acc, int x): int => acc + x);
+
+// 7. Foreign PHP out-param (DEC-374)
+declare function preg_match(string re, string subject, Mutable<List<string>> matches): int;
+```
+
+### Superseded draft (kept for the record)
+
 ### Surface
 
 | Item | Ruling |
