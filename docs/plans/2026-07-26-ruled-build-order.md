@@ -71,7 +71,7 @@
 
 | # | Item |
 |---|---|
-| 5.1 | **DEC-342** UFCS receiver completion + import-gating both ways + the "exists in `Core.X` — add the import" diagnostic **with a quick-fix** + call-site spans + the ambiguity error. Measured against **DEC-375** (the LSP is the expert companion) |
+| 5.1 | **DEC-342** UFCS receiver completion **+ WILDCARD-IMPORT completion** (`Ctrl+Space` on an empty line lists every wildcard-imported symbol and filters as you type) + import-gating both ways + the "exists in `Core.X` — add the import" diagnostic **with a quick-fix** + call-site spans + the ambiguity error. Measured against **DEC-375** (the LSP is the expert companion) |
 | 5.2 | **DEC-341** the pre-verified 5-rule TextMate string section (81/383 → 0/383) **plus** the `vscode-textmate` pre-push gate |
 | 5.3 | **DEC-346** migrate the 391 zero-judgement UFCS sites — **`Output.printLine` stays qualified** |
 | 5.4 | **DEC-350** rename to `Core.Database.Connection`, drop the `Module` suffix |

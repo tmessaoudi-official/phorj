@@ -60,6 +60,27 @@ module is imported **and** its first parameter accepts the receiver type.
    action** (DEC-375's bar: propose the import, don't just report the error).
 4. **Fix the span.** The error anchors at `1:10` (`package Main;`) instead of the call site.
 
+## Wildcard-import completion — RULED 2026-07-26 (developer addition)
+
+> **Everything a wildcard import brings into scope must be completable, everywhere a completion is
+> possible** — not only after a `.`.
+
+Concretely, with `import Acme.*;` (or `import Core.Http.*;` once DEC-384 lands):
+
+1. **On a bare/empty line, and on explicit `Ctrl+Space`**, the editor proposes **every symbol the
+   wildcard brought into scope** — functions, types, classes, enums — and **filters live as the user
+   types**. No `.` and no prefix required to get the first suggestion.
+2. **On a receiver (`x.`)**, wildcard-imported free functions whose first parameter accepts `x`'s type
+   appear as UFCS members, unioned with the module members from the table above.
+3. **Filtering is prefix + substring**, ranked, so `Ctrl+Space` on an empty line is usable rather than a
+   wall of every symbol in scope.
+4. **Same catalog as the checker** — the completion list is derived from the resolved import set, never
+   from a second source of truth, so what is offered is exactly what compiles (Invariant 17).
+
+This is a direct application of **DEC-375**: an expert user knows what a wildcard pulled in, so the
+editor must too. A wildcard that imports 40 symbols the editor cannot name is a worse experience than no
+wildcard at all.
+
 ## UFCS ambiguity across modules — RULED (A)
 
 Import-gating plus completion makes collisions reachable: several modules can contribute to the same
@@ -92,3 +113,6 @@ hint + a formatter lint, *then* migrate. Corpus: **2223** qualified call sites i
 5. `phg check` ≡ LSP diagnostics re-verified for every new code (Invariant 17 / DEC-252), and both
    editors updated in the same change (DEC-181).
 6. Migration of the 391 zero-judgement sites, with `Output.printLine` untouched.
+7. **Wildcard completion:** `Ctrl+Space` on an empty line lists every wildcard-imported symbol and
+   filters as the user types; wildcard-imported free functions also appear on a matching receiver.
+   Tested for a user package (`import Acme.*`) and a stdlib submodule (`import Core.Http.*`).
