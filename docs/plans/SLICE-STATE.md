@@ -5,20 +5,23 @@
 **READ FIRST: `docs/plans/2026-07-26-ruled-build-order.md`** — the single ordering of everything ruled,
 Wave 0 (unblock the workflow) through Wave 6 (real parallelism), plus the 5 **owed measurements**.
 
-### 🔴 ONE THING IS WAITING ON THE DEVELOPER (2026-07-27)
+### ✅ SETTINGS APPLIED — the hand-over loop closed (2026-07-27)
 
-`scripts/claude-bootstrap/settings.json.pending` is committed and **not yet applied**. Claude is
-**classifier-blocked** from writing `.claude/settings.json`, and the developer has no terminal in the
-container — so the change travels through the repo. On his own machine:
+The developer ran `apply-pending-settings.sh` on his own machine, re-signed the history and pushed
+(`970b567`). **Verified after syncing:** 71 allow entries, **no `deny`, no `ask`**, `PreCompact` wired
+on BOTH the `auto` and `manual` matchers, `settings.json.pending` deleted, no stray backup. The
+handoff hook is therefore **live** — it fires on the next compaction.
 
-```
-git pull && bash scripts/claude-bootstrap/apply-pending-settings.sh
-git add .claude/settings.json scripts/claude-bootstrap/settings.json.pending && git commit && git push
-```
+**Ruled the same day: `Bash(git:*)` stays broad (developer chose Option 1).** It permits
+`git push --force`, and with no `deny` tier there is **no mechanical brake in the container**. That is
+deliberate: full execution autonomy, per DEC-354. Force-push protection is behavioural (project rule:
+`git push` needs an explicit request) plus the developer's personal global settings on his own machine,
+which this repo never touches. Do not "helpfully" add a deny tier — it would block him too.
 
-Until then the **PreCompact handoff hook is NOT wired** (the hook itself is built and tested — only the
-`settings.json` entry that fires it is missing) and the allow-list is still the old 6-entry one. The
-script deletes the pending file on success, so `settings.json.pending` existing = not yet applied.
+**The hand-over loop is the reusable pattern**, not a one-off: Claude is classifier-blocked from
+writing `.claude/settings.json` and the developer has no terminal here, so any future settings change
+ships as `scripts/claude-bootstrap/settings.json.pending` + a run of `apply-pending-settings.sh`. The
+pending file existing = not yet applied.
 
 ### ✅ BUILT 2026-07-27 — DEC-354 + DEC-387 (out of wave order, at the developer's request)
 
