@@ -28,6 +28,36 @@ exempts entry files via `entry_for(prog, EntryRole::Cli)`, so a file whose ONLY 
 [Verified by reading the code; no shipped example trips it, so it is **latent, not a live defect**.]
 Asymmetry looks unintended, but it is user-visible language behaviour → the developer rules it, not me.
 
+### ✅ BUILT 2026-07-29 (out of wave order, developer-directed) — DEC-416 + DEC-417
+
+- **DEC-416 — pre-1.0 there is NO deprecation.** Developer ruling: retire = change outright + record +
+  the compiler knows only the new form + update the examples. Swept FOUR affordances: the `Core.Url`
+  compat twin (a whole retired module kept registered), three retired-but-still-explained diagnostics
+  (`E-MULTIPLE-MAIN` — added earlier the same day and reversed by this ruling — plus
+  `E-DB-NAMING-NOT-CONST` and `E-TRANSPILE-FS`), and `phg vendor`'s bespoke retirement error including
+  its own help topic. `docs/DEPRECATION.md` kept but SCOPED to post-1.0.
+- **DEC-417 — userland `#[Deprecated(message: "…")]`.** Provider `Core.Runtime.Deprecated`
+  (import-gated). Compile-time only: PHP 8.5 *does* have a native `#[\Deprecated]`, but it prints at
+  runtime onto stdout, so emitting it would break the byte-identity spine — the developer took the
+  erasure. Declaration tagged (`CompletionItemTag.Deprecated`), every use reported
+  (`W-DEPRECATED` + `DiagnosticTag.Deprecated` ⇒ editors strike the call through). The mark does NOT
+  spread to callers (Rust/Kotlin/Swift/C# all agree). 13 tests; shipped example; three legs identical.
+- Also ruled: **`git push` is now autonomous** (force-push still denied), and **Invariant 17's LSP/editor
+  bar is 100%** — a feature the editor doesn't show is not done.
+- **Collateral fix:** `Display for Diagnostic` hardcoded "error", so EVERY warning in the language read
+  `warning: type error at …`. Now severity-aware.
+- **Invariant 13 paid down, not deferred:** `collect_enum` → `collect/enums.rs` (types_decls 773→597)
+  rather than growing a grandfathered file by one line; LSP tests split at the hard cap.
+
+### ⚠ TWO GAPS RECORDED, NOT SILENTLY SKIPPED (both pre-existing, both queued)
+
+1. **`KNOWN_ISSUES` LIFT-ATTR — the PHP lifter is blind to EVERY PHP 8 attribute.**
+   [Verified: `src/lift/lexer.rs:144` treats `#` as a line comment, so `#[...]` is swallowed whole.]
+   Found by actually testing the lift direction. This is why Invariant 17's lift leg could NOT be closed
+   for `#[Deprecated]`. Impacts routes/DI/ORM attributes in any lifted framework code — its own slice.
+2. **The LSP completes no attribute NAMES at all** — typing `#[` offers nothing (`Entry`, `Config`,
+   `Route`, `Injectable`, `Deprecated`). Uniform across every attribute; queued rather than special-cased.
+
 ### NEXT: **Wave 1.1 — DEC-339** (the P0: redeclaration of a live local/param binding)
 
 Migration cost is MEASURED (DEC-412): **exactly one in-tree site**, `examples/guide/math.phg:54`
