@@ -1,5 +1,24 @@
 # Known Issues & Limitations
 
+## LIFT-ATTR — the PHP lifter is blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
+
+`src/lift/lexer.rs:144` treats `#` as a PHP line comment and skips to end of line. PHP 8 attributes are
+spelled `#[...]`, so **every** attribute in a lifted file is silently swallowed as a comment —
+`#[\Deprecated]`, `#[\Override]`, `#[\ReturnTypeWillChange]`, and any framework attribute
+(routes, DI, ORM mappings, validation). [Verified: `phg lift` on a PHP file whose function carries
+`#[\Deprecated(message: "use shout")]` emits the function with no attribute and no warning.]
+
+**Impact.** A lifted draft loses annotation-carried semantics with no diagnostic. For frameworks that
+put routing or mapping in attributes, this is the most meaningful part of the file. It also means
+Invariant 17's "lift updated in the same change" could NOT be satisfied for DEC-417's
+`#[Deprecated]`: the mapping is trivial and faithful (PHP's own `#[\Deprecated(message:)]` →
+phorj's `#[Deprecated(message:)]`), but there is nowhere to hook it until the lexer can see `#[`.
+
+**Not a regression** — it predates DEC-417 and was found by testing the lift direction rather than
+assuming it. **Queued as its own slice** (lexer: distinguish `#[` from `#`; parser: attribute lists on
+declarations; lifter+printer: map the known set, and emit a `// verify` note for unknown attributes so
+nothing is dropped silently, per Invariant 14's no-silent-downgrade rule).
+
 ## ✅ FIXED (2026-07-19, `a355c342`) — 🔴 was P0: the example byte-identity GLOB was a NO-OP: `all_examples_match_between_backends` skipped ALL 201 examples
 
 **Severity: P0 — the primary enforcement of Invariant #1 (byte-identity spine) over the example

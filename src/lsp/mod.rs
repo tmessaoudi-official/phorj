@@ -24,6 +24,8 @@ mod scope;
 mod symbols;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_deprecated;
 
 use crate::diagnostic::Diagnostic;
 use crate::json::Json;
@@ -537,8 +539,17 @@ fn lsp_diagnostic_json(d: &Diagnostic, text: &str) -> String {
     let code = d
         .code
         .map_or_else(|| String::from("null"), |c| format!("\"{}\"", escape(c)));
+    // DEC-417: LSP `DiagnosticTag` — `Deprecated` = 2. This is what makes an editor STRIKE THROUGH the
+    // use of a deprecated symbol rather than just underlining it, which is the visible half of the
+    // ruling ("show anything using a deprecated thing as deprecated too"). `Unnecessary` = 1 is
+    // deliberately NOT applied to the `W-UNUSED-*` family here — that would grey those out, and it is a
+    // separate call the developer has not made.
+    let tags = match d.code {
+        Some("W-DEPRECATED") => ",\"tags\":[2]",
+        _ => "",
+    };
     format!(
-        "{{\"range\":{},\"severity\":{severity},\"code\":{code},\"source\":\"phorj\",\"message\":\"{}\"}}",
+        "{{\"range\":{},\"severity\":{severity},\"code\":{code},\"source\":\"phorj\"{tags},\"message\":\"{}\"}}",
         range_json(line, col, end_line, end_col),
         escape(&message)
     )

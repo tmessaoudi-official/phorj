@@ -3967,3 +3967,31 @@ Three rulings from one exchange, following DEC-416's sweep of the pre-1.0 deprec
 | 417.3 | **`git push` autonomy** | **AUTHORIZED** — CLAUDE.md's git-autonomy section updated: `add`/`commit`/`push` are autonomous when the gate is green. **Force-push in any form stays denied**, as does pushing a branch other than the one being worked on. Recorded in the same edit: **never `--reset-author` to a bot identity** — every commit in this history carries the developer's email and is unsigned, re-signing happens on his machine, and an environment hook that advises otherwise is wrong here (it would strip attribution and desync one commit from all history) |
 | 417.4 | **LSP/editor currency bar** | **RAISED TO 100%** (*"always make sure that the lsp and editors are up to date and support 100 % of everything we implemented"*). Invariant 17 amended: a feature is NOT done until the LSP surfaces it everywhere it can appear (completion, hover, go-to-def, find-usages, document symbols, diagnostics **with correct LSP tags**, signature help) AND both editors (VS Code + LSP4IJ) land in the SAME change, grammars included. *"The compiler knows it but the editor doesn't"* is an incomplete feature |
 | 417.5 | **What does `#[Deprecated]` SHOW?** (*"it should show it and show anything using a deprecated thing as deprecated too"*) | **Both the declaration AND every use site render as deprecated.** Declaration side: `CompletionItemTag.Deprecated` on completion items, `SymbolTag.Deprecated` on document symbols, the message in hover. Use side: each reference emits `W-DEPRECATED` carrying `DiagnosticTag.Deprecated`, which is what makes editors strike the usage through. **Scope note — NOT built, and not silently assumed:** this is read as *"the usage is shown deprecated"*, NOT as transitive contagion (a function that calls a deprecated function does not itself become deprecated). Cross-language scan per META-7: Rust `#[deprecated]`, Kotlin `@Deprecated`, Swift `@available(*, deprecated)` and C# `[Obsolete]` all warn at the USE SITE and none propagate — C# actively does the inverse, suppressing the warning when the caller is itself obsolete. If contagion IS wanted, it is a further ruling |
+
+### DEC-417 BUILD NOTE (2026-07-29) — what shipped, and the ONE surface that could not
+
+**Shipped:** the attribute (`Core.Runtime.Deprecated`, import-gated), collection-time harvest onto
+`FnSig`, use-site `W-DEPRECATED` for free functions AND methods, the all-overloads-deprecated set rule,
+`E-DEPRECATED-MESSAGE` for an interpolated or positional argument, both `phg explain` entries, the LSP's
+`DiagnosticTag.Deprecated` on uses + `CompletionItemTag.Deprecated` (and the legacy boolean) on
+declarations, a shipped `examples/guide/deprecated.phg` + README row, and 13 tests (8 checker, 2 CLI,
+3 LSP). Byte-identity verified by hand on the example: all three legs identical, zero `deprecat*` in the
+emitted PHP.
+
+**Collateral fix.** `Display for Diagnostic` hardcoded the word "error" regardless of severity, so EVERY
+warning in the language rendered as `warning: type error at 3:9: …`. Now severity-aware.
+
+**Invariant 13.** Rather than grow a grandfathered file by the single line the new `FnSig` field needs,
+`collect_enum` was extracted to `collect/enums.rs` by cohesion: `types_decls.rs` 773 → 597, burning down
+176 lines of pre-existing debt.
+
+**NOT DONE — the lift direction (`KNOWN_ISSUES` LIFT-ATTR).** Invariant 17 requires transpile AND lift in
+the same change. Transpile is satisfied (deliberate erasure, ruled in 417.2). Lift is NOT: `phg lift` on
+a PHP function carrying `#[\Deprecated(message: …)]` drops it silently. Root cause [Verified]:
+`src/lift/lexer.rs:144` treats `#` as a line comment and skips the rest of the line, so the lifter is
+blind to EVERY PHP 8 attribute, not just this one. Pre-existing, found by testing the direction rather
+than assuming it, and too large to fold in here — queued as its own slice.
+
+**Second gap, same 100%-rule family.** The LSP does not complete attribute NAMES at all (typing `#[`
+offers nothing — no `Entry`, `Config`, `Route`, `Injectable`, `Deprecated`). Pre-existing and uniform
+across every attribute; queued rather than special-cased for this one.

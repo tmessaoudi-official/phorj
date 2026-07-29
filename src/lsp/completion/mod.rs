@@ -23,8 +23,21 @@ const EMPTY: &str = "{\"isIncomplete\":false,\"items\":[]}";
 /// A `CompletionItem` JSON object: a label, an LSP `CompletionItemKind`, and a short detail string.
 /// (Moved here from `mod.rs` — a completion concern, and it keeps `mod.rs` under its Invariant-13 cap.)
 fn completion_item(label: &str, kind: u32, detail: &str) -> String {
+    completion_item_tagged(label, kind, detail, false)
+}
+
+/// [`completion_item`] plus DEC-417's `CompletionItemTag.Deprecated` (= 1) when `deprecated`, which is
+/// what makes a client render the entry struck through in the picker. Also sets the older `deprecated`
+/// boolean field: `tags` superseded it in LSP 3.15, but some clients still read only the boolean, and
+/// emitting both is what the spec advises for compatibility.
+fn completion_item_tagged(label: &str, kind: u32, detail: &str, deprecated: bool) -> String {
+    let dep = if deprecated {
+        ",\"tags\":[1],\"deprecated\":true"
+    } else {
+        ""
+    };
     format!(
-        "{{\"label\":\"{}\",\"kind\":{kind},\"detail\":\"{}\"}}",
+        "{{\"label\":\"{}\",\"kind\":{kind},\"detail\":\"{}\"{dep}}}",
         super::escape(label),
         super::escape(detail)
     )
@@ -218,9 +231,15 @@ fn general_items(
     let mut items: Vec<String> = Vec::new();
     let mut seen_top: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Some(prog) = program {
-        for (name, kind) in super::symbols::top_level_symbols(prog) {
+        for (name, kind, deprecated) in super::symbols::top_level_symbols(prog) {
             if seen_top.insert(name.clone()) {
-                items.push(completion_item(&name, kind, "phorj symbol"));
+                // DEC-417: a `#[Deprecated]` declaration is shown struck through in the picker.
+                items.push(completion_item_tagged(
+                    &name,
+                    kind,
+                    "phorj symbol",
+                    deprecated,
+                ));
             }
         }
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -251,9 +270,15 @@ fn general_items(
             .ok()
             .and_then(|t| Parser::new(t).parse_program().ok())
         {
-            for (name, kind) in super::symbols::top_level_symbols(&p) {
+            for (name, kind, deprecated) in super::symbols::top_level_symbols(&p) {
                 if seen_top.insert(name.clone()) {
-                    items.push(completion_item(&name, kind, "project symbol"));
+                    // DEC-417: tagged across the whole project, not just the open buffer.
+                    items.push(completion_item_tagged(
+                        &name,
+                        kind,
+                        "project symbol",
+                        deprecated,
+                    ));
                 }
             }
         }

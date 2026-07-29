@@ -129,19 +129,27 @@ pub fn signature_text(text: &str, span: Span) -> String {
     rest[..cut].split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Every top-level declaration as `(name, CompletionItemKind)` for completion. Imports are skipped
-/// (they bind a module qualifier, not a completable value name). CompletionItemKind: Function=3,
-/// Class=7, Interface=8, Enum=13, Struct=22 (trait), TypeParameter=25 (type alias).
-pub fn top_level_symbols(program: &Program) -> Vec<(String, u32)> {
+/// Every top-level declaration as `(name, CompletionItemKind, is_deprecated)` for completion. Imports
+/// are skipped (they bind a module qualifier, not a completable value name). CompletionItemKind:
+/// Function=3, Class=7, Interface=8, Enum=13, Struct=22 (trait), TypeParameter=25 (type alias).
+///
+/// The third element is DEC-417: whether the declaration carries `#[Deprecated]`, so a completion item
+/// can be tagged `CompletionItemTag.Deprecated` and shown struck through in the picker. Only functions
+/// can carry it today (the attribute's validated targets), so every other arm is `false` — but the
+/// tuple shape is uniform so widening the targets later touches only this function.
+pub fn top_level_symbols(program: &Program) -> Vec<(String, u32, bool)> {
     let mut out = Vec::new();
     for it in &program.items {
         match it {
-            Item::Function(f) => out.push((f.name.clone(), 3)),
-            Item::Class(c) => out.push((c.name.clone(), 7)),
-            Item::Interface(i) => out.push((i.name.clone(), 8)),
-            Item::Enum(e) => out.push((e.name.clone(), 13)),
-            Item::Trait(t) => out.push((t.name.clone(), 22)),
-            Item::TypeAlias { name, .. } => out.push((name.clone(), 25)),
+            Item::Function(f) => {
+                let dep = f.attrs.iter().any(crate::ast::Attribute::is_deprecated);
+                out.push((f.name.clone(), 3, dep));
+            }
+            Item::Class(c) => out.push((c.name.clone(), 7, false)),
+            Item::Interface(i) => out.push((i.name.clone(), 8, false)),
+            Item::Enum(e) => out.push((e.name.clone(), 13, false)),
+            Item::Trait(t) => out.push((t.name.clone(), 22, false)),
+            Item::TypeAlias { name, .. } => out.push((name.clone(), 25, false)),
             Item::Import { .. } | Item::Test { .. } => {}
         }
     }

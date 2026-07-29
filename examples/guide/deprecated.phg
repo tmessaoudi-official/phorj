@@ -1,0 +1,54 @@
+// Userland deprecation (DEC-417) — `#[Deprecated(message: "…")]`.
+//
+// Marking your OWN api as deprecated. The mark is compile-time only: the compiler warns at every
+// place the symbol is USED, your editor strikes those uses through, and nothing changes at runtime.
+//
+//   * the DECLARATION is marked   — shown struck through in completion and the symbol outline
+//   * every USE is reported       — `W-DEPRECATED`, carrying your message, tagged so editors strike it
+//   * nothing gates              — it rides the warning channel; `run`/`check` still succeed
+//
+// Two things it deliberately does NOT do. It does not spread: `describe` below calls a deprecated
+// function, and `describe` itself stays perfectly live (same as Rust, Kotlin, Swift and C#). And it
+// does not reach the PHP output — PHP 8.5 has its own `#[\Deprecated]`, but that one prints a notice
+// at RUNTIME, which would break the byte-identity spine, so phorj erases the mark before every
+// backend. Run this with `--tree-walker`, or transpile it and run the PHP: identical stdout.
+//
+// The message must be a plain literal (there is no runtime to interpolate against), and `message:`
+// is named, never positional — `phg explain E-DEPRECATED-MESSAGE`.
+package Main;
+
+import Core.Output;
+import Core.Runtime.Deprecated;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// The old spelling. Still works, still ships — callers just get told.
+#[Deprecated(message: "use shout(text) — it handles empty input")]
+function yell(string text): string {
+    return "{text}!";
+}
+
+// The replacement.
+function shout(string text): string {
+    if (text == "") {
+        return "!";
+    }
+    return "{text}!";
+}
+
+// Calling a deprecated function does NOT make this one deprecated. Callers of `describe` see nothing;
+// only the `yell` call below is flagged.
+function describe(string text): string {
+    return "old says {yell(text)}, new says {shout(text)}";
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): int {
+    // Each of these two lines warns W-DEPRECATED at compile time, naming the message above.
+    Output.printLine(yell("hello"));
+    Output.printLine(describe("hi"));
+    // The replacement is silent, and handles the case the old one got wrong.
+    Output.printLine(shout("hello"));
+    Output.printLine(shout(""));
+    return 0;
+}

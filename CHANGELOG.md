@@ -6,6 +6,34 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — userland `#[Deprecated(message: "…")]` (2026-07-29, DEC-417)
+Mark your own API as deprecated. Provider is `Core.Runtime.Deprecated`, import-gated like
+`#[Entry]`/`#[Config]`. Both halves of the ruling ship: the DECLARATION is tagged (struck through in
+completion and the outline) and every USE is reported with `W-DEPRECATED` carrying your message, tagged
+`DiagnosticTag.Deprecated` so editors strike the call through. It never gates — warning channel only.
+- **Compile-time only.** PHP 8.5 has a native `#[\Deprecated]`, but it fires at RUNTIME onto stdout,
+  which would break the byte-identity spine, so the mark is erased before every backend. Verified: the
+  emitted PHP contains zero deprecation markers and all three legs match on the shipped example.
+- **The mark does not spread.** A function calling a deprecated function does not become deprecated —
+  matching Rust/Kotlin/Swift/C# (C# actively does the inverse). Pinned by a test.
+- An overload set warns only when EVERY signature is deprecated, so a set with a live overload stays
+  quiet instead of crying wolf.
+- Rejected loudly, not dropped: an interpolated `message:` (no runtime exists to evaluate the holes) and
+  a positional argument. Both `E-DEPRECATED-MESSAGE`, with a `phg explain` entry.
+- Ships `examples/guide/deprecated.phg` + README row; the VS Code grammar already highlights it (its
+  attribute rule is generic, verified rather than assumed).
+
+### Fixed — every warning in the language said "error" (2026-07-29)
+`Display for Diagnostic` hardcoded the severity word, so warnings rendered as
+`warning: type error at 3:9: …`. The headline is now severity-aware and the doubled prefix is gone.
+Found while building `W-DEPRECATED`, where "error" is exactly the wrong word for something that
+compiles and runs fine.
+
+### Known gap recorded — the PHP lifter is blind to all PHP 8 attributes (`KNOWN_ISSUES` LIFT-ATTR)
+`src/lift/lexer.rs` treats `#` as a line comment, so `#[...]` is swallowed whole. This predates
+DEC-417 and was found by actually testing the lift direction. It means Invariant 17's lift leg could
+not be closed for `#[Deprecated]`; queued as its own slice rather than half-done here.
+
 ### Removed — every pre-1.0 deprecation affordance (2026-07-29, DEC-416)
 Developer ruling: before the first stable release there are no users and nobody to migrate, so phorj does
 not deprecate. Retiring something means changing it outright, recording the decision, teaching the
