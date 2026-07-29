@@ -3937,3 +3937,21 @@ Options when this is taken up: (a) exempt any `#[Entry]` regardless of kind; (b)
 why in the spec; (c) exempt per-kind with an explicit list. No recommendation recorded here — it needs
 the developer's ruling, and it belongs in the Wave-4.4 slice (DEC-345, the package-validator work) where
 the surrounding validators are already being touched.
+
+## DEC-416 — pre-1.0 there is NO deprecation: a retired name is an unknown name (2026-07-29, **RULED**)
+
+| DEC | Question | Ruling | Status |
+|----|----------|--------|--------|
+| DEC-416 | **What deprecation/retirement affordances should phorj carry before its first stable release?** Raised by the developer on seeing that the Wave-0.4 sweep had *kept* a retired `E-MULTIPLE-MAIN` explain arm "so an old build log still explains itself" | **RULED (developer, verbatim): *"There is no need for retiring error messages! just hard unknown syntax error! this is before first stable release! so no one is using it! and no one will migrate from it! if we retire something! we just change it and put it in the decisions and the compiler/interpreter will only recognize the new version that's all!"*** plus *"and just update the examples!!"*. **The rule: retire = change outright + record the decision + the compiler recognises ONLY the new form + update the examples in the same change.** No compat twin, no grace window, no migration hint, no retired-but-still-explained diagnostic. A retired name is an UNKNOWN name and produces the ordinary hard error. **Second ruling, same exchange: `W-DEPRECATED` STAYS but becomes USERLAND** — *"We should have a W-DEPRECATED that can be triggered by an explicit `#[Deprecated(message: '')]` in the .phg"* — an attribute an author puts on their own API, not an internal stdlib table. Its provider package is an OPEN sub-question the developer raised (*"we need to decide where the Deprecated will come from! the full package name!!"*) — see the PENDING row below | **RULED — swept 2026-07-29** |
+
+**The inventory that was swept (answering the developer's *"what else are we showing deprecation/retiring for???"*).** Five affordances existed; four are DELETED:
+
+1. **The `Core.Url` deprecated TWIN** — `src/ext/uri/url_compat.rs` kept the whole retired module registered as a parallel row-set whose own comment said *"removed after the deprecation window"*. **DELETED** — `import Core.Url;` is now a plain unknown-import error.
+2. **The `Core.Url` rows in `native::deprecation_of`** — **DELETED.** The function now has no release-build rows at all; a comment records that it is NOT dead code, because the userland attribute will drive it.
+3. **Three retired-but-still-explained diagnostics** — `E-MULTIPLE-MAIN` (added earlier the same day and reversed by this ruling), `E-DB-NAMING-NOT-CONST` (DEC-258), `E-TRANSPILE-FS` (DEC-313). Each arm's entire body announced its own retirement. **ALL THREE DELETED.**
+4. **`phg vendor`'s bespoke retirement error** naming the DEC-316 replacement verbs, threaded through 4 sites (`cli/pm.rs`, `cli/help.rs` — it even had a HELP TOPIC — and `main.rs` ×2). **ALL DELETED**; `phg vendor` is now an unknown command like any typo. *(Invariant 10's wording "`phg vendor` is retired and errors" needs its parenthetical updated when CLAUDE.md is next edited — it now errors as unknown, not as retired.)*
+5. **`docs/DEPRECATION.md` + `SEMVER.md` + `STABILITY.md`** — a full Live→Deprecated→Removed lifecycle with removal versions. **KEPT but SCOPED**: a header now states the lifecycle applies from 1.0 onward and that pre-1.0 follows this ruling. Deleting them was not ruled and they describe a genuine post-1.0 need.
+
+Already compliant before the sweep, kept as the reference pattern: the global `println` retirement (*"a bare call now resolves as an unknown free function"*), bare `#[Entry]` (*"retired, FULLY BREAKING"*), and `for (T x in xs)` (DEC-343 kept BOTH forms, so nothing was retired at all).
+
+**Test discipline.** The one test that asserted the old behaviour (`deprecated_core_url_warns_with_uri_module_replacement`) was not deleted but INVERTED into `retired_core_url_import_is_simply_unknown_not_deprecated`, which pins the new contract: the retired import is a hard error AND emits no `W-DEPRECATED`.

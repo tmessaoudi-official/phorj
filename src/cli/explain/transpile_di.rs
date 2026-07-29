@@ -119,13 +119,6 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              codepoint tier (`String.codepointLength`/`codepoints`, PCRE/byte-decode based)\n\
              transpiles. Run programs using the native-only tier with `phg run`.\n"
         }
-        "E-TRANSPILE-FS" => {
-            "E-TRANSPILE-FS — RETIRED (DEC-313, 2026-07-22): `Core.FileSystemModule` now transpiles.\n\n\
-             The `__phorj_fs_*` helpers map every native to its faithful PHP builtin and reconstruct\n\
-             the 7-way FileSystemError kind taxonomy with explicit pre-checks; the `<<Kind>>` marker\n\
-             is the byte-identity contract (the message tail after it carries raw OS text and is\n\
-             out-of-contract). If a tool still shows this code, it was built before 2026-07-22.\n"
-        }
         "E-TRANSPILE-HTTPCLIENT" => {
             "E-TRANSPILE-HTTPCLIENT — a program importing `Core.HttpClientModule` cannot be transpiled to PHP.\n\n\
              `Core.HttpClientModule` is native-only: live network I/O cannot be byte-identical between the\n\

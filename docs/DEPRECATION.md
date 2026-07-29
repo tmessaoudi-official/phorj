@@ -1,5 +1,19 @@
 # Deprecation policy
 
+> ## ⚠ PRE-1.0: THIS LIFECYCLE DOES NOT APPLY (DEC-416, developer-ruled 2026-07-29)
+>
+> Before the first stable release there are **no users and nobody to migrate**, so phorj does **not**
+> deprecate: when something is retired it is **changed outright**, the decision is recorded in the
+> register, the compiler/interpreter recognises **only the new form**, and the examples are updated in
+> the same change. No compat twin, no grace window, no migration hint, no retired-but-explained
+> diagnostic — a retired name is simply an **unknown** name, and produces the ordinary hard error.
+>
+> `W-DEPRECATED` still exists, but it is being repurposed as a **userland** facility: an explicit
+> `#[Deprecated(message: "…")]` attribute that a `.phg` author puts on their OWN API. It is no longer
+> driven by an internal stdlib side-table.
+>
+> **Everything below describes the policy from 1.0 onward.**
+
 How Phorj retires a part of its public surface without breaking users silently. This complements
 [`../SEMVER.md`](../SEMVER.md) (when breaks are allowed) and [`../STABILITY.md`](../STABILITY.md) (which
 surface is stable vs experimental vs deprecated).

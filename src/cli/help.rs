@@ -169,9 +169,6 @@ pub fn help_for(cmd: &str) -> String {
                       examples:\n  \
                       phg explain E-UNKNOWN-IDENT\n"
         }
-        "vendor" => {
-            "vendor — RETIRED (DEC-282): superseded by `phg add/install/update/remove` (DEC-316).\n"
-        }
         "add" => {
             "add — add a dependency to phorj.json and install it (DEC-316).\n\n\
                   usage: phg add <Publisher/Name>[@version] [--git <url> --ref <tag>] [--path <dir>]\n\n\

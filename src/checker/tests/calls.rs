@@ -423,19 +423,22 @@ fn deprecated_native_emits_w_deprecated() {
 }
 
 #[test]
-fn deprecated_core_url_warns_with_uri_module_replacement() {
-    // DEC-279: `Core.Url` merged into the Uri module. The old paths KEEP WORKING (the twin rows in
-    // `src/ext/uri/url_compat.rs`) but each call warns W-DEPRECATED, and the guidance names the new home.
+fn retired_core_url_import_is_simply_unknown_not_deprecated() {
+    // DEC-416: pre-1.0 a retired surface is REMOVED, not deprecated. `Core.Url` merged into the Uri
+    // module (DEC-279) and its compat twin is deleted, so the old import is an ordinary UNKNOWN
+    // import — a hard error, with no W-DEPRECATED and no migration hint.
     let src =
         r#"import Core.Url; function main() -> void { string s = Url.encodeUriComponent("a b"); }"#;
-    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
-    let w = warnings_of(src);
     assert!(
-        w.iter().any(|d| d.code == Some("W-DEPRECATED")
-            && d.hint
-                .as_deref()
-                .is_some_and(|h| h.contains("Uri.encodeComponent"))),
-        "expected W-DEPRECATED hinting at Uri.encodeComponent, got {w:?}"
+        !errors_of(src).is_empty(),
+        "the retired `Core.Url` import must be a hard error, got no diagnostics"
+    );
+    assert!(
+        !warnings_of(src)
+            .iter()
+            .any(|d| d.code == Some("W-DEPRECATED")),
+        "a retired surface must not emit W-DEPRECATED, got {:?}",
+        warnings_of(src)
     );
 }
 

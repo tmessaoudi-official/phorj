@@ -14,19 +14,16 @@ fn root() -> Result<PathBuf, String> {
 }
 
 /// Dispatch a package-manager verb (with `build --target`'s stub download, the only
-/// network-capable commands). `args` is everything after the
-/// subcommand. `vendor` is the retired alias (DEC-282) pointing at the DEC-316 verbs.
+/// network-capable commands). `args` is everything after the subcommand.
+///
+/// There is no retired-alias arm: pre-1.0, a retired verb is simply an UNKNOWN verb (DEC-416), so the
+/// old `vendor` name falls through to the `other =>` unknown-command error like any typo.
 pub fn dispatch(cmd: &str, args: &[String]) -> Result<(), String> {
     match cmd {
         "install" => cmd_install(),
         "update" => cmd_update(),
         "add" => cmd_add(args),
         "remove" => cmd_remove(args),
-        "vendor" => Err(
-            "phg vendor is retired (DEC-282): use `phg add <Publisher/Name>`, \
-                         `phg install`, `phg update`, or `phg remove <Publisher/Name>` (DEC-316)."
-                .to_string(),
-        ),
         other => Err(format!("unknown package command `{other}`")),
     }
 }

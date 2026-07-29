@@ -94,12 +94,16 @@ pub struct Deprecated {
     pub removed_in: &'static str,
 }
 
-/// Whether the stdlib native `(module, name)` is deprecated, with its replacement guidance (the
-/// policy lives in `docs/DEPRECATION.md`; a deprecated symbol keeps working but emits
-/// `W-DEPRECATED` for ≥1 minor release before removal). First shipping entries: the `Core.Url`
-/// module merged into the Uri module (DEC-279) — its four natives stay registered as a twin of
-/// the `Core.Native.Uri` rows and warn here. A `#[cfg(test)]` sample additionally exercises the
-/// lint wiring against a never-shipping fixture.
+/// Whether the stdlib native `(module, name)` is deprecated, with its replacement guidance.
+///
+/// **No release-build rows today, by design (DEC-416).** Pre-1.0 there is no deprecation window: a
+/// retired surface is simply REMOVED and the examples are updated in the same change, so nothing
+/// needs a grace period. The `Core.Url` twin that used to live here is deleted.
+///
+/// This is NOT dead code awaiting removal — the developer has ruled that `W-DEPRECATED` stays and
+/// becomes USERLAND-driven, triggered by an explicit `#[Deprecated(message: "…")]` in `.phg` source
+/// rather than by this internal table. The `#[cfg(test)]` fixture below keeps the native-call →
+/// `W-DEPRECATED` wiring covered until that attribute lands.
 #[must_use]
 pub fn deprecation_of(module: &str, name: &str) -> Option<Deprecated> {
     #[cfg(test)]
@@ -110,20 +114,7 @@ pub fn deprecation_of(module: &str, name: &str) -> Option<Deprecated> {
             removed_in: "0.99.0",
         });
     }
-    // DEC-279: `Core.Url` merged into the Uri module (`import Core.UriModule;` → `Uri.<fn>`).
-    if module == "Core.Url" {
-        let replacement = match name {
-            "encodeForm" => "Core.UriModule — Uri.encodeForm",
-            "encodeUriComponent" => "Core.UriModule — Uri.encodeComponent",
-            "decodeForm" => "Core.UriModule — Uri.decodeForm",
-            "decodeUriComponent" => "Core.UriModule — Uri.decodeComponent",
-            _ => return None,
-        };
-        return Some(Deprecated {
-            replacement,
-            removed_in: "0.7.0",
-        });
-    }
+    let _ = (module, name);
     None
 }
 

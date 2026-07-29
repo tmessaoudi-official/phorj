@@ -83,14 +83,6 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              name from the remaining columns, nested rules identical to `queryInto`). A list/map/enum V is\n\
              not supported.\n"
         }
-        "E-DB-NAMING-NOT-CONST" => {
-            "E-DB-NAMING-NOT-CONST — RETIRED (DEC-258; no longer emitted).\n\n\
-             A runtime `Naming` value is now legal everywhere: the strategy is a real field riding\n\
-             the `Database`/`Statement` values, so a statically-untraceable strategy dispatches on\n\
-             that field at run time instead of being rejected. A literal at the call site (or on the\n\
-             connection constructor) still bakes the column names at compile time — zero-cost when\n\
-             traceable, one branch per hydration call when not.\n"
-        }
         "E-STATIC-NO-INIT" => {
             "E-STATIC-NO-INIT — a `static` field has no initializer.\n\n\
              A `static` field is class-level state with no constructor to set it, so it must be\n\

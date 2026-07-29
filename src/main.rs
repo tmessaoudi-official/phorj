@@ -94,8 +94,8 @@ fn main() {
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "check" | "parse" | "tokenize" | "transpile" | "lift" | "disassemble"
-            | "benchmark" | "build" | "vendor" | "add" | "install" | "update" | "remove"
-            | "serve" | "lsp" | "test" | "format" | "explain" | "debug"),
+            | "benchmark" | "build" | "add" | "install" | "update" | "remove" | "serve"
+            | "lsp" | "test" | "format" | "explain" | "debug"),
         ) => c,
         // DEC-282: bare `phg <existing-file>` dispatches to RUN (the `#!/usr/bin/env phg` form).
         // Subcommand names keep priority (a file named `check` needs `phg run check`); a missing
@@ -178,9 +178,9 @@ fn main() {
         print!("{report}");
         exit(code as i32);
     }
-    // DEC-316: package-manager verbs (`vendor` retired → add/install/update/remove) — the ONLY
-    // network-capable commands (run/check/transpile stay offline, Invariant 10).
-    if matches!(cmd, "vendor" | "add" | "install" | "update" | "remove") {
+    // DEC-316: package-manager verbs — the ONLY network-capable commands (run/check/transpile stay
+    // offline, Invariant 10). `vendor` is GONE not aliased (DEC-416: a retired verb is unknown).
+    if matches!(cmd, "add" | "install" | "update" | "remove") {
         if let Err(e) = cli::pm::dispatch(cmd, &args[2..]) {
             eprintln!("error: {e}");
             exit(1);

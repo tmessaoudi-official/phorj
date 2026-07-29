@@ -91,14 +91,6 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              The entry may also be a class `static` method named `main` (Java-style):\n\
              `class App { static function main(): int { return 0; } }` — same signature rules.\n"
         }
-        "E-MULTIPLE-MAIN" => {
-            "E-MULTIPLE-MAIN — RETIRED, never emitted. Kept only so an old build log or note that\n\
-             quotes this code still explains itself.\n\n\
-             The name `main` carries no meaning: a free function or a static method is an entry ONLY\n\
-             if it is attributed `#[Entry(kind: EntryKind.…)]` (DEC-331/DEC-337). The live rule is at\n\
-             most ONE entry PER KIND — see `phg explain E-DUPLICATE-ENTRY-KIND`. One `Cli` entry and\n\
-             one `Web` entry may coexist in a program; `run` and `serve` each take their own.\n"
-        }
         "E-TEST-OUTSIDE-TESTS" => {
             "E-TEST-OUTSIDE-TESTS — a `test \"name\" { … }` block appears in a normal build.\n\n\
              A `test` block is a unit test (M-Test). It is only valid in a file run by `phg test`, so\n\

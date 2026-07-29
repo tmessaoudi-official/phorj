@@ -2,9 +2,9 @@
 //!
 //! Pure, deterministic, std-only. The CURRENT surface is the `Core.Native.Uri` rows here, wrapped
 //! by `Uri.encodeForm`/`encodeComponent`/`decodeForm`/`decodeComponent` statics in the
-//! `Core.UriModule` prelude. The old `Core.Url` module rows are KEPT REGISTERED as a deprecated
-//! twin (every `(Core.Url, *)` symbol has a `deprecation_of` row → `W-DEPRECATED` with the new
-//! path; the natives keep working for ≥1 minor release per `docs/DEPRECATION.md`).
+//! `Core.UriModule` prelude. The old `Core.Url` module is GONE — not deprecated, not aliased, no
+//! grace window (DEC-416: pre-1.0 a retired surface is simply unknown, so `import Core.Url;` is a
+//! plain unknown-import error). Only the live `Uri` rows remain here.
 //!
 //! Encoders (`string -> string`) and decoders (`string -> string?`) are byte-identical to PHP
 //! `urlencode` / `rawurlencode` / `urldecode` / `rawurldecode`. The `encodeForm`/`decodeForm` pair
@@ -110,8 +110,9 @@ fn php_decode(func: &str, arg: &str) -> String {
 }
 
 /// The percent-encoding registry entries: the current `Core.Native.Uri` rows (wrapped by the
-/// `Uri.*` prelude statics) + the deprecated `Core.Url` twin rows (DEC-279 — same eval/php bodies,
-/// flagged in [`crate::native::deprecation_of`], removed after the deprecation window).
+/// `Uri.*` prelude statics). The `Core.Url` twin rows that used to ride along here were DELETED by
+/// DEC-416 — pre-1.0, a retired module is an unknown module, so `import Core.Url;` is now a plain
+/// unknown-import error instead of a warning-with-a-hint.
 pub fn url_natives() -> Vec<NativeFn> {
     let row = |module, name, decode: bool, eval, php| NativeFn {
         module,
@@ -153,27 +154,6 @@ pub fn url_natives() -> Vec<NativeFn> {
         row(
             "Core.Native.Uri",
             "decodeComponent",
-            true,
-            raw_url_decode_native,
-            |a| php_decode("rawurldecode", parg(a, 0)),
-        ),
-        // The deprecated `Core.Url` twin (kept working; W-DEPRECATED points at the new path).
-        row("Core.Url", "encodeForm", false, url_encode_native, |a| {
-            format!("urlencode({})", parg(a, 0))
-        }),
-        row(
-            "Core.Url",
-            "encodeUriComponent",
-            false,
-            raw_url_encode_native,
-            |a| format!("rawurlencode({})", parg(a, 0)),
-        ),
-        row("Core.Url", "decodeForm", true, url_decode_native, |a| {
-            php_decode("urldecode", parg(a, 0))
-        }),
-        row(
-            "Core.Url",
-            "decodeUriComponent",
             true,
             raw_url_decode_native,
             |a| php_decode("rawurldecode", parg(a, 0)),

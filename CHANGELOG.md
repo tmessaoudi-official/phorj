@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Removed — every pre-1.0 deprecation affordance (2026-07-29, DEC-416)
+Developer ruling: before the first stable release there are no users and nobody to migrate, so phorj does
+not deprecate. Retiring something means changing it outright, recording the decision, teaching the
+compiler **only** the new form, and updating the examples in the same change. A retired name is an
+**unknown** name and gets the ordinary hard error.
+- **The `Core.Url` compat twin is deleted** — `src/ext/uri/url_compat.rs` had kept the entire retired
+  module registered as a parallel row-set (its own comment promised removal "after the deprecation
+  window"). `import Core.Url;` is now a plain unknown-import error. Its `native::deprecation_of` rows
+  went with it.
+- **Three retired-but-still-explained diagnostics deleted**: `E-MULTIPLE-MAIN`, `E-DB-NAMING-NOT-CONST`
+  (DEC-258), `E-TRANSPILE-FS` (DEC-313). Each arm's whole body was an announcement of its own
+  retirement. The first of those was added earlier the same day and this ruling reverses it.
+- **`phg vendor` is gone, not aliased** — the bespoke "retired, use add/install/update/remove" error was
+  threaded through four sites including its own `phg help vendor` topic. It is now an unknown command.
+- **`docs/DEPRECATION.md` kept but scoped**: a header records that its Live→Deprecated→Removed lifecycle
+  applies from 1.0 onward, and that pre-1.0 follows this ruling instead.
+- `W-DEPRECATED` itself **stays** — it is being repurposed as a userland facility driven by an explicit
+  `#[Deprecated(message: "…")]` attribute on an author's own API, rather than by an internal stdlib
+  table. The provider package is still open.
+- The test asserting the old behaviour was **inverted**, not deleted:
+  `retired_core_url_import_is_simply_unknown_not_deprecated` now pins that the retired import is a hard
+  error and emits no `W-DEPRECATED`.
+
 ### Docs — SSOT reconciliation after Wave 0 (2026-07-29)
 - **`MASTER-PLAN` and `SLICE-STATE` had diverged** on the unruled count — the roadmap said *"seven items
   stay deliberately unruled (L-19/22/25/28/31/33/86)"* while the slice cursor said four, because
