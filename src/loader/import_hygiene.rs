@@ -8,7 +8,8 @@ use super::*;
 
 /// Q-A — the member names a `import <pkg>.*` binds: native registry leaves for a `Core.*` submodule,
 /// else the Pass-1 index entries declared in `pkg` that `vis_violation` would let THIS file import
-/// individually (public cross-package; public+internal same-package — the spec's unifying principle,
+/// individually (public cross-package; public+internal in the declaring package or a descendant, since
+/// `internal` is subtree-scoped — the spec's unifying principle,
 /// "every member you'd be allowed to import individually"). Sorted + deduped (Inv 10 determinism).
 pub(super) fn wildcard_members(
     pkg: &str,

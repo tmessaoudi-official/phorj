@@ -50,22 +50,28 @@ All 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) were ruled interactivel
 that the ruling session's own probing, the on-hold tail and the 2026-07-27 build surfaced** (DEC-366…388 — the last eight are the
 L-report `decision-needed` tail: the `E-IFACE-VIS` bypass, chasing the `jsonround` win, the DEC-322 fold, XML via
 a vetted crate, the split lifetime block, stdlib wildcards, the `Core.Text`/`Core.String` merge, and the cheap
-tail). **Seven items stay deliberately unruled** (L-19/22/25/28/31/33/86 — titles only, developer-approved to
-defer). **Wave 5.5 (DEC-354) is built, plus DEC-388.1–.4 (2026-07-27: disk-reclaim, `/forge`
+tail). **Four items stay unruled** (L-22/25/33/86 — the substantial ones; L-19/28/31 were RULED 2026-07-29 as
+DEC-392/393/391, batch 1 of the audit question sweep). **Wave 5.5 (DEC-354) is built, plus DEC-388.1–.4 (2026-07-27: disk-reclaim, `/forge`
 re-admitted, `backend-parity-reviewer` agent, `validate-infra.sh` in pre-push; 388.5 `/qa-sweep`
 queued); everything else is unbuilt. Start at Wave 0.**
 
-> ⚠ **Q1 knot (2026-07-28 audit)**: build-order 7.5 (DEC-383 forks a/c) overlaps the already-ruled
-> DEC-204/205 (2026-07-12) — whether 7.5 re-opens them or becomes their build slice is PENDING the
-> developer. Do not build either side of that overlap before the ruling.
+> ✅ **Q1 knot RESOLVED (DEC-390, developer 2026-07-29)**: DEC-383 is closed as bookkeeping — its
+> forks (a)/(c) *are* DEC-205/DEC-204, ruled 2026-07-12. **Build-order 7.5 is a BUILD slice**
+> (threshold cycle collector → `Weak<T>`; `Runtime.onShutdown`), not a ruling slice.
 
-> ▶ **NEXT SESSION CURSOR (set 2026-07-29)**: the 2026-07-28 consistency audit is COMPLETE
-> (report: `docs/research/2026-07-28-consistency-audit.md`, fixes in commits 082f9ac/252b6fb).
-> The next interactive session's job is the **§PENDING-question inventory** in that report —
-> 26 developer questions (Q1 first: it gates build-order 7.5) + Q28 (PM git-arg hardening,
-> KNOWN_ISSUES 4b) — then resume the build order at Wave 0. DEC-268 formality: one final clean
-> certification round is owed on the audit batch (or waive it explicitly). Ask questions per
-> `.claude/skills/ask-human/SKILL.md` — plain text, one at a time, never `AskUserQuestion`.
+> ▶ **NEXT SESSION CURSOR (updated 2026-07-29, batch 1 answered)**: the 2026-07-28 consistency audit
+> is COMPLETE (report: `docs/research/2026-07-28-consistency-audit.md`, fixes in commits
+> 082f9ac/252b6fb). Its **§PENDING-question inventory** is being worked through with the developer.
+> **Batch 1 RULED** → DEC-390 (Q1 / DEC-383 closed) · DEC-391 (`srcs` ratified) · DEC-392 (wildcard
+> visibility wording) · DEC-393 (pipe-lambda trailing-op fork closed). **Still owed:** batch 2 =
+> L-25 (`App\`-prefixing / `phpInterop`) · L-86 (DB column naming + error-namespace) · DEC-366
+> ride-along · maxBy/minBy representation lever; batch 3 = the substantial two, L-22 (runtime-config
+> catalog) + L-33 (DEC-324's 7 TOP items); batch 4 = the 3 reopenable auto-rulings (DEC-224/225/226)
+> + 2 bookkeeping items + Q28 (PM git-arg hardening, KNOWN_ISSUES 4b) scheduling. Then the 5 owed
+> measurements (DEC-339/357/377 computable here; DEC-365/370 need the dev box), then resume the build
+> order at Wave 0. DEC-268 formality: one final clean certification round is owed on the audit batch
+> (or waive it explicitly). Ask questions per `.claude/skills/ask-human/SKILL.md` — plain text,
+> batched, never `AskUserQuestion`.
 
 **STANDING RULE — DEC-387, project-wide, not session-scoped:** never `AskUserQuestion`. Put every
 question in the message body with context, a minimal concrete example, numbered options each stating
@@ -458,7 +464,9 @@ in the browser (its own slice; touches `gen_examples.py` + `main.js` + the wasm 
 SSOT — this is a pointer per Inv 19, not a duplicate):**
 - **QUEUED Q-A — Wildcard & group imports** — spec `docs/specs/2026-07-24-wildcard-imports.md`
   (**RULED — BUILD-READY**). Forms `import X.Y.*;` + `import X.Y.{A,B};` + `except {…}`;
-  eager-collision error (`E-IMPORT-AMBIGUOUS`); public+internal binding, shallow (no sub-packages),
+  eager-collision error (`E-IMPORT-AMBIGUOUS`); individually-importable binding (public
+  cross-package, public+internal in the declaring package or a descendant — DEC-392), shallow
+  (no sub-packages),
   no bare `Core.*`; group-only aliasing; empty/absent-except = hard errors; compile-time expansion
   (Inv 5) → sorted per-symbol PHP `use`; format sorts members; `W-UNUSED-IMPORT` (wildcard-scoped);
   **`E-IMPORT-UNKNOWN`**. New codes: E-IMPORT-AMBIGUOUS/WILDCARD-STDLIB-ROOT/WILDCARD-ALIAS/

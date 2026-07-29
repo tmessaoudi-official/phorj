@@ -22,8 +22,9 @@ impl Parser {
                 return self.parse_import_group(path, sp);
             }
             // A `*` after a `.` opens a wildcard import `import Prefix.*;` (Q-A) — the loader expands
-            // it to every public+internal immediate member (shallow), optionally minus an
-            // `except { … }` set. `import X.* as Y` is illegal (E-WILDCARD-ALIAS).
+            // it to every INDIVIDUALLY-IMPORTABLE immediate member (shallow; public cross-package,
+            // public+internal in the declaring package or a descendant — D3 per DEC-392), optionally
+            // minus an `except { … }` set. `import X.* as Y` is illegal (E-WILDCARD-ALIAS).
             if self.eat(&TokenKind::Star) {
                 return self.parse_import_wildcard(path, sp);
             }
@@ -96,8 +97,10 @@ impl Parser {
 
     /// Parse a wildcard import's tail (the `*` was just consumed): an optional `except { a, b [,] }`
     /// exclusion list, then `;`. Returns a single wildcard `Item::Import` whose `path` is the PACKAGE
-    /// PREFIX — the loader expands it to per-member imports (public+internal, shallow, sorted, minus
-    /// `except`). `except` and `as` are contextual (plain identifiers). `import X.* as Y;` is rejected
+    /// PREFIX — the loader expands it to per-member imports (every individually-importable member:
+    /// public cross-package, public+internal in the declaring package or a descendant, since
+    /// `internal` is subtree-scoped — shallow, sorted, minus `except`). `except` and `as` are
+    /// contextual (plain identifiers). `import X.* as Y;` is rejected
     /// as `E-WILDCARD-ALIAS` — a flat wildcard has no single name to bind (use a group or re-import).
     pub(in crate::parser) fn parse_import_wildcard(
         &mut self,

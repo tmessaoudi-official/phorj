@@ -45,13 +45,17 @@ collision-prone; namespace-binding (`* as ns`) is collision-free but changes cal
 
 ## RULED so far (dev, AskUserQuestion, 2026-07-24)
 
-- **D1 — Forms: BOTH.** `import X.Y.*;` (all public+internal immediate members) AND
+- **D1 — Forms: BOTH.** `import X.Y.*;` (every individually-importable immediate member — see D3) AND
   `import X.Y.{A, B};` (explicit multi-member). Shared resolver + shared compile-time expansion.
 - **D2 — Collisions: EAGER error on ANY overlap.** If two wildcard imports bring the same name, the
   program does NOT compile (`E-IMPORT-AMBIGUOUS`), whether or not the name is used. The escape hatch
   is an explicit `import X.Y.Z;` (disambiguates by naming the winner) — and the `except` clause (D5).
   (Stricter than the lazy/use-site alternative; dev chose strict.)
-- **D3 — What `*` binds: all PUBLIC + INTERNAL immediate members, shallow.** Never `private`
+- **D3 — What `*` binds: every member you would be allowed to import INDIVIDUALLY, shallow** — i.e.
+  **public cross-package; public + internal within the declaring package or a DESCENDANT package**
+  — `internal` is subtree-scoped [Verified: `src/loader/visibility.rs:39-45`,
+  `pkg_is_ancestor_or_equal`]. (Wording rewritten by **DEC-392**, 2026-07-29; the earlier "all PUBLIC + INTERNAL" shorthand read as a cross-package `internal` grant,
+  which would make `*` a visibility bypass wider than a named import). Never `private`
   (file-scoped). NOT sub-packages ("except embedded packages"). `protected` is N/A — it is a
   class-member modifier, not a top-level `Visibility` (`Visibility` = Private<Internal<Public,
   [Verified: `src/ast/exprs.rs:397`]). `internal` is only bound where an explicit cross-package
@@ -61,8 +65,9 @@ collision-prone; namespace-binding (`* as ns`) is collision-free but changes cal
   and stdlib SUBMODULES (`import Core.Http.*;`). Bare-root `import Core.*;` is `E-WILDCARD-STDLIB-ROOT`
   (would flood the file with the entire stdlib).
 - **D-process — walk the remaining grey areas ONE-BY-ONE** (dev chose depth over bundling).
-- **D3 CONFIRMED — `*` binds public + internal** (round 2). `internal` included; `private` never;
-  `protected` N/A (class-member axis).
+- **D3 CONFIRMED — `*` binds what a named import would bind** (round 2; wording per DEC-392).
+  `internal` included *where an individual import could already reach it* (the declaring package or a
+  descendant, since `internal` is subtree-scoped); `private` never; `protected` N/A (class-member axis).
 - **D5 RULED — exclusion clause `import X.Y.* except { A, B };`** (keyword `except`, not `hiding`).
   Removes names from the wildcard set before expansion; the ergonomic escape hatch for the strict
   D2 eager-collision rule (except the clash, then re-import it aliased). **sub-open RULED: excepting a
@@ -116,7 +121,8 @@ mod.rs:69). `*` is `TokenKind::Star` (already tokenized for `*`). Expansion belo
    `wildcard: bool` + `except: Vec<String>`, or a sibling `Item::ImportWildcard{prefix,except,span}`).
    Tests: parse `X.Y.*;`, `X.Y.* except {A};`, `X.* as Y` → E-WILDCARD-ALIAS.
 2. **Loader — expansion + diagnostics**: when assembling, expand each wildcard to the SORTED set of
-   public+internal immediate members of the target package (types+functions; NOT sub-packages, NOT
+   individually-importable immediate members of the target package (`vis_violation`-legal: public
+   cross-package, public + internal in the declaring package or a descendant — types+functions; NOT sub-packages, NOT
    private); subtract `except`; emit per-member `Item::Import`. Diagnostics: bare `Core.*` →
    `E-WILDCARD-STDLIB-ROOT`; zero-new-binding → `E-WILDCARD-EMPTY`; `except` name absent →
    `E-EXCEPT-UNKNOWN` (did-you-mean); two wildcards → same leaf → `E-IMPORT-AMBIGUOUS`.
@@ -176,7 +182,10 @@ test enforces this). TDD in `src/loader/tests.rs` + `tests/project.rs` fixtures.
   explicitly"). Proper Core-submodule support needs native-registry expansion wired through the prelude
   pass — a follow-up slice. **User/vendored-package wildcards work fully.** (D4 allowed Core.Sub.*; this
   narrows it pending the follow-up.)
-- ⬚ **P-Q-A-2 — `*` binds PUBLIC-only cross-package (not "public+internal" as D3's shorthand said).**
+- ✅ **P-Q-A-2 — RULED 2026-07-29 (DEC-392): as-built RATIFIED, D3's wording rewritten above.** `*`
+  binds PUBLIC-only cross-package (not "public+internal" as D3's shorthand said). The literal reading
+  was rejected because it would make `*` a visibility bypass — reaching cross-package `internal`
+  members that a named import still rejects with `E-VIS-INTERNAL`. No code change. Original finding:
   [Verified: `loader::vis_violation` mod.rs:69 — a cross-package `internal` member is `E-VIS-INTERNAL`,
   i.e. NOT individually importable]. Implemented per the spec's own **unifying principle** ("every
   member you'd be allowed to import individually" = `vis_violation`-legal): cross-package `*` binds

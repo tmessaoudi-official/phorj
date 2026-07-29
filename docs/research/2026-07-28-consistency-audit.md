@@ -458,7 +458,13 @@ B-102 write-up.)
 
 ## PENDING-question inventory (reproduced from Lens C — feeds `QUESTIONS.md`)
 
-### Genuinely OPEN adjudications (developer ruling owed) — 10
+### Genuinely OPEN adjudications (developer ruling owed) — 10 → **6 remain**
+
+> **Batch 1 RULED by the developer 2026-07-29** — items **9 → DEC-390** (DEC-383 closed as
+> bookkeeping; build-order 7.5 is a BUILD slice), **5 → DEC-391** (`srcs` ratified), **1 → DEC-392**
+> (as-built wildcard visibility ratified, D3's wording rewritten to the unifying principle) and
+> **4 → DEC-393** (pipe-lambda trailing-op fork closed, loud error stays). All four were Option-1
+> recommendations, accepted as recommended. Remaining: items 2, 3, 6, 7, 8, 10.
 
 | # | Item | Where recorded |
 |---|------|----------------|

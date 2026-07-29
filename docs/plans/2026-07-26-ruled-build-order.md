@@ -96,7 +96,7 @@
 | 7.2 | **DEC-385** merge `Core.Text` into `Core.String`, deprecate the module — **must land BEFORE DEC-342's UFCS completion**, or `line.length()` fires the ambiguity error on ordinary code |
 | 7.3 | **DEC-384** stdlib submodule wildcards (`import Core.Http.*;`) — order the native pre-pass against the wildcard hook. `import Acme.*` already works; bare `Core.*` stays rejected |
 | 7.4 | **DEC-386** the cheap tail: close DEC-200 as already-ruled · `DateTime` gating consistent with DEC-353 · delete the group-`{}` sort no-op · deprecate `Core.File` · close the bundle's Q-J1…8 as superseded |
-| 7.5 | **DEC-383** rule forks (a) and (c) of the split lifetime block — ⚠ the 2026-07-28 consistency audit found DEC-205 (cycle collector) and DEC-204 (`Runtime.onShutdown`) already ruled exactly these on 2026-07-12; whether 7.5 re-opens them or becomes a build slice for those rulings is PENDING the developer (audit Q1) |
+| 7.5 | **BUILD the lifetime pair** — **DEC-205** (`Rc` cycle leak: PHP-style threshold collector first, `Weak<T>` second) + **DEC-204** (`Runtime.onShutdown(fn)`, SIGINT/SIGTERM, lands with Ω-2 `Core.Process`). Nothing to rule: **DEC-390** (developer, 2026-07-29) closed DEC-383 as bookkeeping — its forks (a)/(c) *are* DEC-205/DEC-204, both ruled 2026-07-12 |
 
 ## Wave 8 — the two research slices (do NOT start these at a low token budget)
 

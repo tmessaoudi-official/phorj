@@ -878,9 +878,9 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   + the ICU extension-story fork → Ω-5 · typed-serde derive candidate → Ω-7. Two NEW
   DEC-PENDING entries recorded in KNOWN_ISSUES §PENDING (`using`/`defer`, `Runtime.onShutdown`)
   — since RULED 2026-07-12 as DEC-203 (`using` + Closable) and DEC-204 (typed
-  `Runtime.onShutdown(fn)`); builds queued (DEC-364 re-affirmed `using`). ⚠ DEC-383's later
-  fork (c) covers the same `onShutdown` ground — whether it re-opens DEC-204 is PENDING the
-  developer (2026-07-28 audit Q1; see the build-order 7.5 note).
+  `Runtime.onShutdown(fn)`); builds queued (DEC-364 re-affirmed `using`). DEC-383's later fork (c)
+  covered the same `onShutdown` ground and was **closed as bookkeeping by DEC-390** (developer,
+  2026-07-29): DEC-204 stands, nothing re-opened — build-order **7.5 is a BUILD slice**.
 - **Ω-1 · Web spine** (TOP-20 #1/#2/#3): finish **Core.Sql** P1 → P2 `Core.Db` (rusqlite) → PG/MySQL →
   HTTP client → sessions/cookies/auth. Continues Wave D. **UA-L2 is DONE** — the `cli::CORE_MODULES`
   registry (deterministic sorted iteration, Inv-10) means adding a Core module is ONE row; Core.Sql was its
@@ -1109,8 +1109,8 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   the DST needs unsafe-outside-`src/jit/` or a thin-Rc dep — either breaches a declared
   invariant → adjudication, not self-ruling). **Rc CYCLE-LEAK — since RULED 2026-07-12 as
   DEC-205 (BOTH, PHASED: threshold cycle collector first, `Weak<T>` second) — build queued**
-  (⚠ DEC-383 fork (a) covers the same ground; whether it re-opens DEC-205 is PENDING the
-  developer — 2026-07-28 audit Q1, build-order 7.5 note);
+  (DEC-383 fork (a) covered the same ground and was **closed as bookkeeping by DEC-390**, developer
+  2026-07-29: DEC-205 stands, nothing re-opened — build-order **7.5 is a BUILD slice**);
   recorded at the time as DEC-PENDING in KNOWN_ISSUES §PENDING (options: php-style
   trial-deletion collector / weak refs / both, with the `serve` per-request-leak risk example). NaN-box end-state stays parked behind
   the same no-measurable-target reasoning.

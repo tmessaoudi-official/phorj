@@ -16,10 +16,11 @@ impl Parser {
         // ONLY here: everywhere else `( ident =>` stays a parse error, so no valid program changes
         // meaning. After the lambda the climb continues at `right_bp` — the RHS grammar stays
         // uniform, so `x |> (v => v) + 1` binds the `+` to the LAMBDA (a loud
-        // E-PIPE-LAMBDA-CONTEXT), never silently to the pipe result. (PENDING fork: an ergonomic
-        // carve-out binding trailing tight-ops to the pipe result instead — a developer
-        // adjudication, deliberately not self-ruled; erroring now is the additive-relaxable
-        // choice.)
+        // E-PIPE-LAMBDA-CONTEXT), never silently to the pipe result. RULED — DEC-393 (2026-07-29):
+        // the loud error STAYS and the fork is closed. The ergonomic carve-out (bind trailing
+        // tight-ops to the pipe result) was rejected: it would make a lambda's extent depend on
+        // what follows it, and diverge from the named-function form `x |> f + 1`, which fails here
+        // too. Do not "relax" this without a new ruling.
         let rhs = if matches!(self.peek(), TokenKind::LParen)
             && matches!(self.peek2(), TokenKind::Ident(_))
             && matches!(self.peek3(), TokenKind::FatArrow)
