@@ -14,11 +14,20 @@
 # freeze today's set, fail only on NEW violations, burn the baseline down over time. G2 had only three
 # violations, so they were FIXED instead and the guard is hard from day one.
 #
-# G4's baseline doubles as a useful artifact in its own right: the list of diagnostic codes the
-# decision register PROMISES but `src/` does not yet implement (queued features like DEC-360's
-# `W-UNUSED-*` family, DEC-370's `E-TRANSPILE-PARALLEL-NO-PHP`). A code leaving that list without
-# appearing in `src/` is the phantom class this guard exists to catch (`E-RETIRED-FORIN`, the dead
-# `E-MULTIPLE-MAIN`, Invariant 14's non-existent `--sequential-concurrency` flag — all found by hand).
+# G4's baseline doubles as a useful artifact in its own right, and it holds TWO distinct categories —
+# do not read an entry as belonging to the first without checking:
+#   (a) PROMISED-BUT-UNBUILT — codes the register commits to that `src/` does not implement yet
+#       (queued features like DEC-360's `W-UNUSED-*` family, DEC-370's `E-TRANSPILE-PARALLEL-NO-PHP`).
+#       These are debt: the entry should disappear by the code being BUILT.
+#   (b) DELETED-BUT-NARRATED — codes deliberately removed under DEC-416 (pre-1.0, a retired name is an
+#       unknown name) that the register still names while recording their deletion. These are PERMANENT
+#       and correct; the entry must never be "burned down" by re-adding the code.
+# A code leaving this list without appearing in `src/` is the phantom class the guard exists to catch
+# (`E-RETIRED-FORIN`, Invariant 14's non-existent `--sequential-concurrency` flag — both found by hand).
+#
+# NOTE on the match rule: G4 looks for the code as a QUOTED STRING in `src/`, so a code surviving only
+# in `//` comments counts as absent — which is why deleting an explain arm trips this guard even when
+# prose still mentions the code. That is deliberate: a code must have a real site, not a mention.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
