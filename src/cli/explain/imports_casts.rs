@@ -68,13 +68,30 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              channel and never fails the build.\n"
         }
         "W-DEPRECATED" => {
-            "W-DEPRECATED — a deprecated stdlib symbol is used (lint).\n\n\
-             The symbol still works, but it is slated for removal: this lint names its replacement and\n\
-             the version in which it will be removed. Per `SEMVER.md` a deprecated symbol emits this\n\
-             warning for at least one minor release before it is removed (and the removal is a\n\
-             documented `### Breaking` CHANGELOG entry). Migrate to the named replacement; see\n\
-             `docs/DEPRECATION.md` for the policy and `STABILITY.md` for the deprecated tier. Like\n\
-             every `W-…` lint it rides the warning channel and never fails the build.\n"
+            "W-DEPRECATED — something marked `#[Deprecated]` is being USED (lint).\n\n\
+             The author of the function or method you called marked it with\n\
+             `#[Deprecated(message: \"…\")]` (import `Core.Runtime.Deprecated`). It still works and\n\
+             still runs — like every `W-…` lint this rides the warning channel and never fails the\n\
+             build; `--strict` is what promotes it.\n\n\
+             This warning is reported at the USE site, which is what makes your editor strike the\n\
+             call through: the LSP attaches `DiagnosticTag.Deprecated` to it, and tags the declaration\n\
+             itself in completion and document symbols (DEC-417). A function that merely CALLS a\n\
+             deprecated function does not itself become deprecated — the mark does not spread.\n\n\
+             It is a userland facility: the stdlib does not deprecate anything. Before the first\n\
+             stable release phorj does not deprecate at all — a retired name is simply REMOVED and\n\
+             becomes an unknown name (DEC-416), so nothing in `Core.*` will ever raise this.\n"
+        }
+        "E-DEPRECATED-MESSAGE" => {
+            "E-DEPRECATED-MESSAGE — `#[Deprecated]` was given an argument it cannot read.\n\n\
+             The attribute takes exactly one optional NAMED argument, `message:`, and its value must\n\
+             be a PLAIN string literal:\n\n    \
+             #[Deprecated(message: \"use Uri.encodeComponent\")]\n    \
+             #[Deprecated]                       // also fine — the warning then names only the symbol\n\n\
+             Two shapes are rejected. A POSITIONAL argument (`#[Deprecated(\"…\")]`) — the named form is\n\
+             the spelling, matching `#[Entry(kind: …)]`. And an INTERPOLATED string\n\
+             (`#[Deprecated(message: \"use {other}\")]`) — this is compile-time-only metadata with no\n\
+             runtime, so there is nothing to evaluate the holes against; the text would be silently\n\
+             lost, so it is rejected loudly instead. Write the text out literally.\n"
         }
         "E-LAMBDA-THIS" => {
             "E-LAMBDA-THIS — a field-initializer lambda captures `this`.\n\n\

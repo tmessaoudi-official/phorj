@@ -205,6 +205,11 @@ impl Checker {
             if attr.is_config() {
                 continue;
             }
+            // DEC-417: `#[Deprecated(message: …)]` — the userland deprecation marker. Compile-time
+            // only; use-site warnings come from the reference pass. Handled ⇒ KNOWN.
+            if self.check_deprecated_attr(attr) {
+                continue;
+            }
             // DEC-331 D9: `#[Invoke]`/`#[ToString]` — instance-method markers. Per-method legality
             // (target + strict `#[ToString]` signature) validated here; class-level uniqueness in
             // `check_invoke_tostring_class`. Handled ⇒ KNOWN (never `E-UNKNOWN-ATTRIBUTE`).

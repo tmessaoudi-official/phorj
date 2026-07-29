@@ -116,6 +116,9 @@ impl Checker {
                     is_static: false,
                     variadic: false, // DEC-298: interface methods don't support variadics in v1
                     param_names: m.params.iter().map(|p| p.name.clone()).collect(), // DEC-297
+                    // Interface method SIGNATURES carry no attributes (the parser builds them without), so a
+                    // deprecation can only live on the implementing method. DEC-417.
+                    deprecated: None,
                 },
             );
         }

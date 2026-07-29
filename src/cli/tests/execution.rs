@@ -89,3 +89,32 @@ fn help_for_known_command_has_examples_and_name() {
 fn help_for_unknown_command_falls_back_to_top_level() {
     assert_eq!(help_for("bogus"), help_text());
 }
+
+#[test]
+fn unimported_deprecated_attribute_is_import_gated() {
+    // DEC-417: `#[Deprecated]` is import-gated like `#[Entry]`/`#[Config]` (DEC-337, nothing in the
+    // wind). This lives at the CLI level ON PURPOSE: the gate is the `enforce_injected` pass inside
+    // `check_and_expand`, which the checker's own unit harness never runs — asserting it there would
+    // have passed for the wrong reason.
+    let src = wp("#[Deprecated] function old(): int { return 1; }");
+    let err = cmd_check(&src).unwrap_err();
+    assert!(
+        err.contains("E-INJECTED-TYPE-BARE"),
+        "expected the injected-bare gate, got {err}"
+    );
+}
+
+#[test]
+fn a_deprecation_warning_never_gates_the_run() {
+    // W-DEPRECATED rides the warning channel: the program still type-checks AND still runs (DEC-360 —
+    // warnings never fail a build). If this ever starts failing, deprecation has become an error.
+    let src = wp(r#"import Core.Output;
+import Core.Runtime.Deprecated;
+#[Deprecated(message: "use shout")] function yell(string s): string { return s; }
+function main(): void { Output.printLine(yell("hi")); }"#);
+    assert!(
+        cmd_check(&src).unwrap().contains("OK"),
+        "check must still pass"
+    );
+    assert_eq!(cmd_treewalk(&src).unwrap(), "hi\n");
+}

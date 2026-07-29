@@ -75,6 +75,52 @@ impl Attribute {
         attr_path_matches(&self.name, "Core.Runtime.Entry")
     }
 
+    /// True iff this is the `#[Deprecated(message: "…")]` userland deprecation marker (DEC-417).
+    /// Canonical `Core.Runtime.Deprecated`, recognized in every import form via [`attr_path_matches`]
+    /// — the `#[Entry]`/`#[Config]` twin, import-gated under the same `Core.Runtime` provider.
+    ///
+    /// **Compile-time only (DEC-417.2).** No backend ever acts on it: the checker warns at every USE
+    /// site with `W-DEPRECATED` and the LSP tags declaration + usages, but nothing is emitted. In
+    /// particular it is deliberately NOT mapped to PHP's native `#[\Deprecated]` — that one fires at
+    /// runtime onto stdout, which would break Invariant 1 byte-identity against the two Rust legs.
+    pub fn is_deprecated(&self) -> bool {
+        attr_path_matches(&self.name, "Core.Runtime.Deprecated")
+    }
+
+    /// The author's `message:` text from `#[Deprecated(message: "…")]`, if given as a PLAIN string
+    /// literal. `None` when the attribute carries no message (legal — the warning then names only the
+    /// symbol) or when the argument is not a plain literal.
+    ///
+    /// An INTERPOLATED string (`"use {other}"`) deliberately returns `None`: this is compile-time-only
+    /// metadata with no runtime, so there is nothing to evaluate the holes against. The checker rejects
+    /// that shape explicitly rather than silently dropping the text. Single source, so the checker
+    /// warning, hover text and the lifter cannot drift in how they read it.
+    #[must_use]
+    pub fn deprecation_message(&self) -> Option<&str> {
+        self.args.iter().find_map(|a| match a {
+            Expr::NamedArg { name, value, .. } if name == "message" => match value.as_ref() {
+                Expr::Str(parts, _) => match parts.as_slice() {
+                    [StrPart::Literal(s)] => Some(s.as_str()),
+                    _ => None,
+                },
+                _ => None,
+            },
+            _ => None,
+        })
+    }
+
+    /// True iff a `message:` argument is present but is NOT a plain string literal (an interpolation,
+    /// or any other expression) — the shape the checker rejects. Distinguishes "no message at all"
+    /// (fine) from "a message the compiler cannot read" (an error), which
+    /// [`Self::deprecation_message`] alone cannot express since both give `None`.
+    #[must_use]
+    pub fn has_unreadable_deprecation_message(&self) -> bool {
+        self.args
+            .iter()
+            .any(|a| matches!(a, Expr::NamedArg { name, .. } if name == "message"))
+            && self.deprecation_message().is_none()
+    }
+
     /// True iff this is the `#[Config]` typed-config provider marker (DEC-318). Canonical
     /// `Core.Runtime.Config`, recognized in every import form via [`attr_path_matches`] — the
     /// `#[Entry]` twin. The single source is [`is_config_attr`].

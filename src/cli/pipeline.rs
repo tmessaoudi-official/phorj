@@ -147,7 +147,7 @@ pub fn check_and_expand_reified(
             invoke_tostring,
         )) => {
             for w in &warnings {
-                eprintln!("warning: {}", w.render(diag_src));
+                eprintln!("{}", w.render_as(diag_src, "warning")); // DEC-417: was "warning: type error at …"
             }
             // De-alias types, erase `html"…"` literals into their `Html.concat([…])` kernel calls
             // (built by the checker, keyed by span), then erase generic type parameters — all three

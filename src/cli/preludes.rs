@@ -981,7 +981,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         // row up; DEC-318 adds the `#[Config]` provider marker under the same gate. DEC-337 adds
         // `EntryKind` — the injected enum whose variants (`EntryKind.Cli`/`.Web`) name the entry
         // role, import-gated (`import Core.Runtime.EntryKind;`) so kinds are never "in the wind".
-        bare_types: &["Attribute", "Entry", "Config", "EntryKind"],
+        bare_types: &["Attribute", "Entry", "Config", "EntryKind", "Deprecated"],
     },
     VirtualModule {
         module: &["Core", "DependencyInjection"],

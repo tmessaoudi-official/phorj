@@ -118,6 +118,20 @@ struct FnSig {
     /// reads this to reorder named args into positional order (filling omitted defaults) before the
     /// positional arity/type check. Empty is treated as "no names available" (named args rejected).
     param_names: Vec<String>,
+    /// DEC-417: `Some(..)` when the declaration carries `#[Deprecated]`. Compile-time only — the
+    /// checker warns `W-DEPRECATED` at every USE site and the LSP tags declaration + usages; no
+    /// backend ever sees it. `None` is the overwhelmingly common case.
+    deprecated: Option<DeprecationNote>,
+}
+
+/// DEC-417 — a harvested `#[Deprecated(message: "…")]`. Its own type (rather than a bare
+/// `Option<Option<String>>`) so "deprecated without a message" stays distinguishable from "not
+/// deprecated" at every read site.
+#[derive(Clone)]
+struct DeprecationNote {
+    /// The author's `message:` text, when they supplied a plain literal. `None` ⇒ the warning names
+    /// only the symbol, which is the legal bare-`#[Deprecated]` shape.
+    message: Option<String>,
 }
 
 struct EnumInfo {

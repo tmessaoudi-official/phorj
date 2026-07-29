@@ -156,7 +156,13 @@ impl Diagnostic {
     /// when present. Falls back to the plain [`Display`] form when no position is known (`line == 0`
     /// — the tree-walking interpreter and the compiler track none).
     pub fn render(&self, src: &str) -> String {
-        let mut s = self.to_string();
+        self.render_as(src, "error")
+    }
+
+    /// [`Self::render`] with an explicit severity word, so the WARNING channel does not print the word
+    /// "error" (DEC-417). Same body — the caret/hint/code layout is written once.
+    pub fn render_as(&self, src: &str, severity: &str) -> String {
+        let mut s = self.headline(severity);
         if self.line > 0 {
             if let Some(line_text) = src.lines().nth((self.line - 1) as usize) {
                 s.push('\n');
@@ -232,20 +238,33 @@ impl Diagnostic {
     }
 }
 
-impl fmt::Display for Diagnostic {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Diagnostic {
+    /// The headline, with the SEVERITY WORD supplied by the caller — `"error"` for the error channel,
+    /// `"warning"` for the warning channel.
+    ///
+    /// `Diagnostic` carries no severity of its own (which channel it lands in is the checker's
+    /// choice), and before this existed [`fmt::Display`] hardcoded `"error"`. That made every warning
+    /// in the language render as `warning: type error at 3:9: …` — a self-contradicting headline, most
+    /// visible on `W-DEPRECATED` where "error" is exactly the wrong word for something that compiles
+    /// and runs fine (DEC-417).
+    fn headline(&self, severity: &str) -> String {
         let stage = self.stage.label();
         if self.line == 0 {
-            write!(f, "{stage} error: {}", self.message)
+            format!("{stage} {severity}: {}", self.message)
         } else if self.col == 0 {
-            write!(f, "{stage} error at {}: {}", self.line, self.message)
+            format!("{stage} {severity} at {}: {}", self.line, self.message)
         } else {
-            write!(
-                f,
-                "{stage} error at {}:{}: {}",
+            format!(
+                "{stage} {severity} at {}:{}: {}",
                 self.line, self.col, self.message
             )
         }
+    }
+}
+
+impl fmt::Display for Diagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.headline("error"))
     }
 }
 

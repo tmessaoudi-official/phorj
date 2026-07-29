@@ -4,6 +4,7 @@
 use super::*;
 
 mod attributes;
+mod attributes_deprecated;
 mod attributes_invoke;
 mod entry_points;
 mod imports;

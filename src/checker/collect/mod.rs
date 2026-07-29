@@ -7,6 +7,7 @@ mod abstract_traits;
 mod class_graph;
 mod conformance;
 mod entry;
+mod enums;
 mod functions;
 mod inherit;
 mod interfaces;

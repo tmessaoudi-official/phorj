@@ -354,6 +354,10 @@ impl Checker {
                 return self.err(span, format!("unknown function `{name}`"));
             }
         };
+        // DEC-417: the USE site is where a deprecation is reported ("show anything using a deprecated
+        // thing as deprecated too"). Warn once per call, carrying the author's message. Placed after
+        // the clone so `self` is free to borrow mutably.
+        self.warn_if_deprecated_fn(&sigs, name, span);
         // M-RT Slice C1: a return-type-overloaded call reached without a `<Type>` selector has no type
         // context to choose a member (the selector arm `check_overload_select` handles the resolved
         // case and never funnels here). C2 will resolve these from a shallow sink; in C1 it is an error.

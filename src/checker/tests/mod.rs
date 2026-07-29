@@ -11,6 +11,7 @@ mod ctor_visibility;
 mod db_lint;
 mod decimal;
 mod default_params;
+mod deprecated;
 mod destructuring;
 mod entry_point;
 mod field_init;

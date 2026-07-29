@@ -30,6 +30,17 @@ impl Checker {
         // signature is needed here.
         // The method's overload set (M-RT): one or more signatures sharing a return type. An
         // interface method (no overloading) contributes a single signature.
+        // DEC-417: warn at the METHOD use site too. Resolved before the tuple-mapping below, which
+        // drops everything but the call-typing fields — and computed as a small note rather than by
+        // cloning the whole signature set.
+        let dep_note = self
+            .classes
+            .get(&cls)
+            .and_then(|info| info.methods.get(name))
+            .and_then(|v| Self::deprecation_of_set(v));
+        if let Some(note) = dep_note {
+            self.warn_deprecated_use(&note, name, span);
+        }
         let sigs = self
             .classes
             .get(&cls)

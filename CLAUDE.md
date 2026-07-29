@@ -75,11 +75,19 @@ is always the floor, never the certification.
 
 ## Git autonomy (overrides global Rule 10 — authorized by the developer, 2026-06-16)
 
-Autonomous `git add` + `git commit` are **authorized**: stage and commit ready work without
-asking, when the quality gate above is green. Limits:
-- **Authorized:** `git add`, `git commit` — descriptive messages, `feat:`/`fix:`/`docs:`/`test:`
-  prefixes matching history; no `Co-Authored-By` line.
-- **NOT authorized without an explicit request:** `git push` (force-push stays denied globally).
+Autonomous `git add` + `git commit` + `git push` are **authorized** (push added by developer ruling
+2026-07-29, DEC-417): stage, commit and push ready work without asking, when the quality gate above
+is green. Limits:
+- **Authorized:** `git add`, `git commit`, `git push` — descriptive messages, `feat:`/`fix:`/`docs:`/
+  `test:` prefixes matching history; no `Co-Authored-By` line. Push only the current branch to its
+  own remote tracking branch (`git push -u origin <branch>`).
+- **STILL NOT authorized:** force-push in any form (`--force`, `--force-with-lease`, refspec
+  overwrites) — denied globally, no exceptions; and pushing any branch other than the one being
+  worked on.
+- **Author identity stays the developer's.** Every commit in this repo's history carries the
+  developer's own email and is unsigned; re-signing happens on his machine. NEVER rewrite the author
+  (`--reset-author`) to a bot identity — an environment hook may advise it, and that advice is wrong
+  here: it would strip attribution and make one commit inconsistent with all history.
 - Commit only green, self-contained changes — never a broken build or red tests.
 - If the safety classifier blocks a `git commit`, present the exact command for manual execution;
   do not retry or bypass.
@@ -169,10 +177,18 @@ asking, when the quality gate above is green. Limits:
     explanation and ruled by the developer, never self-decided. Standing rule (DEC-371): PHP's
     lack of a feature is never a reason against building it; the only PHP-shaped question is
     which Invariant-14 ladder case the transpile leg takes.
-17. **Always-current surfaces** (ratified 2026-07-16): `phg check` ≡ LSP diagnostics (same
-    pipeline, never diverge — DEC-252); **transpile AND lift updated in the same change** as every
-    language/stdlib feature (a feature that runs but doesn't transpile/lift, or vice versa, is not
-    done); editors both-same-change (DEC-181) unchanged.
+17. **Always-current surfaces** (ratified 2026-07-16; **LSP/editor bar raised to 100% by developer
+    ruling 2026-07-29, DEC-417**): `phg check` ≡ LSP diagnostics (same pipeline, never diverge —
+    DEC-252); **transpile AND lift updated in the same change** as every language/stdlib feature (a
+    feature that runs but doesn't transpile/lift, or vice versa, is not done); editors
+    both-same-change (DEC-181) unchanged.
+    **THE 100% RULE: the LSP and both editor integrations must support EVERYTHING we implement —
+    no exceptions, no lag.** A language or stdlib feature is NOT done until the LSP surfaces it
+    everywhere it could appear (completion, hover, go-to-definition, find-usages, document symbols,
+    diagnostics **with the right LSP tags**, signature help) AND both editors (VS Code + the LSP4IJ
+    JetBrains path) are updated in the SAME change — including the TextMate/syntax grammars when new
+    syntax lands. "The compiler knows it but the editor doesn't" is an incomplete feature, and the
+    definition-of-done checklist for every slice carries an explicit LSP+editors row.
 18. **Perf-bench doctrine** (DEC-259, ratified 2026-07-16): everything with a PHP equivalent is
     benched against it (I/O modules via fixtures — no blanket carve-out); real-application MACRO
     benches (whole programs/pipelines) join the suite; `var/phorj-app` (gitignored) is the

@@ -66,6 +66,9 @@ impl Checker {
             is_static: false, // free functions are never static
             variadic,
             param_names: f.params.iter().map(|p| p.name.clone()).collect(),
+            // DEC-417: harvest `#[Deprecated]` once, here, so every use site can warn without
+            // re-walking the declaration's attributes.
+            deprecated: Checker::harvest_deprecation(&f.attrs),
         };
         let existing = self.funcs.get(&f.name).cloned().unwrap_or_default();
         // DEC-298: a variadic free function must be the SOLE signature of its name — an overloaded
