@@ -85,6 +85,15 @@ queued); everything else is unbuilt. Start at Wave 0.**
 > (or waive it explicitly). Ask questions per `.claude/skills/ask-human/SKILL.md` — plain text,
 > batched, never `AskUserQuestion`.
 
+**ENV CONSTRAINT — the `pre-push` microbench gate CANNOT run in the remote container** (recorded
+2026-07-29): the G-8 ratchet compares against a dockerised `php:8.5-cli`, and there is no Docker daemon
+here — `Cannot connect to the Docker daemon at unix:///var/run/docker.sock` → *"microbench-gate: harness
+run failed"* → the push aborts. On a loaded box it loud-SKIPS instead (`1-min load > 2.5`). Neither is a
+regression, and per DEC-365 the gate is right to refuse rather than claim a pass. For a change with **no
+perf surface** (docs, comments), push with `--no-verify` **and say so in the report**; for anything
+touching codegen, kernels, the `Op` set or the JIT, the ratchet is OWED and must run on the dev box
+before the perf claim is made.
+
 **STANDING RULE — DEC-387, project-wide, not session-scoped:** never `AskUserQuestion`. Put every
 question in the message body with context, a minimal concrete example, numbered options each stating
 its own after-state, the recommended option first with its reason, and a visible *"none of these /
