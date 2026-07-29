@@ -29,6 +29,7 @@ impl Checker {
             class_implements: std::collections::BTreeMap::new(),
             class_supertypes: std::collections::BTreeMap::new(),
             scopes: Vec::new(),
+            fn_scope_floor: 0,
             errors: Vec::new(),
             warnings: Vec::new(),
             cur_ret: Ty::Void,
@@ -210,16 +211,68 @@ impl Checker {
                 )),
             );
         }
-        if let Some(top) = self.scopes.last_mut() {
-            top.insert(name.to_string(), (ty, mutable));
+        // DEC-339 (the P0) — reject a declaration whose name is already bound by a LIVE local or
+        // parameter in this function, same scope or an enclosing one. phorj has block scope and PHP has
+        // none, so a shadowing declaration mistranspiles: the PHP leg writes through to the outer
+        // variable. Ten declaration forms can shadow (locals, `for` counters, `for…in` loop variables,
+        // `match` arm bindings, binding-`if`s, `catch` bindings, …), and one of them silently changes
+        // ITERATION COUNT — so the rule is enforced here, at the single chokepoint every form funnels
+        // through, rather than in the transpiler where it would have to be re-implemented ten times and
+        // would still let `phg run` accept a program that cannot transpile.
+        //
+        // `fn_scope_floor` is what keeps the accepted cases working: a lambda starts a new function, so
+        // its params may shadow an enclosing local. Sibling scopes are already popped, so they never
+        // collide. Class fields are not in `scopes` at all, so a method local may share a field's name.
+        // Canonical 23-row case list: `docs/specs/2026-07-26-block-scope-shadowing.md`.
+        if let Some(prev) = self.live_binding_span(name) {
+            self.err_coded(
+                span,
+                format!(
+                    "`{name}` is already declared in this function — a nested redeclaration would mean one thing here and another in the transpiled PHP"
+                ),
+                "E-SHADOW-LOCAL",
+                Some(format!(
+                    "the existing `{name}` is declared at line {}; rename this one, or assign to it instead of declaring a new one",
+                    prev.line
+                )),
+            );
         }
+        self.declare_raw(name, ty, mutable, span);
+    }
+
+    /// Install a binding WITHOUT any of the shadow checks. The one legitimate bypass: a
+    /// COMPILER-SYNTHESIZED narrowing shadow (`if (x is int) { … }` installs `x: int` in the
+    /// then-block), which is not a user declaration at all — the author wrote no second `x`, and there
+    /// is nothing for DEC-339 to reject. Running the rule here would make flow narrowing itself illegal.
+    ///
+    /// Never call this for anything the author actually wrote; that is [`Self::declare_binding`].
+    pub(super) fn declare_narrowed(&mut self, name: &str, ty: Ty, mutable: bool, span: Span) {
+        self.declare_raw(name, ty, mutable, span);
+    }
+
+    fn declare_raw(&mut self, name: &str, ty: Ty, mutable: bool, span: Span) {
+        if let Some(top) = self.scopes.last_mut() {
+            top.insert(name.to_string(), Binding { ty, mutable, span });
+        }
+    }
+
+    /// The declaration span of a LIVE binding named `name` in the current function, or `None`.
+    ///
+    /// "Live" means: in a scope at or above [`Checker::fn_scope_floor`] — i.e. belonging to the
+    /// function currently being checked, never to an enclosing function across a lambda boundary.
+    /// Searched innermost-first so the reported span is the nearest colliding declaration.
+    fn live_binding_span(&self, name: &str) -> Option<Span> {
+        self.scopes[self.fn_scope_floor.min(self.scopes.len())..]
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name).map(|b| b.span))
     }
     /// A local binding's `(type, mutable)` — locals only (does not fall through to class fields).
     /// Used by the reassignment check (M-mut.1): a non-local target is `E-ASSIGN-UNKNOWN`.
     pub(super) fn lookup_binding(&self, name: &str) -> Option<(Ty, bool)> {
         for scope in self.scopes.iter().rev() {
             if let Some(b) = scope.get(name) {
-                return Some(b.clone());
+                return Some((b.ty.clone(), b.mutable));
             }
         }
         None
@@ -230,7 +283,7 @@ impl Checker {
     /// `E-BARE-FIELD` at the `Ident` site, not silently resolved.
     pub(super) fn lookup(&self, name: &str) -> Option<Ty> {
         for scope in self.scopes.iter().rev() {
-            if let Some((t, _)) = scope.get(name) {
+            if let Some(Binding { ty: t, .. }) = scope.get(name) {
                 return Some(t.clone());
             }
         }

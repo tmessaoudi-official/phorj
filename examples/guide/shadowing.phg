@@ -1,0 +1,83 @@
+// Block scope and the redeclaration rule (DEC-339).
+//
+// Phorj has block scope; PHP does not. A declaration that reuses the name of a LIVE local or parameter
+// would therefore mean two different things on the two legs — the Rust backends make a new binding,
+// while the transpiled PHP writes through to the outer variable. So it is rejected outright
+// (`E-SHADOW-LOCAL`), at the checker, which is the one pipeline every surface shares.
+//
+// This file is the OTHER half of that rule: every form that stays legal, because none of them shadows
+// anything live. If a future change breaks one of these, it has over-tightened the rule — that is what
+// this example exists to catch. The rejected forms cannot be shown here (they no longer compile); the
+// full 23-row matrix is `docs/specs/2026-07-26-block-scope-shadowing.md`, and
+// `phg explain E-SHADOW-LOCAL` summarises it.
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+class Counter {
+    constructor(public int n) {}
+    function bumpedBy(int amount): int {
+        // A method local may share a FIELD's name: `this.n` is mandatory (Invariant 12), so the field is
+        // not a local binding and nothing is shadowed. Rejecting this would poison every field name inside
+        // every method for no correctness gain.
+        int n = amount * 2;
+        return this.n + n;
+    }
+}
+
+enum Shape { Circle(float v), Square(float v) }
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): int {
+    // Sibling blocks may reuse a name, even at a different type — the first binding is already dead by
+    // the time the second is declared ("it can be declared after").
+    {
+        int a = 1;
+        Output.printLine("block one a = {a}");
+    }
+    {
+        string a = "one";
+        Output.printLine("block two a = {a}");
+    }
+    // Sequential `for` loops reuse the counter. Ubiquitous idiom; rejecting it would be unusable.
+    mutable int total = 0;
+    for (mutable int i = 0; i < 3; i = i + 1) {
+        total = total + i;
+    }
+    for (mutable int i = 0; i < 3; i = i + 1) {
+        total = total + i;
+    }
+    Output.printLine("total = {total}");
+    // A loop body may declare per iteration: safe because a declaration always initializes (an
+    // uninitialized `int a;` is a parse error), so a stale PHP variable is never readable.
+    for (mutable int i = 0; i < 2; i = i + 1) {
+        int squared = i * i;
+        Output.printLine("squared = {squared}");
+    }
+    // Sibling `match` arms reuse a binding name — arms are siblings, never both live.
+    Shape sh = new Circle(2.5);
+    string described = match (sh) { Circle(v) => "circle {v}", Square(v) => "square {v}" };
+    Output.printLine(described);
+    // Sibling binding-`if`s reuse a name, for the same reason.
+    int? first = 7;
+    int? second = null;
+    if (var found = first) {
+        Output.printLine("first found {found}");
+    }
+    if (var found = second) {
+        Output.printLine("second found {found}");
+    }
+    // A LAMBDA starts a new function, so its parameter may shadow an outer local. PHP arrow-fn params
+    // shadow correctly and a block-body capture list excludes params, so both legs already agree.
+    int x = 100;
+    var double = function(int x): int { return x * 2; };
+    Output.printLine("outer x = {x}, double(4) = {double(4)}");
+    // Nested lambdas: a new function boundary each time.
+    var outer = function(int v): int { var inner = function(int v): int { return v + 1; }; return inner(v); };
+    Output.printLine("nested = {outer(41)}");
+    Counter c = new Counter(10);
+    Output.printLine("field and local coexist = {c.bumpedBy(5)}");
+    return 0;
+}

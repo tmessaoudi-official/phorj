@@ -364,6 +364,10 @@ impl Checker {
         if self.cur_class.is_some() {
             self.reject_nonfree_variadic(&f.params);
         }
+        // DEC-339: this function's scopes start here — the shadowing rule never looks past this point
+        // into an enclosing function (a method body must not see the names of a lambda it is nested in,
+        // and vice versa).
+        let prev_floor = std::mem::replace(&mut self.fn_scope_floor, self.scopes.len());
         self.push_scope();
         for p in &f.params {
             // Variadic param binds as its EFFECTIVE type `List<T>` (single-sourced with the signature).
@@ -372,6 +376,7 @@ impl Checker {
         }
         self.check_body(&f.body);
         self.pop_scope();
+        self.fn_scope_floor = prev_floor;
         self.cur_ret = prev_ret;
         self.cur_throws = prev_throws;
         self.cur_is_main = prev_main;

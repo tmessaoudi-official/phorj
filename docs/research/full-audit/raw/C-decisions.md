@@ -3995,3 +3995,36 @@ than assuming it, and too large to fold in here — queued as its own slice.
 **Second gap, same 100%-rule family.** The LSP does not complete attribute NAMES at all (typing `#[`
 offers nothing — no `Entry`, `Config`, `Route`, `Injectable`, `Deprecated`). Pre-existing and uniform
 across every attribute; queued rather than special-cased for this one.
+
+### DEC-339 BUILD NOTE (2026-07-29) — the P0 is fixed; one spec item was impossible as written
+
+`E-SHADOW-LOCAL` implemented at `declare_binding` (`src/checker/plumbing.rs`) — the single chokepoint all
+ten declaration forms funnel through, so locals, `for` counters, `for…in` loop variables, `match` arm
+bindings, binding-`if`s, `catch` bindings and ctor params are covered by one rule rather than ten. The
+scope search is bounded below by a new `fn_scope_floor`, raised at every function/method body and at
+every lambda, which is what implements *"a lambda starts a new function"* and keeps accepted cases 19-21
+legal. Bindings now carry their declaration span so the hint can name the colliding line.
+
+**Two carve-outs, both discovered by the existing suite rather than by reasoning.** Flow narrowing
+(`check_block_narrowed`) and early-return tail narrowing (`totality.rs`) install SYNTHESIZED shadows; the
+author wrote no second declaration, so they route through a new `declare_narrowed` that skips the rule.
+Without this the rule made narrowing reject itself — 8 tests failed and named the problem precisely.
+Destructuring binds deliberately KEEP the check, being real author declarations.
+
+**Definition-of-done item 2 was impossible as written and was NOT quietly dropped.** It asked for "a
+differential example per rejected shape 1-10". The ruling chose REJECTION over alpha-renaming, so those
+ten shapes no longer compile and cannot be runnable examples — the item was written when renaming was
+still on the table. The coherent equivalent shipped instead: all 14 rejected shapes are pinned as checker
+tests (`src/checker/tests/shadowing.rs`, 26 tests covering the full 23-row matrix), the 9 ACCEPTED shapes
+get the runnable example `examples/guide/shadowing.phg` (they are the ones that must keep working, and
+over-tightening is the live risk once the rule exists), and the fault class is recorded in
+`examples/README.md` under Invariant 9's non-runnable-fault carve-out — which is what item 3 asks for.
+
+**Migration cost held at the measured figure.** DEC-412 predicted exactly one in-tree site;
+`examples/guide/math.phg` (`int l1` at :46, `float l1` at :54 — case 11 at a different type) was the only
+failure across 270 `.phg` files. Renamed to `lg1`; stdout unchanged.
+
+**Still owed from this slice** (tracked separately, not folded in): DEC-397's lifter hoist — the adjacent
+bug in the same spec, where PHP function scope lifts to non-compiling phorj block scope. It is the same
+insight from the other direction and now has a second reason to exist, since the lifter must not emit
+programs this rule rejects.

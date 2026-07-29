@@ -35,6 +35,7 @@ mod parent_dispatch;
 mod pipes;
 mod reflect;
 mod secret;
+mod shadowing;
 mod static_methods;
 mod string_format;
 mod support;

@@ -6,6 +6,40 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — **P0**: block-scope shadowing broke byte-identity on the PHP leg (2026-07-29, DEC-339)
+Phorj has block scope; PHP does not. A declaration reusing the name of a live local or parameter meant
+two different things on the two legs — the Rust backends made a new binding while the transpiled PHP
+wrote through to the OUTER variable. Ten declaration forms could do it, and one of them, a nested `for`
+reusing its counter name, silently changed the **iteration count**. A `catch` binding leaked an exception
+dump, a stack trace and an absolute path into the PHP leg's output.
+- Now `E-SHADOW-LOCAL`: a declaration is rejected when its name is already bound by a live local or
+  parameter **in the same function** — same scope or an enclosing one. Enforced in the **checker**, the
+  one pipeline every surface shares, so `run`, `--tree-walker`, `transpile`, `build --php`, the LSP, the
+  formatter and the test runner all get it from one place. A transpiler-only guard would have let
+  `phg run` accept a program that cannot transpile.
+- The diagnostic anchors at the offending declaration and its hint names the line of the binding it
+  collides with, so it is actionable rather than just a refusal.
+- **The accepted half is enforced just as hard**, because this rule removes capability: sibling blocks
+  reusing a name (even at a different type), sequential `for` loops reusing the counter, loop bodies
+  declaring per iteration, sibling `match` arms and sibling binding-`if`s, a **lambda parameter**
+  shadowing an outer local (a lambda starts a new function), nested lambda params, and a method local
+  sharing a field's name — all still legal. `examples/guide/shadowing.phg` demonstrates every one and is
+  byte-identical across all three legs.
+- **Flow narrowing is not shadowing.** `if (x is int) { … }` installs a synthesized narrowed binding; the
+  author wrote no second declaration, so it goes through a separate `declare_narrowed` path. Without
+  that carve-out the rule made narrowing reject itself — caught by 8 existing tests.
+- Migration cost was measured up front (DEC-412) as exactly one in-tree site, and that held:
+  `examples/guide/math.phg` declared `int l1` then `float l1`. Renamed; output unchanged.
+- All 23 rows of the ruled matrix are pinned by `src/checker/tests/shadowing.rs` — 14 rejected, 9
+  accepted. `phg explain E-SHADOW-LOCAL` summarises both halves; the fault class is recorded in
+  `examples/README.md` per Invariant 9's carve-out for non-runnable faults.
+
+### Changed — Invariant 13 debt paid down while fixing the above
+`check_lambda` extracted to `src/checker/expr/lambda.rs` (literals.rs 641 → 488) and `collect_enum` to
+`src/checker/collect/enums.rs` (types_decls.rs 773 → 597), rather than growing two grandfathered files.
+A lambda earning its own module is not arbitrary: it is a function boundary, which is precisely why
+DEC-339 needs it.
+
 ### Added — userland `#[Deprecated(message: "…")]` (2026-07-29, DEC-417)
 Mark your own API as deprecated. Provider is `Core.Runtime.Deprecated`, import-gated like
 `#[Entry]`/`#[Config]`. Both halves of the ruling ship: the DECLARATION is tagged (struck through in

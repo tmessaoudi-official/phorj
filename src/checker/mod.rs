@@ -124,6 +124,18 @@ struct FnSig {
     deprecated: Option<DeprecationNote>,
 }
 
+/// One lexical binding: a parameter or a local. Carries the SPAN of its declaration so DEC-339's
+/// `E-SHADOW-LOCAL` can point a secondary note at the binding being collided with — the thing that
+/// makes the diagnostic actionable rather than just a refusal.
+#[derive(Clone)]
+struct Binding {
+    ty: Ty,
+    /// `mutable` (reassignable) — immutable by default (M-mut.1); only a `mutable` binding may be the
+    /// target of `Stmt::Assign`.
+    mutable: bool,
+    span: Span,
+}
+
 /// DEC-417 — a harvested `#[Deprecated(message: "…")]`. Its own type (rather than a bare
 /// `Option<Option<String>>`) so "deprecated without a message" stays distinguishable from "not
 /// deprecated" at every read site.
@@ -429,7 +441,13 @@ pub struct Checker {
     /// lexical block scopes; last is innermost. Each binding carries its type and whether it is
     /// `mutable` (reassignable) — immutable by default (M-mut.1); only a `mutable` binding may be
     /// the target of `Stmt::Assign`.
-    scopes: Vec<HashMap<String, (Ty, bool)>>,
+    scopes: Vec<HashMap<String, Binding>>,
+    /// DEC-339 — the index in `scopes` at which the CURRENT function's own scopes begin. The
+    /// shadowing rule only looks back as far as this, because *"a lambda starts a new function"*: an
+    /// enclosing local must not make a lambda parameter of the same name illegal (accepted cases
+    /// 19-21 of `docs/specs/2026-07-26-block-scope-shadowing.md`). Saved/restored around every
+    /// function, method and lambda body, exactly like `cur_ret`/`cur_throws`.
+    fn_scope_floor: usize,
     errors: Vec<Diagnostic>,
     /// Non-fatal lints (e.g. `W-FORCE-UNWRAP`). Surfaced to stderr by the CLI but never fail the
     /// build — the first member of Phorj's warning channel (M3 S2.5).

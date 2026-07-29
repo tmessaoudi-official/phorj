@@ -265,7 +265,9 @@ impl Checker {
             // Sound regardless of an `else`: reaching past a diverging then-block implies `cond` false.
             for (name, ty) in self.guard_if_narrowings(s) {
                 let m = self.lookup_binding(&name).map(|(_, m)| m).unwrap_or(false);
-                self.declare_binding(&name, ty, m, Self::stmt_span(s));
+                // DEC-339: synthesized by the flow engine (the author wrote no second declaration), so
+                // it bypasses the redeclaration rule — see `declare_narrowed`.
+                self.declare_narrowed(&name, ty, m, Self::stmt_span(s));
             }
             if self.stmt_terminates(s) {
                 dead = true;

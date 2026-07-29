@@ -58,7 +58,32 @@ Asymmetry looks unintended, but it is user-visible language behaviour → the de
 2. **The LSP completes no attribute NAMES at all** — typing `#[` offers nothing (`Entry`, `Config`,
    `Route`, `Injectable`, `Deprecated`). Uniform across every attribute; queued rather than special-cased.
 
-### NEXT: **Wave 1.1 — DEC-339** (the P0: redeclaration of a live local/param binding)
+### ✅ BUILT 2026-07-29 — **Wave 1.1 / DEC-339, THE P0 IS FIXED**
+
+`E-SHADOW-LOCAL` at `declare_binding` — the single chokepoint all ten shadowing declaration forms funnel
+through. New `fn_scope_floor` bounds the search per function, which is what makes *"a lambda starts a new
+function"* real. 26 tests pin the full 23-row matrix; `examples/guide/shadowing.phg` demonstrates the 9
+ACCEPTED shapes (the over-tightening risk) and is byte-identical on all three legs.
+
+- **Two carve-outs the existing suite found for me:** flow narrowing and early-return tail narrowing
+  install SYNTHESIZED shadows, so they route through a new `declare_narrowed`. Without it the rule made
+  narrowing reject itself (8 tests failed and said so). Destructuring binds keep the check.
+- **Migration cost held at DEC-412's measured figure:** exactly one site, `examples/guide/math.phg`
+  (`int l1` / `float l1`). Renamed; stdout unchanged.
+- **One definition-of-done item was impossible as written** and is recorded as such rather than dropped:
+  item 2 wanted a runnable differential example per rejected shape, but the ruling chose rejection, so
+  those shapes no longer compile. Shipped the coherent equivalent — checker tests for all 14 rejected,
+  a runnable example for all 9 accepted, README carve-out for the fault class (item 3).
+- Invariant 13 paid down again: `check_lambda` → `expr/lambda.rs` (641→488).
+
+### STILL OWED from the DEC-339 slice (not folded in, tracked)
+
+**DEC-397 — the lifter hoist.** The adjacent bug in the same spec: PHP function scope lifts to phorj
+block scope, producing non-compiling output (`mutable var b = 5;` inside an `if`, then `b = 7;` outside →
+`E-ASSIGN-UNKNOWN`). It now has a SECOND reason to exist — the lifter must not emit programs
+`E-SHADOW-LOCAL` rejects.
+
+### NEXT: **Wave 1.2 — DEC-340** (transaction auto-rollback unwinds to the entry depth)
 
 Migration cost is MEASURED (DEC-412): **exactly one in-tree site**, `examples/guide/math.phg:54`
 (`l1` is `int` at :46 and `float` at :54 — same scope, different type). One rename; nothing else in

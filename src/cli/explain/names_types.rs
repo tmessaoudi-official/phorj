@@ -110,6 +110,26 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              would read a method call, the transpiler a native. Rename the binding, or drop the\n\
              matching import.\n"
         }
+        "E-SHADOW-LOCAL" => {
+            "E-SHADOW-LOCAL — a declaration reuses the name of a live local or parameter.\n\n\
+             Phorj has block scope; PHP does not. A nested redeclaration therefore means two different\n\
+             things on the two legs — the Rust backends make a NEW binding, while the transpiled PHP\n\
+             writes through to the OUTER variable. That is a silent wrong answer, and in a nested `for`\n\
+             reusing a counter name it silently changes the ITERATION COUNT.\n\n\
+             So a declaration is rejected when its name is already bound by a live local or parameter\n\
+             IN THE SAME FUNCTION — same scope or an enclosing one. Fix it by renaming the inner one,\n\
+             or by ASSIGNING to the existing binding (`a = 2;`) instead of declaring a second one\n\
+             (`int a = 2;`) if writing through was what you meant.\n\n\
+             These stay legal, and are not shadowing:\n    \
+             * sibling blocks reusing a name — the first binding is already dead\n    \
+             * sequential `for` loops reusing the counter — the ubiquitous idiom\n    \
+             * sibling `match` arms, or sibling binding-`if`s, reusing a binding name\n    \
+             * a LAMBDA parameter shadowing an outer local — a lambda starts a new function, and PHP\n      \
+               arrow-fn params shadow correctly, so both legs already agree\n    \
+               * a method local sharing a FIELD's name — `this.field` is mandatory, so a field is not a\n      \
+               local binding and nothing is shadowed\n\n\
+             Full 23-row case list: `docs/specs/2026-07-26-block-scope-shadowing.md`.\n"
+        }
         "E-SHADOW-FN" => {
             "E-SHADOW-FN — a local binding shadows a top-level function name.\n\n\
              Functions are first-class values, so a bare `f` resolves to the function and a bare\n\

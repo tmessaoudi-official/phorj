@@ -51,13 +51,13 @@ function main(): void {
     // result would diverge between Rust's shortest-round-trip and PHP's libm, so we exercise them at
     // their *exact* values (defined by IEEE) — see `numberFormat` below for printing real results. ---
     float e0 = Math.exp(0.0);
-    float l1 = Math.log(1.0);
+    float lg1 = Math.log(1.0);
     float lt = Math.log10(1.0);
     float c0 = Math.cos(0.0);
     float s0 = Math.sin(0.0);
     float t0 = Math.tan(0.0);
     Output.printLine(
-        "exp(0)={e0}, log(1)={l1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}"
+        "exp(0)={e0}, log(1)={lg1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}"
     );
     // --- Wave-B math tail: inverse trig, hyperbolics, hypot, log2/log1p/expm1, angle conversion.
     // All erase to the PHP libm builtins (`log2` uses `log(x, 2)`; `degToRad`/`radToDeg` to

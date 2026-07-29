@@ -279,7 +279,7 @@ impl Checker {
         self.push_scope();
         for (name, ty) in narrowings {
             let m = self.lookup_binding(name).map(|(_, m)| m).unwrap_or(false);
-            self.declare_binding(name, ty.clone(), m, span);
+            self.declare_narrowed(name, ty.clone(), m, span); // DEC-339: synthesized, not authored
         }
         self.check_block(block);
         self.pop_scope();

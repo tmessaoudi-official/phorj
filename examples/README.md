@@ -180,6 +180,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/validate.phg` | **`Core.Validation`** (native-stdlib wave) — syntactic format predicates (`string -> bool`): `isInt`/`isNumber`/`isAlpha`/`isAlnum`/`isHex`, plus the **ctype character-class** predicates `isLower`/`isUpper`/`isWhitespace`/`isPunctuation`/`isControl`/`isVisible` (printable non-space)/`isPrintable`, plus the **composite shape** predicates `isEmail` (local `@` DOTTED-domain with a letters-only TLD ≥2, so `user@localhost` is false; no consecutive dots, so `a..b@c.com` is false) and `isUrl` (`http`/`https` scheme + host + optional `:port` + optional `/path`). Std-only (no regex crate), each hand-rolled in Rust and mirrored by a PHP `preg_match` over the identical anchored pattern (all use the `D`/dollar-end-only flag, so a trailing `\n` is not accepted — byte-exact to the Rust kernel) → byte-identical both backends and real PHP by construction; no new `Op`/`Value`. Every predicate is false on `""`. Shape checks, not range/semantic validation |
 | `guide/uri-encoding.phg` | **`Uri` percent-encoding statics** (DEC-279 — the former `Core.Url`, merged into the Uri module) — `Uri.encodeForm`/`Uri.decodeForm` (form-encoded, space⇒`+`, `~` encoded) and `Uri.encodeComponent`/`Uri.decodeComponent` (RFC 3986, space⇒`%20`, `~` kept), `string -> string` / `string -> string?`. 1:1 with PHP `urlencode`/`rawurlencode`/`urldecode`/`rawurldecode`; decoders return the optional absent case only on invalid-UTF-8 output. The old `Core.Url` module is GONE, not deprecated — DEC-416: pre-1.0 a retired name is simply unknown, so `import Core.Url;` is a plain error. Byte-identical both backends and real PHP; no new `Op`/`Value` |
 | `guide/deprecated.phg` | **Userland deprecation** (DEC-417) — `#[Deprecated(message: "…")]` from `Core.Runtime.Deprecated`, marking your OWN api. The DECLARATION is tagged (struck through in completion and the outline) and every USE is reported with `W-DEPRECATED` carrying your message, tagged `DiagnosticTag.Deprecated` so editors strike the call through. It never gates — warning channel only. Two deliberate non-behaviours the example demonstrates: the mark does NOT spread to callers (as in Rust/Kotlin/Swift/C#), and it is erased before every backend, so it does NOT become PHP's runtime `#[\Deprecated]` — that would print a notice and break the byte-identity spine. `message:` must be a plain literal and is never positional (`E-DEPRECATED-MESSAGE`). Byte-identical on both backends and real PHP; no new `Op`/`Value` |
+| `guide/shadowing.phg` | **Block scope and the redeclaration rule** (DEC-339, the P0) — every form that STAYS legal: sibling blocks reusing a name (even at a different type), sequential `for` loops reusing the counter, a loop body declaring per iteration, sibling `match` arms and sibling binding-`if`s reusing a binding name, a lambda parameter shadowing an outer local, nested lambda params, and a method local sharing a field's name. Exists to catch OVER-tightening: phorj has block scope and PHP does not, so redeclaring a LIVE local is rejected (`E-SHADOW-LOCAL`) — but none of these shadows anything live. The rejected forms cannot appear here because they no longer compile; see the fault note below. Byte-identical on both backends and real PHP |
 | `guide/csv.phg` | **`Core.Csv`** (native-stdlib wave) — single-row CSV `parse` (`string -> List<string>`) and `format` (`List<string> -> string`), RFC-4180 (comma separator, `"`-enclosure, doubled `""` quote). `parse` mirrors PHP `str_getcsv($s,",","\"","")` (escape disabled — no proprietary backslash escape, no 8.4+ deprecation), every quoting quirk pinned to `php -n`; one documented deviation — empty input → `[""]`, not PHP's `[null]` (the PHP emission special-cases `""` to match). Byte-identical both backends and real PHP; no new `Op`/`Value` |
 | `guide/hashing.phg` | **`Core.Hash`** (native-stdlib wave) — `crc32`/`md5`/`sha1`/`sha256` content digests (`bytes -> string`, lowercase hex). Each algorithm is hand-rolled from its public spec in std-only Rust and pinned 1:1 to a PHP core function (`hash("crc32b")`/`md5`/`sha1`/`hash("sha256")`) → byte-identical both backends and real PHP; no new `Op`/`Value`. Checksums/digests, not password hashing |
 | `guide/encoding.phg` | **`Core.Encoding`** (native-stdlib wave) — base64 + hex codecs over `bytes`: `base64Encode`/`hexEncode` (`bytes -> string`) and `base64Decode`/`hexDecode` (`string -> bytes?`, `null` on malformed). Std-only kernels, each 1:1 with a PHP core function (`base64_encode`/`base64_decode($s,true)`/`bin2hex`/`hex2bin`) → byte-identical both backends and real PHP; no new `Op`/`Value` |
@@ -373,6 +374,28 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
   Previously the later declaration silently won. An explicit field that also names a promoted ctor
   param stays allowed (the explicit declaration is authoritative). `phg explain E-DUP-PARAM` /
   `E-DUP-FIELD` document each.
+
+## Faults that cannot be runnable examples — `E-SHADOW-LOCAL` (DEC-339)
+
+Invariant 9's stated carve-out: a compile-time rejection has no runnable example, so the fault class is
+recorded here instead. Fourteen declaration shapes are rejected because phorj has block scope and PHP does
+not — the Rust backends would make a new binding while the transpiled PHP wrote through to the outer
+variable:
+
+1. an `if` block, `while` body, or nested bare block redeclaring an outer local;
+2. a `for` counter shadowing an outer local, or a **nested `for` reusing the counter name** — that one
+   silently changed the ITERATION COUNT;
+3. a `for…in` loop **variable**, or a body local, shadowing an outer local;
+4. a `match` arm binding, a binding-`if`, or a `catch` binding shadowing an outer local — the `catch` case
+   leaked an exception dump, a stack trace and an absolute path into the PHP leg's output;
+5. same-scope redeclaration (`int a = 1; int a = 2;`), including at a different type — the
+   "meant to assign, accidentally redeclared" typo class;
+6. a local redeclaring a parameter, or a constructor parameter (promoted or not) — the argument is
+   silently discarded.
+
+All fourteen are pinned by `src/checker/tests/shadowing.rs`, alongside the nine accepted shapes that
+`guide/shadowing.phg` demonstrates. Run `phg explain E-SHADOW-LOCAL` for the fix, or read the canonical
+matrix in `docs/specs/2026-07-26-block-scope-shadowing.md`.
 
 ## Not yet supported (intentionally absent here)
 
