@@ -101,7 +101,7 @@ pub const EXTENSIONS: &[Extension] = &[
         feature: "database",
         enabled: cfg!(feature = "database"),
         tier: Tier::Default,
-        modules: &["Core.DatabaseModule", "Core.Native.Database"],
+        modules: &["Core.Database", "Core.Native.Database"],
         summary: "multi-driver SQL (bundled SQLite; Postgres/MySQL via their own flags), typed \
                   hydration, transactions",
         migrated: true,
@@ -232,8 +232,8 @@ pub const EXTENSIONS: &[Extension] = &[
         feature: "uri",
         enabled: cfg!(feature = "uri"),
         tier: Tier::Default,
-        modules: &["Core.UriModule", "Core.Native.Uri", "Core.Url"],
-        summary: "RFC 3986 URIs (DEC-240) — kernel + injected Uri class + the deprecated Core.Url compat twins",
+        modules: &["Core.UriModule", "Core.Native.Uri"],
+        summary: "RFC 3986 URIs (DEC-240) — kernel + injected Uri class (the `Core.Url` compat twin was DELETED by DEC-416: pre-1.0 a retired name is simply unknown)",
         migrated: true,
     },
     Extension {

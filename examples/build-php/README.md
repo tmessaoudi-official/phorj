@@ -50,5 +50,5 @@ the build is a no-op for unchanged files (`N already current` — content compar
   (`declare class Cart { function total(): float; }`) — foreign refs emit `\Cart` and are never
   re-declared. `phg stubs` (the `.d.ts` analog) and `phg watch` are the recorded v2 slices.
 * **Native-only modules refuse** exactly like `phg transpile` (THE LADDER RULE): a project
-  importing `Core.DatabaseModule`/`Mail`/`HttpClient`/`Session` is refused loudly, never
+  importing `Core.Database`/`Mail`/`HttpClient`/`Session` is refused loudly, never
   silently degraded.

@@ -39,7 +39,7 @@ pub(crate) fn function_import_bindings(items: &[Item]) -> Vec<(String, String, S
         // A `Core.Native.*` raw-native module (DEC-277) supports the WHOLE-MODULE import form only
         // (`import Core.Native.Uri;` → qualified `Uri.encodeForm(...)`). A member fn-import is not
         // bound here: the bare→qualified rewrite would synthesize `<leaf>.name(...)` with no import
-        // item, and the leaf equals a prelude class name (`Uri`, `Database`, …), so the backends'
+        // item, and the leaf equals a prelude class name (`Uri`, `Connection`, …), so the backends'
         // Native-excluded leaf fallback (`native::index_of_qualified`) can never resolve it — a
         // checker-accepts/backend-rejects split. Rejected loudly in
         // `check_function_import_collisions` (E-IMPORT-NATIVE-MEMBER) instead.

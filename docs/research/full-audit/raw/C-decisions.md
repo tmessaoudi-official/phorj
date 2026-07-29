@@ -4061,3 +4061,29 @@ nesting at all. Staged and ready behind the `uses_db` gate; the open question is
 name. **DEC-350 renames it** (`Core.Database`, `Connection`, `Module` suffix drops) and is RULED but
 unbuilt at build-order slice 5.4, so this note will need sweeping with that rename. Recording it here
 because the register already warns that as-built ≠ ruled and both must be checked before stating a name.
+
+### DEC-350 BUILT (2026-07-29) — `Core.DatabaseModule.Database` → `Core.Database.Connection`
+
+Built at the developer's prompting, out of build-order slice 5.4, after a session reported the AS-BUILT
+name as though it were current. It was the reverse of the mistake this register already warns about, and
+the rule holds either way: **as-built ≠ ruled, and both must be checked before stating a name.**
+
+309 type renames + 482 module-path renames across 61 files (`src/`, `examples/`, `tests/`,
+`docs/specs/`, `FEATURES.md`). Ordering was load-bearing: the TYPE rename ran FIRST, while the module was
+still spelled `DatabaseModule` (which `\bDatabase\b` cannot match, since `M` follows), and the module
+rename second — the other order would have rewritten the freshly-written `Core.Database` again.
+
+**Deliberately NOT renamed:** `DatabaseError` / `DatabaseResult` (an error type is not the connection),
+the raw `Core.Native.Database` module (the native namespace keeps its leaf), and everything under
+`docs/research/` plus past `CHANGELOG` entries — those record what the name WAS, and rewriting them would
+falsify the historical record the register exists to preserve.
+
+**One mistake I made and the suite caught.** The regex guarded the dotted `Native.Database` with a
+lookbehind, but not the ARRAY form `&["Core", "Native", "Database"]`, so two native module paths were
+renamed to `"Connection"` — silently disabling the `E-TRANSPILE-DB` ladder gate for the raw-native leg.
+`raw_native_database_import_transpile_is_a_clean_ladder_error` failed with *"expected E-TRANSPILE-DB, but
+transpile succeeded"*, which is exactly the assertion that test exists for. Both paths restored.
+
+**A second stale surface fell out of it:** `ext::registry::tests::docs_extensions_md_is_current` flagged
+that the `uri` row still advertised "the deprecated `Core.Url` compat twins" — deleted by DEC-416 earlier
+the same day. Row corrected and `docs/EXTENSIONS.md` regenerated.

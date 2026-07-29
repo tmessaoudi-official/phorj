@@ -9,16 +9,16 @@
 //
 // Everything is resolved at COMPILE TIME from each class's field layout and lowered to the shipped S1
 // `Row` accessors (`new Sale(row.getString("product")?, new Order(row.getInt("order.id")?, …), …)`),
-// so there is no runtime reflection and `run ≡ run --tree-walker` holds by construction. Like every `Core.DatabaseModule`
+// so there is no runtime reflection and `run ≡ run --tree-walker` holds by construction. Like every `Core.Database`
 // program it opens real bundled SQLite (`rusqlite`) → quarantined from the byte-identity differential;
 // validated by `tests/db.rs` on both backends. Built only under `--features database`.
 package Main;
 
 import Core.Output;
 import Core.Map;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.DatabaseError;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.DatabaseError;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
@@ -44,7 +44,7 @@ class Sale {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        Database db = new Database("sqlite::memory:");
+        Connection db = new Connection("sqlite::memory:");
         discard db.prepare("CREATE TABLE countries(code TEXT, name TEXT)").exec();
         discard db
             .prepare("CREATE TABLE customers(id INTEGER, name TEXT, country_code TEXT)")

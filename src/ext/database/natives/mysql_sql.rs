@@ -22,7 +22,7 @@ pub(super) fn my_param(v: &Value) -> Result<mysql::Value, String> {
         Value::Null => mysql::Value::NULL,
         other => {
             return Err(format!(
-                "Core.DatabaseModule: cannot bind a {} value (bind a decimal as text)",
+                "Core.Database: cannot bind a {} value (bind a decimal as text)",
                 other.type_name()
             ))
         }
@@ -54,7 +54,7 @@ pub(super) fn expand_positional(
             }
             '?' if !in_s && !in_d => {
                 let b = pbs.get(consumed).ok_or_else(|| {
-                    "Core.DatabaseModule: more ? placeholders than bound values".to_string()
+                    "Core.Database: more ? placeholders than bound values".to_string()
                 })?;
                 consumed += 1;
                 match b {
@@ -79,7 +79,7 @@ pub(super) fn expand_positional(
     }
     if consumed != pbs.len() {
         return Err(format!(
-            "Core.DatabaseModule: {} bound value(s) but {} ? placeholder(s) in the SQL",
+            "Core.Database: {} bound value(s) but {} ? placeholder(s) in the SQL",
             pbs.len(),
             consumed
         ));
@@ -134,9 +134,7 @@ pub(super) fn translate_named(
                 .iter()
                 .find(|(n, _)| *n == name)
                 .map(|(_, v)| v.clone())
-                .ok_or_else(|| {
-                    format!("Core.DatabaseModule: named parameter `:{name}` was not bound")
-                })?;
+                .ok_or_else(|| format!("Core.Database: named parameter `:{name}` was not bound"))?;
             params.push(my_param(&v)?);
             if !used.contains(&name) {
                 used.push(name);
@@ -150,7 +148,7 @@ pub(super) fn translate_named(
     }
     if let Some((n, _)) = pairs.iter().find(|(n, _)| !used.contains(n)) {
         return Err(format!(
-            "Core.DatabaseModule: bound named parameter `:{n}` does not appear in the SQL"
+            "Core.Database: bound named parameter `:{n}` does not appear in the SQL"
         ));
     }
     Ok((out, params))
@@ -198,8 +196,8 @@ pub(super) fn my_cell(
             Ok(n) => Value::Int(n),
             Err(_) => {
                 return Err(format!(
-                "Core.DatabaseModule: column `{name}` holds unsigned value {u}, out of int range"
-            ))
+                    "Core.Database: column `{name}` holds unsigned value {u}, out of int range"
+                ))
             }
         },
         mysql::Value::Float(f) => Value::Float(f64::from(f)),
@@ -212,7 +210,7 @@ pub(super) fn my_cell(
                     Ok(s) => Value::Str(s.into()),
                     Err(_) => {
                         return Err(format!(
-                            "Core.DatabaseModule: column `{name}` holds non-UTF-8 text — read it as BLOB"
+                            "Core.Database: column `{name}` holds non-UTF-8 text — read it as BLOB"
                         ))
                     }
                 }
@@ -220,9 +218,9 @@ pub(super) fn my_cell(
         }
         mysql::Value::Date(..) | mysql::Value::Time(..) => {
             return Err(format!(
-            "Core.DatabaseModule: column `{name}` has a temporal mysql type — select it as text \
+                "Core.Database: column `{name}` has a temporal mysql type — select it as text \
                  (e.g. `SELECT CAST({name} AS CHAR)`) to read date/time values"
-        ))
+            ))
         }
     })
 }

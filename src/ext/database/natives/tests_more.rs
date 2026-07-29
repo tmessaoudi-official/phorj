@@ -1,4 +1,4 @@
-//! In-module unit tests for `Core.DatabaseModule` (part 2): the writes + robustness slice
+//! In-module unit tests for `Core.Database` (part 2): the writes + robustness slice
 //! (`executeMany`, insert-id helpers, timeout remap/end-to-end, `onQuery` storage), the multi-driver
 //! DSN dispatch + credential injection, and the typed array-accessor validation. Shares the helpers
 //! defined in [`super::tests`].
@@ -98,7 +98,7 @@ fn insert_id_helpers() {
 #[test]
 fn remap_timeout_only_when_armed() {
     let armed = remap_timeout(
-        Err("<<SerializationFailureError>>Core.DatabaseModule: database is locked".into()),
+        Err("<<SerializationFailureError>>Core.Database: database is locked".into()),
         true,
     );
     assert!(

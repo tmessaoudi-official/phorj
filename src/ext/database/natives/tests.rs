@@ -1,4 +1,4 @@
-//! In-module unit tests for `Core.DatabaseModule` (part 1): the runtime round-trip, bind-style
+//! In-module unit tests for `Core.Database` (part 1): the runtime round-trip, bind-style
 //! rejection, taxonomy tagging, and the transaction / savepoint / close + column-introspection cases.
 //! The shared helpers ([`ok_of`]/[`err_of`]/[`exec1`]/[`scalar`]/[`q`]/[`x`]) are reused by
 //! [`super::tests_more`] (part 2).

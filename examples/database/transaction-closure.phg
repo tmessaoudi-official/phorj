@@ -1,5 +1,5 @@
-// The CLOSURE form of transactions with `Core.DatabaseModule` (DEC-208 slice C, spec §5) — unblocked by DEC-222
-// (throwing-closure function types). Like every `Core.DatabaseModule` example this opens a real bundled-SQLite
+// The CLOSURE form of transactions with `Core.Database` (DEC-208 slice C, spec §5) — unblocked by DEC-222
+// (throwing-closure function types). Like every `Core.Database` example this opens a real bundled-SQLite
 // database, so it is quarantined from the byte-identity differential (live DB I/O is not byte-identical
 // rusqlite-vs-PDO) and is instead run on BOTH Rust backends by `tests/db.rs` (`run ≡ run --tree-walker`).
 //
@@ -14,29 +14,29 @@
 package Main;
 
 import Core.Output;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.Statement;
-import Core.DatabaseModule.Row;
-import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolationError;
-import Core.DatabaseModule.SerializationFailureError;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.Statement;
+import Core.Database.Row;
+import Core.Database.DatabaseError;
+import Core.Database.UniqueViolationError;
+import Core.Database.SerializationFailureError;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
 // prepare + exec one write; both can throw, so each is `?`-propagated.
-function run(Database db, string sql): void throws DatabaseError {
+function run(Connection db, string sql): void throws DatabaseError {
     Statement s = db.prepare(sql)?;
     discard s.exec()?;
 }
 
-function balOf(Database db, int id): int throws DatabaseError {
+function balOf(Connection db, int id): int throws DatabaseError {
     Statement s = db.prepare("SELECT bal FROM acct WHERE id = {id}")?;
     List<Row> rows = s.query()?;
     return rows[0].getInt("bal")?;
 }
 
-function setup(Database db): void throws DatabaseError {
+function setup(Connection db): void throws DatabaseError {
     run(db, "CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)")?;
     run(db, "INSERT INTO acct(id, bal) VALUES(1, 100)")?;
     run(db, "INSERT INTO acct(id, bal) VALUES(2, 0)")?;
@@ -60,7 +60,7 @@ class Attempts {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        Database db = new Database("sqlite::memory:");
+        Connection db = new Connection("sqlite::memory:");
         setup(db);
         // 1) A void closure that does two writes and returns normally -> COMMIT.
         db.transaction(

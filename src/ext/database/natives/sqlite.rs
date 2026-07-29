@@ -1,6 +1,6 @@
-//! The SQLite [`DriverConn`] backend for `Core.DatabaseModule` (DEC-208), over bundled `rusqlite`.
+//! The SQLite [`DriverConn`] backend for `Core.Database` (DEC-208), over bundled `rusqlite`.
 //!
-//! This is the driver behind a `sqlite:…` / `:memory:` DSN — the ORIGINAL, shipped `Core.DatabaseModule` runtime,
+//! This is the driver behind a `sqlite:…` / `:memory:` DSN — the ORIGINAL, shipped `Core.Database` runtime,
 //! moved BEHIND the [`DriverConn`] trait unchanged (DEC-208 slice I, multi-driver refactor). Every value
 //! mapping, placeholder-expansion, error-classification and transaction rule here is byte-identical to
 //! the pre-refactor single-file implementation, so all shipped `database` tests pass unchanged — the refactor
@@ -30,7 +30,7 @@ fn to_sql(v: &Value) -> Result<rusqlite::types::Value, String> {
         Value::Bytes(b) => S::Blob((**b).clone()),
         other => {
             return Err(format!(
-                "Core.DatabaseModule: cannot bind a {} value",
+                "Core.Database: cannot bind a {} value",
                 other.type_name()
             ))
         }
@@ -90,7 +90,7 @@ fn err_kind(e: &rusqlite::Error) -> Option<&'static str> {
 /// single `DatabaseError.fail` classification point strips the marker and throws the matching subtype.
 pub(super) fn sql_err(e: rusqlite::Error) -> String {
     let kind = err_kind(&e);
-    let base = format!("Core.DatabaseModule: {e}");
+    let base = format!("Core.Database: {e}");
     match kind {
         Some(tag) => format!("<<{tag}>>{base}"),
         None => base,
@@ -124,7 +124,7 @@ pub(super) fn expand_placeholders(
             }
             '?' if !in_squote && !in_dquote => {
                 let b = binds.get(idx).ok_or_else(|| {
-                    "Core.DatabaseModule: more ? placeholders than bound values".to_string()
+                    "Core.Database: more ? placeholders than bound values".to_string()
                 })?;
                 idx += 1;
                 match b {
@@ -152,7 +152,7 @@ pub(super) fn expand_placeholders(
     }
     if idx != binds.len() {
         return Err(format!(
-            "Core.DatabaseModule: {} bound value(s) but {} ? placeholder(s) in the SQL",
+            "Core.Database: {} bound value(s) but {} ? placeholder(s) in the SQL",
             binds.len(),
             idx
         ));
@@ -310,7 +310,7 @@ impl DriverConn for SqliteConn {
                     Value::List(v) => v,
                     other => {
                         return Err(format!(
-                            "Core.DatabaseModule.executeMany: each row must be a list, got {}",
+                            "Core.Database.executeMany: each row must be a list, got {}",
                             other.type_name()
                         ))
                     }

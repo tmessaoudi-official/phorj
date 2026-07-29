@@ -1,4 +1,4 @@
-//! DEC-208 — typed-generic `Core.DatabaseModule` result hydration. S2 shipped `queryInto`/`queryOneInto`; slice B
+//! DEC-208 — typed-generic `Core.Database` result hydration. S2 shipped `queryInto`/`queryOneInto`; slice B
 //! adds NESTED hydration (a field that is itself an entity, from dotted `"order.total"` aliases, eager,
 //! optional-entity→null on all-NULL) + `queryScalar<T>` (one value) + `queryMap<K,V>` (keyed rows).
 //! Slice E adds VALUE MAPPING for a field's type: a phorj `enum` field (TEXT column → the variant whose
@@ -9,10 +9,10 @@
 //! query chain makes the desugar emit the `snake_case` of each field name as its column literal
 //! (`userName` → `getString("user_name")`), applied per dotted segment for a nested alias.
 //! DEC-258 (the COMBINED model) makes the strategy a real VALUE fact: `naming` is a promoted field on
-//! `Database` (ctor default `new Naming.Exact()`), copied onto every `Statement` by `prepare`, and
+//! `Connection` (ctor default `new Naming.Exact()`), copied onto every `Statement` by `prepare`, and
 //! `namingStrategy` is a real copy-builder. Three cooperating tiers: (1) a strategy that is statically
 //! traceable — a literal `namingStrategy(...)` in the chain, or a connection proven by
-//! [`scan_naming_facts`]/[`Database::inline_ctor_naming`] — is BAKED into the helper's column literals
+//! [`scan_naming_facts`]/[`Connection::inline_ctor_naming`] — is BAKED into the helper's column literals
 //! (zero runtime cost, the pre-DEC-258 behavior; the strict-exact default with no strategy anywhere is
 //! byte-for-byte as before); (2) an untraceable strategy (runtime argument, stored `Statement`,
 //! connection through a parameter/field/call) emits BOTH baked helper variants plus a dispatcher that
@@ -58,7 +58,7 @@
 //! reuse the S1 `Statement.query()` + `Row` accessors (each already `throws DatabaseError`) with `?`
 //! propagation — no new native, the same catchable model as S1.
 //!
-//! IMPORT DISCIPLINE (nothing in the wind): active only when `Core.DatabaseModule` is imported. Under that import
+//! IMPORT DISCIPLINE (nothing in the wind): active only when `Core.Database` is imported. Under that import
 //! `queryInto`/`queryOneInto`/`queryScalar`/`queryMap` are the reserved result method names (like
 //! `inject` under `Core.DependencyInjection`); each generated helper takes a `Statement` parameter, so one of these on
 //! any other receiver is a clean argument-type error rather than silent misbehaviour. Disclosed in
@@ -83,7 +83,7 @@ use std::collections::BTreeMap;
 /// `usize::MAX` sentinel above, with room for far more nodes than any program could generate.
 const SYNTH_BASE: usize = usize::MAX / 2;
 
-/// The four type-directed `Core.DatabaseModule` result calls this pass lowers (all nullary member calls).
+/// The four type-directed `Core.Database` result calls this pass lowers (all nullary member calls).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Call {
     /// `List<T> = stmt.queryInto()` — one `T` per row.
@@ -131,7 +131,7 @@ enum NamingFind {
     Found(Naming),
     /// The strategy is NOT statically known (a runtime `namingStrategy` argument, a stored
     /// `Statement`, or a connection that arrived through a parameter/field/call). The `naming`
-    /// FIELD riding the `Statement` value (copied from the `Database` by `prepare`) carries the
+    /// FIELD riding the `Statement` value (copied from the `Connection` by `prepare`) carries the
     /// truth, so the rewrite emits BOTH baked helper variants plus a dispatcher that branches on
     /// `stmt.naming` at run time — one branch per hydration call, never per-row string work, and
     /// never a silent downgrade (the pre-DEC-258 `E-DB-NAMING-NOT-CONST` rejection is retired).
@@ -308,7 +308,7 @@ enum FieldKind {
         optional: bool,
     },
     /// DEC-208 slice E: a phorj `enum` field, mapped from a TEXT column by matching the column value
-    /// against the variant NAME (zero-payload variants only — validated in [`Database::validate_class`]).
+    /// against the variant NAME (zero-payload variants only — validated in [`Connection::validate_class`]).
     /// `optional` (`Status?`) admits a NULL column (→ `null`).
     Enum {
         name: String,
@@ -408,17 +408,17 @@ fn type_label(t: &Type) -> String {
     }
 }
 
-/// True iff the program imports `Core.DatabaseModule` in any form (module or member) — the gate for the whole pass.
+/// True iff the program imports `Core.Database` in any form (module or member) — the gate for the whole pass.
 fn imports_core_db(program: &Program) -> bool {
     program.items.iter().any(|it| {
         matches!(it, Item::Import { path, .. }
-            if path.len() >= 2 && path[0] == "Core" && path[1] == "DatabaseModule")
+            if path.len() >= 2 && path[0] == "Core" && path[1] == "Database")
     })
 }
 
 pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
-    // A no-op unless `Core.DatabaseModule` is imported — so a program that never touches the DB is byte-for-byte
-    // unchanged and a user method named `queryInto` outside `Core.DatabaseModule` is never hijacked.
+    // A no-op unless `Core.Database` is imported — so a program that never touches the DB is byte-for-byte
+    // unchanged and a user method named `queryInto` outside `Core.Database` is never hijacked.
     if !imports_core_db(&program) {
         return Ok(program);
     }
@@ -455,7 +455,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
         items,
         span,
     } = program;
-    let mut db = Database {
+    let mut db = Connection {
         ctor_params: &ctor_params,
         enum_variants: &enum_variants,
         helpers: BTreeMap::new(),
@@ -483,7 +483,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
     })
 }
 
-struct Database<'a> {
+struct Connection<'a> {
     ctor_params: &'a BTreeMap<String, Vec<CtorParam>>,
     /// enum name → `[(variant, payload-arity)]` for every declared/injected enum (DEC-208 slice E).
     enum_variants: &'a BTreeMap<String, Vec<(String, usize)>>,
@@ -500,19 +500,19 @@ struct Database<'a> {
     /// the fixed `phorjRows`/`phorjOut`/… locals and from every user field name.
     next_local: usize,
     /// The column naming strategy of the helper CURRENTLY being synthesized (DEC-208 slice B2). Set as
-    /// the first line of [`Database::synth_helper`] from the helper's spec, read by [`Database::col`]/[`Database::seg`]
+    /// the first line of [`Connection::synth_helper`] from the helper's spec, read by [`Connection::col`]/[`Connection::seg`]
     /// while building that one helper's body. Synthesis is strictly sequential (one helper fully built
     /// before the next), so a transient field is sound — no interleaving.
     current_naming: Naming,
     /// DEC-258 — the enclosing function's PROVEN connection facts: var name → the literal `Naming`
-    /// its `Database` construction carries, for IMMUTABLE, never-shadowed, never-reassigned locals
+    /// its `Connection` construction carries, for IMMUTABLE, never-shadowed, never-reassigned locals
     /// only (see [`scan_naming_facts`] — anything less certain is simply absent, which soundly
     /// falls back to runtime dispatch). Rebuilt at every `rfn` entry.
     naming_facts: BTreeMap<String, Naming>,
 }
 
 /// DEC-258 — scan one function body (recursively: nested blocks, loops, try/catch, lambda bodies)
-/// and return the names PROVEN to hold a `Database` with a compile-time-known naming strategy.
+/// and return the names PROVEN to hold a `Connection` with a compile-time-known naming strategy.
 /// The proof standard is deliberately brutal — a name qualifies only when EVERY binding of it in
 /// the whole function is the same immutable literal-strategy construction, and it is never
 /// reassigned, never a loop/catch/if-let/destructure binder, and never any function/lambda
@@ -531,9 +531,9 @@ fn scan_naming_facts(params: &[Param], body: &[Stmt]) -> BTreeMap<String, Naming
         };
         map.insert(name.to_string(), v);
     }
-    /// The naming carried by a `Database` construction expr — shared with the receiver-side walk.
+    /// The naming carried by a `Connection` construction expr — shared with the receiver-side walk.
     fn ctor_fact(e: &Expr) -> Option<Naming> {
-        Database::inline_ctor_naming(e)
+        Connection::inline_ctor_naming(e)
     }
     fn scan_expr(e: &Expr, map: &mut BTreeMap<String, Fact>) {
         if let Expr::Lambda { params, body, .. } = e {
@@ -681,7 +681,7 @@ fn scan_naming_facts(params: &[Param], body: &[Stmt]) -> BTreeMap<String, Naming
         .collect()
 }
 
-impl Database<'_> {
+impl Connection<'_> {
     fn sp(&mut self) -> Span {
         let s = self.next_span;
         self.next_span += 1;
@@ -731,7 +731,7 @@ impl Database<'_> {
     /// closest to the `query…()`) wins. DEC-258 combined model: with no literal `namingStrategy` in
     /// the chain, the CONNECTION decides — a chain bottoming at `<conn>.prepare(...)` where `<conn>`
     /// is a proven immutable literal-strategy local (see [`scan_naming_facts`]) or an inline
-    /// `new Database(...)` construction is still a compile-time [`NamingFind::Found`] (baked, zero
+    /// `new Connection(...)` construction is still a compile-time [`NamingFind::Found`] (baked, zero
     /// cost); everything else — runtime `namingStrategy` argument, stored `Statement`, connection
     /// from a parameter/field/call — is [`NamingFind::Runtime`] (field dispatch, always correct).
     /// The `namingStrategy` call itself is left intact in the receiver (a real copy-builder prelude
@@ -765,7 +765,7 @@ impl Database<'_> {
                                     Some(n) => NamingFind::Found(*n),
                                     None => NamingFind::Runtime,
                                 },
-                                // An inline `new Database(dsn[, new Naming.X()])?.prepare(...)`.
+                                // An inline `new Connection(dsn[, new Naming.X()])?.prepare(...)`.
                                 other => match Self::inline_ctor_naming(other) {
                                     Some(n) => NamingFind::Found(n),
                                     None => NamingFind::Runtime,
@@ -783,7 +783,7 @@ impl Database<'_> {
         }
     }
 
-    /// The literal naming of an inline `Database` construction expression (through `?` and the
+    /// The literal naming of an inline `Connection` construction expression (through `?` and the
     /// `this`-returning `timeout`/`onQuery` chain), or `None` when untraceable. The receiver-side
     /// twin of [`scan_naming_facts`]'s `ctor_fact`.
     fn inline_ctor_naming(e: &Expr) -> Option<Naming> {
@@ -791,7 +791,7 @@ impl Database<'_> {
             Expr::Propagate { inner, .. } => Self::inline_ctor_naming(inner),
             Expr::New(inner, _) => match &**inner {
                 Expr::Call { callee, args, .. } => match &**callee {
-                    Expr::Ident(n, _) if n == "Database" => match args.len() {
+                    Expr::Ident(n, _) if n == "Connection" => match args.len() {
                         0 | 1 => Some(Naming::Exact),
                         2 => Self::naming_from_arg(&args[1]),
                         _ => None,
@@ -802,7 +802,7 @@ impl Database<'_> {
             },
             Expr::Call { callee, args, .. } => match &**callee {
                 Expr::Member { object, name, .. } => match (&**object, name.as_str()) {
-                    (Expr::Ident(q, _), "withPassword") if q == "Database" => match args.len() {
+                    (Expr::Ident(q, _), "withPassword") if q == "Connection" => match args.len() {
                         2 => Some(Naming::Exact),
                         3 => Self::naming_from_arg(&args[2]),
                         _ => None,
@@ -1251,7 +1251,7 @@ impl Database<'_> {
 
     /// Resolve `streamInto<T>()` (DEC-208 item H): the sink type must be `DatabaseStream<Class>`; validates
     /// the class exactly like `queryInto` and registers a per-class stream helper.
-    /// Register (and name) one baked stream helper. The [`Database::ensure_class_helper`] twin for
+    /// Register (and name) one baked stream helper. The [`Connection::ensure_class_helper`] twin for
     /// `streamInto` (DEC-258 factored it out so the dynamic tier can register both variants).
     fn ensure_stream_helper(&mut self, class: &str, span: Span, naming: Naming) -> Option<String> {
         let helper = format!("phorjStreamInto{class}{}", naming_suffix(naming));
@@ -1788,9 +1788,8 @@ impl Database<'_> {
                 span: arm_span,
             });
         }
-        let msg = format!(
-            "Core.DatabaseModule: column `{col}` value is not a variant of enum `{enum_name}`"
-        );
+        let msg =
+            format!("Core.Database: column `{col}` value is not a variant of enum `{enum_name}`");
         let m = self.str_lit(&msg);
         let fail = self.qual_call("DatabaseError", "fail", vec![m]);
         let body = self.propagate(fail);
@@ -1820,7 +1819,7 @@ impl Database<'_> {
         let getstr = self.member_call(row, "getString", vec![col_e]);
         let getstr_p = self.propagate(getstr);
         let parse = self.qual_call("Json", "parse", vec![getstr_p]);
-        let msg = format!("Core.DatabaseModule: column `{col}` does not contain valid JSON");
+        let msg = format!("Core.Database: column `{col}` does not contain valid JSON");
         let m = self.str_lit(&msg);
         let fail = self.qual_call("DatabaseError", "fail", vec![m]);
         let fail_p = self.propagate(fail);
@@ -2435,7 +2434,7 @@ impl Database<'_> {
             span: gt_span,
         };
         let msg = self.str_lit(&format!(
-            "Core.DatabaseModule.queryOneInto: expected at most one row for `{class}`"
+            "Core.Database.queryOneInto: expected at most one row for `{class}`"
         ));
         let dberr = self.new_obj("DatabaseError", vec![msg]);
         let throw_span = self.sp();
@@ -2474,7 +2473,7 @@ impl Database<'_> {
             "phorjRows",
             BinaryOp::NotEq,
             1,
-            "Core.DatabaseModule.queryScalar: expected exactly one row",
+            "Core.Database.queryScalar: expected exactly one row",
         ));
         body.push(self.row0_local());
         // List<string> phorjCols = phorjRow.columnNames()?;
@@ -2494,7 +2493,7 @@ impl Database<'_> {
             "phorjCols",
             BinaryOp::NotEq,
             1,
-            "Core.DatabaseModule.queryScalar: expected exactly one column",
+            "Core.Database.queryScalar: expected exactly one column",
         ));
         // return phorjRow.accessor(phorjCols[0])?;
         let row2 = self.ident("phorjRow");
@@ -2568,7 +2567,7 @@ impl Database<'_> {
                     "phorjCols",
                     BinaryOp::Lt,
                     2,
-                    "Core.DatabaseModule.queryMap: expected at least two columns for a scalar value",
+                    "Core.Database.queryMap: expected at least two columns for a scalar value",
                 ));
                 let row3 = self.ident("phorjRow");
                 let cols1 = self.index_ident("phorjCols", 1);

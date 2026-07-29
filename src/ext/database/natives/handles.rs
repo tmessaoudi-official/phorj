@@ -1,4 +1,4 @@
-//! The backend-agnostic handle layer for `Core.DatabaseModule` (DEC-208): the `DatabaseResult` value
+//! The backend-agnostic handle layer for `Core.Database` (DEC-208): the `DatabaseResult` value
 //! wrappers ([`success`]/[`failure`]/[`wrap`]/[`wrap_unit`]), the opaque connection / statement / cursor
 //! handles ([`DbConn`]/[`DbStmt`]/[`DbCursor`], carried by [`Value::Db`] via [`DbObject`]), the bind
 //! accumulator ([`Binds`]/[`PosBind`]), the downcast helpers ([`as_conn`]/[`as_stmt`]/[`as_cursor`]),
@@ -13,10 +13,10 @@ use std::rc::Rc;
 
 /// Wrap a success payload as `DatabaseResult.Ok(v)`. The natives here NEVER fault on a DB error (a native
 /// `Err(String)` is an uncatchable hard fault — `vm/exec.rs`); instead they return this `DatabaseResult<T>`
-/// VALUE, and the phorj-source `Core.DatabaseModule` prelude `match`es it and `throw`s a catchable `DatabaseError`
+/// VALUE, and the phorj-source `Core.Database` prelude `match`es it and `throw`s a catchable `DatabaseError`
 /// (DEC-208 error-mechanism = prelude-wrapper). `DatabaseResult` is a PRELUDE-LOCAL enum (defined in
 /// DB_PRELUDE, injected with it) — NOT `Core.Result`, whose injection sits earlier in the module chain
-/// and so is not pulled in by `Core.DatabaseModule`'s transitive import (importer-after-imported doesn't inject).
+/// and so is not pulled in by `Core.Database`'s transitive import (importer-after-imported doesn't inject).
 pub(super) fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "DatabaseResult".into(),
@@ -37,7 +37,7 @@ pub(super) fn failure(msg: String) -> Value {
 thread_local! {
     /// One cached `DatabaseResult.Ok(null)` carrier, reused (Rc bump, no alloc) by every op whose Ok
     /// payload the prelude discards — `bind`/`bindNamed`/`bindList` (`Ok(_) => this`) and
-    /// `begin`/`commit`/`rollback`/`timeout`/`onQuery` (`Ok(_) => Database.ok()`). `bind` alone runs
+    /// `begin`/`commit`/`rollback`/`timeout`/`onQuery` (`Ok(_) => Connection.ok()`). `bind` alone runs
     /// ~40k times in the dbwork macro-bench; skipping its per-call carrier allocation (and the
     /// discarded handle clone in `bind_inner`) is the dbwork alloc lever (DEC-292). Never dropped to
     /// zero (the thread-local holds one ref), so cloning it is a pure refcount bump.
@@ -191,9 +191,9 @@ pub(super) fn as_cursor(v: &Value) -> Result<&DbCursor, String> {
         Value::Db(h) => h
             .as_any()
             .downcast_ref::<DbCursor>()
-            .ok_or_else(|| "Core.DatabaseModule: expected a stream cursor".to_string()),
+            .ok_or_else(|| "Core.Database: expected a stream cursor".to_string()),
         other => Err(format!(
-            "Core.DatabaseModule: expected a stream cursor, got {}",
+            "Core.Database: expected a stream cursor, got {}",
             other.type_name()
         )),
     }
@@ -206,9 +206,9 @@ pub(super) fn as_conn(v: &Value) -> Result<&DbConn, String> {
         Value::Db(h) => h
             .as_any()
             .downcast_ref::<DbConn>()
-            .ok_or_else(|| "Core.DatabaseModule: expected a connection".to_string()),
+            .ok_or_else(|| "Core.Database: expected a connection".to_string()),
         other => Err(format!(
-            "Core.DatabaseModule: expected a connection, got {}",
+            "Core.Database: expected a connection, got {}",
             other.type_name()
         )),
     }
@@ -219,9 +219,9 @@ pub(super) fn as_stmt(v: &Value) -> Result<&DbStmt, String> {
         Value::Db(h) => h
             .as_any()
             .downcast_ref::<DbStmt>()
-            .ok_or_else(|| "Core.DatabaseModule: expected a statement".to_string()),
+            .ok_or_else(|| "Core.Database: expected a statement".to_string()),
         other => Err(format!(
-            "Core.DatabaseModule: expected a statement, got {}",
+            "Core.Database: expected a statement, got {}",
             other.type_name()
         )),
     }
@@ -230,5 +230,5 @@ pub(super) fn as_stmt(v: &Value) -> Result<&DbStmt, String> {
 /// The catchable message for using a connection (or a statement derived from it) after `close()`.
 /// Tagged `ConnectionError` so `catch (ConnectionError e)` is precise.
 pub(super) fn conn_closed() -> String {
-    "<<ConnectionError>>Core.DatabaseModule: the connection is closed".to_string()
+    "<<ConnectionError>>Core.Database: the connection is closed".to_string()
 }

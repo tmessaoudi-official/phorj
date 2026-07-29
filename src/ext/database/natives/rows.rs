@@ -1,4 +1,4 @@
-//! The Row cell accessors for `Core.DatabaseModule` (DEC-208): the strict scalar getters
+//! The Row cell accessors for `Core.Database` (DEC-208): the strict scalar getters
 //! (`getInt`/`getString`/`getFloat`/`getBool` + their `OrNull` variants), the exact-money
 //! `getDecimal`, the typed array-column getters (`getIntList` … `getBoolListOrNull`), and the column
 //! introspection primitives (`columnNames`/`isNull`). Each returns `Ok(payload)` on success and
@@ -16,11 +16,9 @@ fn row_cell<'a>(args: &'a [Value], who: &str) -> Result<(&'a Value, &'a str), St
                 .iter()
                 .find(|(hk, _)| matches!(hk, HKey::Str(s) if s.as_str() == k))
                 .map(|(_, v)| (v, k))
-                .ok_or_else(|| format!("Core.DatabaseModule.{who}: no column `{k}` in this row"))
+                .ok_or_else(|| format!("Core.Database.{who}: no column `{k}` in this row"))
         }
-        _ => Err(format!(
-            "Core.DatabaseModule.{who} expects (Row, string column)"
-        )),
+        _ => Err(format!("Core.Database.{who} expects (Row, string column)")),
     }
 }
 
@@ -29,10 +27,10 @@ pub(super) fn get_int_inner(args: &[Value]) -> Result<Value, String> {
     match v {
         Value::Int(n) => Ok(Value::Int(*n)),
         Value::Null => Err(format!(
-            "Core.DatabaseModule.getInt: column `{k}` is NULL (use int?)"
+            "Core.Database.getInt: column `{k}` is NULL (use int?)"
         )),
         other => Err(format!(
-            "Core.DatabaseModule.getInt: column `{k}` is {}, not int",
+            "Core.Database.getInt: column `{k}` is {}, not int",
             other.type_name()
         )),
     }
@@ -43,10 +41,10 @@ pub(super) fn get_string_inner(args: &[Value]) -> Result<Value, String> {
     match v {
         Value::Str(s) => Ok(Value::Str(s.clone())),
         Value::Null => Err(format!(
-            "Core.DatabaseModule.getString: column `{k}` is NULL (use string?)"
+            "Core.Database.getString: column `{k}` is NULL (use string?)"
         )),
         other => Err(format!(
-            "Core.DatabaseModule.getString: column `{k}` is {}, not string",
+            "Core.Database.getString: column `{k}` is {}, not string",
             other.type_name()
         )),
     }
@@ -59,10 +57,10 @@ pub(super) fn get_float_inner(args: &[Value]) -> Result<Value, String> {
         // SQLite stores an integral REAL as INTEGER; widen int→float for a float column, matching PDO.
         Value::Int(n) => Ok(Value::Float(*n as f64)),
         Value::Null => Err(format!(
-            "Core.DatabaseModule.getFloat: column `{k}` is NULL (use float?)"
+            "Core.Database.getFloat: column `{k}` is NULL (use float?)"
         )),
         other => Err(format!(
-            "Core.DatabaseModule.getFloat: column `{k}` is {}, not float",
+            "Core.Database.getFloat: column `{k}` is {}, not float",
             other.type_name()
         )),
     }
@@ -76,10 +74,10 @@ pub(super) fn get_bool_inner(args: &[Value]) -> Result<Value, String> {
         Value::Int(_) => Ok(Value::Bool(true)),
         Value::Bool(b) => Ok(Value::Bool(*b)),
         Value::Null => Err(format!(
-            "Core.DatabaseModule.getBool: column `{k}` is NULL (use bool?)"
+            "Core.Database.getBool: column `{k}` is NULL (use bool?)"
         )),
         other => Err(format!(
-            "Core.DatabaseModule.getBool: column `{k}` is {}, not bool",
+            "Core.Database.getBool: column `{k}` is {}, not bool",
             other.type_name()
         )),
     }
@@ -96,7 +94,7 @@ pub(super) fn get_int_or_null_inner(args: &[Value]) -> Result<Value, String> {
         Value::Int(n) => Ok(Value::Int(*n)),
         Value::Null => Ok(Value::Null),
         other => Err(format!(
-            "Core.DatabaseModule.getIntOrNull: column `{k}` is {}, not int",
+            "Core.Database.getIntOrNull: column `{k}` is {}, not int",
             other.type_name()
         )),
     }
@@ -108,7 +106,7 @@ pub(super) fn get_string_or_null_inner(args: &[Value]) -> Result<Value, String> 
         Value::Str(s) => Ok(Value::Str(s.clone())),
         Value::Null => Ok(Value::Null),
         other => Err(format!(
-            "Core.DatabaseModule.getStringOrNull: column `{k}` is {}, not string",
+            "Core.Database.getStringOrNull: column `{k}` is {}, not string",
             other.type_name()
         )),
     }
@@ -122,7 +120,7 @@ pub(super) fn get_float_or_null_inner(args: &[Value]) -> Result<Value, String> {
         Value::Int(n) => Ok(Value::Float(*n as f64)),
         Value::Null => Ok(Value::Null),
         other => Err(format!(
-            "Core.DatabaseModule.getFloatOrNull: column `{k}` is {}, not float",
+            "Core.Database.getFloatOrNull: column `{k}` is {}, not float",
             other.type_name()
         )),
     }
@@ -137,7 +135,7 @@ pub(super) fn get_bool_or_null_inner(args: &[Value]) -> Result<Value, String> {
         Value::Bool(b) => Ok(Value::Bool(*b)),
         Value::Null => Ok(Value::Null),
         other => Err(format!(
-            "Core.DatabaseModule.getBoolOrNull: column `{k}` is {}, not bool",
+            "Core.Database.getBoolOrNull: column `{k}` is {}, not bool",
             other.type_name()
         )),
     }
@@ -167,22 +165,22 @@ fn decimal_from_cell(v: &Value, k: &str, who: &str, null_ok: bool) -> Result<Val
         Value::Str(s) => match crate::value::decimal_of(s) {
             Some((unscaled, scale)) => Ok(Value::Decimal { unscaled, scale }),
             None => Err(format!(
-                "Core.DatabaseModule.{who}: column `{k}` value `{s}` is not a valid decimal"
+                "Core.Database.{who}: column `{k}` value `{s}` is not a valid decimal"
             )),
         },
         // Best-effort REAL → shortest round-trip decimal string → exact decimal of THAT string.
         Value::Float(f) => match crate::value::decimal_of(&format!("{f}")) {
             Some((unscaled, scale)) => Ok(Value::Decimal { unscaled, scale }),
             None => Err(format!(
-                "Core.DatabaseModule.{who}: column `{k}` REAL value cannot be represented as a decimal"
+                "Core.Database.{who}: column `{k}` REAL value cannot be represented as a decimal"
             )),
         },
         Value::Null if null_ok => Ok(Value::Null),
         Value::Null => Err(format!(
-            "Core.DatabaseModule.{who}: column `{k}` is NULL (use decimal?)"
+            "Core.Database.{who}: column `{k}` is NULL (use decimal?)"
         )),
         other => Err(format!(
-            "Core.DatabaseModule.{who}: column `{k}` is {}, not decimal",
+            "Core.Database.{who}: column `{k}` is {}, not decimal",
             other.type_name()
         )),
     }
@@ -221,13 +219,13 @@ pub(super) fn list_from_cell(
             for (i, it) in items.iter().enumerate() {
                 if matches!(it, Value::Null) {
                     return Err(format!(
-                        "Core.DatabaseModule.{who}: column `{k}` has a NULL element at [{i}] — filter them in \
+                        "Core.Database.{who}: column `{k}` has a NULL element at [{i}] — filter them in \
                          SQL (e.g. array_remove({k}, NULL)) or select a non-null projection"
                     ));
                 }
                 if !check(it) {
                     return Err(format!(
-                        "Core.DatabaseModule.{who}: column `{k}` element [{i}] is {}, not {elem}",
+                        "Core.Database.{who}: column `{k}` element [{i}] is {}, not {elem}",
                         it.type_name()
                     ));
                 }
@@ -236,10 +234,10 @@ pub(super) fn list_from_cell(
         }
         Value::Null if or_null => Ok(Value::Null),
         Value::Null => Err(format!(
-            "Core.DatabaseModule.{who}: column `{k}` is NULL (use List<{elem}>? / the OrNull accessor)"
+            "Core.Database.{who}: column `{k}` is NULL (use List<{elem}>? / the OrNull accessor)"
         )),
         other => Err(format!(
-            "Core.DatabaseModule.{who}: column `{k}` is {}, not an array",
+            "Core.Database.{who}: column `{k}` is {}, not an array",
             other.type_name()
         )),
     }
@@ -336,7 +334,7 @@ pub(super) fn column_names_inner(args: &[Value]) -> Result<Value, String> {
                 .collect();
             Ok(Value::List(Rc::new(names)))
         }
-        _ => Err("Core.DatabaseModule.columnNames expects (Row)".into()),
+        _ => Err("Core.Database.columnNames expects (Row)".into()),
     }
 }
 

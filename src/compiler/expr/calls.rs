@@ -97,7 +97,7 @@ impl Compiler<'_> {
             // enforced that it was imported and the native exists. Resolution is import-map-first
             // with a Native-excluded leaf fallback (`native::index_of_qualified`): the DEC-277
             // preludes import their raw natives under an alias, and a prelude class (`Uri`,
-            // `Database`) must never leaf-capture its same-leaf `Core.Native.*` module. Lowers to
+            // `Connection`) must never leaf-capture its same-leaf `Core.Native.*` module. Lowers to
             // `Op::CallNative`, which pushes the native's result — no separate `Const(Unit)` (the
             // old `Print` path's pair).
             if !*safe {

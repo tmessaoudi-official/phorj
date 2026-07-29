@@ -14,7 +14,7 @@ keep the `Core.` import root.
 | lift | mandatory | `-` | — | the PHP→Phorj lifter (`phg lift`) — Tier-1/2 modernization drafts |
 | cryptography | default | `cryptography` | Core.Cryptography | password hashing (Argon2id) — the one crate-backed crypto primitive |
 | csv | default | `csv` | Core.Csv | CSV parse/render (RFC-4180 quoting) — DEC-273 migration wave |
-| database | default | `database` | Core.DatabaseModule, Core.Native.Database | multi-driver SQL (bundled SQLite; Postgres/MySQL via their own flags), typed hydration, transactions |
+| database | default | `database` | Core.Database, Core.Native.Database | multi-driver SQL (bundled SQLite; Postgres/MySQL via their own flags), typed hydration, transactions |
 | debug | default | `debug` | Core.DebugModule, Core.Native.Debug | Debug.dump/dd value introspection (the walk-any-value SEAM stays core) |
 | decimal | default | `decimal` | Core.Decimal | exact fixed-point `decimal` MODULE natives (the `1.50d` primitive itself is kernel) |
 | encoding | default | `encoding` | Core.Encoding | base64/hex encode-decode — DEC-273 migration wave |
@@ -28,7 +28,7 @@ keep the `Core.` import root.
 | signals | default | `signals` | — | SIGINT/SIGTERM graceful shutdown for `phg serve` (drain in-flight, exit 0) |
 | test | default | `test` | Core.Test | the `Core.Test` assertion natives behind `phg test` |
 | unicode | default | `unicode` | — | UAX #29 grapheme segmentation behind `String.graphemeLength`/`graphemes` (DEC-256 native-only tier) |
-| uri | default | `uri` | Core.UriModule, Core.Native.Uri, Core.Url | RFC 3986 URIs (DEC-240) — kernel + injected Uri class + the deprecated Core.Url compat twins |
+| uri | default | `uri` | Core.UriModule, Core.Native.Uri | RFC 3986 URIs (DEC-240) — kernel + injected Uri class (the `Core.Url` compat twin was DELETED by DEC-416: pre-1.0 a retired name is simply unknown) |
 | database-mysql | opt-in | `database-mysql` | — | MySQL/MariaDB driver for the database extension |
 | database-postgres | opt-in | `database-postgres` | — | PostgreSQL driver for the database extension |
 | http-client | opt-in | `http-client` | Core.HttpClientModule, Core.Native.HttpClient | outbound HTTP(S) client (rustls; DEC-264 same-host redirect hygiene) |

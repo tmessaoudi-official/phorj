@@ -22,8 +22,7 @@ use std::rc::Rc;
 /// a clean, catchable DB error. The bindable scalar set matches the SQLite driver
 /// (int/float/string/bool/bytes/null); a non-scalar is a clean error, never a silent coercion.
 fn pg_param(v: &Value, expected: &Type) -> Result<Box<dyn ToSql + Sync>, String> {
-    let overflow =
-        |n: i64, t: &str| format!("Core.DatabaseModule: int {n} does not fit the {t} column");
+    let overflow = |n: i64, t: &str| format!("Core.Database: int {n} does not fit the {t} column");
     Ok(match v {
         Value::Int(n) => match *expected {
             Type::INT2 => Box::new(i16::try_from(*n).map_err(|_| overflow(*n, "int2"))?),
@@ -58,9 +57,9 @@ fn pg_param(v: &Value, expected: &Type) -> Result<Box<dyn ToSql + Sync>, String>
         },
         other => {
             return Err(format!(
-                "Core.DatabaseModule: cannot bind a {} value (bind a decimal as text with a ::numeric cast)",
-                other.type_name()
-            ))
+            "Core.Database: cannot bind a {} value (bind a decimal as text with a ::numeric cast)",
+            other.type_name()
+        ))
         }
     })
 }
@@ -73,7 +72,7 @@ pub(super) fn pg_params(
 ) -> Result<Vec<Box<dyn ToSql + Sync>>, String> {
     if values.len() != expected.len() {
         return Err(format!(
-            "Core.DatabaseModule: {} bound value(s) for {} placeholder(s) in the SQL",
+            "Core.Database: {} bound value(s) for {} placeholder(s) in the SQL",
             values.len(),
             expected.len()
         ));
@@ -147,7 +146,7 @@ pub(super) fn pg_cell(row: &Row, i: usize, ty: &Type, name: &str) -> Result<Valu
         }
         _ => {
             return Err(format!(
-                "Core.DatabaseModule: column `{name}` has unsupported postgres type `{ty}` — select it with a \
+                "Core.Database: column `{name}` has unsupported postgres type `{ty}` — select it with a \
                  `::text` cast (e.g. `SELECT {name}::text`) to read numeric/json/timestamp values"
             ))
         }
@@ -191,7 +190,7 @@ pub(super) fn translate_positional(
             }
             '?' if !in_s && !in_d => {
                 let b = pbs.get(consumed).ok_or_else(|| {
-                    "Core.DatabaseModule: more ? placeholders than bound values".to_string()
+                    "Core.Database: more ? placeholders than bound values".to_string()
                 })?;
                 consumed += 1;
                 match b {
@@ -218,7 +217,7 @@ pub(super) fn translate_positional(
     }
     if consumed != pbs.len() {
         return Err(format!(
-            "Core.DatabaseModule: {} bound value(s) but {} ? placeholder(s) in the SQL",
+            "Core.Database: {} bound value(s) but {} ? placeholder(s) in the SQL",
             pbs.len(),
             consumed
         ));
@@ -283,9 +282,7 @@ pub(super) fn translate_named(
                             .find(|(n, _)| *n == name)
                             .map(|(_, v)| v.clone())
                             .ok_or_else(|| {
-                                format!(
-                                    "Core.DatabaseModule: named parameter `:{name}` was not bound"
-                                )
+                                format!("Core.Database: named parameter `:{name}` was not bound")
                             })?;
                         params.push(v);
                         let k = params.len();
@@ -307,7 +304,7 @@ pub(super) fn translate_named(
         .find(|(n, _)| !assigned.iter().any(|(a, _)| a == n))
     {
         return Err(format!(
-            "Core.DatabaseModule: bound named parameter `:{n}` does not appear in the SQL"
+            "Core.Database: bound named parameter `:{n}` does not appear in the SQL"
         ));
     }
     Ok((out, params))

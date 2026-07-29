@@ -3,12 +3,12 @@
 use super::*;
 
 impl Checker {
-    /// DEC-208 slice F — the SQL-injection lint. Fires `W-SQL-INJECTION` when a `Core.DatabaseModule` `Database.prepare`
+    /// DEC-208 slice F — the SQL-injection lint. Fires `W-SQL-INJECTION` when a `Core.Database` `Connection.prepare`
     /// receives a string-INTERPOLATED literal whose hole splices a NON-constant value into the SQL text.
     ///
-    /// Type-directed and import-gated ("nothing in the wind"): the receiver must type to the `Database` class
-    /// AND the program must import `Core.DatabaseModule` (module or member form), so a user class happening to be
-    /// named `Database` with a `prepare` method is never hijacked. A fully-constant interpolation (every hole a
+    /// Type-directed and import-gated ("nothing in the wind"): the receiver must type to the `Connection` class
+    /// AND the program must import `Core.Database` (module or member form), so a user class happening to be
+    /// named `Connection` with a `prepare` method is never hijacked. A fully-constant interpolation (every hole a
     /// literal) does NOT warn; a plain non-interpolated literal has no hole so never warns. This is a
     /// non-fatal lint — the program still compiles (the deliberately-built-query escape hatch stays open).
     pub(in crate::checker) fn lint_sql_injection(
@@ -21,16 +21,16 @@ impl Checker {
         if name != "prepare" {
             return;
         }
-        // Receiver must be the `Database` class …
-        if !matches!(base, Ty::Named(cls, _) if cls == "Database") {
+        // Receiver must be the `Connection` class …
+        if !matches!(base, Ty::Named(cls, _) if cls == "Connection") {
             return;
         }
-        // … and it must be Core.DatabaseModule's `Database` (imported — module `Core.DatabaseModule` or a member `Core.DatabaseModule.X`), never a
-        // coincidental user class named `Database`.
+        // … and it must be Core.Database's `Connection` (imported — module `Core.Database` or a member `Core.Database.X`), never a
+        // coincidental user class named `Connection`.
         if !self
             .imports
             .values()
-            .any(|m| m == "Core.DatabaseModule" || m.starts_with("Core.DatabaseModule."))
+            .any(|m| m == "Core.Database" || m.starts_with("Core.Database."))
         {
             return;
         }

@@ -1,8 +1,8 @@
-//! The `Core.Native.Database` registry — the INTERNAL natives the phorj-source `Core.DatabaseModule`
+//! The `Core.Native.Database` registry — the INTERNAL natives the phorj-source `Core.Database`
 //! prelude wraps. This file holds the shared `Ty` helpers, the crate-facing [`database_natives`]
 //! assembler, and the connection / statement natives; the Row-accessor natives live in
-//! [`super::registry_rows`]. They live under the `DbSys` qualifier (NOT `Database`) so a prelude
-//! `class Database` calling `DbSys.open(..)` never collides with the class.
+//! [`super::registry_rows`]. They live under the `DbSys` qualifier (NOT `Connection`) so a prelude
+//! `class Connection` calling `DbSys.open(..)` never collides with the class.
 
 use super::wrappers::*;
 use crate::native::{NativeEval, NativeFn};
@@ -26,11 +26,11 @@ pub(super) fn bindable() -> Ty {
     Ty::union_of(vec![Ty::String, Ty::Int, Ty::Float, Ty::Bool])
 }
 
-/// The `Core.Native.Database` registry entries — the INTERNAL natives the phorj-source `Core.DatabaseModule` prelude wraps.
-/// They live under the `DbSys` qualifier (NOT `Database`) so a prelude `class Database` calling `DbSys.open(..)`
+/// The `Core.Native.Database` registry entries — the INTERNAL natives the phorj-source `Core.Database` prelude wraps.
+/// They live under the `DbSys` qualifier (NOT `Connection`) so a prelude `class Connection` calling `DbSys.open(..)`
 /// never collides with the class. Every opaque connection / statement / row handle is typed `DatabaseHandle`
 /// (a reserved opaque type backed by `Value::Db`/`Value::Map` — the prelude threads it, never inspects
-/// it). Every native is `pure: false` (opens/uses a real DB resource) so any `import Core.DatabaseModule` program is
+/// it). Every native is `pure: false` (opens/uses a real DB resource) so any `import Core.Database` program is
 /// auto-quarantined from the byte-identity differential, and every native returns `Result<T, string>`
 /// (Success | Failure) — never a hard fault on a DB error (the prelude throws a catchable `DatabaseError`).
 /// The `php` emitters map to PDO (DEC-208 LADDER case 1); finalized in the transpile slice.
@@ -54,8 +54,8 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             php: |a| format!("new \\PDO({})", a.first().map_or("''", |s| s)),
         },
         // Credential-Secret DSN builder (DEC-208 slice G): inject a `Core.Secret` password into a
-        // `postgres://` DSN (`Database.withPassword`). Returns a plain `string` (the authenticated DSN),
-        // consumed immediately by `new Database(...)`; the driver parses the password out and retains only a
+        // `postgres://` DSN (`Connection.withPassword`). Returns a plain `string` (the authenticated DSN),
+        // consumed immediately by `new Connection(...)`; the driver parses the password out and retains only a
         // redacted DSN. A non-postgres DSN is returned unchanged. `pure:false` keeps the module
         // spine-quarantined (a program using it also connects). PHP: no faithful analog (quarantined).
         NativeFn {
@@ -128,7 +128,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
         },
         // Streaming (DEC-208 item H): `stream` runs the query (HigherOrder — fires `onQuery` exactly
         // like `query`) and returns a cursor handle; `streamNext` pulls one row handle at a time
-        // (`null` = exhausted). PHP emitters are placeholders like the rest of DbSys (Core.DatabaseModule is
+        // (`null` = exhausted). PHP emitters are placeholders like the rest of DbSys (Core.Database is
         // E-TRANSPILE-DB native-only — pipeline ladder gate).
         NativeFn {
             module: "Core.Native.Database",
@@ -153,7 +153,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
         // --- Writes & robustness (DEC-208 slice D, spec §4/§7). `bindList` (IN-list) is Pure (records
         // a bind); `executeMany`/`execReturningId` are HigherOrder (they run SQL → fire `onQuery`);
         // `lastInsertId`/`timeout`/`onQuery` are connection-level Pure. All `pure:false` (real DB I/O →
-        // byte-identity quarantine). PHP emitters are placeholders (Core.DatabaseModule transpile finalized later). ---
+        // byte-identity quarantine). PHP emitters are placeholders (Core.Database transpile finalized later). ---
         // `bindList`/`executeMany` are GENERIC over the element type `T` (not `List<bindable>`): an
         // invariant `List<union>` param cannot accept a homogeneous list literal/variable (a `List<int>`
         // is not a `List<string | int | float | bool>`), so bindability is enforced at RUNTIME by
@@ -309,7 +309,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
         // THROWING function type `() => T throws DatabaseError` — the `throws DatabaseError` set is REQUIRED so the
         // user's throwing closure is accepted (variance rejects a throwing fn into a non-throwing slot).
         // HigherOrder: it invokes the closure re-entrantly on the calling backend. PHP is a placeholder
-        // (Core.DatabaseModule is spine-quarantined; nested-savepoint PDO emission is finalized in the transpile slice).
+        // (Core.Database is spine-quarantined; nested-savepoint PDO emission is finalized in the transpile slice).
         NativeFn {
             module: "Core.Native.Database",
             name: "transaction",

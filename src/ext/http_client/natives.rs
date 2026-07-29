@@ -1,5 +1,5 @@
 //! `Core.HttpClientModule` (W3-2 — the TOP-20 #2 parity blocker): a SYNC HTTP/1.1 client, std
-//! `TcpStream` + `rustls` for https. The `Core.DatabaseModule`/`Core.Mail` architecture verbatim: natives under
+//! `TcpStream` + `rustls` for https. The `Core.Database`/`Core.Mail` architecture verbatim: natives under
 //! the disjoint `Core.Native.HttpClient` qualifier return the prelude-local `HcResult<T>`; the prelude
 //! throws the typed `HttpClientError` taxonomy off `<<Kind>>` markers. Native-only
 //! (`E-TRANSPILE-HTTPCLIENT`, pipeline ladder gate): live network I/O cannot be byte-identical —
@@ -48,7 +48,7 @@ fn wrap(inner: Result<Value, String>) -> Value {
 
 // ── Natives ──────────────────────────────────────────────────────────────────────────────────────────
 
-/// The response handle (`Value::Db`-opaque, the Core.DatabaseModule pattern): inert data the typed accessor
+/// The response handle (`Value::Db`-opaque, the Core.Database pattern): inert data the typed accessor
 /// natives below read; the prelude wraps it in the `HttpResponse` class.
 #[derive(Debug)]
 struct HttpRespObj {

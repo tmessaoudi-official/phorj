@@ -86,8 +86,8 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              or handle overflow explicitly with `Math.tryAdd/trySub/tryMul(a, b): int?`.\n"
         }
         "E-TRANSPILE-DB" => {
-            "E-TRANSPILE-DB — a program importing `Core.DatabaseModule` cannot be transpiled to PHP.\n\n\
-             `Core.DatabaseModule` is native-only: it runs live database I/O through the phorj drivers (bundled\n\
+            "E-TRANSPILE-DB — a program importing `Core.Database` cannot be transpiled to PHP.\n\n\
+             `Core.Database` is native-only: it runs live database I/O through the phorj drivers (bundled\n\
              SQLite, Postgres), and live I/O cannot be byte-identical across those drivers and PHP\n\
              PDO — connection behaviour, error text, and type coercions all differ. Rather than emit\n\
              a PHP program that silently diverges from what `phg run` does, `phg transpile` refuses\n\
@@ -243,7 +243,7 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
             "E-PROVIDES-TARGET — `#[Provides]` is not on a valid target.\n\n\
              A `#[Provides]` factory must be a `static` method with a declared return type — the return\n\
              type names the type it provides, and it is resolved without an instance. Make the method\n\
-             `static` and annotate its return type: `static function make(): Database { … }`.\n"
+             `static` and annotate its return type: `static function make(): Connection { … }`.\n"
         }
         "E-PROVIDES-ARGS" => {
             "E-PROVIDES-ARGS — `#[Provides]` was given arguments.\n\n\

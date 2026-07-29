@@ -286,11 +286,11 @@ impl Checker {
                 // `check_method_call`, `check_static_method_call`).
                 "Channel" => Ty::Named("Channel".into(), vec![self.one_arg(name, args, *span)]),
                 "Task" => Ty::Named("Task".into(), vec![self.one_arg(name, args, *span)]),
-                // `DatabaseHandle` (DEC-208): the opaque native connection/statement/row handle the `Core.DatabaseModule`
+                // `DatabaseHandle` (DEC-208): the opaque native connection/statement/row handle the `Core.Database`
                 // prelude classes store in a field and thread to the `Core.Native.Database` natives. Reserved +
                 // IMPORT-GATED (never ambient — the developer's "nothing in the wind" rule): it resolves
-                // only when `Core.Native.Database` is in scope (the injected `Core.DatabaseModule` prelude imports it), so a
-                // user cannot name `DatabaseHandle` without importing `Core.DatabaseModule`. Opaque: it never participates
+                // only when `Core.Native.Database` is in scope (the injected `Core.Database` prelude imports it), so a
+                // user cannot name `DatabaseHandle` without importing `Core.Database`. Opaque: it never participates
                 // in arithmetic/compare/display (like `Channel`/`Task`), so the value kernels are
                 // untouched; the natives downcast the underlying `Value::Db`/`Value::Map` at runtime.
                 "DatabaseHandle" if self.imports.values().any(|m| m == "Core.Native.Database") => {

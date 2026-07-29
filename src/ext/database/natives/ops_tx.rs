@@ -1,4 +1,4 @@
-//! `Core.DatabaseModule` — the TRANSACTION/depth ops: `begin`, `commit`, `rollback`, the DEC-340
+//! `Core.Database` — the TRANSACTION/depth ops: `begin`, `commit`, `rollback`, the DEC-340
 //! entry-depth unwind, `rollbackAll` and `transactionDepth`.
 //!
 //! Split out of `ops.rs` by cohesion (Invariant 13, M-Decomp) when DEC-340's additions took that file
@@ -20,7 +20,7 @@ use crate::value::Value;
 pub(super) fn begin_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__begin expects (Database)".into()),
+        _ => return Err("Core.Database.__begin expects (Connection)".into()),
     };
     let depth = conn.tx_depth.get();
     let sql = if depth == 0 {
@@ -40,7 +40,7 @@ pub(super) fn begin_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn commit_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__commit expects (Database)".into()),
+        _ => return Err("Core.Database.__commit expects (Connection)".into()),
     };
     let depth = conn.tx_depth.get();
     if depth == 0 {
@@ -65,7 +65,7 @@ pub(super) fn commit_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn rollback_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__rollback expects (Database)".into()),
+        _ => return Err("Core.Database.__rollback expects (Connection)".into()),
     };
     let depth = conn.tx_depth.get();
     if depth == 0 {
@@ -94,7 +94,7 @@ pub(super) fn tx_depth_of(db: &Value) -> Result<u32, String> {
 pub(super) fn transaction_depth_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__transactionDepth expects (Database)".into()),
+        _ => return Err("Core.Database.__transactionDepth expects (Connection)".into()),
     };
     Ok(Value::Int(i64::from(conn.tx_depth.get())))
 }
@@ -127,7 +127,7 @@ pub(super) fn unwind_to_inner(db: &Value, target: u32) -> Result<(), String> {
 pub(super) fn rollback_all_inner(args: &[Value]) -> Result<Value, String> {
     let db = match args {
         [c] => c,
-        _ => return Err("Core.DatabaseModule.__rollbackAll expects (Database)".into()),
+        _ => return Err("Core.Database.__rollbackAll expects (Connection)".into()),
     };
     unwind_to_inner(db, 0)?;
     Ok(Value::Int(0))

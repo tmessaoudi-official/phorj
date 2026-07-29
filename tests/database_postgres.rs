@@ -1,5 +1,5 @@
 #![cfg(feature = "database-postgres")]
-//! `Core.DatabaseModule` Postgres driver (DEC-208 slice I) — LIVE round-trip, gated on a reachable server.
+//! `Core.Database` Postgres driver (DEC-208 slice I) — LIVE round-trip, gated on a reachable server.
 //!
 //! A real Postgres round-trip needs a live server, which the build environment does not always have. So
 //! this test is OPT-IN via the `PHORJ_PG_TEST_DSN` env var (the same discipline as the PHP oracle's
@@ -30,16 +30,16 @@ fn program(dsn: &str) -> String {
 package Main;
 import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.Statement;
-import Core.DatabaseModule.Row;
-import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolationError;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.Statement;
+import Core.Database.Row;
+import Core.Database.DatabaseError;
+import Core.Database.UniqueViolationError;
 
 #[Entry(kind: EntryKind.Cli)] function main(): void {{
     try {{
-        Database db = new Database("{dsn}");
+        Connection db = new Connection("{dsn}");
         discard db.prepare("DROP TABLE IF EXISTS phorj_pg_it").exec();
         discard db.prepare("CREATE TABLE phorj_pg_it(id INT PRIMARY KEY, name TEXT, active BOOLEAN)").exec();
 

@@ -1,5 +1,5 @@
 //! `Core.FileSystemModule` (W3 — the FS/streams parity blocker, TOP-20 #5): the TYPED filesystem module, built on
-//! the `Core.DatabaseModule`/`Mail`/`HttpClient` architecture (prelude-wrapper `FileSystemResult<T>` + a `<<Kind>>`
+//! the `Core.Database`/`Mail`/`HttpClient` architecture (prelude-wrapper `FileSystemResult<T>` + a `<<Kind>>`
 //! marker → typed catchable `FileSystemError` taxonomy). It SUPERSEDES the older `Core.File` ERGONOMICS
 //! (whose write/delete failures are uncatchable hard faults and whose read maps every failure to
 //! `null` — the pre-taxonomy era); `Core.File` stays untouched (additive — its deprecation is a

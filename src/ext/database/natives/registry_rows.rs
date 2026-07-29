@@ -24,7 +24,7 @@ pub(super) fn row_natives() -> Vec<NativeFn> {
         },
         // Typed ARRAY-column accessors (DEC-208 slice K): Postgres `int[]`/`text[]`/`float8[]`/
         // `bool[]` cells → typed `List<scalar>` (strict; NULL elements rejected; `OrNull` admits a
-        // whole-array NULL). PHP emitters are placeholders (Core.DatabaseModule is E-TRANSPILE-DB native-only).
+        // whole-array NULL). PHP emitters are placeholders (Core.Database is E-TRANSPILE-DB native-only).
         NativeFn {
             module: "Core.Native.Database",
             name: "getIntList",
@@ -189,7 +189,7 @@ pub(super) fn row_natives() -> Vec<NativeFn> {
         },
         // Decimal accessor (DEC-208 slice E): a `decimal`-typed hydration field maps its column here
         // (exact money — TEXT parsed exactly, never through float). PHP emitters are placeholders
-        // (Core.DatabaseModule is spine-quarantined; the transpile is finalized in a later slice).
+        // (Core.Database is spine-quarantined; the transpile is finalized in a later slice).
         NativeFn {
             module: "Core.Native.Database",
             name: "getDecimal",
@@ -217,7 +217,7 @@ pub(super) fn row_natives() -> Vec<NativeFn> {
         },
         // Column introspection (DEC-208 slice B). `columnNames` → ordered `List<string>`; `isNull` →
         // `bool`. Used by the `queryScalar`/`queryMap`/nested-hydration desugar; PHP emitters are
-        // placeholders (Core.DatabaseModule is spine-quarantined, transpile finalized in a later slice).
+        // placeholders (Core.Database is spine-quarantined, transpile finalized in a later slice).
         NativeFn {
             module: "Core.Native.Database",
             name: "columnNames",

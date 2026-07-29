@@ -1,6 +1,6 @@
-// `Core.DatabaseModule` — the MySQL/MariaDB driver (DEC-208 slice J) + credential Secret (slice G).
+// `Core.Database` — the MySQL/MariaDB driver (DEC-208 slice J) + credential Secret (slice G).
 //
-// `Core.DatabaseModule` is a MULTI-DRIVER primitive: `new Database(dsn)` dispatches on the DSN scheme behind a driver
+// `Core.Database` is a MULTI-DRIVER primitive: `new Connection(dsn)` dispatches on the DSN scheme behind a driver
 // trait — `sqlite:…` (bundled SQLite, the default `database` feature), `postgres://…` (`database-postgres`), and
 // `mysql://…` / `mariadb://…` (the sync `mysql` crate, the `database-mysql` feature). The whole surface is
 // identical across drivers — the SAME `prepare`/`bind`/`bindNamed`/`query`/`exec`/`execReturningId`/
@@ -22,11 +22,11 @@
 package Main;
 
 import Core.Output;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.Row;
-import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolationError;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.Row;
+import Core.Database.DatabaseError;
+import Core.Database.UniqueViolationError;
 import Core.Secret;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
@@ -42,7 +42,7 @@ function main(): void {
     // error prints the host, never the password.
     Secret<string> password = new Secret("developer");
     try {
-        Database db = Database.withPassword(dsn, password);
+        Connection db = Connection.withPassword(dsn, password);
         discard db.prepare("DROP TABLE IF EXISTS phorj_my_demo").exec();
         discard db
             .prepare(

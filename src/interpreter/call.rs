@@ -14,7 +14,7 @@ impl<'c> Interp<'c> {
             // variable is a method receiver; only an *unbound* identifier can be a qualifier.
             // Resolution is import-map-first with a Native-excluded leaf fallback
             // (`native::index_of_qualified`): the DEC-277 preludes import their raw natives under
-            // an alias, and a prelude class (`Uri`, `Database`) must never leaf-capture its
+            // an alias, and a prelude class (`Uri`, `Connection`) must never leaf-capture its
             // same-leaf `Core.Native.*` module.
             // The native's `eval` is shared verbatim with the VM (structural parity).
             if !*safe {

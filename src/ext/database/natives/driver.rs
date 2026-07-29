@@ -1,4 +1,4 @@
-//! The multi-driver seam for `Core.DatabaseModule` (DEC-208 slice I): the scheme-dispatched
+//! The multi-driver seam for `Core.Database` (DEC-208 slice I): the scheme-dispatched
 //! [`DriverConn`] trait, the DSN->backend dispatcher ([`open_driver`] + the feature-gated
 //! `open_mysql`/`open_postgres` stubs), and the pure DSN credential helpers (password injection /
 //! redaction / percent-encoding). No backend detail lives here -- each concrete driver
@@ -56,7 +56,7 @@ fn open_mysql(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
 #[cfg(not(feature = "database-mysql"))]
 fn open_mysql(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     Err(
-        "<<ConnectionError>>Core.DatabaseModule: the mysql driver is not compiled in \
+        "<<ConnectionError>>Core.Database: the mysql driver is not compiled in \
          (build with --features database-mysql)"
             .to_string(),
     )
@@ -70,22 +70,22 @@ fn open_postgres(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
 #[cfg(not(feature = "database-postgres"))]
 fn open_postgres(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     Err(
-        "<<ConnectionError>>Core.DatabaseModule: the postgres driver is not compiled in \
+        "<<ConnectionError>>Core.Database: the postgres driver is not compiled in \
          (build with --features database-postgres)"
             .to_string(),
     )
 }
 
-/// Inject a password into a `postgres://` DSN's authority (DEC-208 slice G — the `Database.withPassword`
+/// Inject a password into a `postgres://` DSN's authority (DEC-208 slice G — the `Connection.withPassword`
 /// factory). The password is percent-encoded and placed as the userinfo password
 /// (`postgres://user:PW@host/…`); an existing DSN password is replaced. This is a PURE string transform
-/// (no `postgres` dep), so the `Database.withPassword` surface type-checks under the plain `database` feature; the
-/// resulting DSN is consumed IMMEDIATELY by `new Database(...)` inside the factory (never surfaced to user
+/// (no `postgres` dep), so the `Connection.withPassword` surface type-checks under the plain `database` feature; the
+/// resulting DSN is consumed IMMEDIATELY by `new Connection(...)` inside the factory (never surfaced to user
 /// code), and the driver parses the password back OUT into its config and stores only a redacted DSN, so
 /// nothing retains the plaintext. A non-postgres DSN is returned unchanged (SQLite has no password).
 pub(super) fn inject_pg_password(dsn: &str, pw: &str) -> String {
     // Every URL-authority DSN takes the injected credential: postgres AND mysql/mariadb (slice J) —
-    // a `Database.withPassword` on a mysql DSN must never silently no-op. SQLite has no password; a bare
+    // a `Connection.withPassword` on a mysql DSN must never silently no-op. SQLite has no password; a bare
     // path / `sqlite:` DSN is returned unchanged.
     let url_scheme = ["postgres://", "postgresql://", "mysql://", "mariadb://"]
         .iter()

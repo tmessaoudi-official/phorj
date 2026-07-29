@@ -1,4 +1,4 @@
-//! The connection / statement / transaction operation bodies for `Core.DatabaseModule` (DEC-208): each
+//! The connection / statement / transaction operation bodies for `Core.Database` (DEC-208): each
 //! returns `Ok(payload)` on success and `Err(db-error-message)` on a DB error. The public natives
 //! ([`super::wrappers`]) `wrap` these onto the `DatabaseResult<T>` VALUE the prelude throws on.
 
@@ -11,13 +11,13 @@ use crate::value::Value;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-/// `new Database(dsn)` → open a connection, dispatching on the DSN scheme onto the right backend driver
+/// `new Connection(dsn)` → open a connection, dispatching on the DSN scheme onto the right backend driver
 /// ([`open_driver`]): `sqlite:PATH` / `sqlite::memory:` / a bare path → SQLite; `postgres://…` →
 /// Postgres. The driver behind [`Value::Db`] is opaque to the generic layer.
 pub(super) fn open_inner(args: &[Value]) -> Result<Value, String> {
     let dsn = match args {
         [Value::Str(s)] => s.as_str(),
-        _ => return Err("Core.DatabaseModule.__open expects (string dsn)".into()),
+        _ => return Err("Core.Database.__open expects (string dsn)".into()),
     };
     let driver = open_driver(dsn)?;
     Ok(Value::Db(Rc::new(DbConn {
@@ -29,16 +29,15 @@ pub(super) fn open_inner(args: &[Value]) -> Result<Value, String> {
 }
 
 /// `DbSys.dsnWithPassword(dsn, password)` → the DSN with `password` injected as its credential (DEC-208
-/// slice G, the `Database.withPassword` factory). A pure string transform ([`inject_pg_password`]); the result
-/// is consumed immediately by `new Database(...)` and never retained in plaintext (the driver parses the
+/// slice G, the `Connection.withPassword` factory). A pure string transform ([`inject_pg_password`]); the result
+/// is consumed immediately by `new Connection(...)` and never retained in plaintext (the driver parses the
 /// password out and stores only a redacted DSN). A non-postgres DSN is returned unchanged.
 pub(super) fn dsn_with_password_inner(args: &[Value]) -> Result<Value, String> {
     let (dsn, pw) = match args {
         [Value::Str(d), Value::Str(p)] => (d.as_str(), p.as_str()),
         _ => {
             return Err(
-                "Core.DatabaseModule.__dsnWithPassword expects (string dsn, string password)"
-                    .into(),
+                "Core.Database.__dsnWithPassword expects (string dsn, string password)".into(),
             )
         }
     };
@@ -49,7 +48,7 @@ pub(super) fn dsn_with_password_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn prepare_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, sql) = match args {
         [c, Value::Str(s)] => (as_conn(c)?, s.clone()),
-        _ => return Err("Core.DatabaseModule.__prepare expects (Database, string sql)".into()),
+        _ => return Err("Core.Database.__prepare expects (Connection, string sql)".into()),
     };
     // Reject preparing on a closed connection eagerly (the statement would otherwise fault only at
     // query/exec time).
@@ -70,16 +69,14 @@ pub(super) fn prepare_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn bind_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, val) = match args {
         [s, v] => (as_stmt(s)?, v),
-        _ => return Err("Core.DatabaseModule.__bind expects (Statement, value)".into()),
+        _ => return Err("Core.Database.__bind expects (Statement, value)".into()),
     };
     let mut binds = stmt.binds.borrow_mut();
     match &mut *binds {
         Binds::None => *binds = Binds::Positional(vec![PosBind::One(val.clone())]),
         Binds::Positional(v) => v.push(PosBind::One(val.clone())),
         Binds::Named(_) => {
-            return Err(
-                "Core.DatabaseModule: cannot mix positional bind() with named bindNamed()".into(),
-            )
+            return Err("Core.Database: cannot mix positional bind() with named bindNamed()".into())
         }
     }
     drop(binds);
@@ -97,7 +94,7 @@ pub(super) fn bind_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn bind_list_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, vals) = match args {
         [s, Value::List(vs)] => (as_stmt(s)?, vs),
-        _ => return Err("Core.DatabaseModule.__bindList expects (Statement, List<value>)".into()),
+        _ => return Err("Core.Database.__bindList expects (Statement, List<value>)".into()),
     };
     let entry = PosBind::List(vals.iter().cloned().collect());
     let mut binds = stmt.binds.borrow_mut();
@@ -106,8 +103,7 @@ pub(super) fn bind_list_inner(args: &[Value]) -> Result<Value, String> {
         Binds::Positional(v) => v.push(entry),
         Binds::Named(_) => {
             return Err(
-                "Core.DatabaseModule: cannot mix positional bindList() with named bindNamed()"
-                    .into(),
+                "Core.Database: cannot mix positional bindList() with named bindNamed()".into(),
             )
         }
     }
@@ -120,9 +116,7 @@ pub(super) fn bind_named_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, name, val) = match args {
         [s, Value::Str(n), v] => (as_stmt(s)?, n.as_str().to_string(), v),
         _ => {
-            return Err(
-                "Core.DatabaseModule.__bindNamed expects (Statement, string name, value)".into(),
-            )
+            return Err("Core.Database.__bindNamed expects (Statement, string name, value)".into())
         }
     };
     let mut binds = stmt.binds.borrow_mut();
@@ -130,9 +124,7 @@ pub(super) fn bind_named_inner(args: &[Value]) -> Result<Value, String> {
         Binds::None => *binds = Binds::Named(vec![(name, val.clone())]),
         Binds::Named(v) => v.push((name, val.clone())),
         Binds::Positional(_) => {
-            return Err(
-                "Core.DatabaseModule: cannot mix named bindNamed() with positional bind()".into(),
-            )
+            return Err("Core.Database: cannot mix named bindNamed() with positional bind()".into())
         }
     }
     drop(binds);
@@ -154,7 +146,7 @@ fn stmt_driver(stmt: &DbStmt) -> Result<std::cell::Ref<'_, Option<Box<dyn Driver
 pub(super) fn query_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
-        _ => return Err("Core.DatabaseModule.__query expects (Statement)".into()),
+        _ => return Err("Core.Database.__query expects (Statement)".into()),
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
@@ -169,7 +161,7 @@ pub(super) fn query_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn stream_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
-        _ => return Err("Core.DatabaseModule.__stream expects (Statement)".into()),
+        _ => return Err("Core.Database.__stream expects (Statement)".into()),
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
@@ -178,7 +170,7 @@ pub(super) fn stream_inner(args: &[Value]) -> Result<Value, String> {
         Value::List(rc) => Rc::try_unwrap(rc).unwrap_or_else(|rc| (*rc).clone()),
         other => {
             return Err(format!(
-                "Core.DatabaseModule.__stream: driver returned {}, not a row list",
+                "Core.Database.__stream: driver returned {}, not a row list",
                 other.type_name()
             ))
         }
@@ -192,7 +184,7 @@ pub(super) fn stream_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn stream_next_inner(args: &[Value]) -> Result<Value, String> {
     let cursor = match args {
         [c] => as_cursor(c)?,
-        _ => return Err("Core.DatabaseModule.__streamNext expects (cursor)".into()),
+        _ => return Err("Core.Database.__streamNext expects (cursor)".into()),
     };
     let next = cursor.rows.borrow_mut().next();
     Ok(next.unwrap_or(Value::Null))
@@ -202,7 +194,7 @@ pub(super) fn stream_next_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn exec_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
-        _ => return Err("Core.DatabaseModule.__exec expects (Statement)".into()),
+        _ => return Err("Core.Database.__exec expects (Statement)".into()),
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
@@ -215,7 +207,7 @@ pub(super) fn exec_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn exec_returning_id_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
-        _ => return Err("Core.DatabaseModule.__execReturningId expects (Statement)".into()),
+        _ => return Err("Core.Database.__execReturningId expects (Statement)".into()),
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
@@ -235,14 +227,12 @@ pub(super) fn execute_many_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, rows) = match args {
         [s, Value::List(rows)] => (as_stmt(s)?, rows),
         _ => {
-            return Err(
-                "Core.DatabaseModule.__executeMany expects (Statement, List<List<value>>)".into(),
-            )
+            return Err("Core.Database.__executeMany expects (Statement, List<List<value>>)".into())
         }
     };
     if !matches!(&*stmt.binds.borrow(), Binds::None) {
         return Err(
-            "Core.DatabaseModule.executeMany: pass all values via the rows argument, not bind()/bindNamed()"
+            "Core.Database.executeMany: pass all values via the rows argument, not bind()/bindNamed()"
                 .into(),
         );
     }
@@ -261,7 +251,7 @@ pub(super) fn execute_many_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn last_insert_id_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__lastInsertId expects (Database)".into()),
+        _ => return Err("Core.Database.__lastInsertId expects (Connection)".into()),
     };
     let guard = conn.driver.borrow();
     let driver = guard.as_ref().ok_or_else(conn_closed)?;
@@ -276,7 +266,7 @@ pub(super) fn last_insert_id_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn timeout_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, ms) = match args {
         [c, Value::Int(ms)] => (as_conn(c)?, *ms),
-        _ => return Err("Core.DatabaseModule.__timeout expects (Database, int ms)".into()),
+        _ => return Err("Core.Database.__timeout expects (Connection, int ms)".into()),
     };
     let clamped = ms.max(0);
     {
@@ -295,7 +285,7 @@ pub(super) fn timeout_inner(args: &[Value]) -> Result<Value, String> {
 pub(super) fn on_query_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, hook) = match args {
         [c, h] => (as_conn(c)?, h.clone()),
-        _ => return Err("Core.DatabaseModule.__onQuery expects (Database, hook)".into()),
+        _ => return Err("Core.Database.__onQuery expects (Connection, hook)".into()),
     };
     *conn.hook.borrow_mut() = Some(hook);
     Ok(Value::Int(0))
@@ -375,7 +365,7 @@ pub(super) fn control(conn: &DbConn, sql: &str) -> Result<(), String> {
 pub(super) fn close_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__close expects (Database)".into()),
+        _ => return Err("Core.Database.__close expects (Connection)".into()),
     };
     *conn.driver.borrow_mut() = None;
     conn.tx_depth.set(0);

@@ -1,6 +1,6 @@
 //! The `Secret<T>` opaque-wrapper type, injected when a program imports `Core.Secret` (Fork B,
 //! `docs/specs/2026-06-28-secret-type-design.md`). A `Secret<T>` value is constructed `new Secret(x)`
-//! `Core.Mail` (DEC-223) — the native mailer prelude, a TWIN of `Core.DatabaseModule`: prelude classes wrap the
+//! `Core.Mail` (DEC-223) — the native mailer prelude, a TWIN of `Core.Database`: prelude classes wrap the
 //! `Core.Native.Mail` natives, errors flow through the prelude-local `MailResult<T>` + a `<<Kind>>`-parsing
 //! `MailError.fail`, and the transport credential is a `Core.Secret`. Native-only (`E-TRANSPILE-MAIL`
 //! — see the pipeline ladder gate); every symbol import-gated (nothing in the wind). Surface notes
@@ -17,12 +17,12 @@ pub const PRELUDE: &str = r#"
 import Core.Native.Mail as NativeMail;
 import Core.String;
 import Core.List;
-// `Core.Secret` provides the opaque credential wrapper for `SmtpConfig.withAuth` (the Database.withPassword
+// `Core.Secret` provides the opaque credential wrapper for `SmtpConfig.withAuth` (the Connection.withPassword
 // discipline): the SMTP password never sits in plaintext in user code and is never retained by the
 // transport (only a redacted `smtp://host:port` description is stored).
 import Core.Secret;
 
-// Prelude-local result carrier (NOT Core.Result — see the Core.DatabaseModule native docs on injection order).
+// Prelude-local result carrier (NOT Core.Result — see the Core.Database native docs on injection order).
 enum MailResult<T> { Ok(T value), Err(string message) }
 
 open class MailError implements Error {
@@ -44,7 +44,7 @@ open class MailError implements Error {
 }
 
 // Typed error taxonomy (spec §5, shaped like DatabaseError's). `MailTimeoutError`/`MailIoError` carry the Mail prefix
-// because bare `TimeoutError` already belongs to Core.DatabaseModule's taxonomy (two injected classes may not collide).
+// because bare `TimeoutError` already belongs to Core.Database's taxonomy (two injected classes may not collide).
 class ConnectionFailedError extends MailError { constructor(string message) { parent.constructor(message); } }
 class AuthFailedError extends MailError { constructor(string message) { parent.constructor(message); } }
 class RecipientRejectedError extends MailError { constructor(string message) { parent.constructor(message); } }

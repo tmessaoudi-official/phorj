@@ -1,7 +1,7 @@
-//! `Core.HttpClientModule` (W3-2, TOP-20 #2 blocker) — the sync HTTP client prelude (the Core.DatabaseModule/Mail
+//! `Core.HttpClientModule` (W3-2, TOP-20 #2 blocker) — the sync HTTP client prelude (the Core.Database/Mail
 //! architecture). Taxonomy names are prefixed where a bare name is already taken by another injected
 //! taxonomy (`HttpTimeoutError`/`HttpTlsError`/`HttpConnectionFailedError` — `TimeoutError`/`TlsError`/
-//! `ConnectionFailedError`/`ConnectionError` belong to Core.DatabaseModule / Core.Mail; injected-class dedup would
+//! `ConnectionFailedError`/`ConnectionError` belong to Core.Database / Core.Mail; injected-class dedup would
 //! silently CAPTURE the other module's class — the cross-prelude collision smell recorded in
 //! KNOWN_ISSUES). Native-only (`E-TRANSPILE-HTTPCLIENT`).
 //!
@@ -15,7 +15,7 @@ import Core.String;
 import Core.List;
 import Core.Bytes;
 
-// Prelude-local result carrier (NOT Core.Result — the Core.DatabaseModule injection-order rationale).
+// Prelude-local result carrier (NOT Core.Result — the Core.Database injection-order rationale).
 enum HcResult<T> { Ok(T value), Err(string message) }
 
 open class HttpClientError implements Error {

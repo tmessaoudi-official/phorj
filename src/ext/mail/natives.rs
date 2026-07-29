@@ -1,4 +1,4 @@
-//! `Core.Mail` — the native mailer (DEC-223), architecturally a TWIN of `Core.DatabaseModule` (DEC-208).
+//! `Core.Mail` — the native mailer (DEC-223), architecturally a TWIN of `Core.Database` (DEC-208).
 //!
 //! LADDER (invariant 14, case 2 — native-only): PHP's `mail()` has no SMTP auth, no TLS, and is
 //! header-injection-prone — there is no faithful safe PHP map, so `phg transpile` hard-errors with

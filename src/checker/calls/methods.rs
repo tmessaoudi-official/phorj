@@ -68,7 +68,7 @@ impl Checker {
             _ => base,
         };
         // DEC-208 slice F — SQL-injection compile-time lint (`W-SQL-INJECTION`). Type-directed: fires
-        // only on `Core.DatabaseModule`'s `Database.prepare(<interpolated SQL>)` when a hole splices a non-constant value
+        // only on `Core.Database`'s `Connection.prepare(<interpolated SQL>)` when a hole splices a non-constant value
         // (a variable / field / call) into the SQL text — steering to a `?` placeholder + `.bind(...)`.
         // A non-fatal lint (the program still compiles — the interpolation escape hatch is preserved).
         self.lint_sql_injection(&base, name, args, span);

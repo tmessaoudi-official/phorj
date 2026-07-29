@@ -52,10 +52,10 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              a local is not flagged — the type-system non-printability is the real guarantee.)\n"
         }
         "W-SQL-INJECTION" => {
-            "W-SQL-INJECTION — a value is string-interpolated into `Core.DatabaseModule` SQL (lint, DEC-208).\n\n\
+            "W-SQL-INJECTION — a value is string-interpolated into `Core.Database` SQL (lint, DEC-208).\n\n\
              `db.prepare(\"SELECT * FROM users WHERE id = {userId}\")` splices `userId` straight into the\n\
              SQL text: if it carries user input, an attacker can inject arbitrary SQL. This lint is\n\
-             type-directed — it fires only on `Core.DatabaseModule`'s `Database.prepare(...)` when the SQL is an interpolated\n\
+             type-directed — it fires only on `Core.Database`'s `Connection.prepare(...)` when the SQL is an interpolated\n\
              literal whose hole is a NON-constant value (a variable, field, or call). A fully-constant\n\
              interpolation (every hole a literal) and a plain non-interpolated literal never warn.\n\n\
              The fix is a bound placeholder — the value is sent to the database SEPARATELY from the SQL\n\

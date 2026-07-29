@@ -15,16 +15,16 @@
 // All three COMPOSE with nested hydration: the nested `Billing` entity below carries an enum, a
 // decimal, AND a Json field, hydrated from dotted `"billing.*"` columns in the same one query. Resolved
 // entirely at compile time from each class's field layout (no runtime reflection), so `run ≡ run --tree-walker`
-// holds by construction. Like every `Core.DatabaseModule` program it opens real bundled SQLite → quarantined from
+// holds by construction. Like every `Core.Database` program it opens real bundled SQLite → quarantined from
 // the byte-identity differential; validated by `tests/db.rs` on both backends. Built only under
 // `--features database`.
 package Main;
 
 import Core.Output;
 import Core.Json;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.DatabaseError;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.DatabaseError;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
@@ -58,7 +58,7 @@ function showExtra(Json? j): string {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        Database db = new Database("sqlite::memory:");
+        Connection db = new Connection("sqlite::memory:");
         discard db
             .prepare(
                 "CREATE TABLE accounts(name TEXT, status TEXT, credit TEXT, meta TEXT, overdraft TEXT, extra TEXT, bplan TEXT, bbal TEXT, bset TEXT)"

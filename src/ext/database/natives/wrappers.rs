@@ -1,4 +1,4 @@
-//! The public native wrappers for `Core.DatabaseModule` (DEC-208): each wraps an [`super::ops`] /
+//! The public native wrappers for `Core.Database` (DEC-208): each wraps an [`super::ops`] /
 //! [`super::rows`] inner body so a DB error becomes `DatabaseResult.Err` (a value the prelude throws
 //! on), never a hard fault. Pure ops go through [`wrap`]/[`wrap_unit`]; statement-executing ops are
 //! `HigherOrder` (they route through [`with_hook`] to fire the `onQuery` hook + timeout classification);
@@ -35,7 +35,7 @@ pub(super) fn db_dsn_with_password(args: &[Value], _out: &mut String) -> Result<
 }
 db_native!(db_prepare, prepare_inner);
 db_native!(db_stream_next, stream_next_inner);
-// Payload-discarded ops (prelude arm `Ok(_) => this` / `Ok(_) => Database.ok()`) — cached-carrier path.
+// Payload-discarded ops (prelude arm `Ok(_) => this` / `Ok(_) => Connection.ok()`) — cached-carrier path.
 db_native_unit!(db_bind, bind_inner);
 db_native_unit!(db_bind_named, bind_named_inner);
 db_native_unit!(db_bind_list, bind_list_inner);
@@ -119,7 +119,7 @@ pub(super) fn db_exec_returning_id(
 pub(super) fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
     let (db, fnv) = match args {
         [db, fnv] => (db, fnv),
-        _ => return Err("Core.DatabaseModule.__transaction expects (Database, fn)".into()),
+        _ => return Err("Core.Database.__transaction expects (Connection, fn)".into()),
     };
     // DEC-340 — record the depth we FOUND, before opening anything. Every unwind below returns to
     // exactly this, never to 0: unwinding to 0 would roll back a caller-owned outer transaction

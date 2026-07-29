@@ -1,29 +1,29 @@
-// Enhanced-PDO database access with `Core.DatabaseModule` (DEC-208) — a strongly-typed PDO.
+// Enhanced-PDO database access with `Core.Database` (DEC-208) — a strongly-typed PDO.
 //
-//   * `new Database(dsn)`            — open a connection (throws `DatabaseError`).
+//   * `new Connection(dsn)`            — open a connection (throws `DatabaseError`).
 //   * `db.prepare(sql)`        — a prepared `Statement`.
 //   * `.bind(v)` / `.bindNamed(name, v)` — positional `?` / named `:name` binds (chainable).
 //   * `.exec()`                — run a write, returns the affected-row count.
 //   * `.query()`               — run a SELECT, returns `List<Row>`; `r.getInt`/`getString`/… are typed.
 //   * every failure is a CATCHABLE `throws DatabaseError` (unlike PDO's silent false/null).
 //
-// `Core.DatabaseModule` opens a real SQLite database (via the bundled `rusqlite`), so an importing program is
+// `Core.Database` opens a real SQLite database (via the bundled `rusqlite`), so an importing program is
 // quarantined from the byte-identity differential (like `Core.Log`/`Core.Process`); it is validated by
 // the `tests/db.rs` fixture on both backends (`run ≡ run --tree-walker`). Built only under `--features database`.
 package Main;
 
 import Core.Output;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.Row;
-import Core.DatabaseModule.DatabaseError;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.Row;
+import Core.Database.DatabaseError;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        Database db = new Database("sqlite::memory:");
+        Connection db = new Connection("sqlite::memory:");
         discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
         // Positional `?` binds.
         discard db.prepare("INSERT INTO users(name, age) VALUES(?, ?)").bind("Ada").bind(36).exec();

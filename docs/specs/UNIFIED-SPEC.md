@@ -2,7 +2,7 @@
 
 > **One document, twenty frozen designs.** Consolidated 2026-07-03 (unification-audit Stage D,
 > HEAD `0691228`) from every spec under `docs/specs/2026-*.md`, per the developer's ruling to fold
-> all of them into a single navigable SSOT (+ the Core.DatabaseModule and Core.Mail locked specs, folded
+> all of them into a single navigable SSOT (+ the Core.Database and Core.Mail locked specs, folded
 > 2026-07-16 post-audit — dated specs are folded at ship-time, never left as parallel SSOTs).
 > The original files now live in
 > [`archive/`](archive/README.md) (2026-07-04) — each section's bare "Source: …md" citation names a
@@ -106,7 +106,7 @@
   - [PHP extension tiers](#php-extension-tiers) *(2026-06-19 — scope narrowed to transpile-leg by DEC-273)*
   - [PHP parity and beyond gap audit](#php-parity-and-beyond-gap-audit) *(2026-06-21 — HISTORICAL)*
   - [Core.Sql — SQL DBAL (instance model)](#coresql--sql-dbal-instance-model) *(2026-07-11 — SUPERSEDED by DEC-208)*
-  - [Core.DatabaseModule — the enhanced-PDO database primitive (DEC-208)](#coredb--the-enhanced-pdo-database-primitive-dec-208) *(2026-07-14 — SHIPPED, slices A–K)*
+  - [Core.Database — the enhanced-PDO database primitive (DEC-208)](#coredb--the-enhanced-pdo-database-primitive-dec-208) *(2026-07-14 — SHIPPED, slices A–K)*
   - [Core.Mail — native mailer (DEC-223)](#coremail--native-mailer-dec-223) *(2026-07-15 — SHIPPED)*
   - [Dependency injection & attribute reflection (DI v2 / L1–L2)](#dependency-injection--attribute-reflection-di-v2--l1l2) *(2026-07-11 — DESIGN; DI v1 SHIPPED; L1/L2 advanced by DEC-261)*
 - **Part V — Build & distribution (M2.5)**
@@ -930,9 +930,9 @@ Anything outside the admitted domains requires revisiting this policy itself, no
 | `corosensei` 0.3.x | Stackful coroutines | `spawn`/channels (green threads) | `green` (non-wasm) | Miri-tested, by the hashbrown/parking_lot author; wasm32 has no native stack to switch (verified) — on wasm the interpreter delegates to the VM's frame-swap; green threads are quarantined from the PHP oracle |
 | `cranelift-*` (Bytecode Alliance) | Native codegen (JIT) | `phg run`/`serve`/`build` hot paths | `jit` (non-wasm) | The G-8 lever — native codegen beats php+JIT (a spike showed ~3× even with boxed `Value`); `std` has no codegen and hand-emitting machine code is the unsafe-est hand-rolling. phorj's FIRST **first-party** `unsafe`, confined to the `src/jit/` island (crate root `forbid`→`deny`; CI-enforced). **In tree since codegen slice 1** (2026-07-06, `jit` feature; pure-int leaf codegen — since WIRED: `jit` is a DEFAULT feature of `phg run` as of 2026-07-09, opt out `--no-jit`) |
 | `unicode-segmentation` 1.x | UAX #29 grapheme clusters (DEC-256, admitted 2026-07-17) | `Core.Text` graphemes | `unicode` | Pure data tables, zero transitive deps, unicode-rs org; graphemes only — everything else Unicode is std |
-| `rusqlite` 0.40.x | Embedded SQL — SQLite (8th domain, admitted 2026-07-03; DEC-208) | `Core.DatabaseModule` | `database` | `bundled` compiles vendored SQLite C source (no system libsqlite3); its `unsafe` is the C-FFI boundary internal to the crate; spine-quarantined (`pure:false`) |
-| `postgres` 0.19.x (sync) | SQL driver — Postgres (DEC-208 slice I) | `Core.DatabaseModule` `DriverConn` seam | `database-postgres` (non-default) | Native wire protocol, no libpq; async/tokio is its INTERNAL blocking-wrapper detail — the phorj-facing API stays sync |
-| `mysql` 28.x (sync, `minimal-rust`) | SQL driver — MySQL/MariaDB (DEC-229, 10th-domain completion) | `Core.DatabaseModule` `DriverConn` seam | `database-mysql` (non-default) | Pure-Rust wire protocol, no TLS/compression extras — the smallest surface; same seam as postgres |
+| `rusqlite` 0.40.x | Embedded SQL — SQLite (8th domain, admitted 2026-07-03; DEC-208) | `Core.Database` | `database` | `bundled` compiles vendored SQLite C source (no system libsqlite3); its `unsafe` is the C-FFI boundary internal to the crate; spine-quarantined (`pure:false`) |
+| `postgres` 0.19.x (sync) | SQL driver — Postgres (DEC-208 slice I) | `Core.Database` `DriverConn` seam | `database-postgres` (non-default) | Native wire protocol, no libpq; async/tokio is its INTERNAL blocking-wrapper detail — the phorj-facing API stays sync |
+| `mysql` 28.x (sync, `minimal-rust`) | SQL driver — MySQL/MariaDB (DEC-229, 10th-domain completion) | `Core.Database` `DriverConn` seam | `database-mysql` (non-default) | Pure-Rust wire protocol, no TLS/compression extras — the smallest surface; same seam as postgres |
 | `lettre` 0.11.x | Native mailer (11th domain, DEC-223) | `Core.Mail` | `mail` (non-default) | RFC-correct MIME/multipart, blocking SmtpTransport (no tokio at the API), rustls TLS, DKIM; native-only (`E-TRANSPILE-MAIL`) |
 | `rustls` 0.23.x | TLS (6th domain, admitted 2026-07-03) | `Core.HttpClient` https (+ ruled serve TLS, DEC-331 D7) | `http-client` (non-default) | Memory-safe TLS; admitted explicitly to gate the HTTP client; native-only, spine-quarantined |
 | `webpki-roots` 1.x | Mozilla trust anchors | `Core.HttpClient` cert validation | `http-client` (non-default) | No OS cert-store dependency — deterministic trust anchors alongside rustls |
@@ -1027,7 +1027,7 @@ DEC-273. Summary:
   Image/Net, DI/Cache/observability/Signals/concurrency-framework, FFI/embeddable.
 - **Classification ≠ implementation.** `.phg`-expressibility only CLASSIFIES a module as an extension;
   **every module (core and extension) is written in Rust + JIT-optimized** — the flag gates
-  build-inclusion, never language or speed (Core.DatabaseModule = a fast Rust extension). The perf mandate is
+  build-inclusion, never language or speed (Core.Database = a fast Rust extension). The perf mandate is
   untouched. Third-party plugins may be `.phg` or Rust.
 - **Seam/module split:** where a capability needs an irreducible primitive, the SEAM stays core and the
   module is an extension — Html (interpolation auto-escape hook core; engine extension), Debug
@@ -1194,7 +1194,7 @@ answer); versioned/i18n/video docs.
 **Status: SUPERSEDED by DEC-208 (2026-07-13) — kept for rationale.** The in-language SQL query
 builder (both the 2026-07-10 static-factory slices AND the instance model below) **left the language
 entirely**: DEC-208 ruled a query builder is 100% userland; Core gained the enhanced-PDO
-[`Core.DatabaseModule` primitive](#coredb--the-enhanced-pdo-database-primitive-dec-208) instead (SHIPPED — see
+[`Core.Database` primitive](#coredb--the-enhanced-pdo-database-primitive-dec-208) instead (SHIPPED — see
 that section). The shipped `Core.Sql` prelude was REMOVED in the DEC-208 supersession commit. What
 survives from this design: always-alias + `E-SQL-AMBIGUOUS-COLUMN` thinking informed the
 `W-SQL-INJECTION` lint; the decoupled-dialect principle became `DriverConn` dispatch-at-execute;
@@ -1217,7 +1217,7 @@ the `throws DatabaseError` Q6 ruling carried over verbatim. Historical text foll
   alias; an unqualified column with >1 table in play = build-time **`E-SQL-AMBIGUOUS-COLUMN`**; a
   single-table query auto-qualifies (bare `id` still fine). A Phorj upgrade over PHP's silent ambiguity.
 - **Decoupled dialect (auto at execute, NOT at build).** The builder is dialect-agnostic; `.toQuery()`
-  yields a portable immutable **`Query`** value (SQL template + binds); `new Database(SqliteConfig(...)).execute(q)`
+  yields a portable immutable **`Query`** value (SQL template + binds); `new Connection(SqliteConfig(...)).execute(q)`
   renders `?`-vs-`$1` / LIMIT / quoting automatically per the connection's dialect. The builder stays
   offline-buildable + testable + `new`-able (NOT born from a connection — that coupling was challenged +
   rejected). Dialect-SPECIFIC features (PG `RETURNING`, MySQL `ON DUPLICATE KEY`) = a later LADDER item /
@@ -1232,23 +1232,23 @@ the `throws DatabaseError` Q6 ruling carried over verbatim. Historical text foll
 - **Q2 — driver:** `rusqlite` (bundled SQLite; the amendment's first realization).
 - **Q3 — Sql surface:** FULL fluent builder (developer chose the full surface — XL, multi-slice).
 - **Q4 — param binding:** ship BOTH positional `?`/`bind` AND named — **named is the default** (`bindNamed`).
-- **Q5 — lifecycle:** interim `Database.close` + `Database.transaction` closure.
+- **Q5 — lifecycle:** interim `Connection.close` + `Connection.transaction` closure.
 - **Q6 — error model:** **`throws DatabaseError` + try/catch** — CATCHABLE (corrected from an earlier "fault").
-- **Q7 — constructor:** true overload on a typed config — `Database.open(string dsn)` + `Database.open(SqliteConfig)`.
+- **Q7 — constructor:** true overload on a typed config — `Connection.open(string dsn)` + `Connection.open(SqliteConfig)`.
 
 ### Tiers
 
 - **P1 (Tier-A, shipped-partial):** the pure builder + raw `Query` — prelude-only `Core.Sql`, zero natives,
   byte-identity-clean. Remaining P1 = `bindNamed`, joins, `groupBy`/`having`/aggregates.
-- **P2 (Tier-B):** `Core.DatabaseModule` execution over `rusqlite` (`database` feature; Tier-3 fixture-tested, NOT in the
+- **P2 (Tier-B):** `Core.Database` execution over `rusqlite` (`database` feature; Tier-3 fixture-tested, NOT in the
   byte-identity differential), then Postgres + MySQL/MariaDB (all sync; Oracle deferred; MongoDB = a
   separate LADDER item).
 
-## Core.DatabaseModule — the enhanced-PDO database primitive (DEC-208)
+## Core.Database — the enhanced-PDO database primitive (DEC-208)
 
 **Status: SHIPPED (slices A–K, 2026-07-13…15).** Locked with the developer over ~10 AskUserQuestion
 rounds; per-round rulings + alternatives in `C-decisions.md` (DEC-208, DEC-220-S3, DEC-221, DEC-227,
-DEC-229). Governing philosophy: `Core.DatabaseModule` is a **primitive**, not an ORM — richer + faster + safer +
+DEC-229). Governing philosophy: `Core.Database` is a **primitive**, not an ORM — richer + faster + safer +
 more correct than PHP's PDO; ORMs/builders/migrations stay **userland** (DEC-208, META-6).
 Source: `archive/2026-07-14-core-db.md` (the full locked build spec, all 11 slices with
 per-slice realization notes — the authoritative slice-level record).
@@ -1259,7 +1259,7 @@ per-slice realization notes — the authoritative slice-level record).
   since DEC-227; flag renamed `db`→`database` 2026-07-17) · sync `postgres` (`database-postgres`) · sync `mysql` v28 minimal-rust (`database-mysql`,
   DEC-229; `mariadb://` normalized). All sync (no tokio at the phorj-facing API), spine-quarantined,
   fixture-tested. A new backend = one `DriverConn` impl + one dep admission. Credentials:
-  `Database.withPassword(dsn, Secret<string>)` — plaintext never retained on the handle; every error path
+  `Connection.withPassword(dsn, Secret<string>)` — plaintext never retained on the handle; every error path
   prints a redacted DSN (PDO leaks the DSN in exceptions).
 - **Statements & binding**: prepared-first `db.prepare(sql)` → `Statement`; positional `.bind(v)` (`?`)
   and named `.bindNamed("n", v)` (`:name`); typed `IN`-list `.bindList([1,2,3])` auto-expands `IN (?)`
@@ -1274,7 +1274,7 @@ per-slice realization notes — the authoritative slice-level record).
   faults); hydrate-on-pull, hydration only in `next()`; drivers currently materialize at `stream()` —
   disclosed, surface-stable); column
   naming strategy = the DEC-258 COMBINED model: `naming` is a real promoted field
-  (`new Database(dsn, new Naming.SnakeToCamel())` = whole-connection; `prepare` copies it onto each
+  (`new Connection(dsn, new Naming.SnakeToCamel())` = whole-connection; `prepare` copies it onto each
   Statement; per-statement `namingStrategy(...)` overrides) — statically-traceable strategies BAKE
   at compile time (zero runtime cost), untraceable ones dispatch on
   the statement's `naming` field at run time (dual baked helpers + one branch per hydration call;
@@ -1308,7 +1308,7 @@ per-slice realization notes — the authoritative slice-level record).
 ## Core.Mail — native mailer (DEC-223)
 
 **Status: SHIPPED (2026-07-15, fable run spine 4).** Design locked with the developer via
-AskUserQuestion; twin-of-Core.DatabaseModule architecture (where a decision matches Core.DatabaseModule, the implementation
+AskUserQuestion; twin-of-Core.Database architecture (where a decision matches Core.Database, the implementation
 follows it verbatim). Deviations under bounded autonomy recorded as DEC-230 (REOPENABLE; re-verdicted
 by the 2026-07-16 audit): `SmtpConfig.withAuth(...)` factory + `SendmailTransport.at(path)` (no ctor
 default params at build time — DEC-249 now queued), `MailTimeoutError`/`MailIoError` subtype names,
@@ -1324,7 +1324,7 @@ downgradeable-opportunistic to required-with-credentials.
 - **Module split (nothing in the wind)**: `Core.Mail` prelude (`Mailer`/`Email`/`Address`/
   `Attachment`/`MailError`/`SmtpConfig` + transport constructors + prelude-local `MailResult<T>`) ·
   `Core.Native.Mail` natives + reserved `MailHandle`. Error mechanism = the prelude-wrapper exactly as
-  Core.DatabaseModule (natives return a result-value; the prelude throws catchable `MailError`).
+  Core.Database (natives return a result-value; the prelude throws catchable `MailError`).
 - **Four transports** behind a `MailTransport` trait: SMTP (optional auth; TLS — see the DEC-265
   amendment above) · sendmail · `file` (deterministic `.eml` — the offline test transport) · `null`.
   SMTP passwords are `Secret` (redacted everywhere, the Db slice-G discipline).

@@ -1,8 +1,8 @@
-//! `Core.DatabaseModule` (DEC-208) — the enhanced-PDO surface: `Database`/`Statement`/`Row`/`DatabaseError` phorj-source classes
+//! `Core.Database` (DEC-208) — the enhanced-PDO surface: `Connection`/`Statement`/`Row`/`DatabaseError` phorj-source classes
 //! wrapping the opaque `DatabaseHandle` and the internal `Core.Native.Database` natives. Each method calls a
 //! `NativeDatabase.*` native (which returns `Result<T, string>` — never a hard fault) and `match`es it, throwing
 //! a catchable `DatabaseError` on `Failure` (DEC-208 error-mechanism = prelude-wrapper; a phorj-source `throw`
-//! is a real `Op::Throw`, byte-identical across both backends). `import Core.DatabaseModule` transitively imports
+//! is a real `Op::Throw`, byte-identical across both backends). `import Core.Database` transitively imports
 //! `Core.Native.Database` (the natives) + `Core.Result` (the carrier), so this module runs BEFORE them.
 //!
 //! DEC-273 wave 3: colocated with the `database` extension. Compiled UNCONDITIONALLY (the
@@ -16,14 +16,14 @@ import Core.String;
 import Core.IteratorModule;
 import Core.Abort.panic;
 // `Core.Map` is imported for the `queryMap<K,V>` hydration helpers the `desugar_db` pass generates
-// into a `Core.DatabaseModule` program (they build the result `Map` via `Map.set`); like the `Core.List` import
+// into a `Core.Database` program (they build the result `Map` via `Map.set`); like the `Core.List` import
 // above it makes the module's ops available to the generated helpers (and, as with `List`, to user
-// code under an `import Core.DatabaseModule`).
+// code under an `import Core.Database`).
 import Core.Map;
-// `Core.Secret` (Fork B) provides the opaque `Secret<T>` credential wrapper used by the `Database.withPassword`
+// `Core.Secret` (Fork B) provides the opaque `Secret<T>` credential wrapper used by the `Connection.withPassword`
 // factory (DEC-208 slice G): a connection password is passed as a `Secret<string>` so it never sits in
 // plaintext in user code, and — because the driver parses it out of the DSN and retains only a redacted
-// DSN — is masked in every connect error / log. Secret is registered before Database (see CORE_MODULES order),
+// DSN — is masked in every connect error / log. Secret is registered before Connection (see CORE_MODULES order),
 // so this transitive import injects the class here exactly as List/String/Map above.
 import Core.Secret;
 
@@ -32,8 +32,8 @@ enum DatabaseResult<T> { Ok(T value), Err(string message) }
 
 // Column NAMING STRATEGY (DEC-208 slice B2; DEC-258 combined model): the mapping between DB column
 // names and phorj field names. Zero-payload variants (construct with `new Naming.SnakeToCamel()`,
-// like `RoundingMode`). Member-gated (`import Core.DatabaseModule.Naming;`) — nothing in the wind.
-// DEC-258: no longer compile-time-only — `naming` is a REAL promoted field on `Database` (ctor
+// like `RoundingMode`). Member-gated (`import Core.Database.Naming;`) — nothing in the wind.
+// DEC-258: no longer compile-time-only — `naming` is a REAL promoted field on `Connection` (ctor
 // default `new Naming.Exact()`) that `prepare` copies onto each `Statement`, so the strategy
 // follows the VALUE across any scope. The `desugar_db` pass still BAKES column literals when the
 // strategy is statically visible (zero runtime cost); when the connection is not traceable it
@@ -51,7 +51,7 @@ open class DatabaseError implements Error {
   //
   // It is ALSO the single classification point (DEC-208 slice C, spec §6): the native tags a driver
   // error with a `<<Kind>>` marker prefix (`src/ext/database/natives.rs` `err_kind`), and `fail` strips the marker
-  // and throws the matching TYPED subtype. Because every Row/Statement/Database method — including the S2
+  // and throws the matching TYPED subtype. Because every Row/Statement/Connection method — including the S2
   // `queryInto` hydration helpers — funnels its `DatabaseResult.Err` through here, they all yield the precise
   // `catch (UniqueViolationError e)` type with zero change at the call sites. An untagged message (a logic /
   // usage error, e.g. mixed bind styles, or a plain SQLite failure) throws the base `DatabaseError`.
@@ -156,7 +156,7 @@ class Row {
 }
 
 class Statement {
-  // DEC-258: `naming` rides the statement (copied from the connection by `Database.prepare`, or
+  // DEC-258: `naming` rides the statement (copied from the connection by `Connection.prepare`, or
   // replaced by `namingStrategy`) so an untraceable-connection hydration can dispatch on it at
   // run time. Public — the desugar's dynamic dispatcher reads it.
   constructor(private DatabaseHandle raw, public Naming naming = new Naming.Exact()) {}
@@ -189,7 +189,7 @@ class Statement {
     return match (NativeDatabase.executeMany(this.raw, rows)) { DatabaseResult.Ok(n) => n, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Exec an INSERT and return the auto-generated rowid / PK (DEC-208 slice D, spec §4) — exec + the
-  // connection's last insert id in one call. (Database.lastInsertId() reads the same value standalone.)
+  // connection's last insert id in one call. (Connection.lastInsertId() reads the same value standalone.)
   function execReturningId(): int throws DatabaseError {
     return match (NativeDatabase.execReturningId(this.raw)) { DatabaseResult.Ok(id) => id, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
@@ -277,9 +277,9 @@ class DatabaseStream<T> implements Iterator<T> {
   }
 }
 
-class Database {
+class Connection {
   // DEC-221: opening a connection can fail, so the constructor itself declares `throws DatabaseError` and
-  // opens directly — `new Database(dsn)` (fail-fast, exactly like PHP's `new PDO`). No static factory. The
+  // opens directly — `new Connection(dsn)` (fail-fast, exactly like PHP's `new PDO`). No static factory. The
   // handle is COMPUTED in the body (not a promoted param), so the field is `mutable` (set once here).
   // DEC-258: `naming` is a promoted field with a variant default — the connection-level column
   // naming strategy. `prepare` copies it onto every Statement, so it follows the value into any
@@ -294,9 +294,9 @@ class Database {
   // DSN, so a connect error prints the host but never the password (unlike PDO, which leaks the DSN in
   // exceptions). Use for a `postgres://user@host/db` DSN (no inline password); SQLite has no password,
   // so the DSN is passed through unchanged. Example:
-  //   `Database db = Database.withPassword("postgres://app@db.host:5432/prod", new Secret(env));`
-  static function withPassword(string dsn, Secret<string> password, Naming naming = new Naming.Exact()): Database throws DatabaseError {
-    return new Database(NativeDatabase.dsnWithPassword(dsn, password.expose()), naming)?;
+  //   `Connection db = Connection.withPassword("postgres://app@db.host:5432/prod", new Secret(env));`
+  static function withPassword(string dsn, Secret<string> password, Naming naming = new Naming.Exact()): Connection throws DatabaseError {
+    return new Connection(NativeDatabase.dsnWithPassword(dsn, password.expose()), naming)?;
   }
   function prepare(string sql): Statement throws DatabaseError {
     return match (NativeDatabase.prepare(this.raw, sql)) { DatabaseResult.Ok(h) => new Statement(h, this.naming), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
@@ -309,21 +309,21 @@ class Database {
   }
   // Arm a query timeout (ms): a bounded lock-wait (SQLite busy_timeout). Once set, a busy/locked
   // failure surfaces as `TimeoutError` rather than `SerializationFailureError`. Chainable (returns this).
-  function timeout(int ms): Database throws DatabaseError {
-    match (NativeDatabase.timeout(this.raw, ms)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+  function timeout(int ms): Connection throws DatabaseError {
+    match (NativeDatabase.timeout(this.raw, ms)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
     return this;
   }
   // Register a per-query observability hook (logging / metrics / slow-query). The `(string sql, int
   // ms) => void` closure fires after each query/exec with the SQL text + elapsed ms. A logging hook is
   // `void` (cannot throw a checked error), so registration never fails. Chainable (returns this).
   // NOTE: `ms` is wall-clock (non-deterministic) — do not print it raw in a byte-identity example.
-  function onQuery((string, int) => void hook): Database {
-    match (NativeDatabase.onQuery(this.raw, hook)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(_) => Database.ok() };
+  function onQuery((string, int) => void hook): Connection {
+    match (NativeDatabase.onQuery(this.raw, hook)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(_) => Connection.ok() };
     return this;
   }
 
   // A void no-op, used as the success arm of the `void`-returning transaction methods below — a `match`
-  // arm must be an EXPRESSION, so `DatabaseResult.Ok(_) => Database.ok()` yields `void` cleanly (a bare `{}` block
+  // arm must be an EXPRESSION, so `DatabaseResult.Ok(_) => Connection.ok()` yields `void` cleanly (a bare `{}` block
   // is not an expression here). The `?` in the error arm makes that arm `never`, unifying to `void`.
   private static function ok(): void {}
 
@@ -334,20 +334,20 @@ class Database {
   // BLOCKED on phorj lambdas being unable to propagate a checked exception (see docs/KNOWN_ISSUES) —
   // recorded as a PENDING adjudication; this manual surface is what the closure form would build on. ---
   function begin(): void throws DatabaseError {
-    match (NativeDatabase.begin(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    match (NativeDatabase.begin(this.raw)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   function commit(): void throws DatabaseError {
-    match (NativeDatabase.commit(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    match (NativeDatabase.commit(this.raw)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   function rollback(): void throws DatabaseError {
-    match (NativeDatabase.rollback(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    match (NativeDatabase.rollback(this.raw)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // DEC-340 — unwind EVERY open level (down to depth 0). For the MANUAL begin/commit path, where the
   // caller genuinely owns the outermost level; `db.transaction`'s auto-rollback deliberately does NOT use
   // this, restoring the depth it found on entry instead so it never destroys a caller-owned outer
   // transaction. Use this when a manual `begin()` may have nested and you want a clean slate.
   function rollbackAll(): void throws DatabaseError {
-    match (NativeDatabase.rollbackAll(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    match (NativeDatabase.rollbackAll(this.raw)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // DEC-340 — the current transaction depth (0 = none open). Exists so the depth invariant is ASSERTABLE:
   // before this it was unobservable from phorj, which is a large part of why the auto-rollback depth bug
@@ -360,7 +360,7 @@ class Database {
   // try { …work…; db.commit(); ok = true; } finally { if (!ok) db.rollbackQuiet(); }` — demonstrated in
   // examples/database/transactions.phg.
   function rollbackQuiet(): void {
-    match (NativeDatabase.rollback(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(_) => Database.ok() };
+    match (NativeDatabase.rollback(this.raw)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(_) => Connection.ok() };
   }
   // Closure-form transaction (DEC-208 slice C, spec §5 — unblocked by DEC-222 throwing closures). BEGIN,
   // run the closure, COMMIT on a normal return (returning its value), auto-ROLLBACK + re-throw the
@@ -397,7 +397,7 @@ class Database {
   // sugar that would call this automatically at scope exit is DEC-203 — a separate language slice
   // (see KNOWN_ISSUES); until then, call close() explicitly (or rely on drop at program end).
   function close(): void {
-    match (NativeDatabase.close(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(_) => Database.ok() };
+    match (NativeDatabase.close(this.raw)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(_) => Connection.ok() };
   }
 }
 "#;

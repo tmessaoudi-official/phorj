@@ -1619,7 +1619,7 @@ fn uses_unavailable_gated_module(src: &str) -> bool {
     // Per-line whole-token match (2026-07-19), NOT `src.contains("import {m}")` — the same
     // substring-hole class as the P0 in `uses_impure_native` (e.g. `Core.Mail` ⊂ `Core.MailFoo`).
     // For a GATED module the WHOLE module is absent when its feature is off, so ANY import under it —
-    // whole (`import Core.DatabaseModule;`) OR member (`import Core.DatabaseModule.Database;`) — flags;
+    // whole (`import Core.Database;`) OR member (`import Core.Database.Connection;`) — flags;
     // an unrelated module that merely shares a name prefix does not.
     let gated = phorj::cli::unavailable_gated_modules();
     src.lines().any(|line| {
@@ -1666,14 +1666,14 @@ fn uses_impure_native(src: &str) -> bool {
     const IMPURE_PRELUDE_MEMBERS: &[(&str, &str)] =
         &[("Core.Time", "Instant"), ("Core.Time", "Date")];
     // The `Core.Native.*` convention (DEC-277): impure natives live under `Core.Native.<X>`, but user
-    // programs import the PRELUDE twin (`Core.DatabaseModule`, not `Core.Native.Database`). ANY import
+    // programs import the PRELUDE twin (`Core.Database`, not `Core.Native.Database`). ANY import
     // under an impure twin root (whole or member) is impure. Twin names diverge from the native leaf
     // (DEC-278 `Module` suffix; `Core.Mail` is not a namesake), so the map is explicit. Only impure
     // `Core.Native.*` modules contribute a root — e.g. `Core.Native.Uri` is PURE, so `Core.UriModule`
     // imports do NOT flag.
     let twin = |m: &str| -> Option<&'static str> {
         match m {
-            "Core.Native.Database" => Some("Core.DatabaseModule"),
+            "Core.Native.Database" => Some("Core.Database"),
             "Core.Native.Input" => Some("Core.Input"),
             "Core.Native.FileSystem" => Some("Core.FileSystemModule"),
             "Core.Native.Session" => Some("Core.SessionModule"),
@@ -1703,7 +1703,7 @@ fn uses_impure_native(src: &str) -> bool {
         if impure_modules.contains(path) {
             return true;
         }
-        // Anything under an impure prelude-twin root (`import Core.DatabaseModule[.X];`).
+        // Anything under an impure prelude-twin root (`import Core.Database[.X];`).
         if impure_twin_roots
             .iter()
             .any(|root| path == *root || path.starts_with(&format!("{root}.")))
@@ -1739,9 +1739,9 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     if dir.file_name().and_then(|n| n.to_str()) == Some("interop") {
         return;
     }
-    // DEC-208: `examples/database/` needs `--features database` (Core.DatabaseModule → bundled SQLite), which the default
-    // differential gate does not build — with `database` off, `import Core.DatabaseModule` is an unknown module. These
-    // Core.DatabaseModule examples are quarantined (impure DB I/O) and validated by `tests/database.rs` on both backends.
+    // DEC-208: `examples/database/` needs `--features database` (Core.Database → bundled SQLite), which the default
+    // differential gate does not build — with `database` off, `import Core.Database` is an unknown module. These
+    // Core.Database examples are quarantined (impure DB I/O) and validated by `tests/database.rs` on both backends.
     if dir.file_name().and_then(|n| n.to_str()) == Some("database") {
         return;
     }

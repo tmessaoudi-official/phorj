@@ -37,7 +37,7 @@ fn every_other_native_is_pure() {
     // `Core.Log` is whole-module impure (DEC-220): every `Log.debug/info/warn/error` writes a
     // `[LEVEL]` line to the ambient process stderr, so an importing program is quarantined (its logs
     // are out-of-band from the compared stdout).
-    // `Core.Native.Database` is whole-module impure (DEC-208): the internal natives behind the `Core.DatabaseModule` prelude
+    // `Core.Native.Database` is whole-module impure (DEC-208): the internal natives behind the `Core.Database` prelude
     // open/read/write a real SQLite database, so any importing program is quarantined (live DB I/O
     // can't be byte-identical across rusqlite and PHP PDO). Only compiled under `--features database`.
     let impure_modules = [

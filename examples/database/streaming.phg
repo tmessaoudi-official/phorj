@@ -1,4 +1,4 @@
-// Streaming query results with `Core.DatabaseModule` (DEC-208 item H, DEC-257 reshape) — rows delivered ONE
+// Streaming query results with `Core.Database` (DEC-208 item H, DEC-257 reshape) — rows delivered ONE
 // AT A TIME through the `Core.IteratorModule` pull protocol, so streams are foreach-able:
 //
 //   * `stmt.stream()`            → `RowStream` — an `Iterator<Row>`: `for (Row r in …)` just works.
@@ -10,15 +10,15 @@
 // ("iterator exhausted") — foreach never triggers it. `streamInto` supports both the turbofish
 // form shown here and the contextual sink form (`DatabaseStream<User> s = stmt.streamInto();`).
 //
-// Like every `Core.DatabaseModule` program this opens a real database, so it is quarantined from the
+// Like every `Core.Database` program this opens a real database, so it is quarantined from the
 // byte-identity differential; `tests/db.rs` validates it on BOTH backends (`run ≡ run --tree-walker`).
 package Main;
 
 import Core.Output;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.Row;
-import Core.DatabaseModule.DatabaseError;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.Row;
+import Core.Database.DatabaseError;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
@@ -29,7 +29,7 @@ class User {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        Database db = new Database("sqlite::memory:");
+        Connection db = new Connection("sqlite::memory:");
         discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
         discard db.prepare("INSERT INTO users VALUES('Ada', 36)").exec();
         discard db.prepare("INSERT INTO users VALUES('Grace', 45)").exec();

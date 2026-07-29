@@ -104,10 +104,10 @@ putting it next rather than first, because GR-2 is live data loss today.
 Definition-of-done item 3 asks for the savepoint helper "with a test that nested begin/rollback composes
 under PDO". Building it surfaced a conflict this file could not have known about.
 
-**`Core.DatabaseModule` is not merely unimplemented on the PHP leg — it is deliberately QUARANTINED.**
+**`Core.Database` is not merely unimplemented on the PHP leg — it is deliberately QUARANTINED.**
 Transpiling any program that imports it is a clean `E-TRANSPILE-DB` Ladder case-2 error
 [Verified: `phg transpile examples/database/transactions.phg` → *"cannot transpile a program importing
-`Core.DatabaseModule` … native-only: live database I/O cannot be byte-identical across the phorj drivers
+`Core.Database` … native-only: live database I/O cannot be byte-identical across the phorj drivers
 and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE)"*]. That
 quarantine was ruled deliberately (register ~:1005, leg 2 of Invariant 14), and its stated reason —
 live DB I/O is not byte-identical — is unrelated to savepoints.
@@ -126,7 +126,7 @@ the non-nesting `->beginTransaction()`/`->commit()`/`->rollBack()` mapping that 
 nesting semantics at all. It is gated behind `uses_db`, which the quarantine keeps unreachable today — so
 it is the prerequisite, staged and ready, not a claim that the leg works.
 
-**The question for the developer:** does `Core.DatabaseModule` stay Ladder case 2 (native-only, quarantined
+**The question for the developer:** does `Core.Database` stay Ladder case 2 (native-only, quarantined
 — in which case item 3 should be struck from this file as unsatisfiable and the helpers either kept staged
 or removed), or does it move to case 1 for the transaction/savepoint surface now that the helpers exist —
 accepting that live DB I/O still cannot be byte-identical, so the differential quarantine would remain

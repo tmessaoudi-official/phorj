@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — **BREAKING**: `Core.DatabaseModule.Database` → `Core.Database.Connection` (2026-07-29, DEC-350)
+The type is provably ONE connection — a single `Box<dyn DriverConn>` with connection-scoped
+`tx_depth`/`hook`/`timeout_ms`, and no pooling anywhere — so `Connection` is what it is. 8 of 10
+ecosystems call this `Connection`; `Database`/`DB` is what Go and Laravel use for the pool/manager phorj
+does not have. And DEC-278's `Module` suffix existed *only* because the module leaf and the type were
+namesakes, so renaming the type dissolves its rationale and the module goes bare.
+- `import Core.DatabaseModule;` → `import Core.Database;`
+- `Database db = new Database(dsn)` → `Connection db = new Connection(dsn)`
+- Unchanged on purpose: `DatabaseError`, `DatabaseResult`, and the raw `Core.Native.Database` module.
+  The error type is not the connection, and the native namespace keeps its leaf.
+- Breaking rename across every DB example, test and doc — cheap now, expensive once users exist.
+
+### Fixed — two stale surfaces the rename's own guards caught
+- `src/ext/registry.rs`'s `uri` row still advertised "the deprecated `Core.Url` compat twins", which
+  DEC-416 deleted. The row and the regenerated `docs/EXTENSIONS.md` no longer claim a surface that is
+  gone.
+- The generated `docs/EXTENSIONS.md` is regenerated, so its `database` row names `Core.Database`.
+
 ### Fixed — **P1 data loss**: transaction auto-rollback unwound only ONE level (2026-07-29, DEC-340)
 `db.transaction(fn)` called rollback exactly once on the throw path, and rollback unwinds a single level.
 So a `begin()` leaked anywhere inside the closure — including inside a helper it called — consumed that

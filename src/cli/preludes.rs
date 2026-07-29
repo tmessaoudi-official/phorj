@@ -135,7 +135,7 @@ import Core.Native.FileSystem as NativeFileSystem;
 import Core.String;
 import Core.List;
 
-// Prelude-local result carrier (NOT Core.Result — the Core.DatabaseModule injection-order rationale).
+// Prelude-local result carrier (NOT Core.Result — the Core.Database injection-order rationale).
 enum FileSystemResult<T> { Ok(T value), Err(string message) }
 
 open class FileSystemError implements Error {
@@ -550,7 +550,7 @@ class Instant {
 /// (whole-module-only vs also member-imports), and the injected member-type names that must be
 /// import-qualified (the `module_of` contribution). UA-L2 (registry-unification): the single source
 /// for BOTH the prelude-injection fold ([`inject_core_modules`]) AND the injected-type discipline
-/// ([`core_module_of`]) — so a new Core module (Database, HTTP expansions) is ONE row here, not edits in
+/// ([`core_module_of`]) — so a new Core module (Connection, HTTP expansions) is ONE row here, not edits in
 /// the eight `inject_*_prelude` fns plus the hand-synced `module_of` match this replaced.
 pub(super) struct VirtualModule {
     /// Import path segments `["Core","Http"]`; gates injection + qualifier root. `pub(super)`: read by `cli::module_catalog` (LSP import completion).
@@ -769,16 +769,16 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "UriBaseNotAbsoluteError",
         ],
     },
-    // `Core.DatabaseModule` (DEC-208) — the enhanced-PDO surface classes. MUST precede `Core.Native.Database` (its natives)
+    // `Core.Database` (DEC-208) — the enhanced-PDO surface classes. MUST precede `Core.Native.Database` (its natives)
     // so its `import Core.Native.Database` triggers the natives being in scope (the Http→Regex ordering rule).
     VirtualModule {
-        module: &["Core", "DatabaseModule"],
-        qualifier: "DatabaseModule",
+        module: &["Core", "Database"],
+        qualifier: "Database",
         srcs: &[crate::ext::database_prelude::PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
-            "Database",
+            "Connection",
             "Statement",
             "Row",
             "DatabaseError",
@@ -787,10 +787,10 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "RowStream",
             "DatabaseStream",
             // DEC-208 slice B2 — the column naming strategy enum, member-gated so
-            // `new Naming.SnakeToCamel()` resolves after `import Core.DatabaseModule.Naming;` (nothing in the wind).
+            // `new Naming.SnakeToCamel()` resolves after `import Core.Database.Naming;` (nothing in the wind).
             "Naming",
             // DEC-208 slice C typed taxonomy — member-gated so `catch (UniqueViolationError e)` resolves
-            // in user code after `import Core.DatabaseModule.UniqueViolationError;` (nothing in the wind).
+            // in user code after `import Core.Database.UniqueViolationError;` (nothing in the wind).
             "UniqueViolationError",
             "ConstraintViolationError",
             "ConnectionError",
@@ -803,9 +803,9 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     // Shape developer-ruled 2026-07-16: `hasNext()/next()` (nullable element types are sound —
     // null is never a termination signal); calling `next()` past exhaustion is a documented
     // FAULT contract ("iterator exhausted") for stdlib implementors. ROW ORDER MATTERS: this
-    // row sits AFTER every prelude that itself imports Core.IteratorModule (Database's streams implement
+    // row sits AFTER every prelude that itself imports Core.IteratorModule (Connection's streams implement
     // it) — the injection fold walks the registry once, so a dependency row must come LATER
-    // than its dependents (same rule as DbSys/Result after Database).
+    // than its dependents (same rule as DbSys/Result after Connection).
     VirtualModule {
         module: &["Core", "IteratorModule"],
         qualifier: "IteratorModule",
@@ -814,8 +814,8 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: true,
         bare_types: &["Iterator"],
     },
-    // `Core.Mail` (DEC-223) — the native-mailer prelude (twin of `Core.DatabaseModule`). MUST precede `Core.Secret`
-    // (its `import Core.Secret` transitively injects it — the same forward-fold rule as Database→Secret) and
+    // `Core.Mail` (DEC-223) — the native-mailer prelude (twin of `Core.Database`). MUST precede `Core.Secret`
+    // (its `import Core.Secret` transitively injects it — the same forward-fold rule as Connection→Secret) and
     // `Core.Native.Mail` (its natives).
     VirtualModule {
         module: &["Core", "Mail"],
@@ -896,8 +896,8 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "TooLargeError",
         ],
     },
-    // `Core.Secret` (Fork B) — the opaque `Secret<T>` credential wrapper. Placed AFTER `Core.DatabaseModule` because
-    // `Core.DatabaseModule`'s `import Core.Secret` (for the `Database.withPassword(dsn, Secret<string>)` factory, DEC-208
+    // `Core.Secret` (Fork B) — the opaque `Secret<T>` credential wrapper. Placed AFTER `Core.Database` because
+    // `Core.Database`'s `import Core.Secret` (for the `Connection.withPassword(dsn, Secret<string>)` factory, DEC-208
     // slice G) transitively injects it, and transitive injection only reaches modules that appear LATER
     // in this list (the same forward-fold rule as Http→Regex — an EARLIER module is never pulled by a
     // later importer). A direct `import Core.Secret;` in user code works from any position (user imports
@@ -932,8 +932,8 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: false,
         bare_types: &[],
     },
-    // `Core.Native.Database` — the INTERNAL DB natives (open/prepare/bind/query/exec/get*) the `Core.DatabaseModule` prelude
-    // wraps. Native-only (no prelude); a distinct qualifier so a prelude `class Database` never collides with
+    // `Core.Native.Database` — the INTERNAL DB natives (open/prepare/bind/query/exec/get*) the `Core.Database` prelude
+    // wraps. Native-only (no prelude); a distinct qualifier so a prelude `class Connection` never collides with
     // the native leaf. Feature-gated (`database`): the natives only exist under `--features database`.
     VirtualModule {
         module: &["Core", "Native", "Database"],
@@ -1232,8 +1232,8 @@ mod gate_tests {
         assert!(import_targets_module("Core.Mail", "Core.Mail"));
         assert!(import_targets_module("Core.Mail.SmtpConfig", "Core.Mail"));
         assert!(import_targets_module(
-            "Core.DatabaseModule.Database",
-            "Core.DatabaseModule"
+            "Core.Database.Connection",
+            "Core.Database"
         ));
         // A LONGER unrelated name must not match (the `.` boundary).
         assert!(!import_targets_module("Core.Mailer", "Core.Mail"));

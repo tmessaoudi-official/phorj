@@ -1,4 +1,4 @@
-// Typed-generic result hydration with `Core.DatabaseModule` (DEC-208 S2) — map result rows straight into a class.
+// Typed-generic result hydration with `Core.Database` (DEC-208 S2) — map result rows straight into a class.
 //
 //   * `List<User> = stmt.queryInto()`      — one `User` per row (contextual `T` from the sink type).
 //   * `User?      = stmt.queryOneInto()`    — 0 rows → `null`, 1 → the object, >1 → `DatabaseError`.
@@ -9,15 +9,15 @@
 // result column of the right type; a type mismatch or a SQL NULL into a NON-optional field throws a
 // catchable `DatabaseError`; a `T?` field (here `nickname`) admits NULL; extra columns are ignored.
 //
-// Like every `Core.DatabaseModule` program this opens a real SQLite database (bundled `rusqlite`), so it is
+// Like every `Core.Database` program this opens a real SQLite database (bundled `rusqlite`), so it is
 // quarantined from the byte-identity differential; it is validated by `tests/db.rs` on BOTH backends
 // (`run ≡ run --tree-walker`). Built only under `--features database`.
 package Main;
 
 import Core.Output;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.DatabaseError;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.DatabaseError;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
@@ -30,7 +30,7 @@ class User {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        Database db = new Database("sqlite::memory:");
+        Connection db = new Connection("sqlite::memory:");
         discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER, nickname TEXT)").exec();
         discard db
             .prepare("INSERT INTO users(name, age, nickname) VALUES(?, ?, ?)")

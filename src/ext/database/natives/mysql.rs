@@ -1,4 +1,4 @@
-//! The MySQL/MariaDB [`DriverConn`] backend for `Core.DatabaseModule` (DEC-208 slice J), over the SYNC `mysql`
+//! The MySQL/MariaDB [`DriverConn`] backend for `Core.Database` (DEC-208 slice J), over the SYNC `mysql`
 //! crate (`minimal-rust`: pure-Rust wire protocol, no libmysqlclient, no TLS/compression extras).
 //!
 //! This is the driver behind a `mysql://…` / `mariadb://…` DSN. It plugs into the SAME
@@ -65,7 +65,7 @@ fn my_err_kind(e: &mysql::Error) -> Option<&'static str> {
 /// the DSN password (redacted at connect), so it is safe verbatim.
 fn my_sql_err(e: mysql::Error) -> String {
     let kind = my_err_kind(&e);
-    let base = format!("Core.DatabaseModule: {e}");
+    let base = format!("Core.Database: {e}");
     match kind {
         Some(tag) => format!("<<{tag}>>{base}"),
         None => base,
@@ -90,7 +90,7 @@ impl std::fmt::Debug for MyConn {
 
 /// Open a `mysql://` / `mariadb://` connection (DEC-208 slice J). A `mariadb://` scheme is normalized
 /// to `mysql://` (same wire protocol) before [`Opts`] parsing. Any inline password (hand-written or
-/// injected by the `Database.withPassword` factory, slice G) is parsed into [`Opts`] and never retained —
+/// injected by the `Connection.withPassword` factory, slice G) is parsed into [`Opts`] and never retained —
 /// only the redacted DSN is stored, so a connect error prints the host but never the password.
 pub(super) fn open(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     let normalized = match dsn.strip_prefix("mariadb://") {
@@ -99,10 +99,10 @@ pub(super) fn open(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     };
     let redacted = redact_dsn_password(dsn);
     let opts = Opts::from_url(&normalized).map_err(|e| {
-        format!("<<ConnectionError>>Core.DatabaseModule: invalid mysql DSN `{redacted}`: {e}")
+        format!("<<ConnectionError>>Core.Database: invalid mysql DSN `{redacted}`: {e}")
     })?;
     let conn = Conn::new(opts).map_err(|e| {
-        let base = format!("Core.DatabaseModule: cannot connect to `{redacted}`: {e}");
+        let base = format!("Core.Database: cannot connect to `{redacted}`: {e}");
         match my_err_kind(&e) {
             Some(tag) => format!("<<{tag}>>{base}"),
             None => format!("<<ConnectionError>>{base}"),
@@ -170,7 +170,7 @@ impl DriverConn for MyConn {
                     Value::List(v) => v,
                     other => {
                         return Err(format!(
-                            "Core.DatabaseModule.executeMany: each row must be a list, got {}",
+                            "Core.Database.executeMany: each row must be a list, got {}",
                             other.type_name()
                         ))
                     }

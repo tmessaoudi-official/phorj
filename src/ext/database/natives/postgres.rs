@@ -1,4 +1,4 @@
-//! The Postgres [`DriverConn`] backend for `Core.DatabaseModule` (DEC-208 slice I), over the SYNC `postgres` crate.
+//! The Postgres [`DriverConn`] backend for `Core.Database` (DEC-208 slice I), over the SYNC `postgres` crate.
 //!
 //! This is the driver behind a `postgres://…` / `postgresql://…` DSN. It plugs into the SAME
 //! [`DriverConn`] trait as the shipped SQLite driver ([`super::sqlite`]) — the multi-driver seam — so
@@ -57,7 +57,7 @@ fn pg_err_kind(e: &postgres::Error) -> Option<&'static str> {
 /// message / IO error text — it never contains the DSN or password, so it is safe to include verbatim.
 pub(super) fn pg_sql_err(e: postgres::Error) -> String {
     let kind = pg_err_kind(&e);
-    let base = format!("Core.DatabaseModule: {e}");
+    let base = format!("Core.Database: {e}");
     match kind {
         Some(tag) => format!("<<{tag}>>{base}"),
         None => base,
@@ -85,17 +85,17 @@ impl std::fmt::Debug for PgConn {
 }
 
 /// Open a `postgres://` connection (DEC-208 slice I). Any password carried inline in the DSN (whether
-/// the user wrote it directly or the `Database.withPassword` factory injected a `Core.Secret`, slice G) is
+/// the user wrote it directly or the `Connection.withPassword` factory injected a `Core.Secret`, slice G) is
 /// parsed OUT of the DSN into the [`Config`] by `Config::from_str` and NEVER retained on the handle —
 /// only a [`redact_dsn_password`]-scrubbed DSN is stored, so every error / diagnostic path is safe by
 /// construction (a connect error prints the host but never the password, unlike PDO).
 pub(super) fn open(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     let redacted = redact_dsn_password(dsn);
     let config = Config::from_str(dsn).map_err(|e| {
-        format!("<<ConnectionError>>Core.DatabaseModule: invalid postgres DSN `{redacted}`: {e}")
+        format!("<<ConnectionError>>Core.Database: invalid postgres DSN `{redacted}`: {e}")
     })?;
     let client = config.connect(NoTls).map_err(|e| {
-        let base = format!("Core.DatabaseModule: cannot connect to `{redacted}`: {e}");
+        let base = format!("Core.Database: cannot connect to `{redacted}`: {e}");
         match pg_err_kind(&e) {
             Some(tag) => format!("<<{tag}>>{base}"),
             None => format!("<<ConnectionError>>{base}"),
@@ -147,16 +147,15 @@ impl DriverConn for PgConn {
             let refs = param_refs(&boxes);
             let rows = client.query(&stmt, &refs).map_err(pg_sql_err)?;
             let row = rows.first().ok_or_else(|| {
-                "<<ConstraintViolationError>>Core.DatabaseModule: RETURNING produced no row"
-                    .to_string()
+                "<<ConstraintViolationError>>Core.Database: RETURNING produced no row".to_string()
             })?;
             if row.is_empty() {
-                return Err("Core.DatabaseModule: RETURNING produced no column".to_string());
+                return Err("Core.Database: RETURNING produced no column".to_string());
             }
             return match pg_cell(row, 0, row.columns()[0].type_(), row.columns()[0].name())? {
                 Value::Int(n) => Ok(n),
                 other => Err(format!(
-                    "Core.DatabaseModule.execReturningId: RETURNING column is {}, not an int id",
+                    "Core.Database.execReturningId: RETURNING column is {}, not an int id",
                     other.type_name()
                 )),
             };
@@ -173,7 +172,7 @@ impl DriverConn for PgConn {
             .map_err(pg_sql_err)?;
         match rows.first() {
             Some(r) => r.try_get::<_, i64>(0).map_err(pg_sql_err),
-            None => Err("Core.DatabaseModule: lastval() returned no row".to_string()),
+            None => Err("Core.Database: lastval() returned no row".to_string()),
         }
     }
 
@@ -214,7 +213,7 @@ impl DriverConn for PgConn {
                     Value::List(v) => v,
                     other => {
                         return Err(format!(
-                            "Core.DatabaseModule.executeMany: each row must be a list, got {}",
+                            "Core.Database.executeMany: each row must be a list, got {}",
                             other.type_name()
                         ))
                     }
