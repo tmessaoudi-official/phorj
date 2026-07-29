@@ -258,58 +258,12 @@ pub fn entry_for(program: &Program, role: EntryRole) -> Option<(Option<&str>, &F
         .find(|(_, f)| entry_declared_role(f) == Some(role))
 }
 
-/// Resolve a program **entry point** (`main` / `handle`) — the single source of truth all backends
-/// share so they invoke the same function (Batch-1 D, `docs/specs/2026-06-27-class-entry-points-design.md`).
-///
-/// An entry is **either** a top-level free function named `name` (returns `Some((None, decl))`) **or**
-/// a `static` method named `name` on some class (`Some((Some(class), decl))`). An *instance* method
-/// named `name` is **not** an entry (an ordinary method). Top-level wins the scan order, but a valid
-/// program has at most one entry — [`entry_point_count`] backs the checker's `E-MULTIPLE-MAIN`, so by
-/// the time any backend calls this the entry is unambiguous.
-pub fn entry_point<'a>(
-    program: &'a Program,
-    name: &str,
-) -> Option<(Option<&'a str>, &'a FunctionDecl)> {
-    for item in &program.items {
-        if let Item::Function(f) = item {
-            if f.name == name {
-                return Some((None, f));
-            }
-        }
-    }
-    for item in &program.items {
-        if let Item::Class(c) = item {
-            for m in &c.members {
-                if let ClassMember::Method(f) = m {
-                    if f.name == name && f.modifiers.contains(&Modifier::Static) {
-                        return Some((Some(c.name.as_str()), f));
-                    }
-                }
-            }
-        }
-    }
-    None
-}
-
-/// How many distinct entry points named `name` a program declares (a top-level function plus every
-/// class-static method of that name). `> 1` is the checker's `E-MULTIPLE-MAIN` — an ambiguous entry is
-/// an error, never a silent pick.
-pub fn entry_point_count(program: &Program, name: &str) -> usize {
-    let mut n = 0;
-    for item in &program.items {
-        match item {
-            Item::Function(f) if f.name == name => n += 1,
-            Item::Class(c) => {
-                for m in &c.members {
-                    if let ClassMember::Method(f) = m {
-                        if f.name == name && f.modifiers.contains(&Modifier::Static) {
-                            n += 1;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    n
-}
+// NOTE — the NAME-based entry resolver (`entry_point(program, "main")` /
+// `entry_point_count`) was DELETED 2026-07-29. It resolved an entry by the magic names
+// `main`/`handle`, which the `#[Entry(kind:)]` migration retired (DEC-331/DEC-337): the developer's
+// rule is that **the name means nothing — a free function or a static method needs `#[Entry(..)]`
+// to be an entry at all**. Both functions had ZERO callers, and their doc-comments were the source
+// of a false claim repeated in three backends (*"the checker's `E-MULTIPLE-MAIN` guarantees ≤1"*) —
+// `E-MULTIPLE-MAIN` has no emit site and is not the rule. The live rule is at most one entry PER
+// KIND (`E-DUPLICATE-ENTRY-KIND`, `src/checker/program/entry_points.rs`); one `Cli` + one `Web` may
+// coexist, which five shipped `examples/web/*` rely on. Use [`entry_candidates`] / [`entry_for`].

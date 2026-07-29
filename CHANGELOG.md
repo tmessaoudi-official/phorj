@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Removed — the dead NAME-based entry resolver, and the false guarantee it underpinned (2026-07-29, DEC-415)
+- Entry points are **attribute-declared only**: a free function or a static method is an entry ONLY if
+  attributed `#[Entry(kind: EntryKind.…)]`. The name `main` carries no meaning (developer ruling).
+- `ast::entry_point()` and `ast::entry_point_count()` — which resolved an entry by the magic names
+  `main`/`handle` — are DELETED. They had **zero callers**; the `#[Entry(kind:)]` migration
+  (DEC-331/DEC-337) had already replaced them with `entry_candidates`/`entry_for`.
+- Their doc-comments were the source of a claim repeated in three backends — *"the checker's
+  `E-MULTIPLE-MAIN` guarantees ≤1"* — that was **false**: `E-MULTIPLE-MAIN` has no emit site, and a
+  program with both a top-level `main` and a class-static `main` type-checked clean. All three comments
+  now cite the rule that is actually enforced.
+- **The live rule is at most one entry PER KIND** (`E-DUPLICATE-ENTRY-KIND`): one `EntryKind.Cli` plus
+  one `EntryKind.Web` may coexist, and `run`/`serve` each take their own — five shipped examples depend
+  on that, so a flat one-entry-per-program rule would have broken them. No behaviour change here: the
+  rule was already implemented and correctly named; this change removes the dead code and the stale
+  claims around it.
+- `phg explain E-MULTIPLE-MAIN` now says the code is retired and points at `E-DUPLICATE-ENTRY-KIND`,
+  so an old build log quoting it still explains itself. The `guide/class-main.phg` header and its
+  `examples/README.md` row no longer teach name-based entries.
+
 ### Added — `pre-push` documentation guards (2026-07-29, DEC-362 BUILT)
 - `scripts/doc-guards.sh` — four mechanical checks against the defect class the GR-24 sweep measured as
   the project's dominant one. **G1** every `src/….rs` path named in tracked markdown exists · **G2**

@@ -131,7 +131,7 @@ pub(super) fn compile_program_with(
         class_decls.push(s);
     }
     // Batch-1 D: the entry is a top-level `function main` OR a class-static `main` method (the shared
-    // `ast::entry_point` resolver, also consumed by the interpreter; `E-MULTIPLE-MAIN` guarantees ≤1).
+    // `ast::entry_for`, also consumed by the interpreter; `E-DUPLICATE-ENTRY-KIND`: ≤1 per kind).
     // The entry *index* needs the methods table, built below, so only the metadata is computed here.
     let (entry_class, entry_decl) = crate::ast::entry_for(program, crate::ast::EntryRole::Cli).ok_or_else(|| {
         "no entry point: running needs an `#[Entry(kind: EntryKind.Cli)]` function (DEC-331). A library or web file \

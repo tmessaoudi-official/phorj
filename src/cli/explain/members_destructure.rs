@@ -92,11 +92,12 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              `class App { static function main(): int { return 0; } }` — same signature rules.\n"
         }
         "E-MULTIPLE-MAIN" => {
-            "E-MULTIPLE-MAIN — a program declares more than one entry point named `main`.\n\n\
-             An entry is EITHER a top-level `function main` OR a single class `static function main`\n\
-             (Batch-1 D) — never both, and never two class-static `main`s. Having more than one is\n\
-             ambiguous (which one runs?), so it is rejected rather than silently picked. Keep exactly\n\
-             one entry: remove the extra top-level `main`, or the extra class `static main`.\n"
+            "E-MULTIPLE-MAIN — RETIRED, never emitted. Kept only so an old build log or note that\n\
+             quotes this code still explains itself.\n\n\
+             The name `main` carries no meaning: a free function or a static method is an entry ONLY\n\
+             if it is attributed `#[Entry(kind: EntryKind.…)]` (DEC-331/DEC-337). The live rule is at\n\
+             most ONE entry PER KIND — see `phg explain E-DUPLICATE-ENTRY-KIND`. One `Cli` entry and\n\
+             one `Web` entry may coexist in a program; `run` and `serve` each take their own.\n"
         }
         "E-TEST-OUTSIDE-TESTS" => {
             "E-TEST-OUTSIDE-TESTS — a `test \"name\" { … }` block appears in a normal build.\n\n\

@@ -1,10 +1,14 @@
-// Class entry points (Batch-1 D) — a program's `main` may be a class `static` method.
+// Class entry points (Batch-1 D; attribute-declared since DEC-331/DEC-337) — an entry may be a
+// class `static` method, not only a top-level function.
 //
-// Phorj's Go-style top-level `function main` still works (every other example uses it). This
-// example shows the Java-style alternative: a `static function main` on a class. Either form is a
-// valid entry; declaring BOTH (or two class-static `main`s) is `E-MULTIPLE-MAIN`. A static method
-// has no `this`, so it cannot read instance state — but it may construct the class and drive it,
-// which is the idiomatic "the class is the program" shape.
+// The NAME carries no meaning (DEC-415): a free function or a static method is an entry ONLY if it
+// is attributed `#[Entry(kind: EntryKind.…)]`. This file is called `class-main` and its method is
+// called `main` for historical reasons; either could be named anything. Both shapes are valid
+// entries, and the rule is at most ONE ENTRY PER KIND — a second `EntryKind.Cli` anywhere in the
+// program is `E-DUPLICATE-ENTRY-KIND` (the older `E-MULTIPLE-MAIN` is retired and never emitted).
+// One `Cli` entry and one `Web` entry MAY coexist; `run` and `serve` each take their own.
+// A static method has no `this`, so it cannot read instance state — but it may construct the class
+// and drive it, which is the idiomatic "the class is the program" shape.
 //
 // The transpiled PHP bootstraps `App::main()` (vs `\Main\main()` for the top-level form); both
 // backends and real PHP are byte-identical, and a `main(): int` return becomes the process exit code.

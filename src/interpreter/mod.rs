@@ -349,7 +349,7 @@ fn run_program_main(
         });
     }
     // Batch-1 D: the entry is a top-level `function main` OR a class-static `main` method — the shared
-    // `ast::entry_point` resolver picks the one (the checker's `E-MULTIPLE-MAIN` guarantees ≤1).
+    // `ast::entry_for` picks the one for this ROLE (`E-DUPLICATE-ENTRY-KIND`: ≤1 entry per kind).
     let (entry_class, main) = match crate::ast::entry_for(program, crate::ast::EntryRole::Cli) {
         Some(e) => e,
         None => return Err(Diagnostic::runtime(
