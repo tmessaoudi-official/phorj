@@ -113,7 +113,8 @@ Invariant-19 pointers to resume from.
 It is **deterministic — no LLM call**. The upstream hook shelled out to `claude -p` (Haiku) on every
 compaction; here that spends the same weekly quota the developer is rationing and fails whenever the
 API is unreachable. Opt in with `PHORJ_HANDOFF_LLM=1` (model via `PHORJ_HANDOFF_MODEL`) to append a
-narrative on top of the deterministic note.
+narrative on top of the deterministic note. `PHORJ_HANDOFF_DIR` overrides the output directory
+(default: `<cwd>/var/claude/handoff`).
 
 Contract: a PreCompact hook must never block compaction, so it **always exits 0** — every failure path
 still logs a reason through `log_obs`. Verify with:

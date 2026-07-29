@@ -942,7 +942,7 @@ macro/helper rows). Source: `native::registry()` / `build()` `src/native/mod.rs:
 |---|---|---|---|
 | Core.Native.Database | 40 | E-TRANSPILE-DB | PERMANENT (live I/O ≠ byte-identical) |
 | Core.Native.Mail | 21 | E-TRANSPILE-MAIL | PERMANENT (SMTP/TLS, injection) |
-| Core.Native.FileSystem | 18 | E-TRANSPILE-FS | **BUILDABLE → build it** (msg text out-of-contract) |
+| Core.Native.FileSystem | 18 | E-TRANSPILE-FS | **BUILDABLE → build it** (msg text out-of-contract) ⊳ BUILT since — DEC-313 (2026-07-22): `transpile/fs_php.rs`, quarantine RETIRED (the code survives only as a retired-explain entry) |
 | Core.Native.Session | 7 | E-TRANSPILE-SESSION | **PERMANENT** (entropy sids + wall-clock TTL + persistent store) |
 | Core.Native.HttpClient | 6 | E-TRANSPILE-HTTPCLIENT | PERMANENT (live network I/O) |
 | Core.String Unicode tier | 4 | E-TRANSPILE-UNICODE | PERMANENT-per-call (mbstring/intl forbidden; codepoint tier transpiles) |

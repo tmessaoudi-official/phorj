@@ -7,15 +7,15 @@
 #
 # SPEED SPLIT (developer, 2026-07-03): the PHP-oracle differential (byte-identity spine check —
 # one `php` subprocess per case) runs at PRE-PUSH. Pre-commit runs the deterministic Rust-only gate
-# (run == runvm parity + every unit/integration test), fast and php-version-independent.
+# (run == run --tree-walker parity + every unit/integration test), fast and php-version-independent.
 #
 # SPEED TIER (developer, 2026-07-08 — measured 126s→~12s): two workspace-compute-bound sweeps
 # dominate the wall clock — `every_repo_phg_formats_idempotently_and_safely` (formatter dogfood over
 # every repo .phg) and `shipped_manual_example_runs_on_both_backends` (one impure fib(30) example on
 # both backends; `differential.rs` already skips it). Both run at PRE-PUSH; everything else (the whole
 # suite MINUS those two = ~11s) runs here every commit. `clippy` also moved to PRE-PUSH (a lint is
-# zero correctness-risk and batches cleanly). `--features jit` gates the JIT backend (not a default
-# feature) per-commit — the old bare `cargo nextest run` never tested it. See scripts/git-hooks/pre-push.
+# zero correctness-risk and batches cleanly). `jit` is a DEFAULT feature since 2026-07-09 — the
+# explicit `--features jit` below is a harmless belt-and-braces no-op kept for clarity. See scripts/git-hooks/pre-push.
 # opt-level (deps=2, workspace=1) lives in Cargo.toml [profile.dev]; it is what makes the fast tier ~11s.
 set -euo pipefail
 

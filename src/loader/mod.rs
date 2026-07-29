@@ -26,7 +26,7 @@
 //! `cli::cmd_treewalk(&str)`, the differential harness, and the checker's package-agnostic tests are
 //! untouched. Library packages export **functions and types** (M-RT cross-package types): a non-`main`
 //! `class`/`enum`/`interface` is mangled like a function (`acme.geometry` + `Point` ⇒
-//! `Acme\Geometry\Point`) and a consuming file binds it with `import type a.b.C [as D];`; the same
+//! `Acme\Geometry\Point`) and a consuming file binds it with a unified `import a.b.C [as D];`; the same
 //! Pass-2 rewrite that mangles call sites also rewrites every type-name position (annotations,
 //! instantiation, `instanceof`, enum access) to the mangled FQN, so the backends see fully-resolved
 //! names and only the transpiler de-mangles into PHP `namespace` blocks.

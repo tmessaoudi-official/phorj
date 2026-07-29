@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # rustup honours rust-toolchain.toml (channel 1.96.0 + rustfmt + clippy components).
+      # rustup honours rust-toolchain.toml (the pinned channel there + rustfmt + clippy components).
       # `rustup show` installs that pinned toolchain and its components on first use, so the
       # CI lints are byte-for-byte the ones a local commit faces — no floating-stable drift.
       - name: Install pinned Rust toolchain
@@ -108,10 +108,11 @@ jobs:
           echo "unsafe-island: OK — no allow(unsafe_code) escape outside src/jit/"
 
   jit:
-    # The Cranelift JIT backend (dep-policy domain #7) lives behind the non-default `jit` feature, so
-    # the `gate` job's `cargo test --workspace` NEVER compiles it — src/jit/ would rot unverified and a
-    # workspace change could break JIT codegen while CI stayed green (the structural false-green pattern
-    # this project keeps guarding against). This job closes that hole. `-p phorj` (not --workspace)
+    # The Cranelift JIT backend (dep-policy domain #7) sits behind the `jit` feature — a DEFAULT
+    # feature since 2026-07-09, so the `gate` job's `cargo test --workspace` DOES compile it. This
+    # job is kept as an explicit-feature belt-and-braces run (it survives any future change to the
+    # default set, so src/jit/ can never silently drop out of CI — the structural false-green
+    # pattern this project keeps guarding against). `-p phorj` (not --workspace)
     # because the playground member has no `jit` feature.
     #
     # clippy runs `--all-targets` under the feature, so it COMPILES every target (incl. the integration

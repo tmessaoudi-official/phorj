@@ -37,19 +37,32 @@ Phorj is a language toolchain, so the relevant attack surface is **untrusted inp
 - **Untrusted binaries (`phg build`).** The hand-rolled ELF / PE / Mach-O section readers used to
   detect an embedded program parse attacker-controlled object files. They perform **minimal section
   lookup with checked arithmetic on every offset** — malformed or hostile headers return `None`, never
-  an overflow panic or out-of-bounds read (invariant **EV-7**). `#![forbid(unsafe_code)]` is set
-  crate-wide.
-- **No third-party runtime dependencies.** Phorj links zero external crates, which removes the
-  supply-chain surface for the runtime (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).
-- **`phg vendor` (supply chain).** This is the only command that touches the network, and it runs
-  only on an explicit `phg vendor`. A dependency's `git`/`tag`/`rev` is passed to `git` behind a `--`
-  end-of-options separator with `protocol.ext.allow=never`, and rejected if it would be read as a git
-  option (leading `-`) or a command-executing remote helper (`ext::`/`file::`). A dependency `name`
-  and the `source` root are validated at manifest-parse time (no `..` traversal, no absolute paths) so
-  they cannot escape the project / `vendor/` tree. `run`/`check`/`transpile` never fetch — they resolve
-  offline from the committed `vendor/`.
-- **`phg serve` (HTTP runtime).** The server is **single-threaded by design** (the `Rc`-shared value
-  heap is not `Send`), so it handles one connection at a time. It is resilient — a per-connection read
+  an overflow panic or out-of-bounds read (invariant **EV-7**). `#![deny(unsafe_code)]` is set on
+  both crate roots; the audited first-party `unsafe` island is confined to `src/jit/` (the
+  finalize→fn-ptr call plus the `extern "C"` trampolines' raw-pointer dereferences — ~48 audited
+  sites) behind a scoped `#![allow]` and a CI `unsafe-island` gate.
+- **A small, vetted dependency surface.** The core is std-first; the default build links 9 vetted,
+  feature-gated crates (crypto, regex, signals, coroutines, JIT codegen, SQLite, Unicode
+  segmentation) out of 14 admitted — each can be compiled out (`--no-default-features` links
+  zero). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
+  `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`.
+- **Package manager (supply chain).** `phg add` / `install` / `update` / `remove` (DEC-316) and
+  `phg build --target` (which downloads a cross-compile binary stub on cache miss,
+  sha256-verified against a manifest baked into the binary before it is published to the cache)
+  are the only commands that touch the network, and only on explicit invocation (`phg vendor` is
+  retired — DEC-282 — and errors). Dependency names are validated at `phorj.json`-parse time
+  (strict PascalCase alphanumeric `Publisher/Name` segments, `Core` reserved) so a name cannot
+  traverse or escape the `vendor/` tree. Git fetching shells out to the host `git` binary; stub
+  and registry fetching shell out to `curl` (`PHORJ_GIT` and `PHORJ_CURL` override which binaries
+  are run, and `PHORJ_STUB_REGISTRY` redirects where stubs are fetched from — treat all three as
+  security-sensitive). A dependency's `git` URL and `ref` are passed to `git clone`/`git checkout`
+  as given (`https://…`, `file://…`, and local paths are all supported), so treat a third-party
+  `phorj.json` with the same care as any build manifest you did not write. `run`/`check`/
+  `transpile` never fetch — they resolve offline from the committed `vendor/`.
+- **`phg serve` (HTTP runtime).** The server runs a **bounded OS-thread worker pool** (`--workers N`,
+  default = number of CPU cores; `--workers 1` restores the single-threaded path). Each worker owns
+  its own `Rc` value heap — values never cross threads — and handles one connection at a time. It is
+  resilient — a per-connection read
   or send error, a request fault (→ 500), or a slow/idle client (bounded by `--timeout`, default 30s)
   never ends the server; only a persistently failing listener does. **Bind `127.0.0.1` (the default)
   on untrusted networks** and keep `--timeout` set. Note: the request body is capped (8 MiB) but the

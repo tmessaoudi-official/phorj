@@ -515,7 +515,7 @@ pub fn import_map(items: &[Item]) -> HashMap<String, String> {
     for item in items {
         if let Item::Import { path, alias, .. } = item {
             // The bound qualifier is the alias when present (`import a.b as c;` ⇒ `c`), else the
-            // path's last segment (M5 S2c). A terminal `import type …;` binds a *type* name, not a
+            // path's last segment (M5 S2c). A terminal type import (unified `import a.b.C;`) binds a *type* name, not a
             // call qualifier, so it is excluded from this (call-site) map.
             let qualifier = alias.clone().or_else(|| path.last().cloned());
             if let Some(q) = qualifier {

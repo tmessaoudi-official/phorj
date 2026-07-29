@@ -14,7 +14,7 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
         "E-VIS-INTERNAL" => {
             "E-VIS-INTERNAL — an `internal` declaration was referenced from another package.\n\n\
              A declaration marked `internal` is visible only within its own package (all its files),\n\
-             not from other packages. A cross-package reference (an `import type`, or a qualified\n\
+             not from other packages. A cross-package reference (a type import, or a qualified\n\
              `pkg.fn()` call) fails. Mark it `public` to export it across packages.\n"
         }
         "E-OPT-USE" => {
@@ -133,10 +133,11 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              the repeated line.\n"
         }
         "E-VENDOR-MISSING" => {
-            "E-VENDOR-MISSING — a `[require]` dependency is declared but not vendored.\n\n\
+            "E-VENDOR-MISSING — a declared dependency is not vendored.\n\n\
              Dependencies resolve offline from the committed `vendor/` tree — Phorj never fetches on\n\
-             `run`/`check`/`transpile`. Run `phg vendor` to clone each `[require]` dependency at its\n\
-             pinned tag/rev into `vendor/` and write `phorj.lock`, then commit both.\n"
+             `run`/`check`/`transpile`. Run `phg install` to clone each `phorj.json` dependency at its\n\
+             pinned tag/rev into `vendor/` and write `phorj.lock`, then commit both (DEC-316; the\n\
+             older `phorj.toml`/`[require]`/`phg vendor` mechanism is retired — DEC-282).\n"
         }
         "E-VENDOR-MAIN" => {
             "E-VENDOR-MAIN — a vendored dependency declared `package Main`.\n\n\

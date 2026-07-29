@@ -33,7 +33,11 @@ enrichment = M3; single-binary bundling = M2.5.
   statement surface (literals, int/float arithmetic, comparison, equality, short-circuit
   `&&`/`||`, unary, interpolation, `println`, list literals, slot-based locals, `if`/`else`,
   `for…in`, blocks) + `phg runvm` (`src/cli.rs`) + the **differential harness**
-  (`tests/differential.rs`): `runvm` stdout is byte-identical to `run`. Plan:
+  (`tests/differential.rs`): `runvm` stdout is byte-identical to `run`. (`phg runvm` and
+  `src/cli.rs` are the era's names — the VM later merged into `phg run` as its default engine,
+  the interpreter becoming `--tree-walker`, and `src/cli.rs` split into `src/cli/`; likewise the
+  era's other single-file paths in the dated sections here — `src/vm.rs`, `src/chunk.rs`,
+  `src/compiler.rs`, `src/transpile.rs`, `src/bundle.rs` — are directories today.) Plan:
   `docs/plans/2026-06-15-m2-plan2-compiler-runvm.md`.
 - **P3 ✅** — user function calls + clox-style call frames (`Frame { func, ip, slot_base }`)
   + `Op::Call`/`Op::Return` + recursion and mutual recursion (`src/compiler.rs` multi-function
@@ -74,7 +78,7 @@ enrichment = M3; single-binary bundling = M2.5.
 > slot-indexed field layout (P5 Phase B) stays **bench-gated and unopened** — after P5a the object
 > path is within ~15% of the scalar baseline, so field access no longer dominates.
 
-## M2.5 — Standalone executables (`phg build`) — 🔨 IN PROGRESS (Phases 1–2 complete; Phase 3 next)
+## M2.5 — Standalone executables (`phg build`) — 🔨 IN PROGRESS (Phases 1–2 + 3a complete; 3b next)
 
 Single-binary bundling: `phg build foo.phg` → a standalone executable that runs `foo.phg` on the
 VM with no Phorj install. Design (advisor-reviewed twice): payload = a **named section** (`.phorj`
@@ -103,8 +107,9 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
   `docs/specs/UNIFIED-SPEC.md#phase-2-cross-os-builds`, `docs/plans/2026-06-16-m2.5-phase2-cross-os.md`.
   **Gotcha (verified):** `llvm-objcopy --add-section` on **PE** needs `--set-section-flags
   …=noload,readonly` or it writes a zero-data section; the flags are applied unconditionally (ELF + PE).
-- **Phase 3 🔲** — CI stub registry; final-artifact signing/notarization (opt-in `--sign`),
-  Windows Authenticode + macOS codesign/notarize via `rcodesign` from Linux.
+- **Phase 3a ✅** — CI stub registry (`.github/workflows/stub-registry.yml`). **Phase 3b 🔲** —
+  final-artifact signing/notarization (opt-in `--sign`), Windows Authenticode + macOS
+  codesign/notarize via `rcodesign` from Linux.
 
 ### Tooling (v0.4.0) — profiling + introspection
 
@@ -125,7 +130,7 @@ warning channel), and **S3 Track A** (lambdas — expression + statement body �
 values, and the pipe operator `|>`). Cross-cutting: stdlib **Track B** Waves 1–2
 (`core.console`/`math`/`text`/`file`, namespaced natives) and **Track D** (`phg benchmark --vs-php`). All
 slices are byte-identical on `run`/`runvm` and round-trip through real PHP. The live slice-by-slice
-status + forward plan live in `CLAUDE.md` (Active plan) and `CHANGELOG.md`; design specs are under
+status + forward plan live in `docs/plans/SLICE-STATE.md` (cursor) + `docs/plans/MASTER-PLAN.md` §0 and `CHANGELOG.md`; design specs are under
 `docs/specs/2026-06-17-m3-*` and `docs/specs/2026-06-18-m3-*`. Modules/packages and web capabilities were
 promoted to their own milestones — **M5** (✅ closed) and **M6** (🔨 in progress), below. The Rich-Types
 sub-track (**M-RT** — ✅ **CLOSED 2026-06-23**: `instanceof`, interfaces, `Map`/`Set`, erased generics
@@ -234,7 +239,8 @@ via a dotted-prefix ancestor relation), not just the exact package. Member-level
 **checker-enforced** (`E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY`/`E-CONST-VISIBILITY`/`E-CTOR-VISIBILITY`),
 not PHP-only — `internal` members erase to PHP `public` (byte-identical). Static-field visibility (G4)
 confirmed enforced. Example `examples/project/member-internal/`. Still deferred: visibility on `type`
-aliases / `import` re-exports; pending dev ruling P-Q-B-1 (overloaded interface-method vis narrowing).
+aliases / `import` re-exports; P-Q-B-1 (overloaded interface-method vis narrowing) RULED as DEC-379
+(2026-07-26: check EVERY overload's visibility) — build queued.
 
 ## Error handling & stack traces — ✅ Slice 1 (2026-06-21) + Slice 2 SHIPPED
 
@@ -271,10 +277,14 @@ name-mangling pass (`run ≡ runvm` structural; the transpiler de-mangles to `na
 never fetch ([ADR-0005](adr/0005-offline-only-vendor.md)). Design
 `docs/specs/2026-06-18-m5-project-model-design.md`.
 
+> **Superseded mechanisms (DEC-282 / DEC-316, 2026-07-20):** `phorj.toml`/`[require]`/`phg vendor`
+> were retired; the shipped manifest is `phorj.json` and the network commands are
+> `phg add`/`install`/`update`/`remove`. This section describes M5 as delivered in June.
+
 ## M6 — Web capabilities — 🔨 CORE COMPLETE (W0–W4 shipped; extensions deferred)
 
 A portable `handle(Request) -> Response` model at the *value* level (PSR-7/15 shape); the socket bridge is
-runtime glue, quarantined in `src/serve.rs` behind a `Transport` trait, outside the byte-identity spine.
+runtime glue, quarantined in `src/serve/` behind a `Transport` trait, outside the byte-identity spine.
 Shipped: **W0** (`bytes` primitive + `b"…"` literals + `Core.Bytes`), **W1** (pure-Phorj
 `Request`/`Response` + `parse_request`/`serialize_response`, `examples/web/handler.phg`), **W2** (the
 `Core.Http` `Router` with **path parameters** `r"/users/{id}"` → `req.param`, literal>param precedence,
@@ -284,15 +294,17 @@ Shipped: **W0** (`bytes` primitive + `b"…"` literals + `Core.Bytes`), **W1** (
 + **slice 2:** `{name:regex}` route constraints via `Core.Regex` (`examples/web/route-constraints.phg`)
 + **slice 3:** `#[Route]` on static class methods, the controller shape (`examples/web/controller.phg`)
 — **W2-ext complete**; design `docs/specs/2026-06-28-m6-w2-extensions-design.md`; design
-`docs/specs/2026-06-28-m6-w2-router-attributes-design.md`), **W3** (`src/serve.rs` socket transport
+`docs/specs/2026-06-28-m6-w2-router-attributes-design.md` — deleted; see git history), **W3** (`src/serve/` socket transport
 behind the `Transport` trait, tested via `tests/serve.rs` outside the spine), and **W4** (`phg serve` +
 the PHP front-controller `examples/web/server.php`, full served app `examples/web/server.phg`).
 **`Core.Json`** (parse/stringify/stringifyPretty) layers on top — `examples/web/json-api.phg` is a
 byte-identity-gated JSON endpoint over the same `handle` contract. **W3 concurrency** (later add):
 `phg serve --workers N` is a bounded OS-thread pool — one request per worker, each its own `Rc` heap
 (values never cross threads; `ast::Program` is `Send + Sync`), default = CPU cores, `--workers 1` =
-single-threaded. This **superseded the planned green-threads** (dominated: single-core + unstable/unsafe
-std machinery); design `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md`. Deferred (later M6):
+single-threaded. The register's SUPERSEDED table records the direction the other way: the W3
+OS-thread serve-pool *plan* was superseded on 06-29 by the green-thread runtime ruling (DEC-132,
+shipped via `corosensei`) for in-language concurrency; the serve worker pool shipped as the
+per-request threading layer. Design `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md` (deleted; see git history). Deferred (later M6):
 optional/wildcard route segments, instance-controller routing. Design
 `docs/specs/2026-06-18-m6-web-design.md`.
 
@@ -318,8 +330,8 @@ stdlib breadth (`core.list`/`json`, `Map`/`Set`) → **M12** release automation 
 > M4 extension API → M5 modules → M6 concurrency+HTTP → M7 tooling → M8 migration) remains a historical
 > design exploration; the **GA roadmap above is the authoritative milestone sequence from M5 on.**
 
-> **As-built note:** no `Backend` trait exists — the three pipelines (`cmd_run`/`cmd_runvm`/`cmd_transpile`)
-> are free functions dispatched by a string `match` in `src/main.rs`, deferred to the 4th backend
+> **As-built note:** no `Backend` trait exists — the three pipelines (`cmd_run`/`cmd_treewalk`/`cmd_transpile`,
+> defined in `src/cli/pipeline.rs`) are free functions dispatched by a string `match` in `src/main.rs`, deferred to the 4th backend
 > (`phg build`) per the Rule of Three ([ADR-0001](adr/0001-no-shared-run-vm-ir.md)).
 
 ## Roadmap-completeness audit — ✅ DELIVERED (2026-06-22)

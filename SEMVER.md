@@ -1,7 +1,8 @@
 # Versioning & compatibility policy
 
 Phorj follows [Semantic Versioning](https://semver.org/) **with an explicit pre-1.0 contract**. The
-current series is `0.x` (the binary reports `phg --version`).
+current series is `1.0.0-nightly.x` pre-releases (the binary reports `phg --version`); the
+pre-1.0 compatibility CONTRACT below still applies until a stable `1.0.0`.
 
 ## Release channels (DEC-323)
 

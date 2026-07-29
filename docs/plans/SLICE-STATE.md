@@ -47,11 +47,13 @@ pending file existing = not yet applied.
   Stop hook that claimed to is not installed and was ruled OUT.
 
 All 27 agenda items (`GR-1`…`GR-27` ⇄ DEC-339…365) were ruled interactively on 2026-07-26, **plus 22 more
-that the ruling session's own probing, the on-hold tail and the 2026-07-27 build surfaced** (DEC-366…387 — the last eight are the
+that the ruling session's own probing, the on-hold tail and the 2026-07-27 build surfaced** (DEC-366…388 — the last eight are the
 L-report `decision-needed` tail: the `E-IFACE-VIS` bypass, chasing the `jsonround` win, the DEC-322 fold, XML via
 a vetted crate, the split lifetime block, stdlib wildcards, the `Core.Text`/`Core.String` merge, and the cheap
 tail). **Seven items stay deliberately unruled** (L-19/22/25/28/31/33/86 — titles only, developer-approved to
-defer). **Wave 5.5 (DEC-354) is built; everything else is unbuilt. Start at Wave 0.**
+defer). **Wave 5.5 (DEC-354) is built, plus DEC-388.1–.4 (2026-07-27: disk-reclaim, `/forge`
+re-admitted, `backend-parity-reviewer` agent, `validate-infra.sh` in pre-push; 388.5 `/qa-sweep`
+queued); everything else is unbuilt. Start at Wave 0.**
 
 **STANDING RULE — DEC-387, project-wide, not session-scoped:** never `AskUserQuestion`. Put every
 question in the message body with context, a minimal concrete example, numbered options each stating

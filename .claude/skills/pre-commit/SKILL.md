@@ -1,6 +1,6 @@
 ---
 name: pre-commit
-description: Use before every git commit — analyses staged changes for blast-radius, produces the four-dimension evidence table (Coverage, Docs, Config, Blast radius) from CLAUDE.md Rule 6, then presents the exact git commit command for manual execution.
+description: Use before every git commit — analyses staged changes for blast-radius, produces the four-dimension evidence table (Coverage, Docs, Config, Blast radius) from CLAUDE.md Rule 6, then commits autonomously when green (project git-autonomy override); the exact command is presented for manual execution only when the safety classifier blocks the commit.
 user-invocable: true
 args: "[--message=<draft-message>]"
 ---
@@ -31,7 +31,7 @@ args: "[--message=<draft-message>]"
 
 ## Side effects
 
-**None** — this skill is read-only. It runs `git diff --staged` and `grep` to analyse staged changes, then displays a report and commit command. It never calls `git commit` and never modifies any file. Output is displayed in conversation only — not persisted to disk; the git commit is the durable artifact.
+The analysis is read-only (`git diff --staged` + `grep`; no file is modified). Under the project's git-autonomy override, Step 5 runs `git commit` autonomously when all four evidence rows are OK; if the safety classifier blocks it, the exact command is presented for manual execution instead. Output is displayed in conversation only — not persisted to disk; the git commit is the durable artifact.
 
 ---
 
@@ -69,7 +69,7 @@ Classify each file:
 
 For each file in the **Public interface** or **Config/infra** categories:
 1. Extract the changed symbol, flag, function name, or path from the diff
-2. Search all references: `grep -r "<symbol>" ~/.claude/ --include="*.md" --include="*.sh" --include="*.json" -l 2>/dev/null`
+2. Search all references: `grep -rn "<symbol>" . --include="*.md" --include="*.rs" --include="*.sh" --include="*.toml" 2>/dev/null` (the phorj repo)
 3. For each hit, read the relevant line and determine if it is a caller, doc reference, or config entry that may need updating
 4. Flag any reference NOT already present in the staged diff as a **potential blast-radius item**
 
@@ -108,16 +108,20 @@ Parse `--message=<text>` from args if provided. Otherwise derive a draft from th
 
 ## Step 5 — Present commit command
 
-If all four evidence rows are **OK**:
+If all four evidence rows are **OK**: commit autonomously (Step 0's project git-autonomy note —
+green, self-contained work needs no permission ask):
 
 ```
-All four dimensions satisfied. Run this command:
+All four dimensions satisfied — committing:
 
 git commit -m "$(cat <<'EOF'
 <commit message here>
 EOF
 )"
 ```
+
+If the safety classifier blocks the `git commit`, present that exact command for manual execution
+instead — do not retry or bypass (project CLAUDE.md, "Git autonomy").
 
 If any row is **INCOMPLETE**: list what is missing and do NOT present the commit command. The commit is blocked until all dimensions are resolved — add the missing staged changes and re-run `/pre-commit`.
 

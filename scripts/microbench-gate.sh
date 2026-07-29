@@ -7,7 +7,7 @@
 #     bench micros are NOT in the differential, so this is their only parity check).
 #   - WIN->LOSS FLIP: a feature whose baseline ratio (php_ns/vm_ns) was a WIN (>= 1 — the VM beat php)
 #     now LOSES (< 1). This IS the G-8 ratchet: once the VM beats release-php+JIT on a feature, it must
-#     keep beating it. (Today every feature LOSES, so this arms for when the JIT lands wins.)
+#     keep beating it. (The ratchet is ARMED: bench/micro-baseline.json records real WINs — e.g. floatarith ~4.2, closurecall ~2.1 — that a flip would block.)
 #
 # Per-feature ratio deltas are REPORTED, NOT blocked on: absolute microbench ns/ratio is too noisy to
 # gate on a shared dev machine — empirically 3-4x swings at load average ~7, with NO code change. The

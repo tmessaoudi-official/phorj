@@ -3,8 +3,8 @@
 //! `Core.Process`/`Core.Environment` are `pure: false`: their results depend on the process, not the program
 //! text, so the byte-identity differential SKIPS any program importing them (see
 //! `uses_impure_native` in `tests/differential.rs`). They are instead exercised here, where the test
-//! sets the args/env it expects. This crate is separate from the `#![forbid(unsafe_code)]` library,
-//! so it may call the (edition-2024-`unsafe`) `std::env::set_var`.
+//! sets the args/env it expects. This crate sits outside the library's `#![deny(unsafe_code)]`
+//! roots, so it may call the (edition-2024-`unsafe`) `std::env::set_var`.
 
 use phorj::cli::cmd_treewalk;
 use phorj::cli::{cmd_run_exit, cmd_treewalk_exit};

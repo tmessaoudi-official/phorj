@@ -72,7 +72,8 @@ $ phg remove Acme/Greet             # drop from phorj.json + vendor/, re-resolve
 `phg add/install/update/remove` are the **only** network-capable commands — `phg run`/`check`/
 `transpile` never touch the network (Invariant 10). Every install pins each package with a tree
 SHA-256 in `phorj.lock`; a later `phg install` re-verifies those hashes offline and refuses a
-tampered or stale `vendor/` tree.
+tampered or stale `vendor/` tree. Git fetching shells out to the host `git` binary; `PHORJ_GIT`
+overrides which binary is run (security-sensitive — set it only to a git you trust).
 
 ## How resolution works
 

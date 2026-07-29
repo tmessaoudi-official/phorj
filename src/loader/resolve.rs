@@ -5,7 +5,7 @@
 use super::*;
 
 /// Resolve a type *name* to its mangled FQN, or `None` if it is a local (`package Main`) type or a
-/// built-in (left bare). A terminal `import type` binding wins; otherwise a same-package sibling type
+/// built-in (left bare). A terminal type-import binding (unified `import`) wins; otherwise a same-package sibling type
 /// (a library type referencing another type in its own package).
 pub(super) fn resolve_type_ref(name: &str, ctx: &ResolveCtx) -> Option<String> {
     if let Some(m) = ctx.type_imports.get(name) {
@@ -106,7 +106,7 @@ pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
         Item::Class(mut c) => {
             c.name = mangle(&ctx.package, &c.name);
             // A cross-package parent class (`class Dog extends Animal` where `Animal` is imported via
-            // `import type`) must be mangled to its FQN so the checker's inheritance tables, the
+            // a type import — unified `import`) must be mangled to its FQN so the checker's inheritance tables, the
             // backends' ancestor resolution, and the transpiler's `extends \FQN` all line up.
             for ext in &mut c.extends {
                 if let Some(m) = resolve_type_ref(ext, ctx) {
@@ -130,7 +130,7 @@ pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
             Item::Class(c)
         }
         // A trait's members are resolved exactly like a class's (it carries no `implements`/`uses` and
-        // is not a subtype). Mangling its name lets a cross-package `use` and `import type` find it.
+        // is not a subtype). Mangling its name lets a cross-package `use` and type import (unified `import`) find it.
         Item::Trait(mut t) => {
             t.name = mangle(&ctx.package, &t.name);
             resolve_members(&mut t.members, ctx);
@@ -571,7 +571,7 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
         // later validates + unwraps it. Without this it would fall into the `leaf` arm unresolved.
         Expr::New(inner, span) => Expr::New(Box::new(resolve_expr(*inner, ctx)), span),
         // A `parent(Ancestor).m(args)` / `parent.m(args)` call: mangle the named ancestor to its FQN
-        // (a cross-package parent class imported via `import type`) so the lexical ancestor lookup
+        // (a cross-package parent class imported via a type import — unified `import`) so the lexical ancestor lookup
         // matches the mangled `extends` chain, and resolve the call arguments. Without this arm it
         // fell into the `leaf` catch-all and a cross-package `parent(Animal)` failed E-PARENT-NOT-ANCESTOR.
         Expr::ParentCall {

@@ -1,6 +1,7 @@
-# SPEC (RULED — BUILD-READY, NOT YET BUILT) — Wildcard & group imports (`import X.Y.*` / `{A,B}`)
+# SPEC (RULED — Q-A BUILT ✅ 2026-07-25) — Wildcard & group imports (`import X.Y.*` / `{A,B}`)
 
-> Status: **RULED 2026-07-24 (dev, AskUserQuestion) — BUILD-READY, NOT BUILT.** Captured from an
+> Status: **RULED 2026-07-24 (dev, AskUserQuestion) — Q-A BUILT ✅ 2026-07-25 (DEC-268-certified,
+> see §Q-A DONE at :228); dev-owned follow-ups P-Q-A-1..5 remain per §PENDING + SLICE-STATE.** Captured from an
 > interactive design session per Invariant 15 (adjudication is the developer's) + Invariant 19
 > (records live in the repo). All sub-decisions ruled (see RULED sections below). Its own slice
 > (Q-A in the import/visibility cluster), NOT part of DEC-331 s3; built BEFORE the visibility-model
@@ -200,7 +201,9 @@ test enforces this). TDD in `src/loader/tests.rs` + `tests/project.rs` fixtures.
   Deferred pending a dev ruling on whether to re-home group expansion.
 
 - ⬚ **P-Q-A-5 — Inv-13 file-size debt accrued across the Q-A series (SURFACED for a dev-scheduled
-  split slice, Inv 15).** [Verified via `scripts/size-gate.sh` 2026-07-25] shipping Q-A grew five
+  split slice, Inv 15).** ⊳ RESOLVED since (verified 2026-07-25, label flipped 2026-07-28): every
+  file named below is split or gone (`src/cli/explain.rs` → `src/cli/explain/*.rs` ×10 all ≤270;
+  `checker/program/walk.rs` 592→255) and `scripts/size-gate.sh` reports `fails=0`. [Verified via `scripts/size-gate.sh` 2026-07-25] shipping Q-A grew five
   grandfathered files past their `size-baseline.txt` entries, and the whole series (steps 1-7, already
   on `origin/master` @94e2dd7) was pushed `--no-verify` with the size-gate red — the established
   practice for this work (dev re-signs / handles baselines). **This session fixed the largest one

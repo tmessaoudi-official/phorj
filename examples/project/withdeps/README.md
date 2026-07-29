@@ -1,9 +1,11 @@
 # `withdeps` — an app with a vendored dependency (DEC-282)
 
 This app depends on an external library package, `Acme.Strutil`, consumed **offline** from the
-committed `vendor/` tree. There is no manifest and no lockfile in the language: `phg` NEVER
-downloads code — a future package-manager extension fetches/updates `vendor/`; the compiler only
-reads what is on disk.
+committed `vendor/` tree. `run`/`check`/`transpile` NEVER download code — the shipped package
+manager (DEC-316: `phorj.json` + `phg add`/`install`/`update`/`remove`, writing `phorj.lock`)
+fetches/updates `vendor/` on explicit invocation; the compiler only reads what is on disk. (This
+example predates the manifest and deliberately ships a bare vendored tree — see
+`examples/package-manager/` for the manifest-driven flow.)
 
 ## Layout
 

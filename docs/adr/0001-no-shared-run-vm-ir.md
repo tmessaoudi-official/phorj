@@ -10,7 +10,7 @@
 Phorj has three backends — the tree-walking interpreter (`run`), the bytecode compiler + stack VM
 (the VM), and the Phorj→PHP transpiler — and they all consume the **same validated AST**. Today
 each is a plain free function dispatched by a string `match` in `main.rs`
-(`cmd_run` / `cmd_the VM leg` / `cmd_transpile`); `grep 'trait ' src/` returns zero. Two unifications are
+(`cmd_run` — since renamed `cmd_treewalk`, the tree-walker having become `run`'s `--tree-walker` oracle — / `cmd_runvm` — since renamed `cmd_run`, the VM having become `run`'s default engine — / `cmd_transpile`); `grep 'trait ' src/` returned zero at the time. Two unifications are
 perennially tempting: a shared intermediate representation (`src/ir.rs`) that all backends lower
 through, and a `Backend` trait that abstracts "execute a program."
 

@@ -109,4 +109,4 @@ and byte-identity-gated the same way:
 | `mixins/` | **cross-package traits** (M-RT S8) — compose two library-package traits into a `Main` class via `import Pkg.Path.TraitName` + `use TraitName;` (a trait is still not a type — `Loud x` as an annotation is `E-USE-AS-TYPE`) |
 | `shapes/` | **cross-package types** (M-RT) — a library package exports a `class` + `interface` + `enum`, consumed from `Main`; nominal subtyping, `instanceof`, and enum `match` all cross-package, erasing to namespaced PHP |
 | `visibility/` | **declaration visibility** — `public`/`internal`/`private` on top-level declarations, loader-enforced and erased from PHP (see `visibility/README.md`) |
-| `withdeps/` | a **vendored git dependency** (M5 S3) — `[require]`, `phg vendor`, `phorj.lock`, and an offline `vendor/` (see `withdeps/README.md`) |
+| `withdeps/` | a **vendored git dependency** — a bare committed `vendor/` tree consumed offline (M5-S3-era; today's manifest-driven flow is `phorj.json` + `phg add`/`install` — DEC-316, see `examples/package-manager/`) (see `withdeps/README.md`) |

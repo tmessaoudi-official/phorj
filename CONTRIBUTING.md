@@ -12,7 +12,7 @@ in a large change, please open an issue to discuss it first (see [SUPPORT.md](SU
 ```sh
 git clone https://github.com/tmessaoudi-official/phorj
 cd phorj
-cargo build              # cargo fetches the four vetted deps (argon2, regex, ctrlc, corosensei)
+cargo build              # cargo fetches the vetted feature-gated deps (see THIRD-PARTY-NOTICES.md)
 cargo test               # run the full suite
 ```
 
@@ -33,7 +33,10 @@ same gate on every push and PR (`.github/workflows/ci.yml`), additionally settin
 `PHORJ_REQUIRE_PHP=1` so the PHP oracle in `tests/differential.rs` *fails* — never silently
 skips — if transpiled PHP diverges from the interpreter/VM. A second CI job exercises
 `phg build --target` cross-compilation parity. A change is not done until all three checks are
-clean. There is no `unsafe` in this crate — `#![forbid(unsafe_code)]` is set crate-wide and must stay.
+clean. First-party `unsafe` is confined to the audited JIT island (`src/jit/`, CI-gated) —
+`#![deny(unsafe_code)]` is set on both crate roots and must stay; no new `unsafe` outside that
+island in `src/`. (The `tests/` integration crates sit outside the deny roots and may carry the
+rare `unsafe` std requires — e.g. edition-2024 `env::set_var` — keep them unsafe-free otherwise.)
 
 ## Test-driven by default
 
@@ -44,6 +47,8 @@ change is considered complete.
 - Unit tests live in `#[cfg(test)] mod tests` next to the code.
 - Integration tests live in `tests/` (`cli.rs`, `build.rs`, `differential.rs`, the `*_integration.rs`
   suites).
+- Golden diagnostics: `PHORJ_BLESS=1 cargo test --test diagnostics` (re)generates the `.expected`
+  files — review the diff before committing a blessed change.
 
 ## Correctness invariants (read before touching backends)
 

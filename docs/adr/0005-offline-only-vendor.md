@@ -1,6 +1,6 @@
 # ADR-0005: Vendoring is offline-only — determinism over convenience
 
-- **Status:** Accepted (2026-06-19)
+- **Status:** Superseded (2026-07-20) by DEC-282 (`phg vendor`/`phorj.toml` retired) + DEC-316 (network-capable `phg add`/`install`/`update`/`remove` over `phorj.json`). Accepted 2026-06-19; kept for rationale.
 - **Deciders:** project author
 - **Fuller design:** m5 project-model design — decision **M5-10**; the M5 S3 plan
   (both consolidated 2026-07-02; git history ≤`60540fc`).

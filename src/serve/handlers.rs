@@ -7,7 +7,8 @@ use super::*;
 /// `signals` feature, SIGINT (Ctrl-C) and SIGTERM set the flag; the accept loops then stop taking new
 /// connections, drain in-flight work, and exit cleanly. Without the feature (the WASM playground), the
 /// flag is never set and the server runs until killed — verbatim pre-S4.2. `ctrlc`'s own `unsafe`
-/// signal registration is confined to that crate, so phorj's code stays `#![forbid(unsafe_code)]`.
+/// signal registration is confined to that crate, so phorj's own code stays unsafe-free
+/// (`#![deny(unsafe_code)]` roots; the JIT island is the sole exception).
 #[must_use]
 pub fn install_shutdown_handler() -> Arc<AtomicBool> {
     let flag = Arc::new(AtomicBool::new(false));

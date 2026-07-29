@@ -38,7 +38,7 @@ phg transpile src/main.phg | php   # area: 12
 
 The legal references it exercises:
 
-- `main` imports `Rect` — **public**, so the cross-package `import type Acme.Shapes.Rect;` is allowed.
+- `main` imports `Rect` — **public**, so the cross-package `import Acme.Shapes.Rect;` is allowed.
 - `scale` (in `Rect.phg`) calls `factor` (in `helpers.phg`) — both **internal**, same package, different
   file — allowed.
 - `factor` calls `clamp` — `clamp` is **private** but the call is in the *same file* — allowed.
@@ -50,7 +50,7 @@ documented here instead. Each of the following, added to `main.phg`, is a **comp
 
 ```phorj
 // scale is `internal` to Acme.Shapes — not exportable to another package:
-import type Acme.Shapes.Scale;   //  no such public type
+import Acme.Shapes.Scale;        //  no such public type
 Shapes.scale(12);                  //  E-VIS-INTERNAL: scale is internal to Acme.Shapes
 
 // clamp is `private` to helpers.phg — not visible to any other file:

@@ -16,7 +16,7 @@ loudly.
   `<name>.phg` has a sibling `<name>.out` with its exact expected stdout.
 - **`ddd/`** — a flagship multi-file, multi-package program (a Domain-Driven-Design ordering domain:
   bounded contexts → packages, entities/value-objects/aggregates → classes, folder = package path). It
-  proves the features *compose at realistic scale*: cross-package `import type`, an aggregate computing
+  proves the features *compose at realistic scale*: cross-package type imports (unified `import Pkg.Path.Type`), an aggregate computing
   over its entities, namespaced PHP emission. Its golden is `ddd/expected.out`; it loads through
   `loader::load` like any project.
 

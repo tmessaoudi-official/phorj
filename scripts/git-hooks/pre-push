@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Phorj pre-push gate — the byte-identity SPINE check (developer, 2026-07-03 speed split).
 #
-# Pre-commit runs the fast Rust-only gate (fast tier: run == runvm parity + every unit/integration
+# Pre-commit runs the fast Rust-only gate (fast tier: run == run --tree-walker parity + every unit/integration
 # test EXCEPT the two heavy sweeps). THIS hook runs the FULL suite — including those two sweeps
 # (`every_repo_phg_formats_idempotently_and_safely` + `shipped_manual_example_runs_on_both_backends`)
 # — plus the PHP-oracle differential against the 8.5 transpile floor before anything is published:
 # with PHORJ_REQUIRE_PHP=1 a missing php FAILS the run (never silently skips), so a push can never
-# bypass the spine check. `--features jit` gates the JIT backend (not a default feature). `clippy`
+# bypass the spine check. `jit` is a DEFAULT feature (the explicit flag is a harmless no-op). `clippy`
 # lives HERE now (moved off pre-commit 2026-07-08 — a lint is zero correctness-risk and batches
 # cleanly at this ~10-20-commit boundary); both feature configs are linted. cargo-nextest is preferred
 # with a `cargo test` fallback — zero hard dependency.
@@ -42,7 +42,7 @@ echo "[pre-push] cargo fmt --check"
 cargo fmt --check
 
 # File-size gate (Invariant 13 — developer-ruled 2026-07-20). Ratchet: new files capped at 500,
-# the 90 pre-existing breaches grandfathered in scripts/size-baseline.txt (may only shrink), soft
+# the pre-existing breaches grandfathered in scripts/size-baseline.txt (72 rows today; may only shrink), soft
 # warn at 300. Cheap (line counts) — runs early. Detail: scripts/size-gate.sh.
 echo "[pre-push] size-gate (Invariant 13 file-size ratchet)"
 bash "$_gate_root/scripts/size-gate.sh"

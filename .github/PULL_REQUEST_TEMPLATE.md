@@ -17,7 +17,7 @@
 - [ ] `cargo clippy --all-targets` is clean (warnings are denied)
 - [ ] `cargo fmt --check` is clean
 - [ ] New/changed behavior has a test, written test-first
-- [ ] No `unsafe` introduced (`#![forbid(unsafe_code)]` stays intact)
+- [ ] No `unsafe` introduced in `src/` outside the audited JIT island (`#![deny(unsafe_code)]` on both crate roots stays intact; `src/jit/` is the sole CI-gated `#![allow]`; `tests/` crates sit outside the deny roots — keep them unsafe-free except where std requires it)
 - [ ] Docs updated where a public interface changed (README / CHANGELOG / docs / examples)
 
 ## Backend-parity impact (if touching language semantics)

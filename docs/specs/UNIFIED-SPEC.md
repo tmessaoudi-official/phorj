@@ -163,14 +163,14 @@ strategy. Phorj removes surprises, never capability.*
 | Construction | `Greeter g = Greeter("Tak")` | **superseded**: `new` is mandatory |
 | Concurrency | "model TBD" | **resolved**: uncolored `spawn`+channels on cooperative green threads (see [Ecosystem strategy](#ecosystem-strategy) E-8) |
 
-Type system (all stand): sound static typing, no juggling/coercion; **erased** generics (type-checked
+Type system (as founded; superseded rows struck below): sound static typing, no juggling/coercion; **erased** generics (type-checked
 then rewritten to `Type::Erased` before any backend — NOT monomorphized; the pragmatic engineering
 choice per the philosophy, `checker/resolve.rs`);
 null safety `T?` + unwrap-before-use; ADT `enum` with payloads + compiler-verified exhaustive
-`match`; `==` value equality / `is` identity; strict `bool` only (no truthiness); `int` = 64-bit
+`match`; `==` value equality / ~~`is` identity~~ **superseded** (DEC-051/DEC-184 — `is` is a shipped TYPE TEST, full synonym of `instanceof`); strict `bool` only (no truthiness); `int` = 64-bit
 signed (+`decimal` for money; sized `i8..u64` deferred to v2); UTF-8 `string`. Collections split the
-PHP `array` wart: `List<T>` / `Map<K,V>` / `Set<T>` (+ tuples, still pending). OOP: single
-inheritance + traits (the safe multiple-inheritance answer, no diamond problem), method overloading
+PHP `array` wart: `List<T>` / `Map<K,V>` / `Set<T>` (+ tuples, since shipped — DEC-288). OOP: single
+inheritance + traits (the safe multiple-inheritance answer, no diamond problem) **superseded on inheritance** (DEC-062 — real multiple `class C extends A, B` shipped; see conflict C-1), method overloading
 by arity+exact type, `constructor(...)` with promotion + visibility, asymmetric visibility,
 statically-typed property accessors, value types, `this` (no `$this`). Errors: exceptions-familiar
 surface — later refined into the ratified three-tier model (`throws E` checked + `Result<T,E>` +
@@ -201,7 +201,7 @@ per-request model, no resident app server; `scp` one binary and run it.
 | 10–12 | Locals | Type-first, no implicit vars, no inference | "Every var typed" rule |
 | 13 | Collections | Split `List`/`Map`/`Set`/tuples | Fixes PHP `array` wart |
 | 14–15 | Constructor / overloading | `constructor(...)` + promotion; arity+exact type | Decoupled from class name; ad-hoc polymorphism PHP lacks |
-| 16–18 | Errors / equality / truthiness | Exceptions-familiar; `==` value · `is` identity; strict bool | No juggling; kills a bug class |
+| 16–18 | Errors / equality / truthiness | Exceptions-familiar; `==` value · ~~`is` identity~~ (superseded — DEC-051/DEC-184: `is` = type test, synonym of `instanceof`); strict bool | No juggling; kills a bug class |
 | 19–20 | Ints / decimal | `int` + sized (v2); native `decimal` | Money math without bcmath |
 | 21–22 | "MI" / power feats | Traits; value types + accessors + operator overloading¹ | MI power without the diamond problem |
 | 23–25 | Exec model | Tree-walker first → bytecode VM; ambitious POC scope | Crafting-Interpreters path; max learning |
@@ -872,8 +872,8 @@ escaping — a later wave (`Html.url_attr`/typed URLs; gap-audit row K-html-cont
 
 **Status: ADOPTED 2026-06-27; AMENDED 2026-07-03 (SQL driver + TLS domains) and 2026-07-06 (native
 codegen / JIT — domain #7).** This policy is why "zero external dependencies" claims in older docs are
-**false and must not be repeated**: Phorj's *core stays `std`-only*, but four vetted, feature-gated
-crates ship **by default**, and three more domains are approved. Source:
+**false and must not be repeated**: Phorj's *core stays `std`-only*, but nine vetted, feature-gated
+crates ship **by default** (of 14 admitted — re-derive from `Cargo.toml`, the SSOT). Source:
 `2026-06-27-dependency-policy.md`.
 
 ### The rule
@@ -889,7 +889,8 @@ Phorj's core (lexer, parser, checker, interpreter, VM, transpiler, loader, bundl
      **regex**: a hand-rolled matcher over attacker-controlled patterns is a ReDoS + correctness
      hazard; a vetted linear-time finite-automaton engine is strictly safer.
    - **OS-signal handling** (2026-06-29) — `std` exposes no signal API; the only native path is
-     hand-rolled `unsafe` `sigaction`, piercing `#![forbid(unsafe_code)]`. Scoped to signal
+     hand-rolled `unsafe` `sigaction`, piercing phorj's own unsafe-free code (then
+     `forbid(unsafe_code)`, now `deny` roots + the JIT island). Scoped to signal
      handling, NOT general OS integration/async runtimes/I-O frameworks.
    - **Stackful coroutines** (2026-06-29) — green-thread suspension mid-evaluation, deep in the
      interpreter/VM stack; `std` has no primitive and the alternative is `unsafe` stack switching.
@@ -917,7 +918,7 @@ Phorj's core (lexer, parser, checker, interpreter, VM, transpiler, loader, bundl
 If a candidate fails any clause, the feature is deferred — it does not justify a dependency.
 Anything outside the admitted domains requires revisiting this policy itself, not just adding a row.
 
-### Admitted dependencies (default features `cryptography`,`regex`,`signals`,`green`)
+### Admitted dependencies (default features `cryptography`,`regex`,`signals`,`green`,`jit`,`database`,`unicode`)
 
 | Crate | Domain | Used by | Gate | Key justification |
 |---|---|---|---|---|
@@ -925,7 +926,14 @@ Anything outside the admitted domains requires revisiting this policy itself, no
 | `regex` (BurntSushi) 1.x | ReDoS-safe regex | `Core.Regex` | `regex` | RE2-style finite automaton, guaranteed linear-time, exhaustively fuzzed; its restricted feature set (no backref/lookaround) is exactly the regular subset PHP `preg_*` matches identically, so the byte-identity spine holds; unsupported patterns rejected at `Regex.compile` |
 | `ctrlc` 3.x | OS signals (SIGINT/SIGTERM) | `phg serve` graceful shutdown | `signals` | Confines the unavoidable `unsafe`; serve is outside the byte-identity spine (quarantined), so this never touches `interpreter ≡ VM ≡ PHP` |
 | `corosensei` 0.3.x | Stackful coroutines | `spawn`/channels (green threads) | `green` (non-wasm) | Miri-tested, by the hashbrown/parking_lot author; wasm32 has no native stack to switch (verified) — on wasm the interpreter delegates to the VM's frame-swap; green threads are quarantined from the PHP oracle |
-| `cranelift-*` (Bytecode Alliance) | Native codegen (JIT) | `phg run`/`serve`/`build` hot paths | `jit` (non-wasm) | The G-8 lever — native codegen beats php+JIT (a spike showed ~3× even with boxed `Value`); `std` has no codegen and hand-emitting machine code is the unsafe-est hand-rolling. phorj's FIRST **first-party** `unsafe`, confined to the `src/jit/` island (crate root `forbid`→`deny`; CI-enforced). **In tree since codegen slice 1** (2026-07-06, `jit` feature; pure-int leaf codegen, not yet wired into `phg run`) |
+| `cranelift-*` (Bytecode Alliance) | Native codegen (JIT) | `phg run`/`serve`/`build` hot paths | `jit` (non-wasm) | The G-8 lever — native codegen beats php+JIT (a spike showed ~3× even with boxed `Value`); `std` has no codegen and hand-emitting machine code is the unsafe-est hand-rolling. phorj's FIRST **first-party** `unsafe`, confined to the `src/jit/` island (crate root `forbid`→`deny`; CI-enforced). **In tree since codegen slice 1** (2026-07-06, `jit` feature; pure-int leaf codegen — since WIRED: `jit` is a DEFAULT feature of `phg run` as of 2026-07-09, opt out `--no-jit`) |
+| `unicode-segmentation` 1.x | UAX #29 grapheme clusters (DEC-256, admitted 2026-07-17) | `Core.Text` graphemes | `unicode` | Pure data tables, zero transitive deps, unicode-rs org; graphemes only — everything else Unicode is std |
+| `rusqlite` 0.40.x | Embedded SQL — SQLite (8th domain, admitted 2026-07-03; DEC-208) | `Core.DatabaseModule` | `database` | `bundled` compiles vendored SQLite C source (no system libsqlite3); its `unsafe` is the C-FFI boundary internal to the crate; spine-quarantined (`pure:false`) |
+| `postgres` 0.19.x (sync) | SQL driver — Postgres (DEC-208 slice I) | `Core.DatabaseModule` `DriverConn` seam | `database-postgres` (non-default) | Native wire protocol, no libpq; async/tokio is its INTERNAL blocking-wrapper detail — the phorj-facing API stays sync |
+| `mysql` 28.x (sync, `minimal-rust`) | SQL driver — MySQL/MariaDB (DEC-229, 10th-domain completion) | `Core.DatabaseModule` `DriverConn` seam | `database-mysql` (non-default) | Pure-Rust wire protocol, no TLS/compression extras — the smallest surface; same seam as postgres |
+| `lettre` 0.11.x | Native mailer (11th domain, DEC-223) | `Core.Mail` | `mail` (non-default) | RFC-correct MIME/multipart, blocking SmtpTransport (no tokio at the API), rustls TLS, DKIM; native-only (`E-TRANSPILE-MAIL`) |
+| `rustls` 0.23.x | TLS (6th domain, admitted 2026-07-03) | `Core.HttpClient` https (+ ruled serve TLS, DEC-331 D7) | `http-client` (non-default) | Memory-safe TLS; admitted explicitly to gate the HTTP client; native-only, spine-quarantined |
+| `webpki-roots` 1.x | Mozilla trust anchors | `Core.HttpClient` cert validation | `http-client` (non-default) | No OS cert-store dependency — deterministic trust anchors alongside rustls |
 
 Transitive: argon2 → `password-hash`, `base64ct`, `rand_core`/`getrandom`; regex →
 `regex-automata`, `regex-syntax`, `aho-corasick` — same audit umbrellas. Full list:
@@ -986,8 +994,9 @@ third-party crate. Ruled mechanism:
   build (still confined to `src/jit/`, still CI-`unsafe-island`-gated).
 - **The crate + the `forbid`→`deny` change landed WITH JIT codegen slice 1** (2026-07-06): `cranelift`
   0.133 is in-tree behind the `jit` feature, the crate roots are `#![deny(unsafe_code)]`, and the sole
-  `src/jit/` allow-island carries the first codegen (pure-int leaf functions; not yet wired into
-  `phg run`). A dedicated `jit` CI job builds + lints + tests `-p phorj --features jit`.
+  `src/jit/` allow-island carries the first codegen (pure-int leaf functions; since WIRED — `jit`
+  is a DEFAULT feature of `phg run` as of 2026-07-09, opt out via `phg run --no-jit`).
+  A dedicated `jit` CI job builds + lints + tests `-p phorj --features jit`.
 - Staged build: Cranelift IR for arithmetic/control-flow → boxed-`Value` runtime → wire into
   `phg run`/`serve` (hot-fn compile) → AOT for `phg build` → unboxing for statically-typed hot paths.
   Reject LLVM; reject C-transpile-as-the-shipped-answer (production-only). Plan: MASTER-PLAN
@@ -1407,7 +1416,7 @@ mirroring the `String.length`/`Bytes.length` and `String.count`/`Bytes.count` pa
 > [dependency policy](#external-dependency-policy) and describe the artifact as "std-only /
 > zero-dependency". The accurate current framing: the **hand-rolled object-format readers, container,
 > CRC-32, SHA-256 stay std-only by policy** (no `object`/`goblin`/`sha2` in code that runs inside the
-> artifact), while the *crate as a whole* ships the four vetted feature-gated deps. The
+> artifact), while the *crate as a whole* ships the vetted feature-gated deps (9 by default of 14 admitted — see §External dependency policy). The
 > tooling-exemption principle (§ boundary below) is unchanged and remains the governing test.
 
 ## phg build master design

@@ -68,7 +68,7 @@ pub(super) fn assemble(
                 Item::Enum(e) => (&e.name, true, e.vis),
                 Item::Interface(i) => (&i.name, true, i.vis),
                 // A trait is a public named symbol in the type namespace (it carries no visibility
-                // modifier — always public reuse). Register it so a cross-package `import type` +
+                // modifier — always public reuse). Register it so a cross-package type import +
                 // `use T;` can resolve and mangle it to its FQN, exactly like a class/interface.
                 Item::Trait(t) => (&t.name, true, crate::ast::Visibility::Public),
                 _ => continue,

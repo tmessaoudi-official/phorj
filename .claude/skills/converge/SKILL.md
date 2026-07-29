@@ -100,9 +100,9 @@ Parse flags. Missing parameters take the DEC-268 defaults (`--scope=dec268`, `--
 ```
 Question: "About to run a convergence loop. Parameters:"
   • Scope:          <3C | 6C | custom angles>
-  • Certify:        <self | advisor>
+  • Certify:        <self | reviewer>
   • Max cycles:     N  (total attempts before escalating)
-  • Converge after: K  consecutive fully-clean cycles (n/a if Certify=advisor)
+  • Converge after: K  consecutive fully-clean cycles
   • Autonomous cap: <auto-cap value> cycles max if autonomous mode is active
   • Angles:
       1. <angle 1 description>
@@ -177,7 +177,7 @@ Where `<status>` is one of:
 - A lens repeats a point after a resolution attempt → **Case C (STUCK)**.
 `prev_findings` is still tracked, and is what tells the next round's reviewers what changed.
 
-**If `CERTIFY == self`** (default): evaluate using the original self-graded comparison:
+**If `CERTIFY == self`**: evaluate using the original self-graded comparison:
 
 **Case A — CLEAN:**
 - `counter += 1`

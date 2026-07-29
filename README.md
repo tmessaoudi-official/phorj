@@ -3,7 +3,8 @@
 [![CI](https://github.com/tmessaoudi-official/phorj/actions/workflows/ci.yml/badge.svg)](https://github.com/tmessaoudi-official/phorj/actions/workflows/ci.yml)
 
 **A statically-typed, PHP-inspired programming language — implemented in Rust with a std-first
-core and exactly four vetted, feature-gated dependencies (`argon2`, `regex`, `ctrlc`, `corosensei`).**
+core and a small set of vetted, feature-gated dependencies (14 crates, 9 in the default build —
+see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).**
 
 Phorj takes the ergonomics that make PHP pleasant to write (familiar syntax, string interpolation,
 classes) and puts them on a **statically-typed, immutable-by-default** footing with a clean compiler
@@ -52,8 +53,8 @@ function main(): void {
 |---|---|---|
 | **M1** | Tree-walking interpreter + Phorj→PHP transpiler | ✅ complete |
 | **M2** | Bytecode compiler + stack VM (byte-identical to the interpreter) | ✅ complete |
-| **M2.5** | `phg build` → standalone native executables | 🔨 in progress (Linux + Windows cross-builds; macOS readers shipped, stub deferred) |
-| **M3+** | Language enrichment, ecosystem, tooling | 🔲 planned — see [ROADMAP.md](ROADMAP.md) & [VISION.md](VISION.md) |
+| **M2.5** | `phg build` → standalone native executables | 🔨 in progress (Linux + Windows cross-builds; macOS readers shipped, signing/notarization (3b) deferred) |
+| **M3+** | Language enrichment (M3 🔨 mostly shipped), packages (M5 ✅), web (M6 🔨 core complete), tooling (M7 ✅), rich types (M-RT ✅) | see [docs/MILESTONES.md](docs/MILESTONES.md) |
 
 Pre-1.0 and single-developer; the version number tracks milestone progress, not a release cadence.
 Full status lives in [`docs/MILESTONES.md`](docs/MILESTONES.md).
@@ -89,20 +90,23 @@ cargo test                   # full suite
 cargo clippy --all-targets   # lints (warnings are denied)
 ```
 
-Toolchain: Rust (edition 2021). The core is std-first with **four vetted, feature-gated
-dependencies** (`argon2` for Argon2id hashing, `regex` for `Core.Regex`, `ctrlc` for signal
-handling, `corosensei` for green threads) — cargo fetches them automatically; see
+Toolchain: Rust (edition 2021). The core is std-first with **14 vetted, feature-gated
+dependencies** (9 in the default build: `argon2`, `regex`, `ctrlc`, `corosensei`, `cranelift`×3
+for the JIT, `rusqlite`, `unicode-segmentation`; plus feature-gated TLS/mail/Postgres/MySQL) —
+cargo fetches them automatically; see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
 `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`.
 
 ### Prebuilt binary
 
-Standalone, statically-linked binaries (no runtime to install) are published per release. Grab the
-one for your platform, mark it executable, and run:
+Standalone binaries (no runtime to install) are published per release as archives —
+`phg-linux-x86_64.tar.gz`, `phg-windows-x86_64.zip`, `phg-macos-x86_64.tar.gz`,
+`phg-macos-aarch64.tar.gz` (each bundles the `phg` binary with the licenses + README). Extract
+and run:
 
 ```sh
-chmod +x phg-*-linux-x86_64-musl
-./phg-*-linux-x86_64-musl run yourfile.phg
+tar xzf phg-linux-x86_64.tar.gz
+./phg run yourfile.phg
 ```
 
 ## Quick start
@@ -139,10 +143,13 @@ phg <command> <source> [options]
 | `disassemble` | type-check → compile → dump the bytecode (per-function listings + descriptor tables) | exit 1 on type error |
 | `benchmark` | median-of-N timing of both backends + memory (peak/current RSS, Linux), output-identity gated | exit 1 if they fault or disagree |
 | `build` | compile to a standalone native executable | exit 1 on type error / build failure |
-| `vendor` | fetch + pin git dependencies into `vendor/` (the only network-touching command), writing `phorj.lock` | exit 1 on fetch/lock failure |
+| `add` / `install` / `update` / `remove` | package manager (DEC-316): manage `phorj.json` deps, fetch + pin into `vendor/`, writing `phorj.lock` — the only network-touching commands besides `build --target`'s verified stub download (`phg vendor` is retired and errors) | exit 1 on fetch/lock failure |
 | `serve` | run an HTTP server that dispatches requests to a Phorj `handle(Request): Response` | exit 1 on bind/handler error |
 | `test` | discover + run `test "name" { … }` blocks (under `tests/`, or a given file/dir) with `Core.Test` assertions | exit 1 if any test fails |
 | `format` | format source to canonical form (`--check` for CI, `-` for stdin, in-place otherwise) | `--check`: exit 1 if any file would change; exit 2 on a parse error |
+| `lsp` | run the Language Server over stdio | — |
+| `debug` | interactive interpreter debugger (`--dap` for the Debug Adapter Protocol) | — |
+| `extensions` | list compiled-in extensions (`--docs` emits the docs table) | — |
 | `explain` | look up a diagnostic code (`phg explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
 
 **Source** (for the run-family commands):
@@ -236,6 +243,9 @@ any LSP-capable editor gets:
   a local binding (parameter, `var`, `for` variable, `if`-let, `catch`, destructure) in scope.
 - **Completion** — top-level names, in-scope locals/params, and keywords.
 - **Document symbols** — a structured outline (classes/enums/interfaces/traits expand to their members).
+- **Find references** and **document highlight** of the symbol under the cursor.
+- **Rename** — workspace-safe rename of a declaration and its references.
+- **Formatting** — the same canonical form `phg format` produces.
 
 The LSP itself adds no dependencies (hand-rolled JSON-RPC in `std` — no `tower-lsp`/`serde`).
 
@@ -318,6 +328,6 @@ Dual-licensed under either of:
 
 at your option. Unless you explicitly state otherwise, any contribution intentionally submitted for
 inclusion in Phorj by you, as defined in the Apache-2.0 license, shall be dual-licensed as above,
-without any additional terms or conditions. Phorj's four vetted third-party dependencies (`argon2`,
-`regex`, `ctrlc`, `corosensei`) and their licenses are listed in
+without any additional terms or conditions. Phorj's vetted third-party dependencies (14
+feature-gated crates) and their licenses are listed in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

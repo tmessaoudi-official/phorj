@@ -56,9 +56,10 @@ effort.**
 3. **Earn complexity.** Abstractions (a pluggable backend trait, a tracing GC, an arena allocator)
    are added when a third use case demands them, not speculatively. The Rule of Three is a design
    tool, not a slogan.
-4. **Std-first core with a minimal, vetted dependency surface.** Exactly four feature-gated
-   external crates (`argon2`, `regex`, `ctrlc`, `corosensei`), each admitted only where rolling our
-   own would be the anti-pattern (see `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`). The whole
+4. **Std-first core with a minimal, vetted dependency surface.** A small set of feature-gated
+   external crates (14 admitted, 9 in the default build — `Cargo.toml` is the SSOT), each admitted
+   only where rolling our own would be the anti-pattern (see
+   `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`). The whole
    language fits in one head, builds in seconds, and keeps the supply-chain surface deliberately tiny.
 5. **Approachable on the outside, rigorous on the inside.** A beginner should be able to read a Phorj
    program; a compiler engineer should respect how it's built.

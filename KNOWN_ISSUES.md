@@ -1,6 +1,6 @@
 # Known Issues & Limitations
 
-## 🔴 P0 (2026-07-19) — the example byte-identity GLOB is a NO-OP: `all_examples_match_between_backends` skips ALL 201 examples
+## ✅ FIXED (2026-07-19, `a355c342`) — 🔴 was P0: the example byte-identity GLOB was a NO-OP: `all_examples_match_between_backends` skipped ALL 201 examples
 
 **Severity: P0 — the primary enforcement of Invariant #1 (byte-identity spine) over the example
 corpus has been DEAD since the DEC-191 `#[Entry]` migration.** Measured: `all_examples_match_between_backends`
@@ -62,7 +62,7 @@ No other callers of the substring pattern remain (grep-confirmed).
 >    `disasm→disassemble` — the old names are dead verbs (`phg -h` confirms; they print usage). Fixed in
 >    the example docs; sweep the rest.
 > 2. **interp/VM labels stale/inverted.** The CLI merged the backends: **`phg run` = the bytecode VM**,
->    **`phg run --tree-walker` = the interpreter (oracle)**; there is **no `phg run` subcommand**. Docs
+>    **`phg run --tree-walker` = the interpreter (oracle)**; there is **no `phg runvm` subcommand**. Docs
 >    still name a literal `phg run` and/or label `phg run` as "the interpreter". The shorthand
 >    "`interp ≡ VM ≡ PHP`" (the spine's *name*, ~800 refs) is benign — NOT the target. Misleading literal /
 >    inverted instances: `docs/INVARIANTS.md` (intro + built-binary row), `CONTRIBUTING.md`, `CLAUDE.md`
@@ -71,7 +71,7 @@ No other callers of the substring pattern remain (grep-confirmed).
 > 3. **DEC-282 manifest retirement left stale refs.** Retired: `phorj.toml`, `[require]`, `phorj.lock`,
 >    `phg vendor` (compiler never touches the network now). Fixed `FEATURES.md` (was self-contradictory,
 >    rows 70 vs 94). Remaining: `SECURITY.md` (calls `phg vendor` "the only command that touches the
->    network" — now NONE do, a STRONGER stance), `CLAUDE.md` Invariant 10 (same), the "Transitive deps /
+>    network" — since DEC-316 the network commands are `phg add`/`install`/`update`/`remove`), `CLAUDE.md` Invariant 10 (same), the "Transitive deps /
 >    `phg vendor` fetches" row below (moot), `conformance/README.md` ("a `phorj.toml` is a project" — now
 >    src/-root walk-up), `docs/adr/0005-offline-only-vendor.md` (mark superseded by DEC-282).
 > 4. **`run ≠ run --tree-walker` divergence — "no entry point".** Running a no-`#[Entry]` file (e.g. a
@@ -95,17 +95,20 @@ parse error, non-zero exit) — never a crash.
 Batched per the developer's "flawless" directive; each has a location + recommendation. These are the
 best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps are in M-gap-matrix §4.13).
 
-- **CRAFT-1 — file-size (Invariant 13) is massively under-enforced: 90 files over the 500 HARD cap** (174 over
-  the 300 soft cap, of 386 src files). Now RATCHET-frozen by `scripts/size-gate.sh` (pre-push) with the 90
-  grandfathered in `scripts/size-baseline.txt` (may only shrink; new files capped at 500). This is the
-  burn-down backlog. Worst offenders: `src/jit/analyze.rs` 3196 (39 fns + 3 impls — NOT a single-dispatcher
+- **CRAFT-1 — file-size (Invariant 13) burn-down** (figures at 2026-07-19 audit time: 90 files over the
+  500 HARD cap, 174 over the 300 soft cap, of 386 src files; **as of 2026-07-28: 66 src files over the
+  hard cap, size-gate fails=0, 72 grandfathered baseline rows**). RATCHET-frozen by `scripts/size-gate.sh`
+  (pre-push) with the breaches grandfathered in `scripts/size-baseline.txt` (may only shrink; new files capped at 500). This is the
+  burn-down backlog. Worst offenders (sizes at audit time; `src/jit/analyze.rs`,
+  `src/ext/database/natives.rs`, `src/jit/handles.rs`, and `src/cli/explain.rs` have since been
+  M-Decomp-split into directories): `src/jit/analyze.rs` 3196 (39 fns + 3 impls — NOT a single-dispatcher
   exemption, a genuine split candidate), `src/checker/desugar_db.rs` 3144, `src/jit/tests/verticals.rs` 2423,
   `src/ext/database/natives.rs` 2360, `src/jit/handles.rs` 2280, `src/cli/explain.rs` 1998, `src/jit/emit_unboxed/mod.rs`
   1987. M-Decomp burns these down as it reaches them.
-- **CRAFT-2 — transpile gated-helper registration is scattered (DRY/SOLID smell): 83 `uses_*` bool flags on
-  `Transpiler`** (`src/transpile/mod.rs`) + **78 set-sites** in `src/transpile/call.rs`. A new gated helper is a
-  3-touch edit (flag decl + set-site + body in `runtime_php.rs`) — easy to half-wire. Recommend consolidating
-  toward a registry-driven helper mechanism (aligns with the DEC-312 `NativeFn` co-registration direction).
+- **CRAFT-2 — ✅ RESOLVED: transpile gated-helper registration consolidated** — the `HelperGates`
+  sub-struct landed (`src/transpile/gates.rs`, 86 `uses_*` fields — all of them; 0 remain on
+  `Transpiler`), closing the scattered 3-touch DRY smell this entry recorded (83 bool flags + 78
+  set-sites at audit time).
 - **CRAFT-3 — one AT-RISK dead-gate (the DEC-191 bug class): `interop_projects_refuse_to_run_and_match_php_golden`
   (`tests/interop.rs:144`)** early-returns on empty collection instead of asserting a seed count, so it silently
   passes green if the interop project(s) ever lose their `phorj.toml` marker. All OTHER corpus-iterating gates
@@ -148,7 +151,17 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
 4. **`Response`-side CRLF is unguarded** — the slice hardens the REQUEST rebuild path
    (fake/withers fault on CR/LF), but `Response.withHeader`/`Cookie.render` still interpolate
    unchecked — the actual outbound injection sink. Guarding them changes shipped surface behavior
-   → PENDING dev adjudication (register).
+   → RULED as DEC-363 (2026-07-26, spec `docs/specs/2026-07-26-response-header-injection-guard.md`) — build queued.
+4b. **P2 SECURITY-HARDENING — the DEC-316 PM git path carries none of the retired vendor path's
+   argument hardening** (found by the 2026-07-28 consistency audit's certification panel). The
+   retired `phg vendor` implementation passed git args behind a `--` end-of-options separator with
+   `protocol.ext.allow=never` and rejected `ext::`/`file::` remote helpers and leading-dash refs
+   (recorded as verified property P6, CHANGELOG ~2026-07-03); the live `src/pm/fetch.rs` passes a
+   dependency's `git`/`ref` to `git clone`/`git checkout` **as given** with no separator and no
+   remote-helper rejection — only package NAMES are validated (`src/pm/manifest.rs`). A hostile
+   third-party `phorj.json` can therefore smuggle git options / command-executing remote helpers.
+   SECURITY.md documents the honest weaker truth; re-porting the P6 guards to `fetch.rs` is a
+   small queued hardening slice (audit Q28).
 5. **`phg check` of `Core.Http` programs under `--no-default-features` fails on the REGEX
    natives** (`Router.constraintOk` → `Regex.compile`; regex is feature-gated) — PRE-EXISTING
    (the old prelude made the same call), surfaced while verifying the slice's no-json story. The
@@ -268,7 +281,7 @@ rarely call `contains` 3 M times in a loop, but WIN-OR-FLAG / Invariant 18 flag 
 
 Recorded honestly in `bench/micro-baseline.json` (map WIN-armed; filter/reduce/contains LOSS-armed for a
 future win). **Two fix levers (GREENLIT, fresh-context, JIT/VM-spine — not rushed at depth):** (a) per-op
-JIT verticals mirroring the map vertical (`src/jit/analyze.rs` + `src/jit/`, the audited `unsafe` island)
+JIT verticals mirroring the map vertical (`src/jit/analyze/` + `src/jit/`, the audited `unsafe` island)
 — targeted, lifts one native at a time; (b) the higher-leverage architectural fix — reduce the general
 VM native-call overhead itself (arg marshalling / dispatch), which would lift ALL ~286 natives at once.
 Dev to choose. Not a correctness issue; interp ≡ VM≡php byte-identical throughout.
@@ -284,7 +297,7 @@ Dev to choose. Not a correctness issue; interp ≡ VM≡php byte-identical throu
   FEASIBLE (the `UB_TAG_FLAT_MAP` PAIR region at `base+2i`/`base+2i+1` is insertion-ordered = `m.iter()` order; a
   helper composing `rt_u_list_new`/`push_int`/`seal` would match the interpreter exactly). But TWO blockers make the
   flip not worth a standalone vertical: (1) the missing vertical itself; (2) **`List<Map>` is not JIT-eligible** — the
-  `MakeList` analyze arm (`src/jit/analyze.rs:1502`) accepts only all-`Str`/all-`Int` elements, so the shipped benches'
+  `MakeList` analyze arm (`src/jit/analyze/kinds.rs`) accepts only all-`Str`/all-`Int` elements, so the shipped benches'
   `List<Map<string,int>> maps=[…]` (used to defeat php hoisting) fails the WHOLE `bench()` function → it never JITs
   (probe: hits=0 even with NO Map.values call). Fixing (1) alone leaves the shipped-bench loss (0.07×/0.08×) untouched.
   A real flip needs a **major front-end expansion** (a list-of-map `Kind` + `MakeList` arm + `Op::Index`→`StrIntMap`
@@ -309,7 +322,7 @@ Dev to choose. Not a correctness issue; interp ≡ VM≡php byte-identical throu
   as a loss (measured 0.68× at 11% idle), so it only registers a WIN on a genuinely quiet core. Unlike maphas's
   robust 1.50×, php's `in_array` over a small int set is already cheap in C, so the hash + fibonacci probe
   overhead nearly cancels the O(1) benefit at this set size. Real WIN, but small-regime + load-sensitive. The building unsafe helper carries an explicit bucket-write/arena-alloc/probe-
-  termination safety argument (`src/jit/handles.rs`). Bucket = 16B `{occupied,key}` (occupancy word SEPARATE
+  termination safety argument (`src/jit/handles/`). Bucket = 16B `{occupied,key}` (occupancy word SEPARATE
   from the key because an int 0 is a valid member, unlike a map's never-0 canon) — probe tests occupancy first.
   Hash = fibonacci high-bits (robust vs adversarial clustering). **FORK-D1 (dev to rule):** identity `key&mask`
   measured 1.15–1.19× (+~10pp) but degrades to O(n) on hostile int sets (all-multiples-of-a-power-of-two
@@ -527,8 +540,9 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
     lifter is best-effort (Tier-1) and its output is not gate-exercised; a type-inferring empty-array
     lift is deferred.
 
-- **DEC-PENDING: the Rc CYCLE-LEAK answer (§15 fork — the representation slice's design half,
-  2026-07-12 session 5).** Instances are `Rc`-shared mutable handles: `a.next = b; b.next = a`
+- **RULED as DEC-205 (2026-07-12: BOTH, PHASED — threshold cycle collector first, `Weak<T>`
+  second) — build queued: the Rc CYCLE-LEAK answer (§15 fork — the representation slice's design
+  half, 2026-07-12 session 5).** Instances are `Rc`-shared mutable handles: `a.next = b; b.next = a`
   leaks until process exit (see "No cycle collector" below). Run-once CLI = fine; **`phg serve`
   is long-lived** — a request handler that builds one cyclic object graph per request leaks
   per-request memory forever. Failing program (leaks one cycle per loop turn under `serve`):
@@ -541,7 +555,8 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   refs for idiomatic graphs). Deferred-not-ruled per the ADJUDICATION rule; reopen with the
   parked items at run end.
 
-- **DEC-PENDING: scope-guard construct (`using`/`defer`) — the Ω-0 audit's one genuinely
+- **RULED as DEC-203 (`using` + Closable), re-affirmed DEC-364 — build queued: scope-guard
+  construct (`using`/`defer`) — the Ω-0 audit's one genuinely
   uncovered capability residue (from SYN-126 `__destruct`, 2026-07-12 session 5).** Rc/Drop has
   no deterministic finalization (the `__destruct` exclusion is confirmed), but deterministic
   SCOPE-EXIT cleanup for resources (files, locks, DB connections — Ω-1 makes this pressing) has
@@ -551,7 +566,8 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   (C#-style — closes at block exit on EVERY path incl. throw; type implements a `Closable`
   contract — RECOMMENDED: explicit, static, transpiles to PHP try/finally); (b) **`defer expr;`
   statement** (Go-style — flexible but execution order is a new footgun surface); (c) both.
-- **DEC-PENDING: graceful-shutdown surface (from the Ω-0 pcntl-family audit, 2026-07-12
+- **RULED as DEC-204 (typed `Runtime.onShutdown(fn)`) — build queued: graceful-shutdown
+  surface (from the Ω-0 pcntl-family audit, 2026-07-12
   session 5).** Raw signals stay excluded; `serve` handles SIGINT internally (vetted `ctrlc`
   dep). A long-lived program (worker loop, serve handler holding state) cannot flush/close on
   SIGTERM today — the process just dies. Options for adjudication: (a) **typed
@@ -671,12 +687,12 @@ not a panic:
   (`enum ParseError`/`class Exception` → `abstract class …`, which PHP rejects "cannot redeclare
   class"). For both, `run`/`run --tree-walker` succeed while the transpiled PHP fails to parse/load.
   Unlike variants, the fix is user-visible and three-way (reject like the guarded keywords / mangle
-  like the injected `RoundingMode` / namespace all output as `\Main\…`), so it is a **PENDING
-  adjudication question** (DEC-200, MASTER-PLAN §13.1.1), not an autonomous ruling. The builtin-class
-  space is also extension-dependent (unbounded); any guard/mangle covers the always-loaded engine core,
-  with the tail oracle-caught. Until ruled, avoid naming a top-level `class`/`enum` after a PHP builtin
-  class or a non-guarded reserved keyword (e.g. `Fn`/`Match`/`Static`/`Null`/`True`/`False`)
-  (`examples/guide/core-result.phg` sidesteps it — `ParseFault`, not `ParseError`).
+  like the injected `RoundingMode` / namespace all output as `\Main\…`). **RULED as DEC-202 and
+  SHIPPED 2026-07-13:** `E-RESERVED-NAME` rejects top-level types named after ~100 always-loaded PHP
+  builtin classes (`is_php_builtin_class_name`) as well as PHP-reserved keywords. The builtin-class
+  space is extension-dependent (unbounded); the guard covers the always-loaded engine core, with the
+  tail oracle-caught. The old avoid-naming guidance is obsolete — the compiler enforces it
+  (`examples/guide/core-result.phg` predates the guard: `ParseFault`, not `ParseError`).
 
 - **`Core.DatabaseModule` typed-generic hydration (DEC-208 S2) — shipped + disclosures.** `List<T> = stmt.queryInto()`
   and `T? = stmt.queryOneInto()` map result rows into a class, by field NAME, STRICT (a missing column /
@@ -700,7 +716,7 @@ not a panic:
   Shipped (`examples/database/transactions.phg`, `tests/database.rs`): manual PDO-faithful transaction control
   `db.begin()` / `db.commit()` / `db.rollback()` — **savepoint-aware** (a nested `begin()` opens
   `SAVEPOINT phorj_sp_<depth>`, so an inner rollback leaves the outer transaction intact), depth tracked
-  in the native (`src/ext/database/natives.rs`, shared across handles); `db.rollbackQuiet()` (a rollback that never
+  in the native (`src/ext/database/natives/`, shared across handles); `db.rollbackQuiet()` (a rollback that never
   throws — the auto-rollback idiom `try { …; commit(); ok = true; } finally { if (!ok) rollbackQuiet(); }`
   in a **named** function); a **typed error taxonomy** — `open class DatabaseError` subtyped `UniqueViolationError` /
   `ConstraintViolationError` / `ConnectionError` / `SerializationFailureError` / `TimeoutError` / `SyntaxError`, each
@@ -714,20 +730,20 @@ not a panic:
     `() => T throws E`) lifted the block: `db.transaction(function(): T throws DatabaseError { … })` runs the
     closure inside a transaction — COMMIT on a normal return (returning the closure's VALUE),
     auto-ROLLBACK + **re-throw the ORIGINAL typed error** on a throw. Mechanism: a `HigherOrder` native
-    (`NativeDatabase.transaction`, `src/ext/database/natives.rs`) begins, invokes the closure re-entrantly on the calling
+    (`NativeDatabase.transaction`, `src/ext/database/natives/`) begins, invokes the closure re-entrantly on the calling
     backend, commits on `Ok`, and on the invoker's `Err` rolls back and re-propagates the *unchanged*
     error — `rollback_inner` is pure `rusqlite` and never re-enters the backend, so the thrown value in
     `pending_throw` survives and the caller catches the exact `DatabaseError` (not a generic one). A nested
     `db.transaction` is a SAVEPOINT (composable partial rollback, reusing the slice-C depth). The manual
     `begin`/`commit`/`rollback`/`rollbackQuiet` stay (developer ruled BOTH). **Retry:**
-    `db.transactionRetry(fn, retries)` re-runs the whole transaction on the transient
-    `SerializationFailureError` only; the retry loop lives in the prelude (only phorj source can `catch` the
+    `db.transaction(fn, int retries = 0)` re-runs the whole transaction on the transient
+    `SerializationFailureError` only (DEC-249 — the former distinct `transactionRetry` is retired);
+    the retry loop lives in the prelude (only phorj source can `catch` the
     TYPED error — `pending_throw` is invisible to a native).
-    - **PENDING adjudication (Invariant 15) — retry SURFACE.** The spec (§5) illustrates one method
-      `db.transaction(retries: N, fn)`, but the language has NO named args, NO method default params, and
-      NO generic-method overloading, so a single generic `transaction` cannot carry an optional `retries`.
-      Realized as a distinct `db.transactionRetry(fn, retries)` (recorded in `C-decisions.md`); developer
-      to confirm the final name/shape. Isolation-level retry (`db.transaction(Isolation.Serializable, fn)`)
+    - **RESOLVED by DEC-249 — retry SURFACE.** The spec (§5) illustrated one method
+      `db.transaction(retries: N, fn)` while the language then had NO method default params; DEC-249
+      built method default parameters, so the retry surface is `db.transaction(fn, int retries = 0)`
+      and `transactionRetry` is retired. Isolation-level retry (`db.transaction(Isolation.Serializable, fn)`)
       still rides with the isolation slice below (deferred).
   - **Deferred (not blocked):** (1) **`using`/`Closable` auto-close (DEC-203)** — `db.close()` ships, but
     the `using (Database db = …) { … }` sugar that would call it at scope exit is DEC-203, a separate ruled-but-
@@ -754,8 +770,9 @@ not a panic:
     bare mixed literal `[1, "x"]`. (3) **`db.timeout(ms)` bounds LOCK-WAIT only** (SQLite `busy_timeout`),
     not a CPU-bound runaway query (a statement-runtime cap needs a progress-handler/interrupt, not wired).
     While a timeout is armed, a transient `busy`/`locked` is reclassified `SerializationFailureError` →
-    `TimeoutError`, so `SerializationFailureError` (the class a future closure-`retry` would target) is not observed
-    with a timeout set — acceptable while retry stays deferred (slice C PENDING). (4) The hook's `ms` is
+    `TimeoutError`, so `SerializationFailureError` (the class the closure-`retry` of
+    `db.transaction(fn, int retries = 0)` targets — DEC-249) is not observed
+    with a timeout set. (4) The hook's `ms` is
     wall-clock and NON-deterministic across the two backends, so no byte-identity example/test prints it
     raw (only the SQL text, or `ms >= 0`).
 
@@ -847,7 +864,7 @@ not a panic:
   non-default `db-postgres` feature (`db-all` = both). `Database.withPassword(dsn, Secret<string>)` (slice G)
   keeps the password out of plaintext user code and out of every error/log (the driver retains only a
   redacted DSN). Deterministic driver coverage (dispatch, `?`/`:name`→`$n` translation, SQLSTATE→taxonomy,
-  redaction) is in `src/ext/database/postgres.rs`; the LIVE round-trip is `tests/database_postgres.rs`, opt-in via
+  redaction) is in `src/ext/database/natives/postgres.rs`; the LIVE round-trip is `tests/database_postgres.rs`, opt-in via
   `PHORJ_PG_TEST_DSN` (skip-loudly if unset — the standard gate never requires a server).
   - **Disclosures / boundaries:** (a) **No oracle.** There is no clean pure-Rust *synchronous* Postgres
     driver to differential the PHP-PDO leg against, so Postgres (like all of `Core.DatabaseModule`) is
@@ -1588,8 +1605,9 @@ or simply unavailable, never a crash):
   not inferred (expression-body lambdas infer it from the expression). This is by design this slice.
 - **Function-type assignability is exact structural equality** — no parameter/return variance
   (`(int) => int` is not assignable to `(int) => int?` etc.).
-- **`core.list` higher-order helpers (`map`/`filter`/`reduce`) are not yet available** — they await
-  the `List<T>`-generic native signatures; lambdas can already be passed to *user* functions today.
+- **`core.list` higher-order helpers (`map`/`filter`/`reduce`) — ✅ BUILT** (`src/native/list_registry.rs`;
+  this file's own PERF-native-call-in-loop tables list them as shipped). The historical blocker
+  (`List<T>`-generic native signatures) was resolved.
 
 ## Core.Html (Waves 1–3 — escape kernel + element builders + `html"…"` sugar)
 
@@ -1614,6 +1632,10 @@ or simply unavailable, never a crash):
   you have audited.
 
 ## Git dependencies (M5 S3)
+
+> Historical (M5-S3-era). DEC-282/DEC-316 retired `phorj.toml`/`[require]`/`phg vendor`; today's
+> equivalents are `phorj.json` + `phg add`/`install`/`update`/`remove` (still no transitive
+> resolution).
 
 - **Transitive dependencies are not resolved.** `phg vendor` fetches the direct `[require]` set;
   a dependency's *own* `[require]` is not walked. Vendor flat-named leaf libraries for now (the
@@ -1663,7 +1685,8 @@ or simply unavailable, never a crash):
 
 ## M6 W4 green threads (`spawn` / channels) — S4.3 cooperative cutover **DONE**
 
-The concurrency *surface* and value model (`docs/specs/2026-06-29-m6-w4-green-threads-design.md`):
+The concurrency *surface* and value model (`docs/specs/2026-06-29-m6-w4-green-threads-design.md` —
+deleted; see git history):
 `spawn <call>` → `Task<T>`, `t.join()`, typed `Channel<T>` (`Channel.create()` / `ch.send(v)` /
 `ch.receive()`). Both backends run it **byte-identically** (`interp ≡ VM`); it is **quarantined from the PHP
 oracle** (PHP has no green threads — the transpiler emits `E-CONCURRENCY-NO-PHP`, never a misleading
@@ -1979,7 +2002,7 @@ collapses one that fits, deterministically (idempotent + meaning-preserving; aut
 not preserved — see `examples/format/README.md`). The first slice wraps **call/`new`/`parent` argument
 lists, collection & map literals, `match` arms, and `.`/`?.` method chains** (≥2 links). The following
 constructs still stay on one line even past 100 columns — each is a self-contained extension of the
-same `src/fmt/doc.rs` document IR (add a `group`/`line` break group at that AST node), tracked here:
+same `src/format/doc.rs` document IR (add a `group`/`line` break group at that AST node), tracked here:
 
 - **Binary-operator chains** (`a + b + c + …`, `x && y && z`) — would break before each operator.
 - **Declaration parameter lists** (`function f(int a, …)`, `constructor(…)`) — would break one param
@@ -1997,11 +2020,11 @@ backends; it is only a cosmetic budget miss. Interpolation holes are **intention
 
 Two maintenance notes for the next session:
 
-- **`src/fmt/printer.rs` grew to ~1680 lines** (was 1475; still one of the G-6 over-cap files, gate
-  W1-6 not yet built). The cohesive split — move the whole expression layer (`expr_doc` +
+- **The formatter printer grew to ~1680 lines** (was 1475; one of the G-6 over-cap files, gate
+  W1-6 not yet built at the time). The cohesive split — move the whole expression layer (`expr_doc` +
   `operand_doc`/`postfix_doc`/`args_doc`/`chain_doc`/`render_expr` + the free layout helpers) into a
-  `src/fmt/printer/expr.rs` sub-module (`pub(super)`) — would bring both files back under 1000. Tracked
-  follow-up (own commit; deferred to keep the DEC-187 change green and reviewable).
+  sub-module (`pub(super)`) — has since SHIPPED: the printer now lives at `src/format/printer/`
+  (`mod.rs` + `exprs.rs`/`stmts.rs`/`items.rs`/`atoms.rs`).
 - **The corpus dogfood now asserts `fmt(src) == src`** (UA-0.8). Any *new* break rule (param lists,
   binary chains, class headers, control-flow conditions) MUST reformat every affected file under
   `examples/` + `selftest/` **in the same commit** — otherwise `every_repo_phg_formats_idempotently_and_safely`
@@ -2196,7 +2219,7 @@ only what the spike proves winnable; WIN-OR-FLAG per slice. Prior context: Phorj
 numeric/recursion/control-flow speed via the unboxed JIT; the string/array/collection speed-WIN was
 previously assessed **evidence-proven unreachable at reasonable cost** — this run re-tests that
 assessment with fresh eyes rather than assuming it. This section is the durable engineering scoping, folded from the
-retired `docs/plans/perf-wave.plan.md` (whose day-by-day narrative lives in `CHANGELOG.md`/`HISTORY`).
+retired `docs/plans/perf-wave.plan.md` (deleted; see git history — its day-by-day narrative lives in `CHANGELOG.md`/`HISTORY`).
 
 **CEILING SPIKE RESULT (2026-07-11, Fable run) — the red flag below is REFUTED at the representation
 level [Verified: interleaved best-of-5, pure-Rust candidates vs fresh docker php:8.5.8+opcache.jit
@@ -2254,7 +2277,9 @@ listindex 1.61 · intadd 1.46 (checked-DEFAULT beats php's unchecked; `#[Uncheck
 mapget 1.10 · mapinsert 1.08 · floatloop 1.00 · floatmul 1.00 (ruled PARITY). The historical
 VM-only losses below this line describe the `--no-jit` path only. Disclosed JIT-path caps: boxed
 (non-flattenable / >4096-slot) collections take a code-5 VM redo in the HOF/pointer-walk/builder
-verticals; the JIT-coverage-of-real-programs metric is still unmeasured (parked).
+verticals; the JIT-coverage-of-real-programs metric is still unmeasured (parked). Debug lens:
+`PHORJ_JIT_DISASM=1` prints each JIT-compiled function's native disassembly to stderr
+(`src/jit/compile/mod.rs`; zero cost when unset).
 
 **range-analysis (`21465d8`):** sound + byte-identity-preserving but produces ZERO measured WIN on any
 current micro (the induction counter was off the critical path); kept as the safe-by-proof half of the
@@ -2294,7 +2319,7 @@ while `phg check` on the same file is clean — the same family as the LSP raw-c
 (since fixed for the LSP by DEC-282's same-loader rule). Found by the DEC-273 wave-1 panel
 (round 5); predates the wave. Fix = route the test runner through the same front-end pipeline.
 
-## Log-v2 v1 limits: processors + userland sinks/formatters deferred (DEC-317, 2026-07-22)
+## Log-v2 v1 limits: userland sinks/formatters deferred (DEC-317, 2026-07-22; processors ✅ SHIPPED — DEC-329.4)
 
 The shipped Log-v2 core (channels/levels/handlers/formatters) has one remaining deferral,
 recorded in the DEC-317 register row: ~~processors~~ ✅ SHIPPED 2026-07-22 (DEC-329.4:

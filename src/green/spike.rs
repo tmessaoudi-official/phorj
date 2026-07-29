@@ -1,5 +1,5 @@
 //! S4.3 step-3 GATING SPIKE — prove the coroutine suspension model the tree-walking interpreter needs
-//! works under phorj's `#![forbid(unsafe_code)]`. The crux (design §4): a deeply-recursive evaluator
+//! works in phorj's own unsafe-free code (`#![deny(unsafe_code)]` roots). The crux (design §4): a deeply-recursive evaluator
 //! must `suspend` from far down its call stack. corosensei's `Yielder` is only handed to the coroutine
 //! closure, so to reach it deep in the recursion we borrow it into a lifetime-parameterized worker
 //! struct created *inside* the closure (the closure is `'static`, but locals inside it may borrow the

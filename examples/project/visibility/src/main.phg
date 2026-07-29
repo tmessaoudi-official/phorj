@@ -2,7 +2,7 @@ package Main;
 
 import Core.Output;
 
-// `Rect` is `public`, so this cross-package `import type` is allowed. Its `internal` helper `scale`
+// `Rect` is `public`, so this cross-package type import is allowed. Its `internal` helper `scale`
 // and `private` helper `clamp` are NOT importable here — see README.md for the rejected cases.
 import Acme.Shapes.Rect;
 import Core.Runtime.Entry;

@@ -38,8 +38,8 @@ path = "src/lib.rs"
 name = "phg"
 path = "src/main.rs"
 
-# Phorj core is std-only. The exceptions are security-critical primitives where std has none and
-# rolling-your-own is the anti-pattern: audited crypto, and a ReDoS-safe regex engine. Each is behind
+# Phorj core is std-only. The exceptions are vetted, domain-scoped primitives where std has none and
+# rolling-your-own is the anti-pattern (14 crates across crypto/regex/signals/coroutines/JIT/SQL/mail/TLS/unicode). Each is behind
 # a feature so the WASM playground builds without it (docs/specs/UNIFIED-SPEC.md#external-dependency-policy).
 [features]
 # `jit` is default (developer-ruled 2026-07-09): the shipped binary compiles hot functions to native
@@ -78,20 +78,21 @@ signals = ["dep:ctrlc"]
 # Green-thread cooperative concurrency (M6 W4 / S4.3): `spawn` + channels run each task on a stackful
 # coroutine driven by the shared `green::sched` scheduler. The coroutine primitive is `corosensei`
 # (4th dependency) — std has no stackful-coroutine primitive and the only std-native path is hand-rolled
-# `unsafe` stack-switching, which `corosensei` confines out of phorj's `#![forbid(unsafe_code)]` (the
+# `unsafe` stack-switching, which `corosensei` confines out of phorj's own unsafe-free code (the
 # same ctrlc criterion). NATIVE-ONLY: corosensei does not compile on wasm32 (no native stack to switch),
 # so the feature is off for the WASM playground, where the interpreter delegates task execution to the
-# VM's frame-swap instead. See docs/specs/2026-06-29-m6-w4-green-threads-design.md §4b.
+# VM's frame-swap instead. See docs/specs/2026-06-29-m6-w4-green-threads-design.md §4b (deleted; see git history).
 green = ["dep:corosensei"]
 # Native codegen JIT backend (perf mandate G-8): Cranelift lowers hot bytecode functions to native
 # machine code — the bytecode VM is ~28× slower than release-php+JIT on hot numeric loops, and no
-# tuning under `#![forbid(unsafe_code)]` closes that (only native codegen does). OFF by default and
-# OFF for wasm (no native JIT target). This is phorj's FIRST first-party `unsafe` (the
-# finalize→transmute→fn-ptr call), confined to `src/jit/` behind a CI-enforced island — the crate
+# tuning under `#![deny(unsafe_code)]` closes that (only native codegen does). A DEFAULT feature
+# since 2026-07-09 (opt out: `--no-default-features` or `phg run --no-jit`); OFF for wasm (no native JIT target). This is phorj's FIRST first-party `unsafe` (the
+# finalize→transmute→fn-ptr call plus the extern "C" trampolines' pointer derefs, ~48 audited
+# sites), confined to `src/jit/` behind a CI-enforced island — the crate
 # roots relax from `forbid(unsafe_code)` to `deny(unsafe_code)` so that one module can carry a scoped
 # `#![allow]`. 7th external-dependency domain — see docs/specs/UNIFIED-SPEC.md#external-dependency-policy.
 jit = ["dep:cranelift", "dep:cranelift-jit", "dep:cranelift-module"]
-# Embedded SQL database primitive `Core.DatabaseModule` (DEC-208, enhanced-PDO). Off by default and off for wasm
+# Embedded SQL database primitive `Core.DatabaseModule` (DEC-208, enhanced-PDO). A DEFAULT feature since DEC-227 (2026-07-15); off for wasm
 # (no native SQLite). rusqlite (8th external-dependency domain, admitted 2026-07-03 — UNIFIED-SPEC
 # #external-dependency-policy Q1/Q2) links SQLite via its `bundled` feature (no system libsqlite3
 # dependency). Its `unsafe` is SQLite C-FFI internal to the crate — phorj's own code stays unsafe-free.
@@ -137,7 +138,7 @@ webpki-roots = { version = "1.0.8", optional = true }
 # stackful coroutines with miri-tested context switching). Powers green-thread task suspension (M6 W4):
 # each `spawn`ned task runs on its own stack and yields at `recv`/`join`/`yield`. std has no
 # stackful-coroutine primitive; the alternative is hand-rolled `unsafe` register/stack switching, which
-# this crate confines outside phorj's `#![forbid(unsafe_code)]`. A low-level *primitive*, NOT an async
+# this crate confines outside phorj's own unsafe-free code (`#![deny(unsafe_code)]` roots). A low-level *primitive*, NOT an async
 # runtime (tokio et al. stay disallowed). Native-only — wasm32 has no native stack to switch (verified:
 # corosensei fails to compile there), so the dep is gated to non-wasm targets and the `green` feature.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -190,7 +191,7 @@ regex = { version = "1", optional = true }
 
 # THIRD external dependency (developer-authorized, 2026-06-29). Powers `phg serve` graceful shutdown
 # (SIGINT/SIGTERM). std has NO signal API, and the only std-native alternative is a hand-rolled
-# `unsafe` `sigaction` handler — which would pierce the crate's `#![forbid(unsafe_code)]`. `ctrlc`
+# `unsafe` `sigaction` handler — which would pierce the crate's own unsafe-free code (`#![deny(unsafe_code)]` roots). `ctrlc`
 # confines that unsafe to a tiny, widely-used, cross-platform crate, keeping phorj's own code
 # unsafe-free. Feature-gated off for the playground. A narrowly-scoped 3rd domain (OS-signal handling)
 # in docs/specs/UNIFIED-SPEC.md#external-dependency-policy — NOT a general-purpose/convenience precedent.
@@ -199,8 +200,8 @@ ctrlc = { version = "3", optional = true, features = ["termination"] }
 # Quality gate (M2 P3.5 Wave 0, Task 0.5): clippy-clean and warning-free become a *compile* gate,
 # not just a CI nicety. Solo dev controls the toolchain, so the known fragility of denying warnings
 # in the manifest (a newer rustc/clippy can introduce warnings that then fail the build) is accepted.
-# Pedantic stays opt-in (not in `clippy::all`). `unsafe` is forbidden via `#![forbid(unsafe_code)]`
-# on the crate roots.
+# Pedantic stays opt-in (not in `clippy::all`). `unsafe` is denied via `#![deny(unsafe_code)]`
+# on the crate roots (sole audited island: src/jit/, CI-gated).
 [lints.rust]
 warnings = "deny"
 
@@ -208,8 +209,8 @@ warnings = "deny"
 all = "deny"
 
 # The WASM playground (`playground/`) is a separate workspace member so the core `phorj` crate above
-# keeps its dependency surface to the four vetted, feature-gated crates (argon2, regex, ctrlc,
-# corosensei) and `#![forbid(unsafe_code)]`. wasm-bindgen lives solely in that member, as a
+# keeps its dependency surface to the vetted, feature-gated crates admitted by the dependency
+# policy (UNIFIED-SPEC §External dependency policy) and `#![deny(unsafe_code)]`. wasm-bindgen lives solely in that member, as a
 # wasm32-only target dependency — see `playground/Cargo.toml`.
 [workspace]
 members = ["playground"]

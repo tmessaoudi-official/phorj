@@ -186,7 +186,7 @@ pub(super) fn validate_member_imports(
 }
 
 /// Build a file's **type-import map**: bare name (or `as` alias) ⇒ the mangled FQN of a cross-package
-/// type, from each `import type a.b.C [as D];`. Validates against the global `types` table and the
+/// type, from each type-classified unified `import a.b.C [as D];`. Validates against the global `types` table and the
 /// file's own definitions / module imports (cross-package types, M-RT generics-all):
 /// - `E-IMPORT-BUILTIN` — the leaf is a built-in type (`List`/`Map`/`Set`/scalars); built-ins
 ///   are import-free, like `int`.
@@ -254,7 +254,7 @@ pub(super) fn build_type_imports(
                 }
                 continue;
             };
-            // Visibility: a cross-package `import type` may only reach a `public` type.
+            // Visibility: a cross-package type import may only reach a `public` type.
             if let Some(info) = prov_types.get(&(pkg.clone(), leaf.clone())) {
                 if let Some(code) = vis_violation(info, file, &prog.package.join(".")) {
                     return Err(format!(
@@ -287,7 +287,7 @@ pub(super) fn build_type_imports(
 }
 
 /// Built-in type names that are import-free (resolved by the checker/compiler, not a package member).
-/// An `import type` naming one of these is `E-TYPE-IMPORT-BUILTIN`.
+/// A type import naming one of these is `E-TYPE-IMPORT-BUILTIN`.
 pub(super) fn is_builtin_type_leaf(name: &str) -> bool {
     matches!(
         name,

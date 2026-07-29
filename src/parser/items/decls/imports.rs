@@ -3,10 +3,11 @@
 use super::*;
 
 impl Parser {
-    /// `import a.b.c;` / `import a.b.c as leaf;` — a module import (Go-qualified `c.fn()` calls).
-    /// `import type a.b.C;` / `import type a.b.C as D;` — a *terminal type* import: the leaf `C` is a
-    /// user/library type, bound bare (or as `D`). `type` and `as` are **contextual** keywords
-    /// (recognized only here), so they stay valid identifiers elsewhere. Assumes current token is
+    /// `import a.b.c;` / `import a.b.c as leaf;` — ONE unified import form (2026-07-03 spec): the
+    /// loader classifies each import as a module import (Go-qualified `c.fn()` calls) or a
+    /// *terminal type* import (the leaf `C` is a user/library type, bound bare or as `D`) by
+    /// resolving the path — there is no `type` keyword. `as` is a **contextual** keyword
+    /// (recognized only here), so it stays a valid identifier elsewhere. Assumes current token is
     /// `import`.
     pub(in crate::parser) fn parse_import(&mut self, sp: Span) -> Result<Item, Diagnostic> {
         self.expect(&TokenKind::Import, "'import'")?;

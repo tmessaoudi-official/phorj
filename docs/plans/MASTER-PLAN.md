@@ -31,7 +31,7 @@
 | **Active programme** | **THE AUTONOMOUS PROGRAMME (confirmed 2026-07-17 via AskUserQuestion — full scope selected). Ordered master queue below (§0 THE QUEUE); grind continuously, gate + DEC-268-panel each wave, commit green, NEVER push.** |
 | **Locked rulings (2026-07-11, developer via ask-human)** | **Perf** = multi-dimensional "better" (faster/safer/organized/SOLID). **AMENDED (2026-07-11, Fable session, developer via ask-human): the string/array/collection speed-beat is REOPENED NOW — fresh-eyes attempt at the FRONT of this run, target faster-or-at-least-equal to PHP, evidence-gated (pure-Rust ceiling spike FIRST per KNOWN_ISSUES §"Parked perf"; WIN-OR-FLAG; no MATCH in the ceiling test → report honestly and re-ask).** Prior end-stage park superseded. **Target** = 100% VISION. **Footguns** audited in Ω-0. **GLOBAL TENETS (whole wave):** prefer INSTANCES + mandatory `new`; nothing in the wind (every symbol import-gated, leaf-or-parent); decoupled / composable / generic / scalable / modular / SOLID. **Core.Sql DBAL = instance model** (`new QueryBuilder("t","a")` → typed per-verb sub-builders `SelectQuery`/`InsertStatement`/`UpdateStatement`/`DeleteStatement`; always-alias + `E-SQL-AMBIGUOUS-COLUMN`; decoupled dialect rendered at `db.execute`; `new Query(sql,[binds])` raw — SUPERSEDES the shipped slices 1+2 static-factory `Sql.query`/`Sql.select`, reworked in Ω-1). **PERF-FIRST rulings (2026-07-11, session 3, developer via ask-human):** (1) **Order A** — unboxed arena verticals (enum → closure/method → objalloc → composites) → V3b single-alloc `Instance` → NaN-box end-state, each shape spike-gated WIN-OR-FLAG; (2) **exit bar = beat-or-match EVERYTHING** (every micro ≥1.0× vs fresh docker php:8.5-cli+JIT, pinned+interleaved) — a flag is accepted only after all three levers are exhausted on that shape, loss anatomy documented; (3) **intadd** scored WON via `#[UncheckedOverflow]` 2× (apples-to-apples vs php's unchecked semantics); checked-DEFAULT ≥1.0× is an ACTIVE best-effort target — range-proof overflow-check-elision front REOPENED (induction/const-init proofs eliding checks where overflow is provably impossible; fault behavior unchanged); (4) **trycatch (0.48×, un-ruled prior)** = full lever attempt in the wave (anatomy first, then zero-cost-on-no-throw shape). **ADJUDICATION BATCH CLEARED (2026-07-12, session 6, developer via AskUserQuestion — DEC-201…206 + META-1…3, full rulings with alternatives in the decision register):** empty literals = contextual typing + List.empty/Map.empty (DEC-201); reserved top-level names = reject E-RESERVED-NAME incl. PHP builtin classes (DEC-202, closes DEC-200); scope guard = `using` + Closable (DEC-203); Runtime.onShutdown (DEC-204); cycles = collector-then-Weak<T>, phased (DEC-205); bare DateTime gated (DEC-206). META-1: sqlbuild goes ALL THE WAY (L2a → L2b → L3 refcounted handles) to ≥1.0× BEFORE Ω-wave work; run-end full reopen of all known issues/design decisions; every decision recorded with alternatives. META-2: L3 = in-island zero-dep (arena count array in src/jit/handles.rs). META-3: wave order as written. **PER-FEATURE PERF GATE (2026-07-12, developer via ask-human, session 5):** programme confirmed Phase A (session-5 perf tail: listappend → mapinsert → hofpipe → forin lever-3 → re-adjudicate+ratchet all 21 → representation slice → perf register+G-8) then Phase B (Ω-0…Ω-9); **every new feature shipped in the Ω waves lands its own perf micro in the same change and must score ≥1.0× vs fresh php:8.5-cli+JIT (beat-or-match, pinned+interleaved protocol)** — the bar is per-feature definition-of-done, not only an Ω-8 hold; run continues without stopping until 100% VISION. **AMENDED 2026-07-16 (DEC-269): WIN-OR-FLAG precedence — after all levers are exhausted on a shape, a LOSS-FLAGGED entry with anatomy + queued levers is an acceptable DoD; perf work is continuous as features ship.** |
 | **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy (both configs, incl. `--no-default-features`) + fmt + release build + an Invariant-9 example + byte-identity `run ≡ run --tree-walker ≡ php-8.5.8`. **`jit` is a DEFAULT feature** (bare `cargo test`/`build`/`clippy` include it; `--features jit` is a harmless redundant no-op; verify jit-off compiles via `cargo check --no-default-features`; run without native codegen via `phg run --no-jit`). Pre-commit = fast Rust-only tier (~12s); pre-push = full oracle + microbench-gate. Commit each green slice; **NEVER push** (developer pushes). |
-| **Next** | ✅ **THE 27-RULING AGENDA IS FULLY RULED (2026-07-26) — BUILD, do not re-ask.** **Single ordering: `docs/plans/2026-07-26-ruled-build-order.md`** (Wave 0 unblock-the-workflow → Wave 6 real parallelism, plus 5 owed measurements). All of `GR-1`…`GR-27` (DEC-339…365) ruled interactively, **plus 21 more the ruling session's own probing and the on-hold tail surfaced** (DEC-366…386: lifter hoist, `final getMessage`, the by-reference form, real parallelism, the PHP-absence rationale audit, the `__phorj_` helper rule, the commit-cost fix, the `E-IFACE-VIS` visibility bypass, chasing the `jsonround` win, XML via a vetted 15th dependency, the split lifetime block, stdlib wildcards, and the `Core.Text`/`Core.String` merge). Waves 0-6 = DEC-339…378, **Wave 7 = DEC-379…386**, Wave 8 = the two research slices. **BUILT so far: Wave 5.5 only** (DEC-354, the narrowed Claude bundle, built out of order on 2026-07-27 at the developer's request — it also produced **DEC-387**: `AskUserQuestion` is FORBIDDEN, every question is plain text with numbered options and a recommendation). **Seven items stay deliberately unruled** (L-19/22/25/28/31/33/86). Live cursor detail at the top of `SLICE-STATE.md`; decision identity + status in the register. **Then** resume §0 THE QUEUE below. Prior in-flight items still stand: perf (jsonround/dbwork → wins + baselined), the §4 recompute. |
+| **Next** | ✅ **THE 27-RULING AGENDA IS FULLY RULED (2026-07-26) — BUILD, do not re-ask.** **Single ordering: `docs/plans/2026-07-26-ruled-build-order.md`** (Wave 0 unblock-the-workflow → Wave 6 real parallelism, plus 5 owed measurements). All of `GR-1`…`GR-27` (DEC-339…365) ruled interactively, **plus 22 more the ruling session's own probing and the on-hold tail surfaced** (DEC-366…388: lifter hoist, `final getMessage`, the by-reference form, real parallelism, the PHP-absence rationale audit, the `__phorj_` helper rule, the commit-cost fix, the `E-IFACE-VIS` visibility bypass, chasing the `jsonround` win, XML via a vetted 15th dependency, the split lifetime block, stdlib wildcards, the `Core.Text`/`Core.String` merge, and the DEC-388 bundle reopen). Waves 0-6 = DEC-339…378, **Wave 7 = DEC-379…386**, Wave 8 = the two research slices. **BUILT so far: Wave 5.5** (DEC-354, the narrowed Claude bundle, built out of order on 2026-07-27 at the developer's request — it also produced **DEC-387**: `AskUserQuestion` is FORBIDDEN, every question is plain text with numbered options and a recommendation) **+ DEC-388.1–.5 (2026-07-27: disk-reclaim script, `/forge` import reversal, `backend-parity-reviewer` agent def, `validate-infra.sh` in pre-push; `/qa-sweep` queued)**. **Seven items stay deliberately unruled** (L-19/22/25/28/31/33/86). Live cursor detail at the top of `SLICE-STATE.md`; decision identity + status in the register. **Then** resume §0 THE QUEUE below. Prior in-flight items still stand: perf (jsonround/dbwork → wins + baselined), the §4 recompute. |
 
 ## 0 THE QUEUE — the confirmed autonomous programme (2026-07-17, developer via AskUserQuestion)
 
@@ -75,8 +75,8 @@
   typed `Bytes.read*/write*` + declarative compile-checked `BinaryLayout` (also fixes a D-surface
   inventory hole) · bz2 as a format row in the queued Core.Compress slice.
 - **W5/W6 runtime+ops:** `Runtime.cpuTime()` (getrusage twin, feeds Metrics) · `phg env` doctor command
-  (deterministic, secret-free, `--json` — the phpinfo answer) · **`phg serve` TLS posture = GA-BLOCKING
-  ADJUDICATION** (native rustls termination vs ruled reverse-proxy-only doc — PENDING, Invariant 15).
+  (deterministic, secret-free, `--json` — the phpinfo answer) · **`phg serve` TLS posture — RULED as DEC-331 D7
+  (LOCKED 2026-07-22)**: native rustls termination behind `http-server-tls` (serve+TLS native-only) — build queued.
 - **post-1.0:** server-side HTTP/2 (rides the TLS ruling) · graceful reload (SIGHUP handover) ·
   `phg run-script` (explicit-only, never on install) · LDAP extension candidate.
 - **Appendix-A rows to record (PENDING-REJECT, currently silent drops):** SOAP · IMAP (PHP itself
@@ -103,14 +103,14 @@ interactively; full rulings in the register, cursor in SLICE-STATE). SPEC-FIRST 
 full addendum in the DEC-331 register row + the DEC-335 row). Cluster builds in D10a order,
 then the DEC-333 perf roadmap. Ruling highlights: slice 3 now carries TWO breaking changes
 (respond retired + bare `#[Entry]` = `E-ENTRY-KIND-REQUIRED`, DEC-191 inference retired);
-`Core.Sandbox` BUILDS in v1 (pure-expr, tree-walker-only, `E-TRANSPILE-SANDBOX`); ArrayAccess
+`Core.Sandbox` RULED for v1, QUEUED not built (pure-expr, tree-walker-only, `E-TRANSPILE-SANDBOX` — zero src hits yet); ArrayAccess
 ADOPTED (reopen flag) with overloaded indexers + the PHP `\ArrayAccess` glue; rustls ships
 behind `http-server-tls`; **DEC-335 two-tier top types `Any` + `Object`** (Any→`mixed`,
 Object→`object`, erased root class, membership = classes+enums+functions, both member-less —
 `#[ToString]` re-confirmed as the stringify designator). NEW QUEUED CAMPAIGN: **DEC-334
 runtime-config catalog** (php.ini-equivalent knob enumeration with defaults, project/global
 mapping — multi-round research with the dev). **DEC-336 extensionless `#!`-shebang sources +
-perpetual editor/LSP currency** (100%-clear tooling slice: a `#!…phg` first line makes an
+perpetual editor/LSP currency — ✅ BUILT 2026-07-24/25** (100%-clear tooling slice: a `#!…phg` first line makes an
 extensionless file a valid source; VS Code/PhpStorm `firstLine` association; editors always
 current — Inv 17 + DEC-181 reaffirmed).**
 Build cluster, in order (D10a):
@@ -128,7 +128,7 @@ Build cluster, in order (D10a):
   loss (joins the flip-all-losses campaign) — **✅ DEC-338 BUILT: 0.10×→~0.88× in-container (near-parity,
   ~9× faster; WIN-vs-PHP not yet confirmed — dev-box ratio owed). See the perf-flip campaign block above.**
 - **(3) `#[Entry(kind: EntryKind.{Cli|Web|Desktop|Mobile|Worker|Embedded})]`** (DEC-337: injected enum
-  variant, qualified + import-gated, never in the wind) + per-type `#[Config]`-injected
+  variant, qualified + import-gated, never in the wind — import-gating since superseded by DEC-353: injected `Entry`/`EntryKind` auto-provided) + per-type `#[Config]`-injected
   typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
   contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`.
 - **Separate QUEUED design slices (specs frozen, same wave + DEC-335):** labeled
@@ -140,8 +140,10 @@ Build cluster, in order (D10a):
   DEC-268 two-clean-round panel certified)**
   (`docs/specs/2026-07-24-wildcard-imports.md` — `import X.Y.*` / `{A,B}` / `except {…}`, eager
   collisions, compile-time expansion → per-symbol PHP `use`, `E-IMPORT-UNKNOWN`; deferrals
-  P-Q-A-1 Core-submodule wildcards, P-Q-A-3 W-UNUSED-IMPORT, P-Q-A-4 group-`{}` sort, P-Q-A-5
-  Inv-13 file-size debt — all dev-owned follow-ups); **Q-B
+  P-Q-A-1 Core-submodule wildcards, P-Q-A-3 W-UNUSED-IMPORT, P-Q-A-4 group-`{}` sort (since ruled
+  a delete-the-no-op by DEC-386), P-Q-A-5
+  Inv-13 file-size debt (since RESOLVED — every named file split/gone, `size-gate.sh` `fails=0`) —
+  the rest dev-owned follow-ups); **Q-B
   visibility-model completeness** (`docs/specs/2026-07-24-visibility-model.md` — package HIERARCHY,
   `internal` REDEFINED = package + descendants on both axes, member `internal` added, folds the
   G4 P0 static-field visibility spine-fix) — **✅ DONE 2026-07-25:** DV-1+DV-2 (package hierarchy +
@@ -372,10 +374,10 @@ DbError` via the prelude-wrapper; `DbHandle`/`DbSys` natives; `bundled rusqlite`
 backends `Ada is 36`/`Grace is 45`); **old Core.Sql builder REMOVED** (DEC-208 supersession — prelude,
 examples, sqlbuild bench, 2 JIT tests, README); **DEC-220 S1 `Core.Log`** (leveled→stderr); **DEC-221
 throwing constructors** (`constructor(...) throws E`; restored the ruled `new Db(dsn)`; a general language
-enrichment). Full oracle gate PHORJ_REQUIRE_PHP=1 green (1990). **DEC-208 S2 STILL PENDING**: the typed-
+enrichment). Full oracle gate PHORJ_REQUIRE_PHP=1 green (1990). **DEC-208 S2 ✅ SHIPPED** (`src/checker/desugar_db.rs`): the typed-
 generic `queryInto<T>()`/`queryOneInto<T>()` hydration (type-directed — checker resolves T's field layout,
-a `DbSys` native hydrates by strict name → `DbError`; same result-value protocol). **DEC-220 S2/S3
-PENDING**: `Response` builders (+ remove serve Output→stderr redirect) · `Response.capture(fn)`.
+a `DbSys` native hydrates by strict name → `DbError`; same result-value protocol). **DEC-220 S2/S3 ✅ SHIPPED
+(2026-07-14 — DEC-220 fully shipped S1+S2+S3)**: `Response` builders (+ serve Output→stderr redirect removed) · capture landed as `Output.capture` (the ruled `Response.capture` wrapper was dropped — no leak-free path; see DEC-220-S3 in the register).
 
 **Sequencing:** correctness (1) → cheap surface fixes (2–4) → the `::` migration (5) → additive
 type/literal work (6–7) → the DB primitive design+build (8, gates Ω-1) → DI at its wave (9).
@@ -714,17 +716,18 @@ Fable main); until then 3C/6C run self-graded with explicit disclosure.
 
 ## 1. GOVERNANCE & STANDING RULES
 
-**G-1 · Byte-identity spine.** `phg run` ≡ `phg run` ≡ transpiled PHP under a real `php` (floor
+**G-1 · Byte-identity spine.** `phg run` ≡ `phg run --tree-walker` ≡ transpiled PHP under a real `php` (floor
 **8.5**, `PHORJ_REQUIRE_PHP=1` fails-not-skips): identical stdout AND failure behavior, every
 program, every example; the interpreter is the reference oracle. Enforced by `tests/differential.rs`
-(3308 lines — split tracked as W1-1) + `tests/conformance.rs`.
+(4737 lines as of 2026-07-28 — split tracked as W1-1) + `tests/conformance.rs`.
 
 **G-1.1 · The concurrency exception (disclose wherever byte-identity is claimed).** Concurrency
 (`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle (DEC-133, ratified): `run ≡ run --tree-walker`
 holds; the PHP leg is a hard error — **the shipped code is `E-CONCURRENCY-NO-PHP`** (the ledger's
 "E-TRANSPILE-CONCURRENCY" was the pre-implementation name; audit B3-4 verified only
-`E-CONCURRENCY-NO-PHP` exists — use it everywhere) — with explicit `--sequential-concurrency`
-opt-in + warning. Until W5-13, fault *line numbers* inside interpolation also diverge on the VM
+`E-CONCURRENCY-NO-PHP` exists — use it everywhere). DEC-369 deleted the never-shipped
+`--sequential-concurrency` opt-in from this rule — the hard error + quarantine is the whole
+mechanism. Until W5-13, fault *line numbers* inside interpolation also diverge on the VM
 (disclosed, W0-5). The audit added four *undisclosed* byte-identity breaks — now tracked + ruled as
 UA-1 (§2.2); each fix lands its adversarial differential case same-commit (UA-0.13).
 
@@ -739,8 +742,10 @@ paths; CTy-operand trap (`expr + 1` case); scratch slots `self.height - 1` (two-
 
 **G-4 · Decisions.** Canonical register `docs/research/full-audit/raw/C-decisions.md`; the
 2026-07-02 adjudication ledger is Appendix B; the **2026-07-03 unification-audit rulings are §13**.
-Protocol for future decisions: interactive AskUserQuestion, ≤4 per round, recommended option first,
-every design question ships a concrete risk example. **NEW standing instruction (developer,
+Protocol for future decisions (DEC-387, 2026-07-27): PLAIN-TEXT questions only — `AskUserQuestion`
+is FORBIDDEN (it silently fails in the remote container); numbered options, recommended option
+first with the why, a visible "none of these / challenge the premise" escape, every design
+question ships a concrete risk example (`.claude/skills/ask-human/SKILL.md`). **NEW standing instruction (developer,
 2026-07-03): when a "more correct" answer and a "PHP-familiar" answer diverge, present and
 default-recommend the more-correct one — PHP-parity is not a tie-breaking bias.** (Pattern across
 the audit gate: the developer consistently chose the thorough option over the cheap one.)
@@ -752,7 +757,7 @@ faults → README capture; impure/quarantined follow the `pure:false` convention
 **G-6 · Anti-regrowth size rule (AMENDED by DEC-262, 2026-07-16): soft 300 / hard 500** production
 lines per file — split-as-you-go is the default, split by cohesion (M-Decomp), never by line count
 alone. Decomp order + the backlog = AUDIT BUILD QUEUE Tier 3. (Historical: the original G-6 was
-800/1000 with 12 tracked over-cap files; `scripts/size-gate.sh` CI gate still to build — W1-6.)
+800/1000 with 12 tracked over-cap files; `scripts/size-gate.sh` shipped 2026-07-20 and is pre-push-wired; only the CI-workflow wiring remains — W1-6.)
 
 **G-7 · Honesty rules.** No silent scope drops (rejects live in Appendix A with reasons);
 codemod items say "REPLACE, not add"; no public perf claim vs a dev-built PHP (the local PHP
@@ -871,7 +876,9 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   Ω-2 · scope-guard `using`/`defer` (the audit's ONE genuinely uncovered residue, from
   `__destruct`) + variadics → Ω-4 · explicit-locale intl instances + explicit-format date parse
   + the ICU extension-story fork → Ω-5 · typed-serde derive candidate → Ω-7. Two NEW
-  DEC-PENDING entries recorded in KNOWN_ISSUES §PENDING (`using`/`defer`, `Runtime.onShutdown`).
+  DEC-PENDING entries recorded in KNOWN_ISSUES §PENDING (`using`/`defer`, `Runtime.onShutdown`)
+  — since RULED 2026-07-12 as DEC-203 (`using` + Closable) and DEC-204 (typed
+  `Runtime.onShutdown(fn)`); builds queued (DEC-364 re-affirmed `using`).
 - **Ω-1 · Web spine** (TOP-20 #1/#2/#3): finish **Core.Sql** P1 → P2 `Core.Db` (rusqlite) → PG/MySQL →
   HTTP client → sessions/cookies/auth. Continues Wave D. **UA-L2 is DONE** — the `cli::CORE_MODULES`
   registry (deterministic sorted iteration, Inv-10) means adding a Core module is ONE row; Core.Sql was its
@@ -1098,9 +1105,10 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   directive): V3b = PARKED with anatomy** (no measurable protocol target — all 21 micros
   run native via the unboxed JIT; V3b's beneficiaries are the disclosed VM-only surfaces;
   the DST needs unsafe-outside-`src/jit/` or a thin-Rc dep — either breaches a declared
-  invariant → adjudication, not self-ruling). **Rc CYCLE-LEAK = DEC-PENDING** in
-  KNOWN_ISSUES §PENDING (options: php-style trial-deletion collector / weak refs / both,
-  with the `serve` per-request-leak risk example). NaN-box end-state stays parked behind
+  invariant → adjudication, not self-ruling). **Rc CYCLE-LEAK — since RULED 2026-07-12 as
+  DEC-205 (BOTH, PHASED: threshold cycle collector first, `Weak<T>` second) — build queued**;
+  recorded at the time as DEC-PENDING in KNOWN_ISSUES §PENDING (options: php-style
+  trial-deletion collector / weak refs / both, with the `serve` per-request-leak risk example). NaN-box end-state stays parked behind
   the same no-measurable-target reasoning.
   **FORIN LEVER-3 — ✅ SHIPPED (session 5): 0.73× → 2.30× WIN** (protocol median
   2.30/2.82/1.66): pointer-walk kinds (`IterEnd`/`IterPtr`) at the desugar's
@@ -1243,7 +1251,7 @@ Ordered P1→P3. Each item is done when its acceptance evidence exists and the g
 
 | # | Sev | Item (source) | Status |
 |---|-----|---------------|--------|
-| UA-0.1 | P1 | **Test-gate serialization** — **PREMISE STALE, remainder DEFERRED (2026-07-04, evidence below; not "done", per G-7).** (a) The fmt corpus test *already* fans out across all cores via `std::thread::scope` (`tests/fmt.rs:128-146`, added since the "111 s" measurement) — the sharding win is already banked. (b) `runtime::shipped_manual_example_runs_on_both_backends` is NOT a corpus monolith: it runs ONE example (`fib(30)`), compute-bound (~57 s, 2.7M tree-walk calls × run+the VM leg) — not shardable without weakening the shipped-example guard. (c) The persistent-worker refactor is confirmed low-ROI (97 µs/call × ~260 calls ≈ 25 ms against 46 s — noise) AND not safely buildable here: a persistent worker must receive *borrowed* closures over a channel, which needs `stacker`/unsafe — both blocked by `forbid(unsafe_code)` + no-new-deps. **The real lever is `cargo-nextest`** (one global -j16 pool across binaries vs cargo's serial-per-binary; handoff proves 228→118 s here) — wiped by the stack reload, restore attempted (from-source `cargo install`, prebuilt blocked by classifier). (B1-1) | ⏸ deferred |
+| UA-0.1 | P1 | **Test-gate serialization** — **PREMISE STALE, remainder DEFERRED (2026-07-04, evidence below; not "done", per G-7).** (a) The fmt corpus test *already* fans out across all cores via `std::thread::scope` (`tests/fmt.rs:128-146`, added since the "111 s" measurement) — the sharding win is already banked. (b) `runtime::shipped_manual_example_runs_on_both_backends` is NOT a corpus monolith: it runs ONE example (`fib(30)`), compute-bound (~57 s, 2.7M tree-walk calls × run+runvm — the era's command names) — not shardable without weakening the shipped-example guard. (c) The persistent-worker refactor is confirmed low-ROI (97 µs/call × ~260 calls ≈ 25 ms against 46 s — noise) AND not safely buildable here: a persistent worker must receive *borrowed* closures over a channel, which needs `stacker`/unsafe — both blocked by `forbid(unsafe_code)` + no-new-deps. **The real lever is `cargo-nextest`** (one global -j16 pool across binaries vs cargo's serial-per-binary; handoff proves 228→118 s here) — wiped by the stack reload, restore attempted (from-source `cargo install`, prebuilt blocked by classifier). (B1-1) | ⏸ deferred |
 | UA-0.2 | P1 | **Wire mold**: `/bin/mold` is installed, no `.cargo/config.toml` exists — add the gitignored machine-local config (CI has no mold). (B1-2) | ✅ `b77e50e` |
 | UA-0.3 | P1 | **Fix broken `--help` examples**: interp/VM/`disassemble` examples fail verbatim (missing `package Main; import Core.Output;`) and teach `->` — fix + convert to `: void` (`src/cli/mod.rs:77,85,129` + arrow prose at `:52,201,638`, `src/main.rs:301`). First contact with the tool currently produces two errors. (B1-3; syntax half sequences with UA-1.5) | ✅ `b77e50e` |
 | UA-0.4 | P1 | **Help-surface parity**: add `lsp` + `debug` to the long `--help` (terse usage lists 18 verbs, long help lists 16) + per-command help for both. (B1-4) | ✅ `b77e50e` |
@@ -1358,10 +1366,13 @@ consolidation (this file + UNIFIED-SPEC + the sibling corrections to KNOWN_ISSUE
 ARCHITECTURE/STABILITY/GA-CHECKLIST/ROADMAP/VISION/README/CONTRIBUTING). Checklist for
 verification, then this section collapses to "done + never reintroduce" (G-7):
 
-- ☐ B3-1 "zero external deps" FALSE everywhere (4 default deps: argon2, regex, ctrlc, corosensei;
-  rusqlite+rustls now approved as feature-gated domains) — incl. `Cargo.toml:83-85` comment.
-- ☐ B3-2 `import type` taught as current syntax (it hard-fails to parse since S0) — docs, .phg
-  comments, ~14 src doc-comments.
+- ☑ B3-1 "zero external deps" FALSE everywhere — **CLOSED by the 2026-07-28 consistency audit**
+  (all live surfaces corrected to the Cargo.toml SSOT: 14 admitted / 9 default-linked; THIRD-PARTY
+  regenerated with all 14 licenses; never reintroduce).
+- ☑ B3-2 `import type` taught as current syntax (it hard-fails to parse since S0) — **CLOSED by the
+  2026-07-28 consistency audit** (conformance README, 2 example .phg, and the last 12 src
+  doc-comments/explain-text sites rewritten to the unified `import`; one deliberately-historical
+  comment kept at `src/loader/imports.rs`).
 - ☐ B3-3 dead CLI verbs (`fmt`/`lex`/`disasm`/`bench`) taught as real, declared *stable*; the
   real verbs are `format`/`tokenize`/`disassemble`/`benchmark`.
 - ☐ B3-4 `E-TRANSPILE-CONCURRENCY` does not exist — the code is `E-CONCURRENCY-NO-PHP`
@@ -1408,7 +1419,7 @@ Do NOT work these without a trigger; do NOT drop them either.
 ### 2.5 Positive attestations (do not re-litigate)
 
 `src/` structurally clean (0 stubs/TODOs/dead-code allows; Op coupling 73/73/73 wildcard-free;
-`forbid(unsafe_code)` both crate roots; kernels single-sourced; deps exactly per policy; all prior
+`deny(unsafe_code)` both crate roots (sole audited island: `src/jit/`, CI-gated); kernels single-sourced; deps exactly per policy; all prior
 src P0/P1s verified FIXED). All 9 golden diagnostics byte-identical; `phg explain` covers 100% of
 emitted codes; zero Rust panics across every error probe. Security posture strong: 0 High findings,
 13 positive attestations (Argon2id/OWASP defaults, fail-loud CSPRNG, no shell anywhere, hardened
@@ -1487,8 +1498,9 @@ from; do not run it as a separate queue.*
     import (pointed at `editors/vscode/`, reusing the shared grammar) for highlighting + the
     **LSP4IJ** marketplace plugin running `phg lsp` for diagnostics/hover/completion/rename/format.
     Both editor READMEs already track the *natively-compiled marketplace plugin* as a follow-up.
-    Refreshed the docs (dead `phg fmt`→`phg format` verb) in this pass. **PENDING scope decision
-    (recorded per §15 "surface, don't self-rule" + "surface scope if it balloons"):** should the run
+    Refreshed the docs (dead `phg fmt`→`phg format` verb) in this pass. **Scope decision — since
+    RULED by DEC-181 (2026-07-04): LSP-first both editors + thin native shells now, the full
+    native IntelliJ/PSI plugin as a follow-on phase.** The question as recorded: should the run
     build a native Gradle/IntelliJ-Platform plugin? Analysis for the developer: (a) the no-build
     path already delivers full functionality; (b) a native plugin is a large lift (Gradle +
     IntelliJ-Platform SDK + Kotlin/plugin.xml) and **cannot be verified here** (needs a running
@@ -1552,7 +1564,7 @@ commands). All rulings Appendix B; item recipes in git history `0691228`.*
 
 - **W2-1** `phg fix` — machine-applicable diagnostics (structured `(span, replacement)` edits; LSP code-actions ride it). The delivery vehicle for everything below.
 - **W2-2** E-MATCH-BARE-TYPE hard error (+ 3-way did-you-mean, repo codemod).
-- **W2-3** foreach REPLACES for-in (REPLACE, not add — the C-2 drift lesson) + binding forms; full corpus codemod.
+- **W2-3** ~~foreach REPLACES for-in~~ **AMENDED by DEC-343 (2026-07-26): KEEP BOTH** (DEC-248 superseded on this point; Conflict C-2 closed); add cross-form migration hints + binding forms. No retirement codemod.
 - **W2-4** `->` return-syntax retirement — **superseded by UA-1.5's ruled sequence** (docs first → parser-reject → individual fixes); W-SEQUENCE-MUTATION verify rides along.
 - **W2-5** E-INTERSECT-SIG relaxed via the shipped overload-resolution rules.
 - **W2-6** DEC-047 no-wind closure. **Fault-intrinsic imports ✅ SHIPPED (DEC-196 Q3, 2026-07-05)** — NOT the old single-`import Core;` model: they land as the two-mode `Core.Assert`/`Core.Abort` split (whole-module→qualified `Assert.assert`, member→bare `panic`, grouped ok; `E-UNIMPORTED` otherwise). Remaining W2-6 sub-items (deep imports, aliasing, further de-reservations) stay open. Spec: UNIFIED-SPEC §"Nothing in the wind" (updated to the two-mode model).
@@ -1575,7 +1587,7 @@ commands). All rulings Appendix B; item recipes in git history `0691228`.*
 ### Dependency-policy amendment (RULED 2026-07-03, developer)
 `rusqlite` (SQLite) + `rustls` (TLS) admitted as new vetted domains — native-only, feature-gated
 (`db`/`tls`, off in WASM), spine-quarantined (corosensei/ctrlc shape), `forbid(unsafe_code)`
-intact in phorj's own code. Pure zero-dep P0s ship FIRST (`Core.Sql`, `Core.Url`). Recorded in
+intact in phorj's own code (then-`forbid`; since relaxed to `deny` roots + the audited JIT island). Pure zero-dep P0s ship FIRST (`Core.Sql`, `Core.Url`). Recorded in
 UNIFIED-SPEC (dependency-policy section). **Gate: UA-L2 (prelude/loader unification) lands before
 W3-1/W3-2 add stdlib types.**
 
@@ -1660,9 +1672,10 @@ W3-1/W3-2 add stdlib types.**
 - **W4-7 · Lift Tier-2/3 depth + playground PHP input** (L) — after W4-1/W4-2/W3-5.
 - **W4-8 · General inert attributes** (M) — inert-only ruled; derive (W5-2) is the behavioral surface.
 - **W4-9 · Dynamic `Json`/`Any` boundary completion** (M).
-- **W4-10 · XML/DOM/XPath** (L, DESIGN-NEEDED) — **PENDING adjudication artifact recorded**
-  (2026-07-03): user-visible surface, developer's call; proposal + failing program + option
-  previews to be presented, not built autonomously. Phased, PHP-DOM-backed per the format recipe.
+- **W4-10 · XML/DOM/XPath** (L) — **RULED as DEC-382 (2026-07-26): admit a vetted
+  `quick-xml`-class crate as the 15th dependency — research + build queued** (the 2026-07-03
+  PENDING adjudication artifact is answered; the "PHP-DOM-backed" recipe is superseded by the
+  vetted-crate ruling; `Cargo.toml` + UNIFIED-SPEC policy row update in the same change).
 - **W4-11 · Subprocess execution** (M, charter admission) — arg-vector only, no shell-string, ever.
 - **W4-12 · Compression/archives + regex breadth** (L) — preg_replace_callback rides HigherOrder;
   **regex additions coordinate with UA-L3's analyzer.**
@@ -1680,7 +1693,7 @@ W3-1/W3-2 add stdlib types.**
   coordinate with UA-L3) · let-else · auto-import quickfix/organizer · tuples + multiple return ·
   Printable (=W4-3) · labeled loops. `phg fix` = W2-1.
 - **W5-13 · VM debug symbols** (L) — scope IP ranges → named locals → per-line pause → DAP over
-  the VM leg; fixes the interpolation fault-line divergence (flip the W0-5 harness flag on).
+  the VM; fixes the interpolation fault-line divergence (flip the W0-5 harness flag on).
 - **W5-14 · M-perf lane** (L) — CallMethod inline cache, CallValue captures borrow, static/const
   borrow-keyed lookup; **the Rc-share `Value::Str` item is now UA-L4 (pulled forward, ruled)**;
   IsInstance interning, dispatch, const-fold, peephole, lazy for-range; incremental compilation
@@ -1948,7 +1961,7 @@ Ledger basis: W3 ≈+6, W4 ≈+6 parity points are the big movers (§11.3).
 
 ### 13.1 · 2026-07-04 fork-backlog adjudication pass (developer-ruled, interactive — final)
 
-> **DEC-197 (2026-07-05, developer-proposed — PENDING scope confirmation → then a fresh-context WAVE).
+> **DEC-197 (2026-07-05, developer-proposed — scope since settled by DEC-274, 2026-07-16: the sugar-gate discipline, ruled "everywhere").
 > UNIFY THE IMPORT MODEL: module FUNCTIONS get the same two-mode discipline as types/variants/intrinsics.**
 > Developer's steer: *"everything needs to be imported either directly or used [via] parent"* — like
 > `import Core.Result;`→`Result.Success` OR `import Core.Result.Success;`→bare `Success`, the SAME must
@@ -2246,8 +2259,9 @@ shadowing (redeclare same-name enum ⇒ Core injection skipped) ships.
   transpile to PHP attributes where faithful, else a native reflection table (mirrors Core.Reflect's
   ClassTables pattern). Also expands attribute targets beyond free functions.
 
-- **DEC-200 — top-level type named after a PHP-reserved-as-class word (PENDING adjudication, surfaced 2026-07-06).**
-  Not yet ruled — **surface to the developer via AskUserQuestion before building** (§15). The enum-*variant*
+- **DEC-200 — top-level type named after a PHP-reserved-as-class word (surfaced 2026-07-06 —
+  since RULED as DEC-202 and SHIPPED 2026-07-13: `E-RESERVED-NAME` rejects ~100 always-loaded PHP
+  builtin class names via `is_php_builtin_class_name`; DEC-386 closed this row as already-ruled).** The enum-*variant*
   leg of this hazard is CLOSED (invisible mangle, `examples/guide/enum-reserved-variants.phg`); this is the
   remaining top-level leg. The checker rejects a top-level `class`/`enum`/`interface`/`trait` named after the
   reserved words **in its guard lists** (`class int`/`enum Empty` → `E-RESERVED-NAME`) but MISSES two groups
@@ -2379,7 +2393,7 @@ Full ruling text + worked examples: git history ≤`60540fc` + `raw/C-decisions.
 | Core override | REJECTED — Core sealed; UFCS extensions are the extension story |
 | Capture writes | E-CAPTURE-WRITE hard error + `Core.Ref<T>` box |
 | Ladder rule | ADOPTED (CLAUDE.md rule 14) — surface, never silently downgrade |
-| Concurrency PHP leg | hard error (shipped code: `E-CONCURRENCY-NO-PHP`) + `--sequential-concurrency` opt-in w/ warning |
+| Concurrency PHP leg | hard error (shipped code: `E-CONCURRENCY-NO-PHP`); the `--sequential-concurrency` opt-in was never shipped and DEC-369 deleted it from the rule |
 | M-Parallel | WORKER ISOLATES; shared-memory Arc REJECTED |
 | Messaging | CO-HEADLINE: enforcement + the two-way bridge |
 | Completion numbers | RATIFIED + recompute-per-milestone rule (now §11) |

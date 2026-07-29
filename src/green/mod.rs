@@ -1,7 +1,8 @@
 //! Green-thread runtime (M6 W4 / S4.3) — uncolored cooperative concurrency: `spawn` + channels on a
 //! single OS thread (the `Rc` `Value` heap is `!Send`, so this is cooperative, not parallel).
 //!
-//! The architecture (developer-locked, `docs/specs/2026-06-29-m6-w4-green-threads-design.md`):
+//! The architecture (developer-locked, `docs/specs/2026-06-29-m6-w4-green-threads-design.md` —
+//! deleted; see git history):
 //! - [`sched`] is the **single-sourced, backend-agnostic scheduler kernel** — it owns ONLY scheduling
 //!   decisions (run-queue order, channel wait-lists, wake/pick) over opaque `TaskId`/`ChanId`. Both the
 //!   interpreter and the VM drive the SAME kernel (like `value.rs` kernels are single-sourced), so the

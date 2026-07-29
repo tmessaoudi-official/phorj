@@ -58,7 +58,7 @@
 | DEC-035 | 06-20 | **Casing is a HARD ERROR for all**: package/folder segments PascalCase (`E-PKG-CASE`), types PascalCase, fns/vars camelCase; no `W-CASE` lint fallback; manifest key `name` → `module`; PascalCase enforced incl. vendor (PHP deps case-mapped at importer boundary) | warn-only lint | plans/2026-06-20-post-wave3-four-tracks.plan.md; parity write-back | ASKED | ✅ (`15a5745`+) |
 | DEC-036 | 06-20 | E-PKG-TYPE **lifted**: library packages may declare class/enum/interface, consumed via terminal **`import type Pkg.Path.Type [as A];`**; all three kinds in one commit; codes `E-TYPE-IMPORT-*` | classes-first phasing; module-qualified `Geometry.Point` form (deferred) | specs/2026-06-20-epkgtype-lift-crosspackage-types-design.md | ASKED ("all three at once") | ✅ |
 | DEC-037 | 06-20 | Selective type import applies to user/library types ONLY; built-ins stay import-free; **no wildcard** (PHP has no `use A\*`) | `import Core.List.List` | specs/2026-06-20-selective-type-import-design.md | ASKED | ✅ |
-| DEC-047 | 07-01 | **No-wind closure** (design-locked, NOT implemented): fault intrinsics `panic/todo/unreachable/assert` move behind mandatory `import Core;`, called `Core.assert(...)` etc. (`E-UNIMPORTED`); deep imports `import Core.A.B.C` any depth binding bare leaf AND parent-qualified; aliasing extended to stdlib+deep; de-reserve `Attr`→Core.Html, `Error`→Core.Error, `Channel`/`Task`→**`Core.Async`** (dev rejected "Concurrent" as misnomer — tasks are cooperative, never parallel) | keep intrinsics in the wind; `Core.Concurrent` | specs/2026-07-01-no-wind-namespace-and-language-surface-design.md | ASKED | 📐 |
+| DEC-047 | 07-01 | **No-wind closure** (design-locked, NOT implemented): fault intrinsics `panic/todo/unreachable/assert` move behind mandatory `import Core;`, called `Core.assert(...)` etc. (`E-UNIMPORTED`); deep imports `import Core.A.B.C` any depth binding bare leaf AND parent-qualified; aliasing extended to stdlib+deep; de-reserve `Attr`→Core.Html, `Error`→Core.Error, `Channel`/`Task`→**`Core.Async`** (dev rejected "Concurrent" as misnomer — tasks are cooperative, never parallel) | keep intrinsics in the wind; `Core.Concurrent` | specs/2026-07-01-no-wind-namespace-and-language-surface-design.md | ASKED | 📐 ⊳ intrinsic-imports leg superseded by DEC-196 Q3 (two-mode `Core.Assert`/`Core.Abort`, shipped 07-05); deep imports / aliasing / de-reservations still open (C-9) |
 | DEC-048 | 07-01 | Import roots: PSR-4-style optional `[packages]` map in manifest; default root `src/` folder=path; first-party bare; `vendor:` prefix for deps | — | specs/2026-07-01-import-roots-psr4-design.md | ASKED | 📐 (spec committed `8fc85f2`) |
 | DEC-049 | 07-01 | **Keyword-vs-import 3-way rule**: built-in types (`int float string bool bytes decimal void never`, `List Map Set`, `T?`, fn types, ranges) are keywords NEVER imported; user/library types `import type`; stdlib functions `import Core.X` | force-import of primitives; `Integer`/`Float` wrapper objects (Java-autoboxing anti-pattern) | plans/2026-07-01-m-dogfood-benchmark-marathon.plan.md | ASKED (rejected 2 proposals) | ✅ documented (INVARIANTS) |
 | DEC-285 | 07-18 | **Built-in attributes resolve in EVERY "nothing in the wind" import form** (developer-raised: `#[Core.Runtime.Entry]` errored `E-UNKNOWN-ATTRIBUTE` but should work). Recognition of the 7 built-ins (`Entry`/`Route`/`UncheckedOverflow`/`Attribute`-marker/DI `Injectable`/`Provides`/`Transient`) now suffix-matches the canonical dotted path via `ast::attr_path_matches` — so bare leaf (after member-import), any partial qualifier, AND the full canonical path all resolve; import-gating of the bare/partial forms stays with `enforce_injected` (dotted = self-gating), so the discipline is unchanged. Entry single-sourced through `is_entry_attr`→`is_entry`, Route centralized into `is_route` (3 sites). Byte-identical (verified run≡runvm≡php-8.5.8 on the qualified form). **Preferred surface stays bare-after-import** (all examples use it; FEATURES.md notes both resolve) | recognize only bare + one partial (the pre-existing gap); make bare self-gating (would break "nothing in the wind") | developer session directive 2026-07-18; tests/attribute_paths.rs | ASKED | ✅ |
@@ -74,7 +74,7 @@
 | DEC-054 | 06-20 | **Generics reach = ALL** — free fns + methods + classes + (later) enums | free-functions-only | m-rt plan ("I want generics all options") | ASKED | ✅ |
 | DEC-055 | 06-20 | Generic classes: inference-only construction (`Box(7)`, no `Box<int>(7)` turbofish), invariant, no bounds | explicit type-arg syntax | specs/2026-06-20-generic-types-classes-design.md | AUTONOMOUS | ✅ |
 | DEC-056 | 06-20 | S4 unions: **D1 primitive members allowed** (`int\|string`); **D2 one big S4** (unions + match-over-union together); **D3 fully autonomous**; `Pattern::Type` reuses `Op::IsInstance`; lone `Circle =>` stays a catch-all binding (footgun deliberately preserved) | enum members (deferred); S4a-only split | specs/2026-06-20-s4-union-types-design.md | ASKED (D1–D3) / AUTONOMOUS (details incl. footgun) | ✅ |
-| DEC-057 | 06-21 | S5 intersections: **D1 = ≤1 concrete class + N interfaces** (dev overruled Claude's interface-only rec — correctly); `E-INTERSECT-MULTI-CLASS` for ≥2 classes; **D2 = require-agreement `E-INTERSECT-SIG`** (revisit when overloading lands) | interface-only members; first-member-wins conflict rule | m-rt plan; specs/2026-06-20-s5-intersection-types-design.md | ASKED (2 challenge rounds) | ✅ (D2 revisit still open — see CONFLICTS C-8) |
+| DEC-057 | 06-21 | S5 intersections: **D1 = ≤1 concrete class + N interfaces** (dev overruled Claude's interface-only rec — correctly); `E-INTERSECT-MULTI-CLASS` for ≥2 classes; **D2 = require-agreement `E-INTERSECT-SIG`** (revisit when overloading lands) | interface-only members; first-member-wins conflict rule | m-rt plan; specs/2026-06-20-s5-intersection-types-design.md | ASKED (2 challenge rounds) | ✅ ⊳ D2 revisit DONE — DEC-245 (overload-set resolution, BUILT 2026-07-16); C-8 closed |
 | DEC-058 | 06-21/22 | **Method overloading confirmed** (dev explicitly rejected "stay PHP-aligned / don't add it": "this language should be equal or better than PHP"); lowers to ONE dispatching PHP method; compile-time unambiguous, most-specific-wins, `T?`≠`T` | no overloading (PHP parity) | m-rt plan; memory ga-direction-and-autonomy | ASKED | ✅ |
 | DEC-059 | 06-28 | **Return-type overloading**: overloads may differ only in return type; resolved from a SHALLOW/direct sink set; `<type>f(...)` selector (distinct from `as` cast); `E-OVERLOAD-AMBIGUOUS-RETURN`/`-SELECT-CONFLICT`/`-NO-CONTEXT`; dev conceded `discard <int>f()` valid | — | plans/2026-06-28-ga-marathon-super-overloading.plan.md | ASKED | ✅ |
 | DEC-060 | 06-22 | **Totality cluster**: return-on-all-paths `E-MISSING-RETURN` + `never` bottom type + `W-UNREACHABLE` + `W-MATCH-UNREACHABLE`, all front-end-only, sequenced FIRST in M-RT (before overloading) | — | specs/2026-06-22-totality-cluster-design.md; parity triage | ASKED (ordering) / AUTONOMOUS (execution) | ✅ |
@@ -107,7 +107,7 @@
 | DEC-091 | 06-24 | Literal braces: BOTH `\{`/`\}` escapes AND raw strings `r"…"`/`r#"…"#` (lexer-side interpolation split) | parser-side split (can't distinguish `\{`) | introspection-strings-process design | ASKED | ✅ |
 | DEC-092 | 06-24 | Reflection: full name-level read-only introspection now (typeName/className/hierarchy/member names); dynamic-dispatch + attribute reflection rejected; **no ambient superglobals ever** (env/args → M-Batteries; request → M6 typed Request; `$_REQUEST` rejected) | deferred reflection; ambient superglobals | specs/2026-06-24-introspection-strings-process-design.md | ASKED (challenge upheld) | ✅ |
 | DEC-093 | 06-25 | **A-1: `: T` return syntax; `->` fully retired**; typed lambdas TS-identical (`fn(int x): string => …`) | keep `->` | plans/2026-06-25-php-fidelity-and-divergence-audit.plan.md | ASKED | ✅ |
-| DEC-094 | 06-25 | **A-6: `foreach (coll as BINDING)` adopted to REPLACE `for (x in coll)`**; one keyword `as`; 4 binding forms; optional `with int i` counter; `of`/`in` rejected as synonyms | keep `for in`; `of` keyword | same plan | ASKED | ◐ shipped **alongside** for-in, not replacing (see CONFLICTS C-2) |
+| DEC-094 | 06-25 | **A-6: `foreach (coll as BINDING)` adopted to REPLACE `for (x in coll)`**; one keyword `as`; 4 binding forms; optional `with int i` counter; `of`/`in` rejected as synonyms | keep `for in`; `of` keyword | same plan | ASKED | ◐ shipped **alongside** for-in, not replacing ⊳ C-2 closed by DEC-343 (2026-07-26): keep both is now the RULED state |
 | DEC-095 | 06-25 | **A-3: type-first params KEEP** (`(int name)` = PHP-minus-sigil) | TS name-first `name: int` | same plan | ASKED | ✅ |
 | DEC-096 | 06-25 | **A-46: `++`/`--` allowed as EXPRESSIONS** (dev overruled Claude's statement-only KEEP after full hazard briefing); eval order pinned to PHP left-to-right; `W-SEQUENCE-MUTATION` lint sweetener | statement-only | same plan; specs/2026-06-26-m3-stream1-syntax-reshape-design.md | ASKED (overruled) | ✅ *(CORRECTED per DEC-210, 2026-07-13: shipped design is STATEMENT-ONLY — `++`/`--` are NOT expressions and the `W-SEQUENCE-MUTATION` lint was never built; verified `x=i++`/`a[i++]=i++` are parse errors. The overrule to expr-form was itself reversed/never-built; ✅ tracks the statement-only outcome.)* |
 | DEC-097 | 06-25/26 | Strings: two modes `"…"` (interpolating) + `r"…"` (raw); PHP `'…'` rejected; **A-62 `"""…"""` auto-dedent text blocks adopted** (Java-style trailing-strip, interpolating, purely additive); `{w}` interpolation delimiter KEEP (A-7; `${w}`/`{$w}` rejected — reintroduce the sigil) | single quotes; `${}` | same plan | ASKED | ✅ |
@@ -149,7 +149,7 @@
 | DEC-127 | 06-29/07-01 | Perf wins: FNV-1a string hashing; slot-indexed fields S1a/S1b + VM inline cache; COW index-assign in place (`Op::SetIndexLocal`, O(n²)→O(1)); reified-operand side-table | — | memory m4-text-and-mperf-fnv, marathon-perf-mustuse-superparent, cow-index-assign-inplace | AUTONOMOUS (marathons) | ✅ |
 | DEC-128 | 07-01 | M-perf W2 (Rc-share `Value::Str`) DEFERRED — 164 call sites, ROI not demonstrated; CI perf-regression gate shipped instead (`scripts/perf-gate.sh`, ratio + best-of-N) | do the Str sharing now | memory session-2026-07-01-lane1-perfgate | AUTONOMOUS | ✅ gate / 📐 W2 |
 | DEC-129 | 07-01 | M-DX build profiles Dev/Release **side-channels only** — byte-identical run≡runvm≡PHP preserved (the "keystone"); interpreter-only debugger (REPL + DAP) | profile-dependent semantics | plans/2026-07-01-m-dx-error-experience.plan.md; memory m-dx-error-experience | ASKED (milestone) / AUTONOMOUS (slices) | ✅ (unpushed) |
-| DEC-286 | 07-18 | **`EnumVal.payload` inline (`Payload { Zero, One(Value), Many(Vec) }`)** — every 0/1-payload enum node (all Json variants, Option/Result, the common user variant) now stores its payload INLINE, paying no per-node heap `Vec`; only 2+-field variants keep a `Vec`. Byte-identical (2279 tests + differential + php-8.5.8 oracle + all-micro output-identity); microbench-gate PASS, no WIN→LOSS flip, `enum`/`match` benches improved. A broad alloc reduction across the whole value model, single-sourced via `Payload::as_slice`. **PENDING (developer review — the "what's blocking jsonround" answer):** jsonround stays **0.29× (LOSS)** — VM 507ms vs C-`json` 145ms, a 3.4× gap. TWO byte-identical levers tried (DEC byte-cursor parse + this inline-payload) bought only ~3% because ~65% of the ~20 allocs/iter is the `Rc<EnumVal>` BOX ITSELF (one per node), the boxed-enum value model PHP's C zval-array beats structurally. Flipping jsonround needs a **value-model rebuild (arena / lazy-materialize Json nodes)** — a spine-deep architectural change to the user-visible, pattern-matched `Json` enum, possibly still short of C; **Invariant-15 developer decision, NOT autonomously attempted.** The two byte-identical wins are banked regardless | keep the per-node `Vec` (wasteful); autonomously attempt the arena rebuild (Invariant-15 violation + spine risk) | developer all-night session 2026-07-18; measured `phg benchmark`/microbench pinned | AUTONOMOUS (byte-identical perf) + PENDING (arena = ASK) |
+| DEC-286 | 07-18 | **`EnumVal.payload` inline (`Payload { Zero, One(Value), Many(Vec) }`)** — every 0/1-payload enum node (all Json variants, Option/Result, the common user variant) now stores its payload INLINE, paying no per-node heap `Vec`; only 2+-field variants keep a `Vec`. Byte-identical (2279 tests + differential + php-8.5.8 oracle + all-micro output-identity); microbench-gate PASS, no WIN→LOSS flip, `enum`/`match` benches improved. A broad alloc reduction across the whole value model, single-sourced via `Payload::as_slice`. **PENDING (developer review — the "what's blocking jsonround" answer):** jsonround stays **0.29× (LOSS)** — VM 507ms vs C-`json` 145ms, a 3.4× gap. TWO byte-identical levers tried (DEC byte-cursor parse + this inline-payload) bought only ~3% because ~65% of the ~20 allocs/iter is the `Rc<EnumVal>` BOX ITSELF (one per node), the boxed-enum value model PHP's C zval-array beats structurally. Flipping jsonround needs a **value-model rebuild (arena / lazy-materialize Json nodes)** — a spine-deep architectural change to the user-visible, pattern-matched `Json` enum, possibly still short of C; **Invariant-15 developer decision, NOT autonomously attempted.** The two byte-identical wins are banked regardless ⊳ SUPERSEDED by DEC-380 (2026-07-26): CHASE THE WIN — research slice queued | keep the per-node `Vec` (wasteful); autonomously attempt the arena rebuild (Invariant-15 violation + spine risk) | developer all-night session 2026-07-18; measured `phg benchmark`/microbench pinned | AUTONOMOUS (byte-identical perf) + PENDING (arena = ASK) |
 
 ## 7. Concurrency (M6 W4 / green threads)
 
@@ -262,8 +262,29 @@ AskUserQuestion with a verified failing/working program. Full narrative in MASTE
 | DEC-180 | 07-04 | **Error model — HONOR the ratified 3-tier.** "Which error" solved by `Result<T,ErrorEnum>` + exhaustive variant match + typed try/catch (shipped). Complete Result/throws ergonomics + **audit/reclassify faulting natives** (normal-input → Result/throws/`T?`); faults stay uncatchable (bugs). NO catchable faults | reopen keystone → catchable fault subset; both | MASTER-PLAN §2.7 Wave B, §13.1 | ASKED (dev probed twice, reconsidered) | 📐 (Wave B) |
 | DEC-182 | 07-04 | **Canonical `Core.Result<T,E>` + `Core.Option<T>` — injected, explicitly-imported** (were user-defined per-file = "in the wind"). Same pattern as injected `Json` (prelude gated on import + `module_of` registry). `Option<T>` vs built-in `T?`: DISTINCT roles, explicit convert (`Option.ofNullable`/`.toNullable`), NO implicit coercion — `T?` = lightweight/stdlib default, `Option` = opt-in rich monadic. `Error` marker stays built-in; `E` = user enums | Option replaces T? in stdlib; implicit T?↔Option coercion; keep user-defined | MASTER-PLAN §2.7 Wave B, §13.1 | ASKED (dev challenged; reconsidered) | 📐 (Wave B) |
 | DEC-181 | 07-04 | **Editors — LSP-first symmetric, then full-native.** VSCode itself is LSP-first (all smarts via `phg lsp`). LSP-first both editors + thin native shells now (run/debug/test+DAP), THEN full native (rich VSCode ext + native IntelliJ/PSI plugin) as follow-on. **STANDING DoD: every feature → both editors same-change** | build native now (unverifiable here); LSP-only forever | MASTER-PLAN §2.7, §13.1 | ASKED | 📐 (native phase) |
-| DEC-184 | 07-04 | **Type-test operator = FULL SYMMETRY `is` + `instanceof`** (Wave A slice 3). Both operators test/narrow over primitives AND classes, interchangeably: `x is int` ≡ `x instanceof int`, `x is Circle` ≡ `x instanceof Circle`. Both flow-narrow in `if` branches. Developer chose full symmetry OVER the recommended `is`-universal-/-`instanceof`-class-only split (challenged on TIMTOWTDI + `instanceof int` having no PHP precedent; ruled symmetry anyway). Supersedes UNIFIED-SPEC's deferred `is`=identity (identity → named stdlib form later if needed). Discriminable set = match's (int/float/string/bool/null; decimal/bytes/html/attr erase → rejected); same `string`-over-erased-union byte-identity guard | is-universal + instanceof-class-only (recommended, declined); is=identity (spec, superseded) | MASTER-PLAN §0/§13.2 Wave A slice 3 | ASKED (dev challenged, ruled symmetry) | 📐 (slice 3) |
+| DEC-184 | 07-04 | **Type-test operator = FULL SYMMETRY `is` + `instanceof`** (Wave A slice 3). Both operators test/narrow over primitives AND classes, interchangeably: `x is int` ≡ `x instanceof int`, `x is Circle` ≡ `x instanceof Circle`. Both flow-narrow in `if` branches. Developer chose full symmetry OVER the recommended `is`-universal-/-`instanceof`-class-only split (challenged on TIMTOWTDI + `instanceof int` having no PHP precedent; ruled symmetry anyway). Supersedes UNIFIED-SPEC's deferred `is`=identity (identity → named stdlib form later if needed). Discriminable set = match's (int/float/string/bool/null; decimal/bytes/html/attr erase → rejected); same `string`-over-erased-union byte-identity guard | is-universal + instanceof-class-only (recommended, declined); is=identity (spec, superseded) | MASTER-PLAN §0/§13.2 Wave A slice 3 | ASKED (dev challenged, ruled symmetry) | ✅ (shipped — `src/parser/exprs/climb.rs:132-160`, `is` ≡ `instanceof` incl. `x is null`) |
 | DEC-183 | 07-04 | **Flat wildcard-free `match` over `T?` is exhaustive** — `Optional<T>` treated as `T \| null` for match totality: member arms + a `null` arm discharge it, no `_` needed (`int?`, `Circle?`, `(A\|B)?`). Completion of slice-1 (null already discriminable); byte-identity holds (`is_int`/`is_null`/`=== null`, pattern-driven). Bounded caveat: `Optional<enum>` (`Color?`) still needs `_` until enum-variant coverage is threaded through `?` (separate follow-up). Surfaced PENDING by Wave A slice 2, ruled Option A | keep requiring `_`/smart-cast (Option B) | MASTER-PLAN §0/§13.2 Wave A slice 2b | ASKED (dev asked for recommendation, then ruled A) | ✅ (slice 2b) |
+
+### Backfilled pointer rows (⊳ added 2026-07-28, consistency audit — closes C-005: 13 DEC ids were cited across the repo with no register row)
+
+> Pointer rows: id, date, one-line subject, and WHERE the full ruling text lives. DEC-190's ruling
+> existed nowhere else, so it is copied IN FULL here rather than pointed at.
+
+| ID | Date | Decision | Alternatives rejected | Source | Mode | Shipped |
+|----|------|----------|----------------------|--------|------|---------|
+| DEC-185 | 07-04 | **Full `Core.Result` combinator set (Wave B B-2b)**: `map`/`mapErr`/`andThen`/`orElse`/`getOrElse`/`toOption`/`isSuccess`/`isFailure`, UFCS-reached; `filter` intentionally absent (no error to synthesize on `false`). Full ruling: MASTER-PLAN §13.2 decisions log [2026-07-04] | pick-a-subset | MASTER-PLAN §13.2 log; CHANGELOG (B-2b); `examples/README.md` `guide/result-combinators.phg` row | ASKED | ✅ SHIPPED (`src/native/result.rs`, gated `__phorj_result_*` PHP helpers) |
+| DEC-187 | 07-04 | **Full width-aware `phg format` wrapping** — EXPAND-ONLY ruled, then **AMENDED same-day to WIDTH-CANONICAL (Rule 2 only)**; Rule 1 "preserve author breaks" dropped. Full ruling + amendment: MASTER-PLAN §13.2 log [2026-07-04] | split the rules across slices | MASTER-PLAN §13.2 log; `examples/format/README.md` ("the width-canonical formatter (DEC-187)") | ASKED | ✅ (shipped as `phg format`) |
+| DEC-188 | 07-04 | **TS utility types stay REJECTED; use interface segregation** (compose UP with multi-`extends`; ADR escape hatch only if a real case can't be segregated). Full ruling: MASTER-PLAN §13.1.1 | admit `Exclude`/`Partial`/`Omit` | MASTER-PLAN §13.1.1 | ASKED | ✅ (decision-only; no build) |
+| DEC-189 | 07-04 | **stdlib/framework = a sequenced per-component DESIGN PROGRAMME** (Symfony-component/PSR selection principle; each component earns its place via §15 ruling + §14 ladder before building). Full ruling: MASTER-PLAN §13.1.1 | build-the-breadth-at-once | MASTER-PLAN §13.1.1 | ASKED | 📐 (standing programme framing) |
+| DEC-190 | 07-04 | **FULL RULING (copied from MASTER-PLAN §13.1.1 — it exists nowhere else): Core is extensible: all Core CLASSES `open`, all Core methods overridable.** (Developer chose "all Core internals open," NOT a whole-language flip — USER code KEEPS final/closed-by-default + the `open`/`open function` opt-in.) `class MyRequest extends Request { … }` + method override works on any Core class. Made SAFE by the mandatory `override` marker (DEC-192). Call up with `parent.method(…)` / `parent(Ancestor).method(…)`. Enum customization stays "redeclare same-name enum to shadow" (ships). **CORRECTION recorded:** `Core.Result.Success` is an enum VARIANT, not a class — you never "extend a variant"; enums are closed data types (shadow to customize). BREAKING-ish: mark Core classes `open` | whole-language open-by-default flip | MASTER-PLAN §13.1.1 | ASKED | 📐 (not built) |
+| DEC-192 | 07-04 | **Mandatory `override function` keyword**: overriding without it = `E-MISSING-OVERRIDE`; marking a non-override = `E-NOT-AN-OVERRIDE`; parent opts in (`open function`), child confirms (C#/Kotlin/Swift model) — what makes DEC-190's all-open Core safe. BREAKING. Full ruling: MASTER-PLAN §13.1.1 | marker-optional | MASTER-PLAN §13.1.1 | ASKED | 📐 (not built — no `override` in `src/parser/` as of 2026-07-28) |
+| DEC-193 | 07-04 | **Example-coverage audit = its own slice, LATER (after Wave B)**: enumerate every keyword + feature vs `examples/` + playground `gen_examples`; include HTML/templating showcases. Full ruling: MASTER-PLAN §13.1.1 | interrupt the marathon now | MASTER-PLAN §13.1.1 | ASKED | 📐 (queued) |
+| DEC-194 | 07-04 | **User-defined attributes (PHP `#[Attribute]` style)**: an attribute IS a class marked `#[Attribute]`, compile-time-const args, read via `Core.Reflect`; byte-identical attribute READING is the design crux (own §15 + ladder slice under DEC-189). Full ruling: MASTER-PLAN §13.1.1 | string/config metadata only | MASTER-PLAN §13.1.1; M-gap-matrix SYN-118 | ASKED | ◐ PARTIAL (declarable + applyable with checked args on classes + free functions, git `bf05648`/`451fb89`; reflection reading not yet — M-gap-matrix SYN-118 verdict P) |
+| DEC-195 | 07-05 | **Guard-helper for the 3 "divergences" — RULED, then the PREMISE was RETRACTED same day; RE-DECIDED: DROP entirely** (all 3 fault in PHP too — behaviourally consistent; helpers were cosmetic). Full record: MASTER-PLAN §13.2 log [2026-07-05] | keep the helpers (cosmetic) | MASTER-PLAN §13.2 log; `docs/research/b2d-rich-error-audit.md` | ASKED (re-decided on the corrected basis) | ✅ (dropped by ruling — nothing built, deliberately) |
+| DEC-196 | 07-05 | **Examples/conformance audit decisions Q1–Q4**; Q3 = the TWO-MODE intrinsic-import model (`Core.Assert` = { `assert` }, `Core.Abort` = { `panic`,`todo`,`unreachable` }: whole-module→qualified, member→bare, else `E-UNIMPORTED`). Full ruling: MASTER-PLAN §13.2 log [2026-07-05] | single-`import Core;` (the DEC-047 model); bare-always | MASTER-PLAN §13.2 log; `docs/research/2026-07-05-examples-conformance-audit.md` | ASKED | ✅ COMPLETE (Q1+Q2+Q3+Q4 shipped 07-05; `src/checker/intrinsic_imports.rs`) |
+| DEC-198 | 07-03/04 | **`String.format` spec = `{}`-style grammar** shared with W5-1 interpolation specifiers (`%`-style rejected at the time) | `%` sprintf (initially rejected) | MASTER-PLAN §6 W3-5 | ASKED | ⊘ SUPERSEDED by DEC-199 (`{}`-for-format dropped) |
+| DEC-199 | 07-05 | **`String.format` = PHP-style `%` sprintf, SUPERSEDES DEC-198**: a runtime spec can't be statically checked in any syntax, `%` is collision-free with `{expr}` interpolation and transpiles to literal `sprintf`; rendered STRICTLY (wrong type = clean fault, not coercion). Full reasoning chain: MASTER-PLAN §6 W3-5 | keep `{}` | MASTER-PLAN §6 W3-5; KNOWN_ISSUES §`String.format` | ASKED | ✅ (slices 1+2+3a+3b+3c+4a+4b shipped — Wave C conversion set complete) |
+| DEC-303 | 07-19 | **`String.chunk`** — codepoint-based chunking, `__phorj_str_chunk` PHP helper | byte-based chunking | SLICE-STATE 2026-07-19 overnight block (commits `bb39af6f` + `73f31189`) | AUTO (overnight fork rule) | ✅ BUILT (2026-07-19) |
 
 ---
 
@@ -272,14 +293,14 @@ AskUserQuestion with a verified failing/working program. Full narrative in MASTE
 | # | Conflict | Trace | Status |
 |---|----------|-------|--------|
 | **C-1** | **D-L3 (06-18) REJECTED multiple inheritance** ("realized as traits/mixins + interfaces") — yet **S6 shipped real MI** (`class C extends A, B`) *and* S8 shipped traits. | Traced: 06-18 D-L3 reject (next-intuitive-features spec) → 06-21 dev: "multi-inheritance wanted, real game changer, WITHOUT removing traits" (ga-direction memory) → 06-22 dev rejected the single+traits framing **twice**, demanded research → S6 Model-1 explicit-resolution MI ASKED + shipped; Model-3 C3 deferred. So: a legitimate developer reversal, properly recorded each step — but **D-L3's text was never amended**, so the two specs still contradict. | Developer-driven supersession; needs doc reconciliation, not re-adjudication. |
-| **C-2** | **A-6 (06-25) adopted `foreach (coll as …)` to REPLACE `for (x in coll)`** ("free `for` for C-style only") — but commit `0747385` (06-26) shipped foreach **"alongside the typed `for (T x in xs)` form"**; examples still use for-in everywhere; FEATURES.md lists `for … in` ✅ with no replacement note; B1 (06-30) *extended* for-in (string/Map two-binding). | The decided replacement was silently softened into an addition during an autonomous slice. Either the decision or the implementation is wrong. [Verified: both forms parse today.] | **Open — adjudicate** (keep both / execute the replacement / amend A-6). |
+| **C-2** | **A-6 (06-25) adopted `foreach (coll as …)` to REPLACE `for (x in coll)`** ("free `for` for C-style only") — but commit `0747385` (06-26) shipped foreach **"alongside the typed `for (T x in xs)` form"**; examples still use for-in everywhere; FEATURES.md lists `for … in` ✅ with no replacement note; B1 (06-30) *extended* for-in (string/Map two-binding). | The decided replacement was silently softened into an addition during an autonomous slice. Either the decision or the implementation is wrong. [Verified: both forms parse today.] | **Closed by DEC-343 (2026-07-26): keep both** (DEC-248 superseded on this point; cross-form migration hints queued). |
 | **C-3** | **Zero-dep locked framing (06-26): "NO TLS, NO regex, NO http/serde crates, `[dependencies]` empty, verified"** — days later `regex` admitted as dep #2, plus argon2/ctrlc/corosensei (4 deps total). | Each dep individually developer-authorized under the 06-27 dependency policy; but the 06-26 "LOCKED FRAMING" text (native-modules-research plan) explicitly names regex as forbidden and was never updated. | Superseded-in-practice; framing doc stale. |
 | **C-4** | **`text` leaf chosen 06-18 explicitly "not `string` (avoids shadowing the `string` type)"** — naming overhaul (06-30) renamed `Core.Text` → **`Core.String`**. | The original rationale (shadowing) is mooted by PascalCase (`String` ≠ `string`), but no record shows the old rationale being revisited when the rename was made. | Likely fine; confirm the shadowing concern was consciously dismissed. |
 | **C-5** | **Ternary: two same-day records disagree (06-24)** — perimeter spec says "ternary ✅ add"; master plan says "DEFERRED, not rejected" (postfix-`?` collision + expression-if coverage). | [Verified: `? :` is a parse error in the current binary → DEFERRED won.] The perimeter spec was never corrected. | Resolved in practice; fix the stale record. |
 | **C-6** | **M6 design (06-18): OS-thread pools "off the table"** (Rc heap) — yet **M6 W3 shipped an OS-thread pool for `phg serve`** (memory: m6-w3-serve-concurrency), later superseded by green threads. | The W3 pool isolated per-connection state so it didn't share `Value`s, but it contradicts the design's blanket statement; superseded anyway by DEC-132. | Historical; no action beyond doc note. |
 | **C-7** | **CLAUDE.md/docs still document `phg bench`, `phg disasm`, `phg fmt`** while DEC-113 renamed the CLI verbs to `benchmark`/`disassemble`/`format`/`tokenize`. | Doc drift from the unpushed naming overhaul; e.g. project CLAUDE.md instructs `phg bench <file>`. | Doc reconciliation task. |
-| **C-8** | **`E-INTERSECT-SIG` (require-agreement) was decided with "revisited when overloading lands"** — overloading landed (param + return-type); no record shows the revisit happening. | m-rt plan D2 note vs overloading completion. | **Open — adjudicate** (allow intersections whose shared method differs per overloading rules?). |
-| **C-9** | **"Nothing in the wind" (06-18) vs shipped import-free intrinsics** — `panic`/`todo`/`unreachable`/`assert` shipped usable with no import, violating the standing principle for weeks. | Caught by the developer 07-01; fix designed (DEC-047: `import Core;`) but NOT implemented. | Designed fix pending implementation. |
+| **C-8** | **`E-INTERSECT-SIG` (require-agreement) was decided with "revisited when overloading lands"** — overloading landed (param + return-type); no record shows the revisit happening. | m-rt plan D2 note vs overloading completion. | **Closed by DEC-245 (overload-set resolution, BUILT 2026-07-16)** — the scheduled D2 revisit happened. |
+| **C-9** | **"Nothing in the wind" (06-18) vs shipped import-free intrinsics** — `panic`/`todo`/`unreachable`/`assert` shipped usable with no import, violating the standing principle for weeks. | Caught by the developer 07-01; fix designed (DEC-047: `import Core;`) but NOT implemented. | **Partially resolved:** intrinsic imports shipped via DEC-196 Q3 (two-mode `Core.Assert`/`Core.Abort`, 2026-07-05), NOT the DEC-047 single-`import Core;` model; DEC-047's remaining sub-items (deep imports, aliasing, de-reservations) stay open. |
 | **C-10** | **Zero-payload enum-variant construction guidance is stale in older records** — pre-06-24 docs/memory said "construct with `V()`"; mandatory-`new` (DEC-083) made it `new V()`, while *match patterns* still use bare call form `V()` (bare `V =>` remains a silent catch-all footgun, deliberately preserved in DEC-056). | memory zero-payload-variant-call-form (already corrected 07-01) + S4 footgun preservation. | Mostly reconciled; the `V =>` catch-all footgun itself may deserve re-adjudication (it was preserved autonomously). |
 
 ## SUPERSEDED (decision → what replaced it)
@@ -372,6 +393,14 @@ AUTONOMOUS details) are the only ambiguity, and ALL FIVE were re-adjudicated in 
 rulings (MASTER-PLAN §12). 10 conflicts,
 33 supersessions traced.*
 
+⊳ CORRECTED 2026-07-28 (consistency audit): the register now holds **239 `DEC-`/`META-` table rows
+through DEC-388** (re-derived: `grep -cE '^\| ?(DEC|META)-'` = 239, including the 13 backfilled
+pointer rows added the same day; the many bullet-format rulings in the dated sections are
+additional), **≥40 traced supersessions** (31 SUPERSEDED-table rows + the inline `⊳` row
+annotations); conflicts **C-2 (closed by DEC-343)** and **C-8 (closed by DEC-245)** are closed —
+8 of the original 10 remain open. The "MASTER-PLAN §12" pointer above is now **Appendix B**
+(MASTER-PLAN renumbering).
+
 
 ---
 
@@ -412,6 +441,7 @@ one sitting (failing programs + after-state previews were embedded in each dialo
   siblings — closes the UA-L2 nothing-in-the-wind inconsistency; the fix for affected code is one
   member-import line). *Alternatives:* un-gate the siblings (repeals nothing-in-the-wind for the
   module); leave-and-document (permanent wart against the #1 recurring design rule).
+  ⊳ Direction superseded by DEC-386/L-85 → DEC-353 consistency (un-gate bare `DateTime`).
 
 **Run-level meta-rulings (same sitting):**
 - **META-1 — sqlbuild bar: go ALL THE WAY (L2a str-ACL builder → L2b field-transfer → L3
@@ -544,7 +574,9 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
     later use → `ConnectionError`). Files: `src/native/db.rs`, `DB_PRELUDE` in `src/cli/preludes.rs`,
     `tests/database.rs` (9 native unit + 6 phorj fixtures), `examples/database/transactions.phg`. `run ≡ runvm`;
     spine-quarantined (impure); nothing-in-the-wind (subtypes member-gated in `bare_types`).
-    - **PENDING (Invariant 15) — the closure form `db.transaction(() => { … })` + closure `retry`.** NOT a
+    - **PENDING (Invariant 15) — the closure form `db.transaction(() => { … })` + closure `retry`.**
+      ⊳ SHIPPED 2026-07-14 — unblocked by DEC-222 throwing-closure function types (see the DEC-249
+      block); label flipped 2026-07-28, consistency audit. NOT a
       scope choice: a phorj **lambda cannot declare or propagate a checked exception** (`Type::Function`
       has no `throws` clause in the parser/AST; `cur_throws` is empty in a lambda body), so a closure that
       does real DB work cannot carry `throws DbError` nor surface a *catchable typed* error to the wrapper
@@ -658,7 +690,8 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   `parse_type` for the generic head, checker `check_new_coll` self-types via `resolve_type`, all 3
   backends build an empty collection (transpile→`[]`), formatter/lift render, parser test + example
   `guide/empty-collections.phg`; PURELY ADDITIVE — `[]` still works. Full oracle 1975 green. `Set`
-  deferred (no empty-set VM op → would need a new `Op`). **PART-2 PENDING**: remove the empty-`[]`
+  deferred (no empty-set VM op → would need a new `Op`). **PART-2 PENDING** *(⊳ shipped 2026-07-14 —
+  see the PART-2 SHIPPED entry below)*: remove the empty-`[]`
   contextual typing (calls/args.rs `check_arg` + `thread_literal_expected` empty-list path + decl/return
   threading) so bare `[]` errors "use `new List<T>()`", then codemod every empty-`[]` across the repo —
   a DEC-209-sized churn; separate slice, fresh context. **RE-SEQUENCED (2026-07-13, evidence-based):
@@ -707,6 +740,7 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   filter (`memory/philosophy-of-phorge.md`). **Next design activity: a systematic feature-by-feature
   in-language-vs-externalize audit of the current surface.**
 - **DEC-216 — PENDING (developer lean, 2026-07-13): package management is SEPARATE from the language.**
+  ⊳ RESOLVED by DEC-316 (2026-07-20): built as `phg` subcommands — softens the "companion tool" lean, approved at plan-exit.
   `phg vendor` + `phorj.toml` should likely leave the language — "the language does not need to handle
   package management; it needs to be separate." Ladder to adjudicate (present with previews, recommended
   first): (1) **remove entirely** — no dependency mechanism in `phg` at all; (2) **dumb `vendor/`
@@ -791,7 +825,10 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   SAVEPOINT (reuses the slice-C `tx_depth`). The manual `begin`/`commit`/`rollback`/`rollbackQuiet` stay
   (developer ruled BOTH). Retry loop lives in the PRELUDE (`db.transactionRetry`) because only phorj
   source can `catch` the TYPED `SerializationFailure` (`pending_throw` is invisible to a native).
-  - **PENDING adjudication (Invariant 15) — retry SURFACE.** The spec (§5) illustrates one method
+  - **PENDING adjudication (Invariant 15) — retry SURFACE.**
+    ⊳ RESOLVED by DEC-249: the retry surface is `db.transaction(fn, int retries = 0)` (method default
+    params built); `transactionRetry` RETIRED — label flipped 2026-07-28, consistency audit.
+    The spec (§5) illustrates one method
     `db.transaction(retries: N, fn)`, but the language supports NEITHER named args, NOR method default
     params, NOR generic-method overloading — three independent walls that make a single generic
     `transaction` carrying an optional `retries` impossible. Realized as a distinct
@@ -914,6 +951,7 @@ for the full non-transpilable inventory and chose to REOPEN three native-only ru
 as PENDING (NOT re-ruled this session, per the developer's "just note all of this and hand to Fable").
 
 - **DEC-223 — native mailer `Core.Mail` (RULED, build-pending; full spec `docs/specs/archive/2026-07-15-core-mail.md`).**
+  ⊳ BUILT since — `src/ext/mail/{tests,handles,natives,mime}.rs` + `lettre` in the registry (label flipped 2026-07-28, consistency audit).
   A native email primitive, architecturally a **twin of Core.Db** (DEC-208): native-only, spine-quarantined
   (`pure:false` natives → `uses_impure_native` excludes it from `differential.rs`), tested against the
   stack's **Mailpit** faker + deterministic `file`/`null` transports. **LADDER (invariant 14) = case 2,
@@ -945,7 +983,8 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   session.
 - **DEC-225 — REOPENED (PENDING, for Fable): concurrency PHP leg.** Developer chose to reopen whether
   `spawn`/channels (green threads, DEC-133) should attempt any PHP mapping. Current status: no PHP leg
-  (`E-CONCURRENCY-NO-PHP` + `--sequential-concurrency` opt-in warn). ⚠ Any PHP mapping serializes the
+  (`E-CONCURRENCY-NO-PHP` hard error; no opt-in flag exists — DEC-369 deleted the phantom
+  `--sequential-concurrency` from the rule). ⚠ Any PHP mapping serializes the
   program silently — a rule-14 downgrade risk to weigh. NOT re-ruled this session.
 - **DEC-226 — REOPENED (PENDING, for Fable): `#[UncheckedOverflow]` transpile.** Developer chose to
   reopen whether unchecked wrapping arithmetic should try a PHP map. Current status: hard error
@@ -1187,6 +1226,8 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   exit codes via cmd_*_exit). QUEUED: the PHP twin (`__phorj_debug_render`, common domain first —
   enums/sets erase to indistinguishable PHP shapes, so the twin FAULTS on those rather than lying);
   TTY-colorized rendering (byte-identity keeps v1 plain).
+  ⊳ The `__phorj_debug_render` PHP twin is BUILT since (in the DEC-238→DEC-263 interim; 4 files use
+  it, incl. `src/ext/debug/natives.rs`) — label flipped 2026-07-28, consistency audit.
 
 ## 2026-07-16 — FULL REOPEN AUDIT rulings (developer at desk, via AskUserQuestion; audit report = docs/research/2026-07-16-full-reopen-audit.md)
 
@@ -1380,6 +1421,7 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   *Alternatives (offered): untyped-like-PHP bindings (the only type-less declaration in the
   language — rejected); `var`-form bindings (rejected); retire foreach instead (rejected — keeps
   the divergence); keep both (TIMTOWTDI — rejected).* Closes conflict C-2 / flag F-009.
+  ⊳ SUPERSEDED on the for-in point by DEC-343 (2026-07-26): keep both forms; C-2 closed.
 - **DEC-249 — RULED: METHOD default parameters BUILD (extending DEC-236's ctor machinery to
   methods); then the retry surface becomes `db.transaction(fn, int retries = 0)` and
   `transactionRetry` retires.** Resolves DEC-208's retained PENDING the ambitious way: the
@@ -1494,6 +1536,8 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   `hasNext()/next()` implementing `Iterator<Row>`/`Iterator<T>` (internal one-row lookahead
   buffer; pre-1.0 unpushed = cheapest breaking moment; alternative keep-both-protocols rejected:
   dual API forever on the flagship streaming type).
+  ⊳ BUILT since — `Iterator<T>`/`hasNext`/`next` ship (`src/cli/preludes.rs`); `Input.lines()`
+  streams byte-identically on all 3 legs — label flipped 2026-07-28, consistency audit.
 - **DEC-243 addendum — BUILT 2026-07-17 fable:** levenshtein (Wagner–Fischer, bytes) +
   similarText (Oliver's algorithm, bytes) + similarTextPercent (value-returning twin of PHP's
   by-ref `$percent`; PHP leg = pure Tier-1 IIFE — META-7 helper-trade disclosed here). Three-leg
@@ -1961,6 +2005,9 @@ NaN/-inf; parseInt/as-int → both Option/null). 0 reverse-direction (no PHP-fau
 **CONTRADICTS DEC-226** ("checked default transpiles faithfully") — the checked default silently wraps.
 Discriminator = each native's `php:` emitter (helper-vs-lenient-builtin). PENDING developer rulings (2,
 per META-7 helper-vs-accept — asked, not self-decided).
+⊳ RULED + BUILT — see the next section (2026-07-16 ruling); the helpers (`__phorj_checked_*`,
+`__phorj_index`, `__phorj_map_set`/`__phorj_map_remove` — the Map-key *read* was never routed
+through a helper) live in `src/transpile/{gates,expr,call,runtime_php,stmt}.rs`.
 
 ## DEC-255 — RULED (2026-07-16, developer via AskUserQuestion): emit throwing helpers for BOTH families + close the harness gap
 
@@ -2866,6 +2913,10 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
 - **DEC-331 — Web/entry-roles + rich per-type config + web-parity slices (INTERACTIVE DESIGN, QUEUED;
   rulings accumulate here as the dev locks each — this DEC block is the single canonical home per
   Invariant 19, no side plan doc).**
+  ⊳ STATUS CLARIFIED 2026-07-28 (consistency audit): **"LOCKED" = ruled, NOT built.** Beyond
+  S3.1/S3.2 (shipped), D2/D3/D5/D6/D7 remain UNBUILT as of 2026-07-25 verification (`ServeConfig`
+  exists only as a code comment; `respond` is still the live `SERVE_ENTRY`; `E-NO-ENTRY-FOR-ROLE`
+  → 0 src hits; no `http-server-tls` feature) — see the on-hold inventory D.2 #2.
   - **D1 (LOCKED 2026-07-22) — entry roles & config wiring.** Role declared via `#[Entry(kind: Type)]`
     (named arg). Active kinds `Cli`, `Web`; reserved (recognized, unbuilt) `Desktop`, `Mobile`, `Worker`,
     `Embedded`. Config is injected as a **typed parameter** of the entry (DEC-318 entry-param injection),
@@ -3080,6 +3131,8 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   weigh in, else defaulted + recorded): exact shebang-match regex breadth; whether `phg run` on an
   extensionless file needs an explicit `--lang`/stdin affordance. Deliverable joins the tooling
   wave; docs (FEATURES/examples/editors README) same-change per Inv 9/17.
+  ⊳ RESOLVED by DEC-336 (RULED + BUILT 2026-07-24/25); no `--lang` flag was needed — label flipped
+  2026-07-28, consistency audit.
 - **DEC-335 — TWO-TIER TOP TYPES `Any` + `Object` (dev-initiated + RULED 2026-07-23, three
   AskUserQuestion rounds) — SPEC FROZEN (`docs/specs/2026-07-23-any-object-top-types.md`),
   BUILD QUEUED with the design slices.** Dev proposal: "a global parent Object everything
@@ -3250,7 +3303,9 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   `E-WILDCARD-ALIAS`, `E-IMPORT-AMBIGUOUS`, `E-IMPORT-UNKNOWN`, `E-WILDCARD-NO-PROJECT` (loose-mode guard).
   Deferrals (tracked in the spec §PENDING): P-Q-A-1 Core-submodule wildcards; P-Q-A-2 D3 "public+internal"
   wording vs as-built public-only cross-package (awaits dev confirm); P-Q-A-3 soft `W-UNUSED-IMPORT`;
-  P-Q-A-4 group-`{}` sort no-op; P-Q-A-5 Inv-13 file-size debt.
+  P-Q-A-4 group-`{}` sort no-op; P-Q-A-5 Inv-13 file-size debt (⊳ RESOLVED since — every named
+  file split/gone, `scripts/size-gate.sh` reports `fails=0`; verified 2026-07-25, label flipped
+  2026-07-28). P-Q-A-4 was later ruled a delete-the-no-op by DEC-386.
 - **Q-B — visibility model completeness (RULED DV-1..DV-5; DV-1/2/3 + follow-up DONE+certified,
   DV-4 verified already-fixed, DV-5 = separate research pass).** DV-1: a package HIERARCHY (dotted-prefix
   ancestor relation). DV-2: `internal` REDEFINED to "this package + descendant packages" (subtree), not
@@ -3258,7 +3313,7 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   constructor + constructor-promoted params), CHECKER-enforced via the package derived from mangled names,
   erasing to PHP `public` (byte-identical). DV-4: the G4 static-field-visibility P0 was found ALREADY fixed
   (W0-2) — no work. DV-5: global completeness sweep is its own research pass (Q-C, not yet run). Promotion
-  detection single-sourced via `Modifier::is_member_visibility` (drift-proof). Pending dev ruling: P-Q-B-1
+  detection single-sourced via `Modifier::is_member_visibility` (drift-proof). Pending dev ruling: P-Q-B-1 ⊳ RULED as DEC-379 (2026-07-26)
   (overloaded interface-method visibility narrowing — pre-existing, reproduces with `private`; the
   `overloads==1` guard on `E-IFACE-VIS` leaves >1-overload reduced-visibility impls reachable via a plain
   interface-typed receiver).
@@ -3287,6 +3342,8 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   been omitted from this register — Invariant-19 SSOT repair.)
 
 ## DEC-337 — `#[Entry(kind:)]` kind is an injected `EntryKind` enum variant (2026-07-25, RULED + BUILT)
+
+> ⊳ Import-gating direction superseded by DEC-353 (auto-provide injected symbols).
 
 - **Problem.** `#[Entry(kind: Cli)]` (DEC-331) read `Cli`/`Web` as a BARE magic identifier — string-matched
   in `parse_entry_kind`, never imported, never resolved. This violated the "nothing in the wind" invariant
@@ -3375,7 +3432,11 @@ every ruling). Dev-ruled interactively 2026-07-24; built + certified (two clean 
   (AskUserQuestion) KEEP PANELLING past the cap; each round's doc findings were fixed and re-panelled until two
   consecutive fully-clean rounds were reached before commit.
 
-## DEC-339 … DEC-355 — GLOBAL REVIEW 2026-07-25: seventeen open adjudications (ALL **PENDING**)
+## DEC-339 … DEC-355 — GLOBAL REVIEW 2026-07-25: seventeen open adjudications (ALL RULED 2026-07-26 — builds queued; see rows)
+
+> Header corrected 2026-07-28 (consistency audit): every row in this batch was RULED 2026-07-26
+> (see each row's Status column); the earlier `ALL PENDING` header was the stale-label class
+> DEC-362 now guards.
 
 **Provenance.** The developer ran his own review pass, produced ~15 findings, and asked (2026-07-25) for
 them to be verified against real code, widened into a global project review, and prepared as an agenda he
@@ -3420,7 +3481,10 @@ row exists in `src/`, or the row is marked PARTIAL.** That single check would ha
 (`tests/differential.rs` globs `examples/**/*.phg`), so any feature without an example has **zero**
 byte-identity coverage. That is precisely how DEC-339's P0 survived — block scoping has no example.
 
-## DEC-356 … DEC-362 — GLOBAL REVIEW 2026-07-25, second batch: the global sweep (ALL **PENDING**)
+## DEC-356 … DEC-362 — GLOBAL REVIEW 2026-07-25, second batch: the global sweep (ALL RULED 2026-07-26 — builds queued; see rows)
+
+> Header corrected 2026-07-28 (consistency audit): every row in this batch was RULED 2026-07-26;
+> the earlier `ALL PENDING` header was the stale-label class DEC-362 now guards.
 
 Same provenance and same canonical-home split as DEC-339…DEC-355 above; these arose from the three
 *additional* sweeps (Rust source quality, docs consistency/Invariant-19, missing enforcement) rather than
@@ -3451,7 +3515,10 @@ Invariant 1** (self-referential property hook diverges `run` vs `run --tree-walk
 unsatisfiable** for `p with { y = 9 }` (runs + transpiles, but `phg lift` fails on the transpiler's own
 output, and lift has no `E-TRANSPILE-*`-style escape hatch).
 
-## DEC-363 / DEC-364 — GLOBAL REVIEW 2026-07-25, third batch: the on-hold inventory (**PENDING**)
+## DEC-363 / DEC-364 — GLOBAL REVIEW 2026-07-25, third batch: the on-hold inventory (BOTH RULED 2026-07-26 — builds queued; see rows)
+
+> Header corrected 2026-07-28 (consistency audit): both rows were RULED 2026-07-26; the earlier
+> `PENDING` header was the stale-label class DEC-362 now guards.
 
 From the deduplicated on-hold sweep (95 items) — the two that are genuinely new adjudications rather than
 restatements of DEC-339…DEC-362. Analysis: `docs/research/2026-07-25-completeness-register.md` §7.
@@ -3475,7 +3542,10 @@ presumed dependency blocker was never actually met, and the slurp-only file APIs
 measurement showing whole-file reads cost 200 MB), and **the pinned dev-box microbench remains owed —
 only the developer can run it**, and it decides whether the perf-flip campaign has 3 losses left or 1.
 
-## DEC-365 — pre-push microbench gate is unpassable in a remote container (2026-07-26, **PENDING**)
+## DEC-365 — pre-push microbench gate is unpassable in a remote container (2026-07-26, **RULED** — build queued; see row)
+
+> Header corrected 2026-07-28 (consistency audit): the row was RULED 2026-07-26 (SKIP-LOUD +
+> NO-HIDDEN-LOSS); the earlier `PENDING` header was the stale-label class DEC-362 now guards.
 
 | DEC | GR | Question | Recommended (not ruled) | Status |
 |---|---|---|---|---|
@@ -3511,7 +3581,11 @@ home each). Analysis lives in `docs/specs/2026-07-26-block-scope-shadowing.md` �
 | DEC-369 | **The shipped `green` feature is mislabelled "concurrency" throughout the project** (developer-corrected 2026-07-26: *"they are not parallel or concurrent, they are sequential"*). **Evidence for the correction:** `src/green/sched.rs:25-32`'s trap set is `Yield` / `Recv(chan)` / `Join(target)` / `Done` — there is **NO I/O trap**, so a task doing file or socket I/O blocks the single OS thread and every other task waits. Combined with the already-documented `Rc`-heap `!Send` (no parallelism), that means **no parallelism AND no I/O overlap ⇒ zero throughput benefit**; the only benefit is expressiveness. "Concurrency" therefore oversells it to any reader who expects overlap. Scope: **194** `concurren*` hits across docs+code (excl. `target/`, `docs/research/`), `src/green/mod.rs:1` ("uncolored cooperative concurrency"), the internal `uses_concurrency()` API, and **`CLAUDE.md` Invariant 14 names a `--sequential-concurrency` flag that DOES NOT EXIST in `src/`** (doc rot, DEC-362's class) | **Recommended (not yet ruled):** user-facing noun becomes **"cooperative tasks"** (matches the `spawn` + channels surface); "coroutine" stays for the *mechanism* (`corosensei`, stackful); **the words "concurrent" and "parallel" are RESERVED for the real thing** in DEC-370. Rename `uses_concurrency` → `uses_tasks`; delete the nonexistent flag from Invariant 14 | **RULED 2026-07-26 — user-facing noun = "cooperative tasks"; "coroutine" = the mechanism only; "concurrent"/"parallel" RESERVED for DEC-370.** Rename `uses_concurrency` -> `uses_tasks`, sweep the 194 hits, delete the nonexistent `--sequential-concurrency` flag from Invariant 14. "Fibers" considered and rejected — PHP `Fiber` is explicit suspend/resume while phorj is `spawn`+channels, so it would set the wrong API mental model | **RULED — build queued** |
 | DEC-370 | **Developer request 2026-07-26: a REAL parallel/concurrent form in phorj.** Today's `green` is cooperative-sequential (DEC-369). **PHP IS NOT A CONSTRAINT HERE** — DEC-005 doctrine (never delegate a capability to PHP), DEC-058 (*this language should be equal or better than PHP*), and the **already-paved road of DEC-133** (`E-CONCURRENCY-NO-PHP` exists and works, `src/transpile/expr.rs:548`) mean a native-only feature behind a transpile hard error is the NORMAL, ruled pattern — not an obstacle. The real constraint is runtime architecture: the `Value` heap is `Rc`-based hence `!Send` | **Recommended: (2) isolated tasks + copying channels as the target architecture, (4) data-parallel stdlib combinators as the FIRST slice.** (2) keeps `Rc` and the JIT untouched (each task owns its heap; values copy at the channel boundary), reuses the already-backend-agnostic single-sourced scheduler kernel, and barely changes the `spawn`+channels surface. **(1) `Rc`->`Arc` shared memory REJECTED** — an atomic refcount on every value clone taxes the JIT hot path the whole perf campaign rests on, and it forces either a GIL (pointless) or a Rust-style `Send`/`Sync` borrow discipline (enormous surface). (3) worker processes = a deployment shape, not the general model. Owed measurement: copy-at-boundary cost, and per-thread instantiability of interpreter/VM state | **RULED 2026-07-26 — (2) isolated tasks + copying channels as the TARGET architecture, (4) data-parallel stdlib combinators as the FIRST slice.** `E-TRANSPILE-PARALLEL-NO-PHP` follows DEC-133's precedent. (1) `Rc`->`Arc` and (3) worker-processes rejected as above. Owed measurement before build: copy-at-boundary cost + per-thread instantiability of interpreter/VM state | **RULED — build queued** |
 
-## DEC-371 — RATIONALE DECONTAMINATION: decisions justified by "PHP doesn't have it" (2026-07-26, **PENDING**)
+## DEC-371 — RATIONALE DECONTAMINATION: decisions justified by "PHP doesn't have it" (2026-07-26, **RULED** — cleanup slice queued; see row)
+
+> Header corrected 2026-07-28 (consistency audit): the row was RULED 2026-07-26 (the follow-through
+> approved as its own cleanup slice); the earlier `PENDING` header was the stale-label class DEC-362
+> now guards.
 
 **Provenance.** The developer challenged (2026-07-26) whether any decision had been taken on the false premise
 that PHP lacking a feature is a reason not to build it, and asked for every such artifact to be reopened.

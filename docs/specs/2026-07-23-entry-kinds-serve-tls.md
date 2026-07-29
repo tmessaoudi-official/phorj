@@ -4,6 +4,16 @@
 > Contains the cluster's TWO breaking changes (D5: `respond(bytes)` retired; §6 P1: bare
 > `#[Entry]` now requires `kind:`).
 
+## BUILD STATUS (added 2026-07-28, consistency audit — this spec previously had no build-status section)
+
+- **S3.1 ✅ SHIPPED** — `#[Entry(kind:)]` + `E-ENTRY-KIND-REQUIRED` (full `--all-features` gate
+  green incl. PHP byte-identity; recorded in SLICE-STATE, never mirrored here until now).
+- **D4/D5/D6/D7 (and the D2/D3 points folded into D1) — RULED, NOT BUILT** as of the 2026-07-25
+  verification: `Http.ServeConfig` exists only as a code comment, `respond` is still the live
+  `SERVE_ENTRY`, `E-NO-ENTRY-FOR-ROLE` has 0 src hits, and there is no `http-server-tls` feature.
+  See the DEC-331 register block (`docs/research/full-audit/raw/C-decisions.md`) — "LOCKED" there
+  means ruled, not built.
+
 ## 1. Surface
 
 ```phg

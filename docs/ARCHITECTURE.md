@@ -41,25 +41,25 @@ milestone; see "Module decomposition" below. The roles are unchanged.
 | `checker/` | type-check gate (no annotation) |
 | `interpreter/` | tree-walking evaluator — the reference semantics |
 | `compiler/` | AST → `BytecodeProgram` |
-| `chunk.rs` | `Op`, `Chunk` (code + consts + line table), `BytecodeProgram` + `validate` |
+| `chunk/` | `Op`, `Chunk` (code + consts + line table), `BytecodeProgram` + `validate` |
 | `vm/` | stack VM; `exec_op` dispatch; reified call `Frame { func, ip, slot_base }` |
 | `transpile/` | AST → PHP source |
-| `value.rs` | `Value` + single-sourced arith/compare kernels (both backends) |
+| `value/` | `Value` + single-sourced arith/compare kernels (both backends) |
 | `ext/` | DEC-273 extension layer: `registry.rs` (one row per extension — drives the disabled-import gate, `phg extensions`, generated `docs/EXTENSIONS.md`) + one self-contained `ext/<name>/` folder per migrated extension (natives + tests colocated) |
 | `native/` | namespaced stdlib registry keyed by `(module,name)` (`Core.Output`/`printLine`, …); single-sources each native's checker sig + shared `eval` + PHP emission; target of `import Core.*` + `Op::CallNative` |
 | `loader/` | multi-file project loader + cross-package name resolution |
 | `diagnostic.rs` | unified `Diagnostic { stage, message, line, col }` |
 | `limits.rs` | recursion/nesting caps + numeric-width policy |
 | `mem.rs` | std-only Linux `/proc` RSS sampler (`VmRSS`/`VmHWM` + `clear_refs` peak reset) for `benchmark` |
-| `serve.rs` | M6 HTTP serve runtime — `Transport` seam + `TcpTransport`; the determinism quarantine (outside `tests/differential.rs`, covered by `tests/serve.rs`) |
-| `cli/` · `main.rs` | command pipelines (`run`/`check`/`parse`/`tokenize`/`transpile`/`disassemble`/`benchmark`/`build`/`vendor`/`serve`/`explain`) + thin dispatcher |
+| `serve/` | M6 HTTP serve runtime — `Transport` seam + `TcpTransport`; the determinism quarantine (outside `tests/differential.rs`, covered by `tests/serve.rs`) |
+| `cli/` · `main.rs` | command pipelines (`run`/`check`/`parse`/`tokenize`/`transpile`/`lift`/`disassemble`/`benchmark`/`build`/`serve`/`lsp`/`test`/`format`/`debug`/`explain`/`extensions` + PM verbs `add`/`install`/`update`/`remove`) + thin dispatcher |
 
 ### Module decomposition (M-Decomp)
 
 Each whale module was split into cohesion sub-files **inside one `mod`**, so child files see the
 parent struct's private fields/methods — moved inherent methods take `pub(super)`; nothing crate-public
 widens. The three coupled exhaustive `Op` matches (`vm::exec_op` in `vm/exec.rs`, `chunk::validate`,
-`compiler::stack_effect` in `compiler/mod.rs`) each stay **whole** in one method (verified by a dummy-variant
+`compiler::stack_effect` in `compiler/emit.rs`) each stay **whole** in one method (verified by a dummy-variant
 smoke check). Layout:
 
 | Module | mod.rs keeps | cluster files |
@@ -75,8 +75,9 @@ smoke check). Layout:
 
 **Tests mirror the split** as sealed child modules (`#[cfg(test)] #[path] mod`), one file per concept —
 **by language feature** for the cross-cutting `checker/tests/` (integration tests through `check()`), and
-**by construct** for `parser/tests/` (which mirror the source clusters). `tokenizer/` (621 lines, one cohesive
-scanner) and `chunk.rs` (shared `Op`/`validate` contract) are deliberately left single.
+**by construct** for `parser/tests/` (which mirror the source clusters). `tokenizer/` (one cohesive
+scanner) is deliberately left compact; `chunk/` keeps the shared `Op`/`validate` contract split as
+`chunk/mod.rs` + `chunk/op.rs` (the `Op` enum) + `chunk/validate.rs` (+ `chunk/tests.rs`).
 
 ## Two `Frame`s — not the same thing
 `vm::Frame` is a reified call record (`{func, ip, slot_base}`) on an explicit frame stack — the
@@ -86,8 +87,8 @@ are opposite concepts (the rename in P3.5 removed the old name collision).
 
 ## Backends today vs. planned
 Three backends exist as **free functions** dispatched by a string `match` in `main.rs`
-(`cmd_run`/`cmd_the VM leg`/`cmd_transpile`). There is no `Backend` trait yet — `grep -rnE '^\s*(pub )?trait ' src/ | grep -v test`
-finds 4 traits (`Transport`, `DebugFrontend`, `Suspend`, `Task`), none a backend abstraction;
+(`cmd_run`/`cmd_treewalk`/`cmd_transpile`, defined in `src/cli/pipeline.rs`). There is no `Backend` trait yet — `grep -rnE '^\s*(pub )?trait ' src/ | grep -v test`
+finds 5 traits (`Transport`, `DebugFrontend`, `Suspend`, `Task`, `DbObject`), none a backend abstraction;
 the backend seam is deferred to the 4th backend (`phg build`, M2.5) per the Rule of Three — see ecosystem
 spec E-1.
 

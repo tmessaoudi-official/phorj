@@ -38,7 +38,10 @@ NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`
 - **Tiered git hooks** (speed, 2026-07-08 — `scripts/git-hooks/{pre-commit,pre-push}`): **pre-commit**
   runs the fast Rust-only tier (`fmt` + `nextest --features jit`, EXCLUDING the two heavy sweeps
   `every_repo_phg_formats_idempotently_and_safely` + `shipped_manual_example_runs_on_both_backends`) —
-  ~12s vs ~126s. **pre-push** runs the FULL suite (those two included) + `clippy` (`--no-default-features`
+  ~12s vs ~126s (pre-commit also runs `phg format --check examples selftest` + doc-tests;
+  pre-push also runs `fmt --check`, the size-gate, `validate-infra.sh` (DEC-388.4), doc-tests and
+  `cargo build --release` — the hooks are the SSOT of their own steps). **pre-push** runs the FULL
+  suite (those two included) + `clippy` (`--no-default-features`
   AND `--all-features`) + the PHP-oracle spine check + `microbench-gate`. Test-speed rests on
   `Cargo.toml [profile.dev]` (deps opt-2, workspace opt-1); `cargo-nextest` is the parallel runner
   (fallback: `cargo test`).
@@ -80,6 +83,8 @@ asking, when the quality gate above is green. Limits:
 - Commit only green, self-contained changes — never a broken build or red tests.
 - If the safety classifier blocks a `git commit`, present the exact command for manual execution;
   do not retry or bypass.
+- **Never run two commits concurrently** (DEC-378): the hooks share `target/` — two racing
+  `cargo test` runs produce spurious failures. One commit at a time, always.
 
 ## Delivery invariants (the rules — details in `docs/INVARIANTS.md`)
 
@@ -118,8 +123,9 @@ asking, when the quality gate above is green. Limits:
    differential glob) + an `examples/README.md` entry. CLI/tooling features get a walkthrough
    README + a small companion `.phg`. Faults can't be runnable examples — capture them in a
    README instead.
-10. **Determinism.** `run`/`check`/`transpile` never touch the network (`phg vendor` is the only
-    network command); examples use only deterministic inputs; any user-facing list derived from
+10. **Determinism.** `run`/`check`/`transpile` never touch the network (the DEC-316 package-manager
+    verbs `phg add`/`install`/`update`/`remove` are the only network commands; `phg vendor` is
+    retired and errors — DEC-282); examples use only deterministic inputs; any user-facing list derived from
     `HashMap`/`HashSet` iteration is sorted before rendering.
 11. **No perf change without a measured before/after** from `phg benchmark` (and no perf claim
     above [Inferred] without one).
@@ -140,8 +146,9 @@ asking, when the quality gate above is green. Limits:
     (2) no faithful mapping → native-only: `E-TRANSPILE-<FEATURE>` hard error on transpile,
     differential-harness quarantine, and a disclosure paragraph wherever byte-identity is
     claimed; (3) silent semantic downgrade: FORBIDDEN. Every exclusion is a tracked, tested,
-    register-recorded artifact. (First application: concurrency — hard error +
-    explicit `--sequential-concurrency` opt-in with warning.)
+    register-recorded artifact. (First application: concurrency — the `E-CONCURRENCY-NO-PHP`
+    hard error + differential quarantine; DEC-369 deleted the never-shipped
+    `--sequential-concurrency` opt-in from this rule.)
 15. **ADJUDICATION RULE** (ratified 2026-07-02; question FORM amended 2026-07-27). User-visible
     language/design decisions are the developer's, made interactively — an autonomous session
     records them as PENDING questions, never rules on them. Every design question ships with a
@@ -158,7 +165,9 @@ asking, when the quality gate above is green. Limits:
     designing anything meant to beat PHP, survey how other languages (Rust/Kotlin/Swift/TS/Go/C#…)
     solved it. Byte-identity is NOT the priority ordering: emitting a `__phorj_*` helper to keep
     the PHP leg identical is always an acceptable tool — but the trade is ALWAYS surfaced with an
-    explanation and ruled by the developer, never self-decided.
+    explanation and ruled by the developer, never self-decided. Standing rule (DEC-371): PHP's
+    lack of a feature is never a reason against building it; the only PHP-shaped question is
+    which Invariant-14 ladder case the transpile leg takes.
 17. **Always-current surfaces** (ratified 2026-07-16): `phg check` ≡ LSP diagnostics (same
     pipeline, never diverge — DEC-252); **transpile AND lift updated in the same change** as every
     language/stdlib feature (a feature that runs but doesn't transpile/lift, or vice versa, is not
@@ -167,7 +176,9 @@ asking, when the quality gate above is green. Limits:
     benched against it (I/O modules via fixtures — no blanket carve-out); real-application MACRO
     benches (whole programs/pipelines) join the suite; `var/phorj-app` (gitignored) is the
     developer's live real-world comparison app — never propose deleting it. WIN-OR-FLAG applies
-    to all of it.
+    to all of it. NO-HIDDEN-LOSS (DEC-365): an unmeasurable or failing bench is recorded as an
+    OWED verdict, never reported as passed, never re-baselined via `--emit`; a confirmed real
+    loss gets fixed — refactor or implement the win — never suppressed.
 19. **Plans live in the repo; ZERO divergence from the SSOT** (ratified 2026-07-21). Every plan
     or spec Claude produces is persisted IN the repo — the out-of-repo plan-mode file
     (`.claude/plans/*`) is an ephemeral scratchpad, NEVER the record of truth (the container is

@@ -113,8 +113,10 @@ structurally from the declared `Type` annotations — the compiler via `compiler
 finalize→transmute→fn-ptr `unsafe` is the sole first-party island, confined to `src/jit/` behind the
 CI `unsafe-island` gate); `[lints] warnings = "deny"` + `clippy.all = "deny"` in `Cargo.toml` (so a
 warning *fails the build*); the toolchain is pinned (`rust-toolchain.toml`) to keep that gate
-reproducible. The tracked `scripts/git-hooks/pre-commit` runs `fmt --check` + `clippy -Dwarnings` +
-`test`. Green means: `cargo test` + `cargo clippy --all-targets` + `cargo fmt --check` + `cargo build
+reproducible. The tracked git hooks are tiered (2026-07-08): `pre-commit` runs `fmt --check` +
+`phg format --check` + the fast nextest tier; `pre-push` runs the FULL suite + `clippy -Dwarnings`
+(both feature configs) + size-gate + validate-infra + the PHP-oracle spine check + microbench-gate.
+Green means: `cargo test` + `cargo clippy --all-targets` + `cargo fmt --check` + `cargo build
 --release`, all clean. As of 2026-07-09 `jit` is a **default feature**, so those bare commands include
 native codegen; additionally verify the jit-off path with `cargo check --no-default-features` (with
 `jit` off the only way to build, that path can otherwise bit-rot).
@@ -173,7 +175,7 @@ per-op (the "ovf-spec" slice). Correctness rests on a coupling invariant, the sa
   loop past the VM's fault point and even non-terminate where the VM faults (`while (i != 0) { i = i *
   3; }`: `3^k mod 2^64` is never 0 → infinite native loop vs a ~40-iter VM overflow fault). The guard
   bounds native to ≤1 partial iteration past the first overflow. Guard tests:
-  `ovf_spec_*` in `src/jit/tests.rs` (end-to-end `cmd_run` vs `cmd_treewalk`).
+  `ovf_spec_*` in `src/jit/tests/` (end-to-end `cmd_run` vs `cmd_treewalk`).
 
 **Float ops (slice v1).** Floats live in the unboxed `vars` as their f64 BITS (an i64); code `bitcast`s
 I64↔F64 only at the float op. `AddF/SubF/MulF` are TOTAL (overflow → inf, never a fault) → NO sticky,
@@ -207,4 +209,5 @@ Recorded here so this file stays the one-stop invariant read; the normative text
   (DEC-181) unchanged.
 - **Perf-bench doctrine** (DEC-259/267): everything with a PHP equivalent is benched against it
   (I/O via fixtures); real-application MACRO benches join the suite; WIN-OR-FLAG applies to all
-  of it.
+  of it; NO-HIDDEN-LOSS (DEC-365) — unmeasurable = verdict OWED, never "passed"; losses are
+  fixed, never suppressed.

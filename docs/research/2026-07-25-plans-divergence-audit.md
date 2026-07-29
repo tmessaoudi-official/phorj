@@ -1,5 +1,11 @@
 # Planning/Spec Divergence Audit — 2026-07-25 (post Q-A + Q-B night)
 
+> ⊳ STATUS UPDATE (2026-07-28 consistency audit): **8 of the 9 findings below were FIXED shortly
+> after this audit was written** (re-verified item-by-item in the 2026-07-25 on-hold inventory §D.1
+> #26 — the Q-A/Q-B register block exists, MASTER-PLAN says DONE, FEATURES has the Q-B row,
+> CHANGELOG/MILESTONES carry both, both spec annotations landed). **Only E1 remains open.**
+> Read the findings below as the historical record, not the current state.
+
 Scope: verify Invariant 19 (ZERO divergence — every roadmap item / decision / slice-status in exactly
 ONE canonical home; MASTER-PLAN + decision register + SLICE-STATE mutually consistent + up-to-date)
 after tonight's shipped+certified work: Q-A wildcard/group imports (DONE+certified), Q-B visibility
