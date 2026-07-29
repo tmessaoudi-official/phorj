@@ -23,8 +23,8 @@
 
 | # | Item | Why first |
 |---|---|---|
-| 0.1 | **DEC-378** docs-only `pre-commit` fast path + no-concurrent-commits rule | Every later commit pays the ~4 min tier otherwise; this session lost ~45 min to it and its only test failure to the race |
-| 0.2 | **DEC-365** microbench gate: SKIP-LOUD on a discarded cpuset, meaning *"unmeasurable, verdict OWED"* — never *"passed"* | Pushes are blocked from the container without it. Carries the **no-hidden-loss** standing rule |
+| 0.1 | ~~**DEC-378** docs-only `pre-commit` fast path + no-concurrent-commits rule~~ — **BUILT 2026-07-29** (fast path routes on staged paths; the rule is now an enforced `flock`, not a remembered convention) | Every later commit pays the ~4 min tier otherwise; this session lost ~45 min to it and its only test failure to the race |
+| 0.2 | **DEC-365** microbench gate SKIP-LOUD — was already built for *load* and *missing binary*; **2026-07-29 fixed a real hole: it probed the docker BINARY, not the DAEMON, so an unreachable daemon returned setup-error 2 and ABORTED the push** (the cause of every `--no-verify` that session). Remaining: the discarded-cpuset case | Pushes are blocked from the container without it. Carries the **no-hidden-loss** standing rule |
 | 0.3 | **DEC-362** three `pre-push` doc guards, incl. *every diagnostic code named in a decision row must exist in `src/`* | Would have caught three separate phantoms found this session |
 | 0.4 | Flip the **40 stale status labels** (task #43) | Zero-ruling cleanup; stops future sessions acting on false state |
 | 0.5 | **Q28 / DEC-414** re-port the P6 git-argument hardening to `src/pm/fetch.rs` (`--` end-of-options, `protocol.ext.allow=never`, reject `ext::`/`file::` remote helpers and leading-dash refs, scrub `GIT_*`) | The only LIVE security regression on the audit tail (`KNOWN_ISSUES` 4b). A re-port, not a design — the guards were verified once as property P6 |

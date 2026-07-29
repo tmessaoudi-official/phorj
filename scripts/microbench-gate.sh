@@ -53,6 +53,17 @@ else
     echo "microbench-gate: docker absent — SKIP the G-8 mandate gate (infra, not a regression)" >&2
     exit 0
   fi
+  # The BINARY being present does not mean the DAEMON is reachable: the remote dev container ships
+  # the client with no daemon, so `command -v docker` passed, the harness ran, failed to connect, and
+  # returned setup-error 2 — which ABORTS the push. That is the opposite of DEC-365's rule that an
+  # unmeasurable bench is a LOUD SKIP with an OWED verdict, never a block and never a pass. Probe the
+  # daemon itself (`docker version` talks to it; `docker info` also works but is slower).
+  if ! docker version >/dev/null 2>&1; then
+    echo "microbench-gate: docker daemon unreachable — SKIP the G-8 mandate gate (infra, not a" >&2
+    echo "  regression). The G-8 ratchet verdict is OWED: re-run on a box with a live daemon before" >&2
+    echo "  making any perf claim (DEC-365 no-hidden-loss)." >&2
+    exit 0
+  fi
   BIN="${PHG_BIN:-$ROOT/target/release/phg}"
   if [[ ! -x "$BIN" ]]; then
     echo "microbench-gate: release binary $BIN absent — SKIP (run: cargo build --release; infra, not a regression)" >&2

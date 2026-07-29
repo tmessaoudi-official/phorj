@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `microbench-gate` blocked every push in the dev container instead of skipping (2026-07-29, DEC-365)
+- `scripts/microbench-gate.sh` gated on `command -v docker`, which tests for the docker **binary**, not
+  a reachable **daemon**. The remote dev container ships the client with no daemon, so the skip never
+  fired, the harness ran, failed to connect, and returned setup-error **2** — which ABORTS the push.
+  That is the inverse of DEC-365's rule (*an unmeasurable bench is a LOUD SKIP with an OWED verdict,
+  never a block and never a pass*). Now probes the daemon with `docker version` and skips loudly,
+  naming the verdict as OWED. Reproduced (exit 2) and verified fixed (exit 0 + the loud skip).
+  This is what forced `--no-verify` on every push of the 2026-07-29 ruling session.
+
+### Added — `pre-commit` docs-only fast path + a mechanically-enforced no-concurrent-commits lock (2026-07-29, DEC-378)
+- **Docs-only fast path:** if nothing staged is `*.rs`, `*.phg`, `Cargo.toml` or `Cargo.lock`, the hook
+  runs `cargo fmt --check` only and skips `phg format --check` (which needs a build) and the Rust test
+  tier (which cannot test a markdown change). Measured motivation: the 2026-07-26 session spent ~45 min
+  on twelve docs-only ruling commits and the 2026-07-29 session paid the full 1999-test tier on eight
+  more. Routing verified behaviourally on four cases: `.md` alone → fast path; `.md`+`.rs`, `.md`+`.phg`,
+  `.md`+`Cargo.toml` → full tier.
+- **No-concurrent-commits lock:** DEC-378's second half was a *stated* rule, which cannot stop a
+  backgrounded commit — and a race between two hook runs (shared `target/`, plus the `phg` binary the
+  cli tests spawn) was the only test failure of the 2026-07-26 session. The hook now takes an exclusive
+  `flock` and aborts with an explanation if another run holds it. Verified: a second holder is refused.
+
 ### Changed — Invariant-13 debt cleanup: 13 oversized files M-Decomp'd to <300 (2026-07-25)
 - Split 13 pre-existing size-gate breaches (parser/checker/cli/ast/lift/loader/transpile — sizes 504–2066)
   into ~90 cohesive submodules, every resulting file <300 lines. Pure code movement / data reorg — no

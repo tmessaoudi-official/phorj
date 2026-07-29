@@ -26,6 +26,37 @@ command -v cargo >/dev/null 2>&1 || export PATH="/stack/tools/cargo/bin:$PATH"
 # Force the Rust-only gate regardless of any `php` on PATH (the oracle is a pre-push concern).
 export PHORJ_SKIP_PHP=1
 
+# ── DEC-378 part 2: NO CONCURRENT COMMITS, enforced rather than remembered ────────────────────────
+# Two hook runs share one `target/` and both spawn the `phg` binary the cli tests drive, so racing
+# them produces spurious failures — the only test failure of the 2026-07-26 session was exactly this
+# (`--test cli` failed under the race, then passed 29/0 in isolation). CLAUDE.md states the rule; a
+# stated rule cannot stop a backgrounded commit, so take an exclusive lock and fail fast instead.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"${TMPDIR:-/tmp}/phorj-commit-hook.lock"
+  if ! flock -n 9; then
+    echo "[pre-commit] ABORT: another commit's hook is still running (DEC-378 — they share target/" >&2
+    echo "  and the phg binary the cli tests spawn, so racing them fails spuriously). Wait for it." >&2
+    exit 1
+  fi
+fi
+
+# ── DEC-378 part 1: DOCS-ONLY FAST PATH ──────────────────────────────────────────────────────────
+# Measured cost of getting this wrong: the 2026-07-26 session spent ~45 min waiting on twelve
+# docs-only ruling commits, and the 2026-07-29 session paid the full 1999-test tier on eight more.
+# If nothing staged can change compiled or executed behaviour, the Rust tier proves nothing. Scope of
+# "can": `*.rs` (the compiler), `Cargo.toml`/`Cargo.lock` (deps/features), `*.phg` (the corpus the
+# formatter and differential gates read). Everything else — .md, .json, .yml, scripts, hooks — takes
+# the fast path. `cargo fmt --check` is kept either way: it is sub-second and needs no build.
+_staged="$(git diff --cached --name-only)"
+if [[ -n "$_staged" ]] && ! grep -qE '(\.rs|\.phg)$|^Cargo\.(toml|lock)$' <<<"$_staged"; then
+  echo "[pre-commit] DOCS-ONLY fast path (no *.rs / *.phg / Cargo.toml / Cargo.lock staged)"
+  echo "[pre-commit]   skipping: phg format --check, the Rust test tier"
+  echo "[pre-commit] cargo fmt --check"
+  cargo fmt --check
+  echo "[pre-commit] OK (docs-only)"
+  exit 0
+fi
+
 echo "[pre-commit] cargo fmt --check"
 cargo fmt --check
 
