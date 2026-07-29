@@ -63,9 +63,21 @@ queued); everything else is unbuilt. Start at Wave 0.**
 > is COMPLETE (report: `docs/research/2026-07-28-consistency-audit.md`, fixes in commits
 > 082f9ac/252b6fb). Its **§PENDING-question inventory** is being worked through with the developer.
 > **Batch 1 RULED** → DEC-390 (Q1 / DEC-383 closed) · DEC-391 (`srcs` ratified) · DEC-392 (wildcard
-> visibility wording) · DEC-393 (pipe-lambda trailing-op fork closed). **Still owed:** batch 2 =
-> L-25 (`App\`-prefixing / `phpInterop`) · L-86 (DB column naming + error-namespace) · DEC-366
-> ride-along · maxBy/minBy representation lever; batch 3 = the substantial two, L-22 (runtime-config
+> visibility wording) · DEC-393 (pipe-lambda trailing-op fork closed).
+> **Batch 2 RULED** → **DEC-394** (error classes: hard collision error + DROP the prefixes, module-scoped;
+> qualified catch already works) · **DEC-395** (nullable arena `Kind` — BUILD NOW, own slice; 652 `Kind::`
+> sites; delete the `??`-fusion peephole if the general path matches it) · **DEC-396** (DEC-339 matrix +3
+> ACCEPTED rows, +1 REJECTED hygiene row `function(int x){int x=2;}`, `using`/local-fn scope forms,
+> `_` exempt) · **DEC-397** (DEC-366 lifter hoist RIDES in the DEC-339 slice — provisional default ratified)
+> · **DEC-398** (field attributes as a GENERAL capability, DB mapping its first consumer — attribute NAME
+> still open). Bookkeeping: the database rename is **DEC-350** (ruled 2026-07-26, `Core.Database.Connection`,
+> `Module` suffix drops — build-order 5.4, UNBUILT; `preludes.rs` still says `Core.DatabaseModule`).
+> **3 batch-2 questions still OPEN with the developer:** (A) lambda capture model — implicit-capture-by-value
+> + captured-name-is-live + the `Mutable<T>` escalation guard, vs explicit PHP-style `use()`; (B) F2
+> `namespaceRoot` as an explicit opt-in knob (cost corrected: the prefix enters at ONE mangling chokepoint,
+> not 88 sites) and whether vendored packages are exempt; (C) the field-attribute NAME (`#[DbName]` /
+> `#[MapsTo]` / `#[ColumnName]`).
+> **Still owed after that:** batch 3 = the substantial two, L-22 (runtime-config
 > catalog) + L-33 (DEC-324's 7 TOP items); batch 4 = the 3 reopenable auto-rulings (DEC-224/225/226)
 > + 2 bookkeeping items + Q28 (PM git-arg hardening, KNOWN_ISSUES 4b) scheduling. Then the 5 owed
 > measurements (DEC-339/357/377 computable here; DEC-365/370 need the dev box), then resume the build

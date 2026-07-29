@@ -796,9 +796,12 @@ not a panic:
   hydration cannot bound a cycle; graph/recursive loading is deliberately ORM territory (DEC-208). (c) The
   synthesized helper names extend to `phorjQueryScalar<Label>` / `phorjQueryMap<KLabel><VLabel>` (same
   astronomical-collision disclosure). (d) A **column naming strategy** (snake_case-DB ↔ camelCase-phorj,
-  the 4th slice-B item) is **NOT shipped** — deferred to a follow-up slice B2 pending a developer ruling on
-  its surface (see `docs/plans/MASTER-PLAN.md` DEC-208 PENDING). The default (strict-exact by-name mapping)
-  is unchanged.
+  the 4th slice-B item) **SHIPPED** as slice B2 + **DEC-258**'s COMBINED model — `Naming.Exact` (default) /
+  `Naming.SnakeToCamel`, a promoted `naming` field on the connection, `.namingStrategy(…)` copy-builder,
+  baked into column literals when statically traceable and runtime-dispatched when not
+  [Verified: `src/checker/desugar_db.rs:8-23`]. The label above was stale; flipped 2026-07-29. The default
+  (strict-exact by-name mapping) is unchanged. **Still open:** a PER-FIELD override for schemas matching
+  neither strategy — ruled as **DEC-398** (field attributes as a general capability; attribute name pending).
 
 - **`Core.DatabaseModule` value mapping (DEC-208 slice E) — shipped subset (enum/decimal/JSON) + `DateTime` deferred.**
   Three column→type conversions the hydration desugar performs at compile time, composing with the
