@@ -1274,10 +1274,18 @@ per-slice realization notes — the authoritative slice-level record).
   naming strategy = the DEC-258 COMBINED model: `naming` is a real promoted field
   (`new Database(dsn, new Naming.SnakeToCamel())` = whole-connection; `prepare` copies it onto each
   Statement; per-statement `namingStrategy(...)` overrides) — statically-traceable strategies BAKE
-  at compile time (zero runtime cost; strict-exact default unchanged), untraceable ones dispatch on
+  at compile time (zero runtime cost), untraceable ones dispatch on
   the statement's `naming` field at run time (dual baked helpers + one branch per hydration call;
   `E-DB-NAMING-NOT-CONST` retired, never a silent downgrade); value mapping enum/decimal/Json
   at compile time (timestamp→DateTime gated on DEC-247's build).
+  **DEFAULT since DEC-403 (2026-07-29, supersedes DEC-258's polarity): `Naming.SnakeToCamel` —
+  camelCase in phorj, snake_case in the database.** That pairing is the convention on both sides
+  (phorj already mandates camelCase; SQL schemas are snake_case), so it is the default and every
+  other strategy — including strict `Naming.Exact` — is the OPT-IN. Precedence, most-specific first:
+  `#[ColumnName("…")]` on the field → per-statement `namingStrategy(…)` → the connection's `naming`
+  → this default. A derived lookup that misses MUST show its work in the error (the failing name was
+  derived by the compiler, not written by the user): it names the field, the derivation, the columns
+  the row actually has (`Row.columnNames`), and both escapes.
 - **Writes**: `exec()` → affected count · `lastInsertId()`/`execReturningId()` · bulk
   `executeMany(rows)` (prepare-once, savepoint-atomic).
 - **Transactions**: BOTH the closure form `db.transaction(fn)` (commit-on-return, auto-rollback +

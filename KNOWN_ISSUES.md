@@ -799,8 +799,10 @@ not a panic:
   the 4th slice-B item) **SHIPPED** as slice B2 + **DEC-258**'s COMBINED model — `Naming.Exact` (default) /
   `Naming.SnakeToCamel`, a promoted `naming` field on the connection, `.namingStrategy(…)` copy-builder,
   baked into column literals when statically traceable and runtime-dispatched when not
-  [Verified: `src/checker/desugar_db.rs:8-23`]. The label above was stale; flipped 2026-07-29. The default
-  (strict-exact by-name mapping) is unchanged. **Still open:** a PER-FIELD override for schemas matching
+  [Verified: `src/checker/desugar_db.rs:8-23`]. The label above was stale; flipped 2026-07-29. **The DEFAULT was FLIPPED by DEC-403
+  (2026-07-29): `Naming.SnakeToCamel` — camelCase model, snake_case columns — with strict `Naming.Exact`
+  becoming the opt-in; supersedes DEC-258's polarity, carries a show-your-work diagnostic requirement.**
+  **Also open:** a PER-FIELD override for schemas matching
   neither strategy — ruled as **DEC-398** (field attributes as a general capability; attribute name pending).
 
 - **`Core.DatabaseModule` value mapping (DEC-208 slice E) — shipped subset (enum/decimal/JSON) + `DateTime` deferred.**

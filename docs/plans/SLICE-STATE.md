@@ -76,7 +76,11 @@ queued); everything else is unbuilt. Start at Wave 0.**
 > + captured-name-is-live + the `Mutable<T>` escalation guard, vs explicit PHP-style `use()`; (B) F2
 > `namespaceRoot` as an explicit opt-in knob (cost corrected: the prefix enters at ONE mangling chokepoint,
 > not 88 sites) and whether vendored packages are exempt; (C) the field-attribute NAME (`#[DbName]` /
-> `#[MapsTo]` / `#[ColumnName]`).
+> `#[MapsTo]` / `#[ColumnName]`) — **all three since RULED: DEC-399 (`#[ColumnName]`), DEC-400 (F2 knob,
+> default-off/project-only), DEC-401 (`declare(strict_types=1)`), DEC-402 (PSR-12 emitter), DEC-403 (DB
+> naming default FLIPPED to snake↔camel, superseding DEC-258's polarity). Lambda capture model: **DEC-404**
+> (implicit capture-by-value KEPT; a captured name is LIVE inside the lambda; `Mutable<T>` escalation
+> guard) — rides with DEC-357/368 in build-order 4.1.**
 > **Still owed after that:** batch 3 = the substantial two, L-22 (runtime-config
 > catalog) + L-33 (DEC-324's 7 TOP items); batch 4 = the 3 reopenable auto-rulings (DEC-224/225/226)
 > + 2 bookkeeping items + Q28 (PM git-arg hardening, KNOWN_ISSUES 4b) scheduling. Then the 5 owed
