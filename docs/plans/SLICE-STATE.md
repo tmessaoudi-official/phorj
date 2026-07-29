@@ -59,6 +59,14 @@ queued); everything else is unbuilt. Start at Wave 0.**
 > DEC-204/205 (2026-07-12) — whether 7.5 re-opens them or becomes their build slice is PENDING the
 > developer. Do not build either side of that overlap before the ruling.
 
+> ▶ **NEXT SESSION CURSOR (set 2026-07-29)**: the 2026-07-28 consistency audit is COMPLETE
+> (report: `docs/research/2026-07-28-consistency-audit.md`, fixes in commits 082f9ac/252b6fb).
+> The next interactive session's job is the **§PENDING-question inventory** in that report —
+> 26 developer questions (Q1 first: it gates build-order 7.5) + Q28 (PM git-arg hardening,
+> KNOWN_ISSUES 4b) — then resume the build order at Wave 0. DEC-268 formality: one final clean
+> certification round is owed on the audit batch (or waive it explicitly). Ask questions per
+> `.claude/skills/ask-human/SKILL.md` — plain text, one at a time, never `AskUserQuestion`.
+
 **STANDING RULE — DEC-387, project-wide, not session-scoped:** never `AskUserQuestion`. Put every
 question in the message body with context, a minimal concrete example, numbered options each stating
 its own after-state, the recommended option first with its reason, and a visible *"none of these /
