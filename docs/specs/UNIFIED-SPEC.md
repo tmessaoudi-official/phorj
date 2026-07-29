@@ -547,8 +547,10 @@ exports:
 
 Both kinds may contain any number of `private`/`internal` helper types and functions (single-file-
 scoped, invisible across files — the ergonomic allowance). A file may NOT mix a public type with a
-public free function, nor declare two public types. **A file declaring the entry point `main` is
-fully exempt** (covers every single-file guide example, loose `phg run`, `-e`/stdin).
+public free function, nor declare two public types. **A file carrying an `#[Entry]` attribute is fully exempt** (covers every single-file guide example,
+loose `phg run`, `-e`/stdin). The NAME `main` grants no exemption and no entry status — only the
+attribute does (DEC-415). As built, the exemption is scoped to `EntryKind.Cli`; the Web case is an
+open question in the register.
 
 | code | when |
 |---|---|

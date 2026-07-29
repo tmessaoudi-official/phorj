@@ -1,6 +1,43 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-07-27) — **AGENDA FULLY RULED. WAVE 5.5 IS BUILT. NEXT: WAVE 0.**
+## ✅ CURRENT CURSOR (2026-07-29) — **WAVE 0 IS COMPLETE. NEXT: WAVE 1.1 (DEC-339).**
+
+### ✅ BUILT 2026-07-29 — WAVE 0, all five rows
+
+| # | What shipped | Evidence |
+|---|---|---|
+| 0.1 | **DEC-378** docs-only `pre-commit` fast path + the no-concurrent-commits rule turned into an enforced `flock` (it was a *remembered convention*, and the race had already produced a spurious failure) | docs commits ~40s → ~4s |
+| 0.2 | **DEC-365** — the microbench gate probed the docker **binary**, not the **daemon**, so an unreachable daemon returned setup-error 2 and **aborted the push**. That was the cause of every `--no-verify` that session | pushes now run the full gate; the gate SKIPs loud |
+| 0.3 | **DEC-362** `scripts/doc-guards.sh` — G1 paths / G2 DEC rows / G3 bare SHAs / G4 diagnostic codes; G2 hard, the rest ratcheted against a 142-entry baseline | found 3 DEC ids with no register row on its first run, then caught a fake id in my own CHANGELOG on its first push |
+| 0.4 | The **stale-label sweep** — IN PROGRESS. Several labels were already correct (the consistency audit had fixed them), so each is verified rather than trusted. Produced **DEC-415** | see below |
+| 0.5 | **Q28 / DEC-414** — re-ported the P6 git argument/transport hardening the DEC-316 package manager never inherited. `ext::`/`file::` helper rejection, leading-dash + empty rejection, `--` on clone, `-c protocol.ext.allow=never`, `GIT_*` scrubbed | 6 tests; the 5 rejection tests each verified to FAIL with the guard neutered. `KNOWN_ISSUES` 4b closed |
+
+**DEC-415 (developer-ruled, from 0.4):** *"the name main means nothing! a free function or a static
+method needs `#[Entry(..)]` to be considered!"* — and the error is about multiple **ENTRIES**, not
+multiple mains. It was **already implemented** (`E-DUPLICATE-ENTRY-KIND`), so the work was hygiene: the
+dead NAME-based resolver `entry_point()`/`entry_point_count()` deleted (zero callers — they were the
+source of a FALSE guarantee repeated in three backend comments), the comments corrected, the retired
+`E-MULTIPLE-MAIN` explain arm rewritten to point at the live code. **The live rule is one entry PER
+KIND** — one `Cli` + one `Web` may coexist and five shipped examples depend on that.
+
+### ⚠ OPEN QUESTION for the developer (found 2026-07-29, NOT ruled — Invariant 15)
+
+**Is the public-surface file-layout exemption right to be `Cli`-only?** `loader::fs::validate_public_surface`
+exempts entry files via `entry_for(prog, EntryRole::Cli)`, so a file whose ONLY entry is
+`#[Entry(kind: EntryKind.Web)]` must still obey one-public-type-or-public-functions-never-both.
+[Verified by reading the code; no shipped example trips it, so it is **latent, not a live defect**.]
+Asymmetry looks unintended, but it is user-visible language behaviour → the developer rules it, not me.
+
+### NEXT: **Wave 1.1 — DEC-339** (the P0: redeclaration of a live local/param binding)
+
+Migration cost is MEASURED (DEC-412): **exactly one in-tree site**, `examples/guide/math.phg:54`
+(`l1` is `int` at :46 and `float` at :54 — same scope, different type). One rename; nothing else in
+270 `.phg` files. The slice also carries **DEC-396**'s matrix additions, **DEC-397**'s lifter hoist,
+**DEC-404**'s captured-name-is-live rule and **DEC-410**'s `enum extends` diagnostic.
+
+---
+
+## (historical) 2026-07-27 cursor — agenda fully ruled, Wave 5.5 built
 
 **READ FIRST: `docs/plans/2026-07-26-ruled-build-order.md`** — the single ordering of everything ruled,
 Wave 0 (unblock the workflow) through Wave 6 (real parallelism), plus the 5 **owed measurements**.
@@ -53,7 +90,7 @@ a vetted crate, the split lifetime block, stdlib wildcards, the `Core.Text`/`Cor
 tail). **Four items stay unruled** (L-22/25/33/86 — the substantial ones; L-19/28/31 were RULED 2026-07-29 as
 DEC-392/393/391, batch 1 of the audit question sweep). **Wave 5.5 (DEC-354) is built, plus DEC-388.1–.4 (2026-07-27: disk-reclaim, `/forge`
 re-admitted, `backend-parity-reviewer` agent, `validate-infra.sh` in pre-push; 388.5 `/qa-sweep`
-queued); everything else is unbuilt. Start at Wave 0.**
+queued); everything else was unbuilt AT THAT DATE. Start at Wave 0.** *(superseded — Wave 0 is now COMPLETE; see the live cursor at the top of this file.)*
 
 > ✅ **Q1 knot RESOLVED (DEC-390, developer 2026-07-29)**: DEC-383 is closed as bookkeeping — its
 > forks (a)/(c) *are* DEC-205/DEC-204, ruled 2026-07-12. **Build-order 7.5 is a BUILD slice**

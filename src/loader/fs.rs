@@ -110,10 +110,15 @@ pub(super) fn validate_package_decl(prog: &Program, file: &Path) -> Result<(), S
 }
 
 /// The public-surface file-naming rule (`docs/specs/2026-06-28-public-surface-file-rule-design.md`): a
-/// non-`main` file's public face is either exactly one public named type (and the file stem equals it,
+/// non-entry file's public face is either exactly one public named type (and the file stem equals it,
 /// byte-exact incl. casing) or some public free functions (no public type) — never both, never two
 /// public types. `private`/`internal` helpers and `declare` (foreign) items ride along free; an entry
-/// file (declares `main`) is fully exempt. Loader-only — never touches a backend.
+/// file is fully exempt. Loader-only — never touches a backend.
+///
+/// "Entry file" means one carrying a **`#[Entry]` attribute** — the NAME `main` grants nothing
+/// (DEC-415). Note the exemption is deliberately scoped to `EntryRole::Cli` below; whether a file whose
+/// only entry is `EntryKind.Web` should be exempt too is an OPEN question for the developer (recorded in
+/// the register — no shipped example trips it today, so this is latent, not a live defect).
 pub(super) fn validate_public_surface(prog: &Program, file: &Path) -> Result<(), String> {
     use crate::ast::Visibility;
     // Entry/program files mix freely under any name.

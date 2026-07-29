@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Docs — SSOT reconciliation after Wave 0 (2026-07-29)
+- **`MASTER-PLAN` and `SLICE-STATE` had diverged** on the unruled count — the roadmap said *"seven items
+  stay deliberately unruled (L-19/22/25/28/31/33/86)"* while the slice cursor said four, because
+  L-19/28/31 were ruled on 2026-07-29 as DEC-392/393/391. The slice cursor was right; the roadmap is
+  corrected. Invariant 19 forbids exactly this fork, so it is called out rather than quietly patched.
+- `SLICE-STATE` now reads **"Wave 0 is COMPLETE, next is Wave 1.1 (DEC-339)"** with a per-row evidence
+  table; the stale *"NEXT: WAVE 0 … everything else is unbuilt"* header is marked superseded in place.
+- **Two stale name-magic claims fixed** (the DEC-415 follow-through): `loader::fs::validate_public_surface`'s
+  doc-comment said a *"non-`main` file"* and *"an entry file (declares `main`)"* — directly contradicting
+  the code beneath it, which keys on `#[Entry]`; and `UNIFIED-SPEC` said *"a file declaring the entry point
+  `main` is fully exempt"*. Both now say the exemption comes from the **attribute**.
+- **New PENDING question recorded, not ruled**: that layout exemption tests `EntryRole::Cli` only, so a file
+  whose only entry is `EntryKind.Web` is not exempt. Verified by reading the validator and its single call
+  site; no shipped example trips it, so it is latent rather than a live defect. Being user-visible language
+  behaviour, it is the developer's call (Invariant 15) and is queued to Wave 4.4 where DEC-345 already
+  touches these validators.
+
 ### Security — re-ported the git argument/transport hardening the package manager had lost (2026-07-29, Q28 / DEC-414)
 - `src/pm/fetch.rs` passed a dependency's `url` and `ref` straight to `git clone`/`git checkout`. Both
   come from a `phorj.json` spec, i.e. from whatever repository a user is asked to `phg install` — and

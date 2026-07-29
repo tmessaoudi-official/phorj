@@ -3916,3 +3916,24 @@ double-colon helper forms are refused. A regression test pins six legitimate for
 neutered** — they detect the gap rather than merely passing. `KNOWN_ISSUES` item 4b is closed, with one
 residual recorded there for a later pass: the helper check is a DENYLIST, and an allowlist of
 `https`/`ssh`/`git`/`file` transports plus bare paths would be stronger.
+
+### PENDING QUESTION (raised 2026-07-29, NOT ruled) — is the file-layout exemption right to be `Cli`-only?
+
+Found during the Wave-0.4 sweep while correcting the entry-point docs for DEC-415, and recorded rather
+than decided (Invariant 15 — user-visible language behaviour is the developer's call).
+
+`loader::fs::validate_public_surface` exempts entry files from the public-surface file rule (one public
+type whose name is the file stem, OR public free functions, never both) — but it tests
+`entry_for(prog, EntryRole::Cli)`, so the exemption is **Cli-only**. A file whose ONLY entry is
+`#[Entry(kind: EntryKind.Web)]` is therefore NOT exempt and must still obey the rule.
+
+[Verified by reading the validator and its single call site in `loader::assemble`; the check runs on the
+PROJECT-assembly path, so a loose single-file `phg check` never reaches it.] **No shipped example trips
+this**, so it is latent, not a live defect — the full suite is green. The asymmetry reads as unintended
+(DEC-415 established that entry status comes from the attribute, and `Web` is as much an entry kind as
+`Cli`), but "which entry kinds exempt a file from the layout rule" is a language-surface question.
+
+Options when this is taken up: (a) exempt any `#[Entry]` regardless of kind; (b) keep Cli-only and say
+why in the spec; (c) exempt per-kind with an explicit list. No recommendation recorded here — it needs
+the developer's ruling, and it belongs in the Wave-4.4 slice (DEC-345, the package-validator work) where
+the surrounding validators are already being touched.
