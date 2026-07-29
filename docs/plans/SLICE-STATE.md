@@ -81,8 +81,15 @@ queued); everything else is unbuilt. Start at Wave 0.**
 > naming default FLIPPED to snake↔camel, superseding DEC-258's polarity). Lambda capture model: **DEC-404**
 > (implicit capture-by-value KEPT; a captured name is LIVE inside the lambda; `Mutable<T>` escalation
 > guard) — rides with DEC-357/368 in build-order 4.1.**
-> **Still owed after that:** batch 3 = the substantial two, L-22 (runtime-config
-> catalog) + L-33 (DEC-324's 7 TOP items); batch 4 = the 3 reopenable auto-rulings (DEC-224/225/226)
+> **Batch 3 RULED** → DEC-405 (four web-pack shapes ratified) · DEC-406 (trusted proxies: deny-by-default
+> CIDR + rightmost-hop + loopback-gated dev hatch) · DEC-407 (`Range` split from `gzip`; `flate2` admitted
+> as dep #16, vetted 1.1.9/pure-Rust default; **bz2 RE-OPENED** — flate2 cannot serve it and the only
+> mature bzip2 crate is C-backed) · DEC-408 (const expressions + const-as-default-param + enum `implements`
+> + enum constants + a separately-named `lazy`, ONE slice) · DEC-409 (**no global `ini_set`** — immutable
+> startup config on the D1 chain + lexically-scoped `Config.with(…)` + per-object config; catalog round 1 =
+> Claude enumerates, developer rules over many rounds) · DEC-410 (**enum `extends` REJECTED** — sealed
+> hierarchies already ship and give subsumption + exhaustiveness soundly, proven 3-leg).
+> **Still owed:** batch 4 = the 3 reopenable auto-rulings (DEC-224/225/226)
 > + 2 bookkeeping items + Q28 (PM git-arg hardening, KNOWN_ISSUES 4b) scheduling. Then the 5 owed
 > measurements (DEC-339/357/377 computable here; DEC-365/370 need the dev box), then resume the build
 > order at Wave 0. DEC-268 formality: one final clean certification round is owed on the audit batch
