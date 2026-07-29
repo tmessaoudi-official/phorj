@@ -4028,3 +4028,36 @@ failure across 270 `.phg` files. Renamed to `lg1`; stdout unchanged.
 bug in the same spec, where PHP function scope lifts to non-compiling phorj block scope. It is the same
 insight from the other direction and now has a second reason to exist, since the lifter must not emit
 programs this rule rejects.
+
+### DEC-340 BUILD NOTE (2026-07-29) — the P1 is fixed; item 3 is blocked on a Ladder ruling
+
+Items 1, 2, 4 and 5 BUILT. `db.transaction` now records the depth it finds on ENTRY and unwinds to
+exactly that on both failure paths (throw and commit-failed), via a new `unwind_to_inner` that loops
+`rollback_inner` — the previous single call could be consumed by a `begin()` leaked anywhere inside the
+closure. Reproduced before fixing (`bal` 100 → **999** immediately after the "rolled back" transaction and
+**999** after a later commit) and verified after (100 twice). The caller-owned-outer-transaction case that
+made depth-0 wrong is now a test: depth 1 before, 1 after, the caller's `555` survives and commits.
+`rollbackAll()` + `transactionDepth()` shipped on the prelude; 4 tests in `tests/database.rs` run every
+scenario on both backends, and `examples/database/transaction-closure.phg` gained the leaked-`begin` case.
+
+**Two guards caught real mistakes of mine.** The whole-module purity assertion in
+`native::process_tests` rejected `transactionDepth` as `pure: true` — correctly, since it reads mutable
+connection state and marking it pure would invite folding or reordering. And a `db_native!`-wrapped
+`transactionDepth` returned a `DatabaseResult` enum where the prelude declared a plain `int`, which
+surfaced as *"cannot interpolate enum into a string"*; it is now unwrapped, since reading a `Cell` cannot
+fail.
+
+**Item 3 (the PHP leg) is BLOCKED — not skipped.** The spec asked for a savepoint helper, describing the
+emitter as "a literal placeholder comment". True, but incomplete: `Core.DatabaseModule` is deliberately
+QUARANTINED by `E-TRANSPILE-DB` (Ladder case 2, register ~:1005), so the placeholder was UNREACHABLE and a
+correct helper is equally unreachable. Making the leg live means lifting that quarantine — a case-2 →
+case-1 move for the whole module — which Invariants 14 and 16 leave to the developer. The helper set was
+still written (`src/transpile/db_php.rs`: per-PDO-handle depth in a `SplObjectStorage` mirroring the Rust
+`Rc<Cell<u32>>`, `SAVEPOINT phorj_sp_N` with the SAME savepoint names the Rust legs emit) and the three
+`php:` emitters repointed at it, replacing a `->beginTransaction()` mapping that could not express phorj's
+nesting at all. Staged and ready behind the `uses_db` gate; the open question is in the spec file.
+
+**Naming note (2026-07-29).** Everything above says `Core.DatabaseModule` because that is the AS-BUILT
+name. **DEC-350 renames it** (`Core.Database`, `Connection`, `Module` suffix drops) and is RULED but
+unbuilt at build-order slice 5.4, so this note will need sweeping with that rename. Recording it here
+because the register already warns that as-built ≠ ruled and both must be checked before stating a name.

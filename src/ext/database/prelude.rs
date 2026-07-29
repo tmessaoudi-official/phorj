@@ -342,6 +342,19 @@ class Database {
   function rollback(): void throws DatabaseError {
     match (NativeDatabase.rollback(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
+  // DEC-340 — unwind EVERY open level (down to depth 0). For the MANUAL begin/commit path, where the
+  // caller genuinely owns the outermost level; `db.transaction`'s auto-rollback deliberately does NOT use
+  // this, restoring the depth it found on entry instead so it never destroys a caller-owned outer
+  // transaction. Use this when a manual `begin()` may have nested and you want a clean slate.
+  function rollbackAll(): void throws DatabaseError {
+    match (NativeDatabase.rollbackAll(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+  }
+  // DEC-340 — the current transaction depth (0 = none open). Exists so the depth invariant is ASSERTABLE:
+  // before this it was unobservable from phorj, which is a large part of why the auto-rollback depth bug
+  // survived unnoticed. Cheap and never throws.
+  function transactionDepth(): int {
+    return NativeDatabase.transactionDepth(this.raw);
+  }
   // Best-effort rollback that NEVER throws — safe inside a `finally` (a throwing rollback there would
   // mask the original exception). The auto-rollback idiom is: `db.begin(); mutable bool ok = false;
   // try { …work…; db.commit(); ok = true; } finally { if (!ok) db.rollbackQuiet(); }` — demonstrated in

@@ -339,6 +339,11 @@ impl Transpiler {
                         }
                         // `Core.Native.FileSystem` (DEC-313) routes through the gated `__phorj_fs_*`
                         // helpers; the `FileSystemResult` wrap happens at the call site (R1).
+                        // DEC-340: the `Core.Native.Database` rows emit `__phorj_db_*` savepoint
+                        // helpers, so the program needs them defined.
+                        if nat.module == "Core.Native.Database" {
+                            self.gates.uses_db = true;
+                        }
                         if nat.module == "Core.Native.FileSystem" {
                             self.gates.uses_fs = true;
                         }

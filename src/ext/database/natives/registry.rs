@@ -243,7 +243,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(db_begin),
             lift_from: &[],
-            php: |a| format!("{}->beginTransaction()", a[0]),
+            php: |a| format!("__phorj_db_begin({})", a[0]), // DEC-340: PDO begin does not NEST
         },
         NativeFn {
             module: "Core.Native.Database",
@@ -253,7 +253,7 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(db_commit),
             lift_from: &[],
-            php: |a| format!("{}->commit()", a[0]),
+            php: |a| format!("__phorj_db_commit({})", a[0]), // DEC-340: releases the matching savepoint
         },
         NativeFn {
             module: "Core.Native.Database",
@@ -263,7 +263,35 @@ fn conn_stmt_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(db_rollback),
             lift_from: &[],
-            php: |a| format!("{}->rollBack()", a[0]),
+            php: |a| format!("__phorj_db_rollback({})", a[0]), // DEC-340: rolls back to the matching savepoint
+        },
+        // DEC-340 — unwind every open level, for the MANUAL begin/commit path where the caller does own
+        // the outermost level. On the PHP leg this drives the savepoint helper down to depth 0.
+        NativeFn {
+            module: "Core.Native.Database",
+            name: "rollbackAll",
+            params: vec![handle()],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::Pure(db_rollback_all),
+            lift_from: &[],
+            php: |a| format!("__phorj_db_rollback_all({})", a[0]),
+        },
+        // DEC-340 — the depth was previously unobservable from phorj: the native returned it and the
+        // prelude discarded the payload, so the invariant could not be asserted by a test or user code.
+        NativeFn {
+            module: "Core.Native.Database",
+            name: "transactionDepth",
+            params: vec![handle()],
+            ret: Ty::Int,
+            // NOT pure: it reads MUTABLE connection state (the shared depth counter). Marking it pure
+            // would invite constant-folding or reordering of something that changes with every
+            // begin/commit — and the whole-module purity guard in `native::process_tests` rightly
+            // rejects a pure row in `Core.Native.Database`.
+            pure: false,
+            eval: NativeEval::Pure(db_transaction_depth),
+            lift_from: &[],
+            php: |a| format!("__phorj_db_tx_depth({})", a[0]),
         },
         NativeFn {
             module: "Core.Native.Database",

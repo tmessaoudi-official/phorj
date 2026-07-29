@@ -6,6 +6,38 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — **P1 data loss**: transaction auto-rollback unwound only ONE level (2026-07-29, DEC-340)
+`db.transaction(fn)` called rollback exactly once on the throw path, and rollback unwinds a single level.
+So a `begin()` leaked anywhere inside the closure — including inside a helper it called — consumed that
+one rollback and left the transaction's **own** level open with its writes live. A later unrelated
+`commit()` then made them permanent, *after* the error handler had been told the transaction rolled back.
+- Reproduced before fixing: a row starting at `bal = 100` read **999** immediately after the "rolled
+  back" transaction and **999** again after a later commit. Both now read `100`.
+- Auto-rollback unwinds to the depth recorded on **ENTRY** — "restore the depth I found" — not to 0.
+  Unwinding to 0 was explicitly rejected: it would roll back a **caller-owned** outer transaction
+  (`db.begin(); db.transaction(fn)` where `fn` throws), destroying work the call was never given
+  authority over. Verified: with a caller-owned outer transaction, depth reads 1 before and 1 after, and
+  the caller's own write survives and commits.
+- Both failure paths use it — the throw path and the commit-failed path. Rollback errors are still
+  discarded there so they can never mask the original throw.
+- **`rollbackAll()`** added for the manual `begin`/`commit` path, where the caller does own the outermost
+  level. **`transactionDepth()`** added because the depth was previously unobservable from phorj — the
+  native returned it and the prelude discarded the payload, which is a large part of why this survived.
+- `examples/database/transaction-closure.phg` gains the leaked-`begin` case; 4 new tests in
+  `tests/database.rs` run every scenario on both backends.
+
+### Added — the `__phorj_db_*` savepoint helpers, staged (DEC-340, PHP leg)
+`src/transpile/db_php.rs`: a full savepoint helper set — per-PDO-handle depth counter in a
+`SplObjectStorage` (mirroring the Rust `Rc<Cell<u32>>` sharing), with `begin`/`commit`/`rollback`
+composing via `SAVEPOINT phorj_sp_N` using **the same savepoint names the Rust legs emit**. The three
+`php:` emitters were repointed at it, replacing a `->beginTransaction()` mapping that could not express
+phorj's nesting at all, since PDO's own `beginTransaction()` does not nest.
+**It is not reachable yet, and that is not a claim it works:** `Core.DatabaseModule` is deliberately
+quarantined by `E-TRANSPILE-DB` (Ladder case 2), so the emitters never run. Making the leg live means
+lifting that quarantine — a case-2 → case-1 move for the whole module, which Invariants 14 and 16 leave
+to the developer. Analysis and the open question are recorded in
+`docs/specs/2026-07-26-transaction-depth-semantics.md`.
+
 ### Fixed — **P0**: block-scope shadowing broke byte-identity on the PHP leg (2026-07-29, DEC-339)
 Phorj has block scope; PHP does not. A declaration reusing the name of a live local or parameter meant
 two different things on the two legs — the Rust backends made a new binding while the transpiled PHP

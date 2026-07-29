@@ -363,78 +363,10 @@ pub(super) fn with_hook(
 /// Run one portable SQL control statement (`BEGIN`/`COMMIT`/`SAVEPOINT`/`RELEASE`/`ROLLBACK[ TO]`) on
 /// the live connection's driver, or a clean `<<ConnectionError>>` if the connection was closed. These
 /// forms are accepted identically by SQLite and Postgres, so transaction management stays generic.
-fn control(conn: &DbConn, sql: &str) -> Result<(), String> {
+pub(super) fn control(conn: &DbConn, sql: &str) -> Result<(), String> {
     let guard = conn.driver.borrow();
     let driver = guard.as_ref().ok_or_else(conn_closed)?;
     driver.control(sql)
-}
-
-/// `db.begin()` → open a transaction (DEC-208 slice C). At depth 0 this is a top-level `BEGIN`; nested,
-/// it opens `SAVEPOINT phorj_sp_<depth>` so transactional helpers compose. Increments the depth only on
-/// success. Returns the new depth (the prelude ignores the payload; it is handy for tests/debugging).
-pub(super) fn begin_inner(args: &[Value]) -> Result<Value, String> {
-    let conn = match args {
-        [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__begin expects (Database)".into()),
-    };
-    let depth = conn.tx_depth.get();
-    let sql = if depth == 0 {
-        "BEGIN".to_string()
-    } else {
-        format!("SAVEPOINT phorj_sp_{depth}")
-    };
-    control(conn, &sql)?;
-    let new_depth = depth + 1;
-    conn.tx_depth.set(new_depth);
-    Ok(Value::Int(i64::from(new_depth)))
-}
-
-/// `db.commit()` → commit the innermost open transaction level. At the outermost level (depth 1) this is
-/// `COMMIT`; nested, it `RELEASE`s the matching savepoint. A commit with no open transaction (depth 0) is
-/// a best-effort no-op so a secondary fault can never mask an original one. Returns the remaining depth.
-pub(super) fn commit_inner(args: &[Value]) -> Result<Value, String> {
-    let conn = match args {
-        [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__commit expects (Database)".into()),
-    };
-    let depth = conn.tx_depth.get();
-    if depth == 0 {
-        return Ok(Value::Int(0));
-    }
-    let remaining = depth - 1;
-    let sql = if remaining == 0 {
-        "COMMIT".to_string()
-    } else {
-        format!("RELEASE phorj_sp_{remaining}")
-    };
-    control(conn, &sql)?;
-    conn.tx_depth.set(remaining);
-    Ok(Value::Int(i64::from(remaining)))
-}
-
-/// `db.rollback()` → roll back the innermost open transaction level. At the outermost level this is
-/// `ROLLBACK`; nested, it `ROLLBACK`s to and `RELEASE`s the matching savepoint (so the outer transaction
-/// survives an inner rollback). A rollback with no open transaction is a best-effort no-op. The depth is
-/// decremented BEFORE issuing the SQL, so the counter stays consistent even if the driver rejects the
-/// statement (a doomed transaction is reset by SQLite regardless). Returns the remaining depth.
-pub(super) fn rollback_inner(args: &[Value]) -> Result<Value, String> {
-    let conn = match args {
-        [c] => as_conn(c)?,
-        _ => return Err("Core.DatabaseModule.__rollback expects (Database)".into()),
-    };
-    let depth = conn.tx_depth.get();
-    if depth == 0 {
-        return Ok(Value::Int(0));
-    }
-    let remaining = depth - 1;
-    conn.tx_depth.set(remaining);
-    let sql = if remaining == 0 {
-        "ROLLBACK".to_string()
-    } else {
-        format!("ROLLBACK TO phorj_sp_{remaining}; RELEASE phorj_sp_{remaining}")
-    };
-    control(conn, &sql)?;
-    Ok(Value::Int(i64::from(remaining)))
 }
 
 /// `db.close()` → deterministically drop the connection (DEC-208 slice C, spec §1). Idempotent and

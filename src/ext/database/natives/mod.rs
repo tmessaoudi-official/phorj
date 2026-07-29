@@ -44,6 +44,7 @@
 mod driver;
 mod handles;
 mod ops;
+mod ops_tx;
 mod registry;
 mod registry_rows;
 mod rows;

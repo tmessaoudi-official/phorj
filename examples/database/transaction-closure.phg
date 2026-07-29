@@ -83,6 +83,23 @@ function main(): void {
             Output.printLine("caught UniqueViolationError; transaction rolled back");
         }
         Output.printLine("after rollback: acct1={balOf(db, 1)} acct2={balOf(db, 2)}");
+        // 3b) A LEAKED `begin()` inside the closure (DEC-340). Auto-rollback unwinds to the depth it
+        //     found on ENTRY — not one level, and not to 0 — so the transaction's own work is discarded
+        //     even though an extra level was opened underneath it. Before that fix a single rollback was
+        //     consumed by the leak, the transaction's own writes stayed live, and a later unrelated
+        //     `commit()` made them permanent AFTER the handler had been told it rolled back (P1 data
+        //     loss). `transactionDepth()` makes the invariant visible; it must read the same before and
+        //     after.
+        int depthBefore = db.transactionDepth();
+        try {
+            db.transaction(
+                function(): void throws DatabaseError { run(db, "UPDATE acct SET bal = 4242 WHERE id = 1")?; db.begin()?; run(db, "UPDATE acct SET bal = 4343 WHERE id = 1")?; run(db, "INSERT INTO acct(id, bal) VALUES(1, 999)")?; }
+            );
+        } catch (UniqueViolationError e) {
+            Output.printLine("caught after a leaked begin(); every level unwound");
+        }
+        int depthAfter = db.transactionDepth();
+        Output.printLine("depth {depthBefore} -> {depthAfter}, acct1={balOf(db, 1)} (unchanged)");
         // 4) NESTED transaction = SAVEPOINT: the outer change (acct 1) commits; the inner transaction
         //    throws and is rolled back to its savepoint, so acct 2 is left intact — the outer survives.
         db.transaction(

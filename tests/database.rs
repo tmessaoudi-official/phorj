@@ -836,6 +836,8 @@ fn db_transaction_closure_example_runs_on_both_backends() {
                     total in tx: 100\n\
                     caught UniqueViolationError; transaction rolled back\n\
                     after rollback: acct1=70 acct2=30\n\
+                    caught after a leaked begin(); every level unwound\n\
+                    depth 0 -> 0, acct1=70 (unchanged)\n\
                     inner savepoint rolled back: outer continues\n\
                     after nested: acct1=500 acct2=30\n\
                     after retry: acct2=42 (succeeded on attempt 2)\n";
@@ -1722,4 +1724,146 @@ class Tagged { constructor(public string name, public List<string> tags) {} }
         src,
         "caught: Core.DatabaseModule.getStringList: column `tags` is string, not an array\n",
     );
+}
+
+// ── DEC-340: auto-rollback unwinds to the ENTRY depth (the P1 data-loss fix) ─────────────────────
+
+/// Shared scaffolding for the depth tests: a one-row `acct` table starting at `bal = 100`.
+fn depth_prog(scenario: &str) -> String {
+    format!(
+        r#"package Main;
+import Core.Output;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Statement;
+import Core.DatabaseModule.Row;
+import Core.DatabaseModule.DatabaseError;
+import Core.DatabaseModule.UniqueViolationError;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+function run(Database db, string sql): void throws DatabaseError {{
+    Statement s = db.prepare(sql)?;
+    discard s.exec()?;
+}}
+function balOf(Database db): int throws DatabaseError {{
+    Statement s = db.prepare("SELECT bal FROM acct WHERE id = 1")?;
+    List<Row> rows = s.query()?;
+    return rows[0].getInt("bal")?;
+}}
+function scenario(Database db): void throws DatabaseError {{
+    run(db, "CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)")?;
+    run(db, "INSERT INTO acct(id, bal) VALUES (1, 100)")?;
+{scenario}
+}}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): int {{
+    try {{
+        Database db = new Database("sqlite::memory:");
+        scenario(db);
+    }} catch (DatabaseError e) {{
+        Output.printLine("unexpected error");
+    }}
+    return 0;
+}}
+"#
+    )
+}
+
+#[test]
+fn dec340_auto_rollback_unwinds_past_a_leaked_begin() {
+    // THE P1 REPRO. A `begin()` leaked inside the closure used to consume the single rollback, leaving
+    // the transaction's OWN level open with `999` live — which a later unrelated `commit()` then made
+    // permanent, after the error handler had been told the transaction rolled back. Both reads must now
+    // be 100.
+    let src = depth_prog(
+        r#"    try {
+        discard db.transaction(function(): int throws DatabaseError {
+            run(db, "UPDATE acct SET bal = 999 WHERE id = 1")?;
+            db.begin()?;
+            run(db, "UPDATE acct SET bal = 777 WHERE id = 1")?;
+            throw new UniqueViolationError("abort");
+        });
+    } catch (DatabaseError e) {
+        Output.printLine("rolled back");
+    }
+    int after = balOf(db)?;
+    Output.printLine("after = {after}");
+    db.commit()?;
+    int later = balOf(db)?;
+    Output.printLine("later = {later}");"#,
+    );
+    both(&src, "rolled back\nafter = 100\nlater = 100\n");
+}
+
+#[test]
+fn dec340_a_caller_owned_outer_transaction_survives() {
+    // Why unwinding to depth 0 was REJECTED. The caller owns an outer transaction with its own work;
+    // the inner `db.transaction` throws. Unwinding to 0 would have destroyed the caller's `555` —
+    // trading the leak bug for a worse one. The depth must come back to exactly what it was (1).
+    let src = depth_prog(
+        r#"    db.begin()?;
+    run(db, "UPDATE acct SET bal = 555 WHERE id = 1")?;
+    int before = db.transactionDepth();
+    Output.printLine("depth before = {before}");
+    try {
+        discard db.transaction(function(): int throws DatabaseError {
+            db.begin()?;
+            throw new UniqueViolationError("abort");
+        });
+    } catch (DatabaseError e) {
+        Output.printLine("inner rolled back");
+    }
+    int mid = db.transactionDepth();
+    Output.printLine("depth after = {mid}");
+    int own = balOf(db)?;
+    Output.printLine("caller work = {own}");
+    db.commit()?;
+    int fin = balOf(db)?;
+    Output.printLine("committed = {fin}");"#,
+    );
+    both(
+        &src,
+        "depth before = 1\ninner rolled back\ndepth after = 1\ncaller work = 555\ncommitted = 555\n",
+    );
+}
+
+#[test]
+fn dec340_transaction_depth_is_observable() {
+    // The depth was previously unobservable from phorj — the native returned it and the prelude threw
+    // the payload away — which is a large part of why the bug survived. Nesting must now be readable.
+    let src = depth_prog(
+        r#"    int d0 = db.transactionDepth();
+    db.begin()?;
+    int d1 = db.transactionDepth();
+    db.begin()?;
+    int d2 = db.transactionDepth();
+    db.rollback()?;
+    int d3 = db.transactionDepth();
+    db.commit()?;
+    int d4 = db.transactionDepth();
+    Output.printLine("{d0} {d1} {d2} {d3} {d4}");"#,
+    );
+    both(&src, "0 1 2 1 0\n");
+}
+
+#[test]
+fn dec340_rollback_all_unwinds_every_level() {
+    // The MANUAL path's escape hatch: the caller owns the outermost level and wants a clean slate.
+    // Distinct from auto-rollback, which restores its entry depth instead.
+    let src = depth_prog(
+        r#"    db.begin()?;
+    run(db, "UPDATE acct SET bal = 1 WHERE id = 1")?;
+    db.begin()?;
+    run(db, "UPDATE acct SET bal = 2 WHERE id = 1")?;
+    db.begin()?;
+    run(db, "UPDATE acct SET bal = 3 WHERE id = 1")?;
+    int deep = db.transactionDepth();
+    db.rollbackAll()?;
+    int flat = db.transactionDepth();
+    int bal = balOf(db)?;
+    Output.printLine("depth {deep} -> {flat}, bal = {bal}");"#,
+    );
+    both(&src, "depth 3 -> 0, bal = 100\n");
 }

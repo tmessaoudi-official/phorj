@@ -229,4 +229,8 @@ pub(in crate::transpile) struct HelperGates {
     pub(in crate::transpile) uses_log: bool,
     /// `Core.Native.FileSystem` emitted (DEC-313) → the `__phorj_fs_*` helpers (`fs_php.rs`).
     pub(in crate::transpile) uses_fs: bool,
+    /// DEC-340 — the program touches `Core.Native.Database`, so the `__phorj_db_*` SAVEPOINT helpers
+    /// must be emitted. PDO's `beginTransaction()` does not nest, so phorj's nesting `begin()` and its
+    /// entry-depth auto-rollback cannot be expressed without them.
+    pub(in crate::transpile) uses_db: bool,
 }

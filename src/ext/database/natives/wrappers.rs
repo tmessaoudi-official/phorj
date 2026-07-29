@@ -6,6 +6,7 @@
 
 use super::handles::{failure, success, wrap, wrap_unit};
 use super::ops::*;
+use super::ops_tx::*; // DEC-340: the transaction/depth ops moved out of `ops.rs` (Inv 13)
 use super::rows::*;
 use crate::native::ClosureInvoker;
 use crate::value::Value;
@@ -44,6 +45,14 @@ db_native_unit!(db_on_query, on_query_inner);
 db_native_unit!(db_begin, begin_inner);
 db_native_unit!(db_commit, commit_inner);
 db_native_unit!(db_rollback, rollback_inner);
+// DEC-340: `rollbackAll` can hit a driver error, so it goes through the `DatabaseResult` wrapper like
+// `rollback`. `transactionDepth` deliberately does NOT: it only reads an `Rc<Cell<u32>>`, so it cannot
+// fail, and wrapping it would hand phorj a `DatabaseResult` enum where the prelude declares a plain
+// `int` — which is exactly the mismatch that first showed up as "cannot interpolate enum into a string".
+db_native_unit!(db_rollback_all, rollback_all_inner);
+pub(super) fn db_transaction_depth(args: &[Value], _out: &mut String) -> Result<Value, String> {
+    transaction_depth_inner(args)
+}
 db_native!(db_close, close_inner);
 db_native!(row_get_int, get_int_inner);
 db_native!(row_get_string, get_string_inner);
@@ -112,6 +121,14 @@ pub(super) fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Res
         [db, fnv] => (db, fnv),
         _ => return Err("Core.DatabaseModule.__transaction expects (Database, fn)".into()),
     };
+    // DEC-340 — record the depth we FOUND, before opening anything. Every unwind below returns to
+    // exactly this, never to 0: unwinding to 0 would roll back a caller-owned outer transaction
+    // (`db.begin(); db.transaction(fn)` where `fn` throws), destroying work this call was never given
+    // authority over.
+    let entry_depth = match tx_depth_of(db) {
+        Ok(d) => d,
+        Err(msg) => return Ok(failure(msg)),
+    };
     // BEGIN. A DB error opening the (save)point is a catchable `DatabaseResult.Err`, never a hard fault.
     if let Err(msg) = begin_inner(std::slice::from_ref(db)) {
         return Ok(failure(msg));
@@ -123,7 +140,10 @@ pub(super) fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Res
         Ok(v) => match commit_inner(std::slice::from_ref(db)) {
             Ok(_) => Ok(success(v)),
             Err(msg) => {
-                let _ = rollback_inner(std::slice::from_ref(db));
+                // DEC-340: unwind to the ENTRY depth, not one level. A `begin()` leaked inside the
+                // closure would otherwise consume the single rollback and leave this transaction's own
+                // level open with its writes live.
+                let _ = unwind_to_inner(db, entry_depth);
                 Ok(failure(msg))
             }
         },
@@ -131,7 +151,13 @@ pub(super) fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Res
         // rollback error must NEVER mask the original — then re-propagate the SAME `Err` unchanged, so
         // the backend reconstructs the ORIGINAL typed throw (`pending_throw` is untouched by rollback).
         Err(e) => {
-            let _ = rollback_inner(std::slice::from_ref(db));
+            // DEC-340 — THE P1 FIX. This used to be a single `rollback_inner`, which unwinds exactly one
+            // level: a `begin()` leaked anywhere in the closure (or in a helper it called) consumed it,
+            // so the transaction's OWN level stayed open with its work live and a later unrelated
+            // `commit()` made it permanent — after the error handler had been told it rolled back.
+            // Discarding the unwind error is deliberate and unchanged: a rollback failure must never
+            // mask the original throw, whose typed value is waiting in the backend's `pending_throw`.
+            let _ = unwind_to_inner(db, entry_depth);
             Err(e)
         }
     }

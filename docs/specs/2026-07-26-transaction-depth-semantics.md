@@ -1,6 +1,7 @@
 # Transaction depth semantics — auto-rollback unwinds to the ENTRY depth (DEC-340, RULED 2026-07-26)
 
-> **Status:** RULED by the developer 2026-07-26, **not yet built**. Canonical home for the rule
+> **Status:** RULED 2026-07-26; **items 1, 2, 4, 5 BUILT 2026-07-29. Item 3 (the PHP leg) is BLOCKED on
+> a question the developer must answer — see "Item 3 is blocked" at the bottom of this file.** Canonical home for the rule
 > (Invariant 19). Decision *identity + status* = the DEC-340 row in
 > `docs/research/full-audit/raw/C-decisions.md`.
 
@@ -96,3 +97,37 @@ putting it next rather than first, because GR-2 is live data loss today.
 3. The PHP leg emits the savepoint helper, with a test that nested begin/rollback composes under PDO.
 4. `examples/database/transaction-closure.phg` gains the leaked-`begin` case (Invariant 9).
 5. The register's §2 GR-2 "unwind to depth 0" wording superseded by a pointer to this file.
+
+
+## Item 3 is blocked — the PHP leg needs a Ladder ruling first (found 2026-07-29)
+
+Definition-of-done item 3 asks for the savepoint helper "with a test that nested begin/rollback composes
+under PDO". Building it surfaced a conflict this file could not have known about.
+
+**`Core.DatabaseModule` is not merely unimplemented on the PHP leg — it is deliberately QUARANTINED.**
+Transpiling any program that imports it is a clean `E-TRANSPILE-DB` Ladder case-2 error
+[Verified: `phg transpile examples/database/transactions.phg` → *"cannot transpile a program importing
+`Core.DatabaseModule` … native-only: live database I/O cannot be byte-identical across the phorj drivers
+and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE)"*]. That
+quarantine was ruled deliberately (register ~:1005, leg 2 of Invariant 14), and its stated reason —
+live DB I/O is not byte-identical — is unrelated to savepoints.
+
+So this file's description of the emitter as "a literal placeholder comment" is accurate but incomplete:
+the placeholder was **unreachable**, because the quarantine fires first. Emitting a correct helper does
+not make the leg work; only LIFTING the quarantine would, and that is a Ladder case-2 → case-1 move for
+the entire database module. Invariants 14 and 16 both put that squarely with the developer.
+
+**What was built anyway, and why it is not dead weight.** `src/transpile/db_php.rs` now contains the
+complete `__phorj_db_*` savepoint helper set — depth counter per PDO handle in a `SplObjectStorage`
+(mirroring the Rust `Rc<Cell<u32>>` sharing), `begin`/`commit`/`rollback` composing via
+`SAVEPOINT phorj_sp_N` with **the same savepoint names the Rust legs emit**, plus `unwind_to` and
+`rollback_all`. The three `php:` emitters for `begin`/`commit`/`rollback` were repointed at it, replacing
+the non-nesting `->beginTransaction()`/`->commit()`/`->rollBack()` mapping that could not express phorj's
+nesting semantics at all. It is gated behind `uses_db`, which the quarantine keeps unreachable today — so
+it is the prerequisite, staged and ready, not a claim that the leg works.
+
+**The question for the developer:** does `Core.DatabaseModule` stay Ladder case 2 (native-only, quarantined
+— in which case item 3 should be struck from this file as unsatisfiable and the helpers either kept staged
+or removed), or does it move to case 1 for the transaction/savepoint surface now that the helpers exist —
+accepting that live DB I/O still cannot be byte-identical, so the differential quarantine would remain
+even if the transpile error were lifted?
