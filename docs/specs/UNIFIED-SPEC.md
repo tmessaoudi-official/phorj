@@ -254,7 +254,7 @@ the single-sourced `NativeFn` registry (signature + `eval` + `php` in one entry;
 |---|---|---|---|
 | E-1 | Backends | Two, behind a clean `Backend` trait | Trait **still not present** at HEAD (per Rule of Three — three pipelines remain free functions; `docs/ARCHITECTURE.md`). The old "grep `trait ` = 0" verification is stale: three *other* traits now exist (`Transport`, `DebugFrontend`, `Suspend`) — but no Backend trait, which was the substantive claim |
 | E-2 | PHP ecosystem | Bridge via transpile; native connectors for the VM; batch migration | In force |
-| E-3 | Packages | Git-based/decentralized first behind `PackageSource`; registry-capable later | Shipped as `phg vendor` (M5) |
+| E-3 | Packages | Git-based/decentralized first behind `PackageSource`; registry-capable later | Shipped M5 as `phg vendor`; since retired (DEC-282) and superseded by the DEC-316 package manager (`phorj.json` + `phg add`/`install`, registry-capable) |
 | E-4 | Sequencing | Extension API + stdlib → modules → packages → connectors | Followed |
 | E-5 | Architecture | Pluggable traits *where earned* | Tempered in practice: only 4 traits in ~75K LOC, each earning its keep (audit-attested no premature abstraction) |
 | E-6 | Testing | One Phorj test surface; PHPUnit-bridge then native | `phg test` shipped (M-Test) |

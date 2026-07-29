@@ -55,6 +55,10 @@ defer). **Wave 5.5 (DEC-354) is built, plus DEC-388.1–.4 (2026-07-27: disk-rec
 re-admitted, `backend-parity-reviewer` agent, `validate-infra.sh` in pre-push; 388.5 `/qa-sweep`
 queued); everything else is unbuilt. Start at Wave 0.**
 
+> ⚠ **Q1 knot (2026-07-28 audit)**: build-order 7.5 (DEC-383 forks a/c) overlaps the already-ruled
+> DEC-204/205 (2026-07-12) — whether 7.5 re-opens them or becomes their build slice is PENDING the
+> developer. Do not build either side of that overlap before the ruling.
+
 **STANDING RULE — DEC-387, project-wide, not session-scoped:** never `AskUserQuestion`. Put every
 question in the message body with context, a minimal concrete example, numbered options each stating
 its own after-state, the recommended option first with its reason, and a visible *"none of these /

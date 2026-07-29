@@ -13,7 +13,7 @@
 //! `ast::Program` shared across workers IS `Send + Sync`). `--workers N` (default = CPU cores);
 //! `--workers 1` keeps the original single-threaded path. This supersedes the old "green-threads"
 //! plan (which would have been single-core + needs unstable/unsafe std machinery) — see
-//! `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md`.
+//! `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md` (deleted spec; upstream git history).
 use crate::ast::Program;
 use crate::chunk::BytecodeProgram;
 use crate::compiler::compile_with;

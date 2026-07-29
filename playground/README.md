@@ -22,9 +22,11 @@ It is auto-deployed to GitHub Pages on every push to `master`, so the live site 
 
 ## How it works
 
-- The Phorj pipeline is compiled to WebAssembly. The core `phorj` crate is unchanged and stays
-  dependency-free + `#![forbid(unsafe_code)]`; this `playground/` crate is a **separate workspace
-  member** that adds the only external dependency in the project (`wasm-bindgen`, wasm32-only).
+- The Phorj pipeline is compiled to WebAssembly. The core `phorj` crate is unchanged (its
+  14 admitted dependencies are feature-gated; the wasm build compiles the std-only core, and its
+  roots are `#![deny(unsafe_code)]` with the audited JIT island compiled out); this `playground/`
+  crate is a **separate workspace member** (itself `#![forbid(unsafe_code)]`) adding only
+  `wasm-bindgen` (wasm32-only) and `serde_json`.
 - The wasm runs in a **Web Worker** with a per-call timeout — a runaway program terminates the worker
   instead of freezing the tab (wasm is single-threaded and non-interruptible).
 - The wrapper functions bypass the CLI's 256 MB `std::thread` worker (`on_deep_stack`, unavailable on

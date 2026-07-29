@@ -304,7 +304,7 @@ byte-identity-gated JSON endpoint over the same `handle` contract. **W3 concurre
 single-threaded. The register's SUPERSEDED table records the direction the other way: the W3
 OS-thread serve-pool *plan* was superseded on 06-29 by the green-thread runtime ruling (DEC-132,
 shipped via `corosensei`) for in-language concurrency; the serve worker pool shipped as the
-per-request threading layer. Design `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md` (deleted; see git history). Deferred (later M6):
+per-request threading layer. Design `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md` (deleted; see upstream git history — this working clone is shallow). Deferred (later M6):
 optional/wildcard route segments, instance-controller routing. Design
 `docs/specs/2026-06-18-m6-web-design.md`.
 

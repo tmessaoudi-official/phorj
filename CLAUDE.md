@@ -124,7 +124,8 @@ asking, when the quality gate above is green. Limits:
    README + a small companion `.phg`. Faults can't be runnable examples — capture them in a
    README instead.
 10. **Determinism.** `run`/`check`/`transpile` never touch the network (the DEC-316 package-manager
-    verbs `phg add`/`install`/`update`/`remove` are the only network commands; `phg vendor` is
+    verbs `phg add`/`install`/`update`/`remove`, plus `phg build --target`'s sha256-verified
+    cross-compile stub download, are the only network commands; `phg vendor` is
     retired and errors — DEC-282); examples use only deterministic inputs; any user-facing list derived from
     `HashMap`/`HashSet` iteration is sorted before rendering.
 11. **No perf change without a measured before/after** from `phg benchmark` (and no perf claim

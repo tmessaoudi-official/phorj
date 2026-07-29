@@ -1,5 +1,6 @@
 //! CLI handlers for the package manager verbs (DEC-316): `phg add/install/update/remove`. These are
-//! the only network-capable commands (`run`/`check`/`transpile` stay offline — Invariant 10). They
+//! the only network-capable commands besides `build --target`'s verified stub download
+//! (`run`/`check`/`transpile` stay offline — Invariant 10). They
 //! operate on the current directory as the project root (where `phorj.json` lives) and drive
 //! `crate::pm::ops`.
 
@@ -12,7 +13,8 @@ fn root() -> Result<PathBuf, String> {
     std::env::current_dir().map_err(|e| format!("cannot determine the current directory: {e}"))
 }
 
-/// Dispatch a package-manager verb (the only network-capable commands). `args` is everything after the
+/// Dispatch a package-manager verb (with `build --target`'s stub download, the only
+/// network-capable commands). `args` is everything after the
 /// subcommand. `vendor` is the retired alias (DEC-282) pointing at the DEC-316 verbs.
 pub fn dispatch(cmd: &str, args: &[String]) -> Result<(), String> {
     match cmd {

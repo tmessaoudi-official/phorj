@@ -672,9 +672,9 @@ wrong; Runtime-pillar packs adjust to ENRICH these, review sweep will inventory 
    may call a private seam a user couldn't reimplement.*
 6. **Ordering = value-ordered, Claude sequences** (spine fixed below); unfinished packs land as
    specs + KNOWN_ISSUES queue entries, never half-built.
-7. **DEFERRED to next brainstorm**: package-ecosystem integrity slice (lockfile + checksum for
-   `phg vendor` only — recommendation recorded; prior abandonment stands otherwise). DEC-216 stays
-   PENDING.
+7. **DEFERRED to next brainstorm**: package-ecosystem integrity slice (lockfile + checksum —
+   recommendation recorded at the time against the since-retired `phg vendor`; the capability
+   shipped as DEC-316's `phorj.lock` tree-SHA pinning). DEC-216 since resolved by DEC-316.
 
 ### Spine (fixed order)
 
@@ -878,7 +878,9 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   + the ICU extension-story fork → Ω-5 · typed-serde derive candidate → Ω-7. Two NEW
   DEC-PENDING entries recorded in KNOWN_ISSUES §PENDING (`using`/`defer`, `Runtime.onShutdown`)
   — since RULED 2026-07-12 as DEC-203 (`using` + Closable) and DEC-204 (typed
-  `Runtime.onShutdown(fn)`); builds queued (DEC-364 re-affirmed `using`).
+  `Runtime.onShutdown(fn)`); builds queued (DEC-364 re-affirmed `using`). ⚠ DEC-383's later
+  fork (c) covers the same `onShutdown` ground — whether it re-opens DEC-204 is PENDING the
+  developer (2026-07-28 audit Q1; see the build-order 7.5 note).
 - **Ω-1 · Web spine** (TOP-20 #1/#2/#3): finish **Core.Sql** P1 → P2 `Core.Db` (rusqlite) → PG/MySQL →
   HTTP client → sessions/cookies/auth. Continues Wave D. **UA-L2 is DONE** — the `cli::CORE_MODULES`
   registry (deterministic sorted iteration, Inv-10) means adding a Core module is ONE row; Core.Sql was its
@@ -1106,7 +1108,9 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   run native via the unboxed JIT; V3b's beneficiaries are the disclosed VM-only surfaces;
   the DST needs unsafe-outside-`src/jit/` or a thin-Rc dep — either breaches a declared
   invariant → adjudication, not self-ruling). **Rc CYCLE-LEAK — since RULED 2026-07-12 as
-  DEC-205 (BOTH, PHASED: threshold cycle collector first, `Weak<T>` second) — build queued**;
+  DEC-205 (BOTH, PHASED: threshold cycle collector first, `Weak<T>` second) — build queued**
+  (⚠ DEC-383 fork (a) covers the same ground; whether it re-opens DEC-205 is PENDING the
+  developer — 2026-07-28 audit Q1, build-order 7.5 note);
   recorded at the time as DEC-PENDING in KNOWN_ISSUES §PENDING (options: php-style
   trial-deletion collector / weak refs / both, with the `serve` per-request-leak risk example). NaN-box end-state stays parked behind
   the same no-measurable-target reasoning.
@@ -1370,9 +1374,10 @@ verification, then this section collapses to "done + never reintroduce" (G-7):
   (all live surfaces corrected to the Cargo.toml SSOT: 14 admitted / 9 default-linked; THIRD-PARTY
   regenerated with all 14 licenses; never reintroduce).
 - ☑ B3-2 `import type` taught as current syntax (it hard-fails to parse since S0) — **CLOSED by the
-  2026-07-28 consistency audit** (conformance README, 2 example .phg, and the last 12 src
-  doc-comments/explain-text sites rewritten to the unified `import`; one deliberately-historical
-  comment kept at `src/loader/imports.rs`).
+  2026-07-28 consistency audit + its certification panel** (conformance README, 4 example .phg,
+  `tests/project.rs` doc-comments, and the last src doc-comments/explain-text sites rewritten to
+  the unified `import`; deliberately-historical mentions kept at `src/loader/imports.rs` and
+  `tests/project.rs:4`).
 - ☐ B3-3 dead CLI verbs (`fmt`/`lex`/`disasm`/`bench`) taught as real, declared *stable*; the
   real verbs are `format`/`tokenize`/`disassemble`/`benchmark`.
 - ☐ B3-4 `E-TRANSPILE-CONCURRENCY` does not exist — the code is `E-CONCURRENCY-NO-PHP`

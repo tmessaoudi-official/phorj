@@ -1,5 +1,5 @@
 //! Bytecode chunk + instruction set for the M2 VM.
-//! See docs/specs/2026-06-15-m2-bytecode-vm-design.md (§4, §5).
+//! See docs/specs/2026-06-15-m2-bytecode-vm-design.md (§4, §5; deleted spec — upstream git history).
 //! P2 scope: full M1 expression/statement surface for `main` (see
 //! the M2 compiler/VM design (docs/specs archive)). P4a adds single-payload enums + `match`;
 //! P4b adds classes (construction + constructor promotion + field reads); P4c adds methods + `this`.

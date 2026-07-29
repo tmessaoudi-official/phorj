@@ -528,7 +528,9 @@ before commit**. The ones that add NEW knowledge beyond the fix batch:
   in SECURITY.md / README / FEATURES.md. None of the audit's five lenses had found this path.
 - **The DEC-316 PM git path lost the retired vendor path's argument hardening** (no `--`
   separator, no `protocol.ext.allow=never`, no `ext::`/`file::` rejection — `src/pm/fetch.rs`
-  passes `git`/`ref` as given; the retired path's guards were verified property P6). Recorded as
+  passes `git`/`ref` as given; the retired path's guards were verified property P6 —
+  `2026-07-03-unification-audit/raw/A7-security.md`, shipped per CHANGELOG under 1.0.0-nightly.0,
+  2026-06-24 — and also scrubbed `GIT_*` env, which the live path inherits). Recorded as
   KNOWN_ISSUES §Rich-Request item 4b; re-porting the guards = audit **Q28** (queued hardening
   slice).
 - **The JIT unsafe island is ~48 audited sites** (fn-ptr call + `extern "C"` trampoline pointer
@@ -546,4 +548,25 @@ before commit**. The ones that add NEW knowledge beyond the fix batch:
 Process note: beyond FIXES.md and the three fixer reports, a fourth (parent-session) pass edited
 `.github/PULL_REQUEST_TEMPLATE.md`, `docs/plans/SLICE-STATE.md` (cursor), and six `src/` files
 (the `import type` comment sweep) — same disease classes, attributed here for the record. The
-build-order 7.5 row now carries the Q1 tension note so no live surface silently answers Q1.
+build-order 7.5 row carries the Q1 tension note, and (round 2) the MASTER-PLAN DEC-203/204 and
+DEC-205 mirrors now cross-reference Q1 explicitly instead of silently answering it.
+
+## Certification-panel round 2 (2026-07-29) — 20 further findings, all fixed in the follow-up commit
+
+Highlights beyond round 1: `E-MODULE-NOT-FOUND` explain/hint still taught the pre-DEC-316 story
+(fixed in `imports_casts.rs` + `loader/entry.rs`); `CLAUDE.md` Invariant 10 and three more
+surfaces missed the `build --target` network disclosure; SECURITY.md now flags `PHORJ_REGISTRY`,
+`PHORJ_STUB_MANIFEST` (the trust anchor of the stub sha256 check), `PHORJ_OBJCOPY`, and the
+`GIT_*` env inheritance, and scopes the runtime outbound surface (non-default `http-client`/
+`mail`/DB features); `STABILITY.md` still said "exactly these four" deps and listed retired
+`vendor` as experimental; `tests/project.rs` taught `import type` in 7 doc-comments;
+`withdeps/README` self-contradicted after the round-1 fix; `selftest/README` claimed a
+`phorj.toml` root marker (it is `src/` — DEC-282). ERRATA for this report: (1) all
+`C-decisions.md:NNNN` line references cite PRE-batch coordinates — the fix batch inserted +112
+lines into that file, shifting everything after line ~58; re-derive by content, not line. (2)
+The batch commit message says "one phg-explain string"; two explain strings changed
+(`E-VENDOR-MISSING` + `E-VIS-INTERNAL`). (3) The addendum's original P6 cite ("CHANGELOG
+~2026-07-03") was wrong: P6 lives in `2026-07-03-unification-audit/raw/A7-security.md`; the
+CHANGELOG hardening entry sits under 1.0.0-nightly.0 (2026-06-24). (4) "(deleted; see git
+history)" annotations: this clone is shallow (grafted 2026-07-19) — the deleted specs are only
+in UPSTREAM history; annotations now say so.

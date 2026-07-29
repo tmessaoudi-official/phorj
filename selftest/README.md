@@ -20,7 +20,8 @@ selftest/faults.phg :: code that should NOT fault ... ok
 Exit code is `0` iff every test passes, else `1` — so `phg test` drops straight into CI.
 
 With no path, `phg test` discovers every `*.phg` under the project's `tests/` directory (the project
-root is the nearest ancestor holding a `phorj.toml`, else the current directory). You can also point
+root is the nearest ancestor holding a `src/` directory — the DEC-282 app-root marker — else the
+current directory). You can also point
 it at a single file or a directory: `phg test selftest/arithmetic.phg`, `phg test selftest/`.
 
 ## Writing tests

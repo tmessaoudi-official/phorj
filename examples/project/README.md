@@ -8,7 +8,8 @@ called leaf-qualified — and it all transpiles to idiomatic namespaced PHP.
 There is NO config file. The app root is found by walking up from the entry to the nearest
 directory containing `src/` (or `vendor/`); imports then resolve against three ordered search
 roots — the entry's own directory, `src/` (package names strip `src/`), and `vendor/` (offline
-dependencies, `vendor/<Publisher>/<Name>/`, folder = package; `phg` never downloads code).
+dependencies, `vendor/<Publisher>/<Name>/`, folder = package; `run`/`check`/`transpile` never
+download code — the DEC-316 package manager writes `vendor/`).
 Loading is import-driven: only packages your imports reach are ever read.
 
 Each subdirectory here is a self-contained app root (its `src/` is the marker). Like every other
@@ -91,7 +92,8 @@ can't autoload free functions, and Phorj is function-heavy).
 
 Library packages export **functions and types** — a `class`/`enum`/`interface` in a library package
 is consumed cross-package via `import Pkg.Path.TypeName;` (see `shapes/`). Git-based
-dependencies resolve offline from `vendor/<Publisher>/<Name>/` — a future package-manager extension writes that tree (see
+dependencies resolve offline from `vendor/<Publisher>/<Name>/` — the shipped package manager
+(DEC-316: `phorj.json` + `phg add`/`install`) writes that tree (see
 `withdeps/`). Casing is enforced: package/folder segments are PascalCase (`E-PKG-CASE`), types are
 PascalCase, functions/variables are camelCase.
 

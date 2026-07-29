@@ -1,4 +1,5 @@
-//! Phorj language server (`phg lsp`) — Item D, `docs/specs/2026-06-28-lsp-design.md`.
+//! Phorj language server (`phg lsp`) — Item D, `docs/specs/2026-06-28-lsp-design.md` (deleted
+//! spec; upstream git history).
 //!
 //! A minimal LSP over stdio so editors show Phorj diagnostics inline. **Hand-rolled** JSON-RPC in
 //! `std`: an LSP server is not a security-critical primitive, so the dependency policy excludes

@@ -8,7 +8,8 @@
 //!     the namespace is a compile-time organizing layer, decisions N-2/D-L9).
 //!
 //! The registry is the load-bearing target of `import Core.Output;` (M3 namespace reshape, Wave 1,
-//! `docs/specs/2026-06-18-m3-namespace-system-design.md`). The former free global `println` is
+//! `docs/specs/2026-06-18-m3-namespace-system-design.md` — deleted spec; upstream git history).
+//! The former free global `println` is
 //! retired for `Core.Output.printLine`, `Op::Print` for `Op::CallNative(index, argc)`.
 
 use crate::ast::Item;
@@ -78,7 +79,8 @@ pub struct NativeFn {
     /// differential (the PHP leg runs in a separate process whose argv/env need not match) and tested
     /// separately under a controlled environment — see `tests/process.rs`. Declared per-native here
     /// (not hardcoded in the harness) so the differential stays generic: it reads this flag via
-    /// `program_uses_impure_native` (`docs/specs/2026-06-25-process-io-quarantine-seam-design.md`, Q1).
+    /// `program_uses_impure_native` (`docs/specs/2026-06-25-process-io-quarantine-seam-design.md`,
+    /// Q1 — deleted spec; upstream git history).
     pub pure: bool,
 }
 

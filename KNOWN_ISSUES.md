@@ -155,10 +155,14 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
 4b. **P2 SECURITY-HARDENING — the DEC-316 PM git path carries none of the retired vendor path's
    argument hardening** (found by the 2026-07-28 consistency audit's certification panel). The
    retired `phg vendor` implementation passed git args behind a `--` end-of-options separator with
-   `protocol.ext.allow=never` and rejected `ext::`/`file::` remote helpers and leading-dash refs
-   (recorded as verified property P6, CHANGELOG ~2026-07-03); the live `src/pm/fetch.rs` passes a
-   dependency's `git`/`ref` to `git clone`/`git checkout` **as given** with no separator and no
-   remote-helper rejection — only package NAMES are validated (`src/pm/manifest.rs`). A hostile
+   `protocol.ext.allow=never`, rejected `ext::`/`file::` remote helpers and leading-dash refs, and
+   scrubbed the `GIT_*` environment (recorded as verified property P6 in
+   `docs/research/2026-07-03-unification-audit/raw/A7-security.md`; shipped per
+   CHANGELOG §"`phg vendor` supply-chain hardening" under 1.0.0-nightly.0, 2026-06-24); the live
+   `src/pm/fetch.rs` passes a
+   dependency's `git`/`ref` to `git clone`/`git checkout` **as given** with no separator, no
+   remote-helper rejection, and an inherited ambient environment (`GIT_SSH_COMMAND` etc. are
+   honoured) — only package NAMES are validated (`src/pm/manifest.rs`). A hostile
    third-party `phorj.json` can therefore smuggle git options / command-executing remote helpers.
    SECURITY.md documents the honest weaker truth; re-porting the P6 guards to `fetch.rs` is a
    small queued hardening slice (audit Q28).

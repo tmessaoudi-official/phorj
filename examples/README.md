@@ -377,4 +377,4 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 
 These are designed but not implemented; they will arrive in later milestones, and examples will be
 added as each lands: sized ints, `decimal`, and **transitive** git dependencies (a dependency's own
-`[require]`; direct git deps are shipped — see `project/withdeps/`).
+`phorj.json` deps; direct git deps are shipped — see `project/withdeps/` and `package-manager/`).

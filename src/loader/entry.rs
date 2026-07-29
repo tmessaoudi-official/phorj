@@ -117,7 +117,7 @@ fn load_unified_src(entry: &Path, entry_src: String) -> Result<Unit, String> {
             return Err(format!(
                 "import `{}` does not resolve: no package `{}` (or `{}`) under any search root\n  searched: {}\n  hint: packages live in folders matching their name (folder = package) under the \
                  entry's directory, `src/`, or `vendor/`; dependencies must already be on disk — \
-                 phg never downloads code [E-MODULE-NOT-FOUND]",
+                 `run`/`check`/`transpile` never download code (`phg install` writes `vendor/`) [E-MODULE-NOT-FOUND]",
                 full,
                 full,
                 if parent.is_empty() { "-" } else { &parent },

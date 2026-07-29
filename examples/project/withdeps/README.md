@@ -44,4 +44,5 @@ exactly what was searched — with the hint that `phg` never fetches.
 
 Determinism is the committed tree itself: what is vendored is what runs, byte-for-byte, on every
 machine and in CI, with zero network. Version selection, updating, lockfiles, and registries are
-the future extension's concern — deliberately OUTSIDE the language.
+the shipped package manager's concern (DEC-316: `phorj.json`, `phg add`/`install`/`update`/
+`remove`, `phorj.lock`) — deliberately OUTSIDE the compile pipeline.

@@ -81,7 +81,7 @@ signals = ["dep:ctrlc"]
 # `unsafe` stack-switching, which `corosensei` confines out of phorj's own unsafe-free code (the
 # same ctrlc criterion). NATIVE-ONLY: corosensei does not compile on wasm32 (no native stack to switch),
 # so the feature is off for the WASM playground, where the interpreter delegates task execution to the
-# VM's frame-swap instead. See docs/specs/2026-06-29-m6-w4-green-threads-design.md §4b (deleted; see git history).
+# VM's frame-swap instead. See docs/specs/2026-06-29-m6-w4-green-threads-design.md §4b (deleted; see upstream git history — this working clone is shallow).
 green = ["dep:corosensei"]
 # Native codegen JIT backend (perf mandate G-8): Cranelift lowers hot bytecode functions to native
 # machine code — the bytecode VM is ~28× slower than release-php+JIT on hot numeric loops, and no

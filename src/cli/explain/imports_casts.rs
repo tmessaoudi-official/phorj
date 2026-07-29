@@ -100,8 +100,9 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              the entry's directory is the only root). Packages live in folders matching their name\n\
              (folder = package): `import Model;` needs `Model/*.phg` declaring `package Model;`\n\
              under one of those roots. The error lists exactly what was searched. Dependencies must\n\
-             already be on disk under `vendor/` — phg never downloads code (a package-manager\n\
-             extension writes `vendor/`; the compiler only reads it).\n"
+             already be on disk under `vendor/` — `run`/`check`/`transpile` never download code\n\
+             (the DEC-316 package manager writes `vendor/`: `phg install`; the compiler only\n\
+             reads it).\n"
         }
         "E-IMPORT-MAIN" => {
             "E-IMPORT-MAIN — `import Main;` (or `Main.…`) is never legal.\n\n\

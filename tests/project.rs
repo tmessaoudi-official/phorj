@@ -1,7 +1,7 @@
 //! M5 S2b/S2c integration: a multi-file project loads through `loader::load`, resolves cross-package
 //! calls, and runs byte-identically on both backends. S2c qualifies cross-package calls
 //! (`Util.compute(x)` via an import leaf or alias), tightens the S2b bare-call interim (unqualified
-//! cross-package calls now fail), supports cross-package types via `import type`, and transpiles to
+//! cross-package calls now fail), supports cross-package type imports (unified `import` — the old `import type` form is retired), and transpiles to
 //! one PHP `namespace` brace-block per package. Packages are PascalCase (`E-PKG-CASE`).
 
 use std::path::{Path, PathBuf};
@@ -194,7 +194,7 @@ fn internal_member_is_not_visible_from_unrelated_package() {
 #[test]
 fn library_package_type_is_usable_cross_package() {
     // The E-PKG-TYPE gate is retired (M-RT cross-package types): a library package may declare a
-    // type, and `package Main` consumes it via `import type`, instantiating + reading a field.
+    // type, and `package Main` consumes it via a type import, instantiating + reading a field.
     let tmp = TempDir::new();
     let entry = tmp.write(
         "src/main.phg",
@@ -213,7 +213,7 @@ fn library_package_type_is_usable_cross_package() {
     assert_eq!(vm.as_deref(), Ok("5\n"), "vm output");
 }
 
-/// `import type` of a type a package does not export.
+/// A type import of a type a package does not export.
 #[test]
 fn import_type_unknown_is_rejected() {
     let tmp = TempDir::new();
@@ -229,7 +229,7 @@ fn import_type_unknown_is_rejected() {
     assert!(err.contains("E-IMPORT-UNKNOWN"), "got: {err}");
 }
 
-/// Two `import type` binding the same bare name without an alias.
+/// Two type imports binding the same bare name without an alias.
 #[test]
 fn import_type_conflict_is_rejected() {
     let tmp = TempDir::new();
@@ -249,7 +249,7 @@ fn import_type_conflict_is_rejected() {
     assert!(err.contains("E-IMPORT-CONFLICT"), "got: {err}");
 }
 
-/// `import type` naming a built-in type (built-ins are import-free).
+/// A type import naming a built-in type (built-ins are import-free).
 #[test]
 fn import_type_builtin_is_rejected() {
     let tmp = TempDir::new();
@@ -265,7 +265,7 @@ fn import_type_builtin_is_rejected() {
     assert!(err.contains("E-IMPORT-BUILTIN"), "got: {err}");
 }
 
-/// `import type` whose bound name collides with a module-import qualifier.
+/// A type import whose bound name collides with a module-import qualifier.
 #[test]
 fn import_type_shadow_is_rejected() {
     let tmp = TempDir::new();
@@ -513,7 +513,7 @@ fn cross_package_call_inside_map_literal_resolves() {
     assert_eq!(run, vm, "run and vm must be byte-identical");
 }
 
-/// A `package Main` class `extends` a library-package class (imported via `import type`), inheriting
+/// A `package Main` class `extends` a library-package class (imported via a type import), inheriting
 /// its constructor + field, overriding an `open` method, and calling up with the named
 /// `parent(Ancestor).m()` form — all resolved across the package boundary, byte-identical.
 #[test]

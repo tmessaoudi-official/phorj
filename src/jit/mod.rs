@@ -69,7 +69,7 @@
 //! ## The `unsafe` island
 //!
 //! A JIT's call path (`finalize → transmute(buf → fn ptr) → call`) is `unsafe` in phorj's own code —
-//! phorj's FIRST first-party `unsafe` (the four other external deps confine their unsafe to
+//! phorj's FIRST first-party `unsafe` (the other admitted deps confine their unsafe to
 //! third-party crates). Per the ruling (`docs/specs/UNIFIED-SPEC.md` §"External dependency policy",
 //! 2026-07-06 amendment): the crate roots relax from `#![forbid(unsafe_code)]` to
 //! `#![deny(unsafe_code)]` and this module — and ONLY this module — carries the audited

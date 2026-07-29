@@ -44,7 +44,7 @@ bright line holds: *if it's `Core.`, the core team shipped it; anything else is 
 `check` / `transpile` are offline; determinism Invariant 10).
 
 **Distributing** is handled by the package-manager verbs (DEC-316, shipped): `phg add`, `phg install`,
-`phg update`, `phg remove` — the only network-capable commands (`run`/`check`/`transpile` stay offline).
+`phg update`, `phg remove` — the only network-capable commands besides `phg build --target`'s verified stub download (`run`/`check`/`transpile` stay offline).
 A dependency is declared in a composer.json-style **`phorj.json`** and comes from one of three sources —
 a **registry** semver constraint (`"^1.2"`), a **git** repo (`{ "git": url, "ref": tag }`), or a local
 **path** (`{ "path": dir }`) — all materialized into `vendor/<Publisher>/<Name>/` and pinned by a tree

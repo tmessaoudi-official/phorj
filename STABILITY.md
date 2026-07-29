@@ -68,7 +68,9 @@ place; refinement ongoing).
 
 Two further vetted dependencies power language-level surfaces rather than stdlib modules: `ctrlc`
 (signal handling) and `corosensei` (green-thread concurrency — `spawn`/channels). The full
-dependency set is exactly these four; see `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`.
+dependency set has since grown to **14 admitted, feature-gated crates (9 linked by default)** —
+`Cargo.toml` and `docs/specs/UNIFIED-SPEC.md#external-dependency-policy` are the SSOT; never
+trust a restated count.
 
 ## CLI commands
 
@@ -79,7 +81,8 @@ and `-h`/`-v`.
 
 ### experimental
 `lift` (PHP → Phorj draft — *review required*, inherently lossy), `serve` (HTTP server),
-`vendor` (git dependencies; transitive deps deferred), `lsp` (language server; the query layer is
+`add`/`install`/`update`/`remove` (DEC-316 package manager — the network-capable verbs; `vendor`
+is retired and errors, DEC-282), `lsp` (language server; the query layer is
 growing), `debug` (interactive debugger REPL + DAP transport).
 
 ## deprecated

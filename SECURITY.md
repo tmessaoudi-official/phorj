@@ -53,12 +53,20 @@ Phorj is a language toolchain, so the relevant attack surface is **untrusted inp
   retired — DEC-282 — and errors). Dependency names are validated at `phorj.json`-parse time
   (strict PascalCase alphanumeric `Publisher/Name` segments, `Core` reserved) so a name cannot
   traverse or escape the `vendor/` tree. Git fetching shells out to the host `git` binary; stub
-  and registry fetching shell out to `curl` (`PHORJ_GIT` and `PHORJ_CURL` override which binaries
-  are run, and `PHORJ_STUB_REGISTRY` redirects where stubs are fetched from — treat all three as
-  security-sensitive). A dependency's `git` URL and `ref` are passed to `git clone`/`git checkout`
+  and registry fetching shell out to `curl`. Several env vars steer these paths and are ALL
+  security-sensitive: `PHORJ_GIT`, `PHORJ_CURL`, and `PHORJ_OBJCOPY` select which binaries are
+  executed; `PHORJ_REGISTRY` replaces the package-name→git-URL index (the index itself carries no
+  signature); `PHORJ_STUB_REGISTRY` redirects where stubs are fetched from; and
+  `PHORJ_STUB_MANIFEST` substitutes the stub-hash manifest — overriding it replaces the baked
+  trust anchor of the sha256 check above. The spawned `git` also inherits the ambient
+  environment (`GIT_SSH_COMMAND` etc. are honoured — see KNOWN_ISSUES item 4b). A dependency's
+  `git` URL and `ref` are passed to `git clone`/`git checkout`
   as given (`https://…`, `file://…`, and local paths are all supported), so treat a third-party
   `phorj.json` with the same care as any build manifest you did not write. `run`/`check`/
-  `transpile` never fetch — they resolve offline from the committed `vendor/`.
+  `transpile` never fetch — they resolve offline from the committed `vendor/`. Programs
+  themselves can open outbound connections at run time only through the non-default features
+  (`http-client`, `mail`, `database-postgres`/`database-mysql`); the shipped release binaries
+  are built with default features only, which exclude all four.
 - **`phg serve` (HTTP runtime).** The server runs a **bounded OS-thread worker pool** (`--workers N`,
   default = number of CPU cores; `--workers 1` restores the single-threaded path). Each worker owns
   its own `Rc` value heap — values never cross threads — and handles one connection at a time. It is
