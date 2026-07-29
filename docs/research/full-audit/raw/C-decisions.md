@@ -3893,3 +3893,26 @@ reconstructed from the surviving references, and says so — none of them is a n
 | ID | Question | Ruling | Status |
 |----|----------|--------|--------|
 | DEC-415 | **Should two entry points be an error, and is `E-MULTIPLE-MAIN` obsolete?** Surfaced by the Wave-0.4 stale-label sweep: the code has **zero emit sites** [Verified: `grep 'with_code("E-MULTIPLE-MAIN")' src/` → 0], its `phg explain` text promised *"it is rejected rather than silently picked"*, and **four comments in the AST, interpreter and compiler asserted the guarantee** (*"the checker's `E-MULTIPLE-MAIN` guarantees ≤1"*) — while a program with a top-level `main` AND a class-static `main` type-checked clean | **RULED (developer, verbatim): *"the name main means nothing! a free function or a static method needs `#[Entry(..)]` to be considered!"*** — entry detection is **attribute-driven only** — *"but the error should be multiple ENTRIES, not multiple mains"*. **And the ruling is ALREADY IMPLEMENTED**, which the asking session should have found before stopping the developer: [Verified live] two same-kind entries give *"duplicate `#[Entry(kind: EntryKind.Cli)]` — a program has at most one entry per kind"* → **`E-DUPLICATE-ENTRY-KIND`** (`src/checker/program/entry_points.rs:183`), a code already named for ENTRIES; `entry_candidates` gates on `is_entry_attr`, so the name is irrelevant; and `examples/README.md:190` already stated *"`E-DUPLICATE-ENTRY-KIND` since the `#[Entry(kind:)]` migration — the older `E-MULTIPLE-MAIN` code is no longer emitted"*. **Refinement the implementation adds and the ruling should carry: the rule is per-KIND, not per-program.** One `Cli` + one `Web` entry MAY coexist and `run`/`serve` each take their own — [Verified: five shipped examples depend on it, `examples/web/{server,core-http,handler,json-api}.phg` + `examples/session/counter.phg`], so a flat "one entry per program" rule would have broken them. **Work done (hygiene only, no behaviour change):** the dead NAME-based resolver `entry_point()`/`entry_point_count()` DELETED (zero callers — they were the source of the false guarantee); the three backend comments corrected to cite `E-DUPLICATE-ENTRY-KIND`; the `E-MULTIPLE-MAIN` explain arm rewritten to say it is RETIRED and point at the live code (kept so an old log quoting it still explains itself) | **RULED — already built; dead code removed** |
+
+### DEC-414 / Q28 BUILD NOTE (2026-07-29) — the P6 git hardening is back
+
+Built at Wave 0.5 as ruled. `src/pm/fetch.rs` gained `validate_git_target`, which refuses — **before any
+process is spawned** — the `ext::`/`file::` double-colon REMOTE-HELPER forms (case-insensitively), a
+leading `-` on either the url or the ref, and empty values; `clone` now passes `--` to end option
+parsing; every invocation carries `-c protocol.ext.allow=never`; and the inherited `GIT_*` environment
+is scrubbed so an ambient `GIT_SSH_COMMAND`/`GIT_CONFIG_*`/`GIT_PROXY_COMMAND` cannot hijack a fetch.
+
+**Why this was worth the slot:** both fields come from a `phorj.json` dependency spec — i.e. from
+whatever repository a user is asked to `phg install` — and git's `ext::` helper *runs a shell command*,
+so `git = "ext::sh -c '…'"` was arbitrary code execution at install time.
+
+**Two deliberate non-choices, recorded so they are not read as oversights.** (1) `--` is NOT added to
+`checkout`: `git checkout -- <x>` means *"restore this path"*, so the separator would change the verb's
+meaning; the leading-dash rejection covers the ref instead. (2) `file://` (the TRANSPORT) and bare local
+paths remain accepted — `fetch_git` documents them as supported and hermetic tests use them; only the
+double-colon helper forms are refused. A regression test pins six legitimate forms.
+
+**Test discipline:** 6 tests, and each of the five REJECTION tests was verified to **FAIL with the guard
+neutered** — they detect the gap rather than merely passing. `KNOWN_ISSUES` item 4b is closed, with one
+residual recorded there for a later pass: the helper check is a DENYLIST, and an allowlist of
+`https`/`ssh`/`git`/`file` transports plus bare paths would be stronger.

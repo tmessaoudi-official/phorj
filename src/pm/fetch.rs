@@ -37,8 +37,12 @@ pub fn fetch_path(manifest_dir: &Path, rel: &str, dest: &Path) -> Result<Fetched
 /// Clone `url` at `git_ref` into `dest`, resolve the exact commit, and strip `.git` (the vendored tree
 /// is source only). `url` may be `https://…`, `file://…`, or a bare local path (git handles all three).
 pub fn fetch_git(url: &str, git_ref: &str, dest: &Path) -> Result<Fetched, String> {
+    validate_git_target(url, git_ref)?;
     let git = std::env::var("PHORJ_GIT").unwrap_or_else(|_| "git".into());
-    run_git(&git, &["clone", "--quiet", url], dest, true)?;
+    // `--` ends option parsing so a hostile URL cannot become a flag. (Deliberately NOT used on the
+    // `checkout` below: `git checkout -- <x>` means "restore this PATH", not "check out this ref", so
+    // the separator would change the verb's meaning. The leading-dash rejection covers the ref.)
+    run_git(&git, &["clone", "--quiet", "--", url], dest, true)?;
     run_git(
         &git,
         &["-C", dest_str(dest)?, "checkout", "--quiet", git_ref],
@@ -119,8 +123,62 @@ fn dest_str(dest: &Path) -> Result<&str, String> {
         .ok_or_else(|| "non-utf8 destination path".to_string())
 }
 
+/// Reject the git argument/transport-injection shapes BEFORE any `git` process is spawned (Q28 /
+/// DEC-414 — a re-port of the retired `phg vendor` path's verified property **P6**, which the DEC-316
+/// package manager did not inherit; see `2026-07-03-unification-audit/raw/A7-security.md:169`).
+///
+/// The threat is concrete: `url` and `git_ref` come from a `phorj.json` dependency spec, i.e. from
+/// whatever repository a user is asked to `phg install`. Git's `ext::` remote helper **runs a shell
+/// command**, so `git = "ext::sh -c 'curl … | sh'"` would be arbitrary code execution at install time;
+/// a leading `-` on either field turns it into a `git` flag (`--upload-pack=…` is the classic).
+///
+/// `ext::`/`file::` are the double-colon REMOTE-HELPER forms and are matched case-insensitively.
+/// The `file://` transport URL and bare local paths are deliberately still allowed — `fetch_git`
+/// documents them as supported, and hermetic tests use them.
+pub(crate) fn validate_git_target(url: &str, git_ref: &str) -> Result<(), String> {
+    for (what, v) in [("git url", url), ("git ref", git_ref)] {
+        if v.starts_with('-') {
+            return Err(format!(
+                "refusing this {what}: it starts with `-`, which git would read as a command-line \
+                 flag rather than a value ({v:?})"
+            ));
+        }
+        if v.is_empty() {
+            return Err(format!("refusing an empty {what}"));
+        }
+    }
+    let lower = url.to_ascii_lowercase();
+    for helper in ["ext::", "file::"] {
+        if lower.starts_with(helper) {
+            return Err(format!(
+                "refusing this git url: `{helper}` is a git REMOTE HELPER, not a transport — `ext::` \
+                 executes a shell command, so a dependency spec could run arbitrary code at install \
+                 time ({url:?}). Use an https/ssh/git URL, or a plain local path."
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Config + environment hardening applied to EVERY `git` invocation (Q28 / P6): disable the `ext`
+/// protocol at the config level as defence in depth behind [`validate_git_target`]'s string check,
+/// and scrub the inherited `GIT_*` environment so an ambient `GIT_SSH_COMMAND`, `GIT_CONFIG_*`,
+/// `GIT_PROXY_COMMAND`, … cannot redirect or hijack the fetch.
+fn harden(cmd: &mut Command) {
+    for (k, _) in std::env::vars_os() {
+        if k.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(&k);
+        }
+    }
+}
+
+/// The leading args every invocation carries (see [`harden`]): `-c protocol.ext.allow=never`.
+const GIT_HARDENING_ARGS: [&str; 2] = ["-c", "protocol.ext.allow=never"];
+
 fn run_git(git: &str, args: &[&str], dest: &Path, is_clone: bool) -> Result<(), String> {
     let mut cmd = Command::new(git);
+    harden(&mut cmd);
+    cmd.args(GIT_HARDENING_ARGS);
     cmd.args(args);
     if is_clone {
         cmd.arg(dest_str(dest)?);
@@ -139,7 +197,10 @@ fn run_git(git: &str, args: &[&str], dest: &Path, is_clone: bool) -> Result<(), 
 }
 
 fn capture_git(git: &str, args: &[&str]) -> Result<String, String> {
-    let out = Command::new(git)
+    let mut cmd = Command::new(git);
+    harden(&mut cmd);
+    let out = cmd
+        .args(GIT_HARDENING_ARGS)
         .args(args)
         .output()
         .map_err(|e| format!("cannot run `{git}`: {e}"))?;
@@ -197,5 +258,73 @@ mod tests {
     fn path_fetch_rejects_missing() {
         let dest = tmp("nope_dest");
         assert!(fetch_path(Path::new("/nonexistent"), "missing", &dest).is_err());
+    }
+
+    // ── Q28 / DEC-414: the re-ported P6 git argument/transport hardening ──────────────────────────
+    // These are the shapes a hostile `phorj.json` dependency spec could carry. `ext::` is the sharp
+    // one: git's ext remote helper RUNS A SHELL COMMAND, so accepting it is code execution at
+    // install time.
+
+    #[test]
+    fn git_url_naming_the_ext_remote_helper_is_refused() {
+        let err = validate_git_target("ext::sh -c 'echo pwned'", "v1").unwrap_err();
+        assert!(err.contains("REMOTE HELPER"), "{err}");
+        // …case-insensitively, so `EXT::` cannot slip past.
+        assert!(validate_git_target("EXT::sh -c 'x'", "v1").is_err());
+    }
+
+    #[test]
+    fn git_url_naming_the_file_remote_helper_is_refused() {
+        assert!(validate_git_target("file::/etc/passwd", "v1").is_err());
+        assert!(validate_git_target("FILE::/tmp/x", "v1").is_err());
+    }
+
+    #[test]
+    fn a_leading_dash_in_the_url_or_ref_is_refused() {
+        // Either would be parsed by git as a FLAG rather than a value.
+        let e1 = validate_git_target("--upload-pack=touch /tmp/pwned", "v1").unwrap_err();
+        assert!(e1.contains("starts with `-`"), "{e1}");
+        let e2 = validate_git_target("https://example.com/r.git", "--upload-pack=x").unwrap_err();
+        assert!(e2.contains("starts with `-`"), "{e2}");
+    }
+
+    #[test]
+    fn empty_url_or_ref_is_refused() {
+        assert!(validate_git_target("", "v1").is_err());
+        assert!(validate_git_target("https://example.com/r.git", "").is_err());
+    }
+
+    #[test]
+    fn legitimate_transports_and_local_paths_still_pass() {
+        // `file://` (the TRANSPORT) and bare paths are documented as supported and must keep working —
+        // only the double-colon HELPER forms are refused.
+        for url in [
+            "https://example.com/acme/pkg.git",
+            "ssh://git@example.com/acme/pkg.git",
+            "git://example.com/acme/pkg.git",
+            "file:///srv/git/pkg.git",
+            "/srv/git/pkg.git",
+            "../sibling-repo",
+        ] {
+            assert!(validate_git_target(url, "v1.2.3").is_ok(), "rejected {url}");
+        }
+    }
+
+    #[test]
+    fn fetch_git_applies_the_guard_before_spawning_git() {
+        // Proves the validator is WIRED IN, not merely present: the error must be ours, and it must
+        // arrive without git having run (a `git` error would read "git clone failed: …").
+        let dest = tmp("guard_dest");
+        // `match` rather than `unwrap_err()`: that would force a `Debug` impl on the public
+        // `Fetched` struct purely for a test.
+        let err = match fetch_git("ext::sh -c 'echo pwned'", "v1", &dest) {
+            Ok(_) => panic!("the guard did not fire — a hostile url was accepted"),
+            Err(e) => e,
+        };
+        assert!(err.contains("REMOTE HELPER"), "{err}");
+        assert!(
+            !err.contains("git clone failed"),
+            "git was spawned anyway: {err}"
+        );
     }
 }

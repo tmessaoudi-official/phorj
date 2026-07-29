@@ -152,25 +152,14 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    (fake/withers fault on CR/LF), but `Response.withHeader`/`Cookie.render` still interpolate
    unchecked — the actual outbound injection sink. Guarding them changes shipped surface behavior
    → RULED as DEC-363 (2026-07-26, spec `docs/specs/2026-07-26-response-header-injection-guard.md`) — build queued.
-4b. **P2 SECURITY-HARDENING — the DEC-316 PM git path carries none of the retired vendor path's
-   argument hardening** (found by the 2026-07-28 consistency audit's certification panel). The
-   retired `phg vendor` implementation passed git args behind a `--` end-of-options separator with
-   `protocol.ext.allow=never`, rejected `ext::`/`file::` remote helpers and leading-dash refs, and
-   scrubbed the `GIT_*` environment (recorded as verified property P6 in
-   `docs/research/2026-07-03-unification-audit/raw/A7-security.md`; shipped per
-   CHANGELOG §"`phg vendor` supply-chain hardening" under 1.0.0-nightly.0, 2026-06-24); the live
-   `src/pm/fetch.rs` passes a
-   dependency's `git`/`ref` to `git clone`/`git checkout` **as given** with no separator, no
-   remote-helper rejection, and an inherited ambient environment (`GIT_SSH_COMMAND` etc. are
-   honoured) — only package NAMES are validated (`src/pm/manifest.rs`). A hostile
-   third-party `phorj.json` can therefore smuggle git options / command-executing remote helpers.
-   SECURITY.md documents the honest weaker truth; re-porting the P6 guards to `fetch.rs` is a
-   small queued hardening slice (audit Q28).
-5. **`phg check` of `Core.Http` programs under `--no-default-features` fails on the REGEX
-   natives** (`Router.constraintOk` → `Regex.compile`; regex is feature-gated) — PRE-EXISTING
-   (the old prelude made the same call), surfaced while verifying the slice's no-json story. The
-   new `body.json()` itself is safe: the `Json` TYPE always injects and
-   `Core.Native.Http.jsonParse` is always registered (flag-naming fault without feature `json`).
+4b. ~~**P2 SECURITY-HARDENING — the DEC-316 PM git path carries none of the retired vendor path's
+   argument hardening**~~ — **FIXED 2026-07-29 (Q28 / DEC-414).** `src/pm/fetch.rs` now rejects the
+   injection shapes before spawning git (`ext::`/`file::` remote helpers case-insensitively, a leading
+   `-` on the url or ref, empty values), passes `--` on `clone`, sets `-c protocol.ext.allow=never` on
+   every invocation, and scrubs the inherited `GIT_*` environment. 6 tests, each verified to FAIL with
+   the guard neutered. Residual (not a regression, recorded for a future hardening pass): the helper
+   check is a DENYLIST — an allowlist of `https`/`ssh`/`git`/`file` transports plus bare paths would be
+   stronger still.
 
 ## STACKDEPTH-deep-member-chain — pathological deep left-associative expressions SIGABRT the checker (PRE-EXISTING, surfaced 2026-07-25 DEC-337 review)
 

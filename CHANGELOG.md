@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Security — re-ported the git argument/transport hardening the package manager had lost (2026-07-29, Q28 / DEC-414)
+- `src/pm/fetch.rs` passed a dependency's `url` and `ref` straight to `git clone`/`git checkout`. Both
+  come from a `phorj.json` spec, i.e. from whatever repository a user is asked to `phg install` — and
+  git's `ext::` remote helper **runs a shell command**, so `git = "ext::sh -c 'curl … | sh'"` was
+  arbitrary code execution at install time. A leading `-` on either field made it a git flag instead of
+  a value (`--upload-pack=…`). The retired `phg vendor` path had all of these guards as verified
+  property **P6**; the DEC-316 rewrite did not inherit them.
+- Now: `validate_git_target` refuses `ext::`/`file::` (the double-colon REMOTE-HELPER forms,
+  case-insensitively), a leading `-` on url or ref, and empty values — **before** any process spawns.
+  `clone` passes `--` to end option parsing. Every invocation carries
+  `-c protocol.ext.allow=never` as defence in depth, and the inherited `GIT_*` environment is scrubbed
+  so an ambient `GIT_SSH_COMMAND`/`GIT_CONFIG_*`/`GIT_PROXY_COMMAND` cannot hijack the fetch.
+- `file://` (the transport) and bare local paths keep working — they are documented as supported and a
+  regression test pins six legitimate forms.
+- 6 tests, and each of the five rejection tests was verified to **FAIL with the guard neutered**, so
+  they detect the gap rather than merely passing. `--` is deliberately NOT added to `checkout`:
+  `git checkout -- <x>` means "restore this path", so it would change the verb's meaning.
+
 ### Removed — the dead NAME-based entry resolver, and the false guarantee it underpinned (2026-07-29, DEC-415)
 - Entry points are **attribute-declared only**: a free function or a static method is an entry ONLY if
   attributed `#[Entry(kind: EntryKind.…)]`. The name `main` carries no meaning (developer ruling).
