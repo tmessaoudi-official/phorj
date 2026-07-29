@@ -17,6 +17,53 @@ import Core.Regex;
 // HttpOnly ON, SameSite Lax, Path "/" — the safe-by-default posture; `Partitioned` (CHIPS) is
 // the ruled opt-in.
 enum SameSite { Lax, Strict, NoValue }
+// DEC-363 (P1 SECURITY) — the header-safety POLICY, in phorj so all three legs (`run`,
+// `run --tree-walker`, transpiled PHP) share ONE definition of "forbidden" by construction.
+//
+// Reproduced before this shipped: `Response.text(200,"ok").withHeader("X-User", evil)` where `evil`
+// carried CRLF emitted a response whose `Content-Length: 2` still described "ok" while ~30 further
+// bytes followed — an injected header, an early head terminator and a second body. That is a
+// request-smuggling / desync primitive, not merely response splitting.
+//
+// The forbidden set mirrors the REQUEST-side gate (`ext/http_client/natives.rs`) exactly, so the two
+// directions cannot drift: CR, LF and NUL anywhere, plus `:` in a name (a `:` would forge a second
+// header on the same line). NUL is included on both sides per the ruling — PHP's own `header()`
+// rejects it, and it is a known header-truncation trick.
+//
+// These are PUBLIC on purpose: a violation is a 500, so a handler holding user-derived input needs a
+// way to check first and return a clean 400 instead. That is what makes the panic-class choice
+// tolerable without making the builders throw.
+class HeaderSafety {
+  static function forbidden(): List<string> {
+    string cr = Bytes.toString(b"\x0d") ?? "";
+    string lf = Bytes.toString(b"\x0a") ?? "";
+    string nul = Bytes.toString(b"\x00") ?? "";
+    return [cr, lf, nul];
+  }
+  static function hasForbidden(string s): bool {
+    for (string bad in HeaderSafety.forbidden()) {
+      if (String.contains(s, bad)) { return true; }
+    }
+    return false;
+  }
+  // A header NAME additionally may not contain `:` — it would forge a second header on the line.
+  static function isValidName(string name): bool {
+    return !HeaderSafety.hasForbidden(name) && !String.contains(name, ":");
+  }
+  static function isValidValue(string value): bool {
+    return !HeaderSafety.hasForbidden(value);
+  }
+  // The single wording, mirroring the request-side gate's message.
+  static function reject(string what): void {
+    NativeHttp.headerFault("header `{what}` contains a forbidden character");
+  }
+  static function requireName(string name): void {
+    if (!HeaderSafety.isValidName(name)) { HeaderSafety.reject(name); }
+  }
+  static function requireValue(string name, string value): void {
+    if (!HeaderSafety.isValidValue(value)) { HeaderSafety.reject(name); }
+  }
+}
 class Cookie {
   constructor(
     public string name,
@@ -25,7 +72,15 @@ class Cookie {
     public bool isSecure = true,
     public bool isHttpOnly = true,
     public bool isPartitioned = false
-  ) {}
+  ) {
+    // DEC-363: the constructor, not `render()`, because every builder (`path`/`secure`/`httpOnly`/
+    // `partitioned`) re-constructs through here — one chokepoint covers all three string fields AND
+    // all four builders. `isSecure`/`isHttpOnly`/`isPartitioned` are `bool` and cannot carry CR/LF/NUL,
+    // so only three of the six fields need guarding.
+    HeaderSafety.requireName(name);
+    HeaderSafety.requireValue(name, value);
+    HeaderSafety.requireValue(name, cookiePath);
+  }
   function path(string p): Cookie {
     return new Cookie(this.name, this.value, p, this.isSecure, this.isHttpOnly, this.isPartitioned);
   }
@@ -69,6 +124,11 @@ class Response {
     return new Response(newStatus, this.body, this.headerLines);
   }
   function withHeader(string name, string value): Response {
+    // DEC-363: guard at the BUILDER, not at `serialize()`. Both chokepoints are byte-identical and
+    // safe, but faulting here names the `withHeader` call that produced the bad value instead of
+    // surfacing at respond time with no idea which header was at fault.
+    HeaderSafety.requireName(name);
+    HeaderSafety.requireValue(name, value);
     return new Response(this.status, this.body, List.concat(this.headerLines, ["{name}: {value}"]));
   }
   function withCookie(Cookie c): Response {

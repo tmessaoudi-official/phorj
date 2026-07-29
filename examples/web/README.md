@@ -145,3 +145,36 @@ that policy into Rust would break the determinism layering). Once a standard **`
 ships `Request`/`Response` + `parseRequest`/`serializeResponse`, `phg serve` will run a bare
 `handle(Request) -> Response` directly — the `respond` shim disappears, the contract is unchanged.
 `Core.Http` is tracked with the native-stdlib wave.
+
+
+## Faults that cannot be runnable examples — header injection (DEC-363, P1 SECURITY)
+
+Invariant 9's carve-out: a fault has no runnable example, so the class is recorded here.
+
+`Response.withHeader(name, value)` and the `Cookie` constructor **reject CR, LF and NUL in any value,
+and `:` in a header name** — a panic-class fault reading ``header `X-User` contains a forbidden
+character``. Before this guard, a CRLF-carrying value produced a response whose `Content-Length: 2` still
+described a 2-byte body while ~30 further bytes followed it: an injected header, an early head
+terminator, and a second body. That is a request-smuggling / desync primitive, not merely response
+splitting, and it was reachable from ordinary handler code on a shipped `phg serve`.
+
+Five surfaces are guarded: `withHeader`'s name and value, and the cookie's `name`, `value` and
+`cookiePath`. The other three `Cookie` fields are `bool` and cannot carry those bytes. The guard sits on
+the **constructor**, so all four builders (`path`/`secure`/`httpOnly`/`partitioned`) are covered — each
+re-constructs.
+
+**A fault here is a 500 on that one request, never a server kill** (`serve/handlers.rs` degrades request
+faults by design), so it is not a DoS vector. But because it is a 500 rather than a 400, a handler
+holding **user-derived** input should validate first:
+
+```phorj
+import Core.Http.HeaderSafety;
+
+if (!HeaderSafety.isValidValue(userSupplied)) {
+    return Response.text(400, "bad header value");
+}
+return Response.text(200, "ok").withHeader("X-User", userSupplied);
+```
+
+The same policy guards the REQUEST side (`Core.HttpClient`), so outbound and inbound cannot drift.
+Full rule: `docs/specs/2026-07-26-response-header-injection-guard.md`.

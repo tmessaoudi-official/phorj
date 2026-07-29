@@ -151,6 +151,27 @@ pub(crate) fn http_natives() -> Vec<NativeFn> {
         Box::new(Ty::List(Box::new(Ty::String))),
     );
     vec![
+        // DEC-363 — the fault-raising primitive for the response-header injection guard.
+        //
+        // The character POLICY lives in phorj (`Http.isValidHeaderName`/`isValidHeaderValue` in the
+        // prelude), so all three legs share one definition of "forbidden" by construction. This native
+        // exists only because prelude phorj has no panic-class fault primitive: there is no `panic`,
+        // no `never`-returning builtin, and a checked `throw` was explicitly rejected (it would ripple
+        // `throws` into every handler and every `examples/web/` file). Modelled on `Core.Test.assert`,
+        // which faults the same way and carries the same kind of PHP twin.
+        //
+        // Panic-class is safe here by evidence, not preference: `serve/handlers.rs` degrades a request
+        // fault to a 500 on that ONE request and never kills the server, so this is not a DoS vector.
+        NativeFn {
+            module: "Core.Native.Http",
+            name: "headerFault",
+            params: vec![Ty::String],
+            ret: Ty::Void,
+            pure: true,
+            eval: NativeEval::Pure(native_header_fault),
+            lift_from: &[],
+            php: |a| format!("(throw new \\Exception({}))", parg(a, 0)),
+        },
         NativeFn {
             module: "Core.Native.Http",
             name: "parseQuery",
@@ -255,3 +276,13 @@ pub(crate) fn native_read_spill_for_tests(handle: i64) -> Result<Vec<u8>, String
 #[cfg(test)]
 #[path = "http_tests.rs"]
 mod tests;
+
+/// DEC-363 — raise the response-header injection fault. Always `Err`, so the call is unreachable-by-
+/// design in a correct program; the message is built by the prelude caller so the wording is
+/// single-sourced there alongside the policy.
+fn native_header_fault(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(msg)] => Err(msg.to_string()),
+        _ => Err("Core.Native.Http.headerFault expects (string)".into()),
+    }
+}

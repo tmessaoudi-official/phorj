@@ -466,3 +466,32 @@ fn header_injection_is_rejected_at_the_gate() {
     let s = format!("{r:?}");
     assert!(s.contains("forbidden character"), "{s}");
 }
+
+#[test]
+fn nul_in_a_request_header_is_rejected_too() {
+    // DEC-363 ruled extra 1: the request-side gate rejected CR/LF but NOT NUL, while PHP's own
+    // `header()` does reject it — a known header-truncation trick. Widened so the request and RESPONSE
+    // gates (`HeaderSafety` in the Core.Http prelude) share one policy and cannot drift.
+    for (name, value) in [("x-evil\0z", "ok"), ("x-ok", "a\0Host: evil")] {
+        let mut out = String::new();
+        let r = hc_request(
+            &[
+                Value::Str("GET".into()),
+                Value::Str("http://127.0.0.1:1/".into()),
+                Value::List(Rc::new(vec![Value::Str(name.into())])),
+                Value::List(Rc::new(vec![Value::Str(value.into())])),
+                Value::Null,
+                Value::Int(100),
+                Value::Int(0),
+                Value::Bool(false),
+            ],
+            &mut out,
+        )
+        .unwrap();
+        let s = format!("{r:?}");
+        assert!(
+            s.contains("forbidden character"),
+            "NUL must be rejected in ({name:?}, {value:?}): {s}"
+        );
+    }
+}

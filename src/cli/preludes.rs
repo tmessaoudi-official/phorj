@@ -698,6 +698,8 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         bare_types: &[
             "AttrBag",
             "Cookie",
+            // DEC-363 — the header-safety policy + the ruled public pre-check helpers.
+            "HeaderSafety",
             "FileBag",
             "HeaderBag",
             "MultipartPart",

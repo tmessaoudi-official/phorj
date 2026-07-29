@@ -737,3 +737,116 @@ fn site_mode_statics_serve_guard_and_fall_through() {
     let root = String::from_utf8_lossy(&fx.sent[2]).to_string();
     assert!(root.starts_with("HTTP/1.1 200"), "fallthrough: {root}");
 }
+
+// ── DEC-363: the response-header injection guard (P1 SECURITY) ────────────────────────────────────
+//
+// Reproduced before the fix: `withHeader("X-User", <CRLF payload>)` serialized a response whose
+// `Content-Length: 2` still described "ok" while ~30 further bytes followed — an injected header, an
+// early head terminator and a second body. A request-smuggling / desync primitive, not just splitting.
+//
+// The guard lives in the phorj PRELUDE, so these run through the real language surface on BOTH Rust
+// backends; the transpiled PHP leg faults with the identical message by construction (one policy, one
+// wording), which the byte-identity gate covers.
+
+/// A program that builds a response through `surface` and prints the serialized head.
+fn injection_prog(surface: &str) -> String {
+    format!(
+        r#"package Main;
+import Core.Output;
+import Core.Http;
+import Core.Http.Response;
+import Core.Http.Cookie;
+import Core.Bytes;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): int {{
+    string evil = Bytes.toString(b"x\x0d\x0aX-Injected: yes\x0d\x0a\x0d\x0a<html>pwned</html>") ?? "";
+    string nul = Bytes.toString(b"a\x00b") ?? "";
+    Response r = {surface};
+    string head = Bytes.toString(r.serialize()) ?? "";
+    Output.printLine(head);
+    return 0;
+}}
+"#
+    )
+}
+
+fn faults_on_both_backends(surface: &str) {
+    let src = injection_prog(surface);
+    for (leg, res) in [
+        ("vm", phorj::cli::cmd_run(&src)),
+        ("tree-walker", phorj::cli::cmd_treewalk(&src)),
+    ] {
+        match res {
+            Ok(out) => panic!("{leg}: injection was NOT refused for {surface}; got:\n{out}"),
+            Err(e) => assert!(
+                e.contains("contains a forbidden character"),
+                "{leg}: wrong diagnostic for {surface}: {e}"
+            ),
+        }
+    }
+}
+
+#[test]
+fn dec363_withheader_value_crlf_is_refused() {
+    faults_on_both_backends(r#"Response.text(200, "ok").withHeader("X-User", evil)"#);
+}
+
+#[test]
+fn dec363_withheader_name_crlf_is_refused() {
+    // The NAME is equally unvalidated — an evil name injects its own line.
+    faults_on_both_backends(r#"Response.text(200, "ok").withHeader(evil, "v")"#);
+}
+
+#[test]
+fn dec363_withheader_name_with_a_colon_is_refused() {
+    // A `:` in a name would forge a second header on the same line.
+    faults_on_both_backends(r#"Response.text(200, "ok").withHeader("X:Forged", "v")"#);
+}
+
+#[test]
+fn dec363_nul_is_refused_in_a_header_value() {
+    // Ruled extra 1: NUL joins the rejected set on BOTH sides (PHP's own `header()` rejects it).
+    faults_on_both_backends(r#"Response.text(200, "ok").withHeader("X-User", nul)"#);
+}
+
+#[test]
+fn dec363_cookie_name_value_and_path_are_all_refused() {
+    // The guard sits on the Cookie CONSTRUCTOR, so all three string fields AND all four builders
+    // (`path`/`secure`/`httpOnly`/`partitioned`, which each re-construct) are covered at once.
+    faults_on_both_backends(r#"Response.text(200, "ok").withCookie(new Cookie(evil, "v", "/"))"#);
+    faults_on_both_backends(r#"Response.text(200, "ok").withCookie(new Cookie("sid", evil, "/"))"#);
+    faults_on_both_backends(r#"Response.text(200, "ok").withCookie(new Cookie("sid", "v", evil))"#);
+}
+
+#[test]
+fn dec363_a_cookie_builder_cannot_smuggle_a_bad_path() {
+    // `path()` re-constructs, so the constructor guard catches it — this is why the chokepoint is the
+    // constructor rather than `render()`.
+    faults_on_both_backends(
+        r#"Response.text(200, "ok").withCookie(new Cookie("sid", "v", "/").path(evil))"#,
+    );
+}
+
+#[test]
+fn dec363_a_clean_response_still_serializes_and_does_not_split() {
+    // The other half: the guard must not break ordinary headers or cookies, and the serialized head
+    // must contain exactly one terminator with no injected line.
+    let src = injection_prog(
+        r#"Response.text(200, "ok").withHeader("X-User", "alice").withCookie(new Cookie("sid", "abc", "/"))"#,
+    );
+    let out = phorj::cli::cmd_run(&src).expect("a clean response must still serialize");
+    assert!(out.contains("X-User: alice"), "{out}");
+    assert!(out.contains("Set-Cookie: sid=abc"), "{out}");
+    assert!(
+        !out.contains("X-Injected"),
+        "no injected header may appear: {out}"
+    );
+    assert_eq!(
+        phorj::cli::cmd_treewalk(&src).expect("interp"),
+        out,
+        "interp ≡ VM"
+    );
+}

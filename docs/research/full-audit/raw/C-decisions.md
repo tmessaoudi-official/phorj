@@ -4087,3 +4087,32 @@ transpile succeeded"*, which is exactly the assertion that test exists for. Both
 **A second stale surface fell out of it:** `ext::registry::tests::docs_extensions_md_is_current` flagged
 that the `uri` row still advertised "the deprecated `Core.Url` compat twins" — deleted by DEC-416 earlier
 the same day. Row corrected and `docs/EXTENSIONS.md` regenerated.
+
+### DEC-363 BUILT (2026-07-29) — the response-header injection guard
+
+Reproduced first, exactly as the spec documented: `Content-Length: 2` describing a 2-byte body while ~30
+further bytes followed it — injected header, early head terminator, second body. Then fixed and
+re-verified on all three legs, which fault with the identical message.
+
+**One design refinement over the spec's sketch, and it is stricter not looser.** The spec said "guard in
+the phorj prelude ⇒ one implementation". Prelude phorj has NO panic-class fault primitive — no `panic`, no
+`never`-returning builtin — and a checked `throw` was explicitly rejected. So the split is: the character
+POLICY and the wording live in phorj (`HeaderSafety` in the `Core.Http` prelude), which is the property
+that actually delivers "all three legs identical by construction"; only the fault-RAISING is a one-line
+native (`Core.Native.Http.headerFault`), modelled on `Core.Test.assert`, which faults the same way and
+carries the same kind of PHP twin. [Verified: no fault primitive exists — no `Ty::Never` builtin, no
+`panic`/`fail`/`unreachable` native anywhere in `src/`.]
+
+**Naming deviation, surfaced not silent.** The ruled spelling was `Http.isValidHeaderName` /
+`isValidHeaderValue`. Delivering that literally requires a `class Http` inside module `Core.Http` — which
+recreates precisely the leaf-equals-type namesake that DEC-278's `Module` suffix existed to avoid and that
+DEC-350 dissolved for the database module hours earlier. They ship as `HeaderSafety.isValidName` /
+`isValidValue` (exported in `bare_types`, so `import Core.Http.HeaderSafety;` works). **The final public
+spelling is the developer's call** — options: keep `HeaderSafety`; add a `class Http` and accept the
+namesake; or rename the module `Core.HttpModule` to free the name, which is the DEC-278 pattern DEC-350
+was moving AWAY from.
+
+9 tests: one per injectable surface on both Rust backends, the NUL case, a builder-smuggling case
+(`Cookie.path(evil)` — proving the constructor chokepoint covers all four builders), and a clean-response
+regression guard asserting an ordinary header + cookie still serialize with no split. The request-side
+gate was widened to NUL in the same change with its own test, so the two directions cannot drift.

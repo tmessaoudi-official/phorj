@@ -108,9 +108,13 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
         match (n, v) {
             (Value::Str(n), Value::Str(v)) => {
                 let (n, v) = (n.as_str(), v.as_str());
-                // The injection gate: header names/values may not carry CR/LF (request smuggling).
-                if n.chars().any(|c| c == '\r' || c == '\n' || c == ':')
-                    || v.chars().any(|c| c == '\r' || c == '\n')
+                // The injection gate: header names/values may not carry CR/LF/NUL (request smuggling
+                // and header truncation). DEC-363 widened this to NUL so it matches the RESPONSE-side
+                // policy (`HeaderSafety` in the Core.Http prelude) exactly — the two directions must
+                // not drift, and PHP's own `header()` rejects NUL too.
+                if n.chars()
+                    .any(|c| c == '\r' || c == '\n' || c == '\0' || c == ':')
+                    || v.chars().any(|c| c == '\r' || c == '\n' || c == '\0')
                 {
                     return Err(format!(
                         "<<InvalidUrlError>>Core.HttpClientModule: header `{n}` contains a forbidden character"

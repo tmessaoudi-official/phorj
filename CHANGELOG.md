@@ -6,6 +6,33 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Security — **P1**: HTTP response splitting / request smuggling via response headers (2026-07-29, DEC-363)
+`Response.withHeader` and `Cookie` interpolated both arguments straight into a header line with zero
+validation, and `respond_once` returns handler bytes verbatim — so nothing downstream could re-validate.
+Reproduced on a shipped `phg serve` surface before fixing: a CRLF-carrying value produced a response whose
+`Content-Length: 2` still described the 2-byte body while ~30 further bytes followed — an injected header,
+an early head terminator and a second body. That is a smuggling/desync primitive, not just splitting.
+- **CR, LF and NUL are now rejected in any header value, and `:` in any header name**, with the wording
+  ``header `X-User` contains a forbidden character`` — mirroring the request-side gate exactly.
+- The **policy lives in phorj** (`HeaderSafety` in the `Core.Http` prelude), so all three legs share one
+  definition of "forbidden" by construction. Verified: `run`, `run --tree-walker` and the transpiled PHP
+  all fault with the identical message.
+- Guarded on the **`Cookie` constructor**, so all three of its string fields and all four builders
+  (`path`/`secure`/`httpOnly`/`partitioned`) are covered by one chokepoint — each re-constructs.
+- Guarded at the **builder** rather than `serialize()`: both are safe, but this names the `withHeader`
+  call that produced the bad value instead of surfacing at respond time.
+- **The request side was widened to NUL** in the same change (it rejected CR/LF only) so the two
+  directions cannot drift; PHP's own `header()` rejects NUL, and it is a header-truncation trick.
+- **`HeaderSafety.isValidName` / `isValidValue` ship as public pre-checks.** A violation is a 500 by
+  design (`serve/handlers.rs` degrades request faults, so this is not a DoS vector) — these let a handler
+  holding user-derived input return a clean 400 instead, without making the builders throw.
+- 9 tests: one per injectable surface on both Rust backends, a NUL case, a builder-smuggling case, and a
+  clean-response regression guard asserting the head does not split.
+- Naming deviation, recorded not silent: the ruling spelled the helpers `Http.isValidHeaderName`. That
+  needs a `class Http` inside module `Core.Http`, recreating exactly the leaf-equals-type namesake that
+  DEC-278's `Module` suffix existed to avoid and DEC-350 has just dissolved. They ship on `HeaderSafety`
+  instead; the final spelling is the developer's call.
+
 ### Changed — **BREAKING**: `Core.DatabaseModule.Database` → `Core.Database.Connection` (2026-07-29, DEC-350)
 The type is provably ONE connection — a single `Box<dyn DriverConn>` with connection-scoped
 `tx_depth`/`hook`/`timeout_ms`, and no pooling anywhere — so `Connection` is what it is. 8 of 10
