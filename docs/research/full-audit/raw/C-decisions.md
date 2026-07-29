@@ -3765,3 +3765,9 @@ convention).
 
 Evidence pointers are in the L report. **Developer-approved to defer** (2026-07-26) rather than accept
 invented recommendations. L-31 and L-19 look mechanical; **L-22 and L-33 look substantial.**
+
+## 2026-07-29 — developer ruling (post-consistency-audit)
+
+| ID | Question | Ruling | Status |
+|----|----------|--------|--------|
+| DEC-389 | Where is the record of truth a session must read/write — is the SSOT set advisory or mandatory? | **RULED (developer, 2026-07-29): the SSOT quartet is MANDATORY.** `docs/plans/MASTER-PLAN.md` (roadmap) · `docs/specs/UNIFIED-SPEC.md` (language/spec) · `docs/plans/SLICE-STATE.md` (current slice + queue) · this register (decisions). Every session reads them before working and writes through them in the same change as the work; every other document stating roadmap/spec/slice/decision content is a pointer, never a copy. Written into CLAUDE.md Invariant 19 | **RULED — WRITTEN** |

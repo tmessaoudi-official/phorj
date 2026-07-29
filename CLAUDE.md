@@ -180,12 +180,19 @@ asking, when the quality gate above is green. Limits:
     to all of it. NO-HIDDEN-LOSS (DEC-365): an unmeasurable or failing bench is recorded as an
     OWED verdict, never reported as passed, never re-baselined via `--emit`; a confirmed real
     loss gets fixed — refactor or implement the win — never suppressed.
-19. **Plans live in the repo; ZERO divergence from the SSOT** (ratified 2026-07-21). Every plan
+19. **Plans live in the repo; ZERO divergence from the SSOT** (ratified 2026-07-21; SSOT quartet
+    made explicit and MANDATORY by developer ruling 2026-07-29). Every plan
     or spec Claude produces is persisted IN the repo — the out-of-repo plan-mode file
     (`.claude/plans/*`) is an ephemeral scratchpad, NEVER the record of truth (the container is
-    reclaimed; only committed state survives). The canonical homes are: `docs/plans/MASTER-PLAN.md`
-    (roadmap SSOT), the decision register `docs/research/full-audit/raw/C-decisions.md` (every DEC
-    row / ruling), and `docs/plans/SLICE-STATE.md` (the live cursor — current slice + queue). A
+    reclaimed; only committed state survives). **The SSOT quartet — every session MUST read these
+    before working and write through them, never around them:**
+    - `docs/plans/MASTER-PLAN.md` — the roadmap SSOT (waves, priorities, percentage ledger);
+    - `docs/specs/UNIFIED-SPEC.md` — the language/spec SSOT (surface, naming, dependency policy);
+    - `docs/plans/SLICE-STATE.md` — the current-slice SSOT (the live cursor: what is being built
+      NOW + the queue — a session that starts or finishes a slice updates it in the same change);
+    - the decision register `docs/research/full-audit/raw/C-decisions.md` (every DEC row/ruling).
+    Any other document that states roadmap, spec, slice, or decision content is a POINTER to
+    these, never a second copy. A
     plan approved for build is mirrored into these BEFORE or IN the commit that starts the work; a
     spec ruled-but-not-yet-built is recorded there too (as QUEUED), so a fresh context resumes
     purely from repo state. **No divergent artifact** (extends Invariant 17's unified-docs
