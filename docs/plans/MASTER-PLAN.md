@@ -79,7 +79,7 @@
   (LOCKED 2026-07-22)**: native rustls termination behind `http-server-tls` (serve+TLS native-only) — build queued.
 - **post-1.0:** server-side HTTP/2 (rides the TLS ruling) · graceful reload (SIGHUP handover) ·
   `phg run-script` (explicit-only, never on install) · LDAP extension candidate.
-- **Appendix-A rows to record (PENDING-REJECT, currently silent drops):** SOAP · IMAP (PHP itself
+- **Appendix-A rows — RECORDED AS DEFERRED (DEC-413, developer-ruled 2026-07-29; reasons attached, door left open — NOT rejected, and no longer silent drops):** SOAP · IMAP (PHP itself
   unbundled it) · SNMP · dba+SysV IPC (contradicts the isolates+channels ruling) · pspell/enchant ·
   ext/calendar (icu4x subsumes) · tidy (W4-10 HTML5 parser subsumes). Plus: **repair the D-php-surface
   denominator** (add inventory rows for the 12 never-swept extension domains).

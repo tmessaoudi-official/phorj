@@ -27,12 +27,13 @@
 | 0.2 | **DEC-365** microbench gate: SKIP-LOUD on a discarded cpuset, meaning *"unmeasurable, verdict OWED"* — never *"passed"* | Pushes are blocked from the container without it. Carries the **no-hidden-loss** standing rule |
 | 0.3 | **DEC-362** three `pre-push` doc guards, incl. *every diagnostic code named in a decision row must exist in `src/`* | Would have caught three separate phantoms found this session |
 | 0.4 | Flip the **40 stale status labels** (task #43) | Zero-ruling cleanup; stops future sessions acting on false state |
+| 0.5 | **Q28 / DEC-414** re-port the P6 git-argument hardening to `src/pm/fetch.rs` (`--` end-of-options, `protocol.ext.allow=never`, reject `ext::`/`file::` remote helpers and leading-dash refs, scrub `GIT_*`) | The only LIVE security regression on the audit tail (`KNOWN_ISSUES` 4b). A re-port, not a design — the guards were verified once as property P6 |
 
 ## Wave 1 — correctness (the reason the agenda existed)
 
 | # | Item | Notes |
 |---|---|---|
-| 1.1 | **DEC-339** reject redeclaration of a live local/param binding (+ **DEC-366** lifter hoist, same slice) | The P0. 10 divergent shapes, one of which changes iteration count. Measure the `examples/`+`tests/` migration cost and report **before** migrating |
+| 1.1 | **DEC-339** reject redeclaration of a live local/param binding (+ **DEC-366** lifter hoist, same slice — ratified by **DEC-397**) | The P0. 10 divergent shapes, one of which changes iteration count. **Migration cost MEASURED 2026-07-29 (DEC-412): exactly ONE in-tree site** — `examples/guide/math.phg:54` re-declares `l1` (`int` at :46, `float` at :54 — same scope, different type = case 11). One rename; nothing else in 270 `.phg` files. Also lands **DEC-396**'s matrix additions (3 ACCEPTED rows, the lambda-own-param hygiene rejection, `using`/local-fn scope forms) and **DEC-404**'s captured-name-is-live rule, and the **DEC-410** `enum extends` diagnostic |
 | 1.2 | **DEC-340** transaction auto-rollback unwinds to the **entry depth** + `rollbackAll()` + `transactionDepth()` + the PHP savepoint helper | P1 silent data loss, reproduced live |
 | 1.3 | **DEC-363** response-header CRLF/NUL guard in the prelude + NUL on the request side + `isValidHeaderName`/`…Value` | P1 security on a shipped `phg serve`, reproduced live |
 | 1.4 | **DEC-367** extend the builtin-collision guard to final methods of the mapped PHP parent | Invariant-1 breach: PHP fatal where both Rust legs run |
@@ -44,7 +45,7 @@
 | # | Item | Notes |
 |---|---|---|
 | 2.1 | **DEC-356** fix all 18 catch-all sites **and** land the probe-variant gate, one slice; widen Invariant 3 to `Expr`/`Stmt`/`Pattern` | The class, not the instances. `B` (shared total visitor) stays a separate later ruling |
-| 2.2 | **DEC-377** audit and classify all **168** `__phorj_*` helpers into the 3 buckets; inline the convenience-only ones | Nobody currently knows which bucket each is in |
+| 2.2 | **DEC-377** finish the helper classification — **first pass done 2026-07-29 (DEC-412): 149 REAL helpers (not 168 — that count was stale; 180 raw matches, 31 grep artifacts), 64 bucket-1 / 66 bucket-2 / 17 bucket-3 INLINE CANDIDATES / 2 unclassified.** Remaining: bucket-2's per-helper justification strings + one read per inline candidate. Watch the `uri_*` trio (PHP 8.5's built-in URI ext may make them waste) and the `text_*`/`trim` group (overlaps DEC-385's Core.Text merge) |
 
 ## Wave 3 — the enabler, then what needs it
 

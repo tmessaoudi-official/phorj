@@ -89,7 +89,16 @@ queued); everything else is unbuilt. Start at Wave 0.**
 > startup config on the D1 chain + lexically-scoped `Config.with(…)` + per-object config; catalog round 1 =
 > Claude enumerates, developer rules over many rounds) · DEC-410 (**enum `extends` REJECTED** — sealed
 > hierarchies already ship and give subsumption + exhaustiveness soundly, proven 3-leg).
-> **Still owed:** batch 4 = the 3 reopenable auto-rulings (DEC-224/225/226)
+> **Batch 4 RULED/MEASURED (2026-07-29)** → DEC-411 (DEC-224/225/226 ratified; the reopenable category is
+> empty) · DEC-412 (**3 of 5 measurements DONE**: DEC-339 cost = **1 site**, `examples/guide/math.phg:54`;
+> DEC-357 captured-local writes = **0 hits, no bug**; DEC-377 = **149 real helpers, not 168** — 64/66/**17 inline
+> candidates**/2, with `uri_*` suspected waste under PHP 8.5's built-in URI ext) · DEC-413 (Appendix-A seven
+> recorded **DEFERRED** with reasons + LDAP candidate) · DEC-414 (**Q28 git-arg hardening → Wave 0.5**).
+> **REMAINING OWED — needs the developer's box (no Docker in the container):** DEC-365's two bench verdicts
+> (`floatloop`, `queryparse`) and DEC-370's copy-at-boundary + per-thread instantiability costing (which
+> gates the real-parallelism build). Also owed: DEC-377 bucket-2 per-helper reasons + one read per inline
+> candidate; DEC-409's round-1 config catalog (Claude enumerates, developer rules over many rounds).
+> **Superseded:** batch 4 = the 3 reopenable auto-rulings (DEC-224/225/226)
 > + 2 bookkeeping items + Q28 (PM git-arg hardening, KNOWN_ISSUES 4b) scheduling. Then the 5 owed
 > measurements (DEC-339/357/377 computable here; DEC-365/370 need the dev box), then resume the build
 > order at Wave 0. DEC-268 formality: one final clean certification round is owed on the audit batch
