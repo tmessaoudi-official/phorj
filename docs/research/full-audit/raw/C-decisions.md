@@ -3875,3 +3875,15 @@ The remote container has the client and no daemon, so the harness ran, failed to
 setup-error **2**, which ABORTS the push — the exact inverse of this row's own no-hidden-loss rule, and
 the reason every push in the 2026-07-29 ruling session used `--no-verify`. Now probes `docker version`
 and skips loudly with the verdict recorded as OWED. Reproduced at exit 2, verified fixed at exit 0.
+
+## Backfilled canonical rows — three DEC ids referenced everywhere but never given a row (2026-07-29)
+
+Found mechanically by **DEC-362 guard G2** the moment it was built (it was written expecting the 13
+missing rows the GR-24 sweep counted; 10 had since been filled, these 3 remained). Each row below is
+reconstructed from the surviving references, and says so — none of them is a new decision.
+
+| DEC | Item | Ruling | Status |
+|----|------|--------|--------|
+| DEC-186 | **Grouped member imports** — `import Pkg.{ A, B as C };`, one prefix listing several leaves, with per-member aliasing | **RULED (reconstructed from references; shipped long before this backfill): the GROUP form is admitted and expanded at PARSE time into one `Item::Import` per member**, with per-member `as` aliasing and an empty-group guard (`E-IMPORT-GROUP-EMPTY`). It is the discipline the rest of the import surface was then built to match — DEC-196 Q3's two-mode intrinsic imports cite it explicitly ("mirroring Phorj's existing type/variant-import discipline"), the DEC-384/Q-A wildcard slice reuses its parser unchanged, and variant imports (`import Core.Result.{ Success, Failure };`) are the same mechanism. [Verified: `src/parser/items/decls/imports.rs` `parse_import_group`] | **BUILT (pre-dates the backfill)** |
+| DEC-197 | **Bare-import leaves for module members** — reaching a member either qualified (`String.format`) or bare after a member import (`import Core.String.format;`) | **RULED (reconstructed): both forms are legal — qualified via the module import, bare via an explicit member import.** This is the mechanism "nothing in the wind" rests on: a bare name is only reachable when an import names it. ⊳ **Superseded in scope by DEC-274**, which is the canonical row for the current rule; DEC-197 is retained here only so references to it resolve | **SUPERSEDED by DEC-274** |
+| DEC-200 | **PHP-reserved and PHP-builtin class names used as top-level type names** | **CLOSED as already-ruled** — DEC-202 ruled the answer (`E-RESERVED-NAME`, covering the full keyword set *and* PHP builtin classes), so this row was stale from the moment DEC-202 landed. Recorded as closed by DEC-386's cheap-tail ruling (2026-07-26); the row itself was still missing until this backfill | **CLOSED — see DEC-202** |

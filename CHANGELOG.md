@@ -6,6 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `pre-push` documentation guards (2026-07-29, DEC-362 BUILT)
+- `scripts/doc-guards.sh` — four mechanical checks against the defect class the GR-24 sweep measured as
+  the project's dominant one. **G1** every `src/….rs` path named in tracked markdown exists · **G2**
+  every `DEC-nnn` mentioned has a row in the decision register · **G3** a commit SHA in `docs/plans/`
+  carries a ref or a subject, never bare · **G4** every diagnostic code named in the register exists in
+  `src/` (the DEC-362 extension — this is the check that would have caught `E-RETIRED-FORIN`, the dead
+  `E-MULTIPLE-MAIN` and Invariant 14's phantom `--sequential-concurrency`, all three found by hand).
+- **G2 is HARD from day one** because it had only three violations, and they were FIXED rather than
+  grandfathered: `DEC-186` (grouped member imports), `DEC-197` (bare-import leaves, superseded by
+  DEC-274) and `DEC-200` (closed by DEC-202) were referenced across the docs with no register row at
+  all. Rows backfilled from surviving references and labelled as reconstructions.
+- **G1/G3/G4 are ratcheted** against `scripts/doc-guards-baseline.txt` (142 entries frozen: 71 dangling
+  paths, 49 bare SHAs, 22 unimplemented codes), following the `size-baseline.txt` precedent — a hard
+  failure on day one would have been un-landable. G4's baseline doubles as the list of diagnostic codes
+  the register promises but `src/` does not implement (DEC-360's `W-UNUSED-*`, DEC-370's
+  `E-TRANSPILE-PARALLEL-NO-PHP`, …). Prefix fragments and bare stems are dropped, not frozen.
+- Every guard was verified to DETECT before being trusted: G1 on a planted non-existent path, G2 on a
+  planted
+  nonexistent DEC id, G4 on a planted register row claiming a phantom code ships. (Writing a literal
+  fake id here would itself trip G2 — which is how this entry got caught on its own first push.) Restoring the tree
+  returns the gate to OK.
+
 ### Fixed — `microbench-gate` blocked every push in the dev container instead of skipping (2026-07-29, DEC-365)
 - `scripts/microbench-gate.sh` gated on `command -v docker`, which tests for the docker **binary**, not
   a reachable **daemon**. The remote dev container ships the client with no daemon, so the skip never

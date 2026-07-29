@@ -55,6 +55,15 @@ bash "$_gate_root/scripts/size-gate.sh"
 echo "[pre-push] validate-infra (Rule 7 infra syntax gate)"
 bash "$_gate_root/scripts/validate-infra.sh" --quiet
 
+# Documentation guards (DEC-362). Doc rot was MEASURED as this project's dominant defect class, and
+# every instance so far was found by hand — a dangling `src/` path, a DEC id with no register row, a
+# diagnostic code claimed as shipped that no longer exists (`E-RETIRED-FORIN`). Four mechanical checks
+# (paths / DEC rows / bare SHAs / diagnostic codes); G2 is hard, the other three are ratcheted against
+# scripts/doc-guards-baseline.txt like the size gate. Cheap (greps, no builds). Detail:
+# scripts/doc-guards.sh.
+echo "[pre-push] doc-guards (DEC-362 documentation ratchet)"
+bash "$_gate_root/scripts/doc-guards.sh"
+
 # Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
 # ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, database, database-postgres,
 # database-mysql, mail, http-client) — the old `--features jit`-only gate never touched those files, hiding
