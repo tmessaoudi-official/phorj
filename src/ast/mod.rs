@@ -11,6 +11,9 @@ mod class_hierarchy;
 mod class_layout;
 mod entry;
 mod walk;
+#[cfg(test)]
+#[path = "walk_tests.rs"]
+mod walk_tests;
 pub use class_hierarchy::*;
 pub use class_layout::*;
 pub use entry::*;

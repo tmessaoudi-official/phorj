@@ -128,3 +128,42 @@ fn import_valid_member_is_accepted() {
     );
     load(&entry).expect("a valid member import must load");
 }
+
+/// The `html"…"` LITERAL counts as a use of `import Core.Html`.
+///
+/// Reproduced before the fix: `var a = html"<p>{name}</p>";` under `import Core.Html;` reported
+/// `E-UNUSED-IMPORT` ("nothing in this file references `Html` — remove the import, or use it") while
+/// REMOVING the import reported `E-HTML-IMPORT` ("`html"…"` requires the Core.Html module"). Two
+/// diagnostics instructing opposite actions, with no way to write the program in that shape — the only
+/// working form was an explicit `Html a = …` annotation, which happens to spell the type name.
+///
+/// The cause: the hygiene scan is TEXTUAL and case-sensitive, so the lowercase literal prefix `html"`
+/// never matched the whole word `Html`. The import GATES the literal, so the literal is a use by
+/// definition.
+#[test]
+fn an_html_literal_counts_as_a_use_of_its_import() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+         import Core.Output;\nimport Core.Html;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { string n = \"x\"; \
+             var a = html\"<p>{n}</p>\"; Output.printLine(\"{a}\"); }",
+    );
+    load(&entry).expect("an `html\"…\"` literal must count as a use of `import Core.Html`");
+}
+
+/// The guard's other half: an import with NO use at all still fails. Without this, "count the literal"
+/// could degrade into "never report Core.Html unused".
+#[test]
+fn an_import_with_no_use_at_all_is_still_unused() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+         import Core.Output;\nimport Core.Html;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"no html here\"); }",
+    );
+    let err = load(&entry).unwrap_err();
+    assert!(err.contains("E-UNUSED-IMPORT"), "got: {err}");
+}

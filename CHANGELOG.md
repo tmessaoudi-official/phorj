@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — an `html"…"` literal now counts as a use of `import Core.Html` (2026-07-30)
+`var a = html"<p>{n}</p>";` under `import Core.Html;` reported `E-UNUSED-IMPORT` — *"nothing in this file
+references `Html` (remove the import, or use it)"* — while **removing** the import reported
+`E-HTML-IMPORT`: *"`html"…"` requires the Core.Html module"*. Two diagnostics instructing opposite
+actions, and no way to write the program in that shape; the only form that compiled was an explicit
+`Html a = …` annotation, which happens to spell the type name.
+- Cause: the import-hygiene scan is textual and case-sensitive, so the lowercase literal prefix `html"`
+  never matched the whole word `Html`. An import that GATES a literal is used by that literal.
+- Keyed on the module leaf lowercased + `"`, so a future `xml"…"` / `sql"…"` sugar following the same
+  convention needs no second special case. `examples/guide/html.phg` gained the `var` form, so the
+  differential glob keeps it working — byte-identical on all three legs.
+
+### Changed — `walk.rs`'s pattern-binding collector has named no-op arms (2026-07-30, DEC-356 partial)
+`collect_pattern_bindings`'s `_ => {}` sat one line beneath a comment recording that this exact bug had
+already fired once (a missed pattern form drops struct-bound names from `free_vars`, miscompiling a lambda
+that captures one). It now lists every binding-free form **by name** — deliberately not `unreachable!()`,
+since those forms are perfectly reachable and simply contribute no bindings.
+- Re-measuring first showed the ruling's own prediction — *"D alone decays"* — had already come true
+  **before D shipped**: **26** named catch-alls in `src/checker/`, not the 17 the spec recorded. The
+  remaining 26 rewriter sites stay open with the per-walker inventory now written down.
+- `walk.rs` was 812 lines (62% over the hard cap), so its inline test module split out to `walk_tests.rs`
+  — reducing the debt instead of squeezing comments to hold a grandfathered ceiling.
+
 ### Fixed — every fault body is single-sourced, and the differential harness now DERIVES from it (2026-07-30, DEC-361)
 A fault body is parity-affecting: Invariant 1 demands identical *failure* behaviour across `phg run`,
 `--tree-walker` and the transpiled PHP. Invariant 4 already single-sourced the arithmetic bodies; every

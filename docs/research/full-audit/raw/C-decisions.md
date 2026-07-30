@@ -4365,3 +4365,55 @@ Six native messages read `"integer overflow in <op>"`. They are not re-inlines t
 were re-typing the canonical prefix, so they now `format!("{FAULT_INT_OVERFLOW} in Math.abs")`. Editing
 the canonical body therefore carries them along, which is the point. **To reverse:** inline the literals
 again — but note `classify` keys on the prefix, so a divergence would silently reclassify them.
+
+
+### DEC-356 PARTIAL (2026-07-30) — `walk.rs` built; the inventory RE-MEASURED and it had decayed
+
+The ruling's central claim was that *"D alone decays — nothing prevents catch-all #19"*. Re-measuring
+before building confirmed it **had already decayed, before D shipped**: **26** named catch-alls in
+`src/checker/`, not the spec's 17. Five new ones (`desugar_db` +2, `rewrite_ufcs` +1,
+`desugar_di/walker` +1, `rewrite_generics` +1) plus four `Ty` sites the original count never listed.
+Classified by the enum each matches: 8 `Expr` · 2 `Stmt` · 1 `Pattern` · 10 `Item` · 4 `Ty` · 1 unclassified.
+
+**Built:** `src/ast/walk.rs`'s `collect_pattern_bindings` — the site the ruling named explicitly, whose
+`_ => {}` sat one line under a comment recording that this exact bug had already fired once. It now has
+**named no-op arms**, not `unreachable!()`, as ruled (those forms are reachable; they just bind nothing).
+`walk.rs` was 812 lines, so its inline test module split out to `walk_tests.rs` — reducing the debt rather
+than squeezing comments to hold a grandfathered ceiling.
+
+**Not built, with the reason measured rather than assumed.** `src/cli/pipeline.rs` runs `erase_tuples`
+AFTER seven of the rewriters, so `Expr::Tuple` genuinely is live at their catch-alls. But the first probe
+— a generic call inside a tuple — **worked on both backends**, so a static miss is not automatically a
+live bug. Each of ~40 (walker × missed-variant) cells needs its own reproduction before a fix is written
+(Rule 14), and each real find needs a differential case. Full per-walker table in the spec.
+
+**Fix technique recorded so the next session does not re-derive it:** an
+`e @ (Expr::A(..) | Expr::B(..) | …) => e` or-pattern arm gives the same compiler enforcement as 37
+individual arms (a variant absent from the list is a non-exhaustive-match error) at ~10 lines per site —
+which is what makes D compatible with Invariant 13's caps. Without it, 26 sites × 37 arms would add
+~900 lines to files that must not grow.
+
+### DEC-418 (2026-07-30, developer-ruled) — every reply ends with a `❓ QUESTION` / `⏹ NO QUESTION` marker
+
+Developer ruling: *"without the marker I cannot tell a question from a pause — both look like prose that
+stopped — so I do not know whether you are waiting on me."* Every reply's LAST line is exactly one of the
+two markers; `❓` carries numbered options (recommended first, each with its own pros/cons and
+after-state, plus a *"none of these / challenge the premise"* escape) and then stops, `⏹` states what is
+being waited on or why work stopped. No exceptions, including one-line replies. Written into `CLAUDE.md`
+so it survives session resets. It is the OUTER frame around Invariant 15's question protocol: Invariant 15
+governs a question's shape, DEC-418 governs whether every reply declares itself one.
+
+### CD-26 (2026-07-30) — the `html"…"` literal counts as a use of `import Core.Html`
+
+Not a ruling — a bug with a forced fix, so no adjudication. Reproduced: `var a = html"<p>{n}</p>";` under
+`import Core.Html;` reported `E-UNUSED-IMPORT` (*"nothing in this file references `Html` — remove the
+import, or use it"*) while REMOVING the import reported `E-HTML-IMPORT` (*"`html"…"` requires the
+Core.Html module"*). **Two diagnostics instructing opposite actions, with no way to write the program in
+that shape** — the only form that compiled was an explicit `Html a = …` annotation, which happens to spell
+the type name. Cause: `loader/import_hygiene.rs`'s scan is textual and case-sensitive, so the lowercase
+literal prefix never matched the whole word `Html`. An import that GATES a literal is used by that
+literal, so the scan now also accepts the module leaf lowercased + `"` — keyed generically, so a future
+`xml"…"` / `sql"…"` sugar following the same convention needs no second special case.
+**To reverse:** drop that branch in `import_hygiene.rs`; `an_html_literal_counts_as_a_use_of_its_import`
+exists to make the removal deliberate, and `an_import_with_no_use_at_all_is_still_unused` guards the other
+direction (the fix must not degrade into "never report `Core.Html` unused").

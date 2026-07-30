@@ -1,4 +1,4 @@
-800	src/ast/walk.rs
+762	src/ast/walk.rs
 573	src/checker/assign.rs
 684	src/checker/calls/core.rs
 676	src/checker/calls/overloads.rs

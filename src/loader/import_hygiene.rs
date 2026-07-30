@@ -247,6 +247,19 @@ pub(super) fn check_unused_imports(prog: &Program, src: &str, file: &Path) -> Re
                     body_lines.iter().any(|l| l.contains(&needle))
                 });
         }
+        // An import that GATES a literal sugar is used BY that literal. `html"…"` requires
+        // `import Core.Html` (`E-HTML-IMPORT`), but the scan is textual and case-sensitive, so the
+        // lowercase prefix never matched the whole word `Html`: the two diagnostics instructed opposite
+        // actions and the program could not be written in that shape at all (the only working form was an
+        // explicit `Html a = …` annotation, which happens to spell the type name). Keyed on the module
+        // LEAF lowercased + `"`, so a future `xml"…"`/`sql"…"` sugar following the same convention is
+        // covered without another special case.
+        if !used {
+            if let Some(leaf) = path.last() {
+                let literal = format!("{}\"", leaf.to_lowercase());
+                used = body_lines.iter().any(|l| l.contains(&literal));
+            }
+        }
         if !used {
             return Err(format!(
                 "{}: unused import `{}` — nothing in this file references `{}` \

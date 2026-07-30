@@ -18,6 +18,34 @@ interpreter (the reference oracle) + bytecode compiler/stack VM + Phorj→PHP tr
 PHP→Phorj lifter, LSP, formatter, test runner, and debugger. Single developer, commits direct to
 `master`, remote is GitHub (`tmessaoudi-official/phorj`). The binary is `phg`; sources are `.phg`.
 
+## Reply convention — EVERY reply ends with a marker line (developer-ruled 2026-07-30)
+
+**Every** reply Claude sends must end with exactly ONE of these two markers, as its **last line**. No
+exceptions — one-line answers, status updates and mid-work check-ins included. A reply without a marker
+is unfinished.
+
+```
+❓ QUESTION — <one line>
+```
+Use when **blocked** and the developer's decision is needed. Follow it with numbered options: the
+recommended one FIRST with its reason, each option stating its own pros/cons **and its after-state**, and
+a final *"none of these / challenge the premise"* escape. Then STOP and wait.
+
+```
+⏹ NO QUESTION — <what you are waiting on, or why you stopped>
+```
+Use when nothing is being asked. Say explicitly what the blocker is — a background job, a build, or
+nothing — so the developer knows whether a reply is expected.
+
+**Why it exists (the developer's reason, verbatim in substance):** without the marker a question and a
+pause look identical — both are prose that stopped — so there is no way to tell whether Claude is
+waiting. The marker is the signal, not the prose.
+
+Never end a turn with a bare question mark and no options. Never use an interactive question tool
+(`AskUserQuestion` is forbidden here anyway — Invariant 15); every question is plain text. This convention
+is the OUTER frame around Invariant 15's question protocol (`.claude/skills/ask-human/SKILL.md`): the
+protocol governs a question's *shape*, this governs whether every reply *declares itself* one.
+
 ## Routing
 
 This sub-project is handled with the global reasoning framework (`~/.claude/CLAUDE.md`). It is

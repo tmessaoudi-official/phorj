@@ -745,56 +745,18 @@ fn collect_pattern_bindings(pat: &Pattern, bound: &mut std::collections::HashSet
                 collect_pattern_bindings(&f.pat, bound);
             }
         }
-        _ => {}
-    }
-}
-
-#[cfg(test)]
-mod uses_concurrency_tests {
-    use super::uses_concurrency;
-
-    fn parse(src: &str) -> crate::ast::Program {
-        crate::loader::load_loose_src(src).expect("parse").program
-    }
-
-    #[test]
-    fn no_spawn_is_false() {
-        assert!(!uses_concurrency(&parse(
-            "package Main;\nimport Core.Output;\n\
-             function main() -> void { Output.printLine(\"hi\"); }\n"
-        )));
-    }
-
-    #[test]
-    fn spawn_in_main_is_true() {
-        assert!(uses_concurrency(&parse(
-            "package Main;\n\
-             function sq(int n) -> int { return n * n; }\n\
-             function main() -> void { var t = spawn sq(3); }\n"
-        )));
-    }
-
-    #[test]
-    fn spawn_nested_in_a_helper_body_is_true() {
-        // spawn buried in a non-main free function, inside an `if` inside a `for` — exercises the
-        // statement recursion (a false negative here would silently route to the eager path).
-        assert!(uses_concurrency(&parse(
-            "package Main;\n\
-             function sq(int n) -> int { return n * n; }\n\
-             function work() -> void {\n\
-                 for (int i in 0..3) { if (i > 0) { var t = spawn sq(i); } }\n\
-             }\n\
-             function main() -> void { work(); }\n"
-        )));
-    }
-
-    #[test]
-    fn spawn_in_a_method_body_is_true() {
-        assert!(uses_concurrency(&parse(
-            "package Main;\n\
-             function sq(int n) -> int { return n * n; }\n\
-             class Runner { function go() -> void { var t = spawn sq(2); } }\n\
-             function main() -> void { new Runner().go(); }\n"
-        )));
+        // Every remaining form binds NOTHING — listed BY NAME (DEC-356) so a new pattern form cannot
+        // join them silently. The `_ => {}` that used to sit here was one line under the comment
+        // above recording that this exact bug had ALREADY fired once. Named no-op arms, deliberately
+        // not `unreachable!()`: these forms are perfectly reachable, they just contribute no bindings,
+        // so a panic here would be factually wrong AND would put one on a checker path.
+        Pattern::Wildcard(_)
+        | Pattern::Int(..)
+        | Pattern::Float(..)
+        | Pattern::Decimal { .. }
+        | Pattern::Str(..)
+        | Pattern::Bool(..)
+        | Pattern::Null(_)
+        | Pattern::Type { binding: None, .. } => {}
     }
 }

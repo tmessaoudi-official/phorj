@@ -156,6 +156,28 @@ recommendation after measuring it).
 - Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
   clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
 
+### ⏳ IN PROGRESS 2026-07-30 — Wave 2.1 / **DEC-356**, partial and deliberately stopped
+
+- **BUILT:** `src/ast/walk.rs`'s `collect_pattern_bindings` — the site the ruling names explicitly — now
+  has **named no-op arms**, not `unreachable!()` (those forms are reachable, they just bind nothing).
+  `walk.rs` was 812 lines, so its inline test module split to `walk_tests.rs`: debt reduced, not held.
+- **RE-MEASURED FIRST, and the spec's inventory had DECAYED** — the ruling's own prediction (*"D alone
+  decays"*) came true before D shipped: **26** named catch-alls in `src/checker/`, not 17. By enum: 8
+  `Expr` · 2 `Stmt` · 1 `Pattern` · 10 `Item` · 4 `Ty` · 1 unclassified. Full per-walker
+  missed-variant table now lives in `docs/specs/2026-07-26-ast-exhaustiveness.md`.
+- **Why the 26 are a slice of their own, measured not assumed:** `cli/pipeline.rs` runs `erase_tuples`
+  AFTER seven of the rewriters, so `Expr::Tuple` really is live at their catch-alls — but the first probe
+  (a generic call inside a tuple) **worked on both backends**. So a static miss is not automatically a
+  live bug; ~40 (walker × variant) cells each need their own reproduction (Rule 14) plus a differential
+  case per real find. **Fix technique recorded** so it is not re-derived: an
+  `e @ (Expr::A(..) | Expr::B(..) | …) => e` or-pattern arm buys the same compiler enforcement as 37
+  individual arms at ~10 lines per site — without it, 26 × 37 would add ~900 lines to files that must not
+  grow.
+- Also landed alongside: **CD-26**, the `html"…"`-counts-as-a-use fix (two diagnostics that instructed
+  opposite actions, so the `var a = html"…"` shape could not be written at all).
+- **DEC-418** (developer-ruled the same day): every reply ends with a `❓ QUESTION` / `⏹ NO QUESTION`
+  marker line. Written into `CLAUDE.md` so it survives session resets.
+
 ### NEXT: case-1 **step 2** — `DatabaseResult.Ok/Err` across the ~20 `php:` emitters
 
 Then the `decimal` PARITY TEST (not a ruling — see CD-14), then flip `E-TRANSPILE-DB`, then **DEC-367**

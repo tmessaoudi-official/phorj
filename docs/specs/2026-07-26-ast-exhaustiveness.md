@@ -66,6 +66,51 @@ ruling applies the identical rule to `Expr`/`Stmt`/`Pattern`, so **Invariant 3's
 `CLAUDE.md` + `docs/INVARIANTS.md` is widened to cover them** — written down rather than remembered.
 The precedent matters: the project has already proven it can hold this line for `Op`.
 
+## RE-MEASURED 2026-07-30 — the inventory above has DECAYED, and `walk.rs` is BUILT
+
+*[Verified 2026-07-30 by classifying every hit by the enum it matches on.]* The ruling's own prediction
+("**D alone decays** — nothing prevents catch-all #19") came true **before D shipped**:
+
+| | 2026-07-26 (spec) | 2026-07-30 (measured) |
+|---|---|---|
+| named catch-alls in `src/checker/` | 17 | **26** |
+
+By enum: **8 `Expr`** · **2 `Stmt`** · **1 `Pattern`** · 10 `Item` · 4 `Ty` · 1 unclassified. The five new
+ones arrived in `desugar_db.rs` (+2), `rewrite_ufcs.rs` (+1), `desugar_di/walker.rs` (+1) and
+`rewrite_generics.rs` (+1); the four `Ty` ones (`calls/methods.rs`, `calls/args.rs`, `calls/member.rs`,
+`common.rs`) the original count never listed at all.
+
+**BUILT so far:** `src/ast/walk.rs`'s `collect_pattern_bindings` — the site the ruling named explicitly —
+now carries **named no-op arms** (`Wildcard | Int | Float | Decimal | Str | Bool | Null |
+Type { binding: None, .. } => {}`), not `unreachable!()`, exactly as ruled. `walk.rs` was 812 lines
+(62% over the hard cap), so its inline test module was split to `walk_tests.rs` rather than squeezing
+comments to hold a grandfathered ceiling.
+
+**The 26 rewriter sites are NOT yet done, and the reason is measured, not assumed.** The pass order in
+`src/cli/pipeline.rs` runs `erase_tuples` *after* `resolve_html` / `erase_generics` / `rewrite_ufcs` /
+`desugar_db` / `desugar_di` / `desugar_router` / `resolve_variant_imports`, so `Expr::Tuple` IS live at
+all seven — their catch-alls really do swallow it. Static analysis says every one of the seven also
+misses `NamedArg`, and most miss `NewColl` / `Pipe` / `Inject` / `TaggedTemplate`:
+
+| walker | handles / 37 | expression-bearing forms it misses |
+|---|---|---|
+| `desugar_db.rs:2966` | 24 | Tuple, NamedArg, Inject, Pipe |
+| `desugar_di/walker.rs:607` | 23 | Tuple, NamedArg, NewColl, TaggedTemplate, Pipe |
+| `resolve_variant_imports.rs:430` | 23 | Tuple, NamedArg, NewColl, TaggedTemplate, Inject, Pipe |
+| `rewrite_ufcs.rs:291` | 23 | Tuple, NamedArg, NewColl, TaggedTemplate, Inject, Pipe |
+| `rewrite_html.rs:211` | 21 | Tuple, NamedArg, NewColl, InstanceOf, Cast, Inject, Pipe |
+| `rewrite_generics.rs:310` | 21 | Tuple, NamedArg, NewColl, New, TaggedTemplate, Inject, Pipe |
+| `desugar_router.rs:406` | 20 | Tuple, NamedArg, NewColl, ParentCall, OverloadSelect, TaggedTemplate, Inject, Pipe |
+
+**But a static miss is not automatically a live bug, and the first probe proved it.** A generic call
+inside a tuple (`var (a, b) = (pick<int>(1, 2), 3);`) works on both backends despite `erase_generics`
+statically missing `Tuple` — so each cell needs its own reproduction before a fix is written (Rule 14).
+That per-cell probing, plus a differential case for each real find, is what makes the remaining work a
+slice of its own rather than a mechanical sweep. **Technique for the fix, when it happens:** an
+`e @ (Expr::A(..) | Expr::B(..) | …) => e` or-pattern arm gives full compiler enforcement (a new variant
+not in the list is a non-exhaustive-match error) at ~10 lines per site instead of 37 — which is what keeps
+D compatible with Invariant 13's caps.
+
 ## Definition of done
 
 1. All 17 checker catch-alls replaced with explicit arms; `walk.rs:748` replaced with named no-op arms.

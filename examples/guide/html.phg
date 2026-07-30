@@ -45,6 +45,13 @@ function main(): void {
     Html hr = Html.raw("<hr/>");
     Output.printLine(Html.render(hr));
     // <hr/>
+    // `var`, so the type name `Html` is never spelled. This shape used to be UNWRITABLE: the hygiene
+    // scan is textual, so the lowercase `html"` literal did not match the word `Html` and the import
+    // reported `E-UNUSED-IMPORT` — while removing it reported `E-HTML-IMPORT`, since the literal
+    // requires the module. Two diagnostics, opposite instructions. An import that GATES a literal is
+    // used by that literal.
+    var inferred = html"<em>{name}</em>";
+    Output.printLine(Html.render(inferred));
     Output.printLine(Html.render(field("name", name)));
     // <li>name: Tom &amp; &quot;Jerry&quot;</li>
     Output.printLine(Html.render(field("bio", bio)));
