@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the PHP-leg SQLSTATE→kind classifier (2026-07-29, DEC-340 case-1 slice, step 1 of 3)
+Developer ruled the database transaction surface should reach Ladder case 1. Step 1 is the error contract,
+which is what everything else depends on: `__phorj_db_classify(PDOException)` maps a real PDO exception
+onto the same 7-kind taxonomy the Rust drivers produce, tagged with the same `<<Kind>>` marker the phorj
+prelude parses. Since the prelude is phorj source it already runs on the PHP leg, so this tagging is the
+whole of what would make `catch (UniqueViolationError e)` work there — and what stops
+`db.transaction(fn, retries)` from silently never retrying, since it retries only the transient class.
+- Verified against **real PDO exceptions**, not synthesised codes — which found a second real defect:
+  keying "unique" on SQLite's driver code **19** mis-classified a **NOT NULL** violation as a unique
+  violation. 19 is the generic `SQLITE_CONSTRAINT`, and the extended codes the Rust driver keys on (2067
+  `_UNIQUE`, 1555 `_PRIMARYKEY`) are **not exposed through PDO's `errorInfo`**, so on SQLite the message is
+  the only discriminator. MySQL's 1062 genuinely is unique-specific and stays.
+- An unmatched error stays **untagged** on purpose — the prelude maps that to the base `DatabaseError`,
+  exactly as an unmatched Rust error does. A drift guard asserts every kind the Rust side tags is still
+  reachable here, so adding one there without adding it here fails a test instead of silently degrading.
+- `Core.Database` remains Ladder case 2 for now. Steps 2 and 3 — `DatabaseResult` construction across ~20
+  `php:` emitters, and the `decimal` mapping (PDO yields float where phorj is exact) — are scoped in
+  `docs/specs/2026-07-26-transaction-depth-semantics.md`; the quarantine flips after those.
+
 ### Fixed — the savepoint helpers printed PHP-8.5 deprecation notices onto stdout (2026-07-29, DEC-340)
 `SplObjectStorage::contains()` is deprecated as of PHP 8.5 — which is the transpile floor — so every depth
 read emitted a notice to **stdout**. Had the database leg been made live with that in place it would have

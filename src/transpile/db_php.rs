@@ -92,4 +92,54 @@ function __phorj_db_unwind_to($pdo, $target) {
 function __phorj_db_rollback_all($pdo) {
     return __phorj_db_unwind_to($pdo, 0);
 }
+function __phorj_db_classify($e) {
+    // Map a PDOException onto the SAME 7-kind taxonomy the Rust drivers produce, tagged with the same
+    // `<<Kind>>` marker the phorj prelude parses (`DatabaseError.fail`). Because the prelude IS phorj
+    // source, it already runs on this leg — so tagging here is the whole of what makes
+    // `catch (UniqueViolationError e)` work in transpiled PHP, and what makes
+    // `db.transaction(fn, retries)` retry the transient class instead of silently never retrying.
+    //
+    // Driver-agnostic SQLSTATE first (Postgres/MySQL agree on these), then the SQLite driver code, which
+    // is what `sqlite.rs` keys on. An unmatched error stays UNTAGGED on purpose — the prelude maps that
+    // to the base `DatabaseError`, exactly as an unmatched Rust error does.
+    $state = $e->getCode();
+    $msg = $e->getMessage();
+    $info = $e->errorInfo ?? [];
+    $driverCode = isset($info[1]) ? (int) $info[1] : 0;
+    $kind = null;
+    if ($state === '23505' || $state === '23000') {
+        // 23505 = Postgres unique_violation. 23000 is the generic integrity class shared by MySQL and
+        // SQLite, so it needs a discriminator. MySQL's 1062 IS unique-specific. SQLite's is NOT: it
+        // reports code 19 (`SQLITE_CONSTRAINT`) for a duplicate AND for NOT NULL/foreign-key/check, and
+        // the EXTENDED codes the Rust driver keys on (2067 `_UNIQUE`, 1555 `_PRIMARYKEY`) are not exposed
+        // through PDO's `errorInfo`. So the message is the only discriminator there — verified against a
+        // real driver: keying on 19 mis-classified a NOT NULL violation as a unique violation.
+        $kind = ($driverCode === 1062 || __phorj_db_msg_is_unique($msg))
+            ? 'UniqueViolationError'
+            : 'ConstraintViolationError';
+    } elseif ($state === '23503' || $state === '23502' || $state === '23514') {
+        $kind = 'ConstraintViolationError';   // foreign key / not-null / check
+    } elseif ($state === '40001' || $state === '40P01') {
+        $kind = 'SerializationFailureError'; // serialization failure / deadlock — the retry target
+    } elseif ($state === '42601' || $state === '42000' || $state === '42S02' || $state === '42S22') {
+        $kind = 'SyntaxError';
+    } elseif ($state === '08006' || $state === '08001' || $state === '08003' || $state === '08004') {
+        $kind = 'ConnectionError';
+    } elseif ($state === 'HYT00' || $state === 'HYT01') {
+        $kind = 'TimeoutError';
+    } elseif ($driverCode === 5 || $driverCode === 6) {
+        $kind = 'SerializationFailureError'; // SQLITE_BUSY / SQLITE_LOCKED
+    } elseif ($driverCode === 1) {
+        $kind = 'SyntaxError';               // SQLITE_ERROR at prepare time
+    }
+    return $kind === null ? $msg : '<<' . $kind . '>>' . $msg;
+}
+function __phorj_db_msg_is_unique($msg) {
+    // SQLite reports UNIQUE/PRIMARY KEY violations through the same generic constraint code, so the
+    // message is the only discriminator — mirroring `sqlite.rs`, which inspects the extended code and
+    // falls back to the same textual markers.
+    return str_contains($msg, 'UNIQUE constraint failed')
+        || str_contains($msg, 'PRIMARY KEY must be unique')
+        || str_contains($msg, 'Duplicate entry');
+}
 "#;

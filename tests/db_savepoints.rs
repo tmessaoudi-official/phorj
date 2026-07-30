@@ -182,3 +182,109 @@ fn savepoint_names_match_the_rust_leg_exactly() {
         "rollback-to name drifted: {src}"
     );
 }
+
+// ── The case-1 groundwork: the SQLSTATE → kind classifier (DEC-340 follow-on) ─────────────────────
+//
+// Lifting `Core.Database` to Ladder case 1 needs the PHP leg to produce the SAME `<<Kind>>`-tagged
+// messages the Rust drivers do, because the phorj prelude parses that marker to decide which typed error
+// to throw. Without it `catch (UniqueViolationError e)` never matches on the PHP leg and
+// `db.transaction(fn, retries)` — which retries ONLY the transient class — silently never retries.
+//
+// These drive REAL PDO exceptions rather than synthesising codes, so the classifier is verified against
+// what the driver actually reports.
+
+#[test]
+fn a_unique_violation_is_classified_from_a_real_pdo_exception() {
+    let Some(out) = run_with_helpers(
+        "unique",
+        r#"$pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$pdo->exec('CREATE TABLE t(id INTEGER PRIMARY KEY)');
+$pdo->exec('INSERT INTO t(id) VALUES (1)');
+try { $pdo->exec('INSERT INTO t(id) VALUES (1)'); }
+catch (PDOException $e) { echo __phorj_db_classify($e), "\n"; }
+"#,
+    ) else {
+        return;
+    };
+    assert!(
+        out.starts_with("<<UniqueViolationError>>"),
+        "a duplicate PK must classify as UniqueViolationError, got {out:?}"
+    );
+}
+
+#[test]
+fn a_syntax_error_is_classified_from_a_real_pdo_exception() {
+    let Some(out) = run_with_helpers(
+        "syntax",
+        r#"$pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+try { $pdo->exec('SELCT oops FROM nowhere'); }
+catch (PDOException $e) { echo __phorj_db_classify($e), "\n"; }
+"#,
+    ) else {
+        return;
+    };
+    assert!(
+        out.starts_with("<<SyntaxError>>"),
+        "a mis-typed statement must classify as SyntaxError, got {out:?}"
+    );
+}
+
+#[test]
+fn a_not_null_violation_is_a_constraint_not_a_unique_violation() {
+    // The discriminator matters: SQLite reports both through the same generic integrity class, and
+    // mis-classifying would make a handler catch the wrong type.
+    let Some(out) = run_with_helpers(
+        "notnull",
+        r#"$pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$pdo->exec('CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
+try { $pdo->exec('INSERT INTO t(id, name) VALUES (1, NULL)'); }
+catch (PDOException $e) { echo __phorj_db_classify($e), "\n"; }
+"#,
+    ) else {
+        return;
+    };
+    assert!(
+        out.starts_with("<<ConstraintViolationError>>"),
+        "a NOT NULL violation must be ConstraintViolationError, not Unique: got {out:?}"
+    );
+}
+
+#[test]
+fn an_unclassifiable_error_stays_untagged() {
+    // Deliberate: the prelude maps an untagged message to the base `DatabaseError`, exactly as an
+    // unmatched Rust-side error does. Inventing a kind here would be worse than staying generic.
+    let Some(out) = run_with_helpers(
+        "untagged",
+        r#"$e = new PDOException('something the drivers never emit');
+echo __phorj_db_classify($e), "\n";
+"#,
+    ) else {
+        return;
+    };
+    assert_eq!(
+        out.trim(),
+        "something the drivers never emit",
+        "got {out:?}"
+    );
+}
+
+#[test]
+fn every_kind_the_rust_side_tags_is_reachable_in_the_php_classifier() {
+    // Drift guard: the PHP classifier must be able to produce every kind the phorj prelude knows how to
+    // throw. If a kind is added on the Rust side and not here, the PHP leg would silently downgrade it to
+    // the base DatabaseError — which is exactly the failure mode that keeps this module at Ladder case 2.
+    let src = phorj::transpile::db_php::db_helper_source();
+    for kind in [
+        "UniqueViolationError",
+        "ConstraintViolationError",
+        "SerializationFailureError",
+        "SyntaxError",
+        "ConnectionError",
+        "TimeoutError",
+    ] {
+        assert!(
+            src.contains(kind),
+            "the PHP classifier cannot produce `{kind}` — it would silently degrade to DatabaseError"
+        );
+    }
+}

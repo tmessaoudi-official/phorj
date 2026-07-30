@@ -170,3 +170,41 @@ strings — I had assumed otherwise and was wrong.] The one real value gap is `d
 **So the case-1 slice is: port `DatabaseResult` + the 7-kind SQLSTATE→kind classifier to the PHP leg,
 decide the `decimal` mapping, then lift the quarantine** — after which the differential quarantine still
 stands on its own separate reason (live DB I/O is not byte-identical), which is unaffected either way.
+
+
+## Case-1 slice, step 1 of 3 BUILT (2026-07-29) — the SQLSTATE classifier
+
+Developer ruled: go for case 1. Step 1 is the error contract's front half, and it is the piece everything
+else depends on.
+
+**Built:** `__phorj_db_classify(PDOException)` in `src/transpile/db_php.rs` maps a real PDO exception onto
+the SAME 7-kind taxonomy the Rust drivers produce, tagged with the same `<<Kind>>` marker. That marker is
+the whole mechanism: the prelude's `DatabaseError.fail` parses it, and the prelude IS phorj source, so it
+already runs on the PHP leg. Driver-agnostic SQLSTATE first (Postgres/MySQL agree), then the SQLite driver
+code. An unmatched error stays UNTAGGED deliberately — the prelude maps that to the base `DatabaseError`,
+exactly as an unmatched Rust error does. Inventing a kind would be worse than staying generic.
+
+**Verified against real PDO exceptions, not synthesised codes** — and that found a second real defect, in
+the same spirit as the `SplObjectStorage::contains()` one. Keying "unique" on SQLite's driver code 19
+mis-classified a **NOT NULL** violation as a unique violation: 19 is the GENERIC `SQLITE_CONSTRAINT`, and
+the extended codes the Rust driver keys on (2067 `_UNIQUE`, 1555 `_PRIMARYKEY`) are **not exposed through
+PDO's `errorInfo`**. So on SQLite the message is the only discriminator. MySQL's 1062 genuinely is
+unique-specific and stays. A handler catching the wrong error type is precisely the silent-downgrade
+failure this slice exists to prevent, and it would have shipped un-noticed without a real driver.
+
+A drift guard asserts the PHP classifier can still produce every kind the Rust side tags — if a kind is
+added there and not here, the PHP leg would silently degrade it to the base `DatabaseError`.
+
+### Remaining before the quarantine can be lifted
+
+- **Step 2 — `DatabaseResult` construction.** Every `Core.Native.Database` `php:` emitter must return
+  `DatabaseResult.Ok(v)` / `Err(<<Kind>>msg)` (the enum-scoped variant classes per DEC-329.3) instead of a
+  raw PDO value, wrapping its call in `try/catch` and routing the exception through the classifier above.
+  ~20 emitters; mechanical, but each needs its Ok payload shape checked against the prelude's `match`.
+- **Step 3 — the `decimal` mapping.** [Verified: PDO+SQLite returns native `int`/`float`, so ints and
+  floats are NOT a problem — I had assumed otherwise and was wrong. But a `NUMERIC` column comes back as
+  float `19.99` where phorj `decimal` is exact fixed-point.] Needs a ruling: bind/fetch decimals as TEXT
+  and reconstruct exactly (matching the Postgres `::numeric` cast the driver already uses), or accept float
+  on the PHP leg and disclose it.
+- **Then** flip `E-TRANSPILE-DB` off. The DIFFERENTIAL quarantine stays regardless — it rests on its own
+  separate reason (live DB I/O is not byte-identical across drivers), which none of this changes.
