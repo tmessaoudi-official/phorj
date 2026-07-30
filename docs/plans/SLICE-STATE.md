@@ -156,6 +156,24 @@ recommendation after measuring it).
 - Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
   clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
 
+### 📊 PARITY RECOMPUTED 2026-07-30 (§4.12) — **≈69% parity · ≈55% floor · ≈70% vision**
+
+Owed at milestone close (Waves 1 and 2 both closed today) and it was 11 days / 265 commits stale.
+From §4.11's 68/53/69. **Read the finding before the number: a 265-commit span moved the headline +1pp,
+and that is what the span WAS** — Waves 0–2 plus DEC-379 were correctness, soundness and enforcement
+(a compiler panic, a visibility bypass, a transaction data loss, two ratchets), and none of that flips a
+§1.2 parity row; it fixes behaviour *inside* rows already counted covered. Anyone reading only the headline
+would conclude the span was unproductive. The floor moved **+2pp** against the headline's +1pp, closing the
+weighted-vs-raw gap to 14pp — the model's own signal that credited rows are becoming real.
+Credited flips: `#[Invoke]`/`#[ToString]`, Log PSR-3 + v2, Rich Request v1, Validation isEmail/isUrl,
+List sumBy/minBy/maxBy. Deliberately NOT credited (double-count / not-parity): the FS transpile emitter,
+the package manager, `phg build --php`, LSP work, all perf, and the beyond-PHP surface (`internal`,
+wildcard imports).
+**STILL OWED, now four recomputes old: the full 631-row §1.2 re-tally.** §4.10's PHANTOM-GAP finding
+(Core.Path / FS breadth / crypto shipped but uncredited) is still only *targeted*-credited, so true parity
+is **higher than 69%** and this recompute does not bank it. The FN stdlib leg (**50.8%**) remains the one
+big lever; next blockers unchanged — XML/streams/intl/SPL-heaps/mb-tail.
+
 ### ⏳ NEXT: 3.1 / **DEC-364** `using` — DESIGNED, blast radius MEASURED, not started
 
 `docs/specs/2026-07-30-using-scope-guard.md` is the canonical design. **The tree is green — nothing is

@@ -610,7 +610,9 @@ Coverage:  language 79.8% · stdlib 27.5% row-weighted / 32.5% usage-weighted ·
 PHP-parity %  ≈ 58   (ccb2403 full-pass; domain-weighted; raw row-parity floor 38.8%)
 Vision %      ≈ 60   (ccb2403 full-pass; 70% parity + 30% roadmap-programme at 64.4%)
 
-  ⟶ CURRENT at HEAD 9a5deff6 (2026-07-19, §4.11):  PHP-parity ≈ 68%  ·  Vision ≈ 69%  ·  floor ≈ 53%
+  ⟶ CURRENT at HEAD d93df1d (2026-07-30, §4.12):  PHP-parity ≈ 69%  ·  Vision ≈ 70%  ·  floor ≈ 55%
+     (§4.12 = the Waves 0–2 span: 265 commits but mostly correctness/soundness, which flip NO parity rows)
+  ⟶ PREV at HEAD 9a5deff6 (2026-07-19, §4.11):  PHP-parity ≈ 68%  ·  Vision ≈ 69%  ·  floor ≈ 53%
      (§4.11 = backed enums DEC-302 (PHP 8.1) + targeted phantom-gap credit (Core.Path, crypto); full re-tally still owed)
   ⟶ PREV at HEAD 580c6041 (2026-07-19, §4.10):  PHP-parity ≈ 66%  ·  Vision ≈ 67%  ·  floor ≈ 51%
      chain: 58% (ccb2403) → 59% (§11.2) → 60% (§4.6, af3aad3) → 61% (§4.7, bea7f61) →
@@ -976,3 +978,75 @@ sumBy/minBy/maxBy — need representation work) · front-end-blocked (mapkeys/ma
 
 **Craftsmanship flags:** see KNOWN_ISSUES §CRAFT-2026-07-20 (90 files >500-cap; 83 scattered `uses_*` flags;
 1 at-risk dead-gate `interop.rs:144`; LSP advertises-but-doesn't-fulfill; stale-286).
+
+
+### 4.12 Recompute at HEAD `d93df1d` (2026-07-30 — the Waves 0–2 span; **mostly NOT parity work, and that is the finding**)
+
+**Span:** 2026-07-19 (§4.11) → 2026-07-30. **265 commits.** Enumerated from `git log --since=2026-07-19`:
+142 `docs`, 56 `feat`, 32 `fix`, 13 `refactor`, 5 `test`, 5 `perf`.
+
+**The headline is a negative one, and it should be read before the number.** A 265-commit span moved the
+parity headline by **+1pp**. That is not a stall — it is what the span WAS. Waves 0, 1 and 2 plus DEC-379
+were **correctness, soundness and enforcement**: DEC-339 (`E-SHADOW-LOCAL`), DEC-340 (transaction data
+loss), DEC-351 (bind lifecycle + savepoint portability), DEC-356 (a compiler PANIC on valid code),
+DEC-361 (fault-body single-sourcing), DEC-363 (response-splitting), DEC-367, DEC-377 (helper
+classification), DEC-379 (a visibility BYPASS). **None of those flip a §1.2 row** — they fix behaviour
+inside rows already counted as covered. Same for the infra/tooling half (doc guards, disk-reclaim, the
+ratchets, LSP completion/find-usages): real value, zero parity rows.
+
+So the model is behaving correctly by barely moving. **Anyone reading only the headline would conclude the
+span was unproductive; the opposite is true.** Two shipped soundness holes were live P0-class defects.
+
+**Row flips credited [Verified: shipped, gate-green, differential/example-covered this span]:**
+
+| # | area | tier | credit | note |
+|---|---|---|---|---|
+| 1 | SYN — `#[Invoke]` / `#[ToString]` (DEC-331 slice 1) | SYN | +2 C | PHP's `__invoke` / `__toString` — genuine PHP-equivalent language surface |
+| 2 | SYN — `#[Deprecated(message:)]` (DEC-417) | SYN | +0.5 P | PHP 8.4 has `#[\Deprecated]`. **Partial on purpose**: the commit shipped the checker half and disclosed a lift gap |
+| 3 | FN-LOG — full PSR-3 level set + Log-v2 channels/handlers/formatters (DEC-317) | T1 | +2 C | PSR-3/Monolog is ubiquitous in PHP; 3-leg content parity |
+| 4 | FN-HTTP — Rich Request v1: bags + files + `body.json` (DEC-331 slice 2) | T1 | +3 C | `$_GET`/`$_POST`/`$_FILES`/`php://input` — high-usage PHP surface, 3-leg byte-identity green |
+| 5 | FN-FILTER — `Core.Validation.isEmail` / `isUrl` | T2 | +2 C | `filter_var(FILTER_VALIDATE_EMAIL/URL)` |
+| 6 | FN — `Core.List.sumBy` / `minBy` / `maxBy` | T3 | +3 C | projection companions (`array_sum`+`array_map`, `array_reduce`) — long tail, deliberately T3 |
+
+**Deliberately NOT credited, to avoid double-counting or inflation:**
+- **`Core.FileSystem` transpile emitter (DEC-313).** §4.9 already credited the FS *functions*; this span
+  lifted the transpile *quarantine*. Real progress, but crediting the rows again would double-count. Noted
+  instead — the honest position is that those rows were slightly over-credited before and are now genuine.
+- **Package manager (DEC-316), `phg build --php` (DEC-320), LSP completion/find-usages.** PHP's analogues
+  are Composer and an IDE plugin — these are *programme/tooling*, so they move Vision, not the FN matrix.
+- **All perf work** (DEC-332 flips, DEC-333 Json-ADT, DEC-338). Perf is orthogonal to parity by design.
+- **`internal` visibility, wildcard imports, package hierarchy.** PHP has no equivalent → beyond-PHP
+  programme, not parity rows.
+
+**Arithmetic (additive on §4.11 — T1 162.5/303, T2 60/140, T3 13/75; SYN 107.5/129; RT 13.5/18):**
+- T1: 162.5 + 2 (Log) + 3 (Rich Request) = **167.5 / 303**
+- T2: 60 + 2 (Validation) = **62 / 140**
+- T3: 13 + 3 (List companions) = **16 / 75**
+- FN usage-weighted = (3×167.5 + 2×62 + 1×16)/1264 = (502.5 + 124 + 16)/1264 = 642.5/1264 = **50.8%** (was 49.1%)
+- SYN: 107.5 + 2.5 = **110 / 129 = 85.3%** (was 83.3%)
+- RT: unchanged **75.0%** — the runtime tier is 20 rows and this span changed behaviour *within* them, not their count
+- **PHP-parity = 0.35×85.3 + 0.40×50.8 + 0.25×75.0 = 29.9 + 20.3 + 18.75 ≈ 69%** (was ≈68)
+- Raw floor: FN raw 231 + 10 = 241; (110 + 241 + 13.5)/665 = 364.5/665 ≈ **55%** (was ≈53)
+
+**Vision %** — programme deltas on §4.11's mean 72.0: package manager (DEC-316, a Composer-class
+capability) **+3**, `phg build --php` **+2**, the enforcement/tooling floor (LSP completion + find-usages +
+the DEC-356/361/377 ratchets) **+2**. New mean = (72.0×16 + 7)/16 = **72.4**.
+**Vision = 0.70×68.9 + 0.30×72.4 = 48.2 + 21.7 ≈ 70%** (was ≈69).
+
+**Grade, per Rule 18:**
+- Row flips 1, 3, 4, 5, 6 — **[Verified]**: each shipped this span, gate-green, with differential and/or
+  example coverage; commits named above.
+- Flip 2 (`#[Deprecated]`) — **[Verified]** as shipped, **credited partial** because its own commit
+  disclosed the lift gap.
+- Tier assignments (T1/T2/T3) and the C/P split — **[Inferred]**, and deliberately conservative: the List
+  projection companions went to T3 rather than T2 to avoid weighting inflation, following §4.10's
+  precedent.
+- Headline percentages — **[Inferred]**: an additive delta on the ratified 35/40/25 model, not a re-tally.
+- Vision milestone bumps — **[Speculative]**: judgement, as in every prior recompute.
+- **STILL OWED, unchanged and now four recomputes old: the full 631-row §1.2 re-tally.** §4.10's
+  PHANTOM-GAP finding (Core.Path / FS breadth / crypto shipped but uncredited) was only *targeted*-credited
+  in §4.11. The true parity is **higher than 69%**, and this recompute does not bank it.
+
+**The number:** **PHP-parity ≈ 69% · floor ≈ 55% · Vision ≈ 70%** (from §4.11's 68/53/69). The floor moved
++2pp against the headline's +1pp — the gap between them keeps closing (17pp → 15pp → 14pp), which is the
+model's own signal that credited rows are becoming real rather than weighted.
