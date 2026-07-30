@@ -1,6 +1,35 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-07-29) — **WAVE 0 IS COMPLETE. NEXT: WAVE 1.1 (DEC-339).**
+## ✅ CURRENT CURSOR (2026-07-30) — **WAVES 0, 1 AND 2 COMPLETE + DEC-379. NEXT: 3.1 / DEC-364 `using`.**
+
+> The cursor below this line is HISTORY. This header is the live one — it was itself stale by a full wave
+> on 2026-07-30 (it still said "NEXT: WAVE 1.1 (DEC-339)" after 1.1 had shipped), which is the same
+> stale-label class that had four BUILT features recorded as "build queued". **If you are resuming after a
+> compaction, trust this header and the two 2026-07-30 sections nearest the top; treat anything dated
+> earlier as history.**
+
+**State at 2026-07-30, all pushed, tree green** (2631 tests under `PHORJ_REQUIRE_PHP=1 --all-features`,
+clippy clean at `--all-features` AND `--no-default-features`, size-gate `fails=0 stale=0`, doc-guards OK):
+
+| | |
+|---|---|
+| Ruled agenda | **16/42 rows built (38%)** |
+| Parity | **≈70% · floor ≈57% · vision ≈71%** (§4.13/§4.14) |
+| Waves done | 0, 1, 2 — plus **DEC-379** pulled forward (soundness) |
+
+**NEXT, in priority order:**
+1. **3.1 / DEC-364 `using`** — FULLY UNBLOCKED. Design + 35-site blast radius + the contextual-keyword
+   ruling (DEC-364.1) are all in `docs/specs/2026-07-30-using-scope-guard.md`, which has a Definition of
+   Done and **no open questions**. Start there, not from scratch.
+2. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by headroom:
+   FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts are TRIAGE
+   only — FN-ARR looked under-credited by count and mapped to exactly its existing C=26.
+
+**Two PENDING developer questions** (Invariant 15 — do not self-rule): the strict-vs-narrow reading of
+DEC-379; and refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section).
+**Two OWED measurements** need the developer's box: DEC-365 + DEC-370 (no Docker in this container).
+
+## ⏳ (history) CURSOR as of 2026-07-29 — WAVE 0 COMPLETE, NEXT WAS WAVE 1.1 (DEC-339) — **superseded**
 
 ### ✅ BUILT 2026-07-29 — WAVE 0, all five rows
 
