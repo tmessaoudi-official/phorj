@@ -217,7 +217,7 @@ queued); everything else was unbuilt AT THAT DATE. Start at Wave 0.** *(supersed
 > `_` exempt) · **DEC-397** (DEC-366 lifter hoist RIDES in the DEC-339 slice — provisional default ratified)
 > · **DEC-398** (field attributes as a GENERAL capability, DB mapping its first consumer — attribute NAME
 > still open). Bookkeeping: the database rename is **DEC-350** (ruled 2026-07-26, `Core.Database.Connection`,
-> `Module` suffix drops — build-order 5.4, UNBUILT; `preludes.rs` still says `Core.DatabaseModule`).
+> `Module` suffix drops — **BUILT 2026-07-29, out of wave order**; `preludes.rs` now says `Core.Database` [Verified: `src/cli/preludes.rs:777`], so the "still says `Core.DatabaseModule`" note above it was itself stale).
 > **3 batch-2 questions still OPEN with the developer:** (A) lambda capture model — implicit-capture-by-value
 > + captured-name-is-live + the `Mutable<T>` escalation guard, vs explicit PHP-style `use()`; (B) F2
 > `namespaceRoot` as an explicit opt-in knob (cost corrected: the prefix enters at ONE mangling chokepoint,

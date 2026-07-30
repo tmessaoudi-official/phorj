@@ -19,7 +19,7 @@ with Phorj's own license; each can be switched off at build time.
 | [`ctrlc`](https://github.com/Detegr/rust-ctrlc) | `signals` | yes | SIGINT/SIGTERM for `phg serve` | MIT OR Apache-2.0 |
 | [`corosensei`](https://github.com/Amanieu/corosensei) | `green` (non-wasm only) | yes | stackful coroutines for green threads | MIT OR Apache-2.0 |
 | [`cranelift`](https://github.com/bytecodealliance/wasmtime/tree/main/cranelift), `cranelift-jit`, `cranelift-module` (Bytecode Alliance) | `jit` (non-wasm only) | yes | native-codegen JIT backend | Apache-2.0 WITH LLVM-exception |
-| [`rusqlite`](https://github.com/rusqlite/rusqlite) (+ bundled SQLite) | `database` | yes | embedded SQL (`Core.DatabaseModule`) | MIT (SQLite: public domain) |
+| [`rusqlite`](https://github.com/rusqlite/rusqlite) (+ bundled SQLite) | `database` | yes | embedded SQL (`Core.Database`) | MIT (SQLite: public domain) |
 | [`unicode-segmentation`](https://github.com/unicode-rs/unicode-segmentation) (unicode-rs) | `unicode` | yes | UAX #29 grapheme clusters | MIT OR Apache-2.0 |
 | [`rustls`](https://github.com/rustls/rustls) | `http-client` | no | TLS for `Core.HttpClient` | Apache-2.0 OR ISC OR MIT |
 | [`webpki-roots`](https://github.com/rustls/webpki-roots) | `http-client` | no | Mozilla trust anchors | CDLA-Permissive-2.0 |

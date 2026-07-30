@@ -68,7 +68,7 @@
   `Response.stream(Iterator<bytes>)` chunked/file streaming · static-file Range + gzip ·
   HttpClient outbound proxy/custom-CA/mTLS (`ProxyConfig`/`TlsConfig` on the Transport seam, Secret-typed)
   · HttpClient streaming bodies (cap becomes the default, not the wall) · `SessionStore` joins the
-  layered-openness public-contract list (Memory now, Db-backed rides Core.DatabaseModule).
+  layered-openness public-contract list (Memory now, Db-backed rides Core.Database).
 - **W4 language additions:** class-const EXPRESSIVENESS (const expressions/typed consts/new-in-init —
   compile-time-evaluated, types mandatory; direct lifter blocker) · enum `implements` + enum constants ·
   trait constants (VERIFIED absent 2026-07-22 — parse error; SYN-115 downgraded CE→P in the matrix) · `pack`/`unpack` analog:
