@@ -78,7 +78,7 @@
 | 5.1 | **DEC-342** UFCS receiver completion **+ WILDCARD-IMPORT completion** (`Ctrl+Space` on an empty line lists every wildcard-imported symbol and filters as you type) + import-gating both ways + the "exists in `Core.X` — add the import" diagnostic **with a quick-fix** + call-site spans + the ambiguity error. Measured against **DEC-375** (the LSP is the expert companion) |
 | 5.2 | **DEC-341** the pre-verified 5-rule TextMate string section (81/383 → 0/383) **plus** the `vscode-textmate` pre-push gate |
 | 5.3 | **DEC-346** migrate the 391 zero-judgement UFCS sites — **`Output.printLine` stays qualified** |
-| 5.4 | **DEC-350** rename to `Core.Database.Connection`, drop the `Module` suffix — ALSO lands **DEC-394**'s prefix drop in the same sweep (`HttpTimeoutError`/`MailTimeoutError` → `TimeoutError`, module-scoped injected classes + the hard collision error): both are stdlib-wide error/type renames, so one codemod, one re-baseline |
+| 5.4 | ~~**DEC-350**~~ — **BUILT 2026-07-29** (verified: `src/cli/preludes.rs:777` says `Core.Database`; its stale doc references were swept 2026-07-30). DEC-394's prefix drop still OPEN. Rename to `Core.Database.Connection`, drop the `Module` suffix — ALSO lands **DEC-394**'s prefix drop in the same sweep (`HttpTimeoutError`/`MailTimeoutError` → `TimeoutError`, module-scoped injected classes + the hard collision error): both are stdlib-wide error/type renames, so one codemod, one re-baseline |
 | 5.5 | ~~**DEC-354** the narrowed Claude bundle: 7 skills, **allow-list-only** permissions, `precompact-handoff` only, no session-remember, no MCP~~ — **BUILT 2026-07-27** (out of order, at the developer's request). Also produced **DEC-387** (`AskUserQuestion` FORBIDDEN — plain-text questions). One residual: `settings.json.pending` awaits the developer's local `apply-pending-settings.sh` run — see SLICE-STATE. **DEC-388 (2026-07-27) reopened and ruled four bundle items DEC-386 closed too broadly:** 388.1 disk-reclaim BUILT · 388.2 `/forge` import REVERSED-and-BUILT (partial reversal of the DEC-354 drop) · 388.3 `backend-parity-reviewer` agent BUILT · 388.4 validate-infra in pre-push BUILT · 388.5 `/qa-sweep` queued after Wave 0 |
 | 5.6 | **DEC-369** vocabulary sweep: "cooperative tasks"; `uses_concurrency` → `uses_tasks`; delete Invariant 14's phantom flag; **"concurrent"/"parallel" reserved** |
 | 5.7 | **DEC-371** strike PHP-absence from the four contaminated rationales; mark DEC-037 superseded; re-open `defer` inside DEC-364; add the standing rule beside Invariant 16 |
@@ -93,7 +93,7 @@
 
 | # | Item |
 |---|---|
-| 7.1 | **DEC-379** close the `E-IFACE-VIS` overload bypass — a soundness hole, do it early |
+| 7.1 | ~~**DEC-379**~~ — **BUILT 2026-07-30** (reproduced: all three legs called a `private` method through an interface receiver; per-overload visibility keyed on the CONFORMING overload; F-032 closed, CD-28 opened) close the `E-IFACE-VIS` overload bypass — a soundness hole, do it early |
 | 7.2 | **DEC-385** merge `Core.Text` into `Core.String`, deprecate the module — **must land BEFORE DEC-342's UFCS completion**, or `line.length()` fires the ambiguity error on ordinary code |
 | 7.3 | **DEC-384** stdlib submodule wildcards (`import Core.Http.*;`) — order the native pre-pass against the wildcard hook. `import Acme.*` already works; bare `Core.*` stays rejected |
 | 7.4 | **DEC-386** the cheap tail: close DEC-200 as already-ruled · `DateTime` gating consistent with DEC-353 · delete the group-`{}` sort no-op · deprecate `Core.File` · close the bundle's Q-J1…8 as superseded |

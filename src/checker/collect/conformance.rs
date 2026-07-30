@@ -212,38 +212,45 @@ impl Checker {
                                 // receiver (the resolver could find the public interface member first).
                                 // Rejecting it here closes the hole at its source.
                                 //
-                                // SCOPE: only when the class provides a SINGLE overload of `mname`.
-                                // `method_vis` records just the first-declared overload's modifiers, so
-                                // on an overload SET (e.g. a `private m()` beside a `public m(int)` that
-                                // is the one satisfying the interface) it can't tell which overload
-                                // conforms — checking the first would false-reject valid code.
-                                // KNOWN GAP (tracked, Q-B DV-3 panel — pre-existing, equal for
-                                // private/protected/internal): with >1 overload the reduced-visibility
-                                // impl is reachable through a plain interface-TYPED receiver
-                                // (`Shape s = new Box(); s.m()`) with NO enforcement — an interface is not
-                                // in `self.classes`, so the methods.rs access-site check finds no
-                                // `method_vis` (⇒ treated public). (The methods.rs backstop covers only
-                                // the lone CLASS member of an INTERSECTION type, not a plain interface
-                                // receiver.) Closing it needs per-overload conformance tracking; deferred
-                                // to a dev ruling (whether a whole overload set must be public). See the
-                                // visibility-model spec's PENDING.
-                                let overloads = self
-                                    .classes
-                                    .get(&c.name)
-                                    .and_then(|ci| ci.methods.get(mname))
-                                    .map_or(0, Vec::len);
-                                let impl_vis = self
-                                    .classes
-                                    .get(&c.name)
-                                    .and_then(|ci| ci.method_vis.get(mname).map(|(v, _)| *v));
-                                if overloads == 1
-                                    && matches!(
-                                        impl_vis,
-                                        Some(MemberVis::Private)
-                                            | Some(MemberVis::Protected)
-                                            | Some(MemberVis::Internal)
-                                    )
-                                {
+                                // DEC-379 — the BYPASS is closed. This used to bail out whenever the
+                                // class had more than one overload of `mname`, because `method_vis`
+                                // collapses an overload set to its first-declared modifiers and so could
+                                // not say WHICH overload satisfies the interface. That made the check
+                                // trivially defeatable: adding any throwaway second overload beside a
+                                // `private` conforming one switched it off entirely, and the private
+                                // method was then reachable through a plain interface-typed receiver.
+                                // Reproduced before the fix — all three legs printed the private
+                                // method's result.
+                                //
+                                // Now `method_overload_vis` is index-aligned with the `Vec<FnSig>`, so
+                                // the visibility enforced is that of the overload that CONFORMS. That is
+                                // the precise rule, and it is what keeps
+                                // `implementing_interface_via_a_public_overload_beside_a_private_one_is_ok`
+                                // valid: a private NON-conforming overload is nobody's business but the
+                                // class's. Order-independent — the conforming overload may be declared
+                                // anywhere in the set.
+                                let impl_vis = self.classes.get(&c.name).and_then(|ci| {
+                                    let sigs = ci.methods.get(mname)?;
+                                    let viss = ci.method_overload_vis.get(mname);
+                                    sigs.iter()
+                                        .enumerate()
+                                        .find(|(_, have)| Self::one_sig_conforms(have, sig))
+                                        .and_then(|(idx, _)| {
+                                            // Fall back to the collapsed per-name visibility when the
+                                            // per-overload vector is absent or short (an inherited set
+                                            // whose parent predates this field): never silently treat a
+                                            // missing entry as public.
+                                            viss.and_then(|v| v.get(idx).copied()).or_else(|| {
+                                                ci.method_vis.get(mname).map(|(v, _)| *v)
+                                            })
+                                        })
+                                });
+                                if matches!(
+                                    impl_vis,
+                                    Some(MemberVis::Private)
+                                        | Some(MemberVis::Protected)
+                                        | Some(MemberVis::Internal)
+                                ) {
                                     // Q-B DV-3: `internal` is ALSO a reduction below the public
                                     // interface contract — else the member-`internal` boundary is
                                     // bypassable by upcasting to the interface (the concrete-call path

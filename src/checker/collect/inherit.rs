@@ -91,6 +91,15 @@ impl Checker {
                         .entry(k.clone())
                         .or_insert((v.0, cls.clone()));
                 }
+                // DEC-379: the per-overload vector inherits ALONGSIDE `method_vis`, or a
+                // subclass would lose the data conformance needs and the bypass would reopen
+                // for inherited overload sets.
+                for (k, v) in &tinfo.method_overload_vis {
+                    child
+                        .method_overload_vis
+                        .entry(k.clone())
+                        .or_insert_with(|| v.clone());
+                }
                 // M-RT S8: a `use`d trait's `static` field becomes a per-using-class copy — each using
                 // class gets its own `ClassName.field` (PHP `use` semantics). Merge it into the class's
                 // static table so `C.field` type-checks; the backends seed a distinct slot per class.
@@ -243,6 +252,13 @@ impl Checker {
                     .entry(k.clone())
                     .or_insert_with(|| v.clone());
             }
+            // DEC-379: same reason as the trait path above.
+            for (k, v) in &parent_info.method_overload_vis {
+                child
+                    .method_overload_vis
+                    .entry(k.clone())
+                    .or_insert_with(|| v.clone());
+            }
             for (k, v) in &parent_info.hooks {
                 child.hooks.entry(k.clone()).or_insert_with(|| v.clone());
             }
@@ -351,11 +367,17 @@ impl Checker {
     /// `have` is the class's overload set for the method name (M-RT overloading): conformance holds
     /// when *any* overload matches the interface signature exactly.
     pub(in crate::checker) fn sig_conforms(&self, have: &[FnSig], want: &(Vec<Ty>, Ty)) -> bool {
-        have.iter().any(|h| {
-            h.params.len() == want.0.len()
-                && h.params.iter().zip(&want.0).all(|(a, b)| a == b)
-                && h.ret == want.1
-        })
+        have.iter().any(|h| Self::one_sig_conforms(h, want))
+    }
+
+    /// Whether ONE overload matches the interface signature exactly — extracted from
+    /// [`Self::sig_conforms`] so DEC-379's conformance check can ask *which* overload matches, not just
+    /// whether any does. Single-sourced deliberately: two copies of this predicate could drift, and the
+    /// visibility rule would then enforce against a different overload than the one conformance blessed.
+    pub(in crate::checker) fn one_sig_conforms(h: &FnSig, want: &(Vec<Ty>, Ty)) -> bool {
+        h.params.len() == want.0.len()
+            && h.params.iter().zip(&want.0).all(|(a, b)| a == b)
+            && h.ret == want.1
     }
 
     /// Nominal subtyping for assignability and `instanceof`: `a` is a subtype of `b` when they are

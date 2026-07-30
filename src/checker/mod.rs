@@ -256,12 +256,14 @@ struct ClassInfo {
     /// for instance fields). W0-2: a `private`/`protected` static read/write from outside its scope is
     /// rejected here, closing the interp ≡ VM ≡ PHP hole (PHP emits a real `private static` property).
     static_vis: HashMap<String, (MemberVis, String)>,
-    /// Member visibility for methods: method name → (vis, owner). Per-name (an overload set shares one
-    /// visibility — the first-declared overload's modifiers win). Enforced at the method-call site.
+    /// Method visibility: name → (vis, owner); per-NAME. Enforced at the method-call site.
     method_vis: HashMap<String, (MemberVis, String)>,
-    /// Names of the `static` methods (Batch-1 D / slice B0). A static method is callable via the class
-    /// name (`ClassName.method(args)`) with no receiver; a *non*-static method called that way is
-    /// `E-STATIC-CALL`. Inherited alongside `methods`. A subset of `methods`' keys.
+    /// **Per-OVERLOAD** visibility, index-aligned with [`Self::methods`] (DEC-379). `method_vis` above
+    /// collapses a set to its first overload — the E-IFACE-VIS BYPASS; see `collect::conformance`.
+    method_overload_vis: HashMap<String, Vec<MemberVis>>,
+    /// Names of the `static` methods (Batch-1 D / slice B0). Callable via the class name
+    /// (`ClassName.method(args)`) with no receiver; a *non*-static method called that way is
+    /// `E-STATIC-CALL`. Inherited alongside `methods`; a subset of its keys.
     static_methods: std::collections::HashSet<String>,
     /// DEC-331 D9a: instance methods carrying `#[Invoke]` (decl order, deduped) — a non-empty set makes
     /// the class callable via `x(args)`. Inherited with the methods (subclass/trait keep the role).
@@ -375,6 +377,7 @@ impl ClassInfo {
             field_vis: HashMap::new(),
             static_vis: HashMap::new(),
             method_vis: HashMap::new(),
+            method_overload_vis: HashMap::new(),
             static_methods: std::collections::HashSet::new(),
             invoke_methods: Vec::new(),
             to_string_method: None,

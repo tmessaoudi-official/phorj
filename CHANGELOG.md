@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the `E-IFACE-VIS` visibility BYPASS (2026-07-30, DEC-379) — a soundness hole
+A class could implement a public interface method as **`private`** and still have it reached through a
+plain interface-typed receiver. The `overloads == 1` guard meant **any** second overload disabled the
+check, so a throwaway `greet(int)` beside a `private greet(string)` switched it off. Reproduced before the
+fix: `phg check` said OK and VM, interpreter and transpiled PHP all printed the private method's result.
+- `ClassInfo::method_overload_vis` records **per-overload** visibility, index-aligned with the signature
+  set, so conformance enforces the visibility of the overload that **conforms** — order-independent, and
+  it inherits on both the trait-`use` and class-`extends` paths.
+- The per-signature predicate was extracted from `sig_conforms` as `one_sig_conforms` and single-sourced:
+  two copies could drift, and the visibility rule would then enforce against a different overload than
+  the one conformance blessed.
+- `KNOWN_ISSUES F-032` closes — and **two of its claims did not survive reproduction**. It rated this
+  "NOT a soundness/security hole" (it was one), and said the PHP leg "fatals at the class declaration"
+  (it does not: overloads emit as `m__ovl_N` **with no visibility modifier**, so PHP accepted it too —
+  recorded as **CD-28**, since the transpiler still drops per-overload visibility for non-interface
+  methods).
+
 ### Added — the `__phorj_*` helper classification registry, with a ratchet (2026-07-30, DEC-377)
 The rule is *a helper may exist ONLY when PHP cannot do natively what phorj does*, and the audit proving
 which helpers comply had been OWED. It is now `src/transpile/helper_buckets.rs`, and **bucket 3

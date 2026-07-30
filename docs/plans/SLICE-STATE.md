@@ -156,6 +156,22 @@ recommendation after measuring it).
 - Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
   clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
 
+### ✅ BUILT 2026-07-30 — **DEC-379** (7.1): the `E-IFACE-VIS` bypass, a soundness hole, closed.
+
+Reproduced first: a `private` conforming overload was accepted by `check` and called through a plain
+interface-typed receiver on **all three legs**. The `overloads == 1` guard meant any second overload
+switched the check off. Fixed with `ClassInfo::method_overload_vis` (per-overload, index-aligned with the
+signature set) so conformance enforces the CONFORMING overload's visibility; `one_sig_conforms` extracted
+and single-sourced; inherits on both trait and class paths.
+**Judgement call recorded:** the ruling's literal *"check EVERY overload"* would have broken a shipped
+positive test (`implementing_interface_via_a_public_overload_beside_a_private_one_is_ok`), so the
+implemented rule is "the CONFORMING overload must be public". Both readings close the hole; they differ
+only on the extra restriction — **left OPEN for the developer**.
+`KNOWN_ISSUES F-032` closed, with two of its claims corrected. New **CD-28**: the transpiler emits
+`m__ovl_N` with no visibility modifier, so per-overload visibility is dropped on the PHP leg — unruled.
+Also fixed the stale **5.4 / DEC-350** label (built 2026-07-29, still listed OPEN).
+Gate: 2631 green, clippy clean both ways, size-gate `fails=0`.
+
 ### ✅ BUILT 2026-07-30 — Wave 2.2 / **DEC-377**. The helper audit, and **bucket 3 is EMPTY**.
 
 `src/transpile/helper_buckets.rs` classifies all **165** helpers (68 bucket-1, 97 bucket-2, 0 bucket-3)

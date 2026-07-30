@@ -3720,7 +3720,7 @@ Source: `docs/research/2026-07-25-global-review/L-*.md`, the 95-item on-hold inv
 
 | DEC | Item | Ruling |
 |---|---|---|
-| DEC-379 | **L-17 / P-Q-B-1 — visibility BYPASS.** The `overloads == 1` guard on `E-IFACE-VIS` lets a method with >1 overload narrow its visibility (even to `private`) and still be reached through a plain interface-typed receiver. Reproduces with `private`; `KNOWN_ISSUES F-032` | **RULED — close the hole: drop the `overloads == 1` guard and check EVERY overload's declared visibility.** It is a soundness bypass, not a stylistic deferral. A handful of negative conformance tests re-baseline | **RULED — build queued** |
+| DEC-379 | **L-17 / P-Q-B-1 — visibility BYPASS.** The `overloads == 1` guard on `E-IFACE-VIS` lets a method with >1 overload narrow its visibility (even to `private`) and still be reached through a plain interface-typed receiver. Reproduces with `private`; `KNOWN_ISSUES F-032` | **RULED — close the hole: drop the `overloads == 1` guard and check EVERY overload's declared visibility.** It is a soundness bypass, not a stylistic deferral. A handful of negative conformance tests re-baseline | **BUILT 2026-07-30** (per-overload visibility; keyed on the CONFORMING overload — the strict "every overload" reading would have broken a shipped positive test, see the build note) |
 | DEC-380 | **L-21 / DEC-286 — `jsonround` is 0.29× structurally.** VM 507ms vs C-`json` 145ms; two byte-identical levers bought ~3% because **~65% of ~20 allocs/iter is the `Rc<EnumVal>` box itself**, one per node | **RULED — OPTION B: CHASE THE WIN.** Developer-ruled 2026-07-26: *"go for Option B and chase the win, even if you have to propose a bold approach or revise an invariant that is blocking us; all must be researched/brainstormed and questioned correctly and with no compromise."* **Research shape, in order:** (1) name the constraint that actually blocks an arena — candidates are Invariant 3 (a new `Value` variant must extend every wildcard-free exhaustive match) and Invariant 1 (byte-identity); neither FORBIDS an arena, they price it, and the price must be MEASURED not assumed; (2) re-examine the prior no-win verdict — it came from a bounded prototype that *"did NOT build the full `Value::JsonArena`"*, so the +60% `deepjson` regression is a **proxy** result and a weak basis for a permanent no; (3) cost the bold options: a real `Value::JsonArena` variant, lazy materialisation with copy-out-on-extract, and **dropping the per-node `Rc` for an index-based arena handle** — which is where the 65% actually lives; (4) WIN-OR-FLAG **and** the no-hidden-loss rule both apply — a residual loss is recorded with anatomy, never suppressed. **DEC-286 is superseded by this row** | **RULED — RESEARCH SLICE queued** |
 | DEC-381 | **L-23 / DEC-322 — duplicate record.** DEC-322 held unadjudicated real-parallelism forks; DEC-370 ruled the subject on 2026-07-26 | **DEC-322 is SUPERSEDED BY DEC-370** (Invariant 19, one canonical home). Bookkeeping only — no design change. Recorded so a future session does not re-open a settled question | **CLOSED** |
 | DEC-382 | **L-24 / W4-10 — XML / DOM / XPath.** Zero hits for `XmlDocument`/`DomDocument` across `src/`, `examples/`, `docs/specs/`. Named a **top remaining FN blocker** with streams/intl/SPL-heaps, and FN is the 40%-weighted drag at ≈49% | **RULED — (B): admit a vetted crate (`quick-xml`-class) as the 15th dependency.** Best parity-per-effort item left. Hand-rolling was rejected: XML is a large, security-sensitive surface (entity expansion, namespaces, XPath) that should not be maintained in-house. **The `Cargo.toml` + UNIFIED-SPEC dependency-policy row must be updated in the same change** (the policy section is the SSOT) | **RULED — research + build queued** |
@@ -4531,3 +4531,59 @@ equivalent, reason stated per family as the rule requires) · **0 bucket 3**.
 One self-inflicted trap worth recording: the scanner initially flagged `__phorj_trim` and `__phorj_x` —
 both from this file's OWN documentation, which names `function __phorj_trim(` precisely to record that it
 does not exist. Comment lines are now skipped, same as the DEC-361 ratchet.
+
+
+### DEC-379 BUILT (2026-07-30) — the E-IFACE-VIS bypass, reproduced then closed
+
+**Reproduced first** (Rule 14), with the release binary:
+
+```phorj
+interface Greeter { function greet(string who): string; }
+class Impl implements Greeter {
+    private function greet(string who): string { return "secret:{who}"; }
+    public  function greet(int n):      string { return "n={n}"; }
+}
+Greeter g = new Impl();
+Output.printLine(g.greet("world"));   // → secret:world
+```
+
+`phg check` said **OK**, and VM, interpreter and transpiled PHP all printed `secret:world` — a `private`
+method reached through a plain interface-typed receiver. The `overloads == 1` guard meant ANY second
+overload disabled the check, so a throwaway `greet(int)` was enough to switch it off.
+
+**The ruling's wording needed a judgement call, and the code answered it.** DEC-379 says *"drop the
+`overloads == 1` guard and check EVERY overload's declared visibility"*. Taken literally that rejects a
+`private` NON-conforming overload too — but a shipped test,
+`implementing_interface_via_a_public_overload_beside_a_private_one_is_ok`, asserts exactly that shape must
+be ACCEPTED, and F-032's own analysis gives the reason (the interface is satisfied by the public
+overload; the private one is nobody's business but the class's). So the implemented rule is **the overload
+that CONFORMS must be public** — which closes the reproduced hole, keeps the shipped positive test valid,
+and is order-independent. Both readings agree on the hole itself; they differ only on the extra
+restriction, which is left to the developer (see the OPEN question below).
+
+**Mechanism.** `ClassInfo::method_overload_vis: HashMap<String, Vec<MemberVis>>`, pushed in the same order
+as `methods`' `Vec<FnSig>` so index *i* is overload *i*'s declared visibility. Conformance finds the index
+whose signature matches the interface method and enforces THAT visibility. The per-signature predicate was
+extracted out of `sig_conforms` as `one_sig_conforms` and single-sourced — two copies could drift, and the
+visibility rule would then enforce against a different overload than the one conformance blessed. The
+vector inherits on BOTH paths (trait `use` and class `extends`), or the bypass would reopen for inherited
+overload sets; a missing/short vector falls back to the collapsed per-name visibility rather than silently
+reading as public.
+
+**F-032's two secondary claims did NOT survive reproduction**, and both are corrected in `KNOWN_ISSUES`:
+- It rated this *"NOT a soundness/security hole"*. It was one.
+- It said the PHP leg *"fatals at the class declaration"*, making it an interp≡VM-vs-PHP break. It does
+  not — see CD-28.
+
+### CD-28 (2026-07-30) — the transpiler drops per-overload visibility on the PHP leg
+
+Found while reproducing DEC-379. An overload set is emitted as `m__ovl_0` / `m__ovl_1` … **with no
+visibility modifier at all** (⇒ `public` in PHP), plus a `m(...$args)` dispatcher. So a `private`
+overload's modifier is silently discarded on the PHP leg. That is why F-032's predicted PHP fatal never
+happened, and why all three legs agreed on the bypass.
+
+DEC-379's checker fix makes the *interface-implementing* case unreachable, so this is no longer a
+soundness concern — but a `private` overload of a NON-interface method is still emitted public. Not
+ruled: it is the kind of silent downgrade Invariant 14 forbids, so it wants a ruling rather than a quiet
+fix. **To reverse/act:** emit the recorded per-overload visibility on each `__ovl_N` and give the
+dispatcher the widest of the set. Recorded, not silently accepted.

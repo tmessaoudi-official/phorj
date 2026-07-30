@@ -100,6 +100,7 @@ impl Checker {
                 field_vis: HashMap::new(),
                 static_vis: HashMap::new(),
                 method_vis: HashMap::new(),
+                method_overload_vis: HashMap::new(),
                 static_methods: std::collections::HashSet::new(),
                 invoke_methods: Vec::new(),
                 to_string_method: None,
@@ -164,6 +165,7 @@ impl Checker {
         // Inherited entries (with their original owner) are merged in by `merge_inherited`.
         let mut field_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut method_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
+        let mut method_overload_vis: HashMap<String, Vec<MemberVis>> = HashMap::new();
         let mut mutable_fields = std::collections::HashSet::new();
         let mut set_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut static_set_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
@@ -501,6 +503,13 @@ impl Checker {
                     method_vis
                         .entry(f.name.clone())
                         .or_insert((MemberVis::of(&f.modifiers), c.name.clone()));
+                    // DEC-379: ALSO record this overload's own visibility, pushed in the same order as
+                    // `methods`, so conformance can ask about the overload that conforms rather than
+                    // giving up on the whole set.
+                    method_overload_vis
+                        .entry(f.name.clone())
+                        .or_default()
+                        .push(MemberVis::of(&f.modifiers));
                     // slice B0: a `static` method is callable via the class name (`ClassName.m(args)`).
                     if f.modifiers.contains(&Modifier::Static) {
                         static_methods.insert(f.name.clone());
@@ -571,6 +580,7 @@ impl Checker {
         info.field_vis = field_vis;
         info.static_vis = static_vis;
         info.method_vis = method_vis;
+        info.method_overload_vis = method_overload_vis;
         info.static_methods = static_methods;
         info.invoke_methods = invoke_methods;
         info.to_string_method = to_string_method;

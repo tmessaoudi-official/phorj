@@ -183,6 +183,49 @@ fn implementing_interface_via_a_public_overload_beside_a_private_one_is_ok() {
     );
 }
 
+/// DEC-379 — the visibility BYPASS: the CONFORMING overload is private.
+///
+/// Reproduced before the fix with the release binary: `phg check` accepted it and all three legs
+/// printed `secret:world`, i.e. a `private` method reached through a plain interface-typed receiver.
+/// The `overloads == 1` guard meant that ANY second overload disabled the check entirely, so adding a
+/// throwaway `m(int)` next to a `private m(string)` turned E-IFACE-VIS off.
+///
+/// Note the pairing with `implementing_interface_via_a_public_overload_beside_a_private_one_is_ok`
+/// directly below: that test requires a private NON-conforming overload to stay legal. The two together
+/// pin the rule to "the overload that CONFORMS must be public" — which is why the fix keys on
+/// conformance rather than rejecting every overload.
+#[test]
+fn implementing_an_interface_via_a_private_conforming_overload_errors() {
+    let errs = errors_of(
+        "interface I { function m(string s) -> string; } \
+             class C implements I { \
+                 private function m(string s) -> string { return s; } \
+                 function m(int n) -> string { return \"n\"; } }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-IFACE-VIS")),
+        "the overload CONFORMING to the interface is private — it must be rejected even though a \
+         second, unrelated overload exists (DEC-379: the `overloads == 1` guard was a bypass), \
+         got {errs:?}"
+    );
+}
+
+/// The bypass was order-independent: the private conforming overload declared SECOND is the same hole,
+/// and would be missed by any fix that only inspects the first-declared overload.
+#[test]
+fn the_private_conforming_overload_is_caught_when_declared_second() {
+    let errs = errors_of(
+        "interface I { function m(string s) -> string; } \
+             class C implements I { \
+                 function m(int n) -> string { return \"n\"; } \
+                 private function m(string s) -> string { return s; } }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-IFACE-VIS")),
+        "declaration order must not matter, got {errs:?}"
+    );
+}
+
 #[test]
 fn intersection_receiver_allows_public_members() {
     // The fix must not over-reject: public members through an intersection stay accessible.

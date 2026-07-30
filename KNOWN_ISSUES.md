@@ -210,7 +210,20 @@ iterative) the checker's expression walkers (`enforce_injected::walk_expr` first
 with a clean diagnostic at a bound consistent with `MAX_EXPR_DEPTH` instead of overflowing. Tracked;
 awaiting prioritisation.
 
-## F-032 — overloaded interface-method visibility not checked at declaration (FLAGGED 2026-07-16, DEC-251(c) build)
+## F-032 — overloaded interface-method visibility not checked at declaration — **FIXED 2026-07-30 (DEC-379)**
+
+> **CLOSED.** `E-IFACE-VIS` now keys on the overload that CONFORMS, via a per-overload visibility
+> vector index-aligned with the signature set (`ClassInfo::method_overload_vis`), so the
+> `overloads == 1` guard is gone. The text below is the AS-FOUND analysis, kept as the record —
+> **two of its claims did not survive reproduction:**
+> - It called this *"NOT a soundness/security hole"*. It was one: `phg check` accepted a `private`
+>   conforming overload and all three legs called it through a plain interface-typed receiver.
+>   DEC-379 re-rated it a soundness bypass and ordered it done early.
+> - It said the PHP leg *"fatals at the class declaration"*, making this an interp≡VM-vs-PHP break.
+>   It does not. Overloads are emitted as `greet__ovl_N` **with no visibility modifier** (⇒ public
+>   in PHP) plus a dispatcher, so the PHP leg accepted it too and printed the same output — all
+>   three legs agreed. That means it was purely a soundness hole with NO parity component, and it
+>   also means the transpiler still drops per-overload visibility (recorded as CD-28).
 
 `E-IFACE-VIS` (DEC-251(c) — a class implementing a public interface method as private/protected is
 rejected) fires only when the class provides a **single overload** of the method. `method_vis` records
