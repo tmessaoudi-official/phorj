@@ -10,7 +10,7 @@ mod call;
 mod classes;
 mod classes_synth;
 mod collisions;
-mod db_php;
+pub mod db_php;
 mod driver;
 mod escapes;
 mod expr;

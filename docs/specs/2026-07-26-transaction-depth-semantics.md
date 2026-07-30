@@ -131,3 +131,42 @@ it is the prerequisite, staged and ready, not a claim that the leg works.
 or removed), or does it move to case 1 for the transaction/savepoint surface now that the helpers exist —
 accepting that live DB I/O still cannot be byte-identical, so the differential quarantine would remain
 even if the transpile error were lifted?
+
+
+## Item 3, resolved as far as it can be without a ruling (2026-07-29)
+
+The helpers are now **verified against the real oracle**, not merely written: `tests/db_savepoints.rs`
+executes the transpiler's own helper source under `php-8.5.8` + PDO/SQLite and asserts nested
+begin/rollback composes, that `unwind_to` restores a caller-owned entry depth (555 survives and commits),
+that `rollback_all` flattens every level, that the depth counter is per-HANDLE rather than global, and
+that the savepoint NAMES still match `ops_tx.rs`. The source is read from the transpiler, so the test
+cannot pass against a stale copy.
+
+**That test immediately found a defect that reading the code would not have.**
+`SplObjectStorage::contains()` is **deprecated as of PHP 8.5** — which is the transpile floor — so every
+depth read printed a deprecation notice onto **stdout**. Had the leg been lifted with that in place, it
+would have broken byte-identity outright, in the subtlest possible way. Now `offsetExists()`.
+
+### The case-1 move: scoped, so it is a slice rather than a vibe
+
+The developer's instinct is that the transaction surface should become Ladder case 1. Two findings say the
+destination is right but the distance is longer than it looks:
+
+1. **The transaction surface cannot move alone.** `E-TRANSPILE-DB` fires on the IMPORT, and a transaction
+   body necessarily contains `prepare`/`exec`/`query`. There is no partial lift — the unit is the module.
+2. **The savepoint helper is a small fraction of the work.** The blocker is the ERROR CONTRACT. The Rust
+   legs reconstruct a 7-kind taxonomy (`ConnectionError`, `ConstraintViolationError`,
+   `SerializationFailureError`, `SyntaxError`, `TimeoutError`, `UniqueViolationError`, `DatabaseError`)
+   and every native returns `DatabaseResult.Ok/Err` which the prelude turns into a typed throw. The PHP
+   emitters are raw PDO calls with **zero** mapping. Lift as-is and `catch (UniqueViolationError)` never
+   matches, and `db.transaction(fn, retries)` — which retries ONLY `SerializationFailureError` — silently
+   never retries. That is the same silent downgrade Invariant 14 forbids, relocated from "no transactions"
+   to "wrong error types", which is worse because it looks like it works.
+
+**Not an obstacle:** value types. [Verified: PHP 8.5 + `pdo_sqlite` returns native `int`/`float`, not
+strings — I had assumed otherwise and was wrong.] The one real value gap is `decimal`: PDO yields float
+`19.99` where phorj is exact fixed-point.
+
+**So the case-1 slice is: port `DatabaseResult` + the 7-kind SQLSTATE→kind classifier to the PHP leg,
+decide the `decimal` mapping, then lift the quarantine** — after which the differential quarantine still
+stands on its own separate reason (live DB I/O is not byte-identical), which is unaffected either way.

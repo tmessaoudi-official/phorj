@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the savepoint helpers printed PHP-8.5 deprecation notices onto stdout (2026-07-29, DEC-340)
+`SplObjectStorage::contains()` is deprecated as of PHP 8.5 — which is the transpile floor — so every depth
+read emitted a notice to **stdout**. Had the database leg been made live with that in place it would have
+broken byte-identity outright, in the subtlest possible way. Now `offsetExists()`.
+Found by `tests/db_savepoints.rs`, a new test that runs the transpiler's own helper source under real
+`php` + PDO/SQLite: nested begin/rollback composes, `unwind_to` restores a caller-owned entry depth,
+`rollback_all` flattens every level, the depth counter is per-handle rather than global, and the savepoint
+names still match `ops_tx.rs`. The source is read from the transpiler, so the test cannot pass against a
+stale copy of the helpers. Reading the code would not have caught this.
+
 ### Security — **P1**: HTTP response splitting / request smuggling via response headers (2026-07-29, DEC-363)
 `Response.withHeader` and `Cookie` interpolated both arguments straight into a header line with zero
 validation, and `respond_once` returns handler bytes verbatim — so nothing downstream could re-validate.

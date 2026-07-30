@@ -18,6 +18,15 @@
 
 use super::*;
 
+/// The `__phorj_db_*` helper source, exposed so `tests/db_savepoints.rs` can execute it under a REAL
+/// `php` + PDO and prove the savepoint arithmetic composes there (DEC-340 item 3's actual intent).
+/// That test is what makes the helpers verified rather than merely written, while `Core.Database` stays
+/// Ladder case 2 — lifting that quarantine needs a separate developer ruling.
+#[must_use]
+pub fn db_helper_source() -> &'static str {
+    DB_HELPERS
+}
+
 impl Transpiler {
     pub(super) fn emit_db_helpers(&mut self) {
         if !self.gates.uses_db {
@@ -34,14 +43,18 @@ impl Transpiler {
 ///
 /// The savepoint NAMES are load-bearing: `phorj_sp_{remaining}` matches `ops.rs` exactly, so a database
 /// inspected mid-transaction looks the same whichever leg ran the program.
-const DB_HELPERS: &str = r#"function &__phorj_db_depths() {
+pub const DB_HELPERS: &str = r#"function &__phorj_db_depths() {
     static $depths = null;
     if ($depths === null) { $depths = new SplObjectStorage(); }
     return $depths;
 }
 function __phorj_db_tx_depth($pdo) {
     $d = &__phorj_db_depths();
-    return $d->contains($pdo) ? $d[$pdo] : 0;
+    // `offsetExists`, NOT `contains`: SplObjectStorage::contains() is DEPRECATED as of PHP 8.5, which is
+    // the transpile floor — it printed a deprecation notice onto stdout on every depth read, which would
+    // have broken byte-identity outright. Caught by running these helpers under the real oracle
+    // (`tests/db_savepoints.rs`) rather than by reading them.
+    return $d->offsetExists($pdo) ? $d[$pdo] : 0;
 }
 function __phorj_db_set_depth($pdo, $n) {
     $d = &__phorj_db_depths();
