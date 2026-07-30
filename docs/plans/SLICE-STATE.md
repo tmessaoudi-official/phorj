@@ -156,6 +156,30 @@ recommendation after measuring it).
 - Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
   clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
 
+### 📊 RE-TALLY group 2 (§4.14) — FN-ARR: **NO delta, and it corrects §4.13's own framing**
+
+FN-ARR maps to **C=26 — exactly what §1.2 already claims.** Zero credit. §4.13 said "six of seven groups
+under-credited" on RAW FUNCTION COUNTS; the mapping shows that heuristic is unreliable — 21 of FN-ARR's 70
+functions have no single PHP counterpart (`maxBy`, `groupBy`, `flatMap`, `partition`, `first`/`last`, … plus
+the entire `Core.Set` type PHP lacks). **After two mapped groups the heuristic has erred both ways:** FN-FS
+was a real 2.5× under-count, FN-ARR was already right. Read "six of seven" as *worth mapping*, NOT as
+*under-credited*. Numbers unchanged: **≈70% parity · ≈57% floor · ≈71% vision**.
+One discrepancy found and deliberately NOT acted on: §1.2 says FN-ARR `P=12`, the mapping defends only 4 —
+but the model never documents how `P` weights into the tier scores, so adjusting it would be the exact
+unverified inflation this exercise removes. Flagged for the model's owner.
+**State: 2 of ~20 groups mapped.** Next by rows-of-headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17).
+
+### 🎨 PENDING DESIGN QUESTION — refinement / newtype-with-invariant types (developer, 2026-07-30)
+
+`PositiveNumber` and family. **Not ruled** (Invariant 15). Full analysis in the gap matrix's PENDING
+section. Short form: the mechanism is worth having — **phorj already hand-rolled it once as `Core.Secret<T>`**
+— but the NUMERIC instance is the worst one to lead with, because `PositiveInt - PositiveInt` is not
+positive, so arithmetic closure either forces constant re-wrapping or adds a new fault class inside
+Invariant 4's single-sourced kernels on the JIT's hot path. Better first instances: **`NonEmpty<T>`**
+(removes a nullable — `List.first` returns `T?` today), **`Email`/`Url`** (nearly free over the shipped
+validators), **units** (author-defined algebra, so closure is a feature). Awaiting a ruling on whether to
+build it and which instance ships first.
+
 ### 📊 THE OWED §1.2 RE-TALLY — STARTED 2026-07-30 (§4.13): **≈70% parity · ≈57% floor · ≈71% vision**
 
 Four recomputes overdue; now started with a **mechanical method** rather than judgement: dump the shipped

@@ -1127,3 +1127,77 @@ under-credits awaiting only their row mappings. On FN-FS's evidence (8→20, a 2
 parity is materially higher than 70% — but each group needs its mapping before it is banked. **The floor is
 now within 13pp of the headline** (was 17 at §4.9), which is the model's own signal that this exercise is
 converting weighted credit into real credit.
+
+
+### 4.14 Re-tally group 2 — FN-ARR: **NO delta, and that CORRECTS §4.13's framing**
+
+FN-ARR mapped row-by-row: **C=26, exactly what §1.2 already claims.** Zero credit taken.
+
+**This walks back §4.13's headline claim, and the walk-back matters more than the group.** §4.13 said "six
+of seven groups under-credited" on the strength of *raw function counts* (FN-ARR: credits 26, ships 70).
+The mapping shows that signal is **unreliable** — 21 of those 70 have no single PHP counterpart:
+
+`maxBy` `minBy` `sumBy` `groupBy` `partition` `flatMap` `flatten` `enumerate` `takeWhile` `dropWhile`
+`find` `all` `any` `none` `first` `last` `lastIndexOf` `getOrDefault` `containsValue` `entries` — **plus
+the entire `Core.Set` type (12 functions), which PHP simply does not have.** Those are beyond-PHP
+ergonomics and belong to the programme, not the parity matrix.
+
+So after two mapped groups the raw-count heuristic has erred in **both directions**: FN-FS was a genuine
+2.5× under-count (8 → 20), FN-ARR was already exactly right. **The heuristic is a triage tool for choosing
+which group to map next — it is NOT evidence of under-credit**, and §4.13's "six of seven" should be read
+as "six of seven worth mapping", not "six of seven under-credited". Corrected here rather than left to
+mislead the next reader.
+
+**One genuine discrepancy found, and deliberately NOT acted on:** §1.2 records FN-ARR `P=12`; the mapping
+finds only **4** defensible partials (`array_combine`→`zip` (pairs, not a map), `array_walk`→`map` (no
+by-ref), `asort`/`ksort`/`arsort`→`sortWith` over entries, `array_pop`/`shift`/`unshift`→`drop`/`take`
+under the immutable model). Named gaps confirmed still missing: `array_flip`, `array_pad`, `array_column`,
+`array_splice`, `shuffle`, `array_rand`, `array_fill_keys`, `array_is_list`. **No adjustment taken** — the
+model does not document how `P` weights into the tier scores, and guessing it would be exactly the
+unverified inflation this exercise exists to remove. **Flagged as a question for the model's owner.**
+
+**The number is unchanged: PHP-parity ≈ 70% · floor ≈ 57% · Vision ≈ 71%.**
+
+**Re-tally state: 2 of ~20 groups mapped** (FN-FS +12 C, FN-ARR ±0). Next best candidates by *rows of
+headroom* rather than by raw count: FN-STR (93 rows, C=30) and FN-MATH (37 rows, C=17) — but on FN-ARR's
+lesson, expect some of that headroom to be beyond-PHP surface rather than credit.
+
+### PENDING DESIGN QUESTION (raised by the developer 2026-07-30) — refinement / newtype-with-invariant types
+
+Not ruled; recorded per Invariant 15. The developer proposed `PositiveNumber` (a numeric type rejecting
+negatives) and asked for a challenge.
+
+**Argument FOR, which the developer did not invoke but is the strongest one: phorj has ALREADY hand-rolled
+this pattern once.** `Core.Secret<T>` [Verified: `src/ext/database/prelude.rs:23`] is a newtype whose
+invariant is "never appear in a log or error". With a general mechanism, `Secret` would be an *instance*
+instead of a bespoke type — the same "one mechanism beats two" reasoning DEC-364 used to reject `defer`,
+pointing the opposite way.
+
+**Three challenges against the NUMERIC form specifically:**
+1. **Arithmetic closure.** `PositiveInt - PositiveInt` is not positive. Either results degrade to the base
+   type (constant re-wrapping — friction users route around) or subtraction faults, creating a **new fault
+   class inside arithmetic** — where Invariant 4 single-sources the kernels precisely because they are
+   parity-affecting, the JIT's unboxed verticals live, and the ≥1.0×-vs-PHP mandate applies.
+2. **Invariant 14.** PHP has no analogue. Wrapping makes PHP-leg arithmetic method calls (perf +
+   readability disaster); erasing the check is a **silent semantic downgrade — forbidden**. The only legal
+   route is erase-with-construction-site-guards (DEC-377 bucket 1/2 helpers).
+3. Erase-before-backends is architecturally CHEAP, though — it is how generics and `html` already work
+   (Invariant 5's `check_and_expand` chokepoint) — **provided the check lives at construction only**.
+
+**Counter-proposal — better first instances than `PositiveNumber`:**
+- **`NonEmpty<T>`** — *removes a nullable* rather than adding a guard. `Core.List.first` returns `T?` today
+  [Verified: `list_registry.rs:391` `ret: Ty::Optional`]; on a non-empty list it returns `T`. No closure
+  problem.
+- **`Email` / `Url`** — nearly free: `Core.Validation.isEmail`/`isUrl` already ship. The boundary case that
+  actually pays ("parse, don't validate").
+- **Units** (`Meters`/`Seconds`) — zero runtime cost, and the author defines the algebra, so closure becomes
+  a feature (`Meters / Seconds = Velocity`) instead of a bug.
+- **`Int<1,100>`** — the honest generalisation, but it needs const generics: a much larger slice.
+
+**Beyond-PHP kicker:** the JIT already computes *proven* value facts
+[Verified: `unboxed_proven_param_kinds`, `collect_unboxed.rs:322`], so a declared non-negative int is free
+information for that optimiser — something PHP can never exploit.
+
+**Assessment: the mechanism is worth having; `PositiveNumber` is the weakest member of the family to lead
+with**, because numeric refinement is the one place arithmetic closure bites hardest. Awaiting a ruling on
+(a) whether to build the mechanism at all, and (b) if so, which instance ships first.
