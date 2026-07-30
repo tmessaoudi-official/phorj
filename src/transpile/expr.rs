@@ -350,7 +350,8 @@ impl Transpiler {
             Expr::Force { inner, .. } => {
                 let v = self.emit_expr(inner)?;
                 Ok(format!(
-                    "({v} ?? throw new \\RuntimeException(\"force-unwrap of null\"))"
+                    "({v} ?? throw new \\RuntimeException(\"{}\"))",
+                        crate::value::faults::FAULT_FORCE_UNWRAP_NULL
                 ))
             }
             // `?` propagation is hoisted at the `VarDecl` statement level (the only position the checker

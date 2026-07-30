@@ -195,7 +195,7 @@ pub fn enum_from_miss(enum_name: &str, value: &Value) -> String {
         Value::Int(n) => n.to_string(),
         other => other.type_name().to_string(),
     };
-    format!("no case of enum `{enum_name}` has value {shown}")
+    super::faults::no_enum_case(enum_name, &shown)
 }
 
 /// Evaluate a compile-time **literal-constant** expression to a `Value` — used to seed `static`

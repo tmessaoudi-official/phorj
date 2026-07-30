@@ -334,7 +334,7 @@ impl<'c> Interp<'c> {
         args: Vec<Value>,
     ) -> R<Value> {
         if self.depth >= crate::limits::MAX_CALL_DEPTH {
-            return rt("stack overflow");
+            return rt(faults::FAULT_STACK_OVERFLOW);
         }
         self.depth += 1;
         let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
@@ -482,7 +482,7 @@ impl<'c> Interp<'c> {
                                     let frag = std::mem::take(&mut self.out);
                                     s.suspend(crate::green::sched::Trap::Recv(*id), frag);
                                 }
-                                None => return rt("recv from empty channel".to_string()),
+                                None => return rt(faults::FAULT_CHANNEL_EMPTY.to_string()),
                             },
                         }
                     },
@@ -503,7 +503,7 @@ impl<'c> Interp<'c> {
                                     let frag = std::mem::take(&mut self.out);
                                     s.suspend(crate::green::sched::Trap::Join(*id), frag);
                                 }
-                                None => return rt("join on an incomplete task".to_string()),
+                                None => return rt(faults::FAULT_JOIN_INCOMPLETE.to_string()),
                             },
                         }
                     },

@@ -46,11 +46,11 @@ pub(super) const JIF_FAULT: i64 = 2;
 /// a panic through `extern "C"` aborts the process.
 pub(super) const FAULT_UNDERFLOW: &str = "jit: operand stack underflow";
 
-/// The VM's clean deep-recursion fault. The string is a bare literal in `vm::exec`/`vm::closure`/the
-/// interpreter (not yet single-sourced in `value.rs` like the arithmetic faults), so it is duplicated
-/// here — but the tests assert the JIT fault against the VM oracle's rendering, not this literal, so
-/// any VM-side drift is caught.
-pub(super) const FAULT_STACK_OVERFLOW: &str = "stack overflow";
+/// The VM's clean deep-recursion fault, RE-EXPORTED rather than redefined (DEC-361 — this file used to
+/// carry its own copy, with a comment noting the body was "not yet single-sourced", which is precisely
+/// the drift risk the ruling closed). The JIT keeps the fault at the VM's exact depth threshold, so a
+/// divergent body would be a silent parity break.
+pub(super) use crate::value::faults::FAULT_STACK_OVERFLOW;
 
 /// ovf-spec code 5 marker. The unboxed codegen speculates (wrapping arith + a sticky flag), so it can
 /// never render the true fault (which one fired, in what order) — it only signals "I overflowed

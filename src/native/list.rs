@@ -320,9 +320,9 @@ pub(super) fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> 
                     // kernels. PHP `array_sum` would instead promote to float on overflow — examples
                     // stay well within i64 range (caveat in KNOWN_ISSUES).
                     Value::Int(n) => {
-                        acc = acc
-                            .checked_add(*n)
-                            .ok_or_else(|| "integer overflow in List.sum".to_string())?;
+                        acc = acc.checked_add(*n).ok_or_else(|| {
+                            format!("{} in List.sum", crate::value::FAULT_INT_OVERFLOW)
+                        })?;
                     }
                     other => {
                         return Err(format!(
@@ -348,9 +348,9 @@ pub(super) fn list_product(args: &[Value], _: &mut String) -> Result<Value, Stri
             for x in xs.iter() {
                 match x {
                     Value::Int(n) => {
-                        acc = acc
-                            .checked_mul(*n)
-                            .ok_or_else(|| "integer overflow in List.product".to_string())?;
+                        acc = acc.checked_mul(*n).ok_or_else(|| {
+                            format!("{} in List.product", crate::value::FAULT_INT_OVERFLOW)
+                        })?;
                     }
                     other => {
                         return Err(format!(
@@ -588,9 +588,9 @@ pub(super) fn list_sum_by(args: &[Value], call: &mut ClosureInvoker) -> Result<V
             for x in xs.iter() {
                 match call(f, vec![x.clone()])? {
                     Value::Int(n) => {
-                        acc = acc
-                            .checked_add(n)
-                            .ok_or_else(|| "integer overflow in List.sumBy".to_string())?;
+                        acc = acc.checked_add(n).ok_or_else(|| {
+                            format!("{} in List.sumBy", crate::value::FAULT_INT_OVERFLOW)
+                        })?;
                     }
                     other => {
                         return Err(format!(

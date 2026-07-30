@@ -7,6 +7,7 @@
 //! interpreter's value-semantics object model (clone-on-use, no heap; decision P4-1). An arena is
 //! a deferred, bench-gated perf milestone, not a correctness requirement.
 
+use crate::value::faults;
 use crate::value::Value;
 use std::collections::{BTreeMap, HashMap};
 
@@ -65,13 +66,12 @@ impl FaultMsg {
     /// classify to the same `FaultKind` (and, here, stay byte-identical — single-sourced).
     pub fn message(&self) -> String {
         match self {
-            FaultMsg::NonExhaustiveMatch => "non-exhaustive match at runtime".to_string(),
-            FaultMsg::ForceUnwrapNull => "force-unwrap of null".to_string(),
-            FaultMsg::Panic(m) => format!("panic: {m}"),
-            FaultMsg::Todo => "todo: not yet implemented".to_string(),
-            FaultMsg::Unreachable => "entered unreachable code".to_string(),
-            FaultMsg::Assert(m) if m.is_empty() => "assertion failed".to_string(),
-            FaultMsg::Assert(m) => format!("assertion failed: {m}"),
+            FaultMsg::NonExhaustiveMatch => faults::FAULT_NON_EXHAUSTIVE_MATCH.to_string(),
+            FaultMsg::ForceUnwrapNull => faults::FAULT_FORCE_UNWRAP_NULL.to_string(),
+            FaultMsg::Panic(m) => faults::panic_with(m),
+            FaultMsg::Todo => faults::FAULT_TODO.to_string(),
+            FaultMsg::Unreachable => faults::FAULT_UNREACHABLE.to_string(),
+            FaultMsg::Assert(m) => faults::assert_with(m),
         }
     }
 }

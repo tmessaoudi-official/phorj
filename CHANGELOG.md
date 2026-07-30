@@ -6,6 +6,33 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — every fault body is single-sourced, and the differential harness now DERIVES from it (2026-07-30, DEC-361)
+A fault body is parity-affecting: Invariant 1 demands identical *failure* behaviour across `phg run`,
+`--tree-walker` and the transpiled PHP. Invariant 4 already single-sourced the arithmetic bodies; every
+other one had been re-typed at **38 sites**. `src/value/faults.rs` is now the one home — it re-exports the
+arithmetic consts (which stay next to the kernels that raise them) and defines the rest, with the
+payload-carrying bodies as functions (`panic_with`, `assert_with`, `no_field`, `no_enum_case`) so the
+message *shape* cannot be re-typed either.
+- The scale was the finding: `"stack overflow"` at five VM sites, two closure sites, three interpreter
+  sites **and a second `pub const` in the JIT** — whose own comment said the body was "not yet
+  single-sourced", i.e. the code documented the defect and shipped anyway. `FaultMsg::message()`, the
+  thing three call sites already treated as the single source, was re-typing all six of its own bodies.
+- **`classify` in `tests/differential.rs` now derives its needles from those consts.** It previously kept
+  independent copies of all twelve bodies, so the test whose entire job is catching fault-body drift was
+  the thing HIDING it — which is why the ruling rejected single-sourcing alone. Two ratchets keep it: no
+  body may appear as a literal outside its definition, and no `pub const FAULT_*` may go unclassified.
+- **The predicted drift had already happened, in TWO places.** The PHP leg's non-exhaustive-`match` fault
+  threw a bare `\UnhandledMatchError` — whose `getMessage()` is the **empty string** — on the
+  `instanceof` path, and PHP's own `"Unhandled match case true"` on the native-`match` path, against
+  `"non-exhaustive match at runtime"` on both Rust legs. Fixed in both lowerings: `throw` is an
+  expression in PHP 8, so a `default => throw new \UnhandledMatchError("<canonical>")` arm carries the
+  right body while keeping the native `match` form. `examples/transpile/demo.php` regenerated (a one-line
+  diff); all three legs still produce byte-identical stdout, since the arm is checker-unreachable.
+- Classification graded up too: `NonExhaustiveMatch` is its own `FaultKind` so a future drift can't hide
+  behind `Panic`, and the four arithmetic bodies that had **no arm at all** got theirs — they were falling
+  through to `Other(full_string)`, which compares the VM's `at L:C:` prefix and so read a real agreement
+  as a divergence.
+
 ### Fixed — `Statement` binds are now EXECUTION-scoped, and the nested-savepoint SQL is MySQL-portable (2026-07-30, DEC-351)
 Two halves of one ruling. **(A) Bind lifecycle.** Binds accumulated and never reset, so reusing a prepared
 statement died on the second iteration with `2 bound value(s) but 1 ? placeholder(s) in the SQL` — the exact

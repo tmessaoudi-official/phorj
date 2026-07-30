@@ -9,6 +9,7 @@
 //! (`"runtime error:"` vs `"compile error:"`), so a raw `assert_eq!` would spuriously fail.
 
 use phorj::cli::{cmd_run, cmd_run_exit, cmd_treewalk, cmd_treewalk_exit};
+use phorj::value::faults;
 use phorj::{cli, loader};
 use std::process::Command;
 
@@ -119,6 +120,19 @@ enum FaultKind {
     /// backends fault with the single-sourced `enum_from_miss` body; classified by body substring so
     /// the VM's `at N:` prefix doesn't split it from the interpreter's prefix-less render.
     EnumFromMiss,
+    /// Non-exhaustive `match` fall-through. A checker-unreachable backstop, but it gets its OWN kind
+    /// rather than folding into `Panic`: DEC-361 found this exact body already DRIFTED (the PHP leg
+    /// threw a bare `\UnhandledMatchError`, whose message is the empty string), and a kind shared with
+    /// `panic` would have let a future drift hide behind an unrelated arm.
+    NonExhaustiveMatch,
+    /// The remaining single-sourced arithmetic bodies, each its own kind now that the table derives
+    /// from `value::faults` — previously they had no arm at all and fell through to `Other(..)`,
+    /// which meant an overflow-vs-scale divergence read as "both faulted differently" rather than as
+    /// the specific mismatch it is.
+    DecimalOverflow,
+    DecimalScale,
+    NegativeShift,
+    NegativeExponent,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -127,40 +141,155 @@ enum FaultKind {
 /// (substring), which ignores the `"runtime error:"` / `"compile error:"` / `"… at L:C:"`
 /// prefix the CLI prepends per pipeline stage.
 fn classify(err: &str) -> FaultKind {
-    if err.contains("integer overflow") {
-        FaultKind::IntOverflow
-    } else if err.contains("division by zero") {
-        FaultKind::DivZero
-    } else if err.contains("modulo by zero") {
-        FaultKind::ModZero
-    } else if err.contains("stack overflow") {
-        FaultKind::StackOverflow
-    } else if err.contains("list index out of range") {
-        FaultKind::IndexOob
-    } else if err.contains("force-unwrap of null") {
-        FaultKind::ForceUnwrap
-    } else if err.contains("range too large") {
-        FaultKind::RangeTooLarge
-    } else if err.contains("decimal division is not exact") {
-        FaultKind::DecimalInexact
-    } else if err.contains("recv from empty channel") || err.contains("join on an incomplete task")
-    {
-        FaultKind::Concurrency
-    } else if err.contains("panic:")
-        || err.contains("not yet implemented")
-        || err.contains("unreachable code")
-        || err.contains("assertion failed")
-    {
-        FaultKind::Panic
-    } else if err.contains("no case of enum") {
-        FaultKind::EnumFromMiss
-    } else if err.contains("no field") {
-        FaultKind::NoField
-    } else if err.contains("unsupported") || err.contains("compile error") {
-        FaultKind::Unsupported
-    } else {
-        FaultKind::Other(err.to_string())
+    for (needle, kind) in FAULT_TABLE {
+        if err.contains(needle) {
+            return kind();
+        }
     }
+    // Not a canonical fault body. `unsupported` / `compile error` are CLI stage words, not fault
+    // bodies, so they are deliberately outside the table.
+    if err.contains("unsupported") || err.contains("compile error") {
+        return FaultKind::Unsupported;
+    }
+    FaultKind::Other(err.to_string())
+}
+
+/// The classification table — **derived from `phorj::value::faults`, never re-typed** (DEC-361).
+///
+/// This is the whole point of the ruling. `classify` is the test that exists to catch fault-body drift
+/// across the three legs; keying it on its own independent copies of the twelve bodies made a drift
+/// *invisible* rather than merely untested, which is strictly worse than having no test. Every needle
+/// here is now the same `&'static str` the backends raise, so a body edited in one place and not the
+/// other cannot type-check its way past this file.
+///
+/// Order matters only where one body is a prefix of another; none currently is, and
+/// `every_canonical_fault_body_classifies` proves each entry round-trips to its own kind.
+#[allow(clippy::type_complexity)]
+const FAULT_TABLE: &[(&str, fn() -> FaultKind)] = &[
+    (faults::FAULT_INT_OVERFLOW, || FaultKind::IntOverflow),
+    (faults::FAULT_DIV_ZERO, || FaultKind::DivZero),
+    (faults::FAULT_MOD_ZERO, || FaultKind::ModZero),
+    (faults::FAULT_STACK_OVERFLOW, || FaultKind::StackOverflow),
+    (faults::FAULT_INDEX_OOB, || FaultKind::IndexOob),
+    (faults::FAULT_FORCE_UNWRAP_NULL, || FaultKind::ForceUnwrap),
+    (faults::FAULT_RANGE_TOO_LARGE, || FaultKind::RangeTooLarge),
+    (faults::FAULT_DECIMAL_NONTERMINATING, || {
+        FaultKind::DecimalInexact
+    }),
+    (faults::FAULT_DECIMAL_OVERFLOW, || {
+        FaultKind::DecimalOverflow
+    }),
+    (faults::FAULT_DECIMAL_DIV_ZERO, || FaultKind::DivZero),
+    (faults::FAULT_DECIMAL_MOD_ZERO, || FaultKind::ModZero),
+    (faults::FAULT_DECIMAL_SCALE, || FaultKind::DecimalScale),
+    (faults::FAULT_NEGATIVE_SHIFT, || FaultKind::NegativeShift),
+    (faults::FAULT_NEGATIVE_EXPONENT, || {
+        FaultKind::NegativeExponent
+    }),
+    (faults::FAULT_CHANNEL_EMPTY, || FaultKind::Concurrency),
+    (faults::FAULT_JOIN_INCOMPLETE, || FaultKind::Concurrency),
+    (faults::FAULT_NON_EXHAUSTIVE_MATCH, || {
+        FaultKind::NonExhaustiveMatch
+    }),
+    (faults::FAULT_PANIC_PREFIX, || FaultKind::Panic),
+    (faults::FAULT_TODO, || FaultKind::Panic),
+    (faults::FAULT_UNREACHABLE, || FaultKind::Panic),
+    // AFTER todo/unreachable: `assert_with("x")` starts with FAULT_ASSERT, and the bare
+    // `FAULT_ASSERT` is its own prefix, so this single entry covers both assert forms.
+    (faults::FAULT_ASSERT, || FaultKind::Panic),
+    (faults::FAULT_NO_ENUM_CASE_PREFIX, || {
+        FaultKind::EnumFromMiss
+    }),
+    (faults::FAULT_NO_FIELD_PREFIX, || FaultKind::NoField),
+];
+
+/// DEC-361's ratchet, in two halves.
+///
+/// **Half 1 — every canonical body classifies.** A body that falls through to `Other(..)` would make
+/// `agree_err` compare whole strings including the VM's `at L:C:` line prefix, so a real agreement
+/// would read as a divergence. Asserted for the payload-carrying forms too, since their SHAPE is what
+/// the prefix consts promise.
+///
+/// **Half 2 — no body escapes the table.** The table cannot be enumerated by reflection, so this scans
+/// `src/value/faults.rs` for every `pub const FAULT_*` and asserts each name appears in this file.
+/// Adding a fault body without teaching `classify` about it therefore fails here — which is precisely
+/// the "make `classify` DERIVE from those same consts" half of the ruling, mechanised.
+#[test]
+fn every_canonical_fault_body_classifies() {
+    for (needle, kind) in FAULT_TABLE {
+        let got = classify(needle);
+        assert_eq!(
+            got,
+            kind(),
+            "the canonical body {needle:?} does not classify to its own kind"
+        );
+        assert!(
+            !matches!(got, FaultKind::Other(_)),
+            "{needle:?} fell through to Other"
+        );
+    }
+    // The payload forms: their bodies must classify by the prefix const alone.
+    assert_eq!(classify(&faults::panic_with("boom")), FaultKind::Panic);
+    assert_eq!(classify(&faults::assert_with("")), FaultKind::Panic);
+    assert_eq!(classify(&faults::assert_with("why")), FaultKind::Panic);
+    assert_eq!(classify(&faults::no_field("n", "C")), FaultKind::NoField);
+    assert_eq!(
+        classify(&faults::no_enum_case("Color", "9")),
+        FaultKind::EnumFromMiss
+    );
+}
+
+#[test]
+fn no_canonical_fault_body_escapes_the_classification_table() {
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/value/faults.rs"),
+    )
+    .expect("read src/value/faults.rs");
+    let this = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/differential.rs"),
+    )
+    .expect("read tests/differential.rs");
+    let mut found = 0usize;
+    for line in src.lines() {
+        // `pub const FAULT_X: &str = …` — the definitions. The `pub use super::arith::{…}` re-export
+        // block is covered by scanning for the same names in its own lines below.
+        let Some(rest) = line.trim().strip_prefix("pub const FAULT_") else {
+            continue;
+        };
+        let Some(name) = rest.split(':').next() else {
+            continue;
+        };
+        found += 1;
+        assert!(
+            this.contains(&format!("faults::FAULT_{name}")),
+            "src/value/faults.rs defines FAULT_{name} but tests/differential.rs never classifies it \
+             — add it to FAULT_TABLE (DEC-361: classify must DERIVE from the consts)"
+        );
+    }
+    // The arith re-exports live in a `pub use` block, not `pub const` lines — check them by name.
+    for name in [
+        "FAULT_DIV_ZERO",
+        "FAULT_MOD_ZERO",
+        "FAULT_INT_OVERFLOW",
+        "FAULT_NEGATIVE_SHIFT",
+        "FAULT_DECIMAL_OVERFLOW",
+        "FAULT_DECIMAL_DIV_ZERO",
+        "FAULT_DECIMAL_SCALE",
+        "FAULT_DECIMAL_MOD_ZERO",
+        "FAULT_DECIMAL_NONTERMINATING",
+        "FAULT_NEGATIVE_EXPONENT",
+    ] {
+        assert!(
+            src.contains(name),
+            "src/value/faults.rs no longer re-exports {name} — the one import surface broke"
+        );
+        assert!(
+            this.contains(&format!("faults::{name}")),
+            "{name} is re-exported but never classified — add it to FAULT_TABLE"
+        );
+        found += 1;
+    }
+    assert!(found >= 20, "the scan found only {found} bodies — it broke");
 }
 
 /// Assert both backends *fail*, and fail with the same [`FaultKind`]. A backend that returns

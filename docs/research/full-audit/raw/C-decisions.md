@@ -3501,7 +3501,7 @@ from the developer's own 15 findings. Analysis in `docs/research/2026-07-25-comp
 | DEC-358 | GR-20 | Type mismatch, arity, unknown method, non-exhaustive match, **every** parse/lex error and **every** runtime fault carry `code == None`, so `phg explain` is unreachable for them — and all 9 `conformance/diagnostics/` cases assert a code, so the corpus is **blind** to the gap | **RULED 2026-07-26 — (A): a `code == None` ratchet with a shrinking allowlist**, mirroring the existing `explain_ratchet`. Makes the backlog CI-visible instead of invisible and shrinks over time, rather than one giant coding sprint with no mechanism preventing regression afterwards | **RULED — build queued** |
 | DEC-359 | GR-21 | `10/0`, literal integer overflow and literal index-OOB all pass `phg check` — PHP parity where a win is free | **RULED 2026-07-26 — (A): reject all three at check time.** The DEC-058 principle (equal or better than PHP) applied to a free win. Constraint: literal index-OOB is rejected **only when statically provable** (the list literal is in scope) — the rule is not "reject all indexing" | **RULED — build queued** |
 | DEC-360 | GR-22 | Unused **import** is a hard error while unused **local** is silent — inconsistent in both directions | **RULED 2026-07-26 — (A): move unused-import into the warning tier and add the `W-UNUSED-*` family.** **Register framing CORRECTED: a warning tier ALREADY EXISTS** — 12 `W-*` codes ship (`W-SQL-INJECTION`, `W-FORCE-UNWRAP`, `W-UNREACHABLE`, `W-MATCH-UNREACHABLE`, `W-CATCH-UNREACHABLE`, `W-DEPRECATED`, `W-REDUNDANT-CAST`, `W-SECRET`, `W-SHADOWED` = **package** shadowing not variables, `W-PHG-IN-DOCROOT`, `W-TRAIT-CTOR-*`), so unused-import is the odd one out rather than a missing tier. New codes: `W-UNUSED-IMPORT` (downgraded from hard error), `W-UNUSED-LOCAL`, `W-UNUSED-PARAM` (NOT for interface/override implementations — the signature is fixed), `W-UNUSED-FIELD`, `W-UNUSED-FUNCTION`, `W-UNUSED-TYPE-PARAM`, `W-UNUSED-CATCH-BINDING`, `W-REDUNDANT-MUTABLE` (declared `mutable`, never reassigned — teaches the immutable default). **Policy ruled: warnings never fail `run`/`check`; `--strict` promotes all warnings to errors and CI uses it** | **RULED — build queued** |
-| DEC-361 | GR-23 | Two backends re-inline the canonical `FaultMsg` (**Invariant 4 breach**), `"non-exhaustive match at runtime"` has **already drifted** (the PHP leg throws `UnhandledMatchError()` with no message), and `differential.rs::classify` re-types all 12 fault bodies as its OWN literals so the drift is **invisible, not merely untested** | **RULED 2026-07-26 — (A): single-source the fault strings AND make `classify` DERIVE from those same consts.** Single-sourcing alone was rejected: it leaves `classify` an independent copy, so the test that should catch drift stays the thing hiding it | **RULED — build queued** |
+| DEC-361 | GR-23 | Two backends re-inline the canonical `FaultMsg` (**Invariant 4 breach**), `"non-exhaustive match at runtime"` has **already drifted** (the PHP leg throws `UnhandledMatchError()` with no message), and `differential.rs::classify` re-types all 12 fault bodies as its OWN literals so the drift is **invisible, not merely untested** | **RULED 2026-07-26 — (A): single-source the fault strings AND make `classify` DERIVE from those same consts.** Single-sourcing alone was rejected: it leaves `classify` an independent copy, so the test that should catch drift stays the thing hiding it | **BUILT 2026-07-30** (`src/value/faults.rs` + two ratchets; 38 re-inlined sites converted; the PHP-leg match drift fixed in BOTH lowerings) |
 | DEC-362 | GR-24 | Documentation rot is the dominant defect class: 60+ dangling `src/` refs, 13 DEC ids with no register row, cursors pinning orphanable bare SHAs | **RULED 2026-07-26 — (A): three mechanical `pre-push` guards** — (1) a markdown reference-checker (every `file:line` / `src/…` path must exist), (2) one-row-per-DEC (every `DEC-nnn` mentioned anywhere has exactly one register row), (3) cursors record ref+subject, **never a bare SHA**. **Guard (2) is EXTENDED per this session's evidence: every diagnostic code named in a decision row must exist in `src/`** — that single check would have caught `E-RETIRED-FORIN`, the dead `E-MULTIPLE-MAIN`, and Invariant 14's phantom `--sequential-concurrency` flag, all three found this session | **RULED — build queued** |
 
 **Records to CLOSE (verified fixed 2026-07-25, evidence in the register §6.3).** These are recorded as
@@ -4278,3 +4278,90 @@ this defect class. Recording it as a stated gap rather than reporting "coverage 
 NO-HIDDEN-LOSS spirit of DEC-365 applied to tests). **To reverse:** run
 `PHORJ_MYSQL_TEST_DSN=… PHORJ_PG_TEST_DSN=… cargo nextest run --all-features` against live servers and
 record the result here; the tests need no edit.
+
+
+### DEC-361 BUILT (2026-07-30) — `src/value/faults.rs` + the derivation ratchet
+
+**Both halves, because the ruling was explicit that single-sourcing alone would be insufficient.**
+
+*Half 1 — one home.* `src/value/faults.rs` is now the fault-body vocabulary. It re-exports the ten
+arithmetic consts (which stay in `arith.rs`, where Invariant 4 puts them, next to the kernels that raise
+them) and defines every other body. The payload-carrying ones are FUNCTIONS — `panic_with`,
+`assert_with`, `no_field`, `no_enum_case` — so the message *shape* is single-sourced too; a `format!`
+re-typed at a call site is the same defect wearing a different hat, and `assert(cond)` vs
+`assert(cond, "why")` being one function is what stops those two forms drifting apart.
+
+**38 sites were re-inlining a body.** The scale was the finding: `"stack overflow"` at five VM sites, two
+`vm::closure` sites, three interpreter sites AND a second `pub const` in `src/jit/boxed.rs` — whose own
+comment said the body was *"not yet single-sourced in `value.rs` like the arithmetic faults"*, i.e. the
+code documented the defect and shipped anyway. Plus `"no field …"` in five places, `"recv from empty
+channel"` and `"join on an incomplete task"` in both backends, `"list index out of range"` three times.
+`FaultMsg::message()` itself — the thing three call sites already treated as the single source — was
+re-typing all six of its bodies.
+
+*Half 2 — `classify` DERIVES.* `tests/differential.rs::classify` now walks a `FAULT_TABLE` whose needles
+ARE the consts. It previously kept its own literals for all twelve bodies, which is why the ruling
+rejected single-sourcing alone: the test that exists to catch fault-body drift was the thing hiding it.
+Two ratchets keep it honest — a source scan asserting no body appears as a literal outside its
+definition, and a scan of `faults.rs` asserting every `pub const FAULT_*` is classified. Adding a body
+without classifying it is now a test failure naming the file and line.
+
+**The drift the ruling predicted had already happened, and in TWO places, not one.** The PHP leg's
+non-exhaustive-`match` fault:
+
+| Leg | Body before |
+|---|---|
+| interpreter + VM | `non-exhaustive match at runtime` |
+| PHP, `instanceof` chain | `new \UnhandledMatchError()` → `getMessage()` is the EMPTY STRING |
+| PHP, native `match (true)` | PHP's own `Unhandled match case true` — a THIRD spelling |
+
+[Verified: ran both shapes under php-8.5.8 and printed the messages.] The second one is the more
+interesting miss: the register only recorded the empty-message case, and the native-`match` lowering
+(both `try_native_match` and `try_match_true`) supplies its own message with no `default` arm at all.
+`throw` is an expression in PHP 8, so a `default => throw new \UnhandledMatchError("<canonical>")` arm
+fixes it while KEEPING the native `match` form — no fallback to the IIFE, no codegen regression. Also
+graded the classification: `NonExhaustiveMatch` is its own `FaultKind` rather than folded into `Panic`,
+so a future drift cannot hide behind an unrelated arm, and the four arithmetic bodies that had NO arm at
+all (`FAULT_DECIMAL_OVERFLOW`/`_SCALE`, `FAULT_NEGATIVE_SHIFT`/`_EXPONENT`) got theirs — previously they
+fell through to `Other(full_string)`, which compares the VM's `at L:C:` line prefix and so read a real
+agreement as a divergence.
+
+`examples/transpile/demo.php` was regenerated; the diff is exactly the one line, and all three legs still
+produce byte-identical stdout (the arm is checker-unreachable, so only FAILURE behaviour changed — which
+is the other half of what Invariant 1 demands).
+
+**Invariant 13 paid down in the same change, not deferred:** the new module needs one declaration line in
+`value/mod.rs` and one in `interpreter/mod.rs`, both grandfathered files. Rather than grow them, the
+interpreter import was hoisted into `interpreter/mod.rs` as a `pub(super) use` so all five submodules get
+it through the existing `use super::*` glob (which shortened four fully-qualified call sites and REMOVED
+a line from `expr.rs` and `call.rs`), and `jit/boxed.rs` came out two lines lighter because the four-line
+comment describing the un-single-sourced body was replaced by a two-line note that it now is. Two header
+paragraphs were reflowed by one line each to hold the last two ceilings. size-gate `fails=0 stale=0`.
+
+**Invariant 17:** no LSP or editor work — no syntax, no new diagnostic, no surface change. The one
+user-visible difference is the *text* of a checker-unreachable fault on the PHP leg, which no editor
+surfaces.
+
+### CD-23 (2026-07-30) — `NonExhaustiveMatch` is its own `FaultKind`, not folded into `Panic`
+
+`panic`/`todo`/`unreachable`/`assert` share one kind because they are one intrinsic family. A
+non-exhaustive match is not: it is a checker-unreachable *backstop*, and DEC-361 found its body had
+already drifted on the PHP leg. Sharing a kind with `Panic` would let the next drift there classify as
+"both faulted the same way" against an unrelated arm. **To reverse:** merge the arm in
+`differential.rs`'s `FAULT_TABLE`; nothing else depends on the distinction.
+
+### CD-24 (2026-07-30) — the `Core.Test` assertion natives are NOT single-sourced onto `FAULT_ASSERT`
+
+`src/ext/test/natives.rs` builds messages like `"assertion failed: expected null, got 3"`. They share a
+prefix with the `assert()` intrinsic's fault but they are a different surface — a test-framework REPORT,
+not a runtime fault whose body must match across three legs — and they carry their own asserted
+expectations. Folding them in would couple the test module's output format to a parity const.
+**To reverse:** drop `ext/test/natives.rs` from the ratchet's `DEFINITIONS` allow-list and compose them
+from `faults::assert_with`.
+
+### CD-25 (2026-07-30) — `"integer overflow in Math.abs"` COMPOSES the canonical body
+
+Six native messages read `"integer overflow in <op>"`. They are not re-inlines to be deleted, but they
+were re-typing the canonical prefix, so they now `format!("{FAULT_INT_OVERFLOW} in Math.abs")`. Editing
+the canonical body therefore carries them along, which is the point. **To reverse:** inline the literals
+again — but note `classify` keys on the prefix, so a divergence would silently reclassify them.

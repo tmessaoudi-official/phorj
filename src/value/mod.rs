@@ -1,9 +1,9 @@
 //! Runtime values for both backends. The M1 heap is **immutable + acyclic**: no reassignment, no
-//! post-construction field mutation, and a constructor's args are fully evaluated before the
-//! instance exists (EV-1). So compound objects are *shared* via `Rc`, not deep-cloned (M2 P5a):
-//! cloning a `Value` (the `Op::GetLocal` hot path + every interpreter var-read) is a refcount bump,
-//! and `Drop` reclaims correctly — no cycle can leak, so no tracing collector is needed (that is
-//! deferred to M3, when mutation could create cycles). See `docs/specs/2026-06-16-m2-p5-object-model-design.md`.
+//! post-construction field mutation, and a constructor's args are fully evaluated before the instance
+//! exists (EV-1). So compound objects are *shared* via `Rc`, not deep-cloned (M2 P5a): cloning a `Value`
+//! (the `Op::GetLocal` hot path + every interpreter var-read) is a refcount bump, and `Drop` reclaims
+//! correctly — no cycle can leak, so no tracing collector is needed (deferred to M3, when mutation could
+//! create cycles). Spec: `docs/specs/2026-06-16-m2-p5-object-model-design.md`.
 
 use crate::green::sched::{ChanId, TaskId};
 use crate::phstr::PhStr;
@@ -18,8 +18,8 @@ mod collections;
 mod core_impl;
 mod db;
 mod decimal;
+pub mod faults;
 mod types;
-
 pub use self::arith::*;
 pub use self::collections::*;
 pub use self::core_impl::*;

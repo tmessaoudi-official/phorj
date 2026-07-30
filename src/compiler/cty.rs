@@ -177,7 +177,7 @@ impl Compiler<'_> {
                         .get(&cls)
                         .and_then(|fs| fs.get(name))
                         .cloned()
-                        .ok_or_else(|| format!("no field `{name}` on `{cls}`")),
+                        .ok_or_else(|| crate::value::faults::no_field(name, &cls)),
                     _ => Err(format!("cannot infer type of field `{name}`")),
                 }
             }

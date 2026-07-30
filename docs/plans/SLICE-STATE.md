@@ -133,6 +133,29 @@ recommendation after measuring it).
 - **Invariant 17: no LSP/editor work** — nothing user-visible changed (no syntax, no diagnostic, no
   surface); this is dialect SQL inside the driver layer.
 
+### ✅ BUILT 2026-07-30 — Wave 1.5 / **DEC-361**. **WAVE 1 IS NOW COMPLETE.**
+
+- `src/value/faults.rs` is the one fault-body home (arith consts re-exported, staying next to their
+  kernels per Invariant 4; payload bodies as FUNCTIONS so the message *shape* is single-sourced too).
+- **38 sites** were re-inlining a body — including a second `pub const` in `src/jit/boxed.rs` whose own
+  comment said the body was *"not yet single-sourced"*, and `FaultMsg::message()` itself, which three call
+  sites already treated as the single source while it re-typed all six of its bodies.
+- **`classify` now DERIVES** from the consts (`FAULT_TABLE`), which was the half the ruling insisted on:
+  it had kept independent copies of all twelve bodies, so the drift-catching test was the drift-hiding one.
+  Two ratchets: no literal outside its definition; no `pub const FAULT_*` left unclassified.
+- **The predicted drift had already happened, in TWO places, not the one recorded.** PHP leg
+  non-exhaustive `match`: bare `\UnhandledMatchError` (empty `getMessage()`) on the `instanceof` path,
+  PHP's own `"Unhandled match case true"` on the native-`match` path. Both fixed via a throwing `default`
+  arm (`throw` is an expression in PHP 8), so the native form survives. `examples/transpile/demo.php`
+  regenerated — one-line diff, three legs still byte-identical.
+- **CD-23/24/25** recorded: `NonExhaustiveMatch` gets its own kind; `Core.Test`'s assertion messages stay
+  out (a test REPORT, not a parity body); the six `"integer overflow in <op>"` natives now COMPOSE the
+  canonical prefix.
+- Invariant 13 paid down in the same change (net-negative in the interpreter and the JIT); size-gate
+  `fails=0 stale=0`. Invariant 17: no LSP/editor work — no syntax, no diagnostic, no surface.
+- Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
+  clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
+
 ### NEXT: case-1 **step 2** — `DatabaseResult.Ok/Err` across the ~20 `php:` emitters
 
 Then the `decimal` PARITY TEST (not a ruling — see CD-14), then flip `E-TRANSPILE-DB`, then **DEC-367**

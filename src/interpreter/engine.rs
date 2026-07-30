@@ -225,7 +225,7 @@ impl<'c> Interp<'c> {
         // native recursion abort the process. Checked before incrementing, so the guard path
         // leaves `depth` untouched and every non-guard exit below decrements exactly once.
         if self.depth >= crate::limits::MAX_CALL_DEPTH {
-            return rt("stack overflow");
+            return rt(faults::FAULT_STACK_OVERFLOW);
         }
         self.depth += 1;
         // Push a trace frame (line is filled in by `exec_stmt` as the body runs). Popped only on the

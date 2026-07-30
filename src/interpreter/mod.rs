@@ -1,7 +1,6 @@
-//! M1 tree-walking evaluator. Walks the untyped AST against runtime `Value`s and
-//! executes `main`. The type-checker (`crate::checker`) is the gate; this stage
-//! assumes type-correct input and never panics on the faults types can't catch —
-//! those become a runtime `Diagnostic`. See design spec `2026-06-15-m1-plan5-evaluator-design.md`.
+//! M1 tree-walking evaluator. Walks the untyped AST against runtime `Value`s and executes `main`. The
+//! type-checker (`crate::checker`) is the gate; this stage assumes type-correct input and never panics on
+//! the faults types can't catch — those become a runtime `Diagnostic`. Spec: `2026-06-15-m1-plan5-evaluator-design.md`.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -11,6 +10,7 @@ use crate::ast::{
     Modifier, Param, Pattern, Program, Stmt, StrPart, UnaryOp,
 };
 use crate::diagnostic::Diagnostic;
+pub(super) use crate::value::faults;
 use crate::value::{ClosureData, EnumVal, Instance, Value};
 use std::rc::Rc;
 

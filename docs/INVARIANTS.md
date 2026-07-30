@@ -43,6 +43,20 @@ kernels (`float_*`), and `compare_ord` live **once**, in `src/value/` (the check
 - The three canonical fault bodies (`FAULT_DIV_ZERO`, `FAULT_MOD_ZERO`, `FAULT_INT_OVERFLOW`) are
   `pub const` in `src/value/arith.rs`; the `agree_err` oracle classifies on these exact bodies, so changing a
   body string is a parity-affecting change.
+- **Every OTHER fault body is single-sourced the same way, in `src/value/faults.rs`** (DEC-361 —
+  Wave 1.5). That module is the one import surface: it re-exports the arithmetic consts above and defines
+  the rest (`FAULT_STACK_OVERFLOW`, `FAULT_INDEX_OOB`, `FAULT_NON_EXHAUSTIVE_MATCH`, …), with the
+  payload-carrying bodies as FUNCTIONS (`panic_with`, `assert_with`, `no_field`, `no_enum_case`) so the
+  message *shape* cannot be re-typed either. Two ratchets enforce it, and both must stay:
+  - `value::faults::tests::no_backend_re_inlines_a_canonical_fault_body` — a body may appear as a
+    string LITERAL only where it is defined. It caught 38 sites when it was written.
+  - `differential.rs::no_canonical_fault_body_escapes_the_classification_table` — `classify` DERIVES its
+    needles from these consts. Before DEC-361 it kept its own independent copies of all twelve bodies, so
+    the test whose whole job is catching fault-body drift was the thing HIDING it: adding a body without
+    classifying it now fails here.
+  - The drift this found had already happened: the PHP leg's non-exhaustive-`match` fault carried PHP's
+    own message (an empty `\UnhandledMatchError`, or the native `match`'s "Unhandled match case …") where
+    both Rust legs said `"non-exhaustive match at runtime"`. The emitter now passes the canonical body.
 
 **`int` is a fixed 64-bit signed integer (`i64`), pinned by design.** Unlike PHP's `int`, whose width
 is platform-dependent (32-bit on a 32-bit build, 64-bit elsewhere), Phorj's `int` is **always** `i64`

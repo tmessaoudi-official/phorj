@@ -40,7 +40,7 @@ fn math_abs(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Int(n)] => n
             .checked_abs()
             .map(Value::Int)
-            .ok_or_else(|| "integer overflow in Math.abs".to_string()),
+            .ok_or_else(|| format!("{} in Math.abs", crate::value::FAULT_INT_OVERFLOW)),
         _ => Err("Math.abs expects (int)".into()),
     }
 }
@@ -186,7 +186,7 @@ fn math_gcd(args: &[Value], _: &mut String) -> Result<Value, String> {
             }
             i64::try_from(a)
                 .map(Value::Int)
-                .map_err(|_| "integer overflow in Math.gcd".to_string())
+                .map_err(|_| format!("{} in Math.gcd", crate::value::FAULT_INT_OVERFLOW))
         }
         _ => Err("Math.gcd expects (int, int)".into()),
     }
@@ -212,7 +212,7 @@ fn math_lcm(args: &[Value], _: &mut String) -> Result<Value, String> {
                 .checked_mul(y)
                 .and_then(|l| i64::try_from(l).ok())
                 .map(Value::Int)
-                .ok_or_else(|| "integer overflow in Math.lcm".to_string())
+                .ok_or_else(|| format!("{} in Math.lcm", crate::value::FAULT_INT_OVERFLOW))
         }
         _ => Err("Math.lcm expects (int, int)".into()),
     }

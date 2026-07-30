@@ -305,9 +305,7 @@ impl<'c> Interp<'c> {
                         let fv = inst.get_field(&f.field);
                         match fv {
                             Some(val) => self.frame.declare(&f.binding, val),
-                            None => {
-                                return rt(format!("no field `{}` on `{}`", f.field, inst.class))
-                            }
+                            None => return rt(faults::no_field(&f.field, &inst.class)),
                         }
                     }
                     Ok(())

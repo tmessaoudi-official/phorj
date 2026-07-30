@@ -182,7 +182,18 @@ fn match_in_return_emits_instanceof_chain() {
     assert!(out.contains("return (3.14159 * $r) * $r;"), "{out}");
     assert!(out.contains("instanceof Shape_Rect) {"), "{out}");
     assert!(out.contains("->w;") && out.contains("->h;"), "{out}");
-    assert!(out.contains("throw new \\UnhandledMatchError();"), "{out}");
+    assert!(out.contains("throw new \\UnhandledMatchError("), "{out}");
+    // DEC-361: the message must be the CANONICAL body, not PHP's default. A bare
+    // `new \UnhandledMatchError()` has an EMPTY `getMessage()` while both Rust legs say
+    // "non-exhaustive match at runtime" — a fault-body drift that had already happened, in the one
+    // body a reader assumes is safe because PHP has a built-in for it.
+    assert!(
+        out.contains(&format!(
+            "throw new \\UnhandledMatchError(\"{}\");",
+            crate::value::faults::FAULT_NON_EXHAUSTIVE_MATCH
+        )),
+        "the PHP leg's non-exhaustive-match fault must carry the canonical body: {out}"
+    );
 }
 
 #[test]

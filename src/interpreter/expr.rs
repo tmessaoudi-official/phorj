@@ -167,7 +167,7 @@ impl<'c> Interp<'c> {
                             // cell stays available for later mutation).
                             match inst.get_field(name) {
                                 Some(v) => Ok(v),
-                                None => rt(format!("no field `{name}` on `{}`", inst.class)),
+                                None => rt(faults::no_field(name, &inst.class)),
                             }
                         }
                         // DEC-302 backed enum: `s.value` reads the variant's scalar backing. The
@@ -205,7 +205,7 @@ impl<'c> Interp<'c> {
                         // emits (`vm.rs` `Op::Index`), so `agree_err` classifies both as `IndexOob`.
                         match usize::try_from(i).ok().filter(|i| *i < list.len()) {
                             Some(i) => Ok(list[i].clone()),
-                            None => rt("list index out of range"),
+                            None => rt(faults::FAULT_INDEX_OOB),
                         }
                     }
                     // Key lookup via the shared kernel — a missing key faults with the same body as
@@ -223,7 +223,7 @@ impl<'c> Interp<'c> {
                 // as the same `FaultKind` (D-L8 / error-parity).
                 let v = self.eval(inner)?;
                 if matches!(v, Value::Null) {
-                    rt("force-unwrap of null")
+                    rt(faults::FAULT_FORCE_UNWRAP_NULL)
                 } else {
                     Ok(v)
                 }
@@ -513,6 +513,6 @@ impl<'c> Interp<'c> {
                 return r;
             }
         }
-        rt("non-exhaustive match at runtime")
+        rt(faults::FAULT_NON_EXHAUSTIVE_MATCH)
     }
 }

@@ -16,7 +16,7 @@ function area(Shape $s): float {
     $__m1 = $s;
     if ($__m1 instanceof Shape_Circle) { $r = $__m1->r; return (3.14159 * $r) * $r; }
     elseif ($__m1 instanceof Shape_Square) { $side = $__m1->side; return $side * $side; }
-    else { throw new \UnhandledMatchError(); }
+    else { throw new \UnhandledMatchError("non-exhaustive match at runtime"); }
 }
 function main(): void {
     $n = new Named("demo");

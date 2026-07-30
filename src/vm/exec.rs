@@ -1,6 +1,7 @@
 //! Bytecode VM — exec (M-Decomp W4). See mod.rs for the struct + core + entry points.
 
 use super::*;
+use crate::value::faults;
 
 impl<'a> Vm<'a> {
     /// Execute one instruction in the current frame (`fr` = top of `frames`, in function `func`).
@@ -245,7 +246,7 @@ impl<'a> Vm<'a> {
                         let i = usize::try_from(idx)
                             .ok()
                             .filter(|i| *i < xs.len())
-                            .ok_or_else(|| "list index out of range".to_string())?;
+                            .ok_or_else(|| faults::FAULT_INDEX_OOB.to_string())?;
                         self.stack.push(xs[i].clone());
                     }
                     Value::Map(m) => self.stack.push(crate::value::map_index(&m, &index)?),
@@ -402,7 +403,7 @@ impl<'a> Vm<'a> {
                                 let frag = std::mem::take(&mut self.out);
                                 s.suspend(crate::green::sched::Trap::Recv(id), frag);
                             }
-                            None => return Err("recv from empty channel".to_string()),
+                            None => return Err(faults::FAULT_CHANNEL_EMPTY.to_string()),
                         },
                     }
                 },
@@ -423,7 +424,7 @@ impl<'a> Vm<'a> {
                                 let frag = std::mem::take(&mut self.out);
                                 s.suspend(crate::green::sched::Trap::Join(id), frag);
                             }
-                            None => return Err("join on an incomplete task".to_string()),
+                            None => return Err(faults::FAULT_JOIN_INCOMPLETE.to_string()),
                         },
                     }
                 },
@@ -491,7 +492,7 @@ impl<'a> Vm<'a> {
 
             Op::Call(idx) => {
                 if self.frames.len() >= MAX_CALL_DEPTH {
-                    return Err("stack overflow".to_string());
+                    return Err(faults::FAULT_STACK_OVERFLOW.to_string());
                 }
                 let arity = self.program.functions[idx].arity;
                 // JIT hot-function hook (b3b): if a shared cache is wired and this callee (+ its
@@ -567,7 +568,7 @@ impl<'a> Vm<'a> {
             // `stack_effect`, so they share this arm.
             Op::CallOverload(set_id, argc) | Op::CallStaticOverload(set_id, argc) => {
                 if self.frames.len() >= MAX_CALL_DEPTH {
-                    return Err("stack overflow".to_string());
+                    return Err(faults::FAULT_STACK_OVERFLOW.to_string());
                 }
                 // M-RT dynamic dispatch: peek the `argc` argument values already on the stack and
                 // pick the most-specific matching overload — the SAME selector + `ParamKind`s the
@@ -757,9 +758,9 @@ impl<'a> Vm<'a> {
                                     }
                                     // Checker-unreachable for a typed read; fault, never panic (EV-7).
                                     None => {
-                                        return Err(format!(
-                                            "no field `{}` on `{}`",
-                                            self.program.names[idx], inst.class
+                                        return Err(faults::no_field(
+                                            &self.program.names[idx],
+                                            &inst.class,
                                         ))
                                     }
                                 }
@@ -771,10 +772,7 @@ impl<'a> Vm<'a> {
                         match inst.fields.borrow()[slot].clone() {
                             Some(v) => self.stack.push(v),
                             None => {
-                                return Err(format!(
-                                    "no field `{}` on `{}`",
-                                    self.program.names[idx], inst.class
-                                ))
+                                return Err(faults::no_field(&self.program.names[idx], &inst.class))
                             }
                         }
                     }
@@ -858,7 +856,7 @@ impl<'a> Vm<'a> {
             // --- P4c: methods + `this` ---
             Op::CallMethod(name_idx, argc) => {
                 if self.frames.len() >= MAX_CALL_DEPTH {
-                    return Err("stack overflow".to_string());
+                    return Err(faults::FAULT_STACK_OVERFLOW.to_string());
                 }
                 // This op's inline-cache site is `(func, ip - 1)` (`ip` was pre-incremented), exactly
                 // like the field-cache sites.
@@ -944,7 +942,7 @@ impl<'a> Vm<'a> {
             // is resolved at compile time (the version an override shadows), not from the receiver.
             Op::CallParent(func, argc) => {
                 if self.frames.len() >= MAX_CALL_DEPTH {
-                    return Err("stack overflow".to_string());
+                    return Err(faults::FAULT_STACK_OVERFLOW.to_string());
                 }
                 let slot_base = self.pop_n_start(argc + 1);
                 self.frames.push(Frame {
@@ -974,7 +972,7 @@ impl<'a> Vm<'a> {
             // matching the frame layout the compiler emits inside the lambda body.
             Op::CallValue(argc) => {
                 if self.frames.len() >= MAX_CALL_DEPTH {
-                    return Err("stack overflow".to_string());
+                    return Err(faults::FAULT_STACK_OVERFLOW.to_string());
                 }
                 // Pop the `argc` args (in source order: last pushed = last arg).
                 let args = self.split_off(argc);

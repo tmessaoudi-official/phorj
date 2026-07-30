@@ -172,7 +172,7 @@ impl<'c> Interp<'c> {
     /// frame (M-mut.7b) — the value-returning analogue of `run_call`, but for an expression body.
     pub(super) fn run_hook_get(&mut self, recv: Value, get: &Expr) -> R<Value> {
         if self.depth >= crate::limits::MAX_CALL_DEPTH {
-            return rt("stack overflow");
+            return rt(faults::FAULT_STACK_OVERFLOW);
         }
         self.depth += 1;
         let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());

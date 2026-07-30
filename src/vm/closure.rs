@@ -32,7 +32,7 @@ impl<'a> Vm<'a> {
             ));
         }
         if self.frames.len() >= MAX_CALL_DEPTH {
-            return Err("stack overflow".to_string());
+            return Err(crate::value::faults::FAULT_STACK_OVERFLOW.to_string());
         }
         // Frame layout `[captures.., args..]` — identical to `Op::CallValue`.
         let slot_base = self.stack.len();
@@ -67,7 +67,7 @@ impl<'a> Vm<'a> {
             ));
         }
         if self.frames.len() >= MAX_CALL_DEPTH {
-            return Err("stack overflow".to_string());
+            return Err(crate::value::faults::FAULT_STACK_OVERFLOW.to_string());
         }
         let slot_base = self.stack.len();
         self.stack.extend(args);

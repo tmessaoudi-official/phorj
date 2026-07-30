@@ -90,7 +90,7 @@ pub fn list_set(list: &mut [Value], idx: i64, v: Value) -> Result<(), String> {
     let i = usize::try_from(idx)
         .ok()
         .filter(|i| *i < list.len())
-        .ok_or_else(|| "list index out of range".to_string())?;
+        .ok_or_else(|| super::faults::FAULT_INDEX_OOB.to_string())?;
     list[i] = v;
     Ok(())
 }
@@ -128,7 +128,7 @@ pub fn set_nested(container: &mut Value, indices: &[Value], v: Value) -> Result<
             let i = usize::try_from(i)
                 .ok()
                 .filter(|i| *i < list.len())
-                .ok_or_else(|| "list index out of range".to_string())?;
+                .ok_or_else(|| super::faults::FAULT_INDEX_OOB.to_string())?;
             if rest.is_empty() {
                 list[i] = v;
                 Ok(())
@@ -179,9 +179,11 @@ pub fn build_range(start: i64, end: i64, inclusive: bool) -> Result<Vec<Value>, 
     if start > hi {
         return Ok(Vec::new());
     }
-    let span = hi.checked_sub(start).ok_or("range too large")?;
+    let span = hi
+        .checked_sub(start)
+        .ok_or(super::faults::FAULT_RANGE_TOO_LARGE)?;
     if span >= MAX_RANGE_LEN {
-        return Err("range too large".to_string());
+        return Err(super::faults::FAULT_RANGE_TOO_LARGE.to_string());
     }
     Ok((start..=hi).map(Value::Int).collect())
 }

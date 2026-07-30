@@ -79,6 +79,7 @@ impl Transpiler {
             None => subj,
         };
         let mut out = format!("match ({subject}) {{");
+        let mut has_default = false;
         for arm in arms {
             let label = match &arm.pattern {
                 Pattern::Int(n, _) => format!("{n}"),
@@ -90,8 +91,19 @@ impl Transpiler {
                 // Eligibility scan already excluded these.
                 _ => unreachable!("non-literal arm survived the native-match eligibility scan"),
             };
+            if label == "default" {
+                has_default = true;
+            }
             let body = self.emit_expr(&arm.body)?;
             out.push_str(&format!(" {label} => {body},"));
+        }
+        if !has_default {
+            // Same DEC-361 reason as `try_match_true`: PHP's native `match` supplies its own
+            // "Unhandled match case …" message, which is neither Rust leg's body.
+            out.push_str(&format!(
+                " default => throw new \\UnhandledMatchError(\"{}\"),",
+                crate::value::faults::FAULT_NON_EXHAUSTIVE_MATCH
+            ));
         }
         out.push_str(" }");
         self.pop_scope();
@@ -125,6 +137,7 @@ impl Transpiler {
         }
         let subj = self.emit_expr(scrutinee)?;
         let mut out = String::from("match (true) {");
+        let mut has_default = false;
         for arm in arms {
             self.push_scope();
             let (tests, binds) = self.classify_pattern(&arm.pattern, &subj)?;
@@ -153,8 +166,23 @@ impl Transpiler {
             } else {
                 parts.join(" && ")
             };
+            if label == "default" {
+                has_default = true;
+            }
             out.push_str(&format!(" {label} => {body},"));
             self.pop_scope();
+        }
+        if !has_default {
+            // DEC-361: without a `default`, PHP's native `match` throws its OWN message —
+            // "Unhandled match case true", a THIRD spelling of a body both Rust legs give as
+            // FAULT_NON_EXHAUSTIVE_MATCH. `throw` is an expression in PHP 8, so a throwing `default`
+            // arm keeps the native `match` form AND the canonical body. Unreachable in well-typed
+            // programs (the checker proves exhaustiveness), so stdout is unaffected — this aligns the
+            // FAILURE behaviour Invariant 1 also demands.
+            out.push_str(&format!(
+                " default => throw new \\UnhandledMatchError(\"{}\"),",
+                crate::value::faults::FAULT_NON_EXHAUSTIVE_MATCH
+            ));
         }
         out.push_str(" }");
         Ok(Some(out))
@@ -283,8 +311,13 @@ impl Transpiler {
             // assignment/return below it (the former independent-`if` form let it run unconditionally
             // in `Assign` position). `first` is only still true for an arm-less match (checker-forbidden).
             let else_kw = if first { "" } else { "else " };
+            // The message is the CANONICAL body, never PHP's default (DEC-361). `new
+            // \UnhandledMatchError()` with no argument has an EMPTY `getMessage()`, while both Rust legs
+            // say "non-exhaustive match at runtime" — a fault-body drift that had ALREADY happened here,
+            // precisely because PHP has a built-in for this fault and the built-in looked sufficient.
             self.line(&format!(
-                "{else_kw}{{ throw new \\UnhandledMatchError(); }}"
+                "{else_kw}{{ throw new \\UnhandledMatchError(\"{}\"); }}",
+                crate::value::faults::FAULT_NON_EXHAUSTIVE_MATCH
             ));
         }
         Ok(())
