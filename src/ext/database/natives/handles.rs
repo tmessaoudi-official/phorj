@@ -155,6 +155,22 @@ pub(super) struct DbStmt {
     pub(super) tx_depth: Rc<Cell<u32>>,
 }
 
+impl DbStmt {
+    /// Take this statement's accumulated binds, RESETTING it to unbound (DEC-351).
+    ///
+    /// Binds belong to the EXECUTION, not to the statement. Before this, they appended forever, so the
+    /// natural reuse of a prepared statement — the whole reason to prepare — died on the second pass with
+    /// *"2 bound value(s) but 1 ? placeholder(s)"*, and `bindNamed` silently last-won instead. This is the
+    /// model PDO already has (`execute($params)`), and phorj's own DEC-208 promised reuse.
+    ///
+    /// Reset happens BEFORE the driver call at every site, not after, so a FAILED execution cannot leave
+    /// stale binds for the next attempt to accumulate onto — which is the same bug wearing a different hat.
+    /// A retry (e.g. `db.transaction(fn, retries)`) re-runs the closure and therefore re-binds.
+    pub(super) fn take_binds(&self) -> Binds {
+        std::mem::replace(&mut *self.binds.borrow_mut(), Binds::None)
+    }
+}
+
 impl DbObject for DbStmt {
     fn kind(&self) -> &'static str {
         "db-statement"

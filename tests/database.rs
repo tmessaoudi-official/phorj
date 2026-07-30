@@ -1864,3 +1864,115 @@ fn dec340_rollback_all_unwinds_every_level() {
     );
     both(&src, "depth 3 -> 0, bal = 100\n");
 }
+
+// ── DEC-351: binds belong to the EXECUTION, not the statement ─────────────────────────────────────
+//
+// Binds used to append forever, so reusing a prepared statement — the whole reason to prepare — died on
+// the second pass with "2 bound value(s) but 1 ? placeholder(s)", and `bindNamed` silently last-won.
+// PDO already had the right model (`execute($params)`), and DEC-208 had promised reuse.
+//
+// `take_binds` resets BEFORE the driver call at every execution site, so a FAILED execution cannot leave
+// stale binds for the next attempt to accumulate onto either — the same bug in a different hat.
+
+#[test]
+fn dec351_a_prepared_statement_can_be_rebound_in_a_loop() {
+    // THE REPRO. Before this it failed on iteration 2.
+    let src = depth_prog(
+        r#"    run(db, "CREATE TABLE t(a INTEGER)")?;
+    Statement ins = db.prepare("INSERT INTO t(a) VALUES (?)")?;
+    for (mutable int i = 1; i <= 3; i = i + 1) {
+        Statement b = ins.bind(i)?;
+        discard b.exec()?;
+    }
+    Statement q = db.prepare("SELECT count(*) AS n, sum(a) AS s FROM t")?;
+    List<Row> rows = q.query()?;
+    int n = rows[0].getInt("n")?;
+    int s = rows[0].getInt("s")?;
+    Output.printLine("rows={n} sum={s}");"#,
+    );
+    both(&src, "rows=3 sum=6\n");
+}
+
+#[test]
+fn dec351_named_binds_reset_identically_to_positional() {
+    // The ruling's "make positional and named behave identically". `bindNamed` used to last-win silently,
+    // which is worse than failing: the loop appeared to work and wrote the wrong rows.
+    let src = depth_prog(
+        r#"    run(db, "CREATE TABLE t(a INTEGER)")?;
+    Statement ins = db.prepare("INSERT INTO t(a) VALUES (:v)")?;
+    for (mutable int i = 1; i <= 3; i = i + 1) {
+        Statement b = ins.bindNamed("v", i)?;
+        discard b.exec()?;
+    }
+    Statement q = db.prepare("SELECT count(*) AS n, sum(a) AS s FROM t")?;
+    List<Row> rows = q.query()?;
+    int n = rows[0].getInt("n")?;
+    int s = rows[0].getInt("s")?;
+    Output.printLine("rows={n} sum={s}");"#,
+    );
+    both(&src, "rows=3 sum=6\n");
+}
+
+#[test]
+fn dec351_a_query_also_resets_its_binds() {
+    // Not just writes: a re-bound SELECT must see only the CURRENT bind.
+    let src = depth_prog(
+        r#"    run(db, "CREATE TABLE t(a INTEGER)")?;
+    run(db, "INSERT INTO t(a) VALUES (1)")?;
+    run(db, "INSERT INTO t(a) VALUES (2)")?;
+    Statement sel = db.prepare("SELECT a FROM t WHERE a = ?")?;
+    Statement q1 = sel.bind(1)?;
+    List<Row> r1 = q1.query()?;
+    Statement q2 = sel.bind(2)?;
+    List<Row> r2 = q2.query()?;
+    int a1 = r1[0].getInt("a")?;
+    int a2 = r2[0].getInt("a")?;
+    Output.printLine("first={a1} second={a2}");"#,
+    );
+    both(&src, "first=1 second=2\n");
+}
+
+#[test]
+fn dec351_a_failed_execution_does_not_leave_stale_binds() {
+    // The subtle half, and why the reset happens BEFORE the driver call. A bind + failed exec used to
+    // leave the value behind, so the NEXT exec saw two binds for one placeholder — the original bug,
+    // reached through an error path instead of a loop.
+    let src = depth_prog(
+        r#"    run(db, "CREATE TABLE t(a INTEGER PRIMARY KEY)")?;
+    Statement ins = db.prepare("INSERT INTO t(a) VALUES (?)")?;
+    Statement first = ins.bind(1)?;
+    discard first.exec()?;
+    try {
+        Statement dup = ins.bind(1)?;
+        discard dup.exec()?;
+    } catch (DatabaseError e) {
+        Output.printLine("duplicate refused");
+    }
+    Statement ok = ins.bind(2)?;
+    discard ok.exec()?;
+    Statement q = db.prepare("SELECT count(*) AS n FROM t")?;
+    List<Row> rows = q.query()?;
+    int n = rows[0].getInt("n")?;
+    Output.printLine("rows={n}");"#,
+    );
+    both(&src, "duplicate refused\nrows=2\n");
+}
+
+#[test]
+fn dec351_executemany_still_refuses_a_pre_bound_statement() {
+    // The reset must not weaken this guard: `executeMany` takes all values through its rows argument, and
+    // mixing in a bind() is ambiguous. The reset actually makes it MORE reliable — a previous exec can no
+    // longer leave stale binds that trip it spuriously.
+    let src = depth_prog(
+        r#"    run(db, "CREATE TABLE t(a INTEGER)")?;
+    Statement ins = db.prepare("INSERT INTO t(a) VALUES (?)")?;
+    Statement bound = ins.bind(9)?;
+    try {
+        discard bound.executeMany([[1], [2]])?;
+        Output.printLine("WRONG: accepted");
+    } catch (DatabaseError e) {
+        Output.printLine("mixed bind refused");
+    }"#,
+    );
+    both(&src, "mixed bind refused\n");
+}

@@ -141,3 +141,101 @@ fn postgres_round_trip_on_both_backends() {
         "interp ≡ VM"
     );
 }
+
+/// DEC-351's D5 fold-in — NESTED savepoints against a live Postgres.
+///
+/// The nested `commit`/`rollback` path had ZERO coverage on Postgres and MySQL, and the SQL it emitted
+/// had drifted into two non-portable forms (a bare `RELEASE`, and a `;`-joined `ROLLBACK TO … ; RELEASE …`
+/// pair through the single-statement `control`). Postgres tolerated both, MySQL does not — so the bug was
+/// invisible here and fatal there. `savepoint.rs` now single-sources the portable spellings; this proves
+/// they actually compose on the wire.
+///
+/// Its own throwaway table (`phorj_pg_sp`), synthetic data only.
+fn savepoint_program(dsn: &str) -> String {
+    format!(
+        r#"
+package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.Row;
+import Core.Database.DatabaseError;
+
+function bal(Connection db): int throws DatabaseError {{
+    List<Row> rows = db.prepare("SELECT bal FROM phorj_pg_sp WHERE id = 1")?.query()?;
+    return rows[0].getInt("bal");
+}}
+
+function put(Connection db, int n): void throws DatabaseError {{
+    discard db.prepare("UPDATE phorj_pg_sp SET bal = ? WHERE id = 1")?.bind(n)?.exec()?;
+}}
+
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
+    try {{
+        Connection db = new Connection("{dsn}");
+        discard db.prepare("DROP TABLE IF EXISTS phorj_pg_sp").exec();
+        discard db.prepare("CREATE TABLE phorj_pg_sp(id INT PRIMARY KEY, bal INT)").exec();
+        discard db.prepare("INSERT INTO phorj_pg_sp(id, bal) VALUES(1, 100)").exec();
+
+        // A nested ROLLBACK: `ROLLBACK TO SAVEPOINT` + `RELEASE SAVEPOINT`, two statements.
+        db.begin();
+        put(db, 200);
+        db.begin();
+        put(db, 300);
+        db.rollback();
+        Output.printLine("after-inner-rollback={{bal(db)}} depth={{db.transactionDepth()}}");
+        db.commit();
+        Output.printLine("after-outer-commit={{bal(db)}} depth={{db.transactionDepth()}}");
+
+        // A nested COMMIT: `RELEASE SAVEPOINT` — the form MySQL rejects when the keyword is missing.
+        db.begin();
+        put(db, 400);
+        db.begin();
+        put(db, 500);
+        db.commit();
+        Output.printLine("after-inner-commit={{bal(db)}} depth={{db.transactionDepth()}}");
+        db.rollback();
+        Output.printLine("after-outer-rollback={{bal(db)}} depth={{db.transactionDepth()}}");
+
+        // Three levels, unwound in one call (each level a `ROLLBACK TO`+`RELEASE` pair).
+        db.begin(); put(db, 1);
+        db.begin(); put(db, 2);
+        db.begin(); put(db, 3);
+        db.rollbackAll();
+        Output.printLine("after-rollback-all={{bal(db)}} depth={{db.transactionDepth()}}");
+
+        discard db.prepare("DROP TABLE phorj_pg_sp").exec();
+        db.close();
+    }} catch (DatabaseError e) {{
+        Output.printLine("unexpected: {{e.message}}");
+    }}
+}}
+"#
+    )
+}
+
+#[test]
+fn nested_savepoints_compose_on_a_live_postgres() {
+    let Ok(dsn) = std::env::var("PHORJ_PG_TEST_DSN") else {
+        eprintln!(
+            "db_postgres: SKIP (nested savepoints) — set PHORJ_PG_TEST_DSN to a live Postgres DSN. \
+             The server-free half of this coverage (the portable-form ratchet over every emitter) runs \
+             in the src/ext/database/natives/savepoint.rs unit tests regardless."
+        );
+        return;
+    };
+    let src = savepoint_program(&dsn);
+    let expected = "after-inner-rollback=200 depth=1\n\
+                    after-outer-commit=200 depth=0\n\
+                    after-inner-commit=500 depth=1\n\
+                    after-outer-rollback=200 depth=0\n\
+                    after-rollback-all=200 depth=0\n";
+    let tree = cmd_treewalk(&src).expect("nested savepoints run on the interpreter");
+    assert_eq!(tree, expected, "interpreter output");
+    assert_eq!(
+        cmd_run(&src).expect("nested savepoints run on the VM"),
+        tree,
+        "interp ≡ VM"
+    );
+}

@@ -150,7 +150,7 @@ pub(super) fn query_inner(args: &[Value]) -> Result<Value, String> {
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
-    let binds = stmt.binds.borrow();
+    let binds = stmt.take_binds(); // DEC-351: binds belong to the execution
     driver.query(&stmt.sql, &binds)
 }
 
@@ -165,7 +165,7 @@ pub(super) fn stream_inner(args: &[Value]) -> Result<Value, String> {
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
-    let binds = stmt.binds.borrow();
+    let binds = stmt.take_binds(); // DEC-351
     let rows = match driver.query(&stmt.sql, &binds)? {
         Value::List(rc) => Rc::try_unwrap(rc).unwrap_or_else(|rc| (*rc).clone()),
         other => {
@@ -198,7 +198,7 @@ pub(super) fn exec_inner(args: &[Value]) -> Result<Value, String> {
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
-    let binds = stmt.binds.borrow();
+    let binds = stmt.take_binds(); // DEC-351
     driver.exec(&stmt.sql, &binds).map(Value::Int)
 }
 
@@ -211,7 +211,7 @@ pub(super) fn exec_returning_id_inner(args: &[Value]) -> Result<Value, String> {
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
-    let binds = stmt.binds.borrow();
+    let binds = stmt.take_binds(); // DEC-351
     driver.exec_returning_id(&stmt.sql, &binds).map(Value::Int)
 }
 

@@ -30,6 +30,7 @@
 use super::driver::{redact_dsn_password, DriverConn};
 use super::handles::Binds;
 use super::mysql_sql::{my_param, my_row_to_map, translate};
+use super::savepoint;
 use crate::value::Value;
 use mysql::prelude::Queryable;
 use mysql::{Conn, Opts, Params, Row};
@@ -150,16 +151,22 @@ impl DriverConn for MyConn {
         // MySQL rejects a standalone SAVEPOINT under autocommit, so open our OWN BEGIN at depth 0;
         // inside a caller transaction use a SAVEPOINT (composable partial rollback) — the Postgres
         // pattern, NOT the SQLite one (Invariant 14: divergences handled explicitly).
+        // The savepoint SQL is single-sourced (DEC-351 D5) — these were the CORRECT spellings the rest
+        // of the module had drifted away from, so the vocabulary was extracted from here.
         let (open, ok_sql, undo_sql) = if in_transaction {
             (
-                "SAVEPOINT phorj_bulk",
-                "RELEASE SAVEPOINT phorj_bulk",
-                "ROLLBACK TO SAVEPOINT phorj_bulk",
+                savepoint::open(savepoint::BULK),
+                savepoint::release(savepoint::BULK),
+                savepoint::rollback_to(savepoint::BULK),
             )
         } else {
-            ("BEGIN", "COMMIT", "ROLLBACK")
+            (
+                "BEGIN".to_string(),
+                "COMMIT".to_string(),
+                "ROLLBACK".to_string(),
+            )
         };
-        self.control(open)?;
+        self.control(&open)?;
         let run = || -> Result<i64, String> {
             let mut conn = self.conn.borrow_mut();
             // Prepare ONCE; each row is a plain positional bind-set against the same statement.
@@ -185,12 +192,12 @@ impl DriverConn for MyConn {
         };
         match run() {
             Ok(total) => {
-                self.control(ok_sql)?;
+                self.control(&ok_sql)?;
                 Ok(total)
             }
             Err(e) => {
                 // Best-effort unwind; return the ORIGINAL error (a rollback failure must not mask it).
-                let _ = self.control(undo_sql);
+                let _ = self.control(&undo_sql);
                 Err(e)
             }
         }

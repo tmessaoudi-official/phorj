@@ -560,6 +560,12 @@ the answer to Q3** — which is why the developer's two intuitions are the same 
 
 ### D5 (P1) — nested savepoints look broken on the MySQL driver, and are untested
 
+> **RESOLVED 2026-07-30** — folded into DEC-351 and BUILT. The tables and line references below are
+> the AS-FOUND state (kept as the evidence for the finding); the SQL is now single-sourced in
+> `src/ext/database/natives/savepoint.rs`, emitting only the three-dialect intersection, with a
+> source-scan ratchet over every emitter. Current status lives in the decision register (DEC-351)
+> and `docs/plans/SLICE-STATE.md` — not here.
+
 The generic transaction-control SQL in `ops.rs` and the MySQL driver's own bulk path disagree about
 MySQL's savepoint grammar, in the same module:
 

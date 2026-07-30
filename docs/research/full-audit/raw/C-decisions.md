@@ -3467,7 +3467,7 @@ This also discharges the already-RULED **DV-5** pass (`docs/specs/2026-07-24-vis
 | DEC-348 | GR-10 | No filesystem locking at all; the presumed dependency blocker is FALSE — `std::fs::File::{lock, try_lock, unlock}` are stable on the pinned rustc and interoperate with PHP `flock()` (verified to block each other bidirectionally) | **RULED 2026-07-26 — (A): scoped `withLock(path, fn)` + `tryWithLock`, whole-file, advisory.** Release guaranteed by construction — no leak path; ladder case 1. Needs a `try/finally` PHP helper to preserve that guarantee, which is why it is sequenced AFTER DEC-364 (`using`). **(B) manual `lock`/`unlock` REJECTED** (leak-prone — the pattern every language regrets); **(C) byte-range/timeout REJECTED** (byte-range needs `fcntl`; a timeout would need a spin-sleep **bandaid**). **MUST BE DISCLOSED IN THE DOCS: Windows is a shipped target whose lock semantics may be MANDATORY rather than advisory, and there is no Windows CI — so any cross-platform guarantee is `[Unverified]` and must say so** | **RULED — build queued** |
 | DEC-349 | GR-11 | A no-modification clone already works as `p with { }` (shallow, transpiles to bare `clone($p)`) but the **lifter refuses it** — a live Invariant-17 gap | **RULED 2026-07-26 — (A): bless + document the EXISTING form, add NO new syntax**; `lift` must refuse loudly only when `__clone` exists. A dedicated `p.clone()` was rejected — a second spelling for something that already works | **RULED — build queued** |
 | DEC-350 | GR-12 | The type named `Database` is provably ONE connection (single `Box<dyn DriverConn>`, connection-scoped `tx_depth`/`hook`/`timeout_ms`, `grep pool` empty, pooling out of scope) | **RULED 2026-07-26 — (A): rename to `Core.Database.Connection` — the TYPE renames AND the `Module` suffix drops.** 8 of 10 ecosystems call this `Connection`; `Database`/`DB` is what Go and Laravel use for the pool/manager phorj does NOT have. DEC-278's `Module` suffix existed only because the module leaf and the type were namesakes, so renaming the type dissolves its rationale and `Core.Database` can go bare. Breaking rename across every DB example and doc — cheap now, expensive once users exist | **RULED — build queued** |
-| DEC-351 | GR-13 | `Statement` binds append and never reset, so a bind-in-a-loop dies on iteration 2 (`2 bound value(s) but 1 ? placeholder(s)`); `bindNamed` silently last-wins and is ~75x slower at 8000 iters (4.469s vs 0.059s re-preparing) | **RULED 2026-07-26 — (A): reset binds after each `exec`/`query`, make positional and named behave identically, fix the quadratic path.** Honours DEC-208's stated reuse promise; cheap because the SQLite driver already uses `prepare_cached` and resets per execute — this is bind lifecycle, not a driver rewrite. **D5 folded in:** the nested-savepoint SQL is not MySQL-portable (bare `RELEASE id`, `;`-joined pair through single-statement `query_drop`) while the module's own `mysql.rs` uses the correct forms, with ZERO nested-savepoint coverage on MySQL or Postgres — fix + add coverage in the same slice | **RULED — build queued** |
+| DEC-351 | GR-13 | `Statement` binds append and never reset, so a bind-in-a-loop dies on iteration 2 (`2 bound value(s) but 1 ? placeholder(s)`); `bindNamed` silently last-wins and is ~75x slower at 8000 iters (4.469s vs 0.059s re-preparing) | **RULED 2026-07-26 — (A): reset binds after each `exec`/`query`, make positional and named behave identically, fix the quadratic path.** Honours DEC-208's stated reuse promise; cheap because the SQLite driver already uses `prepare_cached` and resets per execute — this is bind lifecycle, not a driver rewrite. **D5 folded in:** the nested-savepoint SQL is not MySQL-portable (bare `RELEASE id`, `;`-joined pair through single-statement `query_drop`) while the module's own `mysql.rs` uses the correct forms, with ZERO nested-savepoint coverage on MySQL or Postgres — fix + add coverage in the same slice | **BUILT 2026-07-30** (binds execution-scoped, 4.469s→0.054s measured; D5 single-sourced in `natives/savepoint.rs` + a portable-form ratchet) |
 | DEC-352 | GR-14 | "Visibility/access in blocks inside a function" unbundled into 5 features: bare scoping blocks (already work — and were the DEC-339 P0), local functions, local classes, visibility on locals, visibility on local functions | **RULED 2026-07-26 after a cross-language scan.** **Local FUNCTIONS: YES, capture by value** (consistent with lambdas + DEC-357). PHP maps cleanly — emit a closure with `use(...)` when it captures, or a mangled top-level function when it does not; **never a bare nested `function`, which PHP makes GLOBAL**. **Local CLASSES: YES but NON-CAPTURING** (Rust/Swift semantics — a scoped TYPE, not a closure over locals); enclosing state is passed to the constructor, as PHP's anonymous class does. Decisive: `private` on a top-level type ALREADY means *this FILE only, not importable* (visibility matrix `2026-07-24-visibility-model.md:24`), so a local class adds only adjacency + capture — and capture is the entire cost (effectively-final analysis, DEC-357 interaction, boxing). **VISIBILITY on either: PERMANENTLY REJECTED with an explaining diagnostic** — not deferred but MEANINGLESS: a local has exactly one scope, so `private` has nothing to be private from. No surveyed language allows it; C# rejects it by name (`CS0106`). **Required diagnostic:** referencing an enclosing local inside a local class must say *"a local class does not capture; pass `x` to its constructor"*, never a bare unknown-identifier — Java programmers WILL expect capture | **RULED — build queued** |
 | DEC-353 | GR-15 | The compiler-INJECTED `Core.Runtime.{Entry,EntryKind}` still require explicit imports, so a minimal runnable program is 6 lines with 4 of them ceremony (PHP: 2), and the error text itself calls `Entry` *"an injected `Core.Runtime` type"* | **RULED 2026-07-26 — (A): auto-provide the injected `Entry`/`EntryKind` symbols.** Requiring an explicit import for a COMPILER-INJECTED symbol is self-contradictory; removes 2 lines from every runnable file. Touches the `E-UNIMPORTED` / `E-INJECTED-VARIANT-BARE` machinery DEC-337 just built, so it is a real design change, not a tweak | **RULED — build queued** |
 | DEC-354 | GR-16 | Approve the Claude-bundle import (14 of 199 files audited IN/OUT in `J-claude-bundle.md`) | **RULED 2026-07-26 — REFRAMED by the developer, narrower than the recommendation.** **Skills IN (phorj-useful subset only):** `converge` (it IS the DEC-268 ladder, currently hand-rolled from memory at every 3C/6C gate), `sweep`, `expanding-context`, `sleuth`, `inspect`, `cross-check`, `aggregate-findings`. Dropped as infra-shaped rather than phorj-shaped: `forge`, `qa-sweep`, `validate-infra`, `recent`. **Permissions: an ALLOW-LIST ONLY — no `deny`, no `ask`** (developer-ruled: in a remote container he has no terminal, so a `deny` blocks HIM too; he wants full execution autonomy). **Resolution of the risk that repo settings also load on his laptop: machine-level protections stay in his PERSONAL GLOBAL settings, which the repo never touches.** **Hooks: `precompact-handoff` ONLY** — the gate/Stop hooks are OUT, and for a stronger reason than friction: the framework claims the question guard is *"mechanically enforced"*, which is **FALSE here** (`AskUserQuestion` silently failed 4x this session), and a gate that cannot fire is worse than none. **session-remember: OUT** — its memory dir is wiped when the container is reclaimed, so it has zero durable value here; Invariant 19 already says only committed repo state survives, and this session proved `SLICE-STATE` + the register ARE the memory. **All 57 `mcp/**` files: OUT** — four corporate `.env` files plus desktop-automation drivers, and **`phorj` is a PUBLIC repo**. **BUILT 2026-07-27.** Landed: the 7 skills under `.claude/skills/` (adapted, each with a stated adaptation header — `converge`'s defaults ARE the DEC-268 tier; `sleuth` gained lens K for backend divergence; `sweep` gained the byte-identity/anti-bandaid/Op-triad/file-size dimensions; `cross-check`'s Jira mode DELETED; `aggregate-findings` retargeted off `~/.claude`); `scripts/claude-bootstrap/hooks/precompact-handoff.sh` + `log-helpers.sh` + a 14-assertion test suite, wired as a PreCompact hook on BOTH the `auto` and `manual` matchers (the developer compacts manually, so an `auto`-only matcher would have missed the real case); the allow-list-only `settings.json` (71 entries, no `deny`, no `ask`). **Two build-time discoveries worth keeping:** (a) Claude is CLASSIFIER-BLOCKED from writing `.claude/settings.json` at all, and the developer has no terminal in the container, so settings changes now travel through the repo as `settings.json.pending` + `apply-pending-settings.sh` (the script deletes the pending file so no duplicate persists); (b) the upstream hook called `claude -p` (Haiku) on EVERY compaction — rewritten deterministic (git + transcript via `jq`, zero LLM calls) because that call spends the same weekly quota the developer rations and fails whenever the API is unreachable; `PHORJ_HANDOFF_LLM=1` opts back in. Reports/handoffs live in gitignored `var/claude/**` — never `~/.claude`, which is wiped on reclaim | **BUILT 2026-07-27** |
@@ -4195,3 +4195,86 @@ method stays legal, a foreign `declare class` may declare a final method, and a 
 still define `getMessage` freely (it never extends
 `Exception`, so nothing collides). This is the method counterpart of DEC-202's `E-RESERVED-NAME`, which
 covered colliding class names but could not reach methods.
+
+### DEC-351 BUILT (2026-07-30) — bind lifecycle reset + the D5 savepoint-portability fold-in
+
+**Part A — the ruling itself.** `Statement` binds are now **execution-scoped**: `DbStmt::take_binds()`
+(`natives/handles.rs`) `mem::replace`s the accumulator with `Binds::None`, and every one of the four
+execution sites (`query`/`stream`/`exec`/`execReturningId`) resets **before** the driver call, never after
+— so a FAILED execution cannot leave stale binds for the next attempt to accumulate onto.
+
+Reproduced first, exactly as reported: a bind-in-a-loop died on iteration 2 with
+`Core.Database: 2 bound value(s) but 1 ? placeholder(s) in the SQL`; it now prints `rows=3 sum=6`.
+Positional and named behave identically because they share the one accumulator.
+
+**The quadratic path went with it, measured (Invariant 11).** 8000 named binds through one prepared
+statement: **4.469s → 0.054s**, against GR-13's own re-prepare baseline of 0.059s on the same box. The
+reuse path is now *at* the re-prepare baseline — i.e. the cliff is gone, not merely reduced.
+
+5 tests in `tests/database.rs` (`dec351_*`), all green on both backends, including the stale-bind case
+(`a_failed_execution_does_not_leave_stale_binds`) and the guard that `executeMany` still refuses a
+pre-bound statement.
+
+**This also dissolved a blocking design question of mine.** The phorj-vs-PHP comparison the developer
+asked for concluded PHP wins on statement/param lifecycle (`$s->execute([1]); $s->execute([2])` just
+works) — and then DEC-351 turned out to have already *ruled* that model. With params execution-scoped on
+both legs, the case-1 step-2 `__phorj_db_stmt` wrapper collapses to `[PDOStatement, sql, params[],
+nextIndex]` with nothing to carry across executions.
+
+**Part B — D5, the fold-in.** Two genuinely non-portable forms sat on the nested-savepoint path:
+
+| Defect | Where | Why it survived |
+|---|---|---|
+| bare `RELEASE <name>` | `ops_tx.rs` commit, `sqlite.rs` + `postgres.rs` bulk, `db_php.rs` | Legal in SQLite and Postgres; a **syntax error in MySQL**, where the `SAVEPOINT` keyword is mandatory. The module's own `mysql.rs` already spelled it correctly — it contradicted itself |
+| `ROLLBACK TO x; RELEASE x` as ONE string | `ops_tx.rs` rollback, `sqlite.rs` + `postgres.rs` bulk, `db_php.rs` | Passes through SQLite's `execute_batch`, Postgres's `batch_execute` and PDO's `exec`, all of which accept multiple statements. MySQL's `query_drop` runs ONE — and `DriverConn::control` is single-statement *by contract*, so the pair violated the contract silently on the two backends that tolerate it |
+
+Fixed by **single-sourcing the vocabulary** (`natives/savepoint.rs`), the same discipline Invariant 4
+applies to value kernels: `open` / `release` / `rollback_to` / `name(depth)` / `BULK`, emitting only the
+three-dialect intersection (`SAVEPOINT n`, `RELEASE SAVEPOINT n`, `ROLLBACK TO SAVEPOINT n` — the keyword
+is optional in SQLite/Postgres and mandatory in MySQL, so spelling it always is the intersection, never
+the union). A full unwind is genuinely TWO statements on all three backends (rolling back to a savepoint
+never pops it), so it is now two `control` calls, and the PHP leg two `exec` calls.
+
+**The detector was written first and watched fail.** `savepoint.rs`'s test module carries a source-scan
+ratchet over every file that can emit control SQL (all of `natives/` + `transpile/db_php.rs`): no bare
+`RELEASE`, no bare `ROLLBACK TO`, no `;`-joined pair. On the unfixed tree it failed with three findings
+pointing at the exact lines. It runs in **every** gate, which matters because the live-server coverage
+does not (see below).
+
+Coverage added: nested `commit`/`rollback`/`rollbackAll` round-trips in `tests/database_mysql.rs` and
+`tests/database_postgres.rs` (env-gated on `PHORJ_MYSQL_TEST_DSN` / `PHORJ_PG_TEST_DSN`, skip-loud), plus
+`a_nested_commit_releases_the_savepoint_and_keeps_its_work` in `tests/db_savepoints.rs` — which reaches
+the `RELEASE SAVEPOINT` branch that **no test had ever executed** (every prior case committed at depth 1,
+i.e. the real `commit()`), and is therefore precisely the branch that carried the bare spelling.
+
+**Disclosed, not claimed:** this container has no MySQL or Postgres server (both ports probed closed), so
+the two live nested-savepoint tests SKIP here. What actually ran green is the PHP leg under real
+`php-8.5.8` + PDO (17/17 in `db_savepoints.rs`) and the server-free portable-form ratchet. The MySQL leg
+of D5 is [Inferred from dialect grammars + the module's own `mysql.rs`, which already used these forms],
+not [Verified on a wire].
+
+Also ratcheted in the same change: `src/checker/expr/literals.rs` dropped out of
+`scripts/size-baseline.txt` — the DEC-339 split took it to 488, under the hard cap, so the grandfathered
+ceiling of 636 was strictly looser than the general rule. The size-gate had been reporting it as `stale=1`.
+
+**Invariant 17:** no LSP or editor work — nothing user-visible changed (no syntax, no new diagnostic, no
+new surface); this is dialect SQL inside the driver layer.
+
+### CD-21 (2026-07-30) — extracted a savepoint vocabulary MODULE instead of patching the strings
+
+Two string edits would have fixed the two reported defects. I built `natives/savepoint.rs` + a source-scan
+ratchet instead, because the defect class is *drift between four copies of the same SQL* — and one of the
+four copies (`mysql.rs`) was already right, which is what proves patching does not hold. Invariant 4
+single-sources value kernels for the same reason; transaction-control SQL is a parity-affecting kernel too.
+**To reverse:** inline the four call sites and delete the module; the three ratchet tests exist to make that
+deletion a deliberate act rather than a quiet regrowth.
+
+### CD-22 (2026-07-30) — the MySQL/Postgres nested-savepoint coverage is env-gated, and the gap is stated
+
+D5 asked for nested-savepoint coverage on MySQL and Postgres. No server is reachable from this container,
+so the tests are written and SKIP LOUDLY, following the existing `PHORJ_*_TEST_DSN` discipline — and the
+coverage that runs in every gate is the server-free portable-form ratchet, which is the actual detector for
+this defect class. Recording it as a stated gap rather than reporting "coverage added" full stop (the
+NO-HIDDEN-LOSS spirit of DEC-365 applied to tests). **To reverse:** run
+`PHORJ_MYSQL_TEST_DSN=… PHORJ_PG_TEST_DSN=… cargo nextest run --all-features` against live servers and
+record the result here; the tests need no edit.

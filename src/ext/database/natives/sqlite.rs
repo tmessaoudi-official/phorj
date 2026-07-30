@@ -13,6 +13,7 @@
 
 use super::driver::DriverConn;
 use super::handles::{Binds, PosBind};
+use super::savepoint;
 use crate::value::{HKey, Value};
 use std::rc::Rc;
 
@@ -298,9 +299,10 @@ impl DriverConn for SqliteConn {
     ) -> Result<i64, String> {
         // SQLite auto-opens a transaction for a standalone `SAVEPOINT`, so the bulk savepoint is issued
         // unconditionally here (byte-identical to the shipped runtime; `_in_transaction` is only used by
-        // Postgres, which rejects a savepoint outside a transaction block).
+        // Postgres, which rejects a savepoint outside a transaction block). The SQL comes from the
+        // single-sourced portable vocabulary (DEC-351 D5) — this path used to spell a bare `RELEASE`.
         self.conn
-            .execute_batch("SAVEPOINT phorj_bulk")
+            .execute_batch(&savepoint::open(savepoint::BULK))
             .map_err(sql_err)?;
         let run = || -> Result<i64, String> {
             let mut prepared = self.conn.prepare_cached(sql).map_err(sql_err)?;
@@ -327,16 +329,20 @@ impl DriverConn for SqliteConn {
         match run() {
             Ok(total) => {
                 self.conn
-                    .execute_batch("RELEASE phorj_bulk")
+                    .execute_batch(&savepoint::release(savepoint::BULK))
                     .map_err(sql_err)?;
                 Ok(total)
             }
             Err(e) => {
                 // Best-effort unwind of the whole batch; return the ORIGINAL error (a rollback failure
-                // must not mask it). Same defer-don't-fail discipline as `rollback`'s no-op guard.
+                // must not mask it). Same defer-don't-fail discipline as `rollback`'s no-op guard. Two
+                // statements, two calls: rolling back to a savepoint never pops it.
                 let _ = self
                     .conn
-                    .execute_batch("ROLLBACK TO phorj_bulk; RELEASE phorj_bulk");
+                    .execute_batch(&savepoint::rollback_to(savepoint::BULK));
+                let _ = self
+                    .conn
+                    .execute_batch(&savepoint::release(savepoint::BULK));
                 Err(e)
             }
         }

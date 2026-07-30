@@ -7,11 +7,15 @@
 //! about — a `rollback` that unwound one level while `db.transaction` needed to restore the depth it
 //! found on entry.
 //!
-//! The SQL these emit (`SAVEPOINT phorj_sp_N` / `ROLLBACK TO …` / `RELEASE …`) is mirrored by the PHP
-//! leg's `__phorj_db_*` helpers in `src/transpile/db_php.rs`, savepoint names included.
+//! The SQL these emit comes from [`super::savepoint`] — the single source of the PORTABLE forms
+//! (DEC-351's D5 fold-in; before that, this file spelled `RELEASE` without the `SAVEPOINT` keyword,
+//! a MySQL syntax error, and joined the rollback pair with a `;`, which MySQL's single-statement
+//! `control` rejects). It is mirrored by the PHP leg's `__phorj_db_*` helpers in
+//! `src/transpile/db_php.rs`, savepoint names included.
 
 use super::handles::as_conn;
 use super::ops::control;
+use super::savepoint;
 use crate::value::Value;
 
 /// `db.begin()` → open a transaction (DEC-208 slice C). At depth 0 this is a top-level `BEGIN`; nested,
@@ -26,7 +30,7 @@ pub(super) fn begin_inner(args: &[Value]) -> Result<Value, String> {
     let sql = if depth == 0 {
         "BEGIN".to_string()
     } else {
-        format!("SAVEPOINT phorj_sp_{depth}")
+        savepoint::open(&savepoint::name(depth))
     };
     control(conn, &sql)?;
     let new_depth = depth + 1;
@@ -50,7 +54,7 @@ pub(super) fn commit_inner(args: &[Value]) -> Result<Value, String> {
     let sql = if remaining == 0 {
         "COMMIT".to_string()
     } else {
-        format!("RELEASE phorj_sp_{remaining}")
+        savepoint::release(&savepoint::name(remaining))
     };
     control(conn, &sql)?;
     conn.tx_depth.set(remaining);
@@ -73,12 +77,17 @@ pub(super) fn rollback_inner(args: &[Value]) -> Result<Value, String> {
     }
     let remaining = depth - 1;
     conn.tx_depth.set(remaining);
-    let sql = if remaining == 0 {
-        "ROLLBACK".to_string()
+    if remaining == 0 {
+        control(conn, "ROLLBACK")?;
     } else {
-        format!("ROLLBACK TO phorj_sp_{remaining}; RELEASE phorj_sp_{remaining}")
-    };
-    control(conn, &sql)?;
+        // TWO statements, TWO calls (DEC-351's D5 fix). `ROLLBACK TO SAVEPOINT` discards the level's
+        // work but does NOT pop the savepoint on any of the three backends, so the `RELEASE` is what
+        // removes it. They cannot be `;`-joined: `control` is single-statement by contract, and MySQL's
+        // `query_drop` enforces that even though SQLite/Postgres batch APIs tolerate a pair.
+        let name = savepoint::name(remaining);
+        control(conn, &savepoint::rollback_to(&name))?;
+        control(conn, &savepoint::release(&name))?;
+    }
     Ok(Value::Int(i64::from(remaining)))
 }
 

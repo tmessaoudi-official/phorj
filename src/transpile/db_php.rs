@@ -72,7 +72,7 @@ function __phorj_db_commit($pdo) {
     if ($depth === 0) { return 0; }
     $remaining = $depth - 1;
     if ($remaining === 0) { $pdo->commit(); }
-    else { $pdo->exec('RELEASE phorj_sp_' . $remaining); }
+    else { $pdo->exec('RELEASE SAVEPOINT phorj_sp_' . $remaining); }
     __phorj_db_set_depth($pdo, $remaining);
     return $remaining;
 }
@@ -82,7 +82,15 @@ function __phorj_db_rollback($pdo) {
     $remaining = $depth - 1;
     __phorj_db_set_depth($pdo, $remaining);
     if ($remaining === 0) { $pdo->rollBack(); }
-    else { $pdo->exec('ROLLBACK TO phorj_sp_' . $remaining . '; RELEASE phorj_sp_' . $remaining); }
+    else {
+        // TWO separate `exec` calls, and `RELEASE SAVEPOINT` / `ROLLBACK TO SAVEPOINT` spelled in full
+        // (DEC-351's D5 fix, mirroring `savepoint.rs`). A `;`-joined pair through one `exec` and a bare
+        // `RELEASE` both happen to work on PDO+SQLite, which is why this survived review — but a bare
+        // `RELEASE` is a MySQL syntax error and multi-statement `exec` is not portable either, so the
+        // transpiled PHP would have failed on the very backends the Rust legs support.
+        $pdo->exec('ROLLBACK TO SAVEPOINT phorj_sp_' . $remaining);
+        $pdo->exec('RELEASE SAVEPOINT phorj_sp_' . $remaining);
+    }
     return $remaining;
 }
 function __phorj_db_unwind_to($pdo, $target) {

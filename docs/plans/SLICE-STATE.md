@@ -108,6 +108,31 @@ recommendation after measuring it).
 - **DEC-350** — `Core.DatabaseModule.Database` → `Core.Database.Connection`, built out of order.
 - **Case-1 step 1** — the PHP SQLSTATE→kind classifier, verified against real PDO exceptions.
 
+### ✅ BUILT 2026-07-30 — Wave 1.6 / **DEC-351** (both halves, including the D5 fold-in)
+
+- **Part A, bind lifecycle:** binds are **execution-scoped** now (`DbStmt::take_binds()`, reset BEFORE the
+  driver call at all four execution sites, so a failed execution leaves nothing stale). Reproduced first
+  (`2 bound value(s) but 1 ? placeholder(s)` on iteration 2), now `rows=3 sum=6`. **Measured (Invariant 11):
+  8000 named binds 4.469s → 0.054s**, versus GR-13's own re-prepare baseline of 0.059s — the reuse path is
+  *at* the baseline, i.e. the cliff is gone. 5 `dec351_*` tests, both backends.
+- **Part B, D5:** the nested-savepoint SQL was not MySQL-portable — a bare `RELEASE` (syntax error there)
+  and a `;`-joined pair through the single-statement `control`. Single-sourced in
+  `natives/savepoint.rs` (only the three-dialect intersection: `SAVEPOINT n` / `RELEASE SAVEPOINT n` /
+  `ROLLBACK TO SAVEPOINT n`), with a **source-scan ratchet** over every emitter incl. `transpile/db_php.rs`.
+  Detector written first, watched fail with three findings at the exact lines.
+- **It found a branch nothing had ever run:** the nested `RELEASE SAVEPOINT` (commit with levels still
+  open) — every prior test committed at depth 1, i.e. the real `commit()`. That is precisely why the bare
+  spelling survived review. Now covered on the PHP leg (17/17 under real `php-8.5.8`).
+- **Stated gap, not a claim:** no MySQL/Postgres server is reachable here (both ports probed closed), so the
+  two live nested-savepoint tests SKIP. The MySQL leg of D5 is [Inferred from the dialect grammars + the
+  module's own `mysql.rs`], not [Verified on a wire] — recorded as **CD-22**.
+- **CD-21** also recorded: extracting a vocabulary module rather than patching four copies of the string.
+- Ratchet tightened in the same change: `src/checker/expr/literals.rs` dropped out of
+  `scripts/size-baseline.txt` (the DEC-339 split took it to 488, so its grandfathered 636 ceiling was looser
+  than the general rule — the size-gate had been reporting `stale=1`).
+- **Invariant 17: no LSP/editor work** — nothing user-visible changed (no syntax, no diagnostic, no
+  surface); this is dialect SQL inside the driver layer.
+
 ### NEXT: case-1 **step 2** — `DatabaseResult.Ok/Err` across the ~20 `php:` emitters
 
 Then the `decimal` PARITY TEST (not a ruling — see CD-14), then flip `E-TRANSPILE-DB`, then **DEC-367**

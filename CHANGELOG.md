@@ -6,6 +6,39 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Statement` binds are now EXECUTION-scoped, and the nested-savepoint SQL is MySQL-portable (2026-07-30, DEC-351)
+Two halves of one ruling. **(A) Bind lifecycle.** Binds accumulated and never reset, so reusing a prepared
+statement died on the second iteration with `2 bound value(s) but 1 ? placeholder(s) in the SQL` — the exact
+reuse `Core.Database` promises. `DbStmt::take_binds()` now takes them, resetting the accumulator, at all
+four execution sites (`query`/`stream`/`exec`/`execReturningId`) — **before** the driver call, so a failed
+execution cannot leave stale binds behind. Positional and named binds share the one accumulator and so
+behave identically.
+- The quadratic path went with it, **measured**: 8000 named binds through one statement **4.469s → 0.054s**,
+  against the report's own re-prepare baseline of 0.059s on the same box. The reuse path now sits *at* that
+  baseline — the cliff is gone, not reduced.
+- This also makes params execution-scoped on BOTH legs, which collapses the case-1 step-2 PHP statement
+  wrapper to `[PDOStatement, sql, params[], nextIndex]` with nothing to carry between executions.
+
+**(B) The D5 fold-in — savepoint SQL portability.** The nested path emitted a bare `RELEASE <name>` (a
+**MySQL syntax error**; the `SAVEPOINT` keyword is mandatory there) and a `;`-joined `ROLLBACK TO x;
+RELEASE x` **pair** in one string (MySQL's `query_drop` runs one statement, and `DriverConn::control` is
+single-statement by contract). Both were invisible because SQLite's `execute_batch`, Postgres's
+`batch_execute` and PDO's `exec` all tolerate them — while the module's own `mysql.rs` already spelled the
+forms correctly, so the code contradicted itself.
+- Fixed by single-sourcing the vocabulary in `src/ext/database/natives/savepoint.rs` (the discipline
+  Invariant 4 applies to value kernels): only the three-dialect intersection is emitted — `SAVEPOINT n`,
+  `RELEASE SAVEPOINT n`, `ROLLBACK TO SAVEPOINT n`. A full unwind is genuinely two statements on all three
+  backends (rolling back to a savepoint never pops it), so it is two `control` calls, and two `exec` calls
+  on the PHP leg.
+- A **source-scan ratchet** over every file that can emit control SQL (all of `natives/` +
+  `transpile/db_php.rs`) now rejects a bare `RELEASE`, a bare `ROLLBACK TO`, and any `;`-joined pair. It was
+  written first and watched fail on the unfixed tree with three findings at the exact lines.
+- New coverage: nested `commit`/`rollback`/`rollbackAll` round-trips for MySQL and Postgres (env-gated on
+  `PHORJ_MYSQL_TEST_DSN` / `PHORJ_PG_TEST_DSN`, skip-loud — no server is reachable in the build container,
+  so that half is recorded as a stated gap, not as passed), and a PHP-leg test that reaches the
+  `RELEASE SAVEPOINT` branch **no test had ever executed**: every prior case committed at depth 1, i.e. the
+  real `commit()`, which is exactly why the bare spelling survived review.
+
 ### Fixed — **Invariant-1 breach**: a throwable overriding a `final` PHP method died only on the PHP leg (2026-07-30, DEC-367)
 `class CustomError implements Error` defining `getMessage()` type-checked clean, ran fine on both Rust
 backends, and died at PHP runtime with `Fatal error: Cannot override final method

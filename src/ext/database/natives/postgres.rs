@@ -27,6 +27,7 @@ use super::handles::Binds;
 use super::postgres_sql::{
     has_returning_clause, number_qmarks, param_refs, pg_cell, pg_params, pg_row_to_map, translate,
 };
+use super::savepoint;
 use crate::value::Value;
 use postgres::{Config, NoTls};
 use std::cell::RefCell;
@@ -180,25 +181,44 @@ impl DriverConn for PgConn {
         // Postgres rejects a standalone SAVEPOINT outside a transaction block, so open our OWN BEGIN at
         // depth 0 (and COMMIT/ROLLBACK it); when a caller transaction is already open, use a SAVEPOINT
         // (composable partial rollback), exactly like the SQLite path.
+        //
+        // The savepoint SQL is single-sourced (DEC-351 D5): this path used to spell a bare `RELEASE`
+        // (a MySQL syntax error, so the module contradicted its own mysql driver) and to `;`-join the
+        // undo PAIR into one string — legal only because `batch_execute` tolerates it. The undo is now
+        // a LIST of single statements, which is what `DriverConn::control` promises everywhere.
         let (open, ok_sql, undo_sql) = if in_transaction {
             (
-                "SAVEPOINT phorj_bulk",
-                "RELEASE phorj_bulk",
-                "ROLLBACK TO phorj_bulk; RELEASE phorj_bulk",
+                savepoint::open(savepoint::BULK),
+                savepoint::release(savepoint::BULK),
+                vec![
+                    savepoint::rollback_to(savepoint::BULK),
+                    savepoint::release(savepoint::BULK),
+                ],
             )
         } else {
-            ("BEGIN", "COMMIT", "ROLLBACK")
+            (
+                "BEGIN".to_string(),
+                "COMMIT".to_string(),
+                vec!["ROLLBACK".to_string()],
+            )
+        };
+        // Best-effort unwind: every statement attempted, each failure discarded, so a rollback error can
+        // never mask the original one.
+        let undo = || {
+            for stmt in &undo_sql {
+                let _ = self.client.borrow_mut().batch_execute(stmt);
+            }
         };
         {
             self.client
                 .borrow_mut()
-                .batch_execute(open)
+                .batch_execute(&open)
                 .map_err(pg_sql_err)?;
         }
         let (tsql, _n) = match number_qmarks(sql) {
             Ok(v) => v,
             Err(e) => {
-                let _ = self.client.borrow_mut().batch_execute(undo_sql);
+                undo();
                 return Err(e);
             }
         };
@@ -229,13 +249,13 @@ impl DriverConn for PgConn {
             Ok(total) => {
                 self.client
                     .borrow_mut()
-                    .batch_execute(ok_sql)
+                    .batch_execute(&ok_sql)
                     .map_err(pg_sql_err)?;
                 Ok(total)
             }
             Err(e) => {
-                // Best-effort unwind; return the ORIGINAL error (a rollback failure must not mask it).
-                let _ = self.client.borrow_mut().batch_execute(undo_sql);
+                // Return the ORIGINAL error (a rollback failure must not mask it).
+                undo();
                 Err(e)
             }
         }

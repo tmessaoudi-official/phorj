@@ -48,6 +48,7 @@ mod ops_tx;
 mod registry;
 mod registry_rows;
 mod rows;
+mod savepoint;
 mod wrappers;
 
 #[cfg(feature = "database-mysql")]

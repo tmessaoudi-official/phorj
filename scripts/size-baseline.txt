@@ -6,7 +6,6 @@
 3144	src/checker/desugar_db.rs
 740	src/checker/desugar_di/walker.rs
 534	src/checker/desugar_router.rs
-636	src/checker/expr/literals.rs
 514	src/checker/expr/operators.rs
 619	src/checker/matches.rs
 760	src/checker/mod.rs

@@ -125,6 +125,32 @@ echo bal($pdo), "\n";                           // 555 — and committed
 }
 
 #[test]
+fn a_nested_commit_releases_the_savepoint_and_keeps_its_work() {
+    // The `RELEASE SAVEPOINT` branch (commit with levels still open), which no test reached before
+    // DEC-351's D5 fold-in — every prior case committed at depth 1, i.e. the real `commit()`. It is
+    // exactly the branch that carried the bare `RELEASE` spelling, so it is the one that would have
+    // failed on a MySQL PDO handle.
+    let Some(out) = run_with_helpers(
+        "nested_commit",
+        &format!(
+            r#"{SETUP}
+echo __phorj_db_begin($pdo), " ";      // 1
+upd($pdo, 400);
+echo __phorj_db_begin($pdo), " ";      // 2
+upd($pdo, 500);
+echo __phorj_db_commit($pdo), " ";     // 1 — RELEASE SAVEPOINT phorj_sp_1: 500 KEPT, outer still open
+echo bal($pdo), " ";
+echo __phorj_db_rollback($pdo), " ";   // 0 — the outer level rolls back to before 400
+echo bal($pdo), "\n";
+"#
+        ),
+    ) else {
+        return;
+    };
+    assert_eq!(out.trim(), "1 2 1 500 0 100", "got {out:?}");
+}
+
+#[test]
 fn rollback_all_unwinds_every_level_under_pdo() {
     let Some(out) = run_with_helpers(
         "rollback_all",
@@ -164,22 +190,26 @@ echo __phorj_db_tx_depth($a), " ", __phorj_db_tx_depth($b), "\n";
 }
 
 #[test]
-fn savepoint_names_match_the_rust_leg_exactly() {
-    // Load-bearing: `phorj_sp_{remaining}` is the same name `src/ext/database/natives/ops_tx.rs` emits,
-    // so a database inspected mid-transaction looks identical whichever leg ran the program. Asserted
-    // against the helper SOURCE so a rename on either side breaks this test.
+fn savepoint_names_and_portable_forms_match_the_rust_leg_exactly() {
+    // Load-bearing twice over. The NAME `phorj_sp_{remaining}` is the same one
+    // `src/ext/database/natives/savepoint.rs` emits, so a database inspected mid-transaction looks
+    // identical whichever leg ran the program. And the FORMS are the portable ones (DEC-351's D5 fix):
+    // `RELEASE SAVEPOINT` / `ROLLBACK TO SAVEPOINT`, spelled in full because the keyword is optional in
+    // SQLite/Postgres but MANDATORY in MySQL — the bare spellings this file used to assert would have
+    // failed on a MySQL PDO handle. Asserted against the helper SOURCE, so a drift on either side breaks
+    // this test; the Rust-side twin of this ratchet is `savepoint.rs`'s own source scan.
     let src = phorj::transpile::db_php::db_helper_source();
     assert!(
         src.contains("'SAVEPOINT phorj_sp_' . $depth"),
         "savepoint name drifted from the Rust leg: {src}"
     );
     assert!(
-        src.contains("'RELEASE phorj_sp_' . $remaining"),
-        "release name drifted: {src}"
+        src.contains("'RELEASE SAVEPOINT phorj_sp_' . $remaining"),
+        "release form/name drifted: {src}"
     );
     assert!(
-        src.contains("'ROLLBACK TO phorj_sp_' . $remaining"),
-        "rollback-to name drifted: {src}"
+        src.contains("'ROLLBACK TO SAVEPOINT phorj_sp_' . $remaining"),
+        "rollback-to form/name drifted: {src}"
     );
 }
 

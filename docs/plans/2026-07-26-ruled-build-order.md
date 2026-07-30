@@ -38,7 +38,7 @@
 | 1.3 | **DEC-363** response-header CRLF/NUL guard in the prelude + NUL on the request side + `isValidHeaderName`/`…Value` | P1 security on a shipped `phg serve`, reproduced live |
 | 1.4 | **DEC-367** extend the builtin-collision guard to final methods of the mapped PHP parent | Invariant-1 breach: PHP fatal where both Rust legs run |
 | 1.5 | **DEC-361** single-source the fault strings **and** make `differential.rs::classify` derive from them | The test that should catch drift is what hides it |
-| 1.6 | **DEC-351** reset `Statement` binds per execution, unify positional/named, fix the quadratic path, portable savepoint SQL + MySQL/Postgres coverage | Broken reuse + ~75× |
+| 1.6 | ~~**DEC-351** reset `Statement` binds per execution, unify positional/named, fix the quadratic path, portable savepoint SQL + MySQL/Postgres coverage~~ — **BUILT 2026-07-30**: binds execution-scoped (`take_binds`, reset BEFORE the driver call at all four sites); **8000 named binds 4.469s → 0.054s measured**, at the report's own re-prepare baseline of 0.059s; D5 single-sourced in `natives/savepoint.rs` (three-dialect intersection only) with a source-scan ratchet over every emitter incl. the PHP leg; the nested `RELEASE SAVEPOINT` branch NO test had ever run is now covered. MySQL/PG live tests written but SKIP (no server in-container — **CD-22**, stated gap) | Broken reuse + ~75× |
 
 ## Wave 2 — structural gates
 
