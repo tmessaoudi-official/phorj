@@ -4143,7 +4143,7 @@ not really revisitable.
 | **CD-12** | Shipped DEC-363's pre-checks as `HeaderSafety.isValidName/isValidValue` instead of the ruled `Http.isValidHeaderName` | The ruled spelling needs a `class Http` inside module `Core.Http`, recreating the leaf==type namesake DEC-278's `Module` suffix existed to avoid and DEC-350 had just dissolved | Add `class Http` and accept the namesake, or rename the module `Core.HttpModule` (the DEC-278 pattern DEC-350 moved away from) |
 | **CD-13** | Split DEC-363's guard: POLICY in phorj, fault-RAISING in a one-line native | Prelude phorj has no panic-class fault primitive (no `panic`, no `never` builtin) and a checked throw was rejected. Modelled on `Core.Test.assert` | Add a real fault primitive to the language, then move the raise into the prelude |
 | **CD-14** | Concluded the `decimal` mapping needs NO ruling — reversing my own earlier recommendation | Measured: `bind` rejects `decimal` on both legs, so writes are already TEXT-based; and `NUMERIC` affinity destroys precision AT STORAGE before either leg sees it (PDO returned `12345678901234568`, `CAST AS TEXT` could not recover it). Identical on both legs ⇒ not a divergence | If DB `decimal` should be exact regardless of column type, that is a new feature (bind decimals as TEXT + a `DECIMAL`-affinity schema rule), not a PHP-leg question |
-| **CD-15** | Sequenced the case-1 lift as 3 steps, error contract FIRST | The error taxonomy is what makes `catch (UniqueViolationError)` work and `db.transaction(fn, retries)` retry; savepoints were the visible-but-small part | Reorder freely — steps 2/3 are independent of each other |
+| **CD-15** | Sequenced the case-1 lift as 3 steps, error contract FIRST. **CORRECTED 2026-07-30: my "step 2 is ~20 emitters, mechanical" estimate was WRONG** — 3 emitters are placeholders and most others emit the bare receiver, and the immutable-`Statement`-over-mutable-`PDOStatement` mapping is a real design choice (see the spec). Step 2 is its own slice needing a ruling, not step 1's tail | The error taxonomy is what makes `catch (UniqueViolationError)` work and `db.transaction(fn, retries)` retry; savepoints were the visible-but-small part | Reorder freely — steps 2/3 are independent of each other |
 | **CD-16** | Q28's git-argument guard is a DENYLIST (`ext::`/`file::`) not a transport allowlist | Re-ported the retired path's verified property P6 as-was rather than redesigning it under a security fix | Switch to an allowlist of `https`/`ssh`/`git`/`file` + bare paths; recorded as a residual in `KNOWN_ISSUES` 4b |
 | **CD-17** | doc-guards: G2 (one row per DEC) is HARD, G1/G3/G4 are RATCHETED against a frozen 142-entry baseline | A hard gate on 142 pre-existing violations would have blocked every push; the ratchet stops NEW ones while the debt burns down | Delete `scripts/doc-guards-baseline.txt` to make all four hard — expect ~142 failures |
 | **CD-18** | The no-concurrent-commits rule is an enforced `flock`, not a convention | It was a remembered convention and the race had already produced a spurious test failure | Remove the `flock` from `scripts/git-hooks/pre-commit` |
@@ -4155,3 +4155,13 @@ the 8.5 floor (would have broken byte-identity via stdout notices), SQLite drive
 NOT NULL as a unique violation (would have made handlers catch the wrong type), and the `decimal`
 assumption above being wrong in my favour. Every PHP-leg change should be executed against
 `php-8.5.8` before it is believed.
+
+
+### CD-20 (2026-07-30) — `__phorj_db_try` catches ONLY `PDOException`
+
+A `TypeError`, or a bug in an emitted expression, is not a database error. Laundering it into
+`DatabaseResult.Err` would let a genuine defect be caught by `catch (DatabaseError e)` and reported to the
+user as a database problem, which is strictly worse than crashing. It stays a hard fault, exactly as a
+Rust-side panic does. Pinned by `db_try_does_not_launder_a_non_database_error_into_a_result`.
+**To reverse:** widen the `catch` in `src/transpile/db_php.rs` — and delete that test, which exists to make
+the widening deliberate.

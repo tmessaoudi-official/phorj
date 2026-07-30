@@ -288,3 +288,98 @@ fn every_kind_the_rust_side_tags_is_reachable_in_the_php_classifier() {
         );
     }
 }
+
+// ── Case-1 step 2: the DatabaseResult protocol on the PHP leg ─────────────────────────────────────
+//
+// Every `Core.Native.Database` native returns `DatabaseResult.Ok(v)` / `Err(msg)`, which the phorj
+// prelude MATCHES on to decide between returning a value and throwing a typed `DatabaseError`. The
+// prelude is phorj source, so it already runs on this leg — producing the right variant is the whole
+// contract. `DatabaseResult<T>` erases to DEC-329.3's `DatabaseResult_Ok`/`_Err` (generics are erased
+// before any backend, Invariant 5), so the tests below declare those classes exactly as the transpiler
+// emits them.
+
+/// The two variant classes as the transpiler emits them for `enum DatabaseResult<T>`.
+const RESULT_CLASSES: &str = r#"abstract class DatabaseResult {}
+final class DatabaseResult_Ok extends DatabaseResult { public function __construct(public $value) {} }
+final class DatabaseResult_Err extends DatabaseResult { public function __construct(public string $message) {} }
+"#;
+
+#[test]
+fn db_try_wraps_a_success_as_databaseresult_ok() {
+    let Some(out) = run_with_helpers(
+        "try_ok",
+        &format!(
+            r#"{RESULT_CLASSES}
+$pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$pdo->exec('CREATE TABLE t(id INTEGER PRIMARY KEY)');
+$r = __phorj_db_try(fn() => $pdo->exec('INSERT INTO t(id) VALUES (1)'));
+echo get_class($r), " ", var_export($r->value, true), "\n";
+"#
+        ),
+    ) else {
+        return;
+    };
+    assert_eq!(out.trim(), "DatabaseResult_Ok 1", "got {out:?}");
+}
+
+#[test]
+fn db_try_wraps_a_pdo_error_as_databaseresult_err_with_the_kind_tag() {
+    // The join between step 1 and step 2: the Err payload must carry the `<<Kind>>` marker, because that
+    // is what the prelude parses to pick WHICH typed error to throw.
+    let Some(out) = run_with_helpers(
+        "try_err",
+        &format!(
+            r#"{RESULT_CLASSES}
+$pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$pdo->exec('CREATE TABLE t(id INTEGER PRIMARY KEY)');
+$pdo->exec('INSERT INTO t(id) VALUES (1)');
+$r = __phorj_db_try(fn() => $pdo->exec('INSERT INTO t(id) VALUES (1)'));
+echo get_class($r), " ", (str_starts_with($r->message, '<<UniqueViolationError>>') ? 'tagged' : $r->message), "\n";
+"#
+        ),
+    ) else {
+        return;
+    };
+    assert_eq!(out.trim(), "DatabaseResult_Err tagged", "got {out:?}");
+}
+
+#[test]
+fn db_try_unit_still_returns_ok_for_a_discarded_payload() {
+    let Some(out) = run_with_helpers(
+        "try_unit",
+        &format!(
+            r#"{RESULT_CLASSES}
+$pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$r = __phorj_db_try_unit(fn() => $pdo->exec('CREATE TABLE t(id INTEGER)'));
+echo get_class($r), " ", var_export($r->value, true), "\n";
+"#
+        ),
+    ) else {
+        return;
+    };
+    assert_eq!(out.trim(), "DatabaseResult_Ok 0", "got {out:?}");
+}
+
+#[test]
+fn db_try_does_not_launder_a_non_database_error_into_a_result() {
+    // Deliberate: only PDOException is caught. A TypeError or a bug in the emitted expression is NOT a
+    // database error, and turning it into `DatabaseResult.Err` would let a real defect be caught by
+    // `catch (DatabaseError e)` and reported as a database problem. It must stay a hard fault, exactly as
+    // a Rust-side panic does.
+    let Some(out) = run_with_helpers(
+        "try_passthrough",
+        &format!(
+            r#"{RESULT_CLASSES}
+try {{
+    __phorj_db_try(fn() => throw new RuntimeException('a real bug'));
+    echo "WRONG: swallowed\n";
+}} catch (RuntimeException $e) {{
+    echo "propagated: ", $e->getMessage(), "\n";
+}}
+"#
+        ),
+    ) else {
+        return;
+    };
+    assert_eq!(out.trim(), "propagated: a real bug", "got {out:?}");
+}

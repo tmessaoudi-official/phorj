@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the `DatabaseResult` protocol on the PHP leg (2026-07-30, DEC-340 case-1 step 2, partial)
+`__phorj_db_try` / `__phorj_db_try_unit` produce DEC-329.3's `DatabaseResult_Ok`/`_Err` — the shape the
+phorj prelude matches on — with the Err payload carrying step 1's `<<Kind>>` tag, which is the join between
+the two steps. Only `PDOException` is caught: a `TypeError` or a bug in an emitted expression is not a
+database error, and laundering it into `DatabaseResult.Err` would let a real defect be caught as a database
+problem. 4 tests against real PDO.
+
+**Step 2 is otherwise STOPPED, and my estimate of it was wrong.** I called it "~20 emitters, mechanical".
+It is not: 3 emitters are outright placeholders (`query` emits `->execute()` where it must return a list of
+row handles), and most others emit the bare receiver because the Rust natives mutate a shared handle. Worse,
+phorj's `Statement` accumulates binds on ONE shared handle by design (a DEC-266 allocation lever) and PDO
+has no equivalent model — `bindValue` needs a 1-based index — so the PHP twin needs its own parameter
+accumulator and `prepare` must return a wrapper object. That wrapper's shape governs every other emitter, so
+it is a design decision, not a wrapping exercise. Recorded in the spec with a recommended shape; it wants a
+ruling before it is written.
+
 ### Added — the PHP-leg SQLSTATE→kind classifier (2026-07-29, DEC-340 case-1 slice, step 1 of 3)
 Developer ruled the database transaction surface should reach Ladder case 1. Step 1 is the error contract,
 which is what everything else depends on: `__phorj_db_classify(PDOException)` maps a real PDO exception

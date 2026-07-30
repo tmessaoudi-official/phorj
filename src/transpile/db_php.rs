@@ -134,6 +134,33 @@ function __phorj_db_classify($e) {
     }
     return $kind === null ? $msg : '<<' . $kind . '>>' . $msg;
 }
+function __phorj_db_try($fn) {
+    // The `DatabaseResult` protocol on the PHP leg (case-1 step 2). Every `Core.Native.Database` native
+    // returns `DatabaseResult.Ok(v)` / `Err(msg)`, which the phorj prelude MATCHES on to decide whether to
+    // return a value or throw a typed `DatabaseError`. Since the prelude is phorj source it already runs
+    // here, so producing the right variant is the whole of the contract.
+    //
+    // `DatabaseResult<T>` erases to the DEC-329.3 enum-scoped classes `DatabaseResult_Ok` (field `value`)
+    // and `DatabaseResult_Err` (field `message`) — generics are erased before any backend (Invariant 5).
+    //
+    // Only PDOException is caught. A TypeError or a bug in the emitted expression is NOT a database error
+    // and must not be laundered into one — it stays a hard fault, exactly as a Rust-side panic would.
+    try {
+        return new DatabaseResult_Ok($fn());
+    } catch (PDOException $e) {
+        return new DatabaseResult_Err(__phorj_db_classify($e));
+    }
+}
+function __phorj_db_try_unit($fn) {
+    // For natives whose Ok payload the prelude discards (`wrap_unit` on the Rust side): still a real
+    // `DatabaseResult_Ok`, carrying 0 so the shape matches, because the prelude matches the VARIANT.
+    try {
+        $fn();
+        return new DatabaseResult_Ok(0);
+    } catch (PDOException $e) {
+        return new DatabaseResult_Err(__phorj_db_classify($e));
+    }
+}
 function __phorj_db_msg_is_unique($msg) {
     // SQLite reports UNIQUE/PRIMARY KEY violations through the same generic constraint code, so the
     // message is the only discriminator — mirroring `sqlite.rs`, which inspects the extended code and

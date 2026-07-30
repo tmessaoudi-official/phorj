@@ -208,3 +208,37 @@ added there and not here, the PHP leg would silently degrade it to the base `Dat
   on the PHP leg and disclose it.
 - **Then** flip `E-TRANSPILE-DB` off. The DIFFERENTIAL quarantine stays regardless — it rests on its own
   separate reason (live DB I/O is not byte-identical across drivers), which none of this changes.
+
+
+## Case-1 step 2: STARTED, then STOPPED — and my step-2 estimate (CD-15) was wrong
+
+**Built and verified (keep):** the `DatabaseResult` protocol helpers `__phorj_db_try` /
+`__phorj_db_try_unit` in `src/transpile/db_php.rs`, with 4 tests against real PDO. They produce
+DEC-329.3's `DatabaseResult_Ok` (field `value`) / `DatabaseResult_Err` (field `message`) — the shape the
+prelude matches on — and the Err payload carries the step-1 `<<Kind>>` tag, which is the join between the
+two steps. One deliberate property is pinned by test: **only `PDOException` is caught.** A `TypeError` or a
+bug in an emitted expression is not a database error, and laundering it into `DatabaseResult.Err` would let
+a real defect be caught by `catch (DatabaseError e)` and misreported. It stays a hard fault, as a Rust-side
+panic does.
+
+**Where I stopped, and why.** I described step 2 as *"~20 emitters; mechanical"* (CD-15). Reading them, that
+is **false**, and I am correcting it rather than discovering it later:
+
+- **3 emitters are outright placeholders** (`query`, `executeMany`, `transaction`) whose comments say
+  "finalized in transpile slice" — `query` emits `->execute()` where it must return a LIST of row handles.
+- Most others are *wrong*, not merely unwrapped: `bind`/`bindNamed`/`bindList`/`timeout`/`onQuery` all emit
+  `a[0]` — the receiver, unchanged — because the Rust natives mutate a shared handle and return it.
+
+**The design question that makes this non-mechanical.** phorj's `Statement` binds onto a SHARED raw handle
+in place and returns that same handle (`prelude.rs:163` — a deliberate DEC-266 allocation lever), so
+`stmt.bind(a).bind(b)` accumulates on one object. PDO's `PDOStatement` has no equivalent accumulate-then-
+execute-with-collected-params model: `bindValue` needs a 1-based index, so the PHP twin must carry its own
+parameter accumulator and positional counter, and `prepare` must therefore return a WRAPPER object rather
+than a bare `PDOStatement`. That wrapper's shape determines what every other emitter can assume, and it is
+a real design choice with performance and semantics consequences — not a wrapping exercise.
+
+**So step 2 is a genuine slice needing a design decision**, not the mechanical tail of step 1. Recommended
+shape (not ruled): a `__phorj_db_stmt` wrapper holding `[PDOStatement, sql, params[], nextIndex]`, with
+`prepare` returning it, the bind family appending to it, and `query`/`exec`/`executeMany` calling
+`execute($params)` — which is also what makes `executeMany` expressible at all. That is one focused slice
+with its own tests, and it should be ruled before it is written.
