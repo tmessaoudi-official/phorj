@@ -110,6 +110,21 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              would read a method call, the transpiler a native. Rename the binding, or drop the\n\
              matching import.\n"
         }
+        "E-FINAL-PARENT-METHOD" => {
+            "E-FINAL-PARENT-METHOD — a throwable class defines a method PHP's `Exception` marks `final`.\n\n\
+             A class that `implements Error` transpiles to one extending PHP's `Exception`, and PHP makes\n\
+             seven of its methods `final`:\n\n    \
+             getMessage  getCode  getFile  getLine  getTrace  getPrevious  getTraceAsString\n\n\
+             Defining one of them used to type-check clean and run fine on both Rust backends, then die on\n\
+             the PHP leg with `Fatal error: Cannot override final method Exception::getMessage()` — the\n\
+             byte-identity spine broken at RUNTIME, on one leg only. It is now refused here instead.\n\n\
+             Fix it by renaming yours (`getMessageText`, `describe`, …), or by exposing the value as a\n\
+             field — a throwable's message is already carried by its constructor, so `getMessage` is\n\
+             usually re-inventing what you already have.\n\n\
+             `__construct` and `__toString` are NOT final, so a throwable may still have its own\n\
+             constructor and its own `#[ToString]`. A class that does NOT implement `Error` is unaffected:\n\
+             it never extends `Exception`, so nothing collides.\n"
+        }
         "E-SHADOW-LOCAL" => {
             "E-SHADOW-LOCAL — a declaration reuses the name of a live local or parameter.\n\n\
              Phorj has block scope; PHP does not. A nested redeclaration therefore means two different\n\

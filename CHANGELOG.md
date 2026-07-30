@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — **Invariant-1 breach**: a throwable overriding a `final` PHP method died only on the PHP leg (2026-07-30, DEC-367)
+`class CustomError implements Error` defining `getMessage()` type-checked clean, ran fine on both Rust
+backends, and died at PHP runtime with `Fatal error: Cannot override final method
+Exception::getMessage()` — because a throwable transpiles to a class extending `Exception`, which marks
+seven methods `final`. Now `E-FINAL-PARENT-METHOD` at check time, one diagnostic at the declaration.
+- The seven names came from **reflection against php-8.5.8**, not memory: `getMessage`, `getCode`,
+  `getFile`, `getLine`, `getTrace`, `getPrevious`, `getTraceAsString`.
+- `__construct` and `__toString` are **not** final, so a throwable keeps its own constructor and
+  `#[ToString]`; a class that does not implement `Error` is unaffected entirely. Both pinned by tests,
+  because over-rejecting here would make `Error` subclasses unusable.
+- Renaming on emission stays rejected (the ruling): it would keep the program running while silently
+  diverging from the source, and break anything catching it as a PHP `Exception`.
+- A `declare class` is exempt: it DESCRIBES an existing PHP class, so declaring a signature for a method
+  final over there is correct (that is how `examples/interop/` binds PHP's own `DivisionByZeroError`). The
+  first version of the guard over-rejected exactly that, and the pre-push gate blocked the commit before it
+  landed; a regression test now pins it.
+- The method counterpart of DEC-202's `E-RESERVED-NAME`, which guarded colliding class names but could not
+  reach methods.
+
 ### Added — the `DatabaseResult` protocol on the PHP leg (2026-07-30, DEC-340 case-1 step 2, partial)
 `__phorj_db_try` / `__phorj_db_try_unit` produce DEC-329.3's `DatabaseResult_Ok`/`_Err` — the shape the
 phorj prelude matches on — with the Err payload carrying step 1's `<<Kind>>` tag, which is the join between

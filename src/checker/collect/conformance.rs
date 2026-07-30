@@ -58,7 +58,51 @@ impl Checker {
                         Some(format!("rename it, e.g. `{}Error`", c.name)),
                     );
                 }
+                // A `declare class` DESCRIBES an existing PHP class rather than defining one, so
+                // declaring a signature for a method that is final over there is exactly right — it is
+                // how `examples/interop/exceptions.phg` binds PHP's own `DivisionByZeroError`. Only a
+                // class we EMIT can collide. (Caught by the pre-push gate, not by reasoning.)
+                if throwable && !c.foreign {
+                    self.check_final_parent_method_collisions(c);
+                }
             }
+        }
+    }
+
+    /// DEC-367 (Invariant-1 breach) — a throwable class may not define a method that PHP's `Exception`
+    /// declares `final`.
+    ///
+    /// A phorj class implementing `Error` transpiles to one extending `Exception`. PHP marks seven of
+    /// `Exception`'s methods `final`, so defining one of them emitted a program that BOTH Rust backends
+    /// ran happily while the PHP leg died at runtime with
+    /// `Fatal error: Cannot override final method Exception::getMessage()`. Reproduced on php-8.5.8.
+    ///
+    /// Rejected at CHECK time, so the failure is one diagnostic at the declaration instead of a runtime
+    /// fatal on one leg only. Renaming on emission was explicitly REJECTED by the ruling: the program
+    /// would keep running while silently diverging from what the author wrote, and anything catching it
+    /// as a PHP `Exception` would break.
+    ///
+    /// The existing `E-RESERVED-NAME` guard (DEC-202) covers colliding class NAMES; this is its method
+    /// counterpart, which that guard did not reach.
+    fn check_final_parent_method_collisions(&mut self, c: &crate::ast::ClassDecl) {
+        use crate::ast::ClassMember;
+        for m in &c.members {
+            let ClassMember::Method(f) = m else { continue };
+            if !FINAL_EXCEPTION_METHODS.contains(&f.name.as_str()) {
+                continue;
+            }
+            self.err_coded(
+                f.span,
+                format!(
+                    "`{}` implements `Error`, so it transpiles to a class extending PHP's `Exception` — and `{}` is `final` there, which PHP refuses to override",
+                    c.name, f.name
+                ),
+                "E-FINAL-PARENT-METHOD",
+                Some(format!(
+                    "rename it (e.g. `{}Text`), or expose the value through a field — `Error`'s message is already carried by its constructor",
+                    f.name
+                )),
+            );
         }
     }
 
@@ -227,3 +271,17 @@ impl Checker {
         }
     }
 }
+
+/// The methods PHP declares `final` on `Exception` (DEC-367). [Verified against php-8.5.8 by
+/// reflection — `(new ReflectionClass('Exception'))->getMethods()` filtered on `isFinal()` — rather than
+/// from memory.] `__construct` and `__toString` are NOT final and stay overridable, which is what lets a
+/// throwable carry its own constructor and `#[ToString]`.
+const FINAL_EXCEPTION_METHODS: &[&str] = &[
+    "getMessage",
+    "getCode",
+    "getFile",
+    "getLine",
+    "getTrace",
+    "getPrevious",
+    "getTraceAsString",
+];

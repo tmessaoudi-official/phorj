@@ -4165,3 +4165,33 @@ user as a database problem, which is strictly worse than crashing. It stays a ha
 Rust-side panic does. Pinned by `db_try_does_not_launder_a_non_database_error_into_a_result`.
 **To reverse:** widen the `catch` in `src/transpile/db_php.rs` — and delete that test, which exists to make
 the widening deliberate.
+
+### DEC-367 BUILT (2026-07-30) — `E-FINAL-PARENT-METHOD`
+
+Reproduced first: `class CustomError implements Error` defining `getMessage()` type-checked **clean**, ran
+`custom: boom` on the VM, and died on the PHP leg with `Fatal error: Cannot override final method
+Exception::getMessage()` — Invariant 1 broken at RUNTIME, on one leg only, with `phg check` reporting
+nothing. Now one diagnostic at the declaration.
+
+Guard placed in `check_error_names`' walk (`collect/conformance.rs`), which already computes whether a
+class is throwable via the transitive `class_implements` — so the scope is exactly right for free and no
+second traversal was added. Renaming on emission stays REJECTED per the ruling: it would keep the program
+running while silently diverging from the source, and break anything catching it as a PHP `Exception`.
+
+**The final list came from reflection, not memory:**
+`(new ReflectionClass('Exception'))->getMethods()` filtered on `isFinal()` against php-8.5.8 gives exactly
+`getMessage getCode getFile getLine getTrace getPrevious getTraceAsString`. `__construct` and `__toString`
+are NOT final, which is what lets a throwable keep its own constructor and `#[ToString]` — over-rejecting
+those would have made `Error` subclasses unusable, so a test pins it.
+
+**The first version OVER-rejected, and the pre-push gate caught it — not a reviewer, not me.** A
+`declare class` DESCRIBES an existing PHP class instead of defining one, so declaring a signature for a
+method that is final over there is exactly correct: it is how `examples/interop/exceptions.phg` binds PHP's
+own `DivisionByZeroError`. The guard now skips `foreign` classes, since only a class phorj EMITS can
+collide, and the commit was blocked before it landed. A regression test pins it.
+
+5 tests: all seven names rejected, the diagnostic explains the PHP reason and offers a rename, an ordinary
+method stays legal, a foreign `declare class` may declare a final method, and a NON-throwable class may
+still define `getMessage` freely (it never extends
+`Exception`, so nothing collides). This is the method counterpart of DEC-202's `E-RESERVED-NAME`, which
+covered colliding class names but could not reach methods.
