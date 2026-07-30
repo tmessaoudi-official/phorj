@@ -383,3 +383,59 @@ try {{
     };
     assert_eq!(out.trim(), "propagated: a real bug", "got {out:?}");
 }
+
+// ── CD-14: the `decimal` PARITY facts, pinned rather than ruled ───────────────────────────────────
+//
+// I initially recommended the developer RULE on how DB decimals map to the PHP leg (exact TEXT round-trip
+// vs disclosed float). Measuring it showed there is nothing to rule, so these tests pin the facts instead
+// — and will fail if any of them stops being true, which is what would reopen the question.
+//
+// The three facts: `bind` does not accept `decimal` at all, so the write path is already text-based on
+// BOTH legs; a TEXT column round-trips exactly; and a `NUMERIC` column loses precision inside SQLite's
+// type affinity, BEFORE either leg sees the value — so it is a property of the schema, not a divergence.
+
+#[test]
+fn cd14_a_numeric_column_loses_precision_before_either_leg_sees_it() {
+    // The load-bearing fact. If this ever starts round-tripping exactly, the storage layer changed and the
+    // decimal mapping is worth revisiting. Note `CAST(... AS TEXT)` cannot recover it: the damage is done
+    // at INSERT, by column affinity.
+    let Some(out) = run_with_helpers(
+        "cd14_numeric",
+        r#"$pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$pdo->exec('CREATE TABLE m(amt NUMERIC)');
+$pdo->exec("INSERT INTO m(amt) VALUES ('12345678901234567.89')");
+echo (string) $pdo->query('SELECT CAST(amt AS TEXT) AS t FROM m')->fetchColumn(), "\n";
+"#,
+    ) else {
+        return;
+    };
+    assert_ne!(
+        out.trim(),
+        "12345678901234567.89",
+        "a NUMERIC column preserved full precision — the storage assumption behind CD-14 changed, so the \
+         decimal mapping is worth revisiting"
+    );
+}
+
+#[test]
+fn cd14_a_text_column_round_trips_a_decimal_exactly_on_the_php_leg() {
+    // The exact path, which is the one phorj's own API steers you to (`bind` takes a string, not a
+    // decimal). The Rust leg was verified to produce the same value by hand:
+    //   TEXT column + string bind -> getDecimal -> 12345678901234567.89
+    let Some(out) = run_with_helpers(
+        "cd14_text",
+        r#"$pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$pdo->exec('CREATE TABLE m(amt TEXT)');
+$s = $pdo->prepare('INSERT INTO m(amt) VALUES (?)');
+$s->execute(['12345678901234567.89']);
+echo (string) $pdo->query('SELECT amt FROM m')->fetchColumn(), "\n";
+"#,
+    ) else {
+        return;
+    };
+    assert_eq!(
+        out.trim(),
+        "12345678901234567.89",
+        "the exact TEXT path must round-trip on the PHP leg too — this is what makes CD-14 safe"
+    );
+}
