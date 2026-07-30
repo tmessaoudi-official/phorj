@@ -156,6 +156,28 @@ recommendation after measuring it).
 - Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
   clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
 
+### ⏳ NEXT: 3.1 / **DEC-364** `using` — DESIGNED, blast radius MEASURED, not started
+
+`docs/specs/2026-07-30-using-scope-guard.md` is the canonical design. **The tree is green — nothing is
+half-built.** What is decided: the `Stmt::Using { ty, name, init, body, span }` shape; **no new `Op` and no
+new `Value`** (it lowers to `try { … } finally { h.close(); }`, reusing `Stmt::Try`'s already-differentialled
+ordering); mandatory declared type implementing `Core.Closable`, enforced at compile time so the `close()`
+call is total.
+
+**Blast radius measured, not estimated: 35 sites** [Verified — added the variant, collected every `E0004`,
+reverted]. 4 in `ast/walk.rs`, 15 checker rewriters needing the arm they already give `Stmt::For`, 2 in
+`checker/stmt/core.rs` (the real work), 1 compiler, 3 formatter, 2 `rewrite_new`. **That count is the
+receipt for DEC-356:** before this morning those walks carried `leaf => leaf`, so `Stmt::Using` would have
+compiled and been silently skipped by generics erasure / DI / html / UFCS inside a `using` block.
+
+Beyond what the compiler can enumerate: the lexer keyword, `Core.Closable` in the prelude, **lift**
+(PHP has no `using` — recognise the `try`/`finally`-with-one-`close()` shape and raise it), 8 LSP surfaces
++ 3 editor grammars in the SAME change (Invariant 17's 100% rule), and an example + README (Invariant 9).
+
+**OPEN QUESTION blocking a clean start:** is `using` **reserved** or **contextual**? Reserving is simpler
+and matches C#, but breaks any identifier spelled `using` — and DEC-344 is simultaneously *de*-reserving
+`main`, so the project is moving the other way. Not ruled; deliberately not decided in passing.
+
 ### ✅ BUILT 2026-07-30 — **DEC-379** (7.1): the `E-IFACE-VIS` bypass, a soundness hole, closed.
 
 Reproduced first: a `private` conforming overload was accepted by `check` and called through a plain

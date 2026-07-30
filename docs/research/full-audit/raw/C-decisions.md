@@ -4587,3 +4587,26 @@ soundness concern — but a `private` overload of a NON-interface method is stil
 ruled: it is the kind of silent downgrade Invariant 14 forbids, so it wants a ruling rather than a quiet
 fix. **To reverse/act:** emit the recorded per-overload visibility on each `__ovl_N` and give the
 dispatcher the widest of the set. Recorded, not silently accepted.
+
+
+### DEC-364 DESIGNED (2026-07-30) — spec written, blast radius measured, build NOT started
+
+`docs/specs/2026-07-30-using-scope-guard.md` is the canonical design. Nothing was half-built: the variant
+was added to measure the radius, then reverted, and the tree is green.
+
+**Decided:** `Stmt::Using { ty, name, init, body, span }`; **no new `Op`, no new `Value`** — it lowers to
+`try { … } finally { h.close(); }`, so all three backends reuse `Stmt::Try`'s machinery and its
+already-differentialled failure ordering. The declared type is mandatory and must implement
+`Core.Closable`, enforced at compile time, which is what makes the `close()` call total.
+
+**Blast radius = 35 sites** [Verified: added `Stmt::Using`, collected every `E0004` location, reverted].
+**This is the receipt for DEC-356**, landed hours earlier the same day: before it, most of those checker
+walks carried `leaf => leaf`, so `Stmt::Using` would have compiled cleanly and been silently passed
+through — generics erasure, DI desugaring, html resolution and UFCS would all have skipped the inside of a
+`using` block, failing only when a user hit it. The 35 compile errors are the mechanical-exhaustiveness
+rule doing exactly what it was built for, on the very next feature.
+
+**OPEN QUESTION, deliberately not decided:** is `using` a **reserved** word or a **contextual** keyword?
+Reserving matches C# and is simpler, but breaks any identifier spelled `using` — while DEC-344 is
+simultaneously *de*-reserving `main`, i.e. the project is moving the other way. This is user-visible
+surface (Invariant 15), so it is the developer's call and the build should not start without it.
