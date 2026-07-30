@@ -83,7 +83,36 @@ block scope, producing non-compiling output (`mutable var b = 5;` inside an `if`
 `E-ASSIGN-UNKNOWN`). It now has a SECOND reason to exist — the lifter must not emit programs
 `E-SHADOW-LOCAL` rejects.
 
-### NEXT: **Wave 1.2 — DEC-340** (transaction auto-rollback unwinds to the entry depth)
+### 📌 CLAUDE-MADE DECISIONS ARE NOW TRACKED AS A SET — `CD-1`…`CD-19`
+
+At the developer's request (*"note all your decisions so we might be able to revisit them later"*), every
+autonomous judgement call from the Wave 0/1 + DEC-416/417/350/363 work is consolidated in the decision
+register under **"CLAUDE-MADE DECISIONS"**. `CD-n` deliberately contrasts with `DEC-n`: a DEC is the
+developer's, a CD is mine and is a candidate for being overturned. Each row carries the call, WHY, and
+**how to reverse it** — a decision you cannot cheaply undo is not really revisitable.
+
+The ones most worth a look, because they interpret or extend a ruling rather than merely implement it:
+**CD-2** (deprecation does not spread — my reading of DEC-417.5), **CD-7** (substituted DEC-339's
+definition-of-done item 2, which the chosen ruling made impossible), **CD-9** (extended DEC-340's unwind to
+the commit-failure path, which the spec did not rule), **CD-12** (`HeaderSafety` instead of the ruled
+`Http.isValidHeaderName`), and **CD-14** (concluded `decimal` needs no ruling — reversing my own earlier
+recommendation after measuring it).
+
+### ✅ BUILT 2026-07-29/30 — Wave 1.2 (DEC-340), Wave 1.3 (DEC-363), DEC-350, and case-1 step 1
+
+- **DEC-340** — the P1 transaction data loss is FIXED (entry-depth unwind + `rollbackAll` +
+  `transactionDepth`); item 3 was BLOCKED by the `E-TRANSPILE-DB` Ladder quarantine and is now unblocked by
+  the developer's case-1 ruling.
+- **DEC-363** — the P1 response-header injection is CLOSED (CR/LF/NUL + `:`, policy in phorj so all three
+  legs share it, request side widened to NUL).
+- **DEC-350** — `Core.DatabaseModule.Database` → `Core.Database.Connection`, built out of order.
+- **Case-1 step 1** — the PHP SQLSTATE→kind classifier, verified against real PDO exceptions.
+
+### NEXT: case-1 **step 2** — `DatabaseResult.Ok/Err` across the ~20 `php:` emitters
+
+Then the `decimal` PARITY TEST (not a ruling — see CD-14), then flip `E-TRANSPILE-DB`, then **DEC-367**
+(the builtin-collision guard for final parent methods: `implements Error` + `getMessage()` dies at runtime
+on the PHP leg while both Rust backends run fine).
 
 Migration cost is MEASURED (DEC-412): **exactly one in-tree site**, `examples/guide/math.phg:54`
 (`l1` is `int` at :46 and `float` at :54 — same scope, different type). One rename; nothing else in

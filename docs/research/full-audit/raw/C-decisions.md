@@ -4116,3 +4116,42 @@ was moving AWAY from.
 (`Cookie.path(evil)` — proving the constructor chokepoint covers all four builders), and a clean-response
 regression guard asserting an ordinary header + cookie still serialize with no split. The request-side
 gate was widened to NUL in the same change with its own test, so the two directions cannot drift.
+
+## CLAUDE-MADE DECISIONS — the autonomous judgement calls, all revisitable (2026-07-29/30)
+
+Requested by the developer: *"note all your decisions so we might be able to revisit them later"*. Every
+row below is a call **I made without a ruling** during the Wave 0/1 + DEC-416/417/350/363 work. They are
+`CD-n` rather than `DEC-n` on purpose — a `DEC` is the developer's, a `CD` is mine and is a candidate for
+being overturned. (The `CD-` prefix is also invisible to doc-guard G2, which tracks `DEC-nnn` rows only.)
+
+Each row states the call, WHY, and **how to reverse it** — because a decision you cannot cheaply undo is
+not really revisitable.
+
+| ID | Decision | Why | To reverse |
+|----|----------|-----|-----------|
+| **CD-1** | Kept `docs/DEPRECATION.md`+`SEMVER.md`+`STABILITY.md`, scoped to post-1.0, when DEC-416 swept deprecation | The ruling was about PRE-1.0 behaviour; deleting a post-1.0 policy was not ruled and describes a real future need | Delete the three files; drop the header block added to `DEPRECATION.md` |
+| **CD-2** | Read DEC-417.5 (*"show anything using a deprecated thing as deprecated too"*) as **use-site rendering**, NOT transitive contagion | Rust/Kotlin/Swift/C# all warn at the use site and none propagate; C# actively suppresses when the caller is itself obsolete (META-7 scan) | Flip `deprecation_does_not_spread_to_the_caller` in `checker/tests/deprecated.rs` and add a propagation pass; that test exists to make this one edit |
+| **CD-3** | `#[Deprecated]` REJECTS an interpolated `message:` and any positional arg (`E-DEPRECATED-MESSAGE`) | Compile-time-only metadata has no runtime to evaluate holes against, so the text would be silently lost; named-only matches `#[Entry(kind:)]` | Accept them in `attributes_deprecated.rs`; decide what an interpolated message should mean |
+| **CD-4** | An overload SET warns only when EVERY signature is deprecated | A set with one live overload may be what the call resolves to; warning there trains authors to ignore the channel | `deprecation_of_set` in `attributes_deprecated.rs` — one condition |
+| **CD-5** | Made `Display for Diagnostic` severity-aware, changing user-visible output for EVERY warning | It hardcoded "error", so every warning read `warning: type error at 3:9:` — self-contradicting, worst on `W-DEPRECATED` | Revert `headline()`/`render_as` in `diagnostic.rs` and the `pipeline.rs` call site |
+| **CD-6** | Synthesized flow-narrowing shadows bypass DEC-339 via a separate `declare_narrowed` | The author wrote no second declaration; without the carve-out the rule made narrowing reject itself (8 tests said so) | Route narrowing back through `declare_binding` — and expect those 8 tests to fail again |
+| **CD-7** | Substituted DEC-339's definition-of-done item 2 | It asked for a runnable differential example per REJECTED shape; the ruling chose rejection, so those shapes no longer compile. Shipped: 26 checker tests for all 14 rejected + a runnable example for the 9 ACCEPTED + a README fault carve-out | If runnable coverage of the rejected shapes is still wanted, it needs alpha-renaming instead of rejection — i.e. reopening DEC-339 itself |
+| **CD-8** | Chose the Invariant-13 split boundaries: `collect/enums.rs`, `expr/lambda.rs`, `natives/ops_tx.rs`, `lsp/tests_deprecated.rs`, `checker/program/attributes_deprecated.rs`, `transpile/db_php.rs` | Cohesion, not line count: enum vs class collection share only the receiver; a lambda IS a function boundary (why DEC-339 needed it); the tx ops are the only ones touching `tx_depth` | Each is a pure move — `git mv` the contents back and delete the `mod` line |
+| **CD-9** | Extended DEC-340's entry-depth unwind to the COMMIT-FAILURE path, not just the throw path | *"Restore the depth I found"* applies symmetrically; a leaked `begin` would otherwise leave the level open after a failed commit too. **The spec only ruled the throw path — this is my extension** | Use `rollback_inner` instead of `unwind_to_inner` in the `Err(msg)` arm of `db_transaction` |
+| **CD-10** | Kept `Core.DatabaseModule`-era names out of the DEC-350 rename in `docs/research/**` and past `CHANGELOG` entries | Those record what the name WAS; rewriting them falsifies the historical record the register exists to preserve | Run the same rename over those paths |
+| **CD-11** | Excluded `DatabaseError`, `DatabaseResult` and `Core.Native.Database` from the DEC-350 rename | DEC-350 renamed "the TYPE" (the connection); an error type is not the connection, and the native namespace keeps its leaf | Rename them too — note `Core.Native.Database` is load-bearing for the `E-TRANSPILE-DB` gate |
+| **CD-12** | Shipped DEC-363's pre-checks as `HeaderSafety.isValidName/isValidValue` instead of the ruled `Http.isValidHeaderName` | The ruled spelling needs a `class Http` inside module `Core.Http`, recreating the leaf==type namesake DEC-278's `Module` suffix existed to avoid and DEC-350 had just dissolved | Add `class Http` and accept the namesake, or rename the module `Core.HttpModule` (the DEC-278 pattern DEC-350 moved away from) |
+| **CD-13** | Split DEC-363's guard: POLICY in phorj, fault-RAISING in a one-line native | Prelude phorj has no panic-class fault primitive (no `panic`, no `never` builtin) and a checked throw was rejected. Modelled on `Core.Test.assert` | Add a real fault primitive to the language, then move the raise into the prelude |
+| **CD-14** | Concluded the `decimal` mapping needs NO ruling — reversing my own earlier recommendation | Measured: `bind` rejects `decimal` on both legs, so writes are already TEXT-based; and `NUMERIC` affinity destroys precision AT STORAGE before either leg sees it (PDO returned `12345678901234568`, `CAST AS TEXT` could not recover it). Identical on both legs ⇒ not a divergence | If DB `decimal` should be exact regardless of column type, that is a new feature (bind decimals as TEXT + a `DECIMAL`-affinity schema rule), not a PHP-leg question |
+| **CD-15** | Sequenced the case-1 lift as 3 steps, error contract FIRST | The error taxonomy is what makes `catch (UniqueViolationError)` work and `db.transaction(fn, retries)` retry; savepoints were the visible-but-small part | Reorder freely — steps 2/3 are independent of each other |
+| **CD-16** | Q28's git-argument guard is a DENYLIST (`ext::`/`file::`) not a transport allowlist | Re-ported the retired path's verified property P6 as-was rather than redesigning it under a security fix | Switch to an allowlist of `https`/`ssh`/`git`/`file` + bare paths; recorded as a residual in `KNOWN_ISSUES` 4b |
+| **CD-17** | doc-guards: G2 (one row per DEC) is HARD, G1/G3/G4 are RATCHETED against a frozen 142-entry baseline | A hard gate on 142 pre-existing violations would have blocked every push; the ratchet stops NEW ones while the debt burns down | Delete `scripts/doc-guards-baseline.txt` to make all four hard — expect ~142 failures |
+| **CD-18** | The no-concurrent-commits rule is an enforced `flock`, not a convention | It was a remembered convention and the race had already produced a spurious test failure | Remove the `flock` from `scripts/git-hooks/pre-commit` |
+| **CD-19** | `transactionDepth` is `pure: false` | It reads MUTABLE connection state; marking it pure invites folding/reordering. My first attempt said `true` and the whole-module purity guard rejected it | It is guard-enforced — changing it means changing `native::process_tests` too, which is the point |
+
+**Standing pattern worth keeping** (not a decision, an observation with evidence): on the PHP leg, RUNNING
+the emitted code beat READING it three times in two sessions — `SplObjectStorage::contains()` deprecated at
+the 8.5 floor (would have broken byte-identity via stdout notices), SQLite driver code 19 mis-classifying
+NOT NULL as a unique violation (would have made handlers catch the wrong type), and the `decimal`
+assumption above being wrong in my favour. Every PHP-leg change should be executed against
+`php-8.5.8` before it is believed.
