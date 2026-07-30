@@ -24,19 +24,19 @@
 | # | Item | Why first |
 |---|---|---|
 | 0.1 | ~~**DEC-378** docs-only `pre-commit` fast path + no-concurrent-commits rule~~ — **BUILT 2026-07-29** (fast path routes on staged paths; the rule is now an enforced `flock`, not a remembered convention) | Every later commit pays the ~4 min tier otherwise; this session lost ~45 min to it and its only test failure to the race |
-| 0.2 | **DEC-365** microbench gate SKIP-LOUD — was already built for *load* and *missing binary*; **2026-07-29 fixed a real hole: it probed the docker BINARY, not the DAEMON, so an unreachable daemon returned setup-error 2 and ABORTED the push** (the cause of every `--no-verify` that session). Remaining: the discarded-cpuset case | Pushes are blocked from the container without it. Carries the **no-hidden-loss** standing rule |
+| 0.2 | ~~**DEC-365** microbench gate SKIP-LOUD — was already built for *load* and *missing binary*; **2026-07-29 fixed a real hole: it probed the docker BINARY, not the DAEMON, so an unreachable daemon returned setup-error 2 and ABORTED the push** (the cause of every `--no-verify` that session). Remaining: the discarded-cpuset case~~ — **BUILT 2026-07-29** | Pushes are blocked from the container without it. Carries the **no-hidden-loss** standing rule |
 | 0.3 | ~~**DEC-362** three `pre-push` doc guards, incl. *every diagnostic code named in a decision row must exist in `src/`*~~ — **BUILT 2026-07-29** as `scripts/doc-guards.sh` (G1 paths / G2 DEC rows / G3 bare SHAs / G4 diagnostic codes; G2 hard, the rest ratcheted against a 142-entry baseline). Found and fixed 3 DEC ids with no register row on its first run | Would have caught three separate phantoms found this session |
-| 0.4 | Flip the **40 stale status labels** (task #43) | Zero-ruling cleanup; stops future sessions acting on false state |
+| 0.4 | ~~Flip the **40 stale status labels** (task #43)~~ — **BUILT 2026-07-30** (task #43; and this very row was one of the stale labels it missed — see the note below) | Zero-ruling cleanup; stops future sessions acting on false state |
 | 0.5 | ~~**Q28 / DEC-414** re-port the P6 git-argument hardening to `src/pm/fetch.rs`~~ — **BUILT 2026-07-29**: `ext::`/`file::` helper rejection (case-insensitive), leading-dash + empty rejection, `--` on clone, `-c protocol.ext.allow=never` everywhere, `GIT_*` env scrubbed; 6 tests each verified to fail with the guard neutered. `KNOWN_ISSUES` 4b closed | Was the only LIVE security regression on the audit tail |
 
 ## Wave 1 — correctness (the reason the agenda existed)
 
 | # | Item | Notes |
 |---|---|---|
-| 1.1 | **DEC-339** reject redeclaration of a live local/param binding (+ **DEC-366** lifter hoist, same slice — ratified by **DEC-397**) | The P0. 10 divergent shapes, one of which changes iteration count. **Migration cost MEASURED 2026-07-29 (DEC-412): exactly ONE in-tree site** — `examples/guide/math.phg:54` re-declares `l1` (`int` at :46, `float` at :54 — same scope, different type = case 11). One rename; nothing else in 270 `.phg` files. Also lands **DEC-396**'s matrix additions (3 ACCEPTED rows, the lambda-own-param hygiene rejection, `using`/local-fn scope forms) and **DEC-404**'s captured-name-is-live rule, and the **DEC-410** `enum extends` diagnostic |
-| 1.2 | **DEC-340** transaction auto-rollback unwinds to the **entry depth** + `rollbackAll()` + `transactionDepth()` + the PHP savepoint helper | P1 silent data loss, reproduced live |
-| 1.3 | **DEC-363** response-header CRLF/NUL guard in the prelude + NUL on the request side + `isValidHeaderName`/`…Value` | P1 security on a shipped `phg serve`, reproduced live |
-| 1.4 | **DEC-367** extend the builtin-collision guard to final methods of the mapped PHP parent | Invariant-1 breach: PHP fatal where both Rust legs run |
+| 1.1 | ~~**DEC-339** reject redeclaration of a live local/param binding (+ **DEC-366** lifter hoist, same slice — ratified by **DEC-397**)~~ — **BUILT 2026-07-29** | The P0. 10 divergent shapes, one of which changes iteration count. **Migration cost MEASURED 2026-07-29 (DEC-412): exactly ONE in-tree site** — `examples/guide/math.phg:54` re-declares `l1` (`int` at :46, `float` at :54 — same scope, different type = case 11). One rename; nothing else in 270 `.phg` files. Also lands **DEC-396**'s matrix additions (3 ACCEPTED rows, the lambda-own-param hygiene rejection, `using`/local-fn scope forms) and **DEC-404**'s captured-name-is-live rule, and the **DEC-410** `enum extends` diagnostic |
+| 1.2 | ~~**DEC-340** transaction auto-rollback unwinds to the **entry depth** + `rollbackAll()` + `transactionDepth()` + the PHP savepoint helper~~ — **BUILT 2026-07-29** | P1 silent data loss, reproduced live |
+| 1.3 | ~~**DEC-363** response-header CRLF/NUL guard in the prelude + NUL on the request side + `isValidHeaderName`/`…Value`~~ — **BUILT 2026-07-30** | P1 security on a shipped `phg serve`, reproduced live |
+| 1.4 | ~~**DEC-367** extend the builtin-collision guard to final methods of the mapped PHP parent~~ — **BUILT 2026-07-29** | Invariant-1 breach: PHP fatal where both Rust legs run |
 | 1.5 | ~~**DEC-361** single-source the fault strings **and** make `differential.rs::classify` derive from them~~ — **BUILT 2026-07-30**: `src/value/faults.rs` + two ratchets (no-literal-outside-its-definition, and every const must be classified); **38 re-inlined sites** converted, incl. a second `pub const` in the JIT whose comment admitted the body wasn't single-sourced; the predicted PHP-leg match drift found in **TWO** lowerings (empty `\UnhandledMatchError` + PHP's native "Unhandled match case") and fixed in both | The test that should catch drift is what hides it |
 | 1.6 | ~~**DEC-351** reset `Statement` binds per execution, unify positional/named, fix the quadratic path, portable savepoint SQL + MySQL/Postgres coverage~~ — **BUILT 2026-07-30**: binds execution-scoped (`take_binds`, reset BEFORE the driver call at all four sites); **8000 named binds 4.469s → 0.054s measured**, at the report's own re-prepare baseline of 0.059s; D5 single-sourced in `natives/savepoint.rs` (three-dialect intersection only) with a source-scan ratchet over every emitter incl. the PHP leg; the nested `RELEASE SAVEPOINT` branch NO test had ever run is now covered. MySQL/PG live tests written but SKIP (no server in-container — **CD-22**, stated gap) | Broken reuse + ~75× |
 
@@ -118,3 +118,17 @@ recommendations; developer-approved to defer. L-31/L-19 look mechanical; **L-22 
 3. **DEC-365** — the two **owed verdicts**: `floatloop` (WIN→LOSS on a discarded-cpuset run) and `queryparse` (0.146 here vs DEC-338's ~0.88×, so **DEC-338's near-parity claim stays un-certified**). Both need a dev-box run.
 4. **DEC-370** — copy-at-boundary cost + per-thread runtime instantiability.
 5. **DEC-377** — the 168-helper classification.
+
+
+## Stale-status postmortem (2026-07-30)
+
+Row **0.4** was "flip the 40 stale status labels", and it was marked done — yet on 2026-07-30 a count of
+this very file found **seven** rows still unflipped (0.2, 0.4, 1.1, 1.2, 1.3, 1.4, 5.4) and the decision
+register still saying *"RULED — build queued"* for **four shipped features** (DEC-339/340/363/367). A
+fresh session reading either SSOT would have concluded Wave 1.1–1.4 was unbuilt.
+
+The lesson is the one DEC-361 and DEC-377 both landed on: **a status label with nothing asserting it goes
+stale, and a sweep that fixes labels by hand fixes them once.** 0.4 swept prose and missed status columns.
+The countable check that caught this — parse every `N.N` row, compare its BUILT tag against the register
+and against whether the code exists — is cheap and should be run at the start of any status question rather
+than trusting either file.

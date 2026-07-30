@@ -68,8 +68,8 @@ working as designed.
 
 ## Beyond the 35 — what the compiler CANNOT enumerate
 
-- **Lexer:** `using` becomes a keyword. Check the de-reservation question first (DEC-344 de-reserves
-  `main`) — a new reserved word is a breaking change for any identifier named `using`.
+- **Parser, NOT the lexer** — `using` is contextual (DEC-364.1 below), so no keyword is added and no
+  identifier is reserved; the decision happens at statement position with one lookahead.
 - **`Core.Closable`** in the prelude, plus `Connection`/`Statement`/file handles declaring it. The DB
   prelude already anticipates this (`src/ext/database/prelude.rs:396` names `using`/`Closable`).
 - **Lift** (Invariant 17): PHP has no `using`, so the lifter must recognise the `try`/`finally`-with-a-
@@ -88,9 +88,17 @@ working as designed.
 5. Example + README entry; `FEATURES.md` row; spec status flipped here.
 6. Full ALL-FEATURES gate green.
 
-## Open question for the developer, before the build starts
+## RULED 2026-07-30 (DEC-364.1) — `using` is CONTEXTUAL, not reserved
 
-**Is `using` a reserved word, or contextual?** Reserving it is simpler to implement and matches C#, but it
-breaks any existing identifier spelled `using` — and DEC-344 is simultaneously *de*-reserving `main`, so
-the project is currently moving in the opposite direction. A contextual keyword (only significant before
-`(`) costs parser lookahead but reserves nothing. Not ruled; do not decide it in passing.
+Significant only immediately before `(`; reserves nothing. Reserving would break any identifier spelled
+`using`, and DEC-344 is simultaneously *de*-reserving `main` — a new reserved word would cut against the
+direction the project is already moving. Cost: one parser lookahead branch.
+
+**So the lexer gains NO keyword.** `using` stays an ordinary identifier token and the parser decides at
+statement position. Both of these must parse, and each needs a test — the pair is this decision's
+regression surface:
+
+```phorj
+int using = 1;                      // still a legal identifier
+using (Connection db = open()) { }  // the scope guard
+```
