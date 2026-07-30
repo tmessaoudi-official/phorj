@@ -156,6 +156,33 @@ recommendation after measuring it).
 - Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
   clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
 
+### 📊 THE OWED §1.2 RE-TALLY — STARTED 2026-07-30 (§4.13): **≈70% parity · ≈57% floor · ≈71% vision**
+
+Four recomputes overdue; now started with a **mechanical method** rather than judgement: dump the shipped
+surface from `native::registry()` (the checker's own ground truth) and compare against each §1.2 group's
+claimed `C`. Then map **PHP row → phorj function explicitly**, because a shipped native is NOT automatically
+a PHP row (`sumBy`, `graphemes`, `fileStem`, `join` have no counterpart and are NOT credited).
+
+**Result across 7 sampled groups: SIX are under-credited, one is genuinely thin.**
+
+| group | rows | §1.2 credits C | ships |
+|---|---|---|---|
+| FN-STR | 93 | 30 | 55 | | FN-ARR | 74 | 26 | 70 | | FN-MATH | 37 | 17 | 50 |
+| FN-PCRE | 11 | 4 | 10 | | FN-JSON | 6 | 3 | 5 | | FN-FS | 55 | **8 → 20 CREDITED** | 31 |
+| FN-DATE | 27 | 5 | 3 → **a real gap, not a phantom** |
+
+FN-DATE is what keeps the method honest — it finds real gaps too, so it is not an inflation machine.
+
+**Only FN-FS is credited**, on an explicit 20-pair PHP-row mapping (`file_exists`→`exists`,
+`file_get_contents`→`readText`, `scandir`→`listDir`, … plus `removeDirAll` as **CB** since PHP needs a
+RecursiveIterator, and `walk` as **P** for lacking depth/filter control). §1.2 said `C=8 P=2`; corrected to
+`C=20 P=1`. That is a **2.5× under-count in one group**, which is why the headline moved +1pp on this alone.
+
+**Remaining debt is now SCOPED, not vague:** ~19 groups, six of them already measured as under-credits
+awaiting only their row mappings. On FN-FS's evidence the true parity is materially higher than 70%. The
+floor is now within **13pp** of the headline (17pp at §4.9) — the model's own signal that this exercise is
+converting weighted credit into real credit.
+
 ### 📊 PARITY RECOMPUTED 2026-07-30 (§4.12) — **≈69% parity · ≈55% floor · ≈70% vision**
 
 Owed at milestone close (Waves 1 and 2 both closed today) and it was 11 days / 265 commits stale.

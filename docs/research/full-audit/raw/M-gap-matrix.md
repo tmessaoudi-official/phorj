@@ -1050,3 +1050,80 @@ the DEC-356/361/377 ratchets) **+2**. New mean = (72.0×16 + 7)/16 = **72.4**.
 **The number:** **PHP-parity ≈ 69% · floor ≈ 55% · Vision ≈ 70%** (from §4.11's 68/53/69). The floor moved
 +2pp against the headline's +1pp — the gap between them keeps closing (17pp → 15pp → 14pp), which is the
 model's own signal that credited rows are becoming real rather than weighted.
+
+
+### 4.13 The OWED §1.2 re-tally — STARTED 2026-07-30 (HEAD `a10a297`): method, inventory, FN-FS credited
+
+The full 631-row re-pass has been owed since §4.10 and is four recomputes old. This starts it with a
+**mechanical method** instead of judgement, does **one group rigorously** as the template, and credits only
+that group. **1 of ~20 groups done; the rest carry a measured signal but NO credit.**
+
+#### The method (repeatable, and the reason the debt was hard before)
+
+Dump what phorj **actually ships** from `native::registry()` grouped by module, then compare against each
+§1.2 group's claimed `C`. The registry is the ground truth — it is what the checker resolves against — so
+this replaces "grep and judge" with a count. Then, per group, map **PHP row → phorj function explicitly**,
+because a shipped phorj function is NOT automatically a PHP row: `sumBy`, `graphemes`, `fileStem`, `join`
+have no PHP counterpart and must NOT be credited.
+
+#### Shipped surface, per module [Verified: `native::registry()` at this HEAD, all-features]
+
+`Core.String` 45 · `Core.Math` 50 · `Core.List` 44 · `Core.Native.Database` 42 · `Core.Native.Uri` 32 ·
+`Core.Native.Mail` 21 · `Core.Conversion` 20 · `Core.Native.FileSystem` 18 · `Core.Map` 14 ·
+`Core.Validation` 14 · `Core.Set` 12 · `Core.Log` 11 · `Core.Regex` 10 · `Core.File` 8 · `Core.Hash` 8 ·
+`Core.Result` 8 · `Core.Test` 8 · `Core.Native.Http` 8 · `Core.Bytes` 6 · `Core.Option` 6 ·
+`Core.Random` 6 · `Core.Native.HttpClient` 6 · `Core.Json` 5 · `Core.Path` 5 · `Core.Runtime` 5 ·
+`Core.Encoding` 4 · `Core.Native.Input` 4 · `Core.Decimal` 3 · `Core.Output` 3 · `Core.Time` 3 ·
+`Core.Html` 51 (beyond-PHP) · smaller: Csv 2, Cryptography 2, Environment 2, Ini 1, Process 1, Reflection 7.
+
+#### The signal, measured across 7 sampled groups
+
+| group | rows | §1.2 credits C | actually ships | read |
+|---|---|---|---|---|
+| FN-STR | 93 | 30 | 55 (String 45 + Bytes 6 + Encoding 4) | under-credited |
+| FN-ARR | 74 | 26 | 70 (List 44 + Map 14 + Set 12) | under-credited |
+| FN-MATH | 37 | 17 | 50 (Math) | under-credited |
+| FN-PCRE | 11 | 4 | 10 (Regex) | under-credited |
+| FN-JSON | 6 | 3 | 5 (Json) | under-credited |
+| FN-FS | 55 | 8 | 31 (File 8 + FileSystem 18 + Path 5) | under-credited — **credited below** |
+| FN-DATE | 27 | 5 | 3 (Time) | **genuinely thin — a real gap, not a phantom** |
+
+**Six of seven under-credited, one genuinely thin.** That confirms §4.10's PHANTOM-GAP suspicion as
+*systematic*, not incidental — and FN-DATE is the counter-example that keeps it honest: the method finds
+real gaps too, so it is not an inflation machine.
+
+#### FN-FS credited — explicit PHP-row mapping [Verified]
+
+`file_exists`→`exists` · `is_file`→`isFile` · `is_dir`→`isDir` · `file_get_contents`→`readText` ·
+`file_put_contents`→`writeText` · `…(FILE_APPEND)`→`appendText` · `copy` · `rename`→`rename`/`move` ·
+`unlink`→`delete` · `filesize`→`size` · `mkdir`→`createDir` · `rmdir`→`removeDir` ·
+*(no single PHP fn — needs RecursiveIterator)*→`removeDirAll` **CB** · `scandir`→`listDir` ·
+`sys_get_temp_dir`→`tempDir` · `basename`→`baseName` · `dirname`→`directoryName` ·
+`pathinfo(EXTENSION)`→`extension` · binary `fread`→`readBytes` · binary `fwrite`→`writeBytes` = **20 C**
+(incl. 1 CB); `RecursiveDirectoryIterator`→`walk` = **1 P** (no depth/filter control).
+
+**NOT credited**: `fileStem`, `join` — no PHP counterpart, so they are beyond-PHP surface, not parity.
+
+**§1.2 FN-FS was `C=8 P=2`. Corrected: `C=20 P=1` → +12 C.** FS is high-usage ⇒ **T1**.
+
+#### Arithmetic (additive on §4.12 — T1 167.5/303, T2 62/140, T3 16/75; SYN 110/129; RT 13.5/18)
+
+- T1: 167.5 + 12 = **179.5 / 303**
+- FN usage-weighted = (3×179.5 + 2×62 + 16)/1264 = 678.5/1264 = **53.7%** (was 50.8%)
+- SYN **85.3%**, RT **75.0%** — unchanged
+- **PHP-parity = 0.35×85.3 + 0.40×53.7 + 0.25×75.0 ≈ 70%** (was ≈69)
+- Raw floor: FN raw 241 + 12 = 253; (110 + 253 + 13.5)/665 ≈ **57%** (was ≈55)
+- **Vision = 0.70×70.1 + 0.30×72.4 ≈ 71%** (was ≈70)
+
+**Grade:** the shipped-surface inventory **[Verified]** (registry dump, reproducible); the FN-FS row mapping
+**[Verified]** (each pair is a named PHP function against a named shipped native); T1 placement
+**[Inferred]**; the headline **[Inferred]** (additive delta on the ratified model); the six uncredited
+signals **[Verified as signals, Unverified as credit]** — deliberately not banked without their mappings.
+
+**The number:** **PHP-parity ≈ 70% · floor ≈ 57% · Vision ≈ 71%**.
+
+**Remaining debt, now scoped rather than vague:** ~19 groups, of which the six above are measured
+under-credits awaiting only their row mappings. On FN-FS's evidence (8→20, a 2.5× under-count) the true
+parity is materially higher than 70% — but each group needs its mapping before it is banked. **The floor is
+now within 13pp of the headline** (was 17 at §4.9), which is the model's own signal that this exercise is
+converting weighted credit into real credit.
