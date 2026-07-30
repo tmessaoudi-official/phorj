@@ -45,7 +45,7 @@
 | # | Item | Notes |
 |---|---|---|
 | 2.1 | ~~**DEC-356**~~ — **BUILT 2026-07-30**: D + C + Invariant 3 widened. Found a VERIFIED compiler PANIC (`html"…"` in a tuple → `unreachable!`), plus `Item::Test` and `Stmt::Destructure` gaps. Leaf sets single-sourced as or-pattern macros; six cohesion splits left Invariant 13 net-negative (4 files dropped under the hard cap). Follow-up B QUEUED. |
-| 2.2 | **DEC-377** finish the helper classification — **first pass done 2026-07-29 (DEC-412): 149 REAL helpers (not 168 — that count was stale; 180 raw matches, 31 grep artifacts), 64 bucket-1 / 66 bucket-2 / 17 bucket-3 INLINE CANDIDATES / 2 unclassified.** Remaining: bucket-2's per-helper justification strings + one read per inline candidate. Watch the `uri_*` trio (PHP 8.5's built-in URI ext may make them waste) and the `text_*`/`trim` group (overlaps DEC-385's Core.Text merge) |
+| 2.2 | ~~**DEC-377**~~ — **BUILT 2026-07-30**: `src/transpile/helper_buckets.rs` classifies all **165** helpers (68 bucket-1 / 97 bucket-2 / **0 bucket-3**) with a both-directions ratchet. All 17 bucket-3 candidates REFUTED by reading them; both attached findings were wrong (`uri_*` already uses PHP 8.5's URI extension, `text_*` exists because PHP is byte-oriented — verified against php-8.5.8); `__phorj_trim` is a phantom. The count was wrong three times (168 → "149 real" → 165) and is now asserted, not claimed. |
 
 ## Wave 3 — the enabler, then what needs it
 

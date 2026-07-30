@@ -4493,3 +4493,41 @@ One shared total visitor across the 13 rewriters. It is only safe NOW that D is 
 carrying explicit arms, the compiler *enumerates* the blast radius a shared visitor must preserve. The
 six cohesion splits landed here deliberately anticipate it — each pass's traversal now lives in its own
 `*_walk.rs`, which is the seam B would replace.
+
+
+### DEC-377 BUILT (2026-07-30) — the audit landed, and **bucket 3 is EMPTY**
+
+The rule (*a `__phorj_*` helper may exist ONLY when PHP cannot do natively what phorj does*) demanded an
+audit classifying every helper. DEC-377 itself said why it mattered: *"nobody currently knows which bucket
+each is in, which is the same unverified-claims pattern this whole agenda has been fixing."*
+
+**Every one of DEC-412's 17 bucket-3 candidates is REFUTED by reading it.** DEC-377's "must be INLINED"
+action therefore applies to nothing. Both findings attached to that list were also wrong:
+
+| DEC-412 said | Reading it shows |
+|---|---|
+| the `uri_*` trio "may be pure waste … may reimplement what the target already has" | they **already use** PHP 8.5's extension (`new \Uri\Rfc3986\Uri($raw)`). What they add is the exception→sentinel bridge phorj's `Result` surface needs — and that needs `try`/`catch`, which **is not an expression in PHP** [Verified php-8.5.8: `$x = try {…} catch {…};` is a parse error; `@` does not suppress an exception]. **Bucket 2.** |
+| the `text_*` + `trim` group is "ASCII-oriented … inlinable" | the exact opposite: they exist BECAUSE PHP's calls are byte-oriented and therefore wrong. [Verified php-8.5.8: `trim()` leaves U+00A0/U+2009 in place where the helper's `/u` class strips them; `strrev("héllo")` returns mojibake.] Their Unicode class is already single-sourced as `transpile::PHP_TRIM_WS` and shared with `__phorj_http_trim`, so inlining would duplicate a parity-affecting class at N sites — DEC-361's lesson exactly. **Bucket 1.** |
+| `__phorj_trim` is a bucket-3 candidate | **it does not exist.** Zero `function __phorj_trim(` definitions — a phantom from prefix-matching `__phorj_trim_start`. |
+
+**The count was wrong three times, and is now asserted rather than claimed.** DEC-377 said 168; DEC-412
+corrected to "149 real"; the true figure is **165**. Both earlier numbers came from grepping `__phorj_`
+and subtracting guessed artifacts. A first careful pass here read **158** — it missed the by-reference
+form `function &__phorj_rng_state()` (used by `rng_*`, `now_*`, `db_depths` to hold mutable global state)
+and the checked-arith codegen table. `__phorj_unwrap` appears in comments but was inlined at M3 S2.5.
+
+**`src/transpile/helper_buckets.rs` is the registry, with a RATCHET** —
+`the_helper_registry_matches_the_source_exactly` re-derives the set from source and asserts it matches
+exactly, in both directions: an unclassified helper fails, and a classified-but-deleted one fails too.
+Verified live by planting `__phorj_probe_helper` (caught by name) and removing it. This is the part that
+matters: DEC-377's classification was OWED for four days because it was a document with nothing keeping it
+true, and DEC-356's inventory decayed 17→26 the same way. **Bucket 3 being recordable is itself a build
+failure** — bucket 3 means "must be inlined", so recording one instead of inlining it would be recording
+the violation.
+
+Final classification: **68 bucket 1** (semantic necessity) · **97 bucket 2** (no single-expression
+equivalent, reason stated per family as the rule requires) · **0 bucket 3**.
+
+One self-inflicted trap worth recording: the scanner initially flagged `__phorj_trim` and `__phorj_x` —
+both from this file's OWN documentation, which names `function __phorj_trim(` precisely to record that it
+does not exist. Comment lines are now skipped, same as the DEC-361 ratchet.

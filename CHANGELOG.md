@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the `__phorj_*` helper classification registry, with a ratchet (2026-07-30, DEC-377)
+The rule is *a helper may exist ONLY when PHP cannot do natively what phorj does*, and the audit proving
+which helpers comply had been OWED. It is now `src/transpile/helper_buckets.rs`, and **bucket 3
+("convenience/DRY only — must be INLINED") is EMPTY**: all 17 candidates from the earlier heuristic pass
+are refuted by reading them.
+- The `uri_*` trio was suspected of "reimplementing what the target already has". It **already uses** PHP
+  8.5's URI extension; what it adds is the exception→sentinel bridge, which needs `try`/`catch` — and
+  `try` is not an expression in PHP [verified: `$x = try {…} catch {…};` is a parse error].
+- The `text_*` group was called "ASCII-oriented and inlinable". The opposite: they exist because PHP's
+  calls are byte-oriented [verified: `trim()` leaves U+00A0/U+2009; `strrev("héllo")` returns mojibake].
+- `__phorj_trim` **does not exist** — a phantom from prefix-matching `__phorj_trim_start`.
+- **The count was wrong three times** (168 → "149 real" → **165**) and is now asserted by the ratchet, not
+  claimed. A first pass here read 158, missing the by-reference `function &__phorj_x()` form.
+- The ratchet fails in both directions — unclassified helper, or classified-but-deleted — verified live by
+  planting one. Recording a bucket-3 entry is itself a build failure, since bucket 3 means "inline it".
+
 ### Fixed — AST rewriters are exhaustive; a catch-all was hiding a compiler PANIC (2026-07-30, DEC-356)
 `rewrite_html`'s `leaf => leaf` arm swallowed `Expr::Tuple`, and `erase_tuples` runs AFTER `resolve_html`,
 so `var (a, b) = (html"<p>{n}</p>", 1);` left the literal unresolved and **panicked the compiler** with

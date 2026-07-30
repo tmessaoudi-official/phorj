@@ -17,6 +17,7 @@ mod expr;
 mod fs_php;
 mod functions;
 mod gates;
+mod helper_buckets;
 mod kinds;
 mod log_php;
 mod magic_php;

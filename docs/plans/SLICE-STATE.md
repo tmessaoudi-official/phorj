@@ -156,6 +156,18 @@ recommendation after measuring it).
 - Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
   clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
 
+### ✅ BUILT 2026-07-30 — Wave 2.2 / **DEC-377**. The helper audit, and **bucket 3 is EMPTY**.
+
+`src/transpile/helper_buckets.rs` classifies all **165** helpers (68 bucket-1, 97 bucket-2, 0 bucket-3)
+with a ratchet that re-derives the set from source and fails in BOTH directions. All 17 bucket-3
+candidates refuted by reading them; both attached findings were wrong (`uri_*` already USES PHP 8.5's URI
+extension and adds the `try`/`catch` bridge that PHP's expression grammar cannot express; `text_*` exists
+BECAUSE PHP's calls are byte-oriented — verified against php-8.5.8 both ways); `__phorj_trim` is a
+phantom. **The count was wrong three times** (168 → "149 real" → 165) and is now asserted, not claimed.
+Gate: 2629 green, clippy clean both ways, size-gate `fails=0`.
+**Still owed on DEC-377:** nothing. **Still owed on DEC-412:** the two measurements needing the
+developer's box (DEC-365 + DEC-370 — no Docker in the container).
+
 ### ✅ BUILT 2026-07-30 — Wave 2.1 / **DEC-356**. D + C + Invariant 3 widened.
 
 **It was hiding a compiler PANIC on valid user code.** `rewrite_html`'s `leaf => leaf` swallowed
