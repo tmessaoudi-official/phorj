@@ -10,6 +10,8 @@ use crate::token::Span;
 mod class_hierarchy;
 mod class_layout;
 mod entry;
+#[macro_use]
+mod leaves;
 mod walk;
 #[cfg(test)]
 #[path = "walk_tests.rs"]

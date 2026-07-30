@@ -2821,7 +2821,6 @@ impl Connection<'_> {
                     .collect(),
                 span,
             ),
-            Expr::NewColl { kind, args, span } => Expr::NewColl { kind, args, span },
             Expr::Unary { op, expr, span } => Expr::Unary {
                 op,
                 expr: Box::new(self.rexpr(*expr)),
@@ -2963,7 +2962,22 @@ impl Connection<'_> {
             },
             // Leaves (Int/Float/Decimal/Bool/Null/Bytes/Ident/This) and `Inject` (already expanded by
             // `desugar_di` upstream) carry no `queryInto` to rewrite.
-            leaf => leaf,
+            // DEC-356: these bear expressions and were silently passed through by `leaf => leaf`.
+            Expr::Tuple(items, span) => {
+                Expr::Tuple(items.into_iter().map(|e| self.rexpr(e)).collect(), span)
+            }
+            Expr::NamedArg { name, value, span } => Expr::NamedArg {
+                name,
+                value: Box::new(self.rexpr(*value)),
+                span,
+            },
+            Expr::Pipe { lhs, rhs, span } => Expr::Pipe {
+                lhs: Box::new(self.rexpr(*lhs)),
+                rhs: Box::new(self.rexpr(*rhs)),
+                span,
+            },
+            // Carries no nested expression — single-sourced in `ast::leaves` (DEC-356).
+            e @ (crate::expr_leaves!() | Expr::NewColl { .. } | Expr::Inject { .. }) => e,
         }
     }
 
@@ -3100,39 +3114,13 @@ impl Connection<'_> {
                 finally_block: finally_block.map(|b| self.rblock(b)),
                 span,
             },
-            leaf => leaf, // Break / Continue carry no expression
+            // `break`/`continue` carry nothing — the set is single-sourced in `ast::leaves` (DEC-356),
+            // so a new `Stmt` variant breaks the build here rather than being swept through.
+            s @ crate::stmt_leaves!() => s,
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::snake_case;
-
-    #[test]
-    fn snake_case_camel_boundaries() {
-        // The `SnakeToCamel` core case (DEC-208 slice B2): a camelCase field → its snake_case column.
-        assert_eq!(snake_case("userName"), "user_name");
-        assert_eq!(snake_case("firstName"), "first_name");
-        assert_eq!(snake_case("streetName"), "street_name");
-        assert_eq!(snake_case("postalCode"), "postal_code");
-        assert_eq!(snake_case("homeAddress"), "home_address");
-    }
-
-    #[test]
-    fn snake_case_acronyms() {
-        // An interior/trailing ACRONYM run stays together; the run ends where a lowercase word begins.
-        assert_eq!(snake_case("userId"), "user_id");
-        assert_eq!(snake_case("userID"), "user_id");
-        assert_eq!(snake_case("httpServer"), "http_server");
-        assert_eq!(snake_case("parseHTTPResponse"), "parse_http_response");
-    }
-
-    #[test]
-    fn snake_case_digits_and_noop() {
-        // A digit is a word boundary before an uppercase; an all-lowercase name is unchanged.
-        assert_eq!(snake_case("field2Name"), "field2_name");
-        assert_eq!(snake_case("id"), "id");
-        assert_eq!(snake_case("plain"), "plain");
-    }
-}
+#[path = "desugar_db_tests.rs"]
+mod desugar_db_tests;

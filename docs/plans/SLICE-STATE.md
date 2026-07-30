@@ -156,7 +156,29 @@ recommendation after measuring it).
 - Gate: **2625 tests green** under `PHORJ_REQUIRE_PHP=1 cargo test --workspace --all-features`, clippy
   clean at `--all-features` and `--no-default-features`, `fmt --check`, release build.
 
-### ⏳ IN PROGRESS 2026-07-30 — Wave 2.1 / **DEC-356**, partial and deliberately stopped
+### ✅ BUILT 2026-07-30 — Wave 2.1 / **DEC-356**. D + C + Invariant 3 widened.
+
+**It was hiding a compiler PANIC on valid user code.** `rewrite_html`'s `leaf => leaf` swallowed
+`Expr::Tuple`; `erase_tuples` runs AFTER `resolve_html`; so `var (a, b) = (html"<p>{n}</p>", 1);` reached
+`unreachable!("html literal not resolved before compilation")`. GR-18 was rated hygiene — it was a P0.
+
+- **D:** every `Expr`/`Stmt`/`Pattern` total walk exhaustive. `rustc` enumerated the gaps (leaf-only
+  or-pattern first, then read the non-exhaustive error) instead of trusting the spec's decayed table —
+  4–6 expression-bearing forms missed per walker; `Tuple`/`NamedArg` missed by all seven. Also found:
+  `Item::Test` (statement body → same panic path), `Stmt::Destructure` in `desugar_di` (bears an
+  initializer), and `_ => false` for `StrPart` in two boolean scanners.
+- **Leaf sets are MACROS** (`src/ast/leaves.rs`) — an or-pattern, so exhaustiveness checking is fully
+  intact; a `fn is_leaf()` would have been a catch-all by the back door. Gate property verified by hand.
+- **C:** `no_fixed_rewriter_regrows_a_catch_all`. Flags INERT catch-alls only — one that recurses is total
+  behaviour. Found four more sites when first run. CD-27 exempts `apply_repl` (checker-constructed domain).
+- **Invariant 13 NET-NEGATIVE:** six files split by cohesion; four dropped under the hard cap and their
+  grandfather entries were deleted (67 from 71).
+- Gate: **2628 green** under `PHORJ_REQUIRE_PHP=1 --all-features`, clippy clean both ways, fmt, release,
+  size-gate `fails=0 stale=0`, doc-guards OK.
+- **Follow-up B (one shared total visitor) stays QUEUED** — now safe, because explicit arms let the
+  compiler enumerate what a visitor must preserve; the six `*_walk.rs` splits are the seam it replaces.
+
+### (superseded) earlier partial note — Wave 2.1 / DEC-356
 
 - **BUILT:** `src/ast/walk.rs`'s `collect_pattern_bindings` — the site the ruling names explicitly — now
   has **named no-op arms**, not `unreachable!()` (those forms are reachable, they just bind nothing).

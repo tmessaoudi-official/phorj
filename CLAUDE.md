@@ -133,10 +133,17 @@ is green. Limits:
    concurrency (see rule 14 — its PHP leg is excluded, never silently degraded).
 2. **The interpreter is the reference oracle.** When backends disagree, the interpreter is right
    by definition; validate the VM against it, never the reverse.
-3. **A new `Op` variant extends three exhaustive matches in the same commit:** `vm::exec_op`
+3. **Mechanical exhaustiveness — `Op` AND `Expr`/`Stmt`/`Pattern`** (widened 2026-07-30, DEC-356).
+   A **new `Op` variant extends three exhaustive matches in the same commit:** `vm::exec_op`
    (`src/vm/exec.rs:9`), `BytecodeProgram::validate` (`src/chunk/validate.rs:21`),
    `compiler::stack_effect` (`src/compiler/emit.rs:75`). All three are wildcard-free (verified
    2026-07-25) — never reintroduce a `_` arm.
+   **The same rule governs `Expr` (37) / `Stmt` (15) / `Pattern` (11):** a rewriter's total walk carries
+   NO catch-all, and a *named* one (`other => other`, `leaf => leaf`) is worse than `_` because it reads
+   as deliberate and greps as handled. Leaf sets are single-sourced as or-pattern macros in
+   `src/ast/leaves.rs` so `rustc` still enforces exhaustiveness; exemptions are recorded as CD rows,
+   never silent. This class already panicked the compiler on valid user code (an `html"…"` inside a
+   tuple → `unreachable!("html literal not resolved before compilation")`).
 4. **Value kernels are single-sourced** in `src/value/` — checked int/float arithmetic + the canonical
    fault consts in `src/value/arith.rs`, `compare_ord` alongside. Never re-inline them in a backend; fault bodies are
    parity-affecting.

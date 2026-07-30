@@ -34,6 +34,23 @@ When the VM and the interpreter disagree, the **interpreter is right by definiti
 older, simpler implementation and the semantics of record. New VM behaviour is validated *against*
 the interpreter, never the reverse.
 
+## 2b. Mechanical exhaustiveness covers `Expr` / `Stmt` / `Pattern`, not just `Op` (DEC-356)
+A new `Op` variant must extend three exhaustive, wildcard-free matches (Invariant 3 below / rule 3 in
+`CLAUDE.md`). **The identical rule now applies to `Expr` (37 variants), `Stmt` (15) and `Pattern` (11).**
+- **A named catch-all is WORSE than `_`**: `other => other` / `leaf => leaf` compiles cleanly, reads as
+  deliberate, and greps as a *handled* case. Both forms are banned in a rewriter's total walk.
+- The leaf sets are single-sourced as macros in `src/ast/leaves.rs` (`expr_leaves!`, `stmt_leaves!`,
+  `pattern_leaves!`) — an or-pattern, so `rustc` keeps checking exhaustiveness. Adding a variant breaks
+  the build at every site until someone rules whether it is a leaf. A `fn is_leaf(&Expr) -> bool` would
+  reintroduce the catch-all by the back door, which is why these are macros.
+- `ast::leaves::tests::no_fixed_rewriter_regrows_a_catch_all` asserts no fixed rewriter regrows one.
+- **What this class costs when it slips:** `rewrite_html`'s catch-all swallowed `Expr::Tuple`, so
+  `var (a, b) = (html"<p>{n}</p>", 1);` left the literal unresolved and the compiler PANICKED on valid
+  user code — `unreachable!("html literal not resolved before compilation")` [Verified by before/after].
+- **Exemptions are recorded, never silent.** `rewrite_ufcs`'s `apply_repl` keeps a catch-all (CD-27): its
+  domain is checker-CONSTRUCTED replacement shapes, not user AST. Full rule:
+  `docs/specs/2026-07-26-ast-exhaustiveness.md`.
+
 ## 3. Arithmetic & comparison are single-sourced in `src/value/`
 The checked integer kernels (`int_add/sub/mul/div/rem/neg → Result<i64, String>`), the float
 kernels (`float_*`), and `compare_ord` live **once**, in `src/value/` (the checked kernels + canonical fault consts in

@@ -52,6 +52,12 @@ function main(): void {
     // used by that literal.
     var inferred = html"<em>{name}</em>";
     Output.printLine(Html.render(inferred));
+    // DEC-356: an `html"…"` literal inside a TUPLE element. `resolve_html` runs BEFORE `erase_tuples`,
+    // so its walker sees `Expr::Tuple` — and its old `leaf => leaf` catch-all swallowed it, leaving the
+    // literal unresolved. The compiler then PANICKED on valid user code:
+    // `internal error: entered unreachable code: html literal not resolved before compilation`.
+    var (nested, tag) = (html"<b>{name}</b>", "b");
+    Output.printLine("{tag}: {Html.render(nested)}");
     Output.printLine(Html.render(field("name", name)));
     // <li>name: Tom &amp; &quot;Jerry&quot;</li>
     Output.printLine(Html.render(field("bio", bio)));

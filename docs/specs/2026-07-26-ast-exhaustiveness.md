@@ -66,7 +66,16 @@ ruling applies the identical rule to `Expr`/`Stmt`/`Pattern`, so **Invariant 3's
 `CLAUDE.md` + `docs/INVARIANTS.md` is widened to cover them** — written down rather than remembered.
 The precedent matters: the project has already proven it can hold this line for `Op`.
 
-## RE-MEASURED 2026-07-30 — the inventory above has DECAYED, and `walk.rs` is BUILT
+## BUILT 2026-07-30 — see the DEC-356 build note in the decision register for the outcome
+
+> **This spec is now a record, not a plan.** D, C and the Invariant 3 widening all shipped. The single
+> most important thing it got wrong: it rated the class *structural*. It was hiding a **compiler panic on
+> valid user code** — `var (a, b) = (html"<p>{n}</p>", 1);` reached
+> `unreachable!("html literal not resolved before compilation")` because `rewrite_html`'s catch-all
+> swallowed `Expr::Tuple` and `erase_tuples` runs after it. Canonical outcome, per-gap findings and the
+> CD-27 exemption: the DEC-356 build note in `docs/research/full-audit/raw/C-decisions.md`.
+
+## RE-MEASURED 2026-07-30 (pre-build) — the inventory above had DECAYED
 
 *[Verified 2026-07-30 by classifying every hit by the enum it matches on.]* The ruling's own prediction
 ("**D alone decays** — nothing prevents catch-all #19") came true **before D shipped**:

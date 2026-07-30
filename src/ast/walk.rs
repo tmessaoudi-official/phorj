@@ -303,7 +303,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
             Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
                 parts.iter().any(|p| match p {
                     StrPart::Expr(inner) => in_expr(inner),
-                    _ => false,
+                    StrPart::Literal(_) => false, // named, not `_` — DEC-356
                 })
             }
             Expr::List(items, _) | Expr::Tuple(items, _) => items.iter().any(in_expr),
@@ -435,7 +435,7 @@ pub fn uses_concurrency(program: &Program) -> bool {
             Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
                 parts.iter().any(|p| match p {
                     StrPart::Expr(inner) => in_expr(inner),
-                    _ => false,
+                    StrPart::Literal(_) => false, // named, not `_` — DEC-356
                 })
             }
             Expr::List(items, _) | Expr::Tuple(items, _) => items.iter().any(in_expr),

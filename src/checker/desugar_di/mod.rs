@@ -418,6 +418,7 @@ fn imports_di_module(program: &Program) -> bool {
 }
 
 mod synth;
+mod walk;
 mod walker;
 
 use self::synth::*;

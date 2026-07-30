@@ -207,8 +207,43 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
             // hydration closure — an un-walked `New` left the `?` as a Result-mode `Propagate` the VM
             // rejects and the interpreter faults on). Walker-totality: `New` is NOT a leaf.
             Expr::New(inner, span) => Expr::New(Box::new(rexpr(*inner, h)), span),
-            // leaves carry no nested expression: Int / Float / Bool / Null / Bytes / Ident / This
-            leaf => leaf,
+            // DEC-356: the five forms below were silently passed through by a `leaf => leaf` arm.
+            // They all bear expressions, so an `html"…"` hole (or any later pass's target) inside one
+            // was never rewritten.
+            Expr::Tuple(items, span) => {
+                Expr::Tuple(items.into_iter().map(|e| rexpr(e, h)).collect(), span)
+            }
+            Expr::NamedArg { name, value, span } => Expr::NamedArg {
+                name,
+                value: Box::new(rexpr(*value, h)),
+                span,
+            },
+            Expr::InstanceOf {
+                value,
+                type_name,
+                span,
+            } => Expr::InstanceOf {
+                value: Box::new(rexpr(*value, h)),
+                type_name,
+                span,
+            },
+            Expr::Cast {
+                value,
+                type_name,
+                span,
+            } => Expr::Cast {
+                value: Box::new(rexpr(*value, h)),
+                type_name,
+                span,
+            },
+            Expr::Pipe { lhs, rhs, span } => Expr::Pipe {
+                lhs: Box::new(rexpr(*lhs, h)),
+                rhs: Box::new(rexpr(*rhs, h)),
+                span,
+            },
+            // Carries no nested expression — single-sourced in `ast::leaves` so adding an `Expr` variant
+            // breaks the build here until someone rules whether it is a leaf (DEC-356).
+            e @ (crate::expr_leaves!() | Expr::NewColl { .. } | Expr::Inject { .. }) => e,
         }
     }
 
@@ -373,7 +408,22 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 }
                 Item::Class(c)
             }
-            other => other,
+            // DEC-356: `Item::Test` carries a STATEMENT BODY, and the old `other => other` swallowed it —
+            // so an `html"…"` literal inside a `test { … }` block was never resolved, which would have
+            // reached the compiler's `unreachable!("html literal not resolved before compilation")` panic
+            // exactly like the tuple case did.
+            Item::Test { name, body, span } => Item::Test {
+                name,
+                body: rblock(body, html),
+                span,
+            },
+            // No expression-bearing body to walk. Named (DEC-356) so a new `Item` form that DOES carry
+            // one cannot join them silently.
+            it @ (Item::Enum(..)
+            | Item::Interface(..)
+            | Item::Trait(..)
+            | Item::TypeAlias { .. }
+            | Item::Import { .. }) => it,
         })
         .collect();
 

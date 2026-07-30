@@ -4,14 +4,10 @@
 676	src/checker/calls/overloads.rs
 772	src/checker/collect/types_decls.rs
 3144	src/checker/desugar_db.rs
-740	src/checker/desugar_di/walker.rs
-534	src/checker/desugar_router.rs
 514	src/checker/expr/operators.rs
 619	src/checker/matches.rs
 760	src/checker/mod.rs
 593	src/checker/overloads.rs
-560	src/checker/resolve_variant_imports.rs
-652	src/checker/rewrite_generics.rs
 543	src/checker/stmt/core.rs
 627	src/checker/stmt/flow.rs
 510	src/checker/tests/generics.rs

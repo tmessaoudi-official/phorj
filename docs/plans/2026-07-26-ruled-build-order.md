@@ -44,7 +44,7 @@
 
 | # | Item | Notes |
 |---|---|---|
-| 2.1 | **DEC-356** fix all 18 catch-all sites **and** land the probe-variant gate, one slice; widen Invariant 3 to `Expr`/`Stmt`/`Pattern` | The class, not the instances. `B` (shared total visitor) stays a separate later ruling |
+| 2.1 | ~~**DEC-356**~~ — **BUILT 2026-07-30**: D + C + Invariant 3 widened. Found a VERIFIED compiler PANIC (`html"…"` in a tuple → `unreachable!`), plus `Item::Test` and `Stmt::Destructure` gaps. Leaf sets single-sourced as or-pattern macros; six cohesion splits left Invariant 13 net-negative (4 files dropped under the hard cap). Follow-up B QUEUED. |
 | 2.2 | **DEC-377** finish the helper classification — **first pass done 2026-07-29 (DEC-412): 149 REAL helpers (not 168 — that count was stale; 180 raw matches, 31 grep artifacts), 64 bucket-1 / 66 bucket-2 / 17 bucket-3 INLINE CANDIDATES / 2 unclassified.** Remaining: bucket-2's per-helper justification strings + one read per inline candidate. Watch the `uri_*` trio (PHP 8.5's built-in URI ext may make them waste) and the `text_*`/`trim` group (overlaps DEC-385's Core.Text merge) |
 
 ## Wave 3 — the enabler, then what needs it

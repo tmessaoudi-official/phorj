@@ -6,6 +6,37 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — AST rewriters are exhaustive; a catch-all was hiding a compiler PANIC (2026-07-30, DEC-356)
+`rewrite_html`'s `leaf => leaf` arm swallowed `Expr::Tuple`, and `erase_tuples` runs AFTER `resolve_html`,
+so `var (a, b) = (html"<p>{n}</p>", 1);` left the literal unresolved and **panicked the compiler** with
+`unreachable!("html literal not resolved before compilation")`. Valid user code, hard crash. GR-18 was
+rated a hygiene item; it was a live P0.
+- **Every `Expr`/`Stmt`/`Pattern` total walk is now exhaustive.** Method mattered: each catch-all was
+  replaced with a leaf-only or-pattern so **`rustc` enumerated the gaps** rather than trusting the spec's
+  (by then decayed) table. Each of seven walkers was missing 4–6 expression-bearing forms; `Tuple` and
+  `NamedArg` were missed by all of them.
+- More real gaps found the same way: `rewrite_html` skipped **`Item::Test`** (which carries a statement
+  body → same panic path for an `html"…"` inside a `test { … }` block); `desugar_di` skipped
+  **`Stmt::Destructure`** (which bears an initializer, so `inject<T>()` there was never desugared —
+  `desugar_db` walks it correctly three files away, which is what made the gap invisible); and
+  `ast::walk`'s two boolean scanners answered `_ => false` for a `StrPart`.
+- **Leaf sets single-sourced as macros** (`src/ast/leaves.rs`). A macro expands to an or-pattern, so
+  exhaustiveness checking stays fully intact — a `fn is_leaf(&Expr) -> bool` would have reintroduced the
+  catch-all by the back door. Verified by hand: adding an `Expr` variant produces `non-exhaustive
+  patterns: Expr::ProbeVariant(_, _) not covered` at every fixed site.
+- **A named catch-all is worse than `_`** — it compiles cleanly, reads as deliberate, and greps as
+  handled. `ast::leaves::tests::no_fixed_rewriter_regrows_a_catch_all` now rejects both, and flags only
+  INERT ones (a catch-all that *recurses* is total behaviour, the opposite of the bug). Written before the
+  last fixes, it immediately found four more sites.
+- Invariant 3's wording widened in `CLAUDE.md` + `docs/INVARIANTS.md` to cover `Expr`/`Stmt`/`Pattern`.
+- **Invariant 13 net-negative:** the recursion arms are real code, so six files breached their ceilings —
+  all six split by cohesion (each pass's walk trio into its own `*_walk.rs`). `rewrite_ufcs` 503→74,
+  `desugar_di/walker` 782→397, `rewrite_generics` 680→252, `resolve_variant_imports` 587→168,
+  `desugar_router` 577→238. **Four files fell under the hard cap and their grandfather entries were
+  deleted** (67 remain, from 71).
+- One exemption, recorded as **CD-27**: `rewrite_ufcs::apply_repl` dispatches on checker-CONSTRUCTED
+  replacement shapes, not user AST.
+
 ### Fixed — an `html"…"` literal now counts as a use of `import Core.Html` (2026-07-30)
 `var a = html"<p>{n}</p>";` under `import Core.Html;` reported `E-UNUSED-IMPORT` — *"nothing in this file
 references `Html` (remove the import, or use it)"* — while **removing** the import reported

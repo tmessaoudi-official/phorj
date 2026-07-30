@@ -3496,7 +3496,7 @@ from the developer's own 15 findings. Analysis in `docs/research/2026-07-25-comp
 
 | DEC | GR | Question (one line) | Recommended (not ruled) | Status |
 |---|---|---|---|---|
-| DEC-356 | GR-18 | Exhaustiveness is mechanical for `Op` (Invariant 3) but hand-rolled for `Expr`/`Stmt`/`Pattern`: **17 named catch-alls** (`other => other`, `leaf => leaf`) across 10 checker files silently pass a new variant through, `desugar_db.rs:67-69` *declares* the rewriter TOTAL and then closes with two of them, and `walk.rs:748`'s `_ => {}` sits one line under a comment recording that this exact bug already fired | **RULED 2026-07-26 — D **and** C as ONE slice; B is a separately-ruled follow-up.** Fix all 18 sites (17 checker + `walk.rs:748`) **and** land the probe-variant gate together: D alone decays (nothing stops catch-all #19), C alone ships a gate over 18 known-broken sites, and B (one shared total visitor) only becomes safe AFTER D, because explicit arms are what let the compiler enumerate the blast radius a visitor must preserve. `walk.rs:748` gets **named no-op arms, NOT `unreachable!()`** (those forms are reachable, they just bind nothing — a panic there would be factually wrong). **Invariant 3's wording is widened to name `Expr`/`Stmt`/`Pattern`** in the same change. Full rule: `docs/specs/2026-07-26-ast-exhaustiveness.md` | **RULED — build queued** |
+| DEC-356 | GR-18 | Exhaustiveness is mechanical for `Op` (Invariant 3) but hand-rolled for `Expr`/`Stmt`/`Pattern`: **17 named catch-alls** (`other => other`, `leaf => leaf`) across 10 checker files silently pass a new variant through, `desugar_db.rs:67-69` *declares* the rewriter TOTAL and then closes with two of them, and `walk.rs:748`'s `_ => {}` sits one line under a comment recording that this exact bug already fired | **RULED 2026-07-26 — D **and** C as ONE slice; B is a separately-ruled follow-up.** Fix all 18 sites (17 checker + `walk.rs:748`) **and** land the probe-variant gate together: D alone decays (nothing stops catch-all #19), C alone ships a gate over 18 known-broken sites, and B (one shared total visitor) only becomes safe AFTER D, because explicit arms are what let the compiler enumerate the blast radius a visitor must preserve. `walk.rs:748` gets **named no-op arms, NOT `unreachable!()`** (those forms are reachable, they just bind nothing — a panic there would be factually wrong). **Invariant 3's wording is widened to name `Expr`/`Stmt`/`Pattern`** in the same change. Full rule: `docs/specs/2026-07-26-ast-exhaustiveness.md` | **BUILT 2026-07-30** (D + C + Invariant 3 widened; a VERIFIED compiler panic on valid user code was the headline find; CD-27 records the one exemption) |
 | DEC-357 | GR-19 | Writing to a captured local inside a lambda is **silently lost** — `total = total + x` inside a `List.map` closure leaves `total=0` on all three legs with no error and no warning | **RULED 2026-07-26 — REJECT the write at check time**, hint naming the object-field pattern. NOT an Invariant-1 break (the legs agree); it is a dead assignment that reads as live. Narrow by design: **by-value capture is ALREADY the documented semantics** (`FEATURES.md:37`), so this enforces what is already stated. Boundary: reject assignment to the captured local ITSELF; mutating a captured **object's field** stays **LEGAL** — it is the reference-shared workaround the shipped `examples/database/transaction-closure.phg` depends on. **By-reference capture (`use (&$x)`) REJECTED as out of scope** — it would contradict documented by-value semantics and is a language redesign needing its own spec. A warning tier was rejected (a lost write is correctness, not style). Full rule: `docs/specs/2026-07-26-capture-write-rejection.md` | **RULED — build queued** |
 | DEC-358 | GR-20 | Type mismatch, arity, unknown method, non-exhaustive match, **every** parse/lex error and **every** runtime fault carry `code == None`, so `phg explain` is unreachable for them — and all 9 `conformance/diagnostics/` cases assert a code, so the corpus is **blind** to the gap | **RULED 2026-07-26 — (A): a `code == None` ratchet with a shrinking allowlist**, mirroring the existing `explain_ratchet`. Makes the backlog CI-visible instead of invisible and shrinks over time, rather than one giant coding sprint with no mechanism preventing regression afterwards | **RULED — build queued** |
 | DEC-359 | GR-21 | `10/0`, literal integer overflow and literal index-OOB all pass `phg check` — PHP parity where a win is free | **RULED 2026-07-26 — (A): reject all three at check time.** The DEC-058 principle (equal or better than PHP) applied to a free win. Constraint: literal index-OOB is rejected **only when statically provable** (the list literal is in scope) — the rule is not "reject all indexing" | **RULED — build queued** |
@@ -4417,3 +4417,79 @@ literal, so the scan now also accepts the module leaf lowercased + `"` — keyed
 **To reverse:** drop that branch in `import_hygiene.rs`; `an_html_literal_counts_as_a_use_of_its_import`
 exists to make the removal deliberate, and `an_import_with_no_use_at_all_is_still_unused` guards the other
 direction (the fix must not degrade into "never report `Core.Html` unused").
+
+
+### DEC-356 BUILT (2026-07-30) — the class closed, and it was hiding a compiler PANIC
+
+**The headline: this bug class panicked the compiler on valid user code.** `rewrite_html`'s
+`leaf => leaf` arm swallowed `Expr::Tuple`, and `erase_tuples` runs AFTER `resolve_html`, so:
+
+```
+var (a, b) = (html"<p>{n}</p>", 1);
+```
+
+left the literal unresolved and reached
+`unreachable!("html literal not resolved before compilation")` in `compiler/expr/core.rs`.
+[Verified: ran the program with the fix stashed — thread panicked; with the fix — correct output on all
+three legs.] The register had rated GR-18 a structural/hygiene item. It was a live P0.
+
+**D — the fix.** Every `Expr`/`Stmt`/`Pattern` total walk is now exhaustive. The method mattered: rather
+than guess which forms each walker missed, each catch-all was replaced with a leaf-only or-pattern and
+**`rustc` enumerated the gaps** — no guessing, no reliance on the spec's (decayed) table. What it found,
+per walker, was 4–6 expression-bearing forms each; `Tuple` and `NamedArg` were missed by ALL seven.
+
+**Newly-found real gaps beyond the headline** (each [Inferred] from the code shape unless noted):
+- `rewrite_html` skipped **`Item::Test`**, which carries a statement body — so an `html"…"` inside a
+  `test { … }` block took the same unresolved-literal path to the same panic.
+- `desugar_di`'s `Stmt` walker skipped **`Stmt::Destructure`**, which bears an initializer expression and
+  an else-block, so `inject<T>()` in a destructuring initializer was never desugared. `desugar_db` walks
+  the same statement correctly three files away — which is exactly what made the gap invisible.
+- `ast::walk`'s two boolean scanners (`lambda_uses_this`, `uses_concurrency`) answered `_ => false` for a
+  `StrPart`, i.e. "contains nothing" for any future part form.
+
+**The leaf sets are single-sourced as MACROS** (`src/ast/leaves.rs`: `expr_leaves!`, `stmt_leaves!`,
+`pattern_leaves!`). This is the design decision that made D compatible with Invariant 13: spelling 37
+arms at each of 26 sites would have added ~900 lines to files already at their caps; a macro adds ~1 line
+per site. Crucially it does NOT weaken enforcement — a macro expands to an or-pattern, so `rustc` still
+checks exhaustiveness, whereas a `fn is_leaf(&Expr) -> bool` would have reintroduced the catch-all by the
+back door. Verified by hand: adding a variant to `Expr` produced `non-exhaustive patterns:
+Expr::ProbeVariant(_, _) not covered` at every fixed site.
+
+`NewColl` and `Inject` are deliberately OUT of the macro even though they carry no `Expr`: a site that
+*meaningfully handles* one would then get `unreachable_pattern` — and `desugar_di` handling `Expr::Inject`
+is not a leaf case, it is the entire point of that pass. Sites treating them as pass-throughs name them
+in their own or-pattern.
+
+**C — the gate, honestly re-shaped.** The ruling asked for a never-constructed probe variant and noted
+its own limitation (a match that still carries a catch-all keeps compiling). A `#[cfg(test)]` variant
+cannot exist on the real `Expr` without breaking the non-test build, so the gate is inverted into
+`ast::leaves::tests::no_fixed_rewriter_regrows_a_catch_all`: assert no fixed rewriter regrows an INERT
+catch-all. It flags `other => other` / `leaf => leaf` / `_ => {}` / `_ => false` / `_ => true` and
+deliberately NOT a catch-all that recurses (`other => Box::new(rexpr(other, m))` is total behaviour, the
+opposite of the bug). Written before the last fixes, it immediately found four more sites.
+
+**Invariant 13 paid down, substantially net-negative.** The recursion arms are real code, so six files
+breached their ceilings. All six were split by cohesion — the walk trio (`rexpr`/`rstmt`/`rblock`) is each
+pass's *traversal*, distinct from its analysis, and is precisely what follow-up B would consolidate:
+`desugar_router` 577→238, `resolve_variant_imports` 587→168, `rewrite_generics` 680→252, `rewrite_ufcs`
+503→74, `desugar_di/walker` 782→397, plus `desugar_db`'s inline tests moved out. **Four files fell under
+the 500 hard cap and their grandfather entries were DELETED** (67 remain, down from 71).
+
+**Invariant 17:** no LSP/editor work — no syntax, no new diagnostic, no surface change. The user-visible
+delta is that programs which previously panicked or silently skipped a rewrite now work.
+
+### CD-27 (2026-07-30) — `rewrite_ufcs::apply_repl` keeps its catch-all, deliberately
+
+Its domain is **not** user AST: it dispatches on replacement shapes the CHECKER constructed. Exhaustiveness
+over 37 `Expr` variants would mean two dozen arms asserting nothing about reachable code, and
+`unreachable!()` would be worse — DEC-356's own headline find is a valid program hitting exactly such a
+panic, so adding one on a checker path would repeat the mistake. The ratchet exempts this single arm by
+name, so a SECOND catch-all in that file still fails. **To reverse:** drop the `exempt` clause in
+`no_fixed_rewriter_regrows_a_catch_all` and give `apply_repl` explicit arms.
+
+### DEC-356 FOLLOW-UP B — QUEUED, not dropped (as the ruling required)
+
+One shared total visitor across the 13 rewriters. It is only safe NOW that D is done: with every site
+carrying explicit arms, the compiler *enumerates* the blast radius a shared visitor must preserve. The
+six cohesion splits landed here deliberately anticipate it — each pass's traversal now lives in its own
+`*_walk.rs`, which is the seam B would replace.
