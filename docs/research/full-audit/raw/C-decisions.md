@@ -3463,7 +3463,7 @@ This also discharges the already-RULED **DV-5** pass (`docs/specs/2026-07-24-vis
 | DEC-344 | GR-6 | `main` is still forced into the entry signature **by name** (`type_bodies.rs:347`) despite DEC-331's attribute-declared entries — a library `function main(string s): string` with no `#[Entry]` is rejected, while `#[Entry] function startHere()` works | **RULED 2026-07-26 — (A): remove the name-based special case; entry-ness comes ONLY from `#[Entry]`.** Delete dead `E-MULTIPLE-MAIN` + its stale `phg explain` entry, and repurpose `class-main.phg` into a differential-gated regression test so the reservation cannot silently return. **Nothing is lost: multi-entry protection already exists and is LIVE — `E-DUPLICATE-ENTRY-KIND` (verified 2026-07-26: two `#[Entry(kind: EntryKind.Cli)]` -> *a program has at most one entry per kind*).** By design that is per-KIND, so one Cli + one Web in one program stays legal (DEC-331: `run`->Cli, `serve`->Web) | **RULED — build queued** |
 | DEC-345 | GR-7 | `package` validators are skipped by the no-user-imports fast path (`loader/entry.rs:53-66`), so enforcement follows the import graph, not the file; plus bug **A6** — a CORRECT `src/App/Cmd/Runner.phg` + `package App.Cmd;` is rejected with a self-contradicting message because the entry root is always `entry_local` | **RULED 2026-07-26 — (A), IN THIS ORDER:** fix A6 first -> then run the validators on the fast path -> then fix the `validated (every file…)` message and give the loose-`Main` error a code. **Order is load-bearing:** closing the fast path before fixing A6 would start emitting the WRONG error for correct layouts. Hatch = **`#[Core.Runtime.FreePath]` written FULLY QUALIFIED above `package`** — verified 2026-07-26 that fully-qualified attributes already resolve with NO import (`#[Core.Runtime.Entry(kind: Core.Runtime.EntryKind.Cli)]` runs), so the *"an attribute before `package` cannot be imported"* dilemma dissolves with zero new machinery and nothing left in the wind. Named `FreePath` over `Loose` for precision (it means *this file's package need not match its path*, not *sloppy*); home is `Core.Runtime` beside `Entry`/`EntryKind`, no new module. `phorj.json` opt-out REJECTED — the loader never reads it and it contradicts DEC-282's no-manifest/no-marker rule. All surfaces funnel through `load_unified_src`, so run/check/transpile/build/test/**LSP** land together (Invariant 17 by construction) | **RULED — build queued** |
 | DEC-346 | GR-8 | Execute the already-ruled DEC-326 UFCS promotion: 2223 qualified sites in examples, 1231 of them `Output.printLine` (55.4%) | **RULED 2026-07-26 — (A): tooling FIRST** (DEC-342 completion + import hint + formatter lint), **then** the 391 zero-judgement sites. **`Output.printLine` STAYS QUALIFIED — developer-ruled:** it is 55.4% of the corpus and the most-read line in every example, and UFCS reads well only when the receiver is the subject (`line.trim()`, `xs.map(…)`) — for output the SINK is the subject, so `"hello".printLine()` inverts it. No codemod touches it | **RULED — build queued** |
-| DEC-347 | GR-9 | Every file API is whole-slurp — `readAll` costs 200 MB where `Input.lines()` streams an 88 MB file in 23.7 MB RSS, and `limits.rs` has no I/O or memory cap | **RULED 2026-07-26 — (A): `FileSystem.lines(path): Iterator<string>` over an offset-chunk native, NO file handle.** Zero new Value/type/transpile machinery, O(1) memory, identical user syntax, non-breaking later swap to a real handle; ladder **case 1** (`fgets` maps). **(B) a full `FileHandle` type REJECTED** — blocked by C4: no transpiling precedent for an opaque handle, `emit_type` would emit an unsatisfiable PHP class hint, and both sibling handles are already `E-TRANSPILE-*` quarantined. Sequenced AFTER DEC-364 (`using`) | **RULED — build queued** |
+| DEC-347 | GR-9 | Every file API is whole-slurp — `readAll` costs 200 MB where `Input.lines()` streams an 88 MB file in 23.7 MB RSS, and `limits.rs` has no I/O or memory cap | **RULED 2026-07-26 — (A): `FileSystem.lines(path): Iterator<string>` over an offset-chunk native, NO file handle.** Zero new Value/type/transpile machinery, O(1) memory, identical user syntax, non-breaking later swap to a real handle; ladder **case 1** (`fgets` maps). **(B) a full `FileHandle` type REJECTED** — blocked by C4: no transpiling precedent for an opaque handle, `emit_type` would emit an unsatisfiable PHP class hint, and both sibling handles are already `E-TRANSPILE-*` quarantined. Sequenced AFTER DEC-364 (`using`) | **BUILT 2026-07-31** — see "DEC-347 BUILT" at the end of this file; memory claim verified, perf loss recorded OWED |
 | DEC-348 | GR-10 | No filesystem locking at all; the presumed dependency blocker is FALSE — `std::fs::File::{lock, try_lock, unlock}` are stable on the pinned rustc and interoperate with PHP `flock()` (verified to block each other bidirectionally) | **RULED 2026-07-26 — (A): scoped `withLock(path, fn)` + `tryWithLock`, whole-file, advisory.** Release guaranteed by construction — no leak path; ladder case 1. Needs a `try/finally` PHP helper to preserve that guarantee, which is why it is sequenced AFTER DEC-364 (`using`). **(B) manual `lock`/`unlock` REJECTED** (leak-prone — the pattern every language regrets); **(C) byte-range/timeout REJECTED** (byte-range needs `fcntl`; a timeout would need a spin-sleep **bandaid**). **MUST BE DISCLOSED IN THE DOCS: Windows is a shipped target whose lock semantics may be MANDATORY rather than advisory, and there is no Windows CI — so any cross-platform guarantee is `[Unverified]` and must say so** | **BUILT 2026-07-31 (`withLock`)** — see "DEC-348 BUILT" at the end of this file; premise re-verified, cross-platform disclosed. **`tryWithLock` BUILT 2026-07-31 (DEC-348.1)** — return type ruled `Option<T>`; see "DEC-348.1 BUILT" at the end of this file |
 | DEC-349 | GR-11 | A no-modification clone already works as `p with { }` (shallow, transpiles to bare `clone($p)`) but the **lifter refuses it** — a live Invariant-17 gap | **RULED 2026-07-26 — (A): bless + document the EXISTING form, add NO new syntax**; `lift` must refuse loudly only when `__clone` exists. A dedicated `p.clone()` was rejected — a second spelling for something that already works | **RULED — build queued** |
 | DEC-350 | GR-12 | The type named `Database` is provably ONE connection (single `Box<dyn DriverConn>`, connection-scoped `tx_depth`/`hook`/`timeout_ms`, `grep pool` empty, pooling out of scope) | **RULED 2026-07-26 — (A): rename to `Core.Database.Connection` — the TYPE renames AND the `Module` suffix drops.** 8 of 10 ecosystems call this `Connection`; `Database`/`DB` is what Go and Laravel use for the pool/manager phorj does NOT have. DEC-278's `Module` suffix existed only because the module leaf and the type were namesakes, so renaming the type dissolves its rationale and `Core.Database` can go bare. Breaking rename across every DB example and doc — cheap now, expensive once users exist | **RULED — build queued** |
@@ -4857,3 +4857,66 @@ temptation was to call it flaky-and-move-on; it was a real bug in an example shi
 the test corpus. Blocking `withLock` hid this — concurrent runs merely waited — and `tryWithLock` turned
 the same latent collision into a WRONG ANSWER, which is what made it visible. Any future example doing
 filesystem mutation should serialise itself the same way, or not mutate shared paths at all.
+
+| DEC-420 | GR-PHPFN | PHP builtin FUNCTION names are unguarded: a phorj `function count(…)` passes `phg check`, runs on both Rust backends, and transpiles to `Cannot redeclare function count()`. Found 2026-07-31 while writing the DEC-347 tests | **PENDING — developer ruling required (Invariant 15).** [Verified: a `function count(…)` program ran clean on the interpreter and the VM, and its PHP leg exited 255 with `Cannot redeclare function count()`.] This is EXACTLY the DEC-213 failure mode (`Cannot redeclare class DateTime`) with the class half fixed and the function half still open — `php_names.rs` documents itself as covering "builtin class/interface names" only. The fix would mirror DEC-213: ONE builtin-FUNCTION list read by BOTH the checker (reject, `E-RESERVED-NAME`) and the transpiler, so the reject set and the mangle set cannot drift. It is NOT self-rulable because it rejects programs that compile today — user-visible surface. Sub-question if ruled in: reject (loud, breaks existing code) vs MANGLE the emitted PHP name (silent, keeps every program working, and there is precedent — DEC-213 mangles colliding enum VARIANTS rather than rejecting them) | Not started — recorded in KNOWN_ISSUES |
+
+### DEC-347 BUILT (2026-07-31) — `FileSystem.lines`, and a perf loss reported rather than hidden
+
+**The ruling's core claim was MEASURED, not asserted.** `FileSystem.lines` peaks at **23.7 MB RSS on an
+84.7 MB / 1.2 M-line file**, where `readText` + `String.split` peaks at **322 MB** — 13.6x less. 23.7 MB is
+the same figure DEC-347 itself cited for `Input.lines()`, which is a useful independent corroboration.
+(The two legs differ by one line: the slurp counts the trailing empty element after the final newline —
+exactly the off-by-one the chunk splitter drops.)
+
+**Design, following the ruling exactly:** an offset-chunk native, NO handle. The iterator's whole state is
+a byte offset in an `int` — nothing to leak, nothing to close, no `using`. A CHUNK rather than a line
+because a `lineAt(path, offset)` native would `open(2)` per line, which cannot compete with `fgets` on an
+already-open handle. Chunks always end on a line boundary (EXTENDING past the 64 KiB target rather than
+truncating), so the prelude never stitches a partial line — the failure mode that only appears on files
+big enough to cross a chunk edge.
+
+**PERF: a confirmed 4x LOSS vs PHP `fgets`, recorded OWED per DEC-365 NO-HIDDEN-LOSS.**
+- First working version: **58x slower** (295 ms vs 5.07 ms, 40k lines). Checksums matched, so the timing
+  was trusted.
+- Fix 1, root-caused not guessed: the prelude split each chunk itself with `List.append` per line, and
+  `native::list::list_append` does `(**xs).clone()` — a FULL list copy per call, so decoding a 64 KiB
+  chunk of ~1200 lines cost ~720k element clones: O(n²). Moved the split into Rust (`splitLines`).
+  → 32.9 ms (9x).
+- Fix 2: `List.length` is a native call and the hot path made three per LINE; cached it in a field.
+  → 21.0 ms (a further 1.6x; 14x total).
+- Residual **4x** (21.0 ms vs 5.2 ms) is the per-line cost of a phorj-level `Iterator` — two virtual calls
+  per element — against PHP's C loop. No tuning inside this design removes it.
+- **The official G-8 number is OWED, not passed:** that harness needs `php:8.5-cli` under docker and the
+  docker daemon is unavailable in this container. The bench pair `bench/micro/fslines.{phg,php}` is
+  committed so it runs where docker works. The local numbers used the local debug/ZTS PHP with JIT OFF,
+  which FLATTERS phorj — so the true gap against release PHP+JIT is ≥4x, never less.
+- Closing it needs a ruled decision, so it is NOT self-decided: a native-driven `forEachLine(path, fn)`
+  (no per-element virtual calls, but new user-visible API), a JIT vertical for foreach-over-Iterator, or
+  accepting the 4x for a streaming API whose selling point is memory rather than speed.
+
+**A wrapping bug worth remembering:** `splitLines` initially used the `fs_native!` macro, which wraps every
+return into a `FileSystemResult`. The prelude then got an ENUM where it expected a `List`
+(`List.length expects (List<T>)` at runtime, and on the PHP leg `Cannot assign FileSystemResult_Ok to
+property FileLines::$buffer of type array`). A native that CANNOT fail must not use the Result-wrapping
+macro, and its `php` mapping must be a plain call rather than `wrapped!`.
+
+### Two bugs found while building DEC-347 (2026-07-31) — neither caused by it
+
+**1. A newline inside a string literal inside a CLOSURE was destroyed on the PHP leg — a live
+Invariant-1 divergence.** The transpiler emitted literals with RAW newlines; rendering a closure body on
+ONE line then turned a newline inside the literal into a SPACE. `function(): string { return "a\nb\n"; }`
+printed `a\nb\n` on both Rust backends and `a b ` through PHP. Nothing caught it because no example had
+put a newline-bearing literal inside a closure — the DEC-347 example was the first.
+
+Fixed at the LITERAL (`transpile::escapes::push_control_escaped`), not at the closure emitter: control
+characters now emit as PHP escapes, so a literal contains no raw newline and no downstream single-line
+rendering — present or future — can corrupt one. `php_escape_bytes` already had this discipline; the two
+text escapers have been brought up to it. The regression test was verified to FAIL without the fix
+(`left: "a b t\tab c rlf "`).
+
+**2. The tier-1 PHP-function gate scanned COMMENT prose as function calls.** `bareword_calls` skipped
+string bodies but not comments, so any `word (` in prose was reported — `terminators (so the caller's …)`
+in the DEC-347 helper's own comment tripped it, and `lock (` had done the same during DEC-348. Now more
+than cosmetic: since DEC-419 a user's `/** … */` doc comment is EMITTED into the transpiled PHP, so a doc
+that mentions `someFunction(x)` in prose would have failed the gate on the user's behalf. Comments are now
+skipped before the scan.

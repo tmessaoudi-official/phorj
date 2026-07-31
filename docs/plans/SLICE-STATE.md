@@ -15,7 +15,7 @@ clippy clean at `--all-features` AND `--no-default-features`, `cargo fmt --check
 |---|---|
 | Ruled agenda | **18/42 rows built (43%)** |
 | Parity | **≈70% · floor ≈57% · vision ≈71%** (§4.13/§4.14 — unchanged by DEC-364, a syntax row) |
-| Waves done | 0, 1, 2 — plus **DEC-379** (soundness), **DEC-364** (`using`), **DEC-348** (`withLock` + `tryWithLock`), **DEC-419** (doc comments) |
+| Waves done | 0, 1, 2 — plus **DEC-379** (soundness), **DEC-364** (`using`), **DEC-348** (`withLock` + `tryWithLock`), **DEC-419** (doc comments), **DEC-347** (`FileSystem.lines`) |
 
 ### DEC-364 `using` — BUILT 2026-07-31
 
@@ -87,17 +87,39 @@ are opt-in via `emit_with_source`.
 [Pre-existing, unrelated] phorj → PHP → phorj is blocked by the lifter's Tier-1 lexer rejecting `\` in
 the FQNs transpiled output always contains (`\OverflowException`). A lifter-tier gap, not a doc one.
 
+### DEC-347 `FileSystem.lines` — BUILT 2026-07-31
+
+`Iterator<string>` over an offset-chunk native, no handle. **[Verified] 23.7 MB peak RSS on an 84.7 MB /
+1.2 M-line file vs 322 MB slurping — 13.6x less**, matching the figure the ruling itself cited. Chunks
+never end mid-line, so no line is ever stitched across reads. Three legs byte-identical on every shape
+that breaks line readers (blank line, no trailing terminator, CRLF, empty file, chunk-crossing file).
+
+**PERF: a confirmed 4x LOSS vs PHP `fgets`, recorded OWED (DEC-365).** 58x → 4x via two measured fixes:
+the split moved into Rust (the prelude's per-line `List.append` was O(n²) — `list_append` clones the list
+per call), and `List.length` cached in a field (three native calls per line). The residual is the per-line
+cost of a phorj-level `Iterator` — two virtual calls per element against PHP's C loop — which no tuning
+inside this design removes. Closing it needs either a ruled new API (a native-driven
+`forEachLine(path, fn)`) or a JIT vertical for foreach-over-Iterator; **not self-ruled** (Invariant 15).
+The official G-8 number is OWED: that harness needs `php:8.5-cli` under docker and the daemon is
+unavailable in this container. Local numbers used a debug/ZTS PHP with JIT OFF, which FLATTERS phorj, so
+the real gap is ≥4x.
+
+**Two byte-identity/gate bugs found and fixed on the way** (neither caused by this slice): a newline
+inside a string literal inside a CLOSURE was turned into a space on the PHP leg (raw newlines in emitted
+literals + one-line closure rendering — a live Invariant-1 break); and the tier-1 PHP-function gate
+scanned COMMENT prose as calls.
+
 **NEXT, in priority order:**
-1. **DEC-347 (`FileSystem.lines`)** — the other slice sequenced after DEC-364; now the last of that
-   pair. `Iterator<string>` over an offset-chunk native, ladder case 1 (`fgets` maps).
 2. **LIFT-TRY** (KNOWN_ISSUES §LIFT-TRY, new) — the lifter has NO `try`/`catch`/`finally`, which is why
    `using` does not lift. Lifter-wide gap, not a `using` gap; unblocks Invariant 17's other half.
 3. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.
 
-**Four PENDING developer questions** (Invariant 15 — do not self-rule): **`tryWithLock`'s return type**
-(DEC-348's last piece — the native is built and waiting); the strict-vs-narrow reading of DEC-379;
+**Five PENDING developer questions** (Invariant 15 — do not self-rule): **DEC-420** (PHP builtin FUNCTION
+names are unguarded — a phorj `function count()` transpiles to a fatal; reject vs mangle); **the DEC-347
+residual 4x** (a native-driven `forEachLine` vs a JIT vertical vs accepting it); the strict-vs-narrow
+reading of DEC-379;
 refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section); and whether
 the public-surface file-layout exemption should stay `Cli`-only (latent, from 2026-07-29).
 **Two OWED measurements** need the developer's box: DEC-365 + DEC-370 (no Docker in this container).

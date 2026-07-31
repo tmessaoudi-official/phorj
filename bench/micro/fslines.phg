@@ -1,0 +1,51 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+import Core.String;
+
+// Microbench: STREAMING line reads (DEC-347) — `FileSystem.lines` vs PHP's `fgets` loop, the
+// idiomatic counterpart. Invariant 18: everything with a PHP equivalent is benched against it, and
+// `fgets` is exactly what the transpile leg lowers to (ladder case 1).
+//
+// The fixture is written once, OUTSIDE the timed region, so the measurement is read cost only. Both
+// legs fold every line's length into the checksum: that defeats dead-code elimination AND gates
+// output-identity, so a timing is only trusted when the two legs agree on what they read.
+function fixture(string path, int lines): void throws FileSystemError {
+    mutable string body = "";
+    mutable int i = 0;
+    while (i < lines) {
+        body = body + "row {i} the quick brown fox jumps over the lazy dog\n";
+        i = i + 1;
+    }
+    FileSystem.writeText(path, body)?;
+}
+
+function bench(string path): int throws FileSystemError {
+    mutable int acc = 0;
+    for (string line in FileSystem.lines(path)) {
+        acc = acc + String.length(line);
+    }
+    return acc;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        string path = "{FileSystem.tempDir()}/phorj-bench-fslines.txt";
+        fixture(path, 40000);
+        int warm = bench(path);
+        int guard = warm - warm;
+        int t = Runtime.monotonicNanos();
+        int acc = bench(path);
+        int d = Runtime.monotonicNanos() - t;
+        Output.printLine("fslines\t{d + guard}\t{acc}");
+        FileSystem.delete(path);
+    } catch (FileSystemError e) {
+        Output.printLine("fslines\t0\tERROR {e.message}");
+    }
+}

@@ -19,9 +19,40 @@ pub(super) fn lit_arg(e: Option<&Expr>) -> String {
 }
 
 pub(super) fn php_escape(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('$', "\\$")
+    let mut out = String::new();
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '$' => out.push_str("\\$"),
+            _ => push_control_escaped(&mut out, c),
+        }
+    }
+    out
+}
+
+/// Push `c`, turning a CONTROL character into a PHP escape sequence rather than emitting it raw.
+///
+/// **This is a byte-identity fix, not cosmetics** (found 2026-07-31). A raw newline inside an emitted
+/// PHP string literal is semantically fine on its own line — but the emitter renders some constructs on
+/// ONE line (a closure body, for instance), and collapsing a statement onto one line turns a newline
+/// *inside a literal* into a space. So `function(): string { return "a\nb\n"; }` printed `a\nb\n` on
+/// both Rust backends and `a b ` through PHP: a live Invariant-1 divergence, invisible until a
+/// newline-bearing literal appeared inside a closure. Escaping at the literal is the root fix — a
+/// literal that contains no raw newline cannot be corrupted by ANY downstream single-line rendering,
+/// present or future, which patching the closure emitter alone would not have guaranteed.
+///
+/// `\n`/`\r`/`\t` get their readable forms; every other C0 control and DEL becomes `\xHH` with two
+/// digits always, so PHP's greedy `\x` cannot merge with a following hex character (the same rule
+/// [`php_escape_bytes`] already applied — this brings the text escapers up to it).
+fn push_control_escaped(out: &mut String, c: char) {
+    match c {
+        '\n' => out.push_str("\\n"),
+        '\r' => out.push_str("\\r"),
+        '\t' => out.push_str("\\t"),
+        c if (c as u32) < 0x20 || c as u32 == 0x7F => out.push_str(&format!("\\x{:02x}", c as u32)),
+        c => out.push(c),
+    }
 }
 
 /// Escape a literal segment for emission *inside an interpolating* PHP double-quoted string (B-9).
@@ -45,7 +76,9 @@ pub(super) fn php_escape_interp(s: &str) -> String {
                 };
                 out.push_str(if interpolates { "\\$" } else { "$" });
             }
-            _ => out.push(c),
+            // Same control-character escaping as the standalone form — an INTERPOLATING literal is just
+            // as vulnerable to a single-line rendering eating its newlines.
+            _ => push_control_escaped(&mut out, c),
         }
     }
     out

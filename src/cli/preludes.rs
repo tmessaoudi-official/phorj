@@ -799,6 +799,8 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
             "FileSystemIoError",
             // DEC-348 — the `using` subject returned by the (private) lock acquisition.
             "FileLock",
+            // DEC-347 — the streaming `Iterator<string>` returned by `FileSystem.lines`.
+            "FileLines",
         ],
     },
     // `Core.ClosableModule` (DEC-364) — the `using` release protocol. Imported by `Core.Database`

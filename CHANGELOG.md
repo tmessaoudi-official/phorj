@@ -28,6 +28,51 @@ PID-qualified (a fixed `/tmp` path is shared state between concurrently-running 
 holder creates. Under full-workspace load the holder had sometimes not acquired yet, so the try
 succeeded and the assertion failed — raising the sleep would have been a bandaid over a race.
 
+### Added — `FileSystem.lines(path): Iterator<string>`, streaming line reads (2026-07-31, DEC-347)
+O(chunk) memory instead of slurping: **[Verified] 23.7 MB peak RSS on an 84.7 MB / 1.2 M-line file,
+against 322 MB for `readText` + `String.split` — 13.6x less**, and 23.7 MB is the same figure the ruling
+cited for `Input.lines()`.
+
+No file HANDLE exists. The ruling rejected a `FileHandle` type (blocked by C4: no transpiling precedent
+for an opaque handle — `emit_type` would emit an unsatisfiable PHP class hint), so the iterator's whole
+state is a byte OFFSET in an `int`: nothing to leak, nothing to close, no `using` required, and a later
+swap to a real handle stays non-breaking because none of the mechanism is user-visible.
+
+The native reads ~64 KiB and always stops on a LINE BOUNDARY, extending past the target rather than
+truncating, so a line is never split across two reads and a single over-long line still comes back whole.
+Terminators are stripped (`\n`, and a preceding `\r`, so CRLF reads like LF); a BLANK line is still a
+line. `hasNext`/`next` declare `throws FileSystemError`, because a mid-iteration read failure must not
+masquerade as exhaustion. Transpiles via `fgets` — Invariant-14 ladder case 1, no quarantine.
+
+**PERF: a confirmed 4x LOSS against PHP's `fgets` loop, recorded OWED (DEC-365 NO-HIDDEN-LOSS).** The
+first working version was 58x slower; two measured fixes took it to 4x (a 14x improvement) —
+(1) the chunk split moved from the prelude into Rust, because `List.append` CLONES the list per call and
+the prelude's per-line append was O(n²); (2) `List.length` cached in a field, since the hot path called
+that native three times per line. The residual 4x is the per-line cost of a phorj-level `Iterator` (two
+virtual calls per element) versus PHP's C loop, which no tuning inside this design removes. The G-8
+microbench pair (`bench/micro/fslines.{phg,php}`) is added but its official number is OWED here: that
+harness needs `php:8.5-cli` under docker and the docker daemon is unavailable in this container. The
+numbers above are local, against a debug/ZTS PHP with JIT OFF — which flatters phorj, so the true gap is
+≥4x.
+
+### Fixed — a newline inside a string literal inside a closure was destroyed on the PHP leg (2026-07-31)
+A live Invariant-1 divergence, found while building DEC-347. The transpiler emitted string literals with
+RAW newlines; rendering a closure body on ONE line then turned a newline INSIDE a literal into a space.
+`function(): string { return "a\nb\n"; }` printed `a\nb\n` on both Rust backends and `a b ` through PHP.
+Nothing caught it because no example had put a newline-bearing literal inside a closure.
+
+Fixed at the literal (`transpile::escapes`): control characters now emit as PHP escapes (`\n`/`\r`/`\t`,
+else `\xHH`), so a literal contains no raw newline and NO downstream single-line rendering can corrupt
+one — patching the closure emitter alone would not have guaranteed that. `php_escape_bytes` already did
+this; the text escapers have been brought up to it. Regression test in `tests/differential.rs`, verified
+to fail without the fix.
+
+### Fixed — the tier-1 PHP-function gate scanned comment prose (2026-07-31)
+`bareword_calls` skipped string bodies but not COMMENTS, so `word (` in prose was reported as a call —
+`terminators (so the caller's …)` in the DEC-347 helper's own comment tripped it, as `lock (` had earlier.
+This matters more since DEC-419: a user's `/** … */` doc comment is now emitted into the PHP, so a doc
+mentioning `someFunction(x)` in prose would have failed the gate on the user's behalf.
+
 ### Added — doc comments cross the PHP boundary in BOTH directions (2026-07-31, DEC-419)
 Both sub-questions raised with the doc-comment ruling were answered yes and are built.
 

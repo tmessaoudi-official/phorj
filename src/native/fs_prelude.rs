@@ -17,6 +17,8 @@ import Core.Native.FileSystem as NativeFileSystem;
 import Core.String;
 import Core.List;
 import Core.ClosableModule;
+import Core.IteratorModule;
+import Core.Bytes;
 import Core.Option;
 
 // Prelude-local result carrier (NOT Core.Result — the Core.Database injection-order rationale).
@@ -104,6 +106,20 @@ class FileSystem {
   static function tempDir(): string throws FileSystemError {
     return match (NativeFileSystem.tempDir()) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
+  // DEC-347 — STREAMING line reads. `lines(path)` is an `Iterator<string>`, so it is foreach-able and
+  // reads O(chunk) memory rather than slurping the file: `readText` on an 88 MB file costs ~200 MB,
+  // which is the gap this closes.
+  //
+  // No file HANDLE exists — the ruling rejected a `FileHandle` type (blocked by C4: no transpiling
+  // precedent for an opaque handle). The iterator's whole state is a byte OFFSET in an `int`, so there
+  // is nothing to leak and nothing to close, and swapping in a real handle later stays non-breaking
+  // because the user-facing syntax never mentions the mechanism.
+  //
+  // Line terminators are STRIPPED from what the iterator yields (`\n`, and a preceding `\r` so CRLF
+  // files read the same as LF ones) — the terminator is a delimiter, not data.
+  static function lines(string path): Iterator<string> {
+    return new FileLines(path, 0, new List<string>(), 0, 0, false);
+  }
   // DEC-348 — scoped advisory file locking. `withLock` is a THIN wrapper over `using` (DEC-364):
   // that is the whole design, and it is why DEC-348 was sequenced after it. The release is
   // guaranteed by construction — there is no leak path, because there is no way to hold the lock
@@ -156,6 +172,66 @@ class FileSystem {
 // The held lock, as a `Closable` so `using` releases it. Carries an opaque native ticket (an `int`,
 // so DEC-348 needs no new `Value`); `close()` is idempotent and declares no `throws`, which is what
 // keeps `using (FileLock …)` free of `E-USING-CLOSE-THROWS` boilerplate at every call site.
+// DEC-347's `Iterator<string>` over an offset. It THROWS from `hasNext`/`next`: a read can fail
+// mid-iteration (the file is deleted, permissions change), and the alternative — swallowing it and
+// reporting exhaustion — would turn a truncated read into a silently short loop. DEC-257 already
+// requires a `foreach` over a throwing iterator to catch or declare, so the cost lands where it should.
+class FileLines implements Iterator<string> {
+  // `buffer`/`index` hold the lines decoded from the current chunk; `exhausted` latches at EOF so a
+  // repeated `hasNext()` after the end does not keep re-reading the file.
+  // `count` CACHES `List.length(buffer)`. Not a micro-optimisation for its own sake: `List.length` is a
+  // native call, and the hot path hit it three times per LINE (twice in `fill`'s loop guard, once in
+  // `hasNext`) — measured worth ~2.4x on the 40k-line microbench.
+  constructor(
+    private string path,
+    private mutable int offset,
+    private mutable List<string> buffer,
+    private mutable int index,
+    private mutable int count,
+    private mutable bool exhausted
+  ) {}
+  function hasNext(): bool throws FileSystemError {
+    if (this.index < this.count) {
+      return true;
+    }
+    this.fill()?;
+    return this.index < this.count;
+  }
+  function next(): string throws FileSystemError {
+    // The common case needs no refill at all — `hasNext` has already run it, and a direct `next()` on a
+    // ready buffer must not pay for a check it cannot need.
+    if (this.index >= this.count) {
+      this.fill()?;
+    }
+    string line = this.buffer[this.index];
+    this.index = this.index + 1;
+    return line;
+  }
+  // Refill until a line is available or the file ends. A `while`, not an `if`: a chunk CAN decode to
+  // zero lines (a trailing "\n" at the very end of the file yields nothing after the drop below), and
+  // treating that as exhaustion would stop the iterator one chunk early.
+  private function fill(): void throws FileSystemError {
+    while (this.index >= this.count && !this.exhausted) {
+      string? read = match (NativeFileSystem.readLinesChunk(this.path, this.offset)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
+      // `if (var …)` binds the NON-null inner, so the chunk needs no `!` unwrap below.
+      if (var chunk = read) {
+        // Advance by the chunk's BYTE length — the native kept the terminators precisely so this is
+        // exact. A character count would desynchronise on the first non-ASCII line.
+        this.offset = this.offset + Bytes.length(Bytes.fromString(chunk));
+        this.buffer = NativeFileSystem.splitLines(chunk);
+        this.count = List.length(this.buffer);
+        this.index = 0;
+      } else {
+        this.exhausted = true;
+        this.buffer = new List<string>();
+        this.count = 0;
+        this.index = 0;
+        return;
+      }
+    }
+  }
+}
+
 class FileLock implements Closable {
   constructor(private int ticket) {}
   // Both arms discard: releasing must not throw, and the native's release is already idempotent, so

@@ -36,7 +36,7 @@
 //! ## The count was wrong three times
 //!
 //! DEC-377 said **168**; DEC-412 corrected to **149 real**; the audited figure was **165**, and it is
-//! **171** as of DEC-348 (which added six lock helpers — see bucket 2). The number moves whenever a
+//! **173** as of DEC-347 (DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers). The number moves whenever a
 //! helper is added, which is fine; what must never drift again is the number stated here versus the
 //! source, and the ratchet below is what ties them together. Both earlier numbers came from grepping `__phorj_` and subtracting guessed
 //! artifacts; this one enumerates `function &?__phorj_x(` definitions plus the checked-arith codegen
@@ -71,7 +71,7 @@
 //!   `__phorj_str` `__phorj_str_chunk` `__phorj_text_index_of` `__phorj_text_reverse`
 //!   `__phorj_text_trim` `__phorj_text_trim_end` `__phorj_text_trim_start` `__phorj_trunc`
 //!
-//! ## Bucket 2 — no single-expression equivalent (103)
+//! ## Bucket 2 — no single-expression equivalent (105)
 //!
 //! Reason stated per family, as DEC-377 requires: `fs_*` `http_*` `db_*` `uri_*` need `try`/`catch` to
 //! turn an exception into a value, and `try` is not an expression in PHP · `regex_*` `log_*` need a
@@ -87,7 +87,9 @@
 //!   `__phorj_db_try_unit` `__phorj_db_tx_depth` `__phorj_db_unwind_to` `__phorj_drop_while`
 //!   `__phorj_find` `__phorj_format` `__phorj_fs_copy` `__phorj_fs_create_dir`
 //!   `__phorj_fs_delete` `__phorj_fs_err` `__phorj_fs_list_dir` `__phorj_fs_move`
-//!   `__phorj_fs_put` `__phorj_fs_read_bytes` `__phorj_fs_read_text` `__phorj_fs_remove_dir`
+//!   `__phorj_fs_put` `__phorj_fs_read_bytes` `__phorj_fs_read_lines_chunk` `__phorj_fs_read_text`
+//!   `__phorj_fs_split_lines`
+//!   `__phorj_fs_remove_dir`
 //!   `__phorj_fs_lock_acquire` `__phorj_fs_lock_open` `__phorj_fs_lock_release` `__phorj_fs_lock_store`
 //!   `__phorj_fs_lock_try_acquire` `__phorj_fs_locks`
 //!   `__phorj_fs_remove_dir_all` `__phorj_fs_rmrf` `__phorj_fs_size` `__phorj_fs_walk`
@@ -174,6 +176,16 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_fs_move", 2),
     ("__phorj_fs_put", 2),
     ("__phorj_fs_read_bytes", 2),
+    // DEC-347 streaming lines. Bucket 2: PHP HAS every piece (`fopen`/`fseek`/`fread`/`fgets`), but the
+    // helper is a LOOP plus a mid-line extension plus a UTF-8 gate plus the typed-error mapping — none
+    // of which is an expression, and `fgets` alone would not give the offset-advance contract the
+    // prelude depends on (terminators kept, chunk never ending mid-line).
+    ("__phorj_fs_read_lines_chunk", 2),
+    // DEC-347's chunk splitter. Bucket 2: `explode` gives the pieces, but dropping the trailing empty
+    // element and stripping a `\r` per line is a statement sequence, not an expression. It lives in a
+    // helper for a PERFORMANCE reason too — doing it in the prelude was O(n²) via `List.append`'s
+    // copy-per-call (58x slower than `fgets`), so both legs push it down to one pass.
+    ("__phorj_fs_split_lines", 2),
     ("__phorj_fs_read_text", 2),
     // DEC-348 advisory locking (6). Bucket 2 throughout: PHP HAS `flock`, but a scoped lock needs the
     // open handle to OUTLIVE the acquiring expression — the OS lock dies with the descriptor — so the
@@ -306,7 +318,7 @@ mod tests {
     /// This is what stops the audit decaying. DEC-377's classification sat OWED because it was a
     /// one-off document with nothing keeping it true; meanwhile DEC-356's inventory drifted 17→26 the
     /// same way. Adding a `__phorj_*` helper now fails here until it is classified, and deleting one
-    /// fails until it is removed — so the count cannot drift again (168 → "149 real" → 165 → 171).
+    /// fails until it is removed — so the count cannot drift again (168 → "149 real" → 165 → 171 → 173).
     ///
     /// A **bucket-3 entry is a build failure by design**: bucket 3 means "convenience/DRY only, must be
     /// INLINED", so recording one instead of inlining it would be recording the violation.

@@ -265,6 +265,88 @@ import Core.FileSystemModule.FileSystemNotFoundError;
     let _ = std::fs::remove_dir_all(&root2);
 }
 
+/// DEC-347 — `FileSystem.lines` streams a file as an `Iterator<string>`, agreeing on all three legs.
+///
+/// The cases are the ones that actually break line readers: a blank line (content, not a terminator), a
+/// final line with NO terminator, CRLF (must read like LF), an empty file (empty iteration, not an
+/// error), and a file large enough to cross the native's 64 KiB chunk boundary — the last is the one
+/// that only fails on real inputs, because a chunk ending mid-line is invisible on a small fixture.
+#[test]
+fn fs_lines_streams_every_shape_of_file_identically_on_all_legs() {
+    let root = scratch("lines");
+    std::fs::create_dir_all(&root).unwrap();
+    // 3000 lines of 40 bytes = 120 KB, so the read spans two chunks and the boundary lands mid-line.
+    let big: String = (0..3000)
+        .map(|i| format!("row {i:05} {}\n", "p".repeat(28)))
+        .collect();
+    std::fs::write(format!("{root}/big.txt"), big.as_bytes()).unwrap();
+    let prog = format!(
+        r#"package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+import Core.IteratorModule;
+import Core.IteratorModule.Iterator;
+// NOT named `count`: that collides with PHP's builtin and transpiles to `Cannot redeclare function
+// count()`. Hit for real while writing this test — see KNOWN_ISSUES "PHP builtin FUNCTION names".
+function countOf(Iterator<string> it): int throws FileSystemError {{
+  mutable int n = 0;
+  for (string line in it) {{ n = n + 1; }}
+  return n;
+}}
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
+  try {{
+    string p = "{root}/one.txt";
+    FileSystem.writeText(p, "alpha\nbeta\n\ngamma\n");
+    for (string line in FileSystem.lines(p)) {{ Output.printLine("[{{line}}]"); }}
+    FileSystem.writeText(p, "one\ntwo");
+    Output.printLine("noeol {{countOf(FileSystem.lines(p))}}");
+    FileSystem.writeText(p, "r1\r\nr2\r\n");
+    for (string line in FileSystem.lines(p)) {{ Output.printLine("crlf[{{line}}]"); }}
+    FileSystem.writeText(p, "");
+    Output.printLine("empty {{countOf(FileSystem.lines(p))}}");
+    // Spans the native's chunk boundary — the case a small fixture cannot reach.
+    Output.printLine("big {{countOf(FileSystem.lines("{root}/big.txt"))}}");
+    FileSystem.delete(p);
+  }} catch (FileSystemError e) {{ Output.printLine("unexpected: {{e.message}}"); }}
+}}
+"#
+    );
+    let expected = "[alpha]\n[beta]\n[]\n[gamma]\nnoeol 2\ncrlf[r1]\ncrlf[r2]\nempty 0\nbig 3000\n";
+    both(&prog, expected);
+
+    // The PHP leg runs the same shapes through the `fgets` twin (ladder case 1).
+    let Some(php) = php_bin() else {
+        eprintln!("SKIP fs lines php leg: php not found — set PHORJ_REQUIRE_PHP=1 to require it");
+        assert!(
+            std::env::var("PHORJ_REQUIRE_PHP").as_deref() != Ok("1"),
+            "php required but not found"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        return;
+    };
+    let code = cmd_transpile(&prog).expect("lines program transpiles");
+    let php_file = std::path::Path::new(&root).join("prog.php");
+    std::fs::write(&php_file, &code).unwrap();
+    let out = std::process::Command::new(&php)
+        .arg(&php_file)
+        .output()
+        .expect("php runs");
+    assert!(
+        out.status.success(),
+        "php lines leg failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        expected,
+        "php lines parity"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// `tryWithLock` reports contention instead of waiting, and its `Option<T>` return keeps "the lock was
 /// busy" distinguishable from "the closure ran and returned null" — the ambiguity that ruled out the
 /// cheaper `T?` (developer-ruled 2026-07-31). Both branches are asserted, and the busy branch needs no

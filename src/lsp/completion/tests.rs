@@ -176,15 +176,18 @@ fn prelude_statics_surface_in_member_completion_without_an_lsp_edit() {
         None,
         &std::collections::HashMap::new(),
     ));
-    for want in ["withLock", "tryWithLock"] {
+    for want in ["withLock", "tryWithLock", "lines"] {
         assert!(got.iter().any(|l| l == want), "want {want} in {got:?}");
     }
     // `acquireLock` is `private` — an internal `using` subject, not user-facing surface. Offering it
-    // would advertise exactly the leak-prone shape the DEC-348 ruling rejected.
-    assert!(
-        !got.iter().any(|l| l == "acquireLock"),
-        "private prelude statics must NOT be offered: {got:?}"
-    );
+    // would advertise exactly the leak-prone shape the DEC-348 ruling rejected. Same for the raw
+    // `readLinesChunk` native behind `lines` (DEC-347): it is `Core.Native.FileSystem`, not user surface.
+    for hidden in ["acquireLock", "readLinesChunk"] {
+        assert!(
+            !got.iter().any(|l| l == hidden),
+            "internal `{hidden}` must NOT be offered: {got:?}"
+        );
+    }
 }
 
 #[test]

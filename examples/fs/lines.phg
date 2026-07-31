@@ -1,0 +1,75 @@
+package Main;
+
+import Core.Output;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+import Core.IteratorModule;
+import Core.IteratorModule.Iterator;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Streaming line reads (DEC-347) — `FileSystem.lines(path)` is an `Iterator<string>`, so it is
+// foreach-able and reads O(chunk) memory instead of slurping the whole file.
+//
+// Why it exists: `readText` on an 88 MB file costs ~200 MB of RSS, because the entire contents plus the
+// split result are live at once. MEASURED on an 84.7 MB file (1.2 M lines): this iterator peaks at
+// 23.7 MB, the `readText` + `String.split` equivalent at 322 MB — 13.6x less.
+//
+// There is NO file handle. The ruling rejected a `FileHandle` type (blocked by C4: no transpiling
+// precedent for an opaque handle — `emit_type` would emit an unsatisfiable PHP class hint), so the
+// iterator's whole state is a byte OFFSET in an `int`. Nothing to leak, nothing to close, and no
+// `using` needed. Swapping in a real handle later stays non-breaking, because none of that mechanism
+// is visible here.
+//
+// The native reads ~64 KiB per call and always stops on a LINE BOUNDARY, so a line is never split
+// across two reads — a bug that only shows up on files big enough to cross a chunk edge, which is
+// exactly when nobody is looking. A single line longer than the chunk is returned whole.
+//
+// Terminators are stripped from what you get: `\n`, and a preceding `\r` too, so a CRLF file reads
+// identically to an LF one. An EMPTY line is still a line (it yields ""), because a blank line is
+// content — only the delimiter is dropped.
+//
+// `hasNext`/`next` DECLARE `throws FileSystemError`: a read can fail part-way through (the file is
+// deleted, permissions change), and reporting exhaustion instead would silently turn a truncated read
+// into a short loop. DEC-257 already requires a `foreach` over a throwing iterator to catch or declare,
+// so this example wraps its loop in `try`.
+//
+// Transpiles to PHP via `fgets` (Invariant-14 ladder case 1 — a faithful mapping, no quarantine), so
+// all three legs print identically.
+/// Counts the lines of a file without ever holding more than one chunk in memory.
+///
+/// Takes an `Iterator<string>` rather than a path, so it works over ANY iterator — the streaming read
+/// is just one supplier.
+function countLines(Iterator<string> lines): int throws FileSystemError {
+    mutable int n = 0;
+    for (string line in lines) {
+        n = n + 1;
+    }
+    return n;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        // CONCURRENCY: this example REWRITES its file four times below, and the repo's test corpus runs
+        // every example concurrently (`tests/format.rs` fans it across cores while `differential.rs`
+        // runs it too). phorj has no per-process unique-path source, so two copies would otherwise
+        // interleave a write with the other's iteration and print different output. Everything
+        // therefore runs inside one `withLock` — DEC-348 and DEC-347 composing, and the same fix
+        // `examples/fs/lock.phg` documents.
+        string path = "{FileSystem.tempDir()}/phorj-lines-example.txt";
+        string serial = "{FileSystem.tempDir()}/phorj-lines-example.lock";
+        discard FileSystem.withLock(
+            serial,
+            function(): int throws FileSystemError { FileSystem.writeText(path, "alpha\nbeta\n\ngamma\n")?; for (string line in FileSystem.lines(path)) { Output.printLine("[{line}]"); } Output.printLine("count: {countLines(FileSystem.lines(path))?}"); FileSystem.writeText(path, "one\ntwo")?; Output.printLine("no trailing newline: {countLines(FileSystem.lines(path))?}"); FileSystem.writeText(path, "r1\r\nr2\r\n")?; for (string line in FileSystem.lines(path)) { Output.printLine("crlf [{line}]"); } FileSystem.writeText(path, "")?; Output.printLine("empty file: {countLines(FileSystem.lines(path))?}"); FileSystem.delete(path)?; return 0; }
+        );
+    } catch (FileSystemError e) {
+        // 1. Foreach straight over the iterator. The blank third line comes back as "".
+        // 2. An `Iterator<string>` is an ordinary value — it flows into any function taking one.
+        // 3. A file with no trailing newline yields its last line all the same.
+        // 4. CRLF reads the same as LF — the `\r` is a terminator, not data.
+        // 5. An empty file is an empty iteration, not an error.
+        Output.printLine("unexpected: {e.message}");
+    }
+}

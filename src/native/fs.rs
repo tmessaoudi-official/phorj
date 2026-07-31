@@ -12,6 +12,7 @@
 //! UTF-8 for the `*Text` forms (a non-UTF-8 file is a clean typed error steering to `readBytes`).
 
 use super::fs_bodies::*;
+use super::fs_lines::{read_lines_chunk_inner, split_lines_inner};
 use super::fs_lock::{lock_acquire_inner, lock_release_inner, lock_try_acquire_inner};
 use super::{NativeEval, NativeFn};
 use crate::types::Ty;
@@ -43,6 +44,14 @@ fs_native!(fs_list_dir, list_dir_inner);
 fs_native!(fs_walk, walk_inner);
 fs_native!(fs_temp_dir, temp_dir_inner);
 // DEC-348 advisory locking — bodies + the ticket slab live in `fs_lock.rs`.
+// DEC-347 streaming line reads — the offset-chunk body lives in `fs_lines.rs`.
+fs_native!(fs_read_lines_chunk, read_lines_chunk_inner);
+// NOT `fs_native!`: that macro wraps the result into a `FileSystemResult`, and `splitLines` cannot
+// fail — it takes a string and returns its lines. Wrapping it produced an ENUM where the prelude
+// expected a `List`, which surfaced as `List.length expects (List<T>)` at runtime.
+fn fs_split_lines(args: &[Value], _out: &mut String) -> Result<Value, String> {
+    split_lines_inner(args)
+}
 fs_native!(fs_lock_acquire, lock_acquire_inner);
 fs_native!(fs_lock_try_acquire, lock_try_acquire_inner);
 fs_native!(fs_lock_release, lock_release_inner);
@@ -187,6 +196,35 @@ pub fn fs_natives() -> Vec<NativeFn> {
             fs_size,
             &[],
             wrapped!("__phorj_fs_size", 1),
+        ),
+        // DEC-347 — the streaming-lines primitive. INTERNAL: user code calls `FileSystem.lines(path)`,
+        // which wraps this in an `Iterator<string>`. Returns a chunk ending on a line boundary (or
+        // `null` at EOF), terminators INTACT so the caller's offset advance is exact.
+        entry(
+            "readLinesChunk",
+            vec![Ty::String, Ty::Int],
+            res(Ty::Optional(Box::new(Ty::String))),
+            fs_read_lines_chunk,
+            &[],
+            wrapped!("__phorj_fs_read_lines_chunk", 2),
+        ),
+        // DEC-347 — the chunk splitter. In Rust because the prelude's own loop was O(n²) via
+        // `List.append`'s copy-per-call: 58x slower than PHP's `fgets` before this moved down.
+        entry(
+            "splitLines",
+            vec![Ty::String],
+            Ty::List(Box::new(Ty::String)),
+            fs_split_lines,
+            &[],
+            // A PLAIN call, not `wrapped!`: this native returns a `List`, not a `FileSystemResult`, so
+            // the Result-pair wrapper would hand the prelude a `FileSystemResult_Ok` where it expects an
+            // array (`Cannot assign FileSystemResult_Ok to property FileLines::$buffer of type array`).
+            |a: &[String]| {
+                format!(
+                    "__phorj_fs_split_lines({})",
+                    a.first().map_or("''", |s| s.as_str())
+                )
+            },
         ),
         // DEC-348 — the three lock primitives. INTERNAL: user code never calls these, it calls the
         // prelude's `FileSystem.withLock(path, fn)`, whose `using (FileLock …)` is what guarantees the

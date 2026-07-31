@@ -37,6 +37,47 @@ function __phorj_fs_read_text($p) {
     if (!preg_match('//u', $t)) { return __phorj_fs_err('FileSystemIoError', 'readText', $p); }
     return [true, $t];
 }
+// DEC-347 — the streaming-lines twin. Ladder case 1: PHP has `fgets`, so the mapping is faithful and
+// no `E-TRANSPILE-*` quarantine is needed. Mirrors `native::fs_lines` exactly, including the two
+// properties the prelude depends on: the chunk KEEPS its terminators (so the caller's byte-offset
+// advance is exact) and it never ends mid-line (so the caller never stitches).
+function __phorj_fs_read_lines_chunk($p, $off) {
+    if ($off < 0) { return [false, '<<FileSystemIoError>>Core.FileSystemModule.lines: `' . $p . '`: negative offset ' . $off]; }
+    if (!file_exists($p)) { return __phorj_fs_err('NotFound', 'lines', $p); }
+    if (is_dir($p)) { return __phorj_fs_err('IsADirectory', 'lines', $p); }
+    $h = @fopen($p, 'rb');
+    if ($h === false) { return __phorj_fs_err('FileSystemIoError', 'lines', $p); }
+    if (fseek($h, $off) !== 0) { fclose($h); return __phorj_fs_err('FileSystemIoError', 'lines', $p); }
+    $buf = '';
+    while (strlen($buf) < 65536) {
+        $r = fread($h, 65536 - strlen($buf));
+        if ($r === false || $r === '') { break; }
+        $buf .= $r;
+    }
+    // Stopped mid-line: `fgets` continues from the current position to the next newline (inclusive) or
+    // EOF, which is precisely the Rust side's byte-at-a-time extension.
+    if ($buf !== '' && substr($buf, -1) !== "\n") {
+        $rest = fgets($h);
+        if ($rest !== false) { $buf .= $rest; }
+    }
+    fclose($h);
+    if ($buf === '') { return [true, null]; }
+    // Same UTF-8 gate as `readText` — a chunk ends on a line boundary, so invalid UTF-8 here is real
+    // file content, not a split multi-byte sequence.
+    if (!preg_match('//u', $buf)) { return __phorj_fs_err('FileSystemIoError', 'lines', $p); }
+    return [true, $buf];
+}
+// DEC-347 — the chunk-splitter twin. Mirrors `native::fs_lines::split_lines_inner` rule for rule:
+// split on "\n", drop the trailing empty element the final terminator leaves, strip a preceding "\r".
+function __phorj_fs_split_lines($chunk) {
+    $parts = explode("\n", $chunk);
+    if (end($parts) === '') { array_pop($parts); }
+    $out = [];
+    foreach ($parts as $l) {
+        $out[] = (substr($l, -1) === "\r") ? substr($l, 0, -1) : $l;
+    }
+    return $out;
+}
 function __phorj_fs_read_bytes($p) {
     if (!file_exists($p)) { return __phorj_fs_err('NotFound', 'readBytes', $p); }
     if (is_dir($p)) { return __phorj_fs_err('IsADirectory', 'readBytes', $p); }

@@ -25,6 +25,7 @@ mod convert;
 mod file;
 mod fs;
 mod fs_bodies;
+mod fs_lines;
 mod fs_lock;
 pub(crate) mod fs_prelude;
 mod html;

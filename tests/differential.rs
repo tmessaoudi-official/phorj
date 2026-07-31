@@ -3439,6 +3439,10 @@ const TIER1_PHP: &[&str] = &[
     "fclose",
     "flock",
     "is_readable",
+    // DEC-347 streaming line reads — core, same tier.
+    "fread",
+    "fseek",
+    "fgets",
     "file_put_contents",
     "filesize",
     "getenv",
@@ -3582,6 +3586,25 @@ fn bareword_calls(php: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < b.len() {
+        // Skip COMMENTS before anything else. Prose is not code, and a comment containing `word (` was
+        // reported as a call: `terminators (so the caller's …)` in the DEC-347 helper's own comment
+        // tripped this guard, and `lock (` had done the same earlier. It matters more since DEC-419 —
+        // a user's `/** … */` doc comment is now EMITTED into the PHP, so a doc that mentions
+        // `someFunction(x)` in prose would fail this gate on the user's behalf.
+        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'/' {
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < b.len() && !(b[i] == b'*' && b[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(b.len());
+            continue;
+        }
         match b[i] {
             b'\'' | b'"' => {
                 // Skip the string body up to the matching unescaped quote.
@@ -4867,5 +4890,32 @@ function driver(int x): MyRes {
         src,
         "MyRes.Success(104)\nMyRes.Failure(\"odd\")\n",
         "dec329_propagate_duck_typed",
+    );
+}
+
+/// A newline INSIDE a string literal inside a CLOSURE must survive the PHP leg (found 2026-07-31 while
+/// building DEC-347).
+///
+/// This was a live Invariant-1 divergence: the emitter wrote literals with RAW newlines, and rendering a
+/// closure body on one line turned a newline inside the literal into a SPACE. Both Rust backends printed
+/// `a\nb\n`; PHP printed `a b `. Nothing caught it because no example had put a newline-bearing literal
+/// inside a closure. Fixed by escaping control characters at the literal (`transpile::escapes`), so no
+/// downstream single-line rendering can corrupt one.
+///
+/// The tab and carriage return are here for the same reason — they are the other two characters whose
+/// raw form a single-line rendering would eat.
+#[test]
+fn a_newline_inside_a_literal_inside_a_closure_survives_the_php_leg() {
+    let src = r#"import Core.Output;
+function apply(() => string f): string { return f(); }
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+  Output.print(apply(function(): string { return "a\nb\n"; }));
+  Output.print(apply(function(): string { return "t\tab\n"; }));
+  Output.print(apply(function(): string { return "c\r\nrlf\n"; }));
+}"#;
+    agree_out_php(
+        src,
+        "a\nb\nt\tab\nc\r\nrlf\n",
+        "newline_in_literal_in_closure",
     );
 }
