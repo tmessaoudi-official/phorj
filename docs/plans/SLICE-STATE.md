@@ -131,10 +131,11 @@ disclosed rather than assumed.
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.
 
-**Five PENDING developer questions** (Invariant 15 — do not self-rule): **DEC-420** (PHP builtin FUNCTION
-names are unguarded — a phorj `function count()` transpiles to a fatal; reject vs mangle); **the DEC-347
-residual 4x** (a native-driven `forEachLine` vs a JIT vertical vs accepting it); the strict-vs-narrow
-reading of DEC-379;
+**Six PENDING developer questions** (Invariant 15 — do not self-rule): **DEC-420** (PHP builtin FUNCTION
+names are unguarded — a phorj `function count()` transpiles to a fatal; reject vs mangle); **DEC-421**
+(a lifted PHP error path re-parses but does not TYPE-CHECK — PHP's exception classes have no phorj
+counterpart; leave / map the hierarchy / emit `// CANNOT LIFT:` notes); **the DEC-347 residual 4x** (a
+native-driven `forEachLine` vs a JIT vertical vs accepting it); the strict-vs-narrow reading of DEC-379;
 refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section); and whether
 the public-surface file-layout exemption should stay `Cli`-only (latent, from 2026-07-29).
 **Two OWED measurements** need the developer's box: DEC-365 + DEC-370 (no Docker in this container).
