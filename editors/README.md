@@ -8,6 +8,8 @@ behavior is identical across IDEs and matches the CLI (`phg check`, `phg format`
   std-only, off the byte-identity spine (it never runs the execution backends).
 - **Grammar:** `vscode/syntaxes/phorj.tmLanguage.json` — a TextMate grammar (keywords, types, strings
   with `{…}` interpolation, numbers, comments, `#[…]` attributes), consumed by both VSCode and JetBrains.
+  `/** … */` doc comments (DEC-419) get their own `comment.block.documentation.phorj` scope. Because the
+  ONE grammar file serves both editors, a syntax addition reaches both from a single edit.
 
 | Editor | Setup |
 |--------|-------|

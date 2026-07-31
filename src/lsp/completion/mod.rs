@@ -43,6 +43,27 @@ fn completion_item_tagged(label: &str, kind: u32, detail: &str, deprecated: bool
     )
 }
 
+/// [`completion_item_tagged`] plus DEC-419's `documentation` (markdown): the declaration's `/** … */`
+/// doc comment, so the picker shows it in the detail pane without a separate hover. Omitted entirely
+/// when the declaration has none — an empty `documentation` renders as a blank pane in some clients.
+fn completion_item_documented(
+    label: &str,
+    kind: u32,
+    detail: &str,
+    deprecated: bool,
+    doc: Option<&str>,
+) -> String {
+    let base = completion_item_tagged(label, kind, detail, deprecated);
+    match doc {
+        Some(d) if !d.is_empty() => format!(
+            "{},\"documentation\":{{\"kind\":\"markdown\",\"value\":\"{}\"}}}}",
+            base.trim_end_matches('}'),
+            super::escape(d)
+        ),
+        _ => base,
+    }
+}
+
 /// Like [`completion_item`] but carries an explicit `textEdit` that REPLACES the already-typed
 /// dotted-path prefix (`[start_char, end_char)` on `line`) with the full `label`. Dotted import paths
 /// (`Core.Output`) need this: `.` is a word boundary, so a plain label item would make the client
@@ -234,11 +255,15 @@ fn general_items(
         for (name, kind, deprecated) in super::symbols::top_level_symbols(prog) {
             if seen_top.insert(name.clone()) {
                 // DEC-417: a `#[Deprecated]` declaration is shown struck through in the picker.
-                items.push(completion_item_tagged(
+                // DEC-419: its `/** … */` doc comment rides along as `documentation`.
+                let doc = super::symbols::definition_of(prog, &name)
+                    .and_then(|(_, span)| super::docs::doc_markdown_before(text, span.start));
+                items.push(completion_item_documented(
                     &name,
                     kind,
                     "phorj symbol",
                     deprecated,
+                    doc.as_deref(),
                 ));
             }
         }

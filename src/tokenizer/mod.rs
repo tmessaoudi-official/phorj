@@ -215,7 +215,11 @@ fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagn
                             col,
                         },
                         text,
-                        kind: CommentKind::Block,
+                        kind: if crate::token::opens_doc_comment(lx.src, start) {
+                            CommentKind::Doc
+                        } else {
+                            CommentKind::Block
+                        },
                         own_line,
                     });
                     continue;
@@ -450,3 +454,6 @@ fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagn
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod tests_doc_comments;

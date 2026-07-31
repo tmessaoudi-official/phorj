@@ -177,6 +177,40 @@ fn hover_on_a_call_shows_the_declaration_signature() {
     assert!(body.contains("function helper(int n) -> int"), "{body}");
 }
 
+/// DEC-419: hover shows the declaration's `/** … */` doc comment under its signature. This is the
+/// end-to-end assertion — `lsp::docs` unit-tests the extraction, this one proves the JSON actually
+/// carries it, which is the part a caller sees.
+#[test]
+fn hover_shows_the_doc_comment_under_the_signature() {
+    let mut s = Server::default();
+    let prog = "package Main;\n/** Doubles `n`. */\nfunction helper(int n) -> int { return n; }\nfunction main() -> void { var r = helper(3); }";
+    s.handle(&did_open("file:///x.phg", prog));
+    // line 3 → the `main` line, inside `helper(3)`.
+    let out = s.handle(&req_at("hover", 3, 35));
+    let body = &out[0];
+    assert!(body.contains("function helper(int n) -> int"), "{body}");
+    assert!(
+        body.contains("Doubles `n`."),
+        "doc missing from hover: {body}"
+    );
+}
+
+/// A PLAIN block comment must not appear on hover — otherwise `/**` means nothing and the ruling's
+/// distinction is cosmetic.
+#[test]
+fn hover_does_not_show_a_plain_block_comment() {
+    let mut s = Server::default();
+    let prog = "package Main;\n/* internal note, not docs */\nfunction helper(int n) -> int { return n; }\nfunction main() -> void { var r = helper(3); }";
+    s.handle(&did_open("file:///x.phg", prog));
+    let out = s.handle(&req_at("hover", 3, 35));
+    let body = &out[0];
+    assert!(body.contains("function helper(int n) -> int"), "{body}");
+    assert!(
+        !body.contains("internal note"),
+        "block comment leaked into hover: {body}"
+    );
+}
+
 #[test]
 fn definition_jumps_to_the_declaration_line() {
     let mut s = Server::default();

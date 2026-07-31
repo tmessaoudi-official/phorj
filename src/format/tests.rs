@@ -117,6 +117,19 @@ fn comments_are_preserved() {
     assert_eq!(out, fmt(&out), "comment-bearing output must be idempotent");
 }
 
+/// DEC-419: a doc comment survives formatting with its `*` COLUMN intact. The column is not cosmetic —
+/// `lsp::docs` strips exactly one leading `*` per line, so a formatter that re-indented or dropped
+/// those stars would silently change the rendered hover text.
+#[test]
+fn doc_comments_keep_their_star_column_and_are_idempotent() {
+    let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n/**\n * First.\n *\n * Second.\n */\nfunction doc(): void {}\n#[Entry(kind: EntryKind.Cli)] function main(): void { return; }\n";
+    let out = fmt(src);
+    for want in ["/**", " * First.", " * Second.", " */"] {
+        assert!(out.contains(want), "doc line {want:?} lost:\n{out}");
+    }
+    assert_eq!(out, fmt(&out), "doc-comment output must be idempotent");
+}
+
 // ── width-canonical wrapping (DEC-187) ─────────────────────────────────────────────────────────
 
 /// A statement value that overflows the column budget wraps; a short one stays on one line.

@@ -24,6 +24,7 @@
     "comments": {
       "patterns": [
         { "name": "comment.line.double-slash.phorj", "match": "//.*$" },
+        { "name": "comment.block.documentation.phorj", "begin": "/\\*\\*(?!/)", "end": "\\*/" },
         { "name": "comment.block.phorj", "begin": "/\\*", "end": "\\*/" }
       ]
     },

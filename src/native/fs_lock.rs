@@ -110,8 +110,12 @@ pub(super) fn lock_release_inner(args: &[Value]) -> Result<Value, String> {
 mod tests {
     use super::*;
 
+    /// A scratch lock path for one test. The PID is in the name deliberately: `cargo test --workspace`
+    /// runs several test binaries at once, and a FIXED `/tmp` path is shared state between them — which
+    /// is exactly how a lock test becomes flaky, since a concurrent holder is indistinguishable from
+    /// the contention the test is trying to create.
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir().join(format!("phorj-lock-test-{name}"));
+        let p = std::env::temp_dir().join(format!("phorj-lock-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_file(&p);
         p.to_string_lossy().into_owned()
     }
@@ -159,19 +163,34 @@ mod tests {
         // than blocking, so contention can only be exercised across a process boundary.
         let p = tmp("contended");
         std::fs::write(&p, b"x").unwrap();
+        // The holder SIGNALS once it actually holds the lock, by creating `<p>.held`. Waiting for that
+        // file is an OBSERVABLE precondition; the previous `sleep(400ms)` was a guess, and under the
+        // load of a full `--workspace` run the holder had sometimes not acquired yet, so the try
+        // SUCCEEDED and the assertion below failed. That is a real flake this test produced, not a
+        // hypothetical — fixing it by raising the sleep would have been a bandaid over a race.
+        let held = format!("{p}.held");
+        let _ = std::fs::remove_file(&held);
         let holder = std::process::Command::new("sh")
             .arg("-c")
-            .arg(format!("exec flock -x {p} sleep 2"))
+            .arg(format!("exec flock -x {p} sh -c 'touch {held}; sleep 5'"))
             .spawn();
         let Ok(mut holder) = holder else {
             eprintln!("SKIP: `flock(1)` unavailable — cannot hold a cross-process lock");
             return;
         };
-        std::thread::sleep(std::time::Duration::from_millis(400));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !std::path::Path::new(&held).exists() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the external holder never signalled that it took the lock"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         let got = lock_try_acquire_inner(&[Value::Str(p.clone().into())]).unwrap();
         let t = ticket_of(&got);
         let _ = holder.kill();
         let _ = holder.wait();
+        let _ = std::fs::remove_file(&held);
         assert_eq!(
             t, NOT_ACQUIRED,
             "a contended try must answer 0 (not acquired), not raise an error"

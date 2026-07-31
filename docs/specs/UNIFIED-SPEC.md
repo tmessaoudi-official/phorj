@@ -94,6 +94,7 @@
     *(2026-07-03 — the CURRENT import model, SHIPPED S0–S2)*
   - [Import roots and PSR-4 mapping](#import-roots-and-psr-4-mapping) *(2026-07-01 — needs re-base)*
   - [Public-surface file-naming rule](#public-surface-file-naming-rule) *(2026-06-28 — SHIPPED)*
+  - [Comment syntax](#comment-syntax) *(2026-07-31 — DEC-419, SHIPPED)*
 - **Part III — Type system & semantics**
   - [Comprehensive statics](#comprehensive-statics) *(2026-06-28 — A+B SHIPPED, LSB deferred)*
   - [Secret type](#secret-type) *(2026-06-28 — SHIPPED)*
@@ -570,6 +571,68 @@ Main`; auto-rename tooling.
 ---
 
 # Part III — Type system & semantics
+
+## Comment syntax
+
+**Status: SHIPPED — DEC-419, ruled and built 2026-07-31.** This is the comment SSOT.
+
+Phorj has exactly **three** comment forms and no others:
+
+| Form | Meaning |
+|---|---|
+| `// …` | line comment, to end of line |
+| `/* … */` | ordinary block comment — a note to the next reader, may span lines |
+| `/** … */` | **DOC comment** — the documentation of the declaration that follows it |
+
+### `#` is not a comment
+
+A bare `# …` is a **lex error** (`unexpected character '#'`). `#` exists solely as the attribute sigil
+`#[`. This is a deliberate divergence from PHP, which accepts `#` as a line comment: phorj also uses
+`#[` for attributes, so accepting both would force the reader — and the lexer — to decide which kind of
+`#` they are looking at from what follows it. One meaning per sigil.
+
+### Why `/** … */` and not `///`
+
+PHPDoc's spelling, chosen on purpose. Phorj transpiles to PHP, where `/** … */` **is** the docblock, so
+the same bytes mean the same thing on both sides of that boundary, and a PHP→phorj lift can read them
+back without translation. `///` was considered and rejected: it has no PHPDoc counterpart, so it would
+need converting in each direction. Only one form was adopted, per the same "one mechanism beats two"
+reasoning that rejected `defer` in favour of `using` (DEC-364).
+
+### The rule, single-sourced
+
+A `/*` comment opens a DOC comment iff the bytes are `/**` **and** the next byte is not `/`. The
+exclusion keeps `/**/` an ordinary EMPTY block comment. `/***/` does count as a doc comment whose body
+is `*` — a harmless corner, recorded so it is a decision rather than an accident.
+
+That predicate lives in exactly one place, `token::opens_doc_comment`, and BOTH consumers call it: the
+tokenizer to pick `CommentKind::Doc`, and the LSP to find the doc text above a declaration. Two
+spellings would drift, and the drift would be invisible — highlighted as documentation by the editor
+while hover showed nothing.
+
+### What the doc form does
+
+`phg lsp` renders a declaration's doc comment on **hover** (markdown, under the signature) and in the
+**completion** detail pane (`documentation`). A plain `/* … */` above the same declaration is NOT
+documentation and is not surfaced — that distinction is the entire reason the two forms differ.
+Attribute lines between the doc comment and the declaration (`#[Entry(…)]`) are skipped when looking
+upwards, since that is where they sit in real code.
+
+Doc comments are **not AST nodes**: comments are a side channel keyed by span (what the formatter
+consumes), and hover already holds the buffer text plus the declaration's span, so the doc is
+recoverable without a field on every declaration kind and without the backends carrying data they can
+never use. The byte-identity spine is untouched by construction — comments of every form are invisible
+to `run`, to the VM, and to the transpiled PHP.
+
+### Still open (deliberately not built)
+
+Two sub-questions were raised with the ruling and are NOT part of it, so neither is implemented:
+- whether `transpile` should **emit** a doc comment as a PHP docblock (stdout-neutral, so
+  byte-identity-safe either way);
+- whether the **lifter** should read PHPDoc back into a phorj doc comment.
+
+Both are additive: today transpile drops all comments and the lifter reads none, which is the same
+behaviour as before this ruling, so neither gap is a regression.
 
 ## Comprehensive statics
 

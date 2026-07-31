@@ -132,6 +132,38 @@ fn member_context_lists_module_natives_on_incomplete_buffer() {
 /// exists, with no LSP-side edit. `FileSystem.tryWithLock` (DEC-348) is the live case — both lock
 /// entry points must appear, so a future prelude addition that the LSP silently fails to enumerate
 /// fails here instead of shipping as "the compiler knows it but the editor doesn't".
+/// DEC-419: a documented declaration carries its `/** … */` text as `documentation` in the completion
+/// item, so the picker's detail pane shows it. Asserts on the raw JSON because `documentation` is a
+/// field the `labels` helper discards.
+#[test]
+fn completion_items_carry_the_doc_comment_as_documentation() {
+    // `plain` is deliberately UNdocumented and declared on its own line: the repaired parse blanks the
+    // CURSOR's line, so a decl sharing that line would vanish from the item list entirely.
+    let src = "package Main;\n/** Doubles `n`. */\nfunction helper(int n): int { return n; }\nfunction plain(): void {}\nfunction main(): void { hel }\n";
+    let offset = src.find("hel }").unwrap() + 3;
+    let resp = complete(src, offset, None, None, &std::collections::HashMap::new());
+    // Split the response into per-item chunks so "which item carries the doc" is actually asserted —
+    // a substring search over the whole payload would pass if ANY item had it.
+    let items: Vec<&str> = resp.split("{\"label\":\"").collect();
+    let helper = items
+        .iter()
+        .find(|i| i.starts_with("helper\""))
+        .unwrap_or_else(|| panic!("no `helper` item in {resp}"));
+    assert!(
+        helper.contains("documentation") && helper.contains("Doubles"),
+        "doc missing from completion item: {helper}"
+    );
+    // An UNdocumented declaration must not gain an empty `documentation` (a blank detail pane).
+    let plain = items
+        .iter()
+        .find(|i| i.starts_with("plain\""))
+        .unwrap_or_else(|| panic!("no `plain` item in {resp}"));
+    assert!(
+        !plain.contains("documentation"),
+        "undocumented decl gained an empty documentation: {plain}"
+    );
+}
+
 #[test]
 fn prelude_statics_surface_in_member_completion_without_an_lsp_edit() {
     let src =

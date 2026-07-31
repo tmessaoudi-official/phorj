@@ -18,6 +18,7 @@
 
 mod catalog;
 mod completion;
+pub(super) mod docs;
 mod keywords;
 mod references;
 mod scope;
@@ -204,23 +205,42 @@ impl Server {
                 } else {
                     symbols::signature_text(&text, span)
                 };
-                format!(
-                    "{{\"contents\":{{\"kind\":\"markdown\",\"value\":\"```phorj\\n{}\\n```\"}}}}",
-                    escape(&sig)
-                )
+                // A LOCAL has no doc comment: `/** … */` documents a declaration, and a local binding
+                // inside a body is not one. Asking anyway would find the enclosing item's doc and
+                // misattribute it to the variable.
+                let doc = if is_local {
+                    None
+                } else {
+                    docs::doc_markdown_before(&text, span.start)
+                };
+                Self::hover_markdown(&sig, doc.as_deref())
             }
             // Cross-file: the name is declared in another open document (a same-package sibling).
             None => match self.cross_file_decl(&doc_uri(msg).unwrap_or_default(), &name) {
                 Some((_uri, span, other_text)) => {
                     let sig = symbols::signature_text(&other_text, span);
-                    format!(
-                        "{{\"contents\":{{\"kind\":\"markdown\",\"value\":\"```phorj\\n{}\\n```\"}}}}",
-                        escape(&sig)
-                    )
+                    // The doc comes from the OTHER file's text, not this buffer's — passing `text` here
+                    // would read whatever happens to sit at that offset locally.
+                    let doc = docs::doc_markdown_before(&other_text, span.start);
+                    Self::hover_markdown(&sig, doc.as_deref())
                 }
                 None => "null".to_string(),
             },
         }
+    }
+
+    /// A hover response: the signature in a `phorj` code fence, with the declaration's doc comment
+    /// (DEC-419) rendered as markdown ABOVE it — signature first is deliberate, since that is the part
+    /// the reader is usually hovering to check.
+    fn hover_markdown(sig: &str, doc: Option<&str>) -> String {
+        let body = match doc {
+            Some(d) if !d.is_empty() => format!("```phorj\n{sig}\n```\n\n---\n\n{d}"),
+            _ => format!("```phorj\n{sig}\n```"),
+        };
+        format!(
+            "{{\"contents\":{{\"kind\":\"markdown\",\"value\":\"{}\"}}}}",
+            escape(&body)
+        )
     }
 
     /// `textDocument/definition` — the `Location` of the symbol's declaration (top-level or local), or

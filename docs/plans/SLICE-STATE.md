@@ -15,7 +15,7 @@ clippy clean at `--all-features` AND `--no-default-features`, `cargo fmt --check
 |---|---|
 | Ruled agenda | **18/42 rows built (43%)** |
 | Parity | **≈70% · floor ≈57% · vision ≈71%** (§4.13/§4.14 — unchanged by DEC-364, a syntax row) |
-| Waves done | 0, 1, 2 — plus **DEC-379** (soundness), **DEC-364** (`using`), **DEC-348** (`withLock`) |
+| Waves done | 0, 1, 2 — plus **DEC-379** (soundness), **DEC-364** (`using`), **DEC-348** (`withLock` + `tryWithLock`), **DEC-419** (doc comments) |
 
 ### DEC-364 `using` — BUILT 2026-07-31
 
@@ -63,6 +63,22 @@ Building it forced two fixes beyond the feature:
   invisible to the editor, breaking DEC-417's 100% bar before `tryWithLock` existed. Now unions prelude
   class PUBLIC statics and excludes the `Core.Native.*` twins; `private` statics stay hidden. This also
   closes the "prelude-class members (Date/Uri…) are a follow-up" gap the catalog documented.
+
+### DEC-419 doc comments — BUILT 2026-07-31
+
+`//` + `/* … */` + `/** … */`, three forms and no others. The developer's proposal turned out to be
+ALREADY the shipped surface (`//` and `/* */` both lexed; `#` already a lex error, only `#[` accepted),
+so the ruling's real content was the DOC form: `/** … */` now lexes as `CommentKind::Doc` and `phg lsp`
+renders it on hover + as completion `documentation`. A plain `/* … */` is deliberately not docs.
+
+Design notes worth keeping: the doc predicate is single-sourced in `token::opens_doc_comment` (tokenizer
+AND LSP call it — two spellings would drift invisibly); doc comments are NOT AST nodes, since hover
+already has the text and the span, so no declaration kind gained a field and no backend carries new
+data; the TextMate doc rule must precede the plain block rule or `/**` gets swallowed; and JetBrains
+loads the same grammar file, so both editors came from one edit.
+
+OPEN, deliberately unbuilt (both additive, neither a regression — transpile drops all comments today and
+the lifter reads none): transpile-emit as a PHP docblock, and lifter PHPDoc-read.
 
 **NEXT, in priority order:**
 1. **DEC-347 (`FileSystem.lines`)** — the other slice sequenced after DEC-364; now the last of that

@@ -27,7 +27,9 @@ the VSCode extension, because all three drive the *same* `phg lsp` server and th
 `Settings → Editor → TextMate Bundles → +` and select this repository's **`editors/vscode/`** directory.
 JetBrains reads its `package.json` `grammars` entry and loads `syntaxes/phorj.tmLanguage.json`, so
 `.phg` files are highlighted (keywords, types, strings + `{…}` interpolation, numbers, comments,
-attributes). No VSCode required — the directory is just a standard TextMate-compatible bundle.
+attributes). `/** … */` doc comments (DEC-419) carry their own scope
+(`comment.block.documentation.phorj`), so a theme that styles documentation differently from an ordinary
+`/* … */` block will show the difference here too. No VSCode required — the directory is just a standard TextMate-compatible bundle.
 
 ## 2. Language server (LSP4IJ)
 
@@ -36,7 +38,8 @@ attributes). No VSCode required — the directory is just a standard TextMate-co
    - **Name:** `Phorj`
    - **Command:** `phg lsp` (or `/absolute/path/to/phg lsp`)
    - **Mappings → File name patterns:** `*.phg` → language id `phorj`
-3. Apply. Open any `.phg` file: diagnostics appear inline (identical to `phg check`), and hover,
+3. Apply. Open any `.phg` file: diagnostics appear inline (identical to `phg check`), and hover
+   (including a declaration's `/** … */` doc comment, rendered as markdown under its signature),
    go-to-definition (`Ctrl/Cmd+Click`), completion, structure view (document symbols), find-usages
    (references), rename, and reformat (`phg format`) all work through the server.
 

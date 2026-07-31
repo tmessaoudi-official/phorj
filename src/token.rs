@@ -27,8 +27,17 @@ pub struct Comment {
 pub enum CommentKind {
     /// `// …` to end of line.
     Line,
-    /// `/* … */` (may span lines).
+    /// `/* … */` (may span lines) — an ordinary comment, carrying no documentation meaning.
     Block,
+    /// `/** … */` — a DOC comment (DEC-419), the documentation attached to the declaration that
+    /// follows it. Distinct from [`CommentKind::Block`] so tooling can tell "documentation" from "a
+    /// note to the next reader"; `phg lsp` renders it on hover.
+    ///
+    /// PHPDoc's spelling on purpose: phorj transpiles to PHP, where `/** … */` IS the docblock, so the
+    /// same bytes mean the same thing on both sides of the boundary (and a PHP→phorj lift can read them
+    /// back). `///` was considered and rejected — it has no PHPDoc counterpart, so it would need
+    /// translating in both directions.
+    Doc,
 }
 
 /// One segment of a lexed string literal. The tokenizer splits interpolation (`{expr}`) from literal
@@ -213,6 +222,24 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
+}
+
+/// Does a `/*`-comment starting at `at` open a DOC comment (`/** … */`) rather than a plain block?
+///
+/// THE single source of this rule (DEC-419): the tokenizer calls it to pick [`CommentKind`], and the
+/// LSP calls it to find the doc text above a declaration. Two independent spellings of "is this a doc
+/// comment" would drift, and the drift would be invisible — highlighted as documentation in the editor
+/// while hover showed nothing.
+///
+/// True iff the bytes at `at` are `/**` AND the byte after is not `/`. That exclusion is what keeps
+/// `/**/` an ordinary EMPTY block comment rather than an unterminated doc comment. `/***/` does count
+/// as a doc comment whose body is `*` — a harmless corner, called out so it is a decision and not an
+/// accident.
+pub fn opens_doc_comment(src: &[u8], at: usize) -> bool {
+    src.get(at) == Some(&b'/')
+        && src.get(at + 1) == Some(&b'*')
+        && src.get(at + 2) == Some(&b'*')
+        && src.get(at + 3) != Some(&b'/')
 }
 
 #[cfg(test)]

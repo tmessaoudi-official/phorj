@@ -6,6 +6,58 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `examples/fs/lock.phg` was racy under the concurrent test corpus (2026-07-31)
+The example reset its state by DELETING its working directory, and the repo's test corpus runs every
+example concurrently (`tests/format.rs` fans the corpus across cores; `tests/differential.rs` runs it
+too). Since phorj has no per-process unique-path source, several copies shared one fixed temp path, so
+one run could remove the counter another was tallying. **[Verified]** by hammering the old file: 16
+concurrent runs produced 4 DISTINCT outputs, including real errors — `removeDirAll: Directory not empty
+(os error 39)` and `appendText: … No such file or directory`. It surfaced as a single transient failure
+in a full `--workspace` run.
+
+Fixed with the example's own subject: all mutation now happens inside one `withLock(serial)`, so
+concurrent runs serialize and every copy prints the same thing. No directory and no deletion — the paths
+sit directly in the temp dir and state is reset by writing the counter empty under the lock. The inner
+demos deliberately use a different lock file, because the OS lock is per-descriptor and a blocking
+`withLock` nested on the same path would deadlock against itself. Re-verified: 3 rounds of 16 concurrent
+runs, 1 distinct output each time.
+
+Also fixed the same class of bug in `native::fs_lock`'s contention test: its scratch path is now
+PID-qualified (a fixed `/tmp` path is shared state between concurrently-running test binaries), and the
+`sleep(400ms)` that waited for the external holder is replaced by waiting on an observable signal the
+holder creates. Under full-workspace load the holder had sometimes not acquired yet, so the try
+succeeded and the assertion failed — raising the sleep would have been a bandaid over a race.
+
+### Added — doc comments: `/** … */` (2026-07-31, DEC-419)
+Phorj now has THREE comment forms and no others: `//`, `/* … */`, and `/** … */`. The last is a **DOC
+comment** — the documentation of the declaration that follows it — and `phg lsp` renders it on hover
+(markdown, under the signature) and as completion `documentation`. A plain `/* … */` above the same
+declaration is deliberately NOT documentation; that distinction is the whole point.
+
+`#` remains NOT a comment: a bare `# …` is a lex error, and `#` is only the attribute sigil `#[`. That
+divergence from PHP is deliberate — accepting both would force the reader and the lexer to decide which
+kind of `#` they are looking at from what follows it.
+
+`/** … */` is PHPDoc's spelling on purpose: phorj transpiles to PHP, where that IS the docblock, so the
+same bytes mean the same thing on both sides of the boundary and a lift can read them back. `///` was
+rejected — no PHPDoc counterpart, so it would need translating in each direction.
+
+The "is this a doc comment" rule is single-sourced in `token::opens_doc_comment` and shared by the
+tokenizer (which picks `CommentKind::Doc`) and the LSP (which extracts the text). Two spellings would
+drift invisibly — highlighted as documentation while hover showed nothing. `/**/` stays an ordinary
+EMPTY block comment; `/***/` counts as a doc comment with body `*` (a corner recorded as a decision).
+
+Doc comments are NOT AST nodes: hover already holds the buffer text and the declaration's span, so no
+field is added to any declaration kind and the backends carry nothing new. Comments of every form stay
+invisible to `run`, the VM and the transpiled PHP, so the byte-identity spine is untouched.
+
+Editors: the TextMate grammar gains `comment.block.documentation.phorj`, ordered BEFORE the plain block
+rule (TextMate takes the first match, so a `/\*` rule listed first would swallow `/**`). The JetBrains
+path loads that same grammar file, so both editors are covered by the one change.
+
+NOT built, and deliberately so — both raised with the ruling, both additive, neither a regression:
+transpile does not yet EMIT a doc comment as a PHP docblock, and the lifter does not READ PHPDoc back.
+
 ### Added — `FileSystem.tryWithLock(path, fn)`, non-blocking advisory locking (2026-07-31, DEC-348.1)
 Returns `Option<T>` — `None` when the lock is held by someone else, `Some(v)` when the closure ran and
 returned `v`. Developer-ruled over the cheaper `T?`: under `T?` a busy lock and a closure that

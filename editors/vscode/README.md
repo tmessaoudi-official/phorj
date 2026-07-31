@@ -11,6 +11,9 @@ server power the JetBrains/PhpStorm setup — see `../phpstorm/README.md`.)
 
 ## Features
 
+- **Doc comments** — `/** … */` (DEC-419) is a documentation comment: it is highlighted as documentation
+  and shown on hover under the declaration's signature, plus in the completion detail pane. A plain
+  `/* … */` is deliberately NOT documentation.
 - **Syntax highlighting** — keywords, types, strings with `{…}` interpolation, numbers, comments, and
   `#[…]` attributes (TextMate grammar, no server needed).
 - **Diagnostics** — type/parse errors and lints, live as you type (identical to `phg check`).

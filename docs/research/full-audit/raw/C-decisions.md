@@ -4761,4 +4761,73 @@ strength of "prelude members are enumerated generically", which was assumed rath
 assumption was false. A feature's LSP row is not satisfied by a plausible mechanism — it needs an assertion
 that the specific new name appears.
 
-| DEC-419 | GR-COMMENTS | Comment syntax: is `//` + `/* … */` the settled, unified surface, and should a DOC comment exist? Raised by the developer 2026-07-31, who proposed `//` for one line and `/**` for many, noting `#` is ambiguous with the `#[` attribute sigil | **PENDING — developer ruling required (Invariant 15).** State [Verified]: the proposal is ALREADY what phorj implements. `src/tokenizer/mod.rs:184` starts a line comment on `//` only; `:205` starts a block on `/*`; `#` is NOT a comment (`# x` is `lex error: unexpected character '#'`), it is only the attribute sigil `#[`. So the developer's instinct matches the shipped design and no change is needed there. The REAL open question is narrower: `CommentKind` has only `Line` and `Block` (`src/token.rs:27`), `/**` is not distinguished from `/*`, and **nothing consumes comments for documentation** — LSP hover shows no doc text. So phorj has no doc-comment concept. Sub-questions: which form (`/** */` PHPDoc-style, `///` Rust-style, or both); whether the LSP surfaces it on hover/completion (Invariant 17 would then apply); whether transpile EMITS it as a PHP docblock (stdout-neutral, so byte-identity-safe) and whether the lifter READS PHPDoc back | Not started — no code written |
+| DEC-419 | GR-COMMENTS | Comment syntax: is `//` + `/* … */` the settled, unified surface, and should a DOC comment exist? Raised by the developer 2026-07-31, who proposed `//` for one line and `/**` for many, noting `#` is ambiguous with the `#[` attribute sigil | **RULED 2026-07-31 — (1): `/** … */` as a distinguished DOC comment, surfaced on LSP hover.** First, the state check [Verified]: the proposal was ALREADY the shipped surface — `src/tokenizer/mod.rs` starts a line comment on `//` only and a block on `/*`, and `#` was already NOT a comment (`# x` ⇒ `lex error: unexpected character '#'`), it is only the `#[` sigil. So no change was needed there and the developer's instinct matched the design. The ruling's real content was the DOC form, which did NOT exist: `CommentKind` had only `Line`/`Block`, `/**` was indistinguishable from `/*`, and NOTHING consumed comments as documentation. `/** … */` chosen over `///` because it is PHPDoc's spelling — phorj transpiles to PHP where that IS the docblock, so the same bytes mean the same thing across the boundary and a lift can read them back; `///` has no counterpart and would need translating in both directions. ONE form only, per the same 'one mechanism beats two' reasoning that rejected `defer` (DEC-364). **Two sub-questions were raised WITH the ruling and are NOT part of it** — transpile-EMIT as a PHP docblock, and lifter PHPDoc-READ. Both additive; neither built. | **BUILT 2026-07-31** — see "DEC-419 BUILT" at the end of this file |
+
+### DEC-419 BUILT (2026-07-31) — doc comments, and the surface that was already correct
+
+**The premise was checked before it was accepted, and half of it needed no work.** The developer proposed
+`//` + `/**` and flagged `#` as ambiguous with `#[`. All of that was already true of the shipped lexer:
+`//` and `/* */` lex, and `#` is a lex error outside `#[`. Reporting "already done, nothing to build"
+for that half — rather than quietly re-implementing it — is the whole value of the state check.
+
+**What genuinely did not exist** was any notion of documentation: `CommentKind` had `Line` and `Block`
+only, `/**` was indistinguishable from `/*`, and no consumer read comments for docs — hover showed
+signatures and nothing else. That gap is what got built.
+
+**Design decisions inside the build, each with its reason:**
+- **Single-sourced predicate.** `token::opens_doc_comment` is the ONE definition of "is this a doc
+  comment", called by the tokenizer (to pick `CommentKind::Doc`) and by `lsp::docs` (to find the text
+  above a declaration). Two spellings would drift, and the drift would be INVISIBLE: highlighted as
+  documentation by the editor while hover showed nothing.
+- **Doc comments are NOT AST nodes.** Comments live in a side channel keyed by span (what the formatter
+  consumes). Attaching them would mean a field on `Function`/`Class`/`Enum`/`Trait`/`Interface`/
+  `TypeAlias` plus every construction site, and the backends would carry data they can never use. Hover
+  already holds the buffer text and the declaration's span, so the doc is recoverable from what is in
+  hand — and the byte-identity spine is untouched by construction.
+- **Attribute lines are skipped when walking upwards.** `#[Entry(…)]` sits between the doc and the
+  declaration in real code; not skipping it would silently un-document every entry point.
+- **A LOCAL gets no doc.** Asking for one would find the enclosing item's doc and misattribute it to a
+  variable.
+- **`/**/` stays an ordinary EMPTY block comment**; `/***/` counts as a doc comment with body `*`. Both
+  recorded as decisions rather than left to be discovered.
+- **TextMate rule ORDER is load-bearing:** the doc rule must precede the plain-block rule, because
+  TextMate takes the first match and a `/\*` rule listed first would swallow `/**`. JetBrains loads the
+  same grammar file (`editors/vscode/syntaxes/phorj.tmLanguage.json`), so Invariant 17's both-editors
+  requirement was satisfied by that single edit — worth knowing, since it is not obvious.
+
+**Ratchets:** 8 unit tests on the extraction (including the two negatives that make `/**` mean something
+— a plain block comment and a line comment must NOT surface); 2 end-to-end LSP hover tests on the actual
+JSON; 1 completion test asserting per-item that the documented decl carries `documentation` and the
+undocumented one does NOT gain an empty field; 1 tokenizer test pinning all four classification corners;
+1 formatter test proving the `*` column survives formatting — that column is not cosmetic, since the
+extractor strips exactly one `*` per line, so a formatter that re-indented would change rendered text.
+
+**Deliberately NOT built, and stated so rather than half-done:** transpile does not emit a docblock, and
+the lifter does not read PHPDoc. Both were raised with the ruling as sub-questions, both are additive,
+and neither is a regression — transpile drops all comments today and the lifter reads none.
+
+### Shipped-example concurrency (2026-07-31) — a race in `examples/fs/lock.phg`, found by a single transient test failure
+
+**Worth recording because the failure looked like noise.** One `cargo test --workspace --all-features`
+run failed with `2128 passed; 1 failed`, and six standalone re-runs of the lib tests were clean. The
+temptation was to call it flaky-and-move-on; it was a real bug in an example shipped the previous day.
+
+**Two independent causes, both the same shape — fixed shared `/tmp` state under a CONCURRENT corpus:**
+1. `examples/fs/lock.phg` reset state by DELETING its working directory, on a FIXED path. `tests/format.rs`
+   runs every example through the tree-walker fanned across cores, and `tests/differential.rs` runs it as
+   well, so several copies execute at once. [Verified] by hammering the pre-fix file: 16 concurrent runs →
+   4 distinct outputs, with `removeDirAll: Directory not empty (os error 39)` and `appendText: … No such
+   file or directory`. Fixed by serialising the whole example inside one `withLock(serial)` — the feature
+   making its own example safe — with no directory and no deletion, state reset by writing content under
+   the lock. Post-fix: 3 rounds × 16 concurrent → 1 distinct output each round.
+2. `native::fs_lock`'s contention test used a FIXED `/tmp` path (shared between concurrently-running test
+   binaries) and a `sleep(400ms)` to wait for an external `flock` holder. Under full-workspace load the
+   holder sometimes had not acquired yet, so the try SUCCEEDED and the assertion failed. Fixed with a
+   PID-qualified path and an observable signal (the holder `touch`es a file once it holds the lock, and
+   the test waits on that with a deadline). Raising the sleep would have been a bandaid over a race.
+
+**The generalisable lesson:** phorj has no per-process unique-path source (`Core.Process` exposes only
+`arguments`/`get`/`all` — no pid), so ANY shipped example that mutates a fixed temp path is unsafe under
+the test corpus. Blocking `withLock` hid this — concurrent runs merely waited — and `tryWithLock` turned
+the same latent collision into a WRONG ANSWER, which is what made it visible. Any future example doing
+filesystem mutation should serialise itself the same way, or not mutate shared paths at all.

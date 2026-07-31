@@ -1,0 +1,59 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Comment syntax (DEC-419). Phorj has exactly THREE comment forms and no others:
+//
+//   //  … to end of line
+//   /*  … */  an ordinary block comment — a note to the next reader
+//   /** … */  a DOC comment — the documentation of the declaration that follows it
+//
+// `#` is NOT a comment. It is only the attribute sigil `#[`, and a bare `# …` is a lex error
+// (`unexpected character '#'`). That is deliberate: PHP allows `#` as a comment, but phorj also uses
+// `#[` for attributes, so allowing both would make the reader (and the lexer) work out which `#` they
+// are looking at from what follows it.
+//
+// `/** … */` is PHPDoc's spelling on purpose. Phorj transpiles to PHP, where `/** … */` IS the
+// docblock, so the same bytes carry the same meaning on both sides of that boundary. `///` was
+// considered and rejected: it has no PHPDoc counterpart, so it would need translating in each
+// direction.
+//
+// What the DOC form buys you: `phg lsp` renders it on hover and in the completion detail pane. A plain
+// `/* … */` above the same declaration is NOT documentation and is not shown — that distinction is the
+// entire reason the two forms differ.
+//
+// Comments never affect runtime behaviour, so all three forms are invisible to `run`, to the VM, and to
+// the transpiled PHP. This example prints only to prove the file runs; the comments themselves are the
+// subject. Hover over `celsiusToFahrenheit` in an editor to see its doc.
+/**
+ * Converts a Celsius temperature to Fahrenheit.
+ *
+ * The body is markdown, so `code`, **bold** and lists all render on hover:
+ *   - blank comment lines become blank markdown lines
+ *   - the leading `*` column is furniture and is stripped
+ */
+function celsiusToFahrenheit(float c): float {
+    return c * 9.0 / 5.0 + 32.0;
+}
+
+/** A one-line doc comment is fine too — the `*` column is optional. */
+function boilingPoint(): float {
+    return 100.0;
+}
+
+/* This is an ordinary block comment, NOT documentation. It explains something to whoever reads the
+   source next, and the editor deliberately does not surface it on hover. */
+function freezingPoint(): float {
+    return 0.0;
+}
+
+/**/
+// The line above is an EMPTY BLOCK comment, not an unterminated doc comment: `/**/` is `/*` + `*/`.
+// The rule is "`/**` not followed by `/`", which is why this one is ordinary.
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine("freezing: {celsiusToFahrenheit(freezingPoint())}");
+    Output.printLine("boiling:  {celsiusToFahrenheit(boilingPoint())}");
+}

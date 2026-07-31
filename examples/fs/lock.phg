@@ -33,6 +33,21 @@ import Core.Runtime.EntryKind;
 // Rust holder and a PHP `flock()` holder block each other in both directions. Windows is a shipped
 // target, its lock semantics may be MANDATORY rather than advisory, and there is no Windows CI — so
 // treat the cross-platform behaviour as unverified.
+// CONCURRENCY-SAFETY OF THIS EXAMPLE ITSELF (worth reading — it is the feature eating its own cooking).
+// The repo's test corpus runs every example CONCURRENTLY (`tests/format.rs` fans the corpus across
+// cores while `tests/differential.rs` runs it too), and phorj has no per-process unique-path source, so
+// a shipped example that mutates a FIXED temp path can be running several times at once. The earlier
+// shape of this file was racy for that reason: it began by DELETING its working directory, so one run
+// could remove the counter another run was mid-way through tallying, and print a different number.
+//
+// The fix is the subject of the example: everything mutating runs inside `withLock(serial)`, so
+// concurrent runs SERIALIZE and each produces identical output. No `removeDirAll`, and no directory at
+// all — the paths sit directly in the temp dir, which always exists. State is reset by WRITING the
+// counter empty under the lock rather than by deleting anything.
+//
+// The inner demos use a DIFFERENT lock file (`guard`) than the outer `serial` one on purpose: the OS
+// lock is per-file-descriptor, so a blocking `withLock` nested on the SAME path would deadlock against
+// itself. That is the same property step 4 below turns into a deterministic demonstration.
 // A tally file bumped under the lock — the canonical read-modify-write, where the danger is another
 // holder interleaving BETWEEN the modify and the read-back. One `x` is appended per bump and the new
 // count is the file's size.
@@ -46,60 +61,29 @@ function bump(string counter): int throws FileSystemError {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        string dir = "{FileSystem.tempDir()}/phorj-lock-example";
-        // Idempotent setup: an earlier ABORTED run would leave the tree behind, and this example has
-        // to be re-runnable (the differential harness runs it on each backend in turn).
-        if (FileSystem.exists(dir)) {
-            FileSystem.removeDirAll(dir);
-        }
-        FileSystem.createDir(dir);
-        string counter = "{dir}/counter.txt";
-        string guard = "{dir}/guard.lock";
+        string tmp = FileSystem.tempDir();
+        string serial = "{tmp}/phorj-lock-example-serial.lock";
+        string counter = "{tmp}/phorj-lock-example-counter.txt";
+        string guard = "{tmp}/phorj-lock-example-guard.lock";
+        // Everything below is inside ONE lock, which is what makes the output identical no matter how
+        // many copies of this example run at once.
+        discard FileSystem.withLock(
+            serial,
+            function(): int throws FileSystemError { FileSystem.writeText(counter, "")?; Output.printLine("bump -> {bump(counter)?}"); Output.printLine("bump -> {bump(counter)?}"); int a = FileSystem.withLock(guard, function(): int throws FileSystemError { return 1; })?; int b = FileSystem.withLock(guard, function(): int throws FileSystemError { return 2; })?; Output.printLine("sequential acquisitions: {a} then {b}"); try { discard FileSystem.withLock(guard, function(): int throws FileSystemError { discard FileSystem.readText("{tmp}/phorj-lock-example-absent")?; return 0; }); Output.printLine("unreachable"); } catch (FileSystemError e) { Output.printLine("closure threw, and it propagated"); } int after = FileSystem.withLock(guard, function(): int throws FileSystemError { return 3; })?; Output.printLine("lock was free after the throw: {after}"); string nested = FileSystem.withLock(guard, function(): string throws FileSystemError { Option<string> inner = FileSystem.tryWithLock(guard, function(): string throws FileSystemError { return "inner acquired"; })?; return match (inner) { Option.Some(v) => v, Option.None() => "tryWithLock saw it held" }; })?; Output.printLine(nested); Option<string> free = FileSystem.tryWithLock(guard, function(): string throws FileSystemError { return "acquired"; })?; Output.printLine(match (free) { Option.Some(v) => "tryWithLock on a free lock: {v}", Option.None() => "unreachable" }); return 0; }
+        );
+    } catch (FileSystemError e) {
+        // Reset by CONTENT, not by deleting the tree — a delete is what made this racy before.
         // 1. The closure's value comes back out of `withLock`.
-        Output.printLine("bump -> {bump(counter)}");
-        Output.printLine("bump -> {bump(counter)}");
         // 2. Re-acquiring in the same program only works because the block released. A leaked lock
         //    would deadlock here rather than print.
-        int a = FileSystem.withLock(guard, function(): int throws FileSystemError { return 1; });
-        int b = FileSystem.withLock(guard, function(): int throws FileSystemError { return 2; });
-        Output.printLine("sequential acquisitions: {a} then {b}");
         // 3. A closure that THROWS still releases on the way out — the error propagates unchanged,
         //    and the next acquisition succeeds.
-        try {
-            discard FileSystem.withLock(
-                guard,
-                function(): int throws FileSystemError { discard FileSystem.readText("{dir}/does-not-exist")?; return 0; }
-            );
-            Output.printLine("unreachable");
-        } catch (FileSystemError e) {
-            Output.printLine("closure threw, and it propagated");
-        }
-        int after = FileSystem.withLock(
-            guard,
-            function(): int throws FileSystemError { return 3; }
-        );
-        Output.printLine("lock was free after the throw: {after}");
-        // 4. `tryWithLock` reports contention instead of waiting. This is DETERMINISTIC with no second
-        //    process and no sleep: the OS lock is per-file-DESCRIPTOR, so the inner attempt opens its
-        //    own descriptor and genuinely finds the lock held — by this very program.
-        string nested = FileSystem.withLock(
-            guard,
-            function(): string throws FileSystemError { Option<string> inner = FileSystem.tryWithLock(guard, function(): string throws FileSystemError { return "inner acquired"; })?; return match (inner) { Option.Some(v) => v, Option.None() => "tryWithLock saw it held" }; }
-        );
-        Output.printLine(nested);
-        // 5. …and on a FREE lock the same call acquires and hands back the closure's value.
-        Option<string> free = FileSystem.tryWithLock(
-            guard,
-            function(): string throws FileSystemError { return "acquired"; }
-        );
-        Output.printLine(
-            match (free) {
-                Option.Some(v) => "tryWithLock on a free lock: {v}",
-                Option.None() => "unreachable"
-            }
-        );
-        FileSystem.removeDirAll(dir);
-    } catch (FileSystemError e) {
+        // 4. `tryWithLock` reports contention instead of waiting. DETERMINISTIC with no second
+        //    process and no sleep: the OS lock is per-file-DESCRIPTOR, so the inner attempt opens
+        //    its own descriptor and genuinely finds the lock held — by this very program.
+        // 5. …and on a FREE lock the same call acquires and hands back the closure's value. `guard`
+        //    is free here: every block above released it, and a concurrent run cannot hold it
+        //    because it is still waiting on `serial`.
         Output.printLine("unexpected: {e.message}");
     }
 }
