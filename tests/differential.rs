@@ -4919,3 +4919,23 @@ function apply(() => string f): string { return f(); }
         "newline_in_literal_in_closure",
     );
 }
+
+/// DEC-420 — a phorj free function named after a PHP builtin runs identically on all three legs.
+///
+/// This is the case that was BROKEN: `function count(…)` type-checked, ran on the interpreter and the
+/// VM, and its PHP leg died with `Cannot redeclare function count()` (exit 255). Ruled to MANGLE rather
+/// than reject, so no program that compiles today stops compiling. `agree_out_php` runs the real PHP, so
+/// a regression here fails on the actual fatal rather than on a string comparison.
+#[test]
+fn free_functions_named_after_php_builtins_still_run_on_the_php_leg() {
+    let src = r#"import Core.Output;
+function count(int n): int { return n * 2; }
+function sort(int a): int { return a + 1; }
+function key(): string { return "k"; }
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+  Output.printLine("{count(21)}");
+  Output.printLine("{sort(6)}");
+  Output.printLine(key());
+}"#;
+    agree_out_php(src, "42\n7\nk\n", "php_builtin_function_name_collision");
+}

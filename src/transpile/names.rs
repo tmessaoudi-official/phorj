@@ -37,6 +37,33 @@ pub(super) fn php_scoped_variant_name(enum_name: &str, variant: &str) -> String 
     }
 }
 
+/// The PHP name for a phorj FREE function, mangled when it would redeclare a builtin (DEC-420).
+///
+/// **Why mangle rather than reject** (developer-ruled 2026-07-31): rejecting would break programs that
+/// compile today, and DEC-213 already set the precedent by mangling colliding enum VARIANTS instead of
+/// refusing them. The trailing `_` is that same convention, so the two collision fixes read alike.
+///
+/// **Both the definition and every call site must route through here**, or the mangle turns one fatal
+/// (`Cannot redeclare function count()`) into a different one (`Call to undefined function count_()`).
+/// The three sites are: the definition (`emit_function_named`), the call (`emit_call`), and the
+/// first-class-callable reference (`name(...)`).
+///
+/// Only the LAST segment is considered and rewritten: a namespaced `Acme\Util\count` does not collide
+/// with the global builtin at all, but keeping the mangle keyed on the leaf means the definition and the
+/// call agree no matter which form each site happens to hold.
+///
+/// METHODS are never passed here — a `count()` method on a class is perfectly legal PHP.
+pub(super) fn php_free_fn_name(name: &str) -> String {
+    let leaf = last_segment(name);
+    if !crate::php_names::is_php_builtin_function_name(leaf) {
+        return name.to_string();
+    }
+    match name.rfind('\\') {
+        Some(i) => format!("{}{}_", &name[..=i], leaf),
+        None => format!("{leaf}_"),
+    }
+}
+
 /// Property names PHP's `\Exception` already declares (M-faults 2b). A Phorj `Error` subtype
 /// transpiles to `extends \Exception`, so a promoted/declared field with one of these names would be
 /// a typed redeclaration of an inherited untyped property — a PHP fatal — and must be emitted untyped.

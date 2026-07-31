@@ -46,6 +46,25 @@ Together with `cargo-nextest` now installed (the hooks already preferred it and 
 `cargo test`), a WARM full-suite cycle — touch `src/lib.rs`, recompile, run all 2686 tests with
 `--all-features` — is **43 s**, of which 28 s is the parallel test run.
 
+### Fixed — a phorj function named after a PHP builtin no longer kills the PHP leg (2026-07-31, DEC-420)
+`function count(int n)` passed `phg check`, ran on both Rust backends, and transpiled to
+`Cannot redeclare function count()` — the PHP leg exited 255. That is exactly the DEC-213 failure mode
+(`Cannot redeclare class DateTime`) with the class half fixed and the function half still open.
+
+Developer-ruled to **MANGLE** rather than reject: no program that compiles today stops compiling, and
+DEC-213 already set the precedent by mangling colliding enum VARIANTS. The emitted PHP name gains a
+trailing `_` (`count` → `count_`), the same convention, so the two collision fixes read alike.
+
+**Definition and every call site route through one `php_free_fn_name`** — mangling the definition alone
+would swap one fatal for `Call to undefined function count_()`. The three sites are the definition, the
+call, and the first-class-callable reference; a test asserts the call site specifically. Methods are NOT
+mangled (a `count()` method is legal PHP), and a non-colliding name is untouched.
+
+The builtin-function list lives beside the class list in `php_names.rs`, under the same DEC-213 rule:
+ONE list, so the mangle set cannot drift from the emit set. It covers the always-present core rather than
+the extension-gated tail — a miss is not silent, it surfaces as the same `Cannot redeclare` fatal from the
+transpile→real-PHP oracle, and the fix is one row.
+
 ### Added — the PHP lifter reads `try`/`catch`/`finally` (2026-07-31, LIFT-TRY)
 The lift subset had NO exception handling: the parser refused the `try` keyword and the printer listed it
 as out of subset. It now handles all four shapes real PHP writes — a root-qualified type

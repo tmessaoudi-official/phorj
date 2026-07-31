@@ -747,7 +747,8 @@ impl Transpiler {
             if self.namespaced && name.contains('\\') {
                 format!("\\{name}(...)")
             } else {
-                format!("{name}(...)")
+                // DEC-420: the reference must name the SAME symbol the definition emitted.
+                format!("{}(...)", php_free_fn_name(name))
             }
         } else {
             format!("${name}") // best-effort; the checker guarantees resolution

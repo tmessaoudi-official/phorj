@@ -37,9 +37,16 @@ impl Transpiler {
             .collect();
         // In namespaced mode a top-level function is declared inside its `namespace` block, so emit
         // only its trailing segment (`Acme\Util\compute` ⇒ `compute`). Methods keep their name.
+        // DEC-420: a FREE function whose name is a PHP builtin is emitted mangled, and every call site
+        // routes through the same helper so the two cannot disagree.
+        let mangled;
         let disp = match name_override {
             Some(n) => n,
             None if self.namespaced && !is_method => last_segment(&f.name),
+            None if !is_method => {
+                mangled = php_free_fn_name(&f.name);
+                &mangled
+            }
             None => &f.name,
         };
         // Batch-1 D: a `static` method must be emitted `static` in PHP, else a class-static entry call

@@ -69,7 +69,8 @@ impl Transpiler {
             if self.namespaced && name.contains('\\') {
                 return Ok(format!("\\{name}({argv})"));
             }
-            return Ok(format!("{name}({argv})")); // free function
+            // DEC-420: mangled iff the name collides with a PHP builtin — same helper as the definition.
+            return Ok(format!("{}({argv})", php_free_fn_name(name))); // free function
         }
         if let Expr::Member { .. } = callee {
             return self.emit_member_call(callee, args);

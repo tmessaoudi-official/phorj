@@ -2406,25 +2406,3 @@ legs for symmetry.
    (inert when unused; skipped when the block declares the name), so `FileSystem.exists` from
    `package Acme.Fs` runs on the PHP leg. Verified on the recorded reproduction (FS + Uri shape).
 
-## PHP builtin FUNCTION names are not guarded (the DEC-213 gap, functions half)
-
-**Found 2026-07-31 while writing the DEC-347 tests.** `php_names.rs` rejects a top-level
-class/enum/interface/trait whose name collides with a PHP builtin CLASS (`E-RESERVED-NAME`, DEC-202/213)
-— but nothing checks FUNCTION names. So:
-
-```phorj
-function count(Iterator<string> it): int { … }   // `phg run` works fine
-```
-transpiles to `function count(…)` and PHP fatals with **`Cannot redeclare function count()`**
-[Verified: hit for real, `php_exit=255`].
-
-That is precisely the failure DEC-213 fixed for classes (`Cannot redeclare class DateTime`), still open
-for functions — `phg check` passes, both Rust backends run, and only the PHP leg dies.
-
-**Not fixed, deliberately:** the fix rejects names that compile today, which is user-visible language
-surface and therefore the developer's call (Invariant 15). Recorded as a PENDING question in the decision
-register. The shape would mirror DEC-213 exactly: one builtin-FUNCTION list, read by both the checker
-(reject) and the transpiler, so the two sets cannot drift.
-
-**Workaround until then:** avoid PHP builtin function names for top-level phorj functions (`count`,
-`print`, `sort`, `key`, `next`, `current`, `reset`, `end`, `list`, `range`, …).

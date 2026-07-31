@@ -46,3 +46,57 @@ fn emit_without_source_carries_no_docblocks() {
         .collect();
     assert_eq!(stripped, bare, "docblocks changed more than the comments");
 }
+
+/// DEC-420 — a free function named after a PHP builtin is MANGLED, at the definition AND every call.
+///
+/// Before this, `function count(…)` passed `phg check`, ran on both Rust backends, and transpiled to
+/// `Cannot redeclare function count()` — verified by running the PHP, which exited 255. The mangle is
+/// only useful if BOTH sites agree: mangling the definition alone would swap one fatal for
+/// `Call to undefined function count_()`, so the call site is asserted too.
+#[test]
+fn a_free_function_named_after_a_php_builtin_is_mangled_at_both_sites() {
+    let src = "package Main;\nfunction count(int n): int { return n * 2; }\nfunction plain(int n): int { return count(n); }\n";
+    let prog = crate::cli::parse_program(src).expect("fixture parses");
+    let php = crate::transpile::emit(&prog).expect("transpiles");
+    assert!(
+        php.contains("function count_(int $n)"),
+        "definition not mangled:\n{php}"
+    );
+    assert!(
+        php.contains("count_($n)"),
+        "CALL not mangled — the two sites disagree:\n{php}"
+    );
+    assert!(
+        !php.contains("function count(int"),
+        "the unmangled definition is still emitted:\n{php}"
+    );
+}
+
+/// A name that is NOT a builtin must be untouched — the mangle has to be surgical, or every program's
+/// PHP output changes for no reason.
+#[test]
+fn a_non_colliding_function_name_is_left_alone() {
+    let src = "package Main;\nfunction tally(int n): int { return n; }\nfunction go(int n): int { return tally(n); }\n";
+    let prog = crate::cli::parse_program(src).expect("fixture parses");
+    let php = crate::transpile::emit(&prog).expect("transpiles");
+    assert!(php.contains("function tally(int $n)"), "{php}");
+    assert!(php.contains("tally($n)"), "{php}");
+    assert!(
+        !php.contains("tally_"),
+        "a non-colliding name was mangled:\n{php}"
+    );
+}
+
+/// A METHOD named `count` is legal PHP and must NOT be mangled — only free functions collide with the
+/// global builtin namespace.
+#[test]
+fn a_method_named_after_a_builtin_is_not_mangled() {
+    let src = "package Main;\nclass Bag { constructor(public int n) {} function count(): int { return this.n; } }\n";
+    let prog = crate::cli::parse_program(src).expect("fixture parses");
+    let php = crate::transpile::emit(&prog).expect("transpiles");
+    assert!(
+        php.contains("function count()"),
+        "a method was mangled:\n{php}"
+    );
+    assert!(!php.contains("count_"), "a method was mangled:\n{php}");
+}
