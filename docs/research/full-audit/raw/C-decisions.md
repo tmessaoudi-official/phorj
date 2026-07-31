@@ -3464,7 +3464,7 @@ This also discharges the already-RULED **DV-5** pass (`docs/specs/2026-07-24-vis
 | DEC-345 | GR-7 | `package` validators are skipped by the no-user-imports fast path (`loader/entry.rs:53-66`), so enforcement follows the import graph, not the file; plus bug **A6** — a CORRECT `src/App/Cmd/Runner.phg` + `package App.Cmd;` is rejected with a self-contradicting message because the entry root is always `entry_local` | **RULED 2026-07-26 — (A), IN THIS ORDER:** fix A6 first -> then run the validators on the fast path -> then fix the `validated (every file…)` message and give the loose-`Main` error a code. **Order is load-bearing:** closing the fast path before fixing A6 would start emitting the WRONG error for correct layouts. Hatch = **`#[Core.Runtime.FreePath]` written FULLY QUALIFIED above `package`** — verified 2026-07-26 that fully-qualified attributes already resolve with NO import (`#[Core.Runtime.Entry(kind: Core.Runtime.EntryKind.Cli)]` runs), so the *"an attribute before `package` cannot be imported"* dilemma dissolves with zero new machinery and nothing left in the wind. Named `FreePath` over `Loose` for precision (it means *this file's package need not match its path*, not *sloppy*); home is `Core.Runtime` beside `Entry`/`EntryKind`, no new module. `phorj.json` opt-out REJECTED — the loader never reads it and it contradicts DEC-282's no-manifest/no-marker rule. All surfaces funnel through `load_unified_src`, so run/check/transpile/build/test/**LSP** land together (Invariant 17 by construction) | **RULED — build queued** |
 | DEC-346 | GR-8 | Execute the already-ruled DEC-326 UFCS promotion: 2223 qualified sites in examples, 1231 of them `Output.printLine` (55.4%) | **RULED 2026-07-26 — (A): tooling FIRST** (DEC-342 completion + import hint + formatter lint), **then** the 391 zero-judgement sites. **`Output.printLine` STAYS QUALIFIED — developer-ruled:** it is 55.4% of the corpus and the most-read line in every example, and UFCS reads well only when the receiver is the subject (`line.trim()`, `xs.map(…)`) — for output the SINK is the subject, so `"hello".printLine()` inverts it. No codemod touches it | **RULED — build queued** |
 | DEC-347 | GR-9 | Every file API is whole-slurp — `readAll` costs 200 MB where `Input.lines()` streams an 88 MB file in 23.7 MB RSS, and `limits.rs` has no I/O or memory cap | **RULED 2026-07-26 — (A): `FileSystem.lines(path): Iterator<string>` over an offset-chunk native, NO file handle.** Zero new Value/type/transpile machinery, O(1) memory, identical user syntax, non-breaking later swap to a real handle; ladder **case 1** (`fgets` maps). **(B) a full `FileHandle` type REJECTED** — blocked by C4: no transpiling precedent for an opaque handle, `emit_type` would emit an unsatisfiable PHP class hint, and both sibling handles are already `E-TRANSPILE-*` quarantined. Sequenced AFTER DEC-364 (`using`) | **RULED — build queued** |
-| DEC-348 | GR-10 | No filesystem locking at all; the presumed dependency blocker is FALSE — `std::fs::File::{lock, try_lock, unlock}` are stable on the pinned rustc and interoperate with PHP `flock()` (verified to block each other bidirectionally) | **RULED 2026-07-26 — (A): scoped `withLock(path, fn)` + `tryWithLock`, whole-file, advisory.** Release guaranteed by construction — no leak path; ladder case 1. Needs a `try/finally` PHP helper to preserve that guarantee, which is why it is sequenced AFTER DEC-364 (`using`). **(B) manual `lock`/`unlock` REJECTED** (leak-prone — the pattern every language regrets); **(C) byte-range/timeout REJECTED** (byte-range needs `fcntl`; a timeout would need a spin-sleep **bandaid**). **MUST BE DISCLOSED IN THE DOCS: Windows is a shipped target whose lock semantics may be MANDATORY rather than advisory, and there is no Windows CI — so any cross-platform guarantee is `[Unverified]` and must say so** | **RULED — build queued** |
+| DEC-348 | GR-10 | No filesystem locking at all; the presumed dependency blocker is FALSE — `std::fs::File::{lock, try_lock, unlock}` are stable on the pinned rustc and interoperate with PHP `flock()` (verified to block each other bidirectionally) | **RULED 2026-07-26 — (A): scoped `withLock(path, fn)` + `tryWithLock`, whole-file, advisory.** Release guaranteed by construction — no leak path; ladder case 1. Needs a `try/finally` PHP helper to preserve that guarantee, which is why it is sequenced AFTER DEC-364 (`using`). **(B) manual `lock`/`unlock` REJECTED** (leak-prone — the pattern every language regrets); **(C) byte-range/timeout REJECTED** (byte-range needs `fcntl`; a timeout would need a spin-sleep **bandaid**). **MUST BE DISCLOSED IN THE DOCS: Windows is a shipped target whose lock semantics may be MANDATORY rather than advisory, and there is no Windows CI — so any cross-platform guarantee is `[Unverified]` and must say so** | **BUILT 2026-07-31 (`withLock`)** — see "DEC-348 BUILT" at the end of this file; premise re-verified, cross-platform disclosed. **`tryWithLock` PENDING** one ruling on its return type |
 | DEC-349 | GR-11 | A no-modification clone already works as `p with { }` (shallow, transpiles to bare `clone($p)`) but the **lifter refuses it** — a live Invariant-17 gap | **RULED 2026-07-26 — (A): bless + document the EXISTING form, add NO new syntax**; `lift` must refuse loudly only when `__clone` exists. A dedicated `p.clone()` was rejected — a second spelling for something that already works | **RULED — build queued** |
 | DEC-350 | GR-12 | The type named `Database` is provably ONE connection (single `Box<dyn DriverConn>`, connection-scoped `tx_depth`/`hook`/`timeout_ms`, `grep pool` empty, pooling out of scope) | **RULED 2026-07-26 — (A): rename to `Core.Database.Connection` — the TYPE renames AND the `Module` suffix drops.** 8 of 10 ecosystems call this `Connection`; `Database`/`DB` is what Go and Laravel use for the pool/manager phorj does NOT have. DEC-278's `Module` suffix existed only because the module leaf and the type were namesakes, so renaming the type dissolves its rationale and `Core.Database` can go bare. Breaking rename across every DB example and doc — cheap now, expensive once users exist | **RULED — build queued** |
 | DEC-351 | GR-13 | `Statement` binds append and never reset, so a bind-in-a-loop dies on iteration 2 (`2 bound value(s) but 1 ? placeholder(s)`); `bindNamed` silently last-wins and is ~75x slower at 8000 iters (4.469s vs 0.059s re-preparing) | **RULED 2026-07-26 — (A): reset binds after each `exec`/`query`, make positional and named behave identically, fix the quadratic path.** Honours DEC-208's stated reuse promise; cheap because the SQLite driver already uses `prepare_cached` and resets per execute — this is bind lifecycle, not a driver rewrite. **D5 folded in:** the nested-savepoint SQL is not MySQL-portable (bare `RELEASE id`, `;`-joined pair through single-statement `query_drop`) while the module's own `mysql.rs` uses the correct forms, with ZERO nested-savepoint coverage on MySQL or Postgres — fix + add coverage in the same slice | **BUILT 2026-07-30** (binds execution-scoped, 4.469s→0.054s measured; D5 single-sourced in `natives/savepoint.rs` + a portable-form ratchet) |
@@ -4667,3 +4667,50 @@ now reach inside a `using` body — Invariant 7), `lsp::scope::collect_bindings`
 now exhaustive. One claim of mine was WRONG and the compiler caught it: `inline_parent_ctor` was NOT
 missing `Stmt::Block` recursion (it matches `Block(b, _)`, which my grep pattern missed) — recorded
 here because the mistaken version was written down before being checked.
+
+
+### DEC-348 BUILT (2026-07-31) — `FileSystem.withLock`, on top of DEC-364; `tryWithLock` PENDING one ruling
+
+**Shipped:** `FileSystem.withLock(path, fn)` — whole-file advisory locking, released on every exit path.
+The implementation is the ruling's own reasoning made literal: `withLock`'s body is
+`using (FileLock guard = …) { return fn()?; }`, so "release guaranteed by construction — no leak path"
+is DEC-364's guarantee rather than a second one this function has to make. That is exactly why the
+ruling sequenced DEC-348 after DEC-364, and it means the "needs a `try`/`finally` PHP helper" the
+ruling anticipated **did not need writing**: `using` already lowers to a literal `try`/`finally` on the
+PHP leg, so no new `__phorj_*` guard helper exists.
+
+Three internal natives (`lockAcquire` / `lockTryAcquire` / `lockRelease`) + a `flock()` twin in
+`transpile/fs_php.rs`. **No new `Op` and no new `Value`:** the OS lock is kept alive by a thread-local
+slab and the prelude's `FileLock` carries an opaque **`int` ticket** (contrast `Core.Database`, which
+needed `Value::Db`). Tickets start at 1 so `0` can mean *not acquired* across the native boundary.
+
+**Premise re-verified before building on it** (the ruling asserted it; it is load-bearing, so it was
+re-checked rather than trusted):
+- `std::fs::File::{lock, try_lock, unlock}` are stable on the pinned toolchain [Verified: compiled and
+  ran all three under rustc 1.97.1]. Note `try_lock` now returns `Result<(), TryLockError>`, and the
+  two error arms are kept distinct: `WouldBlock` is ordinary contention (answer `0`), `Error(e)` is a
+  real I/O failure that must surface as a typed `FileSystemError`. Collapsing them would report a
+  permissions problem as contention.
+- Rust and PHP take the SAME lock [Verified: `/proc/locks` reports `FLOCK ADVISORY WRITE` for the Rust
+  holder; a Rust holder blocks a PHP `LOCK_EX|LOCK_NB` probe and a PHP holder blocks Rust's `try_lock`,
+  reproducibly in both directions]. **My first probe of the Rust→PHP direction reported NO interop and
+  that reading was WRONG** — the probe raced (no stdout flush before the hold), which is recorded here
+  because the false negative was believed for several minutes before `/proc/locks` settled it.
+- End-to-end, the lock is real on BOTH legs: with an external `flock(1)` holder, the phorj run AND the
+  transpiled PHP run both BLOCK rather than acquiring (`tests/fs.rs`, asserted by deadline, not by
+  sleeping).
+
+**DISCLOSED as the ruling mandates:** everything above was verified on **Linux**. Windows is a shipped
+target, its lock semantics may be **mandatory** rather than advisory, and there is no Windows CI — so
+the cross-platform guarantee is `[Unverified]` and says so in `FEATURES.md`, the prelude, the example
+and `src/native/fs_lock.rs`.
+
+**One knock-on the build surfaced:** the `Core.ClosableModule` registry row had to move AFTER
+`Core.FileSystemModule`. The injection fold walks `CORE_MODULES` once and can only inject a LATER row
+from an earlier row's imports, so a prelude that imports `Closable` must precede it. This fails
+QUIETLY (`Closable` is simply never injected and the importing prelude stops compiling), so the row now
+carries that warning in a comment.
+
+**`tryWithLock` is NOT shipped — it needs one developer ruling.** The native (`lockTryAcquire`) is
+built and tested; what is undecided is the phorj-visible RETURN TYPE, which is user-visible surface and
+so not mine to rule (Invariant 15). The question is recorded with the developer.

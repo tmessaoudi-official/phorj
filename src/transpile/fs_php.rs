@@ -131,4 +131,59 @@ function __phorj_fs_walk($p) {
     __phorj_fs_walk_into($p, '', $out);
     sort($out, SORT_STRING);
     return [true, $out];
+}
+// DEC-348 advisory locking — the twin of `src/native/fs_lock.rs`. PHP flock and the Rust side take the
+// same kind of advisory OS lock, and each blocks the other reproducibly, so a phorj program and the PHP
+// it transpiles to contend for one and the same lock. Ticket semantics are pinned to the Rust side:
+// tickets start at 1, and 0 means not-acquired for the try form. The handle must stay in a table for the
+// whole hold — letting it fall out of scope would close it and release early, which is the same reason
+// the Rust side keeps its file in a slab.
+function &__phorj_fs_locks() {
+    static $locks = [];
+    return $locks;
+}
+function __phorj_fs_lock_open($p, $op) {
+    $h = @fopen($p, 'c+');
+    if ($h === false) {
+        if (file_exists($p) && !is_readable($p)) { return [false, __phorj_fs_err('PermissionDenied', $op, $p)[1]]; }
+        if (is_dir($p)) { return [false, __phorj_fs_err('IsADirectory', $op, $p)[1]]; }
+        return [false, __phorj_fs_err('FileSystemIoError', $op, $p)[1]];
+    }
+    return [true, $h];
+}
+function __phorj_fs_lock_store($h) {
+    $locks = &__phorj_fs_locks();
+    static $next = 1;
+    $t = $next++;
+    $locks[$t] = $h;
+    return $t;
+}
+function __phorj_fs_lock_acquire($p) {
+    $o = __phorj_fs_lock_open($p, 'withLock');
+    if (!$o[0]) { return [false, $o[1]]; }
+    if (!flock($o[1], LOCK_EX)) { fclose($o[1]); return __phorj_fs_err('FileSystemIoError', 'withLock', $p); }
+    return [true, __phorj_fs_lock_store($o[1])];
+}
+function __phorj_fs_lock_try_acquire($p) {
+    $o = __phorj_fs_lock_open($p, 'tryWithLock');
+    if (!$o[0]) { return [false, $o[1]]; }
+    $would_block = false;
+    if (!flock($o[1], LOCK_EX | LOCK_NB, $would_block)) {
+        fclose($o[1]);
+        // Contention is the answer the caller asked for (0), not an error; anything else is real I/O
+        // trouble and must surface as a typed error — the same split as Rust's `TryLockError`.
+        if ($would_block) { return [true, 0]; }
+        return __phorj_fs_err('FileSystemIoError', 'tryWithLock', $p);
+    }
+    return [true, __phorj_fs_lock_store($o[1])];
+}
+function __phorj_fs_lock_release($t) {
+    $locks = &__phorj_fs_locks();
+    if (isset($locks[$t])) {
+        @flock($locks[$t], LOCK_UN);
+        @fclose($locks[$t]);
+        unset($locks[$t]);
+    }
+    // Idempotent, and never an error: `FileLock.close()` must not throw (see `E-USING-CLOSE-THROWS`).
+    return [true, true];
 }"#;

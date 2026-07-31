@@ -3434,6 +3434,11 @@ const TIER1_PHP: &[&str] = &[
     "dirname",
     "file_exists",
     "file_get_contents",
+    // DEC-348 advisory locking — all four are core (no extension), same tier as the file_* family.
+    "fopen",
+    "fclose",
+    "flock",
+    "is_readable",
     "file_put_contents",
     "filesize",
     "getenv",

@@ -1,0 +1,79 @@
+package Main;
+
+import Core.Output;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Scoped advisory file locking (DEC-348) — `FileSystem.withLock(path, fn)`.
+//
+// The lock is taken before `fn` runs and released when the block exits, on EVERY path: a normal
+// return, a `return` out of the closure, or a throw. There is no `lock()`/`unlock()` pair to
+// mis-pair, which is the point — the ruling rejected a manual API precisely because that is the shape
+// every language regrets. Internally `withLock` is a `using (FileLock …)` block (DEC-364), so the
+// release guarantee is the scope guard's, not a promise this function makes separately.
+//
+// WHOLE-FILE and ADVISORY. It excludes other `withLock` holders and anything else using the same OS
+// lock — notably PHP's `flock()`, so a phorj program and the PHP it transpiles to contend for the
+// SAME lock. It does NOT stop an unrelated program from reading or writing the file.
+//
+// Byte-range locking and timeouts were both rejected by the ruling: byte-range needs `fcntl`, and a
+// timeout would need a spin-sleep, which is a bandaid rather than a mechanism.
+//
+// [Unverified on Windows] Verified on Linux only, where `/proc/locks` shows `FLOCK ADVISORY` and a
+// Rust holder and a PHP `flock()` holder block each other in both directions. Windows is a shipped
+// target, its lock semantics may be MANDATORY rather than advisory, and there is no Windows CI — so
+// treat the cross-platform behaviour as unverified.
+// A tally file bumped under the lock — the canonical read-modify-write, where the danger is another
+// holder interleaving BETWEEN the modify and the read-back. One `x` is appended per bump and the new
+// count is the file's size.
+function bump(string counter): int throws FileSystemError {
+    return FileSystem.withLock(
+        counter,
+        function(): int throws FileSystemError { FileSystem.appendText(counter, "x")?; return FileSystem.size(counter)?; }
+    )?;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        string dir = "{FileSystem.tempDir()}/phorj-lock-example";
+        // Idempotent setup: an earlier ABORTED run would leave the tree behind, and this example has
+        // to be re-runnable (the differential harness runs it on each backend in turn).
+        if (FileSystem.exists(dir)) {
+            FileSystem.removeDirAll(dir);
+        }
+        FileSystem.createDir(dir);
+        string counter = "{dir}/counter.txt";
+        string guard = "{dir}/guard.lock";
+        // 1. The closure's value comes back out of `withLock`.
+        Output.printLine("bump -> {bump(counter)}");
+        Output.printLine("bump -> {bump(counter)}");
+        // 2. Re-acquiring in the same program only works because the block released. A leaked lock
+        //    would deadlock here rather than print.
+        int a = FileSystem.withLock(guard, function(): int throws FileSystemError { return 1; });
+        int b = FileSystem.withLock(guard, function(): int throws FileSystemError { return 2; });
+        Output.printLine("sequential acquisitions: {a} then {b}");
+        // 3. A closure that THROWS still releases on the way out — the error propagates unchanged,
+        //    and the next acquisition succeeds.
+        try {
+            discard FileSystem.withLock(
+                guard,
+                function(): int throws FileSystemError { discard FileSystem.readText("{dir}/does-not-exist")?; return 0; }
+            );
+            Output.printLine("unreachable");
+        } catch (FileSystemError e) {
+            Output.printLine("closure threw, and it propagated");
+        }
+        int after = FileSystem.withLock(
+            guard,
+            function(): int throws FileSystemError { return 3; }
+        );
+        Output.printLine("lock was free after the throw: {after}");
+        FileSystem.removeDirAll(dir);
+    } catch (FileSystemError e) {
+        Output.printLine("unexpected: {e.message}");
+    }
+}

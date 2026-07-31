@@ -12,6 +12,7 @@
 //! UTF-8 for the `*Text` forms (a non-UTF-8 file is a clean typed error steering to `readBytes`).
 
 use super::fs_bodies::*;
+use super::fs_lock::{lock_acquire_inner, lock_release_inner, lock_try_acquire_inner};
 use super::{NativeEval, NativeFn};
 use crate::types::Ty;
 use crate::value::Value;
@@ -41,6 +42,10 @@ fs_native!(fs_remove_dir_all, remove_dir_all_inner);
 fs_native!(fs_list_dir, list_dir_inner);
 fs_native!(fs_walk, walk_inner);
 fs_native!(fs_temp_dir, temp_dir_inner);
+// DEC-348 advisory locking — bodies + the ticket slab live in `fs_lock.rs`.
+fs_native!(fs_lock_acquire, lock_acquire_inner);
+fs_native!(fs_lock_try_acquire, lock_try_acquire_inner);
+fs_native!(fs_lock_release, lock_release_inner);
 
 /// The `Core.Native.FileSystem` registry entries (std-only — no new dependency; always compiled, no feature).
 pub fn fs_natives() -> Vec<NativeFn> {
@@ -182,6 +187,33 @@ pub fn fs_natives() -> Vec<NativeFn> {
             fs_size,
             &[],
             wrapped!("__phorj_fs_size", 1),
+        ),
+        // DEC-348 — the three lock primitives. INTERNAL: user code never calls these, it calls the
+        // prelude's `FileSystem.withLock(path, fn)`, whose `using (FileLock …)` is what guarantees the
+        // release. The `int` is an opaque ticket (0 = not acquired for the try form).
+        entry(
+            "lockAcquire",
+            vec![Ty::String],
+            res(Ty::Int),
+            fs_lock_acquire,
+            &[],
+            wrapped!("__phorj_fs_lock_acquire", 1),
+        ),
+        entry(
+            "lockTryAcquire",
+            vec![Ty::String],
+            res(Ty::Int),
+            fs_lock_try_acquire,
+            &[],
+            wrapped!("__phorj_fs_lock_try_acquire", 1),
+        ),
+        entry(
+            "lockRelease",
+            vec![Ty::Int],
+            res(Ty::Bool),
+            fs_lock_release,
+            &[],
+            wrapped!("__phorj_fs_lock_release", 1),
         ),
         entry(
             "exists",

@@ -135,6 +135,7 @@ pub(super) const FS_PRELUDE: &str = r#"
 import Core.Native.FileSystem as NativeFileSystem;
 import Core.String;
 import Core.List;
+import Core.ClosableModule;
 
 // Prelude-local result carrier (NOT Core.Result — the Core.Database injection-order rationale).
 enum FileSystemResult<T> { Ok(T value), Err(string message) }
@@ -220,6 +221,45 @@ class FileSystem {
   }
   static function tempDir(): string throws FileSystemError {
     return match (NativeFileSystem.tempDir()) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
+  }
+  // DEC-348 — scoped advisory file locking. `withLock` is a THIN wrapper over `using` (DEC-364):
+  // that is the whole design, and it is why DEC-348 was sequenced after it. The release is
+  // guaranteed by construction — there is no leak path, because there is no way to hold the lock
+  // without the `using` block that releases it, on every exit edge including a throw.
+  //
+  // Whole-file and ADVISORY: it excludes other flock/`FileSystem.withLock` users, NOT arbitrary
+  // readers/writers. Byte-range locking and timeouts were both REJECTED by the ruling (byte-range
+  // needs `fcntl`; a timeout would need a spin-sleep bandaid).
+  //
+  // The lock file is created if absent and never truncated — locking must not destroy the content
+  // the lock protects.
+  //
+  // [Unverified on Windows] Windows is a shipped target, its lock semantics may be MANDATORY rather
+  // than advisory, and there is no Windows CI. Verified on Linux only: `/proc/locks` shows
+  // `FLOCK ADVISORY`, and a Rust holder and a PHP `flock()` holder block each other both ways.
+  static function withLock<T>(string path, () => T throws FileSystemError fn): T throws FileSystemError {
+    using (FileLock guard = FileSystem.acquireLock(path)?) {
+      return fn()?;
+    }
+  }
+  // Internal — the `using` subject. Not the user-facing surface: reaching for this instead of
+  // `withLock` would reintroduce exactly the leak path the ruling rejected in option (B).
+  private static function acquireLock(string path): FileLock throws FileSystemError {
+    int ticket = match (NativeFileSystem.lockAcquire(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
+    return new FileLock(ticket);
+  }
+  private static function ok(): void {}
+}
+
+// The held lock, as a `Closable` so `using` releases it. Carries an opaque native ticket (an `int`,
+// so DEC-348 needs no new `Value`); `close()` is idempotent and declares no `throws`, which is what
+// keeps `using (FileLock …)` free of `E-USING-CLOSE-THROWS` boilerplate at every call site.
+class FileLock implements Closable {
+  constructor(private int ticket) {}
+  // Both arms discard: releasing must not throw, and the native's release is already idempotent, so
+  // there is nothing a caller could do with a failure on this path.
+  function close(): void {
+    match (NativeFileSystem.lockRelease(this.ticket)) { FileSystemResult.Ok(_) => FileLock.ok(), FileSystemResult.Err(_) => FileLock.ok() };
   }
   private static function ok(): void {}
 }
@@ -836,18 +876,6 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: true,
         bare_types: &["Iterator"],
     },
-    // `Core.ClosableModule` (DEC-364) — the `using` release protocol. SAME ROW-ORDER RULE as
-    // `Core.IteratorModule` above: `Core.Database`'s prelude imports this one (its `Connection`
-    // implements `Closable`), and the injection fold walks the registry once, so this row must come
-    // LATER than every prelude that imports it.
-    VirtualModule {
-        module: &["Core", "ClosableModule"],
-        qualifier: "ClosableModule",
-        srcs: &[CLOSABLE_PRELUDE],
-        respond_bridge: None,
-        member_gated: true,
-        bare_types: &["Closable"],
-    },
     // `Core.Mail` (DEC-223) — the native-mailer prelude (twin of `Core.Database`). MUST precede `Core.Secret`
     // (its `import Core.Secret` transitively injects it — the same forward-fold rule as Connection→Secret) and
     // `Core.Native.Mail` (its natives).
@@ -898,7 +926,23 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "FileSystemIsADirectoryError",
             "FileSystemDirNotEmptyError",
             "FileSystemIoError",
+            // DEC-348 — the `using` subject returned by the (private) lock acquisition.
+            "FileLock",
         ],
+    },
+    // `Core.ClosableModule` (DEC-364) — the `using` release protocol. **ROW-ORDER CRITICAL, same rule
+    // as `Core.IteratorModule`:** the injection fold walks this registry ONCE and can only inject a
+    // LATER row from an earlier row's imports, so this row must sit after EVERY prelude that imports
+    // it — today `Core.Database` (its `Connection` is `Closable`) and `Core.FileSystemModule` (its
+    // `FileLock` is). Moving it earlier does not fail loudly: `Closable` simply never gets injected and
+    // the importing prelude stops compiling.
+    VirtualModule {
+        module: &["Core", "ClosableModule"],
+        qualifier: "ClosableModule",
+        srcs: &[CLOSABLE_PRELUDE],
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Closable"],
     },
     // `Core.Native.FileSystem` — the INTERNAL filesystem natives.
     VirtualModule {

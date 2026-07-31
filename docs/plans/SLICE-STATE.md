@@ -1,6 +1,6 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-07-31) — **WAVES 0/1/2 + DEC-379 + DEC-364 COMPLETE. NEXT: DEC-347 or DEC-348.**
+## ✅ CURRENT CURSOR (2026-07-31) — **WAVES 0/1/2 + DEC-379 + DEC-364 + DEC-348 COMPLETE. NEXT: DEC-347.**
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
@@ -13,9 +13,9 @@ clippy clean at `--all-features` AND `--no-default-features`, `cargo fmt --check
 
 | | |
 |---|---|
-| Ruled agenda | **17/42 rows built (40%)** |
+| Ruled agenda | **18/42 rows built (43%)** |
 | Parity | **≈70% · floor ≈57% · vision ≈71%** (§4.13/§4.14 — unchanged by DEC-364, a syntax row) |
-| Waves done | 0, 1, 2 — plus **DEC-379** (soundness) and **DEC-364** (`using`) |
+| Waves done | 0, 1, 2 — plus **DEC-379** (soundness), **DEC-364** (`using`), **DEC-348** (`withLock`) |
 
 ### DEC-364 `using` — BUILT 2026-07-31
 
@@ -33,20 +33,32 @@ corrections) and the **"DEC-364 BUILT"** section at the end of the decision regi
    the VM failed. Toggled by the byte LENGTH of a prelude line. Fixed at the injection chokepoint
    (`cli::prelude_spans`), with a ratchet.
 
+### DEC-348 `withLock` — BUILT 2026-07-31
+
+`FileSystem.withLock(path, fn)`, whole-file advisory. Its body is literally
+`using (FileLock guard = …) { return fn()?; }` — the ruling's "release guaranteed by construction" IS
+DEC-364's guarantee, which is why it was sequenced here, and why the `try`/`finally` PHP helper the
+ruling anticipated never needed writing. No new `Op`/`Value` (an `int` ticket into a thread-local slab).
+Rust and PHP contend on the same `flock` — both legs verified to BLOCK on a lock an external process
+holds. **[Unverified on Windows]**, disclosed in four places as the ruling mandates. Build record: the
+"DEC-348 BUILT" section of the register.
+
+**`tryWithLock` is NOT shipped** — the native is built and tested; its phorj-visible RETURN TYPE is
+user-visible surface and needs one ruling (see the PENDING list below).
+
 **NEXT, in priority order:**
-1. **DEC-347 (`FileSystem.lines`) or DEC-348 (`withLock`)** — both were explicitly sequenced AFTER
-   DEC-364 so they could land on a real release guarantee instead of hand-rolled `try`/`finally`. That
-   guarantee now exists, so either is unblocked. DEC-348 is the better first pick: its whole ruling
-   ("release guaranteed by construction — no leak path") is what `using` just made expressible.
+1. **DEC-347 (`FileSystem.lines`)** — the other slice sequenced after DEC-364; now the last of that
+   pair. `Iterator<string>` over an offset-chunk native, ladder case 1 (`fgets` maps).
 2. **LIFT-TRY** (KNOWN_ISSUES §LIFT-TRY, new) — the lifter has NO `try`/`catch`/`finally`, which is why
    `using` does not lift. Lifter-wide gap, not a `using` gap; unblocks Invariant 17's other half.
 3. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.
 
-**Three PENDING developer questions** (Invariant 15 — do not self-rule): the strict-vs-narrow reading of
-DEC-379; refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section); and
-whether the public-surface file-layout exemption should stay `Cli`-only (latent, from 2026-07-29).
+**Four PENDING developer questions** (Invariant 15 — do not self-rule): **`tryWithLock`'s return type**
+(DEC-348's last piece — the native is built and waiting); the strict-vs-narrow reading of DEC-379;
+refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section); and whether
+the public-surface file-layout exemption should stay `Cli`-only (latent, from 2026-07-29).
 **Two OWED measurements** need the developer's box: DEC-365 + DEC-370 (no Docker in this container).
 
 ## ⏳ (history) CURSOR as of 2026-07-29 — WAVE 0 COMPLETE, NEXT WAS WAVE 1.1 (DEC-339) — **superseded**

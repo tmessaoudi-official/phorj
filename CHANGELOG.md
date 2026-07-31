@@ -6,6 +6,35 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `FileSystem.withLock(path, fn)`, scoped advisory file locking (2026-07-31, DEC-348)
+Whole-file advisory locking with the release guaranteed by construction: `withLock` takes the lock, runs
+the closure, and releases it on every exit path including a throw. Its body IS a
+`using (FileLock guard = …) { return fn()?; }` block, so the guarantee is DEC-364's — which is precisely
+why DEC-348 was sequenced after it, and why the `try`/`finally` PHP helper the ruling anticipated did not
+need writing (`using` already lowers to a literal `try`/`finally` on the PHP leg).
+- No manual `lock`/`unlock` pair exists — the ruling rejected that shape as leak-prone. Byte-range locks
+  and timeouts were rejected too (byte-range needs `fcntl`; a timeout would need a spin-sleep bandaid).
+- **No new `Op` and no new `Value`:** the OS lock is held by a thread-local slab and the prelude's
+  `FileLock` carries an opaque `int` ticket. Tickets start at 1 so `0` can mean *not acquired*.
+- Rust and PHP contend on the SAME lock. [Verified: `/proc/locks` reports `FLOCK ADVISORY WRITE`; a Rust
+  holder blocks a PHP `LOCK_EX|LOCK_NB` probe and a PHP holder blocks Rust's `try_lock`, both directions
+  reproducibly; and end-to-end, with an external `flock(1)` holder BOTH the phorj run and the transpiled
+  PHP run block rather than acquiring — asserted by deadline in `tests/fs.rs`, not by sleeping.]
+- `tryWithLock` is **not** shipped: the native is built and tested, but its phorj-visible return type is
+  user-visible surface awaiting one ruling (Invariant 15).
+- `examples/fs/lock.phg` + `examples/README.md` + `FEATURES.md`; `tests/fs.rs` gains the release-on-throw
+  case and the cross-process contention proof.
+- **[Unverified on Windows]** — verified on Linux only. Windows is a shipped target, its lock semantics
+  may be **mandatory** rather than advisory, and there is no Windows CI. Disclosed in `FEATURES.md`, the
+  prelude, the example and `src/native/fs_lock.rs`, as the DEC-348 ruling requires.
+
+### Fixed — the `Core.ClosableModule` registry row had to move after its importers (2026-07-31)
+The prelude-injection fold walks `CORE_MODULES` **once** and can only inject a LATER row from an earlier
+row's imports, so any prelude that imports `Closable` must be positioned before it. `Core.FileSystemModule`
+became such an importer (its `FileLock` is `Closable`), which put the row out of order. This fails
+QUIETLY — `Closable` is simply never injected and the importing prelude stops compiling — so the row now
+documents the constraint rather than leaving the next editor to rediscover it.
+
 ### Added — `using`, the scope guard (2026-07-31, DEC-364 / DEC-364.1)
 `using (T h = init) { … }` releases `h` on **every** exit path from the block: normal fall-through, a
 `return`, a `break`/`continue` out of an enclosing loop, and a throw. `T` must implement
