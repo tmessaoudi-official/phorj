@@ -28,6 +28,32 @@ PID-qualified (a fixed `/tmp` path is shared state between concurrently-running 
 holder creates. Under full-workspace load the holder had sometimes not acquired yet, so the try
 succeeded and the assertion failed — raising the sleep would have been a bandaid over a race.
 
+### Fixed — the WASM playground build was broken for six consecutive CI runs (2026-07-31)
+`INJECTED_SPAN_BASE` was `1 << 32`, which is a compile ERROR on `wasm32-unknown-unknown`: `usize` is 32
+bits there, so the shift overflows during const-eval — `error[E0080]: attempt to shift left by 32_i32,
+which would overflow`. Introduced with DEC-364 (`using`); the playground workflow went red at that commit
+and stayed red for every push after it.
+
+**The local gate could not see it.** `cargo test`, both `clippy` passes, `cargo build --release` and
+`cargo check --no-default-features` all target the 64-bit host, and the `playground` workflow was the
+project's only wasm32 compile. Every local signal was green while the deploy was broken.
+
+Two changes, so the class cannot recur:
+- The base is now `1 << 28` (256 MiB) — still absurdly beyond any `.phg` source, and it fits a 32-bit
+  `usize`. A `const _: () = assert!(…)` proves the whole `base + fragments * stride` range is
+  representable **on the target being compiled**, which is the only place the check means anything. (The
+  first draft of that assertion overflowed on its own multiplication — `checked_mul` before
+  `checked_add` is what makes it correct.)
+- **`scripts/wasm-check.sh`, wired into pre-push**: `cargo check` for wasm32 on both the library
+  (`--no-default-features`, since `jit` is a default feature and cranelift cannot target wasm) and the
+  `phorj-playground` crate in release — the exact configuration the workflow builds. A missing wasm32
+  target is a LOUD skip, never a silent pass.
+
+### Changed — `examples/fs/lines.phg` demo body extracted to a named function (2026-07-31)
+`phg format` renders a closure body on ONE line, which strands the comments inside it: the numbered steps
+ended up in the `catch` block, describing code that was no longer next to them. The body is now a named
+`demo(path)` the `withLock` closure calls, so each comment stays with its statement.
+
 ### Added — `FileSystem.lines(path): Iterator<string>`, streaming line reads (2026-07-31, DEC-347)
 O(chunk) memory instead of slurping: **[Verified] 23.7 MB peak RSS on an 84.7 MB / 1.2 M-line file,
 against 322 MB for `readText` + `String.split` — 13.6x less**, and 23.7 MB is the same figure the ruling

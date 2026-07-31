@@ -49,27 +49,47 @@ function countLines(Iterator<string> lines): int throws FileSystemError {
     return n;
 }
 
+// The demo body as a NAMED function, not an inline closure. `phg format` renders a closure body on one
+// line, which strands interior comments — the numbered steps below ended up in the `catch` block when
+// this was written inline, describing code that was no longer next to them.
+function demo(string path): int throws FileSystemError {
+    // 1. Foreach straight over the iterator. The blank third line comes back as "".
+    FileSystem.writeText(path, "alpha\nbeta\n\ngamma\n")?;
+    for (string line in FileSystem.lines(path)) {
+        Output.printLine("[{line}]");
+    }
+    // 2. An `Iterator<string>` is an ordinary value — it flows into any function taking one.
+    Output.printLine("count: {countLines(FileSystem.lines(path))?}");
+    // 3. A file with no trailing newline yields its last line all the same.
+    FileSystem.writeText(path, "one\ntwo")?;
+    Output.printLine("no trailing newline: {countLines(FileSystem.lines(path))?}");
+    // 4. CRLF reads the same as LF — the `\r` is a terminator, not data.
+    FileSystem.writeText(path, "r1\r\nr2\r\n")?;
+    for (string line in FileSystem.lines(path)) {
+        Output.printLine("crlf [{line}]");
+    }
+    // 5. An empty file is an empty iteration, not an error.
+    FileSystem.writeText(path, "")?;
+    Output.printLine("empty file: {countLines(FileSystem.lines(path))?}");
+    FileSystem.delete(path)?;
+    return 0;
+}
+
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        // CONCURRENCY: this example REWRITES its file four times below, and the repo's test corpus runs
-        // every example concurrently (`tests/format.rs` fans it across cores while `differential.rs`
-        // runs it too). phorj has no per-process unique-path source, so two copies would otherwise
-        // interleave a write with the other's iteration and print different output. Everything
-        // therefore runs inside one `withLock` — DEC-348 and DEC-347 composing, and the same fix
-        // `examples/fs/lock.phg` documents.
+        // CONCURRENCY: `demo` REWRITES its file four times, and the repo's test corpus runs every
+        // example concurrently (`tests/format.rs` fans it across cores while `differential.rs` runs it
+        // too). phorj has no per-process unique-path source, so two copies would otherwise interleave a
+        // write with the other's iteration and print different output. One `withLock` serialises them —
+        // DEC-348 and DEC-347 composing, and the same trap `examples/fs/lock.phg` documents.
         string path = "{FileSystem.tempDir()}/phorj-lines-example.txt";
         string serial = "{FileSystem.tempDir()}/phorj-lines-example.lock";
         discard FileSystem.withLock(
             serial,
-            function(): int throws FileSystemError { FileSystem.writeText(path, "alpha\nbeta\n\ngamma\n")?; for (string line in FileSystem.lines(path)) { Output.printLine("[{line}]"); } Output.printLine("count: {countLines(FileSystem.lines(path))?}"); FileSystem.writeText(path, "one\ntwo")?; Output.printLine("no trailing newline: {countLines(FileSystem.lines(path))?}"); FileSystem.writeText(path, "r1\r\nr2\r\n")?; for (string line in FileSystem.lines(path)) { Output.printLine("crlf [{line}]"); } FileSystem.writeText(path, "")?; Output.printLine("empty file: {countLines(FileSystem.lines(path))?}"); FileSystem.delete(path)?; return 0; }
+            function(): int throws FileSystemError { return demo(path)?; }
         );
     } catch (FileSystemError e) {
-        // 1. Foreach straight over the iterator. The blank third line comes back as "".
-        // 2. An `Iterator<string>` is an ordinary value — it flows into any function taking one.
-        // 3. A file with no trailing newline yields its last line all the same.
-        // 4. CRLF reads the same as LF — the `\r` is a terminator, not data.
-        // 5. An empty file is an empty iteration, not an error.
         Output.printLine("unexpected: {e.message}");
     }
 }

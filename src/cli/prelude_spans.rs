@@ -4,13 +4,43 @@
 
 use super::*;
 
-/// The first `Span.start` handed to an INJECTED prelude — chosen far above any real file size so a
-/// prelude offset can never equal a user-file offset. See [`lex_parse_injected`].
-pub(crate) const INJECTED_SPAN_BASE: usize = 1 << 32;
+/// The first `Span.start` handed to an INJECTED prelude — far above any real file size, so a prelude
+/// offset can never equal a user-file offset. See [`lex_parse_injected`].
+///
+/// **256 MiB, not 4 GiB, and that is not arbitrary.** This was `1 << 32`, which is a compile ERROR on a
+/// 32-bit target: `usize` is 32 bits on `wasm32-unknown-unknown`, so the shift overflows during
+/// const-eval and the WASM playground build fails outright (`error[E0080]: attempt to shift left by
+/// 32_i32, which would overflow`). The local quality gate never caught it because it only builds for the
+/// 64-bit host — the playground workflow was the sole wasm32 compile, so the break sat red for six
+/// consecutive runs. `scripts/wasm-check.sh` now compiles for wasm32 locally so this class cannot hide
+/// again.
+///
+/// 256 MiB is still absurdly beyond any `.phg` source: the whole example corpus is a few hundred KiB,
+/// and a single source file approaching this would be pathological long before offsets mattered.
+pub(crate) const INJECTED_SPAN_BASE: usize = 1 << 28;
 
 /// The offset room reserved per injected module. Every shipped prelude is well under a megabyte, so
 /// 16 MiB of headroom keeps each module's range disjoint from every other's.
 pub(super) const INJECTED_SPAN_STRIDE: usize = 1 << 24;
+
+/// Headroom the range must accommodate, in prelude FRAGMENTS. The shipped registry has **22** (21 rows
+/// with sources, one carrying two), so 128 is ~6x room — generous without pretending to a figure the
+/// 32-bit budget cannot fund.
+const INJECTED_SPAN_FRAGMENT_HEADROOM: usize = 128;
+
+/// The rebasing scheme must fit a 32-bit `usize`, asserted AT COMPILE TIME on the actual target — the
+/// only way this stays honest, since the overflow is invisible on a 64-bit host and cost six red
+/// playground runs before anyone compiled for wasm32.
+///
+/// `checked_mul` FIRST: the product itself overflows before any add, which is how the first draft of
+/// this very assertion failed (`attempt to compute 256_usize * 16777216_usize, which would overflow`).
+const _: () = assert!(
+    match INJECTED_SPAN_STRIDE.checked_mul(INJECTED_SPAN_FRAGMENT_HEADROOM) {
+        Some(room) => INJECTED_SPAN_BASE.checked_add(room).is_some(),
+        None => false,
+    },
+    "the injected-span range overflows `usize` on this target — lower INJECTED_SPAN_BASE/STRIDE"
+);
 
 /// lex + parse an INJECTED `Core.*` prelude, **rebasing its byte offsets** into a range that cannot
 /// collide with the user program's.

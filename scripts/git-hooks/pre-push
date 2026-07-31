@@ -55,6 +55,13 @@ bash "$_gate_root/scripts/size-gate.sh"
 echo "[pre-push] validate-infra (Rule 7 infra syntax gate)"
 bash "$_gate_root/scripts/validate-infra.sh" --quiet
 
+# wasm32 compile gate. The local gate builds ONLY for the 64-bit host, so a 32-bit-only error is
+# invisible here: `INJECTED_SPAN_BASE = 1 << 32` overflows const-eval on wasm32 and broke the playground
+# workflow for six consecutive runs while every local step stayed green. `cargo check` for the
+# playground's target closes that blind spot. Detail: scripts/wasm-check.sh.
+echo "[pre-push] wasm-check (the playground target the host build cannot see)"
+bash "$_gate_root/scripts/wasm-check.sh"
+
 # Documentation guards (DEC-362). Doc rot was MEASURED as this project's dominant defect class, and
 # every instance so far was found by hand — a dangling `src/` path, a DEC id with no register row, a
 # diagnostic code claimed as shipped that no longer exists (`E-RETIRED-FORIN`). Four mechanical checks

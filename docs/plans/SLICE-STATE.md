@@ -109,6 +109,13 @@ inside a string literal inside a CLOSURE was turned into a space on the PHP leg 
 literals + one-line closure rendering — a live Invariant-1 break); and the tier-1 PHP-function gate
 scanned COMMENT prose as calls.
 
+**CI STATUS (checked 2026-07-31 against GitHub):** the `playground` workflow was RED for six consecutive
+runs — `INJECTED_SPAN_BASE = 1 << 32` does not compile on wasm32 (32-bit `usize`), introduced with
+DEC-364 and invisible to a gate that only builds for the 64-bit host. Fixed (base `1 << 28` + a
+target-aware compile-time assertion) and the blind spot closed with `scripts/wasm-check.sh` in pre-push.
+Audit note: any workflow building a configuration no local step builds is ungated — `release.yml`'s
+cross-targets are the next candidate to check.
+
 **NEXT, in priority order:**
 2. **LIFT-TRY** (KNOWN_ISSUES §LIFT-TRY, new) — the lifter has NO `try`/`catch`/`finally`, which is why
    `using` does not lift. Lifter-wide gap, not a `using` gap; unblocks Invariant 17's other half.

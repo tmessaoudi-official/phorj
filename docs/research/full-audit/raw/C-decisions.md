@@ -4920,3 +4920,31 @@ in the DEC-347 helper's own comment tripped it, and `lock (` had done the same d
 than cosmetic: since DEC-419 a user's `/** … */` doc comment is EMITTED into the transpiled PHP, so a doc
 that mentions `someFunction(x)` in prose would have failed the gate on the user's behalf. Comments are now
 skipped before the scan.
+
+### The wasm32 gate blind spot (2026-07-31) — six red playground runs the local gate called green
+
+**What broke.** DEC-364 introduced `INJECTED_SPAN_BASE: usize = 1 << 32`. On `wasm32-unknown-unknown`
+`usize` is 32 bits, so that shift overflows during const-eval and the crate does not compile:
+`error[E0080]: attempt to shift left by 32_i32, which would overflow`. The playground workflow failed at
+that commit and at all five pushes after it, while the full local gate — tests, both clippy passes,
+release build, `--no-default-features` check — passed green every time.
+
+**Why the gate missed it, which is the part worth keeping.** Every local step compiles for the 64-bit
+host. The project's ONLY wasm32 compile lived in a GitHub workflow, so an entire target was outside the
+gate's reach. This is not a discipline failure that more care would have caught: nothing local could have
+observed it. A gate that cannot see a target does not gate that target.
+
+**Fixes.** Base lowered to `1 << 28` (256 MiB — still far beyond any real `.phg`), plus a
+`const _: () = assert!(…)` that proves `base + fragments * stride` is representable on the target
+ACTUALLY being compiled, since the overflow is invisible on a 64-bit host. Headroom is 128 fragments
+against a shipped count of 22 (counted, not guessed). Note the assertion's own first draft overflowed on
+its multiplication — `checked_mul` must precede `checked_add`.
+
+And the gate gap itself: `scripts/wasm-check.sh` in the pre-push lane, `cargo check`-ing wasm32 for the
+library (`--no-default-features`; `jit` is a default feature and cranelift cannot target wasm) and for
+`phorj-playground` in release — the workflow's exact configuration. `cargo check` rather than
+`wasm-pack build` so it needs no wasm-pack, no node and no network.
+
+**Generalisable lesson:** when a CI job builds a configuration no local step builds, that configuration is
+ungated no matter how thorough the local gate looks. Worth auditing the other workflows for the same
+shape (`release.yml`'s cross-targets are the obvious next candidate).
