@@ -115,6 +115,42 @@ impl Lifter {
             }
             php::PhpStmt::Break => vec![Stmt::Break(SP)],
             php::PhpStmt::Continue => vec![Stmt::Continue(SP)],
+            // LIFT-TRY: `try`/`catch`/`finally` maps 1:1 — phorj has the same three parts, so nothing is
+            // approximated. A catch's binding scope is its own body, matching PHP.
+            php::PhpStmt::Try {
+                body,
+                catches,
+                finally_block,
+            } => {
+                let mut lifted_catches: Vec<crate::ast::CatchClause> = Vec::new();
+                for c in catches {
+                    // A union catch keeps every member: `catch (A | B $e)` is `catch (A | B e)`, not a
+                    // silent narrowing to the first type.
+                    let ty = lift_catch_type(&c.types);
+                    // PHP 8 allows `catch (T)` with no variable. phorj's `CatchClause` always binds a
+                    // name, so an unused one is synthesised — `_` is not a legal ident here, and
+                    // inventing a name is visible in the draft, which a lift is meant to be.
+                    let name = c.var.clone().unwrap_or_else(|| "ignored".to_string());
+                    let mut inner = declared.clone();
+                    inner.insert(name.clone());
+                    lifted_catches.push(crate::ast::CatchClause {
+                        ty,
+                        name,
+                        body: self.lift_block(&c.body, &mut inner)?,
+                        span: SP,
+                    });
+                }
+                let fin = match finally_block {
+                    Some(f) => Some(self.lift_block(f, &mut declared.clone())?),
+                    None => None,
+                };
+                vec![Stmt::Try {
+                    body: self.lift_block(body, &mut declared.clone())?,
+                    catches: lifted_catches,
+                    finally_block: fin,
+                    span: SP,
+                }]
+            }
             php::PhpStmt::Block(stmts) => {
                 vec![Stmt::Block(self.lift_block(stmts, declared)?, SP)]
             }
@@ -195,5 +231,22 @@ impl Lifter {
         declared: &mut HashSet<String>,
     ) -> Result<Stmt, String> {
         self.lift_assign_like(e, declared)
+    }
+}
+
+/// The phorj `Type` for a PHP catch clause's type list.
+///
+/// A leading `\` is stripped (`\RuntimeException` → `RuntimeException`): PHP writes root-namespace
+/// builtins qualified, phorj does not have that spelling. A union of two or more becomes a phorj union
+/// so `catch (A | B $e)` does not silently narrow to its first member.
+fn lift_catch_type(types: &[String]) -> Type {
+    let named = |t: &String| Type::Named {
+        name: t.trim_start_matches('\\').to_string(),
+        args: Vec::new(),
+        span: SP,
+    };
+    match types {
+        [one] => named(one),
+        many => Type::Union(many.iter().map(named).collect(), SP),
     }
 }

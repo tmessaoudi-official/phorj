@@ -4946,5 +4946,13 @@ library (`--no-default-features`; `jit` is a default feature and cranelift canno
 `wasm-pack build` so it needs no wasm-pack, no node and no network.
 
 **Generalisable lesson:** when a CI job builds a configuration no local step builds, that configuration is
-ungated no matter how thorough the local gate looks. Worth auditing the other workflows for the same
-shape (`release.yml`'s cross-targets are the obvious next candidate).
+ungated no matter how thorough the local gate looks.
+
+**The audit that lesson demanded, DONE the same day — all four workflows checked against GitHub.**
+`ci.yml` and `release.yml` were green through every one of today's pushes; `release.yml` runs on EVERY push
+to master and its `x86_64-pc-windows-msvc` / `x86_64-apple-darwin` / `aarch64-apple-darwin` jobs all pass;
+`stub-registry.yml` is tag-only. So wasm32 was the sole instance, for a reason worth stating: it is both
+the only 32-bit target and the only configuration no local step compiled. The release matrix is entirely
+64-bit natives, so the pointer-width class cannot bite there. What remains unverifiable locally is
+platform-API BEHAVIOUR (Windows `flock` semantics — DEC-348's `[Unverified on Windows]`), and that is
+already disclosed as unverified rather than assumed.

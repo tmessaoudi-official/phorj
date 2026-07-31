@@ -23,6 +23,9 @@ mod tests;
 mod parser_tests;
 
 #[cfg(test)]
+mod parser_tests_try;
+
+#[cfg(test)]
 mod printer_tests;
 
 #[cfg(test)]

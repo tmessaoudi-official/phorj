@@ -30,8 +30,10 @@ const SP: Span = Span {
 mod decls;
 mod exprs;
 mod magic;
+mod mappings;
 pub use decls::*;
 use exprs::*;
+use mappings::*;
 
 // DEC-312: the Core modules referenced by builtin→native resolutions during one lift, drained into
 // `import` items at assembly. Thread-local (the lifter is stateless free functions; a lift runs on

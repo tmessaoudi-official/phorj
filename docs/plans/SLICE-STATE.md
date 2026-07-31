@@ -113,12 +113,20 @@ scanned COMMENT prose as calls.
 runs — `INJECTED_SPAN_BASE = 1 << 32` does not compile on wasm32 (32-bit `usize`), introduced with
 DEC-364 and invisible to a gate that only builds for the 64-bit host. Fixed (base `1 << 28` + a
 target-aware compile-time assertion) and the blind spot closed with `scripts/wasm-check.sh` in pre-push.
-Audit note: any workflow building a configuration no local step builds is ungated — `release.yml`'s
-cross-targets are the next candidate to check.
+**Workflow audit DONE (2026-07-31, all four checked against GitHub):** `ci.yml` and `release.yml` were
+GREEN throughout today — `release.yml` runs on every push to master and its Windows/macOS/aarch64-darwin
+builds all pass. `stub-registry.yml` is tag-only. So the wasm32 gap was the SOLE instance, and for a
+specific reason: wasm32 is both the only 32-bit target AND the only configuration no local step compiled.
+The release matrix is all 64-bit natives, so the `usize` class cannot bite there; what stays unverifiable
+locally is platform-API behaviour (the `[Unverified on Windows]` lock semantics), which is already
+disclosed rather than assumed.
 
 **NEXT, in priority order:**
-2. **LIFT-TRY** (KNOWN_ISSUES §LIFT-TRY, new) — the lifter has NO `try`/`catch`/`finally`, which is why
-   `using` does not lift. Lifter-wide gap, not a `using` gap; unblocks Invariant 17's other half.
+2. ~~**LIFT-TRY**~~ — **BUILT 2026-07-31.** `try`/`catch`/`finally` is in the lift subset (all four real
+   shapes; drafts re-parse; `\` is now a token, which also unblocks reading FQNs). What remains is
+   narrower and renamed **LIFT-USING**: raising a `try`/`finally` back to `using` is shape recognition,
+   deliberately not guessed, with a test pinning today's faithful behaviour. `throw` is still refused —
+   the next increment, mapping 1:1.
 3. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.

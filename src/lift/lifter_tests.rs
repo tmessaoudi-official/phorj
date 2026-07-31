@@ -398,3 +398,62 @@ fn a_plain_php_block_comment_does_not_become_a_doc_comment() {
     );
     assert!(phg.contains("function plain(): int"), "{phg}");
 }
+
+/// LIFT-TRY — a PHP `try`/`catch`/`finally` lifts to the phorj equivalent, and the draft RE-PARSES.
+///
+/// Re-parsing is the assertion that matters: the printer emits text, so a plausible-looking string that
+/// does not parse would pass a substring check while being useless as a draft.
+#[test]
+fn try_catch_finally_lifts_and_the_draft_reparses() {
+    let php = "<?php\nfunction risky(int $n): int {\n  try {\n    return 100 / $n;\n  } catch (\\DivisionByZeroError $e) {\n    return 0;\n  } finally {\n    echo \"cleanup\\n\";\n  }\n}\nfunction main(): void { echo risky(4), \"\\n\"; }\n";
+    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
+    for want in ["try {", "catch (DivisionByZeroError e) {", "finally {"] {
+        assert!(phg.contains(want), "missing {want:?} in:\n{phg}");
+    }
+    // The root-namespace marker is stripped — phorj has no `\Type` spelling.
+    assert!(
+        !phg.contains("\\DivisionByZeroError"),
+        "the `\\` leaked:\n{phg}"
+    );
+    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
+}
+
+/// A UNION catch keeps both members through the whole pipeline (parser → lifter → printer). Narrowing
+/// to the first type would silently change which exceptions the clause catches.
+#[test]
+fn a_union_catch_survives_the_lift() {
+    let php = "<?php\nfunction f(int $n): int {\n  try {\n    return 10 / $n;\n  } catch (\\DivisionByZeroError | \\RuntimeException $e) {\n    return -1;\n  }\n}\nfunction main(): void { echo f(2), \"\\n\"; }\n";
+    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
+    assert!(
+        phg.contains("catch (DivisionByZeroError | RuntimeException e)"),
+        "the union was not preserved:\n{phg}"
+    );
+    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
+}
+
+/// PHP 8's variable-less `catch (T)` has no phorj spelling — phorj's `CatchClause` always binds. The
+/// lift SYNTHESISES a name rather than dropping the clause, and the draft still re-parses.
+#[test]
+fn a_variableless_catch_gets_a_synthesised_binding() {
+    let php = "<?php\nfunction g(int $n): int {\n  try {\n    return 10 / $n;\n  } catch (\\DivisionByZeroError) {\n    return -2;\n  }\n}\nfunction main(): void { echo g(2), \"\\n\"; }\n";
+    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
+    assert!(
+        phg.contains("catch (DivisionByZeroError ignored)"),
+        "no synthesised binding:\n{phg}"
+    );
+    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
+}
+
+/// `using` is STILL not produced by the lift, and that is deliberate: recognising that a particular
+/// `try`/`finally` *is* a scope guard is a shape decision, so the lifter faithfully emits the
+/// try/finally the source wrote. This pins the documented boundary so it cannot drift silently.
+#[test]
+fn a_try_finally_lifts_as_itself_and_is_not_raised_to_using() {
+    let php = "<?php\nfunction h(): int {\n  $g = acquire();\n  try {\n    return 1;\n  } finally {\n    $g->close();\n  }\n}\nfunction main(): void { echo h(), \"\\n\"; }\n";
+    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
+    assert!(phg.contains("try {") && phg.contains("finally {"), "{phg}");
+    assert!(
+        !phg.contains("using ("),
+        "a try/finally was raised to `using`, which LIFT-TRY deliberately does NOT do:\n{phg}"
+    );
+}

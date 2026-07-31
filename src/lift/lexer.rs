@@ -37,6 +37,8 @@ pub enum PTok {
     RBracket,
     Comma,
     Semi,
+    /// `\` — a namespace separator or root qualifier (`\RuntimeException`, `Acme\MyError`).
+    Backslash,
     Colon,
     /// `::` (static/`const` access — `Limits::MAX`).
     DoubleColon,
@@ -397,6 +399,13 @@ pub fn lex_php_with_docs(
             '!' => PTok::Not,
             '&' => PTok::Amp,
             '|' => PTok::Bar,
+            // LIFT-TRY: `\` becomes a TOKEN rather than a lex error, so a root-qualified or namespaced
+            // catch type (`catch (\RuntimeException $e)`, `catch (Acme\MyError $e)`) can be read. It was
+            // previously `unexpected character `\``, which also made any FQN in transpiled PHP unliftable.
+            // Accepting the token does not accept `\` anywhere: the parser still rejects it wherever it
+            // has no meaning, so the failure stays loud — it just now names the construct instead of the
+            // character.
+            '\\' => PTok::Backslash,
             '^' => PTok::Caret,
             '~' => PTok::Tilde,
             _ => {

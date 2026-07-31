@@ -356,17 +356,33 @@ impl Printer {
                 self.line(&format!("{};", self.expr(e)?));
                 Ok(())
             }
-            // `using` (DEC-364) sits behind the SAME boundary as `try`, and for the same reason:
-            // it lowers to `try`/`finally`, and the lift subset has no `try` at all (the lift PARSER
-            // rejects the keyword outright — `lift::parser_tests`). So the lifter can never produce
-            // one, and raising a PHP `try { … } finally { $h->close(); }` back to `using` is blocked
-            // on try/catch/finally entering the subset first — a separate slice, recorded in
-            // KNOWN_ISSUES rather than half-built here.
-            Stmt::Throw { .. }
-            | Stmt::Try { .. }
-            | Stmt::Using { .. }
-            | Stmt::Destructure { .. } => {
-                Err("printer: throw/try/using/destructure are outside the lift subset".into())
+            // LIFT-TRY (2026-07-31): `try`/`catch`/`finally` is now IN the subset.
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                self.block_stmt("try", body)?;
+                for c in catches {
+                    // `catch (T e)` — phorj's spelling puts the binder after the type, no `$`.
+                    let head = format!("catch ({} {})", ty(&c.ty)?, c.name);
+                    self.block_stmt(&head, &c.body)?;
+                }
+                if let Some(f) = finally_block {
+                    self.block_stmt("finally", f)?;
+                }
+                Ok(())
+            }
+            // `throw` and `using` remain outside the subset, for DIFFERENT reasons now that `try` is in.
+            // `throw`: the lift PARSER still refuses the keyword (LIFT-TRY's scope was try/catch/finally),
+            // so the lifter cannot produce one — a refused `throw` is a loud error, never a wrong lift.
+            // `using`: raising a PHP `try { … } finally { $h->close(); }` back to `using` is a
+            // SHAPE-RECOGNITION decision, not a printing one — the lifter would have to decide that a
+            // particular try/finally *is* a scope guard, and today it faithfully lifts it as the
+            // try/finally the source actually wrote. Recorded in KNOWN_ISSUES rather than guessed at.
+            Stmt::Throw { .. } | Stmt::Using { .. } | Stmt::Destructure { .. } => {
+                Err("printer: throw/using/destructure are outside the lift subset".into())
             }
         }
     }

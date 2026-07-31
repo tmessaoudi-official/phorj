@@ -313,6 +313,12 @@ pub(super) fn ty(t: &Type) -> Result<String, String> {
         }
         Type::Optional { inner, .. } => Ok(format!("{}?", ty(inner)?)),
         Type::Infer(_) => Ok("var".to_string()),
+        // LIFT-TRY: a union is now printable, because PHP's `catch (A | B $e)` lifts to one and
+        // narrowing it to the first member would silently change which exceptions the clause catches.
+        Type::Union(members, _) => {
+            let m: Result<Vec<_>, _> = members.iter().map(ty).collect();
+            Ok(m?.join(" | "))
+        }
         _ => Err("printer: this type is outside the lift subset".into()),
     }
 }

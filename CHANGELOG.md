@@ -28,6 +28,27 @@ PID-qualified (a fixed `/tmp` path is shared state between concurrently-running 
 holder creates. Under full-workspace load the holder had sometimes not acquired yet, so the try
 succeeded and the assertion failed — raising the sleep would have been a bandaid over a race.
 
+### Added — the PHP lifter reads `try`/`catch`/`finally` (2026-07-31, LIFT-TRY)
+The lift subset had NO exception handling: the parser refused the `try` keyword and the printer listed it
+as out of subset. It now handles all four shapes real PHP writes — a root-qualified type
+(`catch (\RuntimeException $e)`), a UNION (`catch (A | B $e)`, every member preserved rather than
+narrowed to the first), PHP 8's variable-less `catch (T)` (a binding is synthesised, since phorj's
+`CatchClause` always binds), and `try`/`finally` with no catch at all. A bare `try` with neither arm is a
+PHP syntax error and is reported as one instead of becoming a block.
+
+Supporting changes: `\` is now a lift TOKEN rather than `unexpected character` — needed for qualified
+catch types, and it also unblocks reading FQNs generally; and the lift printer can render a union type,
+which it previously refused.
+
+Every test asserts the lifted draft RE-PARSES, not merely that it contains the right substrings — a
+plausible string that does not parse would be useless as a draft while passing a substring check.
+
+**Still deliberately out:** a lifted `try { … } finally { $h->close(); }` is NOT raised to `using` (that
+is shape recognition, not printing — guessing wrong rewrites the meaning of code the lifter does not
+understand), and `throw` remains refused, which keeps a rethrowing `catch` a loud error rather than a
+wrong lift. Both are recorded in KNOWN_ISSUES under LIFT-USING, with a test pinning the try/finally
+behaviour so it cannot drift.
+
 ### Fixed — the WASM playground build was broken for six consecutive CI runs (2026-07-31)
 `INJECTED_SPAN_BASE` was `1 << 32`, which is a compile ERROR on `wasm32-unknown-unknown`: `usize` is 32
 bits there, so the shift overflows during const-eval — `error[E0080]: attempt to shift left by 32_i32,

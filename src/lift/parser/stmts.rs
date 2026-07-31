@@ -13,6 +13,52 @@ impl PParser {
         if self.at(&PTok::LBrace) {
             return Ok(PhpStmt::Block(self.parse_block()?));
         }
+        // LIFT-TRY: `try { … } catch (T $e) { … }* finally { … }?`.
+        if self.is_kw("try") {
+            self.advance();
+            let body = self.parse_block()?;
+            let mut catches = Vec::new();
+            while self.is_kw("catch") {
+                self.advance();
+                self.expect(&PTok::LParen, "`(` after `catch`")?;
+                // A union type list: `catch (A | B $e)`. At least one member is required.
+                let mut types = vec![self.parse_catch_type()?];
+                while self.eat(&PTok::Bar) {
+                    types.push(self.parse_catch_type()?);
+                }
+                // PHP 8 permits `catch (T)` with NO variable — hence `Option`, not a required name.
+                let var = match self.peek() {
+                    PTok::Var(v) => {
+                        let v = v.clone();
+                        self.advance();
+                        Some(v)
+                    }
+                    _ => None,
+                };
+                self.expect(&PTok::RParen, "`)` closing the catch clause")?;
+                catches.push(PhpCatch {
+                    types,
+                    var,
+                    body: self.parse_block()?,
+                });
+            }
+            let finally_block = if self.is_kw("finally") {
+                self.advance();
+                Some(self.parse_block()?)
+            } else {
+                None
+            };
+            // `try` alone is a PHP syntax error; requiring one arm here reports it as a lift error
+            // rather than silently producing a bare block.
+            if catches.is_empty() && finally_block.is_none() {
+                return Err(self.err("`try` needs at least one `catch` or a `finally`"));
+            }
+            return Ok(PhpStmt::Try {
+                body,
+                catches,
+                finally_block,
+            });
+        }
         if self.is_kw("return") {
             self.advance();
             let e = if self.at(&PTok::Semi) {
@@ -160,4 +206,31 @@ impl PParser {
     }
 
     // ── expressions ──
+}
+
+impl super::PParser {
+    /// One member of a catch clause's type list: an identifier, optionally `\`-qualified
+    /// (`\RuntimeException`) or namespaced (`Acme\MyError`). The leading/inner `\` is kept verbatim
+    /// here; the LIFTER strips the root marker, so the parser stays a faithful reader of the source.
+    fn parse_catch_type(&mut self) -> Result<String, String> {
+        let mut out = String::new();
+        if self.eat(&PTok::Backslash) {
+            out.push('\\');
+        }
+        loop {
+            match self.peek() {
+                PTok::Ident(n) => {
+                    out.push_str(n);
+                    self.advance();
+                }
+                _ => return Err(self.err("a class name in the catch clause")),
+            }
+            if self.eat(&PTok::Backslash) {
+                out.push('\\');
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
 }

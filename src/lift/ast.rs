@@ -199,6 +199,26 @@ pub enum PhpStmt {
     Continue,
     /// A brace block `{ … }` used as a statement.
     Block(Vec<PhpStmt>),
+    /// `try { … } catch (T $e) { … } … finally { … }` (LIFT-TRY, 2026-07-31).
+    ///
+    /// The lift subset had NO exception handling at all, which is why `using` could not round-trip:
+    /// `using` lowers to `try`/`finally`, so raising that shape back needed the whole family to exist
+    /// first. PHP allows `catch (A | B $e)` and — since PHP 8 — a catch with NO variable, so both are
+    /// represented rather than assumed away.
+    Try {
+        body: Vec<PhpStmt>,
+        catches: Vec<PhpCatch>,
+        finally_block: Option<Vec<PhpStmt>>,
+    },
+}
+
+/// One `catch (T $e) { … }` clause. `types` holds the union members (one entry for the common case);
+/// `var` is `None` for PHP 8's variable-less `catch (T)`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhpCatch {
+    pub types: Vec<String>,
+    pub var: Option<String>,
+    pub body: Vec<PhpStmt>,
 }
 
 /// A PHP expression.

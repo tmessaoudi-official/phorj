@@ -1,19 +1,25 @@
 # Known Issues & Limitations
 
-## LIFT-TRY — the PHP lifter has NO `try`/`catch`/`finally`, so `using` cannot round-trip (2026-07-31, DEC-364)
+## LIFT-USING — a lifted `try`/`finally` is not raised to `using` (2026-07-31; was LIFT-TRY)
 
-`using (T h = e) { … }` (DEC-364) ships on all three legs, but it is **not lifted**, and the blocker is
-lifter-wide rather than `using`-specific: the lift subset contains **no exception handling at all** — the
-lift parser rejects the `try` keyword outright, and the lift printer lists `try` as outside its subset.
-Since `using` lowers to `try`/`finally`, raising a PHP `try { … } finally { $h->close(); }` back to a
-`using` block requires the whole exception family to enter the subset first. `Stmt::Using` therefore sits
-behind exactly the same documented boundary as `Stmt::Try`.
+**LIFT-TRY is BUILT.** `try`/`catch`/`finally` is now in the lift subset: the lift AST has
+`PhpStmt::Try` + `PhpCatch`, the parser reads all four real shapes (root-qualified `\RuntimeException`,
+a UNION `catch (A | B $e)`, PHP 8's variable-less `catch (T)`, and `try`/`finally` with no catch), and the
+printer emits the phorj equivalent. A lifted draft re-parses — asserted, not eyeballed.
 
-**Scope when it is built:** `try`/`catch`/`finally` in the lift AST + parser + printer, and then the
-shape-recognition pass that raises the single-`close()`-in-`finally` form back to `using` (a plain
-`try`/`finally` must keep lifting as a `try`/`finally` — only the exact guard shape is raised).
-Invariant 17's "transpile AND lift in the same change" is met on the transpile side; this is the
-disclosed other half.
+**What remains, deliberately.** A PHP `try { … } finally { $h->close(); }` lifts as the `try`/`finally`
+the source actually wrote; it is NOT raised to `using`. That is a SHAPE-RECOGNITION decision rather than
+a printing one — the lifter would have to conclude that a particular try/finally *is* a scope guard, and
+guessing wrong would rewrite the meaning of code it does not understand. A test pins the current
+behaviour so it cannot drift silently
+(`lifter_tests::a_try_finally_lifts_as_itself_and_is_not_raised_to_using`).
+
+If it is built, the rule must be exact: only a `finally` whose SOLE statement is a `close()` on the
+variable the `try` guards, and a plain try/finally must keep lifting as itself.
+
+**Also still out: `throw`.** It was not in LIFT-TRY's scope, so the lift parser still refuses the keyword.
+That makes a `catch` body which rethrows a loud error rather than a wrong lift — acceptable, and the
+natural next increment, since the mapping to phorj's `throw` is 1:1.
 
 ## LIFT-ATTR — the PHP lifter is blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
 

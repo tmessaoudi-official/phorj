@@ -10,9 +10,9 @@
 //! comparison operators — a real 8.0 change, pinned by tests.
 
 use super::ast::{
-    PhpArrayElem, PhpBinOp, PhpClass, PhpEnum, PhpEnumCase, PhpExpr, PhpFunction, PhpItem,
-    PhpMatchArm, PhpMember, PhpMethod, PhpParam, PhpProgram, PhpStmt, PhpStrPart, PhpType, PhpUnOp,
-    PhpVisibility,
+    PhpArrayElem, PhpBinOp, PhpCatch, PhpClass, PhpEnum, PhpEnumCase, PhpExpr, PhpFunction,
+    PhpItem, PhpMatchArm, PhpMember, PhpMethod, PhpParam, PhpProgram, PhpStmt, PhpStrPart, PhpType,
+    PhpUnOp, PhpVisibility,
 };
 use super::lexer::{lex_php, PTok, PTokenSpanned};
 use crate::limits::MAX_NEST_DEPTH;
@@ -20,11 +20,11 @@ use crate::limits::MAX_NEST_DEPTH;
 /// Keywords that exist in PHP but are outside the Tier-1 subset. Encountered in statement-leading
 /// position they produce a clear "not supported" error rather than being misread as an expression.
 const UNSUPPORTED_KW: &[&str] = &[
-    "try",
-    "catch",
-    "finally",
-    "switch",
+    // LIFT-TRY (2026-07-31): `try`/`catch`/`finally` are now IN the subset — removed from this list.
+    // `throw` deliberately stays OUT: it was not in LIFT-TRY's scope, and a refused `throw` is a loud
+    // error rather than a wrong lift, so a `catch` body that rethrows reports instead of misreading.
     "throw",
+    "switch",
     "do",
     "namespace",
     "use",
