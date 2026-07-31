@@ -128,6 +128,33 @@ fn member_context_lists_module_natives_on_incomplete_buffer() {
     assert!(!got.is_empty());
 }
 
+/// Invariant 17's 100% rule, as a ratchet: a prelude STATIC must surface in completion the moment it
+/// exists, with no LSP-side edit. `FileSystem.tryWithLock` (DEC-348) is the live case — both lock
+/// entry points must appear, so a future prelude addition that the LSP silently fails to enumerate
+/// fails here instead of shipping as "the compiler knows it but the editor doesn't".
+#[test]
+fn prelude_statics_surface_in_member_completion_without_an_lsp_edit() {
+    let src =
+        "package Main;\nimport Core.FileSystemModule;\nfunction main(): void {\n  FileSystem.\n}\n";
+    let offset = src.find("FileSystem.").unwrap() + "FileSystem.".len();
+    let got = labels(&complete(
+        src,
+        offset,
+        None,
+        None,
+        &std::collections::HashMap::new(),
+    ));
+    for want in ["withLock", "tryWithLock"] {
+        assert!(got.iter().any(|l| l == want), "want {want} in {got:?}");
+    }
+    // `acquireLock` is `private` — an internal `using` subject, not user-facing surface. Offering it
+    // would advertise exactly the leak-prone shape the DEC-348 ruling rejected.
+    assert!(
+        !got.iter().any(|l| l == "acquireLock"),
+        "private prelude statics must NOT be offered: {got:?}"
+    );
+}
+
 #[test]
 fn unresolved_lowercase_receiver_emits_neither_module_members_nor_keywords() {
     // A lowercase receiver is an instance, never a Core module → must NOT emit module members. And

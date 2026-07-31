@@ -43,8 +43,26 @@ Rust and PHP contend on the same `flock` — both legs verified to BLOCK on a lo
 holds. **[Unverified on Windows]**, disclosed in four places as the ruling mandates. Build record: the
 "DEC-348 BUILT" section of the register.
 
-**`tryWithLock` is NOT shipped** — the native is built and tested; its phorj-visible RETURN TYPE is
-user-visible surface and needs one ruling (see the PENDING list below).
+**`tryWithLock` — SHIPPED 2026-07-31 (DEC-348.1).** Return type ruled `Option<T>`: `None` = the lock
+was busy, `Some(v)` = the closure ran and returned `v`. `T?` was rejected because a busy lock and a
+closure legitimately returning null collapse to the same value under it, and that ambiguity type-checks
+clean. Its busy branch is deterministic with NO second process — the OS lock is per-file-DESCRIPTOR, so
+a nested attempt finds the lock held by its own program.
+
+Building it forced two fixes beyond the feature:
+- **The prelude injection fold now runs to a FIXED POINT** (`cli::preludes::inject_core_modules`). It was
+  single-pass, so a prelude's `import Core.X` was honoured only when `X` sat LATER in `CORE_MODULES`; an
+  earlier row was dropped in SILENCE, and the user saw `unknown identifier v` pointing at their own match
+  arm. `Core.Option` (an early row) is imported by the FS prelude, which is what forced it. The
+  `ROW-ORDER CRITICAL` comments this invalidated are corrected, not left to rot; ratchet =
+  `gate_tests::a_prelude_import_of_an_earlier_registry_row_is_still_injected`.
+- **A shipped Invariant-17 violation in LSP completion** (`lsp::catalog::module_members`): it enumerated
+  ONLY `native::registry()`, and `Core.Native.FileSystem`'s leaf segment collides with the friendly class
+  name, so `FileSystem.` offered the INTERNAL natives (`lockAcquire`/`lockRelease` — the leak-prone manual
+  API the ruling rejected) and offered NEITHER `withLock` nor `tryWithLock`. So `withLock` shipped
+  invisible to the editor, breaking DEC-417's 100% bar before `tryWithLock` existed. Now unions prelude
+  class PUBLIC statics and excludes the `Core.Native.*` twins; `private` statics stay hidden. This also
+  closes the "prelude-class members (Date/Uri…) are a follow-up" gap the catalog documented.
 
 **NEXT, in priority order:**
 1. **DEC-347 (`FileSystem.lines`)** — the other slice sequenced after DEC-364; now the last of that

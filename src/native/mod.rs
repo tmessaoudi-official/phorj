@@ -26,6 +26,7 @@ mod file;
 mod fs;
 mod fs_bodies;
 mod fs_lock;
+pub(crate) mod fs_prelude;
 mod html;
 pub(crate) mod http;
 mod input;

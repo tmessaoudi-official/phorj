@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `FileSystem.tryWithLock(path, fn)`, non-blocking advisory locking (2026-07-31, DEC-348.1)
+Returns `Option<T>` — `None` when the lock is held by someone else, `Some(v)` when the closure ran and
+returned `v`. Developer-ruled over the cheaper `T?`: under `T?` a busy lock and a closure that
+legitimately returns null are the SAME value, and that ambiguity type-checks clean, so it is a trap
+rather than a shortcut. Release is the same `using`-based guarantee as `withLock`.
+
+Contention is deterministic to test without a second process or a sleep: the OS lock is per-file-
+DESCRIPTOR, so a nested attempt opens its own descriptor and genuinely finds the lock held by its own
+program. That is what `examples/fs/lock.phg` and `tests/fs.rs` assert, on all three legs.
+
+### Fixed — prelude injection now runs to a fixed point (2026-07-31, DEC-348.1)
+`cli::preludes::inject_core_modules` was a single pass over `CORE_MODULES`, so a prelude's own
+`import Core.X` was honoured only when `X` sat LATER in the registry; an earlier row was dropped
+SILENTLY, surfacing as `unknown identifier v` on the user's own match arm rather than a missing type.
+`Core.Option` is an early row and the FS prelude imports it, which is what surfaced this. The
+`ROW-ORDER CRITICAL` comments the fix invalidated are corrected rather than left in place.
+
+### Fixed — LSP completion offered internal natives and hid prelude statics (2026-07-31, DEC-348.1)
+`lsp::catalog::module_members` enumerated only `native::registry()`. Because `Core.Native.FileSystem`'s
+last dotted segment collides with the friendly class name, `FileSystem.` completion advertised the
+INTERNAL lock natives (`lockAcquire`/`lockRelease` — exactly the leak-prone manual API the DEC-348
+ruling rejected) while offering neither `withLock` nor `tryWithLock`. `withLock` therefore shipped
+invisible to the editor, breaking Invariant 17's 100% bar (DEC-417) the day it landed. Completion now
+unions the module's prelude-class PUBLIC statics and excludes the `Core.Native.*` twins; `private`
+statics stay hidden. Also closes the deferred "prelude-class members (Date/Uri…)" gap.
+
 ### Added — `FileSystem.withLock(path, fn)`, scoped advisory file locking (2026-07-31, DEC-348)
 Whole-file advisory locking with the release guaranteed by construction: `withLock` takes the lock, runs
 the closure, and releases it on every exit path including a throw. Its body IS a

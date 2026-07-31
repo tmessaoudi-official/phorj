@@ -265,6 +265,81 @@ import Core.FileSystemModule.FileSystemNotFoundError;
     let _ = std::fs::remove_dir_all(&root2);
 }
 
+/// `tryWithLock` reports contention instead of waiting, and its `Option<T>` return keeps "the lock was
+/// busy" distinguishable from "the closure ran and returned null" — the ambiguity that ruled out the
+/// cheaper `T?` (developer-ruled 2026-07-31). Both branches are asserted, and the busy branch needs no
+/// second process: the OS lock is per-file-DESCRIPTOR, so a nested attempt opens its own descriptor and
+/// genuinely finds the lock held by this same program. That makes it deterministic — no sleep, no race.
+///
+/// The null case is the load-bearing one: a closure returning `null` under a FREE lock must still come
+/// back as `Some(null)`, never `None`. Under a `T?` return those two would be one value.
+#[test]
+fn fs_try_with_lock_distinguishes_contention_from_a_null_result() {
+    let root = scratch("trylock");
+    let prog = format!(
+        r#"package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
+  try {{
+    FileSystem.createDir("{root}");
+    string p = "{root}/guard.lock";
+    // 1. Free lock: acquires and hands back the closure's value.
+    Option<int> got = FileSystem.tryWithLock(p, function(): int throws FileSystemError {{ return 7; }});
+    Output.printLine(match (got) {{ Option.Some(v) => "some {{v}}", Option.None() => "none" }});
+    // 2. Held lock: reports None rather than blocking. Nested inside a `withLock` on the SAME path.
+    string nested = FileSystem.withLock(p, function(): string throws FileSystemError {{
+      Option<int> inner = FileSystem.tryWithLock(p, function(): int throws FileSystemError {{ return 1; }})?;
+      return match (inner) {{ Option.Some(v) => "inner some {{v}}", Option.None() => "inner none" }};
+    }});
+    Output.printLine(nested);
+    // 3. The distinction `Option` exists for: a null result under a FREE lock is `Some(null)`.
+    Option<string?> nul = FileSystem.tryWithLock(p, function(): string? throws FileSystemError {{ return null; }});
+    Output.printLine(match (nul) {{ Option.Some(v) => "some-of-null {{v ?? \"yes\"}}", Option.None() => "none" }});
+    // 4. The lock is released after every `tryWithLock` too — a leak would make this block forever.
+    discard FileSystem.withLock(p, function(): int throws FileSystemError {{ Output.printLine("free after try"); return 0; }});
+    FileSystem.removeDirAll("{root}");
+  }} catch (FileSystemError e) {{ Output.printLine("unexpected: {{e.message}}"); }}
+}}
+"#
+    );
+    let expected = "some 7\ninner none\nsome-of-null yes\nfree after try\n";
+    both(&prog, expected);
+
+    // The PHP leg must agree — its `flock(LOCK_NB)` twin and the same `Option` shape.
+    let Some(php) = php_bin() else {
+        eprintln!("SKIP fs trylock php leg: php not found — set PHORJ_REQUIRE_PHP=1 to require it");
+        assert!(
+            std::env::var("PHORJ_REQUIRE_PHP").as_deref() != Ok("1"),
+            "php required but not found"
+        );
+        return;
+    };
+    let root2 = scratch("trylock-php");
+    let code = cmd_transpile(&prog.replace(&root, &root2)).expect("trylock program transpiles");
+    let php_file = std::path::Path::new(&root2).join("prog.php");
+    std::fs::create_dir_all(&root2).unwrap();
+    std::fs::write(&php_file, &code).unwrap();
+    let out = std::process::Command::new(&php)
+        .arg(&php_file)
+        .output()
+        .expect("php runs");
+    assert!(
+        out.status.success(),
+        "php trylock leg failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        expected,
+        "php trylock parity"
+    );
+    let _ = std::fs::remove_dir_all(&root2);
+}
+
 /// The lock must be a REAL OS lock, not a no-op that happens to run the closure. Held by an external
 /// `flock(1)` process, `withLock` has to BLOCK — on the Rust leg AND on the transpiled PHP leg, which
 /// is the bidirectional interop DEC-348 rests on.

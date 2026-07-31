@@ -82,16 +82,73 @@ pub(super) fn core_module_paths() -> Vec<String> {
     crate::cli::module_catalog::core_module_paths()
 }
 
-/// The native members of the module whose qualifier (last dotted segment) equals `qualifier` —
-/// e.g. `"List"` → `map`/`filter`/…, `"Output"` → `printLine`/`print`. Sorted + deduped; empty when
-/// the qualifier names no Core module (the caller then falls back to general completion).
+/// The completable members of the Core module whose qualifier (last dotted segment) equals
+/// `qualifier` — e.g. `"List"` → `map`/`filter`/…, `"Output"` → `printLine`/`print`,
+/// `"FileSystem"` → `readText`/`withLock`/… Sorted + deduped; empty when the qualifier names no
+/// Core module (the caller then falls back to general completion).
+///
+/// TWO sources, unioned (DEC-348 — Invariant 17's 100% rule):
+///   * `native::registry()` for registry-only modules (`Output`, `Map`, `Math`, `List`);
+///   * the module's PRELUDE class statics for modules whose user-facing surface is written in phorj
+///     (`FileSystem.withLock`, and the `Date`/`Uri` classes the old doc comment deferred).
+///
+/// **`Core.Native.*` twins are excluded**, the same filter `core_module_paths` already applies. Their
+/// leaf segment collides with the friendly class name (`Core.Native.FileSystem` → `FileSystem`), so
+/// including them did two wrong things at once: it advertised INTERNAL natives users must never call
+/// (`FileSystem.lockAcquire` — precisely the leak-prone manual API the DEC-348 ruling rejected), and
+/// the friendly statics with no same-named native (`withLock`) were missing entirely. That is why
+/// `withLock` shipped invisible to the editor and DEC-417's 100% bar was already broken before
+/// `tryWithLock` existed.
 pub(super) fn module_members(qualifier: &str) -> Vec<String> {
     let mut names: Vec<String> = native::registry()
         .iter()
+        .filter(|n| !n.module.starts_with("Core.Native."))
         .filter(|n| n.module.rsplit('.').next() == Some(qualifier))
         .map(|n| n.name.to_string())
         .collect();
+    names.extend(prelude_class_statics(qualifier));
     names.sort();
     names.dedup();
     names
+}
+
+/// The PUBLIC static methods of the prelude class named `qualifier`, if some `CORE_MODULES` row
+/// injects such a class. `private` statics are omitted: they are internals (`FileSystem.acquireLock`
+/// is the `using` subject behind `withLock`), and offering them would advertise the very shape the
+/// DEC-348 ruling rejected. Parsed from the registry's own prelude source, so a new prelude static is
+/// completable the moment it is written — no LSP edit, which is what Invariant 17 requires.
+fn prelude_class_statics(qualifier: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for vm in crate::cli::preludes::CORE_MODULES {
+        if !vm.bare_types.contains(&qualifier) {
+            continue;
+        }
+        for src in vm.srcs {
+            let Ok(prog) = crate::cli::parse_program(&format!("package Main;\n{src}\n")) else {
+                continue; // unreachable: registry preludes parse
+            };
+            for it in &prog.items {
+                let Item::Class(c) = it else { continue };
+                if c.name != qualifier {
+                    continue;
+                }
+                for m in &c.members {
+                    if let ClassMember::Method(f) = m {
+                        let is_static = f
+                            .modifiers
+                            .iter()
+                            .any(|md| matches!(md, crate::ast::Modifier::Static));
+                        let is_private = f
+                            .modifiers
+                            .iter()
+                            .any(|md| matches!(md, crate::ast::Modifier::Private));
+                        if is_static && !is_private {
+                            out.push(f.name.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
 }

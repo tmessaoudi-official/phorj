@@ -124,146 +124,9 @@ function respond(bytes raw): bytes {
 
 // DEC-273 wave 3: the mail prelude source moved to `crate::ext::mail_prelude` (colocation).
 
-/// `Core.FileSystemModule` (W3, TOP-20 #5 blocker) — the TYPED filesystem prelude: every failure is a catchable
-/// `FileSystemError` subtype (contrast the older `Core.File`, whose write/delete failures are uncatchable
-/// hard faults — its deprecation is a queued adjudication; this module is purely additive).
-/// Listings are SORTED (determinism). Std-only, always compiled (no feature gate). The taxonomy is
-/// FileSystem-PREFIXED throughout (`FileSystemNotFoundError`, not `NotFound` — a bare generic name would CAPTURE
-/// user-space classes via the injected-type discipline; caught live when `examples/web/server.phg`'s
-/// own `NotFound` class collided).
-pub(super) const FS_PRELUDE: &str = r#"
-import Core.Native.FileSystem as NativeFileSystem;
-import Core.String;
-import Core.List;
-import Core.ClosableModule;
-
-// Prelude-local result carrier (NOT Core.Result — the Core.Database injection-order rationale).
-enum FileSystemResult<T> { Ok(T value), Err(string message) }
-
-open class FileSystemError implements Error {
-  constructor(public string message) {}
-  static function fail(string message): never throws FileSystemError {
-    if (String.startsWith(message, "<<NotFound>>")) { throw new FileSystemNotFoundError(String.removePrefix(message, "<<NotFound>>")); }
-    if (String.startsWith(message, "<<PermissionDenied>>")) { throw new FileSystemPermissionDeniedError(String.removePrefix(message, "<<PermissionDenied>>")); }
-    if (String.startsWith(message, "<<AlreadyExists>>")) { throw new FileSystemAlreadyExistsError(String.removePrefix(message, "<<AlreadyExists>>")); }
-    if (String.startsWith(message, "<<NotADirectory>>")) { throw new FileSystemNotADirectoryError(String.removePrefix(message, "<<NotADirectory>>")); }
-    if (String.startsWith(message, "<<IsADirectory>>")) { throw new FileSystemIsADirectoryError(String.removePrefix(message, "<<IsADirectory>>")); }
-    if (String.startsWith(message, "<<DirNotEmpty>>")) { throw new FileSystemDirNotEmptyError(String.removePrefix(message, "<<DirNotEmpty>>")); }
-    if (String.startsWith(message, "<<FileSystemIoError>>")) { throw new FileSystemIoError(String.removePrefix(message, "<<FileSystemIoError>>")); }
-    throw new FileSystemError(message);
-  }
-}
-
-class FileSystemNotFoundError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
-class FileSystemPermissionDeniedError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
-class FileSystemAlreadyExistsError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
-class FileSystemNotADirectoryError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
-class FileSystemIsADirectoryError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
-class FileSystemDirNotEmptyError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
-class FileSystemIoError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
-
-// The typed filesystem surface (static module functions — filesystem state is ambient, so an
-// instance would carry nothing; the SORTED listings + typed errors are the value).
-class FileSystem {
-  static function readText(string path): string throws FileSystemError {
-    return match (NativeFileSystem.readText(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function readBytes(string path): bytes throws FileSystemError {
-    return match (NativeFileSystem.readBytes(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function writeText(string path, string contents): void throws FileSystemError {
-    match (NativeFileSystem.writeText(path, contents)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function writeBytes(string path, bytes contents): void throws FileSystemError {
-    match (NativeFileSystem.writeBytes(path, contents)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function appendText(string path, string contents): void throws FileSystemError {
-    match (NativeFileSystem.appendText(path, contents)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function copy(string from, string to): void throws FileSystemError {
-    match (NativeFileSystem.copy(from, to)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function move(string from, string to): void throws FileSystemError {
-    match (NativeFileSystem.move(from, to)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function delete(string path): void throws FileSystemError {
-    match (NativeFileSystem.delete(path)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function size(string path): int throws FileSystemError {
-    return match (NativeFileSystem.size(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function exists(string path): bool throws FileSystemError {
-    return match (NativeFileSystem.exists(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function isFile(string path): bool throws FileSystemError {
-    return match (NativeFileSystem.isFile(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function isDir(string path): bool throws FileSystemError {
-    return match (NativeFileSystem.isDir(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  // Recursive create (mkdir -p semantics); removeDir removes ONE EMPTY dir; removeDirAll is the
-  // loud recursive delete (refuses "/", "." and "..").
-  static function createDir(string path): void throws FileSystemError {
-    match (NativeFileSystem.createDir(path)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function removeDir(string path): void throws FileSystemError {
-    match (NativeFileSystem.removeDir(path)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function removeDirAll(string path): void throws FileSystemError {
-    match (NativeFileSystem.removeDirAll(path)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  // Entry NAMES of one directory, sorted; walk = every FILE under a root as sorted relative paths.
-  static function listDir(string path): List<string> throws FileSystemError {
-    return match (NativeFileSystem.listDir(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function walk(string root): List<string> throws FileSystemError {
-    return match (NativeFileSystem.walk(root)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  static function tempDir(): string throws FileSystemError {
-    return match (NativeFileSystem.tempDir()) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-  }
-  // DEC-348 — scoped advisory file locking. `withLock` is a THIN wrapper over `using` (DEC-364):
-  // that is the whole design, and it is why DEC-348 was sequenced after it. The release is
-  // guaranteed by construction — there is no leak path, because there is no way to hold the lock
-  // without the `using` block that releases it, on every exit edge including a throw.
-  //
-  // Whole-file and ADVISORY: it excludes other flock/`FileSystem.withLock` users, NOT arbitrary
-  // readers/writers. Byte-range locking and timeouts were both REJECTED by the ruling (byte-range
-  // needs `fcntl`; a timeout would need a spin-sleep bandaid).
-  //
-  // The lock file is created if absent and never truncated — locking must not destroy the content
-  // the lock protects.
-  //
-  // [Unverified on Windows] Windows is a shipped target, its lock semantics may be MANDATORY rather
-  // than advisory, and there is no Windows CI. Verified on Linux only: `/proc/locks` shows
-  // `FLOCK ADVISORY`, and a Rust holder and a PHP `flock()` holder block each other both ways.
-  static function withLock<T>(string path, () => T throws FileSystemError fn): T throws FileSystemError {
-    using (FileLock guard = FileSystem.acquireLock(path)?) {
-      return fn()?;
-    }
-  }
-  // Internal — the `using` subject. Not the user-facing surface: reaching for this instead of
-  // `withLock` would reintroduce exactly the leak path the ruling rejected in option (B).
-  private static function acquireLock(string path): FileLock throws FileSystemError {
-    int ticket = match (NativeFileSystem.lockAcquire(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
-    return new FileLock(ticket);
-  }
-  private static function ok(): void {}
-}
-
-// The held lock, as a `Closable` so `using` releases it. Carries an opaque native ticket (an `int`,
-// so DEC-348 needs no new `Value`); `close()` is idempotent and declares no `throws`, which is what
-// keeps `using (FileLock …)` free of `E-USING-CLOSE-THROWS` boilerplate at every call site.
-class FileLock implements Closable {
-  constructor(private int ticket) {}
-  // Both arms discard: releasing must not throw, and the native's release is already idempotent, so
-  // there is nothing a caller could do with a failure on this path.
-  function close(): void {
-    match (NativeFileSystem.lockRelease(this.ticket)) { FileSystemResult.Ok(_) => FileLock.ok(), FileSystemResult.Err(_) => FileLock.ok() };
-  }
-  private static function ok(): void {}
-}
-"#;
+// DEC-348.1: the FS prelude source moved to `crate::native::fs_prelude` (colocation with the FS
+// natives it wraps, same pattern as the database/mail/http_client preludes). `preludes.rs` is a
+// grandfathered Invariant-13 file — split it, never grow it.
 
 // DEC-273 wave 3: the http_client prelude source moved to `crate::ext::http_client_prelude` (colocation).
 
@@ -612,7 +475,7 @@ class Instant {
 /// for BOTH the prelude-injection fold ([`inject_core_modules`]) AND the injected-type discipline
 /// ([`core_module_of`]) — so a new Core module (Connection, HTTP expansions) is ONE row here, not edits in
 /// the eight `inject_*_prelude` fns plus the hand-synced `module_of` match this replaced.
-pub(super) struct VirtualModule {
+pub(crate) struct VirtualModule {
     /// Import path segments `["Core","Http"]`; gates injection + qualifier root. `pub(super)`: read by `cli::module_catalog` (LSP import completion).
     pub(super) module: &'static [&'static str],
     /// The `module_of` return value for this row's `bare_types` (the dotted module below `Core.`),
@@ -622,7 +485,7 @@ pub(super) struct VirtualModule {
     /// attribute-only modules (`Core.DependencyInjection`/`Core.Runtime*`) that contribute to
     /// `module_of` but inject no enum/class prelude. Plural since DEC-331 slice 2: `Core.Http`
     /// splits its source across two consts (Inv-13) — the fold treats the fragments as one prelude.
-    srcs: &'static [&'static str],
+    pub(crate) srcs: &'static [&'static str],
     /// The conditionally-injected `respond` serve-bridge source (Http only) — appended when the
     /// program defines `handle` and no `respond`. The one honest residual special-case.
     respond_bridge: Option<&'static str>,
@@ -634,16 +497,22 @@ pub(super) struct VirtualModule {
     /// shadow-check derives those from the parsed source) — e.g. `Core.Time` injects `DateTime` too,
     /// but `DateTime` is deliberately NOT in `module_of` (see KNOWN_ISSUES). Fusing the two lists
     /// would silently change gating; `DateTime` is the proof they diverge.
-    bare_types: &'static [&'static str],
+    pub(crate) bare_types: &'static [&'static str],
 }
 
 // DEC-273 wave 3: the database prelude source moved to `crate::ext::database_prelude` (colocation).
 
-/// The Core-module registry, in the SAME order as the pre-UA-L2 injection chain — ORDER IS
-/// LOAD-BEARING: `HTTP_PRELUDE` transitively `import Core.Regex`, and Http runs BEFORE Regex, so
-/// that transitive import is what triggers `Regex`-class injection for `Router.constraintOk`. A
-/// reorder that broke this would still pass most tests; `examples/web/route-constraints.phg` (a
-/// regex-constrained route with no explicit `import Core.Regex`) is the regression guard.
+/// The Core-module registry, in the SAME order as the pre-UA-L2 injection chain.
+///
+/// **Order no longer decides WHETHER a transitive import is honoured** (DEC-348): the fold in
+/// [`inject_core_modules`] runs to a fixed point, so a prelude that `import`s another row gets it
+/// injected whether that row sits earlier or later. It used to be single-pass, which made order
+/// load-bearing and made an earlier-row import fail in total silence.
+///
+/// Order still decides the ORDER of injected items in the resulting program, so a reorder is not
+/// free — it can move declarations in transpiled PHP output. `examples/web/route-constraints.phg`
+/// (a regex-constrained route with no explicit `import Core.Regex`, relying on `HTTP_PRELUDE`'s
+/// transitive one) remains the regression guard for the transitive-injection path itself.
 /// DEC-282 (unused-import analysis) — the names an `import Core.…;` WHOLE-MODULE row binds into a
 /// file: the qualifier's leaf plus every injected bare type (`Core.IteratorModule` binds
 /// `Iterator`; `Core.Runtime` binds `Entry`; …). `None` for a path that is not a whole-module row
@@ -662,10 +531,12 @@ pub(crate) fn core_module_bound_names(path: &[String]) -> Option<Vec<String>> {
     Some(names)
 }
 
-pub(super) const CORE_MODULES: &[VirtualModule] = &[
-    // NOTE (DEC-331 slice 2): the `Core.Json` row moved AFTER `Core.Http` — the Http prelude is
-    // now its sole transitive importer (`RequestBody.json(): Json?`), and the forward-fold only
-    // injects a later row from an earlier row's imports (the SessionModule→Http precedent).
+pub(crate) const CORE_MODULES: &[VirtualModule] = &[
+    // NOTE (DEC-331 slice 2): the `Core.Json` row sits AFTER `Core.Http` — the Http prelude is its
+    // sole transitive importer (`RequestBody.json(): Json?`). That placement was REQUIRED when the
+    // fold was single-pass (it could only reach later rows); since DEC-348 made the fold run to a
+    // fixed point it is merely conventional, and the row is left where it is because moving it would
+    // shuffle injected-item order for no gain.
     VirtualModule {
         module: &["Core", "Decimal"],
         qualifier: "Decimal",
@@ -913,7 +784,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "FileSystemModule"],
         qualifier: "FileSystemModule",
-        srcs: &[FS_PRELUDE],
+        srcs: &[crate::native::fs_prelude::FS_PRELUDE],
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
@@ -930,12 +801,14 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "FileLock",
         ],
     },
-    // `Core.ClosableModule` (DEC-364) — the `using` release protocol. **ROW-ORDER CRITICAL, same rule
-    // as `Core.IteratorModule`:** the injection fold walks this registry ONCE and can only inject a
-    // LATER row from an earlier row's imports, so this row must sit after EVERY prelude that imports
-    // it — today `Core.Database` (its `Connection` is `Closable`) and `Core.FileSystemModule` (its
-    // `FileLock` is). Moving it earlier does not fail loudly: `Closable` simply never gets injected and
-    // the importing prelude stops compiling.
+    // `Core.ClosableModule` (DEC-364) — the `using` release protocol. Imported by `Core.Database`
+    // (its `Connection` is `Closable`) and `Core.FileSystemModule` (its `FileLock` is).
+    // ROW ORDER IS NO LONGER LOAD-BEARING (DEC-348): the fold runs to a fixed point, so a prelude's
+    // import is honoured whether the imported row sits earlier or later. Before that, a single pass
+    // could only reach LATER rows and an earlier one was dropped in silence — the constraint this
+    // comment used to carry. `Core.Option` (an early row, imported by the FS prelude) is the case
+    // that forced the fix; `gate_tests::a_prelude_import_of_an_earlier_registry_row_is_still_injected`
+    // is the ratchet.
     VirtualModule {
         module: &["Core", "ClosableModule"],
         qualifier: "ClosableModule",
@@ -1195,37 +1068,45 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
     // offset range regardless of how many fragments each module carries (a per-module index times a
     // varying fragment count would not be injective).
     let mut frag_index = 0usize;
-    for m in CORE_MODULES {
-        if m.srcs.is_empty() {
-            continue;
-        }
-        let p = cur.as_ref();
-        let gated_in = if m.member_gated {
-            imports_module_or_member(p, m.module)
-        } else {
-            p.items.iter().any(|it| {
-                matches!(it, Item::Import { path, .. }
+    // The fold runs to a FIXED POINT, not once. A prelude may itself `import Core.X`, and a single
+    // pass could only honour that when `X` sat LATER in `CORE_MODULES` — an earlier row was dropped
+    // SILENTLY (DEC-348: `Core.FileSystemModule` importing `Core.Option`). Each module still injects
+    // at most once (`done`), so a pass that injects nothing new terminates the loop; with N rows the
+    // worst case is N passes, and today the second pass is a pure no-op for every existing program.
+    let mut done = [false; CORE_MODULES.len()];
+    loop {
+        let mut injected_this_pass = false;
+        for (idx, m) in CORE_MODULES.iter().enumerate() {
+            if m.srcs.is_empty() || done[idx] {
+                continue;
+            }
+            let p = cur.as_ref();
+            let gated_in = if m.member_gated {
+                imports_module_or_member(p, m.module)
+            } else {
+                p.items.iter().any(|it| {
+                    matches!(it, Item::Import { path, .. }
                     if path.len() == m.module.len()
                         && path.iter().zip(m.module).all(|(a, b)| a == b))
-            })
-        };
-        if !gated_in {
-            continue;
-        }
-        let mut parsed_items: Vec<Item> = Vec::new();
-        for src in m.srcs {
-            // Offsets rebased per fragment so an injected span can never equal a user-file span —
-            // see `lex_parse_injected` for the divergence this closes.
-            let parsed = lex_parse_injected(src, frag_index);
-            frag_index += 1;
-            let Ok(parsed) = parsed else {
-                continue; // unreachable: registry preludes are valid
+                })
             };
-            parsed_items.extend(parsed.items);
-        }
-        let mut prepend: Vec<Item> = Vec::new();
-        for it in parsed_items {
-            let absent = match &it {
+            if !gated_in {
+                continue;
+            }
+            let mut parsed_items: Vec<Item> = Vec::new();
+            for src in m.srcs {
+                // Offsets rebased per fragment so an injected span can never equal a user-file span —
+                // see `lex_parse_injected` for the divergence this closes.
+                let parsed = lex_parse_injected(src, frag_index);
+                frag_index += 1;
+                let Ok(parsed) = parsed else {
+                    continue; // unreachable: registry preludes are valid
+                };
+                parsed_items.extend(parsed.items);
+            }
+            let mut prepend: Vec<Item> = Vec::new();
+            for it in parsed_items {
+                let absent = match &it {
                 Item::Import { path, .. } => !p.items.iter().any(|x| {
                     matches!(x, Item::Import { path: xp, .. } if xp.join(".") == path.join("."))
                 }),
@@ -1249,62 +1130,71 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
                     .any(|x| matches!(x, Item::Interface(y) if y.name == i.name)),
                 _ => false,
             };
-            // Multi-fragment preludes may repeat an import across fragments — dedupe within the
-            // batch too (the absent-check above only sees the pre-injection program).
-            let dup_in_batch = match &it {
+                // Multi-fragment preludes may repeat an import across fragments — dedupe within the
+                // batch too (the absent-check above only sees the pre-injection program).
+                let dup_in_batch = match &it {
                 Item::Import { path, .. } => prepend.iter().any(|x| {
                     matches!(x, Item::Import { path: xp, .. } if xp.join(".") == path.join("."))
                 }),
                 _ => false,
             };
-            if absent && !dup_in_batch {
-                let mut it = it;
-                if let Item::Enum(e) = &mut it {
-                    e.injected = true;
+                if absent && !dup_in_batch {
+                    let mut it = it;
+                    if let Item::Enum(e) = &mut it {
+                        e.injected = true;
+                    }
+                    if let Item::Interface(i) = &mut it {
+                        i.injected = true;
+                    }
+                    prepend.push(it);
                 }
-                if let Item::Interface(i) = &mut it {
-                    i.injected = true;
-                }
-                prepend.push(it);
             }
-        }
-        // Http serve bridge (DEC-191): synthesize `respond` wrapping the program's #[Entry]
-        // WEB handler (`(Request): Response`, resolved by ATTRIBUTE — the magic `handle` name is
-        // retired), when no `respond` exists. The wrapper calls the entry by its actual path
-        // (top-level name, or `Class.method` for a static entry).
-        if let Some(bridge_src) = m.respond_bridge {
-            let has_respond = p
-                .items
-                .iter()
-                .any(|x| matches!(x, Item::Function(f) if f.name == "respond"));
-            let web =
-                crate::ast::entry_for(p, crate::ast::EntryRole::Web).map(|(cls, f)| match cls {
-                    Some(c) => format!("{c}.{}", f.name),
-                    None => f.name.clone(),
-                });
-            if let (Some(callee), false) = (web, has_respond) {
-                let src = bridge_src.replace("handle(req)", &format!("{callee}(req)"));
-                if let Ok(bridge) = lex_parse(&src) {
-                    prepend.extend(
-                        bridge
-                            .items
-                            .into_iter()
-                            .filter(|it| matches!(it, Item::Function(f) if f.name == "respond")),
+            // Http serve bridge (DEC-191): synthesize `respond` wrapping the program's #[Entry]
+            // WEB handler (`(Request): Response`, resolved by ATTRIBUTE — the magic `handle` name is
+            // retired), when no `respond` exists. The wrapper calls the entry by its actual path
+            // (top-level name, or `Class.method` for a static entry).
+            if let Some(bridge_src) = m.respond_bridge {
+                let has_respond = p
+                    .items
+                    .iter()
+                    .any(|x| matches!(x, Item::Function(f) if f.name == "respond"));
+                let web =
+                    crate::ast::entry_for(p, crate::ast::EntryRole::Web).map(
+                        |(cls, f)| match cls {
+                            Some(c) => format!("{c}.{}", f.name),
+                            None => f.name.clone(),
+                        },
                     );
+                if let (Some(callee), false) = (web, has_respond) {
+                    let src = bridge_src.replace("handle(req)", &format!("{callee}(req)"));
+                    if let Ok(bridge) = lex_parse(&src) {
+                        prepend.extend(
+                            bridge.items.into_iter().filter(
+                                |it| matches!(it, Item::Function(f) if f.name == "respond"),
+                            ),
+                        );
+                    }
                 }
             }
+            // Gated in and handled: never reconsider this row, even when it contributed no items (an
+            // all-shadowed prelude), or the loop would spin on it forever.
+            done[idx] = true;
+            injected_this_pass = true;
+            if prepend.is_empty() {
+                continue;
+            }
+            let mut items = Vec::with_capacity(p.items.len() + prepend.len());
+            items.extend(prepend);
+            items.extend(p.items.iter().cloned());
+            cur = std::borrow::Cow::Owned(Program {
+                package: p.package.clone(),
+                items,
+                span: p.span,
+            });
         }
-        if prepend.is_empty() {
-            continue;
+        if !injected_this_pass {
+            break;
         }
-        let mut items = Vec::with_capacity(p.items.len() + prepend.len());
-        items.extend(prepend);
-        items.extend(p.items.iter().cloned());
-        cur = std::borrow::Cow::Owned(Program {
-            package: p.package.clone(),
-            items,
-            span: p.span,
-        });
     }
     cur
 }
@@ -1321,6 +1211,33 @@ mod gate_tests {
     /// `phg check` passed, `--tree-walker` ran correctly, and only the VM failed to compile — flipped
     /// by nothing more than the byte length of a prelude line. Asserting the ranges are disjoint is
     /// what stops it coming back the next time a prelude gains a line.
+    /// A prelude that imports an EARLIER registry row must still get that row injected (DEC-348).
+    ///
+    /// The fold used to be a single pass over `CORE_MODULES`, so it could only ever satisfy a
+    /// prelude's import if the imported row sat LATER in the registry. An earlier row failed
+    /// SILENTLY — and not with a clean "unknown type": `Option.Some(v)` parsed as a non-pattern and
+    /// the user saw `unknown identifier v` pointing at their own match arm. That is why
+    /// `Core.FileSystemModule` (row ~914) importing `Core.Option` (row ~678) needed the fold to run
+    /// to a FIXED POINT, and why the ordering constraint documented on the `Core.ClosableModule` row
+    /// is no longer load-bearing.
+    #[test]
+    fn a_prelude_import_of_an_earlier_registry_row_is_still_injected() {
+        // `Core.FileSystemModule` imports `Core.Option`, which is an earlier row. The user program
+        // does NOT import `Core.Option` — only the prelude does.
+        let src = "package Main;\nimport Core.FileSystemModule;\nfunction main(): void { }\n";
+        let user = crate::cli::parse_program(src).expect("the fixture parses");
+        let injected = super::inject_core_modules(&user);
+        let has_option_enum = injected
+            .items
+            .iter()
+            .any(|it| matches!(it, crate::ast::Item::Enum(e) if e.name == "Option"));
+        assert!(
+            has_option_enum,
+            "`Core.FileSystemModule`'s prelude imports `Core.Option`, an EARLIER registry row, so a \
+             single-pass fold drops it; the injected program must still carry `enum Option`"
+        );
+    }
+
     #[test]
     fn injected_prelude_spans_cannot_collide_with_user_file_offsets() {
         let src = "package Main;\nimport Core.Database;\nfunction main() -> void { }\n";
