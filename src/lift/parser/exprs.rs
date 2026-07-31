@@ -314,7 +314,9 @@ impl PParser {
         if matches!(self.peek(), PTok::Var(_)) {
             return Err(self.err("dynamic `new $class` is Tier-3"));
         }
-        let class = self.expect_ident("class name after `new`")?;
+        // A qualified name is accepted here (`new \RuntimeException(…)`), not just a bare ident: PHP
+        // writes root-namespace builtins that way, and `throw`/`catch` both routinely do.
+        let class = self.parse_qualified_name()?;
         let args = if self.at(&PTok::LParen) {
             self.parse_args()?
         } else {

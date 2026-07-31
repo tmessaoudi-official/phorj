@@ -374,15 +374,17 @@ impl Printer {
                 }
                 Ok(())
             }
-            // `throw` and `using` remain outside the subset, for DIFFERENT reasons now that `try` is in.
-            // `throw`: the lift PARSER still refuses the keyword (LIFT-TRY's scope was try/catch/finally),
-            // so the lifter cannot produce one — a refused `throw` is a loud error, never a wrong lift.
-            // `using`: raising a PHP `try { … } finally { $h->close(); }` back to `using` is a
+            Stmt::Throw { value, .. } => {
+                self.line(&format!("throw {};", self.expr(value)?));
+                Ok(())
+            }
+            // `using` remains outside the subset:
+            // raising a PHP `try { … } finally { $h->close(); }` back to `using` is a
             // SHAPE-RECOGNITION decision, not a printing one — the lifter would have to decide that a
             // particular try/finally *is* a scope guard, and today it faithfully lifts it as the
             // try/finally the source actually wrote. Recorded in KNOWN_ISSUES rather than guessed at.
-            Stmt::Throw { .. } | Stmt::Using { .. } | Stmt::Destructure { .. } => {
-                Err("printer: throw/using/destructure are outside the lift subset".into())
+            Stmt::Using { .. } | Stmt::Destructure { .. } => {
+                Err("printer: using/destructure are outside the lift subset".into())
             }
         }
     }

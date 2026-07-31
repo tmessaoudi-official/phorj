@@ -457,3 +457,39 @@ fn a_try_finally_lifts_as_itself_and_is_not_raised_to_using() {
         "a try/finally was raised to `using`, which LIFT-TRY deliberately does NOT do:\n{phg}"
     );
 }
+
+/// `throw` lifts, and the root-namespace marker is stripped so the draft PARSES.
+///
+/// The strip is the load-bearing part: `catch` stripped it while `new` did not, so a lifted
+/// `throw new \RuntimeException(…)` emitted a `\` that is not valid phorj — an unparseable draft sitting
+/// beside a correctly-lifted catch in the same function. Both now route through `strip_root_ns`.
+#[test]
+fn throw_lifts_and_the_root_namespace_marker_is_stripped() {
+    let php = "<?php\nfunction guard(int $n): int {\n  if ($n < 0) { throw new \\RuntimeException(\"negative\"); }\n  return $n;\n}\nfunction main(): void { echo guard(3), \"\\n\"; }\n";
+    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
+    assert!(
+        phg.contains("throw new RuntimeException(\"negative\")"),
+        "throw did not lift cleanly:\n{phg}"
+    );
+    assert!(
+        !phg.contains("\\RuntimeException"),
+        "the root `\\` leaked:\n{phg}"
+    );
+    // PARSE, not type-check: a lifted draft references PHP classes with no phorj counterpart, which is
+    // the documented review-required boundary — but it must at least be syntactically phorj.
+    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
+}
+
+/// A rethrow inside a `catch` — the shape that made `throw` worth having, since LIFT-TRY without it
+/// meant any realistic PHP error path was unliftable.
+#[test]
+fn a_rethrow_inside_a_catch_lifts() {
+    let php = "<?php\nfunction f(int $n): int {\n  try {\n    return 10 / $n;\n  } catch (\\DivisionByZeroError $e) {\n    throw new \\LogicException(\"wrapped\");\n  }\n}\nfunction main(): void { echo f(2), \"\\n\"; }\n";
+    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
+    assert!(phg.contains("catch (DivisionByZeroError e)"), "{phg}");
+    assert!(
+        phg.contains("throw new LogicException(\"wrapped\")"),
+        "{phg}"
+    );
+    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
+}

@@ -33,6 +33,9 @@ pub(super) fn body_has_value_return(body: &[php::PhpStmt]) -> bool {
                 || catches.iter().any(|c| body_has_value_return(&c.body))
                 || finally_block.as_deref().is_some_and(body_has_value_return)
         }
+        // A `throw` DIVERGES rather than returning a value — it is not a value-return, and treating it
+        // as one would make a function that only throws look like it returns something.
+        php::PhpStmt::Throw(_) => false,
         Expr(_) | Echo(_) | php::PhpStmt::Break | php::PhpStmt::Continue => false,
     })
 }
@@ -139,4 +142,17 @@ pub(super) fn named(name: &str) -> Type {
         args: Vec::new(),
         span: SP,
     }
+}
+
+/// Strip PHP's root-namespace marker from a class name: `\RuntimeException` → `RuntimeException`.
+///
+/// THE one place that rule lives. `new` and `catch` both need it, and having each strip its own was the
+/// bug this replaced: the catch clause stripped, the `new` did not, so a lifted
+/// `throw new \RuntimeException(…)` emitted a `\` that is not valid phorj at all — an unparseable draft
+/// beside a correctly-lifted catch in the same function.
+///
+/// Inner separators are LEFT ALONE (`Acme\MyError` keeps its shape): a namespaced user class is not the
+/// same thing as a root-qualified builtin, and flattening it would invent a name.
+pub(super) fn strip_root_ns(name: &str) -> &str {
+    name.strip_prefix('\\').unwrap_or(name)
 }

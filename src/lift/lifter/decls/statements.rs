@@ -115,6 +115,10 @@ impl Lifter {
             }
             php::PhpStmt::Break => vec![Stmt::Break(SP)],
             php::PhpStmt::Continue => vec![Stmt::Continue(SP)],
+            php::PhpStmt::Throw(e) => vec![Stmt::Throw {
+                value: lift_expr(e)?,
+                span: SP,
+            }],
             // LIFT-TRY: `try`/`catch`/`finally` maps 1:1 — phorj has the same three parts, so nothing is
             // approximated. A catch's binding scope is its own body, matching PHP.
             php::PhpStmt::Try {
@@ -241,7 +245,7 @@ impl Lifter {
 /// so `catch (A | B $e)` does not silently narrow to its first member.
 fn lift_catch_type(types: &[String]) -> Type {
     let named = |t: &String| Type::Named {
-        name: t.trim_start_matches('\\').to_string(),
+        name: strip_root_ns(t).to_string(),
         args: Vec::new(),
         span: SP,
     };

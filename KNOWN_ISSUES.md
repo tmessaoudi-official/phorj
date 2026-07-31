@@ -17,9 +17,17 @@ behaviour so it cannot drift silently
 If it is built, the rule must be exact: only a `finally` whose SOLE statement is a `close()` on the
 variable the `try` guards, and a plain try/finally must keep lifting as itself.
 
-**Also still out: `throw`.** It was not in LIFT-TRY's scope, so the lift parser still refuses the keyword.
-That makes a `catch` body which rethrows a loud error rather than a wrong lift — acceptable, and the
-natural next increment, since the mapping to phorj's `throw` is 1:1.
+**`throw` is now BUILT too** (2026-07-31), including the qualified `new \RuntimeException(…)` that real
+PHP writes — that spelling had been a LEX error, so it could not even be read. PHP 8's throw-as-an-
+EXPRESSION (`$x = $y ?? throw new E()`) stays refused: lifting it wrongly would move where the throw
+happens.
+
+**What a lifted error path still needs from a human: the exception TYPES.** A draft that lifts cleanly and
+re-parses will not TYPE-CHECK, because `RuntimeException`/`LogicException`/`DivisionByZeroError` have no
+phorj counterpart — `phg check` says `unknown type RuntimeException`. That is the documented
+review-required boundary rather than a defect, but whether the lifter should MAP PHP's builtin exception
+hierarchy onto phorj error types is a user-visible design decision and is recorded as a PENDING question
+in the register (Invariant 15 — not self-ruled).
 
 ## LIFT-ATTR — the PHP lifter is blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
 

@@ -199,6 +199,10 @@ pub enum PhpStmt {
     Continue,
     /// A brace block `{ … }` used as a statement.
     Block(Vec<PhpStmt>),
+    /// `throw <expr>;` (2026-07-31). The STATEMENT form only — PHP 8's throw-as-an-EXPRESSION
+    /// (`$x = $y ?? throw new E()`) stays outside the subset and is refused by the expression parser,
+    /// because a wrong lift there would move where the throw happens.
+    Throw(PhpExpr),
     /// `try { … } catch (T $e) { … } … finally { … }` (LIFT-TRY, 2026-07-31).
     ///
     /// The lift subset had NO exception handling at all, which is why `using` could not round-trip:

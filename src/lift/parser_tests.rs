@@ -372,10 +372,9 @@ fn rejects_operator_in_string_interpolation() {
 #[test]
 fn rejects_unsupported_keywords() {
     for (src, frag) in [
-        // `try`/`catch`/`finally` moved INTO the subset (LIFT-TRY, 2026-07-31) — see
-        // `parses_try_catch_finally` below. `throw` deliberately stayed out.
+        // `try`/`catch`/`finally` AND `throw` moved INTO the subset (2026-07-31) — see
+        // `parser_tests_try.rs`. What stays here is what is still genuinely out of subset.
         ("<?php switch ($x) {}", "`switch` is not supported"),
-        ("<?php throw new E();", "`throw` is not supported"),
         ("<?php namespace App;", "`namespace` is not supported"),
         ("<?php interface I {}", "`interface` is not supported"),
         ("<?php trait T {}", "`trait` is not supported"),

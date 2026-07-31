@@ -20,10 +20,7 @@ use crate::limits::MAX_NEST_DEPTH;
 /// Keywords that exist in PHP but are outside the Tier-1 subset. Encountered in statement-leading
 /// position they produce a clear "not supported" error rather than being misread as an expression.
 const UNSUPPORTED_KW: &[&str] = &[
-    // LIFT-TRY (2026-07-31): `try`/`catch`/`finally` are now IN the subset — removed from this list.
-    // `throw` deliberately stays OUT: it was not in LIFT-TRY's scope, and a refused `throw` is a loud
-    // error rather than a wrong lift, so a `catch` body that rethrows reports instead of misreading.
-    "throw",
+    // `try`/`catch`/`finally` (LIFT-TRY) and `throw` are now IN the subset — both removed from this list.
     "switch",
     "do",
     "namespace",

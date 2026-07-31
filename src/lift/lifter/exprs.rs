@@ -149,7 +149,9 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         },
         php::PhpExpr::New { class, args } => Expr::New(
             Box::new(Expr::Call {
-                callee: Box::new(Expr::Ident(class.clone(), SP)),
+                // `\RuntimeException` → `RuntimeException`: phorj has no root-qualified spelling, so
+                // leaving the marker produced a draft that could not even parse.
+                callee: Box::new(Expr::Ident(strip_root_ns(class).to_string(), SP)),
                 args: lift_exprs(args)?,
                 type_args: Vec::new(),
                 span: SP,

@@ -13,6 +13,14 @@ impl PParser {
         if self.at(&PTok::LBrace) {
             return Ok(PhpStmt::Block(self.parse_block()?));
         }
+        // `throw <expr>;` — the statement form. PHP 8's throw-as-expression is not handled here and is
+        // left to the expression parser to refuse, so it reports rather than being silently relocated.
+        if self.is_kw("throw") {
+            self.advance();
+            let e = self.parse_expr()?;
+            self.expect(&PTok::Semi, "`;` after `throw`")?;
+            return Ok(PhpStmt::Throw(e));
+        }
         // LIFT-TRY: `try { … } catch (T $e) { … }* finally { … }?`.
         if self.is_kw("try") {
             self.advance();
@@ -22,9 +30,9 @@ impl PParser {
                 self.advance();
                 self.expect(&PTok::LParen, "`(` after `catch`")?;
                 // A union type list: `catch (A | B $e)`. At least one member is required.
-                let mut types = vec![self.parse_catch_type()?];
+                let mut types = vec![self.parse_qualified_name()?];
                 while self.eat(&PTok::Bar) {
-                    types.push(self.parse_catch_type()?);
+                    types.push(self.parse_qualified_name()?);
                 }
                 // PHP 8 permits `catch (T)` with NO variable — hence `Option`, not a required name.
                 let var = match self.peek() {
@@ -209,10 +217,13 @@ impl PParser {
 }
 
 impl super::PParser {
-    /// One member of a catch clause's type list: an identifier, optionally `\`-qualified
-    /// (`\RuntimeException`) or namespaced (`Acme\MyError`). The leading/inner `\` is kept verbatim
-    /// here; the LIFTER strips the root marker, so the parser stays a faithful reader of the source.
-    fn parse_catch_type(&mut self) -> Result<String, String> {
+    /// A class name, optionally `\`-qualified (`\RuntimeException`) or namespaced (`Acme\MyError`).
+    ///
+    /// Shared by catch clauses and `new`: PHP writes root-namespace builtins qualified, so
+    /// `throw new \RuntimeException(…)` inside a `catch (\RuntimeException $e)` needs BOTH to read the
+    /// same way. The `\` is kept verbatim here — the LIFTER strips the root marker, keeping the parser a
+    /// faithful reader of the source.
+    pub(super) fn parse_qualified_name(&mut self) -> Result<String, String> {
         let mut out = String::new();
         if self.eat(&PTok::Backslash) {
             out.push('\\');

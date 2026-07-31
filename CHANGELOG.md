@@ -61,11 +61,19 @@ which it previously refused.
 Every test asserts the lifted draft RE-PARSES, not merely that it contains the right substrings — a
 plausible string that does not parse would be useless as a draft while passing a substring check.
 
-**Still deliberately out:** a lifted `try { … } finally { $h->close(); }` is NOT raised to `using` (that
-is shape recognition, not printing — guessing wrong rewrites the meaning of code the lifter does not
-understand), and `throw` remains refused, which keeps a rethrowing `catch` a loud error rather than a
-wrong lift. Both are recorded in KNOWN_ISSUES under LIFT-USING, with a test pinning the try/finally
-behaviour so it cannot drift.
+**`throw` landed in the same session**, including the qualified `new \RuntimeException(…)` real PHP writes
+— previously a LEX error, so unreadable. That also fixed an inconsistency the change exposed: `catch`
+stripped PHP's root-namespace marker while `new` did not, so a lifted `throw new \RuntimeException(…)`
+emitted a `\` that is not valid phorj — an unparseable draft beside a correctly-lifted catch in the same
+function. Both now route through one `strip_root_ns`. PHP 8's throw-as-an-EXPRESSION stays refused, since
+lifting it wrongly would move where the throw happens.
+
+**Still deliberately out:** a lifted `try { … } finally { $h->close(); }` is NOT raised to `using` — that
+is shape recognition, not printing, and guessing wrong rewrites the meaning of code the lifter does not
+understand. Recorded in KNOWN_ISSUES under LIFT-USING with a test pinning the behaviour so it cannot
+drift. A lifted error path also still needs a human for the exception TYPES (PHP's
+`RuntimeException`/`LogicException` have no phorj counterpart); whether to map that hierarchy is a
+PENDING developer question.
 
 ### Fixed — the WASM playground build was broken for six consecutive CI runs (2026-07-31)
 `INJECTED_SPAN_BASE` was `1 << 32`, which is a compile ERROR on `wasm32-unknown-unknown`: `usize` is 32

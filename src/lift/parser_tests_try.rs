@@ -75,3 +75,28 @@ fn rejects_a_try_with_no_catch_and_no_finally() {
     let e = perr("<?php try { foo(); }");
     assert!(e.contains("at least one `catch` or a `finally`"), "got {e}");
 }
+
+/// `throw` is in the subset (2026-07-31), including the qualified `new \RuntimeException(…)` that real
+/// PHP writes — that spelling was previously a LEX error, so it could not even be read.
+#[test]
+fn parses_throw_with_a_qualified_class() {
+    use crate::lift::ast::{PhpExpr, PhpStmt};
+    let p = parse("<?php throw new \\RuntimeException(\"bad\");");
+    let PhpItem::Stmt(PhpStmt::Throw(PhpExpr::New { class, args })) = &p.items[0] else {
+        panic!("expected a throw, got {:?}", p.items[0]);
+    };
+    // The parser keeps the source's `\` verbatim; the LIFTER is what strips the root marker.
+    assert_eq!(class, "\\RuntimeException");
+    assert_eq!(args.len(), 1);
+}
+
+/// PHP 8's throw-as-an-EXPRESSION is not in the subset and must be REFUSED, not misread — lifting it
+/// wrongly would move where the throw happens.
+#[test]
+fn refuses_throw_as_an_expression() {
+    let e = perr("<?php $x = $y ?? throw new E();");
+    assert!(
+        !e.is_empty(),
+        "a throw-expression must be refused, got no error"
+    );
+}
