@@ -562,11 +562,8 @@ pub(super) fn scan_braced(chars: &[char]) -> Result<(String, usize), String> {
 /// operator token means a top-level operator was present).
 pub(super) fn parse_interp_chain(inner: &str) -> Result<PhpExpr, String> {
     let toks = lex_php(&format!("<?php {inner}"))?;
-    let mut p = PParser {
-        toks,
-        pos: 0,
-        depth: 0,
-    };
+    // An expression fragment declares nothing, so it carries no PHPDoc.
+    let mut p = PParser::new(toks, std::collections::HashMap::new());
     p.eat(&PTok::OpenTag);
     let e = p.parse_postfix()?;
     if !matches!(p.peek(), PTok::Eof) {

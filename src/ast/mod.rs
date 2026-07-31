@@ -10,6 +10,7 @@ use crate::token::Span;
 mod class_hierarchy;
 mod class_layout;
 mod entry;
+mod item_meta;
 #[macro_use]
 mod leaves;
 mod lower_using;
@@ -21,6 +22,7 @@ mod walk_tests;
 pub use class_hierarchy::*;
 pub use class_layout::*;
 pub use entry::*;
+pub use item_meta::*;
 pub use lower_using::*;
 pub use subexprs::*;
 pub use walk::*;

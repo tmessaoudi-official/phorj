@@ -358,3 +358,43 @@ fn unregistered_or_wrong_arity_builtins_stay_unresolved() {
     let out2 = lift(r#"<?php echo strlen("a", "b");"#);
     assert!(out2.contains("strlen(\"a\", \"b\")"), "{out2}");
 }
+
+/// DEC-419 — PHPDoc survives PHP → phorj → PHP, with the SAME body text at both ends.
+///
+/// The two directions are independent code (`lift::lexer` captures, `transpile` re-emits), so proving
+/// each in isolation would not prove they agree on the body. This asserts the fixed point, which is the
+/// whole reason `/** … */` was chosen over `///`: PHPDoc's own spelling means no translation step in
+/// either direction.
+#[test]
+fn phpdoc_round_trips_through_a_lift_and_back() {
+    let php = "<?php\n/**\n * Greets someone by name.\n *\n * Second paragraph.\n */\nfunction greet(string $who): string { return \"hello \" . $who; }\n\nfunction main(): void { echo greet(\"world\"), \"\\n\"; }\n";
+    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
+    assert!(
+        phg.contains("/**")
+            && phg.contains(" * Greets someone by name.")
+            && phg.contains(" * Second paragraph."),
+        "PHPDoc did not become a phorj doc comment:\n{phg}"
+    );
+    // …and back down. `transpile` re-emits it as a PHP docblock, so the body returns unchanged.
+    let prog = crate::cli::parse_program(&phg).expect("the lifted draft parses");
+    let checked = crate::cli::check_and_expand(&prog, &phg).expect("the lifted draft type-checks");
+    let php2 = crate::transpile::emit_with_source(&checked, Some(&phg)).expect("it transpiles");
+    assert!(
+        php2.contains(" * Greets someone by name.") && php2.contains(" * Second paragraph."),
+        "the doc did not survive back into PHP:\n{php2}"
+    );
+}
+
+/// A PLAIN `/* … */` in the PHP source must NOT become a phorj doc comment — PHP's own convention is
+/// that documentation is the double-star form, and the lift has to respect that distinction or every
+/// incidental note turns into published documentation.
+#[test]
+fn a_plain_php_block_comment_does_not_become_a_doc_comment() {
+    let php = "<?php\n/* internal note */\nfunction plain(): int { return 1; }\n\nfunction main(): void { echo plain(), \"\\n\"; }\n";
+    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
+    assert!(
+        !phg.contains("internal note"),
+        "a plain block comment leaked into the lifted draft:\n{phg}"
+    );
+    assert!(phg.contains("function plain(): int"), "{phg}");
+}

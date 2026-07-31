@@ -4802,9 +4802,35 @@ undocumented one does NOT gain an empty field; 1 tokenizer test pinning all four
 1 formatter test proving the `*` column survives formatting — that column is not cosmetic, since the
 extractor strips exactly one `*` per line, so a formatter that re-indented would change rendered text.
 
-**Deliberately NOT built, and stated so rather than half-done:** transpile does not emit a docblock, and
-the lifter does not read PHPDoc. Both were raised with the ruling as sub-questions, both are additive,
-and neither is a regression — transpile drops all comments today and the lifter reads none.
+**Both sub-questions RULED YES and BUILT (2026-07-31, same day).** `transpile` re-emits a doc comment as
+a PHP docblock; the lifter reads PHPDoc back into a phorj doc comment.
+
+- **Asserted as a FIXED POINT, not as two features.** The two directions are independent code, so proving
+  each alone would not prove they agree on the body text. `lifter_tests::phpdoc_round_trips_through_a_lift_and_back`
+  takes PHP → phorj → PHP and asserts the same body at both ends. This is the concrete payoff of choosing
+  PHPDoc's spelling over `///`.
+- **The two sides key the doc differently, out of necessity.** The transpiler has the original phorj
+  source, so it keys by SPAN (`ast::item_decl_span`). The lifter has NO phorj spans — it works from parsed
+  PHP — so it keys by declaration NAME (`ast::item_decl_name` + `PhpProgram::docs`). Top-level names are
+  unique, so the name key is total. Doc comments stay non-AST on both paths, as originally decided.
+- **`emit` is preserved exactly.** The doc-bearing form is opt-in (`emit_with_source`), and a test asserts
+  the two outputs differ ONLY by comment lines — so no existing caller's PHP changed.
+- **The lifter's PHPDoc is a side channel keyed by token index, NOT a new `PTok` variant.** A new token
+  would appear at any stream position and every existing parser site would need to learn to skip it — a
+  wide change whose failure mode is silent (one missed site rejects valid PHP).
+- **A plain `/* … */` is not lifted as documentation**, mirroring PHP's own convention; asserted.
+
+**[Pre-existing limitation, found while verifying — NOT caused here and NOT fixed here]** a
+phorj → PHP → phorj round-trip is not generally possible: transpiled output always contains
+fully-qualified names (`\OverflowException`, emitted by the checked-arithmetic helpers) and the lifter's
+Tier-1 lexer rejects `\`. My first attempt at a phorj→PHP→phorj doc test hit exactly this and I redirected
+to PHP → phorj → PHP, which the lifter's tier does support, rather than report a round-trip I could not
+demonstrate. Widening the lift tier is a separate matter (see the LIFT backlog).
+
+**Invariant 13 fallout, all SPLIT rather than grown:** `ast::item_meta`, `transpile::tests_docs`,
+`lift::printer::docs`, `lift::printer::setup` (all new), plus a `PParser::new` constructor that removed
+the duplicated state literal at both construction sites — the split that made the code smaller, not just
+rearranged.
 
 ### Shipped-example concurrency (2026-07-31) — a race in `examples/fs/lock.phg`, found by a single transient test failure
 

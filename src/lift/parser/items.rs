@@ -87,15 +87,24 @@ impl PParser {
         // An optional leading `<?php` open tag.
         self.eat(&PTok::OpenTag);
         let mut items = Vec::new();
+        let mut docs: std::collections::BTreeMap<String, String> =
+            std::collections::BTreeMap::new();
         while !self.at(&PTok::Eof) {
             // A `?>` close tag (and a re-opening `<?php`) are tolerated between items.
             if self.eat(&PTok::CloseTag) {
                 self.eat(&PTok::OpenTag);
                 continue;
             }
-            items.push(self.parse_item()?);
+            // DEC-419: a PHPDoc block sits in front of the item's FIRST token, so read the side
+            // channel at `self.pos` BEFORE parsing consumes it, then key it by the parsed name.
+            let doc = self.docs.get(&self.pos).cloned();
+            let item = self.parse_item()?;
+            if let (Some(d), Some(name)) = (doc, super::super::ast::php_item_name(&item)) {
+                docs.insert(name.to_string(), d);
+            }
+            items.push(item);
         }
-        Ok(PhpProgram { items })
+        Ok(PhpProgram { items, docs })
     }
 
     pub(super) fn parse_item(&mut self) -> Result<PhpItem, String> {

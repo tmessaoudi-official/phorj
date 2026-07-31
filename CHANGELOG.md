@@ -28,6 +28,38 @@ PID-qualified (a fixed `/tmp` path is shared state between concurrently-running 
 holder creates. Under full-workspace load the holder had sometimes not acquired yet, so the try
 succeeded and the assertion failed — raising the sleep would have been a bandaid over a race.
 
+### Added — doc comments cross the PHP boundary in BOTH directions (2026-07-31, DEC-419)
+Both sub-questions raised with the doc-comment ruling were answered yes and are built.
+
+`transpile` now re-emits a declaration's `/** … */` as a PHP **docblock**. Since `/** … */` IS PHPDoc
+this is a re-emission, not a translation — the star column is re-added around the same body. Comments
+produce no output, so the byte-identity spine is untouched.
+
+The **lifter** now reads PHPDoc back into a phorj doc comment. A plain `/* … */` in the PHP source is
+deliberately NOT lifted as documentation, mirroring PHP's own convention.
+
+Verified as a fixed point rather than as two isolated features: PHP → phorj → PHP returns the same doc
+body at both ends. That fixed point is what choosing PHPDoc's spelling over `///` was for.
+
+The two sides key the doc differently, because they have different information: the transpiler works
+from the original phorj source and keys by SPAN (`ast::item_decl_span`), while the lifter has no phorj
+spans at all — it works from parsed PHP and keys by declaration NAME (`ast::item_decl_name`). Top-level
+names are unique, so the name key is total. Doc comments remain non-AST on both paths.
+
+`emit` (no source) is preserved exactly — the doc-bearing form is opt-in via `emit_with_source`, and a
+test asserts the two outputs differ ONLY by the comment lines. The lifter keeps its PHPDoc in a side
+channel keyed by token index rather than a new `PTok` variant: a new token would appear at any stream
+position and every parser site would have to learn to skip it, with a silent failure mode.
+
+**[Pre-existing limitation, unrelated to docs]** phorj → PHP → phorj is not generally possible:
+transpiled output contains fully-qualified names (`\OverflowException` from the checked-arithmetic
+helpers) and the lifter's Tier-1 lexer rejects `\`. So the doc round-trip is asserted in the
+PHP → phorj → PHP direction, which the lifter's tier supports.
+
+Invariant 13 fallout, all split rather than grown: `ast::item_meta` (new), `transpile::tests_docs`
+(new), `lift::printer::{docs,setup}` (new), and a `PParser::new` constructor that removed the
+duplicated state literal at both construction sites.
+
 ### Added — doc comments: `/** … */` (2026-07-31, DEC-419)
 Phorj now has THREE comment forms and no others: `//`, `/* … */`, and `/** … */`. The last is a **DOC
 comment** — the documentation of the declaration that follows it — and `phg lsp` renders it on hover

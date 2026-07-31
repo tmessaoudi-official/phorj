@@ -1,4 +1,9 @@
-//! Doc-comment extraction for hover/completion (DEC-419).
+//! Doc-comment extraction (DEC-419) — THE one reader of `/** … */` documentation.
+//!
+//! Three consumers, one rule: the LSP (hover + completion `documentation`), and the TRANSPILER, which
+//! re-emits the doc as a PHP docblock. Living at crate level rather than under `lsp/` is what keeps
+//! those from drifting — a second extractor would let hover and the emitted PHP disagree about what a
+//! declaration's documentation even is.
 //!
 //! A `/** … */` comment immediately above a declaration IS that declaration's documentation. This
 //! module finds it in the buffer text and renders it as markdown.
@@ -22,7 +27,7 @@
 /// (`#[Entry(…)]` sits between the doc and the declaration in real code) and blank lines, the next
 /// thing is a `/** … */` block. A plain `/* … */` or `// …` above a declaration is deliberately NOT
 /// documentation — that distinction is the whole point of the ruling.
-pub(super) fn doc_markdown_before(text: &str, decl_start: usize) -> Option<String> {
+pub(crate) fn doc_markdown_before(text: &str, decl_start: usize) -> Option<String> {
     let bytes = text.as_bytes();
     // Walk up from the declaration's line to the first line that is neither blank nor an attribute.
     let mut line_start = line_start_of(bytes, decl_start.min(bytes.len()));

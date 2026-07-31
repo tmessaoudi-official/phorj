@@ -624,15 +624,34 @@ recoverable without a field on every declaration kind and without the backends c
 never use. The byte-identity spine is untouched by construction — comments of every form are invisible
 to `run`, to the VM, and to the transpiled PHP.
 
-### Still open (deliberately not built)
+### Both directions across the PHP boundary (developer-ruled 2026-07-31, BUILT)
 
-Two sub-questions were raised with the ruling and are NOT part of it, so neither is implemented:
-- whether `transpile` should **emit** a doc comment as a PHP docblock (stdout-neutral, so
-  byte-identity-safe either way);
-- whether the **lifter** should read PHPDoc back into a phorj doc comment.
+The two sub-questions raised with the original ruling were both answered **yes**, and both are built:
 
-Both are additive: today transpile drops all comments and the lifter reads none, which is the same
-behaviour as before this ruling, so neither gap is a regression.
+- **`transpile` EMITS** a doc comment as a PHP docblock (`transpile::emit_with_source`). Since `/** … */`
+  IS PHPDoc, this is a re-emission rather than a translation — the star column is re-added around the
+  same body. Comments produce no output, so the byte-identity spine is untouched.
+- **The lifter READS** PHPDoc back into a phorj doc comment. A plain `/* … */` in the PHP source is
+  deliberately NOT lifted as documentation, mirroring PHP's own convention.
+
+Verified as a fixed point: PHP → phorj → PHP returns the same doc body at both ends
+(`lifter_tests::phpdoc_round_trips_through_a_lift_and_back`). That fixed point is the payoff of choosing
+PHPDoc's spelling over `///`.
+
+**How the doc reaches each emitter, and why they differ.** Doc comments remain non-AST, so each side
+uses the key it actually has: the transpiler works from the original phorj source and keys by SPAN
+(`ast::item_decl_span`), while the lifter has no phorj spans at all — it works from parsed PHP and keys
+by declaration NAME (`ast::item_decl_name`, `PhpProgram::docs`). Top-level names are unique, so the
+name key is total.
+
+`emit` (no source) is preserved exactly: it produces the same PHP it always did, and the doc-bearing
+form is opt-in via `emit_with_source`. A test asserts the two outputs differ ONLY by the comment lines.
+
+**Known limitation, pre-existing and unrelated:** a phorj → PHP → phorj round-trip is not generally
+possible, because transpiled output contains fully-qualified names (`\OverflowException` from the
+checked-arithmetic helpers) and the lifter's Tier-1 lexer rejects `\`. That gap predates DEC-419 and is
+a lifter-tier matter, not a doc-comment one; the doc round-trip is therefore asserted in the
+PHP → phorj → PHP direction, which the lifter's tier does support.
 
 ## Comprehensive statics
 

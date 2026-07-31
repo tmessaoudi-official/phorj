@@ -256,8 +256,9 @@ fn general_items(
             if seen_top.insert(name.clone()) {
                 // DEC-417: a `#[Deprecated]` declaration is shown struck through in the picker.
                 // DEC-419: its `/** … */` doc comment rides along as `documentation`.
-                let doc = super::symbols::definition_of(prog, &name)
-                    .and_then(|(_, span)| super::docs::doc_markdown_before(text, span.start));
+                let doc = super::symbols::definition_of(prog, &name).and_then(|(_, span)| {
+                    crate::doc_comment::doc_markdown_before(text, span.start)
+                });
                 items.push(completion_item_documented(
                     &name,
                     kind,

@@ -3,20 +3,6 @@
 use super::*;
 
 /// Print a whole Phorj program to `.phg` source. `Err` if it contains a node outside the lift subset.
-pub fn print_program(p: &Program) -> Result<String, String> {
-    let mut pr = Printer {
-        out: String::new(),
-        indent: 0,
-    };
-    pr.program(p)?;
-    Ok(pr.out)
-}
-
-pub(super) struct Printer {
-    out: String,
-    indent: usize,
-}
-
 impl Printer {
     pub(super) fn line(&mut self, s: &str) {
         for _ in 0..self.indent {
@@ -35,6 +21,9 @@ impl Printer {
         self.line(&format!("package {pkg};"));
         for item in &p.items {
             self.out.push('\n');
+            // DEC-419: PHPDoc lifted from the source becomes a phorj doc comment. `/** … */` is the
+            // same spelling on both sides, so this is a re-emission, not a translation.
+            self.doc_comment(item);
             self.item(item)?;
         }
         Ok(())

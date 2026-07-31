@@ -77,8 +77,15 @@ already has the text and the span, so no declaration kind gained a field and no 
 data; the TextMate doc rule must precede the plain block rule or `/**` gets swallowed; and JetBrains
 loads the same grammar file, so both editors came from one edit.
 
-OPEN, deliberately unbuilt (both additive, neither a regression — transpile drops all comments today and
-the lifter reads none): transpile-emit as a PHP docblock, and lifter PHPDoc-read.
+**Both PHP-boundary directions BUILT 2026-07-31** (developer answered yes to both sub-questions):
+`transpile` re-emits a doc comment as a PHP docblock, and the lifter reads PHPDoc back. Asserted as a
+FIXED POINT — PHP → phorj → PHP returns the same body — which is what PHPDoc's spelling was chosen for.
+The two sides key differently by necessity: transpiler by SPAN (it has the phorj source), lifter by
+declaration NAME (a lifted program has no phorj spans). `emit` without source stays byte-unchanged; docs
+are opt-in via `emit_with_source`.
+
+[Pre-existing, unrelated] phorj → PHP → phorj is blocked by the lifter's Tier-1 lexer rejecting `\` in
+the FQNs transpiled output always contains (`\OverflowException`). A lifter-tier gap, not a doc one.
 
 **NEXT, in priority order:**
 1. **DEC-347 (`FileSystem.lines`)** — the other slice sequenced after DEC-364; now the last of that

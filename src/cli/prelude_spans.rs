@@ -6,7 +6,7 @@ use super::*;
 
 /// The first `Span.start` handed to an INJECTED prelude — chosen far above any real file size so a
 /// prelude offset can never equal a user-file offset. See [`lex_parse_injected`].
-pub(super) const INJECTED_SPAN_BASE: usize = 1 << 32;
+pub(crate) const INJECTED_SPAN_BASE: usize = 1 << 32;
 
 /// The offset room reserved per injected module. Every shipped prelude is well under a megabyte, so
 /// 16 MiB of headroom keeps each module's range disjoint from every other's.

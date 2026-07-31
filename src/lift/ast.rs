@@ -14,6 +14,25 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct PhpProgram {
     pub items: Vec<PhpItem>,
+    /// PHPDoc attached to top-level declarations, keyed by declaration NAME (DEC-419).
+    ///
+    /// Name-keyed rather than a field on `PhpFunction`/`PhpClass`/`PhpEnum` so exactly one struct
+    /// gains a field instead of three plus every construction site — and top-level names are unique in
+    /// PHP, so the key is total. Sorted so the lifted output is deterministic (Invariant 10).
+    pub docs: std::collections::BTreeMap<String, String>,
+}
+
+/// The declared NAME of a top-level item, or `None` for a bare statement (which declares nothing).
+///
+/// Exhaustive on purpose: a new `PhpItem` variant must say whether it is nameable rather than
+/// inheriting `None` from a wildcard and losing its PHPDoc in silence.
+pub fn php_item_name(item: &PhpItem) -> Option<&str> {
+    match item {
+        PhpItem::Function(f) => Some(&f.name),
+        PhpItem::Class(c) => Some(&c.name),
+        PhpItem::Enum(e) => Some(&e.name),
+        PhpItem::Stmt(_) => None,
+    }
 }
 
 /// A top-level item.

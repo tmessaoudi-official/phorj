@@ -34,7 +34,7 @@ mod stmt;
 mod types;
 
 /// The public transpiler entry point (defined in `driver`) re-exported at `crate::transpile::emit`.
-pub use driver::emit;
+pub use driver::{emit, emit_with_source};
 // `decomposed_classes` (in `driver`) is also called from `split.rs`; re-glob it so that module's
 // `use super::*` keeps reaching it.
 use self::driver::decomposed_classes;
@@ -106,6 +106,11 @@ struct Transpiler {
     enums: HashSet<String>,
     /// `(enum, variant) → payload field names` — keyed precisely since DEC-329.3.
     variant_fields: HashMap<(String, String), Vec<String>>,
+    /// The ORIGINAL phorj source, when the caller has it (DEC-419). Only used to recover `/** … */`
+    /// doc comments and re-emit them as PHP docblocks — comments are not AST nodes, so the source text
+    /// is the only channel. `None` for callers that transpile a `Program` they did not read from a file
+    /// (the benchmark path); the output then simply carries no docblocks, which is what it did before.
+    src: Option<String>,
     out: String,
     indent: usize,
     locals: Vec<HashSet<String>>,
@@ -196,5 +201,8 @@ enum MatchTarget {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod tests_docs;
 #[cfg(test)]
 mod tests_enums;

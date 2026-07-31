@@ -39,6 +39,7 @@ mod help;
 pub(crate) mod module_catalog;
 mod pipeline;
 mod prelude_spans;
+pub(crate) use prelude_spans::INJECTED_SPAN_BASE;
 pub(crate) mod preludes;
 
 pub use self::help::*;

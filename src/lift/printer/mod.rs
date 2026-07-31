@@ -14,8 +14,10 @@ use crate::ast::{
     Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
 
+mod docs;
 mod exprs;
 mod items;
+mod setup;
 use self::exprs::*;
-use self::items::*;
-pub use items::print_program;
+pub(super) use self::setup::Printer;
+pub use setup::{print_program, print_program_with_docs};

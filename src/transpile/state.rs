@@ -20,6 +20,7 @@ impl Transpiler {
             split: split::SplitPass::Off,
             variant_owner: HashMap::new(),
             variant_fields: HashMap::new(),
+            src: None,
             out: String::new(),
             indent: 0,
             locals: Vec::new(),
@@ -44,6 +45,37 @@ impl Transpiler {
     }
 
     /// Indentation-aware line writer.
+    /// Re-emit a declaration's `/** … */` doc comment as a PHP DOCBLOCK at the current indent
+    /// (DEC-419). A no-op when the caller supplied no source, when the declaration has no doc, or when
+    /// the span is an INJECTED prelude span — prelude docs are phorj-internal and belong in no user's
+    /// generated PHP.
+    ///
+    /// `/** … */` is PHPDoc's own syntax, so this is a re-emission rather than a translation: the star
+    /// column is re-added around the same body. The body cannot contain `*/` by construction (the
+    /// extractor stops at the first one), so it cannot terminate the docblock early.
+    ///
+    /// Emitting comments cannot affect the byte-identity spine — PHP comments produce no output.
+    pub(super) fn emit_doc_block(&mut self, span: crate::token::Span) {
+        let Some(src) = self.src.as_deref() else {
+            return;
+        };
+        if span.start >= crate::cli::INJECTED_SPAN_BASE {
+            return;
+        }
+        let Some(doc) = crate::doc_comment::doc_markdown_before(src, span.start) else {
+            return;
+        };
+        self.line("/**");
+        for l in doc.lines() {
+            if l.is_empty() {
+                self.line(" *");
+            } else {
+                self.line(&format!(" * {l}"));
+            }
+        }
+        self.line(" */");
+    }
+
     pub(super) fn line(&mut self, s: &str) {
         for _ in 0..self.indent {
             self.out.push_str("    ");

@@ -18,7 +18,6 @@
 
 mod catalog;
 mod completion;
-pub(super) mod docs;
 mod keywords;
 mod references;
 mod scope;
@@ -211,7 +210,7 @@ impl Server {
                 let doc = if is_local {
                     None
                 } else {
-                    docs::doc_markdown_before(&text, span.start)
+                    crate::doc_comment::doc_markdown_before(&text, span.start)
                 };
                 Self::hover_markdown(&sig, doc.as_deref())
             }
@@ -221,7 +220,7 @@ impl Server {
                     let sig = symbols::signature_text(&other_text, span);
                     // The doc comes from the OTHER file's text, not this buffer's — passing `text` here
                     // would read whatever happens to sit at that offset locally.
-                    let doc = docs::doc_markdown_before(&other_text, span.start);
+                    let doc = crate::doc_comment::doc_markdown_before(&other_text, span.start);
                     Self::hover_markdown(&sig, doc.as_deref())
                 }
                 None => "null".to_string(),

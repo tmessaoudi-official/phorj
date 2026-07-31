@@ -99,13 +99,32 @@ pub struct PTokenSpanned {
     pub line: usize,
 }
 
-/// Lex PHP source into Tier-1 tokens. Returns `lift lex error: …` (with a line) on a character or
-/// construct outside the supported set, so the lifter can report rather than silently misread.
+/// Lex PHP source into Tier-1 tokens, discarding PHPDoc. See [`lex_php_with_docs`] for the
+/// doc-preserving form; this is that function with the doc map dropped.
 pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
+    lex_php_with_docs(src).map(|(t, _)| t)
+}
+
+/// [`lex_php`] plus the PHPDoc blocks (DEC-419), as a SIDE CHANNEL keyed by the index of the token
+/// each block precedes.
+///
+/// A side map rather than a `PTok::Doc` token on purpose: a new token variant would appear in the
+/// stream at any position, and every existing parser site would have to learn to skip it — a large
+/// change with a silent failure mode (one missed site rejects valid PHP). Keying by "the token this
+/// doc sits in front of" leaves the stream byte-for-byte as it was, so the parser opts IN by looking
+/// the position up.
+///
+/// Only `/** … */` is captured. `//`, `#` and plain `/* … */` are skipped as before — PHP's own
+/// convention is that documentation is the double-star form, which is exactly why phorj adopted that
+/// spelling (DEC-419).
+pub fn lex_php_with_docs(
+    src: &str,
+) -> Result<(Vec<PTokenSpanned>, std::collections::HashMap<usize, String>), String> {
     let chars: Vec<char> = src.chars().collect();
     let mut i = 0usize;
     let mut line = 1usize;
     let mut out: Vec<PTokenSpanned> = Vec::new();
+    let mut docs: std::collections::HashMap<usize, String> = std::collections::HashMap::new();
 
     let push = |out: &mut Vec<PTokenSpanned>, tok: PTok, line: usize| {
         out.push(PTokenSpanned { tok, line });
@@ -148,6 +167,10 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
             continue;
         }
         if c == '/' && i + 1 < chars.len() && chars[i + 1] == '*' {
+            // A DOC block is `/**` not followed by `/` — the same rule as phorj's own lexer, so
+            // `/**/` stays an ordinary empty comment on both sides of the boundary.
+            let is_doc = chars.get(i + 2) == Some(&'*') && chars.get(i + 3) != Some(&'/');
+            let body_start = if is_doc { i + 3 } else { i + 2 };
             i += 2;
             while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
                 if chars[i] == '\n' {
@@ -159,6 +182,13 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
                 return Err(format!(
                     "lift lex error: unterminated block comment (line {line})"
                 ));
+            }
+            if is_doc {
+                let body: String = chars[body_start.min(i)..i].iter().collect();
+                // Keyed by the index of the NEXT token — the one this doc documents. A second doc
+                // before the same token replaces the first: PHP's own rule is that the docblock
+                // nearest the declaration wins.
+                docs.insert(out.len(), strip_php_doc_stars(&body));
             }
             i += 2; // consume `*/`
             continue;
@@ -379,5 +409,32 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
         i += 1;
     }
     push(&mut out, PTok::Eof, line);
-    Ok(out)
+    Ok((out, docs))
+}
+
+/// Strip PHPDoc furniture from a docblock body: the leading `*` column and blank leading/trailing
+/// lines. Deliberately the SAME shape as `doc_comment::clean` on the phorj side — a lift followed by a
+/// transpile should land on the same text it started from, and two different strippers would drift.
+fn strip_php_doc_stars(body: &str) -> String {
+    let mut lines: Vec<String> = body
+        .lines()
+        .map(|l| {
+            let t = l.trim_start();
+            match t.strip_prefix('*') {
+                Some(rest) => rest
+                    .strip_prefix(' ')
+                    .unwrap_or(rest)
+                    .trim_end()
+                    .to_string(),
+                None => t.trim_end().to_string(),
+            }
+        })
+        .collect();
+    while lines.first().is_some_and(|l| l.is_empty()) {
+        lines.remove(0);
+    }
+    while lines.last().is_some_and(|l| l.is_empty()) {
+        lines.pop();
+    }
+    lines.join("\n")
 }

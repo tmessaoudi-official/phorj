@@ -663,7 +663,7 @@ pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, Strin
     on_deep_stack(|| {
         reject_native_only_transpile(prog)?;
         let checked = check_and_expand(prog, diag_src)?;
-        crate::transpile::emit(&checked)
+        crate::transpile::emit_with_source(&checked, Some(diag_src))
     })
 }
 
@@ -761,7 +761,7 @@ pub fn cmd_transpile(src: &str) -> Result<String, String> {
         let raw = lex_parse(src)?;
         reject_native_only_transpile(&raw)?;
         let prog = parse_checked(src)?;
-        crate::transpile::emit(&prog)
+        crate::transpile::emit_with_source(&prog, Some(src))
     })
 }
 

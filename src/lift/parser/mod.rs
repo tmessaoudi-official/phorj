@@ -50,16 +50,35 @@ struct PParser {
     /// Live expression-nesting depth, checked in [`PParser::parse_unary`] (every operand passes
     /// through it once per level) to bound recursion on pathologically nested input.
     depth: usize,
+    /// PHPDoc by the token index it precedes (DEC-419) — read at item boundaries only.
+    docs: std::collections::HashMap<usize, String>,
+}
+
+impl PParser {
+    /// One construction site for the parser state, so a new field cannot be forgotten at the other.
+    fn new(toks: Vec<PTokenSpanned>, docs: std::collections::HashMap<usize, String>) -> Self {
+        PParser {
+            toks,
+            pos: 0,
+            depth: 0,
+            docs,
+        }
+    }
 }
 
 /// Parse a Tier-1 PHP token stream into a [`PhpProgram`]. The stream must end in [`PTok::Eof`]
 /// (the lexer guarantees this).
 pub fn parse_php(toks: Vec<PTokenSpanned>) -> Result<PhpProgram, String> {
-    let mut p = PParser {
-        toks,
-        pos: 0,
-        depth: 0,
-    };
+    parse_php_with_docs(toks, std::collections::HashMap::new())
+}
+
+/// [`parse_php`] with the lexer's PHPDoc side channel (DEC-419), so top-level declarations keep their
+/// documentation. `parse_php` is this with an empty map.
+pub fn parse_php_with_docs(
+    toks: Vec<PTokenSpanned>,
+    docs: std::collections::HashMap<usize, String>,
+) -> Result<PhpProgram, String> {
+    let mut p = PParser::new(toks, docs);
     p.parse_program()
 }
 

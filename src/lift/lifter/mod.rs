@@ -9,9 +9,6 @@
 //! params, backed enums, key-foreach, …) errors clearly here and is built out in later L4 slices.
 
 use super::ast as php;
-use super::lexer::lex_php;
-use super::parser::parse_php;
-use super::printer::print_program;
 use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, Expr, FunctionDecl, Item,
     MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,

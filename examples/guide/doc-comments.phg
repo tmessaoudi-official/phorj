@@ -24,6 +24,15 @@ import Core.Runtime.EntryKind;
 // `/* … */` above the same declaration is NOT documentation and is not shown — that distinction is the
 // entire reason the two forms differ.
 //
+// ACROSS THE PHP BOUNDARY, BOTH WAYS. `phg transpile` re-emits each doc comment below as a PHP
+// docblock, and `phg lift` reads PHPDoc back into a phorj doc comment. Because `/** … */` IS PHPDoc,
+// neither direction translates anything — the same bytes carry the same meaning, and PHP → phorj → PHP
+// returns the identical body. Try it:
+//
+//     phg transpile examples/guide/doc-comments.phg | grep -A 3 '/\*\*'
+//
+// A plain `/* … */` is dropped on both legs, exactly as it is ignored by hover.
+//
 // Comments never affect runtime behaviour, so all three forms are invisible to `run`, to the VM, and to
 // the transpiled PHP. This example prints only to prove the file runs; the comments themselves are the
 // subject. Hover over `celsiusToFahrenheit` in an editor to see its doc.

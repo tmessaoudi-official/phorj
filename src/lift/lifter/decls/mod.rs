@@ -6,10 +6,12 @@ mod declarations;
 mod statements;
 
 pub fn lift_source(php_src: &str) -> Result<String, String> {
-    let toks = lex_php(php_src)?;
-    let prog = parse_php(toks)?;
+    // DEC-419: lex WITH the PHPDoc side channel and print WITH the recovered docs, so documentation
+    // survives PHP → phorj instead of being dropped on the floor.
+    let (toks, docs) = crate::lift::lexer::lex_php_with_docs(php_src)?;
+    let prog = crate::lift::parser::parse_php_with_docs(toks, docs)?;
     let phorj = lift(&prog)?;
-    print_program(&phorj)
+    crate::lift::printer::print_program_with_docs(&phorj, &prog.docs)
 }
 
 /// DEC-331 D1: the lifted entry is always a CLI script (PHP has no entry-role concept), so it

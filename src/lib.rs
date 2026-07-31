@@ -19,6 +19,7 @@ pub mod dap;
 pub mod debug;
 pub mod diagnostic;
 pub mod dispatch;
+pub mod doc_comment;
 pub mod dump;
 pub mod ext;
 pub mod format;

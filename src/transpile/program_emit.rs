@@ -240,6 +240,11 @@ impl Transpiler {
             if !self.keeps(item) {
                 continue;
             }
+            // DEC-419: the declaration's `/** … */` doc comment, re-emitted as a PHP docblock. One site
+            // for every top-level kind, so a new kind cannot silently lose its docs.
+            if let Some(span) = crate::ast::item_decl_span(item) {
+                self.emit_doc_block(span);
+            }
             match item {
                 Item::Import { .. } => {}
                 // M8.5: a foreign `declare function` produces no PHP definition (PHP already has it).
@@ -428,6 +433,11 @@ impl Transpiler {
                 }
             }
             for item in items {
+                // DEC-419: same docblock re-emission as the flat path — the namespaced form must not
+                // silently drop documentation just because the program spans packages.
+                if let Some(span) = crate::ast::item_decl_span(item) {
+                    self.emit_doc_block(span);
+                }
                 match item {
                     Item::Function(f) => {
                         // Group M-RT overloads within this package's bucket (same full name).
