@@ -12,6 +12,8 @@ mod class_layout;
 mod entry;
 #[macro_use]
 mod leaves;
+mod lower_using;
+mod subexprs;
 mod walk;
 #[cfg(test)]
 #[path = "walk_tests.rs"]
@@ -19,6 +21,8 @@ mod walk_tests;
 pub use class_hierarchy::*;
 pub use class_layout::*;
 pub use entry::*;
+pub use lower_using::*;
+pub use subexprs::*;
 pub use walk::*;
 
 /// Type annotations (e.g. `int`, `List<Shape>`, `T?`).

@@ -1,5 +1,20 @@
 # Known Issues & Limitations
 
+## LIFT-TRY — the PHP lifter has NO `try`/`catch`/`finally`, so `using` cannot round-trip (2026-07-31, DEC-364)
+
+`using (T h = e) { … }` (DEC-364) ships on all three legs, but it is **not lifted**, and the blocker is
+lifter-wide rather than `using`-specific: the lift subset contains **no exception handling at all** — the
+lift parser rejects the `try` keyword outright, and the lift printer lists `try` as outside its subset.
+Since `using` lowers to `try`/`finally`, raising a PHP `try { … } finally { $h->close(); }` back to a
+`using` block requires the whole exception family to enter the subset first. `Stmt::Using` therefore sits
+behind exactly the same documented boundary as `Stmt::Try`.
+
+**Scope when it is built:** `try`/`catch`/`finally` in the lift AST + parser + printer, and then the
+shape-recognition pass that raises the single-`close()`-in-`finally` form back to `using` (a plain
+`try`/`finally` must keep lifting as a `try`/`finally` — only the exact guard shape is raised).
+Invariant 17's "transpile AND lift in the same change" is met on the transpile side; this is the
+disclosed other half.
+
 ## LIFT-ATTR — the PHP lifter is blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
 
 `src/lift/lexer.rs:144` treats `#` as a PHP line comment and skips to end of line. PHP 8 attributes are
@@ -547,7 +562,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
 > Every fork below is now RULED and queued for its wave slot; the original analyses are kept
 > for context. **DEC-201** empty literals → SUPERSEDED by **DEC-214** (empty collections via `new List<T>()`/`new Map<K,V>()`, mandatory `new`; bare `[]` rejected `E-EMPTY-LITERAL`; `List.empty`/`Map.empty` and `[]` contextual typing dropped) — SHIPPED (part-1 the `new` capability, part-2 the `[]` rejection + repo codemod).
 > **DEC-202** reserved top-level names → reject `E-RESERVED-NAME` (full keyword set + PHP builtin classes).
-> **DEC-203** scope guard → `using` block + `Closable` contract (PHP try/finally).
+> **DEC-203** scope guard → `using` block + `Closable` contract (PHP try/finally) — **SHIPPED as DEC-364** (2026-07-31; `using (T h = e) { … }`, `Core.ClosableModule`, `Connection` is `Closable`).
 > **DEC-204** shutdown → `Runtime.onShutdown(fn)` (lands with Ω-2 Core.Process).
 > **DEC-205** cycles → BOTH, PHASED: PHP-style threshold collector first, `Weak<T>` (→ PHP WeakReference) second.
 > **DEC-206** bare `DateTime` → gated (`E-INJECTED-TYPE-BARE`) like its siblings.
@@ -580,7 +595,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   refs for idiomatic graphs). Deferred-not-ruled per the ADJUDICATION rule; reopen with the
   parked items at run end.
 
-- **RULED as DEC-203 (`using` + Closable), re-affirmed DEC-364 — build queued: scope-guard
+- **SHIPPED 2026-07-31 as DEC-364 (`using` + `Core.ClosableModule`) — option (a) was built; `defer` stays rejected on its own merits (DEC-371 re-examination): scope-guard
   construct (`using`/`defer`) — the Ω-0 audit's one genuinely
   uncovered capability residue (from SYN-126 `__destruct`, 2026-07-12 session 5).** Rc/Drop has
   no deterministic finalization (the `__destruct` exclusion is confirmed), but deterministic
@@ -770,10 +785,10 @@ not a panic:
       built method default parameters, so the retry surface is `db.transaction(fn, int retries = 0)`
       and `transactionRetry` is retired. Isolation-level retry (`db.transaction(Isolation.Serializable, fn)`)
       still rides with the isolation slice below (deferred).
-  - **Deferred (not blocked):** (1) **`using`/`Closable` auto-close (DEC-203)** — `db.close()` ships, but
-    the `using (Connection db = …) { … }` sugar that would call it at scope exit is DEC-203, a separate ruled-but-
-    unbuilt language slice (lexer/parser/checker/backends); defining `Closable` here now would collide with
-    that slice, so it is left to DEC-203. (2) **Isolation levels** (`Isolation` enum + `db.begin(Isolation)`)
+  - **Deferred (not blocked):** (1) ~~**`using`/`Closable` auto-close (DEC-203)**~~ — **SHIPPED
+    2026-07-31 (DEC-364)**: `Connection implements Closable`, so `using (Connection db = new
+    Connection(dsn)) { … }` closes on every exit path. Explicit `db.close()` still works and stays
+    idempotent. (2) **Isolation levels** (`Isolation` enum + `db.begin(Isolation)`)
     — SQLite has effectively one isolation, so it is minimally meaningful until the Postgres driver lands;
     deferred to keep the overload set arity-distinguished and the slice tight.
 

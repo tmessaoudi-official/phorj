@@ -38,6 +38,7 @@ pub use test_runner::cmd_test;
 mod help;
 pub(crate) mod module_catalog;
 mod pipeline;
+mod prelude_spans;
 pub(crate) mod preludes;
 
 pub use self::help::*;

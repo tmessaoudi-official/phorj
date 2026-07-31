@@ -281,6 +281,19 @@ pub(super) fn rstmt(s: Stmt, r: &[Route]) -> Stmt {
             body: rblock(body, r),
             span,
         },
+        Stmt::Using {
+            ty,
+            name,
+            init,
+            body,
+            span,
+        } => Stmt::Using {
+            ty,
+            name,
+            init: rexpr(init, r),
+            body: rblock(body, r),
+            span,
+        },
         Stmt::While {
             cond,
             body,

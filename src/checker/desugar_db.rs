@@ -68,6 +68,7 @@
 //! recurse EVERY expression-bearing position so a `queryInto` in any position is either rewritten or
 //! reported. A new expression-bearing AST node → add its arm here.
 
+use super::desugar_db_facts::scan_naming_facts;
 use crate::ast::{
     ctor_plan, BinaryOp, CatchClause, ClassMember, CollKind, CtorParam, Expr, FunctionDecl, Item,
     LambdaBody, MatchArm, MemberSep, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
@@ -112,7 +113,7 @@ enum ClassKind {
 /// (the prelude `Statement.namingStrategy` is a chainable no-op returning `this`, present solely so the
 /// chain type-checks). Because the transform runs before the backends, `interp ≡ VM` is trivial.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Naming {
+pub(super) enum Naming {
     /// The default (unchanged from slice B): the column name IS the field name (strict-exact).
     Exact,
     /// DB `snake_case` ↔ phorj `camelCase`: the column name is the `snake_case` of the field name
@@ -483,7 +484,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
     })
 }
 
-struct Connection<'a> {
+pub(super) struct Connection<'a> {
     ctor_params: &'a BTreeMap<String, Vec<CtorParam>>,
     /// enum name → `[(variant, payload-arity)]` for every declared/injected enum (DEC-208 slice E).
     enum_variants: &'a BTreeMap<String, Vec<(String, usize)>>,
@@ -509,176 +510,6 @@ struct Connection<'a> {
     /// only (see [`scan_naming_facts`] — anything less certain is simply absent, which soundly
     /// falls back to runtime dispatch). Rebuilt at every `rfn` entry.
     naming_facts: BTreeMap<String, Naming>,
-}
-
-/// DEC-258 — scan one function body (recursively: nested blocks, loops, try/catch, lambda bodies)
-/// and return the names PROVEN to hold a `Connection` with a compile-time-known naming strategy.
-/// The proof standard is deliberately brutal — a name qualifies only when EVERY binding of it in
-/// the whole function is the same immutable literal-strategy construction, and it is never
-/// reassigned, never a loop/catch/if-let/destructure binder, and never any function/lambda
-/// parameter. Anything else ⇒ absent ⇒ the (always-correct) runtime dispatch tier.
-fn scan_naming_facts(params: &[Param], body: &[Stmt]) -> BTreeMap<String, Naming> {
-    #[derive(Clone, Copy, PartialEq)]
-    enum Fact {
-        Lit(Naming),
-        Poison,
-    }
-    fn merge(map: &mut BTreeMap<String, Fact>, name: &str, f: Fact) {
-        let v = match (map.get(name), f) {
-            (None, f) => f,
-            (Some(Fact::Lit(a)), Fact::Lit(b)) if *a == b => Fact::Lit(b),
-            _ => Fact::Poison,
-        };
-        map.insert(name.to_string(), v);
-    }
-    /// The naming carried by a `Connection` construction expr — shared with the receiver-side walk.
-    fn ctor_fact(e: &Expr) -> Option<Naming> {
-        Connection::inline_ctor_naming(e)
-    }
-    fn scan_expr(e: &Expr, map: &mut BTreeMap<String, Fact>) {
-        if let Expr::Lambda { params, body, .. } = e {
-            for p in params {
-                merge(map, &p.name, Fact::Poison);
-            }
-            match body {
-                LambdaBody::Expr(inner) => scan_expr(inner, map),
-                LambdaBody::Block(stmts) => scan_block(stmts, map),
-            }
-            return;
-        }
-        let mut work = Vec::new();
-        crate::ast::push_subexprs(e, &mut work);
-        for sub in work {
-            scan_expr(sub, map);
-        }
-    }
-    fn scan_block(stmts: &[Stmt], map: &mut BTreeMap<String, Fact>) {
-        for s in stmts {
-            match s {
-                Stmt::VarDecl {
-                    name,
-                    init,
-                    mutable,
-                    ..
-                } => {
-                    let fact = match (mutable, ctor_fact(init)) {
-                        (false, Some(n)) => Fact::Lit(n),
-                        _ => Fact::Poison,
-                    };
-                    merge(map, name, fact);
-                    scan_expr(init, map);
-                }
-                Stmt::Assign { target, value, .. } => {
-                    if let Expr::Ident(n, _) = target {
-                        merge(map, n, Fact::Poison);
-                    }
-                    scan_expr(target, map);
-                    scan_expr(value, map);
-                }
-                Stmt::Return { value, .. } => {
-                    if let Some(v) = value {
-                        scan_expr(v, map);
-                    }
-                }
-                Stmt::If {
-                    cond,
-                    bind,
-                    then_block,
-                    else_block,
-                    ..
-                } => {
-                    if let Some(b) = bind {
-                        merge(map, b, Fact::Poison);
-                    }
-                    scan_expr(cond, map);
-                    scan_block(then_block, map);
-                    if let Some(eb) = else_block {
-                        scan_block(eb, map);
-                    }
-                }
-                Stmt::For {
-                    name,
-                    val,
-                    iter,
-                    body,
-                    ..
-                } => {
-                    merge(map, name, Fact::Poison);
-                    if let Some((_, v)) = val {
-                        merge(map, v, Fact::Poison);
-                    }
-                    scan_expr(iter, map);
-                    scan_block(body, map);
-                }
-                Stmt::While { cond, body, .. } => {
-                    scan_expr(cond, map);
-                    scan_block(body, map);
-                }
-                Stmt::CFor {
-                    init,
-                    cond,
-                    step,
-                    body,
-                    ..
-                } => {
-                    if let Some(i) = init {
-                        scan_block(std::slice::from_ref(i), map);
-                    }
-                    if let Some(c) = cond {
-                        scan_expr(c, map);
-                    }
-                    if let Some(st) = step {
-                        scan_block(std::slice::from_ref(st), map);
-                    }
-                    scan_block(body, map);
-                }
-                Stmt::Break(_) | Stmt::Continue(_) => {}
-                Stmt::Block(inner, _) => scan_block(inner, map),
-                Stmt::Expr(e, _) | Stmt::Discard(e, _) => scan_expr(e, map),
-                Stmt::Throw { value, .. } => scan_expr(value, map),
-                Stmt::Try {
-                    body,
-                    catches,
-                    finally_block,
-                    ..
-                } => {
-                    scan_block(body, map);
-                    for c in catches {
-                        merge(map, &c.name, Fact::Poison);
-                        scan_block(&c.body, map);
-                    }
-                    if let Some(fb) = finally_block {
-                        scan_block(fb, map);
-                    }
-                }
-                Stmt::Destructure {
-                    pat,
-                    init,
-                    else_block,
-                    ..
-                } => {
-                    for (b, _) in pat.binders() {
-                        merge(map, &b, Fact::Poison);
-                    }
-                    scan_expr(init, map);
-                    if let Some(eb) = else_block {
-                        scan_block(eb, map);
-                    }
-                }
-            }
-        }
-    }
-    let mut map = BTreeMap::new();
-    for p in params {
-        merge(&mut map, &p.name, Fact::Poison);
-    }
-    scan_block(body, &mut map);
-    map.into_iter()
-        .filter_map(|(k, v)| match v {
-            Fact::Lit(n) => Some((k, n)),
-            Fact::Poison => None,
-        })
-        .collect()
 }
 
 impl Connection<'_> {
@@ -786,7 +617,7 @@ impl Connection<'_> {
     /// The literal naming of an inline `Connection` construction expression (through `?` and the
     /// `this`-returning `timeout`/`onQuery` chain), or `None` when untraceable. The receiver-side
     /// twin of [`scan_naming_facts`]'s `ctor_fact`.
-    fn inline_ctor_naming(e: &Expr) -> Option<Naming> {
+    pub(super) fn inline_ctor_naming(e: &Expr) -> Option<Naming> {
         match e {
             Expr::Propagate { inner, .. } => Self::inline_ctor_naming(inner),
             Expr::New(inner, _) => match &**inner {
@@ -3018,6 +2849,24 @@ impl Connection<'_> {
                 value: self.rexpr(value),
                 span,
             },
+            // `expected`-typed by the mandatory `using` type, exactly as a `VarDecl` is — that is what
+            // makes `using (Connection c = …)` resolve like `var Connection c = …`.
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => {
+                let init = self.rexpr_expected(init, Some(&ty));
+                Stmt::Using {
+                    ty,
+                    name,
+                    init,
+                    body: self.rblock(body),
+                    span,
+                }
+            }
             Stmt::Return { value, span } => Stmt::Return {
                 value: value.map(|e| {
                     let expected = self.current_ret.clone();

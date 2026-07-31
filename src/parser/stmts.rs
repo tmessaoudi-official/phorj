@@ -43,6 +43,9 @@ impl Parser {
             // M-must-use: `discard <expr>;` — the escape hatch for the must-use rule. Contextual
             // (see `at_discard`); a bare `discard` value-use falls through to the expression path.
             TokenKind::Ident(s) if s == "discard" && self.at_discard() => self.parse_discard(),
+            // DEC-364.1: `using` is contextual too — see `at_using` for why the gate also checks the
+            // header shape instead of just the `(`.
+            TokenKind::Ident(s) if s == "using" && self.at_using() => self.parse_using(),
             _ => self.parse_var_decl_or_expr_stmt(),
         }
     }
@@ -55,54 +58,6 @@ impl Parser {
         let value = self.parse_expr()?;
         self.expect(&TokenKind::Semicolon, "';' after 'discard <expr>'")?;
         Ok(Stmt::Discard(value, sp))
-    }
-
-    /// `throw expr;` (M-faults 2b).
-    pub(super) fn parse_throw(&mut self) -> Result<Stmt, Diagnostic> {
-        let sp = self.peek_span();
-        self.expect(&TokenKind::Throw, "'throw'")?;
-        let value = self.parse_expr()?;
-        self.expect(&TokenKind::Semicolon, "';' after 'throw <expr>'")?;
-        Ok(Stmt::Throw { value, span: sp })
-    }
-
-    /// `try { .. } catch (Type name) { .. } [catch …] [finally { .. }]` (M-faults 2b). Requires at
-    /// least one `catch` **or** a `finally` (a bare `try {}` is a parse error). A catch type may be a
-    /// union (`catch (A | B e)`), parsed by the shared `parse_type`.
-    pub(super) fn parse_try(&mut self) -> Result<Stmt, Diagnostic> {
-        let sp = self.peek_span();
-        self.expect(&TokenKind::Try, "'try'")?;
-        let body = self.parse_block()?;
-        let mut catches = Vec::new();
-        while self.check(&TokenKind::Catch) {
-            let csp = self.peek_span();
-            self.advance(); // 'catch'
-            self.expect(&TokenKind::LParen, "'(' after 'catch'")?;
-            let ty = self.parse_type()?;
-            let name = self.expect_ident("a binding name in the catch clause")?;
-            self.expect(&TokenKind::RParen, "')' to close the catch clause")?;
-            let cbody = self.parse_block()?;
-            catches.push(crate::ast::CatchClause {
-                ty,
-                name,
-                body: cbody,
-                span: csp,
-            });
-        }
-        let finally_block = if self.eat(&TokenKind::Finally) {
-            Some(self.parse_block()?)
-        } else {
-            None
-        };
-        if catches.is_empty() && finally_block.is_none() {
-            return Err(self.error("'catch' or 'finally' after the try block"));
-        }
-        Ok(Stmt::Try {
-            body,
-            catches,
-            finally_block,
-            span: sp,
-        })
     }
 
     /// Dispatch the three `var`-led statement forms (Phase 1 slice 5): a list destructure (`var [a, b]

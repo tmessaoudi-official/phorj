@@ -6,6 +6,66 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `using`, the scope guard (2026-07-31, DEC-364 / DEC-364.1)
+`using (T h = init) { … }` releases `h` on **every** exit path from the block: normal fall-through, a
+`return`, a `break`/`continue` out of an enclosing loop, and a throw. `T` must implement
+`Core.ClosableModule`'s `Closable` (`close(): void`) — checked at compile time, because nothing probes
+for the method at runtime, so the requirement is what makes the emitted call total.
+- **No new `Op` and no new `Value`.** All three backends run **ONE** shared lowering
+  (`ast::lower_using`) to `{ T h = init; try { … } finally { h.close(); } }`, so byte-identity holds by
+  construction rather than by testing, and the PHP leg is a literal `try`/`finally` with no
+  `__phorj_*` helper. The declaration sits **outside** the `try`: a fault in `init` means no handle was
+  acquired, so there must be nothing to release.
+- `using` is **contextual** (DEC-364.1) — the tokenizer gains nothing and no identifier is reserved, so
+  `int using = 1;` still compiles. The gate additionally requires the header's `Type name =` shape
+  rather than just the following `(`, so `using(1);` stays a *call* to a function named `using` — the
+  same discipline `at_discard` documents for itself.
+- `Connection implements Closable`, so `using (Connection db = new Connection(dsn)) { … }` closes on
+  every exit path. Closes the deferral both `src/ext/database/prelude.rs` and `KNOWN_ISSUES` recorded
+  against DEC-203.
+- Diagnostics `E-USING-NOT-CLOSABLE`, `E-USING-INFER`, `E-USING-CLOSE-THROWS` (all three explainable via
+  `phg explain`). The third exists because interface conformance compares parameters and the return type
+  but **not** `throws`: an implementor may declare `close(): void throws IoError`, and that call is
+  synthesized into a `finally`, so it must be caught or declared — the rule DEC-257 already applies to a
+  throwing iterator's `foreach`.
+- `examples/guide/scope-guard.phg` (one exit path at a time + nested guards releasing inner-first),
+  `examples/README.md`, `FEATURES.md`, the LSP keyword set, and the shared editor grammar (contextual,
+  so `using` highlights only in the header position).
+- **NOT lifted, deliberately** — the lifter has no `try`/`catch`/`finally` at all, so this is a
+  lifter-wide gap rather than a `using` gap. Recorded as `KNOWN_ISSUES` §LIFT-TRY.
+
+### Fixed — a `break` inside `try` was invisible to the totality engine (2026-07-31) — a soundness hole
+`breaks_this_loop` descended into `if` and `block` but **not** `try`/`catch`/`finally` (nor a destructure
+`else`), so a `break` that was a loop's only exit could not be seen. Reproduced before the fix:
+`function f(): int { while (true) { try { break; } finally { … } } }` type-checked clean (`phg check`
+exit 0) and then printed `unit` from a function whose declared return type is `int`, on **both** Rust
+legs — an unsound *acceptance*. The predicate is now exhaustive over `Stmt`, and the file it lives in
+(`checker/common_flow.rs`) says why a catch-all there is a correctness question, not a style one.
+
+### Fixed — injected-prelude spans collided with user-file offsets (2026-07-31) — an Invariant 1 divergence
+The checker records several post-check rewrites in side tables keyed on `Span.start` **alone**
+(`ufcs_resolutions`, `html_resolutions`, the reflect/cast substitutions, `for_bind_resolutions`,
+`for_iter_lowerings`), justified by "each call site's `(` token is at a unique byte offset". That holds
+within one source string — but an injected `Core.*` prelude is a **separate** string whose offsets
+restart at 0 and therefore overlap the user file's one-for-one. When a prelude call site and a user call
+site landed on the same offset, the prelude's recorded rewrite was applied to the **user's** node:
+`phg check` stayed clean, the tree-walker (which re-checks nothing) ran correctly, and only the VM
+failed to compile.
+- Reproduced and pinned down by length alone: adding one `import` line to the `Core.Database` prelude
+  broke `examples/database/transaction-closure.phg` on the VM with "`transaction` is not a function,
+  variant, or class" while `check` and `--tree-walker` both passed — and adding a single trailing
+  **space** to that same line made it pass again.
+- Fixed at the one injection chokepoint: `cli::prelude_spans::lex_parse_injected` rebases each prelude
+  fragment's token offsets above `1 << 32`, with per-fragment stride, so an injected offset can never
+  equal a user-file offset. `line`/`col` are untouched, so prelude diagnostics still point correctly.
+- Ratchet: `injected_prelude_spans_cannot_collide_with_user_file_offsets`.
+
+### Fixed — four more DEC-356 catch-alls the original sweep missed (2026-07-31)
+`Stmt::Using` proved them live rather than theoretical: `rewrite_foreach::walk_stmts` and `::lower_stmt`
+(so `materialize_for_binds` and the Iterator lowering reach inside a `using` body — Invariant 7),
+`lsp::scope::collect_bindings` (the LSP saw neither the `using` binding nor anything declared inside it),
+and `inline_parent_ctor::inline_stmt`. All four are now exhaustive over `Stmt`.
+
 ### Fixed — the `E-IFACE-VIS` visibility BYPASS (2026-07-30, DEC-379) — a soundness hole
 A class could implement a public interface method as **`private`** and still have it reached through a
 plain interface-typed receiver. The `overloads == 1` guard meant **any** second overload disabled the

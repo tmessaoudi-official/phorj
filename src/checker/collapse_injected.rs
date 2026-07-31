@@ -118,6 +118,19 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 body: body.iter().map(rstmt).collect(),
                 span: *span,
             },
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => Stmt::Using {
+                ty: rt(ty),
+                name: name.clone(),
+                init: init.clone(),
+                body: body.iter().map(rstmt).collect(),
+                span: *span,
+            },
             Stmt::If {
                 cond,
                 bind,

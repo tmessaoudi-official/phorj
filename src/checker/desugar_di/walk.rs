@@ -326,6 +326,19 @@ impl Di<'_> {
                 body: self.rblock(body),
                 span,
             },
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => Stmt::Using {
+                ty,
+                name,
+                init: self.rexpr(init),
+                body: self.rblock(body),
+                span,
+            },
             Stmt::While {
                 cond,
                 body,

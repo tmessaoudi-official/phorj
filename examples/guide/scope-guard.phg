@@ -1,0 +1,105 @@
+package Main;
+
+import Core.Output;
+import Core.ClosableModule;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// The `using` scope guard (DEC-364) — deterministic release, on EVERY exit path.
+//
+// `using (T h = init) { … }` calls `h.close()` when control leaves the block, whichever way it
+// leaves: normal fall-through, a `return`, a `break`/`continue` out of an enclosing loop, or a
+// thrown error. `T` must implement `Core.ClosableModule`'s `Closable` — that requirement is what
+// makes the release call total, because nothing probes for the method at runtime.
+//
+// It is not a new runtime primitive: every backend lowers it to `{ T h = init; try { … } finally {
+// h.close(); } }` through ONE shared lowering, so `phg run`, `--tree-walker` and the transpiled PHP
+// run the identical tree. The declaration sits OUTSIDE the `try` on purpose — if `init` itself
+// faults, no handle was acquired and there is nothing to release.
+//
+// `using` reserves nothing (DEC-364.1): it is a contextual keyword, significant only in the header
+// position, so `int using = 1;` and a function named `using` both keep working — see the bottom.
+class Handle implements Closable {
+    constructor(public string tag) {
+        Output.printLine("  open  {this.tag}");
+    }
+    function use(): void {
+        Output.printLine("  use   {this.tag}");
+    }
+    function close(): void {
+        // `close()` satisfies `Closable`. It declares no `throws`, so a `using` over this type needs
+        // nothing extra at the call site; an implementor that DID declare one would have to be caught or
+        // declared there (`E-USING-CLOSE-THROWS`).
+        Output.printLine("  close {this.tag}");
+    }
+}
+
+class DrainedError implements Error {
+    constructor(public string message) {}
+}
+
+// 1. The ordinary path: released at the closing brace.
+function normalExit(): void {
+    using (Handle h = new Handle("normal")) {
+        h.use();
+    }
+}
+
+// 2. An early `return` still releases — this is the case a hand-written `close()` at the end of the
+//    function silently gets wrong.
+function earlyReturn(): int {
+    using (Handle h = new Handle("return")) {
+        h.use();
+        return 7;
+    }
+}
+
+// 3. A `break` leaves both the guard and the loop. `using` is not a loop, so the `break` binds to
+//    the enclosing `for`.
+function breakOut(): void {
+    for (int i in 0..3) {
+        using (Handle h = new Handle("loop {i}")) {
+            if (i == 1) {
+                break;
+            }
+            h.use();
+        }
+    }
+}
+
+// 4. A throw releases on the way out, before the error reaches the caller.
+function throwing(): void throws DrainedError {
+    using (Handle h = new Handle("throw")) {
+        throw new DrainedError("drained");
+    }
+}
+
+// 5. Nested guards release inner-first, the reverse of acquisition order.
+function nested(): void {
+    using (Handle outer = new Handle("outer")) {
+        using (Handle inner = new Handle("inner")) {
+            inner.use();
+        }
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine("normal exit:");
+    normalExit();
+    Output.printLine("early return:");
+    Output.printLine("  got   {earlyReturn()}");
+    Output.printLine("break out of a loop:");
+    breakOut();
+    Output.printLine("throw:");
+    try {
+        throwing();
+    } catch (DrainedError e) {
+        Output.printLine("  caught {e.message}");
+    }
+    Output.printLine("nested:");
+    nested();
+    // DEC-364.1 — `using` is contextual, so it is still an ordinary identifier here.
+    int using = 42;
+    Output.printLine("`using` as a name: {using}");
+}

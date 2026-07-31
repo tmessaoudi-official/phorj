@@ -355,6 +355,19 @@ pub fn resolve_invoke_tostring(
                 body: rblock(body, inv, ts),
                 span,
             },
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => Stmt::Using {
+                ty,
+                name,
+                init: rexpr(init, inv, ts),
+                body: rblock(body, inv, ts),
+                span,
+            },
             Stmt::While {
                 cond,
                 body,

@@ -114,7 +114,9 @@ fn inline_stmt(s: &mut Stmt, lexical: &str, snap: &Snap) {
                 inline_stmts(eb, lexical, snap);
             }
         }
-        Stmt::For { body, .. } | Stmt::While { body, .. } => inline_stmts(body, lexical, snap),
+        Stmt::For { body, .. } | Stmt::While { body, .. } | Stmt::Using { body, .. } => {
+            inline_stmts(body, lexical, snap)
+        }
         Stmt::CFor {
             init, step, body, ..
         } => {
@@ -140,7 +142,18 @@ fn inline_stmt(s: &mut Stmt, lexical: &str, snap: &Snap) {
                 inline_stmts(fb, lexical, snap);
             }
         }
-        _ => {}
+        Stmt::Destructure {
+            else_block: Some(eb),
+            ..
+        } => inline_stmts(eb, lexical, snap),
+        Stmt::VarDecl { .. }
+        | Stmt::Assign { .. }
+        | Stmt::Return { .. }
+        | Stmt::Throw { .. }
+        | Stmt::Destructure {
+            else_block: None, ..
+        }
+        | crate::stmt_leaves!() => {}
     }
 }
 

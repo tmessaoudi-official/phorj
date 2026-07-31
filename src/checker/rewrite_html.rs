@@ -303,6 +303,19 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 body: rblock(body, h),
                 span,
             },
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => Stmt::Using {
+                ty,
+                name,
+                init: rexpr(init, h),
+                body: rblock(body, h),
+                span,
+            },
             Stmt::While {
                 cond,
                 body,

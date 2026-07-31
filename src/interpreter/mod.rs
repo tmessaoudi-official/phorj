@@ -42,64 +42,6 @@ type R<T> = Result<T, Signal>;
 /// Single-sourced with the VM via [`crate::chunk::THROW_SENTINEL`].
 const THROW_SENTINEL: &str = crate::chunk::THROW_SENTINEL;
 
-/// The source line of a statement, for runtime trace frames (error-handling slice 1).
-fn stmt_line(s: &Stmt) -> u32 {
-    match s {
-        Stmt::VarDecl { span, .. }
-        | Stmt::Assign { span, .. }
-        | Stmt::Return { span, .. }
-        | Stmt::If { span, .. }
-        | Stmt::For { span, .. }
-        | Stmt::While { span, .. }
-        | Stmt::CFor { span, .. }
-        | Stmt::Throw { span, .. }
-        | Stmt::Try { span, .. }
-        | Stmt::Destructure { span, .. } => span.line,
-        Stmt::Break(s)
-        | Stmt::Continue(s)
-        | Stmt::Block(_, s)
-        | Stmt::Expr(_, s)
-        | Stmt::Discard(_, s) => s.line,
-    }
-}
-
-fn rt<T>(msg: impl Into<String>) -> R<T> {
-    Err(Signal::Runtime(Diagnostic::runtime(msg)))
-}
-
-/// Flatten a runtime `Signal` to its message body for the higher-order-native callback boundary (a
-/// [`crate::native::ClosureInvoker`] returns `Result<_, String>`, the backend-shared fault contract).
-/// A `Return` escaping `call_closure` would be an interpreter bug — a closure's return value is
-/// consumed inside the call, never surfaced — so it maps to a defensive internal-error string.
-fn signal_msg(sig: Signal) -> String {
-    match sig {
-        Signal::Runtime(d) => d.message,
-        Signal::Return(_) => "internal error: closure return escaped".to_string(),
-        Signal::Break | Signal::Continue => "internal error: loop control escaped".to_string(),
-        // A `Throw` is intercepted before this point at the native boundary (it becomes the
-        // sentinel + `pending_throw`); reaching here would be an interpreter bug.
-        Signal::Throw(_) => "internal error: throw escaped to native boundary".to_string(),
-    }
-}
-
-/// The literal text of a fault intrinsic's string-literal message argument (M-faults 2a). The checker
-/// guarantees it is a single `StrPart::Literal`; defaults to empty (e.g. a bare `assert(cond)`).
-fn lit_msg(e: Option<&Expr>) -> String {
-    if let Some(Expr::Str(parts, _)) = e {
-        if let [crate::ast::StrPart::Literal(s)] = &parts[..] {
-            return s.clone();
-        }
-    }
-    String::new()
-}
-
-fn as_bool(v: &Value) -> R<bool> {
-    match v {
-        Value::Bool(b) => Ok(*b),
-        other => rt(format!("expected bool, got {}", other.type_name())),
-    }
-}
-
 /// The lexical block-scope stack of the *currently executing* call — a `Vec` of scopes
 /// (innermost last), pushed/popped as the tree-walker enters and leaves blocks. No closures in
 /// M1, so it captures no enclosing environment. NB despite the holding field being named `frame`,
@@ -527,6 +469,8 @@ pub fn call_named(
 
 // cohesion split (M-Decomp W4): stmt/expr/call/construct clusters.
 mod call;
+mod helpers;
+use helpers::*;
 mod construct;
 mod expr;
 mod stmt;

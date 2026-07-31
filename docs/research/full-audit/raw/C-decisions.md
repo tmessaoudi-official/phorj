@@ -3529,7 +3529,7 @@ restatements of DEC-339…DEC-362. Analysis: `docs/research/2026-07-25-completen
 | DEC | GR | Question (one line) | Recommended (not ruled) | Status |
 |---|---|---|---|---|
 | DEC-363 | GR-25 | **P1 SECURITY** — the Response-side outbound sink has **no CRLF guard**: `withHeader`/`withCookie` interpolate unvalidated into CRLF-joined header lines and `respond_once` returns handler bytes verbatim ⇒ HTTP **response splitting AND a request-smuggling/desync shape**, reproduced live on a shipped `phg serve` | **RULED 2026-07-26 — guard in the phorj PRELUDE, panic-class fault**, at `Response.withHeader` (name + value) and the **`Cookie` constructor** (the single chokepoint: every builder re-constructs; 3 of its 6 fields are injectable strings). Rejects **CR/LF/NUL** in values and **`:`** in names, mirroring the request-side gate. Prelude ⇒ all three legs identical **by construction**; a Rust `respond_once` guard was **REJECTED** (`phg build --php` never runs it ⇒ PHP leg stays exploitable). Panic-class over checked throw settled by evidence: `handlers.rs:143,186-188` degrades a handler fault to **a 500 on that request, never a panic** ⇒ no DoS vector, and no `throws` ripple into every handler. Also ruled: **NUL added to the REQUEST side too** (it rejects CR/LF only; PHP's `header()` rejects NUL), and **`Http.isValidHeaderName`/`isValidHeaderValue`** ship so a handler can return a clean 400 for user-derived input. Full rule: `docs/specs/2026-07-26-response-header-injection-guard.md` | **BUILT 2026-07-29** [Verified 2026-07-30: `isValidHeaderName` in `src/`, differential-tested (`tests/differential.rs:2174`)] — the row had gone stale, saying "build queued" for shipped work |
-| DEC-364 | GR-26 | Finish the `using`/`defer` scope-guard surface already ruled by DEC-203 (`using` + `Closable`) — unbuilt, while every open slice hand-rolls `try/finally` around it | **RULED 2026-07-26 — (A): build `using` NOW, sequenced BEFORE DEC-347 (streaming reads) and DEC-348 (locking)**, so those land on a real release guarantee instead of hand-rolled `try/finally`. **`defer` re-examined per DEC-371** (its "no PHP analog" reason was struck) and **still REJECTED — on its real merits**: LIFO ordering plus capture timing is a genuine footgun, and `using` covers the same need with block-scoped clarity. One mechanism beats two | **RULED — build queued** |
+| DEC-364 | GR-26 | Finish the `using`/`defer` scope-guard surface already ruled by DEC-203 (`using` + `Closable`) — unbuilt, while every open slice hand-rolls `try/finally` around it | **RULED 2026-07-26 — (A): build `using` NOW, sequenced BEFORE DEC-347 (streaming reads) and DEC-348 (locking)**, so those land on a real release guarantee instead of hand-rolled `try/finally`. **`defer` re-examined per DEC-371** (its "no PHP analog" reason was struck) and **still REJECTED — on its real merits**: LIFO ordering plus capture timing is a genuine footgun, and `using` covers the same need with block-scoped clarity. One mechanism beats two | **BUILT 2026-07-31** — see "DEC-364 BUILT" at the end of this file (three legs byte-identical; two pre-existing bugs found and fixed; lift deferred with its reason) |
 
 **Inventory headline (not a decision, but it changes how to run the agenda):** **40 stale status labels**
 were found — **26 items recorded OPEN that are actually BUILT** (incl. tuples DEC-288, backed enums,
@@ -4622,3 +4622,48 @@ word cuts against the direction the project is already moving. Cost is one parse
 **Consequence for the build:** the lexer gains NO keyword. `using` stays an ordinary identifier token and
 the parser decides at statement position, so `int using = 1;` and `using (T h = e) { … }` must BOTH parse —
 each needs a test, and the pair is the regression surface for this decision.
+
+
+### DEC-364 BUILT (2026-07-31) — `using` shipped on all three legs, plus two pre-existing bugs it exposed
+
+**Shipped:** `Stmt::Using { ty, name, init, body, span }`, the contextual parser branch (DEC-364.1),
+`Core.ClosableModule`'s `Closable` interface, checker enforcement, all three backends, the formatter,
+the LSP + the shared editor grammar, `examples/guide/scope-guard.phg`, `FEATURES.md`, and three
+`phg explain` codes. Byte-identical across `run` / `run --tree-walker` / transpiled PHP under
+php-8.5.8 for every exit path [Verified: fall-through, `return`, `break` out of a loop, `continue`,
+throw, and nested guards releasing inner-first — three-way `diff` empty].
+
+**Two corrections to the design doc, both applied there:**
+- **`Core.Closable` → `Core.ClosableModule`.** DEC-278 rules that a module whose leaf equals the
+  single type it binds takes the `Module` suffix; `Core.Closable`/`Closable` is exactly that namesake
+  collision, so the ruled convention applies and the spec's phrasing was corrected rather than the
+  convention bent. Import path is `import Core.ClosableModule;`, binding the bare type `Closable`.
+- **Blast radius 35 → 34 sites**, and the design's "3 editor grammar files" is **1**: both editors
+  consume the same `editors/vscode/syntaxes/phorj.tmLanguage.json` (the JetBrains path is a TextMate
+  bundle over that very file), so "both editors updated" is one grammar edit plus the LSP.
+
+**One deliberate scope boundary — LIFT.** `using` is NOT lifted, because the lifter has **no
+`try`/`catch`/`finally` at all**: the lift parser rejects the keyword outright and the lift printer
+lists `try` as outside its subset. Raising a PHP `try { … } finally { $h->close(); }` back to `using`
+is therefore blocked on the whole exception family entering the lift subset — a separate slice, not a
+`using` gap. `Stmt::Using` sits behind the same documented boundary as `Stmt::Try`. Invariant 17's
+"transpile AND lift in the same change" is satisfied on the transpile side and explicitly deferred,
+with its reason, on the lift side.
+
+| # | Bug found while building | Status |
+|---|---|---|
+| a | **`breaks_this_loop` never descended into `try`** (nor a destructure `else`), so a `break` that was a loop's ONLY exit was invisible: `function f(): int { while (true) { try { break; } finally { … } } }` type-checked clean and then returned `unit` from an `int` signature. An unsound ACCEPTANCE, live on both Rust legs | **FIXED** [Verified: reproduced before (`check` exit 0, both legs printed `got unit`), `E-MISSING-RETURN` after]. Predicate made exhaustive over `Stmt` |
+| b | **Injected-prelude spans collided with user-file offsets.** The checker keys post-check rewrites (`ufcs_resolutions`, `html_resolutions`, reflect/cast substitutions, `for_bind_resolutions`, `for_iter_lowerings`) on `Span.start` alone, justified by "each call site's `(` is at a unique byte offset" — true within ONE source string, but an injected prelude is a SEPARATE string whose offsets restart at 0. A collision applied a PRELUDE's rewrite to a USER node: `phg check` clean, `--tree-walker` correct, **VM compile failed** — an Invariant 1 divergence turned on by the byte LENGTH of a prelude line | **FIXED** at the injection chokepoint (`cli::prelude_spans::lex_parse_injected` rebases each fragment's offsets above `1<<32`; `line`/`col` untouched). [Verified: adding one `import` to the DB prelude broke `examples/database/transaction-closure.phg` on the VM only; adding one trailing SPACE to that same line fixed it — offset-dependence proven, then closed]. Ratchet: `injected_prelude_spans_cannot_collide_with_user_file_offsets` |
+
+Bug (b) is why `Connection implements Closable` could not ship until it was fixed: any prelude edit was
+a coin-flip on this collision. `Connection` IS now `Closable`, so
+`using (Connection db = new Connection(dsn)) { … }` closes on every exit path — closing the deferral
+`src/ext/database/prelude.rs` and `KNOWN_ISSUES.md` had both recorded against DEC-203.
+
+**Also swept (same DEC-356 class, four walkers the original sweep missed and this variant proved live):**
+`rewrite_foreach::walk_stmts` + `::lower_stmt` (so `materialize_for_binds` and the Iterator lowering
+now reach inside a `using` body — Invariant 7), `lsp::scope::collect_bindings` (the LSP saw neither the
+`using` binding nor anything declared inside it), and `inline_parent_ctor::inline_stmt`. All four are
+now exhaustive. One claim of mine was WRONG and the compiler caught it: `inline_parent_ctor` was NOT
+missing `Stmt::Block` recursion (it matches `Block(b, _)`, which my grep pattern missed) — recorded
+here because the mistaken version was written down before being checked.

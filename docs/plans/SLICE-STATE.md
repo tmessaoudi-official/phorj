@@ -1,32 +1,52 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-07-30) — **WAVES 0, 1 AND 2 COMPLETE + DEC-379. NEXT: 3.1 / DEC-364 `using`.**
+## ✅ CURRENT CURSOR (2026-07-31) — **WAVES 0/1/2 + DEC-379 + DEC-364 COMPLETE. NEXT: DEC-347 or DEC-348.**
 
-> The cursor below this line is HISTORY. This header is the live one — it was itself stale by a full wave
-> on 2026-07-30 (it still said "NEXT: WAVE 1.1 (DEC-339)" after 1.1 had shipped), which is the same
-> stale-label class that had four BUILT features recorded as "build queued". **If you are resuming after a
-> compaction, trust this header and the two 2026-07-30 sections nearest the top; treat anything dated
-> earlier as history.**
+> The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
+> wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
+> queued" — so it is rewritten, not appended to, at the end of every slice.) **Resuming after a
+> compaction: trust this header; treat anything dated earlier as history.**
 
-**State at 2026-07-30, all pushed, tree green** (2631 tests under `PHORJ_REQUIRE_PHP=1 --all-features`,
-clippy clean at `--all-features` AND `--no-default-features`, size-gate `fails=0 stale=0`, doc-guards OK):
+**State at 2026-07-31, all pushed, tree green** (full suite under `PHORJ_REQUIRE_PHP=1 --all-features`,
+clippy clean at `--all-features` AND `--no-default-features`, `cargo fmt --check`, size-gate
+`fails=0 stale=0`, doc-guards OK, `cargo build --release` → `target/release/phg`):
 
 | | |
 |---|---|
-| Ruled agenda | **16/42 rows built (38%)** |
-| Parity | **≈70% · floor ≈57% · vision ≈71%** (§4.13/§4.14) |
-| Waves done | 0, 1, 2 — plus **DEC-379** pulled forward (soundness) |
+| Ruled agenda | **17/42 rows built (40%)** |
+| Parity | **≈70% · floor ≈57% · vision ≈71%** (§4.13/§4.14 — unchanged by DEC-364, a syntax row) |
+| Waves done | 0, 1, 2 — plus **DEC-379** (soundness) and **DEC-364** (`using`) |
+
+### DEC-364 `using` — BUILT 2026-07-31
+
+Design + build record: `docs/specs/2026-07-30-using-scope-guard.md` (status flipped, three inline
+corrections) and the **"DEC-364 BUILT"** section at the end of the decision register. Byte-identical on
+`run` / `run --tree-walker` / php-8.5.8 for every exit path. `Connection implements Closable`.
+
+**It exposed and fixed two PRE-EXISTING bugs — both verified live before the fix:**
+1. **`breaks_this_loop` never descended into `try`** → a `break` that was a loop's only exit was
+   invisible, so `function f(): int { while (true) { try { break; } finally { … } } }` type-checked
+   clean and returned `unit` from an `int` signature. Unsound acceptance.
+2. **Injected-prelude spans collided with user-file offsets** (the checker's rewrite tables key on
+   `Span.start` alone; a prelude is a separate source string whose offsets restart at 0) → a prelude's
+   UFCS rewrite was applied to a USER node, so `check` passed, the tree-walker was correct, and only
+   the VM failed. Toggled by the byte LENGTH of a prelude line. Fixed at the injection chokepoint
+   (`cli::prelude_spans`), with a ratchet.
 
 **NEXT, in priority order:**
-1. **3.1 / DEC-364 `using`** — FULLY UNBLOCKED. Design + 35-site blast radius + the contextual-keyword
-   ruling (DEC-364.1) are all in `docs/specs/2026-07-30-using-scope-guard.md`, which has a Definition of
-   Done and **no open questions**. Start there, not from scratch.
-2. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by headroom:
-   FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts are TRIAGE
-   only — FN-ARR looked under-credited by count and mapped to exactly its existing C=26.
+1. **DEC-347 (`FileSystem.lines`) or DEC-348 (`withLock`)** — both were explicitly sequenced AFTER
+   DEC-364 so they could land on a real release guarantee instead of hand-rolled `try`/`finally`. That
+   guarantee now exists, so either is unblocked. DEC-348 is the better first pick: its whole ruling
+   ("release guaranteed by construction — no leak path") is what `using` just made expressible.
+2. **LIFT-TRY** (KNOWN_ISSUES §LIFT-TRY, new) — the lifter has NO `try`/`catch`/`finally`, which is why
+   `using` does not lift. Lifter-wide gap, not a `using` gap; unblocks Invariant 17's other half.
+3. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
+   headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
+   are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.
 
-**Two PENDING developer questions** (Invariant 15 — do not self-rule): the strict-vs-narrow reading of
-DEC-379; and refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section).
+**Three PENDING developer questions** (Invariant 15 — do not self-rule): the strict-vs-narrow reading of
+DEC-379; refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section); and
+whether the public-surface file-layout exemption should stay `Cli`-only (latent, from 2026-07-29).
 **Two OWED measurements** need the developer's box: DEC-365 + DEC-370 (no Docker in this container).
 
 ## ⏳ (history) CURSOR as of 2026-07-29 — WAVE 0 COMPLETE, NEXT WAS WAVE 1.1 (DEC-339) — **superseded**

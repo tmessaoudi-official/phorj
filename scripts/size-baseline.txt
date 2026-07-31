@@ -8,7 +8,6 @@
 619	src/checker/matches.rs
 760	src/checker/mod.rs
 593	src/checker/overloads.rs
-543	src/checker/stmt/core.rs
 627	src/checker/stmt/flow.rs
 510	src/checker/tests/generics.rs
 667	src/checker/tests/throws.rs
@@ -22,7 +21,6 @@
 772	src/format/printer/exprs.rs
 690	src/interpreter/call.rs
 518	src/interpreter/expr.rs
-548	src/interpreter/mod.rs
 2476	src/jit/analyze/mod.rs
 639	src/jit/boxed.rs
 1658	src/jit/emit_unboxed/mod.rs

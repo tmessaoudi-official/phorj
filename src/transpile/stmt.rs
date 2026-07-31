@@ -5,6 +5,18 @@ use super::*;
 impl Transpiler {
     pub(super) fn emit_stmt(&mut self, s: &Stmt) -> Result<(), String> {
         match s {
+            // DEC-364 `using` — emit THE shared lowering (`ast::lower_using`), so the PHP leg is a
+            // literal `try`/`finally` over the same tree the two Rust legs run. No `__phorj_*`
+            // helper is needed (Invariant 16's byte-identity trade does not arise here).
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => {
+                self.emit_stmt(&crate::ast::lower_using(ty, name, init, body, *span))?;
+            }
             // `match` is handled at statement granularity (return / var-decl-init position).
             // These specific arms must precede the generic VarDecl/Return arms.
             Stmt::Return {

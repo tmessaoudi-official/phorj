@@ -56,6 +56,9 @@ pub(super) const KEYWORDS: &[&str] = &[
     "spawn",
     "receive",
     "discard",
+    // DEC-364: contextual like `foreach`/`discard` — an ordinary identifier in the token stream,
+    // recognized positionally by the parser, but completed here because users type it.
+    "using",
     "panic",
     "assert",
     "test",

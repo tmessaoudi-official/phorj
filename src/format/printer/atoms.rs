@@ -244,7 +244,8 @@ pub(super) fn stmt_start(s: &Stmt) -> usize {
         | Stmt::CFor { span, .. }
         | Stmt::Throw { span, .. }
         | Stmt::Try { span, .. }
-        | Stmt::Destructure { span, .. } => span.start,
+        | Stmt::Destructure { span, .. }
+        | Stmt::Using { span, .. } => span.start,
         Stmt::Break(sp)
         | Stmt::Continue(sp)
         | Stmt::Block(_, sp)

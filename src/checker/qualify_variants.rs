@@ -151,6 +151,10 @@ fn qs(s: &mut Stmt, ctx: &Ctx) {
             qe(iter, ctx);
             qblock(body, ctx);
         }
+        Stmt::Using { init, body, .. } => {
+            qe(init, ctx);
+            qblock(body, ctx);
+        }
         Stmt::While { cond, body, .. } => {
             qe(cond, ctx);
             qblock(body, ctx);

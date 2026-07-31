@@ -370,6 +370,19 @@ pub(super) fn rstmt(s: Stmt, u: &Map) -> Stmt {
             body: rblock(body, u),
             span,
         },
+        Stmt::Using {
+            ty,
+            name,
+            init,
+            body,
+            span,
+        } => Stmt::Using {
+            ty,
+            name,
+            init: rexpr(init, u),
+            body: rblock(body, u),
+            span,
+        },
         Stmt::While {
             cond,
             body,

@@ -77,6 +77,7 @@
     "keywords": {
       "patterns": [
         { "name": "keyword.control.phorj", "match": "\\b(return|if|else|for|foreach|while|do|match|when|default|throw|throws|try|catch|finally|break|continue|in|spawn|receive)\\b" },
+        { "name": "keyword.control.phorj", "match": "\\busing\\b(?=\\s*\\()", "comment": "DEC-364/DEC-364.1: `using` is CONTEXTUAL — it reserves nothing, so it is highlighted only in the scope-guard position (immediately before `(`). A plain `int using = 1;` stays an ordinary identifier, and colouring it would misreport that." },
         { "name": "storage.modifier.phorj", "match": "\\b(private|protected)\\(set\\)" },
         { "name": "storage.modifier.phorj", "match": "\\b(var|mutable|static|const|open|abstract|sealed|public|private|protected|internal|use|with|extends|implements)\\b" },
         { "name": "keyword.operator.word.phorj", "match": "\\b(new|instanceof|is|as)\\b" },

@@ -18,7 +18,8 @@ impl Checker {
             | Stmt::Block(_, span)
             | Stmt::Throw { span, .. }
             | Stmt::Try { span, .. }
-            | Stmt::Destructure { span, .. } => *span,
+            | Stmt::Destructure { span, .. }
+            | Stmt::Using { span, .. } => *span,
             Stmt::Break(span) | Stmt::Continue(span) => *span,
         }
     }
@@ -27,65 +28,6 @@ impl Checker {
     /// statement position for the forwarding form before checking it.
     pub(in crate::checker) fn is_parent_ctor_call(e: &crate::ast::Expr) -> bool {
         matches!(e, crate::ast::Expr::ParentCall { method, .. } if method == "constructor")
-    }
-
-    /// Thread an EXPECTED `List<T>`/`Map<K,V>` type into a list/map literal (UA-1.6 / DEC-178): check
-    /// each member against `T` / `K,V` — allowing a **union** or subtype-upcast member — instead of the
-    /// bottom-up first-element/first-pair inference in `check_list`/`check_map` (which rejects
-    /// heterogeneous members as "must share one type"). Also supplies the element type for an empty
-    /// `[]`. Returns the expected collection type on a literal/type match, `None` otherwise (the caller
-    /// falls back to `check_expr`). Shared by the declaration initializer and the `return` value; the
-    /// generic-call-argument position (which needs bidirectional inference) is deferred to Wave C.
-    pub(in crate::checker) fn thread_literal_expected(
-        &mut self,
-        e: &crate::ast::Expr,
-        expected: &Ty,
-    ) -> Option<Ty> {
-        // DEC-214 part-2: a bare empty `[]` is rejected before any expected-type threading — an empty
-        // collection needs `new List<T>()` / `new Map<K,V>()`, never contextual inference from the
-        // declared/return type. (Return `Some(Error)` so the caller reports exactly once.)
-        if let crate::ast::Expr::List(elems, span) = e {
-            if elems.is_empty() {
-                return Some(self.err_empty_literal(*span));
-            }
-        }
-        match (e, expected) {
-            (crate::ast::Expr::List(elems, _), Ty::List(elem_ty)) => {
-                for el in elems {
-                    let et = self.check_expr(el);
-                    if !self.ty_assignable(&et, elem_ty) {
-                        self.err_assign(Self::expr_span(el), &et, elem_ty);
-                    }
-                }
-                Some(Ty::List(elem_ty.clone()))
-            }
-            (crate::ast::Expr::Map(pairs, _), Ty::Map(key_ty, val_ty)) => {
-                // Keys must be the hashable subset (`int`/`bool`/`string`) — mirror `check_map`'s
-                // `E-MAP-KEY` guard, which this expected-type path bypasses.
-                if !matches!(&**key_ty, Ty::Int | Ty::Bool | Ty::String | Ty::Error) {
-                    self.err_coded(
-                        Self::expr_span(e),
-                        format!(
-                            "map key type must be `int`, `bool`, or `string`, found `{key_ty}`"
-                        ),
-                        "E-MAP-KEY",
-                        None,
-                    );
-                }
-                for (k, v) in pairs {
-                    let kt = self.check_expr(k);
-                    if !self.ty_assignable(&kt, key_ty) {
-                        self.err_assign(Self::expr_span(k), &kt, key_ty);
-                    }
-                    let vt = self.check_expr(v);
-                    if !self.ty_assignable(&vt, val_ty) {
-                        self.err_assign(Self::expr_span(v), &vt, val_ty);
-                    }
-                }
-                Some(Ty::Map(key_ty.clone(), val_ty.clone()))
-            }
-            _ => None,
-        }
     }
 
     pub(in crate::checker) fn check_stmt(&mut self, stmt: &crate::ast::Stmt) {
@@ -365,6 +307,13 @@ impl Checker {
                 }
             }
             Stmt::For { .. } => self.check_for(stmt), // implemented in Task 5
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => self.check_using(ty, name, init, body, *span),
             Stmt::While {
                 cond,
                 body,

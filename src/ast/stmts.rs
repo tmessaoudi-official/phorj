@@ -112,6 +112,26 @@ pub enum Stmt {
         else_block: Option<Vec<Stmt>>,
         span: Span,
     },
+    /// `using (T h = init) { .. }` — the scope guard (DEC-364). `h` is released at **every** exit path
+    /// from `body`: normal fall-through, `return`, `break`/`continue` out of the block, and a throw.
+    ///
+    /// `ty` is **mandatory** and must implement `Core.Closable`; rejecting anything else at compile time
+    /// is what makes the `close()` call total (there is no runtime "does it have close()?" probe). The
+    /// binding is scoped to `body`, so it cannot outlive its own release.
+    ///
+    /// **No new `Op` and no new `Value`.** Every backend lowers it to the shape a hand-written guard
+    /// already has — `try { body } finally { h.close(); }` — so the failure ordering is [`Stmt::Try`]'s,
+    /// which is already differentialled, and the PHP leg is a literal `try`/`finally`.
+    ///
+    /// `using` is a **contextual** keyword (DEC-364.1): the tokenizer gains nothing and `using` remains a
+    /// usable identifier; the parser decides at statement position with one lookahead for `(`.
+    Using {
+        ty: Type,
+        name: String,
+        init: Expr,
+        body: Vec<Stmt>,
+        span: Span,
+    },
 }
 
 /// The target of a [`Stmt::Destructure`] (Phase 1 slice 5). A dedicated, flat (no nested sub-patterns)

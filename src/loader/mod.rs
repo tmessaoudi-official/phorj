@@ -53,6 +53,7 @@ mod fs;
 mod import_hygiene;
 mod imports;
 mod resolve;
+mod resolve_stmts;
 mod unit;
 mod visibility;
 

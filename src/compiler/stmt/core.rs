@@ -9,6 +9,15 @@ impl Compiler<'_> {
         // regardless of any height drift in preceding dead-code-after-`return`.
         self.height = self.locals.len();
         match s {
+            // DEC-364 `using` — compile THE shared lowering (`ast::lower_using`); see the
+            // interpreter's arm. Nothing here is VM-specific, which is the point.
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => self.stmt(&crate::ast::lower_using(ty, name, init, body, *span)),
             Stmt::VarDecl { ty, name, init, .. } => {
                 self.expr(init)?; // value stays on the stack as the new local's slot
                                   // `var` carries no annotation — derive the local's `CTy` from the initializer so

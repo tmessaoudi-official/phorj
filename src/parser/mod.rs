@@ -64,6 +64,7 @@ pub struct Parser {
 
 // impl-cluster cohesion split (M-Decomp W3.1): one `impl Parser` block per cluster file.
 mod exprs;
+mod guards;
 mod items;
 mod patterns;
 mod stmts;
@@ -202,6 +203,44 @@ impl Parser {
                 self.peek2(),
                 TokenKind::Ident(_) | TokenKind::New | TokenKind::Lt
             )
+    }
+
+    /// `using` is a contextual scope-guard keyword (DEC-364 / DEC-364.1) — it reserves NOTHING, so
+    /// BOTH of these must parse, and each has a test:
+    ///
+    /// ```text
+    /// int using = 1;                      // still an ordinary identifier
+    /// using (Connection db = open()) { }  // the scope guard
+    /// ```
+    ///
+    /// DEC-364.1 ruled the gate as "significant only immediately before `(`". Taken literally that
+    /// would also claim a *call* statement to a function named `using` (`using(x);`) — precisely the
+    /// misfire [`Self::at_discard`] documents itself as avoiding — so this gate is one step tighter
+    /// and additionally requires the header's `Type name =` shape, found by scanning for a top-level
+    /// `=` before the matching `)`. That discriminator is exact: `=` cannot appear at the top level
+    /// of an argument list (assignment is a *statement* here, and named arguments use `:`), so every
+    /// `using` header has one and no call ever does. It therefore accepts every program the ruling
+    /// accepts, while leaving `using(x);` the call it looks like.
+    fn at_using(&self) -> bool {
+        if !(self.at_kw("using") && matches!(self.peek2(), TokenKind::LParen)) {
+            return false;
+        }
+        let mut depth: i32 = 0;
+        for t in &self.tokens[(self.pos + 1).min(self.tokens.len() - 1)..] {
+            match &t.kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return false; // the header's own `)`, reached with no `=`
+                    }
+                }
+                TokenKind::Eq if depth == 1 => return true,
+                TokenKind::Eof => return false,
+                _ => {}
+            }
+        }
+        false
     }
 
     /// `parent` is a contextual super-dispatch keyword (M-RT super/parent), recognized ONLY as a call

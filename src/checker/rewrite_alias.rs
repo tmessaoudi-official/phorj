@@ -113,6 +113,19 @@ pub fn expand_aliases(program: &Program) -> Program {
                 body: body.iter().map(|s| rstmt(s, a)).collect(),
                 span: *span,
             },
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => Stmt::Using {
+                ty: rt(ty, a, 0),
+                name: name.clone(),
+                init: init.clone(),
+                body: body.iter().map(|s| rstmt(s, a)).collect(),
+                span: *span,
+            },
             Stmt::If {
                 cond,
                 bind,

@@ -91,6 +91,10 @@ fn vstmt(s: &mut Stmt, pre: bool, f: &mut impl FnMut(&mut Expr)) {
             vexpr(iter, pre, f);
             vblock(body, pre, f);
         }
+        Stmt::Using { init, body, .. } => {
+            vexpr(init, pre, f);
+            vblock(body, pre, f);
+        }
         Stmt::While { cond, body, .. } => {
             vexpr(cond, pre, f);
             vblock(body, pre, f);

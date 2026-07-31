@@ -541,8 +541,8 @@ fn pc_stmt(s: &Stmt, out: &mut Vec<(Option<String>, String)>) {
                 pc_block(b, out);
             }
         }
-        Stmt::For { iter, body, .. } => {
-            pc_expr(iter, out);
+        Stmt::For { iter: e, body, .. } | Stmt::Using { init: e, body, .. } => {
+            pc_expr(e, out);
             pc_block(body, out);
         }
         Stmt::While { cond, body, .. } => {

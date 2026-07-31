@@ -265,6 +265,11 @@ impl Ctx {
                 self.walk_expr(iter, errs);
                 self.walk_block(body, errs);
             }
+            Stmt::Using { ty, init, body, .. } => {
+                self.walk_type(ty, errs);
+                self.walk_expr(init, errs);
+                self.walk_block(body, errs);
+            }
             Stmt::While { cond, body, .. } => {
                 self.walk_expr(cond, errs);
                 self.walk_block(body, errs);

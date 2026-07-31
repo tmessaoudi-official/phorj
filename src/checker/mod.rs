@@ -15,6 +15,7 @@ use crate::types::Ty;
 mod collapse_injected;
 mod desugar_config;
 mod desugar_db;
+mod desugar_db_facts;
 mod desugar_di;
 mod desugar_router;
 mod desugar_variadics;
@@ -63,6 +64,7 @@ mod calls;
 mod casing;
 mod collect;
 pub(crate) mod common;
+mod common_flow;
 mod expr;
 mod matches;
 mod program;
@@ -76,6 +78,7 @@ pub use resolutions::check_resolutions;
 // Stateless helpers live in `common`; this glob re-exposes them to `mod.rs`'s own bodies AND
 // (transitively, via each cluster's `use super::*`) to every sibling cluster file.
 use common::*;
+use common_flow::*;
 
 #[derive(Clone)]
 struct FnSig {
@@ -87,10 +90,9 @@ struct FnSig {
     defaults: Vec<Option<crate::ast::Expr>>,
     ret: Ty,
     /// Generic type parameters this function declares (`["T"]` for `function id<T>(T x) -> T`).
-    /// Empty for a non-generic function — the common case. When non-empty, `params`/`ret` contain
-    /// `Ty::Param` occurrences that a call site unifies away (M-RT S7). Free functions AND class
-    /// methods may be generic (M-RT generics-all); interface method signatures stay non-generic
-    /// (the parser builds them with empty `type_params`), so theirs is always empty.
+    /// Empty for a non-generic function. When non-empty, `params`/`ret` hold `Ty::Param`s that a
+    /// call site unifies away (M-RT S7). Free functions AND class methods may be generic (M-RT
+    /// generics-all); interface method signatures stay non-generic (empty `type_params`).
     type_params: Vec<String>,
     /// Per-type-param bounds (DEC-211): `(param, Interface)` pairs. At a generic call site, after the
     /// arguments bind each `T` (θ), the concrete binding must implement its bound (`E-BOUND-NOT-SATISFIED`)
@@ -130,8 +132,7 @@ struct FnSig {
 #[derive(Clone)]
 struct Binding {
     ty: Ty,
-    /// `mutable` (reassignable) — immutable by default (M-mut.1); only a `mutable` binding may be the
-    /// target of `Stmt::Assign`.
+    /// `mutable` — immutable by default (M-mut.1); only a `mutable` binding may be an assign target.
     mutable: bool,
     span: Span,
 }
@@ -141,8 +142,7 @@ struct Binding {
 /// deprecated" at every read site.
 #[derive(Clone)]
 struct DeprecationNote {
-    /// The author's `message:` text, when they supplied a plain literal. `None` ⇒ the warning names
-    /// only the symbol, which is the legal bare-`#[Deprecated]` shape.
+    /// The author's `message:` literal; `None` ⇒ the bare-`#[Deprecated]` shape (warning names only it).
     message: Option<String>,
 }
 

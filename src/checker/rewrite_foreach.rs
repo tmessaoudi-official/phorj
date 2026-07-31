@@ -143,7 +143,9 @@ fn walk_stmts(stmts: &mut [Stmt], f: &mut impl FnMut(&mut Stmt)) {
                     walk_stmts(b, f);
                 }
             }
-            Stmt::For { body, .. } | Stmt::While { body, .. } => walk_stmts(body, f),
+            Stmt::For { body, .. } | Stmt::While { body, .. } | Stmt::Using { body, .. } => {
+                walk_stmts(body, f)
+            }
             Stmt::CFor {
                 init, step, body, ..
             } => {
@@ -174,7 +176,16 @@ fn walk_stmts(stmts: &mut [Stmt], f: &mut impl FnMut(&mut Stmt)) {
                 else_block: Some(eb),
                 ..
             } => walk_stmts(eb, f),
-            _ => {}
+            Stmt::VarDecl { .. }
+            | Stmt::Assign { .. }
+            | Stmt::Return { .. }
+            | Stmt::Expr(..)
+            | Stmt::Discard(..)
+            | Stmt::Throw { .. }
+            | Stmt::Destructure {
+                else_block: None, ..
+            }
+            | crate::stmt_leaves!() => {}
         }
     }
 }
@@ -304,7 +315,9 @@ fn lower_stmt(s: &mut Stmt, spans: &HashSet<usize>) {
                 lower_block(b, spans);
             }
         }
-        Stmt::For { body, .. } | Stmt::While { body, .. } => lower_block(body, spans),
+        Stmt::For { body, .. } | Stmt::While { body, .. } | Stmt::Using { body, .. } => {
+            lower_block(body, spans)
+        }
         Stmt::CFor {
             init, step, body, ..
         } => {
@@ -335,6 +348,15 @@ fn lower_stmt(s: &mut Stmt, spans: &HashSet<usize>) {
             else_block: Some(eb),
             ..
         } => lower_block(eb, spans),
-        _ => {}
+        Stmt::VarDecl { .. }
+        | Stmt::Assign { .. }
+        | Stmt::Return { .. }
+        | Stmt::Expr(..)
+        | Stmt::Discard(..)
+        | Stmt::Throw { .. }
+        | Stmt::Destructure {
+            else_block: None, ..
+        }
+        | crate::stmt_leaves!() => {}
     }
 }

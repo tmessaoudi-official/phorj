@@ -45,6 +45,11 @@ impl Checker {
                 cond_always && !breaks_this_loop(body)
             }
             // `for (T x in iter)` always terminates over a finite list — never a divergence source.
+            // A `using` body runs exactly once (unlike a loop body, which may run zero times), so the
+            // guard terminates exactly when its body does — the same rule as `Stmt::Block`. Without
+            // this arm a `return` inside a `using` was invisible and `E-MISSING-RETURN` misfired
+            // [Verified: `function f(): int { using (H h = …) { return 1; } }` was rejected].
+            Stmt::Using { body, .. } => self.block_terminates(body),
             Stmt::Expr(e, _) => self.expr_is_never(e),
             // A `throw` always diverges (it unwinds out of the current frame; M-faults 2b).
             Stmt::Throw { .. } => true,
@@ -106,6 +111,9 @@ impl Checker {
                 else_block: Some(eb),
                 ..
             } => self.block_assigns_field(then_block, field) && self.block_assigns_field(eb, field),
+            // A `using` body runs exactly once, so an assignment on all of ITS paths is an
+            // assignment on all paths (DEC-364) — again the `Stmt::Block` rule.
+            Stmt::Using { body, .. } => self.block_assigns_field(body, field),
             // An `if` with no else, or a loop body (may run zero times), does not assign on all paths.
             _ => false,
         }
@@ -120,6 +128,8 @@ impl Checker {
             Stmt::Throw { .. } => true,
             Stmt::Expr(e, _) => self.expr_is_never(e),
             Stmt::Block(b, _) => b.iter().any(|x| self.stmt_diverges_no_return(x)),
+            // Runs exactly once — same as a block (DEC-364).
+            Stmt::Using { body, .. } => body.iter().any(|x| self.stmt_diverges_no_return(x)),
             Stmt::If {
                 then_block,
                 else_block: Some(eb),

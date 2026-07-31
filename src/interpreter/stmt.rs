@@ -26,6 +26,16 @@ impl<'c> Interp<'c> {
                 self.frame.declare(name, v);
                 Ok(())
             }
+            // DEC-364 `using` — run THE shared lowering (`ast::lower_using`), never a second
+            // hand-written guard: the VM and the transpiler execute the identical tree, so
+            // "released on every exit path" cannot mean three slightly different things.
+            Stmt::Using {
+                ty,
+                name,
+                init,
+                body,
+                span,
+            } => self.exec_stmt(&crate::ast::lower_using(ty, name, init, body, *span)),
             Stmt::Assign { target, value, .. } => match target {
                 Expr::Ident(name, _) => {
                     let v = self.eval(value)?;

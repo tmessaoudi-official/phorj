@@ -119,6 +119,10 @@ impl Walker<'_> {
                 self.expr(iter);
                 self.block(body);
             }
+            Stmt::Using { init, body, .. } => {
+                self.expr(init);
+                self.block(body);
+            }
             Stmt::While { cond, body, .. } => {
                 self.expr(cond);
                 self.block(body);

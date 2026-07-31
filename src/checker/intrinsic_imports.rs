@@ -237,6 +237,10 @@ fn walk_stmt(s: &mut Stmt, en: &Enabled, errs: &mut Vec<Diagnostic>) {
             walk_expr(iter, en, errs);
             walk_block(body, en, errs);
         }
+        Stmt::Using { init, body, .. } => {
+            walk_expr(init, en, errs);
+            walk_block(body, en, errs);
+        }
         Stmt::While { cond, body, .. } => {
             walk_expr(cond, en, errs);
             walk_block(body, en, errs);

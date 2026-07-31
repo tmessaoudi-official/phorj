@@ -175,6 +175,21 @@ impl Checker {
                     self.check_stmt_casing(st);
                 }
             }
+            Stmt::Using {
+                name,
+                init,
+                body,
+                span,
+                ..
+            } => {
+                // A `using` binding is a declaration like `VarDecl`, so its name is casing-checked
+                // (a `for` loop variable is not — that asymmetry is pre-existing, not copied here).
+                self.want_name_case(name, *span);
+                self.check_expr_casing(init);
+                for st in body {
+                    self.check_stmt_casing(st);
+                }
+            }
             Stmt::While { cond, body, .. } => {
                 self.check_expr_casing(cond);
                 for st in body {

@@ -367,8 +367,17 @@ impl Printer {
                 self.line(&format!("{};", self.expr(e)?));
                 Ok(())
             }
-            Stmt::Throw { .. } | Stmt::Try { .. } | Stmt::Destructure { .. } => {
-                Err("printer: throw/try/destructure are outside the lift subset".into())
+            // `using` (DEC-364) sits behind the SAME boundary as `try`, and for the same reason:
+            // it lowers to `try`/`finally`, and the lift subset has no `try` at all (the lift PARSER
+            // rejects the keyword outright — `lift::parser_tests`). So the lifter can never produce
+            // one, and raising a PHP `try { … } finally { $h->close(); }` back to `using` is blocked
+            // on try/catch/finally entering the subset first — a separate slice, recorded in
+            // KNOWN_ISSUES rather than half-built here.
+            Stmt::Throw { .. }
+            | Stmt::Try { .. }
+            | Stmt::Using { .. }
+            | Stmt::Destructure { .. } => {
+                Err("printer: throw/try/using/destructure are outside the lift subset".into())
             }
         }
     }

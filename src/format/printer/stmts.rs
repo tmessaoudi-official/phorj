@@ -91,6 +91,18 @@ impl Printer<'_> {
                 };
                 self.block_stmt(&format!("for ({i}; {c}; {s})"), body)
             }
+            Stmt::Using {
+                ty: t,
+                name,
+                init,
+                body,
+                ..
+            } => {
+                // The type is mandatory in the surface (DEC-364), so it always prints — there is no
+                // inferred `using` form to collapse to.
+                let head = format!("using ({} {name} = {})", ty(t)?, self.expr(init)?);
+                self.block_stmt(&head, body)
+            }
             Stmt::For {
                 ty: t,
                 name,

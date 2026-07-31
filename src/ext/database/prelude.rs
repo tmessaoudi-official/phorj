@@ -14,6 +14,7 @@ import Core.Native.Database as NativeDatabase;
 import Core.List;
 import Core.String;
 import Core.IteratorModule;
+import Core.ClosableModule;
 import Core.Abort.panic;
 // `Core.Map` is imported for the `queryMap<K,V>` hydration helpers the `desugar_db` pass generates
 // into a `Core.Database` program (they build the result `Map` via `Map.set`); like the `Core.List` import
@@ -277,7 +278,7 @@ class DatabaseStream<T> implements Iterator<T> {
   }
 }
 
-class Connection {
+class Connection implements Closable {
   // DEC-221: opening a connection can fail, so the constructor itself declares `throws DatabaseError` and
   // opens directly — `new Connection(dsn)` (fail-fast, exactly like PHP's `new PDO`). No static factory. The
   // handle is COMPUTED in the body (not a promoted param), so the field is `mutable` (set once here).
@@ -393,9 +394,10 @@ class Connection {
     }
   }
   // Deterministic close (spec §1): idempotent, never throws. After close(), any further use of this
-  // connection (or a Statement derived from it) fails with `ConnectionError`. The `using`/`Closable`
-  // sugar that would call this automatically at scope exit is DEC-203 — a separate language slice
-  // (see KNOWN_ISSUES); until then, call close() explicitly (or rely on drop at program end).
+  // connection (or a Statement derived from it) fails with `ConnectionError`. This satisfies
+  // `Core.ClosableModule`, so a connection is a scope guard: `using (Connection c = new
+  // Connection(dsn)) { … }` closes it on every exit path (DEC-364, shipped — it was DEC-203's
+  // deferral). Calling close() explicitly still works and stays idempotent.
   function close(): void {
     match (NativeDatabase.close(this.raw)) { DatabaseResult.Ok(_) => Connection.ok(), DatabaseResult.Err(_) => Connection.ok() };
   }

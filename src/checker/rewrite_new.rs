@@ -116,6 +116,10 @@ fn ue_stmt(s: &mut Stmt) {
             ue_expr(iter);
             ue_block(body);
         }
+        Stmt::Using { init, body, .. } => {
+            ue_expr(init);
+            ue_block(body);
+        }
         Stmt::While { cond, body, .. } => {
             ue_expr(cond);
             ue_block(body);

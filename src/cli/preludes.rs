@@ -1,6 +1,7 @@
 //! The injected `Core.*` virtual modules: prelude sources, the CORE_MODULES registry
 //! (UA-L2 — one row per module), and import-gated injection.
 
+use super::prelude_spans::lex_parse_injected;
 use super::*;
 
 /// Type-check + de-alias an already-parsed program (the gate, minus lex/parse). De-aliases so every
@@ -360,6 +361,25 @@ pub(super) const ITERATOR_PRELUDE: &str = r#"
 interface Iterator<T> {
     function hasNext(): bool;
     function next(): T;
+}
+"#;
+
+/// `Core.ClosableModule` (DEC-364) — the release protocol behind `using (T h = …) { … }`. An
+/// implementor becomes usable as a scope guard: the checker requires this interface before it will
+/// emit the release call, which is what makes that call total (nothing probes for `close()` at
+/// runtime).
+///
+/// **Named `ClosableModule`, not `Closable`, by DEC-278**: a module whose leaf equals the single
+/// type it binds takes the `Module` suffix, so `import Core.ClosableModule.Closable;` is fully
+/// explicit — the same shape as `Core.IteratorModule`/`Iterator` directly above.
+///
+/// `close()` declares no `throws`, so the common implementor needs nothing discharged at the `using`
+/// site. Conformance does not compare `throws` (only params + return), so an implementor *may* still
+/// declare them — `checker::stmt::using` requires those to be caught or declared, exactly as DEC-257
+/// does for a throwing iterator's `foreach`.
+pub(super) const CLOSABLE_PRELUDE: &str = r#"
+interface Closable {
+    function close(): void;
 }
 "#;
 
@@ -816,6 +836,18 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: true,
         bare_types: &["Iterator"],
     },
+    // `Core.ClosableModule` (DEC-364) — the `using` release protocol. SAME ROW-ORDER RULE as
+    // `Core.IteratorModule` above: `Core.Database`'s prelude imports this one (its `Connection`
+    // implements `Closable`), and the injection fold walks the registry once, so this row must come
+    // LATER than every prelude that imports it.
+    VirtualModule {
+        module: &["Core", "ClosableModule"],
+        qualifier: "ClosableModule",
+        srcs: &[CLOSABLE_PRELUDE],
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Closable"],
+    },
     // `Core.Mail` (DEC-223) — the native-mailer prelude (twin of `Core.Database`). MUST precede `Core.Secret`
     // (its `import Core.Secret` transitively injects it — the same forward-fold rule as Connection→Secret) and
     // `Core.Native.Mail` (its natives).
@@ -1115,6 +1147,10 @@ pub(crate) fn core_module_of(name: &str) -> Option<&'static str> {
 pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
     let mut cur: std::borrow::Cow<'_, Program> = std::borrow::Cow::Borrowed(prog);
+    // A running per-FRAGMENT counter, so every injected prelude fragment gets its own disjoint
+    // offset range regardless of how many fragments each module carries (a per-module index times a
+    // varying fragment count would not be injective).
+    let mut frag_index = 0usize;
     for m in CORE_MODULES {
         if m.srcs.is_empty() {
             continue;
@@ -1134,7 +1170,11 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
         }
         let mut parsed_items: Vec<Item> = Vec::new();
         for src in m.srcs {
-            let Ok(parsed) = lex_parse(src) else {
+            // Offsets rebased per fragment so an injected span can never equal a user-file span —
+            // see `lex_parse_injected` for the divergence this closes.
+            let parsed = lex_parse_injected(src, frag_index);
+            frag_index += 1;
+            let Ok(parsed) = parsed else {
                 continue; // unreachable: registry preludes are valid
             };
             parsed_items.extend(parsed.items);
@@ -1228,6 +1268,48 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
 #[cfg(test)]
 mod gate_tests {
     use super::import_targets_module;
+
+    /// Every INJECTED prelude span must sit above [`super::INJECTED_SPAN_BASE`], so it can never equal
+    /// a user-file offset in the checker's `Span.start`-keyed rewrite tables.
+    ///
+    /// This is the ratchet for a divergence that was live and silent: a prelude call site colliding
+    /// with a user call site made the prelude's recorded UFCS rewrite apply to the USER's node, so
+    /// `phg check` passed, `--tree-walker` ran correctly, and only the VM failed to compile — flipped
+    /// by nothing more than the byte length of a prelude line. Asserting the ranges are disjoint is
+    /// what stops it coming back the next time a prelude gains a line.
+    #[test]
+    fn injected_prelude_spans_cannot_collide_with_user_file_offsets() {
+        let src = "package Main;\nimport Core.Database;\nfunction main() -> void { }\n";
+        let user = crate::cli::parse_program(src).expect("the fixture parses");
+        let injected = super::inject_core_modules(&user);
+        let mut checked = 0usize;
+        for item in &injected.items {
+            let sp = match item {
+                crate::ast::Item::Class(c) => c.span,
+                crate::ast::Item::Interface(i) => i.span,
+                crate::ast::Item::Function(f) => f.span,
+                crate::ast::Item::Enum(e) => e.span,
+                _ => continue,
+            };
+            // The user fixture's own items stay below the base; everything injected is above it.
+            if sp.start < super::prelude_spans::INJECTED_SPAN_BASE {
+                assert!(
+                    sp.start < src.len(),
+                    "a non-rebased span ({}) is outside the user source ({} bytes) — it is an \
+                     injected item that escaped `lex_parse_injected`",
+                    sp.start,
+                    src.len()
+                );
+            } else {
+                checked += 1;
+            }
+        }
+        assert!(
+            checked > 5,
+            "expected the Database prelude to inject many items, saw {checked} rebased — \
+             the test is no longer exercising injection"
+        );
+    }
 
     #[test]
     fn import_matching_covers_module_member_and_lookalike() {

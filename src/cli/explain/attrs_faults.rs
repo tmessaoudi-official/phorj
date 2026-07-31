@@ -5,6 +5,38 @@
 /// Explanation text for a code in this band, or `None` when `code` is not this catalog's.
 pub(super) fn text(code: &str) -> Option<&'static str> {
     Some(match code {
+        "E-USING-NOT-CLOSABLE" => {
+            "E-USING-NOT-CLOSABLE — a `using` header names a type that is not `Closable`.\n\n\
+             `using (T h = …) { … }` (DEC-364) releases `h` on EVERY exit path from the block —\n\
+             normal fall-through, `return`, `break`/`continue`, and a throw — by calling `h.close()`\n\
+             in a synthesized `finally`. Nothing probes for that method at runtime, so the type must\n\
+             prove it has one up front by implementing `Core.ClosableModule`'s `Closable`:\n\n\
+             \x20 import Core.ClosableModule;\n\
+             \x20 class Handle implements Closable {\n\
+             \x20     function close(): void { … }\n\
+             \x20 }\n\n\
+             If the type is not yours to change, release it by hand with `try`/`finally`. If the\n\
+             message says no `Closable` is in scope, the interface itself is missing — add the\n\
+             `import Core.ClosableModule;` line.\n"
+        }
+        "E-USING-INFER" => {
+            "E-USING-INFER — a `using` binding was written without an explicit type.\n\n\
+             `using (var h = …)` is rejected: the declared type is what proves the binding can be\n\
+             released (see `E-USING-NOT-CLOSABLE`), so unlike `var` elsewhere it cannot be inferred\n\
+             from the initializer. Spell the type — `using (Connection db = new Connection(dsn)) { … }`.\n"
+        }
+        "E-USING-CLOSE-THROWS" => {
+            "E-USING-CLOSE-THROWS — the released type's `close()` declares a checked exception that is\n\
+             neither caught nor declared here.\n\n\
+             A `using` block calls `close()` in a synthesized `finally`, so a fault that `close()`\n\
+             declares can leave the enclosing function just like any other throwing call — and the\n\
+             same rule applies: catch it, or declare it.\n\n\
+             \x20 try { using (Handle h = open()) { … } } catch (IoError e) { … }   // caught\n\
+             \x20 function f(): void throws IoError { using (Handle h = open()) { … } }  // declared\n\n\
+             `Closable.close()` itself declares no `throws`, so this only arises when an implementor\n\
+             adds them (interface conformance compares parameters and the return type, not `throws`).\n\
+             This is the same auto-propagation rule DEC-257 applies to a throwing iterator's `foreach`.\n"
+        }
         "E-PARENT-OUTSIDE-METHOD" => {
             "E-PARENT-OUTSIDE-METHOD — `parent` used outside an instance method or constructor.\n\n\
              `parent.m(…)` / `parent(A).m(…)` dispatch to an inherited method relative to the class that\n\

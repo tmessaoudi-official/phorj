@@ -120,7 +120,20 @@ pub fn collect_bindings(body: &[Stmt], out: &mut Vec<(String, Span)>) {
                     out.push((n, sp));
                 }
             }
-            _ => {}
+            // DEC-364: a `using` binding is a real binder scoped to its block — the LSP must see
+            // both it and anything declared inside (Invariant 17's 100% rule).
+            Stmt::Using {
+                name, body, span, ..
+            } => {
+                out.push((name.clone(), *span));
+                collect_bindings(body, out);
+            }
+            Stmt::Assign { .. }
+            | Stmt::Return { .. }
+            | Stmt::Expr(..)
+            | Stmt::Discard(..)
+            | Stmt::Throw { .. }
+            | crate::stmt_leaves!() => {}
         }
     }
 }

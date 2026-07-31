@@ -94,5 +94,6 @@ mod atoms;
 mod exprs;
 mod items;
 mod stmts;
+mod stmts_inline;
 
 use self::atoms::*;

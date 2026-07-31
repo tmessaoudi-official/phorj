@@ -878,7 +878,9 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   + the ICU extension-story fork → Ω-5 · typed-serde derive candidate → Ω-7. Two NEW
   DEC-PENDING entries recorded in KNOWN_ISSUES §PENDING (`using`/`defer`, `Runtime.onShutdown`)
   — since RULED 2026-07-12 as DEC-203 (`using` + Closable) and DEC-204 (typed
-  `Runtime.onShutdown(fn)`); builds queued (DEC-364 re-affirmed `using`). DEC-383's later fork (c)
+  `Runtime.onShutdown(fn)`); **`using` BUILT 2026-07-31 as DEC-364** (three legs byte-identical;
+  `Core.ClosableModule`; `defer` stays rejected on its merits; lift deferred — see KNOWN_ISSUES
+  §LIFT-TRY). `onShutdown` build still queued. DEC-383's later fork (c)
   covered the same `onShutdown` ground and was **closed as bookkeeping by DEC-390** (developer,
   2026-07-29): DEC-204 stands, nothing re-opened — build-order **7.5 is a BUILD slice**.
 - **Ω-1 · Web spine** (TOP-20 #1/#2/#3): finish **Core.Sql** P1 → P2 `Core.Db` (rusqlite) → PG/MySQL →

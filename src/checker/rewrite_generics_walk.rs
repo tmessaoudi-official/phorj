@@ -365,6 +365,19 @@ pub(super) fn rstmt(s: &Stmt, params: &Params) -> Stmt {
             body: body.iter().map(|s| rstmt(s, params)).collect(),
             span: *span,
         },
+        Stmt::Using {
+            ty,
+            name,
+            init,
+            body,
+            span,
+        } => Stmt::Using {
+            ty: rty(ty, params),
+            name: name.clone(),
+            init: rexpr(init, params),
+            body: body.iter().map(|s| rstmt(s, params)).collect(),
+            span: *span,
+        },
         Stmt::While {
             cond,
             body,
