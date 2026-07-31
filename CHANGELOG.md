@@ -28,6 +28,24 @@ PID-qualified (a fixed `/tmp` path is shared state between concurrently-running 
 holder creates. Under full-workspace load the holder had sometimes not acquired yet, so the try
 succeeded and the assertion failed — raising the sleep would have been a bandaid over a race.
 
+### Changed — dev builds drop DEPENDENCY debuginfo, cutting `target/debug` 24 GB → 7.4 GB (2026-07-31)
+`[profile.dev.package."*"] debug = false`. Measured, not estimated: a clean full build of the workspace
+with `--all-features` produced **7.4 GB** of `target/debug` against **24 GB** before, and free disk went
+from 2.1 GB to 19 GB.
+
+**Why it mattered for speed.** The container's writable allowance is finite, so builds were hitting
+`No space left on device` — which forced `rm -rf target` and a cold ~10-minute rebuild on every push.
+Keeping `target/` warm is what removes that, and dependency debuginfo was what filled it: nobody steps
+into cranelift or rustls with a debugger.
+
+**Phorj's OWN debuginfo is untouched** — `[profile.dev]` keeps the default `debug = 2`, so backtraces,
+`gdb`/`lldb` on phorj code and every panic message keep full fidelity. The only thing given up is
+variable inspection *inside third-party crates*.
+
+Together with `cargo-nextest` now installed (the hooks already preferred it and were falling back to
+`cargo test`), a WARM full-suite cycle — touch `src/lib.rs`, recompile, run all 2686 tests with
+`--all-features` — is **43 s**, of which 28 s is the parallel test run.
+
 ### Added — the PHP lifter reads `try`/`catch`/`finally` (2026-07-31, LIFT-TRY)
 The lift subset had NO exception handling: the parser refused the `try` keyword and the printer listed it
 as out of subset. It now handles all four shapes real PHP writes — a root-qualified type

@@ -29,6 +29,15 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 2
+# No debuginfo for DEPENDENCIES (2026-07-31). `target/debug/deps` had grown to 22 GB and the container's
+# writable allowance is finite, so builds were hitting `No space left on device` and forcing a full
+# `rm -rf target` — which cost a ~10-minute cold rebuild on every push. Dependency debuginfo is what
+# dominated that: nobody steps into cranelift or rustls with a debugger.
+#
+# **Phorj's OWN debuginfo is untouched** (`[profile.dev]` above carries the default `debug = 2`), so
+# backtraces, `gdb`/`lldb` on phorj code, and every panic message keep full fidelity. The only thing
+# given up is variable inspection *inside third-party crates*.
+debug = false
 
 [lib]
 name = "phorj"

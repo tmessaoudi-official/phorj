@@ -71,8 +71,10 @@ NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`
   `cargo build --release` — the hooks are the SSOT of their own steps). **pre-push** runs the FULL
   suite (those two included) + `clippy` (`--no-default-features`
   AND `--all-features`) + the PHP-oracle spine check + `microbench-gate`. Test-speed rests on
-  `Cargo.toml [profile.dev]` (deps opt-2, workspace opt-1); `cargo-nextest` is the parallel runner
-  (fallback: `cargo test`).
+  `Cargo.toml [profile.dev]` (deps opt-2, workspace opt-1, **deps `debug = false`** — that last one cut
+  `target/debug` from 24 GB to 7.4 GB, which is what keeps `target/` warm instead of being cleared for
+  disk; phorj's own debuginfo is untouched); `cargo-nextest` is the parallel runner (fallback:
+  `cargo test`) and IS installed — a warm full-suite cycle is ~43 s.
 - **Full correctness gate — ALL-FEATURES (developer-ruled 2026-07-16)** (before claiming any feature
   done, and always before a push):
   `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo nextest run --workspace --all-features`
