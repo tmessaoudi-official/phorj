@@ -6007,3 +6007,73 @@ tree-walker parity. Invariant 16 (META-7) also owes a cross-language survey here
 immutable strings has faced this (Java's `StringBuilder`, Rust's `String::push_str`, Swift's COW
 `isKnownUniquelyReferenced`, PHP's own refcount-1 realloc) and the COW/unique-check route is the standard
 answer, which is evidence for the `TakeLocal` shape rather than for a builder type.
+
+
+## DEC-431.1 — the ratchet BLOCKED a push, and it is right to: `mapinsert` was never a WIN (2026-08-01, PENDING RULING — push held)
+
+The DEC-431 commit (`c6420f8`, docs + two bench files, **no Rust**) was blocked by the G-8 ratchet:
+`mapinsert` — baseline **1.012 (WIN)** — confirmed at **0.776**. Not bypassed. Investigated instead.
+
+### phorj did NOT regress — verified against a pre-DEC-428 binary
+
+Interleaved, pinned, 5 rounds, `8c57c79` (before ALL of today's Rust work) vs current HEAD on the same bench:
+
+| round | pre-DEC-428 | current | php |
+|---|---|---|---|
+| 1 | 6.21 ms | 6.31 | 5.20 |
+| 2 | 7.02 | 7.11 | 5.66 |
+| 3 | 7.03 | 7.09 | 6.48 |
+| 4 | 7.10 | 7.09 | 5.75 |
+| 5 | 7.10 | 7.08 | 5.62 |
+
+**Identical.** phorj's `mapinsert` leg is ~7.0 ms before and after. So the flip is not a code regression — and
+it could not be, since the blocked commit contains no Rust.
+
+### The baseline value is not reproducible on a quiet box
+
+Five independent harness runs at load 0.33-0.44: **0.83 / 0.81 / 0.79 / 0.81 / 0.80**, spreads as tight as
+1%/4%. The harness already uses best-of-K on BOTH legs, so this is not a sampling artifact. For the
+baseline's 1.012 to hold with phorj at 7.0 ms, php's leg must have measured ~7.08 ms at emit time; it now
+measures 5.2-6.5. **`mapinsert`'s true value is ~0.80-0.85 — it was never a WIN.**
+
+Provenance checked and RULED OUT as the cause: `_baseline_php` is `/stack/tools/phpbrew/php/php-8.5.8/bin/php`
+— the same binary used here, so this is not the docker-vs-local mix-up DEC-425 found. The `--emit` path does
+get the load guard (it sits in the harness-running branch, before the emit block). But the guard's threshold
+is `MICROBENCH_MAX_LOAD=2.5`, and DEC-430 established that 2.5 is nowhere near quiet — the blocked push
+itself settled only to 2.50 and flagged **12** features as noisy against **5** on a quiet box. So the
+baseline was emitted on a measurably non-quiet box, which is exactly what open task #58 ("re-tighten the
+ratchet floor on a quiet box") has been recording all along.
+
+### And `mapinsert` is not alone
+
+The whole near-parity cluster, baseline vs a quiet-box re-measure:
+
+| feature | baseline | quiet-box now |
+|---|---|---|
+| intadd | 1.275 | **1.81** ↑ |
+| maphas | 1.375 | 1.53 ↑ |
+| setcontains | 1.200 | 1.38 ↑ |
+| forin | 1.218 | 1.40 ↑ |
+| mapvalues | 1.089 | 1.20 ↑ |
+| mapkeys | 1.053 | 1.16 ↑ |
+| listappend | 1.361 | 1.33 ~ |
+| floatmul | 1.002 | 1.00 ~ |
+| listcontains | 0.995 (owed) | 0.86 ↓ |
+| **mapget** | **1.004** | **0.95 ↓ (now sub-parity)** |
+| **mapinsert** | **1.012** | **0.84 ↓ (blocks)** |
+
+Most moved UP — `intadd` 1.275 → 1.81 is DEC-428 doing its job. But **`mapget` and `mapinsert`, the two
+hash-map benches recorded at ~1.00, are both genuinely below parity now.** `mapget` at 0.95 does not block
+only because its flip limit is `min(1.004 × 0.85, 0.95) = 0.853`; `mapinsert` at 0.84 falls under its 0.860.
+So the gate caught the first of a pair, by a margin of 0.02.
+
+### Why the block is CORRECT, and what it means
+
+The ratchet's job is "once the VM beats release-php on a feature, it must keep beating it." It fired because
+that premise was false for `mapinsert` — the recorded WIN was a measurement artifact. DEC-365 is explicit
+that a confirmed real loss gets FIXED, never suppressed, and at 0.84 this is a real ~19% loss on map insert.
+Re-emitting to make the block go away would be precisely the laundering DEC-365 forbids **unless** the ruling
+is that the baseline itself is invalid — which is a different claim, and the developer's to make, because it
+moves numbers across the whole scoreboard.
+
+**Nothing was re-emitted and nothing was bypassed. `c6420f8` is committed locally and unpushed.**
