@@ -6,6 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Found — a CLOSURE is never JIT-compiled, however hot (DEC-434, 2026-08-01)
+Took the two deepest rows, `fsforeachline` (0.293) and `fslines` (0.113). DEC-431 had shown their profiles
+were 74x dominated by their own fixtures, so this measured the read alone (fixture written once by shell).
+
+**2,806 Ir per line, and only 4.9% of it is the line scan.** 48.68% (1,366 Ir/line) is VM closure
+machinery: `exec_op` 19.1%, `run_until` 10.6%, `call_closure_value` 5.4%, `Value` stack traffic 10.7%,
+`do_return` 2.9%. Allocator 12.6%. **Half the cost of reading a line is calling the one-expression closure
+that consumes it.**
+
+**Root cause [Verified]:** the JIT hot hook exists at exactly ONE call site — `src/vm/exec.rs:504`, inside
+the `Op::Call` arm. It is absent from `Op::CallValue` (`:972`) and from `Vm::call_closure_value` (the path
+every higher-order native uses). So `List.map`/`filter`/`reduce`, `forEachLine`, and any `f()` on a
+function value run their body interpreted **forever**. `PHORJ_JIT_EXPLAIN` prints nothing — not a decline,
+no attempt.
+
+This reframes the scoreboard's HOF split: `listfilter` 8.0x, `listmap` 7.2x, `mapfilter` 5.2x are fast
+because they have bespoke JIT **verticals** that bypass the closure; `fsforeachline` has none and loses
+3.4x. The verticals have been treating this one native at a time. Options — hook the closure paths (lifts
+every HOF at once, but the JIT entry must take the captures), keep building verticals, or cut the per-call
+frame cost — are a PENDING RULING in DEC-434. Nothing built: after DEC-431.2, the bar for touching the
+JIT's calling convention on inference is higher than one session's remaining budget.
+
 ### Fixed — the canon registry allocated a key per map write; `mapinsert`/`mapget` are WINs (DEC-433, 2026-08-01)
 First two rows off DEC-432's hunt list, and the two nobody had looked at. Both JIT cleanly
 (`PHORJ_JIT_EXPLAIN` prints nothing), so this is real cost in the map path, not the DEC-431 cliff.

@@ -6304,3 +6304,74 @@ Mitigating context, offered but not decisive: the table only admits keys <= `INL
 bounded by the arena `cap` (over it, everything falls back to the VM), so degradation is bounded rather
 than unbounded. **Surfaced for a ruling, deliberately not self-decided** — worth roughly another 2-3% on
 these two benches.
+
+
+## DEC-434 — a CLOSURE is never JIT-compiled, however hot; and the fs benches' per-line budget (2026-08-01, FOUND — fix is a PENDING RULING)
+
+Took `fsforeachline` (0.293) and `fslines` (0.113), the two deepest rows. DEC-431 had shown their profiles
+were 74x dominated by their own `fixture()`, so the first job was a read-only measurement: the fixture is
+written once by the shell and the `.phg` reads a pre-existing 40,000-line, 2.1 MB file.
+
+### The per-line budget — 2,806 Ir per line, and only 5% of it is the read
+
+| component | share | Ir / line |
+|---|---|---|
+| `exec_op` (interpreting the closure body) | 19.10% | 536 |
+| `run_until` (the re-entrant VM loop) | 10.62% | 298 |
+| `call_closure_value` | 5.38% | 151 |
+| `Vec<Value>::push_mut` | 4.49% | 126 |
+| `Value::clone` | 3.28% | 92 |
+| `drop_glue::<Value>` | 2.96% | 83 |
+| `do_return` | 2.85% | 80 |
+| **VM closure machinery, total** | **48.68%** | **1366** |
+| allocator (`malloc`/`free`/`_int_free`) | 12.60% | 354 |
+| `memchr_aligned` — THE ACTUAL LINE SCAN | 4.90% | 138 |
+
+**Half the cost of reading a line is calling the one-expression closure that consumes it.** The real work —
+finding the newline — is 4.9%.
+
+### Root cause [Verified]: the JIT hot hook exists at exactly ONE call site
+
+`src/vm/exec.rs:504`, inside the `Op::Call` arm. It is not in `Op::CallValue` (`:972` — calling a
+first-class function value: **0** jit references in the arm) and not in `Vm::call_closure_value`
+(`src/vm/closure.rs` — the path every higher-order NATIVE uses: no jit reference in the file at all).
+
+So **a closure is never JIT-compiled, no matter how hot.** `List.map` / `filter` / `reduce`,
+`FileSystem.forEachLine`, and every `f()` on a function value run their body on the interpreter forever.
+Confirmed from the other side too: `PHORJ_JIT_EXPLAIN=1` prints NOTHING for this program — not a decline,
+but no attempt, because nothing on the closure path ever asks.
+
+This reframes several existing wins. `listfilter` 8.0x, `listmap` 7.2x, `mapfilter` 5.2x are fast because
+DEC-311 and friends built per-native JIT **verticals** — bespoke inlined implementations that bypass the
+closure entirely. That strategy works beautifully where a vertical exists and does nothing where one does
+not, which is exactly the shape of the scoreboard: HOFs with verticals win big, `forEachLine` (no vertical)
+loses 3.4x. The verticals were treating the symptom of this, one native at a time.
+
+### Why the two fs rows differ
+
+`fsforeachline` pays 1366 Ir/line of closure machinery once per line. `fslines` (0.113, 2.6x worse again)
+pays the same PLUS the iterator protocol's two phorj-level virtual calls per element (`hasNext`, `next`) —
+the structural cost DEC-347/DEC-422 already named and that motivated `forEachLine` in the first place.
+DEC-422(a) removed the iterator overhead and left the closure overhead untouched, which is why it improved
+the row (0.113 -> 0.293) without fixing it.
+
+### PENDING RULING — none of these is self-rulable
+
+  1. **Put the hot hook on the closure paths** (`Op::CallValue` + `call_closure_value`), mirroring
+     `Op::Call`. The direct answer, and it lifts EVERY higher-order native at once rather than one
+     vertical at a time. Complication: a closure's frame is `[captures.., args..]`, so the JIT entry must
+     take the captures — `JitError::Unsupported`'s own doc already mentions "a closure capture outside
+     this slice's supported subset", so the codegen has some notion of them; how much works is unmeasured.
+  2. **Keep building verticals** — proven, incremental, but O(natives) forever and it leaves user-written
+     higher-order code interpreted.
+  3. **Reduce the per-call frame cost** (1366 Ir/line for ~8 ops is ~170 Ir/op against a typical VM
+     dispatch of 20-50) — worth a look independently of (1), since `push_mut`/`clone`/`drop_glue` at 301
+     Ir/line combined suggests the `Value` stack traffic itself is heavy.
+  4. The allocator's 354 Ir/line is a real second target: lines here are ~54 bytes, over
+     `PhStr::INLINE_CAP` (22), so each becomes a heap `PhStr` — one allocation per line, unavoidable while
+     the closure may retain the string, but PHP pays a `zend_string` per line too and still wins, so this
+     is not where the 4x lives.
+
+Recorded, measured, not guessed at. Nothing was built: after DEC-431.2 (where the recommended fix turned
+out to re-run the loop twice) the bar for touching the JIT's calling convention on inference is higher than
+one session's remaining budget.

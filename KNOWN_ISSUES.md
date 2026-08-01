@@ -1,5 +1,26 @@
 # Known Issues & Limitations
 
+## PERF-closures-never-jit — a closure is NEVER JIT-compiled, however hot (found 2026-08-01, DEC-434)
+
+The JIT hot hook lives at exactly ONE call site: `src/vm/exec.rs:504`, inside the `Op::Call` arm. It is
+absent from `Op::CallValue` (`:972`, calling a first-class function value) and from
+`Vm::call_closure_value` (`src/vm/closure.rs`, the path every higher-order NATIVE uses). So the body of a
+`List.map` / `filter` / `reduce`, of `FileSystem.forEachLine`, and of any `f()` on a function value runs on
+the interpreter forever. `PHORJ_JIT_EXPLAIN=1` prints nothing for such a program — not a decline, but no
+attempt.
+
+Measured on `forEachLine` over 40,000 lines (fixture excluded, so this is the read alone): **2,806 Ir per
+line, of which 48.68% (1,366 Ir) is VM closure machinery** — `exec_op` 19.1%, `run_until` 10.6%,
+`call_closure_value` 5.4%, `Value` stack traffic 10.7%, `do_return` 2.9%. The actual line scan
+(`memchr`) is **4.9%**. Half the cost of reading a line is calling the one-expression closure.
+
+This is why HOFs split so sharply on the scoreboard: `listfilter` 8.0x, `listmap` 7.2x and `mapfilter` 5.2x
+have bespoke JIT **verticals** that bypass the closure entirely, while `fsforeachline` (no vertical) loses
+3.4x. The verticals treat the symptom one native at a time.
+
+**NOT RULED** — options and their trade-offs are in DEC-434. Byte-identity is unaffected; this is a speed
+cliff, like PERF-throws-kills-jit below, and the two compound in any fallible higher-order code.
+
 ## PERF-throws-kills-jit — a FALLIBLE CALL anywhere in a function takes the WHOLE function off the JIT (found 2026-08-01, DEC-431)
 
 **Measured, three ways, same program.** A hot integer loop — `acc = acc + (i * 3 - 1)`, 5,000,000
