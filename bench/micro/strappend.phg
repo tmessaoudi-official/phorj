@@ -1,0 +1,49 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+import Core.String;
+
+// Microbench: GROWING a string in a loop (`s = s + part`) against PHP's `.=` — the commonest
+// string-building idiom there is, and the one the suite was BLIND to until DEC-431.
+//
+// Why `strbuild` does not cover this. That bench also appends in a loop, but it RESETS `s` to "" every
+// time the result passes 512 bytes, so the accumulator never grows and the per-append cost is constant
+// by construction. It therefore measures short-string append and reports a 2.2x WIN while saying nothing
+// about the shape below, where the accumulator reaches ~1 MB. The two are complementary, not redundant:
+// keep both, and never treat `strbuild` as coverage for this.
+//
+// What it exposes. On the JIT this is amortized O(1) per append (in-place when the buffer is uniquely
+// owned). On the VM and the tree-walker it is O(n) per append — `PhStr::concat` allocates a fresh buffer
+// and copies BOTH sides every time, because at the `Concat` op the accumulator's `Rc` is aliased (the
+// local slot AND the stack copy), so it can never be appended in place. That makes the whole loop
+// QUADRATIC off the JIT: measured 18.1 ms / 72.2 ms / 492.1 ms at 5k / 10k / 20k lines, against a linear
+// 0.66 / 1.18 / 2.33 with the JIT. The gap at 20k is 211x, and it is the SAME program.
+//
+// So this bench measures the default (JIT) path, where phorj is ~1.75x behind PHP — an honest,
+// bounded loss. The quadratic cliff behind it is DEC-431's pending ruling, not something a ratio can
+// express, and it is recorded in KNOWN_ISSUES rather than encoded here.
+//
+// The checksum is the final byte length: it defeats dead-code elimination AND gates output-identity, so
+// a timing is only trusted when both legs built the same string.
+function bench(int lines): int {
+    mutable string body = "";
+    mutable int i = 0;
+    while (i < lines) {
+        body = body + "row {i} the quick brown fox jumps over the lazy dog\n";
+        i = i + 1;
+    }
+    return String.length(body);
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int lines = 20000;
+    int warm = bench(lines);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int n = bench(lines);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("strappend\t{d + guard}\t{n}");
+}

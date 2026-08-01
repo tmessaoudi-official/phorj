@@ -1,6 +1,7 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. IN FLIGHT: the DEC-423 perf programme — every loss named; the JIT vertical started (DEC-428 = step 1, `floatloop` -36%) and step 2 was BUILT, MEASURED AT ZERO, REVERTED (DEC-429 — the sticky phi costs nothing; `opt_level` was `speed` all along, and a stale comment saying `none` had been the premise of DEC-425/428). `floatloop` is now a documented near-parity, not a tuning debt — and DEC-430 upgraded that to HARDWARE-BOUNDED: php sits at 1.98 cycles/iteration, exactly this core's 2-cycle FP-add latency floor, so the ceiling on further phorj work there is ~11%. DEC-430 also found the box's real clock is ~2.75 GHz (not the 2.100 `/proc/cpuinfo` reports) and localized phorj's 25-95% short-loop variance to front-end µarch state — eight causes refuted, BLOCKED on PMU access. NEXT: pick the next loss from the list below — measure with callgrind Ir SLOPE, never wall clock (DEC-429). ONE PENDING RULING carried out of DEC-430: raise `MICROBENCH_RUNS` (K=3 is systematically pessimistic on short loops) vs leave the per-push gate fast.**
+## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. IN FLIGHT: the DEC-423 perf programme — every loss named; the JIT vertical started (DEC-428 = step 1, `floatloop` -36%) and step 2 was BUILT, MEASURED AT ZERO, REVERTED (DEC-429 — the sticky phi costs nothing; `opt_level` was `speed` all along, and a stale comment saying `none` had been the premise of DEC-425/428). `floatloop` is now a documented near-parity, not a tuning debt — and DEC-430 upgraded that to HARDWARE-BOUNDED: php sits at 1.98 cycles/iteration, exactly this core's 2-cycle FP-add latency floor, so the ceiling on further phorj work there is ~11%. DEC-430 also found the box's real clock is ~2.75 GHz (not the 2.100 `/proc/cpuinfo` reports) and localized phorj's 25-95% short-loop variance to front-end µarch state — eight causes refuted, BLOCKED on PMU access. NEXT: pick the next loss from the list below — measure with callgrind Ir SLOPE, never wall clock (DEC-429). ONE PENDING RULING carried out of DEC-430: raise `MICROBENCH_RUNS` (K=3 is systematically pessimistic on short loops) vs leave the per-push gate fast. **NEW + BIGGEST OPEN ITEM (DEC-431): a FALLIBLE CALL anywhere in a function takes the WHOLE function off the JIT — ~320x on a hot loop (773.83 ms vs 2.42 ms when the one call is hoisted), and `throws` is mandatory for any I/O, so this hits most real code SILENTLY. Plus VM/tree-walker `s = s + x` is O(n^2) (492 ms vs the JIT's 2.33 at 20k lines). Byte-identity holds — speed cliffs, not correctness. `bench/micro/strappend` added (0.48x); BOTH FIXES ARE PENDING RULINGS.**
+
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
@@ -304,7 +305,15 @@ a PENDING question, not self-ruled.
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.
 
-**PENDING developer questions** (Invariant 15 — do not self-rule): ~~**MICROBENCH-K**~~ **— RULED
+**PENDING developer questions** (Invariant 15 — do not self-rule): **DEC-431-JIT-CLIFF** + **DEC-431-CONCAT** (new 2026-08-01, the two biggest open perf items — a fallible
+callee declines the caller's whole JIT graph (~320x on a hot loop), and `s = s + x` is quadratic off the
+JIT (211x at 20k lines). Candidates for the first: make the fallible prelude methods compilable / stop an
+un-compilable callee disqualifying a compilable caller and bail to the VM at that call site only (strongest
+— the code-5 fault-exit machinery already does exactly this) / warn at compile time. For the second: a
+`TakeLocal`-shaped op for the recognized `x = x + e` shape so the `Rc` is unique at append time — a NEW
+`Op`, so Invariant 3's three matches + tree-walker parity, and Invariant 16 owes the cross-language survey
+(Java StringBuilder / Rust push_str / Swift isKnownUniquelyReferenced / PHP's own refcount-1 realloc all
+point at the unique-check route). Full ladder: DEC-431.); ~~**MICROBENCH-K**~~ **— RULED
 2026-08-01 (DEC-430.1): report the spread, leave K=3. BUILT** (`vm_worst_ns`/`php_worst_ns` in the JSON, a
 `spread v/p` column, `[noisy: VM spread +N%]` in the gate + a summary line; no verdict changes; `--emit`
 verified not to leak the fields). First real run flagged 5 of 51 — `floatarith` +29%, `floatloop` +27%,

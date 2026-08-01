@@ -1,5 +1,75 @@
 # Known Issues & Limitations
 
+## PERF-throws-kills-jit — a FALLIBLE CALL anywhere in a function takes the WHOLE function off the JIT (found 2026-08-01, DEC-431)
+
+**Measured, three ways, same program.** A hot integer loop — `acc = acc + (i * 3 - 1)`, 5,000,000
+iterations, the exact `intadd` bench body:
+
+| shape | time |
+|---|---|
+| loop alone (the `intadd` bench) | **3.43 ms** |
+| loop + a call to an INFALLIBLE prelude method (`String.length`) | **1.90 ms** |
+| loop + a call to a FALLIBLE one (`FileSystem.writeText(…)?`) | **773.83 ms** |
+| the same, with that one call HOISTED into a separate function | **2.42 ms** |
+
+So a single fallible call in the same function as a hot loop costs **~320x**, and moving that one line
+into another function recovers all of it. Nothing about the loop changed.
+
+**Root cause.** JIT eligibility is transitive over the `Op::Call` graph: `Compiled::compile_unboxed`
+compiles the callee set reachable from the entry, and if any member is not compilable the whole graph is
+declined. The fallible prelude method is not compilable, so the CALLER — including a hot loop that has
+nothing to do with it — is interpreted. Verified from the disassembly: `work`'s loop is plain int ops and
+the only other instruction is `Call(16) -> FileSystem::writeText/3`.
+
+**Why it matters more than the number suggests.** `throws` is not exotic — the checker REQUIRES it for
+any fallible call, so every function that touches the filesystem, a database, the network or a lock
+declares it. Any hot loop in such a function is interpreted. This is invisible: the code type-checks,
+the output is byte-identical (Invariant 1 holds — this is purely a speed cliff), and nothing warns.
+
+**Workaround, until it is ruled:** keep hot loops in their own function and hoist fallible calls out of
+it. Verified above (773.83 ms -> 2.42 ms).
+
+**How it was found, because the path matters.** Profiling the `fsforeachline` loss (0.30x): 97% of the
+callgrind profile was `memcpy`, and 14.0 of the 14.18 BILLION instructions turned out to be the bench's
+own `fixture()`, not the read under test. `fixture()` builds a string in a loop and then writes it, so it
+declares `throws` — which put it on the interpreter, where string append is quadratic (see
+PERF-vm-concat-quadratic below). The bench had been paying that since it was written.
+
+**NOT RULED — the fix is a design decision** (register: DEC-431). The obvious candidates, none chosen: make
+the fallible prelude methods compilable; stop letting an un-compilable callee disqualify a compilable
+caller (compile the caller and bail to the VM at that call site only); or warn at compile time when a hot
+loop sits in a declined function. A `fallibleloop` bench is deliberately NOT added yet: its ratio would be
+~0.005 and would measure a compiler limitation rather than a feature, distorting the geomean. Recorded
+here instead of hidden — and stated so rather than silently omitted.
+
+## PERF-vm-concat-quadratic — `s = s + x` in a loop is O(n^2) off the JIT (found 2026-08-01, DEC-431)
+
+`PhStr::concat(a, b)` always allocates a fresh buffer and copies BOTH sides. It cannot do better as
+called: the bytecode for `body = body + x` is `GetLocal(1); Const; Concat(2); SetLocal(1)`, so at the
+`Concat` op the accumulator's `Rc` is ALIASED — the local slot holds one reference and the stack copy
+another — and `Rc::get_mut` can never succeed. Every iteration therefore re-copies the whole accumulator.
+
+Measured, same program, 5k / 10k / 20k lines:
+
+| backend | 5 000 | 10 000 | 20 000 |
+|---|---|---|---|
+| JIT | 0.66 ms | 1.18 ms | **2.33 ms** (linear) |
+| VM (`--no-jit`) | 18.1 ms | 72.2 ms | **492.1 ms** (quadratic) |
+| tree-walker | 18.2 ms | 69.1 ms | **494.8 ms** (quadratic) |
+
+211x apart at 20k. The JIT is amortized because its inline concat ladder appends into a uniquely-owned
+arena slot; the VM and the tree-walker have no equivalent. `--no-jit` is documented as a byte-identical
+escape hatch — it still is, but it is unusable on this idiom.
+
+**Now benched:** `bench/micro/strappend` (added with this entry) measures the DEFAULT (JIT) path at
+**0.48x** — phorj ~2.1x behind PHP's `.=`, an honest bounded loss with a solid 7%/5% spread. The existing
+`strbuild` bench does NOT cover this: it resets the accumulator at 512 bytes, so it never grows and
+reports a 2.06x WIN. That blind spot is why this went unmeasured.
+
+**NOT RULED.** A fix needs the accumulator to be unaliased at append time — e.g. a `TakeLocal`-style op
+emitted for the recognized `x = x + e` shape, which is a new `Op` variant and therefore Invariant 3's
+three exhaustive matches plus tree-walker parity work. Ladder and alternatives: DEC-431.
+
 ## LIFT-USING — a lifted `try`/`finally` is not raised to `using` (2026-07-31; was LIFT-TRY)
 
 **LIFT-TRY is BUILT.** `try`/`catch`/`finally` is now in the lift subset: the lift AST has

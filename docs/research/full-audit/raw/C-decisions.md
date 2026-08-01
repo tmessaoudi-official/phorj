@@ -5911,3 +5911,99 @@ as defensive rather than presented as proven.
 The underlying variance is still un-root-caused and still blocked on PMU access (DEC-430). Raising K
 remains available (`MICROBENCH_RUNS`) and is now an informed choice rather than a guess: the report says
 which features would benefit. The `_owed` floors were NOT re-emitted (DEC-365).
+
+
+## DEC-431 — a fallible call takes the whole function off the JIT (~320x), and VM string append is quadratic (2026-08-01, FOUND + BENCHED; the FIXES are PENDING RULINGS)
+
+Set out to profile the `fsforeachline` loss (0.30x) with DEC-430's Ir-slope method. Found something much
+larger on the way in, and the way it was found is the point.
+
+### How it surfaced
+
+callgrind on `fsforeachline`: **97% of the profile was `memcpy`**, and **14.0 of the 14.18 BILLION**
+instructions were the bench's own `fixture()` — not the read under test. Isolating the fixture confirmed
+it: fixture-only = 13,996,282,532 Ir; the whole bench (fixture + two reads) = 14,184,618,009. **The two
+reads are ~188 M instructions; the setup is 74x the thing being measured.** Every profile anyone has ever
+taken of the fs benches was really a profile of their fixture.
+
+`fixture()` builds a string in a loop and writes it, so it declares `throws`. That turned out to be the
+whole story.
+
+### Defect A — a FALLIBLE CALL anywhere in a function takes the WHOLE function off the JIT
+
+Same hot integer loop (`acc = acc + (i * 3 - 1)`, 5,000,000 iterations — the exact `intadd` body):
+
+| shape | time |
+|---|---|
+| loop alone (the `intadd` bench) | **3.43 ms** |
+| loop + a call to an INFALLIBLE prelude method (`String.length`) | **1.90 ms** |
+| loop + a call to a FALLIBLE one (`FileSystem.writeText(…)?`) | **773.83 ms** |
+| the same, that one call HOISTED into a separate function | **2.42 ms** |
+
+**~320x, from one line's placement.** Confirmed three independent ways (infallible control, the fallible
+case, and the hoist).
+
+**Root cause [Verified].** JIT eligibility is transitive over the `Op::Call` graph — the callee set
+reachable from the entry is compiled as one module, and one un-compilable member declines the whole graph.
+The fallible prelude method is not compilable, so the caller's hot loop is interpreted. From the
+disassembly, `work`'s body is plain int ops plus exactly one other instruction:
+`Call(16) -> FileSystem::writeText/3`.
+
+**Why this is bigger than the number.** `throws` is not an edge case — the checker REQUIRES it for any
+fallible call, so every function touching the filesystem, a database, the network or a lock has it. Any
+hot loop in such a function is interpreted, silently: it type-checks, the output stays byte-identical
+(Invariant 1 holds — this is a speed cliff, not a correctness bug), and nothing warns. The developer's
+`var/phorj-app` real-world comparison app is the obvious place this has been costing real numbers.
+
+### Defect B — `s = s + x` in a loop is O(n^2) off the JIT
+
+`PhStr::concat(a, b)` always allocates a fresh buffer and copies BOTH sides, and as CALLED it cannot do
+better: `body = body + x` compiles to `GetLocal(1); Const; Concat(2); SetLocal(1)`, so at the `Concat` op
+the accumulator's `Rc` is **aliased** — the local slot holds one reference, the stack copy another — and
+`Rc::get_mut` can never succeed.
+
+| backend | 5 000 lines | 10 000 | 20 000 |
+|---|---|---|---|
+| JIT | 0.66 ms | 1.18 ms | **2.33 ms** (linear) |
+| VM (`--no-jit`) | 18.1 ms | 72.2 ms | **492.1 ms** (quadratic) |
+| tree-walker | 18.2 ms | 69.1 ms | **494.8 ms** (quadratic) |
+
+211x at 20k. The JIT is amortized (its inline concat ladder appends into a uniquely-owned arena slot); the
+VM and tree-walker have no equivalent. `--no-jit` remains byte-identical, so it is still a valid escape
+hatch — just unusable on this idiom. Defects A and B compound: A puts the function on the VM, B makes its
+string building quadratic once it is there.
+
+### What SHIPPED with this entry: the bench that was missing
+
+`bench/micro/strappend.{phg,php}` — the string-growing idiom against PHP's `.=`, measured on the DEFAULT
+(JIT) path: **0.48x**, a 7%/5% spread (solid, not noise). Honest and bounded: phorj is ~2.1x behind PHP
+even on its fast path.
+
+**Why the suite was blind.** `strbuild` appends in a loop too, but RESETS the accumulator to "" every time
+it passes 512 bytes — so it never grows, the per-append cost is constant by construction, and it reports a
+2.06x WIN. It measures short-string append and says nothing about a growing accumulator. Both benches now
+exist and the new one's header says explicitly never to treat `strbuild` as coverage for it.
+
+**A `fallibleloop` bench for defect A is deliberately NOT added**, and this is the disclosure rather than a
+silent omission: its ratio would be ~0.005 and would measure a compiler limitation rather than a language
+feature, distorting the geomean and the `_owed` list. It is recorded in `KNOWN_ISSUES.md` instead. If the
+ruling below makes it a feature-level number, it becomes a bench then.
+
+Nothing was re-emitted — `strappend` reports as `not in baseline (new)` and does not block (verified).
+
+### PENDING RULINGS — both fixes are design decisions, neither self-rulable
+
+**A (the JIT cliff).** Candidates, none chosen: (1) make the fallible prelude methods compilable; (2) stop
+letting an un-compilable callee disqualify a compilable caller — compile the caller and bail to the VM at
+that one call site (the fault-exit machinery already does exactly this for code 5); (3) warn at compile
+time when a hot loop sits in a declined function. (2) looks strongest on the evidence — the mechanism is
+already there — but it changes the JIT's compilation unit, which is a structural decision.
+
+**B (quadratic append).** A fix needs the accumulator unaliased at append time — e.g. a `TakeLocal`-shaped
+op emitted for the recognized `x = x + e` shape, which pushes the value out of the slot so the `Rc` is
+unique, plus a `PhStr::concat` fast path that appends in place. That is a NEW `Op` variant: Invariant 3's
+three exhaustive matches (`vm::exec_op`, `BytecodeProgram::validate`, `compiler::stack_effect`), plus
+tree-walker parity. Invariant 16 (META-7) also owes a cross-language survey here — every language with
+immutable strings has faced this (Java's `StringBuilder`, Rust's `String::push_str`, Swift's COW
+`isKnownUniquelyReferenced`, PHP's own refcount-1 realloc) and the COW/unique-check route is the standard
+answer, which is evidence for the `TakeLocal` shape rather than for a builder type.

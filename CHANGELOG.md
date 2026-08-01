@@ -6,6 +6,48 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Found — a fallible call takes the WHOLE function off the JIT (~320x); VM string append is quadratic (DEC-431, 2026-08-01)
+Set out to profile the `fsforeachline` loss with DEC-430's Ir-slope method and found something much larger
+on the way in. **A bench ships; both fixes are PENDING RULINGS.**
+
+**How it surfaced.** callgrind on `fsforeachline`: 97% of the profile was `memcpy`, and **14.0 of the 14.18
+BILLION** instructions were the bench's own `fixture()`, not the read under test (fixture-only measured
+13,996,282,532 Ir against the full bench's 14,184,618,009 — the two reads are ~188 M). **The setup was 74x
+the thing being measured.** `fixture()` builds a string in a loop and writes it, so it declares `throws` —
+and that turned out to be the whole story.
+
+**Defect A — a fallible call anywhere in a function takes the whole function off the JIT.** Same hot
+integer loop (the exact `intadd` body, 5M iterations):
+
+| shape | time |
+|---|---|
+| loop alone (`intadd`) | 3.43 ms |
+| loop + an INFALLIBLE prelude call (`String.length`) | 1.90 ms |
+| loop + a FALLIBLE one (`FileSystem.writeText(…)?`) | **773.83 ms** |
+| the same, that one call hoisted to another function | **2.42 ms** |
+
+**~320x from one line's placement**, confirmed three independent ways. Root cause [Verified]: JIT
+eligibility is transitive over the `Op::Call` graph — one un-compilable callee declines the whole graph, so
+the caller's hot loop is interpreted. `throws` is not exotic; the checker REQUIRES it for any fallible
+call, so every function touching the filesystem/database/network/a lock has it. Silent: it type-checks,
+output stays byte-identical (Invariant 1 holds — a speed cliff, not a correctness bug), nothing warns.
+Workaround until ruled: keep hot loops in their own function and hoist fallible calls out.
+
+**Defect B — `s = s + x` in a loop is O(n²) off the JIT.** `PhStr::concat` always allocates a fresh buffer
+and copies both sides, and as called it cannot do better: `body = body + x` compiles to
+`GetLocal(1); Const; Concat(2); SetLocal(1)`, so at `Concat` the accumulator's `Rc` is **aliased** (local
+slot + stack copy) and `Rc::get_mut` can never succeed. Measured at 5k/10k/20k lines — JIT
+0.66/1.18/**2.33** ms (linear) vs VM 18.1/72.2/**492.1** and tree-walker 18.2/69.1/**494.8** (quadratic).
+211x apart at 20k. A and B compound: A puts the function on the VM, B makes its string building quadratic
+once there.
+
+**What ships: `bench/micro/strappend`** — the string-growing idiom vs PHP's `.=`, on the default (JIT)
+path: **0.48x**, 7%/5% spread (solid). **Why the suite was blind:** `strbuild` appends in a loop too but
+RESETS the accumulator at 512 bytes, so it never grows and reports a 2.06x WIN. A `fallibleloop` bench for
+defect A is deliberately NOT added — its ratio would be ~0.005 and would measure a compiler limitation
+rather than a feature, distorting the geomean; it is in `KNOWN_ISSUES.md` instead, stated rather than
+silently omitted. Nothing re-emitted (`strappend` reports as new, non-blocking — verified).
+
 ### Added — the ratchet reports per-feature measurement spread (DEC-430.1, 2026-08-01)
 Developer-ruled answer to DEC-430's question: report the spread, leave `K=3`.
 
