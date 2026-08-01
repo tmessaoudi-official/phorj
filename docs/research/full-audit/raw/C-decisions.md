@@ -5458,3 +5458,60 @@ own header — the guard↔increment link — and widening an overflow-elision p
 where being wrong means silently wrong arithmetic rather than a failing test. It is also squarely
 inside the JIT programme that DEC-423 says needs a scope ruling before it starts. Recorded with the
 exact entry point (`verify_with_g`, float/call-carrying bodies) so the work is ready to pick up.
+
+
+## DEC-426 — `jsonround` / `deepjson`: not tunable, and they lose for two DIFFERENT reasons (2026-08-01)
+
+Next off the DEC-423 list, and the pair that does not depend on the JIT ruling. Result: **no code
+change**. Two tuning attempts, both measured, both rejected — and the profiles say these are design
+questions, not tuning gaps. Both stay OWED.
+
+### `deepjson` (0.84x, 1038 ms vs php 869 ms) — 55% of it is SKIPPING
+
+[Verified by callgrind: `skip_string` **28.3%**, `skip_value` **26.1%** (two frames) — the lazy parser
+walking bytes the program never reads.]
+
+That is DEC-294's lazy representation working as designed and still losing, because of how many times
+it walks the document. Per `Json.parse` + the bench's four field reads:
+  1. `validate_json` scans the WHOLE doc (required — `Json.parse` must return null for malformed input);
+  2. materializing the ROOT scans it again, skipping each child's entire subtree to delimit it;
+  3. materializing `data` scans the array;
+  4. materializing `rec0` is small.
+
+Roughly **three full-document scans** against PHP's single `json_decode` pass. The memo is not the
+problem — `materialize_lazy` already caches via `cached.get_or_init`, so the two `topString(rec0, …)`
+calls share one materialization [Verified by reading the code].
+
+**The lazy premise does not hold at this size.** DEC-294's bet is that unread records never allocate;
+at 12 records a skip-scan simply is not much cheaper than materialize-as-you-go, and we pay it three
+times over. The structural fix is to have `validate_json` RECORD child offsets so step 2 disappears —
+about a third of the scanning. That changes the lazy representation (an index costs memory for
+documents nobody materializes), so it is a DEC-294 design question, not a tuning pass.
+
+### Two rejected attempts, recorded so they are not retried
+
+1. **Bulk-skip the plain run via a slice `position` instead of a per-byte `self.b.get(i)`.** Removes a
+   bounds check and three comparisons per byte. [Verified: 228.6M → 223.6M Ir (**−2.2%**), wall clock
+   1034 → 1038.5 ms — nothing, and the first 3-sample reading of "1015" was noise that a 7-sample
+   median did not reproduce.] REVERTED, on the same rule that reverted `exec_hot` (DEC-423): fewer
+   instructions with no wall-clock movement is not a win. **Why it could not help:** the strings in the
+   document are 2–8 bytes (`"ok"`, `"Ada"`, `"ada@x.io"`), so the per-byte loop barely runs — the cost
+   is per-STRING call overhead, not per-byte scanning.
+2. **`#[inline]` on `skip_string`.** [Verified: 1105 ms vs 1038 — actively WORSE.] Reverted.
+
+### `jsonround` (0.29x, 612 ms vs php 178 ms) — a different profile entirely
+
+[Verified by callgrind: VM interpretation **~34%** (`exec_op` 18.4%, `run_to_completion` 9.9%, stack
+push/pop 6%), malloc/free 15.6%, the parser only **11.7%**.] So unlike `deepjson`, the parser is NOT
+the cost here — the cost is the VM running the bench's own phorj code.
+
+That code is two nested seven-arm exhaustive `match`es per field read, because that is how phorj gets a
+typed value out of the `Json` ADT. PHP writes `is_int($j['id'] ?? null) ? $j['id'] : 0`. The comparison
+is idiomatic-to-idiomatic and therefore fair — but it also names a real **ergonomics gap**: phorj has
+no `Json.getInt(key)` / `getString(key)` accessor, and PHP's `$j['id']` is exactly that. Adding one
+would be both an API improvement and a large perf win (a native accessor replaces ~14 interpreted match
+arms per read). It is new user-visible stdlib surface, so Invariant 15 — the developer's call, recorded
+as a PENDING question rather than self-ruled.
+
+The residual after that would still be VM-interpretation-bound, i.e. the same JIT programme DEC-423
+flagged. Three of the nine losses now terminate there.

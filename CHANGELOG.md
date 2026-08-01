@@ -6,6 +6,34 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Measured — `jsonround`/`deepjson` are design questions, not tuning gaps (DEC-426, 2026-08-01)
+No code change. Two tuning attempts, both measured, both rejected; both benches stay OWED.
+
+**`deepjson` (0.84x, 1038 ms vs php 869 ms): 55% of it is SKIPPING** — [Verified by callgrind:
+`skip_string` 28.3%, `skip_value` 26.1%.] The lazy parser walks the document roughly THREE times per
+parse — `validate_json` over the whole doc (required, since `Json.parse` must null on malformed
+input), then a delimitation scan per materialized level — against PHP's single `json_decode` pass. The
+memo is fine (`materialize_lazy` already caches, so the two `topString(rec0, …)` calls share one
+materialization). DEC-294's lazy bet is that unread records never allocate; at 12 records a skip-scan
+simply is not much cheaper than materialize-as-you-go, and we pay it three times. The structural fix —
+have validation record child offsets so the root's re-scan disappears — changes the lazy
+representation, so it is a DEC-294 design question.
+
+Rejected, and recorded so they are not retried: **bulk-skipping the plain run via a slice `position`**
+instead of a per-byte bounds-checked `get` [Verified: −2.2% instructions, wall clock 1034 → 1038.5 ms
+— nothing; an initial 3-sample "1015" was noise a 7-sample median did not reproduce], reverted on the
+same rule as `exec_hot`; and **`#[inline]` on `skip_string`** [Verified: 1105 ms — actively worse].
+Neither could have helped: the document's strings are 2–8 bytes, so the cost is per-STRING call
+overhead, not per-byte scanning.
+
+**`jsonround` (0.29x) loses for a completely different reason** — [Verified: VM interpretation ~34%,
+malloc 15.6%, the parser only 11.7%.] The cost is the bench's own phorj code: two nested seven-arm
+exhaustive `match`es per field read, because that is how phorj gets a typed value out of the `Json`
+ADT, versus PHP's `$j['id']`. Fair as an idiomatic comparison — but it names a real ergonomics gap:
+phorj has no `Json.getInt(key)`/`getString(key)` accessor. Adding one would be both an API improvement
+and a large perf win (a native replaces ~14 interpreted match arms per read). New user-visible stdlib
+surface, so it is recorded as a PENDING question rather than self-ruled (Invariant 15).
+
 ### Measured — `floatloop` never regressed; the loss is one loop-carried sticky phi (DEC-425, 2026-08-01)
 The ratchet recorded `floatloop` at 1.011 (WIN) through 2026-07-20 and it now reads 0.48 — the one
 apparent WIN→LOSS flip on the board. It is not a regression. [Verified by building the exact commit

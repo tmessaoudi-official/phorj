@@ -187,7 +187,17 @@ a PENDING question, not self-ruled.
      never addressed where the time went. STILL OWED at 4.5x — malloc/free is still 28.6%, and the rest
      is a REPRESENTATION difference (a typed bag graph vs PHP's plain arrays). Closing it needs lazy
      bags and/or arena allocation, a design change to DEC-331 slice 2's rich Request — adjudicable.
-   - `jsonround` **0.29x** / `deepjson` **0.79x** — the queued Json-ADT JIT slice.
+   - `jsonround` **0.29x** / `deepjson` **0.84x** — **DIAGNOSED 2026-08-01 (DEC-426), no code change;
+     they lose for DIFFERENT reasons.** `deepjson`: 55% is SKIPPING — the lazy parser walks the doc ~3x
+     per parse (validate + a delimitation scan per materialized level) vs PHP's single decode. Two
+     tuning attempts measured and REVERTED (a slice-`position` bulk skip: -2.2% instructions, 0% wall
+     clock; `#[inline]`: actively worse) — the strings are 2-8 bytes, so the cost is per-STRING call
+     overhead, not per-byte scanning. The structural fix (validation records child offsets) is a
+     DEC-294 lazy-representation design change. `jsonround`: the parser is only 11.7%; **34% is the VM
+     interpreting the bench's own two nested seven-arm exhaustive matches per field read**. That names
+     an ergonomics gap — phorj has no `Json.getInt(key)`/`getString(key)` accessor where PHP writes
+     `$j['id']`. A native accessor is both an API win and a big perf win; NEW STDLIB SURFACE, so it is
+     a PENDING question (Invariant 15), not self-rulable.
    - `floatloop` **0.48x** — **DIAGNOSED 2026-08-01 (DEC-425), and it is NOT a regression**: building
      the exact commit whose baseline said 1.011 measures 0.43 against this php, so docker
      `php:8.5-cli` was ~2.3x slower on this loop and every pre-2026-08-01 WIN is tainted by that.
