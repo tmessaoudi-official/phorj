@@ -3,6 +3,7 @@
 
 use super::*;
 
+mod canon;
 mod helper_refs;
 mod json_ext;
 mod list_builders;
@@ -759,7 +760,7 @@ pub(super) extern "C" fn rt_u_list_seal(ctx: *mut UbCtx, list: i64) -> i64 {
             .copy_from_slice(&hash.to_le_bytes());
         // Canonicalize: adopt the registry's slot for this content, or register this one (a flat
         // element is bump-pinned — never recycled — so it may safely enter the registry).
-        let canon1 = *ctx.interned.entry(bytes.clone()).or_insert(slot as u32) as u64 + 1;
+        let canon1 = ctx.canon_for(bytes, slot);
         ctx.buf_storage[off + UB_SLOT_CANON_OFF..off + UB_SLOT_CANON_OFF + 8]
             .copy_from_slice(&canon1.to_le_bytes());
         ctx.bump += 1;
@@ -1408,38 +1409,10 @@ pub(super) extern "C" fn rt_u_map_builder_set(
     val: i64,
 ) -> i64 {
     let ctx = unsafe { &mut *ctx };
-    let kb: Vec<u8> = match ctx.str_bytes(key) {
-        Some(b) => b.to_vec(),
-        None => return -1,
-    };
-    if kb.len() > crate::phstr::INLINE_CAP {
-        return -1; // AMB keys are slot-interned (≤ 22 bytes); long keys stay on the VM
-    }
-    // Canon: adopt the registry entry, else register a fresh bump-pinned key slot.
-    let kslot = match ctx.interned.get(&kb) {
-        Some(&s) => s as usize,
-        None => {
-            let Ok(ks) = std::str::from_utf8(&kb) else {
-                return -1;
-            };
-            if ctx.bump + 1 > ctx.cap {
-                return -1;
-            }
-            let kslot = ctx.bump as usize;
-            let koff = kslot * UB_SLOT_SIZE;
-            let hash = crate::phstr::PhStr::new(ks).cached_hash();
-            ctx.buf_storage[koff] = kb.len() as u8;
-            ctx.buf_storage[koff + 1..koff + 1 + kb.len()].copy_from_slice(&kb);
-            ctx.buf_storage[koff + 1 + kb.len()..koff + UB_SLOT_HASH_OFF].fill(0);
-            ctx.buf_storage[koff + UB_SLOT_HASH_OFF..koff + UB_SLOT_HASH_OFF + 8]
-                .copy_from_slice(&hash.to_le_bytes());
-            let canon1 = (kslot as u64) + 1;
-            ctx.buf_storage[koff + UB_SLOT_CANON_OFF..koff + UB_SLOT_CANON_OFF + 8]
-                .copy_from_slice(&canon1.to_le_bytes());
-            ctx.bump += 1;
-            ctx.interned.insert(kb, kslot as u32);
-            kslot
-        }
+    // Canon: adopt the registry entry, else register a fresh bump-pinned key slot. Both live in
+    // `canon.rs` — see there for why the probe takes a BORROWED slice (DEC-433).
+    let Some(kslot) = ctx.canon_key_slot(key) else {
+        return -1;
     };
     let canon1 = kslot as u64 + 1;
     let hoff = kslot * UB_SLOT_SIZE + UB_SLOT_HASH_OFF;

@@ -6,6 +6,40 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the canon registry allocated a key per map write; `mapinsert`/`mapget` are WINs (DEC-433, 2026-08-01)
+First two rows off DEC-432's hunt list, and the two nobody had looked at. Both JIT cleanly
+(`PHORJ_JIT_EXPLAIN` prints nothing), so this is real cost in the map path, not the DEC-431 cliff.
+
+**Root cause [Verified by callgrind].** `UbCtx::interned` — the CANON registry, a
+`HashMap<Vec<u8>, u32>` — was probed by building an OWNED copy of the key first at three sites:
+`rt_u_map_builder_set` did `.to_vec()`, i.e. **one heap allocation per `m[k] = v`**, and the flat-list and
+map seals used `entry(bytes.clone())`, cloning on every seal even when already registered. Since
+`Vec<u8>: Borrow<[u8]>`, all three can probe by slice for free; the allocation was pure waste on every
+touch after a key's first. malloc/free was ~3% of the `mapinsert` profile.
+
+**Fixed:** probe borrowed, allocate only to insert. The two seals were the same logic written twice and
+now share `canon_for`; the builder's probe+register became `canon_key_slot`. Both live in a new
+`src/jit/handles/canon.rs` (63 lines). That structure was forced by the size gate and was right: the
+inline version pushed grandfathered `handles/mod.rs` 2000 → 2020, and extracting left it at **1973
+(−27 below baseline)** with `maps_ext.rs` at 478 (−18). The baseline row is ratcheted to 1973.
+
+**Measured.** Ir slope (the DEC-430 instrument): `mapinsert` **90.486 → 87.219 Ir/iteration, −3.6%**,
+unchanged by the refactor. Wall clock, interleaved + pinned, 9 rounds against a pre-fix binary: phorj's
+leg **6.24 → 5.91 ms on minima (−5.3%)**, 6.49 → 6.03 on medians (−7.1%). Wall clock moving MORE than Ir
+is the expected signature of removing an allocation — allocator cache and lock cycles that Ir
+under-counts. Harness on a quiet box: `mapinsert` **1.06× (WIN)**, `mapget` **1.01× (WIN)**, with no map
+bench moving backwards.
+
+**Honesty on the flip:** the baseline had `mapinsert` at 0.813, but the *pre-fix* binary measured ~1.00 in
+the same interleaved run — that row's instability is what blocked a push in DEC-431.1. So the claim is
+"−5..7% on the phorj leg, measured interleaved", not "0.813 → 1.06 because of this change"; −3.6% Ir
+cannot do that. Identity re-verified on all three legs.
+
+**Not done, and it is a security trade:** `interned` still uses Rust's default SipHash (another ~2.2% of
+the profile). The codebase's `FnvHasher` doc argues SipHash "buys nothing" for field-map keys because they
+"come only from a program's own source" — that argument does NOT transfer, because `interned` holds
+runtime map keys and `m[request.query("x")] = 1` reaches it. Surfaced for a ruling rather than self-decided.
+
 ### Added — `PHORJ_JIT_EXPLAIN=1`; the ~320x cliff's mechanism CORRECTED and my recommended fix REFUTED (DEC-431.2, 2026-08-01)
 Went to build DEC-431's `throws` cliff fix. Investigated first, and the investigation killed both the
 recorded mechanism and the recommended design — so nothing was built from the wrong plan.

@@ -112,7 +112,7 @@ pub(in crate::jit) fn seal_flat_entries(
         ctx.buf_storage[koff + 1 + bytes.len()..koff + UB_SLOT_HASH_OFF].fill(0);
         ctx.buf_storage[koff + UB_SLOT_HASH_OFF..koff + UB_SLOT_HASH_OFF + 8]
             .copy_from_slice(&hash.to_le_bytes());
-        let canon1 = *ctx.interned.entry(bytes.clone()).or_insert(kslot as u32) as u64 + 1;
+        let canon1 = ctx.canon_for(bytes, kslot);
         ctx.buf_storage[koff + UB_SLOT_CANON_OFF..koff + UB_SLOT_CANON_OFF + 8]
             .copy_from_slice(&canon1.to_le_bytes());
         // Value slot: the raw i64, LE, bytes 0..8 (the rest is never read).

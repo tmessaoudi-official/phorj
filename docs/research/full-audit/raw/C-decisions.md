@@ -6236,3 +6236,71 @@ Three ratchet tests (`src/jit/tests/decline_reasons.rs`) pin the two decline rea
 the same loop compiles once no fallible call shares its function — without that third test the first two
 would pass equally well if the JIT declined everything. They assert the specific reason strings, not merely
 `is_err()`, precisely because a vague assertion is what let the mechanism be mis-stated.
+
+
+## DEC-433 — the canon registry allocated a key per map write; `mapinsert`/`mapget` are WINs (2026-08-01, BUILT)
+
+First two rows off DEC-432's hunt list, and the two that were entirely unexamined. Both JIT cleanly
+(`PHORJ_JIT_EXPLAIN` prints nothing), so this is not the DEC-431 cliff — it is real cost in the map path.
+
+### Root cause [Verified by callgrind]
+
+`UbCtx::interned` is the CANON registry (content → canonical slot), a `HashMap<Vec<u8>, u32>`. Three
+call sites probed it by building an OWNED copy of the key first:
+  * `rt_u_map_builder_set` — `ctx.str_bytes(key)` then `.to_vec()`, **one heap allocation per `m[k] = v`**;
+  * the flat-list seal and the map seal — `entry(bytes.clone())`, which clones on EVERY seal even when
+    the entry is already present, and the registry hit is the common case.
+
+`Vec<u8>: Borrow<[u8]>`, so all three can probe by SLICE for free. The allocation was pure waste on every
+touch after a key's first. In the `mapinsert` profile malloc/free was ~3%.
+
+### Fixed, and it took a module
+
+Probe borrowed; allocate only to insert. The two seal sites were the same probe-then-insert written
+twice, so both now call one `canon_for`, and `rt_u_map_builder_set`'s whole probe+register became
+`canon_key_slot`. Those live in a NEW `src/jit/handles/canon.rs` (63 lines) — the CANON registry is a
+distinct concern and now reads as one.
+
+That structure was forced by the size gate, and it was right to. The first version inlined the fix and
+pushed the grandfathered `handles/mod.rs` from 2000 to 2020; Invariant 13 says split it, do not grow it.
+Extracting left **`handles/mod.rs` at 1973 (-27 below its baseline)** and `maps_ext.rs` at 478 (-18). The
+baseline row is RATCHETED to 1973 so the gain cannot be silently spent.
+
+### Measured
+
+**Instructions (callgrind Ir slope, the DEC-430 instrument — deterministic, ~0.2% floor):**
+`mapinsert` **90.486 -> 87.219 Ir/iteration, -3.6%.** Re-measured after the refactor (87.265 -> 87.219),
+so the extraction cost nothing.
+
+**Wall clock, interleaved + pinned, 9 rounds, pre-fix vs post-fix binaries built from the same tree:**
+phorj's `mapinsert` leg **6.24 -> 5.91 ms on minima (-5.3%)**, 6.49 -> 6.03 on medians (-7.1%).
+
+Wall clock improves MORE than instruction count, which is the expected signature of removing an
+allocation: malloc/free costs cache and allocator-lock cycles that Ir under-counts. Worth remembering as
+a reading rule — a change that only moves Ir is suspect (DEC-429), one that moves wall clock MORE than Ir
+is usually touching memory behaviour.
+
+**Harness, quiet box:** `mapinsert` **1.06x (WIN)**, `mapget` **1.01x (WIN)** — and no map bench moved
+backwards (`mapkeys` 1.06, `mapvalues` 1.04, `mapmerge` 2.28, `maphas` 1.40).
+
+**Honesty on the flip.** The baseline recorded `mapinsert` at 0.813, but the pre-fix binary measured
+~1.00 against php in the same interleaved run above — that row's own instability is what blocked a push
+in DEC-431.1. So the defensible claim is **"the fix is worth -5..7% on the phorj leg, measured
+interleaved"**, and separately that both benches now measure as WINs. It is NOT "0.813 -> 1.06 because of
+this change"; -3.6% Ir cannot do that, and claiming it would be the loaded-box error in reverse.
+
+Output identity re-verified on all three legs (JIT / VM / tree-walker, checksum 15625859375).
+
+### NOT done — and it is a security trade, not an oversight
+
+The other half of the profile is the hasher: `interned` uses Rust's **default SipHash-1-3** with
+`RandomState`, showing as `hash_one::<&Vec<u8>>` 1.12% + `sip::Hasher::write` 1.12%. The codebase already
+ships `FnvHasher` and uses it for class field slots, whose doc argues SipHash "buys nothing here" because
+field-map keys "come only from a program's own source (never attacker-controlled network input)".
+
+**That argument does NOT transfer.** `interned` holds RUNTIME map keys: `m[request.query("x")] = 1`
+reaches it. Swapping to a non-collision-resistant hash there is a hash-flooding trade, not a free win.
+Mitigating context, offered but not decisive: the table only admits keys <= `INLINE_CAP` (22 bytes) and is
+bounded by the arena `cap` (over it, everything falls back to the VM), so degradation is bounded rather
+than unbounded. **Surfaced for a ruling, deliberately not self-decided** — worth roughly another 2-3% on
+these two benches.
