@@ -5337,3 +5337,64 @@ it is a correctness signal, not a timing one, and blocks on sight. If the re-mea
 suspects are reported and NOT blocked — DEC-365's rule that unmeasurable is OWED, never a block and
 never a silent pass. [Verified live: forcing suspects with a tightened band drives the re-measure and
 the confirmed verdicts; at defaults the gate reports 43 WIN / 8 OWED / 0 blocking and PASSES.]
+
+
+## DEC-424 — `queryparse`: the layout rebuild, and why DEC-338 did not close it (2026-08-01)
+
+First target off the DEC-423 list. DEC-338 is recorded BUILT to "flip the `queryparse` 0.10x loss" and
+the sweep measured **0.13x** — so the label said fixed and the number said 7.7x slower. Worth stating
+what actually happened: **DEC-338 was really done.** `Request.parse` IS nativized
+(`Core.Native.Http.parseRequest`); the interpreter no longer walks that body. The nativization simply
+did not address where the time goes, and nobody re-measured to find out.
+
+### The bug: a fresh `ClassLayout` per instance
+
+`native::http::request::inst` — the helper that hand-builds each prelude bag — called
+`ClassLayout::from_sorted_names` on EVERY instance. A `ClassLayout` is a sorted `Vec<String>` plus a
+name→slot hash map, and it depends only on the CLASS's field set. So a single `Request.parse` allocated
+a fresh string vector, sorted it, and built a fresh hash map once per bag in the graph — `Request`,
+`ParamBag`, `HeaderBag`, `AttrBag`, `FileBag`, `RequestBody`, every `Cookie`.
+
+[Verified by callgrind, 4000 parses: malloc/free was ~38% of all instructions retired, with
+`HashMap::insert` (3.7%) and `Rc<ClassLayout>::drop_slow` (1.4%) immediately behind it.] Caching the
+layout per class took the bench from **1839 ms to 1177 ms (-36%)**.
+
+### Two follow-ons, one of which is a lesson about fixing profiles
+
+1. **The first cache used a `std::collections::HashMap`** keyed by class name — and its SipHash of that
+   name promptly appeared as 3% of the profile, more than the lookup it replaced. There are under a
+   dozen classes here, so a `Vec` with a linear `memcmp` scan is strictly cheaper. Replacing a cost
+   with a smaller cost is still a cost; profile after every step, not just the first.
+2. **`Instance::new` + a `set_field` per field takes a fresh `RefCell` borrow for EACH field** — a
+   dozen borrows per bag, for an object nobody else can see yet. New `Instance::from_slots` fills the
+   slot vector directly; `inst` now places values by slot and constructs once.
+
+Together those two are worth a further **-3% of instructions** (461.5M → 446.6M) and nothing measurable
+in wall clock. Kept anyway — unlike the reverted `exec_hot` experiment (DEC-423), these REMOVE work
+rather than reorganise it, they are not on a hot dispatch path where a second implementation could
+drift, and `from_slots` is the honest API for the "build a fresh instance" case that several natives
+want. But recorded as marginal, not sold as a win.
+
+### Result: better, still losing, still OWED
+
+| | before | after |
+|---|---|---|
+| instructions (4000 parses) | 680.7M | **446.6M (-34%)** |
+| wall clock (200k parses) | 1839 ms | **~1180 ms** |
+| ratio vs php+JIT | 0.13x | **0.22x** |
+
+Confirmed through the harness: `queryparse` 0.145 → **0.22**. `webish`, which also parses requests,
+stays a WIN and gains too (2.85x). Still a 4.5x loss, so it stays OWED — DEC-365 unchanged.
+
+**Why it is still losing, and what a WIN would take.** malloc/free is STILL 28.6% after both fixes.
+PHP's parse builds plain arrays; phorj's builds a typed object graph — a `Request` plus six bag
+instances plus every decoded `String`, each its own allocation. That is a REPRESENTATION difference,
+not a tuning gap: closing it means making the bags lazy (parse the query only when `req.query` is
+touched), or arena-allocating the graph, or both. Either is a design change to the rich-Request model
+ruled in DEC-331 slice 2, so it is adjudicable, not something to self-decide.
+
+**The ratchet floor was NOT re-tightened in this change.** `_owed` still records queryparse at 0.145,
+so the gate would allow a slide back to 0.109 before blocking. Re-emitting after an IMPROVEMENT is the
+ratchet working as intended (it is re-emitting after a REGRESSION that DEC-365 forbids), but a re-emit
+rewrites every entry and the box was at load 6.58 when this landed — re-baselining the whole suite off
+a loaded box is exactly how a false floor gets frozen in. Queued for a quiet box.

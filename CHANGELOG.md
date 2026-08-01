@@ -6,6 +6,35 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `queryparse` built a fresh `ClassLayout` per instance (DEC-424, 2026-08-01)
+First target off the DEC-423 loss list. DEC-338 is recorded BUILT to "flip the `queryparse` 0.10x
+loss" and the sweep measured 0.13x. Worth being precise: **DEC-338 was really done** — `Request.parse`
+IS nativized and the interpreter no longer walks that body. It just did not address where the time
+goes, and nobody re-measured to find out.
+
+`native::http::request::inst` called `ClassLayout::from_sorted_names` on EVERY instance. A layout is a
+sorted `Vec<String>` plus a name→slot hash map and depends only on the CLASS, so one `Request.parse`
+allocated a fresh string vector, sorted it, and built a fresh hash map once per bag — `Request`,
+`ParamBag`, `HeaderBag`, `AttrBag`, `FileBag`, `RequestBody`, every `Cookie`. [Verified by callgrind:
+malloc/free was ~38% of instructions retired, `HashMap::insert` and `Rc<ClassLayout>::drop_slow` right
+behind.] Caching it per class: **1839 ms → 1177 ms (−36%)**.
+
+Two follow-ons, one of them a lesson: the first cache used a `HashMap` whose SipHash of the class name
+promptly showed up as 3% of the profile — more than the lookup it replaced, so it is a `Vec` with a
+linear scan now (under a dozen classes). And `Instance::new` + a `set_field` per field takes a fresh
+`RefCell` borrow per field; new `Instance::from_slots` fills the slot vector directly. Those two are
+worth a further −3% of instructions and nothing measurable in wall clock — kept because they REMOVE
+work rather than reorganise it, but recorded as marginal rather than sold as a win.
+
+**Result: 680.7M → 446.6M instructions (−34%), ratio 0.13x → 0.22x.** `webish`, which also parses
+requests, gains too and stays a 2.85x WIN. Still a 4.5x loss, so `queryparse` stays OWED.
+
+**Why it still loses:** malloc/free is *still* 28.6%. PHP builds plain arrays; phorj builds a typed
+object graph — a `Request` plus six bags plus every decoded string, each its own allocation. That is a
+representation difference, not a tuning gap. Closing it means lazy bags (parse the query only when
+`req.query` is touched) and/or arena allocation — a design change to the rich-Request model of DEC-331
+slice 2, so it is adjudicable rather than self-decidable.
+
 ### Added — the G-8 ratchet is ARMED, with every loss frozen as OWED (DEC-423.1, 2026-08-01)
 Developer-ruled follow-on: re-emit the baseline on the local release php **and** freeze the known
 losses as OWED in the same change, so `--emit` cannot launder them.

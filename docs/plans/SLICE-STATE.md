@@ -181,8 +181,12 @@ a PENDING question, not self-ruled.
      which the current JIT cannot do for two STRUCTURAL reasons (its side-effect-free eligibility
      invariant, and an unboxed kind lattice with no objects and no native calls). A JIT programme, not
      a vertical — **needs a scope ruling before it starts**.
-   - `queryparse` **0.13x** — and this one is a STALE LABEL, not just a loss: DEC-338 is recorded BUILT
-     to "flip the queryparse 0.10x loss". It did not. Re-open it.
+   - ~~`queryparse` **0.13x**~~ — **IMPROVED to 0.22x, 2026-08-01 (DEC-424)**: `inst` rebuilt a
+     `ClassLayout` (sorted names + hash map) for EVERY instance, so one parse did it once per bag.
+     Cached per class: -34% instructions, 1839 ms -> ~1180 ms. DEC-338's nativization was real; it just
+     never addressed where the time went. STILL OWED at 4.5x — malloc/free is still 28.6%, and the rest
+     is a REPRESENTATION difference (a typed bag graph vs PHP's plain arrays). Closing it needs lazy
+     bags and/or arena allocation, a design change to DEC-331 slice 2's rich Request — adjudicable.
    - `jsonround` **0.29x** / `deepjson` **0.79x** — the queued Json-ADT JIT slice.
    - `floatloop` **0.48x** — baseline 1.011, i.e. a WIN→LOSS FLIP the dark ratchet never caught.
      Reproducible on a quiet box; the JIT is engaging (100x vs `--no-jit`). Not yet attributable to a

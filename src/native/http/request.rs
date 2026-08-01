@@ -20,15 +20,52 @@ use super::{pairs_to_map, parse_multipart, stash_decision};
 use crate::value::{ClassLayout, Instance, Value};
 use std::rc::Rc;
 
-/// Hand-build a `Value::Instance` of a (kept) prelude class from `(field, value)` pairs. Field order
-/// is irrelevant — the layout sorts the names and access resolves name→slot at runtime.
-fn inst(class: &str, fields: Vec<(&str, Value)>) -> Value {
-    let names: Vec<&str> = fields.iter().map(|(n, _)| *n).collect();
-    let instance = Instance::new(class.into(), ClassLayout::from_sorted_names(&names));
+// Per-CLASS layout cache. A `ClassLayout` is a sorted `Vec<String>` plus a name→slot map, and it
+// depends only on the class's field set — yet `inst` rebuilt one for EVERY instance, so a single
+// `Request.parse` allocated a fresh string vector, sorted it, and built a fresh hash map once per bag
+// in the graph. Measured on `queryparse` (callgrind): malloc/free was ~38% of all instructions
+// retired, with `HashMap::insert` and `Rc<ClassLayout>::drop_slow` right behind it. Caching it took
+// the bench from 1839 ms to 1177 ms (-36%).
+//
+// A `Vec` with a linear scan, NOT a `HashMap`: there are under a dozen classes here, and the first
+// version of this cache used a `std::collections::HashMap` whose SipHash of the class name promptly
+// showed up as 3% of the profile — more than the lookup it was replacing. A short `memcmp` scan is
+// cheaper than hashing at this size.
+//
+// Thread-local: `Value`/`Rc` are single-threaded by construction here.
+thread_local! {
+    static LAYOUTS: std::cell::RefCell<Vec<(&'static str, Rc<ClassLayout>)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Hand-build a `Value::Instance` of a (kept) prelude class from `(field, value)` pairs.
+///
+/// Field order at the CALL SITE is irrelevant — the values are placed into their layout slots here, so
+/// the instance is born fully populated. That is also why this does not use `set_field`: that takes a
+/// fresh `RefCell` borrow per field, which is a dozen borrows per bag for an object nobody else can
+/// see yet.
+fn inst(class: &'static str, fields: Vec<(&str, Value)>) -> Value {
+    let layout = LAYOUTS.with(|c| {
+        let mut cache = c.borrow_mut();
+        if let Some((_, l)) = cache.iter().find(|(k, _)| *k == class) {
+            return Rc::clone(l);
+        }
+        let names: Vec<&str> = fields.iter().map(|(n, _)| *n).collect();
+        let l = ClassLayout::from_sorted_names(&names);
+        cache.push((class, Rc::clone(&l)));
+        l
+    });
+    let mut slots: Vec<Option<Value>> = vec![None; layout.len()];
     for (n, v) in fields {
-        instance.set_field(n, v);
+        // A name with no slot means the cached layout and this call disagree on the field set — only
+        // possible if a class is built two different ways, which these fixed prelude classes never
+        // are. Fail loudly in debug rather than silently dropping the value.
+        match layout.slot(n) {
+            Some(i) => slots[i] = Some(v),
+            None => debug_assert!(false, "class `{class}` has no slot for field `{n}`"),
+        }
     }
-    Value::Instance(Rc::new(instance))
+    Value::Instance(Rc::new(Instance::from_slots(class.into(), layout, slots)))
 }
 
 /// `b""` when spilled (`handle >= 0`), else the raw bytes inline — the phorj `if (stash >= 0) { b"" }`.

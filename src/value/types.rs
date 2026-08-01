@@ -283,6 +283,26 @@ impl Instance {
     /// Write field `name`. Returns `false` when `name` is not a declared storage slot — checker-
     /// unreachable for a valid program (the layout is a superset of declared fields), so callers may
     /// ignore the result; surfacing it keeps the write total/panic-free (EV-7).
+    /// Construct with every slot already filled — one allocation and no per-field `RefCell` borrow.
+    ///
+    /// [`Instance::new`] + a `set_field` per field takes a fresh `borrow_mut` for EACH field, which is
+    /// pure overhead when the caller is building a fresh instance nobody else can see yet. Natives that
+    /// hand-build prelude objects (`Core.Native.Http.parseRequest` builds a dozen bags per request) go
+    /// through here instead. `fields` must be in SLOT order and `layout.len()` long — the assert holds
+    /// callers to it, since a short vector would silently leave trailing fields unset.
+    pub fn from_slots(class: Rc<str>, layout: Rc<ClassLayout>, fields: Vec<Option<Value>>) -> Self {
+        assert_eq!(
+            fields.len(),
+            layout.len(),
+            "Instance::from_slots needs one entry per slot, in slot order"
+        );
+        Instance {
+            class,
+            layout,
+            fields: RefCell::new(fields),
+        }
+    }
+
     pub fn set_field(&self, name: &str, v: Value) -> bool {
         match self.layout.slot(name) {
             Some(i) => {
