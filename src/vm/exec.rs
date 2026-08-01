@@ -519,9 +519,9 @@ impl<'a> Vm<'a> {
                                 *n >= crate::vm::JIT_HOTNESS_THRESHOLD
                             };
                             if compile_now {
-                                let comp = crate::jit::Compiled::compile_unboxed(self.program, idx)
-                                    .ok()
-                                    .map(Rc::new);
+                                let comp =
+                                    crate::jit::Compiled::compile_or_explain(self.program, idx)
+                                        .map(Rc::new);
                                 cache.compiled.insert(idx, comp.clone());
                                 comp
                             } else {

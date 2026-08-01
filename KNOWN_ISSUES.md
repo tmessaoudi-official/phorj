@@ -29,6 +29,16 @@ the output is byte-identical (Invariant 1 holds — this is purely a speed cliff
 **Workaround, until it is ruled:** keep hot loops in their own function and hoist fallible calls out of
 it. Verified above (773.83 ms -> 2.42 ms).
 
+**DIAGNOSE IT: `PHORJ_JIT_EXPLAIN=1 phg run <file>`** (added 2026-08-01, DEC-431.2) prints every hot
+function the JIT declined and why. On this shape it prints `work — Unsupported("unboxed Const Some(Unit)")`
+plus the two prelude declines; on the hoisted version it prints nothing.
+
+**MECHANISM CORRECTED (DEC-431.2) — read that entry, not just this one.** The first blocker is the caller's
+OWN `Const(Unit)` (the dummy receiver for a prelude-class static), not transitivity; supporting that alone
+buys nothing, because every prelude-class static also declines on its own un-whitelisted `CallNative`; and
+the fix DEC-431 recommended (bail to the VM at the call site) is REFUTED — code 5 re-executes from `ip: 0`,
+so the hot loop would be paid twice.
+
 **How it was found, because the path matters.** Profiling the `fsforeachline` loss (0.30x): 97% of the
 callgrind profile was `memcpy`, and 14.0 of the 14.18 BILLION instructions turned out to be the bench's
 own `fixture()`, not the read under test. `fixture()` builds a string in a loop and then writes it, so it

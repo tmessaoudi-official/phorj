@@ -143,6 +143,33 @@ impl Compiled {
     /// `rt_*` helpers are registered: unboxed code is pure register arithmetic + native calls with
     /// inline fault checks; faults travel in the `(value, code)` multi-return, mapped to the
     /// single-sourced kernel strings in [`Compiled::run_unboxed`].
+    /// [`compile_unboxed`](Self::compile_unboxed) for the VM's hot-function hook, reporting a decline
+    /// when `PHORJ_JIT_EXPLAIN` is set in the environment.
+    ///
+    /// **Why this exists at all.** The hook used to call `compile_unboxed(…).ok()`, discarding the
+    /// reason, so there was NO way to ask why a hot function was being interpreted. That single thrown-
+    /// away value cost real work: DEC-431 recorded the wrong mechanism for a ~320x `throws` cliff twice
+    /// over (blaming transitivity, then recommending a fix that re-runs the loop twice) because the
+    /// answer — a `Const(Unit)` dummy receiver — was never visible. A default-deny subset needs a way to
+    /// say what it denied. Full account: DEC-431.2.
+    ///
+    /// Silent unless the variable is set, and read per compile ATTEMPT, which happens once per function
+    /// (the hook caches the outcome, declines included).
+    pub(crate) fn compile_or_explain(program: &BytecodeProgram, idx: usize) -> Option<Compiled> {
+        match Self::compile_unboxed(program, idx) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                if std::env::var_os("PHORJ_JIT_EXPLAIN").is_some() {
+                    eprintln!(
+                        "phg: jit declined `{}` — {e:?}",
+                        program.functions[idx].name
+                    );
+                }
+                None
+            }
+        }
+    }
+
     pub fn compile_unboxed(
         program: &BytecodeProgram,
         entry_idx: usize,

@@ -6,6 +6,40 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `PHORJ_JIT_EXPLAIN=1`; the ~320x cliff's mechanism CORRECTED and my recommended fix REFUTED (DEC-431.2, 2026-08-01)
+Went to build DEC-431's `throws` cliff fix. Investigated first, and the investigation killed both the
+recorded mechanism and the recommended design — so nothing was built from the wrong plan.
+
+**`PHORJ_JIT_EXPLAIN=1 phg run <file>`** now prints every hot function the JIT declined and its exact
+reason; silent by default (verified both ways). This is the fix for the actual root problem: **there was no
+way to ask why a function was interpreted** — the error was discarded by `.ok()` at the compile site in
+`vm::exec`, and that one thrown-away value is why DEC-431 recorded a wrong mechanism and why the wrong fix
+looked strongest.
+
+**Correction 1 — the first blocker is the caller's OWN body, not transitivity.** `work` declines on
+`Unsupported("unboxed Const Some(Unit)")` — the dummy receiver pushed for a prelude-CLASS static call, which
+`collect_unboxed.rs:83` default-denies. Out of subset before transitivity is consulted.
+
+**Correction 2 — supporting `Const(Unit)` alone buys NOTHING.** It appears only for prelude-class statics,
+and each also declines on its own un-whitelisted `CallNative` (`FileSystem::writeText` →
+`CallNative(441, 2)`). Confirmed from the other side: `String.length` is a bare `CallNative(58, 1)` with no
+receiver push, which is why the infallible control compiles. `CallNative` support is a per-native whitelist
+with a bespoke emit arm, and the FS ones additionally need `MakeInstance` of the typed error classes, itself
+unsupported.
+
+**Correction 3 — the fix DEC-431 recommended is REFUTED, and it is the one that matters.** "Compile the
+caller and bail to the VM at that call site" would be *strictly worse than today*: code 5 does not resume,
+it re-executes the whole call from `ip: 0` (`src/vm/exec.rs:556-561`), so the hot loop would run natively,
+bail, and then be re-run interpreted — **paid twice**. The mechanism I cited as supporting evidence is the
+mechanism that makes the design unusable. That claim was [Inferred] from "the fault-exit already bails" and
+never checked against what the redo does — the same failure shape as the `opt_level=none` comment (DEC-429).
+
+Still viable, none chosen: a VM trampoline (the only one preserving native loop execution); compiler loop
+outlining (mechanising the measured 773.83 ms → 2.42 ms workaround); whitelisting the fallible natives; or a
+compile-time warning. Three ratchet tests (`src/jit/tests/decline_reasons.rs`) pin both decline reasons plus
+the control that the same loop compiles once no fallible call shares its function — without that third test
+the first two would pass equally well if the JIT declined everything.
+
 ### Changed — STANDING RULE: nothing is put aside until it WINS; first quiet-box baseline (DEC-432, 2026-08-01)
 Developer-ruled: *"until we are winning we put nothing aside."* **No loss is ever CLOSED** — not as
 "documented near-parity", not as "a tie inside the noise", not as "hardware-bounded". A loss leaves the

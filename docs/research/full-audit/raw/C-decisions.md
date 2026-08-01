@@ -6155,3 +6155,84 @@ swings 0.92-1.05, so the margin to a false block is ~0.03. If the ratchet trips 
 code change, that is why — do not treat it as a regression without re-measuring on a quiet box.
 
 Task #58 ("re-tighten the ratchet floor on a quiet box") is CLOSED by this entry.
+
+
+## DEC-431.2 — the cliff's mechanism CORRECTED (twice), my own recommended fix REFUTED, and `PHORJ_JIT_EXPLAIN` shipped (2026-08-01)
+
+Went to build DEC-431's ~320x `throws` cliff fix. Investigated first, and the investigation killed both the
+recorded mechanism and the recommended design. Nothing was built from the wrong plan.
+
+### Correction 1 — the first blocker is the caller's OWN body, not transitivity
+
+DEC-431 recorded: *"JIT eligibility is transitive over the `Op::Call` graph; the fallible prelude method is
+not compilable, so the CALLER is declined."* Half right. The caller declines **first, on its own op**:
+
+```
+phg: jit declined `work` — Unsupported("unboxed Const Some(Unit)")
+```
+
+`Const(Unit)` is the **dummy receiver** the compiler pushes for a prelude-CLASS static call
+(`FileSystem.writeText`), and `collect_unboxed.rs:83` default-denies any `Const` that is not
+Int/Bool/Float/Str. So `work` is out of subset before transitivity is ever consulted.
+
+### Correction 2 — supporting `Const(Unit)` alone would buy NOTHING
+
+The tempting cheap fix is dead. `Const(Unit)` appears only for prelude-class statics, and every one of
+those ALSO declines on its own un-whitelisted native:
+
+```
+phg: jit declined `FileSystem::writeText` — Unsupported("unboxed CallNative(441, 2)")
+phg: jit declined `FileSystem::ok`       — Unsupported("unboxed Const Some(Unit)")
+```
+
+Verified from the other side too: `String.length` is a BARE `CallNative(58, 1)` with no receiver push at
+all, which is exactly why the infallible control compiles. `CallNative` support is a hand-written
+whitelist (`analyze/natives.rs`) with a bespoke emit arm per native — so "make the fallible prelude methods
+compilable" is a large per-native slice, and the FS ones additionally need `MakeInstance` of the typed
+error classes, which is separately unsupported (`FileSystemError::new`: *"MakeInstance … field 0 kind
+Str(Borrowed) (deferred)"*; the seven subclasses: *"non-ctor-initialized or >15 fields"*).
+
+### Correction 3 — **my own recommended fix is REFUTED**, and this is the one that matters
+
+DEC-431 called this the strongest candidate: *"stop letting an un-compilable callee disqualify a compilable
+caller — compile the caller and bail to the VM at that one call site (the code-5 fault-exit machinery
+already does exactly this)."*
+
+**It would be strictly WORSE than today.** Code 5 does not resume; it re-executes the whole call from the
+top — `src/vm/exec.rs:556-561` pushes the frame with `ip: 0`. So the caller would run its hot loop
+natively, reach the call, bail, and then the VM would re-run the ENTIRE function including that loop. **The
+loop gets paid twice.** The mechanism I cited as already-existing evidence is the mechanism that makes the
+design unusable.
+
+That claim was [Inferred] from "the fault-exit already bails" and never checked against what the redo
+actually does. Same failure shape as the `opt_level=none` comment (DEC-429): a plausible mechanism quoted
+instead of read.
+
+### What DOES remain viable (none chosen — still a ruling)
+
+  1. **A VM trampoline.** The JIT emits a call to a helper that runs the un-compilable callee ON THE VM and
+     returns its value, continuing natively afterwards. This is the general answer and the only one that
+     preserves the loop's native execution. Real work: value marshalling in/out plus fault propagation
+     through the existing `(value, code)` multi-return.
+  2. **Loop outlining in the compiler.** Hoist a loop into its own synthetic function so it compiles
+     independently — mechanising the workaround that measured 773.83 ms -> 2.42 ms. Invisible to the user,
+     no JIT change at all, but it moves locals across a call boundary.
+  3. **Whitelist the fallible natives** (per-native emit arms + error-class `MakeInstance`). Largest, and it
+     only fixes the stdlib calls it covers.
+  4. **Warn at compile time** when a hot loop sits in a declined function. No speed gain; makes the cliff
+     visible in the language rather than only in a debug env var.
+
+### SHIPPED: `PHORJ_JIT_EXPLAIN=1`
+
+The reason this entry exists is that **there was no way to ask why a function was interpreted** — the error
+was thrown away by `.ok()` at the compile site in `vm::exec`. That single discarded value is why DEC-431
+recorded a wrong mechanism, and why the wrong fix looked strongest.
+
+`PHORJ_JIT_EXPLAIN=1 phg run …` now prints each declined hot function and its exact reason; silent by
+default (verified both ways). On the 320x case it prints the three declines above; on the hoisted control it
+prints **nothing**, because `work` compiles.
+
+Three ratchet tests (`src/jit/tests/decline_reasons.rs`) pin the two decline reasons AND the control that
+the same loop compiles once no fallible call shares its function — without that third test the first two
+would pass equally well if the JIT declined everything. They assert the specific reason strings, not merely
+`is_err()`, precisely because a vague assertion is what let the mechanism be mis-stated.
