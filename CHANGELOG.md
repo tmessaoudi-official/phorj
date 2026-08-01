@@ -30,6 +30,14 @@ was.
 to the baseline as well as absolute; a strong WIN is unaffected. [Verified: setunion 52.5 → 0.5 still
 FAILS; mapinsert 1.012 → 0.94 now warns.]
 
+**It now actually runs in the pre-push lane, without wedging pushes.** Two more problems, both only
+visible end-to-end: it skipped on load it had *caused itself* (2.78 right after `cargo build --release`,
+against a 2.5 threshold), so it now WAITS for that transient load to settle (bounded, 90 s default)
+before skipping; and a timing verdict could block falsely (observed: a blocking flip at load ~1.5 that
+did not reproduce), so timing verdicts are now CONFIRMED by re-measuring only the flagged features
+before blocking. A real regression reproduces; load noise does not. Identity breaks skip confirmation
+and block on sight. If the re-measure fails, suspects are reported and not blocked (DEC-365).
+
 **The gate has tests now — it had none.** `scripts/test-microbench-gate.sh` (pre-push, ~1s, no docker
 or php) pins seven behaviours through the `MICROBENCH_GATE_JSON` seam that was built for tests and
 never used — which is exactly how the gate stayed dark. Each fixture derives from the baseline so it

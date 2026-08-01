@@ -5315,3 +5315,25 @@ output-identity break blocks · a near-parity wobble warns without blocking.
 **The tests were verified to FAIL against a broken gate**, not merely to pass: neutering the
 owed-deepening branch makes case 2 fail and the suite exit 1. A gate nobody tests is a gate nobody can
 trust is running — that is the lesson DEC-423 paid for.
+
+### Making it actually run in the pre-push lane, without wedging pushes
+
+Arming the gate surfaced two more problems, both only visible end-to-end:
+
+**It skipped on load it had caused itself.** The load guard is right — absolute native-vs-php ratios
+move with load — but in the pre-push lane the load comes from the lane: the full suite, two clippy
+passes and a release build run immediately before. Measured 2.78 right after `cargo build --release`,
+against a 2.5 threshold, so the guard tripped essentially every time. That load is transient and
+self-clearing, so the gate now WAITS for it (bounded, `MICROBENCH_SETTLE_SECS`, default 90 s, polled
+every 5 s) and only then skips. Not a retry around a flaky operation — waiting for a known,
+self-inflicted, self-clearing condition.
+
+**A timing verdict could block a push falsely.** Observed live: one run at load ~1.5 (below the guard)
+reported a blocking flip that did not reproduce at all on the next run. So timing-based verdicts are
+now CONFIRMED before they block — the gate re-measures ONLY the flagged features (seconds, not the full
+51) and blocks only on what reproduces. A real regression reproduces; load noise does not. This does
+not weaken the ratchet, it removes the false positives. An output-identity break never takes this path:
+it is a correctness signal, not a timing one, and blocks on sight. If the re-measure itself fails, the
+suspects are reported and NOT blocked — DEC-365's rule that unmeasurable is OWED, never a block and
+never a silent pass. [Verified live: forcing suspects with a tightened band drives the re-measure and
+the confirmed verdicts; at defaults the gate reports 43 WIN / 8 OWED / 0 blocking and PASSES.]

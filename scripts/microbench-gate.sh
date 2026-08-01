@@ -100,12 +100,31 @@ else
   # VM-regression gate is perf-gate.sh (same-process tree/VM ratio); THIS ratchet needs a quiet box
   # (MASTER-PLAN §0: "MUST re-run microbench-gate on a QUIET box"). So SKIP (never block) when the
   # 1-min load exceeds MICROBENCH_MAX_LOAD — a push is never wedged by an unmeasurable-under-load box.
-  _load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
   _maxload="${MICROBENCH_MAX_LOAD:-2.5}"
+  # SETTLE, then skip. The load guard is right — measuring absolute native-vs-php ratios on a loaded
+  # box manufactures false flips — but in the pre-push lane the load is caused by the lane ITSELF: the
+  # full test suite, two clippy passes and a release build run immediately before this. So the guard
+  # tripped essentially every time (measured 2.78 right after `cargo build --release`), and a gate that
+  # always skips is the same disease as a gate that never runs, one layer down.
+  #
+  # The load is TRANSIENT — those processes have already exited and the 1-minute average is just
+  # decaying — so wait for it rather than giving up on it. Bounded (default 90 s, polled every 5 s):
+  # if it settles we measure, if it does not we skip exactly as before. This is not a retry loop around
+  # a flaky operation; it is waiting for a known, self-inflicted, self-clearing condition.
+  _settle="${MICROBENCH_SETTLE_SECS:-90}"
+  _waited=0
+  _load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
+  while awk -v l="$_load1" -v m="$_maxload" 'BEGIN{exit (l>m)?0:1}' && [[ "$_waited" -lt "$_settle" ]]; do
+    [[ "$_waited" == 0 ]] && echo "microbench-gate: 1-min load $_load1 > $_maxload (the pre-push lane's own build) — waiting up to ${_settle}s for it to settle" >&2
+    sleep 5
+    _waited=$((_waited + 5))
+    _load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
+  done
   if awk -v l="$_load1" -v m="$_maxload" 'BEGIN{exit (l>m)?0:1}'; then
-    echo "microbench-gate: 1-min load $_load1 > $_maxload — SKIP the G-8 ratchet (box too loaded to measure native-VM-vs-docker-php reliably; perf-gate.sh still gates VM regressions; re-run on a quiet box). Not a regression." >&2
+    echo "microbench-gate: 1-min load $_load1 still > $_maxload after ${_settle}s — SKIP the G-8 ratchet (box too loaded to measure absolute VM-vs-php ratios reliably; perf-gate.sh still gates VM regressions). Not a regression; the verdict is OWED." >&2
     exit 0
   fi
+  [[ "$_waited" -gt 0 ]] && echo "microbench-gate: load settled to $_load1 after ${_waited}s — measuring" >&2
   json="$(bash "$ROOT/scripts/microbench.sh" --json)" || {
     echo "microbench-gate: harness run failed" >&2
     exit 2
@@ -138,6 +157,10 @@ fi
 fails=0
 wins=0
 owed=0
+# Timing-based blocks are CONFIRMED before they block. An output-identity break is not timing and
+# blocks immediately; a flip or an owed deepening is re-measured first — see the confirmation pass.
+suspects=()
+suspect_kind=()
 while IFS=$'\t' read -r feat ratio identical; do
   [[ -n "$feat" ]] || continue
   if [[ "$identical" != "true" ]]; then
@@ -162,8 +185,9 @@ while IFS=$'\t' read -r feat ratio identical; do
       continue
     fi
     if awk -v o="$owed_ratio" -v r="$ratio" -v eps="$OWED_EPSILON" 'BEGIN{exit (r < o*eps)?0:1}'; then
-      echo "  FAIL $feat: an OWED loss DEEPENED — was $owed_ratio, now $ratio (past the ${OWED_EPSILON}x band)"
-      fails=$((fails + 1))
+      echo "  susp $feat: an OWED loss may have DEEPENED — was $owed_ratio, now $ratio; re-measuring to confirm"
+      suspects+=("$feat")
+      suspect_kind+=("owed:$owed_ratio:$ratio")
       continue
     fi
     echo "  owed $feat: ratio $owed_ratio -> $ratio (still losing; carried, not laundered)"
@@ -181,8 +205,9 @@ while IFS=$'\t' read -r feat ratio identical; do
   # moment it drops under 0.95, because 5.0 * 0.85 is far above that and the absolute term binds.
   if awk -v br="$b_ratio" -v r="$ratio" -v eps="$FLIP_EPSILON" -v rel="$RELATIVE_DROP" \
      'BEGIN{ lim = (br*rel < eps) ? br*rel : eps; exit (br>=1.0 && r<lim)?0:1 }'; then
-    echo "  FAIL $feat: WIN->LOSS flip — baseline ratio $b_ratio (WIN) now $ratio (< $FLIP_EPSILON band): a G-8 mandate regression"
-    fails=$((fails + 1))
+    echo "  susp $feat: possible WIN->LOSS flip — baseline $b_ratio (WIN) now $ratio; re-measuring to confirm"
+    suspects+=("$feat")
+    suspect_kind+=("flip:$b_ratio:$ratio")
     continue
   fi
   # Near-parity wobble: a WIN baseline now fractionally < 1.0 but within the FLIP_EPSILON band — box
@@ -194,6 +219,60 @@ while IFS=$'\t' read -r feat ratio identical; do
   # REPORT (non-blocking): ratio movement vs baseline.
   echo "  ok   $feat: ratio $b_ratio -> $ratio ($win_now)"
 done < <(jq -r '.[] | [.feature, .ratio, .identical] | @tsv' <<<"$json")
+
+# CONFIRMATION PASS. A timing-based verdict is re-measured before it blocks a push.
+#
+# Why: this gate compares ABSOLUTE native-vs-php ratios, which move with box load — that is why it has
+# a load guard at all. Now that the ratchet actually runs (it was dark for weeks, DEC-423), a false
+# block would wedge a push, and the pre-push lane is precisely where the box is busiest. Observed
+# live: one run at load ~1.5 reported a blocking flip that did not reproduce at all on the next run.
+#
+# Re-measuring ONLY the flagged features is cheap (seconds, not the full 51) and it is the honest
+# discriminator: a real regression reproduces, load noise does not. This does NOT weaken the ratchet —
+# a confirmed flip still blocks — it removes the false ones. An output-identity break never comes here:
+# it is a correctness signal, not a timing one, and blocks on sight.
+if [[ ${#suspects[@]} -gt 0 && -z "${MICROBENCH_GATE_JSON:-}" ]]; then
+  echo "microbench-gate: re-measuring ${#suspects[@]} suspect(s) to confirm: ${suspects[*]}"
+  if confirm_json="$(bash "$ROOT/scripts/microbench.sh" --json "${suspects[@]}" 2>/dev/null)"; then
+    while IFS=$'\t' read -r feat ratio; do
+      [[ -n "$feat" ]] || continue
+      b_ratio="$(jq -r --arg f "$feat" '.features[$f].ratio // empty' "$BASELINE")"
+      owed_ratio="$(jq -r --arg f "$feat" '._owed[$f].ratio // empty' "$BASELINE")"
+      if [[ -n "$owed_ratio" ]]; then
+        if awk -v o="$owed_ratio" -v r="$ratio" -v eps="$OWED_EPSILON" 'BEGIN{exit (r < o*eps)?0:1}'; then
+          echo "  FAIL $feat: an OWED loss DEEPENED — was $owed_ratio, confirmed at $ratio"
+          fails=$((fails + 1))
+        else
+          echo "  ok   $feat: not confirmed on re-measure ($ratio) — load noise, not a regression"
+        fi
+        continue
+      fi
+      if awk -v br="$b_ratio" -v r="$ratio" -v eps="$FLIP_EPSILON" -v rel="$RELATIVE_DROP" \
+         'BEGIN{ lim = (br*rel < eps) ? br*rel : eps; exit (br>=1.0 && r<lim)?0:1 }'; then
+        echo "  FAIL $feat: WIN->LOSS flip — baseline $b_ratio (WIN), confirmed at $ratio"
+        fails=$((fails + 1))
+      else
+        echo "  ok   $feat: not confirmed on re-measure ($ratio) — load noise, not a regression"
+      fi
+    done < <(jq -r '.[] | [.feature, .ratio] | @tsv' <<<"$confirm_json")
+  else
+    # Could not re-measure: report the suspects, do NOT block on an unconfirmed timing (DEC-365 —
+    # unmeasurable is OWED, never a block and never a silent pass).
+    echo "microbench-gate: re-measure FAILED — suspects unconfirmed and NOT blocked; verdict OWED for: ${suspects[*]}" >&2
+  fi
+elif [[ ${#suspects[@]} -gt 0 ]]; then
+  # The JSON seam (tests) is deterministic by construction — there is no load noise to confirm away,
+  # so a suspect IS the verdict. Same wording as the confirmed path, so the tests pin the real message.
+  for i in "${!suspects[@]}"; do
+    IFS=: read -r kind was now <<<"${suspect_kind[$i]}"
+    if [[ "$kind" == "owed" ]]; then
+      echo "  FAIL ${suspects[$i]}: an OWED loss DEEPENED — was $was, now $now"
+    else
+      echo "  FAIL ${suspects[$i]}: WIN->LOSS flip — baseline $was (WIN) now $now"
+    fi
+    fails=$((fails + 1))
+  done
+fi
 
 echo "microbench-gate: $wins WIN / $(($(jq 'length' <<<"$json") - wins)) loss vs release-php+JIT; $owed OWED (carried); $fails blocking regression(s)"
 if [[ "$fails" -gt 0 ]]; then
