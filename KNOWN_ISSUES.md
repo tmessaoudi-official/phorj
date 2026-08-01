@@ -22,12 +22,57 @@ PHP writes — that spelling had been a LEX error, so it could not even be read.
 EXPRESSION (`$x = $y ?? throw new E()`) stays refused: lifting it wrongly would move where the throw
 happens.
 
-**What a lifted error path still needs from a human: the exception TYPES.** A draft that lifts cleanly and
-re-parses will not TYPE-CHECK, because `RuntimeException`/`LogicException`/`DivisionByZeroError` have no
-phorj counterpart — `phg check` says `unknown type RuntimeException`. That is the documented
-review-required boundary rather than a defect, but whether the lifter should MAP PHP's builtin exception
-hierarchy onto phorj error types is a user-visible design decision and is recorded as a PENDING question
-in the register (Invariant 15 — not self-ruled).
+**The exception TYPES are now mapped — DEC-421 is BUILT** (2026-08-01, superseding what this paragraph
+used to say). Phorj ships a standard error taxonomy (`Core.ErrorModule`: `RuntimeError`, `LogicError`,
+`MathError`, `TypeMismatchError`, `InvalidValueError`, `IoError`) and the lifter maps PHP's builtin
+exception classes onto it in both `catch` and `throw new` position, emitting the member imports the
+draft needs. A lifted `catch (\RuntimeException $e)` now type-checks with NO hand edits — asserted, not
+eyeballed (`lift::lifter::exceptions::tests::a_lifted_catch_of_a_php_builtin_type_checks_with_no_hand_edits`).
+An exception class with no honest counterpart keeps its own name and gets a `// CANNOT LIFT:` note.
+
+## LIFT-THROWS — a lifted `throw` needs its `throws` clause added by hand (2026-08-01)
+
+Phorj has **checked exceptions** and PHP does not. So a lifted function whose body throws has nothing a
+`throws` clause could be derived FROM, and the draft stops at `E-THROW-UNDECLARED`:
+
+```
+type error at 22:9: `InvalidValueError` is thrown here but neither caught nor declared
+  [E-THROW-UNDECLARED]
+  hint: add `throws InvalidValueError` to the enclosing function, or wrap this in `try`/`catch`
+```
+
+[Verified: `phg lift examples/lift/errors.php > /tmp/e.phg && phg check /tmp/e.phg` reports exactly
+three of these, one per `throw`, plus one unrelated `Output.print(int)` type error — see LIFT-ECHO-INT
+below.] This is a diagnostic pointing at the exact
+statement with the exact fix, not a silent wrong answer — the draft names real types and the human adds
+one clause per throwing function. `examples/lift/errors.phg` is that draft, hand-finished.
+
+**Why it is not simply inferred.** The analysis itself is mechanical (which literal `throw`s escape the
+enclosing `try`), but making a draft that *checks* needs three more things, and each is a
+draft-visible design choice rather than a derivation:
+  1. **Transitive propagation.** Declaring `throws E` on `f` makes every call to `f` an
+     `E-CALL-UNHANDLED` — so the lifter must also thread `?` through the intra-file call graph.
+  2. **`?` is all-or-nothing.** `?` propagates EVERY error the callee declares, ignoring any enclosing
+     `try`; a bare call inside `try` must have all of them caught right there. "Handle one, propagate
+     the rest" has no one-step spelling, so the lifter must choose which shape to emit (see the second
+     `catch` in `examples/lift/errors.phg`, which exists for exactly this reason).
+  3. **`main`.** It can declare `throws`, or the lifter can synthesize a wrapping `try`/`catch`. Two
+     visibly different drafts.
+
+Recorded as a PENDING question in the register rather than self-ruled (Invariant 15). Out of scope for
+DEC-421, which was ruled as the type MAPPING.
+
+## LIFT-ECHO-INT — `echo <non-string>` lifts to a `Output.print(int)` type error (noted 2026-08-01)
+
+PHP's `echo` coerces; phorj's `Output.print` takes a `string`. So `echo halfOrZero($n);` lifts to
+`Output.print(halfOrZero(n));` and `phg check` reports *"`Output.print` argument 1 expects `string`,
+found `int`"*. [Verified: the fourth diagnostic from the LIFT-THROWS command above.]
+
+Long-standing, and already worked around rather than fixed: `tests/lift_roundtrip.rs` says its samples
+"echo a STRING … raw int echo is avoided on purpose". Naming it here so the workaround stops reading as
+coverage. The fix is a lift-side conversion (`Output.print("{e}")`, or `Conversion.toString(e)`) chosen
+by the lifted expression's type — which the lifter does not currently track, hence a slice rather than a
+one-liner.
 
 ## LIFT-ATTR — the PHP lifter is blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
 

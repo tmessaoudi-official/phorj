@@ -149,9 +149,15 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         },
         php::PhpExpr::New { class, args } => Expr::New(
             Box::new(Expr::Call {
-                // `\RuntimeException` → `RuntimeException`: phorj has no root-qualified spelling, so
-                // leaving the marker produced a draft that could not even parse.
-                callee: Box::new(Expr::Ident(strip_root_ns(class).to_string(), SP)),
+                // Two rules in one call (`phorj_error_name`): a PHP builtin EXCEPTION maps onto phorj's
+                // standard taxonomy (DEC-421 — `\RuntimeException` → `RuntimeError`), and anything else
+                // just loses PHP's root marker, which phorj has no spelling for. Mapping only the CATCH
+                // clause and not the `new` left `throw new RuntimeException(…)` naming a type that does
+                // not exist, so the draft still failed to check.
+                callee: Box::new(Expr::Ident(
+                    crate::lift::lifter::exceptions::phorj_error_name(class),
+                    SP,
+                )),
                 args: lift_exprs(args)?,
                 type_args: Vec::new(),
                 span: SP,

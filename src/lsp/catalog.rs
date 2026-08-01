@@ -82,6 +82,24 @@ pub(super) fn core_module_paths() -> Vec<String> {
     crate::cli::module_catalog::core_module_paths()
 }
 
+/// The names importable FROM the Core module at dotted `path` — the second half of an import, as in
+/// `import Core.ErrorModule.RuntimeError;`. Sorted + deduped; empty when `path` names no Core module.
+///
+/// This exists because a MEMBER-GATED module has no other way in: referencing one of its types bare is
+/// `E-INJECTED-TYPE-BARE`, so `import Core.ErrorModule;` alone buys nothing and the member import is
+/// mandatory. Completion offered module paths only, which left DEC-421's six error types untypeable
+/// from the editor — the same 100%-rule hole `withLock` fell through, one level further down the path.
+///
+/// TWO sources, matching what the checker's import resolution accepts:
+///   * the row's injected TYPE names (`bare_types` — `Core.ErrorModule.RuntimeError`);
+///   * natives registered under that exact module (`Core.Output.printLine`).
+///
+/// Prelude class STATICS are deliberately absent: `withLock` is a member of the `FileSystem` class,
+/// reached through `import Core.FileSystemModule.FileSystem;`, and is not itself importable.
+pub(super) fn module_member_imports(path: &str) -> Vec<String> {
+    crate::cli::module_catalog::core_module_members(path)
+}
+
 /// The completable members of the Core module whose qualifier (last dotted segment) equals
 /// `qualifier` — e.g. `"List"` → `map`/`filter`/…, `"Output"` → `printLine`/`print`,
 /// `"FileSystem"` → `readText`/`withLock`/… Sorted + deduped; empty when the qualifier names no

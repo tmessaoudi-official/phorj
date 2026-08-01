@@ -133,11 +133,26 @@ pub(super) fn complete(
                     detail, line, start_char, character, label,
                 )
             };
-            let mut items: Vec<String> = catalog::core_module_paths()
-                .into_iter()
+            let core_paths = catalog::core_module_paths();
+            let mut items: Vec<String> = core_paths
+                .iter()
                 .filter(|p| prefix.is_empty() || p.starts_with(&prefix))
-                .map(|p| edit(&p, "core module"))
+                .map(|p| edit(p, "core module"))
                 .collect();
+            // A MEMBER import (`import Core.ErrorModule.RuntimeError;`) once the typed path has passed a
+            // module and a `.`. Mandatory for a member-gated module — `import Core.ErrorModule;` alone
+            // leaves its types bare (`E-INJECTED-TYPE-BARE`) — so offering only paths made DEC-421's
+            // taxonomy unreachable from the editor.
+            for module in &core_paths {
+                let Some(member_prefix) = prefix.strip_prefix(&format!("{module}.")) else {
+                    continue;
+                };
+                for m in catalog::module_member_imports(module) {
+                    if m.starts_with(member_prefix) {
+                        items.push(edit(&format!("{module}.{m}"), "core module member"));
+                    }
+                }
+            }
             let project_pkgs = uri
                 .and_then(super::uri_to_path)
                 .map(|p| crate::loader::project_packages(&p))

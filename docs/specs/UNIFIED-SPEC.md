@@ -450,6 +450,7 @@ teaching it is wrong); the four `E-TYPE-IMPORT-*` codes re-homed as `E-IMPORT-BU
 | `Core.Decimal` | `RoundingMode` enum | `Decimal` | member ⇒ `Decimal.RoundingMode` (or member-import) |
 | `Core.Http` | `Request`,`Response`,`Route`,`Router`,`ParamBag`,`HeaderBag`,`AttrBag`,`FileBag`,`RequestBody`,`UploadedFile`,`MultipartPart`,`Cookie`,`SameSite` (+ `#[Route]`) | `Http` | members ⇒ `Http.X` / `#[Http.Route]` (bags: DEC-331 s2) |
 | `Core.Time` | `Duration`,`Date`,`Instant` | `Time` | members ⇒ `Time.X` |
+| `Core.ErrorModule` | `RuntimeError`,`LogicError`,`MathError`,`TypeMismatchError`,`InvalidValueError`,`IoError` (DEC-421) | `ErrorModule` | members ⇒ member-import (`import Core.ErrorModule.RuntimeError;`). Named `ErrorModule`, not `Error`: `Error` is already the built-in marker interface these six implement, so that leaf would bind one name to two things |
 
 Rules for the multi-type modules: **default = qualified by leaf** (`Http.Router`, `Time.Duration`,
 `Decimal.RoundingMode`, `#[Http.Route(...)]`); **bare only via member-import**

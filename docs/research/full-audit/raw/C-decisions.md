@@ -4957,6 +4957,84 @@ the only 32-bit target and the only configuration no local step compiled. The re
 platform-API BEHAVIOUR (Windows `flock` semantics — DEC-348's `[Unverified on Windows]`), and that is
 already disclosed as unverified rather than assumed.
 
-| DEC-421 | GR-LIFTEXC | A lifted PHP error path re-parses but does NOT type-check: `RuntimeException`, `LogicException`, `DivisionByZeroError` etc. have no phorj counterpart, so `phg check` reports `unknown type RuntimeException`. Surfaced 2026-07-31 by building LIFT-TRY + `throw` | **RULED 2026-07-31 — (3) MAP PHP's builtin exception hierarchy onto phorj error types.** Which means phorj ships a standard exception taxonomy; the TAXONOMY ITSELF (names + shape) is a further user-visible choice and is being surfaced separately rather than invented. [Verified: `phg lift` on a `try`/`catch`/`throw` PHP fixture emits a draft that PARSES and then fails `phg check` with `unknown type RuntimeException`.] This is the lifter's documented review-required boundary working as designed, NOT a defect — the question is whether to narrow it. Options: (a) leave it, and the human maps each exception when reviewing the draft (today's behaviour; honest, but every non-trivial error path needs hand work); (b) MAP PHP's builtin hierarchy onto phorj error types, which needs a phorj-side decision about what those types even are — phorj has an `Error` marker + user-declared errors, with no `RuntimeException` analogue, so this is really "should phorj ship a standard exception taxonomy?"; (c) emit a `// CANNOT LIFT:` note per unmapped type so the draft at least says what is missing. Not self-rulable: (b) would add user-visible stdlib surface | Build queued 2026-07-31, blocked on the taxonomy sub-question |
+| DEC-421 | GR-LIFTEXC | A lifted PHP error path re-parses but does NOT type-check: `RuntimeException`, `LogicException`, `DivisionByZeroError` etc. have no phorj counterpart, so `phg check` reports `unknown type RuntimeException`. Surfaced 2026-07-31 by building LIFT-TRY + `throw` | **RULED 2026-07-31 — (3) MAP PHP's builtin exception hierarchy onto phorj error types.** Which means phorj ships a standard exception taxonomy; **TAXONOMY RULED 2026-07-31 — option (1): a small FLAT set in `Core.ErrorModule`** — `RuntimeError`, `LogicError`, `ArithmeticError`, `TypeError`, `ValueError`, `IoError`. Flat on purpose: no inheritance-matching subtlety, and it matches how phorj already prefixes taxonomies (`FileSystemNotFoundError`). Mirroring PHP's real `Throwable`/`Error`/`Exception` hierarchy was REJECTED — it would import PHP's much-criticised split into a language that deliberately lacks it, deciding phorj's error model as a side effect of a lift feature. [Verified: `phg lift` on a `try`/`catch`/`throw` PHP fixture emits a draft that PARSES and then fails `phg check` with `unknown type RuntimeException`.] This is the lifter's documented review-required boundary working as designed, NOT a defect — the question is whether to narrow it. Options: (a) leave it, and the human maps each exception when reviewing the draft (today's behaviour; honest, but every non-trivial error path needs hand work); (b) MAP PHP's builtin hierarchy onto phorj error types, which needs a phorj-side decision about what those types even are — phorj has an `Error` marker + user-declared errors, with no `RuntimeException` analogue, so this is really "should phorj ship a standard exception taxonomy?"; (c) emit a `// CANNOT LIFT:` note per unmapped type so the draft at least says what is missing. Not self-rulable: (b) would add user-visible stdlib surface | **BUILT 2026-08-01** — see the DEC-421 BUILT section below; THREE of the six ruled names had to change (`ArithmeticError`/`TypeError`/`ValueError` are real PHP builtin CLASSES → `E-RESERVED-NAME`) |
 
 | DEC-422 | GR-LINESPERF | DEC-347's `FileSystem.lines` is a confirmed 4x LOSS vs PHP's `fgets` loop (21.0 ms vs 5.2 ms, 40k lines), after a measured 58x → 4x improvement. The residual is the per-line cost of a phorj-level `Iterator` — two virtual calls per element — against PHP's C loop | **RULED 2026-07-31 — BOTH (2) and (3).** (2) a native-driven `forEachLine(path, fn)` with no per-element virtual calls, and (3) a JIT vertical for foreach-over-`Iterator`. They are complementary rather than redundant: (2) fixes THIS API and can land first; (3) helps EVERY iterator in the language, including the `Iterator` implementors users write, and is the deeper win. Accepting the 4x was explicitly rejected | Build queued 2026-07-31 — (2) first (self-contained), then (3) |
+
+## DEC-421 — `Core.ErrorModule`, phorj's standard error taxonomy (2026-08-01, RULED + BUILT)
+
+**Ruled** 2026-07-31 in two steps: map PHP's builtin exception hierarchy onto phorj error types
+(option 3), and — the follow-up question that ruling forced — make the target *a small FLAT set*
+(option 1) rather than a mirror of PHP's own hierarchy.
+
+**Shipped:** six types injected as `Core.ErrorModule`, each an ordinary phorj class `implements Error`.
+No new `Value`, no new `Ty`, nothing for a backend to learn; each transpiles to `extends \Exception`
+like any other phorj error, and the existing typed-catch machinery handles them unchanged.
+
+| type | what lands on it |
+|---|---|
+| `RuntimeError` | `Throwable`, `Exception`, `Error`, `ErrorException`, `RuntimeException` |
+| `LogicError` | `LogicException`, `BadFunctionCallException`, `BadMethodCallException` |
+| `MathError` | `ArithmeticError`, `DivisionByZeroError`, `OverflowException`, `UnderflowException`, `RangeException` |
+| `TypeMismatchError` | `TypeError` |
+| `InvalidValueError` | `ValueError`, `InvalidArgumentException`, `DomainException`, `LengthException`, `OutOfRangeException`, `OutOfBoundsException`, `UnexpectedValueException`, `JsonException` |
+| `IoError` | *(no PHP counterpart — phorj's own; PHP throws `RuntimeException` for I/O)* |
+
+### THREE of the six ruled names had to change — the proposal was flawed
+
+The ruling named `ArithmeticError`, `TypeError` and `ValueError`. All three are **real PHP builtin
+classes**, so `E-RESERVED-NAME` (DEC-202/213) rejects them, and rightly: transpiling
+`class TypeError extends \Exception` would redeclare PHP's own. [Verified: the prelude failed to inject
+with `E-RESERVED-NAME` on all three before they were renamed.] They shipped as `MathError`,
+`TypeMismatchError` and `InvalidValueError`. `RuntimeError`, `LogicError` and `IoError` collide with
+nothing and kept their natural names. **The proposal should have been checked against the reserved list
+before the question was asked, not after the ruling** — the same class of miss as offering a name the
+language cannot spell.
+
+Named `ErrorModule`, not `Error` (DEC-278's suffix rule, applied for a concrete reason here): `Error` is
+already the built-in marker interface these six implement, so a module whose qualifier leaf was `Error`
+would bind that name to two different things in the same file.
+
+### The mapping is SEMANTIC, not hierarchical
+
+`InvalidArgumentException` lands on `InvalidValueError`, not `LogicError`. PHP files it under
+`LogicException` for hierarchy reasons, but what it reports is a bad argument VALUE, and a flat set
+should say what a thing means rather than where PHP filed it. `None` is a real answer: an exception with
+no honest counterpart keeps its own name and the draft carries a `// CANNOT LIFT:` note, so a framework
+or user-defined exception is left visibly for the human rather than coerced into the nearest phorj type.
+
+### Lifter wiring
+
+Both positions (`catch` clause types including every union member, and `throw new X`), plus
+`import Core.ErrorModule;` and one member import per type USED — importing all six would be
+`E-UNUSED-IMPORT`, a lift failing the very check it exists to pass. **[Verified] a lifted
+`catch (\RuntimeException $e)` now type-checks with NO hand edits**
+(`lift::lifter::exceptions::tests::a_lifted_catch_of_a_php_builtin_type_checks_with_no_hand_edits`);
+three legs byte-identical on a throw/catch/dispatch path (`examples/lift/errors.phg`, whose output also
+matches the original `examples/lift/errors.php` run under php-8.5.8).
+
+### Two things found on the way
+
+1. **The three exception walks were separate**, and the `throw new X` arm had been added to the WRONG
+   one — mapped names were reported as unmappable, so a correct draft carried bogus notes. Now ONE
+   `visit_exception_sites` visitor answers all three questions (`src/lift/lifter/exceptions.rs`), which
+   also took `decls/statements.rs` from 438 to 260 lines (Invariant 13).
+2. **A second shipped Invariant-17 hole, one level below the `withLock` one.** `import Core.` completed
+   module PATHS only; a trailing `.` returned an empty list for EVERY module. A member-gated module has
+   no other way in — `import Core.ErrorModule;` alone leaves its types bare (`E-INJECTED-TYPE-BARE`) —
+   so the taxonomy was untypeable from the editor the day it shipped. Fixed in
+   `cli::module_catalog::core_module_members`, derived from the same two registries as
+   `core_module_paths`, so a new type or native is completable with no LSP edit. No editor change was
+   needed: DEC-421 adds no new SYNTAX, and neither grammar hard-codes Core type names [Verified: no hit
+   for `FileSystemError`/`FileSystemModule` anywhere under `editors/`].
+
+### NOT in it — LIFT-THROWS, a new PENDING question
+
+A lifted `throw` still needs its `throws` clause by hand. Phorj has checked exceptions and PHP does not,
+so the source carries nothing to derive one from, and making a draft that CHECKS needs three
+draft-visible choices: transitive `?` threading through the intra-file call graph; what to emit where a
+call needs one error handled and the rest propagated (`?` is all-or-nothing, ignoring any enclosing
+`try`); and whether `main` declares `throws` or gets a synthesized wrapping `try`/`catch`. Recorded in
+`KNOWN_ISSUES.md` §LIFT-THROWS. Not self-ruled (Invariant 15). Also noted there: **LIFT-ECHO-INT**, the
+long-standing `echo <non-string>` → `Output.print(int)` type error, which `tests/lift_roundtrip.rs` had
+been working around rather than recording.

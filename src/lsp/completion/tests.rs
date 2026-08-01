@@ -109,6 +109,69 @@ fn import_context_filters_by_prefix() {
     );
 }
 
+/// A MEMBER-GATED module can only be used through a member import, so `import Core.ErrorModule.` had
+/// to complete its six types or DEC-421's taxonomy was unreachable from the editor — Invariant 17's
+/// 100% rule. Before this, `import Core.` offered module PATHS only and a trailing `.` produced an
+/// empty list for every module, which is the same class of hole `withLock` fell through.
+#[test]
+fn a_module_path_plus_a_dot_completes_its_member_imports() {
+    let cases = [
+        // (typed prefix, a member that must be offered)
+        ("import Core.ErrorModule.", "Core.ErrorModule.RuntimeError"),
+        (
+            "import Core.FileSystemModule.",
+            "Core.FileSystemModule.FileSystem",
+        ),
+        // A registry-only module: its members are natives, not injected types.
+        ("import Core.Output.", "Core.Output.printLine"),
+    ];
+    for (src, want) in cases {
+        let got = labels(&complete(
+            src,
+            src.len(),
+            None,
+            None,
+            &std::collections::HashMap::new(),
+        ));
+        assert!(got.iter().any(|l| l == want), "want {want} in {got:?}");
+    }
+    // Filtering still applies to the member segment, and the six are complete.
+    let src = "import Core.ErrorModule.";
+    let got = labels(&complete(
+        src,
+        src.len(),
+        None,
+        None,
+        &std::collections::HashMap::new(),
+    ));
+    for want in [
+        "RuntimeError",
+        "LogicError",
+        "MathError",
+        "TypeMismatchError",
+        "InvalidValueError",
+        "IoError",
+    ] {
+        assert!(
+            got.iter().any(|l| l == &format!("Core.ErrorModule.{want}")),
+            "want Core.ErrorModule.{want} in {got:?}"
+        );
+    }
+    let partial = "import Core.ErrorModule.Math";
+    let got = labels(&complete(
+        partial,
+        partial.len(),
+        None,
+        None,
+        &std::collections::HashMap::new(),
+    ));
+    assert_eq!(
+        got,
+        vec!["Core.ErrorModule.MathError"],
+        "prefix not applied"
+    );
+}
+
 #[test]
 fn member_context_lists_module_natives_on_incomplete_buffer() {
     // `Output.` with nothing after ⇒ the buffer does NOT parse; member completion must still fire.

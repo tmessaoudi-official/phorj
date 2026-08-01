@@ -1,21 +1,21 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-07-31) — **WAVES 0/1/2 + DEC-379 + DEC-364 + DEC-348 COMPLETE. NEXT: DEC-347.**
+## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421 COMPLETE. NEXT: DEC-422(a) `forEachLine`.**
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
 > queued" — so it is rewritten, not appended to, at the end of every slice.) **Resuming after a
 > compaction: trust this header; treat anything dated earlier as history.**
 
-**State at 2026-07-31, all pushed, tree green** (full suite under `PHORJ_REQUIRE_PHP=1 --all-features`,
+**State at 2026-08-01, all pushed, tree green** (full suite under `PHORJ_REQUIRE_PHP=1 --all-features`,
 clippy clean at `--all-features` AND `--no-default-features`, `cargo fmt --check`, size-gate
 `fails=0 stale=0`, doc-guards OK, `cargo build --release` → `target/release/phg`):
 
 | | |
 |---|---|
-| Ruled agenda | **18/42 rows built (43%)** |
+| Ruled agenda | **20/42 rows built (48%)** |
 | Parity | **≈70% · floor ≈57% · vision ≈71%** (§4.13/§4.14 — unchanged by DEC-364, a syntax row) |
-| Waves done | 0, 1, 2 — plus **DEC-379** (soundness), **DEC-364** (`using`), **DEC-348** (`withLock` + `tryWithLock`), **DEC-419** (doc comments), **DEC-347** (`FileSystem.lines`) |
+| Waves done | 0, 1, 2 — plus **DEC-379** (soundness), **DEC-364** (`using`), **DEC-348** (`withLock` + `tryWithLock`), **DEC-419** (doc comments), **DEC-347** (`FileSystem.lines`), **DEC-420** (PHP-builtin function-name mangle), **DEC-421** (`Core.ErrorModule`) |
 
 ### DEC-364 `using` — BUILT 2026-07-31
 
@@ -121,21 +121,67 @@ The release matrix is all 64-bit natives, so the `usize` class cannot bite there
 locally is platform-API behaviour (the `[Unverified on Windows]` lock semantics), which is already
 disclosed rather than assumed.
 
+### DEC-421 `Core.ErrorModule` — BUILT 2026-08-01
+
+Phorj now ships a **standard error taxonomy**, and it is the reason a lifted PHP error path type-checks.
+Six types (`RuntimeError`, `LogicError`, `MathError`, `TypeMismatchError`, `InvalidValueError`,
+`IoError`), FLAT — none extends another — each an ordinary phorj class `implements Error`, so there is
+no new `Value`, no new `Ty`, nothing for a backend to learn, and they transpile to `extends \Exception`
+like any other phorj error. Three legs verified byte-identical on a throw/catch/dispatch path.
+
+**Three of the six names the developer ruled had to change, and the reason is worth keeping.**
+`ArithmeticError`, `TypeError` and `ValueError` — the obvious spellings, and the ones proposed in the
+question — are real PHP **builtin classes**, so `E-RESERVED-NAME` (DEC-202/213) rejects them, rightly:
+`class TypeError extends \Exception` would redeclare PHP's own. The proposal was checked against the
+reserved list only after the ruling. They are `MathError` / `TypeMismatchError` / `InvalidValueError`.
+`RuntimeError`, `LogicError` and `IoError` collide with nothing.
+
+Named `ErrorModule`, not `Error` (DEC-278's suffix rule, for a concrete reason here): `Error` is already
+the built-in marker interface these six implement, so a module whose qualifier leaf was `Error` would
+bind that name to two different things in one file.
+
+The lifter maps PHP's builtins in BOTH positions (`catch` and `throw new`), emits `Core.ErrorModule`
+plus one member import per type USED (importing all six would be `E-UNUSED-IMPORT` — a lift failing the
+very check it exists to pass), and leaves an unmapped class named as-is with a `// CANNOT LIFT:` note.
+The mapping is SEMANTIC, not hierarchical: `InvalidArgumentException` → `InvalidValueError`, because PHP
+files it under `LogicException` for hierarchy reasons but what it reports is a bad VALUE.
+
+**Two things found on the way, both fixed here:**
+- **The three exception walks were separate**, and the `throw new X` arm had been added to the WRONG one
+  — mapped names were reported as unmappable, so a correct draft carried bogus notes. Now ONE
+  `visit_exception_sites` visitor answers all three questions (`src/lift/lifter/exceptions.rs`), which
+  also took `decls/statements.rs` from 438 to 260 lines (Invariant 13).
+- **A second shipped Invariant-17 hole, one level below the `withLock` one**: `import Core.` completed
+  module PATHS only, and a trailing `.` returned an empty list for EVERY module. A member-gated module
+  has no other way in — `import Core.ErrorModule;` alone leaves its types bare
+  (`E-INJECTED-TYPE-BARE`) — so the taxonomy was untypeable from the editor the day it shipped. Fixed in
+  `cli::module_catalog::core_module_members` (derived from the same two registries, so a new type or
+  native is completable with no LSP edit).
+
+**What is NOT in it: `throws` inference** — a lifted `throw` still needs its clause by hand. Phorj has
+checked exceptions and PHP does not, so there is nothing to derive it from, and making a draft that
+CHECKS needs three draft-visible choices (transitive `?` threading, the all-or-nothing `?` vs partial
+handling, and whether `main` declares or wraps). Recorded as **LIFT-THROWS** in `KNOWN_ISSUES.md` and as
+a PENDING question, not self-ruled.
+
 **NEXT, in priority order:**
 2. ~~**LIFT-TRY**~~ — **BUILT 2026-07-31.** `try`/`catch`/`finally` is in the lift subset (all four real
    shapes; drafts re-parse; `\` is now a token, which also unblocks reading FQNs). What remains is
    narrower and renamed **LIFT-USING**: raising a `try`/`finally` back to `using` is shape recognition,
    deliberately not guessed, with a test pinning today's faithful behaviour. `throw` is still refused —
    the next increment, mapping 1:1.
-3. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
+3. **DEC-422 (a) — `forEachLine(path, fn)`**, the native-driven line reader the developer ruled in
+   (2026-07-31: *"both 2 and 3"*), closing the DEC-347 residual 4x from the API side.
+   `NativeEval::HigherOrder` + `ClosureInvoker`; `List.map` is the template.
+4. **DEC-422 (b) — the JIT vertical for foreach-over-`Iterator`**, the other half of the same ruling:
+   it closes the residual for EVERY iterator, not just line reads.
+5. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.
 
-**Six PENDING developer questions** (Invariant 15 — do not self-rule): **DEC-420** (PHP builtin FUNCTION
-names are unguarded — a phorj `function count()` transpiles to a fatal; reject vs mangle); **DEC-421**
-(a lifted PHP error path re-parses but does not TYPE-CHECK — PHP's exception classes have no phorj
-counterpart; leave / map the hierarchy / emit `// CANNOT LIFT:` notes); **the DEC-347 residual 4x** (a
-native-driven `forEachLine` vs a JIT vertical vs accepting it); the strict-vs-narrow reading of DEC-379;
+**PENDING developer questions** (Invariant 15 — do not self-rule): **LIFT-THROWS** (new 2026-08-01 — a
+lifted `throw` needs its `throws` clause by hand; inferring one means ruling three draft-visible
+choices, see `KNOWN_ISSUES.md`); the strict-vs-narrow reading of DEC-379;
 refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section); and whether
 the public-surface file-layout exemption should stay `Cli`-only (latent, from 2026-07-29).
 **Two OWED measurements** need the developer's box: DEC-365 + DEC-370 (no Docker in this container).

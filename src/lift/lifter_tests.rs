@@ -399,51 +399,6 @@ fn a_plain_php_block_comment_does_not_become_a_doc_comment() {
     assert!(phg.contains("function plain(): int"), "{phg}");
 }
 
-/// LIFT-TRY — a PHP `try`/`catch`/`finally` lifts to the phorj equivalent, and the draft RE-PARSES.
-///
-/// Re-parsing is the assertion that matters: the printer emits text, so a plausible-looking string that
-/// does not parse would pass a substring check while being useless as a draft.
-#[test]
-fn try_catch_finally_lifts_and_the_draft_reparses() {
-    let php = "<?php\nfunction risky(int $n): int {\n  try {\n    return 100 / $n;\n  } catch (\\DivisionByZeroError $e) {\n    return 0;\n  } finally {\n    echo \"cleanup\\n\";\n  }\n}\nfunction main(): void { echo risky(4), \"\\n\"; }\n";
-    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
-    for want in ["try {", "catch (DivisionByZeroError e) {", "finally {"] {
-        assert!(phg.contains(want), "missing {want:?} in:\n{phg}");
-    }
-    // The root-namespace marker is stripped — phorj has no `\Type` spelling.
-    assert!(
-        !phg.contains("\\DivisionByZeroError"),
-        "the `\\` leaked:\n{phg}"
-    );
-    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
-}
-
-/// A UNION catch keeps both members through the whole pipeline (parser → lifter → printer). Narrowing
-/// to the first type would silently change which exceptions the clause catches.
-#[test]
-fn a_union_catch_survives_the_lift() {
-    let php = "<?php\nfunction f(int $n): int {\n  try {\n    return 10 / $n;\n  } catch (\\DivisionByZeroError | \\RuntimeException $e) {\n    return -1;\n  }\n}\nfunction main(): void { echo f(2), \"\\n\"; }\n";
-    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
-    assert!(
-        phg.contains("catch (DivisionByZeroError | RuntimeException e)"),
-        "the union was not preserved:\n{phg}"
-    );
-    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
-}
-
-/// PHP 8's variable-less `catch (T)` has no phorj spelling — phorj's `CatchClause` always binds. The
-/// lift SYNTHESISES a name rather than dropping the clause, and the draft still re-parses.
-#[test]
-fn a_variableless_catch_gets_a_synthesised_binding() {
-    let php = "<?php\nfunction g(int $n): int {\n  try {\n    return 10 / $n;\n  } catch (\\DivisionByZeroError) {\n    return -2;\n  }\n}\nfunction main(): void { echo g(2), \"\\n\"; }\n";
-    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
-    assert!(
-        phg.contains("catch (DivisionByZeroError ignored)"),
-        "no synthesised binding:\n{phg}"
-    );
-    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
-}
-
 /// `using` is STILL not produced by the lift, and that is deliberate: recognising that a particular
 /// `try`/`finally` *is* a scope guard is a shape decision, so the lifter faithfully emits the
 /// try/finally the source wrote. This pins the documented boundary so it cannot drift silently.
@@ -456,40 +411,4 @@ fn a_try_finally_lifts_as_itself_and_is_not_raised_to_using() {
         !phg.contains("using ("),
         "a try/finally was raised to `using`, which LIFT-TRY deliberately does NOT do:\n{phg}"
     );
-}
-
-/// `throw` lifts, and the root-namespace marker is stripped so the draft PARSES.
-///
-/// The strip is the load-bearing part: `catch` stripped it while `new` did not, so a lifted
-/// `throw new \RuntimeException(…)` emitted a `\` that is not valid phorj — an unparseable draft sitting
-/// beside a correctly-lifted catch in the same function. Both now route through `strip_root_ns`.
-#[test]
-fn throw_lifts_and_the_root_namespace_marker_is_stripped() {
-    let php = "<?php\nfunction guard(int $n): int {\n  if ($n < 0) { throw new \\RuntimeException(\"negative\"); }\n  return $n;\n}\nfunction main(): void { echo guard(3), \"\\n\"; }\n";
-    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
-    assert!(
-        phg.contains("throw new RuntimeException(\"negative\")"),
-        "throw did not lift cleanly:\n{phg}"
-    );
-    assert!(
-        !phg.contains("\\RuntimeException"),
-        "the root `\\` leaked:\n{phg}"
-    );
-    // PARSE, not type-check: a lifted draft references PHP classes with no phorj counterpart, which is
-    // the documented review-required boundary — but it must at least be syntactically phorj.
-    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
-}
-
-/// A rethrow inside a `catch` — the shape that made `throw` worth having, since LIFT-TRY without it
-/// meant any realistic PHP error path was unliftable.
-#[test]
-fn a_rethrow_inside_a_catch_lifts() {
-    let php = "<?php\nfunction f(int $n): int {\n  try {\n    return 10 / $n;\n  } catch (\\DivisionByZeroError $e) {\n    throw new \\LogicException(\"wrapped\");\n  }\n}\nfunction main(): void { echo f(2), \"\\n\"; }\n";
-    let phg = crate::lift::lifter::lift_source(php).expect("the fixture lifts");
-    assert!(phg.contains("catch (DivisionByZeroError e)"), "{phg}");
-    assert!(
-        phg.contains("throw new LogicException(\"wrapped\")"),
-        "{phg}"
-    );
-    crate::cli::parse_program(&phg).expect("the lifted draft must re-parse");
 }

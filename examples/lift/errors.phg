@@ -1,0 +1,80 @@
+package Main;
+
+import Core.Output;
+import Core.Math;
+import Core.ErrorModule;
+import Core.ErrorModule.InvalidValueError;
+import Core.ErrorModule.MathError;
+import Core.ErrorModule.RuntimeError;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// The lifted form of `errors.php` — `phg lift errors.php` produces everything below except the
+// `throws` clauses and one string conversion (see README §"Exceptions"). It is committed as a runnable
+// example, so all three legs — VM, tree-walker, and the transpiled PHP under a real `php` — are
+// byte-identity-gated on it like every other example.
+//
+// `RuntimeError` / `MathError` / `InvalidValueError` are three of `Core.ErrorModule`'s six standard
+// error types (DEC-421). They exist so ordinary error code — and a lifted PHP error path in
+// particular — has conventional types to name without every program declaring its own. `phg lift`
+// maps PHP's builtin exceptions onto them: `\InvalidArgumentException` here, `\DivisionByZeroError`,
+// `\RuntimeException`.
+//
+// The set is FLAT — none of the six extends another. PHP's `Throwable`/`Error`/`Exception` split was
+// deliberately not mirrored, so `catch` needs no subclass matching: a clause catches exactly the type
+// it names, which is the subtlety a hierarchy would have added.
+//
+// The mapping is SEMANTIC, not hierarchical. PHP files `InvalidArgumentException` under
+// `LogicException`, but what it reports is a bad argument VALUE — so it lands on `InvalidValueError`.
+// A flat set should say what a thing means rather than where PHP filed it.
+//
+// One difference from the PHP is FORCED by phorj's effect system, not chosen: in `errors.php`,
+// `halfOrZero` catches only `DivisionByZeroError` and `InvalidArgumentException` propagates out of it
+// untouched. Phorj has no way to spell "handle one of this call's errors and propagate the rest" in
+// one step — a bare call inside `try` must have ALL its errors caught there, and `?` propagates ALL of
+// them to the caller regardless of any enclosing `try`. So the pass-through is written explicitly, as
+// a second `catch` that rethrows. Same behaviour, one clause more.
+/// Halves an even, non-negative `n`.
+///
+/// Both failures are the caller's to handle, and the two `throws` types say which is which: a
+/// negative input is a bad VALUE, an odd one is an arithmetic impossibility.
+function half(int n): int throws InvalidValueError | MathError {
+    if (n < 0) {
+        throw new InvalidValueError("negative: {n}");
+    }
+    if (n % 2 != 0) {
+        throw new MathError("odd: {n}");
+    }
+    return n.integerDivide(2);
+}
+
+/// Wraps the odd-input case as a `RuntimeError`, and lets a negative input through unchanged.
+///
+/// The second `catch` is the pass-through: `InvalidValueError` is rethrown as itself, because a bare
+/// call inside `try` must have every error it can raise caught right there. It stays in the `throws`
+/// list, so callers still see it.
+function halfOrZero(int n): int throws RuntimeError | InvalidValueError {
+    try {
+        return half(n);
+    } catch (MathError e) {
+        throw new RuntimeError("not halvable");
+    } catch (InvalidValueError e) {
+        throw e;
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Both inputs succeed — a fault that aborts the program prints no stdout, so it could not be a
+    // byte-identity example (see `examples/errors/README.md`). The failing paths are exercised by the
+    // test suite instead.
+    for (int n in [8, 4]) {
+        try {
+            Output.printLine("half({n}) = {halfOrZero(n)}");
+        } catch (RuntimeError e) {
+            Output.printLine("half({n}) failed: {e.message}");
+        } catch (InvalidValueError e) {
+            Output.printLine("half({n}) rejected: {e.message}");
+        }
+    }
+}

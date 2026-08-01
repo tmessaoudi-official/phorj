@@ -77,6 +77,66 @@ example.
 | `"$name"` / `"$o->prop"` / `"{$o->m()}"` interpolation | Phorj `"{name}"` / `"{o.prop}"` / `"{o.m()}"` holes |
 | `foreach ($xs as $x)` (keyless) | Phorj `foreach (xs as x)` — element type inferred (A-6) |
 
+## Exceptions — PHP's builtins map onto `Core.ErrorModule` (DEC-421)
+
+A second sample, [`errors.php`](errors.php), covers the error path: a `throw`, a typed `catch`, and a
+rethrow that wraps one failure kind in another.
+
+```console
+$ phg lift errors.php
+```
+
+Phorj ships a **standard error taxonomy** — six types in `Core.ErrorModule` — and lift maps PHP's
+builtin exception classes onto it. Before that existed, a lifted `catch (\RuntimeException $e)`
+produced valid phorj syntax that then failed `phg check` with `unknown type RuntimeException`: phorj
+had an `Error` marker interface and user-declared errors and nothing in between.
+
+| PHP builtin | phorj |
+|---|---|
+| `Throwable`, `Exception`, `Error`, `ErrorException`, `RuntimeException` | `RuntimeError` |
+| `LogicException`, `BadFunctionCallException`, `BadMethodCallException` | `LogicError` |
+| `ArithmeticError`, `DivisionByZeroError`, `OverflowException`, `UnderflowException`, `RangeException` | `MathError` |
+| `TypeError` | `TypeMismatchError` |
+| `ValueError`, `InvalidArgumentException`, `DomainException`, `LengthException`, `OutOfRangeException`, `OutOfBoundsException`, `UnexpectedValueException`, `JsonException` | `InvalidValueError` |
+| *(no PHP counterpart — phorj's own)* | `IoError` |
+
+The set is **flat**: none of the six extends another. PHP's `Throwable`/`Error`/`Exception` split was
+deliberately not mirrored — it would import a much-criticised hierarchy into a language that does not
+have one, and decide phorj's error model as a side effect of a lift feature. Flat also means `catch`
+needs no subclass matching: a clause catches exactly the type it names.
+
+Three names avoid a collision rather than reading oddly by choice. `ArithmeticError`, `TypeError` and
+`ValueError` are real PHP **builtin classes**, so `E-RESERVED-NAME` rejects them — transpiling
+`class TypeError extends \Exception` would redeclare PHP's own.
+
+The mapping is **semantic, not hierarchical**. `InvalidArgumentException` lands on `InvalidValueError`
+rather than `LogicError`: PHP files it under `LogicException` for hierarchy reasons, but what it
+reports is a bad argument *value*, and a flat set should say what a thing means.
+
+**An unmapped class is refused loudly, not guessed.** A framework or application exception keeps its
+own name and the draft is prefixed with a note:
+
+```
+// CANNOT LIFT: `Acme\PaymentFailed` has no phorj counterpart — declare it, or catch one of
+// `Core.ErrorModule`'s types instead.
+```
+
+### The one thing lift cannot infer: `throws`
+
+A lifted `catch` now type-checks with **no hand edits**. A lifted `throw` does not, and cannot: phorj
+has checked exceptions and PHP does not, so the PHP source carries nothing a `throws` clause could be
+derived from. `phg check` says so precisely, at the exact statement:
+
+```
+type error at 22:9: `InvalidValueError` is thrown here but neither caught nor declared
+  [E-THROW-UNDECLARED]
+  hint: add `throws InvalidValueError` to the enclosing function, or wrap this in `try`/`catch`
+```
+
+The committed [`errors.phg`](errors.phg) is the draft with those clauses added (and one `int` →
+string conversion `echo` needs). It is part of the example suite, so it is byte-identity-gated on
+both backends **and** real PHP, and its output matches the original `errors.php` run under `php`.
+
 ## What lift refuses (loudly — the Tier-2 frontier)
 
 Lift errors rather than guess when there is no faithful Phorj form *yet*: an `array` **type**

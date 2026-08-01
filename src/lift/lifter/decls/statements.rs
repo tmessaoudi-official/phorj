@@ -240,12 +240,16 @@ impl Lifter {
 
 /// The phorj `Type` for a PHP catch clause's type list.
 ///
-/// A leading `\` is stripped (`\RuntimeException` → `RuntimeException`): PHP writes root-namespace
-/// builtins qualified, phorj does not have that spelling. A union of two or more becomes a phorj union
-/// so `catch (A | B $e)` does not silently narrow to its first member.
+/// A PHP builtin exception maps to phorj's standard taxonomy (DEC-421 —
+/// `\RuntimeException` → `RuntimeError`), which is what makes a lifted error path actually TYPE-CHECK
+/// rather than merely parse. An unmapped class keeps its own name with the root `\` stripped, and the
+/// caller marks it with a `// CANNOT LIFT:` note — a framework exception is left visibly for the human
+/// instead of being coerced into the nearest phorj type.
+///
+/// A union of two or more becomes a phorj union, so `catch (A | B $e)` does not silently narrow.
 fn lift_catch_type(types: &[String]) -> Type {
     let named = |t: &String| Type::Named {
-        name: strip_root_ns(t).to_string(),
+        name: super::super::exceptions::phorj_error_name(t),
         args: Vec::new(),
         span: SP,
     };

@@ -3,7 +3,7 @@
 use super::*;
 
 mod declarations;
-mod statements;
+pub(in crate::lift) mod statements;
 
 pub fn lift_source(php_src: &str) -> Result<String, String> {
     // DEC-419: lex WITH the PHPDoc side channel and print WITH the recovered docs, so documentation
@@ -11,7 +11,24 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
     let (toks, docs) = crate::lift::lexer::lex_php_with_docs(php_src)?;
     let prog = crate::lift::parser::parse_php_with_docs(toks, docs)?;
     let phorj = lift(&prog)?;
-    crate::lift::printer::print_program_with_docs(&phorj, &prog.docs)
+    let out = crate::lift::printer::print_program_with_docs(&phorj, &prog.docs)?;
+    // DEC-421: an exception class with no mapping into phorj's standard taxonomy keeps its own name,
+    // which will NOT type-check. Saying so beats leaving the reader to discover it from `phg check`:
+    // the lifter's contract is that anything it cannot do is refused LOUDLY, never guessed.
+    let unmapped = super::exceptions::unmapped_exception_classes(&prog);
+    if unmapped.is_empty() {
+        return Ok(out);
+    }
+    let notes: String = unmapped
+        .iter()
+        .map(|c| {
+            format!(
+                "// CANNOT LIFT: `{c}` has no phorj counterpart — declare it, or catch one of \
+                 `Core.ErrorModule`'s types instead.\n"
+            )
+        })
+        .collect();
+    Ok(format!("{notes}{out}"))
 }
 
 /// DEC-331 D1: the lifted entry is always a CLI script (PHP has no entry-role concept), so it
@@ -112,6 +129,29 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             except: Vec::new(),
             span: SP,
         });
+    }
+    // DEC-421: a catch clause that mapped onto phorj's standard taxonomy needs `Core.ErrorModule`
+    // imported, plus a MEMBER import per type used — an injected type referenced bare without its
+    // import is `E-INJECTED-TYPE-BARE`, so emitting the mapping without these would produce a draft
+    // that still does not check, defeating the point of mapping at all.
+    let used = super::exceptions::mapped_error_types(prog);
+    if !used.is_empty() {
+        final_items.push(Item::Import {
+            path: vec!["Core".into(), "ErrorModule".into()],
+            alias: None,
+            wildcard: false,
+            except: Vec::new(),
+            span: SP,
+        });
+        for t in used {
+            final_items.push(Item::Import {
+                path: vec!["Core".into(), "ErrorModule".into(), t],
+                alias: None,
+                wildcard: false,
+                except: Vec::new(),
+                span: SP,
+            });
+        }
     }
     // DEC-312: one `import <module>;` per Core module a builtin→native resolution referenced.
     for module in super::drain_native_modules() {

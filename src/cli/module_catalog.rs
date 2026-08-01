@@ -24,3 +24,27 @@ pub(crate) fn core_module_paths() -> Vec<String> {
     v.dedup();
     v
 }
+
+/// The names importable FROM the Core module at dotted `path` — the second half of an import, as in
+/// `import Core.ErrorModule.RuntimeError;`. Sorted + deduped; empty when `path` names no Core module.
+///
+/// Same two sources as [`core_module_paths`], and for the same reason — either kind of module can be
+/// imported from: a row's injected TYPE names (`bare_types`) and the natives registered under that
+/// exact module path (`Core.Output.printLine`). Derived, so a new type or native is completable the
+/// moment it is registered.
+pub(crate) fn core_module_members(path: &str) -> Vec<String> {
+    let mut v: Vec<String> = super::preludes::CORE_MODULES
+        .iter()
+        .filter(|vm| vm.module.join(".") == path)
+        .flat_map(|vm| vm.bare_types.iter().map(|t| (*t).to_string()))
+        .chain(
+            crate::native::registry()
+                .iter()
+                .filter(|n| n.module == path)
+                .map(|n| n.name.to_string()),
+        )
+        .collect();
+    v.sort();
+    v.dedup();
+    v
+}

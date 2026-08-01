@@ -6,6 +6,59 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.ErrorModule`, phorj's standard error taxonomy (DEC-421, 2026-08-01)
+Six error types every program can throw and catch — `RuntimeError`, `LogicError`, `MathError`,
+`TypeMismatchError`, `InvalidValueError`, `IoError` — so code that needs a conventional error does not
+have to declare its own. **FLAT on purpose:** none of the six extends another. PHP's
+`Throwable`/`Error`/`Exception` split was considered and rejected — mirroring it would import a
+much-criticised hierarchy into a language that deliberately lacks one, and would decide phorj's error
+model as a side effect of a lift feature. Flat also means `catch` needs no subclass matching.
+
+They are ordinary phorj classes `implements Error`: no new `Value`, no new `Ty`, no new `Op`, and they
+transpile to `extends \Exception` like any other phorj error. Three legs verified byte-identical on a
+throw/catch/dispatch path.
+
+**Three of the six names avoid a collision, and that is why they read as they do.** `ArithmeticError`,
+`TypeError` and `ValueError` — the obvious spellings, and the ones the ruling named — are all real PHP
+**builtin classes**, so `E-RESERVED-NAME` rejects them: `class TypeError extends \Exception` would
+redeclare PHP's own.
+
+**`phg lift` maps PHP's builtin exceptions onto the set**, in both `catch` and `throw new` position,
+emitting `Core.ErrorModule` plus one member import per type USED (importing all six would be
+`E-UNUSED-IMPORT` — a lift failing the very check it exists to pass). A lifted
+`catch (\RuntimeException $e)` now type-checks with **no hand edits**; before this it emitted valid
+syntax that died on `unknown type RuntimeException`. The mapping is SEMANTIC, not hierarchical:
+`InvalidArgumentException` → `InvalidValueError`, because PHP files it under `LogicException` for
+hierarchy reasons but what it reports is a bad VALUE. An exception with no honest counterpart keeps its
+own name and gets a `// CANNOT LIFT:` note rather than being coerced into the nearest phorj type.
+
+`examples/lift/errors.php` + `errors.phg` are the walkthrough; the `.phg` is byte-identity-gated on all
+three legs and its output matches the original PHP under php-8.5.8.
+
+**Not included, and now recorded: `throws` inference** (`KNOWN_ISSUES.md` §LIFT-THROWS). A lifted
+`throw` still needs its clause by hand — phorj has checked exceptions and PHP does not, so there is
+nothing to derive one from, and a draft that CHECKS needs three draft-visible choices that are the
+developer's to rule.
+
+### Fixed — one exception walk instead of three near-identical ones (2026-08-01)
+The `throw new X` arm had been added to two of the three recursive walks and, in one, to the WRONG one:
+mapped exception names were reported as UNmappable, so a correctly-lifted draft carried bogus
+`// CANNOT LIFT:` notes for types it had emitted properly. Replaced by a single `visit_exception_sites`
+visitor (`src/lift/lifter/exceptions.rs`) that answers all three questions, making that class of
+mistake unrepresentable — a new statement form is handled once, for every question at once. Also took
+`lift/lifter/decls/statements.rs` from 438 to 260 lines (Invariant 13).
+
+### Fixed — member imports were not completable, for ANY Core module (2026-08-01)
+`import Core.` offered module PATHS only; a trailing `.` returned an empty list for every module.
+[Verified: `import Core.ErrorModule.`, `import Core.FileSystemModule.` and `import Core.Output.` all
+returned `[]`.] A **member-gated** module has no other way in — `import Core.ErrorModule;` alone leaves
+its types bare (`E-INJECTED-TYPE-BARE`) — so DEC-421's taxonomy was untypeable from the editor the day
+it shipped, breaking Invariant 17's 100% rule one level below the hole `withLock` fell through.
+
+Fixed with `cli::module_catalog::core_module_members`, derived from the same two registries as
+`core_module_paths` (a row's injected `bare_types` + the natives registered under that exact module
+path), so a new type or native is completable the moment it is registered — no LSP edit.
+
 ### Fixed — `examples/fs/lock.phg` was racy under the concurrent test corpus (2026-07-31)
 The example reset its state by DELETING its working directory, and the repo's test corpus runs every
 example concurrently (`tests/format.rs` fans the corpus across cores; `tests/differential.rs` runs it

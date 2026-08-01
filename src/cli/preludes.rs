@@ -811,6 +811,24 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
     // comment used to carry. `Core.Option` (an early row, imported by the FS prelude) is the case
     // that forced the fix; `gate_tests::a_prelude_import_of_an_earlier_registry_row_is_still_injected`
     // is the ratchet.
+    // `Core.ErrorModule` (DEC-421) — the standard error taxonomy. Named `ErrorModule` rather than
+    // `Error` because `Error` is already the built-in marker interface these six implement, and a
+    // qualifier leaf of `Error` would bind that name to two things in one file.
+    VirtualModule {
+        module: &["Core", "ErrorModule"],
+        qualifier: "ErrorModule",
+        srcs: &[crate::native::error_prelude::ERROR_PRELUDE],
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &[
+            "RuntimeError",
+            "LogicError",
+            "MathError",
+            "TypeMismatchError",
+            "InvalidValueError",
+            "IoError",
+        ],
+    },
     VirtualModule {
         module: &["Core", "ClosableModule"],
         qualifier: "ClosableModule",

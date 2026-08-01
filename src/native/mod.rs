@@ -22,6 +22,7 @@ use std::sync::OnceLock;
 // sole ordering coordinator (pinned slots); `Core.Console` stays here (slot 0, inlined).
 mod bytes;
 mod convert;
+pub(crate) mod error_prelude;
 mod file;
 mod fs;
 mod fs_bodies;
