@@ -6,7 +6,52 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Measured — the sticky phi costs NOTHING; `opt_level` was never `none` (DEC-429, 2026-08-01)
+No code ships. A hypothesis was built, fully tested, measured at zero, and reverted — and it took two
+prior diagnoses down with it.
+
+**The premise was a stale comment.** `emit_unboxed/mod.rs` asserted twice that *"Cranelift's baseline
+`opt_level=none` does NOT DCE the loop-carried sticky phi"*. But `compile/mod.rs:185` has set
+`("opt_level", "speed")` since P-2a, and `speed` removes the phi for free. That one sentence was the
+stated premise of DEC-425, of DEC-428's mechanism claim, and of this whole reverted change. Both comment
+sites are corrected in place with the measured numbers and a "do not restore this" note.
+
+**The instrument changed, and that is the durable part.** Wall clock on this box cannot resolve an effect
+this size: pinned, interleaved, on a settled box, phorj's `floatloop` spanned **4.03-6.68 ms** (66%,
+visibly bimodal) while php spanned **3.62-4.01 ms** (11%). The verdict came instead from **callgrind
+instruction counts by SLOPE** — run at two iteration counts, take `ΔIr / Δiterations` — which cancels
+startup, is immune to load, and reproduces to **~0.2%** (the same binary re-measured on two occasions gave
+6.9956 and 7.0106 Ir/iteration, so ±0.02 Ir/iter is the method's own floor here). From here on that is the
+instrument for JIT work; wall clock only confirms a win the slope already showed.
+
+| build | Ir / iteration |
+|---|---|
+| pre-DEC-428 (`8c57c79`) | 9.9981 |
+| master with DEC-428 (`73d085a`) | 7.0106 |
+| + the loop-scoped sticky (reverted) | 7.0003 |
+
+**DEC-428's measurement stands; its mechanism claim was wrong.** `floatloop` 8.2 -> 5.24 ms is real and now
+confirmed as 10.00 -> 7.01 Ir/iteration (-30%) — but the win came from what disappears at each newly-PROVEN
+site (`sadd_overflow` + `uextend` + `bor` collapsing to one `iadd`), not from dropping the phi. **DEC-425's
+"100% of the gap is the speculation STICKY" is likewise corrected**: the per-op accumulation was ~30%, the
+phi 0%, and its supporting datum ("`#[UncheckedOverflow]` runs ~4.0 ms") does not reproduce — that variant
+measured 6.4-7.6 ms today, consistent with the corrected model.
+
+**The real diagnosis of `floatloop`, and it is not codegen volume:** phorj runs **7.01** Ir/iteration
+against php's **8.00** — 12% FEWER instructions — and is still ~11% slower (4.03 vs 3.62 ms best-of-9).
+The gap is instructions-per-cycle plus phorj's own variance, so more static proving cannot close this
+shape. Its body is a serial float-dependency chain (`x = x + 1.5` feeding the next compare), leaving both
+engines ~0.08 ns/iteration apart against the same latency bound — a documented near-parity rather than a
+tuning debt. The measured ratio (0.90 best-of-9, 0.78 median) is better than the frozen `_owed` floor, and
+is deliberately NOT re-baselined: DEC-365 forbids laundering an OWED row, and a box with a 66% spread has
+no business writing a baseline.
+
 ### Changed — JIT: conditional accumulators now PROVE; `floatloop` -36% (DEC-428, 2026-08-01)
+> **Mechanism corrected by DEC-429 (below/above in this file).** The -36% is real and reproduces as
+> -30% Ir/iteration; it comes from the per-op `sadd_overflow`+`uextend`+`bor` sequence vanishing at each
+> proven site, NOT from dropping the loop-carried phi — which is measured to cost zero, because Cranelift
+> runs at `opt_level=speed` here and removes it. The paragraphs below preserve the original reasoning as
+> written; read them with that correction in force.
 The first step of the JIT programme, scoped to the one gap DEC-425 had already diagnosed down to a line.
 
 `range_acc`'s body walk used to REJECT any `JumpIfFalse` that was not a loop guard — i.e. any `if`

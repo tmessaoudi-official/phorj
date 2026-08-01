@@ -104,9 +104,9 @@ pub(super) fn build_body_unboxed(
     // Range analysis (docs/plans/perf-wave.plan.md): `proven_ops[ip]` = an `AddI` that is a provably-
     // no-overflow induction-variable increment → emit a plain wrapping-free `iadd`, no sticky. From it:
     //   `needs_sticky` — is any reachable speculated overflow op (`AddI`/`SubI`/`MulI`/`Neg`) NOT proven?
-    //     If NO, the speculation sticky flag + its back-edge/Return checks are dead → omit them entirely
-    //     (Cranelift's baseline `opt_level=none` does NOT DCE the loop-carried sticky phi, so omitting is
-    //     what actually turns a proven counted loop's PARITY into a WIN).
+    //     If NO, the sticky flag + its back-edge/Return checks are dead → omit them. What that saves is
+    //     the PER-OP `sadd_overflow`+`uextend`+`bor` at each proven site (10.00 → 7.01 Ir/iter on
+    //     `floatloop`); the loop-carried PHI costs ZERO — `opt_level=speed`, not `none` (DEC-429).
     //   `needs_fault_exit` — is there ANY path to the shared fault-exit (a sticky redo, OR a `DivI`/
     //     `RemI`/`Call` per-op fault branch)? If NO, don't create the block at all (an unreferenced,
     //     never-jumped-to block would be a dangling exit — avoid it).
@@ -284,7 +284,7 @@ pub(super) fn build_body_unboxed(
     // `sticky != 0` ⇒ exit code 5 = "redo on VM", where the VM's per-op CHECKED arithmetic reproduces
     // the true first fault in the correct order (the single source of fault truth — Invariant 2).
     // Only declared when at least one unproven speculated op needs it (else the whole sticky chain is
-    // dead — and Cranelift baseline won't DCE the loop-carried phi, so omitting is the actual win).
+    // dead). The win is the per-op `uextend`+`bor`, NOT the phi — measured at zero, DEC-429.
     let sticky = if needs_sticky {
         let v = b.declare_var(types::I64);
         let sticky_seed = b.ins().iconst(types::I64, 0);

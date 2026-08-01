@@ -5402,6 +5402,12 @@ a loaded box is exactly how a false floor gets frozen in. Queued for a quiet box
 
 ## DEC-425 — `floatloop`: NOT a regression, and the loss is one loop-carried sticky phi (2026-08-01)
 
+> **CORRECTED BY DEC-429 — do not read this entry alone.** Its central claim, *"100% of the gap is the
+> speculation STICKY"*, is wrong on both counts: the per-op accumulation was ~30% and the loop-carried PHI
+> costs **0** (measured by callgrind Ir slope). The phi reasoning rested on a comment citing
+> `opt_level=none`, but `compile/mod.rs:185` has set `opt_level=speed` since P-2a. Its supporting datum,
+> *"`#[UncheckedOverflow]` runs ~4.0 ms"*, does not reproduce — that variant measures 6.4-7.6 ms.
+
 Diagnosis before optimisation, as the DEC-423 list requires for this one. Two findings, and the second
 is a ready-to-build fix that is nevertheless NOT self-rulable.
 
@@ -5563,6 +5569,12 @@ the point of the DEC-423 sweep: turn "beat PHP" into a finite list with named ca
 
 ## DEC-428 — the JIT programme, step 1: conditional accumulators prove (2026-08-01, BUILT)
 
+> **MECHANISM CORRECTED BY DEC-429 — do not read this entry alone.** The -36% is real and reproduces
+> deterministically as 10.00 -> 7.01 Ir/iteration (-30%), but it comes from the per-op
+> `sadd_overflow`+`uextend`+`bor` sequence vanishing at each newly-proven site, NOT from "dropping the
+> loop-carried sticky phi" as claimed below — that phi costs zero, because Cranelift runs at
+> `opt_level=speed` here. The "next step" this entry records was built, measured at zero, and reverted.
+
 The developer said "go" to the DEC-423 JIT scope question three times; taken as the ruling, and this is
 the first step. Scope deliberately narrow: the one gap DEC-425 had already diagnosed down to a line.
 
@@ -5623,3 +5635,131 @@ distinction above is known; a passing test suite alone would have hidden it.
 into `range_acc/{mod,walk,verify}.rs` (368 / 336 / 149) — driver, one-trip body walk, one-`G`
 verification attempt. Invariant 13's "split it, do not grow it", enforced by the gate rather than
 remembered.
+
+
+## DEC-429 — the sticky phi costs NOTHING: hypothesis tested, REVERTED, and two prior diagnoses corrected (2026-08-01, MEASURED / NOT BUILT)
+
+The JIT programme's step 2, as DEC-428 recorded it: `needs_sticky` is whole-function, so `floatloop`'s
+`return acc + Conversion.truncate(x)` — one `AddI` after the loop, executed ONCE — materialized the
+loop-carried sticky overflow phi and (per the recorded reasoning) taxed all 5,000,000 iterations. Fix:
+scope the sticky to loop bodies, give out-of-loop unproven ops a per-op branch.
+
+**It was built, fully tested, and then reverted, because the premise is false.** No code ships from this
+entry. What ships is the measurement and the corrections it forces.
+
+### The instrument — and why the old one could not have answered this
+
+Wall clock on this box CANNOT resolve an effect of this size on the phorj leg. Pinned (`taskset -c 2`),
+interleaved, on a settled box (load 0.47), 9 rounds: phorj `floatloop` ranged **4.03 – 6.68 ms** (a 66%
+spread, visibly bimodal) while php on the same rounds ranged **3.62 – 4.01 ms** (11%). A median over that
+phorj distribution is not a measurement of a 5% change; it is a lottery. Two successive sequential runs of
+the same binary "showed" a 36% swing.
+
+So the verdict came from **callgrind instruction counts by SLOPE**, which is deterministic and cancels
+process startup entirely: run the bench at two iteration counts, take `ΔIr / Δiterations`. Reproducible to
+**~0.2%** — the same binary re-measured on two occasions gave 6.9956 and 7.0106 Ir/iteration, so ±0.02
+Ir/iter is this method's own floor at these iteration counts (the slope is a two-point fit and process
+startup Ir is not perfectly constant). Against wall clock's 66%, that is the difference between an
+instrument and a coin flip. **This is the standing instrument for JIT work from here on** —
+wall clock is for confirming a win the slope already showed, never for finding one.
+
+Instrument validated before use: `Ir` scales with the iteration count (100k → 6.08M, 400k → 10.28M), so
+callgrind IS counting the JIT-generated code and not just the front end.
+
+### The result: ZERO
+
+| build | Ir / iteration |
+|---|---|
+| pre-DEC-428 (`8c57c79`) | **9.9981** |
+| master with DEC-428 (`73d085a`) | **7.0106** |
+| + the DEC-429 loop-scoped sticky | **7.0003** |
+
+Dropping the phi moved the loop by **0.0047 Ir/iteration** — which is 4× SMALLER than the method's own
+±0.02 reproducibility floor (above), so it is not merely small, it is *unmeasurable*: the same unchanged
+binary varies by more than the change did. Invariant 11 permits no perf change without a measured before/after, and the measurement is zero,
+so the change was reverted in full. (Precedent in the same session: the `exec_hot` fast dispatch, −4% Ir /
+0% wall clock, was reverted on the same rule. This one is not even −4%.)
+
+### The root cause of the wrong premise: a stale comment about a setting we do not use
+
+`src/jit/emit_unboxed/mod.rs` said, twice: *"Cranelift's baseline `opt_level=none` does NOT DCE the
+loop-carried sticky phi, so omitting is what actually turns a proven counted loop's PARITY into a WIN."*
+
+**`src/jit/compile/mod.rs:185` has set `("opt_level", "speed")` since P-2a.** The comment describes a
+configuration this project abandoned, and `speed` removes the phi for free — which is exactly why the
+measurement is zero. That one stale sentence was the stated premise of DEC-425's "100% of the gap is the
+speculation STICKY", of DEC-428's mechanism claim, and of this entire reverted change. Both comment sites
+are now corrected in place with the measured numbers and an explicit "do not restore this" note.
+
+**Lesson, recorded because it is the generalizable part:** a comment asserting a compiler-flag behaviour is
+a claim about configuration, and configuration drifts. Three decisions in a row quoted it instead of
+checking `compile/mod.rs`. Rule 11 says a state claim needs a direct file read; a *code comment* is not
+that read.
+
+### Correction to DEC-428 (shipped earlier today, `73d085a`)
+
+The **measurement stands**: `floatloop` 8.2 → 5.24 ms, and now confirmed deterministically as
+**10.00 → 7.01 Ir/iteration, −30%**. The **mechanism claim was wrong.** The win did not come from
+dropping the phi; it came from what disappears at each newly-PROVEN site: `sadd_overflow` + `uextend` +
+`bor` collapse into a single `iadd`. Three instructions per accumulator site per iteration — that is the
+30%. DEC-428's conclusion was right for a reason it did not state.
+
+### Correction to DEC-425
+
+*"100% of the gap is the speculation STICKY"* — the per-op accumulation was ~30% of it, not 100%, and the
+phi was 0%. The supporting datum, *"`#[UncheckedOverflow]` (no phi) runs ~4.0 ms"*, does not reproduce:
+measured today on the current build, the `#[UncheckedOverflow]` variant of `floatloop` ran **6.4 – 7.6 ms**,
+i.e. no better and probably worse. Consistent with the corrected model — DEC-428 already made the loop's
+ops plain, so `#[UncheckedOverflow]` has nothing left to remove.
+
+### The actual, verified diagnosis of `floatloop` — and it is not a codegen-volume problem
+
+Apples-to-apples instruction counts, same method, same box (php-8.5.8 + tracing JIT, `Debug Build => no`,
+JIT confirmed live via `opcache_get_status()["jit"]["enabled"] === true`):
+
+| leg | Ir / iteration | best-of-9 wall clock (5M iters, pinned, interleaved) |
+|---|---|---|
+| phorj (master) | **7.01** | **4.03 ms** |
+| php 8.5.8 + JIT | **8.00** | **3.62 ms** |
+
+**phorj executes 12% FEWER instructions than PHP and is still ~11% slower.** So the remaining gap is not
+volume — it is instructions-per-cycle plus phorj's own run-to-run instability. Best-case throughput:
+phorj ≈ 8.7 G instr/s against php ≈ 11.1 G instr/s. More static proving CANNOT close this shape; phorj is
+already below PHP's instruction count and every op in the loop is proven.
+
+Two consequences worth stating plainly:
+  * **The measured ratio is better than the frozen `_owed` floor says.** Best-of-9 gives 3.62/4.03 =
+    **0.90**; medians give 0.78. Recorded here, and *not* re-baselined — DEC-365 forbids laundering an OWED
+    row via `--emit`, and a box with a 66% spread on the phorj leg has no business writing a baseline.
+  * **`floatloop` may be near a hardware floor.** Its body is a SERIAL float-dependency chain
+    (`x = x + 1.5` feeding the next iteration's compare), so both engines are bounded by fadd latency, and
+    they now sit ~0.08 ns/iteration apart. A benchmark where both legs are within a fraction of a cycle of
+    the same dependency limit is a documented near-parity, not a tuning debt. **[Inferred** — the
+    dependency-chain bound follows from the loop shape and the two measured throughputs; the specific
+    fadd latency and clock on this box were not measured.**]**
+
+### What the next step is NOT
+
+Not "raise `opt_level`" — already `speed`. Not "prove more ops" — all of `floatloop`'s are proven. Not
+"remove the phi" — measured at zero. The open, *investigable* question is phorj's 66%-vs-11% wall-clock
+variance on an allocation-free 7-instruction loop; JIT code alignment / placement is the obvious first
+hypothesis (a fresh code buffer per process, so loop-entry alignment varies run to run, which would also
+explain the bimodality). **Not started, and deliberately not guessed at further in this entry.**
+
+### The work that was reverted, so a future attempt need not rediscover it
+
+An `ovf_policy` module beside `range_acc/` — 158 lines, NOT in the tree (that is the point; it was
+reverted, so do not go looking for the file): an `Ovf { Plain, Sticky, Branch }` enum, `in_loop_body` (back-edge
+interval union — sound in BOTH directions of error, since over-marking keeps the sticky and under-marking
+falls back to the pre-sticky per-op branch), and `overflow_policy`, which keeps the sticky whenever there
+is no loop to carry it (with no back-edge the sticky is ordinary SSA and beats a `brif` per op). Wiring:
+`needs_fault_exit` must key on `any_unproven`, **not** `needs_sticky` — a per-op branch needs the block
+just as much, and narrowing it panics in `Ec::fault_if`.
+
+Six tests, and unlike DEC-428's set **all three guards were verified load-bearing** by deliberately
+weakening each and re-running: the loop-scoping (→ the floatloop-shape test fails), the no-loop carve-out
+(→ the straight-line test fails), and the `any_unproven` fault-exit key (→ a codegen PANIC at
+`ec.rs:32`). That last one needed a purpose-built shape — a const-bounded proven loop plus a trailing
+`acc + m`, with no call/index/div/`Eq` — because the `floatloop` shape has a `CallNative` that creates the
+fault-exit block anyway and hid the bug through all 173 other JIT tests. Worth keeping in mind: the
+narrowing passed the entire existing JIT suite.

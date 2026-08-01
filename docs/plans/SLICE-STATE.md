@@ -1,6 +1,6 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. IN FLIGHT: the DEC-423 perf programme — every loss named; the JIT vertical started (DEC-428 = step 1, `floatloop` -36%). NEXT step recorded inside the DEC-428 register entry: move `needs_sticky` off whole-function scope.**
+## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. IN FLIGHT: the DEC-423 perf programme — every loss named; the JIT vertical started (DEC-428 = step 1, `floatloop` -36%) and step 2 was BUILT, MEASURED AT ZERO, REVERTED (DEC-429 — the sticky phi costs nothing; `opt_level` was `speed` all along, and a stale comment saying `none` had been the premise of DEC-425/428). `floatloop` is now a documented near-parity, not a tuning debt. NEXT: pick the next loss from the list below — but measure with callgrind Ir SLOPE, never wall clock (DEC-429).**
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
@@ -206,15 +206,35 @@ a PENDING question, not self-ruled.
      widened to UNKNOWN at the join; accumulators keep their envelope because the envelope solve already
      takes `min(growth.lo, 0)`/`max(growth.hi, 0)` per site — i.e. it always modelled "this site may not
      run". Split by cohesion to `src/jit/range_acc/{mod,walk,verify}.rs` (Invariant 13).
-     **STILL A LOSS** (php 3.59 ms) with a precise residual: `needs_sticky` is computed over the WHOLE
-     function, and `return acc + Conversion.truncate(x)` is an `AddI` OUTSIDE the loop, so it stays
-     unproven and the phi survives — one op run ONCE taxing 5,000,000 iterations. The fix is at the
-     EMITTER (an unproven op not inside a loop takes a per-op fault branch instead of forcing the
-     sticky; both paths end in the same VM redo, so unobservable) — **the next JIT-programme step**.
      Honest test note: only the join-widening guard is load-bearing (`task9_join_widening_prevents_a_
      stale_then_branch_interval` fails without it); the nested-region and conditional-counter-write
      refusals are currently UNREACHABLE and labelled defensive, not proven.
-   - `floatloop` (pre-DEC-428 diagnosis, kept for the reasoning) — **DEC-425, and it was NOT a regression**: building
+     **MECHANISM CORRECTED + CLOSED, 2026-08-01 (DEC-429).** The -36% is real and reproduces
+     deterministically as **10.00 -> 7.01 Ir/iteration (-30%)**, but it came from the per-op
+     `sadd_overflow`+`uextend`+`bor` sequence vanishing at each newly-proven site — **NOT** from dropping
+     the loop-carried phi, which is measured at **0.0047 Ir/iteration, i.e. zero**. Reason: the whole
+     "the phi survives / Cranelift won't remove it" line rested on a comment claiming `opt_level=none`,
+     while `compile/mod.rs:185` has set **`opt_level=speed` since P-2a**. The "next step" recorded above
+     (scope `needs_sticky` to loop bodies) WAS built, fully tested, measured at zero, and **REVERTED** per
+     Invariant 11. `floatloop` is now **NOT a codegen-volume problem at all**: phorj runs **7.01**
+     Ir/iteration against php's **8.00** — 12% FEWER instructions — and is still ~11% slower (4.03 vs
+     3.62 ms best-of-9, pinned + interleaved). The gap is instructions-per-cycle plus phorj's own
+     variance, and the body is a SERIAL float-dependency chain, so both engines sit ~0.08 ns/iteration
+     apart against the same latency bound: **a documented near-parity, not a tuning debt.** Measured ratio
+     0.90 (best-of-9) / 0.78 (median) — better than the frozen `_owed` floor and deliberately NOT
+     re-baselined (DEC-365).
+     **STANDING INSTRUMENT CHANGE (DEC-429):** wall clock on this box CANNOT resolve a <20% JIT effect —
+     phorj's `floatloop` spans 4.03-6.68 ms pinned+interleaved on a settled box (66%, bimodal) where php
+     spans 3.62-4.01 (11%). Use **callgrind Ir by SLOPE** (`ΔIr / Δiterations` across two iteration
+     counts): load-immune and reproducible to **~0.2%** (±0.02 Ir/iter is its own floor — the same binary
+     re-measured gave 6.9956 and 7.0106). Wall clock only confirms
+     a win the slope already showed. The open, investigable question left is phorj's own variance on an
+     allocation-free 7-instruction loop — JIT code alignment/placement is the first hypothesis (fresh code
+     buffer per process ⇒ loop-entry alignment varies), NOT started.
+   - `floatloop` (pre-DEC-428 diagnosis, kept for the reasoning — **its "100% is the sticky phi" claim is
+     WRONG, corrected by DEC-429: ~30% was the per-op accumulation, 0% the phi; and its
+     "`#[UncheckedOverflow]` runs ~4.0 ms" datum does not reproduce — that variant measures 6.4-7.6 ms
+     today**) — **DEC-425, and it was NOT a regression**: building
      the exact commit whose baseline said 1.011 measures 0.43 against this php, so docker
      `php:8.5-cli` was ~2.3x slower on this loop and every pre-2026-08-01 WIN is tainted by that.
      100% of the gap is the speculation STICKY: the hot counter IS proven, but `acc = acc + 1` in a
@@ -236,9 +256,15 @@ a PENDING question, not self-ruled.
    loss and lifted `floatloop` 0.46 -> 0.71 (still a loss, so the 42/8 split is unchanged; the geomean
    is now marginally better than 2.45x and will be re-derived at the next full sweep rather than
    estimated here). 28 features win by >=2x. Every remaining loss has ONE of three named causes: VM
-   interpretation of user code (5 of 8 — **the JIT programme, now IN FLIGHT: step 1 = DEC-428**), a
-   representation/design choice (`queryparse` DEC-424, `deepjson` DEC-426 — both adjudicable), or noise
-   at parity (`listcontains`). Nothing is unexplained and nothing left moves under a tuning pass.
+   interpretation of user code (5 of 8 — **the JIT programme, IN FLIGHT: step 1 = DEC-428 shipped,
+   step 2 = DEC-429 measured at zero and reverted**), a representation/design choice (`queryparse`
+   DEC-424, `deepjson` DEC-426 — both adjudicable), or noise at parity (`listcontains`). Nothing is
+   unexplained and nothing left moves under a tuning pass.
+   **DEC-429 narrows that first bucket to 4 of 8**: `floatloop` is NOT VM interpretation and NOT codegen
+   volume — phorj already runs 12% FEWER instructions per iteration than php on it (7.01 vs 8.00) and the
+   residual is IPC on a serial float-dependency chain. It joins `listcontains` as a documented
+   near-parity. And the instrument for the remaining four is now **callgrind Ir by slope**, because wall
+   clock here cannot resolve a <20% JIT effect (66% spread on the phorj leg, pinned + interleaved).
    **THE GATE IS NOW ARMED** (DEC-423.1, developer-ruled): the baseline is re-emitted on the local
    release php with all 8 losses frozen as `_owed` — DERIVED at emit time, so `--emit` cannot launder
    one. The gate reports every owed loss on every push, BLOCKS if one deepens past 25%, and says
