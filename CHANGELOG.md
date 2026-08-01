@@ -118,7 +118,8 @@ probed, post-DEC-428, output-identity gated): 52 features, 11 OWED.
 **HONEST SCOREBOARD: 41 WIN / 11 LOSS, geomean 2.36x, median 2.13x.** That is LOWER than the 42/8, 2.45x,
 2.30x reported earlier today, and the correction is the point — three recorded "WINs" were loaded-box
 artifacts and are now OWED at their true values (`mapget` 1.004->0.958, `mapinsert` 1.012->0.813,
-`floatmul` 1.002->0.981), while `floatloop` moved the other way on merit (0.476 -> **1.05**, DEC-428
+`floatmul` 1.002->0.981), while `floatloop` APPEARED to move the other way (0.476 -> 1.05) — **CORRECTED by DEC-434.1: that
+reading was itself a lucky best-of-3 draw; floatloop is ~0.776, a real loss, and stays on the hunt list** (DEC-428
 finally visible against an undistorted php leg) and `strappend` enters at 0.448.
 
 **The hunt list, worst first:** `fslines` 0.113 · `queryparse` 0.224 · `jsonround` 0.286 ·

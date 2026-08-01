@@ -6375,3 +6375,51 @@ the row (0.113 -> 0.293) without fixing it.
 Recorded, measured, not guessed at. Nothing was built: after DEC-431.2 (where the recommended fix turned
 out to re-run the loop twice) the bar for touching the JIT's calling convention on inference is higher than
 one session's remaining budget.
+
+
+## DEC-434.1 — `floatloop` never won; the ratchet armed a lucky draw, and `--emit` needs a robustness guard (2026-08-01)
+
+A DOCS-ONLY commit was blocked by the ratchet: `floatloop`, baseline 1.050 (WIN), confirmed at 0.818.
+No Rust changed, so it could not be a regression — and DEC-432 had predicted this in writing:
+
+> *"floatloop's 1.05 comes from the +27%-spread bench (best-of-25 read 0.92); its flip limit is 0.893, so
+> the margin to a false block is ~0.03. If the ratchet trips on it with no code change, that is why."*
+
+### Except the prediction was too kind to me — it is not a false positive
+
+On a genuinely quiet box (load 0.35), five harness runs: **0.78 / 0.74 / 0.62 / 0.73 / 0.79**, all LOSS,
+VM spread 7-27%. `floatloop` is a real ~0.75 loss. **The 1.050 in the baseline was a lucky best-of-3 draw
+at emit time** — the same fiction as `mapinsert`'s 1.012 in DEC-431.1, inverted.
+
+**So DEC-430 and DEC-432 are CORRECTED: `floatloop` did NOT "win on merit" (0.476 -> 1.05).** It is ~0.776
+and goes back on the hunt list where DEC-432's standing rule always said it belonged. That is the third
+`floatloop` claim to need correcting in one day (the sticky-phi mechanism, the hardware-floor closure, now
+the win) — a bench sitting near parity with a 27% spread will keep producing plausible wrong answers, and
+the lesson is to distrust any single reading of it, mine included.
+
+### Re-emitted on a quiet box (load 0.19)
+
+52 features, **10 OWED**. `floatloop` correctly enters at 0.776. `mapinsert` **1.089** and `mapget`
+**1.042** are recorded as WINs — DEC-433's fix holds up across a fresh emit, which is the independent
+confirmation that measurement deserved.
+
+**Corrected scoreboard: 42 WIN / 10 LOSS, geomean 2.42x, median 2.24x.**
+
+### The real defect: `--emit` will arm a WIN it cannot distinguish from a loss
+
+DEC-431.1 fixed emitting on a LOADED box. This is the remaining hole: even on a quiet box, best-of-3 on a
+high-variance row can land above 1.0 and get armed, after which every later run risks a false block. The
+gate already has the data to refuse this — DEC-430.1 records `vm_worst_ns`, and `floatloop` was flagged
+`[noisy: VM spread +27%]` in the very run that armed it.
+
+**Proposed rule (NOT built, needs a ruling because it moves the whole scoreboard):** at `--emit`, a feature
+is armed as a WIN only if its *spread-adjusted* ratio clears 1.0 — `ratio x (vm_best / vm_worst)`, i.e. the
+ratio recomputed against the WORST VM sample. Otherwise it is recorded OWED. Worked examples from the run
+that armed the fiction: `floatloop` 1.05 / 1.27 = **0.83 -> OWED** (correct); `setunion` 52 / 1.04 = 50
+-> armed (correct); `mapkeys` 1.06 / 1.13 = **0.94 -> OWED**; `mapinsert` 1.069 / 1.66 = **0.64 -> OWED**
+even though DEC-433 genuinely improved it.
+
+That last case is the trade: the rule owes MORE than strictly necessary. Under DEC-432 ("nothing is put
+aside until it wins") erring toward OWED is the safe direction — a ratchet should arm only robust wins, and
+an un-armed row is still hunted. But it would move several near-parity rows onto the list, so it is the
+developer's call, not mine.
