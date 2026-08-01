@@ -3,8 +3,23 @@
 #
 # For each feature `bench/micro/<name>.phg` (with a hand-authored idiomatic `bench/micro/<name>.php`):
 #   - phorj: `phg run <name>.phg`  (the VM) — best-of-K on this host.
-#   - PHP:   `<name>.php` under `docker run php:8.5-cli` with opcache+JIT (a REAL release php — the
-#            local builds are all ZTS DEBUG, JIT off, so they are NOT a valid baseline).
+#   - PHP:   `<name>.php` with opcache+JIT. Either `docker run php:8.5-cli`, or a LOCAL release php
+#            via MICROBENCH_PHP_BIN.
+#
+# ⚠ THE "local builds are all ZTS DEBUG, JIT off" NOTE THAT USED TO SIT HERE WAS STALE, and it cost
+# this project every perf verdict it had. The stack's own oracle php IS a valid baseline — verified
+# 2026-08-01 on `scripts/toolchain.env`'s php-8.5.8: `Debug Build => no`, `Thread Safety => disabled`
+# (NTS), Zend OPcache present, and `opcache_get_status()["jit"]["on"] === true` with a 128 MB buffer.
+# Because the note said otherwise, nobody tried it; docker is absent in the dev container, so the
+# harness and the G-8 ratchet both SKIPPED, every verdict sat OWED, and a real WIN->LOSS flip
+# (floatloop 1.011 -> 0.48) went unseen. Run the whole suite with no docker:
+#
+#     source scripts/toolchain.env
+#     MICROBENCH_PHP_BIN="$PHORJ_PHP" scripts/microbench.sh
+#
+# Docker stays the CROSS-BOX reference (bench/micro-baseline.json was recorded against php:8.5-cli, so
+# ratios from the two sources are not interchangeable); the local path is what makes the suite
+# runnable at all on a box without a daemon.
 # Each micro self-times (warmup call + timed call) and prints `name<TAB>total_ns<TAB>checksum` — TOTAL
 # self-timed nanoseconds, NOT ns/op: the old integer per-op (`d / iters`) floored sub-2ns/op workloads
 # to `1`, collapsing distinct timings to a meaningless 1.00× tie (it masked intadd's true verdict). The

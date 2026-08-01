@@ -6,6 +6,43 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the microbench harness had been DARK, and a stale comment is why (DEC-423, 2026-08-01)
+`scripts/microbench.sh` said *"the local builds are all ZTS DEBUG, JIT off, so they are NOT a valid
+baseline"*. That is false for the stack's own oracle php. [Verified on php-8.5.8: `Debug Build => no`,
+`Thread Safety => disabled`, OPcache present, `opcache_get_status()["jit"]["on"] === true`.] The
+harness has always had a `MICROBENCH_PHP_BIN` escape hatch; nobody used it because the comment said it
+was worthless. Docker is absent in the dev container, so every run skipped, the G-8 ratchet skipped on
+every push, and the OWED backlog grew against infrastructure that was never missing. Comment corrected
+with the one-command local recipe.
+
+**Three things the dark gate let through**, all found in the first sweep:
+- **`floatloop` flipped WIN → LOSS**: baseline 1.011, now 0.48x, reproducible across 3 runs on a quiet
+  box (and the JIT is engaging — 836 ms `--no-jit` vs 8.0 ms with). Exactly the signal the ratchet
+  exists to block. Not yet attributable to a phorj regression: the baseline was taken against docker
+  `php:8.5-cli` and this is phpbrew php-8.5.8, so the ratios are not interchangeable.
+- **`dbwork` was a PHANTOM bench** — it imported `Core.DatabaseModule.Database`/`.Statement`, an API
+  that never shipped (the real one is `Core.Database.Connection`/`Row`). It could not `phg check`, so it
+  aborted the whole harness run, yet `bench/micro-baseline.json` carries a `dbwork` ratio: that entry
+  was fiction. Repointed at the real API; it runs on both legs now with a matching checksum and is an
+  honest 0.84x LOSS.
+- **`fslines`, `queryparse` and `fsforeachline` are absent from the baseline entirely**, so the ratchet
+  could never have gated them. `queryparse` is the sharp one: DEC-338 is recorded BUILT to "flip the
+  queryparse 0.10x loss", and it measures 0.13x today.
+
+### Measured — the first honest G-8 scoreboard: 42 WIN / 9 LOSS
+51 paired micros vs release php-8.5.8 + JIT, interleaved, both legs pinned, quiet box,
+output-identity gated. Losses worst-first: `fslines` 0.10x · `queryparse` 0.13x · `fsforeachline` 0.27x
+· `jsonround` 0.29x · `floatloop` 0.48x · `deepjson` 0.79x · `dbwork` 0.84x · `listcontains` 0.94x ·
+`floatmul` 1.00x (tie).
+
+For scale on the winning side: `setunion` 48.9x, `setdifference` 33.9x, `trycatch` 27.7x, `sumby`
+15.6x, `listreduce` 14.2x, `isemail` 12.5x. phorj is not generally slow — it is specifically slow on
+nine things, and the mandate now has a finite named target list instead of a vibe.
+
+The G-8 ratchet is still SKIPPING, deliberately: arming it needs a baseline recorded on this php, and
+`--emit` today would write floatloop's 0.48 in as the new normal — laundering the very flip the gate
+exists to catch, which DEC-365 forbids.
+
 ### Fixed — the line-read benches were comparing against a HANDICAPPED PHP (2026-08-01)
 `bench/micro/fslines.php` and `fsforeachline.php` folded each line with `mb_strlen`. phorj's
 `String.length` is documented BYTE length, so the faithful twin is `strlen` — and `strlen` is faster.

@@ -1,6 +1,6 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. NEXT: DEC-422(b) — needs a scope ruling (see below).**
+## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. NEXT: the DEC-423 perf programme — 9 named losses; two need rulings (see below).**
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
@@ -173,20 +173,26 @@ a PENDING question, not self-ruled.
 3. ~~**DEC-422 (a) — `forEachLine`**~~ — **BUILT 2026-08-01.** 4.0x -> 1.6x vs PHP (2.5x faster than the
    iterator); verdict still OWED per DEC-365, and the residual was measured rather than assumed: the
    per-line CLOSURE CALL FRAME is ~2/3 of the remaining time, the read itself is near PHP's.
-4. **DEC-422 (b) — a JIT PROGRAMME, not a vertical, and it needs a ruling before it starts.** The
-   developer raised the bar on 2026-08-01: *"the performance and everything must beat php best with jit
-   is a must"*. Honest numbers against that bar (medians of 15, output-identity gated, PHP JIT on):
-   **PHP 2.52 ms · `forEachLine` 8.59 ms (3.41x) · `lines` 22.34 ms (8.87x)**. The old "4x"/"1.6x" were
-   measured against a PHP handicapped twice over (JIT off, and `mb_strlen` where `strlen` is the
-   faithful twin of byte-length `String.length`) — both bench files are fixed.
-   Measured breakdown: **VM execution of the closure body ~45%**, malloc/free ~15%, the actual file
-   read ~14%. Our reading is fine; the nine-op closure body is the cost. The existing JIT cannot take
-   it for two STRUCTURAL reasons — its side-effect-free eligibility invariant (the closure mutates a
-   field, which the accumulate-through-a-holder pattern requires) and an unboxed kind lattice with no
-   objects and no native calls. Two experiments are recorded in the register, one kept (per-element
-   allocations removed, -6%, and it helps every higher-order native) and one REVERTED with its finding
-   (a fast dispatch path cut 4% of instructions and 0% of wall clock — the workload is allocator-bound,
-   so do not re-try it).
+4. **THE PERF PROGRAMME — now a named list, not a vibe (DEC-423, 2026-08-01).** The developer raised
+   the bar to *"must beat php best with jit"*; sweeping all 51 micros against a real release php+JIT
+   gives **42 WIN / 9 LOSS**. Attack in this order (ratio = php/vm; < 1 = phorj loses):
+   - `fslines` **0.10x** and `fsforeachline` **0.27x** — the DEC-422 pair. Measured cause: ~45% of the
+     time is the VM executing the closure body; the read itself is ~14%. Needs the body out of the VM,
+     which the current JIT cannot do for two STRUCTURAL reasons (its side-effect-free eligibility
+     invariant, and an unboxed kind lattice with no objects and no native calls). A JIT programme, not
+     a vertical — **needs a scope ruling before it starts**.
+   - `queryparse` **0.13x** — and this one is a STALE LABEL, not just a loss: DEC-338 is recorded BUILT
+     to "flip the queryparse 0.10x loss". It did not. Re-open it.
+   - `jsonround` **0.29x** / `deepjson` **0.79x** — the queued Json-ADT JIT slice.
+   - `floatloop` **0.48x** — baseline 1.011, i.e. a WIN→LOSS FLIP the dark ratchet never caught.
+     Reproducible on a quiet box; the JIT is engaging (100x vs `--no-jit`). Not yet attributable to a
+     phorj regression (baseline was docker php:8.5-cli, this is phpbrew php-8.5.8 — not
+     interchangeable). Diagnose before optimising.
+   - `dbwork` **0.84x**, `listcontains` **0.94x**, `floatmul` **1.00x** (tie) — the near-misses.
+   **The gate is still dark by choice**: arming the ratchet needs a baseline on this php, and `--emit`
+   today would launder floatloop's flip (DEC-365 forbids it). Developer ruling needed on whether to
+   re-emit locally (losing cross-box comparability with the docker reference) or keep docker as the
+   reference and accept the gate skips off-docker.
 5. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.

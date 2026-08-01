@@ -5182,3 +5182,69 @@ So DEC-422(3) as originally scoped — a JIT vertical for foreach-over-`Iterator
 number: it does not touch `forEachLine` (a closure invoked from a native is not an iterator virtual
 call), and for `lines` it would still have to JIT the same ineligible body. **This is a JIT programme,
 not a vertical**, and it needs a developer ruling on scope and sequencing before it starts.
+
+
+## DEC-423 — the G-8 scoreboard, measured at last: 42 WIN / 9 LOSS (2026-08-01)
+
+Follow-on from the developer's *"must beat php best with jit"* ruling. The instruction was to sweep the
+whole suite against the corrected bar before aiming any more optimisation work. Doing so turned up a
+piece of infrastructure rot that is more important than any individual number.
+
+### THE HARNESS HAD BEEN DARK, AND A STALE COMMENT IS WHY
+
+`scripts/microbench.sh` carried: *"the local builds are all ZTS DEBUG, JIT off, so they are NOT a valid
+baseline"*. That is FALSE for the stack's own oracle php. [Verified on `scripts/toolchain.env`'s
+php-8.5.8: `Debug Build => no`, `Thread Safety => disabled` (NTS), Zend OPcache present,
+`opcache_get_status()["jit"]["on"] === true`, 128 MB buffer.]
+
+The harness has always had a `MICROBENCH_PHP_BIN` escape hatch. Nobody used it, because the comment
+said local php was worthless. Docker is absent in the dev container, so:
+  * every `microbench.sh` run SKIPPED,
+  * the G-8 ratchet (`microbench-gate.sh`) SKIPPED on every push, printing "OWED",
+  * and the OWED backlog grew for weeks against infrastructure that was never actually missing.
+
+**Three things the dark gate let through**, all found in one sweep:
+1. **`floatloop` flipped WIN -> LOSS**: baseline 1.011, now **0.48x** (reproducible across 3 runs at
+   load 0.38, and the JIT IS engaging — 836 ms with `--no-jit` vs 8.0 ms with, a 100x speedup). This is
+   precisely the signal the ratchet exists to block. NOT yet attributable to a phorj regression: the
+   baseline was recorded against docker `php:8.5-cli` and this is phpbrew php-8.5.8, so the two ratios
+   are not interchangeable. It is a confirmed LOSS against a valid release-PHP+JIT baseline either way.
+2. **`dbwork` was a PHANTOM bench.** It imported `Core.DatabaseModule.Database`/`.Statement` — an API
+   that does not exist and never shipped (the real one is `Core.Database.Connection`/`Row`). It could
+   not `phg check`, so it aborted the whole harness run... yet `bench/micro-baseline.json` carries a
+   `dbwork` ratio. That baseline entry was fiction. Repointed at the real API; it now runs on both legs
+   with a matching checksum (1529850) and is an honest **0.84x LOSS**.
+3. **`fslines`, `queryparse` and `fsforeachline` are absent from the baseline entirely** — so the
+   ratchet could never have gated them no matter what. `queryparse` is the worst case: DEC-338 is
+   recorded as BUILT to "flip the queryparse 0.10x loss" and it is measured today at **0.13x**. The
+   label says fixed; the number says 7.7x slower.
+
+### The scoreboard
+
+51 paired micros, `MICROBENCH_PHP_BIN` = php-8.5.8 + opcache JIT tracing, interleaved samples, both
+legs pinned to one core, quiet box (load 0.07), output-identity gated. Ratio = php_ns / vm_ns; > 1 = the
+VM wins. **42 WIN, 9 LOSS.**
+
+| loss | ratio | phorj is | note |
+|---|---|---|---|
+| `fslines` | 0.10x | 10.0x slower | DEC-347 iterator; not in the baseline |
+| `queryparse` | 0.13x | 7.7x slower | **DEC-338 is recorded BUILT/fixed — it is not** |
+| `fsforeachline` | 0.27x | 3.7x slower | DEC-422(a), shipped today; not in the baseline |
+| `jsonround` | 0.29x | 3.4x slower | known, queued |
+| `floatloop` | 0.48x | 2.1x slower | **baseline 1.011 = a WIN->LOSS flip** |
+| `deepjson` | 0.79x | 1.3x slower | known, queued |
+| `dbwork` | 0.84x | 1.2x slower | revived from dead today |
+| `listcontains` | 0.94x | 1.06x slower | was 0.024x; the JIT vertical nearly closed it |
+| `floatmul` | 1.00x | tie | exact parity, no headroom either way |
+
+For scale on the other side: `setunion` 48.9x, `setdifference` 33.9x, `trycatch` 27.7x, `sumby` 15.6x,
+`listreduce` 14.2x, `isemail` 12.5x. **phorj is not generally slow — it is specifically slow on nine
+things**, and the mandate now has a finite, named target list.
+
+### What was NOT done, and why
+
+The ratchet is still SKIPPING and was deliberately left that way. Arming it needs a baseline recorded
+on this php, and `--emit` today would write floatloop's 0.48 in as the new normal — laundering exactly
+the flip the gate exists to catch, which DEC-365's no-hidden-loss rule forbids in as many words. The
+baseline question is the developer's: re-emit on local php and lose cross-box comparability with the
+docker reference, or keep docker as the reference and accept the gate stays dark off-docker.

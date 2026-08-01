@@ -2,11 +2,12 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
-import Core.DatabaseModule;
-import Core.DatabaseModule.Database;
-import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.Statement;
+import Core.Database;
+import Core.Database.Connection;
+import Core.Database.DatabaseError;
+import Core.Database.Statement;
 import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
 
 // MACRO bench: a database work slice — per outer iteration: one prepared parameterized INSERT
 // executed for 50 rows (statement reuse via executeMany's prepare-once path would hide the bind
@@ -14,7 +15,7 @@ import Core.Runtime.Entry;
 // SELECT read back through the typed scalar path. Paired against PHP PDO sqlite (both sides run
 // the SAME embedded C SQLite — the delta measured is the LANGUAGE-side binding/dispatch overhead,
 // which is exactly the fair fight). Connection opened once outside the loop (both sides).
-function bench(Database db, int iters): int throws DatabaseError {
+function bench(Connection db, int iters): int throws DatabaseError {
     mutable int acc = 0;
     mutable int i = 0;
     while (i < iters) {
@@ -39,7 +40,7 @@ function bench(Database db, int iters): int throws DatabaseError {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     try {
-        Database db = new Database("sqlite::memory:");
+        Connection db = new Connection("sqlite::memory:");
         discard db.prepare("CREATE TABLE t(k INTEGER, v INTEGER)").exec();
         int iters = 400;
         int warm = bench(db, iters);
