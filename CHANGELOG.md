@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Measured — `floatloop` never regressed; the loss is one loop-carried sticky phi (DEC-425, 2026-08-01)
+The ratchet recorded `floatloop` at 1.011 (WIN) through 2026-07-20 and it now reads 0.48 — the one
+apparent WIN→LOSS flip on the board. It is not a regression. [Verified by building the exact commit
+whose baseline recorded 1.011 (`b5ce34c`) and measuring it against the SAME php: phorj 9.12 ms vs php
+3.95 ms — already a 0.43 LOSS. Today's master is 7.2 ms, i.e. phorj got *faster*.] The "flip" is a
+baseline-ENVIRONMENT artifact: docker `php:8.5-cli` was ~2.3x slower on this loop than the local
+release php. **That taints every WIN in the pre-2026-08-01 baseline** — the 2026-08-01 re-emit
+supersedes it, which is why several formerly-"WIN" rows now read as losses or ties.
+
+**100% of the gap is checked int arithmetic**, and removing it wins: [Verified: the same bench with
+`#[UncheckedOverflow]` runs at ~4.0 ms against php's ~3.4–3.95 ms.] The mechanism is the one
+`emit_unboxed` documents — `needs_sticky` is true when ANY reachable speculated op is unproven, and
+Cranelift at `opt_level=none` will not DCE the resulting loop-carried phi. Here the hot counter IS
+proven (`range_proven_ops` returns exactly `[24]`); the unproven op is `acc = acc + 1` inside a branch
+that fires **7 times in 5,000,000 iterations**, and its mere reachability taxes every one of them.
+[Verified: making the branch unreachable leaves the 2x unchanged — it is the phi, not the add.]
+
+This is a general shape: **any counted loop with a conditional counter** pays it. The fix is to prove
+the accumulator so no phi is emitted; `range_acc::accumulator_elision` already exists for exactly this
+and [Verified by probe] declines this shape inside `verify_with_g`, whose interval walk does not model
+the float ops and `CallNative` in the body. Not built — widening an overflow-elision proof is the
+"ONE unsound spot" the range-analysis tests name, and it belongs to the JIT programme DEC-423 says
+needs a scope ruling first.
+
 ### Fixed — `queryparse` built a fresh `ClassLayout` per instance (DEC-424, 2026-08-01)
 First target off the DEC-423 loss list. DEC-338 is recorded BUILT to "flip the `queryparse` 0.10x
 loss" and the sweep measured 0.13x. Worth being precise: **DEC-338 was really done** — `Request.parse`

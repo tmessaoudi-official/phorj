@@ -5398,3 +5398,63 @@ so the gate would allow a slide back to 0.109 before blocking. Re-emitting after
 ratchet working as intended (it is re-emitting after a REGRESSION that DEC-365 forbids), but a re-emit
 rewrites every entry and the box was at load 6.58 when this landed — re-baselining the whole suite off
 a loaded box is exactly how a false floor gets frozen in. Queued for a quiet box.
+
+
+## DEC-425 — `floatloop`: NOT a regression, and the loss is one loop-carried sticky phi (2026-08-01)
+
+Diagnosis before optimisation, as the DEC-423 list requires for this one. Two findings, and the second
+is a ready-to-build fix that is nevertheless NOT self-rulable.
+
+### It never regressed — the docker baseline was measuring a slower PHP
+
+The ratchet recorded `floatloop` at **1.011 (WIN)** through 2026-07-20 and it now measures **0.48**.
+That looked like the one genuine WIN→LOSS flip on the board. It is not.
+
+[Verified by building the exact commit whose baseline recorded 1.011 — `b5ce34c`, 2026-07-20 — and
+measuring it against the SAME phpbrew php-8.5.8: **phorj 9.12 ms vs php 3.95 ms, a ratio of 0.43 —
+already a LOSS.**] Today's master is **7.2 ms**: phorj got *faster* over that period, not slower.
+
+So the "flip" is entirely a baseline-ENVIRONMENT artifact: docker `php:8.5-cli` was roughly **2.3x
+slower on this loop** than the local release php. **This retro-actively taints every WIN in the
+pre-2026-08-01 baseline** — each was measured against that slower PHP and may be overstated by up to
+that factor. The 2026-08-01 re-emit already supersedes it, which is why several formerly-"WIN" rows
+(floatloop, listcontains, floatmul) read as losses or ties now. Nothing else to do about the old
+numbers except not trust them; task #57 is closed by this.
+
+### The whole loss is the speculation STICKY, and removing it WINS
+
+[Verified: the same bench with `#[UncheckedOverflow]` runs at **~4.0 ms** against php's ~3.4–3.95 ms —
+a 2x speedup that turns the loss into a WIN or a tie.] So 100% of the gap is checked int arithmetic.
+
+The mechanism is documented in `emit_unboxed/mod.rs`'s own comment and floatloop hits it squarely:
+`needs_sticky` is true when ANY reachable speculated op (`AddI`/`SubI`/`MulI`/`Neg`) is unproven, and
+then the loop-carried sticky phi is emitted — *"Cranelift's baseline `opt_level=none` does NOT DCE the
+loop-carried sticky phi, so omitting is what actually turns a proven counted loop's PARITY into a
+WIN."*
+
+In `floatloop` the hot counter IS proven — [Verified: `range_proven_ops` returns exactly `[24]`, the
+`i = i + 1` at the loop tail]. The unproven op is `acc = acc + 1` inside `if (x > 1000000.0)`, which
+executes **7 times in 5,000,000 iterations**. Its mere REACHABILITY forces the sticky phi onto every
+iteration. [Verified: raising the threshold so the branch can never fire leaves the 2x completely
+unchanged — 8.6–9.1 ms checked vs 3.8–4.5 ms unchecked. It is the phi, not the add.]
+
+This is a general shape, not a bench artifact: **any counted loop with a conditional counter** pays it —
+"count the matches while scanning", "tally errors while parsing". `floatloop` just makes it visible.
+
+### The fix exists in outline and is REFUSED at a known line
+
+Proving `acc` would set `needs_sticky` false and the loop would emit no phi at all. The machinery is
+already there: `range_acc::accumulator_elision` ("bounded accumulator adds", with ENTRY GUARDS —
+`param > G` ⇒ code-5 decline to the VM — for exactly the case where boundedness needs a precondition).
+
+[Verified by probe: it returns `None` for this shape.] Traced by hand as far as: the loop structure,
+the outer-counter selection (`counters = [24]`), the entry-prefix walk and the header-guard bound all
+PASS, and `acc` is correctly collected as a candidate (`acc_slots = [(2, 0)]`). The refusal is inside
+`verify_with_g`'s interval walk — the body carries float ops (`AddF`, a float `Gt`) and a `CallNative`,
+which that walk does not model.
+
+**Not built, and deliberately.** This is the "ONE unsound spot" the range-analysis tests name in their
+own header — the guard↔increment link — and widening an overflow-elision proof is the class of change
+where being wrong means silently wrong arithmetic rather than a failing test. It is also squarely
+inside the JIT programme that DEC-423 says needs a scope ruling before it starts. Recorded with the
+exact entry point (`verify_with_g`, float/call-carrying bodies) so the work is ready to pick up.

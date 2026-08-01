@@ -188,10 +188,17 @@ a PENDING question, not self-ruled.
      is a REPRESENTATION difference (a typed bag graph vs PHP's plain arrays). Closing it needs lazy
      bags and/or arena allocation, a design change to DEC-331 slice 2's rich Request — adjudicable.
    - `jsonround` **0.29x** / `deepjson` **0.79x** — the queued Json-ADT JIT slice.
-   - `floatloop` **0.48x** — baseline 1.011, i.e. a WIN→LOSS FLIP the dark ratchet never caught.
-     Reproducible on a quiet box; the JIT is engaging (100x vs `--no-jit`). Not yet attributable to a
-     phorj regression (baseline was docker php:8.5-cli, this is phpbrew php-8.5.8 — not
-     interchangeable). Diagnose before optimising.
+   - `floatloop` **0.48x** — **DIAGNOSED 2026-08-01 (DEC-425), and it is NOT a regression**: building
+     the exact commit whose baseline said 1.011 measures 0.43 against this php, so docker
+     `php:8.5-cli` was ~2.3x slower on this loop and every pre-2026-08-01 WIN is tainted by that.
+     100% of the gap is the speculation STICKY: the hot counter IS proven, but `acc = acc + 1` in a
+     branch firing 7 times in 5M iterations is reachable-and-unproven, so the loop-carried phi is
+     emitted and Cranelift at `opt_level=none` will not remove it. `#[UncheckedOverflow]` (no phi)
+     runs ~4.0 ms vs php ~3.4-3.95 — a WIN. The fix is to prove the conditional accumulator;
+     `range_acc::accumulator_elision` exists for it and declines inside `verify_with_g` (its interval
+     walk does not model the body's float ops / `CallNative`). NOT BUILT: this is the "one unsound
+     spot" the range tests name, and it is JIT-programme work needing the scope ruling.
+     **A general shape, not a bench artifact** — any counted loop with a conditional counter pays it.
    - `dbwork` **0.84x**, `listcontains` **0.94x**, `floatmul` **1.00x** (tie) — the near-misses.
    **THE GATE IS NOW ARMED** (DEC-423.1, developer-ruled): the baseline is re-emitted on the local
    release php with all 8 losses frozen as `_owed` — DERIVED at emit time, so `--emit` cannot launder
