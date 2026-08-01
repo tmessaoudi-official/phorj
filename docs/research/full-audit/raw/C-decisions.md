@@ -5515,3 +5515,47 @@ as a PENDING question rather than self-ruled.
 
 The residual after that would still be VM-interpretation-bound, i.e. the same JIT programme DEC-423
 flagged. Three of the nine losses now terminate there.
+
+
+## DEC-427 — the last two losses, and the standing scoreboard (2026-08-01)
+
+`dbwork` and `listcontains` were the only two losses not already blocked on a ruling. Both diagnosed,
+neither worth a code change, and with them the whole board is now accounted for.
+
+### `listcontains` (0.87x) is a TIE inside the noise, not a loss
+
+[Verified: phorj 23.8 ms; `#[UncheckedOverflow]` makes no difference (23.3 vs 24.0 ms), so unlike
+`floatloop` this is NOT the sticky phi; and PHP itself swings **21.4 → 31.5 ms across three
+consecutive runs on a quiet box**.] The bench's own PHP leg is less repeatable than the gap being
+measured. It was 0.024x before the DEC-311 JIT vertical and is now parity-with-noise — the vertical did
+its job. Chasing the last few percent here would be chasing measurement error.
+
+### `dbwork` (0.86x) terminates in the same place as everything else
+
+[Verified by callgrind: `exec_op` 14.5% + `run_to_completion` 7.4% + stack push 3.1% = **~25% VM
+interpretation**, malloc/free ~16.6%, and **`sqlite3VdbeExec` only 2.7%**.] Both legs run the same
+embedded SQLite, so the engine is not the variable — the delta is phorj-level dispatch of the
+prepare/bind/exec chain, once per row. Same root as `fslines`, `fsforeachline`, `jsonround`: the VM
+interpreting user code.
+
+### THE STANDING SCOREBOARD (quiet box, load 0.64, release php-8.5.8 + JIT, output-identity gated)
+
+**42 WIN / 8 LOSS across 50 paired micros. Geometric mean 2.45x, median 2.30x — phorj is about 2.4x
+faster than PHP-with-JIT across the suite.** 28 features win by 2x or more; 4 sit within ±10% of parity.
+
+| | |
+|---|---|
+| biggest wins | `setunion` 50.5x · `setdifference` 33.8x · `trycatch` 27.6x · `sumby` 15.6x · `listreduce` 13.3x · `isemail` 12.1x · `isurl` 10.0x · `listfilter` 7.9x |
+| the 8 losses | `listcontains` 0.87x · `dbwork` 0.86x · `deepjson` 0.85x · `floatloop` 0.46x · `fsforeachline` 0.29x · `jsonround` 0.29x · `queryparse` 0.22x · `fslines` 0.11x |
+
+### Every remaining loss now has ONE of three named causes
+
+1. **VM interpretation of user-level code** — `fslines`, `fsforeachline`, `jsonround`, `dbwork`, and
+   `floatloop`'s variant of it. This is the JIT programme (DEC-422(b)/DEC-425), blocked on a scope
+   ruling. FIVE of the eight.
+2. **A representation/design choice** — `queryparse`'s typed bag graph vs PHP's plain arrays (DEC-424),
+   `deepjson`'s multi-pass lazy parser (DEC-426). Both adjudicable, both recorded.
+3. **Measurement noise at parity** — `listcontains`.
+
+Nothing on the board is now unexplained, and nothing is left that a tuning pass would move. That was
+the point of the DEC-423 sweep: turn "beat PHP" into a finite list with named causes.

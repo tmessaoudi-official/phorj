@@ -6,6 +6,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Measured — the standing scoreboard: 42 WIN / 8 LOSS, geomean 2.45x vs PHP+JIT (DEC-427, 2026-08-01)
+`dbwork` and `listcontains` were the last two losses not already blocked on a ruling. Both diagnosed,
+neither worth a code change, and with them the whole board is accounted for.
+
+**`listcontains` (0.87x) is a TIE inside the noise** — [Verified: `#[UncheckedOverflow]` makes no
+difference (23.3 vs 24.0 ms), so unlike `floatloop` this is not the sticky phi; and PHP's own leg swings
+21.4 → 31.5 ms across three consecutive runs on a quiet box.] It was 0.024x before the DEC-311 vertical;
+the vertical did its job and the remainder is measurement error.
+
+**`dbwork` (0.86x) terminates where everything else does** — [Verified: ~25% VM interpretation, ~16.6%
+malloc/free, and `sqlite3VdbeExec` only **2.7%**.] Both legs run the same embedded SQLite, so the engine
+is not the variable: the delta is phorj-level dispatch of the prepare/bind/exec chain, per row.
+
+**Scoreboard** (quiet box, release php-8.5.8 + JIT, interleaved, pinned, output-identity gated):
+**42 WIN / 8 LOSS across 50 micros, geometric mean 2.45x, median 2.30x** — phorj is ~2.4x faster than
+PHP-with-JIT across the suite. 28 features win by ≥2x; 4 sit within ±10% of parity.
+Biggest wins: `setunion` 50.5x, `setdifference` 33.8x, `trycatch` 27.6x, `sumby` 15.6x, `listreduce`
+13.3x, `isemail` 12.1x. The 8 losses: `listcontains` 0.87x, `dbwork` 0.86x, `deepjson` 0.85x,
+`floatloop` 0.46x, `fsforeachline` 0.29x, `jsonround` 0.29x, `queryparse` 0.22x, `fslines` 0.11x.
+
+**Every remaining loss now has one of three named causes:** VM interpretation of user code (five of
+eight — the JIT programme, blocked on a scope ruling); a representation/design choice (`queryparse`'s
+typed bag graph, `deepjson`'s multi-pass lazy parser — both adjudicable); or noise at parity
+(`listcontains`). Nothing on the board is unexplained, and nothing left would move under a tuning pass.
+
 ### Measured — `jsonround`/`deepjson` are design questions, not tuning gaps (DEC-426, 2026-08-01)
 No code change. Two tuning attempts, both measured, both rejected; both benches stay OWED.
 

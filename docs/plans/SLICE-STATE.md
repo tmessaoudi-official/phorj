@@ -209,7 +209,18 @@ a PENDING question, not self-ruled.
      walk does not model the body's float ops / `CallNative`). NOT BUILT: this is the "one unsound
      spot" the range tests name, and it is JIT-programme work needing the scope ruling.
      **A general shape, not a bench artifact** — any counted loop with a conditional counter pays it.
-   - `dbwork` **0.84x**, `listcontains` **0.94x**, `floatmul` **1.00x** (tie) — the near-misses.
+   - `dbwork` **0.86x**, `listcontains` **0.87x**, `floatmul` **1.00x** — **DIAGNOSED 2026-08-01
+     (DEC-427), no code change.** `listcontains` is a TIE inside the noise (PHP's own leg swings
+     21.4-31.5 ms run to run; `#[UncheckedOverflow]` changes nothing, so it is not the sticky phi).
+     `dbwork` is ~25% VM interpretation with `sqlite3VdbeExec` at only 2.7% — same engine on both legs,
+     so the delta is phorj-level dispatch of the per-row bind/exec chain: the JIT programme again.
+
+   **STANDING SCOREBOARD (2026-08-01, quiet box, release php+JIT, output-identity gated): 42 WIN /
+   8 LOSS across 50 micros, GEOMEAN 2.45x, median 2.30x.** 28 features win by >=2x. Every remaining
+   loss now has ONE of three named causes: VM interpretation of user code (5 of 8 — the JIT programme,
+   blocked on the scope ruling), a representation/design choice (`queryparse` DEC-424, `deepjson`
+   DEC-426 — both adjudicable), or noise at parity (`listcontains`). Nothing is unexplained and nothing
+   left moves under a tuning pass.
    **THE GATE IS NOW ARMED** (DEC-423.1, developer-ruled): the baseline is re-emitted on the local
    release php with all 8 losses frozen as `_owed` — DERIVED at emit time, so `--emit` cannot launder
    one. The gate reports every owed loss on every push, BLOCKS if one deepens past 25%, and says
