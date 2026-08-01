@@ -127,7 +127,13 @@ pub fn deprecation_of(module: &str, name: &str) -> Option<Deprecated> {
 /// `Value::Closure` and its call arguments, run it on the calling backend and return its result (or
 /// a fault as a plain `String`, the backend-shared contract). The interpreter wraps `call_closure`;
 /// the VM wraps `call_closure_value` (a nested `run_until` over the shared `exec_op`).
-pub type ClosureInvoker<'a> = dyn FnMut(&Value, Vec<Value>) -> Result<Value, String> + 'a;
+///
+/// Args are a BORROWED SLICE, not an owned `Vec` (perf, 2026-08-01). This is the per-element path for
+/// every higher-order native, so an owned `Vec` meant one heap allocation per list element / per file
+/// line purely to hand over one or two values; `&[x.clone()]` is a stack temporary instead. The VM
+/// clones straight onto its operand stack and allocates nothing; the interpreter still needs an owned
+/// `Vec` for `call_closure`, so it pays the same single allocation it always did.
+pub type ClosureInvoker<'a> = dyn FnMut(&Value, &[Value]) -> Result<Value, String> + 'a;
 
 /// A backend's re-entrant **capturing** closure invoker, handed to a [`NativeEval::Capturing`] body
 /// (`Core.Output.capture`, DEC-220-S3): given a zero-arg `Value::Closure`, run it on the calling

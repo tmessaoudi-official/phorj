@@ -113,7 +113,7 @@ pub(super) fn for_each_line_inner(args: &[Value], call: &mut ClosureInvoker) -> 
                 "<<FileSystemIoError>>Core.FileSystemModule.forEachLine: `{path}` is not UTF-8 — use readBytes"
             ));
         };
-        if let Err(e) = call(f, vec![Value::Str(text.into())]) {
+        if let Err(e) = call(f, &[Value::Str(text.into())]) {
             return ForEachEnd::Closure(e);
         }
     }
@@ -138,7 +138,7 @@ mod tests {
     /// backends supply, so the body under test is the one that ships.
     fn lines_of(path: &str) -> Result<Vec<String>, String> {
         let mut seen: Vec<String> = Vec::new();
-        let mut invoke = |_f: &Value, args: Vec<Value>| {
+        let mut invoke = |_f: &Value, args: &[Value]| {
             match args.first() {
                 Some(Value::Str(s)) => seen.push(s.as_str().to_string()),
                 other => panic!("expected one string arg, got {other:?}"),
@@ -214,7 +214,7 @@ mod tests {
         let p = tmp("stops");
         std::fs::write(&p, "a\nb\nc\nd\n").unwrap();
         let mut seen: Vec<String> = Vec::new();
-        let mut invoke = |_f: &Value, args: Vec<Value>| {
+        let mut invoke = |_f: &Value, args: &[Value]| {
             let Some(Value::Str(s)) = args.first() else {
                 panic!("expected a string arg")
             };

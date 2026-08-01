@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the line-read benches were comparing against a HANDICAPPED PHP (2026-08-01)
+`bench/micro/fslines.php` and `fsforeachline.php` folded each line with `mb_strlen`. phorj's
+`String.length` is documented BYTE length, so the faithful twin is `strlen` — and `strlen` is faster.
+The bench was making PHP do more work than phorj and calling the result a comparison.
+[Verified, JIT on, 40k lines: `mb_strlen` 4.31 ms vs `strlen` 2.52 ms median.]
+
+**Every line-reading loss recorded before today was understated**, on two counts at once — this, and
+the baseline having been measured with PHP's JIT off. Against the ruled bar (PHP at its best, JIT on)
+the honest numbers are: PHP 2.52 ms · `forEachLine` 8.59 ms (**3.41x slower**) · `lines` 22.34 ms
+(**8.87x slower**). Both OWED under DEC-365. The DEC-347 "4x" and the DEC-422(a) "1.6x" are superseded.
+
+### Changed — the higher-order native call path allocates nothing per element (2026-08-01)
+`Vm::call_closure_value` cloned the closure's captures into a throwaway `Vec` on every call, and
+`ClosureInvoker` took an owned `Vec` of arguments — so every list element and every file line cost two
+heap allocations before any work happened. Captures now clone straight onto the operand stack, and the
+invoker takes a borrowed slice (`&[Value]`), so `&[x.clone()]` is a stack temporary.
+
+[Verified: `forEachLine` over 40k lines 9.15 -> 8.59 ms (-6%), 131M -> 116M instructions retired.]
+Small on this bench, but it is the per-element path for EVERY higher-order native — `List.map`,
+`filter`, `reduce`, `sortWith`, `Option.map`, the regex and test callbacks — so the whole language
+collects it. The tree-walker still builds one owned `Vec` (its `call_closure` consumes one); the oracle
+is not the perf target, parity is.
+
 ### Added — `FileSystem.forEachLine`, the native-driven line reader (DEC-422(a), 2026-08-01)
 Reads the same lines as DEC-347's `lines(path)` under identical terminator rules, but the loop runs
 INSIDE the native (and inside `fgets` on the PHP leg), so the two phorj-level virtual calls per element

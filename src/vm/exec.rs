@@ -13,11 +13,6 @@ impl<'a> Vm<'a> {
         // of executed instructions). Matching `*op` binds the `Copy` operands by value; the only
         // two non-`Copy` payloads (`Fault(FaultMsg)`, `IsInstance(String)`) bind by `ref`.
         match *op {
-            Op::Const(i) => {
-                let v = self.program.functions[func].chunk.consts[i].clone();
-                self.stack.push(v);
-            }
-
             // Arithmetic dispatches into the single-sourced `value` kernels — the interpreter
             // calls the *same* functions, so the checked-op / div-zero / overflow fault path
             // is structurally identical across both backends (the Wave 0 `Op::Neg` divergence
@@ -170,6 +165,10 @@ impl<'a> Vm<'a> {
                 self.stack.push(Value::Bool(compare(op, &a, &b)?));
             }
 
+            Op::Const(i) => {
+                let v = self.program.functions[func].chunk.consts[i].clone();
+                self.stack.push(v);
+            }
             Op::Pop => {
                 self.pop();
             }
@@ -469,7 +468,7 @@ impl<'a> Vm<'a> {
                         // args must be OWNED first (the stack is mutated during the call).
                         let args = self.split_off(argc);
                         let mut invoke =
-                            |fv: &Value, cargs: Vec<Value>| self.call_closure_value(fv, cargs);
+                            |fv: &Value, cargs: &[Value]| self.call_closure_value(fv, cargs);
                         f(&args, &mut invoke)?
                     }
                     crate::native::NativeEval::Capturing(f) => {
@@ -481,7 +480,7 @@ impl<'a> Vm<'a> {
                         let args = self.split_off(argc);
                         let mut capture = |fv: &Value| {
                             let start = self.out.len();
-                            self.call_closure_value(fv, Vec::new())?;
+                            self.call_closure_value(fv, &[])?;
                             Ok(self.out.split_off(start))
                         };
                         f(&args, &mut capture)?

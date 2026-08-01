@@ -10,17 +10,28 @@ impl<'a> Vm<'a> {
     /// any frames it spawns) returns, then pops and returns the value left on the stack. The slot math
     /// mirrors `Op::CallValue`; execution shares `exec_op` with the main loop — one execution core, no
     /// second interpreter (the parity analogue of the tree-walker's `call_closure`). M-RT S7b-3.
+    ///
+    /// **Allocation-free per call, deliberately** (perf, 2026-08-01). This is the per-ELEMENT path for
+    /// every higher-order native, so a heap allocation here is one allocation per list element / per
+    /// file line. Two used to happen and both are gone: `captures.clone()` built a throwaway `Vec` on
+    /// every call (now the captures are cloned straight onto the stack, element by element — an `Rc`
+    /// bump each, no container), and `args` was a `Vec` the caller had to build (now a borrowed slice,
+    /// so `&[x.clone()]` is a stack temporary). Measured on `forEachLine` over 40k lines, where
+    /// malloc/free was 24% of all instructions retired.
     pub(super) fn call_closure_value(
         &mut self,
         callee: &Value,
-        args: Vec<Value>,
+        args: &[Value],
     ) -> Result<Value, String> {
-        let (func_idx, captures) = match callee {
-            Value::Closure(cd) => match cd.as_ref() {
-                crate::value::ClosureData::Byte { func, captures } => (*func, captures.clone()),
-                _ => return Err("expected a bytecode closure".to_string()),
-            },
+        // Clone the `Rc` (a refcount bump) rather than borrowing through `callee`: the borrow would
+        // have to stay live across the `self.stack` mutation below.
+        let cd = match callee {
+            Value::Closure(cd) => cd.clone(),
             v => return Err(format!("cannot call {} as a function", v.type_name())),
+        };
+        let (func_idx, captures): (usize, &[Value]) = match cd.as_ref() {
+            crate::value::ClosureData::Byte { func, captures } => (*func, captures),
+            _ => return Err("expected a bytecode closure".to_string()),
         };
         let func_arity = self.program.functions[func_idx].arity;
         let n_captures = self.program.functions[func_idx].n_captures;
@@ -36,8 +47,8 @@ impl<'a> Vm<'a> {
         }
         // Frame layout `[captures.., args..]` — identical to `Op::CallValue`.
         let slot_base = self.stack.len();
-        self.stack.extend(captures);
-        self.stack.extend(args);
+        self.stack.extend(captures.iter().cloned());
+        self.stack.extend(args.iter().cloned());
         let target_depth = self.frames.len();
         self.frames.push(Frame {
             func: func_idx,

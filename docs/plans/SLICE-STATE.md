@@ -1,6 +1,6 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. NEXT: DEC-422(b) the JIT vertical.**
+## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. NEXT: DEC-422(b) — needs a scope ruling (see below).**
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
@@ -173,10 +173,20 @@ a PENDING question, not self-ruled.
 3. ~~**DEC-422 (a) — `forEachLine`**~~ — **BUILT 2026-08-01.** 4.0x -> 1.6x vs PHP (2.5x faster than the
    iterator); verdict still OWED per DEC-365, and the residual was measured rather than assumed: the
    per-line CLOSURE CALL FRAME is ~2/3 of the remaining time, the read itself is near PHP's.
-4. **DEC-422 (b) — the JIT vertical**, now with a WIDER scope than the ruling assumed. It was framed as
-   foreach-over-`Iterator`, which closes `lines` — but a closure invoked from inside a NATIVE is not an
-   iterator virtual call, so that alone leaves `forEachLine`'s 1.6x untouched. Closing both means the
-   native->closure call too.
+4. **DEC-422 (b) — a JIT PROGRAMME, not a vertical, and it needs a ruling before it starts.** The
+   developer raised the bar on 2026-08-01: *"the performance and everything must beat php best with jit
+   is a must"*. Honest numbers against that bar (medians of 15, output-identity gated, PHP JIT on):
+   **PHP 2.52 ms · `forEachLine` 8.59 ms (3.41x) · `lines` 22.34 ms (8.87x)**. The old "4x"/"1.6x" were
+   measured against a PHP handicapped twice over (JIT off, and `mb_strlen` where `strlen` is the
+   faithful twin of byte-length `String.length`) — both bench files are fixed.
+   Measured breakdown: **VM execution of the closure body ~45%**, malloc/free ~15%, the actual file
+   read ~14%. Our reading is fine; the nine-op closure body is the cost. The existing JIT cannot take
+   it for two STRUCTURAL reasons — its side-effect-free eligibility invariant (the closure mutates a
+   field, which the accumulate-through-a-holder pattern requires) and an unboxed kind lattice with no
+   objects and no native calls. Two experiments are recorded in the register, one kept (per-element
+   allocations removed, -6%, and it helps every higher-order native) and one REVERTED with its finding
+   (a fast dispatch path cut 4% of instructions and 0% of wall clock — the workload is allocator-bound,
+   so do not re-try it).
 5. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.

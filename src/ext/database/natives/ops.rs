@@ -342,7 +342,7 @@ pub(super) fn with_hook(
         // hook is restored afterward (even if it faulted, so the error still propagates).
         let hook = s.hook.borrow_mut().take();
         if let Some(h) = hook {
-            let fired = invoke(&h, vec![Value::Str(s.sql.as_str().into()), Value::Int(ms)]);
+            let fired = invoke(&h, &[Value::Str(s.sql.as_str().into()), Value::Int(ms)]);
             *s.hook.borrow_mut() = Some(h);
             fired?;
         }

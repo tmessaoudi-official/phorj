@@ -102,7 +102,7 @@ fn list_sort_with_comparator_and_fault_parity() {
     let nums = Value::List(Rc::new(vec![Value::Int(3), Value::Int(1), Value::Int(2)]));
     let placeholder = Value::Int(0); // stands in for the closure value (eval passes it to `call`)
                                      // Descending comparator: cmp(a, b) = b - a.
-    let mut desc = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut desc = |_f: &Value, a: &[Value]| match a {
         [Value::Int(x), Value::Int(y)] => Ok(Value::Int(y - x)),
         _ => Err("bad arity".to_string()),
     };
@@ -119,10 +119,10 @@ fn list_sort_with_comparator_and_fault_parity() {
         other => panic!("sortWith returned {other:?}"),
     }
     // A comparator fault propagates cleanly (never a panic).
-    let mut boom = |_f: &Value, _a: Vec<Value>| Err("kaboom".to_string());
+    let mut boom = |_f: &Value, _a: &[Value]| Err("kaboom".to_string());
     assert!(list_sort_with(&[nums.clone(), placeholder.clone()], &mut boom).is_err());
     // A non-int comparator result is a clean fault.
-    let mut bad = |_f: &Value, _a: Vec<Value>| Ok(Value::Bool(true));
+    let mut bad = |_f: &Value, _a: &[Value]| Ok(Value::Bool(true));
     assert!(list_sort_with(&[nums, placeholder], &mut bad).is_err());
 }
 
@@ -206,7 +206,7 @@ fn list_sum_by_eval_and_emit() {
 
     // Projection: square each element, then sum (1 + 4 + 9 + 16 = 30). Mirrors `sum`, but folds
     // the closure's result via the re-entrant invoker (stub here).
-    let mut square = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut square = |_f: &Value, a: &[Value]| match a {
         [Value::Int(n)] => Ok(Value::Int(n * n)),
         _ => Err("bad arity".to_string()),
     };
@@ -217,7 +217,7 @@ fn list_sum_by_eval_and_emit() {
 
     // sumBy over the empty list is 0 (the projection is never called).
     let empty = Value::List(std::rc::Rc::new(vec![]));
-    let mut never = |_f: &Value, _a: Vec<Value>| Err("must not be called".to_string());
+    let mut never = |_f: &Value, _a: &[Value]| Err("must not be called".to_string());
     assert!(matches!(
         list_sum_by(&[empty, placeholder.clone()], &mut never),
         Ok(Value::Int(0))
@@ -225,11 +225,11 @@ fn list_sum_by_eval_and_emit() {
 
     // EV-7: an overflowing projected sum faults cleanly, never panics (mirrors `list_sum`).
     let two = Value::List(std::rc::Rc::new(vec![Value::Int(1), Value::Int(2)]));
-    let mut to_max = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(i64::MAX));
+    let mut to_max = |_f: &Value, _a: &[Value]| Ok(Value::Int(i64::MAX));
     assert!(list_sum_by(&[two.clone(), placeholder.clone()], &mut to_max).is_err());
 
     // a non-int projection result is a clean fault, never a panic.
-    let mut nonint = |_f: &Value, _a: Vec<Value>| Ok(Value::Str("x".into()));
+    let mut nonint = |_f: &Value, _a: &[Value]| Ok(Value::Str("x".into()));
     assert!(list_sum_by(&[two, placeholder], &mut nonint).is_err());
 
     // PHP erasure: array_sum over the projected array (array_map preserves order); ret is int.
@@ -398,7 +398,7 @@ fn list_higher_order_eval_and_emit() {
     let placeholder = Value::Int(0);
 
     // map: double each element.
-    let mut dbl = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut dbl = |_f: &Value, a: &[Value]| match a {
         [Value::Int(n)] => Ok(Value::Int(n * 2)),
         _ => Err("bad arity".to_string()),
     };
@@ -412,7 +412,7 @@ fn list_higher_order_eval_and_emit() {
     }
 
     // filter: keep the even elements (predicate returns bool).
-    let mut even = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut even = |_f: &Value, a: &[Value]| match a {
         [Value::Int(n)] => Ok(Value::Bool(n % 2 == 0)),
         _ => Err("bad arity".to_string()),
     };
@@ -426,11 +426,11 @@ fn list_higher_order_eval_and_emit() {
     }
 
     // filter: a non-bool predicate result is a clean fault, never a panic.
-    let mut bad = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(7));
+    let mut bad = |_f: &Value, _a: &[Value]| Ok(Value::Int(7));
     assert!(list_filter(&[nums.clone(), placeholder.clone()], &mut bad).is_err());
 
     // flatMap: expand each n to [n, n*10], then concatenate (map + one-level flatten).
-    let mut expand = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut expand = |_f: &Value, a: &[Value]| match a {
         [Value::Int(n)] => Ok(Value::List(std::rc::Rc::new(vec![
             Value::Int(*n),
             Value::Int(n * 10),
@@ -447,11 +447,11 @@ fn list_higher_order_eval_and_emit() {
         other => panic!("flatMap returned {other:?}"),
     }
     // flatMap: a non-list mapper result is a clean fault, never a panic.
-    let mut notlist = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(7));
+    let mut notlist = |_f: &Value, _a: &[Value]| Ok(Value::Int(7));
     assert!(list_flat_map(&[nums.clone(), placeholder.clone()], &mut notlist).is_err());
 
     // takeWhile / dropWhile: predicate `x < 3` over [1,2,3,4] → prefix [1,2], suffix [3,4].
-    let mut lt3 = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut lt3 = |_f: &Value, a: &[Value]| match a {
         [Value::Int(n)] => Ok(Value::Bool(*n < 3)),
         _ => Err("bad arity".to_string()),
     };
@@ -472,11 +472,11 @@ fn list_higher_order_eval_and_emit() {
         other => panic!("dropWhile returned {other:?}"),
     }
     // takeWhile: a non-bool predicate result is a clean fault, never a panic.
-    let mut nb = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(1));
+    let mut nb = |_f: &Value, _a: &[Value]| Ok(Value::Int(1));
     assert!(list_take_while(&[nums.clone(), placeholder.clone()], &mut nb).is_err());
 
     // groupBy: key = x % 2 over [1,2,3,4] → first-seen keys [1, 0]; groups [1,3] and [2,4].
-    let mut par = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut par = |_f: &Value, a: &[Value]| match a {
         [Value::Int(n)] => Ok(Value::Int(n % 2)),
         _ => Err("bad arity".to_string()),
     };
@@ -494,11 +494,11 @@ fn list_higher_order_eval_and_emit() {
         other => panic!("groupBy returned {other:?}"),
     }
     // groupBy: a non-hashable key is a clean fault, never a panic.
-    let mut nonhash = |_f: &Value, _a: Vec<Value>| Ok(Value::List(std::rc::Rc::new(vec![])));
+    let mut nonhash = |_f: &Value, _a: &[Value]| Ok(Value::List(std::rc::Rc::new(vec![])));
     assert!(list_group_by(&[nums.clone(), placeholder.clone()], &mut nonhash).is_err());
 
     // reduce: sum, seeded with 100.
-    let mut add = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut add = |_f: &Value, a: &[Value]| match a {
         [Value::Int(acc), Value::Int(x)] => Ok(Value::Int(acc + x)),
         _ => Err("bad arity".to_string()),
     };
@@ -512,14 +512,14 @@ fn list_higher_order_eval_and_emit() {
 
     // reduce over the empty list returns the seed unchanged (the closure is never called).
     let empty = Value::List(std::rc::Rc::new(vec![]));
-    let mut never = |_f: &Value, _a: Vec<Value>| Err("must not be called".to_string());
+    let mut never = |_f: &Value, _a: &[Value]| Err("must not be called".to_string());
     assert!(matches!(
         list_reduce(&[empty, Value::Int(42), placeholder.clone()], &mut never),
         Ok(Value::Int(42))
     ));
 
     // A fault from the closure propagates as a plain `String` (the backend-shared contract).
-    let mut boom = |_f: &Value, _a: Vec<Value>| Err("kaboom".to_string());
+    let mut boom = |_f: &Value, _a: &[Value]| Err("kaboom".to_string());
     assert_eq!(
         list_map(&[nums, placeholder], &mut boom).unwrap_err(),
         "kaboom"
@@ -621,9 +621,9 @@ fn list_min_max_by_first_wins_on_tie_and_calls_selector_once_per_element() {
     // A `Cell` counter proves the selector fires exactly once per element (no primed element-0
     // double-call — the parity contract the `__phorj_min_by`/`_max_by` PHP helpers must also honour).
     let calls = Cell::new(0usize);
-    let mut sel = |_f: &Value, a: Vec<Value>| {
+    let mut sel = |_f: &Value, a: &[Value]| {
         calls.set(calls.get() + 1);
-        Ok(Value::Int(key_of(&a)))
+        Ok(Value::Int(key_of(a)))
     };
     let placeholder = Value::Int(0);
 
@@ -643,7 +643,7 @@ fn list_min_max_by_first_wins_on_tie_and_calls_selector_once_per_element() {
 
     // Empty list -> null; the selector is never called.
     let empty = Value::List(Rc::new(vec![]));
-    let mut never = |_f: &Value, _a: Vec<Value>| Err("must not be called".to_string());
+    let mut never = |_f: &Value, _a: &[Value]| Err("must not be called".to_string());
     assert!(matches!(
         list_min_by(&[empty.clone(), placeholder.clone()], &mut never),
         Ok(Value::Null)
@@ -714,7 +714,7 @@ fn list_is_empty_flatten_and_count() {
         Value::Int(4),
     ]));
     let placeholder = Value::Int(0);
-    let mut even = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+    let mut even = |_f: &Value, a: &[Value]| match a {
         [Value::Int(n)] => Ok(Value::Bool(n % 2 == 0)),
         _ => Err("bad arity".to_string()),
     };
@@ -722,7 +722,7 @@ fn list_is_empty_flatten_and_count() {
         list_count(&[nums.clone(), placeholder.clone()], &mut even).unwrap(),
         Value::Int(2)
     ));
-    let mut boom = |_f: &Value, _a: Vec<Value>| Err("kaboom".to_string());
+    let mut boom = |_f: &Value, _a: &[Value]| Err("kaboom".to_string());
     assert!(list_count(&[nums, placeholder], &mut boom).is_err());
 }
 

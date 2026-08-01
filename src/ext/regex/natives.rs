@@ -259,7 +259,7 @@ pub(super) fn regex_replace_callback(
                     }
                 }
                 let m_val = regex_match_value(whole.as_str(), pairs)?;
-                match call(cb, vec![m_val])? {
+                match call(cb, &[m_val])? {
                     Value::Str(r) => out.push_str(&r),
                     other => {
                         return Err(format!(

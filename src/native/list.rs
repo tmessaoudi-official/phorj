@@ -55,7 +55,7 @@ pub(super) fn list_sort_with(args: &[Value], call: &mut ClosureInvoker) -> Resul
                 if err.is_some() {
                     return Ordering::Equal;
                 }
-                match call(f, vec![a.clone(), b.clone()]) {
+                match call(f, &[a.clone(), b.clone()]) {
                     Ok(Value::Int(n)) => n.cmp(&0),
                     Ok(_) => {
                         err = Some("List.sortWith comparator must return int".into());
@@ -110,7 +110,7 @@ pub(super) fn list_partition(args: &[Value], call: &mut ClosureInvoker) -> Resul
             let mut yes = Vec::new();
             let mut no = Vec::new();
             for x in xs.iter() {
-                match call(f, vec![x.clone()])? {
+                match call(f, std::slice::from_ref(x))? {
                     Value::Bool(true) => yes.push(x.clone()),
                     Value::Bool(false) => no.push(x.clone()),
                     other => {
@@ -380,7 +380,7 @@ pub(super) fn list_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Valu
         [Value::List(xs), f] => {
             let mut out = Vec::with_capacity(xs.len());
             for x in xs.iter() {
-                out.push(call(f, vec![x.clone()])?);
+                out.push(call(f, std::slice::from_ref(x))?);
             }
             Ok(Value::List(std::rc::Rc::new(out)))
         }
@@ -392,7 +392,7 @@ pub(super) fn list_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<V
         [Value::List(xs), f] => {
             let mut out = Vec::new();
             for x in xs.iter() {
-                match call(f, vec![x.clone()])? {
+                match call(f, std::slice::from_ref(x))? {
                     Value::Bool(true) => out.push(x.clone()),
                     Value::Bool(false) => {}
                     other => {
@@ -413,7 +413,7 @@ pub(super) fn list_reduce(args: &[Value], call: &mut ClosureInvoker) -> Result<V
         [Value::List(xs), init, f] => {
             let mut acc = init.clone();
             for x in xs.iter() {
-                acc = call(f, vec![acc, x.clone()])?;
+                acc = call(f, &[acc, x.clone()])?;
             }
             Ok(acc)
         }
@@ -457,7 +457,7 @@ pub(super) fn list_flat_map(args: &[Value], call: &mut ClosureInvoker) -> Result
         [Value::List(xs), f] => {
             let mut out = Vec::new();
             for x in xs.iter() {
-                match call(f, vec![x.clone()])? {
+                match call(f, std::slice::from_ref(x))? {
                     Value::List(inner) => out.extend(inner.iter().cloned()),
                     other => {
                         return Err(format!(
@@ -481,7 +481,7 @@ pub(super) fn list_take_while(args: &[Value], call: &mut ClosureInvoker) -> Resu
         [Value::List(xs), f] => {
             let mut out = Vec::new();
             for x in xs.iter() {
-                match call(f, vec![x.clone()])? {
+                match call(f, std::slice::from_ref(x))? {
                     Value::Bool(true) => out.push(x.clone()),
                     Value::Bool(false) => break,
                     other => {
@@ -508,7 +508,7 @@ pub(super) fn list_drop_while(args: &[Value], call: &mut ClosureInvoker) -> Resu
             let mut dropping = true;
             for x in xs.iter() {
                 if dropping {
-                    match call(f, vec![x.clone()])? {
+                    match call(f, std::slice::from_ref(x))? {
                         Value::Bool(true) => continue,
                         Value::Bool(false) => dropping = false,
                         other => {
@@ -536,7 +536,7 @@ pub(super) fn list_group_by(args: &[Value], call: &mut ClosureInvoker) -> Result
         [Value::List(xs), f] => {
             let mut groups: Vec<(HKey, Vec<Value>)> = Vec::new();
             for x in xs.iter() {
-                let kv = call(f, vec![x.clone()])?;
+                let kv = call(f, std::slice::from_ref(x))?;
                 let key = HKey::from_value(&kv).ok_or_else(|| {
                     format!("List.groupBy key must be hashable, got {}", kv.type_name())
                 })?;
@@ -563,7 +563,7 @@ pub(super) fn list_count(args: &[Value], call: &mut ClosureInvoker) -> Result<Va
         [Value::List(xs), f] => {
             let mut n: i64 = 0;
             for x in xs.iter() {
-                match call(f, vec![x.clone()])? {
+                match call(f, std::slice::from_ref(x))? {
                     Value::Bool(true) => n += 1,
                     Value::Bool(false) => {}
                     _ => return Err("List.count predicate must return bool".into()),
@@ -586,7 +586,7 @@ pub(super) fn list_sum_by(args: &[Value], call: &mut ClosureInvoker) -> Result<V
         [Value::List(xs), f] => {
             let mut acc: i64 = 0;
             for x in xs.iter() {
-                match call(f, vec![x.clone()])? {
+                match call(f, std::slice::from_ref(x))? {
                     Value::Int(n) => {
                         acc = acc.checked_add(n).ok_or_else(|| {
                             format!("{} in List.sumBy", crate::value::FAULT_INT_OVERFLOW)
@@ -640,7 +640,7 @@ fn list_extreme_by(
             // the selector fires exactly once per element (no primed element-0 double-invocation).
             let mut best: Option<(Value, Value)> = None;
             for x in xs.iter() {
-                let key = call(f, vec![x.clone()])?;
+                let key = call(f, std::slice::from_ref(x))?;
                 let take = match &best {
                     None => true,
                     Some((_, best_key)) => natural_cmp(&key, best_key) == better,

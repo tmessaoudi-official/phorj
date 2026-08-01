@@ -35,7 +35,7 @@ fn none() -> Value {
 fn option_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::Enum(o), f] if o.ty.as_ref() == "Option" => match o.variant.as_ref() {
-            "Some" => Ok(some(call(f, vec![o.payload[0].clone()])?)),
+            "Some" => Ok(some(call(f, &[o.payload[0].clone()])?)),
             _ => Ok(none()),
         },
         _ => Err("Option.map expects (Option<T>, (T) -> U)".into()),
@@ -47,7 +47,7 @@ fn option_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String
 fn option_and_then(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::Enum(o), f] if o.ty.as_ref() == "Option" => match o.variant.as_ref() {
-            "Some" => call(f, vec![o.payload[0].clone()]),
+            "Some" => call(f, &[o.payload[0].clone()]),
             _ => Ok(none()),
         },
         _ => Err("Option.andThen expects (Option<T>, (T) -> Option<U>)".into()),
@@ -58,7 +58,7 @@ fn option_and_then(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, S
 fn option_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::Enum(o), f] if o.ty.as_ref() == "Option" => match o.variant.as_ref() {
-            "Some" => match call(f, vec![o.payload[0].clone()])? {
+            "Some" => match call(f, &[o.payload[0].clone()])? {
                 Value::Bool(true) => Ok(Value::Enum(o.clone())),
                 Value::Bool(false) => Ok(none()),
                 other => Err(format!(

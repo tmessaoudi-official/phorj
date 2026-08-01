@@ -141,7 +141,7 @@ fn map_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
         [Value::Map(m), f] => {
             let mut out = Vec::with_capacity(m.len());
             for (k, v) in m.iter() {
-                out.push((k.clone(), call(f, vec![v.clone()])?));
+                out.push((k.clone(), call(f, std::slice::from_ref(v))?));
             }
             Ok(Value::Map(std::rc::Rc::new(out)))
         }
@@ -155,7 +155,7 @@ fn map_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String
         [Value::Map(m), f] => {
             let mut out = Vec::new();
             for (k, v) in m.iter() {
-                match call(f, vec![v.clone()])? {
+                match call(f, std::slice::from_ref(v))? {
                     Value::Bool(true) => out.push((k.clone(), v.clone())),
                     Value::Bool(false) => {}
                     other => {

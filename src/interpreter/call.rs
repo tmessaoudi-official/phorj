@@ -31,9 +31,13 @@ impl<'c> Interp<'c> {
                             let result = match crate::native::registry()[idx].eval {
                                 crate::native::NativeEval::Pure(f) => f(&argv, &mut self.out),
                                 crate::native::NativeEval::HigherOrder(f) => {
-                                    let mut invoke = |fv: &Value, cargs: Vec<Value>| match fv {
+                                    // The shared invoker hands args as a borrowed SLICE (no
+                                    // allocation on the VM's side); the tree-walker's `call_closure`
+                                    // consumes an owned `Vec`, so it pays the one allocation it always
+                                    // did. The oracle is not the perf target — parity is.
+                                    let mut invoke = |fv: &Value, cargs: &[Value]| match fv {
                                         Value::Closure(rc) => {
-                                            match self.call_closure(rc.clone(), cargs) {
+                                            match self.call_closure(rc.clone(), cargs.to_vec()) {
                                                 Ok(v) => Ok(v),
                                                 // A `throw` inside a closure passed to the native
                                                 // can't cross the `Result<_, String>` boundary as a

@@ -677,7 +677,7 @@ fn list_max(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// Run a `(T) -> bool` predicate over the list, short-circuiting. A non-bool result is a clean fault
 /// (matches `filter`). `find` returns the first matching element (or `Null`); `any`/`all` the verdict.
 fn list_pred(call: &mut ClosureInvoker, f: &Value, x: &Value) -> Result<bool, String> {
-    match call(f, vec![x.clone()])? {
+    match call(f, std::slice::from_ref(x))? {
         Value::Bool(b) => Ok(b),
         other => Err(format!(
             "List predicate must return bool, got {}",

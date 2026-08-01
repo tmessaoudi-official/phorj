@@ -133,7 +133,7 @@ pub(super) fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Res
     if let Err(msg) = begin_inner(std::slice::from_ref(db)) {
         return Ok(failure(msg));
     }
-    match invoke(fnv, Vec::new()) {
+    match invoke(fnv, &[]) {
         // Normal return: COMMIT and hand back the closure's value. If the COMMIT itself fails, roll
         // back best-effort (to reset the shared `tx_depth`) and surface the commit error as a
         // catchable `DatabaseResult.Err` — the closure's work is not returned.

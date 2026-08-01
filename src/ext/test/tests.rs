@@ -66,13 +66,13 @@ fn assert_faults_passes_only_when_the_closure_faults() {
     // The closure value is a stand-in (the eval just hands it to the invoker, which ignores it here).
     let f = Value::Unit;
     // Closure faults (invoker returns Err) → assertion passes.
-    let mut faulting = |_f: &Value, _args: Vec<Value>| Err::<Value, String>("boom".into());
+    let mut faulting = |_f: &Value, _args: &[Value]| Err::<Value, String>("boom".into());
     assert!(matches!(
         test_assert_faults(std::slice::from_ref(&f), &mut faulting),
         Ok(Value::Unit)
     ));
     // Closure returns normally → assertion fails.
-    let mut completing = |_f: &Value, _args: Vec<Value>| Ok::<Value, String>(Value::Int(1));
+    let mut completing = |_f: &Value, _args: &[Value]| Ok::<Value, String>(Value::Int(1));
     assert!(test_assert_faults(std::slice::from_ref(&f), &mut completing).is_err());
 }
 

@@ -5103,3 +5103,82 @@ I/O failure is wrapped into `FileSystemResult.Err` so the prelude throws a typed
 while the closure's failure propagates untouched. Collapsing them is the obvious shortcut and would
 hand a caller's own error to a `catch (FileSystemError e)` that has nothing to do with it — the silent
 semantic downgrade Invariant 14 forbids.
+
+
+## DEC-422 perf — the honest baseline, and why `forEachLine` still loses (2026-08-01)
+
+Developer ruling, 2026-08-01, verbatim in substance: **"the performance and everything must beat php
+best with jit is a must"**. That RAISES the Invariant-18 bar — WIN-OR-FLAG is now measured against PHP
+at its best, JIT enabled, not against whatever `php` happens to be configured as. Recorded here as a
+standing rule; every future perf claim in this repo is against that baseline.
+
+### The bench was comparing against a HANDICAPPED PHP — fixed
+
+`bench/micro/fslines.php` and `fsforeachline.php` folded each line with **`mb_strlen`**. phorj's
+`String.length` is documented BYTE length, so the faithful twin is **`strlen`** — and `strlen` is
+FASTER. The bench was therefore making PHP do more work than phorj and calling the result a
+comparison. [Verified, JIT on, 40k lines: `mb_strlen` 4.31 ms vs `strlen` 2.52 ms median.]
+
+**Every line-reading loss recorded before 2026-08-01 was understated**, on two counts at once (this,
+and JIT being off). The DEC-347 "4x" and the DEC-422(a) "1.6x" are both superseded by the table below.
+Fixed in both bench files, with the reasoning inline so it cannot silently regress.
+
+### Current, honest numbers
+
+Medians of 15, 40k lines, same fixture and fold, output-identity gated (checksum 2108890 every leg),
+`php -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M`:
+
+| | ms | vs PHP |
+|---|---|---|
+| PHP `fgets` + `strlen` (JIT ON) | 2.52 | 1.00x |
+| phorj `forEachLine` | 8.59 | **3.41x slower** |
+| phorj `lines` iterator | 22.34 | **8.87x slower** |
+
+Both are OWED under DEC-365. The ruled bar is < 2.52 ms, i.e. `forEachLine` needs a **3.4x** speedup.
+
+### Where the time goes — measured (callgrind, 40k lines, 111M Ir total)
+
+| | share |
+|---|---|
+| VM execution of the closure body (`exec_op` / `run_until` / `call_closure_value` / `do_return` / stack push+pop) | ~45% |
+| `malloc`/`free` | ~15% |
+| the actual file read (`memchr`, `read_until`, `from_utf8`, `memcpy`) | ~14% |
+| `Value::clone` + `drop_glue` | ~6% |
+
+**Our file reading is not the problem.** The closure body — nine bytecode ops — is.
+
+### Two experiments, both recorded because one FAILED
+
+1. **Per-call allocations removed — KEPT.** `call_closure_value` cloned the captures into a throwaway
+   `Vec` on every call, and `ClosureInvoker` took an owned `Vec` of args, so every list element / file
+   line cost two heap allocations before any work happened. Captures now clone straight onto the
+   operand stack and the invoker takes a borrowed slice (`&[Value]`). [Verified: 9.15 -> 8.59 ms, -6%;
+   131M -> 116M Ir.] Small here, but it is the per-element path for EVERY higher-order native
+   (`List.map`/`filter`/`reduce`, `Option.map`, the regex and test callbacks), so it is a win the whole
+   language collects.
+2. **A fast dispatch path for the cheap ops — REVERTED.** Hypothesis: `exec_op` is a ~1000-line match,
+   so each op pays a large prologue; lifting `Const`/`GetLocal`/`SetLocal`/`Pop` into an
+   `#[inline(always)]` helper should cut dispatch cost. Built it (single-sourced, one body per op, the
+   match kept wildcard-free per Invariant 3). [Verified: 116M -> 111M Ir, **-4%**, and wall clock
+   8.60 -> 8.59 ms — no measurable change.] The workload is allocator/memory bound, not
+   instruction-issue bound. Reverted: Invariant 11's bar is a measured wall-clock before/after, and a
+   second dispatch site that buys nothing is complexity without payment. **The finding is the value:
+   VM dispatch overhead is NOT the bottleneck, so do not re-try this.**
+
+### What beating PHP actually requires — and why it is not a slice
+
+The closure body must stop going through the VM. The existing JIT cannot take it, for two independent
+reasons that are both structural rather than missing verticals:
+
+1. **The side-effect-free eligibility invariant.** A JIT fault falls back to re-running the function on
+   the VM, which is only sound if the function has no observable effects. Our closure MUTATES a field
+   (`a.total = …`) — the accumulation pattern the API requires, since phorj closures capture by value.
+   Admitting it means reworking the fault/redo model, not adding an op.
+2. **The unboxed kind lattice covers `Int`/`Float`/`Bool` plus string/list/map HANDLES.** The closure
+   reads an object field, writes it back, and calls a native. Objects and native calls are not in the
+   lattice at all.
+
+So DEC-422(3) as originally scoped — a JIT vertical for foreach-over-`Iterator` — closes neither
+number: it does not touch `forEachLine` (a closure invoked from a native is not an iterator virtual
+call), and for `lines` it would still have to JIT the same ineligible body. **This is a JIT programme,
+not a vertical**, and it needs a developer ruling on scope and sequencing before it starts.

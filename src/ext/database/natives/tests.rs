@@ -10,11 +10,11 @@ use crate::value::Value;
 // directly, so these shims supply a no-op closure invoker (no hook registered → never invoked) and
 // keep the `(args, &mut out)` call ergonomics. Return shape is unchanged (`Ok(wrap(..))`).
 pub(super) fn q(args: &[Value], _out: &mut String) -> Result<Value, String> {
-    let mut noop = |_: &Value, _: Vec<Value>| Ok(Value::Null);
+    let mut noop = |_: &Value, _: &[Value]| Ok(Value::Null);
     db_query(args, &mut noop)
 }
 pub(super) fn x(args: &[Value], _out: &mut String) -> Result<Value, String> {
-    let mut noop = |_: &Value, _: Vec<Value>| Ok(Value::Null);
+    let mut noop = |_: &Value, _: &[Value]| Ok(Value::Null);
     db_exec(args, &mut noop)
 }
 

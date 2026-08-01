@@ -52,7 +52,7 @@ fn probe_opt(v: &Value) -> (String, Option<i64>) {
 
 #[test]
 fn map_transforms_success_and_passes_failure_through() {
-    let mut times_ten = |_f: &Value, args: Vec<Value>| match args.as_slice() {
+    let mut times_ten = |_f: &Value, args: &[Value]| match args {
         [Value::Int(n)] => Ok(Value::Int(n * 10)),
         _ => Err("bad".into()),
     };
@@ -65,7 +65,7 @@ fn map_transforms_success_and_passes_failure_through() {
 
 #[test]
 fn map_err_transforms_failure_and_passes_success_through() {
-    let mut plus_one = |_f: &Value, args: Vec<Value>| match args.as_slice() {
+    let mut plus_one = |_f: &Value, args: &[Value]| match args {
         [Value::Int(n)] => Ok(Value::Int(n + 1)),
         _ => Err("bad".into()),
     };
@@ -79,7 +79,7 @@ fn map_err_transforms_failure_and_passes_success_through() {
 #[test]
 fn and_then_binds_success_without_double_wrapping() {
     // f returns a Result directly; Success(x) becomes f(x), Failure passes through.
-    let mut bind = |_f: &Value, args: Vec<Value>| match args.as_slice() {
+    let mut bind = |_f: &Value, args: &[Value]| match args {
         [Value::Int(n)] => Ok(success(Value::Int(n + 100))),
         _ => Err("bad".into()),
     };
@@ -92,7 +92,7 @@ fn and_then_binds_success_without_double_wrapping() {
 #[test]
 fn or_else_binds_failure_without_double_wrapping() {
     // f returns a Result directly; Failure(e) becomes f(e), Success passes through.
-    let mut recover = |_f: &Value, args: Vec<Value>| match args.as_slice() {
+    let mut recover = |_f: &Value, args: &[Value]| match args {
         [Value::Int(_)] => Ok(success(Value::Int(0))),
         _ => Err("bad".into()),
     };

@@ -110,7 +110,7 @@ pub(super) fn test_assert_faults(
     call: &mut ClosureInvoker,
 ) -> Result<Value, String> {
     match args {
-        [f] => match call(f, Vec::new()) {
+        [f] => match call(f, &[]) {
             Err(_fault) => Ok(Value::Unit),
             Ok(_v) => {
                 Err("assertion failed: expected the closure to fault, but it returned".into())

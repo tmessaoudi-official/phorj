@@ -22,7 +22,7 @@ fn probe(v: &Value) -> (String, Option<i64>) {
 
 #[test]
 fn map_transforms_some_and_passes_none_through() {
-    let mut times_ten = |_f: &Value, args: Vec<Value>| match args.as_slice() {
+    let mut times_ten = |_f: &Value, args: &[Value]| match args {
         [Value::Int(n)] => Ok(Value::Int(n * 10)),
         _ => Err("bad".into()),
     };
@@ -35,7 +35,7 @@ fn map_transforms_some_and_passes_none_through() {
 #[test]
 fn and_then_binds_without_double_wrapping() {
     // f returns an Option directly (here Some(x + 100)); Some(x) becomes f(x), None passes through.
-    let mut bind = |_f: &Value, args: Vec<Value>| match args.as_slice() {
+    let mut bind = |_f: &Value, args: &[Value]| match args {
         [Value::Int(n)] => Ok(some(Value::Int(n + 100))),
         _ => Err("bad".into()),
     };
@@ -47,8 +47,8 @@ fn and_then_binds_without_double_wrapping() {
 
 #[test]
 fn filter_keeps_only_a_passing_some() {
-    let mut keep = |_f: &Value, _: Vec<Value>| Ok(Value::Bool(true));
-    let mut drop = |_f: &Value, _: Vec<Value>| Ok(Value::Bool(false));
+    let mut keep = |_f: &Value, _: &[Value]| Ok(Value::Bool(true));
+    let mut drop = |_f: &Value, _: &[Value]| Ok(Value::Bool(false));
     assert_eq!(
         probe(&option_filter(&[some(Value::Int(5)), Value::Null], &mut keep).unwrap()),
         ("Some".into(), Some(5))
@@ -65,7 +65,7 @@ fn filter_keeps_only_a_passing_some() {
 
 #[test]
 fn filter_rejects_a_non_bool_predicate_result() {
-    let mut bad = |_f: &Value, _: Vec<Value>| Ok(Value::Int(1));
+    let mut bad = |_f: &Value, _: &[Value]| Ok(Value::Int(1));
     assert!(option_filter(&[some(Value::Int(5)), Value::Null], &mut bad).is_err());
 }
 

@@ -57,7 +57,7 @@ fn none() -> Value {
 fn result_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::Enum(r), f] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
-            "Success" => Ok(success(call(f, vec![r.payload[0].clone()])?)),
+            "Success" => Ok(success(call(f, &[r.payload[0].clone()])?)),
             _ => Ok(Value::Enum(r.clone())),
         },
         _ => Err("Result.map expects (Result<T,E>, (T) -> U)".into()),
@@ -69,7 +69,7 @@ fn result_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String
 fn result_map_err(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::Enum(r), f] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
-            "Failure" => Ok(failure(call(f, vec![r.payload[0].clone()])?)),
+            "Failure" => Ok(failure(call(f, &[r.payload[0].clone()])?)),
             _ => Ok(Value::Enum(r.clone())),
         },
         _ => Err("Result.mapErr expects (Result<T,E>, (E) -> F)".into()),
@@ -82,7 +82,7 @@ fn result_map_err(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, St
 fn result_and_then(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::Enum(r), f] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
-            "Success" => call(f, vec![r.payload[0].clone()]),
+            "Success" => call(f, &[r.payload[0].clone()]),
             _ => Ok(Value::Enum(r.clone())),
         },
         _ => Err("Result.andThen expects (Result<T,E>, (T) -> Result<U,E>)".into()),
@@ -107,7 +107,7 @@ fn result_get_or_else(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn result_or_else(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::Enum(r), f] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
-            "Failure" => call(f, vec![r.payload[0].clone()]),
+            "Failure" => call(f, &[r.payload[0].clone()]),
             _ => Ok(Value::Enum(r.clone())),
         },
         _ => Err("Result.orElse expects (Result<T,E>, (E) -> Result<T,F>)".into()),

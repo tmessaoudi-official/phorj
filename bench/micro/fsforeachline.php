@@ -17,9 +17,12 @@ function bench(string $path): int {
     $acc = 0;
     $h = fopen($path, 'rb');
     while (($line = fgets($h)) !== false) {
-        // `fgets` KEEPS the terminator; phorj strips it, so trim to compare like for like (and `\r`
-        // too, for the same reason phorj strips it).
-        $acc += mb_strlen(rtrim($line, "\r\n"));
+        // `strlen`, NOT `mb_strlen`: phorj's `String.length` is documented BYTE length, so `strlen` is
+        // the faithful twin — and it is FASTER, which raises the bar on phorj rather than lowering it.
+        // The bench used `mb_strlen` until 2026-08-01 and was therefore comparing against a handicapped
+        // PHP (measured: 4.31 ms vs 3.55 ms median, JIT on). Any loss measured before that date was
+        // understated by ~20%. `rtrim` stays: `fgets` keeps the terminator and phorj strips it.
+        $acc += strlen(rtrim($line, "\r\n"));
     }
     fclose($h);
     return $acc;
