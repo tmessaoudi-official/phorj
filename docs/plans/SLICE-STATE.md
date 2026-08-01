@@ -304,11 +304,16 @@ a PENDING question, not self-ruled.
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.
 
-**PENDING developer questions** (Invariant 15 — do not self-rule): **MICROBENCH-K** (new 2026-08-01, DEC-430
-— `microbench.sh`'s `K=3` best-of is systematically PESSIMISTIC for phorj on the 25-40%-variance short loops:
-`floatloop` best-of-3 ≈ 4.5-5.0 ms vs best-of-25 3.899. Raising K multiplies the runtime of a gate that runs
-on EVERY push and moves numbers across the whole scoreboard — a measurement-policy trade-off, not a tuning
-call); **LIFT-THROWS** (new 2026-08-01 — a
+**PENDING developer questions** (Invariant 15 — do not self-rule): ~~**MICROBENCH-K**~~ **— RULED
+2026-08-01 (DEC-430.1): report the spread, leave K=3. BUILT** (`vm_worst_ns`/`php_worst_ns` in the JSON, a
+`spread v/p` column, `[noisy: VM spread +N%]` in the gate + a summary line; no verdict changes; `--emit`
+verified not to leak the fields). First real run flagged 5 of 51 — `floatarith` +29%, `floatloop` +27%,
+`mapvalues` +23%, `intadd` +21%, `listcontains` **+59%** (which is DEC-427's "tie inside the noise", now
+visible on every push instead of needing a separate investigation). **Read the marker ONE WAY**: over K=3
+the spread is a DETECTOR, not a measurement — `listcontains` read +1% in a 7-feature run and +59% in the
+full one, minutes apart — so a marker means "distrust this row" and its ABSENCE means only "these three
+samples agreed". Raising `MICROBENCH_RUNS` stays available and is now an informed choice. **LIFT-THROWS**
+(new 2026-08-01 — a
 lifted `throw` needs its `throws` clause by hand; inferring one means ruling three draft-visible
 choices, see `KNOWN_ISSUES.md`); the strict-vs-narrow reading of DEC-379;
 refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section); and whether

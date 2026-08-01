@@ -46,6 +46,16 @@ OWED_EPSILON="${MICROBENCH_OWED_EPSILON:-0.75}"
 # comment at the flip check: an absolute band alone cannot tell a near-parity wobble from a regression.
 RELATIVE_DROP="${MICROBENCH_RELATIVE_DROP:-0.85}"
 
+# Annotate `[noisy]` when the VM leg's slowest sample exceeds its fastest by this much. Changes NO
+# verdict — information only, and free (the harness already takes the K samples). phorj's short
+# high-IPC loops carry a 25-40% per-iteration variance here, so best-of-K lands ABOVE the true minimum
+# and the ratio reads PESSIMISTIC; 15% sits above php's observed 2-5%. Full rationale: DEC-430/430.1.
+#
+# ⚠ ONE-WAY EVIDENCE. Over K=3 the spread is a DETECTOR, not a measurement — three draws miss tails
+# (`listcontains` read +1% then +59% minutes apart). A marker means "distrust this row"; its ABSENCE
+# means only "these three agreed", never "solid". Reading it as a certificate is worse than no marker.
+NOISE_PCT="${MICROBENCH_NOISE_PCT:-15}"
+
 # Flags for the one-shot "does this php actually JIT?" probe (the local-baseline gate below).
 JIT_PROBE="-dopcache.enable_cli=1 -dopcache.jit_buffer_size=8M -dopcache.jit=tracing"
 
@@ -161,8 +171,25 @@ owed=0
 # blocks immediately; a flip or an owed deepening is re-measured first — see the confirmation pass.
 suspects=()
 suspect_kind=()
-while IFS=$'\t' read -r feat ratio identical; do
+noisy_n=0
+# `noise` is the suffix appended to whatever this feature's line turns out to be. Computed once, here,
+# so every branch below (owed / recovered / flip / wobble / ok) carries it without repeating the math.
+while IFS=$'\t' read -r feat ratio identical vm_ns vm_worst; do
   [[ -n "$feat" ]] || continue
+  # A JSON without the spread fields (older run / test fixture) yields the literal "null" — "not
+  # measured", never a zero to divide by nor a 0% that would read as CLEAN. The `!= "null"` halves are
+  # DEFENSIVE, not load-bearing (verified by deletion: bash coerces the bare word to 0 and `-gt 0`
+  # rejects it); kept because that coercion is obscure and a future field may not coerce.
+  noise=""
+  if [[ "$vm_ns" != "null" && "$vm_worst" != "null" && "${vm_ns:-0}" -gt 0 && "${vm_worst:-0}" -gt 0 ]]; then
+    _sp="$(awk -v b="$vm_ns" -v w="$vm_worst" 'BEGIN{printf "%.0f", (w/b-1)*100}')"
+    if [[ "$_sp" -ge "$NOISE_PCT" ]]; then
+      # One-sided on purpose (`+N%`, never `±N%`): best-of-K is an upper bound on the real VM time,
+      # so the truth is at or BELOW what is printed. Short here; explained once in the summary.
+      noise="  [noisy: VM spread +${_sp}%]"
+      noisy_n=$((noisy_n + 1))
+    fi
+  fi
   if [[ "$identical" != "true" ]]; then
     echo "  FAIL $feat: output-identity break (VM vs PHP checksum differ) — a correctness bug, not a timing"
     fails=$((fails + 1))
@@ -181,7 +208,7 @@ while IFS=$'\t' read -r feat ratio identical; do
   if [[ -n "$owed_ratio" ]]; then
     owed=$((owed + 1))
     if [[ "$win_now" == "WIN" ]]; then
-      echo "  RECOVERED $feat: owed at $owed_ratio, now $ratio (a WIN) — re-emit so the ratchet protects it"
+      echo "  RECOVERED $feat: owed at $owed_ratio, now $ratio (a WIN) — re-emit so the ratchet protects it$noise"
       continue
     fi
     if awk -v o="$owed_ratio" -v r="$ratio" -v eps="$OWED_EPSILON" 'BEGIN{exit (r < o*eps)?0:1}'; then
@@ -190,7 +217,7 @@ while IFS=$'\t' read -r feat ratio identical; do
       suspect_kind+=("owed:$owed_ratio:$ratio")
       continue
     fi
-    echo "  owed $feat: ratio $owed_ratio -> $ratio (still losing; carried, not laundered)"
+    echo "  owed $feat: ratio $owed_ratio -> $ratio (still losing; carried, not laundered)$noise"
     continue
   fi
   # BLOCK: a feature we had WON now LOSES by MORE than the noise band (the G-8 ratchet).
@@ -213,12 +240,12 @@ while IFS=$'\t' read -r feat ratio identical; do
   # Near-parity wobble: a WIN baseline now fractionally < 1.0 but within the FLIP_EPSILON band — box
   # noise on a parity baseline, reported not blocked (so a shared-machine push is never wedged by it).
   if awk -v br="$b_ratio" -v r="$ratio" 'BEGIN{exit (br>=1.0 && r<1.0)?0:1}'; then
-    echo "  warn $feat: near-parity wobble — baseline $b_ratio now $ratio (within $FLIP_EPSILON noise band; not blocking)"
+    echo "  warn $feat: near-parity wobble — baseline $b_ratio now $ratio (within $FLIP_EPSILON noise band; not blocking)$noise"
     continue
   fi
   # REPORT (non-blocking): ratio movement vs baseline.
-  echo "  ok   $feat: ratio $b_ratio -> $ratio ($win_now)"
-done < <(jq -r '.[] | [.feature, .ratio, .identical] | @tsv' <<<"$json")
+  echo "  ok   $feat: ratio $b_ratio -> $ratio ($win_now)$noise"
+done < <(jq -r '.[] | [.feature, .ratio, .identical, (.vm_ns // null), (.vm_worst_ns // null)] | @tsv' <<<"$json")
 
 # CONFIRMATION PASS. A timing-based verdict is re-measured before it blocks a push.
 #
@@ -275,6 +302,11 @@ elif [[ ${#suspects[@]} -gt 0 ]]; then
 fi
 
 echo "microbench-gate: $wins WIN / $(($(jq 'length' <<<"$json") - wins)) loss vs release-php+JIT; $owed OWED (carried); $fails blocking regression(s)"
+# Say once what the per-line `[noisy]` markers mean. Silent when nothing was noisy.
+if [[ "$noisy_n" -gt 0 ]]; then
+  echo "microbench-gate: $noisy_n feature(s) measured with >${NOISE_PCT}% VM spread — their ratios are PESSIMISTIC"
+  echo "  (best-of-K is an upper bound on the real VM time; raising MICROBENCH_RUNS tightens it. DEC-430)"
+fi
 if [[ "$fails" -gt 0 ]]; then
   echo "microbench-gate: FAIL — $fails regression(s) (WIN->LOSS flip or output-identity break)" >&2
   exit 1

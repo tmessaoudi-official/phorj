@@ -6,6 +6,33 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the ratchet reports per-feature measurement spread (DEC-430.1, 2026-08-01)
+Developer-ruled answer to DEC-430's question: report the spread, leave `K=3`.
+
+`microbench.sh` already takes the K samples, so tracking the WORST alongside the best costs nothing. The
+JSON gains `vm_worst_ns` / `php_worst_ns`, the table gains a `spread v/p` column, and
+`microbench-gate.sh` appends `[noisy: VM spread +N%]` when the VM spread reaches `MICROBENCH_NOISE_PCT`
+(default 15 — above php's observed 2-5%, below phorj's 25-40%), plus one summary line. **No verdict
+changes**; the gate blocks on exactly what it blocked on before. `--emit` was verified not to leak the
+new fields — the emitted baseline's key set is byte-identical to the shipped one, `_owed` included, so
+DEC-365's no-laundering guarantee is untouched.
+
+It paid off on the first real run: 51 features on a quiet box, 5 flagged — `floatarith` +29%, `floatloop`
++27%, `mapvalues` +23%, `intadd` +21%, and **`listcontains` +59%**. DEC-427 had called `listcontains` "a
+TIE inside the noise" only after a separate manual investigation; the gate now says so on every push.
+
+**The limitation, stated because the inverse reading is worse than no marker:** over K=3 the spread is a
+DETECTOR, not a measurement. Three draws routinely miss the tail — `listcontains` read **+1%** in a
+7-feature run and **+59%** in the full one, minutes apart on the same box. A marker means "distrust this
+row"; its absence means only "these three samples agreed", never "this row is solid".
+
+Three new gate tests (7, 7b, 9). Each guard was checked by deliberately weakening it, which found a real
+gap: deleting the threshold entirely passed every pre-existing case, so a broken threshold would have
+marked all 51 rows and drowned the signal silently. Case 9 exists for that and fails without it. The
+field-presence `!= "null"` checks are honestly labelled defensive-not-load-bearing (bash coerces the bare
+word to 0 anyway). The underlying variance remains un-root-caused and blocked on PMU access; `_owed` was
+not re-emitted.
+
 ### Measured — the box's clock, `floatloop` AT the hardware floor, phorj's variance localized (DEC-430, 2026-08-01)
 No code change. Task #62's variance hunt, and it produced a bigger result than the variance itself.
 

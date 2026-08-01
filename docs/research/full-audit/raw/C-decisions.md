@@ -5852,3 +5852,62 @@ other way from every bias this project has guarded against so far. **Not self-ru
 triples the time of a gate that runs on every push, and it moves numbers on the whole scoreboard, so the
 trade-off is the developer's (see the QUESTION carried out of this entry). DEC-365 still forbids
 re-baselining an OWED row, so nothing was re-emitted.
+
+
+## DEC-430.1 — the ratchet now REPORTS per-feature spread (2026-08-01, BUILT — developer-ruled option 1)
+
+DEC-430 closed with a question: `microbench.sh` takes K=3 samples and keeps the best, which is the right
+estimator, but against the 25-40% per-iteration variance phorj shows on short high-IPC loops it lands
+well above the true minimum — so those ratios read PESSIMISTIC and the frozen `_owed` floors are too
+harsh. Options were to raise K (multiplies a per-push gate), raise it for a named subset (a list that
+rots), report the spread (free), or leave it. **The developer ruled: report the spread, leave K=3.**
+
+### What was built
+
+`microbench.sh` already takes the K samples, so tracking the WORST alongside the best costs nothing:
+  * the JSON gains `vm_worst_ns` / `php_worst_ns` (raw, so consumers derive their own view);
+  * the table gains a `spread v/p` column;
+  * `microbench-gate.sh` appends `[noisy: VM spread +N%]` to a feature's line when the VM spread reaches
+    `MICROBENCH_NOISE_PCT` (default 15 — above php's observed 2-5%, below phorj's 25-40%), and prints one
+    summary line explaining what the markers mean.
+
+No verdict changes. The gate blocks on exactly what it blocked on before; this is information only. The
+`--emit` path was verified NOT to leak the new fields — the emitted baseline's key set is byte-identical
+to the shipped one, `_owed` included, so DEC-365's no-laundering guarantee is untouched.
+
+### It paid for itself on the first real run
+
+51 features, quiet box (load 0.15), 5 flagged: `floatarith` +29%, `floatloop` +27%, `intadd` +21%,
+`mapvalues` +23%, and **`listcontains` +59%**. That last one matters: DEC-427 called `listcontains` "a TIE
+inside the noise" and had to run a separate manual investigation to justify it. The gate now says so on
+every push, in the report, for free.
+
+### The limitation, stated because the inverse reading would be worse than no marker at all
+
+**Over K=3 the spread is a DETECTOR, not a measurement.** Three draws routinely miss the tail. Live case
+from this very session, minutes apart on the same quiet box: `listcontains` read **+1%** in a 7-feature
+run and **+59%** in the full one. So a marker means "distrust this row"; its ABSENCE means only "these
+three samples happened to agree" — never "this row is solid". That asymmetry is written into the script
+next to the threshold, because someone reading absence-as-certificate is a worse failure than the silent
+pessimism this replaces.
+
+### Testing
+
+Three new cases in `scripts/test-microbench-gate.sh` (7, 7b, 9), plus 8 asserting backwards
+compatibility. Each guard was checked by deliberately weakening it — the DEC-428 discipline — and that
+found a real gap: **deleting the threshold entirely passed every pre-existing case**, because case 7 only
+proves a noisy row IS flagged and case 8's fixture has no spread fields at all. Case 9 (a 5% spread must
+NOT be annotated) was written for exactly that and is verified to fail without the threshold; without it
+a broken threshold would have marked all 51 rows and drowned the signal, silently.
+
+Honest note on the other guard: the `!= "null"` halves of the field-presence test are **defensive, not
+load-bearing** — verified by deleting them, tests still pass, because bash's arithmetic context resolves
+the bare word `null` as an unset variable to 0 and the `-gt 0` test rejects it anyway. Kept (relying on
+that coercion is obscure, and a future field could arrive as a string that does not coerce), and labelled
+as defensive rather than presented as proven.
+
+### What is NOT resolved
+
+The underlying variance is still un-root-caused and still blocked on PMU access (DEC-430). Raising K
+remains available (`MICROBENCH_RUNS`) and is now an informed choice rather than a guess: the report says
+which features would benefit. The `_owed` floors were NOT re-emitted (DEC-365).

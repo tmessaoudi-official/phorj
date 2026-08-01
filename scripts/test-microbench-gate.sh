@@ -106,6 +106,45 @@ else
   echo "  skip 6 near-parity wobble: no baseline feature in [1.0, 1.05)"
 fi
 
+# 7. SPREAD REPORTING (DEC-430). The harness samples K times and keeps the BEST; with K=3 against the
+# 25-40% per-iteration variance phorj shows on short high-IPC loops, that best-of lands well above the
+# true minimum, so the recorded ratio is systematically PESSIMISTIC. Nothing can be done about that for
+# free — but it can be made VISIBLE, which is the point: a reader must be able to tell a solid verdict
+# from one measured through a 40% swing.
+jq --arg f "$any_feat" '(.[] | select(.feature==$f) | .vm_worst_ns) = 1400 | (.[] | select(.feature==$f) | .php_worst_ns) = 1010' \
+  "$TMP/clean.json" >"$TMP/noisy.json"
+check 0 "noisy: VM spread \+40%" "7 a high-spread measurement is flagged noisy" "$TMP/noisy.json"
+check 0 "1 feature\(s\) measured with >15% VM spread" "7b the run summarises how many were noisy" "$TMP/noisy.json"
+
+# 8. The SAME fixture without the spread fields must behave exactly as before — no annotation, no
+# arithmetic on a missing value. Cases 1-6 above already run on such a fixture, but assert the absence
+# explicitly: a `null` reaching the spread math would either divide by zero or mark EVERY feature
+# noisy, and both failure modes are silent-looking in a 51-line report.
+# 9. And the other side of the threshold: a SMALL spread must stay unannotated. Without this, deleting
+# the threshold test entirely still passes every other case (verified by doing exactly that) — case 7
+# only proves a noisy row IS flagged, case 8 only covers a fixture with no spread fields at all. A
+# marker on all 51 rows would drown the signal it exists to carry, silently.
+jq --arg f "$any_feat" '(.[] | select(.feature==$f) | .vm_worst_ns) = 1050 | (.[] | select(.feature==$f) | .php_worst_ns) = 1010' \
+  "$TMP/clean.json" >"$TMP/quiet.json"
+out_quiet="$(MICROBENCH_GATE_JSON="$TMP/quiet.json" bash "$GATE" 2>&1)"
+if grep -q 'noisy' <<<"$out_quiet"; then
+  echo "  FAIL 9 a 5% spread must be below the threshold, but it was flagged noisy"
+  fails=$((fails + 1))
+else
+  echo "  ok   9 a low-spread measurement is NOT annotated"
+fi
+
+out_plain="$(MICROBENCH_GATE_JSON="$TMP/clean.json" bash "$GATE" 2>&1)"
+if grep -q 'noisy' <<<"$out_plain"; then
+  echo "  FAIL 8 spread-less JSON must not be annotated: found a 'noisy' marker"
+  fails=$((fails + 1))
+elif grep -qE 'null|division by zero' <<<"$out_plain"; then
+  echo "  FAIL 8 spread-less JSON leaked a null/division error into the report"
+  fails=$((fails + 1))
+else
+  echo "  ok   8 a JSON without spread fields is unannotated and clean"
+fi
+
 if [[ "$fails" -gt 0 ]]; then
   echo "test-microbench-gate: FAIL — $fails case(s)" >&2
   exit 1

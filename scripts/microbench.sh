@@ -138,11 +138,19 @@ if [[ -z "$LOCAL_PHP" ]]; then
   [[ "$DOCKER_BOTH" == "1" ]] && docker cp "$BIN" "$CONTAINER:/phg"
 fi
 
-declare -A vm_ns vm_sum php_ns php_sum
+# `*_worst` tracks the SLOWEST of the K samples alongside the best (DEC-430). Best-of-K is the right
+# estimator and stays the one reported — but on this box phorj's short, high-IPC loops carry a 25-40%
+# per-iteration variance (eight causes refuted; root cause needs PMU counters we do not have), so
+# best-of-3 lands well above the true minimum and the ratio comes out PESSIMISTIC. The spread cannot be
+# removed for free; it CAN be made visible, so a reader can tell a solid verdict from one measured
+# through a 40% swing. Costs nothing — the K samples are already being taken.
+declare -A vm_ns vm_sum vm_worst php_ns php_sum php_worst
 for name in "${features[@]}"; do
   vbest=""
+  vworst=""
   vcs=""
   pbest=""
+  pworst=""
   pcs=""
   for ((k = 0; k < K; k++)); do
     # shellcheck disable=SC2086 # PHG_ARGS is a deliberate word-split flag list
@@ -154,6 +162,7 @@ for name in "${features[@]}"; do
     ns="$(printf '%s' "$line" | cut -f2)"
     vcs="$(printf '%s' "$line" | cut -f3)"
     if [[ -z "$vbest" || "$ns" -lt "$vbest" ]]; then vbest="$ns"; fi
+    if [[ -z "$vworst" || "$ns" -gt "$vworst" ]]; then vworst="$ns"; fi
     # shellcheck disable=SC2086 # JIT_FLAGS / OPCACHE_ARG are deliberate word-split flag lists
     if [[ -n "$LOCAL_PHP" ]]; then
       pline="$(taskset -c "$CPU" "$LOCAL_PHP" $OPCACHE_ARG $JIT_FLAGS "$MICRO/$name.php" 2>/dev/null)"
@@ -163,11 +172,14 @@ for name in "${features[@]}"; do
     pns="$(printf '%s' "$pline" | cut -f2)"
     pcs="$(printf '%s' "$pline" | cut -f3)"
     if [[ -z "$pbest" || "$pns" -lt "$pbest" ]]; then pbest="$pns"; fi
+    if [[ -z "$pworst" || "$pns" -gt "$pworst" ]]; then pworst="$pns"; fi
   done
   vm_ns[$name]="$vbest"
   vm_sum[$name]="$vcs"
+  vm_worst[$name]="$vworst"
   php_ns[$name]="$pbest"
   php_sum[$name]="$pcs"
+  php_worst[$name]="$pworst"
 done
 cleanup_container
 trap - EXIT
@@ -185,14 +197,15 @@ if [[ "$JSON" == 1 ]]; then
     ratio="$(awk -v v="$v" -v p="$p" 'BEGIN{if(v>0)printf "%.3f",p/v; else print 0}')"
     [[ $first == 1 ]] || printf ','
     first=0
-    printf '{"feature":"%s","vm_ns":%s,"php_ns":%s,"ratio":%s,"identical":%s}' "$name" "$v" "$p" "$ratio" "$ok"
+    printf '{"feature":"%s","vm_ns":%s,"php_ns":%s,"vm_worst_ns":%s,"php_worst_ns":%s,"ratio":%s,"identical":%s}' \
+      "$name" "$v" "$p" "${vm_worst[$name]:-0}" "${php_worst[$name]:-0}" "$ratio" "$ok"
   done
   printf ']\n'
   exit 0
 fi
 
-printf '%-16s %12s %12s %9s  %s\n' feature "VM ns" "php+JIT ns" ratio verdict
-printf '%-16s %12s %12s %9s  %s\n' "----" "----" "----" "----" "----"
+printf '%-16s %12s %12s %9s %13s  %s\n' feature "VM ns" "php+JIT ns" ratio "spread v/p" verdict
+printf '%-16s %12s %12s %9s %13s  %s\n' "----" "----" "----" "----" "----" "----"
 for name in "${features[@]}"; do
   v="${vm_ns[$name]:-?}"
   p="${php_ns[$name]:-?}"
@@ -204,5 +217,10 @@ for name in "${features[@]}"; do
   fi
   ratio="$(awk -v v="$v" -v p="$p" 'BEGIN{if(v>0)printf "%.2f",p/v; else print "inf"}')"
   verdict="$(awk -v v="$v" -v p="$p" 'BEGIN{print (v<p)?"WIN":"LOSS"}')"
-  printf '%-16s %12s %12s %8sx  %s\n' "$name" "$v" "$p" "$ratio" "$verdict"
+  # Observed spread across the K samples, per leg (DEC-430). A wide VM spread does not invalidate the
+  # ratio — best-of-K is still the right estimator — it says this row was measured through noise and
+  # the true VM number is at or below what is printed.
+  spread="$(awk -v v="$v" -v vw="${vm_worst[$name]:-0}" -v p="$p" -v pw="${php_worst[$name]:-0}" \
+    'BEGIN{ dv=(v>0&&vw>0)?(vw/v-1)*100:0; dp=(p>0&&pw>0)?(pw/p-1)*100:0; printf "%.0f%%/%.0f%%", dv, dp }')"
+  printf '%-16s %12s %12s %8sx %13s  %s\n' "$name" "$v" "$p" "$ratio" "$spread" "$verdict"
 done
