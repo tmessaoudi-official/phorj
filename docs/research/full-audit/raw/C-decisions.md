@@ -5280,8 +5280,19 @@ interchangeable and the previous baseline had no such marker.
 
 It resolves its PHP in order: `MICROBENCH_PHP_BIN` → docker → **the oracle php from
 `scripts/toolchain.env`, if it actually JITs** (probed, not assumed:
-`opcache_get_status()["jit"]["on"]`). Only then does it skip. In this container that means the ratchet
-is live on every push for the first time.
+`opcache_get_status()["jit"]["on"]`). Only then does it skip. [Verified live: the gate resolves
+`/stack/tools/phpbrew/php/php-8.5.8/bin/php`, reports all 8 owed losses and PASSES, in 81 s at the
+pre-push default of 3 runs — next to a full test suite, two clippy passes and a release build in the
+same lane.]
+
+**The first arming attempt was WRONG, and the push it was committed on caught it.** The fallback was
+gated on the docker BINARY being absent (`! command -v docker`) — but in this container the client is
+installed and only the DAEMON is unreachable. So the fallback never fired, the daemon probe ran next,
+and the very next push printed "docker daemon unreachable — SKIP" exactly as before: the gate was
+committed as armed while still being dark. The two conditions are now one probe (`docker version`,
+which talks to the daemon). The lesson is narrow and worth keeping: the JSON-seam tests exercised the
+gate's DECISION logic and all passed, but nothing exercised its ENVIRONMENT resolution, and that is
+where the bug was. Seam tests are not an end-to-end run.
 
 ### A near-parity wobble must not wedge pushes
 

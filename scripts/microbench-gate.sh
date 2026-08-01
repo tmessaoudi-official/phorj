@@ -62,36 +62,31 @@ if [[ -n "${MICROBENCH_GATE_JSON:-}" ]]; then
   }
   json="$(cat "$MICROBENCH_GATE_JSON")"
 else
-  # PHP SOURCE. Docker is the cross-box reference, but its absence used to mean the ratchet simply
-  # never ran — and in the dev container it is ALWAYS absent, so the gate was dark on every push for
-  # weeks (DEC-423). A local RELEASE php with a working JIT is a valid baseline; the stack's oracle php
-  # is exactly that. Prefer docker when present, fall back to the oracle php, and only then skip.
-  if [[ -z "${MICROBENCH_PHP_BIN:-}" ]] && ! command -v docker >/dev/null 2>&1; then
+  # PHP SOURCE, resolved in order: an explicit MICROBENCH_PHP_BIN, then docker, then the stack's
+  # oracle php. Docker stays the cross-box reference, but its absence used to mean the ratchet simply
+  # never ran — and in this container it is always unusable, so the gate was dark on every push for
+  # weeks (DEC-423).
+  #
+  # ⚠ "Docker is usable" means the DAEMON answers, not that the client is installed. The dev container
+  # ships the binary with no daemon behind it, so a `command -v docker` test passes and the run then
+  # dies on connect. The first arming attempt got this wrong in exactly that way — the fallback was
+  # gated on the binary being ABSENT, so it never fired here and the very next push still printed
+  # "docker daemon unreachable — SKIP". Both conditions are folded into one probe below.
+  if [[ -z "${MICROBENCH_PHP_BIN:-}" ]] && ! docker version >/dev/null 2>&1; then
     # shellcheck source=/dev/null
     [[ -f "$ROOT/scripts/toolchain.env" ]] && source "$ROOT/scripts/toolchain.env"
+    # PROBE the JIT, never assume it: a php without opcache, or with JIT off, is not a valid G-8
+    # baseline and silently using one would understate every loss (the mb_strlen lesson, DEC-423).
     if [[ -n "${PHORJ_PHP:-}" && -x "${PHORJ_PHP:-}" ]] && "$PHORJ_PHP" $JIT_PROBE -r \
         'exit((opcache_get_status(false)["jit"]["on"] ?? false) ? 0 : 1);' >/dev/null 2>&1; then
       export MICROBENCH_PHP_BIN="$PHORJ_PHP"
-      echo "microbench-gate: docker absent — using the local release php+JIT ($PHORJ_PHP)" >&2
+      echo "microbench-gate: docker unusable — using the local release php+JIT ($PHORJ_PHP)" >&2
     else
-      echo "microbench-gate: docker absent and no local php+JIT — SKIP the G-8 gate (infra, not a regression)" >&2
+      echo "microbench-gate: docker unusable and no local php+JIT — SKIP the G-8 gate (infra, not a" >&2
+      echo "  regression). The verdict is OWED: re-run where a real release php+JIT is reachable" >&2
+      echo "  before making any perf claim (DEC-365 no-hidden-loss)." >&2
       exit 0
     fi
-  fi
-  if [[ -z "${MICROBENCH_PHP_BIN:-}" ]] && ! command -v docker >/dev/null 2>&1; then
-    echo "microbench-gate: docker absent — SKIP the G-8 mandate gate (infra, not a regression)" >&2
-    exit 0
-  fi
-  # The BINARY being present does not mean the DAEMON is reachable: the remote dev container ships
-  # the client with no daemon, so `command -v docker` passed, the harness ran, failed to connect, and
-  # returned setup-error 2 — which ABORTS the push. That is the opposite of DEC-365's rule that an
-  # unmeasurable bench is a LOUD SKIP with an OWED verdict, never a block and never a pass. Probe the
-  # daemon itself (`docker version` talks to it; `docker info` also works but is slower).
-  if [[ -z "${MICROBENCH_PHP_BIN:-}" ]] && ! docker version >/dev/null 2>&1; then
-    echo "microbench-gate: docker daemon unreachable — SKIP the G-8 mandate gate (infra, not a" >&2
-    echo "  regression). The G-8 ratchet verdict is OWED: re-run on a box with a live daemon before" >&2
-    echo "  making any perf claim (DEC-365 no-hidden-loss)." >&2
-    exit 0
   fi
   BIN="${PHG_BIN:-$ROOT/target/release/phg}"
   if [[ ! -x "$BIN" ]]; then

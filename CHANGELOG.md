@@ -17,8 +17,13 @@ convention. The gate reports every owed loss on every run, **blocks if one deepe
 RECOVERED (asking for a re-emit) when one flips to a win. Emitted: 51 features, 8 OWED.
 
 **The gate now runs off-docker.** It resolves PHP as `MICROBENCH_PHP_BIN` → docker → the oracle php from
-`scripts/toolchain.env` if it genuinely JITs (probed via `opcache_get_status()`, not assumed). In this
-container the ratchet is live on every push for the first time.
+`scripts/toolchain.env` if it genuinely JITs (probed via `opcache_get_status()`, not assumed). [Verified
+live: resolves php-8.5.8, reports all 8 owed losses, PASSES, 81 s at the pre-push default.] The first
+attempt at this was wrong and the push it rode on caught it — the fallback was gated on the docker
+BINARY being absent, but here the client is installed and only the daemon is unreachable, so the gate
+was committed as "armed" while still skipping. Both conditions are now one `docker version` probe. The
+seam tests covered the gate's decision logic, not its environment resolution, which is where the bug
+was.
 
 **Near-parity wobbles no longer wedge pushes.** Arming the gate immediately exposed a flaw: `mapinsert`
 (baseline 1.012) tripped the flip check at 0.940 — a 7% swing on a shared box. The band is now relative
