@@ -110,7 +110,18 @@ else
   # VM-regression gate is perf-gate.sh (same-process tree/VM ratio); THIS ratchet needs a quiet box
   # (MASTER-PLAN §0: "MUST re-run microbench-gate on a QUIET box"). So SKIP (never block) when the
   # 1-min load exceeds MICROBENCH_MAX_LOAD — a push is never wedged by an unmeasurable-under-load box.
-  _maxload="${MICROBENCH_MAX_LOAD:-2.5}"
+  # EMIT is held to a STRICTER bar than gating, and DEC-431.1 is why. 2.5 permits a box that is
+  # measurably not quiet: at load 2.50 the run flagged 12 features as noisy where a quiet box flags 5,
+  # and the baseline emitted under that bar recorded `mapinsert` at 1.012 (a WIN) when its true value
+  # re-measures at 0.80-0.85 on a quiet box — five runs, spreads as tight as 1%/4%, with phorj's own leg
+  # verified UNCHANGED against a pre-DEC-428 binary. That fiction then BLOCKED a push as a WIN->LOSS
+  # flip. A bad gating sample costs one skipped run; a bad EMIT poisons every future comparison until
+  # someone re-emits, so it gets the tighter threshold. Override with MICROBENCH_EMIT_MAX_LOAD.
+  if [[ "$EMIT" == 1 ]]; then
+    _maxload="${MICROBENCH_EMIT_MAX_LOAD:-0.7}"
+  else
+    _maxload="${MICROBENCH_MAX_LOAD:-2.5}"
+  fi
   # SETTLE, then skip. The load guard is right — measuring absolute native-vs-php ratios on a loaded
   # box manufactures false flips — but in the pre-push lane the load is caused by the lane ITSELF: the
   # full test suite, two clippy passes and a release build run immediately before this. So the guard
@@ -131,6 +142,15 @@ else
     _load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
   done
   if awk -v l="$_load1" -v m="$_maxload" 'BEGIN{exit (l>m)?0:1}'; then
+    if [[ "$EMIT" == 1 ]]; then
+      # REFUSE, do not skip. Skipping an emit exits 0 having written nothing, which reads as success and
+      # leaves the old baseline in place — the silent-no-op class this project keeps getting bitten by.
+      echo "microbench-gate: REFUSING to emit — 1-min load $_load1 still > $_maxload after ${_settle}s." >&2
+      echo "  A baseline recorded on a loaded box becomes a fiction every later run is compared against" >&2
+      echo "  (DEC-431.1: mapinsert was recorded as a 1.012 WIN and is really 0.80-0.85). Wait for the" >&2
+      echo "  box to go quiet and re-run, or set MICROBENCH_EMIT_MAX_LOAD deliberately." >&2
+      exit 2
+    fi
     echo "microbench-gate: 1-min load $_load1 still > $_maxload after ${_settle}s — SKIP the G-8 ratchet (box too loaded to measure absolute VM-vs-php ratios reliably; perf-gate.sh still gates VM regressions). Not a regression; the verdict is OWED." >&2
     exit 0
   fi

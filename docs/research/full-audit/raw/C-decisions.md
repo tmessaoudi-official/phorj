@@ -6077,3 +6077,81 @@ is that the baseline itself is invalid — which is a different claim, and the d
 moves numbers across the whole scoreboard.
 
 **Nothing was re-emitted and nothing was bypassed. `c6420f8` is committed locally and unpushed.**
+
+
+## DEC-432 — STANDING RULE: nothing is put aside until it WINS. Plus the first quiet-box baseline (2026-08-01, developer-ruled + BUILT)
+
+### The rule (developer, verbatim in substance)
+
+> *"until we are winning we put nothing aside. you can continue to other things but eventually have to go
+> back to perf hunt!"*
+
+**No loss is ever CLOSED.** Not as "documented near-parity", not as "a tie inside the noise", not as
+"hardware-bounded", not as "not worth a code change". A loss leaves the list exactly one way: by becoming a
+WIN. Other work may proceed in between — the hunt is never abandoned, only paused.
+
+**This REVERSES two calls made earlier the same day, and they are hereby reopened:**
+  * **DEC-430 closed `floatloop`** as a "documented near-parity, bounded by hardware, ~11% ceiling — it
+    stops counting as JIT-programme work." Reopened. (It has since measured **1.05 — a WIN** on a quiet
+    box, so it leaves the list on merit rather than by being excused. The reasoning was still wrong.)
+  * **DEC-427 closed `listcontains`** as "a TIE inside the noise". Reopened at **0.861**.
+Both were self-ruled. Under this rule that judgement was not mine to make: "close it" is the developer's
+call and the answer is no.
+
+The DEC-365 no-hidden-loss rule said an unmeasurable loss is recorded rather than reported as passed. This
+extends it: a MEASURED loss may not be retired by argument either.
+
+### Fix shipped: `--emit` now REFUSES a non-quiet box
+
+DEC-431.1's root cause was that `--emit` shared the gating threshold (`MICROBENCH_MAX_LOAD=2.5`), which
+permits a box that is measurably not quiet — at load 2.50 a run flags 12 features noisy where a quiet box
+flags 5. The baseline emitted under it recorded `mapinsert` at 1.012 (a WIN) when its true value is
+0.80-0.85, and that fiction then blocked a push.
+
+So emit now has its own, tighter bar: `MICROBENCH_EMIT_MAX_LOAD` (default **0.7**), and on failure it
+**REFUSES with exit 2** rather than skipping. Skipping an emit exits 0 having written nothing, which reads
+as success and silently leaves the stale baseline in place — the silent-no-op class this project keeps
+getting bitten by (the dark gate, the vacuous tests, the phantom bench). Verified: forced to an
+unreachable threshold it refuses and writes no file. Asymmetry is deliberate — a bad gating sample costs
+one skipped run, a bad emit poisons every later comparison until someone notices.
+
+### The first baseline emitted on a genuinely quiet box
+
+Load **0.08**, local release php-8.5.8 + tracing JIT (JIT presence probed, not assumed), post-DEC-428,
+best-of-K on both legs, output-identity gated. **52 features, 11 OWED.**
+
+**HONEST SCOREBOARD: 41 WIN / 11 LOSS, geometric mean 2.36x, median 2.13x.**
+
+That is LOWER than the 42/8, 2.45x, 2.30x this project has been reporting all day — and the correction is
+the point. Three recorded "WINs" were artifacts of the loaded-box baseline and are now OWED at their true
+values: **`mapget` 1.004 -> 0.958**, **`mapinsert` 1.012 -> 0.813**, **`floatmul` 1.002 -> 0.981**. One
+moved the other way on merit: **`floatloop` 0.476 -> 1.05**, DEC-428's conditional-accumulator work
+finally visible against an undistorted php leg. And `strappend` (DEC-431) enters at 0.448.
+
+### THE HUNT LIST — 11 live items, worst first
+
+| # | feature | ratio | what is known |
+|---|---|---|---|
+| 1 | `fslines` | **0.113** | iterator form: two phorj-level virtual calls per element vs PHP's C loop (DEC-347/422) |
+| 2 | `queryparse` | **0.224** | typed bag-graph representation choice — adjudicable (DEC-424) |
+| 3 | `jsonround` | **0.286** | 34% is the VM interpreting the bench's own nested matches; blocked on the `Json.getInt` accessor ruling (DEC-426, question #60) |
+| 4 | `fsforeachline` | **0.293** | the native-driven reader; its profile was 74x dominated by its own fixture until DEC-431 |
+| 5 | `strappend` | **0.448** | `s = s + x`; quadratic off the JIT, and 2.1x behind PHP's `.=` even on it (DEC-431) |
+| 6 | `mapinsert` | **0.813** | NEW — never actually a WIN; unexamined |
+| 7 | `listcontains` | **0.861** | reopened from "tie inside the noise"; +59% VM spread, so measure it properly first |
+| 8 | `dbwork` | **0.869** | ~25% VM interpretation, `sqlite3VdbeExec` only 2.7% — same engine both legs (DEC-427) |
+| 9 | `deepjson` | **0.884** | multi-pass lazy parser walks the doc ~3x vs one `json_decode` — adjudicable (DEC-426) |
+| 10 | `mapget` | **0.958** | NEW — never actually a WIN; unexamined |
+| 11 | `floatmul` | **0.981** | NEW to the list; near parity, unexamined |
+
+Above them all sits **DEC-431's ~320x JIT cliff**, which is not a bench row but taxes any hot loop in a
+function that declares `throws` — i.e. most real code. It is the highest-value open item on the board.
+
+### One caveat, flagged rather than buried
+
+`floatloop` is recorded as a **1.05** WIN but it is the +27%-VM-spread bench: best-of-25 measured it at
+0.92 and this best-of-3 emit caught 1.05. Its flip limit is `min(1.05 x 0.85, 0.95) = 0.893`, and it
+swings 0.92-1.05, so the margin to a false block is ~0.03. If the ratchet trips on `floatloop` with no
+code change, that is why — do not treat it as a regression without re-measuring on a quiet box.
+
+Task #58 ("re-tighten the ratchet floor on a quiet box") is CLOSED by this entry.

@@ -4,233 +4,246 @@
   "_baseline_php": "/stack/tools/phpbrew/php/php-8.5.8/bin/php",
   "_owed": {
     "dbwork": {
-      "ratio": 0.884
+      "ratio": 0.869
     },
     "deepjson": {
-      "ratio": 0.812
+      "ratio": 0.884
     },
-    "floatloop": {
-      "ratio": 0.476
+    "floatmul": {
+      "ratio": 0.981
     },
     "fsforeachline": {
-      "ratio": 0.286
+      "ratio": 0.293
     },
     "fslines": {
-      "ratio": 0.114
+      "ratio": 0.113
     },
     "jsonround": {
-      "ratio": 0.281
+      "ratio": 0.286
     },
     "listcontains": {
-      "ratio": 0.995
+      "ratio": 0.861
+    },
+    "mapget": {
+      "ratio": 0.958
+    },
+    "mapinsert": {
+      "ratio": 0.813
     },
     "queryparse": {
-      "ratio": 0.145
+      "ratio": 0.224
+    },
+    "strappend": {
+      "ratio": 0.448
     }
   },
   "features": {
     "closurecall": {
-      "ratio": 1.936,
+      "ratio": 2.345,
       "identical": true
     },
     "dbwork": {
-      "ratio": 0.884,
+      "ratio": 0.869,
       "identical": true
     },
     "deepjson": {
-      "ratio": 0.812,
+      "ratio": 0.884,
       "identical": true
     },
     "enum": {
-      "ratio": 1.597,
+      "ratio": 1.857,
       "identical": true
     },
     "fibrec": {
-      "ratio": 2.011,
+      "ratio": 2.077,
       "identical": true
     },
     "floatarith": {
-      "ratio": 7.024,
+      "ratio": 5.548,
       "identical": true
     },
     "floatloop": {
-      "ratio": 0.476,
+      "ratio": 1.050,
       "identical": true
     },
     "floatmul": {
-      "ratio": 1.002,
+      "ratio": 0.981,
       "identical": true
     },
     "forin": {
-      "ratio": 1.218,
+      "ratio": 1.355,
       "identical": true
     },
     "fsforeachline": {
-      "ratio": 0.286,
+      "ratio": 0.293,
       "identical": true
     },
     "fslines": {
-      "ratio": 0.114,
+      "ratio": 0.113,
       "identical": true
     },
     "hofpipe": {
-      "ratio": 5.742,
+      "ratio": 4.744,
       "identical": true
     },
     "intadd": {
-      "ratio": 1.275,
+      "ratio": 1.669,
       "identical": true
     },
     "interp": {
-      "ratio": 2.681,
+      "ratio": 2.279,
       "identical": true
     },
     "isemail": {
-      "ratio": 12.506,
+      "ratio": 11.996,
       "identical": true
     },
     "isurl": {
-      "ratio": 10.150,
+      "ratio": 10.396,
       "identical": true
     },
     "jsonround": {
-      "ratio": 0.281,
+      "ratio": 0.286,
       "identical": true
     },
     "listappend": {
-      "ratio": 1.361,
+      "ratio": 1.370,
       "identical": true
     },
     "listcontains": {
-      "ratio": 0.995,
+      "ratio": 0.861,
       "identical": true
     },
     "listfilter": {
-      "ratio": 8.269,
+      "ratio": 9.626,
       "identical": true
     },
     "listindex": {
-      "ratio": 1.472,
+      "ratio": 1.423,
       "identical": true
     },
     "listmap": {
-      "ratio": 7.011,
+      "ratio": 5.443,
       "identical": true
     },
     "listreduce": {
-      "ratio": 13.471,
+      "ratio": 13.478,
       "identical": true
     },
     "mapfilter": {
-      "ratio": 5.269,
+      "ratio": 4.893,
       "identical": true
     },
     "mapget": {
-      "ratio": 1.004,
+      "ratio": 0.958,
       "identical": true
     },
     "maphas": {
-      "ratio": 1.375,
+      "ratio": 1.547,
       "identical": true
     },
     "mapinsert": {
-      "ratio": 1.012,
+      "ratio": 0.813,
       "identical": true
     },
     "mapkeys": {
-      "ratio": 1.053,
+      "ratio": 1.074,
       "identical": true
     },
     "mapmap": {
-      "ratio": 2.210,
+      "ratio": 2.135,
       "identical": true
     },
     "mapmerge": {
-      "ratio": 2.229,
+      "ratio": 2.359,
       "identical": true
     },
     "mapvalues": {
-      "ratio": 1.089,
-      "identical": true
-    },
-    "match": {
-      "ratio": 7.101,
-      "identical": true
-    },
-    "mathabs": {
-      "ratio": 2.486,
-      "identical": true
-    },
-    "mathmax": {
-      "ratio": 2.720,
-      "identical": true
-    },
-    "mathmin": {
-      "ratio": 2.791,
-      "identical": true
-    },
-    "mathsign": {
-      "ratio": 2.692,
-      "identical": true
-    },
-    "maxby": {
-      "ratio": 5.567,
-      "identical": true
-    },
-    "methodcall": {
-      "ratio": 2.812,
-      "identical": true
-    },
-    "minby": {
-      "ratio": 5.799,
-      "identical": true
-    },
-    "objalloc": {
-      "ratio": 6.815,
-      "identical": true
-    },
-    "queryparse": {
-      "ratio": 0.145,
-      "identical": true
-    },
-    "setcontains": {
       "ratio": 1.200,
       "identical": true
     },
+    "match": {
+      "ratio": 6.552,
+      "identical": true
+    },
+    "mathabs": {
+      "ratio": 2.768,
+      "identical": true
+    },
+    "mathmax": {
+      "ratio": 2.682,
+      "identical": true
+    },
+    "mathmin": {
+      "ratio": 2.603,
+      "identical": true
+    },
+    "mathsign": {
+      "ratio": 2.459,
+      "identical": true
+    },
+    "maxby": {
+      "ratio": 5.100,
+      "identical": true
+    },
+    "methodcall": {
+      "ratio": 2.398,
+      "identical": true
+    },
+    "minby": {
+      "ratio": 5.181,
+      "identical": true
+    },
+    "objalloc": {
+      "ratio": 7.550,
+      "identical": true
+    },
+    "queryparse": {
+      "ratio": 0.224,
+      "identical": true
+    },
+    "setcontains": {
+      "ratio": 1.352,
+      "identical": true
+    },
     "setdifference": {
-      "ratio": 32.589,
+      "ratio": 34.896,
       "identical": true
     },
     "setintersection": {
-      "ratio": 1.631,
+      "ratio": 1.457,
       "identical": true
     },
     "setunion": {
-      "ratio": 52.481,
+      "ratio": 52.214,
+      "identical": true
+    },
+    "strappend": {
+      "ratio": 0.448,
       "identical": true
     },
     "strbuild": {
-      "ratio": 2.195,
+      "ratio": 2.079,
       "identical": true
     },
     "stringconcat": {
-      "ratio": 1.950,
+      "ratio": 1.696,
       "identical": true
     },
     "stringcontains": {
-      "ratio": 3.467,
+      "ratio": 3.385,
       "identical": true
     },
     "sumby": {
-      "ratio": 15.729,
+      "ratio": 14.965,
       "identical": true
     },
     "trycatch": {
-      "ratio": 28.588,
+      "ratio": 26.984,
       "identical": true
     },
     "webish": {
-      "ratio": 2.860,
+      "ratio": 1.964,
       "identical": true
     }
   }

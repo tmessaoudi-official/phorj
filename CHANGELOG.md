@@ -6,6 +6,40 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — STANDING RULE: nothing is put aside until it WINS; first quiet-box baseline (DEC-432, 2026-08-01)
+Developer-ruled: *"until we are winning we put nothing aside."* **No loss is ever CLOSED** — not as
+"documented near-parity", not as "a tie inside the noise", not as "hardware-bounded". A loss leaves the
+list one way only: by becoming a WIN. Other work may proceed in between; the hunt is paused, never
+abandoned. This extends DEC-365 (an *unmeasurable* loss is recorded, not passed) to say a **measured** loss
+may not be retired by argument either.
+
+**Two of the same day's calls are REVERSED and reopened.** DEC-430 closed `floatloop` as "bounded by
+hardware, ~11% ceiling, stops counting as JIT-programme work"; DEC-427 closed `listcontains` as "a TIE
+inside the noise". Both were self-ruled, and under this rule that was not mine to decide.
+
+**Fix shipped — `--emit` now REFUSES a non-quiet box.** DEC-431.1's root cause was `--emit` sharing the
+gating threshold (`MICROBENCH_MAX_LOAD=2.5`), which permits a box that is measurably not quiet (12 features
+flagged noisy at load 2.50 vs 5 quiet). Emit gets its own `MICROBENCH_EMIT_MAX_LOAD` (default **0.7**) and
+**exits 2** rather than skipping — a skipped emit exits 0 having written nothing, which reads as success and
+leaves the stale baseline in place. Verified: forced past its threshold it refuses and writes no file.
+
+**First baseline emitted on a genuinely quiet box** (load 0.08, local release php-8.5.8+JIT with the JIT
+probed, post-DEC-428, output-identity gated): 52 features, 11 OWED.
+**HONEST SCOREBOARD: 41 WIN / 11 LOSS, geomean 2.36x, median 2.13x.** That is LOWER than the 42/8, 2.45x,
+2.30x reported earlier today, and the correction is the point — three recorded "WINs" were loaded-box
+artifacts and are now OWED at their true values (`mapget` 1.004->0.958, `mapinsert` 1.012->0.813,
+`floatmul` 1.002->0.981), while `floatloop` moved the other way on merit (0.476 -> **1.05**, DEC-428
+finally visible against an undistorted php leg) and `strappend` enters at 0.448.
+
+**The hunt list, worst first:** `fslines` 0.113 · `queryparse` 0.224 · `jsonround` 0.286 ·
+`fsforeachline` 0.293 · `strappend` 0.448 · `mapinsert` 0.813 · `listcontains` 0.861 · `dbwork` 0.869 ·
+`deepjson` 0.884 · `mapget` 0.958 · `floatmul` 0.981. Above all of them sits DEC-431's ~320x JIT cliff,
+which is not a bench row but taxes any hot loop in a `throws` function — i.e. most real code.
+
+**Caveat, flagged not buried:** `floatloop`'s 1.05 comes from the +27%-spread bench (best-of-25 read 0.92);
+its flip limit is 0.893, so the margin to a false block is ~0.03. If the ratchet trips on it with no code
+change, re-measure on a quiet box before calling it a regression.
+
 ### Found — a fallible call takes the WHOLE function off the JIT (~320x); VM string append is quadratic (DEC-431, 2026-08-01)
 Set out to profile the `fsforeachline` loss with DEC-430's Ir-slope method and found something much larger
 on the way in. **A bench ships; both fixes are PENDING RULINGS.**
