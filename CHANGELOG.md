@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the G-8 ratchet is ARMED, with every loss frozen as OWED (DEC-423.1, 2026-08-01)
+Developer-ruled follow-on: re-emit the baseline on the local release php **and** freeze the known
+losses as OWED in the same change, so `--emit` cannot launder them.
+
+`_owed` is **derived** at emit time from every feature that loses — never hand-maintained, so there is
+no list to forget and no way to write a loss in as normal. A feature leaves it by being FIXED and
+re-emitted, never by being edited out. DEC-365's no-hidden-loss rule is now structural rather than a
+convention. The gate reports every owed loss on every run, **blocks if one deepens** past 25%, and says
+RECOVERED (asking for a re-emit) when one flips to a win. Emitted: 51 features, 8 OWED.
+
+**The gate now runs off-docker.** It resolves PHP as `MICROBENCH_PHP_BIN` → docker → the oracle php from
+`scripts/toolchain.env` if it genuinely JITs (probed via `opcache_get_status()`, not assumed). In this
+container the ratchet is live on every push for the first time.
+
+**Near-parity wobbles no longer wedge pushes.** Arming the gate immediately exposed a flaw: `mapinsert`
+(baseline 1.012) tripped the flip check at 0.940 — a 7% swing on a shared box. The band is now relative
+to the baseline as well as absolute; a strong WIN is unaffected. [Verified: setunion 52.5 → 0.5 still
+FAILS; mapinsert 1.012 → 0.94 now warns.]
+
+**The gate has tests now — it had none.** `scripts/test-microbench-gate.sh` (pre-push, ~1s, no docker
+or php) pins seven behaviours through the `MICROBENCH_GATE_JSON` seam that was built for tests and
+never used — which is exactly how the gate stayed dark. Each fixture derives from the baseline so it
+cannot drift. The tests were verified to FAIL against a deliberately broken gate, not merely to pass.
+
 ### Fixed — the microbench harness had been DARK, and a stale comment is why (DEC-423, 2026-08-01)
 `scripts/microbench.sh` said *"the local builds are all ZTS DEBUG, JIT off, so they are NOT a valid
 baseline"*. That is false for the stack's own oracle php. [Verified on php-8.5.8: `Debug Build => no`,

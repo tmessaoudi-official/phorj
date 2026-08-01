@@ -5248,3 +5248,59 @@ on this php, and `--emit` today would write floatloop's 0.48 in as the new norma
 the flip the gate exists to catch, which DEC-365's no-hidden-loss rule forbids in as many words. The
 baseline question is the developer's: re-emit on local php and lose cross-box comparability with the
 docker reference, or keep docker as the reference and accept the gate stays dark off-docker.
+
+
+## DEC-423.1 — the G-8 ratchet ARMED, with the 9 losses frozen as OWED (2026-08-01, developer-ruled)
+
+Follow-on ruling to DEC-423, option (1): re-emit the baseline on the local release php **and freeze the
+known losses as OWED in the same change**, so `--emit` cannot launder them. Built.
+
+### `_owed` is DERIVED, which is the whole point
+
+`--emit` now writes a `_owed` map containing **every feature that loses at emit time**, with the ratio
+it lost by. It is computed from the run, never hand-maintained — so there is no list to forget to
+update and no way to emit a loss as if it were normal. A feature leaves `_owed` by being FIXED and
+re-emitted, never by being edited out. That is DEC-365's no-hidden-loss rule made structural instead of
+a convention someone has to remember.
+
+The gate then, on every run:
+  * REPORTS each owed feature (`owed fslines: ratio 0.114 -> 0.129 (still losing; carried, not laundered)`);
+  * **BLOCKS if an owed loss DEEPENS** past `MICROBENCH_OWED_EPSILON` (default 0.75 — a 25% deepening;
+    generous because these are absolute native-vs-php ratios on a shared box);
+  * says **RECOVERED** and asks for a re-emit when one flips to a WIN, so the ratchet starts protecting it;
+  * prints the owed count in the summary line, so a carried loss is visible on every single push.
+
+Emitted on php-8.5.8: 51 features, **8 OWED** — `fslines` 0.114, `queryparse` 0.145, `fsforeachline`
+0.286, `jsonround` 0.281, `floatloop` 0.476, `deepjson` 0.812, `dbwork` 0.884, `listcontains` 0.995.
+(`floatmul` came in at ≥ 1.0 on the emit run — a genuine coin-flip at exact parity.) The baseline
+records which php it was measured against (`_baseline_php`), because docker and phpbrew ratios are not
+interchangeable and the previous baseline had no such marker.
+
+### The gate now RUNS off-docker
+
+It resolves its PHP in order: `MICROBENCH_PHP_BIN` → docker → **the oracle php from
+`scripts/toolchain.env`, if it actually JITs** (probed, not assumed:
+`opcache_get_status()["jit"]["on"]`). Only then does it skip. In this container that means the ratchet
+is live on every push for the first time.
+
+### A near-parity wobble must not wedge pushes
+
+Arming the gate immediately exposed a flaw in the flip check: `mapinsert` has a baseline of 1.012, and
+an absolute-only band flagged it at 0.940 as a WIN→LOSS flip. That is a 7% swing on a shared box, and
+it would have blocked every push. The band is now relative to the baseline as well as absolute — a
+feature must be below BOTH `FLIP_EPSILON` and `baseline * MICROBENCH_RELATIVE_DROP` (0.85). A strong
+WIN is unaffected: at baseline 5.0 the absolute term still binds, so a collapse to 0.9 blocks exactly
+as before. [Verified: setunion 52.5 → 0.5 still FAILS; mapinsert 1.012 → 0.94 now warns.]
+
+### The gate has tests now — it had NONE
+
+`scripts/test-microbench-gate.sh`, wired into pre-push. The `MICROBENCH_GATE_JSON` seam was built "for
+tests" and nothing used it, which is precisely how the gate managed to be dark for weeks. Seven cases,
+driven through the seam (no docker, no php, no timing, ~1s, deterministic), each deriving its fixture
+FROM the baseline so it cannot drift: clean run passes · clean run reports the owed losses · a deepened
+owed loss blocks · a real WIN→LOSS flip blocks · a recovered owed loss passes with a re-emit note · an
+output-identity break blocks · a near-parity wobble warns without blocking.
+
+**The tests were verified to FAIL against a broken gate**, not merely to pass: neutering the
+owed-deepening branch makes case 2 fail and the suite exit 1. A gate nobody tests is a gate nobody can
+trust is running — that is the lesson DEC-423 paid for.

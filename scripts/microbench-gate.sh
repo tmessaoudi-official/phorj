@@ -36,6 +36,19 @@ EMIT=0
 # 2026-07-13. A genuine loss (new ratio < FLIP_EPSILON) still fails. Override via MICROBENCH_FLIP_EPSILON.
 FLIP_EPSILON="${MICROBENCH_FLIP_EPSILON:-0.95}"
 
+# An OWED loss may not silently DEEPEN. `--emit` records every feature that loses at emit time into
+# `_owed` (derived, never hand-maintained — see the emit block), and this is the band within which an
+# owed ratio may drift before the gate blocks. Generous on purpose: these are absolute native-vs-php
+# ratios on a shared box, so a tight band would wedge pushes on noise. A 25% deepening is not noise.
+OWED_EPSILON="${MICROBENCH_OWED_EPSILON:-0.75}"
+
+# A WIN->LOSS flip must also be a meaningful drop RELATIVE to the feature's own baseline. See the
+# comment at the flip check: an absolute band alone cannot tell a near-parity wobble from a regression.
+RELATIVE_DROP="${MICROBENCH_RELATIVE_DROP:-0.85}"
+
+# Flags for the one-shot "does this php actually JIT?" probe (the local-baseline gate below).
+JIT_PROBE="-dopcache.enable_cli=1 -dopcache.jit_buffer_size=8M -dopcache.jit=tracing"
+
 command -v jq >/dev/null 2>&1 || {
   echo "microbench-gate: jq is required" >&2
   exit 2
@@ -49,7 +62,23 @@ if [[ -n "${MICROBENCH_GATE_JSON:-}" ]]; then
   }
   json="$(cat "$MICROBENCH_GATE_JSON")"
 else
-  if ! command -v docker >/dev/null 2>&1; then
+  # PHP SOURCE. Docker is the cross-box reference, but its absence used to mean the ratchet simply
+  # never ran — and in the dev container it is ALWAYS absent, so the gate was dark on every push for
+  # weeks (DEC-423). A local RELEASE php with a working JIT is a valid baseline; the stack's oracle php
+  # is exactly that. Prefer docker when present, fall back to the oracle php, and only then skip.
+  if [[ -z "${MICROBENCH_PHP_BIN:-}" ]] && ! command -v docker >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    [[ -f "$ROOT/scripts/toolchain.env" ]] && source "$ROOT/scripts/toolchain.env"
+    if [[ -n "${PHORJ_PHP:-}" && -x "${PHORJ_PHP:-}" ]] && "$PHORJ_PHP" $JIT_PROBE -r \
+        'exit((opcache_get_status(false)["jit"]["on"] ?? false) ? 0 : 1);' >/dev/null 2>&1; then
+      export MICROBENCH_PHP_BIN="$PHORJ_PHP"
+      echo "microbench-gate: docker absent — using the local release php+JIT ($PHORJ_PHP)" >&2
+    else
+      echo "microbench-gate: docker absent and no local php+JIT — SKIP the G-8 gate (infra, not a regression)" >&2
+      exit 0
+    fi
+  fi
+  if [[ -z "${MICROBENCH_PHP_BIN:-}" ]] && ! command -v docker >/dev/null 2>&1; then
     echo "microbench-gate: docker absent — SKIP the G-8 mandate gate (infra, not a regression)" >&2
     exit 0
   fi
@@ -58,7 +87,7 @@ else
   # returned setup-error 2 — which ABORTS the push. That is the opposite of DEC-365's rule that an
   # unmeasurable bench is a LOUD SKIP with an OWED verdict, never a block and never a pass. Probe the
   # daemon itself (`docker version` talks to it; `docker info` also works but is slower).
-  if ! docker version >/dev/null 2>&1; then
+  if [[ -z "${MICROBENCH_PHP_BIN:-}" ]] && ! docker version >/dev/null 2>&1; then
     echo "microbench-gate: docker daemon unreachable — SKIP the G-8 mandate gate (infra, not a" >&2
     echo "  regression). The G-8 ratchet verdict is OWED: re-run on a box with a live daemon before" >&2
     echo "  making any perf claim (DEC-365 no-hidden-loss)." >&2
@@ -89,11 +118,20 @@ else
 fi
 
 if [[ "$EMIT" == 1 ]]; then
+  # `_owed` is DERIVED, never hand-maintained: every feature losing at emit time is recorded here with
+  # the ratio it lost by. That is what stops `--emit` from laundering a loss (DEC-365 no-hidden-loss,
+  # and the developer ruling of 2026-08-01 that the 9 known losses be frozen as OWED rather than
+  # written in as the new normal). The gate then reports every owed feature on EVERY run and BLOCKS if
+  # one deepens — so a loss can be carried, but never quietly, and never further.
   jq '{
-    "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT (docker php:8.5-cli). The gate BLOCKS on identity breaks and WIN->LOSS flips (ratio crossing 1.0 downward) — NOT on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after the JIT lands a WIN so the flip check protects it. ratio<1 = the VM still LOSES to php (the JIT is the lever).",
+    "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT. The gate BLOCKS on identity breaks, WIN->LOSS flips (ratio crossing 1.0 downward), and any _owed loss DEEPENING past MICROBENCH_OWED_EPSILON. It does NOT block on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after a fix lands a WIN so the flip check protects it.",
+    "_owed_comment": "DERIVED at --emit from every feature with ratio < 1.0: the losses we are CARRYING, each with the ratio it lost by. Reported loudly every run and blocked from deepening. A feature leaves this list by being FIXED and re-emitted, never by being edited out.",
+    "_baseline_php": "'"${MICROBENCH_PHP_BIN:-docker php:8.5-cli}"'",
+    _owed: (map(select(.ratio < 1.0) | { (.feature): { ratio: .ratio } }) | add // {}),
     features: (map({ (.feature): { ratio: .ratio, identical: .identical } }) | add)
   }' <<<"$json" >"$BASELINE"
-  echo "microbench-gate: wrote baseline -> $BASELINE ($(jq '.features | length' "$BASELINE") features)"
+  echo "microbench-gate: wrote baseline -> $BASELINE ($(jq '.features | length' "$BASELINE") features, $(jq '._owed | length' "$BASELINE") OWED loss(es))"
+  jq -r '._owed | to_entries[] | "  OWED \(.key): ratio \(.value.ratio) — carried, must not deepen"' "$BASELINE"
   exit 0
 fi
 
@@ -104,6 +142,7 @@ fi
 
 fails=0
 wins=0
+owed=0
 while IFS=$'\t' read -r feat ratio identical; do
   [[ -n "$feat" ]] || continue
   if [[ "$identical" != "true" ]]; then
@@ -112,17 +151,41 @@ while IFS=$'\t' read -r feat ratio identical; do
     continue
   fi
   b_ratio="$(jq -r --arg f "$feat" '.features[$f].ratio // empty' "$BASELINE")"
+  owed_ratio="$(jq -r --arg f "$feat" '._owed[$f].ratio // empty' "$BASELINE")"
   win_now="$(awk -v r="$ratio" 'BEGIN{print (r>=1.0)?"WIN":"loss"}')"
   [[ "$win_now" == "WIN" ]] && wins=$((wins + 1))
   if [[ -z "$b_ratio" ]]; then
     echo "  note $feat: not in baseline (new) — ratio=$ratio ($win_now); run --emit to snapshot it"
     continue
   fi
+  # An OWED loss: carried deliberately, reported every run, blocked from deepening. Checked BEFORE the
+  # flip logic because a feature cannot be both (the flip check needs a WIN baseline).
+  if [[ -n "$owed_ratio" ]]; then
+    owed=$((owed + 1))
+    if [[ "$win_now" == "WIN" ]]; then
+      echo "  RECOVERED $feat: owed at $owed_ratio, now $ratio (a WIN) — re-emit so the ratchet protects it"
+      continue
+    fi
+    if awk -v o="$owed_ratio" -v r="$ratio" -v eps="$OWED_EPSILON" 'BEGIN{exit (r < o*eps)?0:1}'; then
+      echo "  FAIL $feat: an OWED loss DEEPENED — was $owed_ratio, now $ratio (past the ${OWED_EPSILON}x band)"
+      fails=$((fails + 1))
+      continue
+    fi
+    echo "  owed $feat: ratio $owed_ratio -> $ratio (still losing; carried, not laundered)"
+    continue
+  fi
   # BLOCK: a feature we had WON now LOSES by MORE than the noise band (the G-8 ratchet).
   # A parity baseline (~1.0 — floatmul/floatloop) wobbling a fraction below 1.0 is box noise on this
   # shared machine (empirically ±3-5% php-side swings with NO code change; MASTER-PLAN §0 gate-infra
   # ruling), NOT a regression: only a drop below FLIP_EPSILON blocks. A genuine >5% loss still fails.
-  if awk -v br="$b_ratio" -v r="$ratio" -v eps="$FLIP_EPSILON" 'BEGIN{exit (br>=1.0 && r<eps)?0:1}'; then
+  # The band is RELATIVE to the baseline as well as absolute, because a feature that only JUST wins
+  # cannot be distinguished from noise by an absolute threshold. `mapinsert` (baseline 1.012) tripping
+  # at 0.940 is the live case that forced this — a 7% wobble on a shared box, not a regression, and it
+  # would have wedged every push. A feature must now be BOTH below the absolute band AND clearly down
+  # on its own baseline (`RELATIVE_DROP`). A strong WIN is unaffected: baseline 5.0 still blocks the
+  # moment it drops under 0.95, because 5.0 * 0.85 is far above that and the absolute term binds.
+  if awk -v br="$b_ratio" -v r="$ratio" -v eps="$FLIP_EPSILON" -v rel="$RELATIVE_DROP" \
+     'BEGIN{ lim = (br*rel < eps) ? br*rel : eps; exit (br>=1.0 && r<lim)?0:1 }'; then
     echo "  FAIL $feat: WIN->LOSS flip — baseline ratio $b_ratio (WIN) now $ratio (< $FLIP_EPSILON band): a G-8 mandate regression"
     fails=$((fails + 1))
     continue
@@ -137,7 +200,7 @@ while IFS=$'\t' read -r feat ratio identical; do
   echo "  ok   $feat: ratio $b_ratio -> $ratio ($win_now)"
 done < <(jq -r '.[] | [.feature, .ratio, .identical] | @tsv' <<<"$json")
 
-echo "microbench-gate: $wins WIN / $(($(jq 'length' <<<"$json") - wins)) loss vs release-php+JIT; $fails blocking regression(s)"
+echo "microbench-gate: $wins WIN / $(($(jq 'length' <<<"$json") - wins)) loss vs release-php+JIT; $owed OWED (carried); $fails blocking regression(s)"
 if [[ "$fails" -gt 0 ]]; then
   echo "microbench-gate: FAIL — $fails regression(s) (WIN->LOSS flip or output-identity break)" >&2
   exit 1

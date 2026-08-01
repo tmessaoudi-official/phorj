@@ -189,10 +189,13 @@ a PENDING question, not self-ruled.
      phorj regression (baseline was docker php:8.5-cli, this is phpbrew php-8.5.8 — not
      interchangeable). Diagnose before optimising.
    - `dbwork` **0.84x**, `listcontains` **0.94x**, `floatmul` **1.00x** (tie) — the near-misses.
-   **The gate is still dark by choice**: arming the ratchet needs a baseline on this php, and `--emit`
-   today would launder floatloop's flip (DEC-365 forbids it). Developer ruling needed on whether to
-   re-emit locally (losing cross-box comparability with the docker reference) or keep docker as the
-   reference and accept the gate skips off-docker.
+   **THE GATE IS NOW ARMED** (DEC-423.1, developer-ruled): the baseline is re-emitted on the local
+   release php with all 8 losses frozen as `_owed` — DERIVED at emit time, so `--emit` cannot launder
+   one. The gate reports every owed loss on every push, BLOCKS if one deepens past 25%, and says
+   RECOVERED when one flips to a win. It resolves PHP as `MICROBENCH_PHP_BIN` → docker → the oracle php
+   if it genuinely JITs, so it runs off-docker for the first time. It also has TESTS now
+   (`scripts/test-microbench-gate.sh`, pre-push, ~1s, verified to fail against a broken gate) — it had
+   none, which is how it stayed dark.
 5. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.

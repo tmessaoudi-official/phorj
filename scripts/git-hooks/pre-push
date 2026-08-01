@@ -71,6 +71,13 @@ bash "$_gate_root/scripts/wasm-check.sh"
 echo "[pre-push] doc-guards (DEC-362 documentation ratchet)"
 bash "$_gate_root/scripts/doc-guards.sh"
 
+# The G-8 ratchet's OWN behaviour tests (DEC-423). The gate below is the only thing between a perf
+# regression and master, and it had no tests — which is how it stayed DARK for weeks without anyone
+# noticing. These drive it through its JSON seam: no docker, no php, no timing, ~1s, fully
+# deterministic. If the gate stops blocking, THIS fails first.
+echo "[pre-push] test-microbench-gate (the ratchet's own behaviour tests)"
+bash "$_gate_root/scripts/test-microbench-gate.sh"
+
 # Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
 # ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, database, database-postgres,
 # database-mysql, mail, http-client) — the old `--features jit`-only gate never touched those files, hiding
