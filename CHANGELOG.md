@@ -6,6 +6,50 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — JIT: conditional accumulators now PROVE; `floatloop` -36% (DEC-428, 2026-08-01)
+The first step of the JIT programme, scoped to the one gap DEC-425 had already diagnosed down to a line.
+
+`range_acc`'s body walk used to REJECT any `JumpIfFalse` that was not a loop guard — i.e. any `if`
+inside a loop body. That single refusal is why a CONDITIONAL accumulator could never be proven, and one
+unproven speculated op anywhere in a function forces the loop-carried sticky overflow phi that Cranelift
+at `opt_level=none` will not remove. So `if (cond) { count = count + 1; }` — the commonest counting
+idiom there is — taxed EVERY iteration of its loop.
+
+The walk now models one body-level `if`: a FORWARD `JumpIfFalse` landing inside the loop opens a
+conditional region (backward or escaping targets are refused); the operand stack must be EMPTY at the
+branch (a statement `if`, so the two paths cannot disagree about depth at the join); only ONE region at
+a time (a nested `if` is refused, not approximated); at the join every slot the region MAY have written
+is widened to UNKNOWN; float arithmetic and the remaining comparisons are modelled as
+pop-two-push-unknown, listed EXPLICITLY rather than swept up by a catch-all (`Neg` is deliberately
+excluded — it is a speculated overflow op, not a neutral one). Accumulators keep their envelope interval
+across the join, and that is earned rather than assumed: the envelope solve already takes
+`min(growth.lo, 0)` / `max(growth.hi, 0)` per site, so it has ALWAYS modelled "this site may or may not
+run" — which is exactly a conditional site.
+
+**Measured**: `floatloop` **8.2 ms -> 5.24 ms (-36%)**, ratio **0.46 -> 0.71**, checksum unchanged
+(500004) on the VM and the tree-walker; `intadd` (1.27x) and `fibrec` (2.00x) unmoved, so no collateral.
+**Still a loss** (php 3.59 ms) — and the residual is now precise: `needs_sticky` is computed over the
+WHOLE function, and `floatloop`'s `return acc + Conversion.truncate(x)` is an `AddI` *outside* the loop
+body, so it stays unproven and the phi survives. One op executed ONCE taxes 5,000,000 iterations. The
+fix belongs at the emitter, not the analysis (an unproven op not inside a loop can take a per-op fault
+branch, free at one execution, instead of forcing the sticky) — recorded as the next step rather than
+rushed into this change.
+
+**Two of the three new guards are NOT load-bearing, and the register says so.** The join-widening IS:
+deleting it fails `task9_join_widening_prevents_a_stale_then_branch_interval`, built specifically to
+bite (`t` starts at 5e18 and the conditional assigns `1`, so carrying the then-branch interval past the
+join would prove an elision that drops a real overflow check). The nested-region refusal and the
+conditional-counter-write refusal are currently UNREACHABLE — the shapes that would reach them are
+refused earlier by the single-writer counter rule — so they are kept as defensive checks and *labelled*
+defensive, not presented as proven. The first attempt at those rejection tests was VACUOUS; it was
+caught only by deliberately weakening each guard and re-running, which a green suite alone would have
+hidden.
+
+`range_acc.rs` was a grandfathered 762-line file and this pushed it to 829, so it split by cohesion into
+`src/jit/range_acc/{mod,walk,verify}.rs` (368 / 336 / 149) — driver, one-trip body walk, one-`G`
+verification attempt. Invariant 13's "split it, do not grow it", enforced by the gate rather than
+remembered.
+
 ### Measured — the standing scoreboard: 42 WIN / 8 LOSS, geomean 2.45x vs PHP+JIT (DEC-427, 2026-08-01)
 `dbwork` and `listcontains` were the last two losses not already blocked on a ruling. Both diagnosed,
 neither worth a code change, and with them the whole board is accounted for.
@@ -1927,7 +1971,7 @@ literals take no contextual type and no `List.empty()`/`Map.empty()` constructor
 ### Added — Task 9: accumulator overflow-check elision — **ALL 17 micros now ≥ 1.0× vs php+JIT**
 
 The checked-add price (the measured single root cause of the last three losses) is gone where
-it can be PROVEN gone: a new fail-closed interval pass (`src/jit/range_acc.rs`) analyzes a
+it can be PROVEN gone: a new fail-closed interval pass (`src/jit/range_acc/`) analyzes a
 counted loop in i128 and elides the `*_overflow` + sticky accumulation for every
 `AddI`/`SubI`/`MulI` whose result provably fits i64 — bounded ACCUMULATOR chains
 (`acc = acc + m[k] + xs[idx]` — growth tracked through the chain to the `SetLocal`),

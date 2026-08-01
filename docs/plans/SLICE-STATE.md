@@ -1,6 +1,6 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. NEXT: the DEC-423 perf programme — 9 named losses; two need rulings (see below).**
+## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. IN FLIGHT: the DEC-423 perf programme — every loss named; the JIT vertical started (DEC-428 = step 1, `floatloop` -36%). NEXT step recorded inside the DEC-428 register entry: move `needs_sticky` off whole-function scope.**
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
@@ -198,7 +198,23 @@ a PENDING question, not self-ruled.
      an ergonomics gap — phorj has no `Json.getInt(key)`/`getString(key)` accessor where PHP writes
      `$j['id']`. A native accessor is both an API win and a big perf win; NEW STDLIB SURFACE, so it is
      a PENDING question (Invariant 15), not self-rulable.
-   - `floatloop` **0.48x** — **DIAGNOSED 2026-08-01 (DEC-425), and it is NOT a regression**: building
+   - `floatloop` ~~**0.48x**~~ — **IMPROVED to 0.71x, 2026-08-01 (DEC-428, the JIT programme's step 1)**:
+     `range_acc`'s body walk now models ONE body-level `if`, so a CONDITIONAL accumulator proves and the
+     loop-carried sticky overflow phi is dropped. **8.2 ms -> 5.24 ms (-36%)**, checksum unchanged on
+     the VM and the tree-walker; `intadd`/`fibrec` unmoved. Guards: forward-only `JumpIfFalse` landing
+     inside the loop, EMPTY operand stack at the branch, ONE region (no nesting), every may-write slot
+     widened to UNKNOWN at the join; accumulators keep their envelope because the envelope solve already
+     takes `min(growth.lo, 0)`/`max(growth.hi, 0)` per site — i.e. it always modelled "this site may not
+     run". Split by cohesion to `src/jit/range_acc/{mod,walk,verify}.rs` (Invariant 13).
+     **STILL A LOSS** (php 3.59 ms) with a precise residual: `needs_sticky` is computed over the WHOLE
+     function, and `return acc + Conversion.truncate(x)` is an `AddI` OUTSIDE the loop, so it stays
+     unproven and the phi survives — one op run ONCE taxing 5,000,000 iterations. The fix is at the
+     EMITTER (an unproven op not inside a loop takes a per-op fault branch instead of forcing the
+     sticky; both paths end in the same VM redo, so unobservable) — **the next JIT-programme step**.
+     Honest test note: only the join-widening guard is load-bearing (`task9_join_widening_prevents_a_
+     stale_then_branch_interval` fails without it); the nested-region and conditional-counter-write
+     refusals are currently UNREACHABLE and labelled defensive, not proven.
+   - `floatloop` (pre-DEC-428 diagnosis, kept for the reasoning) — **DEC-425, and it was NOT a regression**: building
      the exact commit whose baseline said 1.011 measures 0.43 against this php, so docker
      `php:8.5-cli` was ~2.3x slower on this loop and every pre-2026-08-01 WIN is tainted by that.
      100% of the gap is the speculation STICKY: the hot counter IS proven, but `acc = acc + 1` in a
@@ -216,11 +232,13 @@ a PENDING question, not self-ruled.
      so the delta is phorj-level dispatch of the per-row bind/exec chain: the JIT programme again.
 
    **STANDING SCOREBOARD (2026-08-01, quiet box, release php+JIT, output-identity gated): 42 WIN /
-   8 LOSS across 50 micros, GEOMEAN 2.45x, median 2.30x.** 28 features win by >=2x. Every remaining
-   loss now has ONE of three named causes: VM interpretation of user code (5 of 8 — the JIT programme,
-   blocked on the scope ruling), a representation/design choice (`queryparse` DEC-424, `deepjson`
-   DEC-426 — both adjudicable), or noise at parity (`listcontains`). Nothing is unexplained and nothing
-   left moves under a tuning pass.
+   8 LOSS across 50 micros, GEOMEAN 2.45x, median 2.30x** — measured BEFORE DEC-428, which deepened no
+   loss and lifted `floatloop` 0.46 -> 0.71 (still a loss, so the 42/8 split is unchanged; the geomean
+   is now marginally better than 2.45x and will be re-derived at the next full sweep rather than
+   estimated here). 28 features win by >=2x. Every remaining loss has ONE of three named causes: VM
+   interpretation of user code (5 of 8 — **the JIT programme, now IN FLIGHT: step 1 = DEC-428**), a
+   representation/design choice (`queryparse` DEC-424, `deepjson` DEC-426 — both adjudicable), or noise
+   at parity (`listcontains`). Nothing is unexplained and nothing left moves under a tuning pass.
    **THE GATE IS NOW ARMED** (DEC-423.1, developer-ruled): the baseline is re-emitted on the local
    release php with all 8 losses frozen as `_owed` — DERIVED at emit time, so `--emit` cannot launder
    one. The gate reports every owed loss on every push, BLOCKS if one deepens past 25%, and says

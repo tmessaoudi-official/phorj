@@ -5559,3 +5559,67 @@ faster than PHP-with-JIT across the suite.** 28 features win by 2x or more; 4 si
 
 Nothing on the board is now unexplained, and nothing is left that a tuning pass would move. That was
 the point of the DEC-423 sweep: turn "beat PHP" into a finite list with named causes.
+
+
+## DEC-428 — the JIT programme, step 1: conditional accumulators prove (2026-08-01, BUILT)
+
+The developer said "go" to the DEC-423 JIT scope question three times; taken as the ruling, and this is
+the first step. Scope deliberately narrow: the one gap DEC-425 had already diagnosed down to a line.
+
+### What changed
+
+`range_acc`'s body walk used to REJECT any `JumpIfFalse` that was not a loop guard — i.e. any `if`
+inside a loop body. That single refusal is why a CONDITIONAL accumulator could never be proven, and an
+unproven speculated op anywhere in a function forces the loop-carried sticky overflow phi that
+Cranelift at `opt_level=none` will not remove. So `if (cond) { count = count + 1; }` — the commonest
+counting idiom there is — taxed EVERY iteration of its loop.
+
+The walk now models one body-level `if`:
+  * a FORWARD `JumpIfFalse` landing inside the loop opens a conditional region (backward or escaping
+    targets are other control shapes this pass has not verified — refused);
+  * the operand stack must be EMPTY at the branch (a statement `if`, so the two paths cannot disagree
+    about depth at the join);
+  * only ONE region at a time — a nested `if` is refused, not approximated;
+  * at the join, every slot the region MAY have written is widened to UNKNOWN;
+  * float arithmetic and the remaining comparisons are modelled as pop-two-push-unknown, listed
+    EXPLICITLY rather than swept up by a catch-all (`Neg` is deliberately excluded — it is a speculated
+    overflow op, not a neutral one).
+
+Accumulators keep their envelope interval across the join rather than being widened, and that is
+earned, not assumed: the envelope solve already takes `min(growth.lo, 0)` / `max(growth.hi, 0)` per
+site, so it has ALWAYS modelled "this site may or may not run" — exactly a conditional site.
+
+### Measured
+
+`floatloop`: **8.2 ms → 5.24 ms (-36%)**, ratio **0.46 → 0.71**. Checksum unchanged (500004) on the VM
+and the tree-walker. `intadd` (1.27x) and `fibrec` (2.00x) unmoved — no collateral.
+
+**Still a loss** (php 3.59 ms), and the reason is now precise: `needs_sticky` is computed over the
+WHOLE function, and `floatloop`'s `return acc + Conversion.truncate(x)` is an `AddI` outside the loop
+body, so it stays unproven and the phi survives. One op executed ONCE still taxes 5,000,000 iterations.
+The fix is at the emitter, not the analysis — an unproven op that is not inside a loop can take a
+per-op fault branch (free at one execution) instead of forcing the sticky. Both paths end in the same
+VM redo, so it is not observable. Next step, recorded rather than rushed.
+
+### On the testing — two of the three new guards are NOT load-bearing, and saying so
+
+Honest scope note, because the opposite claim would be easy to make. Of the checks this change adds:
+  * **the join-widening IS load-bearing and IS covered.** Deleting it makes
+    `task9_join_widening_prevents_a_stale_then_branch_interval` fail — a test built specifically to
+    bite: `t` starts at 5e18 and the conditional assigns it `1`, so carrying the then-branch interval
+    past the join would prove an elision that drops a real overflow check. Verified to fail with the
+    widening removed.
+  * **the nested-region refusal and the conditional-counter-write refusal are currently UNREACHABLE.**
+    Deleting either changes no test outcome, because the shapes that would reach them are already
+    refused earlier by the single-writer counter rule. They are kept as defensive checks — the earlier
+    rules are not obviously sufficient forever — but they are labelled in the test file as defensive
+    and unverified rather than presented as proven.
+
+The first attempt at these rejection tests was VACUOUS (the shapes failed for unrelated reasons) and
+was caught by deliberately weakening each guard and re-running. That check is the only reason the
+distinction above is known; a passing test suite alone would have hidden it.
+
+`range_acc.rs` was a grandfathered 762-line file and this pushed it to 829, so it split by cohesion
+into `range_acc/{mod,walk,verify}.rs` (368 / 336 / 149) — driver, one-trip body walk, one-`G`
+verification attempt. Invariant 13's "split it, do not grow it", enforced by the gate rather than
+remembered.

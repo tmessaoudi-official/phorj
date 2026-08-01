@@ -355,7 +355,7 @@ Compounding it, the side-table each pass consumes is named six different single 
 | `src/value/types.rs:277` | `fn get_field(&self, name) -> Option<Value>` | `get_*` implies a cheap borrow; this does a layout lookup **plus a `.clone()` out of a `RefCell`** (`:279-280`). Honestly documented at `:274`, but the name fights the doc | `read_field` or `field_cloned` |
 | `src/value/types.rs:286` | `fn set_field(&self, …) -> bool` | `set_*` taking `&self` and mutating through `RefCell` — semantically required for handle values and documented at `:283-285`, but the signature alone reads as a no-op; also returns an ignorable bool | keep `&self`; change to `-> Result<(), UnknownField>` so the ignorable-bool ambiguity disappears |
 | `src/checker/desugar_variadics.rs:12` | `desugar_variadic_params` | Name asserts a pipeline phase it does not occupy (G7) | `lower_variadic_params` |
-| `src/jit/range_acc.rs:370` | `fn verify_with_g(…, h: usize, e: usize, g: i64)` | 3 single letters among 10 params; only `g` is documented (`:365`), and `g` is baked into the function name | `check_at_trip_bound(header_ip, exit_ip, trip_bound)` |
+| `src/jit/range_acc/verify.rs` | `fn verify_with_g(…, h: usize, e: usize, g: i64)` | 3 single letters among 10 params; only `g` is documented, and `g` is baked into the function name | `check_at_trip_bound(header_ip, exit_ip, trip_bound)` |
 
 - **RECOMMENDED:** `validate_class` first (P2 → it is the one where a caller can be *wrong*, not
   merely confused), then `get_field`/`set_field` as a pair, then the rest opportunistically.

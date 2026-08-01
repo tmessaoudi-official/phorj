@@ -26,7 +26,6 @@
 1658	src/jit/emit_unboxed/mod.rs
 944	src/jit/emit_unboxed/verticals.rs
 2000	src/jit/handles/mod.rs
-762	src/jit/range_acc.rs
 674	src/jit/tests/unboxed_flow.rs
 511	src/jit/tests/unboxed_int.rs
 1411	src/jit/tests/verticals.rs

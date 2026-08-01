@@ -1069,7 +1069,7 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   (range-proof overflow-check elision, ruled ACTIVE) is the single closing lever for all
   three.** NEXT: task 9 → fundamentals sweep → representation slice (V3b + cycle-leak fork).
   **TASK 9 — ✅ SHIPPED (session 4): interval-proof elision → 🏆 ALL 17 MICROS ≥ 1.0×.**
-  `src/jit/range_acc.rs`: fail-closed i128 interval pass over counted loops — accumulator
+  `src/jit/range_acc/`: fail-closed i128 interval pass over counted loops — accumulator
   CHAINS (growth tracked to the `SetLocal`), counter-affine terms, expression-dividend
   RemI-by-pow2; const bound = exact G, param bound = entry guard `param > G → code-5 decline`
   (ladder 2^31→2^24→2^20); env-stability walk rejects hidden growing slots; body locals live

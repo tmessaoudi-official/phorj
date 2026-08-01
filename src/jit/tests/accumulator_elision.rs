@@ -122,9 +122,15 @@ fn task9_rejects_unbounded_growth_and_overflow_faults_identically() {
 }
 
 #[test]
-fn task9_rejects_computed_bound_and_body_branches() {
-    // A COMPUTED loop bound (not a param, not a const) and an `if` inside the body are both
-    // out of the v1 scope — the pass must fail closed on each.
+fn task9_rejects_a_computed_bound_but_now_proves_a_conditional_accumulator() {
+    // A COMPUTED loop bound (not a param, not a const) stays out of scope — the trip count is what the
+    // envelope is solved against, so an unknown bound has nothing to solve with.
+    //
+    // A body-level `if`, however, is now IN scope (DEC-425). It used to be refused, and that refusal was
+    // why a CONDITIONAL accumulator — "tally while scanning", the commonest shape there is — left a
+    // loop-carried sticky overflow phi on every iteration. Soundness comes from the envelope solve,
+    // which already takes `min(growth.lo, 0)` / `max(growth.hi, 0)` per site: it has ALWAYS assumed a
+    // site may or may not run, which is exactly what a conditional site is.
     const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
         import Core.Output;\n\
         function computed(int n): int { int lim = n * 2; mutable int acc = 0; mutable int i = 0;\n\
@@ -135,15 +141,118 @@ fn task9_rejects_computed_bound_and_body_branches() {
     let program = compile_source(SRC);
     assert!(
         acc_elision(&program, "computed").is_none(),
-        "computed bound is out of v1 scope"
+        "computed bound is still out of scope"
+    );
+    let branchy = acc_elision(&program, "branchy").expect("a conditional accumulator now proves");
+    assert!(
+        branchy.proven.iter().filter(|&&p| p).count() >= 2,
+        "both the conditional site and the counter increment must prove"
     );
     assert!(
-        acc_elision(&program, "branchy").is_none(),
-        "body branches are out of v1 scope"
+        !branchy.guards.is_empty(),
+        "the param bound must carry an entry guard (decline to the VM above it)"
+    );
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "elided code must match the oracle exactly");
+}
+
+/// THE load-bearing test for the conditional-accumulator extension: the elided code must produce the
+/// SAME NUMBERS as the interpreter oracle across a spread of trip counts, including 0 and the values
+/// either side of the branch condition.
+///
+/// It is load-bearing because it BITES. Verified by deleting the join-widening (the step that marks
+/// every slot a conditional region may have written as unknown at the merge): this test then fails
+/// with a wrong tally rather than a crash, which is exactly the failure mode an unsound widening
+/// produces. The interval-vs-oracle pair is what catches it; a structural `is_some()` assertion alone
+/// would not have.
+#[test]
+fn task9_conditional_accumulator_is_byte_identical_across_trip_counts() {
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+        import Core.Output;\n\
+        function tally(int n): int { mutable int acc = 0; mutable int i = 0;\n\
+          while (i < n) { if (i % 3 == 0) { acc = acc + 7; } i = i + 1; } return acc; }\n\
+        function withlocal(int n): int { mutable int acc = 0; mutable int t = 0; mutable int i = 0;\n\
+          while (i < n) { if (i > 1) { t = i * 2; acc = acc + 1; } i = i + 1; } return acc + t; }\n\
+        #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+          Output.printLine(\"{tally(0)} {tally(1)} {tally(2)} {tally(3)} {tally(4)} {tally(100)}\");\n\
+          Output.printLine(\"{withlocal(0)} {withlocal(2)} {withlocal(3)} {withlocal(10)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle);
+    // Pinned literally: a wrong tally is the symptom of a bad region merge, and comparing only against
+    // the oracle would miss a bug that broke BOTH legs the same way.
+    assert_eq!(
+        jit_out.trim(),
+        "0 7 7 7 14 238\n0 0 5 26",
+        "the tallies themselves must be right"
+    );
+}
+
+/// THE soundness test for the join-widening — the one step of the conditional extension that can
+/// silently produce WRONG ARITHMETIC rather than a crash.
+///
+/// `t` starts enormous and the conditional assigns it `1`. Without widening at the merge, the analysis
+/// would carry the THEN-branch's interval (`t ∈ [1,1]`) past the join and conclude that `acc = acc + t`
+/// grows by at most 1 per iteration — proving the elision and dropping the overflow check. On the ELSE
+/// path `t` is still 5e18, so `acc` overflows immediately and nothing detects it. Widening every
+/// maybe-written slot to unknown at the join is what makes the growth unbounded and forces a refusal.
+///
+/// Verified to BITE: deleting the widening makes this test fail. It is the only test that does, which is
+/// why it is spelled out rather than folded into the fail-closed group.
+#[test]
+fn task9_join_widening_prevents_a_stale_then_branch_interval() {
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+        import Core.Output;\n\
+        function staleiv(int n): int { mutable int acc = 0; mutable int t = 5000000000000000000;\n\
+          mutable int i = 0;\n\
+          while (i < n) { if (i > 1) { t = 1; } acc = acc + t; i = i + 1; } return acc; }\n\
+        #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{staleiv(1)}\"); }";
+    let program = compile_source(SRC);
+    assert!(
+        acc_elision(&program, "staleiv").is_none(),
+        "a slot conditionally overwritten must be UNKNOWN after the join — carrying the then-branch \
+         interval would elide a real overflow check"
     );
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle);
+}
+
+/// Shapes that must fail CLOSED (keep their overflow checks) and stay byte-identical.
+///
+/// Honest scope note: each of these is refused by a check that predates this extension (the
+/// single-writer counter rule, the i64-fit rule), NOT by the two guards the extension added — verified
+/// by deleting each guard and re-running, which changed nothing. Those two guards
+/// (nested-region refusal, conditional counter write) are therefore DEFENSIVE and currently
+/// unreachable; they are kept because the earlier checks are not obviously sufficient forever, and
+/// removing them would make a future widening silently unsound. This test pins the BEHAVIOUR
+/// (fail-closed + oracle parity), which is what actually matters here.
+#[test]
+fn task9_out_of_scope_conditional_shapes_fail_closed() {
+    const SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+        import Core.Output;\n\
+        function nested(int n): int { mutable int acc = 0; mutable int i = 0;\n\
+          while (i < n) { if (i > 2) { if (i > 4) { acc = acc + 1; } } i = i + 1; } return acc; }\n\
+        function condcounter(int n): int { mutable int acc = 0; mutable int i = 0;\n\
+          while (i < n) { acc = acc + 1; if (acc > 0) { i = i + 1; } } return acc; }\n\
+        function huge(int n): int { mutable int acc = 9000000000000000000; mutable int i = 0;\n\
+          while (i < n) { if (i > 2) { acc = acc + 20000000000000; } i = i + 1; } return acc; }\n\
+        #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+          Output.printLine(\"{nested(9)} {condcounter(5)}\"); }";
+    let program = compile_source(SRC);
+    for name in ["nested", "condcounter", "huge"] {
+        assert!(
+            acc_elision(&program, name).is_none(),
+            "`{name}` must fail closed (keep its overflow check)"
+        );
+    }
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "refused shapes must still match the oracle"
+    );
 }
 
 #[test]
