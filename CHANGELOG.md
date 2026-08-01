@@ -6,6 +6,39 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `FileSystem.forEachLine`, the native-driven line reader (DEC-422(a), 2026-08-01)
+Reads the same lines as DEC-347's `lines(path)` under identical terminator rules, but the loop runs
+INSIDE the native (and inside `fgets` on the PHP leg), so the two phorj-level virtual calls per element
+disappear and the file is opened ONCE instead of re-opened and seeked per 64 KiB chunk. Built on
+`NativeEval::HigherOrder` + the backend-supplied re-entrant `ClosureInvoker` — the same mechanism
+`List.map` uses, so one body drives the interpreter and the VM. PHP twin `__phorj_fs_for_each_line`
+(Invariant-14 ladder case 1, faithful — no quarantine); three legs byte-identical on every shape that
+breaks line readers, plus a missing file.
+
+**MEASURED, and it is still a loss.** 40k lines, same fixture and fold, output-identity gated, medians
+of 5: PHP `fgets` 5.7 ms · **`forEachLine` 9.1 ms (1.6x slower)** · `lines` iterator 22.8 ms (4.0x).
+So 2.5x faster than the iterator and the gap against PHP drops from 4.0x to 1.6x — recorded as an OWED
+verdict per DEC-365's no-hidden-loss rule, NOT reported as a pass. The local `php` is a debug/ZTS build
+with JIT off (which flatters phorj) and the official G-8 harness needs a docker daemon this container
+does not have.
+
+**Where the residual is, measured rather than guessed.** A probe build skipping only the closure
+invocation: 4.4 ms without it, 13.1 ms with it — the per-line CALL FRAME is ~2/3 of the time, and the
+read itself (4.4 ms) is within reach of PHP's own (2.1 ms). This reshapes DEC-422(3): a JIT vertical for
+foreach-over-`Iterator` would close `lines`, but a closure invoked from inside a native is not an
+iterator virtual call, so it does not touch this path.
+
+**The trade, stated because it is not free.** `lines` stays. The closure cannot `break`, cannot `return`
+from the enclosing function, and may throw only `FileSystemError`. And since phorj closures capture
+locals BY VALUE, accumulating needs a field on a holder object — a `mutable int` assigned inside the
+closure silently stays 0, with no error. That is closure behaviour generally (`List.map` is the same)
+and already in FEATURES.md, but it is the first thing anyone writes here, so `examples/fs/foreach-line.phg`
+and `tests/fs.rs` both show the working pattern.
+
+The native keeps its two failure channels apart (`ForEachEnd::{Io, Closure}`): an I/O failure becomes a
+catchable typed `FileSystemError`, while the closure's own failure propagates untouched. Collapsing them
+would hand a caller's error to a `catch (FileSystemError e)` that has nothing to do with it.
+
 ### Added — `Core.ErrorModule`, phorj's standard error taxonomy (DEC-421, 2026-08-01)
 Six error types every program can throw and catch — `RuntimeError`, `LogicError`, `MathError`,
 `TypeMismatchError`, `InvalidValueError`, `IoError` — so code that needs a conventional error does not

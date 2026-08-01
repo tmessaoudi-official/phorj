@@ -1,6 +1,6 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421 COMPLETE. NEXT: DEC-422(a) `forEachLine`.**
+## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. NEXT: DEC-422(b) the JIT vertical.**
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
@@ -170,11 +170,13 @@ a PENDING question, not self-ruled.
    narrower and renamed **LIFT-USING**: raising a `try`/`finally` back to `using` is shape recognition,
    deliberately not guessed, with a test pinning today's faithful behaviour. `throw` is still refused —
    the next increment, mapping 1:1.
-3. **DEC-422 (a) — `forEachLine(path, fn)`**, the native-driven line reader the developer ruled in
-   (2026-07-31: *"both 2 and 3"*), closing the DEC-347 residual 4x from the API side.
-   `NativeEval::HigherOrder` + `ClosureInvoker`; `List.map` is the template.
-4. **DEC-422 (b) — the JIT vertical for foreach-over-`Iterator`**, the other half of the same ruling:
-   it closes the residual for EVERY iterator, not just line reads.
+3. ~~**DEC-422 (a) — `forEachLine`**~~ — **BUILT 2026-08-01.** 4.0x -> 1.6x vs PHP (2.5x faster than the
+   iterator); verdict still OWED per DEC-365, and the residual was measured rather than assumed: the
+   per-line CLOSURE CALL FRAME is ~2/3 of the remaining time, the read itself is near PHP's.
+4. **DEC-422 (b) — the JIT vertical**, now with a WIDER scope than the ruling assumed. It was framed as
+   foreach-over-`Iterator`, which closes `lines` — but a closure invoked from inside a NATIVE is not an
+   iterator virtual call, so that alone leaves `forEachLine`'s 1.6x untouched. Closing both means the
+   native->closure call too.
 5. **Continue the §1.2 re-tally** (§4.13/§4.14 hold the method). 2 of ~20 groups mapped. Next by
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.

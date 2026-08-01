@@ -1,0 +1,97 @@
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// `FileSystem.forEachLine(path, fn)` (DEC-422(a)) — the FAST path for "read every line and do
+// something with each".
+//
+// It reads the same lines as `FileSystem.lines(path)` (DEC-347, `examples/fs/lines.phg`) under the same
+// terminator rules: `\n` stripped, a preceding `\r` stripped too, a blank line still a line, a final
+// line with no terminator still a line. The two APIs disagreeing on any file shape would be a bug in
+// one of them, and `tests/fs.rs` runs both over the same fixtures to keep it that way.
+//
+// The difference is WHERE THE LOOP RUNS. `lines` hands back an `Iterator<string>`, so every element
+// costs a `hasNext` plus a `next` at the phorj level — against PHP's C loop that is a MEASURED 4x loss,
+// structural rather than a tuning miss. `forEachLine` runs the whole loop inside the native (and inside
+// `fgets` on the PHP leg), so there are no per-element virtual calls and the file is opened ONCE for
+// the whole read instead of re-opened and seeked per 64 KiB chunk.
+//
+// WHEN TO USE WHICH — they both stay, and this is the honest trade:
+//
+//   * `forEachLine` — the common case. Fastest, and reads O(one line) of memory.
+//   * `lines` — when you need any of the things a closure cannot do: `break` out early, `return` from
+//     the enclosing function, throw an error other than `FileSystemError`, or pass the sequence along
+//     as an `Iterator<string>` VALUE.
+//
+// ACCUMULATION NEEDS A HOLDER, and it is the first thing everyone gets wrong. phorj closures capture
+// enclosing locals BY VALUE, so a `mutable int n` assigned inside the closure silently leaves the outer
+// `n` at 0 — no error, just a wrong answer. A field on an object works, because the object reference is
+// what was copied. That is a property of closures generally (`List.map` behaves identically), not of
+// this function.
+/// Counts lines, and totals their length — the accumulate-through-a-field pattern.
+class Stats {
+    constructor(public mutable int lines, public mutable int chars) {}
+}
+
+// Transpiles via `fgets` (Invariant-14 ladder case 1 — a faithful mapping, no quarantine), so the VM,
+// the tree-walker and the transpiled PHP all print identically.
+function report(string path): void throws FileSystemError {
+    // 1. The common shape: one closure, called once per line.
+    FileSystem.forEachLine(path, function(string line): void { Output.printLine("[{line}]"); })?;
+    // 2. Accumulating — through a FIELD, for the reason in the note above.
+    Stats s = new Stats(0, 0);
+    FileSystem.forEachLine(
+        path,
+        function(string line): void { s.lines = s.lines + 1; s.chars = s.chars + String.length(line); }
+    )?;
+    Output.printLine("lines={s.lines} chars={s.chars}");
+}
+
+function demo(string path): int throws FileSystemError {
+    // A blank line is content — only the delimiter is dropped — and the last line needs no terminator.
+    FileSystem.writeText(path, "alpha\nbeta\n\ngamma")?;
+    report(path)?;
+    // 3. A CRLF file reads exactly like an LF one; the `\r` is a terminator, not data.
+    FileSystem.writeText(path, "r1\r\nr2\r\n")?;
+    report(path)?;
+    // 4. An empty file is an empty iteration, not an error — the closure is simply never called.
+    FileSystem.writeText(path, "")?;
+    report(path)?;
+    // 5. A missing file is a CATCHABLE typed error, like every other `FileSystem` call. The native
+    //    keeps this channel separate from the closure's own failures on purpose: an error the closure
+    //    throws is the caller's and must not arrive re-labelled as a filesystem error.
+    try {
+        FileSystem.forEachLine(
+            "{path}.absent",
+            function(string line): void { Output.printLine("never reached"); }
+        );
+    } catch (FileSystemError e) {
+        Output.printLine("missing file: caught");
+    }
+    FileSystem.delete(path)?;
+    return 0;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        // CONCURRENCY: `demo` rewrites its fixture four times, and the repo's test corpus runs every
+        // example concurrently, so two copies would otherwise interleave one's write with the other's
+        // read. One `withLock` serialises them — the same trap `examples/fs/lock.phg` documents, and the
+        // same fix `examples/fs/lines.phg` uses.
+        string path = "{FileSystem.tempDir()}/phorj-foreachline-example.txt";
+        string serial = "{FileSystem.tempDir()}/phorj-foreachline-example.lock";
+        discard FileSystem.withLock(
+            serial,
+            function(): int throws FileSystemError { return demo(path)?; }
+        );
+    } catch (FileSystemError e) {
+        Output.printLine("unexpected: {e.message}");
+    }
+}

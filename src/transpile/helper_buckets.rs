@@ -87,7 +87,8 @@
 //!   `__phorj_db_try_unit` `__phorj_db_tx_depth` `__phorj_db_unwind_to` `__phorj_drop_while`
 //!   `__phorj_find` `__phorj_format` `__phorj_fs_copy` `__phorj_fs_create_dir`
 //!   `__phorj_fs_delete` `__phorj_fs_err` `__phorj_fs_list_dir` `__phorj_fs_move`
-//!   `__phorj_fs_put` `__phorj_fs_read_bytes` `__phorj_fs_read_lines_chunk` `__phorj_fs_read_text`
+//!   `__phorj_fs_for_each_line` `__phorj_fs_put` `__phorj_fs_read_bytes` `__phorj_fs_read_lines_chunk`
+//!   `__phorj_fs_read_text`
 //!   `__phorj_fs_split_lines`
 //!   `__phorj_fs_remove_dir`
 //!   `__phorj_fs_lock_acquire` `__phorj_fs_lock_open` `__phorj_fs_lock_release` `__phorj_fs_lock_store`
@@ -180,6 +181,7 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     // helper is a LOOP plus a mid-line extension plus a UTF-8 gate plus the typed-error mapping — none
     // of which is an expression, and `fgets` alone would not give the offset-advance contract the
     // prelude depends on (terminators kept, chunk never ending mid-line).
+    ("__phorj_fs_for_each_line", 2),
     ("__phorj_fs_read_lines_chunk", 2),
     // DEC-347's chunk splitter. Bucket 2: `explode` gives the pieces, but dropping the trailing empty
     // element and stripping a `\r` per line is a statement sequence, not an expression. It lives in a

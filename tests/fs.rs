@@ -526,3 +526,93 @@ fn php_bin() -> Option<String> {
         .unwrap_or(false);
     ok.then_some(cand)
 }
+
+/// DEC-422(a) — `FileSystem.forEachLine(path, fn)`, the native-driven line reader.
+///
+/// Same OUTPUT as `for (line in FileSystem.lines(path))` on every shape, which is the contract that
+/// matters: the two APIs differ only in where the loop runs (Rust/PHP vs a phorj-level `Iterator`), so
+/// any behavioural difference between them would be a bug in one of them. Asserted against the SAME
+/// fixture shapes as the `lines` test — blank line, no trailing terminator, CRLF, empty file, and a
+/// file large enough to cross the 64 KiB chunk boundary the iterator uses.
+///
+/// Counting goes through a holder CLASS, not a captured local: phorj closures capture enclosing locals
+/// BY VALUE (FEATURES.md), so `mutable int n` assigned inside the closure silently stays 0. That is not
+/// a `forEachLine` quirk — `List.map` behaves identically — but it is the first thing anyone writes, so
+/// the working pattern is what the test and the example both show.
+#[test]
+fn fs_for_each_line_agrees_with_lines_on_every_shape_and_all_legs() {
+    let root = scratch("foreachline");
+    std::fs::create_dir_all(&root).unwrap();
+    let big: String = (0..3000)
+        .map(|i| format!("row {i:05} {}\n", "p".repeat(28)))
+        .collect();
+    std::fs::write(format!("{root}/big.txt"), big.as_bytes()).unwrap();
+    let prog = format!(
+        r#"package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+class Tally {{ constructor(public mutable int n) {{}} }}
+function countOf(string path): int throws FileSystemError {{
+  Tally t = new Tally(0);
+  FileSystem.forEachLine(path, function(string line): void {{ t.n = t.n + 1; }})?;
+  return t.n;
+}}
+#[Entry(kind: EntryKind.Cli)] function main(): void {{
+  try {{
+    string p = "{root}/one.txt";
+    FileSystem.writeText(p, "alpha\nbeta\n\ngamma\n");
+    FileSystem.forEachLine(p, function(string line): void {{ Output.printLine("[{{line}}]"); }});
+    FileSystem.writeText(p, "one\ntwo");
+    Output.printLine("noeol {{countOf(p)}}");
+    FileSystem.writeText(p, "r1\r\nr2\r\n");
+    FileSystem.forEachLine(p, function(string line): void {{ Output.printLine("crlf[{{line}}]"); }});
+    FileSystem.writeText(p, "");
+    Output.printLine("empty {{countOf(p)}}");
+    Output.printLine("big {{countOf("{root}/big.txt")}}");
+    // A MISSING file is a catchable typed error, not a fault — the same contract every other
+    // `FileSystem` call carries, and the reason the native keeps its I/O channel separate.
+    try {{
+      FileSystem.forEachLine("{root}/absent.txt", function(string line): void {{ Output.printLine("!"); }});
+    }} catch (FileSystemError e) {{ Output.printLine("missing caught"); }}
+    FileSystem.delete(p);
+  }} catch (FileSystemError e) {{ Output.printLine("unexpected: {{e.message}}"); }}
+}}
+"#
+    );
+    let expected = "[alpha]\n[beta]\n[]\n[gamma]\nnoeol 2\ncrlf[r1]\ncrlf[r2]\nempty 0\nbig 3000\nmissing caught\n";
+    both(&prog, expected);
+
+    // The PHP leg runs the same shapes through the `fgets` twin (ladder case 1).
+    let Some(php) = php_bin() else {
+        eprintln!(
+            "SKIP fs forEachLine php leg: php not found — set PHORJ_REQUIRE_PHP=1 to require it"
+        );
+        assert!(
+            std::env::var("PHORJ_REQUIRE_PHP").as_deref() != Ok("1"),
+            "php required but not found"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        return;
+    };
+    let code = cmd_transpile(&prog).expect("forEachLine program transpiles");
+    let php_file = std::path::Path::new(&root).join("prog.php");
+    std::fs::write(&php_file, &code).unwrap();
+    let out = std::process::Command::new(&php)
+        .arg(&php_file)
+        .output()
+        .expect("php runs");
+    assert!(
+        out.status.success(),
+        "php forEachLine leg failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        expected,
+        "php forEachLine parity"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

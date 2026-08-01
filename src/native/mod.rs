@@ -26,6 +26,7 @@ pub(crate) mod error_prelude;
 mod file;
 mod fs;
 mod fs_bodies;
+mod fs_for_each_line;
 mod fs_lines;
 mod fs_lock;
 pub(crate) mod fs_prelude;

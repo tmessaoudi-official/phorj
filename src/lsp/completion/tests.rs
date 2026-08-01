@@ -239,7 +239,7 @@ fn prelude_statics_surface_in_member_completion_without_an_lsp_edit() {
         None,
         &std::collections::HashMap::new(),
     ));
-    for want in ["withLock", "tryWithLock", "lines"] {
+    for want in ["withLock", "tryWithLock", "lines", "forEachLine"] {
         assert!(got.iter().any(|l| l == want), "want {want} in {got:?}");
     }
     // `acquireLock` is `private` — an internal `using` subject, not user-facing surface. Offering it

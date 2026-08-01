@@ -120,6 +120,20 @@ class FileSystem {
   static function lines(string path): Iterator<string> {
     return new FileLines(path, 0, new List<string>(), 0, 0, false);
   }
+  // DEC-422(a) — the FAST path for the common case: read every line, do something with each.
+  //
+  // Same lines as `lines(path)`, same terminator rules, but the loop runs INSIDE the native (and
+  // inside `fgets` on the PHP leg), so there are no per-line phorj virtual calls. `lines` is an
+  // `Iterator<string>`, which costs a `hasNext` plus a `next` per element against PHP's C loop — a
+  // MEASURED 4x loss that no tuning inside that design removes.
+  //
+  // What you give up for it: the body is a CLOSURE, so there is no `break`, no `return` from the
+  // enclosing function, and the only error it may throw is `FileSystemError` (a native parameter type
+  // is fixed in Rust; the same restriction `withLock` carries). Reach for `lines` when you need any of
+  // those, or when you need an `Iterator<string>` as a VALUE to pass along.
+  static function forEachLine(string path, (string) => void throws FileSystemError fn): void throws FileSystemError {
+    match (NativeFileSystem.forEachLine(path, fn)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
+  }
   // DEC-348 — scoped advisory file locking. `withLock` is a THIN wrapper over `using` (DEC-364):
   // that is the whole design, and it is why DEC-348 was sequenced after it. The release is
   // guaranteed by construction — there is no leak path, because there is no way to hold the lock

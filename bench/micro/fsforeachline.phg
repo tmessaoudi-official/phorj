@@ -1,0 +1,65 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemError;
+import Core.String;
+
+// Microbench: the NATIVE-DRIVEN line reader (DEC-422(a)) vs PHP's `fgets` loop — the same comparison
+// `fslines` makes for the ITERATOR form, against the same fixture and the same fold, so the two phorj
+// numbers are directly comparable to each other as well as to PHP.
+//
+// That pairing is the point. `fslines` measured a 4x loss whose cause was structural: an
+// `Iterator<string>` costs a `hasNext` plus a `next` per element against PHP's C loop. This file
+// measures the same read with the loop moved INSIDE the native, which is the only variable that
+// changed — so the delta between the two phorj benches IS the per-element virtual-call cost.
+//
+// The fixture is written once, OUTSIDE the timed region, so this measures read cost only. Both legs
+// fold every line's length into the checksum: that defeats dead-code elimination AND gates
+// output-identity, so a timing is only trusted when the two legs agree on what they read.
+
+// The accumulator is a FIELD, not a captured local: phorj closures capture enclosing locals by value
+// (FEATURES.md), so `acc = acc + …` inside the closure would silently leave the outer `acc` at 0 and
+// the checksum would gate the bench as broken. This is the accumulation pattern `forEachLine` callers
+// need, which makes it the right thing for a bench to exercise.
+class Acc {
+    constructor(public mutable int total) {}
+}
+
+function fixture(string path, int lines): void throws FileSystemError {
+    mutable string body = "";
+    mutable int i = 0;
+    while (i < lines) {
+        body = body + "row {i} the quick brown fox jumps over the lazy dog\n";
+        i = i + 1;
+    }
+    FileSystem.writeText(path, body)?;
+}
+
+function bench(string path): int throws FileSystemError {
+    Acc a = new Acc(0);
+    FileSystem.forEachLine(path, function(string line): void {
+        a.total = a.total + String.length(line);
+    })?;
+    return a.total;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        string path = "{FileSystem.tempDir()}/phorj-bench-fsforeachline.txt";
+        fixture(path, 40000);
+        int warm = bench(path);
+        int guard = warm - warm;
+        int t = Runtime.monotonicNanos();
+        int acc = bench(path);
+        int d = Runtime.monotonicNanos() - t;
+        Output.printLine("fsforeachline\t{d + guard}\t{acc}");
+        FileSystem.delete(path);
+    } catch (FileSystemError e) {
+        Output.printLine("fsforeachline\t0\tERROR {e.message}");
+    }
+}

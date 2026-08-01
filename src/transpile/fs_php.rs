@@ -67,6 +67,35 @@ function __phorj_fs_read_lines_chunk($p, $off) {
     if (!preg_match('//u', $buf)) { return __phorj_fs_err('FileSystemIoError', 'lines', $p); }
     return [true, $buf];
 }
+// DEC-422(a) — the native-driven line reader's twin. Ladder case 1: PHP's `fgets` on an already-open
+// handle IS the faithful mapping, and it is the very loop phorj was measured 4x slower than — so the
+// PHP leg here is idiomatic rather than a workaround.
+//
+// Terminator rules mirror `__phorj_fs_split_lines` exactly (strip one trailing "\n", then a preceding
+// "\r"), because the two APIs must agree on every file shape. `fgets` returns the line WITH its
+// terminator, and returns the final unterminated line too, so a file with no trailing newline needs no
+// special case on either side.
+function __phorj_fs_for_each_line($p, $fn) {
+    if (!file_exists($p)) { return __phorj_fs_err('NotFound', 'forEachLine', $p); }
+    if (is_dir($p)) { return __phorj_fs_err('IsADirectory', 'forEachLine', $p); }
+    $h = @fopen($p, 'rb');
+    if ($h === false) { return __phorj_fs_err('FileSystemIoError', 'forEachLine', $p); }
+    while (($l = fgets($h)) !== false) {
+        if (substr($l, -1) === "\n") {
+            $l = substr($l, 0, -1);
+            if (substr($l, -1) === "\r") { $l = substr($l, 0, -1); }
+        }
+        // Same UTF-8 gate the other readers apply, per LINE: a line is a whole number of characters,
+        // so invalid UTF-8 here is real file content rather than a split multi-byte sequence.
+        if (!preg_match('//u', $l)) { fclose($h); return __phorj_fs_err('FileSystemIoError', 'forEachLine', $p); }
+        // A `throw` from the closure unwinds straight through — `fclose` would be skipped, so the
+        // handle is closed by PHP's refcount at scope exit. That matches the Rust side, where the
+        // `File` is dropped on the early return.
+        $fn($l);
+    }
+    fclose($h);
+    return [true, null];
+}
 // DEC-347 — the chunk-splitter twin. Mirrors `native::fs_lines::split_lines_inner` rule for rule:
 // split on "\n", drop the trailing empty element the final terminator leaves, strip a preceding "\r".
 function __phorj_fs_split_lines($chunk) {

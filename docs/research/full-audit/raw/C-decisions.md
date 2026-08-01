@@ -4959,7 +4959,7 @@ already disclosed as unverified rather than assumed.
 
 | DEC-421 | GR-LIFTEXC | A lifted PHP error path re-parses but does NOT type-check: `RuntimeException`, `LogicException`, `DivisionByZeroError` etc. have no phorj counterpart, so `phg check` reports `unknown type RuntimeException`. Surfaced 2026-07-31 by building LIFT-TRY + `throw` | **RULED 2026-07-31 — (3) MAP PHP's builtin exception hierarchy onto phorj error types.** Which means phorj ships a standard exception taxonomy; **TAXONOMY RULED 2026-07-31 — option (1): a small FLAT set in `Core.ErrorModule`** — `RuntimeError`, `LogicError`, `ArithmeticError`, `TypeError`, `ValueError`, `IoError`. Flat on purpose: no inheritance-matching subtlety, and it matches how phorj already prefixes taxonomies (`FileSystemNotFoundError`). Mirroring PHP's real `Throwable`/`Error`/`Exception` hierarchy was REJECTED — it would import PHP's much-criticised split into a language that deliberately lacks it, deciding phorj's error model as a side effect of a lift feature. [Verified: `phg lift` on a `try`/`catch`/`throw` PHP fixture emits a draft that PARSES and then fails `phg check` with `unknown type RuntimeException`.] This is the lifter's documented review-required boundary working as designed, NOT a defect — the question is whether to narrow it. Options: (a) leave it, and the human maps each exception when reviewing the draft (today's behaviour; honest, but every non-trivial error path needs hand work); (b) MAP PHP's builtin hierarchy onto phorj error types, which needs a phorj-side decision about what those types even are — phorj has an `Error` marker + user-declared errors, with no `RuntimeException` analogue, so this is really "should phorj ship a standard exception taxonomy?"; (c) emit a `// CANNOT LIFT:` note per unmapped type so the draft at least says what is missing. Not self-rulable: (b) would add user-visible stdlib surface | **BUILT 2026-08-01** — see the DEC-421 BUILT section below; THREE of the six ruled names had to change (`ArithmeticError`/`TypeError`/`ValueError` are real PHP builtin CLASSES → `E-RESERVED-NAME`) |
 
-| DEC-422 | GR-LINESPERF | DEC-347's `FileSystem.lines` is a confirmed 4x LOSS vs PHP's `fgets` loop (21.0 ms vs 5.2 ms, 40k lines), after a measured 58x → 4x improvement. The residual is the per-line cost of a phorj-level `Iterator` — two virtual calls per element — against PHP's C loop | **RULED 2026-07-31 — BOTH (2) and (3).** (2) a native-driven `forEachLine(path, fn)` with no per-element virtual calls, and (3) a JIT vertical for foreach-over-`Iterator`. They are complementary rather than redundant: (2) fixes THIS API and can land first; (3) helps EVERY iterator in the language, including the `Iterator` implementors users write, and is the deeper win. Accepting the 4x was explicitly rejected | Build queued 2026-07-31 — (2) first (self-contained), then (3) |
+| DEC-422 | GR-LINESPERF | DEC-347's `FileSystem.lines` is a confirmed 4x LOSS vs PHP's `fgets` loop (21.0 ms vs 5.2 ms, 40k lines), after a measured 58x → 4x improvement. The residual is the per-line cost of a phorj-level `Iterator` — two virtual calls per element — against PHP's C loop | **RULED 2026-07-31 — BOTH (2) and (3).** (2) a native-driven `forEachLine(path, fn)` with no per-element virtual calls, and (3) a JIT vertical for foreach-over-`Iterator`. They are complementary rather than redundant: (2) fixes THIS API and can land first; (3) helps EVERY iterator in the language, including the `Iterator` implementors users write, and is the deeper win. Accepting the 4x was explicitly rejected | **(2) BUILT 2026-08-01** — `FileSystem.forEachLine`, 4.0x loss -> 1.6x; verdict still OWED (see the DEC-422(a) BUILT section). (3) the JIT vertical remains queued |
 
 ## DEC-421 — `Core.ErrorModule`, phorj's standard error taxonomy (2026-08-01, RULED + BUILT)
 
@@ -5038,3 +5038,68 @@ call needs one error handled and the rest propagated (`?` is all-or-nothing, ign
 `KNOWN_ISSUES.md` §LIFT-THROWS. Not self-ruled (Invariant 15). Also noted there: **LIFT-ECHO-INT**, the
 long-standing `echo <non-string>` → `Output.print(int)` type error, which `tests/lift_roundtrip.rs` had
 been working around rather than recording.
+
+
+## DEC-422(a) — `FileSystem.forEachLine`, the native-driven line reader (2026-08-01, BUILT)
+
+The first half of DEC-422's "both (2) and (3)" ruling. `forEachLine(path, fn)` reads the same lines as
+DEC-347's `lines(path)` under identical terminator rules, but the loop runs inside the native — so the
+two phorj-level virtual calls per element (`hasNext`, `next`) disappear, and the file is opened ONCE
+rather than re-opened and `seek`ed per 64 KiB chunk (a chunk native has nowhere to keep a handle; the
+DEC-347 ruling rejected a `FileHandle` type under C4).
+
+Implemented as `NativeEval::HigherOrder` + the backend-supplied re-entrant `ClosureInvoker`, the same
+mechanism `List.map` uses, so ONE body drives the interpreter and the VM — parity by construction
+rather than two implementations. PHP twin `__phorj_fs_for_each_line` via `fgets` (Invariant-14 ladder
+case 1: faithful, no quarantine). Three legs verified byte-identical on every shape that breaks line
+readers, plus a missing file.
+
+### MEASURED — a real improvement, and still a real LOSS (DEC-365 no-hidden-loss)
+
+40k lines, same fixture, same fold, output-identity gated (checksum 2108890 on all legs); medians of 5:
+
+| | ms | vs PHP |
+|---|---|---|
+| PHP `fgets` loop | 5.7 | 1.0x |
+| phorj `forEachLine` (this) | 9.1 | **1.6x slower** |
+| phorj `lines` iterator (DEC-347) | 22.8 | 4.0x slower |
+
+So the API is **2.5x faster than the iterator** and cuts the gap against PHP from 4.0x to 1.6x — but it
+does NOT win, and per DEC-365 that is recorded as an OWED verdict rather than reported as a pass. Two
+caveats that both point the same way: the local `php` is a debug/ZTS build with **JIT OFF**, which
+FLATTERS phorj, and the official G-8 harness needs `php:8.5-cli` under docker, whose daemon is
+unavailable in this container.
+
+### Where the residual actually is — measured, not guessed
+
+A probe build that skips only the closure invocation (everything else identical, same binary):
+
+| | ms |
+|---|---|
+| read + `Value::Str` allocation, no closure call | 4.4 |
+| the same, with the closure call | 13.1 |
+
+**The per-line closure invocation is ~2/3 of the time.** The file reading itself (4.4 ms) is within
+reach of PHP's own read (measured 2.1 ms with a trivial fold). So the remaining loss is a phorj CALL
+FRAME per line, not I/O.
+
+**That reshapes what (3) has to cover.** DEC-422(3) was scoped as a JIT vertical for
+foreach-over-`Iterator`, which would close the gap for `lines` but does NOT touch this path — a closure
+invoked from inside a native is not an iterator virtual call. Closing `forEachLine`'s residual needs the
+JIT (or the VM) to handle the native→closure call itself. Recorded here rather than discovered later.
+
+### The API trade, stated because it is not free
+
+`lines` STAYS. The closure body cannot `break`, cannot `return` from the enclosing function, and may
+throw only `FileSystemError` — a native's parameter type is fixed in Rust and `Ty::Function`'s throws
+set is covariant in the "fewer" direction only, the same restriction `withLock` carries. And because
+phorj closures capture enclosing locals BY VALUE, accumulating requires a field on a holder object; a
+`mutable int` assigned inside the closure silently stays 0. That last one is a property of closures
+generally (`List.map` behaves identically) and is documented in FEATURES.md, but it is the first thing
+a `forEachLine` caller writes, so the example and the test both demonstrate the working pattern.
+
+The two failure channels are kept apart in the native (`ForEachEnd::{Io, Closure}`): the module's own
+I/O failure is wrapped into `FileSystemResult.Err` so the prelude throws a typed `FileSystemError`,
+while the closure's failure propagates untouched. Collapsing them is the obvious shortcut and would
+hand a caller's own error to a `catch (FileSystemError e)` that has nothing to do with it — the silent
+semantic downgrade Invariant 14 forbids.

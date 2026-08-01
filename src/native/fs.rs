@@ -12,6 +12,7 @@
 //! UTF-8 for the `*Text` forms (a non-UTF-8 file is a clean typed error steering to `readBytes`).
 
 use super::fs_bodies::*;
+use super::fs_for_each_line::{for_each_line_inner, ForEachEnd};
 use super::fs_lines::{read_lines_chunk_inner, split_lines_inner};
 use super::fs_lock::{lock_acquire_inner, lock_release_inner, lock_try_acquire_inner};
 use super::{NativeEval, NativeFn};
@@ -51,6 +52,19 @@ fs_native!(fs_read_lines_chunk, read_lines_chunk_inner);
 // expected a `List`, which surfaced as `List.length expects (List<T>)` at runtime.
 fn fs_split_lines(args: &[Value], _out: &mut String) -> Result<Value, String> {
     split_lines_inner(args)
+}
+// DEC-422(a) — the higher-order line reader. NOT `fs_native!`: that macro is for `Pure` bodies with an
+// out-buffer, and this one needs the backend's re-entrant `ClosureInvoker`. The shim exists to keep the
+// two failure channels apart (see `ForEachEnd`): the module's OWN I/O failure is wrapped into a
+// `FileSystemResult` so the prelude can throw a typed `FileSystemError`, while the CLOSURE's failure —
+// a phorj `throw` arriving as the backend's sentinel — propagates untouched. Wrapping the latter would
+// hand a user's own error to a `catch (FileSystemError e)` that has nothing to do with it.
+fn fs_for_each_line(args: &[Value], call: &mut super::ClosureInvoker) -> Result<Value, String> {
+    match for_each_line_inner(args, call) {
+        ForEachEnd::Done => Ok(wrap(Ok(Value::Null))),
+        ForEachEnd::Io(msg) => Ok(wrap(Err(msg))),
+        ForEachEnd::Closure(msg) => Err(msg),
+    }
 }
 fs_native!(fs_lock_acquire, lock_acquire_inner);
 fs_native!(fs_lock_try_acquire, lock_try_acquire_inner);
@@ -226,6 +240,31 @@ pub fn fs_natives() -> Vec<NativeFn> {
                 )
             },
         ),
+        // DEC-422(a) — the native-driven line reader. Unlike the other rows this is HIGHER-ORDER: the
+        // whole read loop runs in Rust and calls the closure per line, which is what removes the two
+        // phorj-level virtual calls per element that made `lines` 4x slower than PHP's `fgets`.
+        //
+        // The closure's declared throws is `FileSystemError` and only that: a native's parameter type
+        // is fixed here in Rust, and `Ty::Function`'s throws set is covariant in the "fewer" direction,
+        // so a non-throwing closure is accepted and one throwing anything else is not. Same restriction
+        // `withLock` carries, for the same reason. `lines` stays for the cases that need more.
+        NativeFn {
+            module: "Core.Native.FileSystem",
+            name: "forEachLine",
+            params: vec![
+                Ty::String,
+                Ty::Function(
+                    vec![Ty::String],
+                    Box::new(Ty::Void),
+                    vec![Ty::Named("FileSystemError".into(), Vec::new())],
+                ),
+            ],
+            ret: res(Ty::Void),
+            pure: false,
+            eval: NativeEval::HigherOrder(fs_for_each_line),
+            lift_from: &[],
+            php: wrapped!("__phorj_fs_for_each_line", 2),
+        },
         // DEC-348 — the three lock primitives. INTERNAL: user code never calls these, it calls the
         // prelude's `FileSystem.withLock(path, fn)`, whose `using (FileLock …)` is what guarantees the
         // release. The `int` is an opaque ticket (0 = not acquired for the try form).
