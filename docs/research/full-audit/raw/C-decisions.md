@@ -5737,6 +5737,10 @@ Two consequences worth stating plainly:
     the same dependency limit is a documented near-parity, not a tuning debt. **[Inferred** — the
     dependency-chain bound follows from the loop shape and the two measured throughputs; the specific
     fadd latency and clock on this box were not measured.**]**
+    → **UPGRADED TO [Verified] BY DEC-430, and it is stronger than this guess:** the clock WAS then measured
+    (2.75 GHz effective, not the 2.100 `/proc/cpuinfo` reports), and php sits at **1.98 cycles/iteration** —
+    i.e. exactly the 2-cycle FP-add latency of this core, *at* the floor — against phorj's 2.15. The ceiling
+    on any further phorj work on this bench is therefore ~11%, and it is not a tuning debt.
 
 ### What the next step is NOT
 
@@ -5763,3 +5767,88 @@ weakening each and re-running: the loop-scoping (→ the floatloop-shape test fa
 `acc + m`, with no call/index/div/`Eq` — because the `floatloop` shape has a `CallNative` that creates the
 fault-exit block anyway and hid the bug through all 173 other JIT tests. Worth keeping in mind: the
 narrowing passed the entire existing JIT suite.
+
+
+## DEC-430 — the box's real clock, `floatloop` AT the hardware floor, and phorj's own 25-40% variance localized but NOT root-caused (2026-08-01, MEASURED / NO CODE CHANGE)
+
+Task #62, opened by DEC-429: phorj's `floatloop` wall clock spans 66% pinned+interleaved on a settled box
+where php spans 11%, with identical instruction counts run to run. Rule 14 applies — reproduce and trace
+before any fix. Three findings, in ascending order of usefulness.
+
+### 1. `/proc/cpuinfo` lies about the clock by 31%, and every cycles-per-iteration number derived from it is wrong
+
+A serial integer add chain is exactly 1 cycle/iteration on any modern x86 core, so wall time over N
+iterations gives the true core frequency. Six samples, pinned: **2.638 - 2.820 GHz, effective ~2.75 GHz.**
+`/proc/cpuinfo` and the TSC both report **2.100 GHz** — that is the NOMINAL invariant-TSC rate this guest is
+told, not the frequency the core runs at.
+
+This matters because it silently breaks the arithmetic: at 2.100 GHz `floatloop` computes to 1.69
+cycles/iteration, which is *physically impossible* for a serial FP-add chain and is exactly the
+contradiction that started this investigation. **Any future cycles/iteration on this box must use ~2.75 GHz,
+measured, never `/proc/cpuinfo`.** The probe is 20 lines of C and takes a second; it belongs in any perf
+session's opening moves.
+
+Bonus: the clock is STABLE to 2.6%, and `/proc/stat` steal time did not move (223 → 223) across the whole
+investigation. So frequency scaling and hypervisor steal are both excluded as noise sources, up front.
+
+### 2. `floatloop`: php is AT the hardware dependency floor; the ceiling on further phorj work is ~11%
+
+With the real clock, and best-of-25 pinned + interleaved:
+
+| leg | ms (5M iters) | cycles / iteration | Ir / iteration |
+|---|---|---|---|
+| php 8.5.8 + tracing JIT | **3.603** | **1.98** | 8.00 |
+| phorj (master) | **3.899** | **2.15** | 7.01 |
+
+The loop body is a serial float-dependency chain (`x = x + 1.5` feeds the next iteration's compare), and
+FP-add latency on this core (Golden Cove class — the flags carry `amx_tile`/`avx512_fp16`) is 2 cycles. **php
+measures 1.98 cycles/iteration: it is sitting exactly on that floor.** phorj is 0.17 cycles above it.
+
+So `floatloop` is not a tuning debt and cannot become a meaningful win: the maximum recoverable is ~11%, and
+phorj already executes 12% FEWER instructions per iteration than php (7.01 vs 8.00, DEC-429). It is a
+**documented near-parity, bounded by hardware**, and it should stop being counted as JIT-programme work. This
+upgrades DEC-429's [Inferred] near-parity note to [Verified] and sharpens it.
+
+### 3. The variance: eight hypotheses refuted, one correlation found, root cause BLOCKED on hardware counters
+
+Reproduced first, per Rule 14 — 25 runs pinned + interleaved on a settled box (load 0.08): phorj
+**3.899-7.611 ms (95% spread)**, php **3.603-3.740 ms (4%)**. Then, each hypothesis with the evidence that
+killed it:
+
+| # | hypothesis | REFUTED by |
+|---|---|---|
+| 1 | host noise / other load | zero steal (223→223); clock stable 2.6%; php interleaved on the SAME core stable to 2-4% |
+| 2 | frequency scaling | measured 2.638-2.820 GHz, and it ANTI-correlates (the fastest clock round gave the slowest phorj) |
+| 3 | JIT code placement / alignment | `setarch --addr-no-randomize` gives 82% vs 95% — no help; and see #4 |
+| 4 | anything per-PROCESS at all | the variance occurs **WITHIN one process**: 8 consecutive `bench` calls, same native code at the same address, 4.75 → 7.36 ms |
+| 5 | Cranelift compile time leaking into the timed window | `bench` contains a loop ⇒ `function_has_loop` ⇒ compiled EAGERLY on call 1; the variance is across calls 2-9 |
+| 6 | silent VM fallback (a `JitRun::Fault` redo) | `--no-jit` is **883 ms**, 170x the JIT — a fallback would be unmissable, and the VM leg is itself stable to 3% |
+| 7 | the float path (dual-space, GPR↔XMM bitcasts) | `floatmul`, a PURE float loop, is the most stable thing measured: **2-3%** in-process |
+| 8 | SMT sibling contention / a busy runtime thread | this box has **no SMT** (every logical CPU is its own core); and `phg`'s 2nd thread is the one that SLEEPS (state=S, utime=0) while the spawned worker runs the program |
+
+**The one positive correlation.** The unstable loops are the SHORT, high-IPC ones and the stable one has
+latency slack: `floatloop` 2.15-3.0 cycles/iteration (unstable), `intadd` ~2.25 (unstable, 21-32%),
+`floatmul` **~6.9** (stable, 2-3%). And the absolute spread SCALES with the iteration count (1.13 ms at 5M →
+5.26 ms at 20M, relative spread flat at 25-32%), so it is a sustained per-iteration rate difference, not a
+fixed per-call warm-up.
+
+**Root cause NOT established, and no fix attempted.** What survives is microarchitectural front-end state
+(µop-cache/DSB residency, 32-byte fetch-boundary straddling, issue-port contention) — and separating those
+requires hardware performance counters. `perf` is not installed in this container and PMU access is not
+available to it. Rule 14 forbids patching around an undiagnosed cause, so this stops here rather than
+guessing at a loop-alignment change. **Recorded as OPEN with the instrument named** (`perf stat -e
+idq.dsb_uops,idq.mite_uops,uops_issued.any` on a box with PMU access would settle it in one run).
+
+### The consequence that IS actionable: the frozen `_owed` floors for short-loop benches are too harsh
+
+`scripts/microbench.sh` already uses the right estimator — **best-of-K**, not a median (`vbest` at :156) —
+but `K` defaults to **3**, and best-of-3 against a 25-40% tail lands well above the true minimum. Measured on
+`floatloop`: best-of-3 typically ~4.5-5.0 ms, best-of-9 4.031, best-of-25 **3.899**. So the recorded ratio is
+systematically PESSIMISTIC for phorj on exactly the high-variance short loops, and the frozen `_owed` floor
+of 0.46 carries that error.
+
+That is a MEASUREMENT artifact, not phorj being slow — and it is worth stating plainly because it cuts the
+other way from every bias this project has guarded against so far. **Not self-ruled**: raising `K` doubles or
+triples the time of a gate that runs on every push, and it moves numbers on the whole scoreboard, so the
+trade-off is the developer's (see the QUESTION carried out of this entry). DEC-365 still forbids
+re-baselining an OWED row, so nothing was re-emitted.

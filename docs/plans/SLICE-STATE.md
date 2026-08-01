@@ -1,6 +1,6 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. IN FLIGHT: the DEC-423 perf programme — every loss named; the JIT vertical started (DEC-428 = step 1, `floatloop` -36%) and step 2 was BUILT, MEASURED AT ZERO, REVERTED (DEC-429 — the sticky phi costs nothing; `opt_level` was `speed` all along, and a stale comment saying `none` had been the premise of DEC-425/428). `floatloop` is now a documented near-parity, not a tuning debt. NEXT: pick the next loss from the list below — but measure with callgrind Ir SLOPE, never wall clock (DEC-429).**
+## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. IN FLIGHT: the DEC-423 perf programme — every loss named; the JIT vertical started (DEC-428 = step 1, `floatloop` -36%) and step 2 was BUILT, MEASURED AT ZERO, REVERTED (DEC-429 — the sticky phi costs nothing; `opt_level` was `speed` all along, and a stale comment saying `none` had been the premise of DEC-425/428). `floatloop` is now a documented near-parity, not a tuning debt — and DEC-430 upgraded that to HARDWARE-BOUNDED: php sits at 1.98 cycles/iteration, exactly this core's 2-cycle FP-add latency floor, so the ceiling on further phorj work there is ~11%. DEC-430 also found the box's real clock is ~2.75 GHz (not the 2.100 `/proc/cpuinfo` reports) and localized phorj's 25-95% short-loop variance to front-end µarch state — eight causes refuted, BLOCKED on PMU access. NEXT: pick the next loss from the list below — measure with callgrind Ir SLOPE, never wall clock (DEC-429). ONE PENDING RULING carried out of DEC-430: raise `MICROBENCH_RUNS` (K=3 is systematically pessimistic on short loops) vs leave the per-push gate fast.**
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build
@@ -223,6 +223,32 @@ a PENDING question, not self-ruled.
      apart against the same latency bound: **a documented near-parity, not a tuning debt.** Measured ratio
      0.90 (best-of-9) / 0.78 (median) — better than the frozen `_owed` floor and deliberately NOT
      re-baselined (DEC-365).
+     **CLOSED AS A HARDWARE-BOUNDED NEAR-PARITY, 2026-08-01 (DEC-430).** The box's real clock was measured
+     (serial-add probe: **~2.75 GHz effective**, while `/proc/cpuinfo` and the TSC both report 2.100 — the
+     nominal rate, 31% low; every cycles/iteration derived from `/proc/cpuinfo` is wrong, which is what made
+     `floatloop` compute to a physically-impossible 1.69 cycles/iter). With it, best-of-25 pinned +
+     interleaved: **php 3.603 ms = 1.98 cycles/iteration, phorj 3.899 ms = 2.15**. FP-add latency on this
+     core is 2 cycles and the body is a serial `x = x + 1.5` chain, so **php is sitting exactly ON the
+     dependency floor** and phorj is 0.17 cycles above it. Ceiling on any further phorj work here: **~11%**
+     — and phorj already runs 12% FEWER instructions/iteration. `floatloop` is no longer JIT-programme work.
+     **VARIANCE: localized, NOT root-caused, BLOCKED on PMU access (DEC-430).** Eight hypotheses refuted with
+     evidence — host noise (zero steal; php stable to 2-4% interleaved on the same core), frequency (measured,
+     anti-correlates), code placement/ASLR (`setarch --addr-no-randomize` no better), anything per-process
+     (the swing happens WITHIN one process: 8 consecutive calls to the same native code at the same address,
+     4.75 → 7.36 ms), Cranelift compile time (loop-containing ⇒ eager on call 1), silent VM fallback
+     (`--no-jit` = 883 ms, 170x, itself stable to 3%), the float path (`floatmul`, a PURE float loop, is the
+     most stable thing measured at 2-3%), and SMT/thread contention (no SMT on this box; phg's 2nd thread
+     sleeps at 0 utime). Correlation found: unstable = SHORT high-IPC loops (`floatloop` 2.15, `intadd` 2.25
+     cycles/iter) vs stable = latency slack (`floatmul` ~6.9); the absolute spread scales with iters, so it is
+     a sustained per-iteration rate difference. What remains is front-end µarch state (DSB residency, 32-byte
+     fetch straddling, port contention) and separating those needs hardware counters — `perf` is absent here.
+     Rule 14: stop, do not guess at a loop-alignment change. Instrument named for a PMU-capable box:
+     `perf stat -e idq.dsb_uops,idq.mite_uops,uops_issued.any`.
+     **⇒ THE `_owed` FLOORS FOR SHORT LOOPS ARE TOO HARSH** (and this is the one bias that cuts phorj's way):
+     `microbench.sh` already uses best-of-K, not a median (`vbest`, :156) — but K defaults to **3**, and
+     best-of-3 against a 25-40% tail lands well above the true min (`floatloop`: best-of-3 ~4.5-5.0 ms vs
+     best-of-25 **3.899**). Raising K multiplies a per-push gate's runtime and moves the whole scoreboard, so
+     it is a PENDING developer ruling, not self-ruled. Nothing re-baselined (DEC-365).
      **STANDING INSTRUMENT CHANGE (DEC-429):** wall clock on this box CANNOT resolve a <20% JIT effect —
      phorj's `floatloop` spans 4.03-6.68 ms pinned+interleaved on a settled box (66%, bimodal) where php
      spans 3.62-4.01 (11%). Use **callgrind Ir by SLOPE** (`ΔIr / Δiterations` across two iteration
@@ -260,11 +286,13 @@ a PENDING question, not self-ruled.
    step 2 = DEC-429 measured at zero and reverted**), a representation/design choice (`queryparse`
    DEC-424, `deepjson` DEC-426 — both adjudicable), or noise at parity (`listcontains`). Nothing is
    unexplained and nothing left moves under a tuning pass.
-   **DEC-429 narrows that first bucket to 4 of 8**: `floatloop` is NOT VM interpretation and NOT codegen
-   volume — phorj already runs 12% FEWER instructions per iteration than php on it (7.01 vs 8.00) and the
-   residual is IPC on a serial float-dependency chain. It joins `listcontains` as a documented
-   near-parity. And the instrument for the remaining four is now **callgrind Ir by slope**, because wall
-   clock here cannot resolve a <20% JIT effect (66% spread on the phorj leg, pinned + interleaved).
+   **DEC-429/430 narrow that first bucket to 4 of 8**: `floatloop` is NOT VM interpretation and NOT codegen
+   volume — phorj already runs 12% FEWER instructions per iteration than php on it (7.01 vs 8.00), and
+   DEC-430 measured php at **1.98 cycles/iteration, exactly ON this core's 2-cycle FP-add latency floor**,
+   against phorj's 2.15. Ceiling on further work: ~11%. It joins `listcontains` as a documented near-parity —
+   here a HARDWARE-BOUNDED one. And the instrument for the remaining four is now **callgrind Ir by slope**,
+   because wall clock here cannot resolve a <20% JIT effect (95% spread on the phorj leg on short loops,
+   pinned + interleaved on a settled box; DEC-430 refuted eight causes and is blocked on PMU access).
    **THE GATE IS NOW ARMED** (DEC-423.1, developer-ruled): the baseline is re-emitted on the local
    release php with all 8 losses frozen as `_owed` — DERIVED at emit time, so `--emit` cannot launder
    one. The gate reports every owed loss on every push, BLOCKS if one deepens past 25%, and says
@@ -276,7 +304,11 @@ a PENDING question, not self-ruled.
    headroom: FN-STR (93 rows, C=30), FN-MATH (37, C=17). **Heed §4.14's lesson**: raw function counts
    are TRIAGE only — FN-ARR looked under-credited and mapped to exactly its existing C=26.
 
-**PENDING developer questions** (Invariant 15 — do not self-rule): **LIFT-THROWS** (new 2026-08-01 — a
+**PENDING developer questions** (Invariant 15 — do not self-rule): **MICROBENCH-K** (new 2026-08-01, DEC-430
+— `microbench.sh`'s `K=3` best-of is systematically PESSIMISTIC for phorj on the 25-40%-variance short loops:
+`floatloop` best-of-3 ≈ 4.5-5.0 ms vs best-of-25 3.899. Raising K multiplies the runtime of a gate that runs
+on EVERY push and moves numbers across the whole scoreboard — a measurement-policy trade-off, not a tuning
+call); **LIFT-THROWS** (new 2026-08-01 — a
 lifted `throw` needs its `throws` clause by hand; inferring one means ruling three draft-visible
 choices, see `KNOWN_ISSUES.md`); the strict-vs-narrow reading of DEC-379;
 refinement/newtype types (`PositiveNumber` — analysis in the gap matrix's PENDING section); and whether
