@@ -18,7 +18,14 @@ This is why HOFs split so sharply on the scoreboard: `listfilter` 8.0x, `listmap
 have bespoke JIT **verticals** that bypass the closure entirely, while `fsforeachline` (no vertical) loses
 3.4x. The verticals treat the symptom one native at a time.
 
-**NOT RULED** — options and their trade-offs are in DEC-434. Byte-identity is unaffected; this is a speed
+**MEASURED FOLLOW-UP (DEC-434.2): hooking the closure path would achieve NOTHING today.** Compiled as JIT
+entries, a capturing lambda declines with `"capturing entry (deferred)"` and a non-capturing one with
+`"entry return kind Unknown"` — a closure only has known operand kinds in the context of its CALL SITE, and
+the entry boundary throws them away. That makes the per-native vertical strategy design-forced rather than
+a stopgap, and makes kind-specialized closure entries (monomorphization keyed on
+`(closure_fn_idx, arg_kinds)`) the principled fix.
+
+**NOT RULED** — options and their trade-offs are in DEC-434 and DEC-434.2. Byte-identity is unaffected; this is a speed
 cliff, like PERF-throws-kills-jit below, and the two compound in any fallible higher-order code.
 
 ## PERF-throws-kills-jit — a FALLIBLE CALL anywhere in a function takes the WHOLE function off the JIT (found 2026-08-01, DEC-431)

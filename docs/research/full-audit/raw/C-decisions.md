@@ -6423,3 +6423,58 @@ That last case is the trade: the rule owes MORE than strictly necessary. Under D
 aside until it wins") erring toward OWED is the safe direction — a ratchet should arm only robust wins, and
 an un-armed row is still hunted. But it would move several near-parity rows onto the list, so it is the
 developer's call, not mine.
+
+
+## DEC-434.2 — hooking the closure path would achieve NOTHING today; the vertical strategy is forced, not a stopgap (2026-08-01)
+
+DEC-434 left four options and flagged one unmeasured assumption in the leading one: hooking
+`call_closure_value` into the JIT "lifts EVERY higher-order native at once", with the caveat that how much
+of closure compilation already works was unknown. Measured it before anyone builds on it.
+
+### The probe
+
+Compiled every function of a two-lambda program as a JIT ENTRY:
+
+```
+fn#2 <lambda@4>  arity=2 n_captures=1 -> Unsupported("unboxed: capturing entry (deferred)")
+fn#3 <lambda@5>  arity=1 n_captures=0 -> Unsupported("entry return kind Unknown has no VM-hook decode")
+```
+
+**Both decline, for two different reasons**, so a hook on `Op::CallValue` / `call_closure_value` would
+find nothing to compile:
+  * a **capturing** closure cannot be a JIT entry at all — explicitly deferred, because the captures would
+    have to arrive through the entry ABI alongside the args;
+  * a **non-capturing** one declines anyway, because a lambda's parameter kinds are `Unknown` at entry, so
+    nothing downstream proves and the return kind has no decode.
+
+DEC-434's option 1 is therefore NOT the small change it read as. It requires capturing-entry support AND
+param-kind seeding first. Same shape as DEC-431.2: the leading candidate looked cheap and was not, and the
+only reason we know is that it was measured instead of assumed. That is now twice in one day on the JIT —
+worth treating as the local rule: **never cost a JIT design from the outside; compile the thing and read
+the error.**
+
+### The insight that reframes the whole scoreboard
+
+**A closure only has known operand kinds in the context of its CALL SITE.** At a vertical, the lambda is
+inlined into the caller's graph, where the element type of the list being mapped is known — so kinds flow
+and the code compiles. As a standalone entry, that information is thrown away and nothing can be proven.
+
+So the per-native vertical strategy (DEC-311 and successors) is **not a workaround for a missing hook — it
+is forced by the current design.** `listfilter` 8.0x, `listmap` 7.2x and `mapfilter` 5.2x win precisely
+because inlining preserves the kinds; `forEachLine` loses 3.4x because no vertical inlines it. That is the
+actual explanation for the scoreboard's HOF split, and it supersedes DEC-434's framing of the verticals as
+"treating the symptom one native at a time".
+
+### Revised options (still a ruling, now an informed one)
+
+  1. ~~Hook the closure paths~~ — dead on its own. Only viable AFTER (3).
+  2. **Keep building verticals.** Now understood as design-consistent rather than a stopgap. O(natives),
+     and user-written higher-order code stays interpreted — but every one of them is a known, bounded win.
+  3. **Kind-specialized closure entries** (what real JITs call monomorphization): compile a closure entry
+     specialized to the argument kinds OBSERVED at the native call site, keyed on
+     `(closure_fn_idx, arg_kinds)`. This is the principled fix — it restores exactly the information the
+     entry boundary destroys — and it is what would make (1) worth doing. Also the largest.
+  4. **Cut the per-call frame cost** (1366 Ir/line for ~8 ops). Independent of all of the above and the
+     only one that helps without new machinery.
+
+Nothing built. The probe cost minutes and removed a wrong answer from the table.

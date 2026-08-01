@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Measured — hooking the closure path would achieve nothing today (DEC-434.2, 2026-08-01)
+DEC-434's leading option carried one unmeasured assumption; measured it before anyone builds on it.
+Compiled as JIT entries, a **capturing** lambda declines with `"capturing entry (deferred)"` and a
+**non-capturing** one with `"entry return kind Unknown"` — so a hook on `Op::CallValue` /
+`call_closure_value` would find nothing to compile. Option 1 is not the small change it read as; it needs
+capturing-entry support and param-kind seeding first. Second time in one day a leading JIT candidate looked
+cheap and wasn't (see DEC-431.2), so: never cost a JIT design from the outside — compile it and read the
+error.
+
+**The insight:** a closure only has known operand kinds in the context of its CALL SITE. A vertical inlines
+the lambda into the caller's graph where the element type is known; a standalone entry throws that away.
+So the per-native vertical strategy is **design-forced, not a stopgap** — that is the real explanation for
+the scoreboard's HOF split (`listfilter` 8.0×/`listmap` 7.2× with verticals vs `forEachLine` 3.4× behind
+without one), and it supersedes DEC-434's framing. Revised options in DEC-434.2; the principled fix is
+kind-specialized closure entries keyed on `(closure_fn_idx, arg_kinds)`.
+
 ### Found — a CLOSURE is never JIT-compiled, however hot (DEC-434, 2026-08-01)
 Took the two deepest rows, `fsforeachline` (0.293) and `fslines` (0.113). DEC-431 had shown their profiles
 were 74x dominated by their own fixtures, so this measured the read alone (fixture written once by shell).
