@@ -53,18 +53,24 @@ tokenizer skips the shebang; `phg run ./bin/console` works). To light these up i
 - **Language server:** in the LSP4IJ mapping above, add a **File name pattern** for your extensionless
   entries (e.g. `console`, `bin/*`) → language id `phorj`, so the same `phg lsp` attaches. (LSP4IJ
   matches by name pattern; add each executable entry, or a `bin/*`-style glob.)
-   - **Completion** (the `.` trigger character is advertised, so it fires as you type) offers:
-     `import Core.` → the importable Core module paths; `List.` / `Output.` → that Core module's
-     members; plus in-scope top-level symbols, locals/params, and keywords. It is **parse-tolerant**
-     — it works mid-edit on a buffer that does not yet parse (e.g. right after typing `Output.`).
+   - **Completion** (the `.` and `[` trigger characters are advertised, so it fires as you type)
+     offers: `import Core.` → the importable Core module paths; `List.` / `Output.` → that Core
+     module's members; `#[` → the attribute names (`Entry`, `Config`, `Route`, `Deprecated`,
+     `Invoke`, `ToString`, the DI set, plus your own `#[Attribute]`-marked classes), in both the bare
+     (`#[Entry`) and canonical-path (`#[Core.Runtime.Entry`) spellings; plus in-scope top-level
+     symbols, locals/params, and keywords. It is **parse-tolerant** — it works mid-edit on a buffer
+     that does not yet parse (e.g. right after typing `Output.`).
 
 ### Notes
 
 - **Formatting** routes to `phg format` (comment- and meaning-preserving); reformatting a file that does
   not parse is a no-op (the server never corrupts an in-progress buffer).
-- References / rename are **single-document** today (cross-file is a server follow-up).
-- Completion covers Core modules/members + import paths + local symbols/keywords; **instance/type-aware
-  member completion** (`myVar.` → the variable's class methods) and **user-package import paths** are
-  server follow-ups (they need the resolved-type index and project-source scanning respectively).
+- **Find-usages is project-wide** (DEC-327 — it scans every project `.phg` on disk plus the other open
+  buffers). **Rename is still single-document**: it returns edits for the current file only, so a
+  cross-file rename must be finished by hand.
+- Completion covers Core modules/members, import paths (Core **and** user packages), attribute names,
+  declared-type instance members (`this.` / `myVar.`), and local symbols/keywords. An **inferred**
+  receiver (`var x = …`) or a method chain still resolves to nothing — the deliberate conservative
+  gate, since a wrong member list is worse than none.
 - The server is **off the byte-identity spine** — it never runs the three execution backends, so it
   carries no interp/VM/PHP parity risk; its diagnostics equal `phg check` exactly.

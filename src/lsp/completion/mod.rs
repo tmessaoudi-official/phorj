@@ -98,6 +98,11 @@ enum Ctx {
     /// Completing a member after `<receiver>.`: the receiver ident before the dot — a Core-module
     /// qualifier (`List`) or an instance/`this` (resolved to its declared class in `complete`).
     Member(String),
+    /// Completing an ATTRIBUTE NAME inside `#[…]`: the partial text typed after `#[`. `qualified` is
+    /// true once that text contains a `.` (the user is spelling the canonical `Core.Runtime.Entry`
+    /// form, which needs no import) — the bare-leaf and full-path spellings are both legal, so the
+    /// typed shape picks which one is offered.
+    Attribute { prefix: String, qualified: bool },
     /// No special context — general symbol/keyword completion.
     General,
 }
@@ -193,6 +198,35 @@ pub(super) fn complete(
                 }
             }
         }
+        Ctx::Attribute { prefix, qualified } => {
+            // Built-ins from the AST's own enumeration + the buffer's user-declared attributes
+            // (`#[Attribute] class Audited`). Kind 7 = Class: a phorj attribute IS a class (user ones
+            // literally, built-ins as injected types), so the picker shows the class icon.
+            let mut items: Vec<(String, String)> = catalog::builtin_attributes(qualified);
+            if let Some(p) = program.or(parse_repaired(text, offset).as_ref()) {
+                items.extend(catalog::user_attributes(p));
+            }
+            items.sort();
+            items.dedup();
+            // A dotted path needs a `textEdit` REPLACING the typed fragment: `.` is a client word
+            // boundary, so a plain label would insert after the typed `Core.Runtime.` and yield
+            // `Core.Runtime.Core.Runtime.Entry` (the same trap the import context documents).
+            let start_char = character.saturating_sub(prefix.len() as u32);
+            items
+                .into_iter()
+                .filter(|(label, _)| prefix.is_empty() || label.starts_with(&prefix))
+                .map(|(label, detail)| {
+                    if qualified {
+                        completion_item_edit(
+                            &label, 7, /* Class */
+                            &detail, line, start_char, character, &label,
+                        )
+                    } else {
+                        completion_item(&label, 7, &detail)
+                    }
+                })
+                .collect()
+        }
         Ctx::General => general_items(text, offset, program, docs, uri),
     };
     if items.is_empty() {
@@ -217,6 +251,25 @@ fn context(text: &str, offset: usize) -> Ctx {
             .all(|c| c.is_alphanumeric() || c == '.' || c == '_')
         {
             return Ctx::Import(rest.trim().to_string());
+        }
+    }
+
+    // `#[<partial>` — an ATTRIBUTE NAME. Scan back over the path fragment (ident chars AND `.`, since
+    // the canonical form is dotted) and require a literal `#[` immediately before it. Checked BEFORE
+    // the member-access branch below: `#[Core.Runtime.` ends in a `.` and would otherwise be read as a
+    // `<receiver>.` member access, offering module members where an attribute name belongs.
+    {
+        let b = before.as_bytes();
+        let mut i = b.len();
+        while i > 0 && (is_ident_byte(b[i - 1]) || b[i - 1] == b'.') {
+            i -= 1;
+        }
+        if i >= 2 && b[i - 1] == b'[' && b[i - 2] == b'#' {
+            let prefix = &before[i..];
+            return Ctx::Attribute {
+                qualified: prefix.contains('.'),
+                prefix: prefix.to_string(),
+            };
         }
     }
 
@@ -379,3 +432,5 @@ fn parse_repaired(text: &str, offset: usize) -> Option<Program> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_attributes;

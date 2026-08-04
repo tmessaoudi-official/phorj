@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — attribute-name completion, and the built-in attribute set single-sourced (CD-29, 2026-08-04)
+Typing `#[` offered **nothing**, uniformly, for every attribute in the language — `Entry`, `Config`,
+`Route`, `Deprecated`, `Invoke`, `ToString` and the DI set were all undiscoverable from the editor, which
+Invariant 17's 100% rule counts as an incomplete feature. It now offers the full built-in set plus the
+buffer's own `#[Attribute]`-marked classes, in both the bare (`#[Entry`) and canonical-path
+(`#[Core.Runtime.Entry`, with a replacing `textEdit` so it cannot double-insert) spellings. `[` joined `.`
+as an advertised `triggerCharacter`; **both** editor integrations were updated in the same change.
+
+The enabling refactor: the 11 built-in attributes now live as `paths::*` consts in
+`ast/decls/attributes.rs`, every `is_*` recognizer is defined against its const, and
+`BUILTIN_ATTRIBUTE_PATHS` lists the same consts — so completion reads the array the checker recognizes
+by, and a new built-in attribute becomes completable with no LSP edit. Previously the names existed only
+as literals inside the recognizers, so any LSP list would have been a second source of truth by
+construction. Tests pin the checkable direction (every enumerated row is recognized, and so is its bare
+leaf); the converse is documented as *not* mechanically checkable rather than implied to be proven.
+
+Also corrected two stale editor-README claims found in the same lists, both verified against the code:
+find-usages **is** project-wide (DEC-327), and `rename` **is** still single-document.
+
 ### Measured — hooking the closure path would achieve nothing today (DEC-434.2, 2026-08-01)
 DEC-434's leading option carried one unmeasured assumption; measured it before anyone builds on it.
 Compiled as JIT entries, a **capturing** lambda declines with `"capturing entry (deferred)"` and a

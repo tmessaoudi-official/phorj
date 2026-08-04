@@ -384,8 +384,12 @@ Asymmetry looks unintended, but it is user-visible language behaviour → the de
    [Verified: `src/lift/lexer.rs:144` treats `#` as a line comment, so `#[...]` is swallowed whole.]
    Found by actually testing the lift direction. This is why Invariant 17's lift leg could NOT be closed
    for `#[Deprecated]`. Impacts routes/DI/ORM attributes in any lifted framework code — its own slice.
-2. **The LSP completes no attribute NAMES at all** — typing `#[` offers nothing (`Entry`, `Config`,
-   `Route`, `Injectable`, `Deprecated`). Uniform across every attribute; queued rather than special-cased.
+2. ~~**The LSP completes no attribute NAMES at all**~~ — **CLOSED 2026-08-04.** Typing `#[` now offers
+   the full built-in set + the buffer's own `#[Attribute]`-marked classes, in both the bare (`#[Entry`)
+   and canonical-path (`#[Core.Runtime.Entry`) spellings. `[` joined `.` as an advertised trigger
+   character; both editor docs updated in the same change (Invariant 17). The names are enumerated from
+   `ast::BUILTIN_ATTRIBUTE_PATHS` — the same array the `is_*` recognizers are now defined against — so a
+   new built-in attribute is completable with no LSP edit. See CD-29.
 
 ### ✅ BUILT 2026-07-29 — **Wave 1.1 / DEC-339, THE P0 IS FIXED**
 
