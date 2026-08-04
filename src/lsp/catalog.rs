@@ -170,3 +170,49 @@ fn prelude_class_statics(qualifier: &str) -> Vec<String> {
     }
     out
 }
+
+/// Completable ATTRIBUTE names for the `#[` context, as `(label, detail)`.
+///
+/// Sourced from [`crate::ast::BUILTIN_ATTRIBUTE_PATHS`] — the same array the `is_*` recognizers are
+/// defined against — so a new built-in attribute becomes completable with no edit here, exactly like a
+/// new Core module or native. `qualified` selects the spelling: the bare leaf (`Entry`, the idiomatic
+/// import-gated form) or the full canonical path (`Core.Runtime.Entry`, self-gating, needed when the
+/// user is typing a dotted attribute path).
+///
+/// User-declared attributes (DEC-194: a class carrying `#[Attribute]`) are appended by
+/// [`user_attributes`] — the built-in set alone would leave a user's own attributes uncompletable,
+/// which Invariant 17's 100% rule counts as incomplete.
+pub(super) fn builtin_attributes(qualified: bool) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = crate::ast::BUILTIN_ATTRIBUTE_PATHS
+        .iter()
+        .map(|(path, detail)| {
+            let label = if qualified {
+                (*path).to_string()
+            } else {
+                crate::ast::attr_path_leaf(path).to_string()
+            };
+            (label, (*detail).to_string())
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// The names of classes in `program` that carry the `#[Attribute]` marker — user-defined attribute
+/// types (DEC-194), completable at a `#[` use site exactly like a built-in. Sorted + deduped so the
+/// rendered list is deterministic (Invariant 10).
+pub(super) fn user_attributes(program: &Program) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for it in &program.items {
+        let Item::Class(c) = it else { continue };
+        if c.attrs
+            .iter()
+            .any(crate::ast::Attribute::is_attribute_marker)
+        {
+            out.push((c.name.clone(), "user-defined attribute".to_string()));
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}

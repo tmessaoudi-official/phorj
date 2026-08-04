@@ -6478,3 +6478,38 @@ actual explanation for the scoreboard's HOF split, and it supersedes DEC-434's f
      only one that helps without new machinery.
 
 Nothing built. The probe cost minutes and removed a wrong answer from the table.
+
+### CD-29 (2026-08-04) — attribute-name completion: four calls I made without a ruling
+
+Closing the second of the two gaps recorded by the DEC-417 editor slice (*"the LSP completes no attribute
+NAMES at all"*). The feature itself was queued, not designed, so these four are mine:
+
+1. **Offered spelling depends on the typed shape.** A bare `#[Ent` offers the LEAF (`Entry`); once the
+   typed fragment contains a `.` (`#[Core.Runtime.`) it offers full canonical PATHS. Both spellings are
+   legal (`attr_path_matches` accepts leaf / partial / full), so there is no single right answer — the
+   leaf is idiomatic but import-gated, the path is self-gating. *Reverse:* one branch in
+   `catalog::builtin_attributes(qualified)`.
+2. **`CompletionItemKind` 7 (Class).** A phorj attribute IS a class — user ones literally, built-ins as
+   injected types — so the picker shows the class icon. LSP has no "attribute" kind. *Reverse:* the two
+   literals in the `Ctx::Attribute` arm.
+3. **The bare-leaf item carries no import auto-fix.** Accepting `#[Entry]` with no
+   `import Core.Runtime.Entry;` still yields `E-INJECTED-TYPE-BARE`; the canonical path in the item's
+   `detail` tells the user what to import, but nothing inserts it. An `additionalTextEdits` auto-import
+   is the obvious follow-up and deliberately out of this slice. *Reverse:* additive.
+4. **A user attribute is read from the buffer only** (`#[Attribute]`-marked classes in the current file
+   or its repaired parse) — NOT project-wide, unlike find-usages. A cross-file attribute index is the
+   same follow-up as (3). *Reverse:* `catalog::user_attributes` takes the program it is handed.
+
+**Single-sourcing done in the same change (the part that is not a judgement call):** the 11 built-in
+attributes now live in `ast::decls::attributes::paths::*` consts, with every `is_*` recognizer defined
+against its const and `BUILTIN_ATTRIBUTE_PATHS` listing the same consts. Before this the names existed
+only as string literals inside the recognizers, so an LSP list would necessarily have been a second
+source. `every_enumerated_attribute_is_recognized` + `every_enumerated_leaf_is_recognized_and_unique`
+pin the checkable direction; **the converse (a recognizer with no row) is NOT mechanically checkable**
+without a macro over the `impl` block, and the doc comment says so rather than implying a proof.
+
+**Two stale editor-README claims corrected while in the same lists** (both verified against the code,
+not the task list): find-usages is project-wide (`cross_file_references`, DEC-327) — both READMEs called
+it single-document; and `rename` really IS still single-document (it emits `changes` for one URI), so the
+phpstorm "Notes" line that lumped them together was half right and half wrong. Type-aware member
+completion and user-package import paths were also still listed as "server follow-ups" after shipping.

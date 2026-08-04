@@ -19,11 +19,19 @@ server power the JetBrains/PhpStorm setup — see `../phpstorm/README.md`.)
 - **Diagnostics** — type/parse errors and lints, live as you type (identical to `phg check`).
 - **Hover** — the declaration signature of the symbol under the cursor.
 - **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration.
-- **Completion** — top-level symbols, in-scope locals/params, and keywords.
+- **Completion** — top-level symbols, in-scope locals/params, and keywords; `import Core.` → importable
+  module paths (Core + your own packages); `List.` / `this.` / `myVar.` → that receiver's members; and
+  `#[` → **attribute names** (`Entry`, `Config`, `Route`, `Deprecated`, `Invoke`, `ToString`, the DI
+  set, plus your own `#[Attribute]`-marked classes), offered in both the bare (`#[Entry`) and
+  canonical-path (`#[Core.Runtime.Entry`) spellings. `.` and `[` are advertised as trigger characters,
+  so it fires as you type.
 - **Document symbols** — the file outline (classes/enums carry their members).
 - **Find references** + **document highlight** — every use of the symbol under the cursor
-  (scope-accurate).
-- **Rename** — rename a symbol and all its uses.
+  (scope-accurate). For a top-level symbol this is **project-wide** (DEC-327): every project `.phg` on
+  disk plus the other open buffers.
+- **Rename** — rename a symbol and all its uses **in the current file** (find-references is
+  project-wide, but rename returns edits for one document, so a cross-file rename needs finishing by
+  hand).
 - **Formatting** — reformat via `phg format` (comment- and meaning-preserving).
 
 ## Prerequisites

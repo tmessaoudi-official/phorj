@@ -252,6 +252,14 @@ fn initialize_advertises_completion_and_document_symbols() {
     let out = s.handle(&Json::parse(r#"{"id":1,"method":"initialize"}"#).unwrap());
     assert!(out[0].contains("completionProvider"), "{}", out[0]);
     assert!(out[0].contains("documentSymbolProvider"), "{}", out[0]);
+    // Both trigger characters must be advertised: `.` for member/import paths, `[` for attribute
+    // names (`#[`). A client only fires completion unprompted on an advertised trigger, so dropping
+    // `[` here would silently make attribute completion require a manual Ctrl+Space.
+    assert!(
+        out[0].contains(r#""triggerCharacters":[".","["]"#),
+        "{}",
+        out[0]
+    );
 }
 
 #[test]
