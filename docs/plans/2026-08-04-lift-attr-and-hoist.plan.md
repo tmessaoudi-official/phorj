@@ -185,3 +185,42 @@ re-verified the two starred ones.
   UNCONDITIONAL body-top-level assignment to the same name precedes every read outside the first-assignment
   block — provably safe (that assignment fixes the value before any read), covers the reported DEC-397
   shape, and incidentally dissolves A9 because the hoisted init no longer comes from a branch.
+
+## 3C LENS 3 (safety + promises) — 7 further findings; PANEL VERDICT: NOT CERTIFIABLE (31 total)
+
+| # | P | Finding | Evidence |
+|---|---|---|---|
+| S1 | P0 | ★ **The hoist collides with a PARAMETER, and today's lifter is already CORRECT there.** `declared` is seeded with param names, so `function f(int $b): int { if (true) { $b = 5; } return $b; }` lifts to a bare `b = 5` and checks clean. My qualifying rule ("first assignment is in a nested block") *matches* this case, because a param is never assigned at top level → the hoisted `mutable var b = 5` is `E-SHADOW-LOCAL`. **The rule as written breaks working output.** | `declarations.rs:15`; ★ re-verified both directions |
+| S2 | P0 | ★ **Slice B's real-world premise is UNREACHABLE for a more basic reason than attributes: `namespace` and `use` are in `UNSUPPORTED_KW` — hard parse errors.** So no Symfony/Laravel/Doctrine file lifts *at all*, attributes or not. Two consequences: "`#[Route(path: '/x')]` is the dominant real-world form" describes input the lifter refuses wholesale; and since `use Doctrine\ORM\Mapping as ORM;` can never be seen, **there is no alias resolution** — any dotted name the `\`→`.` mapping produces is NOT the class PHP would have resolved | `lift/parser/mod.rs:26-27`; ★ re-verified: `namespace App\Entity;` → `lift parse error: 'namespace' is not supported in Tier-1` |
+| S3 | P1 | Attribute names are raw-`format!`'d with no validation, and the lift lexer accepts Unicode identifiers where phorj's does not — `#[Café]` yields an **unlexable** draft (`lex error`, which suppresses every other diagnostic in the file). Pre-exists for function names, so slice B *widens* rather than creates it | `printer/items.rs:62,70`; `lexer.rs:215` |
+| S4 | P1 | **My Q2 premise was WRONG and the real stake is worse.** Attribute names are NOT in `check_casing`'s walk, so Invariant 12 does not interact at all (`#[app.my_pkg.Column("id")]` checks clean). The actual defect is **qualifier erasure**: attribute resolution is by LEAF, so `#[ORM.Column]` *and* `#[Assert.Column]` both bind to one `class Column` and both check clean. **`ORM.Column` is UNSOUND; `OrmColumn` is not.** That is a soundness choice, not the cosmetic sub-decision the plan deferred | `checker/casing.rs:14`; `checker/program/attributes.rs:17` |
+| S5 | P1 | **The Rollback claim is false — the fix leaves `src/lift/`.** Making named attribute args work requires `checker/program/attributes.rs:45-46` to normalize them. That is **new accepted phorj syntax**, which triggers Invariant 17's 100% RULE: LSP signature-help/completion + BOTH editors in the same change | `checker/expr/core.rs:156-166` |
+| S6 | P1 | `#[Attribute]` "round-trips" is false without import synthesis (`E-INJECTED-TYPE-BARE`) — confirming B5, and adding that the lifter already HAS this machinery (a lifted `echo` emits three imports and checks clean), so it is a plan gap, not a missing capability | `lifter/decls/mod.rs:104-155` |
+| S7 | P1 | **Both of the panel's own remediations have residual holes.** (a) The side-channel precedent carries **raw text** into a *comment*, where nothing can be escaped; an attribute lands in **code**, so the channel must carry `Vec<PhpAttribute>` with real `PhpExpr` args — a deliberate deviation from the precedent, to be stated rather than inherited. (b) My dominating-assignment condition said "precedes every read OUTSIDE the block"; reads *inside* the block before the assignment are unconstrained — `if ($c) { echo $b; $b = 5; } $b = 7;` prints nothing in PHP and `5` hoisted | `lexer.rs:110-121`; `printer/docs.rs:17` |
+
+### Corrections to THIS plan's own reasoning (lens 3, accepted)
+
+- **The `// CANNOT LIFT:` worry was misplaced.** Invariant 14 governs Phorj→PHP; the lift direction has its
+  own doctrine — **DEC-166**: "hard-untranslatable core … always `// CANNOT LIFT`, never guesses". A comment
+  IS the established precedent and uncompilable draft output is in-contract (`phg lift`'s banner promises a
+  draft). **Slice A's real failure is the OPPOSITE of weak honesty:** it makes output *compile* and be
+  *wrong*, replacing a loud `E-UNKNOWN-IDENT` with a silent divergence.
+  [Verified: `if ($c) { $b = 5; } return $b + 0;` → PHP prints `0`; hoisted phorj checks clean and both
+  Rust legs print `5`.]
+- **R2's verdict was right but its REASONING was wrong.** Double evaluation is genuinely harmless — `List`/
+  `Map` are `Rc<Vec<..>>` with no `RefCell` and no identity semantics, PHP has no NaN literal, and an
+  out-of-range int is refused at lift-lex time. R2 fails because **the hoisted initializer is live when the
+  branch does not execute** — not a side-effect problem at all.
+- **String args are already safe** — they route through `escape_str`, which handles `\ " \n \t \r { }`
+  (PHP `'a{b}"c\d'` → phorj `"a\{b\}\"c\\d"`). The injection surface is the attribute **name** (S3) and a
+  raw-text side channel (S7), not the args.
+- **Mis-citation:** the "must not emit programs `E-SHADOW-LOCAL` rejects" sentence is in
+  `SLICE-STATE.md:415-417`, NOT in DEC-397's register row.
+
+### Roadmap consequence (the finding that outranks the slice)
+
+S2 means **LIFT-ATTR is the SECOND blocker for real-world PHP, not the first.** Namespace/`use` support is
+the prerequisite that would actually unlock Symfony/Laravel/Doctrine input; attribute lifting without it
+only serves single-file, namespace-free PHP. My earlier research answer ("lift the app onto phorj's native
+L2 consumers") is sound in principle and unreachable today for a reason I had not checked. Priority is the
+developer's call and is now an open question, not an assumption.
