@@ -180,5 +180,29 @@ Refused loudly, with the reason, rather than half-lifted: a braced `namespace A 
 `package` per file), a second `namespace` in one file, a `namespace` after a declaration,
 `use function` / `use const` (they import a symbol, not a type), and the grouped `use A\{B, C};` form.
 
+## The function-scope hoist (DEC-397, 2026-08-04)
+
+`hoist.php` / `hoist.phg`. PHP has FUNCTION scope; phorj has BLOCK scope. A variable first assigned
+inside a block was declared inside it, so every later use failed.
+
+**Hoisted** when the first assignment is a literal in a block that ALWAYS executes — the function body,
+a bare `{ … }`, or `if (true)` with no `elseif`/`else`.
+
+**Refused, with a `// CANNOT LIFT:` note naming the variable**, in every other case:
+
+| Shape | Why not |
+|---|---|
+| first assignment in a CONDITIONAL block, read outside | PHP reads the unassigned variable as null; hoisting a literal changes the answer. `if ($c) { $b = 5; } return $b + 0;` prints `0` in PHP for `$c = false`, and `5` hoisted |
+| non-literal right-hand side | hoisting `$b = g();` moves a CALL out of its branch — a relocated side effect |
+| a read precedes the first assignment | that read is of an unassigned variable in PHP |
+| `while` / `for` / `foreach` / `try` / `catch` / `finally` body | a loop may run zero times; a `try` body may throw part-way |
+
+**Never touched:** a parameter (already declared — a second declaration is `E-SHADOW-LOCAL`, which
+DEC-397 explicitly forbids the lifter from emitting), a `foreach`/`catch` binding (the construct declares
+it), and a block-local variable (nothing is broken, so hoisting would only add noise).
+
+The refused cases still fail `phg check` — in-contract for a `// lifted (verify)` draft. What would not
+be acceptable is failing it *silently*, or worse, passing it with the wrong answer.
+
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.

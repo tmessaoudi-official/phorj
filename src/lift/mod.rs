@@ -33,4 +33,6 @@ mod printer_tests;
 #[cfg(test)]
 mod lifter_tests;
 #[cfg(test)]
+mod lifter_tests_hoist;
+#[cfg(test)]
 mod lifter_tests_ns;

@@ -1,0 +1,20 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+function pick(): string {
+    mutable var chosen = "first";
+    if (true) {
+        chosen = "first";
+    }
+    chosen = "second";
+    return chosen;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.print(pick() + "\n");
+}

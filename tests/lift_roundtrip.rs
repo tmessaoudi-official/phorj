@@ -160,6 +160,21 @@ fn lift_roundtrip_preserves_behavior() {
             "concat",
             r#"<?php function greet(string $n): string { return "Hi, " . $n; } echo greet("Phorj");"#,
         ),
+        // DEC-397 hoist: `$b` is first assigned inside an always-executing `if (true)` and read after
+        // it. Before the hoist this lifted to a declaration INSIDE the block, so the outer `$b = …`
+        // was `E-ASSIGN-UNKNOWN`. The point of putting it HERE rather than only in a unit test is that
+        // this harness compares the lifted program's stdout against the ORIGINAL PHP's on all three
+        // legs — which is exactly what catches a hoist that compiles but changes the answer.
+        (
+            "hoist_out_of_an_always_executing_block",
+            r#"<?php
+function pick(): string {
+    if (true) { $b = "first"; }
+    $b = "second";
+    return $b;
+}
+echo pick();"#,
+        ),
         // LIFT-NS: a namespaced file with an aliased `use`. Before this slice `namespace`/`use` were in
         // the parser's UNSUPPORTED_KW, so this shape — i.e. every Symfony/Laravel/Doctrine file — could
         // not be lifted at all. The namespace must reach the phorj `package` (PascalCase-ized, since

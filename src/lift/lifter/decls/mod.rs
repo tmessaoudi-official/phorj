@@ -3,6 +3,7 @@
 use super::*;
 
 mod declarations;
+pub(in crate::lift) mod hoist;
 pub(in crate::lift) mod statements;
 
 pub fn lift_source(php_src: &str) -> Result<String, String> {
@@ -16,10 +17,7 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
     // which will NOT type-check. Saying so beats leaving the reader to discover it from `phg check`:
     // the lifter's contract is that anything it cannot do is refused LOUDLY, never guessed.
     let unmapped = super::exceptions::unmapped_exception_classes(&prog);
-    if unmapped.is_empty() {
-        return Ok(out);
-    }
-    let notes: String = unmapped
+    let mut notes: String = unmapped
         .iter()
         .map(|c| {
             format!(
@@ -28,7 +26,56 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
             )
         })
         .collect();
+    // DEC-397: a variable whose first assignment sits in a CONDITIONAL block, and which is read outside
+    // it, cannot be hoisted soundly — PHP reads an unassigned variable as null (plus a warning) and
+    // phorj has no way to express that without a type the lifter cannot infer. Hoisting a literal anyway
+    // would make the draft COMPILE and be WRONG, so the name is reported instead. The draft still fails
+    // `phg check`, which is in-contract for a `// lifted (verify)` draft — what is not acceptable is
+    // failing it silently.
+    notes.push_str(&hoist_notes(&prog));
+    if notes.is_empty() {
+        return Ok(out);
+    }
     Ok(format!("{notes}{out}"))
+}
+
+/// The `// CANNOT LIFT:` notes for every function-scoped variable the DEC-397 hoist had to refuse,
+/// deduped and in first-seen order so the header is deterministic (Invariant 10).
+fn hoist_notes(prog: &php::PhpProgram) -> String {
+    let mut seen: Vec<(String, String)> = Vec::new();
+    let mut push = |label: &str, params: &[php::PhpParam], body: &[php::PhpStmt]| {
+        let names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+        for name in hoist::plan(body, &names).blocked {
+            if !seen.iter().any(|(f, n)| f == label && n == &name) {
+                seen.push((label.to_string(), name));
+            }
+        }
+    };
+    for item in &prog.items {
+        match item {
+            php::PhpItem::Function(f) => push(&f.name, &f.params, &f.body),
+            php::PhpItem::Class(c) => {
+                for m in &c.members {
+                    if let php::PhpMember::Method(me) = m {
+                        if let Some(body) = &me.body {
+                            push(&format!("{}.{}", c.name, me.name), &me.params, body);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    seen.iter()
+        .map(|(func, name)| {
+            format!(
+                "// CANNOT LIFT: `${name}` in `{func}()` is first assigned inside a CONDITIONAL block \
+                 and read outside it. PHP would read it as null there (function scope); phorj has \
+                 block scope and no inferable nullable to stand in, so declare `{name}` before the \
+                 block by hand.\n"
+            )
+        })
+        .collect()
 }
 
 /// DEC-331 D1: the lifted entry is always a CLI script (PHP has no entry-role concept), so it

@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the DEC-397 function-scope hoist, narrowed to what is provably sound (2026-08-04)
+PHP has FUNCTION scope, phorj has BLOCK scope, so a variable first assigned inside a block was DECLARED
+inside it and every later use was `E-ASSIGN-UNKNOWN` / `E-UNKNOWN-IDENT`. The declaration now moves to the
+top of the function — but **only out of blocks that always execute** (the function body, a bare `{ … }`,
+`if (true)` with no other arm), which is exactly the shape of DEC-397's own reproducer.
+
+**The agreed shape was "hoist any literal first assignment", and that is unsound.** For
+`if ($c) { $b = 5; } return $b + 0;`, `$c = false` prints `0` in PHP — an unassigned read is null and
+`null + 0` is `0` — while a hoisted `mutable var b = 5;` prints `5`. The draft would COMPILE and be WRONG,
+trading a loud error for a silent divergence: strictly worse than the bug being fixed. Faithful
+reproduction needs `T? b = null` plus unwraps, and the lifter cannot infer `T` from untyped PHP locals, so
+every conditional case is refused with a `// CANNOT LIFT:` note naming the variable and function instead.
+
+Also never hoisted, each for its own reason: a parameter (already declared — a second declaration is the
+`E-SHADOW-LOCAL` that DEC-397 explicitly forbids), a `foreach`/`catch` binding, a non-literal right-hand
+side (moving a call out of its branch relocates a side effect), a variable read before its first
+assignment, and a block-local variable. Ships `examples/lift/hoist.{php,phg}` and a `lift_roundtrip` case
+— the harness that compares lifted stdout against the original PHP's on all three legs, i.e. the only one
+that catches "compiles but changes the answer".
+
 ### Added — `declare(strict_types=1);` in every transpiled file, both directions (DEC-401, 2026-08-04)
 The transpiler now emits `declare(strict_types=1);` as the first statement of every generated PHP file
 (single-sourced as `PHP_PROLOGUE`, so the flat and namespaced emit paths cannot drift). The PHP leg now

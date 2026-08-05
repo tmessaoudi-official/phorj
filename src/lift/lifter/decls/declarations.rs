@@ -14,6 +14,27 @@ impl Lifter {
         for p in &params {
             declared.insert(p.name.clone());
         }
+        // DEC-397: PHP has FUNCTION scope, phorj has BLOCK scope, so a variable first assigned inside a
+        // block would be DECLARED inside it and then be unknown outside. Plan the hoists BEFORE lifting
+        // the body and seed `declared` with each hoisted name — seeding is what makes every in-block
+        // assignment lift as a plain assignment for free, which is also what keeps the output clear of
+        // `E-SHADOW-LOCAL` (a second declaration). See `hoist` for why this is restricted to blocks
+        // that always execute.
+        let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+        let plan = super::hoist::plan(&f.body, &param_names);
+        let mut prelude: Vec<Stmt> = Vec::new();
+        for (name, lit) in &plan.hoists {
+            declared.insert(name.clone());
+            prelude.push(Stmt::VarDecl {
+                ty: Type::Infer(SP),
+                name: name.clone(),
+                init: lift_expr(lit)?,
+                mutable: true,
+                span: SP,
+            });
+        }
+        let mut body = prelude;
+        body.extend(self.lift_block(&f.body, &mut declared)?);
         Ok(FunctionDecl {
             modifiers: Vec::new(),
             attrs: Vec::new(),
@@ -24,7 +45,7 @@ impl Lifter {
             params,
             ret: lift_ret(&f.ret, Some(&f.body))?,
             throws: Vec::new(),
-            body: self.lift_block(&f.body, &mut declared)?,
+            body,
             foreign: false,
             generic_ret_from_param: None,
             span: SP,

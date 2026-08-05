@@ -6584,3 +6584,40 @@ back**, because helpers are emitted with untyped parameters (`function __phorj_c
 the lifter's Tier-1 requires types. Pre-existing (reproduces with the prologue removed by hand) and
 orthogonal to DEC-401, but it bounds what "the round trip works" currently means, so the round-trip test
 deliberately uses a helper-free program and says why.
+
+### DEC-397 BUILT (2026-08-04) — and the ruled SHAPE was refuted; only a sound subset ships
+
+The register row ruled the SCHEDULING ("the hoist rides in the DEC-339 slice"). The SHAPE was agreed
+separately as *"hoist the first assignment when its value is a literal"*. **Measuring that against real
+PHP refuted it**, and the refutation is the substance of this entry.
+
+```php
+function g(bool $c): int { if ($c) { $b = 5; } return $b + 0; }
+```
+`g(false)` prints **0** under php-8.5.8 — reading an unassigned `$b` yields null, and `null + 0` is `0`.
+A hoisted `mutable var b = 5;` makes it print **5**. [Verified: `0|5`.] So the ruled shape would make the
+draft **COMPILE and be WRONG** — trading a loud `E-UNKNOWN-IDENT` for a silent divergence, which is
+strictly worse than the bug it was fixing and is exactly what `tests/lift_roundtrip.rs` exists to catch.
+
+Reproducing PHP faithfully needs `T? b = null` plus an unwrap at every read, and the lifter cannot infer
+`T` from untyped PHP locals (`mutable var b = null` is `E-INFER-NULL` — verified earlier in this slice).
+So what ships is the SOUND SUBSET: hoist only out of blocks that ALWAYS execute — the function body, a
+bare `{ … }`, and `if (true)` with no other arm, which is precisely the shape of DEC-397's own reproducer.
+
+**Everything else is refused with a `// CANNOT LIFT:` note naming the variable and function** — DEC-166's
+never-guess rule. The refused draft still fails `phg check`, which is in-contract for a
+`// lifted (verify)` draft; what is not acceptable is failing silently, or passing with a wrong answer.
+
+Never hoisted, each for its own reason: a PARAMETER (`declared` is already seeded with param names, so
+these lift correctly today and a second declaration would be `E-SHADOW-LOCAL` — the exact error DEC-397
+says the lifter must not emit); a `foreach`/`catch` binding (the construct declares it); a non-literal RHS
+(moving a call out of its branch relocates a side effect, Invariant 14); a variable READ before its first
+assignment; and a block-local variable (nothing is broken, so hoisting adds only noise — the `h2` fixture
+caught this one before any code was written).
+
+Ships `examples/lift/hoist.{php,phg}` (Invariant 9) plus a `lift_roundtrip` case, deliberately in the
+harness that compares the lifted program's stdout against the ORIGINAL PHP's on all three legs — the only
+gate that catches "compiles but changes the answer".
+
+**Status: the register's DEC-397 row stays RULED; the agreed literal-hoist SHAPE is superseded by this
+narrower sound subset. The developer should know the feature is much smaller than the ruling implied.**

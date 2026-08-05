@@ -23,13 +23,15 @@ file could be lifted AT ALL**, attributes or not. **LIFT-ATTR was the SECOND blo
 LIFT-NS removes the first. Full analysis, all 31 findings, and the corrections to my own reasoning are in
 `docs/plans/2026-08-04-lift-attr-and-hoist.plan.md`.
 
-**STILL OPEN, both with plans now grounded in verified facts rather than my earlier wrong premises:**
-- **#48 DEC-397 lifter hoist** — the ruled literal-hoist shape was REFUTED as written: it breaks output
-  that is CORRECT today (a param assigned only inside a nested block already lifts fine, because
-  `declared` is pre-seeded with params; hoisting it is `E-SHADOW-LOCAL`), and worse, it can make output
-  *compile* and be *wrong* — `if ($c) { $b = 5; } return $b + 0;` prints `0` in PHP and `5` hoisted, which
-  `tests/lift_roundtrip.rs` would catch. Needs the narrowed provably-safe rule (not a param, not a
-  `foreach`/`catch` binding, a dominating assignment before EVERY read including inside the block).
+**#48 DEC-397 hoist — BUILT 2026-08-04, as a SOUND SUBSET, not the ruled shape.** Hoists only out of
+blocks that ALWAYS execute (function body / bare `{ }` / `if (true)` with no other arm — the reproducer's
+own shape). The agreed literal-hoist was refuted by measurement: `if ($c) { $b = 5; } return $b + 0;`
+prints `0` in PHP for `$c = false` and `5` hoisted, so it would make drafts COMPILE and be WRONG. Every
+other case — conditional block, non-literal RHS, read-before-assignment, loop/try body — is refused with a
+`// CANNOT LIFT:` note naming the variable. Params, `foreach`/`catch` bindings and block-locals are never
+touched. **The feature is much smaller than the ruling implied; see the register's "DEC-397 BUILT".**
+
+**STILL OPEN:**
 - **#46 LIFT-ATTR** — now unblocked by LIFT-NS for real input. Two sub-decisions are OWED to the developer:
   the namespaced-attribute spelling is a SOUNDNESS choice, not cosmetic (attribute resolution is by LEAF,
   so `#[ORM.Column]` and `#[Assert.Column]` both bind to one `class Column` and both check clean — so
