@@ -153,8 +153,9 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             });
         }
     }
-    // LIFT-NS: one phorj `import` per PHP `use`, in source order, BEFORE the DEC-312 native imports so
-    // the file's own dependencies read first. Phorj supports import aliases natively, so `use X as Y;`
+    // LIFT-NS: one phorj `import` per PHP `use`, in source order. These land AFTER the imports the lifter
+    // synthesized above (`Core.Runtime.Entry`, `Core.Output`, the `Core.ErrorModule` members), which is
+    // simply the order they are pushed in — nothing depends on it and no test pins it. Phorj supports import aliases natively, so `use X as Y;`
     // lifts to `import X as Y;` rather than being expanded away — which keeps the alias the developer
     // wrote instead of inlining a fully-qualified name at every use site.
     //
@@ -172,18 +173,46 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     // Usage is judged against the LIFTED text, not the PHP source: a Doctrine-style
     // `use … as ORM;` is referenced only from `#[ORM\Column]`, and attributes are not lifted yet
     // (LIFT-ATTR), so a PHP-source scan would keep an import whose only referent was dropped.
+    // The probe MUST propagate a printer error rather than defaulting to `""`: an empty probe makes
+    // `references_ident` false for every name, silently dropping EVERY import. Swallowing it with
+    // `unwrap_or_default()` was a bandaid with no evidenced failure mode (CLAUDE.md's anti-bandaid gate
+    // rates that P0), and the two prints are not interchangeable — this one passes `items` with a
+    // placeholder package and no docs, the final one passes `final_items` with the real package.
     let lifted_decls = crate::lift::printer::print_program(&Program {
         package: vec!["Main".into()],
         items: items.clone(),
         span: SP,
-    })
-    .unwrap_or_default();
+    })?;
+    // Local names already bound by the imports the LIFTER synthesized above (`Core.Output`,
+    // `Core.Runtime.Entry`, `Core.Runtime.EntryKind`, the `Core.ErrorModule` members …). A phorj import
+    // binds its LAST segment, so a PHP `use App\Output;` would bind `Output` a second time and shadow
+    // `Core.Output` — and the lifter's own `Output.print(…)` call would then resolve to the user's
+    // class. That produced SILENT WRONG OUTPUT: `phg check` clean, all three legs agreeing with each
+    // other and disagreeing with the PHP the file was lifted from, so the differential harness could
+    // never see it. Refused loudly instead (DEC-166) — and PHP itself errors on the same shape
+    // (`use A\Helper; use B\Helper;` → "Cannot use B\Helper as Helper"), so refusing is also faithful.
+    let mut bound: Vec<String> = final_items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Import { path, alias, .. } => {
+                Some(alias.clone().or_else(|| path.last().cloned())?)
+            }
+            _ => None,
+        })
+        .collect();
     for u in &prog.uses {
-        let local = u
-            .alias
-            .clone()
-            .or_else(|| u.path.last().cloned())
-            .unwrap_or_default();
+        let Some(local) = u.alias.clone().or_else(|| u.path.last().cloned()) else {
+            continue;
+        };
+        if bound.contains(&local) {
+            return Err(format!(
+                "lift: `use {}` binds the name `{local}`, which this file already imports — phorj has \
+                 no way to express two imports under one name, and silently letting one win would make \
+                 the lifted program disagree with the PHP it came from. Alias it (`use … as Other;`) \
+                 and re-run.",
+                u.path.join("\\")
+            ));
+        }
         if !references_ident(&lifted_decls, &local) {
             continue;
         }
@@ -192,9 +221,10 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             if i + 1 == u.path.len() {
                 path.push(seg.clone());
             } else {
-                path.push(pascalize(seg));
+                path.push(package_segment(seg)?);
             }
         }
+        bound.push(local);
         final_items.push(Item::Import {
             path,
             alias: u.alias.clone(),
@@ -216,7 +246,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     final_items.extend(items);
 
     Ok(Program {
-        package: lift_package(&prog.namespace),
+        package: lift_package(&prog.namespace)?,
         items: final_items,
         span: SP,
     })
@@ -229,16 +259,54 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
 /// with *"package segment `app` must be PascalCase"* [Verified] — and PHP does not guarantee PascalCase
 /// namespaces. `snake_case` and `kebab` separators become word boundaries (`my_pkg` → `MyPkg`), so the
 /// result is a legal phorj package for every input that PHP itself accepts as a namespace.
-fn lift_package(namespace: &[String]) -> Vec<String> {
+fn lift_package(namespace: &[String]) -> Result<Vec<String>, String> {
     if namespace.is_empty() {
-        return vec!["Main".into()];
+        return Ok(vec!["Main".into()]);
     }
-    namespace.iter().map(|s| pascalize(s)).collect()
+    // `Core.` is phorj's RESERVED package root (Invariant 12 — the standard library). A PHP project with
+    // a `Core\` namespace is entirely ordinary, and passing it through emits a draft that dies on
+    // `E-RESERVED-PACKAGE`, so it is refused here with the reason instead.
+    if namespace.first().map(String::as_str) == Some("Core") {
+        return Err(
+            "lift: `namespace Core\\…` maps onto phorj's reserved `Core.` package root (the standard \
+             library). Rename the namespace, or lift into a different package root."
+                .into(),
+        );
+    }
+    namespace.iter().map(|s| package_segment(s)).collect()
 }
 
-/// Upper-camel a single identifier: split on `_`/`-`, capitalize each part, join. A part already
-/// PascalCase is preserved rather than lower-cased (`ORM` stays `ORM`, not `Orm`) — the segment is a
-/// name the developer chose, and only its FIRST character is what `E-PKG-CASE` constrains.
+/// A PHP namespace segment → a legal phorj package segment, or a loud refusal.
+///
+/// `pascalize` alone is not enough, and the two cases below are why this returns a `Result` — both are
+/// legal PHP that produced a draft the toolchain then rejected, which is the exact failure mode DEC-166
+/// exists to prevent (refuse loudly; never emit a guess):
+///   * a segment made only of separators (`___`) pascalizes to `""` → `package ;`, a parse error;
+///   * a non-ASCII segment (`café`) is a legal PHP namespace but phorj's own lexer rejects `é`, so the
+///     draft does not even LEX — and a lex error suppresses every other diagnostic in the file.
+fn package_segment(seg: &str) -> Result<String, String> {
+    let out = pascalize(seg);
+    if out.is_empty() {
+        return Err(format!(
+            "lift: namespace segment `{seg}` has no letters or digits, so it cannot become a phorj \
+             package segment. Rename it."
+        ));
+    }
+    if !out.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(format!(
+            "lift: namespace segment `{seg}` is not ASCII. PHP allows it, but a phorj identifier must \
+             be ASCII, so the lifted draft would not lex. Rename it."
+        ));
+    }
+    if out.starts_with(|c: char| c.is_ascii_digit()) {
+        return Err(format!(
+            "lift: namespace segment `{seg}` starts with a digit, which cannot begin a phorj \
+             identifier. Rename it."
+        ));
+    }
+    Ok(out)
+}
+
 /// Does `text` reference the identifier `name` on a word boundary?
 ///
 /// A plain substring test would keep an import for `Money` because the output mentions `MoneyBag`, and
@@ -261,6 +329,12 @@ fn references_ident(text: &str, name: &str) -> bool {
     })
 }
 
+/// Upper-camel a single identifier: split on `_`/`-`, capitalize each part, join. A part already
+/// PascalCase is preserved rather than lower-cased (`ORM` stays `ORM`, not `Orm`) — the segment is a
+/// name the developer chose, and only its FIRST character is what `E-PKG-CASE` constrains.
+///
+/// Callers must go through [`package_segment`], which rejects the results that are not legal phorj
+/// identifiers (empty, non-ASCII, digit-leading) rather than emitting them.
 fn pascalize(seg: &str) -> String {
     let mut out = String::with_capacity(seg.len());
     for part in seg.split(['_', '-']).filter(|p| !p.is_empty()) {

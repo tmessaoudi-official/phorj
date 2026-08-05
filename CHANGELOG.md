@@ -30,6 +30,8 @@ the second blocker, not the first.**
   `package` per file), a second `namespace`, a `namespace` after a declaration, `use function` / `use const`
   (they import a symbol, not a type), and the grouped `use A\{B, C};` form.
 
+**Honest scope:** this removes the FIRST of two mandatory PSR-12 prologue blockers. `declare(strict_types=1);` is still outside the Tier-1 subset, so a file carrying it (most modern framework code) still stops at the parser; and a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`), so the `use` half needs project-aware lifting before it pays off.
+
 Ships `examples/lift/namespaces.{php,phg}` (Invariant 9), byte-identical on interpreter, VM and
 php-8.5.8, plus a `lift_roundtrip` case asserting a namespaced file's stdout matches the original PHP on
 all three legs. Invariant 13: the new file-level parsing was split to `parser/file_decls.rs` rather than

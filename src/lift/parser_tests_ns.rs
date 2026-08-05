@@ -22,7 +22,7 @@ fn refuses_namespace_and_use_forms_with_no_phorj_analog() {
         // A namespace after a declaration is not PHP-legal and must not be quietly accepted.
         (
             "<?php function f(): int { return 1; } namespace A;",
-            "must precede every declaration",
+            "must come before every `use`",
         ),
         // `use function` / `use const` import a symbol, not a type.
         ("<?php use function App\\helper;", "imports a symbol"),
@@ -33,4 +33,38 @@ fn refuses_namespace_and_use_forms_with_no_phorj_analog() {
         let e = perr(src);
         assert!(e.contains(frag), "for {src:?} got {e}");
     }
+}
+
+/// The refusal messages must be complete sentences, NOT `err`'s "expected X, found Tok" shape — these
+/// are the strings users read, and a full sentence followed by ", found LBrace" is broken English.
+#[test]
+fn refusal_messages_do_not_trail_a_found_clause() {
+    for src in [
+        "<?php namespace App { }",
+        "<?php namespace A; namespace B;",
+        "<?php use function App\\helper;",
+        "<?php use App\\{A, B};",
+        "<?php use App\\A, App\\B;",
+    ] {
+        let e = perr(src);
+        assert!(
+            !e.contains(", found "),
+            "reason-first refusal must not trail a `found` clause: {e}"
+        );
+    }
+}
+
+/// `use` BEFORE `namespace` is a PHP FATAL ("Namespace declaration statement has to be the very first
+/// statement"), so accepting it would invent a meaning for input PHP cannot run.
+#[test]
+fn a_use_before_the_namespace_is_refused() {
+    let e = perr("<?php use App\\A; namespace App;");
+    assert!(e.contains("must come before every `use`"), "{e}");
+}
+
+/// The comma form is legal PHP and needs its own reason rather than a bare "expected `;`".
+#[test]
+fn the_comma_form_use_is_refused_with_a_reason() {
+    let e = perr("<?php use App\\A, App\\B;");
+    assert!(e.contains("comma-separated"), "{e}");
 }

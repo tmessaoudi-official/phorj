@@ -73,6 +73,13 @@ impl PParser {
         matches!(self.peek(), PTok::Ident(s) if s == kw)
     }
 
+    /// A REASON-first refusal: the message is a complete sentence explaining why the construct has no
+    /// phorj analog, so it must NOT get `err`'s trailing `", found {tok}"` (which is phrased for
+    /// "expected X" and reads as broken English after a full sentence). Line only.
+    pub(super) fn err_reason(&self, msg: &str) -> String {
+        format!("lift parse error: {msg} (line {})", self.line())
+    }
+
     pub(super) fn err(&self, msg: &str) -> String {
         format!(
             "lift parse error: {msg}, found {:?} (line {})",
@@ -102,12 +109,17 @@ impl PParser {
             // `use` means trait-composition and a `namespace` means the braced multi-namespace form.
             if self.is_kw("namespace") {
                 if !namespace.is_empty() {
-                    return Err(self.err(
+                    return Err(self.err_reason(
                         "a second `namespace` declaration — phorj has one `package` per file",
                     ));
                 }
-                if !items.is_empty() {
-                    return Err(self.err("`namespace` must precede every declaration in the file"));
+                if !items.is_empty() || !uses.is_empty() {
+                    // PHP itself is fatal here ("Namespace declaration statement has to be the very
+                    // first statement or after any declare call"), so a `use` BEFORE the namespace is
+                    // invalid input, not a shape to invent a meaning for.
+                    return Err(self.err_reason(
+                        "`namespace` must come before every `use` and every declaration in the file",
+                    ));
                 }
                 namespace = self.parse_namespace_decl()?;
                 continue;

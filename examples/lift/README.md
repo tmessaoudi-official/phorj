@@ -66,7 +66,7 @@ example.
 | PHP | Phorj |
 |---|---|
 | top-level statements | a synthesized `function main()` (the runnable entry) |
-| the whole file | `package Main;` (PHP has no packages) |
+| the whole file | `namespace a\b;` → `package A.B;` (PascalCase-ized); no namespace → `package Main;` |
 | `$x = e` | `mutable var x = e;` (PHP locals are freely reassignable) |
 | `.` string concat / `===` / `!==` | `+` / `==` / `!=` (Phorj is typed) |
 | `echo e;` | `Output.print(e);` (+ an automatic `import Core.Output;`) |
@@ -156,6 +156,12 @@ becomes the string `'key'` — use the explicit `"{$a['key']}"` form).
 `namespaces.php` / `namespaces.phg`. Both keywords were outside the Tier-1 subset until this slice, which
 made the lifter unusable on real-world PHP: a namespaced file failed at the PARSER, before anything else
 could be attempted.
+
+> **Honest scope.** This clears ONE of the two mandatory PSR-12 prologue lines.
+> `declare(strict_types=1);` is still outside the Tier-1 subset, so most real framework files still stop
+> at the parser. And a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`) — the `use`
+> half needs project-aware lifting before it pays off, which is why the example below shows the
+> unused-import DROP rather than an emitted import.
 
 - `namespace a\b;` → `package A.B;` — segments PascalCase-ized (`E-PKG-CASE` is enforced and PHP does not
   guarantee PascalCase), `snake_case`/`kebab` treated as word boundaries (`cli_tools` → `CliTools`), an

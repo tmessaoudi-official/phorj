@@ -227,3 +227,59 @@ the prerequisite that would actually unlock Symfony/Laravel/Doctrine input; attr
 only serves single-file, namespace-free PHP. My earlier research answer ("lift the app onto phorj's native
 L2 consumers") is sound in principle and unreachable today for a reason I had not checked. Priority is the
 developer's call and is now an open question, not an assumption.
+
+
+## 6C PANEL ON THE SHIPPED LIFT-NS SLICE — 32 findings; FIXED vs STILL OPEN (2026-08-04)
+
+Two adversarial lenses reviewed the actual diff. **Fixed in the follow-up commit**, each re-verified by
+running it:
+
+| # | P | What it was | Fix |
+|---|---|---|---|
+| 1 | **P0** | ★ **Silent WRONG OUTPUT.** `use App\Output;` emitted `import App.Output;` alongside the lifter's own `import Core.Output;`. A phorj import binds its LAST segment, so `Output` was bound twice and the lifter's own `Output.print(…)` resolved to the USER's class: PHP printed `x`, the lift printed `HIJACKED:x`, `phg check` was clean, and all three legs agreed with each other — so the differential harness could never see it | Refuse loudly. Local names already bound are tracked; a colliding `use` errors with the reason. PHP itself is fatal on the same shape (`use A\Helper; use B\Helper;`), so refusing is faithful |
+| 2 | **P0** | `.unwrap_or_default()` on the usage probe's `print_program` — any of its 7 `Err` sites would blank the probe and silently drop EVERY import. No evidenced failure mode ⇒ the anti-bandaid gate rates this P0 | Propagates with `?` |
+| 3 | P1 | `namespace ___;` → `package ;` (unparseable); `use Lib\_\Klass;` → `import Lib..Klass;` | New `package_segment` refuses an empty result |
+| 4 | P1 | Non-ASCII namespace (`café`, legal PHP) → a draft that does not even LEX, and a lex error suppresses every other diagnostic. This turned a loud pre-change refusal into a broken draft — backwards from DEC-166 | `package_segment` refuses non-ASCII and digit-leading segments |
+| 5 | P1 | `namespace Core\…;` → `package Core.…;`, phorj's RESERVED root (Invariant 12) | `lift_package` refuses it by name |
+| 6 | P1 | `use` BEFORE `namespace` was accepted, though PHP is fatal on it | The ordering guard now also checks `uses` |
+| 7 | P1 | **MASTER-PLAN was not updated** — a mandatory member of Invariant 19's SSOT quartet | Updated, with the honest remaining-blockers list |
+| 8 | P1 | `examples/lift/README.md`'s mapping table still taught `package Main;` "(PHP has no packages)" — contradicting the new section 90 lines below AND giving the wrong rationale | Table row rewritten |
+| 9 | P2 | All four new refusals trailed `", found LBrace"` — `err()` is phrased for "expected X", so a full sentence plus that clause is broken English | New `err_reason` constructor; a test asserts no refusal trails a `found` clause |
+| 10 | P2 | Comma-form `use A, B;` (legal PHP) got a bare "expected `;`" with no reason | Refused with its own reason + test |
+| 11 | P2 | The ordering comment claimed uses are emitted BEFORE the native imports "so the file's own dependencies read first" — the opposite of what ships | Comment corrected to describe reality |
+| 12 | P3 | `pascalize`'s doc comment had been concatenated onto `references_ident`'s by an earlier edit, leaving `pascalize` undocumented | Both restored |
+| — | — | **The overstated claim.** Four shipped places said this unblocks "every Symfony / Laravel / Doctrine file" | Corrected in all four: it clears ONE of two mandatory PSR-12 prologue lines |
+
+### STILL OPEN — tracked, not fixed, and NOT implied fixed anywhere
+
+- **O1 (the big one, needs a ruling).** A lifted `import` can never resolve in a FLAT file:
+  `import Lib.Klass;` → `E-MODULE-NOT-FOUND` ("no package `Lib.Klass` (or `Lib`) under any search
+  root"). So the `use` → `import` half of LIFT-NS only pays off once lifting is **project-aware**
+  (multi-file, writing into a package tree). That is why the shipped example demonstrates the DROP path
+  and why no example anywhere emits a lifted `import` — the coverage gap is a *consequence*, not an
+  oversight. **A design decision is owed: project-aware lift, or keep `use` handling as parse-only?**
+- **O2.** `declare(strict_types=1);` is still Tier-1-unsupported and is the other mandatory PSR-12
+  prologue line, so most real framework files still stop at the parser. Cheap next increment (parse it,
+  drop it — phorj is statically typed) but out of this slice's ruled scope.
+- **O3.** `pascalize` is not injective: `my_pkg`, `My_Pkg`, `myPkg`, `_my_pkg_` all → `MyPkg`, and a
+  leading `_` (a meaningful PHP internal-visibility convention) is silently dropped. Harmless within one
+  file (one package per file) but a project lift would silently MERGE two distinct PHP namespaces.
+- **O4.** `references_ident` matches inside string literals and comments, so `return "Money";` keeps an
+  import of `Money`. Documented as the deliberately-safe direction (a spurious `E-UNUSED-IMPORT` is
+  visible; a wrongly-dropped import would be silent) but still unpinned by a test.
+- **O5.** Statement-position `use`/`namespace` lost their named refusal when they left `UNSUPPORTED_KW`
+  (now a generic "expected `;`"). Class-body trait composition is UNAFFECTED — verified: `parse_member`
+  never consulted that list.
+- **O6.** Anonymous braced `namespace { … }` fails on `expect_ident` before the braced-form check, so it
+  does not get the reason-naming message.
+- **O7 (pre-existing, now with a third instance).** Raw `phg lift` output is NOT `phg format`-canonical
+  (blank lines between imports), so every committed `examples/lift/*.phg` differs from `lift(*.php)`, and
+  nothing pins `example == lift(source)`. `sample.phg` also differs in import ORDER.
+- **O8 (pre-existing).** Three test harnesses build fixed temp paths without `std::process::id()`
+  (`lift_roundtrip.rs`, `conformance.rs`, `cli.rs:313`) — the real cause behind DEC-378's
+  "never run two commits concurrently".
+- **O9.** `src/lift/parser/items.rs` is 477/500 and `src/lift/ast.rs` 435 — both over the soft cap and
+  grown by this slice. The next `use`/`namespace` increment must split rather than grow them.
+- **O10.** phorj itself ACCEPTS two imports binding the same local name (last wins, no diagnostic) —
+  which is what made finding 1 silent. A checker-side `E-DUPLICATE-IMPORT` is arguably owed; that is a
+  language decision, so it is recorded here rather than self-ruled.

@@ -21,7 +21,7 @@ impl PParser {
             segs.push(self.expect_ident("a namespace segment after `\\`")?);
         }
         if self.at(&PTok::LBrace) {
-            return Err(self.err(
+            return Err(self.err_reason(
                 "a braced `namespace A { … }` block — phorj has one `package` per file; use the `namespace A;` form",
             ));
         }
@@ -39,7 +39,7 @@ impl PParser {
         let line = self.line();
         self.advance(); // `use`
         if self.is_kw("function") || self.is_kw("const") {
-            return Err(self.err(
+            return Err(self.err_reason(
                 "`use function` / `use const` imports a symbol rather than a type, which has no phorj equivalent",
             ));
         }
@@ -47,8 +47,9 @@ impl PParser {
         let mut path = vec![self.expect_ident("a class path after `use`")?];
         while self.eat(&PTok::Backslash) {
             if self.at(&PTok::LBrace) {
-                return Err(self
-                    .err("a grouped `use A\\{B, C};` import — write one `use` per class for now"));
+                return Err(self.err_reason(
+                    "a grouped `use A\\{B, C};` import — write one `use` per class for now",
+                ));
             }
             path.push(self.expect_ident("a path segment after `\\`")?);
         }
@@ -58,6 +59,12 @@ impl PParser {
         } else {
             None
         };
+        if self.at(&PTok::Comma) {
+            return Err(self.err_reason(
+                "a comma-separated `use A, B;` import — write one `use` per class for now, so each \
+                 gets its own phorj import",
+            ));
+        }
         self.expect(&PTok::Semi, "`;` after a `use` import")?;
         Ok(PhpUse { path, alias, line })
     }

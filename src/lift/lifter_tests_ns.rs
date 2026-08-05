@@ -1,8 +1,13 @@
 //! LIFT-NS lifter tests — `namespace` → phorj `package`, and `use` → phorj `import`.
 //!
 //! Why this slice exists: `namespace` and `use` were in the parser's `UNSUPPORTED_KW`, so **no**
-//! namespaced PHP file lifted at all — which is every Symfony / Laravel / Doctrine file. Attribute
-//! lifting was the *second* blocker, not the first.
+//! namespaced PHP file lifted at all — it failed at the PARSER. Attribute lifting was the *second*
+//! blocker, not the first.
+//!
+//! Scope, stated honestly: this clears ONE of the two mandatory PSR-12 prologue lines.
+//! `declare(strict_types=1);` is still Tier-1-unsupported, so most real framework files still stop at
+//! the parser; and a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`), so the
+//! `use` half needs project-aware lifting before it is useful. Both are tracked, not implied fixed.
 //!
 //! Every `use` case below REFERENCES the imported name (as a parameter type), because an import whose
 //! name is unreferenced is deliberately dropped — see `unreferenced_use_is_dropped`. An earlier draft
