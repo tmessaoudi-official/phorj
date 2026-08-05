@@ -6667,3 +6667,27 @@ backend. Note this was NOT new syntax: named args already worked on calls AND on
 (`#[Entry(kind: …)]`), so the Invariant-17 editor cost a review pass had predicted was nil. Separately
 confirmed: the LSP advertises **no `signatureHelpProvider` at all**, so Invariant 17's signature-help row
 is a PRE-EXISTING unmet gap for every call in the language — recorded, not created here.
+
+### DEC-435 addendum — the microbench-gate BLOCKED the push, and the row is carried OWED, not laundered
+
+`scripts/microbench-gate.sh` refused the push: `FAIL mapinsert: WIN->LOSS flip — baseline 1.089 (WIN),
+confirmed at 0.845`. Recorded here rather than worked around, per DEC-365 (NO-HIDDEN-LOSS: an unmeasurable
+or failing bench is an OWED verdict, never re-baselined via `--emit`) and DEC-432 (nothing leaves the list
+until it WINS).
+
+**Causality is REFUTED for this change, by code path rather than by assertion.** `bench/micro/mapinsert.phg`
+contains exactly one attribute — `#[Entry(kind: EntryKind.Cli)]`, a BUILT-IN — and declares no
+`#[Attribute]` class. In `check_attributes` the built-in predicates run first and `is_entry_attr` returns
+early, so `check_user_attribute_use` — the only function this commit touched on any hot-or-cold path — is
+never entered for that program. The commit also changes nothing outside the checker, which runs once at
+compile time and not inside the measured loop.
+
+**The box was NOT quiet:** `/proc/loadavg` 0.72 / **2.01** / 2.02 — the 5- and 15-minute averages reflect
+this session's continuous `cargo` builds. DEC-434.1 established that `--emit` must refuse a non-quiet box
+and that a single reading of a high-variance row is not evidence; the same gate run reported `[noisy: VM
+spread +20..63%]` on seven other rows, and SLICE-STATE already records `mapinsert` as having previously
+been a "loaded-box fiction" before DEC-433 cleared it.
+
+**So this is recorded as UNRESOLVED, not as passed and not as fixed.** It needs a re-measure on a quiet
+box before anything is concluded — and if it is real, it gets fixed rather than re-baselined. The push
+stays blocked in the meantime; the gate behaved correctly and was not bypassed.
