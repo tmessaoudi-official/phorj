@@ -6960,3 +6960,47 @@ back to the report.
 **Recorded as the follow-on rather than built now:** registry-first resolution (try `phg add` for a phorj
 port of each composer package before stubbing). The registry has no ports yet, so today it would degenerate
 to the ruled behaviour with an extra lookup.
+
+### DEC-439 part 1 BUILT (2026-08-05) — the directory lift ships; vendor stubs remain queued
+
+`phg lift <dir> -o <out> [--vendor=report|--vendor=stub]`. Ruled shape (a) is built; (b)'s REPORT half is
+built and its STUB half refuses with its reason. Gate green.
+
+**The acceptance evidence** is the thing single-file lifting could not do: a fixture with
+`use Acme\Blog\Support\Money;` across files reports *"whole project type-checks clean: 3 files, 3
+packages, 3 definitions validated"* [Verified].
+
+**A layout rule discovered by measurement, not design.** The ENTRY must be `package Main;` at `src/main.phg`:
+with the entry left in its namespace package the same tree is `E-PKG-PATH` ("a dotted package needs a
+matching subdirectory"), i.e. the project does not LOAD at all. Found by bisecting a failing acceptance check
+against a known-good shipped example rather than by reading the loader.
+
+**Three defects a review round found, none of which reasoning alone surfaced:**
+1. **SILENT DATA LOSS (P0).** Two sources mapping to one package+stem overwrote each other, and the summary
+   still reported "lifted 2/2" [Verified: `src/A/Helper.php` + `src/B/Helper.php`, both `namespace App`,
+   produced one file; `class FromA` was gone]. Legacy PHP hits this constantly because every namespace-LESS
+   file lands in `package Main` and collides on its bare stem. Fixed by walking up the source path for a
+   unique name and REPORTING the rename — lossless, since a phorj package directory may hold any number of
+   files under any names.
+2. **A symlink cycle never terminated.** And the first fix was wrong: a depth cap alone does not help,
+   because the cycle re-walks the whole subtree at every level, so bounded depth is still exponential
+   [Verified: with the cap alone, killed at 30s, reporting 41 files for a 1-file tree]. Directory symlinks
+   are skipped instead — which also stops the same file being lifted twice under two paths.
+3. **The report undercounted, i.e. it lied.** It presented "files I looked at" as "files that exist"
+   [Verified on a Symfony-shaped tree: 8 PHP files present, 4 examined]. Files outside composer's autoload
+   map are now listed. Detection is by CONTENT (`<?php` within the first bytes, after any shebang) because
+   `bin/console` and Laravel's `artisan` have NO extension — the developer made exactly this point, and it is
+   why an extension filter cannot be the mechanism.
+
+**Invariant 13 paid in the same change**, twice: `src/main.rs` is a grandfathered breach the gate forbids
+growing, so the new dispatch was funded by collapsing twelve identical `eprintln!("{USAGE}") + exit(2)` pairs
+into one `usage_exit()` and extracting `phg build`'s flag parsing into `cli::build_flags`; and
+`lift/project/mod.rs` crossed the 500 hard cap, so the output-LAYOUT unit moved to `lift/project/layout.rs`.
+
+**STILL OPEN and ruled-pending — what to do with files outside the autoload map.** They are named but not
+attempted. The taxonomy that matters is not about paths: `public/index.php` / `bin/console` / `artisan` are
+framework BOOTSTRAP (they construct a Symfony Kernel or Laravel Application — nothing to port, they are
+REPLACED by `#[Entry(kind: Web|Cli)]`); `config/*.php` / `routes/web.php` are framework CONFIGURATION
+(re-expressed via `#[Config]` DEC-318 and `#[Route]`); `migrations/*.php` IS the app's own code and should be
+lifted. Deciding this is the open question, along with whether `tests/` (reachable through
+`autoload-dev.psr-4`, so currently lifted) belongs in scope given phorj has its own `phg test` surface.

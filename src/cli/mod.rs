@@ -14,6 +14,7 @@ use crate::vm::Vm;
 // Self-contained command groups (M-Decomp W1.2): the `explain` diagnostic-code table and the
 // `bench` profiling suite. Re-exported so callers keep referring to `cli::cmd_explain` etc.
 mod benchmark;
+pub mod build_flags;
 mod build_php;
 mod debug_repl;
 mod explain;

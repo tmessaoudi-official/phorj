@@ -12,6 +12,13 @@ const USAGE: &str =
     "usage: phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|add|install|update|remove|serve|lsp|debug|test|format|extensions|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
+/// Print usage and exit 2 — the twelve call sites were each an identical `eprintln!` + `exit(2)` pair.
+/// Collapsing them is what pays for the DEC-439 dispatch above without growing this file (Invariant 13).
+fn usage_exit() -> ! {
+    eprintln!("{USAGE}");
+    exit(2)
+}
+
 fn main() {
     // Self-executing artifact: if this binary carries an embedded program, run it on the VM and
     // exit before any CLI parsing. No payload -> fall through to the normal dispatcher.
@@ -111,8 +118,7 @@ fn main() {
             "run"
         }
         _ => {
-            eprintln!("{USAGE}");
-            exit(2);
+            usage_exit();
         }
     };
     // Per-command help: `phg <cmd> -h|--help` prints command-specific help and exits 0.
@@ -187,21 +193,38 @@ fn main() {
         }
         return;
     }
+    // DEC-439 directory lift (`phg lift <dir> -o <out>`): a whole PHP tree into a phorj project, which is
+    // what makes cross-file imports and framework attributes resolvable. A FILE argument keeps the original
+    // single-draft-to-stdout path. Flags are parsed in `lift::project` — this file is a grandfathered
+    // size-gate breach Invariant 13 forbids growing.
+    if cmd == "lift"
+        && args
+            .get(2)
+            .is_some_and(|p| std::path::Path::new(p).is_dir())
+    {
+        match phorj::lift::project::cli_lift_directory(&args[2..]) {
+            Ok(text) => print!("{text}"),
+            Err(phorj::lift::project::CliError::Usage) => usage_exit(),
+            Err(phorj::lift::project::CliError::Failed(e)) => {
+                eprintln!("{e}");
+                exit(1);
+            }
+        }
+        return;
+    }
     // `build` keeps file-only source handling (Phase 1; cross targets extend it in Wave C); a
     // dangling `-o`, unrecognized flag, or extra argument is a usage error — never silent.
     if cmd == "build" {
         let file = match args.get(2) {
             Some(f) => f,
             None => {
-                eprintln!("{USAGE}");
-                exit(2);
+                usage_exit();
             }
         };
         // DEC-320 split PHP emission (no other build flag applies).
         if args.iter().skip(3).any(|a| a == "--php") {
             if args.len() != 4 {
-                eprintln!("{USAGE}");
-                exit(2);
+                usage_exit();
             }
             let entry = std::path::Path::new(file);
             match loader::load(entry).and_then(|unit| cli::cmd_build_php(entry, &unit)) {
@@ -214,59 +237,22 @@ fn main() {
             return;
         }
         let src = read_source_file(file);
-        // Flags after `<file>`: optional -o <out>, optional (--target <triple> | --all), mutually
-        // exclusive. --sign is reserved for Phase 3; unknown flags / extra args → usage, exit 2.
-        let mut out: Option<&str> = None;
-        let mut target: Option<&str> = None;
-        let mut all = false;
-        // M-DX S0: `phg build` is Release by default (secure by construction — value-exposing
-        // machinery is gated off in the artifact). `--dev` opts a debug artifact in.
-        let mut profile = phorj::profile::Profile::Release;
-        let mut i = 3;
-        while i < args.len() {
-            match args[i].as_str() {
-                "-o" => {
-                    out = Some(args.get(i + 1).map(String::as_str).unwrap_or_else(|| {
-                        eprintln!("{USAGE}");
-                        exit(2);
-                    }));
-                    i += 2;
-                }
-                "--target" => {
-                    target = Some(args.get(i + 1).map(String::as_str).unwrap_or_else(|| {
-                        eprintln!("{USAGE}");
-                        exit(2);
-                    }));
-                    i += 2;
-                }
-                "--all" => {
-                    all = true;
-                    i += 1;
-                }
-                "--dev" => {
-                    profile = phorj::profile::Profile::Dev;
-                    i += 1;
-                }
-                "--sign" => {
-                    eprintln!("signing is Phase 3");
-                    exit(2);
-                }
-                _ => {
-                    eprintln!("{USAGE}");
-                    exit(2);
-                }
+        // Flags after `<file>` are parsed in `cli::build_flags` — extracted so this grandfathered file
+        // does not grow (Invariant 13, split-as-you-go).
+        let (out, target, all, profile) = match cli::build_flags::parse(&args[3..]) {
+            Ok(f) => (f.out, f.target, f.all, f.profile),
+            Err(cli::build_flags::FlagError::Usage) => usage_exit(),
+            Err(cli::build_flags::FlagError::SigningIsPhase3) => {
+                eprintln!("signing is Phase 3");
+                exit(2);
             }
-        }
-        if all && target.is_some() {
-            eprintln!("{USAGE}"); // --all and --target are mutually exclusive
-            exit(2);
-        }
+        };
         let res = if all {
-            phorj::bundle::cross::build_all(file, &src, out, profile)
-        } else if let Some(t) = target {
-            phorj::bundle::cross::build_target(file, &src, t, out, profile)
+            phorj::bundle::cross::build_all(file, &src, out.as_deref(), profile)
+        } else if let Some(t) = &target {
+            phorj::bundle::cross::build_target(file, &src, t, out.as_deref(), profile)
         } else {
-            cli::cmd_build(file, &src, out, profile)
+            cli::cmd_build(file, &src, out.as_deref(), profile)
         };
         match res {
             Ok(text) => {
@@ -360,8 +346,7 @@ fn main() {
                 // word truncations are not earned), silently accepted — remove in a future version.
                 "--address" | "--addr" => {
                     addr = args.get(i + 1).map(String::as_str).unwrap_or_else(|| {
-                        eprintln!("{USAGE}");
-                        exit(2);
+                        usage_exit();
                     });
                     i += 2;
                 }
@@ -399,8 +384,7 @@ fn main() {
                     i += 1;
                 }
                 _ => {
-                    eprintln!("{USAGE}");
-                    exit(2);
+                    usage_exit();
                 }
             }
         }
@@ -509,8 +493,7 @@ fn main() {
         let (spec, prog_args) = match cli::resolve_source_and_args(&rest) {
             Some(pair) => pair,
             None => {
-                eprintln!("{USAGE}");
-                exit(2);
+                usage_exit();
             }
         };
         if cmd == "run" {
@@ -574,8 +557,7 @@ fn main() {
             Some(cli::SourceSpec::Stdin) => read_stdin(),
             Some(cli::SourceSpec::Inline(code)) => code,
             None => {
-                eprintln!("{USAGE}");
-                exit(2);
+                usage_exit();
             }
         };
         match cmd {

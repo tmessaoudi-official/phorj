@@ -32,7 +32,17 @@ which is what keeps it free of the language question a general folder would rais
 for free. Biggest win was the least expected: `#[Tag(-5)]` parses as `Unary { Neg, Int(5) }`, so a plain
 NEGATIVE NUMBER had been refused as non-constant all along.
 
-**QUEUED, ruled but NOT built — DEC-439, project-aware lifting.** `phg lift <dir>` lifts a whole tree in ONE
+**Shipped 2026-08-05 — DEC-439 part 1: `phg lift <dir>` builds a phorj PROJECT.** Cross-file references
+resolve (the acceptance evidence: *"whole project type-checks clean: 3 files, 3 packages, 3 definitions"*),
+the entry is re-packaged `Main` at `src/main.phg` (anything else is `E-PKG-PATH` — the project would not
+LOAD), and composer vendor is REPORTED with exact package attribution. `--vendor=stub` refuses with its
+reason. A review round found three defects, all measured: silent data loss on a destination collision, a
+non-terminating symlink cycle (a depth cap alone is still exponential), and a report that undercounted the
+tree. **STILL RULED-PENDING:** what to DO with files outside composer's autoload map — `public/index.php`,
+`bin/console`, `migrations/`, `config/*.php` are named but not attempted, and they are three different kinds
+of thing (bootstrap to REPLACE, config to RE-EXPRESS, migrations to LIFT).
+
+**Superseded below — DEC-439's original queued note:** **QUEUED, ruled but NOT built — DEC-439, project-aware lifting.** `phg lift <dir>` lifts a whole tree in ONE
 pass into a generated `phorj.json` + `src/` project, so cross-file references resolve — the single fix for
 BOTH `E-MODULE-NOT-FOUND` on lifted imports and `E-UNKNOWN-ATTRIBUTE` on framework attributes. Composer
 vendor is detected from `autoload.psr-4` + `installed.json`, REPORTED by default (`VENDOR-REPORT.md`

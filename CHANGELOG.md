@@ -6,6 +6,41 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift <dir>`: a PHP tree becomes a phorj PROJECT (DEC-439 part 1, 2026-08-05)
+Developer-ruled. `phg lift <dir> -o <out>` lifts every file in ONE pass into a generated `phorj.json` +
+`src/` layout mirroring the namespaces, so **cross-file references resolve** — the single fix for both
+`E-MODULE-NOT-FOUND` on a lifted `import` and `E-UNKNOWN-ATTRIBUTE` on a framework attribute, which failed
+for the same reason: one file cannot see its siblings. [Verified: a two-package fixture with a cross-file
+`use` reports *"whole project type-checks clean: 3 files, 3 packages, 3 definitions validated"*.]
+
+The **entry** is re-packaged as `package Main;` at `src/main.phg`. Not cosmetic: a dotted package must sit in
+a matching subdirectory (`E-PKG-PATH`), so an entry left in its namespace package makes the whole project
+fail to LOAD. A second script with top-level code is reported rather than silently demoted — a phorj project
+has one entry per role.
+
+Composer **vendor is REPORTED**, never synthesized: `VENDOR-REPORT.md` ranks every vendor symbol the app
+references by reference count, attributed to the shipping package exactly via `installed.json`. The scan
+survives a file the lifter *rejects* — a Tier-2 construct fails the whole PARSE, so the `use` block is read
+off the token stream as a fallback, which is precisely where dependency information matters most.
+`--vendor=stub` is accepted and **refused with its reason** (ruled, not yet built) rather than quietly
+behaving like the default.
+
+Three defects came out of a review round, each measured rather than reasoned:
+- **silent data loss.** Two sources mapping to one package+stem overwrote each other while the summary said
+  "lifted 2/2" — legacy PHP hits this constantly, since every namespace-less file lands in `package Main`.
+  Now disambiguated by walking up the source path (`src/B/Helper.php` → `B_Helper.phg`) and reported; a phorj
+  package directory may hold any number of files, so nothing is lost.
+- **a symlink cycle never terminated.** A depth cap alone does not help (the cycle re-walks the subtree at
+  every level, so bounded depth is still exponential — measured: killed at 30s, reporting 41 files for a
+  1-file tree). Directory symlinks are skipped instead.
+- **the report undercounted.** It listed "files I looked at" as "files that exist": on a Symfony-shaped tree,
+  8 PHP files present and 4 examined. Files outside composer's autoload map are now named — found by
+  CONTENT, since `bin/console` and Laravel's `artisan` have no extension for a filter to match.
+
+`src/main.rs` paid for the new dispatch by collapsing twelve identical `eprintln!("{USAGE}") + exit(2)` pairs
+into one `usage_exit()` and extracting `phg build`'s flag parsing to `cli::build_flags` — it is a
+grandfathered size-gate breach Invariant 13 forbids growing.
+
 ### Added — attribute arguments are constant-FOLDED (DEC-438, 2026-08-05)
 Developer-ruled, narrow by construction. `#[Tag(1 + 2 * 3, -5, 1.5 + 2.0, "a" + "b")]` now emits
 `#[Tag(7, -5, 3.5, 'ab')]` instead of being refused as non-constant.

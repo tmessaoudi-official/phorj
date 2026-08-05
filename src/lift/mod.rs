@@ -15,6 +15,7 @@ pub mod lexer;
 pub mod lifter;
 pub mod parser;
 pub mod printer;
+pub mod project;
 
 #[cfg(test)]
 mod tests;
