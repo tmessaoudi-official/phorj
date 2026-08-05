@@ -189,11 +189,40 @@ same checksum, startup subtracted). The measurement nobody had taken is **VM vs 
   operand-specialized handlers (php's, visible in our own profile), superinstructions, register bytecode,
   NaN-boxing, inline caches.
 
-**The reframed fork, now the real ruling:** (A) widen JIT coverage row-by-row — each needs a ruling, never
-helps user code, cliff stays; (B) invest in the VM — one programme, lifts every row and all user code,
-shrinks the cliff for all causes at once, but 15.8× is multi-slice; (C) make the performance CONTRACT honest
-instead of chasing rows — document the bimodality, promote `PHORJ_JIT_EXPLAIN` to a first-class diagnostic,
-warn when a hot loop sits in a declined function. Cheapest, wins no row, arguably what a USER needs most.
+**RULED 2026-08-05 (DEC-442) — the perf programme is TWO TRACKS, both approved (developer took DEC-441's
+options 1 AND 3).** With the correction that DEC-441 framed them as a fork when they are orthogonal and
+MULTIPLICATIVE: **track A reduces the FREQUENCY of a JIT decline, track B reduces its COST.** DEC-441's own
+finding forces both — the cliff IS the leverage, so coverage work alone leaves every uncovered decline at
+full height, and VM work alone leaves the covered fast path unimproved.
+
+* **Track A — JIT coverage**, per-row, each needing its own ruling. First up: kind-specialized closure
+  entries (DEC-434.2 opt. 3) for `fslines`/`fsforeachline`. **STILL NEEDS ITS SCOPE RULING — not started.**
+* **Track B — the VM**, one programme, NO ruling required (no new `Op`, no surface, no dependency,
+  byte-identity by construction). Target 176.1 → php's 11.1 Ir/op.
+
+**Track B increment 1 SHIPPED: 176.1 → 167.6 Ir/op, −4.9%; gap 15.8× → 15.1×** [deterministic callgrind,
+same loop, same checksum, startup subtracted]. `pop_int` had `format!` inline in its body, so the body carried
+the formatting machinery plus an allocation and LLVM refused to inline it — every integer pop in every hot
+loop was an out-of-line call (24.6% of the loop, per DEC-441). Fault body moved to a `#[cold]`
+`#[inline(never)]` `expected()`; `#[inline]` gave −3.2%, `#[inline(always)]` on the five that resisted took it
+to −4.9%; the release binary got **52 KB smaller**. Fault bodies byte-for-byte unchanged (Invariant 4) and
+pinned by a test, deliberately — nothing else asserts those strings, since the checker makes the paths
+unreachable for any checked program. Bench: `jsonround` 0.31→0.32, `fsforeachline` 0.35→0.36, JIT rows
+unmoved — **both inside their own spread, so the Ir count is the evidence and the bench is a consistency
+check only.** microbench-gate 45 WIN / 7 loss, 0 blocking regressions, nothing re-baselined. Invariant 13
+caught a real breach on the way (`mod.rs` 624→652, `tests.rs` 576→596, gate FAILED "split it, do not grow
+it") → extracted `src/vm/stack.rs` (152 lines); mod.rs now 541.
+
+**Track B increment 2, the next blocker — measured, not guessed:** `pop2_int` (6.6%), `push_i` (3.7%) and
+`pop` (2.3%) are STILL out-of-line even with `#[inline(always)]`, and their signatures say why —
+**`Result<_, String>` on every arithmetic op**, whose 24-byte `String` error slot makes every `Result` large
+and drags drop glue through every helper. Increment 2 is to shrink the VM error type to a `&'static str` /
+small enum rendering the SAME body (Invariant 4 forbids changing the text): wide but mechanical, and it is
+what unlocks the ~12% this increment could not reach. Increment 3 = the per-op frame re-derivation in
+`run_to_completion` (25.1%). **−4.9% against a 15.1× gap is increment 1 of many — not the gap closing.**
+
+DEC-441's option (C) was NOT taken and is recorded as still-available: make the performance CONTRACT honest
+(document the bimodality, promote `PHORJ_JIT_EXPLAIN`, warn when a hot loop sits in a declined function).
 
 Other pending rulings unchanged: `MICROBENCH_RUNS` above K=3, the spread-adjusted arming rule (DEC-434.1),
 and the hash-flooding hasher trade.

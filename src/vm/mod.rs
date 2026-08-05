@@ -514,93 +514,6 @@ impl<'a> Vm<'a> {
             self.stack.push(rv);
         }
     }
-
-    fn pop(&mut self) -> Value {
-        self.stack.pop().expect("vm stack underflow (compiler bug)")
-    }
-
-    /// Start index for popping the top `n` values. Real work in every build (`len - n`); the
-    /// debug-only guard turns a compiler-bug underflow (which would wrap and then panic with a
-    /// bare `index out of bounds`) into a labelled stack-desync assert. The compiler guarantees
-    /// `n <= stack.len()`.
-    fn pop_n_start(&self, n: usize) -> usize {
-        debug_assert!(
-            n <= self.stack.len(),
-            "vm stack underflow: need {n} values, stack has {} (func {})",
-            self.stack.len(),
-            self.frames.last().map_or(usize::MAX, |f| f.func)
-        );
-        self.stack.len() - n
-    }
-
-    /// Absolute stack index of local `slot` within the frame whose window opens at `base`. The
-    /// debug-only guard catches a slot outside the live locals window — the desync most likely to
-    /// be introduced once P4/P5 mutate the stack as a GC root set — before the raw index panics.
-    fn frame_slot(&self, base: usize, slot: usize) -> usize {
-        let idx = base + slot;
-        debug_assert!(
-            idx < self.stack.len(),
-            "vm local out of range: base {base} + slot {slot} = {idx} >= stack len {} (func {})",
-            self.stack.len(),
-            self.frames.last().map_or(usize::MAX, |f| f.func)
-        );
-        idx
-    }
-
-    /// Pop the top `n` values, returning them in stack order (bottom-most first).
-    /// The compiler guarantees `n <= stack.len()`.
-    fn split_off(&mut self, n: usize) -> Vec<Value> {
-        let start = self.pop_n_start(n);
-        self.stack.split_off(start)
-    }
-
-    /// Pop two ints in operand order: returns `(lhs, rhs)` for `lhs OP rhs`.
-    fn pop2_int(&mut self) -> Result<(i64, i64), String> {
-        let b = self.pop_int()?;
-        let a = self.pop_int()?;
-        Ok((a, b))
-    }
-
-    fn pop2_float(&mut self) -> Result<(f64, f64), String> {
-        let b = self.pop_float()?;
-        let a = self.pop_float()?;
-        Ok((a, b))
-    }
-
-    /// Pop two raw values in operand order: returns `(lhs, rhs)` for `lhs OP rhs`. Used by the decimal
-    /// ops (M-NUM S1), whose kernel coerces a mixed `Decimal`/`Int` pair itself (no per-type pop).
-    fn pop2(&mut self) -> (Value, Value) {
-        let b = self.pop();
-        let a = self.pop();
-        (a, b)
-    }
-
-    fn pop_int(&mut self) -> Result<i64, String> {
-        match self.pop() {
-            Value::Int(n) => Ok(n),
-            v => Err(format!("expected int, found {}", v.type_name())),
-        }
-    }
-
-    fn pop_float(&mut self) -> Result<f64, String> {
-        match self.pop() {
-            Value::Float(x) => Ok(x),
-            v => Err(format!("expected float, found {}", v.type_name())),
-        }
-    }
-
-    /// Push the result of a checked integer kernel, propagating its fault body (e.g.
-    /// `"integer overflow"`) verbatim — the fault string is single-sourced in `value`.
-    fn push_i(&mut self, r: Result<i64, String>) -> Result<(), String> {
-        self.stack.push(Value::Int(r?));
-        Ok(())
-    }
-    /// Push a fallible `f64` result, propagating a zero-divisor fault (`float_div`/`float_rem`). The
-    /// `?` turns the kernel's fault body into the VM fault, byte-identical to the interpreter.
-    fn push_f(&mut self, r: Result<f64, String>) -> Result<(), String> {
-        self.stack.push(Value::Float(r?));
-        Ok(())
-    }
 }
 
 /// Ordering comparison for `Lt`/`Gt`/`Le`/`Ge` on int or float operands. The ordering and the
@@ -619,6 +532,8 @@ fn compare(op: &Op, a: &Value, b: &Value) -> Result<bool, String> {
         None => false, // NaN compares false
     })
 }
+
+mod stack;
 
 #[cfg(test)]
 mod tests;

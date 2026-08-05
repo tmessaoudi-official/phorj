@@ -7334,3 +7334,78 @@ Not "which of 7 rows to fix". The real fork:
 
 **Nothing was built. One hypothesis was refuted, one un-banked win (12× startup) was found, and the problem
 was re-identified as singular.**
+
+### DEC-442 (2026-08-05) — RULED: the perf programme becomes TWO TRACKS, and track B's first increment ships
+
+**Developer ruling (options 1 and 3 of DEC-441's fork, both):** widen JIT coverage AND invest in the VM.
+Recorded with the correction that DEC-441 framed these as a fork when they are **orthogonal and
+multiplicative** — track A reduces the FREQUENCY of a JIT decline, track B reduces its COST. DEC-441's own
+finding is what makes both necessary: the ~320× cliff IS the JIT leverage, so coverage work alone leaves
+every uncovered decline at full height, and VM work alone leaves the covered fast path unimproved.
+
+* **Track A — JIT coverage.** Per-row, each needing its own ruling. First up: kind-specialized closure
+  entries (DEC-434.2 opt. 3) for `fslines`/`fsforeachline`. **Still needs its scope ruling — not started.**
+* **Track B — the VM.** One programme, no ruling required (no new `Op`, no surface, no dependency,
+  byte-identity preserved by construction). Target: 176.1 → php's 11.1 Ir per bytecode op.
+
+### Track B increment 1 — BUILT: outline the operand-type fault bodies
+
+**Measured, deterministic (callgrind, identical loop, same checksum `4999950000`, startup subtracted):
+176.1 → 167.6 Ir per bytecode op, −4.9%. Gap vs php's VM 15.8× → 15.1×.**
+
+**Root cause [Verified].** `pop_int` was:
+
+```rust
+fn pop_int(&mut self) -> Result<i64, String> {
+    match self.pop() {
+        Value::Int(n) => Ok(n),
+        v => Err(format!("expected int, found {}", v.type_name())),   // <- the whole problem
+    }
+}
+```
+
+The `format!` inline in the body meant the body carried the formatting machinery plus an allocation, so LLVM
+declined to inline it — and **every integer pop in every hot loop became an out-of-line call.** DEC-441
+measured that class at 24.6% of the VM loop's instructions. Moving the fault body to a `#[cold]`
+`#[inline(never)]` `expected(want, got)` leaves `pop_int` small enough to inline.
+
+`#[inline]` alone bought −3.2%; `#[inline(always)]` on the five that resisted (`pop`, `pop2_int`,
+`pop2_float`, `push_i`, `push_f`) took it to **−4.9%** [both measured]. The release binary got **52 KB
+SMALLER** (20 836 168 → 20 784 392), so this was not an I-cache trade.
+
+**Fault bodies are byte-for-byte unchanged** — parity-affecting under Invariant 4, so `expected("int", …)`
+reconstructs exactly `"expected int, found …"`. Pinned by
+`vm::stack::tests::operand_type_fault_bodies_are_unchanged_by_outlining`, and the pin is deliberate: nothing
+else in the tree asserts these strings, because the type checker proves operand types before the VM runs, so
+the paths are unreachable for any checked program. A message with no test is a message free to drift.
+
+**Bench effect, reported honestly:** `jsonround` 0.31 → 0.32, `fsforeachline` 0.35 → 0.36, JIT rows unmoved
+(`intadd` 2.01, `fibrec` 2.38, `listfilter` 10.07). Both VM-path moves are INSIDE their own bench spread, so
+the deterministic Ir count is the evidence and the bench is only a consistency check. No row flipped and
+nothing was re-baselined. `microbench-gate`: 45 WIN / 7 loss, 10 OWED carried, **0 blocking regressions**
+(and it independently agrees with DEC-440's count of 7 surviving losses).
+
+**Invariant 13 paid in the same change, and it caught a real breach.** The additions pushed `src/vm/mod.rs`
+624 → 652 and `src/vm/tests.rs` 576 → 596, and the gate FAILED with *"split it, do not grow it"* on both.
+Fixed by extracting `src/vm/stack.rs` (152 lines) — every operation that touches `self.stack` positionally
+and nothing else, with the test living beside the code it pins. `mod.rs` is now **541**, well under its
+frozen 624; `tests.rs` back to exactly 576. Two bugs of mine surfaced during that split and were caught
+before commit: `mod stack;` first landed UNDER the `#[cfg(test)]` attribute (which would have excluded the
+whole module from release builds), and the extraction left a trailing blank line keeping `tests.rs` one line
+over baseline.
+
+### THE NEXT STRUCTURAL BLOCKER, measured not guessed
+
+After this change, `pop2_int` (6.6%), `push_i` (3.7%) and `pop` (2.3%) are **still out-of-line despite
+`#[inline(always)]`**, and the reason is visible in their signatures: **`Result<_, String>` on every
+arithmetic op.** A 24-byte `String` in the error slot makes every `Result` large and drags drop glue through
+every helper. Track B increment 2 is therefore to shrink the VM's error type — a `&'static str` / small enum
+that renders to the *same* body (Invariant 4 forbids changing the text). That is a wide but mechanical
+refactor of every VM fault site, and it is what unlocks the remaining ~12% this increment could not reach.
+
+Remaining profile after increment 1: `exec_op` 41.6%, `run_to_completion` 25.1% (the per-op frame
+re-derivation DEC-441 identified — increment 3), `Vec::push_mut` 9.5%, `drop_glue::<Value>` 4.6%.
+
+**Honest scale statement:** −4.9% against a 15.1× gap is increment 1 of a multi-increment programme, exactly
+as DEC-441 predicted when it refuted the one-line-flag hypothesis. Nobody should read this as the VM gap
+closing.
