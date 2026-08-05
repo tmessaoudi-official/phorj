@@ -121,6 +121,154 @@ fn files_outside_the_autoload_map_are_reported_including_extensionless_ones() {
     );
 }
 
+/// A Symfony/Laravel-shaped tree: the files OUTSIDE `autoload.psr-4` are the whole point of DEC-439 part 2,
+/// and they do not all deserve the same fate. Written as one fixture rather than four because what is being
+/// tested is precisely that ONE content rule sorts them correctly — checking each in isolation would hide a
+/// rule that only works when nothing else is present.
+fn framework_shaped_tree() -> Tmp {
+    let t = Tmp::new("framework");
+    t.write(
+        "composer.json",
+        r#"{ "name": "acme/site", "autoload": { "psr-4": { "App\\": "src/" } }, "bin": ["bin/console"] }"#,
+    );
+    t.write(
+        "src/Entity/Post.php",
+        "<?php\nnamespace App\\Entity;\nclass Post { public function title(): string { return \"t\"; } }\n",
+    );
+    // Doctrine's migrations sit outside the autoload map, yet they ARE the app's own classes.
+    t.write(
+        "migrations/Version20260805.php",
+        "<?php\nnamespace DoctrineMigrations;\nclass Version20260805 { public function up(): string { return \"sql\"; } }\n",
+    );
+    // Symfony's front controller: a top-level `return` — but of a CLOSURE, which is a factory, not data.
+    t.write(
+        "public/index.php",
+        "<?php\nreturn function (array $context) { return new \\App\\Kernel(); };\n",
+    );
+    // A console entry: no extension at all, and declared under composer's `bin` key.
+    t.write(
+        "bin/console",
+        "#!/usr/bin/env php\n<?php\nrequire dirname(__DIR__).'/vendor/autoload.php';\necho \"c\\n\";\n",
+    );
+    // Configuration expressed as PHP: a top-level `return` of data.
+    t.write(
+        "config/framework.php",
+        "<?php\nreturn [ 'secret' => 'x', 'http_method_override' => false ];\n",
+    );
+    t
+}
+
+/// Row of the glue table for `rel`, if it is there at all.
+fn glue_row(report: &str, rel: &str) -> Option<String> {
+    report
+        .lines()
+        .find(|l| l.starts_with(&format!("| `{rel}` |")))
+        .map(str::to_string)
+}
+
+/// A file outside composer's autoload map that DECLARES a class is the app's own code and must be lifted —
+/// Doctrine's `migrations/` is the case that matters, and no rule anywhere names Doctrine.
+#[test]
+fn a_declaring_file_outside_the_autoload_map_is_lifted() {
+    let t = framework_shaped_tree();
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("lifts");
+    let report = read(&out.join("LIFT-REPORT.md"));
+    assert!(
+        glue_row(&report, "migrations/Version20260805.php").is_none(),
+        "a migration declares a class — it is code, not glue:\n{report}"
+    );
+    let mut found = String::new();
+    for e in std::fs::read_dir(out.join("src/DoctrineMigrations")).expect("package dir") {
+        found.push_str(&read(&e.expect("entry").path()));
+    }
+    assert!(
+        found.contains("class Version20260805"),
+        "the migration must be lifted:\n{found}"
+    );
+}
+
+/// PHP configuration is DATA, and the report must name the phorj thing that replaces it rather than say
+/// "not examined".
+#[test]
+fn a_php_config_file_is_reported_with_its_phorj_counterpart() {
+    let t = framework_shaped_tree();
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("lifts");
+    let report = read(&out.join("LIFT-REPORT.md"));
+    let row = glue_row(&report, "config/framework.php").unwrap_or_else(|| {
+        panic!("config/framework.php must be in the glue table:\n{report}");
+    });
+    assert!(row.contains("configuration"), "{row}");
+    assert!(row.contains("#[Config]"), "{row}");
+}
+
+/// A front controller returning a CLOSURE is a factory, not configuration. Both shapes are a top-level
+/// `return`, so a rule that stopped at "has a top-level return" told a Symfony developer to re-express their
+/// front controller as typed configuration — wrong advice, confidently given.
+#[test]
+fn a_front_controller_returning_a_closure_is_bootstrap_not_configuration() {
+    let t = framework_shaped_tree();
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("lifts");
+    let report = read(&out.join("LIFT-REPORT.md"));
+    let row = glue_row(&report, "public/index.php").unwrap_or_else(|| {
+        panic!("public/index.php must be in the glue table:\n{report}");
+    });
+    assert!(
+        row.contains("bootstrap"),
+        "a closure factory is bootstrap, not configuration:\n{row}"
+    );
+    assert!(row.contains("#[Entry"), "{row}");
+}
+
+/// A `bin` entry is an executable SCRIPT, so it must be classified like every other non-code file — not fed
+/// to the lifter to fail on its `require`. composer's `bin` key declares what a file IS FOR, and that is not
+/// the same claim as `autoload`'s "this is my code".
+#[test]
+fn a_composer_bin_script_is_classified_rather_than_lift_attempted() {
+    let t = framework_shaped_tree();
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("lifts");
+    let report = read(&out.join("LIFT-REPORT.md"));
+    let row = glue_row(&report, "bin/console")
+        .unwrap_or_else(|| panic!("bin/console must be in the glue table:\n{report}"));
+    assert!(row.contains("bootstrap"), "{row}");
+    assert!(
+        !report.contains("lift parse error"),
+        "a console script must not be lift-attempted at all:\n{report}"
+    );
+}
+
+/// A tree whose PHP is ALL bootstrap and configuration is a real PHP app with nothing to lift — a different
+/// answer from "there is no PHP here", and reporting them identically would send the developer looking for a
+/// missing file that is not missing.
+///
+/// `composer.json` is required for this shape to arise at all: with none, there is no autoload surface, so
+/// nothing is "outside" it and the whole tree is app code by design (a plain PHP folder is a valid input, and
+/// a top-level script there is the ENTRY, not glue).
+#[test]
+fn a_tree_of_only_glue_is_refused_with_that_reason() {
+    let t = Tmp::new("allglue");
+    t.write(
+        "composer.json",
+        r#"{ "name": "acme/empty", "autoload": { "psr-4": { "App\\": "src/" } } }"#,
+    );
+    t.write("src/.gitkeep", "");
+    t.write("public/index.php", "<?php\necho 1;\n");
+    t.write("config/app.php", "<?php\nreturn ['a' => 1];\n");
+    let err = lift_directory(&t.0, &t.path("out"), VendorMode::Report)
+        .expect_err("a glue-only tree must be refused");
+    assert!(
+        err.contains("framework bootstrap or PHP configuration"),
+        "{err}"
+    );
+    assert!(
+        !err.contains("no `.php` files found"),
+        "there ARE php files — saying otherwise is a lie:\n{err}"
+    );
+}
+
 /// Two sources mapping to the same package AND stem used to overwrite each other, and the summary still
 /// said "lifted 2/2" — a silent data loss. Legacy PHP hits this constantly: every namespace-less file
 /// lands in `package Main` and collides on its bare stem.

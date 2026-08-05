@@ -7004,3 +7004,70 @@ REPLACED by `#[Entry(kind: Web|Cli)]`); `config/*.php` / `routes/web.php` are fr
 (re-expressed via `#[Config]` DEC-318 and `#[Route]`); `migrations/*.php` IS the app's own code and should be
 lifted. Deciding this is the open question, along with whether `tests/` (reachable through
 `autoload-dev.psr-4`, so currently lifted) belongs in scope given phorj has its own `phg test` surface.
+
+### DEC-439 part 2 BUILT (2026-08-05) — the files OUTSIDE `autoload` get a ROLE, decided by content
+
+Closes part 1's "STILL OPEN" question above. Developer-ruled after a challenge in their own words: *"what
+about in symfony case for example the public/index.php, bin/console, migrations folder with doctrine
+migrations … if i lift a folder src/ they won't be lifted ! should i do it manually ?? is there an automatic
+way to do it without hardcoding their path ???"* — and then, on the shape of the answer: *"for the console or
+artisan it's true it has no extension ! but the code inside is php and even has php markers and the php
+shebang !!"*
+
+**Ruled (approved verbatim as "Okay for your recommendation !"):** extend discovery to composer's FULL
+autoload surface, and classify the remainder by CONTENT into three buckets, each reported with its concrete
+phorj replacement rather than a generic "not examined".
+
+**1 — composer's full autoload surface, not just `psr-4`.** `autoload.classmap` (a directory OR a single
+file), `autoload.files`, and legacy `psr-0` are now read for both `autoload` and `autoload-dev`. Ignoring
+`classmap` was the single largest reason app-owned code went unexamined: it is where a project declares its
+`migrations/` and its legacy non-PSR-4 code.
+
+**2 — three roles, from content, no framework path anywhere** (`src/lift/project/classify.rs`, token-level at
+brace depth 0 — deliberately not parse-dependent, since these files are the ones most likely to be outside
+the Tier-1 subset, so a parse requirement would fail to classify precisely where the answer matters):
+
+| Shape | Role | Disposition |
+|---|---|---|
+| declares a class / interface / trait / enum / function | code | **LIFTED** — the app's own code however composer maps it |
+| top-level `return` of DATA | configuration | reported; replacement = a `#[Config]` class (DEC-318) |
+| anything else with no declarations | bootstrap | reported; replacement = `#[Entry(kind: …)]` (+ `#[Route]`) |
+
+Why content and not paths, stated because it is the whole ruling: a rule matching `public/index.php`,
+`artisan` or `migrations/` by NAME is a list of the frameworks the lifter happens to know, and wrong for the
+next one. Doctrine's `migrations/Version*.php` now lifts because it declares a class — and the lifter says
+nothing about Doctrine anywhere. [Verified on a Symfony-shaped fixture: `migrations/Version20260805.php` →
+`lifted/src/DoctrineMigrations/Version20260805.phg`, and the whole project `phg check`s clean.]
+
+**Three defects the fixture found that the design round did not:**
+1. **A returned CLOSURE is a factory, not configuration.** Symfony's `public/index.php`
+   (`return function (array $context) {…}`) and a `config/*.php` file (`return [ … ]`) are BOTH a top-level
+   `return`; a rule that stopped there told the developer to re-express their front controller as typed
+   configuration — wrong advice, confidently given [Verified: the fixture reported `public/index.php` as
+   role `configuration` before the fix, `bootstrap` after]. `return function` / `return static function` /
+   `return fn` / `return new` are factories; only returned data is configuration.
+2. **composer's `bin` key is NOT part of the code surface.** `autoload` says "this is my code"; `bin` says
+   "this is a command", and they are different claims. Including `bin` in the app-file list bypassed
+   classification and fed the console script to the lifter: `lift parse error: require is Tier-2/Tier-3`
+   [Verified] — a refusal where the right answer was "this is a bootstrap script, here is the entry that
+   replaces it". `bin` is still READ, so a declared executable is classified even when the content sniff
+   cannot see it (short tags).
+3. **"no `.php` files found" was a lie for a glue-only tree.** A tree whose PHP is entirely bootstrap and
+   configuration is a real PHP app with nothing to LIFT — a different answer from "there is no PHP here",
+   and reporting them identically sends the developer looking for a file that is not missing. Now two
+   distinct refusals.
+
+**Extension OR content, and the OR is load-bearing in both directions:** `bin/console` and `artisan` have no
+extension for a filter to match, while a short-tag file has no `<?php` for a content check to find. [Verified
+against six shapes: `artisan`, `console`, `plain.php` detected; a `.txt` and a binary rejected; the short-tag
+file caught by the extension branch.]
+
+**Invariant 9 paid in the same change:** `examples/lift/README.md` gained the directory-lift walkthrough it
+was missing since part 1, with the real fixture transcript. No companion `.phg` pair — a directory lift's
+artifact is a TREE plus two reports, not a `.php`→`.phg` pair, so there is nothing for the byte-identity
+example glob to gate; the gated fixture is `tests/lift_project.rs` (13 tests) and the README says so.
+
+**STILL PENDING (adjudication, Invariant 15 — not decided here).** `tests/` is reachable through
+`autoload-dev.psr-4`, so it is currently LIFTED. Whether that is right is a developer question, given phorj
+has its own `phg test` surface: lifting PHPUnit test classes produces drafts whose assertions reference a
+framework that will never be ported. Recorded, not ruled.

@@ -261,12 +261,16 @@ The prior standalone `architecture-decomp.plan.md` is FOLDED here (Invariant 19 
    so no namespaced file lifted at all — and **PHP 8 `#[…]` attributes lift** (LIFT-ATTR / DEC-436; they
    had been silently swallowed as `#` comments), with names resolved PHP-style and spelled so a Symfony
    `#[Route]` cannot be captured by phorj's own built-in.
-   **Project-aware lifting is now RULED and QUEUED (DEC-439) — the next lifter build:** `phg lift <dir>`
+   **Project-aware lifting SHIPPED (DEC-439 parts 1+2, 2026-08-05):** `phg lift <dir> -o <out>`
    lifts a whole tree in ONE pass into a generated `phorj.json` + `src/` project, which is the single fix for
    BOTH `E-MODULE-NOT-FOUND` on lifted imports and `E-UNKNOWN-ATTRIBUTE` on framework attributes. Composer
-   vendor is detected from `autoload.psr-4` + `installed.json` and REPORTED by default, with foreign
-   `declare` stubs opt-in (`--vendor=stub`) because stubs make a program transpile-only
-   (`E-FOREIGN-RUNTIME`). **Still open after that:** **phorj's own attribute TARGETS** — `#[…]` is legal on a
+   vendor is detected from composer's full autoload surface + `installed.json` and REPORTED by default, with
+   foreign `declare` stubs opt-in (`--vendor=stub`, ruled but not yet built — refuses with its reason) because
+   stubs make a program transpile-only (`E-FOREIGN-RUNTIME`). Files outside `autoload` get a ROLE from their
+   CONTENT — code (LIFTED, including Doctrine migrations), configuration (`#[Config]`), bootstrap
+   (`#[Entry(kind: …)]`) — with no framework path hardcoded anywhere. **Still open after that:** whether
+   `tests/` (reachable via `autoload-dev.psr-4`) belongs in scope at all, and **phorj's own attribute
+   TARGETS** — `#[…]` is legal on a
    top-level `function`/`class` only, so a Doctrine entity's property-level mappings are refused loudly
    rather than lifted. See `docs/plans/2026-08-04-lift-attr-and-hoist.plan.md` ·
    the **DEC-283 .phgml template engine** build ·

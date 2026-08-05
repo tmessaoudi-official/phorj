@@ -61,6 +61,107 @@ Both print `Hello, Phorj! Counter starts at 41, next is 42.` The lifted `sample.
 example suite, so it is byte-identity-gated on both backends **and** real PHP like every other
 example.
 
+## `phg lift <dir>` — a whole PROJECT (DEC-439)
+
+Lifting one file at a time could not resolve anything the file *referenced*, for one reason: a file
+cannot see its siblings. `import App.Support.Money;` was `E-MODULE-NOT-FOUND` and `#[App.Meta.Audited]`
+was `E-UNKNOWN-ATTRIBUTE` — both correct, both unfixable one file at a time. Lifting the tree in ONE
+pass fixes both, because the files that *declare* those symbols are now in the project beside the
+files that use them.
+
+```console
+$ phg lift ./my-symfony-app -o ./lifted
+```
+
+`-o` is required: a directory lift writes a whole tree, so where it lands is never implied. The output
+must be empty — it will not overwrite an existing project.
+
+> **No companion fixture for this section, unlike the others.** A directory lift's artifact is a
+> *tree* plus two reports, not a `.php` → `.phg` pair, so there is nothing here for the byte-identity
+> example glob to gate. The transcript below is real output, reproduced from the integration fixture
+> in [`tests/lift_project.rs`](../../tests/lift_project.rs) — which *is* gated.
+
+### It lifts what lifts, and NAMES the rest
+
+A real Symfony/Laravel app contains plenty of Tier-2 PHP, so an all-or-nothing lift would produce
+nothing at all on any real input. Every file that fails is listed in `LIFT-REPORT.md` with its reason
+— which doubles as the ranked worklist of what the lifter still cannot do. `VENDOR-REPORT.md` lists
+every composer symbol the app references, attributed to the package that ships it and ranked by
+reference count. Nothing is faked and nothing is silently skipped.
+
+### The files that are not in `autoload` — and not all the same thing
+
+`autoload.psr-4` maps `src/`, so what happens to Symfony's `public/index.php`, `bin/console`,
+`migrations/`, `config/*.php`, or Laravel's `artisan` and `routes/web.php`? A rule matching those
+**names** would be a list of the frameworks the lifter happens to know, and wrong for the next one. So
+they are classified by **content** instead, and no framework path is hardcoded anywhere:
+
+| Shape | Role | What happens |
+|---|---|---|
+| declares a class / interface / trait / enum / function | code | **lifted** — it is the app's own code however composer maps it |
+| top-level `return` of DATA | configuration | reported, with `#[Config]` (DEC-318) as its replacement |
+| anything else with no declarations | bootstrap | reported, with `#[Entry(kind: …)]` as its replacement |
+
+Two consequences worth stating, because both were wrong before they were measured:
+
+* **Doctrine's `migrations/Version*.php` is LIFTED.** It declares a class, so it is code — and the
+  lifter says nothing about Doctrine anywhere.
+* **A returned closure is a factory, not configuration.** Symfony's `public/index.php`
+  (`return function (array $context) {…}`) and a `config/*.php` file (`return [ … ]`) are *both* a
+  top-level `return`. A rule that stopped there told the developer to re-express their front
+  controller as typed configuration — wrong advice, confidently given.
+
+`bin/console` and `artisan` have **no extension at all**, so PHP-ness is decided by content (an
+opening `<?php`, allowing a `#!` shebang line) as well as by suffix. And composer's `bin` key is read
+but deliberately kept *out* of the code surface: `autoload` says "this is my code", `bin` says "this is
+a command", and feeding a console script to the lifter produced `lift parse error: require is Tier-2`
+where the right answer was "this is a bootstrap script, here is the entry that replaces it".
+
+On the Symfony-shaped fixture that is:
+
+```console
+$ phg lift ./app -o ./lifted
+lifted 2/2 PHP file(s) into `./lifted`
+  no entry — a LIBRARY project (no file had top-level code)
+  4 framework file(s) to RE-EXPRESS, not lift (bootstrap / PHP config) — each paired
+    with its phorj counterpart in `LIFT-REPORT.md`
+  0 vendor symbol(s) referenced — ranked in `VENDOR-REPORT.md` (nothing was stubbed)
+```
+
+| File | Role | phorj counterpart |
+|---|---|---|
+| `bin/console` | bootstrap | `#[Entry(kind: EntryKind.Cli)]` |
+| `config/framework.php` | configuration | a `#[Config]` class, read at the entry |
+| `public/index.php` | bootstrap | `#[Entry(kind: EntryKind.Web)]` |
+| `routes/web.php` | bootstrap | an entry plus `#[Route]` handlers |
+
+…with `src/Entity/Post.php` **and** `migrations/Version20260805.php` lifted into
+`lifted/src/App/Entity/Post.phg` and `lifted/src/DoctrineMigrations/Version20260805.phg`.
+
+A tree whose PHP is *entirely* bootstrap and configuration is refused with exactly that reason — not
+with "no `.php` files found", which would send you looking for a file that is not missing.
+
+### The entry, and collisions
+
+A PHP script with top-level code IS an entry, so the first one becomes `src/main.phg`,
+`package Main;`, at the source root. That is not cosmetic: a dotted package must sit in a matching
+subdirectory (`E-PKG-PATH`) while `package Main` is exempt, so an entry left in its namespace package
+makes the whole project fail to **load**. PHP allows any number of such scripts; phorj has one entry
+per role, so further ones are left in place and *reported* — that choice is the developer's.
+
+Two sources that map to the same package and file stem are **renamed, never overwritten**, and the
+rename is disclosed. Legacy PHP hits this constantly: every namespace-less file lands in `package Main`
+and collides on its bare stem.
+
+### Vendor: reported by default, stubbed only on request
+
+`--vendor=stub` would declare each vendor symbol as a foreign PHP symbol (`declare class` /
+`declare function`, M8.5). It is ruled but not yet built, and it refuses with that reason rather than
+quietly behaving like the default. The reason it must stay opt-in is measured, not stylistic: a program
+carrying foreign declarations cannot run on **either** phorj engine (`E-FOREIGN-RUNTIME`), so stubs
+trade the VM, the JIT and the byte-identity spine for a draft that type-checks. Invariant 14 forbids
+making that trade silently.
+
 ## What lift does (idiomatic, not a mirror)
 
 | PHP | Phorj |

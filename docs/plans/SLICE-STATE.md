@@ -38,11 +38,26 @@ the entry is re-packaged `Main` at `src/main.phg` (anything else is `E-PKG-PATH`
 LOAD), and composer vendor is REPORTED with exact package attribution. `--vendor=stub` refuses with its
 reason. A review round found three defects, all measured: silent data loss on a destination collision, a
 non-terminating symlink cycle (a depth cap alone is still exponential), and a report that undercounted the
-tree. **STILL RULED-PENDING:** what to DO with files outside composer's autoload map — `public/index.php`,
-`bin/console`, `migrations/`, `config/*.php` are named but not attempted, and they are three different kinds
-of thing (bootstrap to REPLACE, config to RE-EXPRESS, migrations to LIFT).
+tree.
 
-**Superseded below — DEC-439's original queued note:** **QUEUED, ruled but NOT built — DEC-439, project-aware lifting.** `phg lift <dir>` lifts a whole tree in ONE
+**Also shipped 2026-08-05 — DEC-439 part 2: the files OUTSIDE `autoload` get a ROLE, decided by CONTENT.**
+Closes part 1's open question, developer-ruled after their challenge about Symfony's `public/index.php`,
+`bin/console` and Doctrine's `migrations/`. Discovery now reads composer's FULL autoload surface
+(`classmap` — a directory or a single file — plus `files` and legacy `psr-0`; ignoring `classmap` was the
+largest single reason app-owned code went unexamined), and everything left over is classified token-level at
+brace depth 0 into three buckets: **declares something → CODE, so it is LIFTED** (Doctrine's
+`migrations/Version*.php`, with the lifter saying nothing about Doctrine anywhere); **top-level `return` of
+DATA → CONFIGURATION**, replaced by a `#[Config]` class (DEC-318); **anything else → BOOTSTRAP**, replaced by
+`#[Entry(kind: …)]`. Never by path: a rule matching those NAMES is a list of the frameworks we happen to know
+and wrong for the next one. Three fixture-found defects: a returned CLOSURE is a factory, not configuration
+(both are a top-level `return`, and stopping there told a Symfony developer to re-express their front
+controller as typed config); composer's `bin` is NOT part of the code surface (it bypassed classification and
+fed the console script to the lifter → `require is Tier-2`); and "no `.php` files found" was a lie for a
+glue-only tree. `examples/lift/README.md` gained the directory-lift walkthrough it had been missing since
+part 1. **STILL PENDING (adjudication):** `tests/` is reachable through `autoload-dev.psr-4` so it is
+currently LIFTED — whether PHPUnit test classes belong in scope is the developer's call, given `phg test`.
+
+**Superseded above — DEC-439's original queued note:** **QUEUED, ruled but NOT built — DEC-439, project-aware lifting.** `phg lift <dir>` lifts a whole tree in ONE
 pass into a generated `phorj.json` + `src/` project, so cross-file references resolve — the single fix for
 BOTH `E-MODULE-NOT-FOUND` on lifted imports and `E-UNKNOWN-ATTRIBUTE` on framework attributes. Composer
 vendor is detected from `autoload.psr-4` + `installed.json`, REPORTED by default (`VENDOR-REPORT.md`

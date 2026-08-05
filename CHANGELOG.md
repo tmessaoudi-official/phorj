@@ -41,6 +41,51 @@ Three defects came out of a review round, each measured rather than reasoned:
 into one `usage_exit()` and extracting `phg build`'s flag parsing to `cli::build_flags` — it is a
 grandfathered size-gate breach Invariant 13 forbids growing.
 
+### Added — the files outside `autoload` get a ROLE, from their CONTENT (DEC-439 part 2, 2026-08-05)
+Developer-ruled, closing part 1's open question. A Symfony app keeps `public/index.php`, `bin/console`,
+`migrations/` and `config/*.php` outside `autoload.psr-4`; a Laravel app keeps `artisan` and `routes/web.php`
+outside it. Part 1 named those files; it did nothing with them.
+
+Discovery now reads composer's **full autoload surface** — `classmap` (a directory OR a single file), `files`,
+and legacy `psr-0`, for both `autoload` and `autoload-dev`. Ignoring `classmap` was the single largest reason
+app-owned code went unexamined: it is where a project declares its `migrations/` and its legacy non-PSR-4
+code.
+
+What is left over is **classified by content**, token-level at brace depth 0, into three roles:
+
+| Shape | Role | Disposition |
+|---|---|---|
+| declares a class / interface / trait / enum / function | code | **LIFTED** — the app's own code however composer maps it |
+| top-level `return` of DATA | configuration | reported; replacement = a `#[Config]` class (DEC-318) |
+| anything else with no declarations | bootstrap | reported; replacement = `#[Entry(kind: …)]` (+ `#[Route]`) |
+
+Never by path, and that is the ruling rather than an implementation note: a rule matching `public/index.php`,
+`artisan` or `migrations/` by NAME is a list of the frameworks the lifter happens to know, and wrong for the
+next one. Doctrine's `migrations/Version*.php` now **lifts** because it declares a class — and the lifter
+mentions Doctrine nowhere. [Verified on a Symfony-shaped fixture: `migrations/Version20260805.php` →
+`lifted/src/DoctrineMigrations/Version20260805.phg`, and the lifted project `phg check`s clean.]
+
+Three defects the fixture found that the design round did not:
+- **a returned CLOSURE is a factory, not configuration.** Symfony's `public/index.php`
+  (`return function (array $context) {…}`) and a `config/*.php` file (`return [ … ]`) are BOTH a top-level
+  `return`; a rule that stopped there told the developer to re-express their front controller as typed
+  configuration — wrong advice, confidently given.
+- **composer's `bin` key is not part of the code surface.** `autoload` says "this is my code"; `bin` says
+  "this is a command". Including it bypassed classification and fed the console script to the lifter:
+  `lift parse error: require is Tier-2/Tier-3` — a refusal where the right answer was "this is a bootstrap
+  script, here is the entry that replaces it". `bin` is still read, so a declared executable is classified
+  even when the content sniff cannot see it.
+- **"no `.php` files found" was a lie for a glue-only tree.** A tree whose PHP is *entirely* bootstrap and
+  configuration is a real PHP app with nothing to LIFT — a different answer from "there is no PHP here", and
+  reporting them identically sends the developer looking for a file that is not missing.
+
+PHP-ness is decided by extension **OR** content, and the OR is load-bearing both ways: `bin/console` and
+`artisan` have no extension for a filter to match, while a short-tag file has no `<?php` for a content check
+to find. `examples/lift/README.md` gained the directory-lift walkthrough it had been missing since part 1.
+
+**Still pending (adjudication):** `tests/` is reachable through `autoload-dev.psr-4`, so it is currently
+lifted. Whether PHPUnit test classes belong in scope is the developer's call, given phorj has `phg test`.
+
 ### Added — attribute arguments are constant-FOLDED (DEC-438, 2026-08-05)
 Developer-ruled, narrow by construction. `#[Tag(1 + 2 * 3, -5, 1.5 + 2.0, "a" + "b")]` now emits
 `#[Tag(7, -5, 3.5, 'ab')]` instead of being refused as non-constant.

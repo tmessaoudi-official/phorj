@@ -32,6 +32,7 @@
 
 use std::path::{Path, PathBuf};
 
+mod classify;
 mod discover;
 mod layout;
 mod report;
@@ -95,6 +96,13 @@ struct Failure {
     reason: String,
 }
 
+/// A PHP file that is NOT the app's own code — a framework bootstrap or a PHP configuration file. It has no
+/// phorj translation; it has a phorj replacement, which [`classify::Role::phorj_counterpart`] names.
+struct Glue {
+    rel: String,
+    role: classify::Role,
+}
+
 /// A vendor symbol the app references.
 struct VendorRef {
     /// The PHP fully-qualified name, as resolved from the referencing file.
@@ -134,23 +142,61 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
     }
 
     let composer = discover::Composer::read(root)?;
-    let files = discover::app_php_files(root, &composer)?;
-    // Every PHP file in the TREE, by content rather than extension — the denominator the app-file list
-    // cannot provide. Without it the reports counted "files I looked at" and called it "files that exist",
-    // which is the silent-omission failure this lifter exists to avoid. [Verified on a Symfony-shaped
-    // fixture: 8 PHP files present, 4 examined; `bin/console` is invisible to an extension filter because
-    // it has no extension at all.]
-    let unexamined: Vec<String> = discover::all_php_files(root)?
-        .into_iter()
-        .filter(|p| !files.contains(p))
-        .map(|p| relative(root, &p))
-        .collect();
+    let mut files = discover::app_php_files(root, &composer)?;
+    // Every PHP file in the TREE — by CONTENT rather than extension, so `bin/console` and Laravel's
+    // `artisan` are seen at all — then CLASSIFIED rather than ignored or guessed at by path (DEC-439
+    // part 2). A file that declares types is the app's own code however composer maps it (Doctrine's
+    // `migrations/` above all), so it joins the lift; a framework bootstrap or a PHP config file has no
+    // phorj translation at all, only a phorj REPLACEMENT, and the report names it.
+    //
+    // Before this existed the reports counted "files I looked at" and called it "files that exist" — the
+    // silent-omission failure this lifter exists to avoid. [Verified on a Symfony-shaped fixture: 8 PHP
+    // files present, 4 examined.]
+    let mut glue: Vec<Glue> = Vec::new();
+    let mut candidates = discover::all_php_files(root)?;
+    // A declared executable is classified even when the content sniff cannot see it — a script written with
+    // PHP's short tags has no `<?php` to find, and composer already told us the file exists.
+    for rel in &composer.bin {
+        let p = root.join(rel);
+        if p.is_file() && !candidates.contains(&p) {
+            candidates.push(p);
+        }
+    }
+    candidates.sort();
+    for path in candidates {
+        if files.contains(&path) {
+            continue;
+        }
+        let src = std::fs::read_to_string(&path).unwrap_or_default();
+        match classify::classify(&src) {
+            classify::Role::Code => files.push(path),
+            role => glue.push(Glue {
+                rel: relative(root, &path),
+                role,
+            }),
+        }
+    }
+    files.sort();
+    glue.sort_by(|a, b| a.rel.cmp(&b.rel));
     if files.is_empty() {
+        // Two different empty results, and reporting them the same way would be a lie: a tree with no PHP
+        // at all is a wrong argument, while a tree whose PHP is ALL bootstrap and configuration is a real
+        // PHP app that simply has no own-code to lift — the developer needs to know which one they hit.
+        if glue.is_empty() {
+            return Err(format!(
+                "lift: no `.php` files found under `{}` (searched {} autoload root(s); `vendor/` is never \
+                 walked)",
+                root.display(),
+                composer.psr4.len() + composer.classmap.len() + composer.files.len()
+            ));
+        }
         return Err(format!(
-            "lift: no `.php` files found under `{}` (searched {} PSR-4 root(s); `vendor/` is never \
-             walked)",
-            root.display(),
-            composer.psr4.len().max(1)
+            "lift: found {} PHP file(s) under `{}`, but every one is framework bootstrap or PHP \
+             configuration — none declares a class, interface, trait, enum or function, so there is no \
+             application code to lift. Point the lift at the directory holding your own classes (for a \
+             Symfony/Laravel layout that is `src/`, or whatever `composer.json`'s `autoload` maps).",
+            glue.len(),
+            root.display()
         ));
     }
 
@@ -246,7 +292,7 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
                 failures: &failures,
                 entry: entry_taken.as_deref(),
                 entry_conflicts: &entry_conflicts,
-                unexamined: &unexamined,
+                glue: &glue,
                 renames: &renames,
             },
         ),
@@ -265,7 +311,7 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
             vendor: vendor_refs.len(),
             entry: entry_taken,
             entry_conflicts: entry_conflicts.len(),
-            unexamined: unexamined.len(),
+            glue: glue.len(),
         },
     ))
 }

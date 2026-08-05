@@ -48,6 +48,21 @@ pub(super) struct Composer {
     /// `installed.json`'s namespace-prefix → package-name map, when a `vendor/` tree is present. This is
     /// what makes attribution exact rather than a guess from the first namespace segment.
     pub(super) installed_psr4: Vec<(String, String)>,
+    /// `autoload.classmap` + `autoload-dev.classmap` — arbitrary directories and files, which is where a
+    /// project's `migrations/` and legacy non-PSR-4 code is typically declared. Ignoring this key was the
+    /// single largest reason app-owned code went unexamined.
+    pub(super) classmap: Vec<String>,
+    /// `autoload.files` — always-included files (helper/function libraries).
+    pub(super) files: Vec<String>,
+    /// The top-level `bin` key — declared executables.
+    ///
+    /// Deliberately NOT part of the app-code surface [`app_php_files`] walks: `autoload` says "this is my
+    /// code", while `bin` says "this is a command", and the two are different claims. Feeding a console
+    /// script to the lifter produced `lift parse error: require is Tier-2` on Symfony's `bin/console` —
+    /// a refusal where the right answer was "this is a bootstrap script, here is the phorj entry that
+    /// replaces it". The key is still read so a declared executable is CLASSIFIED even when the content
+    /// sniff cannot see it.
+    pub(super) bin: Vec<String>,
 }
 
 impl Composer {
@@ -59,10 +74,21 @@ impl Composer {
         if let Ok(text) = std::fs::read_to_string(&path) {
             let j = Json::parse(&text).map_err(|e| format!("composer.json: {e}"))?;
             for key in ["autoload", "autoload-dev"] {
-                if let Some(psr4) = j.get(key).and_then(|a| a.get("psr-4")) {
+                let Some(section) = j.get(key) else { continue };
+                if let Some(psr4) = section.get("psr-4") {
                     collect_psr4(psr4, &mut out.psr4);
                 }
+                // PSR-0 is the legacy prefix scheme and still present in older projects; it maps a prefix
+                // to a directory exactly like PSR-4 for the purposes of "which directories are the app's".
+                if let Some(psr0) = section.get("psr-0") {
+                    collect_psr4(psr0, &mut out.psr4);
+                }
+                // `classmap` and `files` are PATHS, not namespace prefixes — they say "this code is mine"
+                // without saying what it is called, which is exactly the case a psr-4-only reading missed.
+                collect_paths(section.get("classmap"), &mut out.classmap);
+                collect_paths(section.get("files"), &mut out.files);
             }
+            collect_paths(j.get("bin"), &mut out.bin);
             if let Some(req) = j.get("require").and_then(Json::as_obj) {
                 for (name, _) in req {
                     // `php` and `ext-*` are platform requirements, not packages.
@@ -78,6 +104,10 @@ impl Composer {
             .sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
         out.requires.sort();
         out.requires.dedup();
+        for list in [&mut out.classmap, &mut out.files, &mut out.bin] {
+            list.sort();
+            list.dedup();
+        }
         out.installed_psr4 = read_installed(root)?;
         Ok(out)
     }
@@ -125,6 +155,22 @@ fn collect_psr4(psr4: &Json, out: &mut Vec<(String, String)>) {
     }
 }
 
+/// A composer key holding either a single path or an array of paths (`classmap`, `files`, `bin`).
+fn collect_paths(node: Option<&Json>, out: &mut Vec<String>) {
+    let Some(node) = node else { return };
+    if let Some(one) = node.as_str() {
+        out.push(one.to_string());
+        return;
+    }
+    if let Some(items) = node.as_arr() {
+        for i in items {
+            if let Some(p) = i.as_str() {
+                out.push(p.to_string());
+            }
+        }
+    }
+}
+
 /// `vendor/composer/installed.json` → (namespace prefix, package name), so a vendor symbol can be
 /// attributed to the package that ships it. Absent or unparseable = an empty map: attribution degrades to
 /// the namespace root, which is a weaker report but never a wrong one.
@@ -165,16 +211,31 @@ fn read_installed(root: &Path) -> Result<Vec<(String, String)>, String> {
 /// [`NEVER_WALK`]. Either way `vendor/` is never entered.
 pub(super) fn app_php_files(root: &Path, composer: &Composer) -> Result<Vec<PathBuf>, String> {
     let mut roots: Vec<PathBuf> = Vec::new();
-    for (_, dir) in &composer.psr4 {
-        let d = root.join(dir);
-        if d.is_dir() && !roots.contains(&d) {
-            roots.push(d);
+    let mut direct: Vec<PathBuf> = Vec::new();
+    // Every part of composer's AUTOLOAD surface, not just `psr-4`: a `classmap` entry may be a directory OR
+    // a single file, and `files` is always files. Reading all of them is what brings a project's legacy
+    // non-PSR-4 code into scope without naming any framework's directories. `bin` is excluded on purpose —
+    // see the field's own note.
+    let declared = composer
+        .psr4
+        .iter()
+        .map(|(_, d)| d.as_str())
+        .chain(composer.classmap.iter().map(String::as_str))
+        .chain(composer.files.iter().map(String::as_str));
+    for rel in declared {
+        let p = root.join(rel);
+        if is_real_dir(&p) {
+            if !roots.contains(&p) {
+                roots.push(p);
+            }
+        } else if p.is_file() && !direct.contains(&p) {
+            direct.push(p);
         }
     }
-    if roots.is_empty() {
+    if roots.is_empty() && direct.is_empty() {
         roots.push(root.to_path_buf());
     }
-    let mut out = Vec::new();
+    let mut out = direct;
     for r in &roots {
         walk(r, &mut out, 0)?;
     }
@@ -193,15 +254,18 @@ pub(super) fn app_php_files(root: &Path, composer: &Composer) -> Result<Vec<Path
 pub(super) fn all_php_files(root: &Path) -> Result<Vec<PathBuf>, String> {
     let mut candidates = Vec::new();
     walk_any(root, &mut candidates, 0)?;
-    let mut out: Vec<PathBuf> = candidates
-        .into_iter()
-        .filter(|p| {
-            p.extension().and_then(|e| e.to_str()) == Some("php") || starts_with_php_open_tag(p)
-        })
-        .collect();
+    let mut out: Vec<PathBuf> = candidates.into_iter().filter(|p| is_php_file(p)).collect();
     out.sort();
     out.dedup();
     Ok(out)
+}
+
+/// Is this file PHP? By EXTENSION or by CONTENT — the OR is load-bearing in both directions: `bin/console`
+/// and Laravel's `artisan` have no extension for a filter to match, while a `<?=`-only short-tag file has no
+/// `<?php` for a content check to find. [Verified against six shapes: `artisan`, `console`, `plain.php`
+/// detected; a `.txt` and a binary correctly rejected; the short-tag file caught by the extension branch.]
+pub(super) fn is_php_file(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()) == Some("php") || starts_with_php_open_tag(path)
 }
 
 /// Does this file open with `<?php` (allowing a leading `#!` shebang line)? Reads a small prefix only.
@@ -275,7 +339,7 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) -> Result<(), String> 
             if !skip {
                 walk(&path, out, depth + 1)?;
             }
-        } else if !path.is_dir() && path.extension().and_then(|e| e.to_str()) == Some("php") {
+        } else if !path.is_dir() && is_php_file(&path) {
             out.push(path);
         }
     }

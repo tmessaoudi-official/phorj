@@ -8,9 +8,9 @@
 use super::{Failure, VendorRef};
 use std::path::Path;
 
-/// `LIFT-REPORT.md` — every file, lifted or not, with the reason for each failure.
-/// Everything one directory lift has to say about the FILES it saw. A struct rather than eight
-/// positional parameters — four of them are lists of strings, and a transposed pair would be invisible.
+/// Everything one directory lift has to say about the FILES it saw — the input to `LIFT-REPORT.md`. A
+/// struct rather than eight positional parameters: four of them are lists of strings, so a transposed
+/// pair would be invisible at the call site.
 pub(super) struct Outcome<'a> {
     pub(super) total: usize,
     pub(super) lifted: usize,
@@ -19,8 +19,9 @@ pub(super) struct Outcome<'a> {
     pub(super) entry: Option<&'a str>,
     /// Further scripts with top-level code — only one file can be the entry.
     pub(super) entry_conflicts: &'a [String],
-    /// PHP files present in the tree but outside composer's autoload map.
-    pub(super) unexamined: &'a [String],
+    /// Files that are NOT the app's code — framework bootstrap and PHP configuration, each with the phorj
+    /// replacement its role implies.
+    pub(super) glue: &'a [super::Glue],
     /// (source, destination) for each draft renamed to avoid a collision.
     pub(super) renames: &'a [(String, String)],
 }
@@ -34,7 +35,7 @@ pub(super) fn lift_report(root: &Path, o: &Outcome<'_>) -> String {
         root.display()
     ));
     out.push_str(&entry_section(o.entry, o.entry_conflicts));
-    out.push_str(&unexamined_section(o.unexamined));
+    out.push_str(&glue_section(o.glue));
     out.push_str(&rename_section(o.renames));
     if failures.is_empty() {
         out.push_str(
@@ -105,62 +106,59 @@ fn entry_section(entry: Option<&str>, conflicts: &[String]) -> String {
     out
 }
 
-/// Every PHP file in the tree the lift did NOT examine, because it sits outside composer's `autoload`
-/// map — a Symfony/Laravel app is full of them (`public/index.php`, `bin/console`, `migrations/`,
-/// `config/*.php`, `artisan`).
+/// The framework files that are NOT the app's code, grouped by ROLE with the phorj replacement each one
+/// implies (DEC-439 part 2).
 ///
-/// This section exists because its absence made the report LIE: it counted "files I looked at" and called
-/// it "files that exist". [Verified on a Symfony-shaped fixture: 8 PHP files present, 4 examined, 4
-/// invisible.] Listing them is the floor, not the fix — what should HAPPEN to each class of file is a
-/// ruling in flight (DEC-439 follow-up), and until it lands the honest behaviour is to name them.
+/// This section is the difference between a list of skipped files and a migration PLAN. The classification
+/// is by CONTENT, never by path — a rule matching `public/index.php` or `artisan` by name would be a list of
+/// the frameworks the lifter happens to know, and wrong for the next one. What these files actually differ
+/// in is their shape: declarations mean the app's own code (lifted, not listed here), a top-level `return`
+/// with nothing declared means configuration, and top-level statements alone mean a bootstrap script.
 ///
-/// Note what the detection had to do to see `bin/console` at all: PHP-ness is decided by CONTENT, since
-/// that file and Laravel's `artisan` have no extension for a filter to match.
-fn unexamined_section(unexamined: &[String]) -> String {
-    if unexamined.is_empty() {
+/// Note what these files are NOT: candidates for a better lifter. `public/index.php` constructs a Symfony
+/// `Kernel`; there is nothing to port, because phorj has no Kernel and will not. It is REPLACED by an
+/// `#[Entry]`, and saying so is more useful than lifting it into something that looks like code and means
+/// nothing.
+fn glue_section(glue: &[super::Glue]) -> String {
+    if glue.is_empty() {
         return String::new();
     }
     let mut out = format!(
-        "## {} PHP file(s) NOT examined — outside composer's autoload map\n\n\
-         These exist in the tree and were not lifted, not attempted, and not counted above. They are \
-         listed so the count is honest, NOT because listing them is the right long-term answer.\n\n\
-         Most of them are one of two things, and neither is a lift:\n\n\
-         - **framework bootstrap** (`public/index.php`, `bin/console`, `artisan`, `bootstrap/app.php`) — \
-           these construct a Symfony `Kernel` or Laravel `Application`. There is nothing to port: phorj \
-           has no Kernel. They are REPLACED by a phorj entry — `#[Entry(kind: Web)]` for the front \
-           controller, `#[Entry(kind: Cli)]` for the console;\n\
-         - **framework configuration written in PHP** (`config/*.php`, `routes/web.php`) — re-expressed \
-           with phorj's own `#[Config]` (DEC-318) and `#[Route]`, not translated statement by statement.\n\n\
-         The exception is code that is genuinely YOURS but happens to live outside the autoload map — \
-         Doctrine `migrations/` above all (`AbstractMigration` subclasses). Those should be lifted, and \
-         how to find them without hardcoding a framework's directory names is the open question.\n\n",
-        unexamined.len()
+        "## {} framework file(s) to RE-EXPRESS, not lift\n\nThese are not the app's own code, so they were \
+         not lifted — and that is the right outcome rather than a limitation. Each is classified by its \
+         CONTENT (no framework paths are hardcoded anywhere in the lifter) and paired with what to write \
+         instead.\n\n| File | Role | phorj counterpart |\n|---|---|---|\n",
+        glue.len()
     );
-    for u in unexamined {
-        out.push_str(&format!("- `{u}`\n"));
+    for g in glue {
+        out.push_str(&format!(
+            "| `{}` | {} | {} |\n",
+            g.rel,
+            g.role.label(),
+            g.role.phorj_counterpart().unwrap_or("—")
+        ));
     }
-    out.push('\n');
+    out.push_str(
+        "\n> A file here that you believe IS your own code is worth reporting: it means it declares nothing \
+         the classifier could see, which is unusual for application code.\n\n",
+    );
     out
 }
 
-/// Files whose draft had to be RENAMED because two sources mapped to the same package and stem.
+/// The RENAME section: drafts written somewhere other than where their package would put them.
 ///
-/// This section is the fix for a measured silent data loss: `src/A/Helper.php` and `src/B/Helper.php`, both
-/// `namespace App`, both wanted `src/App/Helper.phg` — the second overwrote the first and the summary still
-/// reported "lifted 2/2". Legacy PHP hits it constantly, since every namespace-LESS file lands in
-/// `package Main` and collides on its bare stem.
-///
-/// Renaming loses nothing (a phorj package directory may hold any number of files under any names), but a
-/// developer looking for a particular file's draft has to be told where it went.
+/// Disclosed rather than silent because the draft is not where a reader would look for it. Before this
+/// existed, two sources mapping to the same package AND stem overwrote each other while the summary still
+/// reported "lifted 2/2" — a silent data loss.
 fn rename_section(renames: &[(String, String)]) -> String {
     if renames.is_empty() {
         return String::new();
     }
     let mut out = format!(
-        "## {} draft(s) renamed to avoid a collision\n\nTwo or more source files mapped to the same \
-         package AND the same file name. Nothing was lost — a phorj package directory may hold any number \
-         of files, and a file's own name carries no meaning — but the draft is not where you would look \
-         for it, so each is listed here.\n\n| Source | Written to |\n|---|---|\n",
+        "## {} draft(s) renamed to avoid a collision\n\nTwo or more sources mapped to the same package and \
+         file name, so the later ones were written under a disambiguated name instead of overwriting the \
+         earlier one. Nothing was lost — but the file name no longer matches the original.\n\n\
+         | Source | Written to |\n|---|---|\n",
         renames.len()
     );
     for (src, dest) in renames {
@@ -224,10 +222,8 @@ pub(super) fn vendor_report(
     out
 }
 
-/// The one-screen stdout summary. Names the reports rather than dumping them: a directory lift can produce
-/// hundreds of rows, and the useful stdout is "what happened and where to look".
-/// What one directory lift did, in numbers. A struct rather than eight positional arguments: the counts
-/// are all `usize` and a transposed pair would be invisible at the call site.
+/// What one directory lift did, in numbers — the input to the stdout summary. A struct rather than seven
+/// positional arguments: the counts are all `usize`, so a transposed pair would be invisible.
 pub(super) struct Counts {
     pub(super) total: usize,
     pub(super) lifted: usize,
@@ -236,9 +232,11 @@ pub(super) struct Counts {
     /// The source file that became the entry, if any.
     pub(super) entry: Option<String>,
     pub(super) entry_conflicts: usize,
-    pub(super) unexamined: usize,
+    pub(super) glue: usize,
 }
 
+/// The one-screen stdout summary. Names the reports rather than dumping them: a directory lift can produce
+/// hundreds of rows, and the useful stdout is "what happened and where to look".
 pub(super) fn summary(out_dir: &Path, c: &Counts) -> String {
     let Counts {
         total,
@@ -247,10 +245,9 @@ pub(super) fn summary(out_dir: &Path, c: &Counts) -> String {
         vendor,
         entry,
         entry_conflicts,
-        unexamined,
+        glue,
     } = c;
-    let (failed, vendor, entry_conflicts, unexamined) =
-        (*failed, *vendor, *entry_conflicts, *unexamined);
+    let (failed, vendor, entry_conflicts, glue) = (*failed, *vendor, *entry_conflicts, *glue);
     let entry = entry.as_deref();
     let mut s = format!(
         "lifted {lifted}/{total} PHP file(s) into `{}`\n",
@@ -273,10 +270,10 @@ pub(super) fn summary(out_dir: &Path, c: &Counts) -> String {
             "  {failed} file(s) NOT lifted — each with its reason in `LIFT-REPORT.md`\n"
         ));
     }
-    if unexamined > 0 {
+    if glue > 0 {
         s.push_str(&format!(
-            "  {unexamined} PHP file(s) NOT examined — outside composer's autoload map \
-             (`public/`, `bin/`, `migrations/`, `config/`…), listed in `LIFT-REPORT.md`\n"
+            "  {glue} framework file(s) to RE-EXPRESS, not lift (bootstrap / PHP config) — each paired \
+             with its phorj counterpart in `LIFT-REPORT.md`\n"
         ));
     }
     s.push_str(&format!(
