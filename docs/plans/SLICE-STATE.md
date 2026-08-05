@@ -163,6 +163,38 @@ an unsized tail, which `#![deny(unsafe_code)]` forbids outside `src/jit/`, so it
 island or an admitted crate = a dependency-policy ruling. Even a halved allocator moves `fsforeachline`
 0.35 → ~0.38, not to a WIN.
 
+**REFRAMED 2026-08-05 (DEC-441), at the developer's instruction to challenge the premise rather than pick a
+ruling — and the premise was wrong. THERE IS ONE PERF PROBLEM, NOT SEVEN: phorj's VM needs 15.8× the
+instructions php's VM needs for identical work** (176.1 vs 11.1 Ir per bytecode op, callgrind, same loop,
+same checksum, startup subtracted). The measurement nobody had taken is **VM vs VM, both JITs off**:
+
+* **Every phorj WIN is the JIT's doing** — leverage 28×–334×. With `--no-jit`, phorj loses EVERY row.
+  The scoreboard is a map of JIT COVERAGE, not of language performance.
+* **The losing rows are exactly the rows with JIT leverage 1.0** (`jsonround` 0.99, `fsforeachline` 1.00),
+  and their loss ratio EQUALS their VM/VM ratio (0.31≈0.34, 0.35≈0.41).
+* **The "~320× cliff" is not a defect — it IS the leverage.** `intadd`'s JIT leverage measures 334×;
+  DEC-431 measured the cliff at ~320×. Same number. So fixing the fallible-call decline leaves the cliff at
+  full height for every OTHER decline reason, including undiscovered ones. DEC-431/431.2's option set is
+  symptom-treatment.
+* **Un-banked phorj WIN found on the way: startup is 1.88 M Ir against php's 22.3 M — 12× faster to
+  start.** No bench measures it; short-script/CLI workloads already favour phorj decisively.
+* **A cheap fix of mine was HYPOTHESIZED AND REFUTED** (recorded so nobody retries it): `[profile.release]`
+  is absent, so release builds at `codegen-units = 16` with no LTO, and the hot stack helpers sit in a
+  different module from `exec_op`. Setting `codegen-units = 1` + `lto = "fat"` moved 176.1 → **175.7**
+  Ir/op — **0.2%, nothing** — while build time went 65 s → 5 m 38 s. Reverted. `pop_int` returns
+  `Result<i64, String>` and builds a formatted error on its fault path, so it is too large to inline at any
+  CGU setting. **The 15.8× is structural, not a compiler flag away.**
+* Invariant 16's cross-language survey (which DEC-440 owed and skipped) is now in the register: phorj has
+  NONE of the standard interpreter toolkit — ip/code in locals, inlined dispatch, computed-goto,
+  operand-specialized handlers (php's, visible in our own profile), superinstructions, register bytecode,
+  NaN-boxing, inline caches.
+
+**The reframed fork, now the real ruling:** (A) widen JIT coverage row-by-row — each needs a ruling, never
+helps user code, cliff stays; (B) invest in the VM — one programme, lifts every row and all user code,
+shrinks the cliff for all causes at once, but 15.8× is multi-slice; (C) make the performance CONTRACT honest
+instead of chasing rows — document the bimodality, promote `PHORJ_JIT_EXPLAIN` to a first-class diagnostic,
+warn when a hot loop sits in a declined function. Cheapest, wins no row, arguably what a USER needs most.
+
 Other pending rulings unchanged: `MICROBENCH_RUNS` above K=3, the spread-adjusted arming rule (DEC-434.1),
 and the hash-flooding hasher trade.
 

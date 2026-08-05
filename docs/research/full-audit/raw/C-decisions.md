@@ -7205,3 +7205,132 @@ it closes the row.
 
 **Nothing was built.** The measurement removed three rows from the list, bounded the fourth option, and
 found one new blocked-by-invariant cause.
+
+### DEC-441 (2026-08-05) — THE REFRAME: there is ONE perf problem, and it is the VM (15.8× off PHP's), not seven bench rows
+
+Developer asked for the premise to be challenged rather than a ruling picked from DEC-440's menu — *"do more
+research/brainstorming and reframe it"*. That was the right call: DEC-440 offered three rulings the register
+had ALREADY written, and skipped Invariant 16's cross-language survey entirely.
+
+### The measurement nobody in this register had taken: VM vs VM
+
+Every prior number compares phorj's DEFAULT path (JIT on) against php+JIT. Nobody measured phorj's VM
+against php's VM with both JITs off. Best-of-3, pinned to one core, php-8.5.8:
+
+| feature | JIT vs JIT | **phorj VM vs php VM** | phorj's own JIT leverage |
+|---|---|---|---|
+| `intadd` | 2.00 ✓ | **0.03** | **334×** |
+| `forin` | 1.39 ✓ | **0.03** | 187× |
+| `enum` | 4.02 ✓ | **0.05** | 151× |
+| `fibrec` | 2.36 ✓ | **0.11** | 53× |
+| `listfilter` | 10.03 ✓ | **0.35** | 36× |
+| `interp` | 2.97 ✓ | **0.13** | 28× |
+| `jsonround` | **0.31 ✗** | **0.34** | **0.99 — NONE** |
+| `fsforeachline` | **0.35 ✗** | **0.41** | **1.00 — NONE** |
+| `strappend` | **0.50 ✗** | **0.00** | 284× |
+
+**Three conclusions, and each contradicts the register's framing.**
+
+1. **Every phorj WIN is the JIT's doing.** Leverage is 28×–334× on the winning rows. With `--no-jit`, phorj
+   loses EVERY row measured. The scoreboard is a map of JIT coverage, not of language performance.
+2. **The losing rows are exactly the rows where JIT leverage is 1.0** — `jsonround` 0.99, `fsforeachline`
+   1.00 — and their loss ratio EQUALS their VM/VM ratio (0.31≈0.34, 0.35≈0.41). They do not lose for seven
+   different reasons. They lose because the JIT declined and the fallback is php's VM ÷ 30.
+3. **The "~320× cliff" is not a defect — it IS the leverage.** `intadd`'s measured JIT leverage is **334×**;
+   DEC-431 measured the cliff at **~320×**. The same number. A decline costs 320× *because* the VM is ~30×
+   slower than php's, not because of anything specific to fallible calls. **Fixing the fallible-call decline
+   would leave the cliff standing at full height for every other decline reason** — including reasons not yet
+   discovered. That reframes DEC-431/431.2's whole option set as symptom-treatment.
+
+### The gap, quantified in instructions retired (not wall clock)
+
+Identical loop, both legs printing the same checksum (`4999950000`), callgrind, startup subtracted via a
+0-iteration build of the same program:
+
+| | total Ir | startup | loop Ir | **Ir per bytecode op** |
+|---|---|---|---|---|
+| phorj VM | 160 367 720 | 1 875 689 | 158 492 031 | **176.1** |
+| php VM (JIT off) | 32 334 303 | 22 334 212 | 10 000 091 | **11.1** |
+
+**phorj needs 15.8× the instructions of php for identical work.** 176 Ir to execute ops like `AddI`,
+`GetLocal`, `SetLocal`, `Lt`, `Jump` — each of which should be 5–20. php's 11.1 is what a mature interpreter
+looks like.
+
+**An un-banked phorj WIN found on the way:** phorj's startup is **1.88 M Ir against php's 22.3 M — 12×
+faster to start.** Short-script and CLI workloads already favour phorj decisively and no bench measures it.
+
+### Where the 176 Ir/op goes (callgrind, same loop)
+
+| | share | |
+|---|---|---|
+| `exec_op` | 40.3% | the actual op work |
+| **`run_to_completion`** | **24.3%** | pure dispatch scaffolding, ≈43 Ir/op |
+| `push_mut`+`pop_int`+`push_i`+`pop2_int`+`pop` | **24.6%** | stack traffic, all as OUT-OF-LINE calls |
+| `drop_glue::<Value>` + `Value::clone` | 8.2% | 32-byte enum with `Rc` arms, per op |
+
+Root cause of the scaffolding share, from reading `run_to_completion`/`run_until`: **every single op
+re-derives its function pointer and code slice from the frame table** — `self.frames[fr]` indexed three
+times, `program.functions[func].chunk.code` re-walked, `code.len()` re-checked, `&code[ip]` bounds-checked,
+then a non-inlined `exec_op` call returning `Result<Flow, String>`. A competitive interpreter hoists
+`code`/`ip` into locals and re-syncs only on call/return/jump.
+
+### MY OWN CHEAP FIX, HYPOTHESIZED AND REFUTED — recorded so nobody retries it
+
+`[profile.release]` is **absent** from `Cargo.toml`, so release builds at Cargo's defaults:
+`codegen-units = 16`, no LTO. The hot stack helpers live in `src/vm/mod.rs` and `exec_op` in
+`src/vm/exec.rs` — different modules — so the hypothesis was that CGU boundaries blocked the inlining, and
+a one-line profile change would recover most of that 24.6%.
+
+**Measured: `codegen-units = 1` + `lto = "fat"` gives 176.1 → 175.7 Ir/op. A 0.2% change — nothing.** Gap
+unmoved at 15.8×. Build time went 65 s → **5 m 38 s**. Reverted.
+
+Why it failed: `pop_int` returns `Result<i64, String>` and constructs a formatted error string on its fault
+path, so it is too large for LLVM to inline whatever the CGU settings. The cost is not the call boundary —
+it is that each helper carries real work plus error plumbing. **The 15.8× is structural to the VM's design
+(32-byte `Value` cloned/dropped per op, `Result<_, String>` on every arithmetic op, `Vec<Value>` stack with
+bounds checks, per-op frame re-derivation), not a compiler flag away.** That is the third time in this
+register that a cheap-looking perf fix was refuted by measuring first — and the local rule from DEC-434.2
+("compile the thing and read the error") is what caught it again.
+
+### Invariant 16 / META-7 — the cross-language survey DEC-440 owed and skipped
+
+How every other implementation closed exactly this gap. None of this is novel research; it is the standard
+toolkit, and phorj currently has **none** of it. [Speculative on per-technique yield for phorj; the
+techniques and their adopters are established practice.]
+
+| technique | who does it | what it removes |
+|---|---|---|
+| keep `ip`/`code` in locals, re-sync only at call/return/jump | CPython, php, Lua, YARV — all of them | the 24.3% scaffolding |
+| inline the dispatch `match` into the loop (no per-op call) | Lua, php | per-op call + `Result` plumbing |
+| computed-goto / tail-call dispatch | CPython 3.11+, php `ZEND_VM_KIND_GOTO`, Wasm3 | shared-switch branch mispredicts |
+| **operand-type-specialized handlers** | **php — visible in our own profile as `ZEND_ASSIGN_SPEC_CV_TMP_RETVAL_UNUSED_HANDLER`** | per-op type dispatch |
+| superinstructions / op fusion | CPython's adaptive interpreter, Forth tradition | whole dispatches (`GetLocal;GetLocal;AddI;SetLocal` → 1) |
+| register-based bytecode instead of stack | Lua 5, Dart, Android DEX | push/pop traffic entirely (the 24.6%) |
+| NaN-boxing / pointer tagging | LuaJIT, JSC, V8 | 32-byte `Value` → 8 bytes, and most `drop_glue` |
+| inline caches for field/method access | every JITted VM | hash lookups per access |
+
+php's specialized handlers are the single most relevant entry: it is what our own profile shows php doing,
+and it is why 11.1 Ir/op is achievable at all.
+
+### The reframed strategic choice (a ruling, and now an informed one)
+
+Not "which of 7 rows to fix". The real fork:
+
+  **A. Widen JIT coverage** (the register's current plan, DEC-434.2 opt. 3 et al). Each row needs its own
+  ruling; user-written higher-order code is never helped (DEC-434.2 established verticals are *forced* by
+  the design); and the cliff stays at full height for every decline reason.
+
+  **B. Invest in the VM.** One programme, lifts every row and all user code, and shrinks the cliff
+  proportionally for all causes at once — including the fallible-call cliff, without ruling on it. Honest
+  cost: 15.8× is a multi-slice engineering programme, not a flag (proven above), and it partly duplicates
+  what the JIT already does well on its subset.
+
+  **C. Make the performance CONTRACT honest instead of chasing rows.** Accept the bimodality, document it
+  ("JIT-covered code beats php; interpreted code does not, by ~16×"), and invest in making coverage
+  PREDICTABLE and VISIBLE — `PHORJ_JIT_EXPLAIN` already exists (DEC-431.2); promote it to a first-class
+  surfaced diagnostic, and pick DEC-431.2's option 4 (warn when a hot loop sits in a declined function).
+  Cheapest by far, wins no bench row, and is arguably what a *user* needs most: today the 320× cliff is
+  invisible until you benchmark.
+
+**Nothing was built. One hypothesis was refuted, one un-banked win (12× startup) was found, and the problem
+was re-identified as singular.**
