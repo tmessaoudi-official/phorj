@@ -6688,6 +6688,30 @@ and that a single reading of a high-variance row is not evidence; the same gate 
 spread +20..63%]` on seven other rows, and SLICE-STATE already records `mapinsert` as having previously
 been a "loaded-box fiction" before DEC-433 cleared it.
 
-**So this is recorded as UNRESOLVED, not as passed and not as fixed.** It needs a re-measure on a quiet
-box before anything is concluded — and if it is real, it gets fixed rather than re-baselined. The push
-stays blocked in the meantime; the gate behaved correctly and was not bypassed.
+**RESOLVED 2026-08-04 by an idle-box re-measure (developer ruled Option 1).** Waiting for 1-min load
+< 0.4 (reached 0.37 after 70s) and running the gate alone:
+
+    ok   mapinsert: ratio 1.089 -> 1.348 (WIN)
+    RECOVERED listcontains: owed at 0.899, now 1.943 (a WIN)
+    microbench-gate: PASS — 43 WIN / 9 loss, 0 blocking regression(s)
+
+So there was NO regression: `mapinsert` is BETTER than its baseline. The push then succeeded (it measured
+1.125, still a WIN, at the pre-push lane's own load). No perf rework was needed — the developer's standing
+authorization to "rework perf to make an absolute win" went unused because there was no loss to fix.
+
+**THE REAL FINDING — the gate's quiet-box threshold produces FALSE FAILURES, and by symmetry false
+passes.** `mapinsert` measured 0.845 and 0.810 at load ~2.4, and 1.348 at load 0.37: a **66% swing from
+box load alone**, on a row the ratchet hard-fails a push over. The gate's own log shows the mechanism:
+`1-min load 4.24 > 2.5 (the pre-push lane's own build) — waiting up to 90s`, then `load settled to 2.36
+after 35s — measuring`. It measures immediately after its OWN full release build, and accepts load 2.36 as
+"settled".
+
+That threshold contradicts the project's own doctrine: DEC-430 measured 25–95% short-loop variance and
+DEC-434.1 made `--emit` REFUSE a non-quiet box (exit 2, never a silent skip). The gate applies a far
+laxer bar than the emitter it protects. The consequence cuts both ways — this time it blocked a good push
+for two turns; the same permissiveness can equally mask a REAL regression as within-noise.
+
+**RECOMMENDATION (a safety-mechanism change, so NOT self-ruled):** bring the gate's threshold into line
+with `--emit`'s (a genuinely idle box, ~0.4 rather than 2.5), and/or interpose a settle delay between the
+pre-push build and the measurement instead of a 90s cap that gives up and measures anyway. Recorded as an
+OPEN recommendation for the developer.
