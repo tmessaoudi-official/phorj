@@ -151,5 +151,25 @@ loudly: a top-level operator inside `{$…}` (a PHP parse error too), the remove
 variable-variable form, and a simple-syntax bareword subscript `"$a[key]"` (whose key silently
 becomes the string `'key'` — use the explicit `"{$a['key']}"` form).
 
+## `namespace` / `use` — file-level declarations (LIFT-NS, 2026-08-04)
+
+`namespaces.php` / `namespaces.phg`. Both keywords were outside the Tier-1 subset until this slice, which
+made the lifter unusable on real-world PHP: a namespaced file failed at the PARSER, before anything else
+could be attempted.
+
+- `namespace a\b;` → `package A.B;` — segments PascalCase-ized (`E-PKG-CASE` is enforced and PHP does not
+  guarantee PascalCase), `snake_case`/`kebab` treated as word boundaries (`cli_tools` → `CliTools`), an
+  already-upper segment left alone (`ORM` stays `ORM`). No namespace at all still yields `package Main;`.
+- `use A\B\C;` → `import A.B.C;`, and `use A\B\C as D;` → `import A.B.C as D;` (phorj supports import
+  aliases natively). A leading `\` root marker is not part of the path.
+- Only the namespace segments are reshaped; the LAST segment is the class's own name and is left verbatim.
+- **An unreferenced `use` is dropped.** `E-UNUSED-IMPORT` is a hard error in phorj and an unused `use` is
+  legal and common in PHP, so keeping it would emit a draft that fails `phg check`. It is lossless — a
+  `use` only creates a local alias.
+
+Refused loudly, with the reason, rather than half-lifted: a braced `namespace A { … }` (phorj has one
+`package` per file), a second `namespace` in one file, a `namespace` after a declaration,
+`use function` / `use const` (they import a symbol, not a type), and the grouped `use A\{B, C};` form.
+
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.

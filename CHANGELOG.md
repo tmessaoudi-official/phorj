@@ -6,6 +6,35 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the lifter accepts `namespace` and `use` (LIFT-NS, CD-30, 2026-08-04)
+`namespace` and `use` sat in the lifter's `UNSUPPORTED_KW` and were HARD PARSE ERRORS, so **no**
+namespaced PHP file could be lifted at all — i.e. no Symfony, Laravel or Doctrine file, regardless of
+anything else. This was found while planning LIFT-ATTR and it reorders that work: **attribute lifting was
+the second blocker, not the first.**
+
+- `namespace a\b;` → `package A.B;`. Segments are PascalCase-ized because `E-PKG-CASE` is *enforced*
+  (`package app.entity;` is rejected: *"package segment `app` must be PascalCase"*) and PHP does not
+  guarantee PascalCase namespaces; `snake_case`/`kebab` become word boundaries (`cli_tools` → `CliTools`)
+  and an already-upper segment is preserved (`ORM` stays `ORM`, never `Orm`). No namespace still yields
+  `package Main;`, so every previously-liftable file keeps its package line.
+- `use A\B\C [as D];` → `import A.B.C [as D];`. Phorj supports import aliases natively, so the alias the
+  author wrote survives rather than being inlined at every use site. A leading `\` root marker is not part
+  of the path. Only namespace segments are reshaped — the last segment is the class's own name.
+- **An unreferenced `use` is dropped.** `E-UNUSED-IMPORT` is a hard error in phorj while an unused `use` is
+  legal and very common in PHP, so emitting every `use` verbatim produced "a lift that fails the very check
+  it should pass" — the rule `lifter/exceptions.rs` already followed for error imports. Dropping is
+  semantically lossless: a `use` only creates a local alias. Usage is judged against the LIFTED text, not
+  the PHP source, because a Doctrine-style `use … as ORM;` is referenced only from `#[ORM\Column]` and
+  attributes are not lifted yet.
+- Refused loudly WITH THE REASON rather than half-lifted: a braced `namespace A { … }` (phorj has one
+  `package` per file), a second `namespace`, a `namespace` after a declaration, `use function` / `use const`
+  (they import a symbol, not a type), and the grouped `use A\{B, C};` form.
+
+Ships `examples/lift/namespaces.{php,phg}` (Invariant 9), byte-identical on interpreter, VM and
+php-8.5.8, plus a `lift_roundtrip` case asserting a namespaced file's stdout matches the original PHP on
+all three legs. Invariant 13: the new file-level parsing was split to `parser/file_decls.rs` rather than
+pushing `parser/items.rs` past the 500-line hard cap.
+
 ### Added — attribute-name completion, and the built-in attribute set single-sourced (CD-29, 2026-08-04)
 Typing `#[` offered **nothing**, uniformly, for every attribute in the language — `Entry`, `Config`,
 `Route`, `Deprecated`, `Invoke`, `ToString` and the DI set were all undiscoverable from the editor, which

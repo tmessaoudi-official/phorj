@@ -153,6 +153,56 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             });
         }
     }
+    // LIFT-NS: one phorj `import` per PHP `use`, in source order, BEFORE the DEC-312 native imports so
+    // the file's own dependencies read first. Phorj supports import aliases natively, so `use X as Y;`
+    // lifts to `import X as Y;` rather than being expanded away — which keeps the alias the developer
+    // wrote instead of inlining a fully-qualified name at every use site.
+    //
+    // Path segments are PascalCase-ized for the same reason `lift_package` does it: a namespace segment
+    // is a package segment on the phorj side. The LAST segment is a TYPE name and is left alone — it is
+    // already the class's own name, and PHP class names are PascalCase by universal convention.
+    //
+    // An import is emitted ONLY when the lifted output actually references its local name.
+    // `E-UNUSED-IMPORT` is a HARD error in phorj while an unused `use` is legal and extremely common
+    // in PHP, so emitting every `use` verbatim produces "a lift that fails the very check it should
+    // pass" — the exact rule `exceptions.rs` already follows for error-type imports. Dropping an
+    // unreferenced one is semantically LOSSLESS: a PHP `use` only creates a local alias, so an unused
+    // one carries no behaviour to lose.
+    //
+    // Usage is judged against the LIFTED text, not the PHP source: a Doctrine-style
+    // `use … as ORM;` is referenced only from `#[ORM\Column]`, and attributes are not lifted yet
+    // (LIFT-ATTR), so a PHP-source scan would keep an import whose only referent was dropped.
+    let lifted_decls = crate::lift::printer::print_program(&Program {
+        package: vec!["Main".into()],
+        items: items.clone(),
+        span: SP,
+    })
+    .unwrap_or_default();
+    for u in &prog.uses {
+        let local = u
+            .alias
+            .clone()
+            .or_else(|| u.path.last().cloned())
+            .unwrap_or_default();
+        if !references_ident(&lifted_decls, &local) {
+            continue;
+        }
+        let mut path: Vec<String> = Vec::with_capacity(u.path.len());
+        for (i, seg) in u.path.iter().enumerate() {
+            if i + 1 == u.path.len() {
+                path.push(seg.clone());
+            } else {
+                path.push(pascalize(seg));
+            }
+        }
+        final_items.push(Item::Import {
+            path,
+            alias: u.alias.clone(),
+            wildcard: false,
+            except: Vec::new(),
+            span: SP,
+        });
+    }
     // DEC-312: one `import <module>;` per Core module a builtin→native resolution referenced.
     for module in super::drain_native_modules() {
         final_items.push(Item::Import {
@@ -166,10 +216,61 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     final_items.extend(items);
 
     Ok(Program {
-        package: vec!["Main".into()],
+        package: lift_package(&prog.namespace),
         items: final_items,
         span: SP,
     })
+}
+
+/// A PHP `namespace A\B` → the phorj `package` segments, or `["Main"]` when the file declares none
+/// (the historical default, so an un-namespaced file lifts exactly as before).
+///
+/// Each segment is PascalCase-ized because `E-PKG-CASE` is ENFORCED — `package app.entity;` is rejected
+/// with *"package segment `app` must be PascalCase"* [Verified] — and PHP does not guarantee PascalCase
+/// namespaces. `snake_case` and `kebab` separators become word boundaries (`my_pkg` → `MyPkg`), so the
+/// result is a legal phorj package for every input that PHP itself accepts as a namespace.
+fn lift_package(namespace: &[String]) -> Vec<String> {
+    if namespace.is_empty() {
+        return vec!["Main".into()];
+    }
+    namespace.iter().map(|s| pascalize(s)).collect()
+}
+
+/// Upper-camel a single identifier: split on `_`/`-`, capitalize each part, join. A part already
+/// PascalCase is preserved rather than lower-cased (`ORM` stays `ORM`, not `Orm`) — the segment is a
+/// name the developer chose, and only its FIRST character is what `E-PKG-CASE` constrains.
+/// Does `text` reference the identifier `name` on a word boundary?
+///
+/// A plain substring test would keep an import for `Money` because the output mentions `MoneyBag`, and
+/// re-parsing the printed text just to answer this would be circular (the whole point is that the draft
+/// may not yet check). Word-boundary matching on the printed declarations is the honest middle: it can
+/// still be fooled by the name appearing inside a STRING literal or comment, which errs toward keeping
+/// an import — the safe direction, since a spurious `E-UNUSED-IMPORT` is visible and trivially fixed
+/// whereas a wrongly-dropped import would be a silent loss.
+fn references_ident(text: &str, name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let bytes = text.as_bytes();
+    let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    text.match_indices(name).any(|(i, _)| {
+        let before_ok = i == 0 || !is_word(bytes[i - 1]);
+        let j = i + name.len();
+        let after_ok = j >= bytes.len() || !is_word(bytes[j]);
+        before_ok && after_ok
+    })
+}
+
+fn pascalize(seg: &str) -> String {
+    let mut out = String::with_capacity(seg.len());
+    for part in seg.split(['_', '-']).filter(|p| !p.is_empty()) {
+        let mut cs = part.chars();
+        if let Some(c0) = cs.next() {
+            out.extend(c0.to_uppercase());
+            out.push_str(cs.as_str());
+        }
+    }
+    out
 }
 
 pub(in crate::lift::lifter) struct Lifter {

@@ -9,7 +9,7 @@ fn parse(src: &str) -> PhpProgram {
     parse_php(lex_php(src).expect("lex")).expect("parse")
 }
 
-fn perr(src: &str) -> String {
+pub(super) fn perr(src: &str) -> String {
     parse_php(lex_php(src).expect("lex")).expect_err("expected parse error")
 }
 
@@ -375,7 +375,7 @@ fn rejects_unsupported_keywords() {
         // `try`/`catch`/`finally` AND `throw` moved INTO the subset (2026-07-31) — see
         // `parser_tests_try.rs`. What stays here is what is still genuinely out of subset.
         ("<?php switch ($x) {}", "`switch` is not supported"),
-        ("<?php namespace App;", "`namespace` is not supported"),
+        // `namespace`/`use` moved INTO the subset (LIFT-NS); their residual refusals live in `parser_tests_ns.rs`.
         ("<?php interface I {}", "`interface` is not supported"),
         ("<?php trait T {}", "`trait` is not supported"),
     ] {

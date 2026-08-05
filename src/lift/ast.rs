@@ -14,6 +14,18 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct PhpProgram {
     pub items: Vec<PhpItem>,
+    /// The file's `namespace A\B;` segments, or empty when the file declares none. Lifts to the phorj
+    /// `package` (PascalCase-ized — `E-PKG-CASE` is enforced, so a lowercase PHP namespace segment
+    /// cannot be passed through verbatim); an empty namespace keeps the historical `package Main;`.
+    ///
+    /// Only the SEMICOLON form is represented. PHP's braced form (`namespace A { … }`) can put several
+    /// namespaces in one file, which has no phorj analog (one `package` per file) — the parser refuses
+    /// it loudly rather than lifting the first and dropping the rest.
+    pub namespace: Vec<String>,
+    /// `use A\B\C;` / `use A\B\C as D;` imports, in source order. These map to phorj `import` items —
+    /// phorj supports import ALIASES natively (`import Core.Output as Out;` [Verified]), so an aliased
+    /// PHP `use` lifts to an aliased phorj import instead of being expanded away at lift time.
+    pub uses: Vec<PhpUse>,
     /// PHPDoc attached to top-level declarations, keyed by declaration NAME (DEC-419).
     ///
     /// Name-keyed rather than a field on `PhpFunction`/`PhpClass`/`PhpEnum` so exactly one struct
@@ -33,6 +45,22 @@ pub fn php_item_name(item: &PhpItem) -> Option<&str> {
         PhpItem::Enum(e) => Some(&e.name),
         PhpItem::Stmt(_) => None,
     }
+}
+
+/// A `use A\B\C;` / `use A\B\C as D;` class import.
+///
+/// `use function …` and `use const …` are deliberately NOT represented: they import a symbol into the
+/// current namespace rather than naming a type, and phorj has no equivalent, so the parser refuses them
+/// loudly (DEC-166 — never guess) instead of lifting them as if they were class imports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PhpUse {
+    /// The dotted path segments, root marker stripped (`\Doctrine\ORM\Mapping` → `["Doctrine","ORM","Mapping"]`).
+    pub path: Vec<String>,
+    /// The `as D` alias, if written. `None` means PHP binds the path's LAST segment as the local name —
+    /// which is also what an unaliased phorj `import` does, so the two agree without a synthesized alias.
+    pub alias: Option<String>,
+    /// 1-based source line, for lift diagnostics.
+    pub line: usize,
 }
 
 /// A top-level item.

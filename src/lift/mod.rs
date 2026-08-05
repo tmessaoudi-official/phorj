@@ -21,6 +21,8 @@ mod tests;
 
 #[cfg(test)]
 mod parser_tests;
+#[cfg(test)]
+mod parser_tests_ns;
 
 #[cfg(test)]
 mod parser_tests_try;
@@ -30,3 +32,5 @@ mod printer_tests;
 
 #[cfg(test)]
 mod lifter_tests;
+#[cfg(test)]
+mod lifter_tests_ns;

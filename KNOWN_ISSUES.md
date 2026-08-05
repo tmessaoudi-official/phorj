@@ -191,7 +191,16 @@ spelled `#[...]`, so **every** attribute in a lifted file is silently swallowed 
 `#[\Deprecated(message: "use shout")]` emits the function with no attribute and no warning.]
 
 **Impact.** A lifted draft loses annotation-carried semantics with no diagnostic. For frameworks that
-put routing or mapping in attributes, this is the most meaningful part of the file. It also means
+put routing or mapping in attributes, this is the most meaningful part of the file.
+
+> **Ordering correction (2026-08-04, LIFT-NS).** This was NOT the first blocker for framework code.
+> `namespace` and `use` were in the lifter's `UNSUPPORTED_KW` and were hard parse errors, so a Symfony /
+> Laravel / Doctrine file failed at the PARSER before attributes were ever reached. LIFT-NS fixed that,
+> so this entry is now the *next* blocker rather than one of several. It also means a Doctrine-style
+> `use Doctrine\ORM\Mapping as ORM;` is currently DROPPED as an unreferenced import — its only referent
+> is the `#[ORM\Column]` attribute this entry describes — which will resolve itself when attributes lift.
+
+It also means
 Invariant 17's "lift updated in the same change" could NOT be satisfied for DEC-417's
 `#[Deprecated]`: the mapping is trivial and faithful (PHP's own `#[\Deprecated(message:)]` →
 phorj's `#[Deprecated(message:)]`), but there is nowhere to hook it until the lexer can see `#[`.

@@ -89,10 +89,31 @@ impl PParser {
         let mut items = Vec::new();
         let mut docs: std::collections::BTreeMap<String, String> =
             std::collections::BTreeMap::new();
+        let mut namespace: Vec<String> = Vec::new();
+        let mut uses: Vec<PhpUse> = Vec::new();
         while !self.at(&PTok::Eof) {
             // A `?>` close tag (and a re-opening `<?php`) are tolerated between items.
             if self.eat(&PTok::CloseTag) {
                 self.eat(&PTok::OpenTag);
+                continue;
+            }
+            // LIFT-NS: `namespace A\B;` and `use A\B\C [as D];` are FILE-level, so they are consumed
+            // here rather than by `parse_item` — which keeps them out of statement position, where a
+            // `use` means trait-composition and a `namespace` means the braced multi-namespace form.
+            if self.is_kw("namespace") {
+                if !namespace.is_empty() {
+                    return Err(self.err(
+                        "a second `namespace` declaration — phorj has one `package` per file",
+                    ));
+                }
+                if !items.is_empty() {
+                    return Err(self.err("`namespace` must precede every declaration in the file"));
+                }
+                namespace = self.parse_namespace_decl()?;
+                continue;
+            }
+            if self.is_kw("use") {
+                uses.push(self.parse_use_decl()?);
                 continue;
             }
             // DEC-419: a PHPDoc block sits in front of the item's FIRST token, so read the side
@@ -104,7 +125,12 @@ impl PParser {
             }
             items.push(item);
         }
-        Ok(PhpProgram { items, docs })
+        Ok(PhpProgram {
+            items,
+            docs,
+            namespace,
+            uses,
+        })
     }
 
     pub(super) fn parse_item(&mut self) -> Result<PhpItem, String> {

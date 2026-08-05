@@ -1,6 +1,9 @@
 # LIFT-ATTR + DEC-397 lifter hoist — plan
 
-**Status:** Phase 4 approved (developer ruled *"option 1 for both"*, 2026-08-04). Two slices, two commits.
+**Status:** SUPERSEDED IN PART — the 3C panel found 31 findings and ruled the plan NOT CERTIFIABLE. The
+developer then ruled *"namespace/use support first"*, which shipped as **LIFT-NS** (CD-30) and is NOT
+described by this file. Slices A (#48 hoist) and B (#46 attributes) remain OPEN and must be re-planned
+against the corrected facts in the panel sections below — the original Q1/Q2 premises were refuted.
 **Tracks:** task #48 (hoist) and task #46 (attributes). Closes the two gaps recorded by the DEC-417
 editor slice (`SLICE-STATE.md` §"TWO GAPS RECORDED"), the second of which (#47) shipped in `b219856`.
 

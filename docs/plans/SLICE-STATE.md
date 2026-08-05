@@ -1,7 +1,40 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-01) — **WAVES 0/1/2 + DEC-379/364/348/419/347/420/421/422(a) COMPLETE. IN FLIGHT: the DEC-423 perf programme — every loss named; the JIT vertical started (DEC-428 = step 1, `floatloop` -36%) and step 2 was BUILT, MEASURED AT ZERO, REVERTED (DEC-429 — the sticky phi costs nothing; `opt_level` was `speed` all along, and a stale comment saying `none` had been the premise of DEC-425/428). `floatloop` was (wrongly) closed as a documented near-parity and then as HARDWARE-BOUNDED — **BOTH REVERSED: DEC-432 reopened it, and DEC-434.1 measured it at ~0.776 on a quiet box (5 runs, 0.62-0.79). It is a real loss on the hunt list. Three floatloop claims needed correcting in one day; distrust any single reading of that bench.** DEC-430 also found the box's real clock is ~2.75 GHz (not the 2.100 `/proc/cpuinfo` reports) and localized phorj's 25-95% short-loop variance to front-end µarch state — eight causes refuted, BLOCKED on PMU access. NEXT: pick the next loss from the list below — measure with callgrind Ir SLOPE, never wall clock (DEC-429). ONE PENDING RULING carried out of DEC-430: raise `MICROBENCH_RUNS` (K=3 is systematically pessimistic on short loops) vs leave the per-push gate fast. **NEW + BIGGEST OPEN ITEM (DEC-431): a FALLIBLE CALL anywhere in a function takes the WHOLE function off the JIT — ~320x on a hot loop (773.83 ms vs 2.42 ms when the one call is hoisted), and `throws` is mandatory for any I/O, so this hits most real code SILENTLY. Plus VM/tree-walker `s = s + x` is O(n^2) (492 ms vs the JIT's 2.33 at 20k lines). Byte-identity holds — speed cliffs, not correctness. `bench/micro/strappend` added (0.48x); BOTH FIXES ARE PENDING RULINGS.** **STANDING RULE (DEC-432, developer): NOTHING IS PUT ASIDE UNTIL IT WINS — no loss is ever closed as "near-parity"/"noise"/"hardware-bounded"; it leaves the list only by becoming a WIN. This REOPENED `floatloop` (DEC-430) and `listcontains` (DEC-427), both of which I had wrongly self-closed. FIRST QUIET-BOX BASELINE emitted (load 0.08): **41 WIN / 11 LOSS, geomean 2.36x, median 2.13x** — honestly LOWER than the 2.45x reported earlier, because 3 recorded WINs were loaded-box fictions (mapget/mapinsert/floatmul now OWED) while `floatloop` only APPEARED to win (0.476 -> 1.05) — **CORRECTED by DEC-434.1: a lucky best-of-3 draw; it is ~0.776 and back on the list**. `--emit` now REFUSES a non-quiet box (exit 2, never a silent skip). THE HUNT LIST — **10 OWED rows** after the DEC-434.1 quiet-box re-emit (52 features, **42 WIN / 10 LOSS, geomean 2.42x, median 2.24x**), worst first: fslines 0.118, queryparse 0.224, jsonround 0.300, fsforeachline 0.298, strappend 0.490, floatloop 0.776, dbwork 0.833, deepjson 0.859, listcontains 0.899, floatmul 0.989. **CLEARED by DEC-433 and CONFIRMED by a fresh emit: mapinsert 1.089 WIN, mapget 1.042 WIN** (the canon registry allocated a key per map write; -3.6% Ir, -5..7% wall clock interleaved). A hasher swap there is worth ~2.2% more but is a HASH-FLOODING trade (`interned` holds runtime map keys) — ruling owed, not self-decided — plus DEC-431's ~320x `throws` JIT cliff above them all. Task #58 CLOSED. **DEC-434: a CLOSURE is NEVER JIT-compiled, however hot — the hot hook is at ONE site (`Op::Call`), absent from `Op::CallValue` and `call_closure_value`. 48.7% of forEachLine's per-line cost (1366 of 2806 Ir) is VM closure machinery; the line scan is 4.9%. That is why HOFs with bespoke verticals win 5-8x and `forEachLine` loses 3.4x. RULING OWED. DEC-434.1: `--emit` can still ARM a lucky-draw WIN on a high-variance row (floatloop) — proposed spread-adjusted arming rule, also a ruling.** **DEC-431.2: the cliff's mechanism was CORRECTED TWICE and my own recommended fix REFUTED — code 5 re-executes from ip 0, so 'bail to the VM at the call site' pays the hot loop TWICE. First blocker is the caller's own `Const(Unit)` dummy receiver, not transitivity; supporting it alone buys nothing. `PHORJ_JIT_EXPLAIN=1` SHIPPED (the root problem was that no one could ask why a function was interpreted — the error was discarded by `.ok()`). Viable designs left: VM trampoline / compiler loop outlining / whitelist the fallible natives / compile-time warning — NONE chosen, still a ruling.**
+## ✅ CURRENT CURSOR (2026-08-04) — **LIFT-NS SHIPPED; the lift roadmap is REORDERED**
 
+**Shipped 2026-08-04, gate green:** (1) **attribute-name completion** in the LSP + both editors, with the
+11 built-in attributes single-sourced as `ast::BUILTIN_ATTRIBUTE_PATHS` (`b219856`, CD-29) — this closed
+gap 2 of the DEC-417 editor slice; (2) **LIFT-NS** — the lifter now accepts `namespace` → phorj `package`
+(PascalCase-ized, since `E-PKG-CASE` is enforced) and `use X [as Y]` → `import X [as Y]` (phorj has import
+aliases natively), dropping an unreferenced import because `E-UNUSED-IMPORT` is a hard error (CD-30).
+
+**THE FINDING THAT REORDERED THE ROADMAP.** A 3-lens DEC-268 panel on the LIFT-ATTR/hoist plan returned
+**31 findings, NOT CERTIFIABLE**, and the biggest was not about attributes at all: `namespace` and `use`
+were in the lifter's `UNSUPPORTED_KW` and were HARD PARSE ERRORS, so **no Symfony / Laravel / Doctrine
+file could be lifted AT ALL**, attributes or not. **LIFT-ATTR was the SECOND blocker, not the first.**
+LIFT-NS removes the first. Full analysis, all 31 findings, and the corrections to my own reasoning are in
+`docs/plans/2026-08-04-lift-attr-and-hoist.plan.md`.
+
+**STILL OPEN, both with plans now grounded in verified facts rather than my earlier wrong premises:**
+- **#48 DEC-397 lifter hoist** — the ruled literal-hoist shape was REFUTED as written: it breaks output
+  that is CORRECT today (a param assigned only inside a nested block already lifts fine, because
+  `declared` is pre-seeded with params; hoisting it is `E-SHADOW-LOCAL`), and worse, it can make output
+  *compile* and be *wrong* — `if ($c) { $b = 5; } return $b + 0;` prints `0` in PHP and `5` hoisted, which
+  `tests/lift_roundtrip.rs` would catch. Needs the narrowed provably-safe rule (not a param, not a
+  `foreach`/`catch` binding, a dominating assignment before EVERY read including inside the block).
+- **#46 LIFT-ATTR** — now unblocked by LIFT-NS for real input. Two sub-decisions are OWED to the developer:
+  the namespaced-attribute spelling is a SOUNDNESS choice, not cosmetic (attribute resolution is by LEAF,
+  so `#[ORM.Column]` and `#[Assert.Column]` both bind to one `class Column` and both check clean — so
+  `ORM.Column` is unsound and `OrmColumn` is not); and named attribute args require a CHECKER change,
+  which is new accepted phorj syntax and therefore drags in Invariant 17's 100% rule (LSP + both editors).
+
+**Carried unchanged from the 2026-08-01 cursor** (the DEC-423 perf programme): 10 OWED bench rows, worst
+first — fslines 0.118, queryparse 0.224, fsforeachline 0.298, jsonround 0.300, strappend 0.490,
+floatloop 0.776, dbwork 0.833, deepjson 0.859, listcontains 0.899, floatmul 0.989 — plus DEC-431's ~320x
+`throws` JIT cliff (a fallible call anywhere takes the WHOLE function off the JIT) and DEC-434's "a closure
+is NEVER JIT-compiled". DEC-432 standing rule: nothing leaves the list until it WINS. Pending rulings:
+`MICROBENCH_RUNS` above K=3, the spread-adjusted arming rule (DEC-434.1), Json accessors, and the
+hash-flooding hasher trade.
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build

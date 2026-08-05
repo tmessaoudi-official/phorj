@@ -160,6 +160,18 @@ fn lift_roundtrip_preserves_behavior() {
             "concat",
             r#"<?php function greet(string $n): string { return "Hi, " . $n; } echo greet("Phorj");"#,
         ),
+        // LIFT-NS: a namespaced file with an aliased `use`. Before this slice `namespace`/`use` were in
+        // the parser's UNSUPPORTED_KW, so this shape — i.e. every Symfony/Laravel/Doctrine file — could
+        // not be lifted at all. The namespace must reach the phorj `package` (PascalCase-ized, since
+        // `E-PKG-CASE` is enforced) without changing what the program PRINTS on any of the three legs.
+        (
+            "namespace_and_aliased_use",
+            r#"<?php
+namespace app\cli_tools;
+use App\Support\Helper as H;
+function shout(string $s): string { return $s . "!"; }
+echo shout("ns");"#,
+        ),
         (
             "if_elseif_else",
             r#"<?php

@@ -12,7 +12,7 @@
 use super::ast::{
     PhpArrayElem, PhpBinOp, PhpCatch, PhpClass, PhpEnum, PhpEnumCase, PhpExpr, PhpFunction,
     PhpItem, PhpMatchArm, PhpMember, PhpMethod, PhpParam, PhpProgram, PhpStmt, PhpStrPart, PhpType,
-    PhpUnOp, PhpVisibility,
+    PhpUnOp, PhpUse, PhpVisibility,
 };
 use super::lexer::{lex_php, PTok, PTokenSpanned};
 use crate::limits::MAX_NEST_DEPTH;
@@ -23,8 +23,10 @@ const UNSUPPORTED_KW: &[&str] = &[
     // `try`/`catch`/`finally` (LIFT-TRY) and `throw` are now IN the subset — both removed from this list.
     "switch",
     "do",
-    "namespace",
-    "use",
+    // `namespace` and `use` are now IN the subset (LIFT-NS) — both removed from this list. They are
+    // FILE-level, not statement-level, so `parse_program` consumes them before item dispatch; reaching
+    // one in statement position (a braced `namespace A { … }` body, or a `use` inside a function) is
+    // still refused, by an explicit error that names the reason rather than this generic list.
     "trait",
     "interface",
     "global",
@@ -80,5 +82,6 @@ pub fn parse_php_with_docs(
 }
 
 mod exprs;
+mod file_decls;
 mod items;
 mod stmts;

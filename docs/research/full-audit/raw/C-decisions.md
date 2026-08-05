@@ -6513,3 +6513,37 @@ not the task list): find-usages is project-wide (`cross_file_references`, DEC-32
 it single-document; and `rename` really IS still single-document (it emits `changes` for one URI), so the
 phpstorm "Notes" line that lumped them together was half right and half wrong. Type-aware member
 completion and user-package import paths were also still listed as "server follow-ups" after shipping.
+
+### CD-30 (2026-08-04) — LIFT-NS: the calls I made building `namespace` / `use` lifting
+
+The slice itself was the developer's call (*"option 1 … namespace/use support first"*, after the 3C panel
+found that no namespaced file lifted at all). These sub-decisions were mine:
+
+1. **PascalCase-ize namespace segments instead of refusing a lowercase namespace.** `E-PKG-CASE` is
+   enforced, so `package app.entity;` is rejected; PHP does not guarantee PascalCase. Refusing would have
+   made the lifter useless on the many real projects with lowercase namespace segments, so `cli_tools` →
+   `CliTools`. **This is a RENAME the author did not write** — the alternative (refuse loudly, per DEC-166)
+   is defensible and cheap to switch to. `FEATURES.md` already documents `E-PKG-CASE` as mapping "1:1 to
+   PHP namespaces", which is why I read the transform as intended rather than invented.
+   *Reverse:* `lift_package`/`pascalize` in `lifter/decls/mod.rs`.
+2. **An already-upper segment is preserved, not title-cased.** `ORM` stays `ORM`; only the first character
+   is what `E-PKG-CASE` constrains. *Reverse:* one branch in `pascalize`.
+3. **Only NON-final `use` segments are reshaped.** The last segment is the class's own name; renaming a
+   type would break every reference to it. So `use App\my_pkg\myClass;` → `import App.MyPkg.myClass;`.
+   *Reverse:* the index check in the uses loop.
+4. **An unreferenced `use` is DROPPED, and usage is judged on the LIFTED text.** Found by my own
+   end-to-end run, not by a unit test — my first tests asserted the import STRING appeared and so passed
+   while the draft actually failed `phg check` with `E-UNUSED-IMPORT`. Judging usage on the PHP source
+   would keep a Doctrine `use … as ORM;` whose only referent (`#[ORM\Column]`) is dropped because
+   attributes are not lifted yet. Matching is WORD-BOUNDARY on the printed declarations: it can still be
+   fooled by the name appearing in a string or comment, which errs toward KEEPING an import — the safe
+   direction, since a spurious `E-UNUSED-IMPORT` is visible and trivially fixed while a wrongly-dropped
+   import would be silent. *Reverse:* `references_ident`, or delete the filter.
+5. **`use function` / `use const` and grouped `use A\{B, C};` are refused, not partially lifted** — each
+   needs a design (a symbol import has no phorj analog; a group needs one import per member).
+   *Reverse:* additive.
+
+**Roadmap consequence, recorded because it outranks the slice:** LIFT-ATTR is the SECOND blocker for
+real-world PHP input. This slice removes the first. My earlier claim that "lift a Symfony app = lift the
+app onto phorj's native L2 consumers" was sound in principle and unreachable in practice for a reason I
+had not checked before presenting it.
