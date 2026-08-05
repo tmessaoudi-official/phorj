@@ -6621,3 +6621,49 @@ gate that catches "compiles but changes the answer".
 
 **Status: the register's DEC-397 row stays RULED; the agreed literal-hoist SHAPE is superseded by this
 narrower sound subset. The developer should know the feature is much smaller than the ruling implied.**
+
+### DEC-435 (2026-08-04) — user attributes resolve by CANONICAL PATH; named args accepted
+
+**Ruled by the developer**, after rejecting my proposal to flatten a namespaced attribute name
+(`ORM\Column` → `OrmColumn`): *"i don't accept your recommendation ! i want to keep the . ! but do more
+research/brainstorming and tell me how can we fix the problem you are exposing ! without compromises"*.
+That was the right call — the dot was fixable, and flattening would have papered over a real bug.
+
+**The bug.** `check_user_attribute_use` resolved by LEAF (`attr.name.rsplit('.').next()`), discarding the
+qualifier before the lookup. So `#[ORM.Column]`, `#[Assert.Column]` and `#[Totally.Made.Up.Column]` ALL
+bound to one `class Column` and ALL type-checked clean [Verified before the fix]. Doctrine's `Column` and
+a validator's `Column` would have silently collapsed onto whichever one existed.
+
+**The insight that made a no-compromise fix possible: BUILT-INS were already correct.**
+`attr_path_matches` matches a written name as a segment-boundary SUFFIX of a fixed canonical path, which
+is why `#[Bogus.Entry]` was always rejected while `#[Entry]` / `#[Runtime.Entry]` /
+`#[Core.Runtime.Entry]` all resolve. User attributes were the lone outlier, so the fix DELETES a special
+case rather than adding one — and needed no new field: class-registry keys are already package-mangled
+(`App\Entity\Column`), so `\` → `.` yields the canonical path for free.
+
+Verified end-to-end on a two-package project:
+- `#[Column]` / `#[Entity.Column]` / `#[App.Entity.Column]` → resolve
+- `#[ORM.Column]` with no `ORM` package → **`E-UNKNOWN-ATTRIBUTE`** (was silently clean)
+- `#[ORM.Column]` where `package ORM` really declares `Column` → **resolves, checks clean, RUNS** — and
+  stays distinct from any other `Column`
+
+So the dot is preserved AND now means something, which is exactly what was asked for.
+
+**`E-AMBIGUOUS-ATTRIBUTE` is a tripwire, not a live diagnostic — disclosed rather than dressed up.** The
+developer ruled for an ambiguity error, and it is implemented; but it turns out to be UNREACHABLE, and
+that is verified, not assumed: import hygiene reports first (two imports binding one name is
+`E-IMPORT-CONFLICT`; a local type beside an imported one is `E-IMPORT-SHADOW`), and a class merely present
+in the project without being imported is not a candidate (a bare `#[Column]` with `ORM.Column` imported
+and an un-imported `Assert.Column` also present resolves cleanly). It is kept as a one-branch guard so
+resolution fails loudly rather than silently picking a `HashMap` winner if those rules are ever relaxed;
+`hits.sort()` keeps even that path deterministic (Invariant 10).
+
+**Named attribute arguments (also ruled).** `#[Route(path: "/x")]` was `E-NAMED-ARG-MISPLACED` — the
+positional `zip` let an `Expr::NamedArg` reach `check_arg`, which only accepts one inside a call's
+argument list. They are now normalized to positional with the SAME helper ordinary construction uses
+(`normalize_named_args`, DEC-297), so the two cannot drift; arity and per-argument TYPE checks still run
+on the normalized list. No AST write-back is needed — an attribute is front-end-only and never reaches a
+backend. Note this was NOT new syntax: named args already worked on calls AND on built-in attributes
+(`#[Entry(kind: …)]`), so the Invariant-17 editor cost a review pass had predicted was nil. Separately
+confirmed: the LSP advertises **no `signatureHelpProvider` at all**, so Invariant 17's signature-help row
+is a PRE-EXISTING unmet gap for every call in the language — recorded, not created here.

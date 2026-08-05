@@ -6,6 +6,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — user attributes resolve by canonical path, so a qualifier finally means something (DEC-435, 2026-08-04)
+`#[ORM.Column]`, `#[Assert.Column]` and even `#[Totally.Made.Up.Column]` all bound to one `class Column`
+and all type-checked clean: resolution took only the leaf and threw the qualifier away. Doctrine's
+`Column` and a validator's `Column` would have silently collapsed.
+
+BUILT-IN attributes never had this bug — `attr_path_matches` matches a written name as a
+segment-boundary suffix of a fixed canonical path, which is why `#[Bogus.Entry]` was always rejected while
+`#[Entry]` / `#[Runtime.Entry]` / `#[Core.Runtime.Entry]` all resolve. User attributes were the lone
+outlier, so the fix deletes a special case instead of adding one, and needs no new state: class-registry
+keys are already package-mangled, so `\` → `.` gives the canonical path for free.
+
+`#[Column]`, `#[Entity.Column]` and `#[App.Entity.Column]` resolve for a `Column` in `package App.Entity`;
+`#[ORM.Column]` does not — unless a package `ORM` really declares one, in which case it resolves to THAT
+one and the two stay distinct (verified on a two-package project: checks clean and runs). A bare leaf that
+could mean two visible packages' attributes is `E-AMBIGUOUS-ATTRIBUTE`, which is a deliberate tripwire:
+it is currently unreachable because import hygiene reports `E-IMPORT-CONFLICT` / `E-IMPORT-SHADOW` first,
+and is kept so resolution fails loudly rather than silently if those rules are relaxed.
+
+### Added — named arguments in attributes (DEC-435, 2026-08-04)
+`#[Route(path: "/users", method: "GET")]` was `E-NAMED-ARG-MISPLACED` even though named arguments already
+worked on ordinary calls and on built-in attributes (`#[Entry(kind: …)]`). They are now normalized to
+positional against the attribute class's constructor using the same helper ordinary construction uses, so
+the two cannot drift, and arity plus per-argument type checks still run on the normalized list. Out-of-order
+names, wrong types and misspelled names are all still caught.
+
 ### Added — the DEC-397 function-scope hoist, narrowed to what is provably sound (2026-08-04)
 PHP has FUNCTION scope, phorj has BLOCK scope, so a variable first assigned inside a block was DECLARED
 inside it and every later use was `E-ASSIGN-UNKNOWN` / `E-UNKNOWN-IDENT`. The declaration now moves to the

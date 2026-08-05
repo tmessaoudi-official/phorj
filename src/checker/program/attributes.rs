@@ -4,31 +4,114 @@ use super::*;
 
 impl Checker {
     /// DEC-194 2b-3: if `attr` names a user-defined attribute — a class carrying `#[Attribute]` — validate
-    /// the use and return `true` (handled). The attribute name is a class leaf (bare `Tag`, or qualified
-    /// `Pkg.Tag` — resolved by its last segment). Arguments are checked against the attribute class's
-    /// constructor ARITY; full argument TYPE-checking is a tracked follow-up (2b-3b). A user attribute is
-    /// legal on EVERY target this slice — target restriction rides the `targets:` marker arguments, which
-    /// need named arguments (a later slice). Returns `false` if `attr` is not a user attribute (the caller
+    /// the use and return `true` (handled). Returns `false` if `attr` is not a user attribute (the caller
     /// then falls through to the built-in handling / unknown-attribute error).
+    ///
+    /// # Resolution is by CANONICAL PATH — the same rule built-ins use (2026-08-04)
+    ///
+    /// This used to resolve by LEAF (`attr.name.rsplit('.').next()`), which threw the qualifier away
+    /// before looking anything up. That was unsound: `#[ORM.Column]`, `#[Assert.Column]` and even
+    /// `#[Totally.Made.Up.Column]` all bound to one `class Column` and all type-checked clean — so two
+    /// genuinely different attributes (Doctrine's `Column` and a validator's `Column`) silently collapsed.
+    /// [Verified before the fix: all three checked clean.]
+    ///
+    /// Built-in attributes never had this problem: [`attr_path_matches`] matches a written name as a
+    /// segment-boundary SUFFIX of a fixed canonical path, which is why `#[Bogus.Entry]` is rejected while
+    /// `#[Entry]` / `#[Runtime.Entry]` / `#[Core.Runtime.Entry]` all resolve. User attributes were simply
+    /// the outlier, so the fix is to delete the special case rather than add one.
+    ///
+    /// A user attribute's canonical path comes free from the class registry: keys are package-MANGLED
+    /// (`App\Entity\Column`), so `\` → `.` yields `App.Entity.Column`. A same-package class keeps a bare
+    /// key, whose canonical is just `Column` — and because `attr_path_matches` requires the canonical to
+    /// be at least as long as the written name, a bare canonical correctly refuses every qualifier.
+    ///
+    /// So, for `class Column` in `package App.Entity`: `#[Column]`, `#[Entity.Column]` and
+    /// `#[App.Entity.Column]` resolve; `#[ORM.Column]` does not — unless a package `ORM` really does
+    /// declare a `Column`, in which case it resolves to THAT one and the two stay distinct.
+    ///
+    /// # `E-AMBIGUOUS-ATTRIBUTE` is a TRIPWIRE, not a live diagnostic
+    ///
+    /// When a bare leaf could mean two packages' attributes the use is `E-AMBIGUOUS-ATTRIBUTE` rather
+    /// than a coin flip. **It is currently unreachable, and that is verified, not assumed:** phorj's
+    /// import hygiene already guarantees at most one visible class per name, and it reports first —
+    /// two imports binding `Column` is `E-IMPORT-CONFLICT` ("alias one with `as`"), and a local
+    /// `Column` beside an imported one is `E-IMPORT-SHADOW`. A class that is merely present elsewhere
+    /// in the project without being imported is not a candidate at all (checked: a bare `#[Column]`
+    /// with `ORM.Column` imported and an un-imported `Assert.Column` also present resolves cleanly).
+    ///
+    /// It is kept because it costs one branch and is the correct behaviour if two ever DO become
+    /// visible — if import hygiene is loosened later, attribute resolution fails loudly instead of
+    /// silently picking whichever `HashMap` iteration reached first. The `hits.sort()` above exists for
+    /// the same reason: determinism (Invariant 10) even on a path that should never be taken.
     pub(in crate::checker) fn check_user_attribute_use(
         &mut self,
         attr: &crate::ast::Attribute,
     ) -> bool {
-        let leaf = attr.name.rsplit('.').next().unwrap_or(attr.name.as_str());
-        // Clone the constructor param types out (small) so the `self.classes` borrow ends before the
-        // `&mut self` type-checking calls below.
-        let params: Vec<Ty> = match self.classes.get(leaf) {
-            Some(info) if info.is_user_attribute => info.ctor.clone(),
-            _ => return false,
+        // Every user-attribute class whose canonical path the written name selects. Sorted so the
+        // ambiguity message is deterministic (Invariant 10 — `self.classes` is a HashMap).
+        let mut hits: Vec<String> = self
+            .classes
+            .iter()
+            .filter(|(_, info)| info.is_user_attribute)
+            .filter(|(key, _)| crate::ast::attr_path_matches(&attr.name, &key.replace('\\', ".")))
+            .map(|(key, _)| key.clone())
+            .collect();
+        hits.sort();
+        let key = match hits.len() {
+            0 => return false,
+            1 => hits.remove(0),
+            _ => {
+                let paths: Vec<String> = hits.iter().map(|k| k.replace('\\', ".")).collect();
+                self.err_coded(
+                    attr.span,
+                    format!(
+                        "attribute `#[{}]` is ambiguous — it matches {}",
+                        attr.name,
+                        paths.join(" and ")
+                    ),
+                    "E-AMBIGUOUS-ATTRIBUTE",
+                    Some(
+                        "qualify the attribute with enough of its package path to pick one".into(),
+                    ),
+                );
+                return true;
+            }
         };
-        if attr.args.len() != params.len() {
+        // Clone the constructor shape out (small) so the `self.classes` borrow ends before the
+        // `&mut self` type-checking calls below.
+        let (params, param_names, defaults): (Vec<Ty>, Vec<String>, Vec<Option<crate::ast::Expr>>) = {
+            let info = &self.classes[&key];
+            (
+                info.ctor.clone(),
+                info.ctor_param_names.clone(),
+                info.ctor_defaults.clone(),
+            )
+        };
+        // DEC-401-era follow-on: NAMED arguments (`#[Route(path: "/x")]`) are the dominant real-world
+        // PHP attribute form, and they were `E-NAMED-ARG-MISPLACED` here — the positional `zip` below
+        // let an `Expr::NamedArg` reach `check_arg`, which only accepts one inside a call's argument
+        // list. They are normalized to positional against the attribute class's constructor with the
+        // SAME helper ordinary construction uses (`normalize_named_args`, DEC-297), so the two cannot
+        // drift. No AST write-back is needed: an attribute is front-end-only and never reaches a
+        // backend, so validating the normalized list is the whole job.
+        let args: Vec<crate::ast::Expr> = if crate::checker::calls::args::has_named_args(&attr.args)
+        {
+            match self.normalize_named_args(&key, &param_names, &defaults, &attr.args, attr.span) {
+                Some(pos) => pos,
+                // The helper already reported the precise problem (unknown name, duplicate, missing).
+                None => return true,
+            }
+        } else {
+            attr.args.clone()
+        };
+        if args.len() != params.len() {
             self.err_coded(
                 attr.span,
                 format!(
                     "attribute `#[{}]` takes {} argument(s), got {}",
                     attr.name,
                     params.len(),
-                    attr.args.len()
+                    args.len()
                 ),
                 "E-ATTRIBUTE-ARITY",
                 Some(
@@ -42,7 +125,7 @@ impl Checker {
         // `check_arg` types the argument (with the same literal-threading a `new Tag(…)` call gets); the
         // assignability check + error mirror `check_args_defaulted`. Surplus args (already flagged by the
         // arity error) are dropped by `zip`; a missing arg is covered by the arity error.
-        for (i, (arg, pty)) in attr.args.iter().zip(params.iter()).enumerate() {
+        for (i, (arg, pty)) in args.iter().zip(params.iter()).enumerate() {
             let at = self.check_arg(arg, pty);
             if !self.ty_assignable(&at, pty) {
                 self.err_coded(

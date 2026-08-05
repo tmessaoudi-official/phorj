@@ -31,8 +31,20 @@ other case — conditional block, non-literal RHS, read-before-assignment, loop/
 `// CANNOT LIFT:` note naming the variable. Params, `foreach`/`catch` bindings and block-locals are never
 touched. **The feature is much smaller than the ruling implied; see the register's "DEC-397 BUILT".**
 
+**DEC-435 BUILT 2026-08-04 — the two rulings that were blocking #46 are now resolved AND built.**
+(1) User attributes resolve by CANONICAL PATH, so the dot the developer insisted on keeping now MEANS
+something: `#[ORM.Column]` is `E-UNKNOWN-ATTRIBUTE` unless a package `ORM` really declares `Column`, and
+resolves precisely when it does (verified on a two-package project). The fix DELETED a special case —
+built-ins were already correct via `attr_path_matches`; user attributes were the lone outlier. My
+flatten-to-`OrmColumn` proposal was rejected and rightly so. (2) NAMED attribute args are accepted,
+normalized with the same helper ordinary construction uses. `E-AMBIGUOUS-ATTRIBUTE` exists but is a
+verified-unreachable tripwire (import hygiene reports `E-IMPORT-CONFLICT`/`E-IMPORT-SHADOW` first) — kept
+so resolution fails loudly if those rules relax, and disclosed as such rather than presented as live.
+**Also confirmed en route: the LSP advertises NO `signatureHelpProvider` at all — Invariant 17's
+signature-help row is a pre-existing unmet gap for every call in the language.**
+
 **STILL OPEN:**
-- **#46 LIFT-ATTR** — now unblocked by LIFT-NS for real input. Two sub-decisions are OWED to the developer:
+- **#46 LIFT-ATTR** — now UNBLOCKED: both owed rulings are built. — now unblocked by LIFT-NS for real input. Two sub-decisions are OWED to the developer:
   the namespaced-attribute spelling is a SOUNDNESS choice, not cosmetic (attribute resolution is by LEAF,
   so `#[ORM.Column]` and `#[Assert.Column]` both bind to one `class Column` and both check clean — so
   `ORM.Column` is unsound and `OrmColumn` is not); and named attribute args require a CHECKER change,

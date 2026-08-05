@@ -91,6 +91,19 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              runtime rejects. (PHP also forbids a static and an instance method sharing a name.) Make\n\
              every overload `static`, or none of them, or rename one declaration.\n"
         }
+        "E-AMBIGUOUS-ATTRIBUTE" => {
+            "E-AMBIGUOUS-ATTRIBUTE — a bare attribute name could mean two different attributes.\n\n\
+             A user attribute resolves by CANONICAL PATH (`<package>.<ClassName>`), matched as a\n\
+             segment-boundary suffix — the same rule the built-ins use, which is why `#[Entry]`,\n\
+             `#[Runtime.Entry]` and `#[Core.Runtime.Entry]` all select `Core.Runtime.Entry` while\n\
+             `#[Bogus.Entry]` selects nothing. If two packages each declare an `#[Attribute]` class with\n\
+             the same leaf, a bare `#[Column]` names both, and picking one would be arbitrary. Qualify the\n\
+             use with enough of the path to be unambiguous: `#[Orm.Column]` vs `#[Assert.Column]`.\n\n\
+             In practice you are unlikely to reach this: import hygiene reports first — two imports\n\
+             binding one name is `E-IMPORT-CONFLICT`, and an import shadowing a local type is\n\
+             `E-IMPORT-SHADOW`. This exists so that attribute resolution fails LOUDLY rather than\n\
+             silently choosing, if those rules are ever relaxed.\n"
+        }
         "E-ATTRIBUTE-ARG-TYPE" => {
             "E-ATTRIBUTE-ARG-TYPE — a user attribute argument has the wrong type.\n\n\
              A user attribute (`#[Tag(\"api\")]`) is applied like its constructor, so each argument must be\n\

@@ -3,7 +3,7 @@
 
 use super::*;
 
-mod args;
+pub(in crate::checker) mod args;
 mod core;
 mod dispatch_intersection;
 mod dispatch_named;

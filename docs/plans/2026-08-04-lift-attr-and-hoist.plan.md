@@ -2,7 +2,8 @@
 
 **Status:** SLICE A (#48 hoist) is **BUILT 2026-08-04** as a narrowed sound subset — the agreed
 literal-hoist shape was refuted by measurement (see the register's "DEC-397 BUILT"). Slice B (#46
-attributes) remains OPEN with two rulings owed. Originally: SUPERSEDED IN PART — the 3C panel found 31 findings and ruled the plan NOT CERTIFIABLE. The
+attributes) is now UNBLOCKED: both owed rulings were ruled and BUILT as DEC-435 (canonical-path attribute
+resolution keeping the dot sound, plus named attribute args). Originally: SUPERSEDED IN PART — the 3C panel found 31 findings and ruled the plan NOT CERTIFIABLE. The
 developer then ruled *"namespace/use support first"*, which shipped as **LIFT-NS** (CD-30) and is NOT
 described by this file. Slices A (#48 hoist) and B (#46 attributes) remain OPEN and must be re-planned
 against the corrected facts in the panel sections below — the original Q1/Q2 premises were refuted.

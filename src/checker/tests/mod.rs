@@ -47,5 +47,6 @@ mod turbofish;
 mod types;
 mod unions;
 mod uniqueness;
+mod user_attributes;
 mod using;
 mod visibility;
