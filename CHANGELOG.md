@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `declare(strict_types=1);` in every transpiled file, both directions (DEC-401, 2026-08-04)
+The transpiler now emits `declare(strict_types=1);` as the first statement of every generated PHP file
+(single-sourced as `PHP_PROLOGUE`, so the flat and namespaced emit paths cannot drift). The PHP leg now
+enforces at its boundary what phorj enforces everywhere else: a host PHP caller passing `"5"` to an
+emitted `function helper(int $x)` gets a `TypeError` instead of a silent coercion phorj's own checker
+would never have admitted. Symmetrically (Invariant 17) the LIFTER reads `declare(strict_types=1);` and
+discards it — lossless, since phorj is always strictly typed — while `strict_types=0`, `ticks` and
+`encoding` are refused with a reason, because those do carry meaning phorj cannot express. This also
+clears the second of the two mandatory PSR-12 prologue blockers, so a `declare` + `namespace` + `use`
+file head now lifts.
+
+### Fixed — a latent byte-identity bug that PHP's coercion had been hiding (DEC-401 fallout)
+DEC-401's premise was that no existing example could change behaviour "because the checker already
+guarantees the types". The differential refuted that within one run: the checker guarantees types in
+*phorj* code, not in the hand-written PHP runtime helpers the emitter ships. `-tie` on a `decimal` emitted
+`-("2.345")` — a decimal erases to a PHP *string*, so unary minus was PHP arithmetic and coerced it to a
+float, which then reached `strpos()` inside `__phorj_dec_scale`. Coercive mode had silently stringified
+that float using PHP's own formatting, a conversion the interpreter and VM never performed — so the PHP
+leg was one precision difference away from disagreeing with them. Now routed through the existing exact
+helper (`__phorj_dec_sub("0", $x)`: `max(scales)` plus the same i128 bounds check), verified against the
+tree-walker oracle including `-0.00d` staying `0.00`. Int and decimal negation now share one dispatch
+point so a future numeric kind cannot be forgotten. **`declare(strict_types=1)` turns out to be a
+byte-identity smoke detector for the emitted runtime, not just host-boundary hygiene.**
+
 ### Added — the lifter accepts `namespace` and `use` (LIFT-NS, CD-30, 2026-08-04)
 `namespace` and `use` sat in the lifter's `UNSUPPORTED_KW` and were HARD PARSE ERRORS, so **no**
 namespaced PHP file could be lifted at all — i.e. no Symfony, Laravel or Doctrine file, regardless of

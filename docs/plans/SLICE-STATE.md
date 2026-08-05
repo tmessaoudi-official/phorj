@@ -2,7 +2,15 @@
 
 ## ✅ CURRENT CURSOR (2026-08-04) — **LIFT-NS SHIPPED; the lift roadmap is REORDERED**
 
-**Shipped 2026-08-04, gate green:** (1) **attribute-name completion** in the LSP + both editors, with the
+**Shipped 2026-08-04, gate green:** (0) **DEC-401** — `declare(strict_types=1);` in every transpiled
+file (single-sourced `PHP_PROLOGUE`), and the lifter reads it back (Invariant 17). **Its ruling's central
+assumption was REFUTED by the build:** "no existing example can change behaviour" holds for phorj code but
+NOT for the hand-written PHP runtime helpers, one of which was leaning on coercion — `-tie` on a `decimal`
+emitted `-("2.345")`, coercing a decimal STRING to a float that then hit `strpos()`. Coercive mode had been
+silently stringifying it with PHP's float formatting, which the Rust legs never did — a live byte-identity
+hazard. Fixed via `__phorj_dec_sub("0", $x)`. **strict_types is a byte-identity smoke detector for the
+emitted runtime, not just host-boundary hygiene.** Also clears the SECOND PSR-12 prologue blocker, so a
+`declare` + `namespace` + `use` head now lifts. (1) **attribute-name completion** in the LSP + both editors, with the
 11 built-in attributes single-sourced as `ast::BUILTIN_ATTRIBUTE_PATHS` (`b219856`, CD-29) — this closed
 gap 2 of the DEC-417 editor slice; (2) **LIFT-NS** — the lifter now accepts `namespace` → phorj `package`
 (PascalCase-ized, since `E-PKG-CASE` is enforced) and `use X [as Y]` → `import X [as Y]` (phorj has import

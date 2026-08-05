@@ -3815,7 +3815,7 @@ Six divergences were measured on real output; four rulings follow.
 |----|----------|--------|--------|
 | DEC-399 | **DEC-398's open name.** `#[Column]` was rejected (Doctrine's carries schema definition — type/length/nullable/precision — while ours only maps a name/casing); `#[DbName]` was then rejected too, as reading like *the name of the database* | **RULED — `#[ColumnName(…)]`.** Chosen over `#[MapsTo(…)]` because it COMPOSES: when JSON/CSV mapping wants a field name later, each gets its own precise attribute and they stack (`#[ColumnName("created_at")] #[JsonName("createdAt")]`) without either knowing about the other. `#[MapsTo]` would need a per-surface discriminator (`#[MapsTo(db: …, json: …)]`), turning one attribute into a central registry every future feature must edit — the bottleneck the developer's genericity principle exists to prevent. The GENERAL thing is the field-attribute slot (DEC-398); each consumer owns a precise attribute. Forms: `#[ColumnName("created_at")]` (literal) and `#[ColumnName(naming: Naming.SnakeToCamel)]` (per-field casing) | **RULED — build queued with DEC-398** |
 | DEC-400 | **F2 `phpInterop.namespaceRoot` (L-25), reopened after the cost was corrected.** Claude's first cost figure ("88 emission sites") was a naive grep and wrong: [Verified: `src/transpile/names.rs:5` — `namespace_of` derives the namespace from the ALREADY-MANGLED name; **14 call sites** in 3 files], so the prefix enters at ONE upstream point | **RULED — BUILD the knob: default OFF, explicit-only, PROJECT packages only.** Developer: *"no `App` in the wind! but we want to add it we add it easily and structurally"*. Absent config ⇒ byte-identical to today (nothing implicit); `{ "phpInterop": { "namespaceRoot": "App" } }` ⇒ `namespace App\Billing;`. **Vendored packages are NEVER prefixed** — a library's FQN must not depend on who consumes it, else two apps see the same source as `App\Acme\Client` and `Shop\Acme\Client` and every stub/`declare` written against it breaks. `phg lift` reads the same config so the round-trip stays symmetric (Invariant 17) | **RULED — build queued** |
-| DEC-401 | **No `declare(strict_types=1)` in ANY emitted PHP** — [Verified: `grep -rn strict_types src/ tests/ examples/` → **0 hits**]. So every transpiled file runs in PHP's coercive mode: a host calling an emitted `function helper(int $x)` with `"5"` gets a silent coercion, where phorj's own checker would never have admitted the call | **RULED — EMIT `declare(strict_types=1);` in every transpiled file.** The PHP leg must enforce at its boundary what phorj enforces everywhere else, or "statically typed" is a promise the output quietly drops. Byte-identity for phorj-only programs is unaffected (the checker already guarantees the types, so no existing example can change behaviour) — it changes only what happens when HOST PHP calls in wrong, which today is silent coercion and becomes a `TypeError`. Also plain PHP best practice | **RULED — build queued** |
+| DEC-401 | **No `declare(strict_types=1)` in ANY emitted PHP** — [Verified: `grep -rn strict_types src/ tests/ examples/` → **0 hits**]. So every transpiled file runs in PHP's coercive mode: a host calling an emitted `function helper(int $x)` with `"5"` gets a silent coercion, where phorj's own checker would never have admitted the call | **RULED — EMIT `declare(strict_types=1);` in every transpiled file.** The PHP leg must enforce at its boundary what phorj enforces everywhere else, or "statically typed" is a promise the output quietly drops. Byte-identity for phorj-only programs is unaffected (the checker already guarantees the types, so no existing example can change behaviour) — it changes only what happens when HOST PHP calls in wrong, which today is silent coercion and becomes a `TypeError`. Also plain PHP best practice | **RULED — BUILT 2026-08-04** |
 | DEC-402 | **Emitted PHP is not PSR-12** — measured on real output: `final class Invoice {` (brace on the same line) and `function __construct` / `function total(): int` with **no explicit `public`** (PSR-1/PSR-12 both require it) | **RULED — make the emitter PSR-12-compliant.** Braces on their own line for classes/functions, explicit visibility on methods. Without it every adopting team with `phpcs`/PHP-CS-Fixer in CI must special-case the generated tree forever — friction landing exactly where DEC-320's adoption story lives. Every transpile golden/expected-output fixture re-baselines in the same change (mechanical, gate-verified) | **RULED — build queued** |
 
 **Recorded as DELIBERATE and NOT to be "fixed" (same research pass, so a future session does not file them as bugs):** (1) enums emit `abstract class` + `Status_Open`/`Status_Paid` subclasses rather than PHP 8.1 native `enum` — **forced**, PHP enums cannot carry per-case payload and `Paid(int amount)` does; uniform classes beat a split rule (DEC-329.3). (2) Autoloading is a generated CLASSMAP + one composer `files` entry rather than PSR-4 — **deliberate and strictly better** (DEC-320 delta α: one `.phg` enum emits several classes, which PSR-4 cannot address). (3) Free functions live in the eagerly-loaded shared runtime — **forced**, PHP cannot autoload functions.
@@ -6547,3 +6547,40 @@ found that no namespaced file lifted at all). These sub-decisions were mine:
 real-world PHP input. This slice removes the first. My earlier claim that "lift a Symfony app = lift the
 app onto phorj's native L2 consumers" was sound in principle and unreachable in practice for a reason I
 had not checked before presenting it.
+
+### DEC-401 BUILT (2026-08-04) — and its central assumption was REFUTED by the build
+
+`declare(strict_types=1);` is now emitted in every transpiled file, from a single `PHP_PROLOGUE` const so
+the flat and namespaced emit paths cannot drift. Symmetrically (Invariant 17) the LIFTER now reads
+`declare(strict_types=1);` and discards it — lossless for this one directive, because phorj is always
+strictly typed; `strict_types=0` and every other directive (`ticks`, `encoding`) are REFUSED, since those
+do carry meaning phorj cannot express.
+
+**The ruling assumed "no existing example can change behaviour" because "the checker already guarantees
+the types". That is WRONG, and the differential proved it immediately.** The checker guarantees types in
+PHORJ code; it says nothing about the hand-written PHP RUNTIME HELPERS the emitter also ships. One of them
+was relying on PHP's implicit coercion:
+
+`examples/guide/decimal-div.phg` emitted `$nt = -("2.345");` for `-tie`. A `decimal` erases to a PHP
+*string*, so unary minus was PHP ARITHMETIC — it coerced the string to the float `-2.345`. That float then
+reached `strpos($x, '.')` inside `__phorj_dec_scale`, and under strict_types PHP raised
+`TypeError: strpos(): Argument #1 ($haystack) must be of type string, float given`.
+
+**This was a latent BYTE-IDENTITY bug, not merely a strict-mode complaint.** Coercive mode silently
+stringified the float using PHP's own float formatting — a conversion the interpreter and VM never
+performed — so the PHP leg was one `printf`-precision difference away from disagreeing with them. It had
+been sitting there unnoticed because coercion hid it. `declare(strict_types=1)` is therefore not just
+hygiene at the host boundary (the ruling's stated reason): it is a byte-identity SMOKE DETECTOR for the
+emitted runtime.
+
+Fixed by routing a decimal negation through the existing exact helper — `__phorj_dec_sub("0", $x)`, which
+takes `max(scales)` and carries the same i128 bounds check — rather than adding a new one. Verified
+against the tree-walker oracle: `-2.345|0.00|1.5|2.345`, including `-0.00d` staying `0.00`. The int and
+decimal cases now share ONE dispatch point (`Transpiler::neg_via_helper`) so a future numeric kind cannot
+be silently forgotten in a second `if`.
+
+Also found, recorded, NOT fixed: **a transpiled file that contains any runtime helper does not lift
+back**, because helpers are emitted with untyped parameters (`function __phorj_checked_add($a, $b)`) and
+the lifter's Tier-1 requires types. Pre-existing (reproduces with the prologue removed by hand) and
+orthogonal to DEC-401, but it bounds what "the round trip works" currently means, so the round-trip test
+deliberately uses a helper-free program and says why.

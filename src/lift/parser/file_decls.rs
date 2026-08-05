@@ -1,5 +1,5 @@
-//! PHP-lift parser — FILE-level declarations: `namespace A\B;` and `use A\B\C [as D];`
-//! (LIFT-NS).
+//! PHP-lift parser — the FILE level: `parse_program` plus the declarations only legal there —
+//! `declare(strict_types=1);` (DEC-401), `namespace A\B;` and `use A\B\C [as D];` (LIFT-NS).
 //!
 //! Split out of `items.rs` by cohesion: adding these pushed that file to 530 lines, past
 //! Invariant 13's 500-line hard cap. They form their own unit — both are consumed by
@@ -9,6 +9,103 @@
 use super::*;
 
 impl PParser {
+    pub(super) fn parse_program(&mut self) -> Result<PhpProgram, String> {
+        // An optional leading `<?php` open tag.
+        self.eat(&PTok::OpenTag);
+        let mut items = Vec::new();
+        let mut docs: std::collections::BTreeMap<String, String> =
+            std::collections::BTreeMap::new();
+        let mut namespace: Vec<String> = Vec::new();
+        let mut uses: Vec<PhpUse> = Vec::new();
+        while !self.at(&PTok::Eof) {
+            // A `?>` close tag (and a re-opening `<?php`) are tolerated between items.
+            if self.eat(&PTok::CloseTag) {
+                self.eat(&PTok::OpenTag);
+                continue;
+            }
+            // LIFT-NS: `namespace A\B;` and `use A\B\C [as D];` are FILE-level, so they are consumed
+            // here rather than by `parse_item` — which keeps them out of statement position, where a
+            // `use` means trait-composition and a `namespace` means the braced multi-namespace form.
+            // DEC-401 symmetry: the TRANSPILER now emits `declare(strict_types=1);` in every file, so
+            // the lifter must be able to read its own output back (Invariant 17 — transpile and lift
+            // move together). `strict_types=1` is phorj's permanent state, so it carries no information
+            // to preserve and is simply consumed; any OTHER directive is refused rather than ignored.
+            if self.is_kw("declare") {
+                self.parse_declare_decl()?;
+                continue;
+            }
+            if self.is_kw("namespace") {
+                if !namespace.is_empty() {
+                    return Err(self.err_reason(
+                        "a second `namespace` declaration — phorj has one `package` per file",
+                    ));
+                }
+                if !items.is_empty() || !uses.is_empty() {
+                    // PHP itself is fatal here ("Namespace declaration statement has to be the very
+                    // first statement or after any declare call"), so a `use` BEFORE the namespace is
+                    // invalid input, not a shape to invent a meaning for.
+                    return Err(self.err_reason(
+                        "`namespace` must come before every `use` and every declaration in the file",
+                    ));
+                }
+                namespace = self.parse_namespace_decl()?;
+                continue;
+            }
+            if self.is_kw("use") {
+                uses.push(self.parse_use_decl()?);
+                continue;
+            }
+            // DEC-419: a PHPDoc block sits in front of the item's FIRST token, so read the side
+            // channel at `self.pos` BEFORE parsing consumes it, then key it by the parsed name.
+            let doc = self.docs.get(&self.pos).cloned();
+            let item = self.parse_item()?;
+            if let (Some(d), Some(name)) = (doc, super::super::ast::php_item_name(&item)) {
+                docs.insert(name.to_string(), d);
+            }
+            items.push(item);
+        }
+        Ok(PhpProgram {
+            items,
+            docs,
+            namespace,
+            uses,
+        })
+    }
+
+    /// `declare(strict_types=1);` — consumed and DISCARDED.
+    ///
+    /// Discarding is lossless for this one directive and only this one: phorj is statically typed with
+    /// no coercive mode, so `strict_types=1` states what is already permanently true, and DEC-401 has
+    /// the transpiler emit it on the way back out. `strict_types=0` and every other directive
+    /// (`ticks`, `encoding`) DO carry meaning phorj cannot express, so they are refused rather than
+    /// silently dropped (DEC-166).
+    pub(super) fn parse_declare_decl(&mut self) -> Result<(), String> {
+        self.advance(); // `declare`
+        self.expect(&PTok::LParen, "`(` after `declare`")?;
+        let directive = self.expect_ident("a directive name inside `declare(...)`")?;
+        if directive != "strict_types" {
+            return Err(self.err_reason(&format!(
+                "`declare({directive}=…)` has no phorj equivalent — only `strict_types` is understood,                  because phorj is always strictly typed"
+            )));
+        }
+        self.expect(&PTok::Assign, "`=` inside `declare(strict_types=…)`")?;
+        let value = match self.peek().clone() {
+            PTok::Int(n) => {
+                self.advance();
+                n
+            }
+            _ => return Err(self.err("an integer after `declare(strict_types=`")),
+        };
+        if value != 1 {
+            return Err(self.err_reason(
+                "`declare(strict_types=0)` asks for PHP's COERCIVE mode, which phorj has no way to                  express — every phorj program is strictly typed",
+            ));
+        }
+        self.expect(&PTok::RParen, "`)` after `declare(strict_types=1`")?;
+        self.expect(&PTok::Semi, "`;` after `declare(strict_types=1)`")?;
+        Ok(())
+    }
+
     /// `namespace A\B;` — the SEMICOLON form only.
     ///
     /// The braced form (`namespace A { … }`) is refused: it can declare several namespaces in one file

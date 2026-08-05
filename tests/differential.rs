@@ -3506,6 +3506,10 @@ const TIER1_PHP: &[&str] = &[
 const PHP_CONSTRUCTS: &[&str] = &[
     "if",
     "elseif",
+    // DEC-401: every emitted file opens `declare(strict_types=1);`. `declare` is a language construct,
+    // NOT an extension function, so it belongs here rather than in `TIER1_PHP` — adding it there would
+    // wrongly assert a function of that name exists under the hermetic `php -n` oracle.
+    "declare",
     // DEC-241 asymmetric visibility: `public private(set) int $x;` — the `(set)` group makes the
     // visibility keyword LOOK like a bareword call to this scanner; they are declaration syntax.
     "private",

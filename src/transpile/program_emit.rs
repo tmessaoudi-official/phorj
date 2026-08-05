@@ -233,7 +233,7 @@ impl Transpiler {
         if self.namespaced {
             return self.emit_program_namespaced(program);
         }
-        self.out.push_str("<?php\n");
+        self.out.push_str(PHP_PROLOGUE);
         let mut emitted_overloads: HashSet<String> = HashSet::new();
         for item in &program.items {
             // DEC-320 split emission: a per-file/runtime pass emits only its routed items.
@@ -336,7 +336,7 @@ impl Transpiler {
     /// and types are already declared when it runs.
     pub(super) fn emit_program_namespaced(&mut self, program: &Program) -> Result<(), String> {
         use std::collections::BTreeMap;
-        self.out.push_str("<?php\n");
+        self.out.push_str(PHP_PROLOGUE);
         let mut buckets: BTreeMap<String, Vec<&Item>> = BTreeMap::new();
         for item in &program.items {
             // DEC-320 split emission: a per-file/runtime pass buckets only its routed items.

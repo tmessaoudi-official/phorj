@@ -34,12 +34,12 @@ impl Transpiler {
             Expr::This(_) => Ok("$this".into()),
             Expr::Unary { op, expr, .. } => {
                 let inner = self.emit_expr(expr)?;
-                // DEC-255: negating an `int` overflows only at `i64::MIN` — phorj faults, bare PHP `-$x`
-                // silently promotes to float. Route an int negation through `__phorj_checked_neg`.
-                if matches!(op, UnaryOp::Neg) && self.expr_kind(expr) == OpKind::Int {
-                    self.gates.uses_checked_arith = true;
-                    let bs = if self.namespaced { "\\" } else { "" };
-                    return Ok(format!("{bs}__phorj_checked_neg({inner})"));
+                // Bare PHP `-$x` is WRONG for both `int` and `decimal` — one decision point, so a new
+                // numeric kind cannot be forgotten here. See `neg_via_helper`.
+                if matches!(op, UnaryOp::Neg) {
+                    if let Some(call) = self.neg_via_helper(expr, &inner) {
+                        return Ok(call);
+                    }
                 }
                 let sym = match op {
                     UnaryOp::Neg => "-",

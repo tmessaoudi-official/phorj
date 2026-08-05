@@ -23,7 +23,7 @@ const UNSUPPORTED_KW: &[&str] = &[
     // `try`/`catch`/`finally` (LIFT-TRY) and `throw` are now IN the subset — both removed from this list.
     "switch",
     "do",
-    // `namespace` and `use` are now IN the subset (LIFT-NS) — both removed from this list. They are
+    // `namespace`, `use` and `declare` are now IN the subset (LIFT-NS) — all removed from this list. They are
     // FILE-level, not statement-level, so `parse_program` consumes them before item dispatch; reaching
     // one in statement position (a braced `namespace A { … }` body, or a `use` inside a function) is
     // still refused, by an explicit error that names the reason rather than this generic list.
@@ -31,7 +31,6 @@ const UNSUPPORTED_KW: &[&str] = &[
     "interface",
     "global",
     "goto",
-    "declare",
     "const",
     "static",
     "function", // a *nested* function is a closure-ish construct; top-level fns are caught earlier

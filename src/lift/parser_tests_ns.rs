@@ -4,7 +4,7 @@
 //! Split into its own file because `parser_tests.rs` sits at its grandfathered Invariant-13
 //! ceiling of 559 lines (`scripts/size-baseline.txt`), so growing it would fail the size gate.
 
-use super::parser_tests::perr;
+use super::parser_tests::{parse, perr};
 
 /// LIFT-NS: the `namespace` / `use` shapes that have no phorj analog are refused with a reason, not
 /// silently half-lifted (DEC-166 — never guess). Each message must name WHY, so a draft that stops is
@@ -67,4 +67,52 @@ fn a_use_before_the_namespace_is_refused() {
 fn the_comma_form_use_is_refused_with_a_reason() {
     let e = perr("<?php use App\\A, App\\B;");
     assert!(e.contains("comma-separated"), "{e}");
+}
+
+/// DEC-401 symmetry: the transpiler emits `declare(strict_types=1);` in every file, so the lifter must
+/// read its own output back (Invariant 17). `strict_types=1` states what is permanently true of phorj,
+/// so it is consumed and discarded; anything else carries meaning phorj cannot express and is refused.
+#[test]
+fn declare_strict_types_is_accepted_and_other_directives_are_refused() {
+    // The PSR-12 prologue in full: `declare` then `namespace` then `use`.
+    let p = parse(
+        "<?php\ndeclare(strict_types=1);\n\nnamespace App\\Svc;\nfunction f(): int { return 1; }\n",
+    );
+    assert_eq!(p.namespace, vec!["App".to_string(), "Svc".to_string()]);
+    assert_eq!(
+        p.items.len(),
+        1,
+        "declare must not become an item: {:?}",
+        p.items
+    );
+
+    for (src, frag) in [
+        ("<?php declare(ticks=1);", "has no phorj equivalent"),
+        ("<?php declare(strict_types=0);", "COERCIVE mode"),
+    ] {
+        let e = perr(src);
+        assert!(e.contains(frag), "for {src:?} got {e}");
+    }
+}
+
+/// A transpiled file must lift BACK — the round trip DEC-401 makes load-bearing. Uses the real emitter
+/// output rather than a hand-written prologue, so the two cannot drift.
+///
+/// Deliberately a program that emits NO runtime helpers. A transpiled file containing one does not lift
+/// back, because the helpers are emitted with UNTYPED parameters (`function __phorj_checked_add($a, $b)`)
+/// and the lifter's Tier-1 requires types — a PRE-EXISTING limitation this test discovered rather than
+/// introduced (verified: the same failure occurs with the prologue removed by hand). Recorded in the
+/// plan's open list; it bounds what "lifts back" currently means and is not papered over here.
+#[test]
+fn a_transpiled_file_lifts_back() {
+    let php = crate::cli::cmd_transpile(
+        "package Main;\n\nfunction greet(string n): string {\n    return \"hi \" + n;\n}\n",
+    )
+    .expect("transpile");
+    assert!(
+        php.starts_with("<?php\ndeclare(strict_types=1);\n"),
+        "emitter must open with the DEC-401 prologue:\n{php}"
+    );
+    crate::lift::lifter::lift_source(&php)
+        .unwrap_or_else(|e| panic!("transpiled output failed to lift back: {e}\n{php}"));
 }

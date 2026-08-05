@@ -4,8 +4,10 @@
 // `namespace` and `use` were outside the lifter's Tier-1 subset until 2026-08-04, so a file shaped
 // like this one could not be lifted AT ALL — it failed at the PARSER, before anything else.
 //
-// HONEST SCOPE: this is the first of TWO mandatory PSR-12 prologue blockers. `declare(strict_types=1);`
-// is still Tier-1-unsupported, so most real framework files still stop at the parser.
+// BOTH mandatory PSR-12 prologue lines now lift: `declare(strict_types=1);` (DEC-401, which the
+// TRANSPILER also emits into every generated file) and `namespace`.
+declare(strict_types=1);
+
 namespace app\cli_tools;
 
 // A `use` whose local name is never referenced. PHP allows this freely (editors add them, code moves

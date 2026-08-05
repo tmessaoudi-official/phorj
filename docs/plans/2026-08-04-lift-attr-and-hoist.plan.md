@@ -258,9 +258,15 @@ running it:
   (multi-file, writing into a package tree). That is why the shipped example demonstrates the DROP path
   and why no example anywhere emits a lifted `import` — the coverage gap is a *consequence*, not an
   oversight. **A design decision is owed: project-aware lift, or keep `use` handling as parse-only?**
-- **O2.** `declare(strict_types=1);` is still Tier-1-unsupported and is the other mandatory PSR-12
-  prologue line, so most real framework files still stop at the parser. Cheap next increment (parse it,
-  drop it — phorj is statically typed) but out of this slice's ruled scope.
+- ~~**O2.** `declare(strict_types=1);`~~ — **CLOSED 2026-08-04 by DEC-401**, in BOTH directions: the
+  transpiler now emits it and the lifter reads it back. A `declare` + `namespace` + `use` PSR-12 head
+  lifts. Building it exposed a latent byte-identity bug coercion had been hiding — see the register's
+  "DEC-401 BUILT" section.
+- **O11 (new, found by DEC-401's round-trip test).** A transpiled file containing ANY runtime helper does
+  not lift back: helpers are emitted with untyped parameters (`function __phorj_checked_add($a, $b)`) and
+  the lifter's Tier-1 requires types. Pre-existing and orthogonal to DEC-401 (reproduces with the prologue
+  removed by hand), but it bounds what "the round trip works" means — so the round-trip test deliberately
+  uses a helper-free program and says so.
 - **O3.** `pascalize` is not injective: `my_pkg`, `My_Pkg`, `myPkg`, `_my_pkg_` all → `MyPkg`, and a
   leading `_` (a meaningful PHP internal-visibility convention) is silently dropped. Harmless within one
   file (one package per file) but a project lift would silently MERGE two distinct PHP namespaces.

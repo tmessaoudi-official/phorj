@@ -9,8 +9,23 @@ fn php(src: &str) -> String {
 }
 
 #[test]
-fn empty_program_emits_php_open_tag() {
-    assert_eq!(php(""), "<?php\n");
+fn empty_program_emits_php_open_tag_and_strict_types() {
+    // DEC-401: `declare(strict_types=1);` is emitted in EVERY transpiled file, so the PHP leg enforces
+    // at its boundary what phorj enforces everywhere else. It must be the FIRST statement in the file
+    // (PHP requires that), which this exact-equality assertion pins.
+    assert_eq!(php(""), "<?php\ndeclare(strict_types=1);\n");
+}
+
+/// DEC-401 applies to the NAMESPACED emit path too — a cross-package program takes
+/// `emit_program_namespaced`, a second `<?php` site that could silently drift from the flat one.
+/// Both read the single `PHP_PROLOGUE` const; this pins the namespaced path independently.
+#[test]
+fn the_namespaced_emit_path_also_declares_strict_types() {
+    let out = php("package Acme.Geometry;\n\nclass Point {\n    constructor(public int x) {}\n}\n");
+    assert!(
+        out.starts_with("<?php\ndeclare(strict_types=1);\n"),
+        "namespaced emit must open with the strict_types prologue:\n{out}"
+    );
 }
 
 #[test]

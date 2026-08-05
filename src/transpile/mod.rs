@@ -57,6 +57,24 @@ const PHP_TRIM_WS: &str = r"[\x{09}-\x{0D}\x{20}\x{85}\x{A0}\x{1680}\x{2000}-\x{
 /// semantics diverge from Phorj's (`+` concat-vs-add, `/` int-vs-float, interpolation display).
 /// Anything the resolver cannot pin down is [`OpKind::Other`], which routes to the existing helper
 /// (the safe fallback), so a wrong guess can never happen — only "known" or "fall back".
+/// The PHP prologue every emitted file opens with — **DEC-401**.
+///
+/// `declare(strict_types=1);` is emitted in EVERY transpiled file. The ruling's reason: the PHP leg must
+/// enforce at its boundary what phorj enforces everywhere else, or "statically typed" is a promise the
+/// output quietly drops. Without it, a HOST PHP caller invoking an emitted `function helper(int $x)` with
+/// `"5"` gets a silent coercion where phorj's own checker would never have admitted the call; with it,
+/// that becomes a `TypeError` at the boundary.
+///
+/// **Byte-identity is unaffected for phorj-only programs**, which is why this is safe: the checker has
+/// already proven every type inside the program, so no call the emitter generates can be one that
+/// coercion was papering over. It changes only what happens when PHP code *outside* the program calls in
+/// with the wrong type. [Verified by the differential suite over every `examples/**/*.phg`.]
+///
+/// SINGLE SOURCE for both emit paths (flat and namespaced) so they cannot drift — and it must stay the
+/// first *statement* in the file, which is why `build_php`'s generated-file marker is inserted as a
+/// COMMENT after `<?php` (comments are not statements, so they may precede a `declare`).
+pub(crate) const PHP_PROLOGUE: &str = "<?php\ndeclare(strict_types=1);\n";
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum OpKind {
     Str,
@@ -206,3 +224,35 @@ mod tests;
 mod tests_docs;
 #[cfg(test)]
 mod tests_enums;
+
+impl Transpiler {
+    /// The PHP form of a unary negation when a bare `-$x` would be WRONG, or `None` when the native
+    /// operator is correct. Both cases are here so that adding a numeric kind means revisiting ONE
+    /// place rather than remembering a second `if` in the expression emitter.
+    ///
+    /// * **`int` (DEC-255)** — negating `i64::MIN` faults in phorj, while bare PHP `-$x` silently
+    ///   promotes to float. Routed through `__phorj_checked_neg`.
+    /// * **`decimal` (DEC-401)** — a decimal erases to a PHP *string*, so `-$x` is PHP ARITHMETIC: it
+    ///   coerces the string to a float and the exact value is gone. Under `declare(strict_types=1)` that
+    ///   float then reaches `strpos()` inside `__phorj_dec_scale` and raises a `TypeError`; BEFORE
+    ///   strict_types it silently stringified through PHP's float formatting — i.e. the PHP leg was
+    ///   performing a conversion the two Rust legs never did, a latent byte-identity hazard that
+    ///   coercion had been hiding. Negation IS subtraction from zero, so it reuses the existing exact
+    ///   helper (`max(scales)` plus the same i128 bounds check) instead of adding a new one, which
+    ///   reproduces the Rust kernel including `-0.00d` staying `0.00` rather than becoming `-0.00`.
+    ///   [Verified against the tree-walker oracle: `-2.345|0.00|1.5|2.345`.]
+    fn neg_via_helper(&mut self, operand: &Expr, inner: &str) -> Option<String> {
+        let bs = if self.namespaced { "\\" } else { "" };
+        match self.expr_kind(operand) {
+            OpKind::Int => {
+                self.gates.uses_checked_arith = true;
+                Some(format!("{bs}__phorj_checked_neg({inner})"))
+            }
+            OpKind::Decimal => {
+                self.gates.uses_dec_sub = true;
+                Some(format!("{bs}__phorj_dec_sub(\"0\", {inner})"))
+            }
+            _ => None,
+        }
+    }
+}

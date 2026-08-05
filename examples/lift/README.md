@@ -157,12 +157,15 @@ becomes the string `'key'` — use the explicit `"{$a['key']}"` form).
 made the lifter unusable on real-world PHP: a namespaced file failed at the PARSER, before anything else
 could be attempted.
 
-> **Honest scope.** This clears ONE of the two mandatory PSR-12 prologue lines.
-> `declare(strict_types=1);` is still outside the Tier-1 subset, so most real framework files still stop
-> at the parser. And a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`) — the `use`
-> half needs project-aware lifting before it pays off, which is why the example below shows the
-> unused-import DROP rather than an emitted import.
+> **Honest scope.** Both mandatory PSR-12 prologue lines now lift — `declare(strict_types=1);` was
+> closed by DEC-401, which also has the TRANSPILER emit it into every generated file. What is still
+> open: a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`), so the `use` half needs
+> project-aware lifting before it pays off — which is why the example below shows the unused-import DROP
+> rather than an emitted import. `#[...]` attributes are still swallowed (`KNOWN_ISSUES` LIFT-ATTR).
 
+- `declare(strict_types=1);` → consumed and discarded (phorj is always strictly typed, so it states what
+  is permanently true). `strict_types=0`, `ticks` and `encoding` are REFUSED — they carry meaning phorj
+  cannot express.
 - `namespace a\b;` → `package A.B;` — segments PascalCase-ized (`E-PKG-CASE` is enforced and PHP does not
   guarantee PascalCase), `snake_case`/`kebab` treated as word boundaries (`cli_tools` → `CliTools`), an
   already-upper segment left alone (`ORM` stays `ORM`). No namespace at all still yields `package Main;`.

@@ -5,7 +5,7 @@ use super::ast::*;
 use super::lexer::lex_php;
 use super::parser::parse_php;
 
-fn parse(src: &str) -> PhpProgram {
+pub(super) fn parse(src: &str) -> PhpProgram {
     parse_php(lex_php(src).expect("lex")).expect("parse")
 }
 

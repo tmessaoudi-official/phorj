@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 abstract class Shape {}
 final class Shape_Circle extends Shape {
     public function __construct(public float $r) {}
