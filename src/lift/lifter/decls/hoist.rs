@@ -310,6 +310,11 @@ fn walk_expr(
             }
         }
         E::Var(name) => ctx.see(name, None, false, sightings, order),
+        // A named argument is a wrapper: its VALUE is an ordinary expression and can read a variable
+        // (`f(limit: $n)`), so the walk must descend. Named args only reach a function BODY once the
+        // expression parser admits them (attribute arg lists are outside every body) — recursing now
+        // means that slice cannot silently skip a sighting and mis-hoist.
+        E::NamedArg { value, .. } => walk_expr(value, ctx, sightings, order),
         E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => {}
         E::Interp(parts) => {
             for p in parts {

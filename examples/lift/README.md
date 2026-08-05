@@ -161,7 +161,7 @@ could be attempted.
 > closed by DEC-401, which also has the TRANSPILER emit it into every generated file. What is still
 > open: a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`), so the `use` half needs
 > project-aware lifting before it pays off — which is why the example below shows the unused-import DROP
-> rather than an emitted import. `#[...]` attributes are still swallowed (`KNOWN_ISSUES` LIFT-ATTR).
+> rather than an emitted import. `#[...]` attributes now lift (see below).
 
 - `declare(strict_types=1);` → consumed and discarded (phorj is always strictly typed, so it states what
   is permanently true). `strict_types=0`, `ticks` and `encoding` are REFUSED — they carry meaning phorj
@@ -179,6 +179,41 @@ could be attempted.
 Refused loudly, with the reason, rather than half-lifted: a braced `namespace A { … }` (phorj has one
 `package` per file), a second `namespace` in one file, a `namespace` after a declaration,
 `use function` / `use const` (they import a symbol, not a type), and the grouped `use A\{B, C};` form.
+
+## `#[…]` attributes (LIFT-ATTR, 2026-08-05)
+
+`attributes.php` / `attributes.phg`. A bare `#` is a line COMMENT in PHP, and the lift lexer treated
+`#[Audited("billing")]` as exactly that — **silently swallowing it**. That is the worst failure shape for
+a tool whose contract is "refuse loudly, never guess": the file lifted, and quietly meant less. `#[` is
+now its own token; a bare `#` is still a comment.
+
+An attribute name is a CLASS name, so it is resolved the way PHP resolves one — `use` map first, then the
+current namespace, and a leading `\` means the root. Only then is it spelled for phorj:
+
+| Resolved to | Emitted as | Why |
+|---|---|---|
+| root `Attribute` / `Deprecated` | `Core.Runtime.Attribute` / `Core.Runtime.Deprecated` | same concept under the same name; the dotted form is self-gating, so no import is synthesized |
+| a class in THIS file's package (or the root) | the bare leaf — `#[Audited("billing")]` | a single-file compile keys classes bare, so `#[App.Meta.Audited]` would match nothing and land on `E-ATTR-TARGET`. The bare form matches both keyings |
+| a class from anywhere else | the FULL path — `#[Doctrine.ORM.Mapping.Column]` | phorj matches a built-in attribute as a segment-boundary SUFFIX, so a Symfony `#[Route("/home")]` lifted bare would bind to phorj's own `Core.Http.Route` — a different class taking different arguments, checking clean and meaning something else |
+
+`#[A, B]` (several attributes in one group) is flattened to one `#[…]` per line, and PHP 8.0 **named
+arguments** lift 1:1 (`#[Tag(order: 3, name: "late")]`) — phorj spells them the same way, so nothing is
+reordered; the checker normalizes them into their constructor slots.
+
+**Arguments are never rewritten, dropped or reordered.** `#[Attribute(Attribute::TARGET_CLASS)]`
+therefore lifts to a phorj marker that the CHECKER rejects (`E-ATTRIBUTE-ARGS` — target restriction is
+not implemented yet) rather than the lifter quietly dropping the restriction; likewise
+`#[Deprecated(since: "8.4")]` fails on the argument phorj does not have. A draft that fails `phg check`
+with a precise message is in-contract; one that checks clean and means less is not.
+
+Refused loudly, with the position named:
+
+| Shape | Why |
+|---|---|
+| an attribute on a method, property or class constant | phorj allows `#[…]` on a top-level `function` or `class` only (`E-ATTR-TARGET`) — and `#[ORM\Column]` on a property *is* the meaning of that line, so dropping it is a silent loss |
+| an attribute on a parameter, an enum, or an enum case | same target rule |
+| an unqualified name equal to a phorj built-in attribute (`#[Route]`, `#[Config]`, … in a file with no namespace or `use` for it) | phorj resolves the unqualified name to the BUILT-IN, so the lifted program would mean something different. Qualifying it instead is not a fix — `#[App.Route]` resolves only under a project compile and is `E-ATTR-TARGET` in the flat draft `phg lift` emits |
+| a non-ASCII class name (`#[Café]`) | legal PHP; phorj's lexer rejects `é`, and a LEX error suppresses every other diagnostic in the file |
 
 ## The function-scope hoist (DEC-397, 2026-08-04)
 

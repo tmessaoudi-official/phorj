@@ -91,11 +91,26 @@ impl PParser {
     // ── items ──
 
     pub(super) fn parse_item(&mut self) -> Result<PhpItem, String> {
+        // LIFT-ATTR: PHP 8 attribute groups precede the declaration they annotate. Parsed here (not in
+        // `parse_function`/`parse_class`, which are also reached from member position) so the ONE
+        // position phorj accepts them in is also the one position that consumes them.
+        let attrs = self.parse_attr_groups()?;
         if self.is_kw("function") {
-            return Ok(PhpItem::Function(self.parse_function()?));
+            let mut f = self.parse_function()?;
+            f.attrs = attrs;
+            return Ok(PhpItem::Function(f));
         }
         if self.is_kw("class") || self.is_kw("abstract") || self.is_kw("final") {
-            return Ok(PhpItem::Class(self.parse_class()?));
+            let mut c = self.parse_class()?;
+            c.attrs = attrs;
+            return Ok(PhpItem::Class(c));
+        }
+        if let Some(a) = attrs.first() {
+            return Err(format!(
+                "lift parse error: an attribute `#[{}]` annotates something other than a top-level \
+                 `function` or `class`, which is the only place phorj accepts one (line {})",
+                a.name, a.line
+            ));
         }
         if self.is_kw("enum") {
             return Ok(PhpItem::Enum(self.parse_enum()?));
@@ -117,6 +132,8 @@ impl PParser {
         };
         let body = self.parse_block()?;
         Ok(PhpFunction {
+            // Attributes are attached by `parse_item`, the only position that admits them.
+            attrs: Vec::new(),
             name,
             params,
             ret,
@@ -171,6 +188,8 @@ impl PParser {
         }
         self.expect(&PTok::RBrace, "`}`")?;
         Ok(PhpClass {
+            // Attributes are attached by `parse_item`, the only position that admits them.
+            attrs: Vec::new(),
             name,
             is_abstract,
             is_final,
@@ -196,6 +215,7 @@ impl PParser {
 
     /// One class member: `const`, a method, or a property — preceded by any modifier order.
     pub(super) fn parse_member(&mut self) -> Result<PhpMember, String> {
+        self.reject_attr_here("a class member (method, property or constant)")?;
         let mut vis = PhpVisibility::Public;
         // PHP 8.4 asymmetric visibility: `private(set)` / `protected(set)` — a visibility keyword
         // immediately followed by `(set)`. May stand alone (read defaults public) or follow a read
@@ -323,6 +343,7 @@ impl PParser {
         let mut cases = Vec::new();
         let mut methods = Vec::new();
         while !self.at(&PTok::RBrace) && !self.at(&PTok::Eof) {
+            self.reject_attr_here("an enum case or method")?;
             if self.is_kw("case") {
                 self.advance();
                 let cname = self.expect_ident("case name")?;
@@ -358,6 +379,7 @@ impl PParser {
         self.expect(&PTok::LParen, "`(`")?;
         let mut params = Vec::new();
         while !self.at(&PTok::RParen) {
+            self.reject_attr_here("a parameter")?;
             // Constructor promotion: a leading `public`/`private`/`protected` (optionally with
             // `readonly`) makes the param a promoted property.
             let mut promotion = None;

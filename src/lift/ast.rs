@@ -47,6 +47,19 @@ pub fn php_item_name(item: &PhpItem) -> Option<&str> {
     }
 }
 
+/// A PHP 8 attribute use — `#[Name(args…)]` (LIFT-ATTR).
+///
+/// `name` is kept VERBATIM as written, including any `\` qualifier and a leading root marker
+/// (`\Attribute`, `ORM\Column`). The lifter maps it; the parser stays a faithful reader of the source,
+/// the same discipline `parse_qualified_name` already follows for catch types.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhpAttribute {
+    pub name: String,
+    pub args: Vec<PhpExpr>,
+    /// 1-based source line, for lift diagnostics.
+    pub line: usize,
+}
+
 /// A `use A\B\C;` / `use A\B\C as D;` class import.
 ///
 /// `use function …` and `use const …` are deliberately NOT represented: they import a symbol into the
@@ -84,6 +97,9 @@ pub enum PhpVisibility {
 /// A class declaration: `[abstract|final] class Name [extends P] [implements I, …] { members }`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PhpClass {
+    /// `#[…]` attributes written above the class, in source order (LIFT-ATTR). Carries PHP's own
+    /// `#[\Attribute]` marker, which is what makes a lifted attribute CLASS usable as an attribute.
+    pub attrs: Vec<PhpAttribute>,
     pub name: String,
     pub is_abstract: bool,
     pub is_final: bool,
@@ -154,6 +170,9 @@ pub struct PhpEnumCase {
 /// A typed top-level function: `function name(params): ret { body }`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PhpFunction {
+    /// `#[…]` attributes written above the declaration, in source order (LIFT-ATTR). Empty is the
+    /// overwhelming common case, so this costs a `Vec` header per function and nothing else.
+    pub attrs: Vec<PhpAttribute>,
     pub name: String,
     pub params: Vec<PhpParam>,
     /// Declared return type, if any (`: int`). `None` = no return hint.
@@ -274,6 +293,14 @@ pub enum PhpExpr {
     Name(String),
     /// `[a, b, k => v]` (and the `array(…)` long form, which parses as a `Call` to `Name("array")`).
     Array(Vec<PhpArrayElem>),
+    /// `name: value` — a NAMED argument (PHP 8.0). Needed because `#[Route(path: '/x')]` is the
+    /// dominant real-world attribute spelling; phorj accepts named args in the same positions
+    /// (DEC-297 for construction, DEC-435 for attributes), so this lifts 1:1 rather than being
+    /// reordered away.
+    NamedArg {
+        name: String,
+        value: Box<PhpExpr>,
+    },
     Unary {
         op: PhpUnOp,
         expr: Box<PhpExpr>,

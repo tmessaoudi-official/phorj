@@ -1,54 +1,65 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-04) — **LIFT-NS SHIPPED; the lift roadmap is REORDERED**
+## ✅ CURRENT CURSOR (2026-08-05) — **LIFT-ATTR SHIPPED; the lift chain now reaches attributes**
 
-**Shipped 2026-08-04, gate green:** (0) **DEC-401** — `declare(strict_types=1);` in every transpiled
-file (single-sourced `PHP_PROLOGUE`), and the lifter reads it back (Invariant 17). **Its ruling's central
-assumption was REFUTED by the build:** "no existing example can change behaviour" holds for phorj code but
-NOT for the hand-written PHP runtime helpers, one of which was leaning on coercion — `-tie` on a `decimal`
-emitted `-("2.345")`, coercing a decimal STRING to a float that then hit `strpos()`. Coercive mode had been
-silently stringifying it with PHP's float formatting, which the Rust legs never did — a live byte-identity
-hazard. Fixed via `__phorj_dec_sub("0", $x)`. **strict_types is a byte-identity smoke detector for the
-emitted runtime, not just host-boundary hygiene.** Also clears the SECOND PSR-12 prologue blocker, so a
-`declare` + `namespace` + `use` head now lifts. (1) **attribute-name completion** in the LSP + both editors, with the
-11 built-in attributes single-sourced as `ast::BUILTIN_ATTRIBUTE_PATHS` (`b219856`, CD-29) — this closed
-gap 2 of the DEC-417 editor slice; (2) **LIFT-NS** — the lifter now accepts `namespace` → phorj `package`
-(PascalCase-ized, since `E-PKG-CASE` is enforced) and `use X [as Y]` → `import X [as Y]` (phorj has import
-aliases natively), dropping an unreferenced import because `E-UNUSED-IMPORT` is a hard error (CD-30).
+**Shipped 2026-08-05, gate green (2792/2792 under `PHORJ_REQUIRE_PHP=1 --all-features`):**
+**#46 LIFT-ATTR / DEC-436** — the lifter sees `#[…]`. It had been treating a bare `#` as a PHP line
+comment, so **every attribute in every lifted file was silently swallowed** — the worst failure shape for
+a tool contracted to refuse loudly. `#[` is now its own token; a bare `#` is still a comment.
 
-**THE FINDING THAT REORDERED THE ROADMAP.** A 3-lens DEC-268 panel on the LIFT-ATTR/hoist plan returned
-**31 findings, NOT CERTIFIABLE**, and the biggest was not about attributes at all: `namespace` and `use`
-were in the lifter's `UNSUPPORTED_KW` and were HARD PARSE ERRORS, so **no Symfony / Laravel / Doctrine
-file could be lifted AT ALL**, attributes or not. **LIFT-ATTR was the SECOND blocker, not the first.**
-LIFT-NS removes the first. Full analysis, all 31 findings, and the corrections to my own reasoning are in
+**The decision is the NAME, not the syntax.** An attribute name is a CLASS name, so it resolves PHP-style
+(`use` map → current namespace → `\` for the root), and only then is spelled for phorj: root
+`Attribute`/`Deprecated` → the canonical `Core.Runtime.*` (self-gating, no import synthesized); a class in
+this file's own package → the **BARE leaf** (a single-file compile keys classes bare, so `#[App.Meta.Tag]`
+matches nothing — verified); anything else → the **FULL path**, because phorj matches a built-in attribute
+as a segment-boundary SUFFIX and a Symfony `#[Route("/home")]` lifted bare would bind to `Core.Http.Route`,
+check clean, and mean something else. That last one is **DEC-435's bug class one layer up** — DEC-435 fixed
+it in the checker, this fixes the direction that creates the names. Arguments are lifted verbatim, so
+`#[Attribute(TARGET_CLASS)]` lifts to a marker the CHECKER rejects rather than the lifter dropping the
+restriction silently.
+
+**Two collateral fixes the slice forced out:** the printer emitted FUNCTION attributes only, so class
+attributes had been invisible all along (`Printer::attrs` now shared; `printer/items.rs` was at the 500
+hard cap exactly, so statements moved to `printer/stmts.rs` first); and LIFT-NS's unused-import probe
+counted a name appearing after a `.`, keeping a dead `import Attribute;` that `phg check` accepts — an
+occurrence preceded by `.` no longer counts.
+
+**Prior slices, all shipped and gate-green (2026-08-04):** **DEC-401** `declare(strict_types=1)` in every
+transpiled file, read back by the lifter — its ruling's "no example can change behaviour" assumption was
+REFUTED by the build (a PHP runtime helper was leaning on coercion: `-tie` on a `decimal` emitted
+`-("2.345")`, a live byte-identity hazard, fixed via `__phorj_dec_sub("0", $x)`; strict_types is a
+byte-identity smoke detector for the emitted runtime, not just host hygiene). **LSP attribute-name
+completion** + both editors, with the 11 built-ins single-sourced as `ast::BUILTIN_ATTRIBUTE_PATHS`
+(`b219856`, CD-29). **LIFT-NS** — `namespace` → `package` (PascalCase-ized; `E-PKG-CASE` is enforced) and
+`use X [as Y]` → `import X [as Y]`, dropping an unreferenced import because `E-UNUSED-IMPORT` is hard
+(CD-30). **#48 DEC-397 hoist**, built as a SOUND SUBSET rather than the ruled shape — hoists only out of
+blocks that ALWAYS execute, because `if ($c) { $b = 5; } return $b + 0;` prints `0` in PHP for `$c = false`
+and `5` hoisted, so the ruled literal-hoist would make drafts COMPILE and be WRONG. **DEC-435** — user
+attributes resolve by canonical path (the developer's insistence on keeping the dot was right; the fix
+DELETED a special case) and named attribute args are accepted.
+
+**THE FINDING THAT REORDERED THE ROADMAP (kept for the record).** A 3-lens DEC-268 panel on the
+LIFT-ATTR/hoist plan returned **31 findings, NOT CERTIFIABLE**, and the biggest was not about attributes:
+`namespace` and `use` were hard parse errors, so **no Symfony / Laravel / Doctrine file could be lifted AT
+ALL**. LIFT-ATTR was the SECOND blocker. Full analysis in
 `docs/plans/2026-08-04-lift-attr-and-hoist.plan.md`.
 
-**#48 DEC-397 hoist — BUILT 2026-08-04, as a SOUND SUBSET, not the ruled shape.** Hoists only out of
-blocks that ALWAYS execute (function body / bare `{ }` / `if (true)` with no other arm — the reproducer's
-own shape). The agreed literal-hoist was refuted by measurement: `if ($c) { $b = 5; } return $b + 0;`
-prints `0` in PHP for `$c = false` and `5` hoisted, so it would make drafts COMPILE and be WRONG. Every
-other case — conditional block, non-literal RHS, read-before-assignment, loop/try body — is refused with a
-`// CANNOT LIFT:` note naming the variable. Params, `foreach`/`catch` bindings and block-locals are never
-touched. **The feature is much smaller than the ruling implied; see the register's "DEC-397 BUILT".**
-
-**DEC-435 BUILT 2026-08-04 — the two rulings that were blocking #46 are now resolved AND built.**
-(1) User attributes resolve by CANONICAL PATH, so the dot the developer insisted on keeping now MEANS
-something: `#[ORM.Column]` is `E-UNKNOWN-ATTRIBUTE` unless a package `ORM` really declares `Column`, and
-resolves precisely when it does (verified on a two-package project). The fix DELETED a special case —
-built-ins were already correct via `attr_path_matches`; user attributes were the lone outlier. My
-flatten-to-`OrmColumn` proposal was rejected and rightly so. (2) NAMED attribute args are accepted,
-normalized with the same helper ordinary construction uses. `E-AMBIGUOUS-ATTRIBUTE` exists but is a
-verified-unreachable tripwire (import hygiene reports `E-IMPORT-CONFLICT`/`E-IMPORT-SHADOW` first) — kept
-so resolution fails loudly if those rules relax, and disclosed as such rather than presented as live.
-**Also confirmed en route: the LSP advertises NO `signatureHelpProvider` at all — Invariant 17's
-signature-help row is a pre-existing unmet gap for every call in the language.**
-
-**STILL OPEN:**
-- **#46 LIFT-ATTR** — now UNBLOCKED: both owed rulings are built. — now unblocked by LIFT-NS for real input. Two sub-decisions are OWED to the developer:
-  the namespaced-attribute spelling is a SOUNDNESS choice, not cosmetic (attribute resolution is by LEAF,
-  so `#[ORM.Column]` and `#[Assert.Column]` both bind to one `class Column` and both check clean — so
-  `ORM.Column` is unsound and `OrmColumn` is not); and named attribute args require a CHECKER change,
-  which is new accepted phorj syntax and therefore drags in Invariant 17's 100% rule (LSP + both editors).
+**STILL OPEN on the lift chain — named, not implied fixed:**
+- **project-aware lifting.** A lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`), and a
+  framework attribute names a class that is not in the lifted file (`E-UNKNOWN-ATTRIBUTE`). Both halves of
+  the `use`/attribute work now wait on the same thing: lifting into a PROJECT rather than one file.
+  **Needs a developer ruling on scope** (whole-directory lift? a `phorj.json`-aware mode? stub emission for
+  unresolved vendor classes?).
+- **phorj's own attribute TARGETS.** phorj allows `#[…]` on a top-level `function`/`class` only, so a
+  Doctrine entity (property-level mappings) still does not lift — it now says why instead of losing the
+  mapping. Widening the target set (and implementing `#[Attribute(targets:, repeatable)]`, which is what
+  makes a framework's own attribute *declarations* check clean) is the follow-on.
+- **LIFT-NAMEDARG.** Named arguments parse inside an ATTRIBUTE argument list only; a `f(name: 1)` in a
+  function body is still a loud parse refusal. `PhpExpr::NamedArg` and its lift arm already exist, so the
+  remaining work is the call-argument parser — which needs `parser/exprs.rs` (669 lines, ceiling 670) split
+  first.
+- **The LSP advertises NO `signatureHelpProvider` at all** (confirmed during DEC-435) — Invariant 17's
+  signature-help row is a pre-existing unmet gap for every call in the language, not an attribute matter.
 
 **Carried unchanged from the 2026-08-01 cursor** (the DEC-423 perf programme): 10 OWED bench rows, worst
 first — fslines 0.118, queryparse 0.224, fsforeachline 0.298, jsonround 0.300, strappend 0.490,

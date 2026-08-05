@@ -33,6 +33,9 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
     // `phg check`, which is in-contract for a `// lifted (verify)` draft — what is not acceptable is
     // failing it silently.
     notes.push_str(&hoist_notes(&prog));
+    // LIFT-ATTR: an attribute whose class is not in this file (every framework attribute) is emitted with
+    // its identity intact and named here, so the draft says why `phg check` will flag it.
+    notes.push_str(&super::attrs::unresolved_attribute_notes(&prog));
     if notes.is_empty() {
         return Ok(out);
     }
@@ -94,11 +97,16 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     let mut items: Vec<Item> = Vec::new();
     let mut top_stmts: Vec<Stmt> = Vec::new();
     let mut has_main = false;
+    // LIFT-ATTR: attribute names resolve against the file's `namespace` + `use` map, so the context is
+    // built once here rather than threaded through the Lifter walker — attribute lifting needs no
+    // per-declaration state.
+    let actx = AttrCtx::new(prog);
 
     for item in &prog.items {
         match item {
             php::PhpItem::Function(f) => {
                 let mut lifted = l.lift_function(f)?;
+                lifted.attrs = actx.lift_attributes(&f.attrs)?;
                 if f.name == "main" {
                     has_main = true;
                     // DEC-191: a PHP `main` is the entry INTENT — the lifted draft attributes it
@@ -107,7 +115,11 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
                 }
                 items.push(Item::Function(lifted));
             }
-            php::PhpItem::Class(c) => items.push(Item::Class(l.lift_class(c)?)),
+            php::PhpItem::Class(c) => {
+                let mut lifted = l.lift_class(c)?;
+                lifted.attrs = actx.lift_attributes(&c.attrs)?;
+                items.push(Item::Class(lifted));
+            }
             php::PhpItem::Enum(e) => items.push(Item::Enum(lift_enum(e)?)),
             php::PhpItem::Stmt(s) => {
                 let mut declared = HashSet::new();
@@ -217,9 +229,11 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     // unreferenced one is semantically LOSSLESS: a PHP `use` only creates a local alias, so an unused
     // one carries no behaviour to lose.
     //
-    // Usage is judged against the LIFTED text, not the PHP source: a Doctrine-style
-    // `use … as ORM;` is referenced only from `#[ORM\Column]`, and attributes are not lifted yet
-    // (LIFT-ATTR), so a PHP-source scan would keep an import whose only referent was dropped.
+    // Usage is judged against the LIFTED text, not the PHP source, and LIFT-ATTR is why that matters
+    // most: an attribute name is RESOLVED during the lift, so a Doctrine-style `use … as ORM;` whose
+    // only referent was `#[ORM\Column]` has no referent left once the attribute is emitted as the
+    // expanded `#[Doctrine.ORM.Mapping.Column]`. A PHP-source scan would keep that import; scanning the
+    // lifted text drops it, which is what phorj's hard `E-UNUSED-IMPORT` requires.
     // The probe MUST propagate a printer error rather than defaulting to `""`: an empty probe makes
     // `references_ident` false for every name, silently dropping EVERY import. Swallowing it with
     // `unwrap_or_default()` was a bandaid with no evidenced failure mode (CLAUDE.md's anti-bandaid gate
@@ -266,7 +280,11 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         let mut path: Vec<String> = Vec::with_capacity(u.path.len());
         for (i, seg) in u.path.iter().enumerate() {
             if i + 1 == u.path.len() {
-                path.push(seg.clone());
+                // The last segment is the class's own NAME — never re-cased (that would stop it
+                // matching the class), but still checked for the two ways a legal PHP class name is not
+                // a legal phorj identifier. `use App\Café;` used to emit an import the draft could not
+                // even LEX, and a lex error suppresses every other diagnostic in the file.
+                path.push(type_segment(seg)?);
             } else {
                 path.push(package_segment(seg)?);
             }
@@ -331,7 +349,7 @@ fn lift_package(namespace: &[String]) -> Result<Vec<String>, String> {
 ///   * a segment made only of separators (`___`) pascalizes to `""` → `package ;`, a parse error;
 ///   * a non-ASCII segment (`café`) is a legal PHP namespace but phorj's own lexer rejects `é`, so the
 ///     draft does not even LEX — and a lex error suppresses every other diagnostic in the file.
-fn package_segment(seg: &str) -> Result<String, String> {
+pub(in crate::lift::lifter) fn package_segment(seg: &str) -> Result<String, String> {
     let out = pascalize(seg);
     if out.is_empty() {
         return Err(format!(
@@ -354,6 +372,32 @@ fn package_segment(seg: &str) -> Result<String, String> {
     Ok(out)
 }
 
+/// A PHP class name → the same name, checked for the two ways a legal PHP class name is NOT a legal
+/// phorj identifier. Unlike [`package_segment`] this does NOT pascalize: the segment is a TYPE name,
+/// already the class's own name, and re-casing it would stop it matching the class the lift emits.
+///
+/// The check earns its keep on the non-ASCII case: `class Café` is legal PHP, phorj's lexer rejects
+/// `é`, and a LEX error suppresses every other diagnostic in the file — so emitting it hides the
+/// draft's real problems behind one unrelated failure.
+pub(in crate::lift::lifter) fn type_segment(seg: &str) -> Result<String, String> {
+    if seg.is_empty() {
+        return Err("lift: an empty class-name segment".to_string());
+    }
+    if !seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(format!(
+            "lift: the class name `{seg}` is not ASCII. PHP allows it, but a phorj identifier must be \
+             ASCII, so the lifted draft would not lex. Rename it."
+        ));
+    }
+    if seg.starts_with(|c: char| c.is_ascii_digit()) {
+        return Err(format!(
+            "lift: the class name `{seg}` starts with a digit, which cannot begin a phorj identifier. \
+             Rename it."
+        ));
+    }
+    Ok(seg.to_string())
+}
+
 /// Does `text` reference the identifier `name` on a word boundary?
 ///
 /// A plain substring test would keep an import for `Money` because the output mentions `MoneyBag`, and
@@ -362,6 +406,12 @@ fn package_segment(seg: &str) -> Result<String, String> {
 /// still be fooled by the name appearing inside a STRING literal or comment, which errs toward keeping
 /// an import — the safe direction, since a spurious `E-UNUSED-IMPORT` is visible and trivially fixed
 /// whereas a wrongly-dropped import would be a silent loss.
+///
+/// An occurrence preceded by `.` does NOT count: in phorj an imported name is referenced at the HEAD of
+/// a dotted chain (`Router.new()`, `Money m`) and never after a dot, where it is a member or an interior
+/// package segment. LIFT-ATTR made this load-bearing — `use Attribute;` maps onto the canonical
+/// `Core.Runtime.Attribute`, and the plain word-boundary test saw the `Attribute` inside that path and
+/// kept an `import Attribute;` for a name the output no longer references.
 fn references_ident(text: &str, name: &str) -> bool {
     if name.is_empty() {
         return false;
@@ -369,7 +419,7 @@ fn references_ident(text: &str, name: &str) -> bool {
     let bytes = text.as_bytes();
     let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
     text.match_indices(name).any(|(i, _)| {
-        let before_ok = i == 0 || !is_word(bytes[i - 1]);
+        let before_ok = i == 0 || (!is_word(bytes[i - 1]) && bytes[i - 1] != b'.');
         let j = i + name.len();
         let after_ok = j >= bytes.len() || !is_word(bytes[j]);
         before_ok && after_ok

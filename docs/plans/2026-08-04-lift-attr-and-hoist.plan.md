@@ -292,3 +292,87 @@ running it:
 - **O10.** phorj itself ACCEPTS two imports binding the same local name (last wins, no diagnostic) —
   which is what made finding 1 silent. A checker-side `E-DUPLICATE-IMPORT` is arguably owed; that is a
   language decision, so it is recorded here rather than self-ruled.
+
+## Slice B (LIFT-ATTR) — **BUILT 2026-08-05**, with three corrections to this plan
+
+Register: **DEC-436**. Gate green: 2792/2792 under `PHORJ_REQUIRE_PHP=1 --all-features`, clippy clean at
+`--all-features` AND `--no-default-features`, `cargo fmt --check`, size-gate `fails=0`, doc-guards OK.
+Tests: `src/lift/parser_tests_attrs.rs` (8, the grammar) + `src/lift/lifter_tests_attrs.rs` (22, the
+resolution rules and every refusal). Example: `examples/lift/attributes.{php,phg}` — byte-identical on
+`run` / `run --tree-walker` / php-8.5.8, and identical to the original PHP.
+
+**CORRECTION 1 to step 4 (the spelling) — measured, not preferred.** The plan said `#[\Attribute]` →
+phorj `#[Attribute]` and `ORM\Column` → `ORM.Column`. Both are wrong as written:
+
+- the BARE `#[Attribute]` is `E-INJECTED-TYPE-BARE` without a member import, so the marker is emitted as
+  the canonical `#[Core.Runtime.Attribute]`, which `enforce_injected::check_name` lets through
+  unconditionally (it returns early on any dotted name) — no import synthesis needed;
+- a bare `ORM.Column` is not what PHP means. An attribute name is a CLASS name, so it must be RESOLVED
+  first (`use` map → current namespace → `\` = root) and only then spelled. `#[ORM\Column]` after
+  `use Doctrine\ORM\Mapping as ORM;` is `Doctrine\ORM\Mapping\Column`, and emitting the full path is
+  what makes a Symfony `#[Route("/home")]` un-capturable by phorj's own `Core.Http.Route` (phorj matches a
+  built-in as a segment-boundary SUFFIX, so the bare leaf would bind to it and check clean);
+- and the converse: a class in the file's OWN package must NOT be qualified. [Verified: a one-file
+  `package App.Meta;` fixture through `phg check` accepts `#[Tag]` and rejects `#[App.Meta.Tag]` with
+  `E-ATTR-TARGET`.] A single-file compile keys classes BARE; only a project compile mangles them. The bare
+  leaf matches both keyings, so it is the correct spelling, not the lazy one.
+
+**CORRECTION 2 — the two "open sub-decisions" turned out not to need a ruling.** The namespaced spelling
+was framed as a developer decision because attribute resolution was by LEAF (making `ORM.Column` unsound).
+DEC-435 fixed that resolution the same day, so the spelling became a *derivable* property of how phorj
+resolves names rather than a preference — the table above is measured, and there is nothing left to choose.
+The PHP *engine* attribute tier needs no ladder treatment either: `Override` /`SensitiveParameter` /
+`AllowDynamicProperties` /`ReturnTypeWillChange` /`NoDiscard` are simply absent from the remap table, so
+they pass through as ordinary names and the checker says `E-UNKNOWN-ATTRIBUTE` — a truthful "phorj has no
+such attribute". Two of them are moot anyway: `Override` and `SensitiveParameter` target a method and a
+parameter, both of which are refused for target reasons first.
+
+**CORRECTION 3 — step 6's note is implemented, but it is not the only honesty mechanism.** Attributes
+naming a class the file does not declare DO get a `// CANNOT LIFT:` header note
+(`unresolved_attribute_notes`, mirroring `exceptions::unmapped_exception_classes`). What the plan did not
+anticipate is that most of the honesty budget went to REFUSALS: a method/property/parameter/enum/enum-case
+attribute, an unqualified name colliding with a built-in, and a non-ASCII class name are all hard lift
+errors naming the position, because phorj's own attribute TARGETS are top-level `function`/`class` only and
+`#[ORM\Column]` on a property *is* the meaning of that line.
+
+**Arguments were also settled by discipline rather than by ruling:** they are lifted VERBATIM, never
+rewritten, dropped or reordered. So `#[Attribute(Attribute::TARGET_CLASS)]` lifts to a marker the CHECKER
+rejects (`E-ATTRIBUTE-ARGS`) instead of the lifter silently dropping the target restriction, and
+`#[Deprecated(since: "8.4")]` fails on the argument phorj does not have. The judgement about which argument
+shapes phorj supports stays in ONE place (the checker) rather than being duplicated into the lifter.
+
+### Two collateral bugs the slice forced out (neither was in the plan)
+
+1. **The printer emitted FUNCTION attributes only** — class attributes had been invisible since DEC-194.
+   `Printer::attrs` is now shared by both. `printer/items.rs` was at the 500-line HARD cap exactly, so the
+   statement printers moved to `printer/stmts.rs` (285 lines) first, leaving `items.rs` at 234.
+2. **The unused-import probe counted a name appearing after a `.`** — it saw the `Attribute` inside
+   `Core.Runtime.Attribute` and kept a dead `import Attribute;`. `phg check` does NOT catch that (a
+   one-segment import is accepted), so it needed its own assertion. Fixed and pinned. This **closes half of
+   O4**: the probe still matches inside string literals and comments (still the deliberately-safe
+   direction), but the dotted-segment false positive is gone and tested.
+
+### O-item movement
+
+- **O9 (size) — addressed by splitting, not by growing.** `src/lift/parser/items.rs` is 456 and
+  `src/lift/ast.rs` 462 — both still over the SOFT cap, and both grew only by the field/initializer lines
+  the AST change forced; the new grammar went to `parser/attrs.rs` (107) and the new resolution to
+  `lifter/attrs.rs` (231). `lifter/decls/mod.rs` is 446. Nothing is over the hard cap; size-gate
+  `fails=0`.
+- **O7 (raw lift output is not `phg format`-canonical) — UNCHANGED and re-confirmed.** The committed
+  `examples/lift/attributes.phg` is the FORMATTED lift output (blank lines between imports collapsed), so
+  it is a third instance of `example != lift(source)`. Still nothing pins that equality.
+- **O11 (a transpiled file with runtime helpers does not lift back) — UNCHANGED.**
+
+### STILL OPEN after this slice (named, not implied fixed)
+
+- **project-aware lifting** — a lifted `import` cannot resolve in a flat file, and a framework attribute
+  names a class the file does not contain. Both halves of the `use`/attribute work now wait on the same
+  thing, and its SCOPE needs a developer ruling (whole-directory lift? `phorj.json`-aware? stub emission
+  for unresolved vendor classes?).
+- **phorj's own attribute TARGETS** — widening them (and implementing `#[Attribute(targets:, repeatable)]`)
+  is what makes a Doctrine entity and a framework's own attribute declarations lift clean.
+- **LIFT-NAMEDARG** — named arguments parse inside an ATTRIBUTE argument list only; `f(name: 1)` in a
+  function body is still a loud parse refusal. `PhpExpr::NamedArg`, its lift arm and its `hoist` walk arm
+  already exist, so what remains is the call-argument parser — which needs `parser/exprs.rs` (669 lines,
+  ceiling 670) split first.

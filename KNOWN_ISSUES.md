@@ -182,33 +182,54 @@ coverage. The fix is a lift-side conversion (`Output.print("{e}")`, or `Conversi
 by the lifted expression's type — which the lifter does not currently track, hence a slice rather than a
 one-liner.
 
-## LIFT-ATTR — the PHP lifter is blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
+## ✅ FIXED (2026-08-05, LIFT-ATTR) — the PHP lifter was blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
 
-`src/lift/lexer.rs:144` treats `#` as a PHP line comment and skips to end of line. PHP 8 attributes are
-spelled `#[...]`, so **every** attribute in a lifted file is silently swallowed as a comment —
-`#[\Deprecated]`, `#[\Override]`, `#[\ReturnTypeWillChange]`, and any framework attribute
-(routes, DI, ORM mappings, validation). [Verified: `phg lift` on a PHP file whose function carries
-`#[\Deprecated(message: "use shout")]` emits the function with no attribute and no warning.]
+**Was:** `src/lift/lexer.rs` treated `#` as a PHP line comment and skipped to end of line. PHP 8
+attributes are spelled `#[...]`, so **every** attribute in a lifted file was silently swallowed as a
+comment — `#[\Deprecated]`, `#[\Override]`, and any framework attribute (routes, DI, ORM mappings,
+validation). [Verified before the fix: `phg lift` on a PHP file whose function carried
+`#[\Deprecated(message: "use shout")]` emitted the function with no attribute and no warning.] A lifted
+draft lost annotation-carried semantics with no diagnostic — and for frameworks that put routing or
+mapping in attributes, that is the most meaningful part of the file.
 
-**Impact.** A lifted draft loses annotation-carried semantics with no diagnostic. For frameworks that
-put routing or mapping in attributes, this is the most meaningful part of the file.
+**Fixed by:** a `PTok::AttrOpen` token (`#[`, distinct from a bare `#`, which is still a comment),
+attribute groups on top-level declarations in the parser, name RESOLUTION in the lifter, and printing on
+classes as well as functions (the printer emitted function attributes only, which is how class
+attributes stayed invisible). `examples/lift/attributes.{php,phg}` + `examples/lift/README.md` carry the
+worked example; `src/lift/lifter_tests_attrs.rs` pins the resolution rules.
 
-> **Ordering correction (2026-08-04, LIFT-NS).** This was NOT the first blocker for framework code.
-> `namespace` and `use` were in the lifter's `UNSUPPORTED_KW` and were hard parse errors, so a Symfony /
-> Laravel / Doctrine file failed at the PARSER before attributes were ever reached. LIFT-NS fixed that,
-> so this entry is now the *next* blocker rather than one of several. It also means a Doctrine-style
-> `use Doctrine\ORM\Mapping as ORM;` is currently DROPPED as an unreferenced import — its only referent
-> is the `#[ORM\Column]` attribute this entry describes — which will resolve itself when attributes lift.
+The name is resolved the way PHP resolves a class name — `use` map, then the current namespace, `\` for
+the root — and only then spelled for phorj: root `Attribute`/`Deprecated` → the canonical `Core.Runtime.*`;
+a class in the file's own package → the BARE leaf (a single-file compile keys classes bare, so
+`#[App.Meta.Tag]` matches nothing and is `E-ATTR-TARGET`); anything else → the FULL path, because phorj
+matches a built-in attribute as a segment-boundary SUFFIX and a Symfony `#[Route("/home")]` lifted bare
+would bind to `Core.Http.Route` — checking clean and meaning something else.
 
-It also means
-Invariant 17's "lift updated in the same change" could NOT be satisfied for DEC-417's
-`#[Deprecated]`: the mapping is trivial and faithful (PHP's own `#[\Deprecated(message:)]` →
-phorj's `#[Deprecated(message:)]`), but there is nowhere to hook it until the lexer can see `#[`.
+This also satisfies Invariant 17's "lift updated in the same change" for DEC-417's `#[Deprecated]`: PHP's
+own `#[\Deprecated(message:)]` now maps onto phorj's `#[Deprecated(message:)]`.
 
-**Not a regression** — it predates DEC-417 and was found by testing the lift direction rather than
-assuming it. **Queued as its own slice** (lexer: distinguish `#[` from `#`; parser: attribute lists on
-declarations; lifter+printer: map the known set, and emit a `// verify` note for unknown attributes so
-nothing is dropped silently, per Invariant 14's no-silent-downgrade rule).
+> **Ordering correction (2026-08-04, LIFT-NS), kept for the record.** This was NOT the first blocker for
+> framework code. `namespace` and `use` were in the lifter's `UNSUPPORTED_KW` and were hard parse errors,
+> so a Symfony / Laravel / Doctrine file failed at the PARSER before attributes were ever reached.
+> LIFT-NS fixed that first; this entry was the *next* blocker.
+
+**What remains (deliberate, refused loudly — not silently dropped):**
+
+- an attribute on a **method, property, class constant, parameter, enum or enum case** is a lift REFUSAL
+  with the position named. phorj allows `#[…]` on a top-level `function` or `class` only
+  (`E-ATTR-TARGET`), and `#[ORM\Column]` on a property *is* the meaning of that line — so a Doctrine
+  entity still does not lift, but it now says why instead of quietly losing its mapping. Widening
+  phorj's own attribute targets is the follow-on that unblocks it;
+- an **unqualified** name equal to one of phorj's eleven built-in attribute names (`#[Route]`,
+  `#[Config]`, … in a file with no namespace and no `use` for it) is refused: phorj resolves the
+  unqualified name to the built-in, so emitting it would mean something different;
+- **arguments are never rewritten**, so `#[Attribute(Attribute::TARGET_CLASS)]` lifts to a marker the
+  CHECKER rejects (`E-ATTRIBUTE-ARGS` — phorj's target restriction is not implemented yet) rather than
+  the lifter quietly dropping the restriction. Implementing `#[Attribute(targets:, repeatable)]` in
+  phorj is what makes a framework's own attribute *declarations* lift clean;
+- an attribute naming a class not present in the lifted file (every framework attribute) emits the
+  qualified path and the draft reports `E-UNKNOWN-ATTRIBUTE` — the same open dependency as LIFT-NS's
+  imports: **project-aware lifting**.
 
 ## ✅ FIXED (2026-07-19, `a355c342`) — 🔴 was P0: the example byte-identity GLOB was a NO-OP: `all_examples_match_between_backends` skipped ALL 201 examples
 

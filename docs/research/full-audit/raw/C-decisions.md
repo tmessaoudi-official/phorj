@@ -6715,3 +6715,59 @@ for two turns; the same permissiveness can equally mask a REAL regression as wit
 with `--emit`'s (a genuinely idle box, ~0.4 rather than 2.5), and/or interpose a settle delay between the
 pre-push build and the measurement instead of a 90s cap that gives up and measures anyway. Recorded as an
 OPEN recommendation for the developer.
+
+### DEC-436 (2026-08-05) — LIFT-ATTR: PHP `#[…]` attributes lift, and the NAME is resolved PHP-style
+
+Closes the `KNOWN_ISSUES` LIFT-ATTR entry (found 2026-07-29 while building DEC-417). The lift lexer
+treated a bare `#` as a PHP line comment and skipped to end of line — and PHP 8 attributes are spelled
+`#[…]`, so **every attribute in every lifted file was silently swallowed as a comment**. For a tool whose
+whole contract is *refuse loudly, never guess*, that is the worst possible failure shape: the file lifted
+clean and quietly meant less than the PHP did. `#[` is now its own token (`PTok::AttrOpen`); a bare `#` is
+still a comment, and `parser_tests_attrs.rs` pins both.
+
+**The design decision is the NAME, not the syntax.** An attribute name is a CLASS name, so it is resolved
+the way PHP resolves one — the `use` map first, then the current namespace, with a leading `\` meaning the
+root — and only then spelled for phorj:
+
+| Resolved to | Emitted | Why this spelling and not the other |
+|---|---|---|
+| root `Attribute` / `Deprecated` | `Core.Runtime.Attribute` / `Core.Runtime.Deprecated` | the same concept under the same name in both languages; the dotted form is self-gating in `enforce_injected` (`check_name` returns early on any `.`), so no import is synthesized [Verified: reading `enforce_injected.rs`] |
+| a class in THIS file's package (or the root) | the BARE leaf | a single-file compile keys classes BARE, so `#[App.Meta.Tag]` matches nothing and lands on `E-ATTR-TARGET`; the bare leaf matches both keyings because `attr_path_matches` accepts a segment-boundary suffix [Verified: `phg check` on a one-file `package App.Meta;` fixture accepts `#[Tag]`, rejects `#[App.Meta.Tag]`] |
+| a class from anywhere else | the FULL dotted path | phorj matches a built-in attribute as a segment-boundary SUFFIX, so a Symfony `#[Route("/home")]` lifted BARE would bind to `Core.Http.Route` — a different class taking different arguments, checking clean and meaning something else. A written name LONGER than a canonical path can never match one, so the qualified form is capture-proof |
+
+That third row is **DEC-435's bug class one layer up**: DEC-435 fixed leaf-only resolution collapsing
+distinct attributes in the CHECKER; this fixes the direction that *creates* the names.
+
+**Arguments are lifted verbatim — never rewritten, dropped or reordered.** So
+`#[Attribute(Attribute::TARGET_CLASS)]` lifts to a marker the CHECKER rejects (`E-ATTRIBUTE-ARGS` — phorj's
+target restriction is not implemented yet) rather than the lifter quietly discarding the restriction, and
+`#[Deprecated(since: "8.4")]` fails on the argument phorj does not have. A draft that fails `phg check`
+with a precise message is in-contract for `// lifted (verify)`; a draft that checks clean and means less
+is not (DEC-166). PHP 8.0 named arguments lift 1:1 (phorj spells them identically — DEC-297), and `#[A, B]`
+groups flatten to one `#[…]` per line since the grouping carries no phorj meaning.
+
+**Refused loudly, with the position named:** an attribute on a method, property, class constant,
+parameter, enum or enum case (phorj allows `#[…]` on a top-level `function`/`class` only — and
+`#[ORM\Column]` on a property *is* the meaning of that line, so dropping it is a silent loss); an
+UNQUALIFIED name equal to one of phorj's eleven built-in attribute names (qualifying it instead is not a
+fix — `#[App.Route]` resolves only under a project compile and is `E-ATTR-TARGET` in the flat draft
+`phg lift` emits); and a non-ASCII class name (legal PHP, but phorj's lexer rejects it and a LEX error
+suppresses every other diagnostic in the file).
+
+**Two collateral fixes the slice forced out.**
+1. The printer emitted **function** attributes only, so class attributes had been invisible all along —
+   `Printer::attrs` is now shared by both. (`printer/items.rs` was at the 500-line hard cap exactly, so the
+   statement printers moved to `printer/stmts.rs` first — Invariant 13 split-as-you-go.)
+2. LIFT-NS's unused-import probe matched on word boundaries and `.` is one, so it saw the `Attribute`
+   inside `Core.Runtime.Attribute` and kept a dead `import Attribute;` for a name the output no longer
+   references. `phg check` does NOT catch that (a one-segment import is accepted), so it needed a test of
+   its own. An occurrence preceded by `.` no longer counts: in phorj an imported name is referenced at the
+   HEAD of a dotted chain, never after a dot.
+
+**Still open, and named rather than implied fixed:** a framework attribute names a class that is not in
+the lifted file, so the draft reports `E-UNKNOWN-ATTRIBUTE` — the same dependency LIFT-NS's imports have on
+**project-aware lifting**. And a Doctrine entity still does not lift, because its mappings are
+property-level; widening phorj's OWN attribute targets is the follow-on that unblocks it.
+
+Also satisfies Invariant 17's "lift updated in the same change" for DEC-417's `#[Deprecated]`, which had
+been impossible to honour while the lexer could not see `#[`.

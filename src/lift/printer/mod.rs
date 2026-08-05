@@ -10,14 +10,15 @@
 //! tests assert that fixed point directly.
 
 use crate::ast::{
-    BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, Expr, FunctionDecl, Item, Modifier,
-    Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+    Attribute, BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, Expr, FunctionDecl, Item,
+    Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
 
 mod docs;
 mod exprs;
 mod items;
 mod setup;
+mod stmts;
 use self::exprs::*;
 pub(super) use self::setup::Printer;
 pub use setup::{print_program, print_program_with_docs};

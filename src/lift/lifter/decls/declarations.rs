@@ -62,7 +62,9 @@ impl Lifter {
         }
         Ok(ClassDecl {
             vis: crate::ast::Visibility::Public,
-            attrs: Vec::new(), // PHP→Phorj attribute lifting deferred (DEC-194 later slice)
+            // Attributes are attached by `lift` (LIFT-ATTR), which holds the `namespace`/`use` context
+            // their names resolve against.
+            attrs: Vec::new(),
             name: c.name.clone(),
             type_params: Vec::new(),
             type_param_bounds: Vec::new(),

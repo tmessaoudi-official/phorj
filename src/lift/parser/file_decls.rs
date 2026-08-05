@@ -85,7 +85,7 @@ impl PParser {
         let directive = self.expect_ident("a directive name inside `declare(...)`")?;
         if directive != "strict_types" {
             return Err(self.err_reason(&format!(
-                "`declare({directive}=…)` has no phorj equivalent — only `strict_types` is understood,                  because phorj is always strictly typed"
+                "`declare({directive}=…)` has no phorj equivalent — only `strict_types` is understood, because phorj is always strictly typed"
             )));
         }
         self.expect(&PTok::Assign, "`=` inside `declare(strict_types=…)`")?;
@@ -98,7 +98,7 @@ impl PParser {
         };
         if value != 1 {
             return Err(self.err_reason(
-                "`declare(strict_types=0)` asks for PHP's COERCIVE mode, which phorj has no way to                  express — every phorj program is strictly typed",
+                "`declare(strict_types=0)` asks for PHP's COERCIVE mode, which phorj has no way to express — every phorj program is strictly typed",
             ));
         }
         self.expect(&PTok::RParen, "`)` after `declare(strict_types=1`")?;

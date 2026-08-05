@@ -6,6 +6,53 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the PHP lifter was blind to EVERY `#[…]` attribute (LIFT-ATTR / DEC-436, 2026-08-05)
+A bare `#` is a line comment in PHP, and the lift lexer treated `#[Audited("billing")]` as exactly that —
+so **every attribute in every lifted file was silently swallowed**. For a tool whose contract is *refuse
+loudly, never guess*, that is the worst possible failure shape: the file lifted clean and quietly meant
+less than the PHP did. `#[` is now its own token; a bare `#` is still a comment, and both are pinned.
+
+**The design decision is the NAME, not the syntax.** An attribute name is a CLASS name, so it is resolved
+the way PHP resolves one — the `use` map first, then the current namespace, with a leading `\` meaning the
+root — and only then spelled for phorj:
+
+- root `Attribute` / `Deprecated` → the canonical `Core.Runtime.Attribute` / `Core.Runtime.Deprecated`
+  (same concept, same name; the dotted form is self-gating, so no import is synthesized);
+- a class in **this file's** package (or the root) → the **bare leaf**. A single-file compile keys classes
+  bare, so `#[App.Meta.Tag]` would match nothing and land on `E-ATTR-TARGET`; the bare leaf matches both
+  keyings, which makes it the correct spelling rather than the lazy one;
+- a class from anywhere else → the **full dotted path**. phorj matches a built-in attribute as a
+  segment-boundary SUFFIX, so a Symfony `#[Route("/home")]` lifted bare would bind to phorj's own
+  `Core.Http.Route` — a different class taking different arguments, checking clean and meaning something
+  else. A written name longer than a canonical path can never match one, so the qualified form is
+  capture-proof. This is DEC-435's bug class one layer up: that fixed the checker, this fixes the direction
+  that creates the names.
+
+`#[A, B]` groups flatten to one `#[…]` per line, and PHP 8.0 **named arguments** lift 1:1 (phorj spells
+them identically — DEC-297). **Arguments are never rewritten, dropped or reordered:**
+`#[Attribute(Attribute::TARGET_CLASS)]` lifts to a marker the CHECKER rejects (`E-ATTRIBUTE-ARGS` — phorj's
+target restriction is not implemented yet) rather than the lifter quietly discarding the restriction, which
+keeps that judgement in one place instead of duplicating it into the lifter.
+
+Refused loudly with the position named: an attribute on a method, property, class constant, parameter, enum
+or enum case (phorj allows `#[…]` on a top-level `function`/`class` only, and `#[ORM\Column]` on a property
+*is* the meaning of that line); an unqualified name equal to one of phorj's eleven built-in attribute names;
+and a non-ASCII class name (legal PHP, but phorj's lexer rejects it and a lex error suppresses every other
+diagnostic in the file). An attribute naming a class the file does not declare — every framework attribute —
+is emitted with its identity intact plus a `// CANNOT LIFT:` note saying why `phg check` will flag it.
+
+Two collateral bugs the slice forced out: the printer emitted **function** attributes only, so class
+attributes had been invisible since DEC-194 (`Printer::attrs` is now shared; the statement printers moved to
+`printer/stmts.rs` because `printer/items.rs` sat at the 500-line hard cap exactly); and LIFT-NS's
+unused-import probe counted a name appearing after a `.`, keeping a dead `import Attribute;` that
+`phg check` accepts.
+
+Also satisfies Invariant 17's "lift updated in the same change" for DEC-417's `#[Deprecated]`, which could
+not be honoured while the lexer was unable to see `#[`. Example: `examples/lift/attributes.{php,phg}` —
+byte-identical on `run` / `run --tree-walker` / php-8.5.8 and against the original PHP. Still open and
+named rather than implied fixed: **project-aware lifting** (a framework attribute's class is not in the
+file) and **phorj's own attribute targets** (a Doctrine entity's mappings are property-level).
+
 ### Fixed — user attributes resolve by canonical path, so a qualifier finally means something (DEC-435, 2026-08-04)
 `#[ORM.Column]`, `#[Assert.Column]` and even `#[Totally.Made.Up.Column]` all bound to one `class Column`
 and all type-checked clean: resolution took only the leaf and threw the qualifier away. Doctrine's

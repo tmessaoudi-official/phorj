@@ -256,12 +256,18 @@ The prior standalone `architecture-decomp.plan.md` is FOLDED here (Invariant 19 
 5. **icu4x/Intl (DEC-271, brought forward)** + resolve the open **W4-10 XML/DOM/XPath** fork.
 6. **Generators/`yield` + iterator breadth** (on DEC-257; #8 blocker; spine-sensitive).
 7. **Usability + shippability:** the **lifter** spearhead (Tier-2 mappings + real-app corpus —
-   'usable now' PROVEN by porting real PHP apps). **Progress 2026-08-04 (LIFT-NS):** `namespace` and
-   `use` are IN the Tier-1 subset — they were hard parse errors, so no namespaced file lifted at all.
-   **Still blocking a real framework file:** `declare(strict_types=1);` (the other mandatory PSR-12
-   prologue line) and LIFT-ATTR; and a lifted `import` cannot resolve in a flat file
-   (`E-MODULE-NOT-FOUND`), so the `use` half needs project-aware lifting to pay off — see
-   `docs/plans/2026-08-04-lift-attr-and-hoist.plan.md` · the **DEC-283 .phgml template engine** build ·
+   'usable now' PROVEN by porting real PHP apps). **Progress 2026-08-04/05:** the whole PSR-12 prologue
+   now lifts — `namespace`/`use` (LIFT-NS) and `declare(strict_types=1)` (DEC-401) were hard parse errors,
+   so no namespaced file lifted at all — and **PHP 8 `#[…]` attributes lift** (LIFT-ATTR / DEC-436; they
+   had been silently swallowed as `#` comments), with names resolved PHP-style and spelled so a Symfony
+   `#[Route]` cannot be captured by phorj's own built-in.
+   **Still blocking a real framework file, both now NAMED rather than implied fixed:** (a) **project-aware
+   lifting** — a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`) and a framework
+   attribute names a class the file does not contain (`E-UNKNOWN-ATTRIBUTE`); both halves wait on lifting
+   into a PROJECT, which needs a scope ruling; (b) **phorj's own attribute TARGETS** — `#[…]` is legal on a
+   top-level `function`/`class` only, so a Doctrine entity's property-level mappings are refused loudly
+   rather than lifted. See `docs/plans/2026-08-04-lift-attr-and-hoist.plan.md` ·
+   the **DEC-283 .phgml template engine** build ·
    the **GA programme** (spec freeze, reference/tour/migration docs, fuzzing, release engineering)
    + the **DEC-267 JIT-coverage perf metric** (unlocks the withheld M-perf points 90→100).
 

@@ -10,9 +10,9 @@
 //! comparison operators — a real 8.0 change, pinned by tests.
 
 use super::ast::{
-    PhpArrayElem, PhpBinOp, PhpCatch, PhpClass, PhpEnum, PhpEnumCase, PhpExpr, PhpFunction,
-    PhpItem, PhpMatchArm, PhpMember, PhpMethod, PhpParam, PhpProgram, PhpStmt, PhpStrPart, PhpType,
-    PhpUnOp, PhpUse, PhpVisibility,
+    PhpArrayElem, PhpAttribute, PhpBinOp, PhpCatch, PhpClass, PhpEnum, PhpEnumCase, PhpExpr,
+    PhpFunction, PhpItem, PhpMatchArm, PhpMember, PhpMethod, PhpParam, PhpProgram, PhpStmt,
+    PhpStrPart, PhpType, PhpUnOp, PhpUse, PhpVisibility,
 };
 use super::lexer::{lex_php, PTok, PTokenSpanned};
 use crate::limits::MAX_NEST_DEPTH;
@@ -80,6 +80,7 @@ pub fn parse_php_with_docs(
     p.parse_program()
 }
 
+mod attrs;
 mod exprs;
 mod file_decls;
 mod items;

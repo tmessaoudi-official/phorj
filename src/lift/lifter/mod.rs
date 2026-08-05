@@ -27,11 +27,13 @@ const SP: Span = Span {
 
 /// End-to-end convenience: PHP source → Phorj `.phg` source. Lexes (L1), parses (L2), lifts (L4),
 /// and prints (L3). Any stage's error propagates as a `lift …` / `printer: …` string.
+mod attrs;
 mod decls;
 mod exceptions;
 mod exprs;
 mod magic;
 mod mappings;
+use attrs::AttrCtx;
 pub use decls::*;
 use exprs::*;
 use mappings::*;

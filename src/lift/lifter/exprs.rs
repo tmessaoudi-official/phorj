@@ -24,6 +24,15 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         php::PhpExpr::Var(name) if name == "this" => Expr::This(SP),
         php::PhpExpr::Var(name) | php::PhpExpr::Name(name) => Expr::Ident(name.clone(), SP),
         php::PhpExpr::Array(elems) => lift_array(elems)?,
+        // LIFT-ATTR: `name: value` lifts 1:1 — phorj spells a named argument exactly the same way
+        // (DEC-297), so nothing is reordered here. The checker normalizes named args into their
+        // positional slots later, and rejects the positions phorj does not support yet, which keeps
+        // that judgement in ONE place instead of duplicating it in the lifter.
+        php::PhpExpr::NamedArg { name, value } => Expr::NamedArg {
+            name: name.clone(),
+            value: Box::new(lift_expr(value)?),
+            span: SP,
+        },
         php::PhpExpr::Unary { op, expr } => Expr::Unary {
             op: match op {
                 php::PhpUnOp::Not => UnaryOp::Not,

@@ -4,10 +4,10 @@
 //! namespaced PHP file lifted at all — it failed at the PARSER. Attribute lifting was the *second*
 //! blocker, not the first.
 //!
-//! Scope, stated honestly: this clears ONE of the two mandatory PSR-12 prologue lines.
-//! `declare(strict_types=1);` is still Tier-1-unsupported, so most real framework files still stop at
-//! the parser; and a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`), so the
-//! `use` half needs project-aware lifting before it is useful. Both are tracked, not implied fixed.
+//! Scope, stated honestly: this cleared ONE of the two mandatory PSR-12 prologue lines — DEC-401 closed
+//! `declare(strict_types=1);` and LIFT-ATTR closed `#[…]`, so the whole prologue now lifts. What is STILL
+//! open is the payoff: a lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`), so the
+//! `use` half waits on project-aware lifting. Tracked, not implied fixed.
 //!
 //! Every `use` case below REFERENCES the imported name (as a parameter type), because an import whose
 //! name is unreferenced is deliberately dropped — see `unreferenced_use_is_dropped`. An earlier draft
@@ -84,6 +84,21 @@ fn aliased_use_becomes_an_aliased_import() {
         "ORM",
     ));
     assert!(out.contains("import Doctrine.ORM.Mapping as ORM;"), "{out}");
+}
+
+/// The last segment of a `use` path is the CLASS name and is never re-cased — but it must still be a
+/// legal phorj identifier. `use App\Café;` emitted `import App.Café;`, a draft phorj's lexer cannot even
+/// LEX, and a lex error suppresses every other diagnostic in the file. (LIFT-ATTR needed the same check
+/// for attribute names, so the two share `type_segment`.)
+#[test]
+fn a_non_ascii_class_name_in_a_use_is_refused() {
+    let err = lift_source(&php_with_use(
+        "App\\Cli",
+        "use App\\Caf\u{e9};",
+        "Caf\u{e9}",
+    ))
+    .expect_err("a non-ASCII class name must be refused, not emitted");
+    assert!(err.contains("ASCII"), "{err}");
 }
 
 #[test]

@@ -119,7 +119,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Standalone executable (host) | ✅ | `phg build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phg build --target … / --all` |
 | Standalone executable (macOS) | 🔲 | reader ships; signed stub deferred to M2.5 Phase 3 |
-| PHP → Phorj migration (inverse of the transpiler; best-effort draft, review required) | ✅ | `phg lift <file.php>` |
+| PHP → Phorj migration (inverse of the transpiler; best-effort draft, review required) | ✅ | `phg lift <file.php>`. Subset frontier + every loud refusal: `examples/lift/README.md`. The PSR-12 prologue lifts (`declare(strict_types=1)` DEC-401, `namespace`/`use` LIFT-NS) and PHP 8 `#[…]` **attributes** lift with PHP-style name resolution (LIFT-ATTR / DEC-436) — they had been silently swallowed as `#` comments. Still open: **project-aware lifting** (a framework attribute's class is not in the lifted file) and phorj's own attribute **targets** (`#[…]` is legal on a top-level `function`/`class` only, so a Doctrine entity's property-level mappings are refused loudly) |
 | Language server (diagnostics, hover, go-to-def, completion, symbols) + editor integrations | ✅ | `phg lsp`; clients in `editors/vscode/`, `editors/phpstorm/` |
 | Debugger (interactive REPL + DAP transport) | ✅ | `phg debug [--dap]` |
 

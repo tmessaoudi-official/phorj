@@ -22,6 +22,8 @@ mod tests;
 #[cfg(test)]
 mod parser_tests;
 #[cfg(test)]
+mod parser_tests_attrs;
+#[cfg(test)]
 mod parser_tests_ns;
 
 #[cfg(test)]
@@ -32,6 +34,8 @@ mod printer_tests;
 
 #[cfg(test)]
 mod lifter_tests;
+#[cfg(test)]
+mod lifter_tests_attrs;
 #[cfg(test)]
 mod lifter_tests_hoist;
 #[cfg(test)]

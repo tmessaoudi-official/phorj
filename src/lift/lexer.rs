@@ -37,6 +37,10 @@ pub enum PTok {
     RBracket,
     Comma,
     Semi,
+    /// `#[` — the opener of a PHP 8 ATTRIBUTE (LIFT-ATTR). A distinct token because a bare `#` is a
+    /// line COMMENT in PHP, so the two spellings must not be conflated; the matching `]` is an ordinary
+    /// `RBracket`, since an attribute's argument list is otherwise lexed like any other.
+    AttrOpen,
     /// `\` — a namespace separator or root qualifier (`\RuntimeException`, `Acme\MyError`).
     Backslash,
     Colon,
@@ -163,6 +167,16 @@ pub fn lex_php_with_docs(
             continue;
         }
         if c == '#' {
+            // LIFT-ATTR: `#[` opens a PHP 8 ATTRIBUTE, not a comment. This branch used to swallow to
+            // end-of-line unconditionally, so EVERY attribute in a lifted file vanished silently —
+            // `#[Deprecated]`, `#[Override]`, and every framework routing / DI / ORM annotation, which
+            // for framework code is the most meaningful part of the file. A bare `# …` is still a line
+            // comment (PHP accepts both spellings), so exactly one character decides between them.
+            if chars.get(i + 1) == Some(&'[') {
+                push(&mut out, PTok::AttrOpen, line);
+                i += 2;
+                continue;
+            }
             while i < chars.len() && chars[i] != '\n' {
                 i += 1;
             }

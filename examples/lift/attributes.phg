@@ -1,0 +1,27 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package App.Meta;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+#[Core.Runtime.Attribute]
+open class Audited {
+    constructor(public mutable string reason) {}
+}
+
+#[Audited("billing")]
+open class Invoice {
+    constructor(public mutable string ref) {}
+    public open function label(): string {
+        return "invoice " + this.ref;
+    }
+}
+
+#[Audited("entry")]
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var i = new Invoice("A-1");
+    Output.print(i.label());
+    Output.print("\n");
+}
