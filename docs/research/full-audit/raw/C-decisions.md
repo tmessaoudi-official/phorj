@@ -7071,3 +7071,44 @@ example glob to gate; the gated fixture is `tests/lift_project.rs` (13 tests) an
 `autoload-dev.psr-4`, so it is currently LIFTED. Whether that is right is a developer question, given phorj
 has its own `phg test` surface: lifting PHPUnit test classes produces drafts whose assertions reference a
 framework that will never be ported. Recorded, not ruled.
+
+### DEC-439 part 3 RULED + BUILT (2026-08-05) — `autoload-dev` code is REPORTED, not lifted
+
+Closes part 2's PENDING adjudication row. **Developer ruling: sub-option (a)** — skip `autoload-dev` entirely
+and report its files as a fourth role whose counterpart is phorj's own `phg test`. (Recorded with the reading
+disclosed: the developer answered *"Okay with your recommendation !"* to an option that carried three
+sub-options, and (a) was the first-listed, i.e. the recommended one under this project's question protocol.
+The change is small and single-purpose, so a one-line correction flips it.)
+
+**The case:** a Symfony app declares `"autoload-dev": { "psr-4": { "App\\Tests\\": "tests/" } }`, so part 2
+lifted `tests/PostTest.php` into `lifted/src/App/Tests/PostTest.phg` — a draft whose
+`extends \PHPUnit\Framework\TestCase` and `assertSame` reference a framework that will never be ported, and
+whose symbols then fill `VENDOR-REPORT.md` as unresolvable. phorj has `phg test`; naming that is more useful
+than emitting the draft.
+
+**Built as a fourth `Role::Test`**, and it is the ONE role not decided by content — it cannot be, because a
+PHPUnit class declares a class, so content alone calls it application code. It comes from composer's own
+`autoload-dev` declaration, checked BEFORE classification. That is still machine-readable metadata and not a
+guess at a directory called `tests/`, so the no-hardcoded-framework-paths rule is intact. **The honest limit,
+stated in the code:** test code in a project that declares no `autoload-dev` is indistinguishable from
+application code and is lifted.
+
+**Two lists, because there are two different questions** — this is the part that is easy to get wrong.
+`autoload-dev` prefixes are dropped from the WALK (`Composer::psr4`) but KEPT for namespace recognition
+(`Composer::dev_psr4`, unioned in `is_app_namespace`): test code is the app's own even though it is not
+lifted, so a reference into the test namespace is a sibling reference, not a composer dependency. The
+regression guard (`a_dev_namespace_reference_is_not_reported_as_vendor`) PASSED before the change and would
+have failed had the prefixes simply been removed — it was written for exactly that reason.
+
+**Invariant 13 paid in the same change.** `discover.rs` had reached 399 lines, so the WALK mechanics moved to
+`lift/project/walk.rs` along the cohesion line that matters — that module answers "what did composer
+DECLARE", the new one "what does the filesystem actually HOLD", and the two have different failure modes (a
+wrong answer there mis-scopes the lift; a wrong answer here fails to terminate). [Verified a PURE move: the
+only diff against the original text is three `fn` → `pub(super) fn`.] discover.rs is now 295, back under the
+soft cap, and the gate's warn count fell 144 → 143. **Next split candidate, noted not deferred silently:**
+`lift/project/mod.rs` is 443 of the 500 hard cap, so the next feature there starts by splitting it.
+
+**Observation, not a finding:** `cargo doc` reports 106 intra-doc-link errors codebase-wide, including one in
+text this change moved (`[Verified: …with the cap alone…]` parses as a link attempt). It pre-exists at HEAD at
+`discover.rs:24` [Verified by stashing and re-running], and `cargo doc` is not part of the quality gate.
+Recorded so it is a known state rather than a surprise later.

@@ -106,14 +106,16 @@ fn entry_section(entry: Option<&str>, conflicts: &[String]) -> String {
     out
 }
 
-/// The framework files that are NOT the app's code, grouped by ROLE with the phorj replacement each one
-/// implies (DEC-439 part 2).
+/// The files REPORTED rather than lifted, grouped by ROLE with the phorj replacement each one implies
+/// (DEC-439 parts 2 and 3).
 ///
 /// This section is the difference between a list of skipped files and a migration PLAN. The classification
 /// is by CONTENT, never by path — a rule matching `public/index.php` or `artisan` by name would be a list of
 /// the frameworks the lifter happens to know, and wrong for the next one. What these files actually differ
 /// in is their shape: declarations mean the app's own code (lifted, not listed here), a top-level `return`
-/// with nothing declared means configuration, and top-level statements alone mean a bootstrap script.
+/// of data means configuration, and anything else means a bootstrap script. The one exception is TEST code,
+/// which declares classes like any other and so is recognized from composer's own `autoload-dev` — still a
+/// machine-readable declaration rather than a guess at a directory name.
 ///
 /// Note what these files are NOT: candidates for a better lifter. `public/index.php` constructs a Symfony
 /// `Kernel`; there is nothing to port, because phorj has no Kernel and will not. It is REPLACED by an
@@ -124,10 +126,10 @@ fn glue_section(glue: &[super::Glue]) -> String {
         return String::new();
     }
     let mut out = format!(
-        "## {} framework file(s) to RE-EXPRESS, not lift\n\nThese are not the app's own code, so they were \
-         not lifted — and that is the right outcome rather than a limitation. Each is classified by its \
-         CONTENT (no framework paths are hardcoded anywhere in the lifter) and paired with what to write \
-         instead.\n\n| File | Role | phorj counterpart |\n|---|---|---|\n",
+        "## {} file(s) to RE-EXPRESS, not lift\n\nNone of these has a phorj TRANSLATION; each has a phorj \
+         REPLACEMENT, which is the right outcome rather than a limitation. No framework paths are hardcoded \
+         anywhere in the lifter: bootstrap and configuration are told apart by CONTENT, and test code by \
+         composer's own `autoload-dev` declaration.\n\n| File | Role | phorj counterpart |\n|---|---|---|\n",
         glue.len()
     );
     for g in glue {
@@ -139,8 +141,9 @@ fn glue_section(glue: &[super::Glue]) -> String {
         ));
     }
     out.push_str(
-        "\n> A file here that you believe IS your own code is worth reporting: it means it declares nothing \
-         the classifier could see, which is unusual for application code.\n\n",
+        "\n> A file here with role `bootstrap` or `configuration` that you believe IS your own code is worth \
+         reporting: it means it declares nothing the classifier could see, which is unusual for application \
+         code.\n\n",
     );
     out
 }
@@ -272,7 +275,7 @@ pub(super) fn summary(out_dir: &Path, c: &Counts) -> String {
     }
     if glue > 0 {
         s.push_str(&format!(
-            "  {glue} framework file(s) to RE-EXPRESS, not lift (bootstrap / PHP config) — each paired \
+            "  {glue} file(s) to RE-EXPRESS, not lift (bootstrap / PHP config / test code) — each paired \
              with its phorj counterpart in `LIFT-REPORT.md`\n"
         ));
     }

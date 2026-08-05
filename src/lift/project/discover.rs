@@ -14,34 +14,28 @@
 use crate::pm::json::Json;
 use std::path::{Path, PathBuf};
 
-/// Directories never walked, whatever `composer.json` says. `vendor/` is the important one: lifting a
-/// dependency tree is explicitly NOT what a directory lift does (DEC-439 — vendor is reported, and
-/// optionally stubbed, never forked).
-const NEVER_WALK: &[&str] = &["vendor", "node_modules", ".git", ".github", "var", "cache"];
-
-/// Directory-nesting bound for both walks — a backstop only. The real cycle defence is [`is_real_dir`]:
-/// a depth cap alone does NOT save you, because a symlinked cycle re-walks the whole subtree at every
-/// level, so 64 levels is exponential rather than merely deep. [Verified: with the cap alone and
-/// `src/up -> ..`, the lift had to be killed at 30s.] 64 is far past any real source layout.
-const MAX_WALK_DEPTH: usize = 64;
-
-/// A directory that is NOT a symlink.
-///
-/// Symlinked directories are skipped rather than followed, which is what makes a cyclic tree
-/// (`src/up -> ..`) terminate at all. It also avoids lifting the same file twice under two paths — a
-/// symlinked source tree is ordinary in PHP projects (shared library dirs, `vendor` overlays), and the
-/// duplicate would then collide on its destination and be renamed for no reason.
-fn is_real_dir(path: &Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir())
-}
-
 /// What `composer.json` told us about the project.
 #[derive(Debug, Default)]
 pub(super) struct Composer {
-    /// `autoload.psr-4` + `autoload-dev.psr-4`: (namespace prefix without the trailing `\`, relative dir).
-    /// Sorted LONGEST-PREFIX-FIRST, because PSR-4 resolution is longest-match and `App\Domain\` must win
-    /// over `App\`.
+    /// `autoload.psr-4` (and `psr-0`): (namespace prefix without the trailing `\`, relative dir). Sorted
+    /// LONGEST-PREFIX-FIRST, because PSR-4 resolution is longest-match and `App\Domain\` must win over `App\`.
+    ///
+    /// `autoload-dev` is deliberately NOT merged in here — see [`Composer::dev_psr4`].
     pub(super) psr4: Vec<(String, String)>,
+    /// `autoload-dev.psr-4` / `psr-0`, kept SEPARATE from [`Composer::psr4`] (DEC-439 part 3).
+    ///
+    /// Test code is the app's own, so its namespaces still count as app namespaces — a reference into them
+    /// must not be reported as a composer dependency. But it is not LIFTED, because phorj has its own
+    /// `phg test` surface and a lifted PHPUnit class would reference a framework that will never be ported.
+    /// Two different questions, so two different lists.
+    pub(super) dev_psr4: Vec<(String, String)>,
+    /// Every directory and file declared by `autoload-dev` — its `psr-4`/`psr-0` targets, `classmap` and
+    /// `files`. Path membership is how a file is recognized as test code.
+    ///
+    /// This is composer's OWN declaration, not a guess: nothing here matches a directory called `tests/`, so
+    /// the no-hardcoded-framework-paths rule is intact. The honest limit is the converse — test code in a
+    /// project that declares no `autoload-dev` is indistinguishable from application code, and is lifted.
+    pub(super) dev_paths: Vec<String>,
     /// Dependency package names (`vendor/name`) from `require`, sorted. Used to attribute a vendor symbol
     /// to a package in the report.
     pub(super) requires: Vec<String>,
@@ -75,18 +69,34 @@ impl Composer {
             let j = Json::parse(&text).map_err(|e| format!("composer.json: {e}"))?;
             for key in ["autoload", "autoload-dev"] {
                 let Some(section) = j.get(key) else { continue };
+                let dev = key == "autoload-dev";
+                let prefixes = if dev {
+                    &mut out.dev_psr4
+                } else {
+                    &mut out.psr4
+                };
                 if let Some(psr4) = section.get("psr-4") {
-                    collect_psr4(psr4, &mut out.psr4);
+                    collect_psr4(psr4, prefixes);
                 }
                 // PSR-0 is the legacy prefix scheme and still present in older projects; it maps a prefix
                 // to a directory exactly like PSR-4 for the purposes of "which directories are the app's".
                 if let Some(psr0) = section.get("psr-0") {
-                    collect_psr4(psr0, &mut out.psr4);
+                    collect_psr4(psr0, prefixes);
                 }
                 // `classmap` and `files` are PATHS, not namespace prefixes — they say "this code is mine"
                 // without saying what it is called, which is exactly the case a psr-4-only reading missed.
-                collect_paths(section.get("classmap"), &mut out.classmap);
-                collect_paths(section.get("files"), &mut out.files);
+                if dev {
+                    // Every dev target lands in one list: the only question asked of it is "is this file
+                    // test code", and a prefix's directory answers that as well as a `classmap` entry does.
+                    for (_, dir) in out.dev_psr4.clone() {
+                        out.dev_paths.push(dir);
+                    }
+                    collect_paths(section.get("classmap"), &mut out.dev_paths);
+                    collect_paths(section.get("files"), &mut out.dev_paths);
+                } else {
+                    collect_paths(section.get("classmap"), &mut out.classmap);
+                    collect_paths(section.get("files"), &mut out.files);
+                }
             }
             collect_paths(j.get("bin"), &mut out.bin);
             if let Some(req) = j.get("require").and_then(Json::as_obj) {
@@ -100,11 +110,17 @@ impl Composer {
         }
         // Longest prefix first (PSR-4 is longest-match); ties broken by name so the order is total and
         // the walk is deterministic (Invariant 10).
-        out.psr4
-            .sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
+        for prefixes in [&mut out.psr4, &mut out.dev_psr4] {
+            prefixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
+        }
         out.requires.sort();
         out.requires.dedup();
-        for list in [&mut out.classmap, &mut out.files, &mut out.bin] {
+        for list in [
+            &mut out.classmap,
+            &mut out.files,
+            &mut out.bin,
+            &mut out.dev_paths,
+        ] {
             list.sort();
             list.dedup();
         }
@@ -124,12 +140,27 @@ impl Composer {
 
     /// Is this fully-qualified class name part of the APP (i.e. under one of its PSR-4 prefixes)?
     ///
+    /// **Dev prefixes count.** Test code is the app's own even though it is not lifted, so a reference into
+    /// the test namespace is a sibling reference, not a composer dependency.
+    ///
     /// With no `composer.json` there are no prefixes, so nothing is "app" by prefix — the caller falls
     /// back to "was it declared by a file we lifted", which is the only sound answer available then.
     pub(super) fn is_app_namespace(&self, fqn: &str) -> bool {
         self.psr4
             .iter()
+            .chain(self.dev_psr4.iter())
             .any(|(prefix, _)| fqn.starts_with(prefix.as_str()))
+    }
+
+    /// Is `path` inside something composer declared under `autoload-dev` — i.e. is it TEST code?
+    ///
+    /// Checked before content classification, and it has to be: a PHPUnit class declares a class, so content
+    /// alone calls it application code and lifts it.
+    pub(super) fn is_dev_path(&self, root: &Path, path: &Path) -> bool {
+        self.dev_paths.iter().any(|rel| {
+            let declared = root.join(rel);
+            path == declared || path.starts_with(&declared)
+        })
     }
 }
 
@@ -208,7 +239,7 @@ fn read_installed(root: &Path) -> Result<Vec<(String, String)>, String> {
 /// run, and the reports are keyed on this order).
 ///
 /// With PSR-4 prefixes the walk is restricted to their directories; without, the whole tree minus
-/// [`NEVER_WALK`]. Either way `vendor/` is never entered.
+/// the never-walked set (`super::walk`). Either way `vendor/` is never entered.
 pub(super) fn app_php_files(root: &Path, composer: &Composer) -> Result<Vec<PathBuf>, String> {
     let mut roots: Vec<PathBuf> = Vec::new();
     let mut direct: Vec<PathBuf> = Vec::new();
@@ -224,7 +255,7 @@ pub(super) fn app_php_files(root: &Path, composer: &Composer) -> Result<Vec<Path
         .chain(composer.files.iter().map(String::as_str));
     for rel in declared {
         let p = root.join(rel);
-        if is_real_dir(&p) {
+        if super::walk::is_real_dir(&p) {
             if !roots.contains(&p) {
                 roots.push(p);
             }
@@ -237,7 +268,7 @@ pub(super) fn app_php_files(root: &Path, composer: &Composer) -> Result<Vec<Path
     }
     let mut out = direct;
     for r in &roots {
-        walk(r, &mut out, 0)?;
+        super::walk::walk(r, &mut out, 0)?;
     }
     out.sort();
     out.dedup();
@@ -245,7 +276,7 @@ pub(super) fn app_php_files(root: &Path, composer: &Composer) -> Result<Vec<Path
 }
 
 /// Every file in the tree that IS PHP, whatever it is called and wherever it sits (minus
-/// [`NEVER_WALK`]) — the denominator [`app_php_files`] alone cannot provide.
+/// the never-walked set) — the denominator [`app_php_files`] alone cannot provide.
 ///
 /// PHP-ness is decided by CONTENT, not extension, because the files this catches are exactly the ones an
 /// extension filter cannot: `bin/console` and Laravel's `artisan` have no extension at all. A PHP file
@@ -253,95 +284,12 @@ pub(super) fn app_php_files(root: &Path, composer: &Composer) -> Result<Vec<Path
 /// than a guess.
 pub(super) fn all_php_files(root: &Path) -> Result<Vec<PathBuf>, String> {
     let mut candidates = Vec::new();
-    walk_any(root, &mut candidates, 0)?;
-    let mut out: Vec<PathBuf> = candidates.into_iter().filter(|p| is_php_file(p)).collect();
+    super::walk::walk_any(root, &mut candidates, 0)?;
+    let mut out: Vec<PathBuf> = candidates
+        .into_iter()
+        .filter(|p| super::walk::is_php_file(p))
+        .collect();
     out.sort();
     out.dedup();
     Ok(out)
-}
-
-/// Is this file PHP? By EXTENSION or by CONTENT — the OR is load-bearing in both directions: `bin/console`
-/// and Laravel's `artisan` have no extension for a filter to match, while a `<?=`-only short-tag file has no
-/// `<?php` for a content check to find. [Verified against six shapes: `artisan`, `console`, `plain.php`
-/// detected; a `.txt` and a binary correctly rejected; the short-tag file caught by the extension branch.]
-pub(super) fn is_php_file(path: &Path) -> bool {
-    path.extension().and_then(|e| e.to_str()) == Some("php") || starts_with_php_open_tag(path)
-}
-
-/// Does this file open with `<?php` (allowing a leading `#!` shebang line)? Reads a small prefix only.
-fn starts_with_php_open_tag(path: &Path) -> bool {
-    let Ok(bytes) = std::fs::read(path) else {
-        return false;
-    };
-    let head = &bytes[..bytes.len().min(256)];
-    let Ok(text) = std::str::from_utf8(head) else {
-        return false;
-    };
-    // A shebang may precede the open tag (`#!/usr/bin/env php`), so look within the prefix rather than
-    // requiring the very first bytes.
-    text.contains("<?php")
-}
-
-/// Like [`walk`] but collects EVERY file, not just `.php` ones — the caller decides PHP-ness by content.
-fn walk_any(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) -> Result<(), String> {
-    if depth > MAX_WALK_DEPTH {
-        return Ok(());
-    }
-    let entries =
-        std::fs::read_dir(dir).map_err(|e| format!("cannot read `{}`: {e}", dir.display()))?;
-    let mut names: Vec<PathBuf> = Vec::new();
-    for e in entries {
-        names.push(
-            e.map_err(|e| format!("cannot read `{}`: {e}", dir.display()))?
-                .path(),
-        );
-    }
-    names.sort();
-    for path in names {
-        if is_real_dir(&path) {
-            let skip = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| NEVER_WALK.contains(&n));
-            if !skip {
-                walk_any(&path, out, depth + 1)?;
-            }
-        } else if !path.is_dir() {
-            // A symlink TO a directory lands here and is correctly not collected as a file.
-            out.push(path);
-        }
-    }
-    Ok(())
-}
-
-fn walk(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) -> Result<(), String> {
-    if depth > MAX_WALK_DEPTH {
-        return Ok(());
-    }
-    let entries =
-        std::fs::read_dir(dir).map_err(|e| format!("cannot read `{}`: {e}", dir.display()))?;
-    // Collected then sorted: `read_dir` order is filesystem-dependent, and a lift that varies with it
-    // would produce different reports on different machines for the same input.
-    let mut names: Vec<PathBuf> = Vec::new();
-    for e in entries {
-        names.push(
-            e.map_err(|e| format!("cannot read `{}`: {e}", dir.display()))?
-                .path(),
-        );
-    }
-    names.sort();
-    for path in names {
-        if is_real_dir(&path) {
-            let skip = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| NEVER_WALK.contains(&n));
-            if !skip {
-                walk(&path, out, depth + 1)?;
-            }
-        } else if !path.is_dir() && is_php_file(&path) {
-            out.push(path);
-        }
-    }
-    Ok(())
 }

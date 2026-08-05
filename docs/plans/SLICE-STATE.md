@@ -54,8 +54,21 @@ and wrong for the next one. Three fixture-found defects: a returned CLOSURE is a
 controller as typed config); composer's `bin` is NOT part of the code surface (it bypassed classification and
 fed the console script to the lifter → `require is Tier-2`); and "no `.php` files found" was a lie for a
 glue-only tree. `examples/lift/README.md` gained the directory-lift walkthrough it had been missing since
-part 1. **STILL PENDING (adjudication):** `tests/` is reachable through `autoload-dev.psr-4` so it is
-currently LIFTED — whether PHPUnit test classes belong in scope is the developer's call, given `phg test`.
+part 1.
+
+**Also shipped 2026-08-05 — DEC-439 part 3: `autoload-dev` code is REPORTED, not lifted.** Closes part 2's
+pending adjudication row; developer ruled sub-option (a). A fourth `Role::Test`, and the ONE role not decided
+by content — it cannot be, since a PHPUnit class declares a class like any other, so it comes from composer's
+own `autoload-dev` declaration (still machine-readable metadata, not a guess at a directory named `tests/`).
+Counterpart named in the report: re-write against `phg test`. **Two lists, because two different questions:**
+dev prefixes leave the WALK but stay in namespace RECOGNITION — test code is the app's own even though it is
+not lifted, so a reference into the test namespace is a sibling reference, not a composer dependency (the
+regression guard for that passed BEFORE the change and would have failed had the prefixes simply been
+removed). Honest limit, stated in the code: test code in a project declaring no `autoload-dev` is
+indistinguishable from application code and is lifted. Invariant 13 paid in the same change — `discover.rs`
+had reached 399, so the WALK mechanics moved to `lift/project/walk.rs` (verified a pure move; discover.rs back
+to 295, gate warns 144→143). **Next split candidate, noted rather than silently deferred:**
+`lift/project/mod.rs` is 443 of the 500 hard cap.
 
 **Superseded above — DEC-439's original queued note:** **QUEUED, ruled but NOT built — DEC-439, project-aware lifting.** `phg lift <dir>` lifts a whole tree in ONE
 pass into a generated `phorj.json` + `src/` project, so cross-file references resolve — the single fix for

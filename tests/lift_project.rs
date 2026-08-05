@@ -260,12 +260,81 @@ fn a_tree_of_only_glue_is_refused_with_that_reason() {
     let err = lift_directory(&t.0, &t.path("out"), VendorMode::Report)
         .expect_err("a glue-only tree must be refused");
     assert!(
-        err.contains("framework bootstrap or PHP configuration"),
+        err.contains("not one of them is application code to lift"),
         "{err}"
     );
     assert!(
         !err.contains("no `.php` files found"),
         "there ARE php files — saying otherwise is a lie:\n{err}"
+    );
+}
+
+/// Test code declared by `autoload-dev` is REPORTED, not lifted (DEC-439 part 3, developer-ruled).
+///
+/// A PHPUnit class declares a class, so content classification alone calls it code and lifts it — producing a
+/// draft whose `extends \PHPUnit\Framework\TestCase` and `assertSame` reference a framework that will never be
+/// ported, plus a pile of unresolvable symbols in `VENDOR-REPORT.md`. phorj has its own `phg test` surface, so
+/// the honest answer is to name them and point there.
+///
+/// Note what decides this: composer's OWN `autoload-dev` declaration, which is machine-readable metadata —
+/// not a path named `tests/`. The no-hardcoded-framework-paths rule is intact.
+#[test]
+fn test_code_declared_by_autoload_dev_is_reported_rather_than_lifted() {
+    let t = Tmp::new("devtests");
+    t.write(
+        "composer.json",
+        r#"{ "name": "acme/t",
+             "autoload": { "psr-4": { "App\\": "src/" } },
+             "autoload-dev": { "psr-4": { "App\\Tests\\": "tests/" } } }"#,
+    );
+    t.write(
+        "src/Post.php",
+        "<?php\nnamespace App;\nclass Post { public function t(): string { return \"t\"; } }\n",
+    );
+    t.write(
+        "tests/PostTest.php",
+        "<?php\nnamespace App\\Tests;\nclass PostTest { public function testT(): string { return \"x\"; } }\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("lifts");
+
+    assert!(
+        !out.join("src/App/Tests").exists(),
+        "a test class must not be lifted into the project"
+    );
+    let report = read(&out.join("LIFT-REPORT.md"));
+    let row = glue_row(&report, "tests/PostTest.php")
+        .unwrap_or_else(|| panic!("tests/PostTest.php must be reported:\n{report}"));
+    assert!(row.contains("test"), "{row}");
+    assert!(
+        row.contains("phg test"),
+        "the counterpart must be phorj's own test surface:\n{row}"
+    );
+    // …and the app's own code still lifts, so the exclusion is scoped to the dev surface.
+    assert!(out.join("src/App/Post.phg").is_file(), "App\\Post was lost");
+}
+
+/// Dropping `autoload-dev` from the WALK must not drop it from namespace recognition: a reference into the
+/// test namespace is still the app's own, so reporting it as a composer dependency would be wrong.
+#[test]
+fn a_dev_namespace_reference_is_not_reported_as_vendor() {
+    let t = Tmp::new("devns");
+    t.write(
+        "composer.json",
+        r#"{ "name": "acme/n",
+             "autoload": { "psr-4": { "App\\": "src/" } },
+             "autoload-dev": { "psr-4": { "App\\Tests\\": "tests/" } } }"#,
+    );
+    t.write(
+        "src/Uses.php",
+        "<?php\nnamespace App;\nuse App\\Tests\\Fixture;\nclass Uses { public function f(Fixture $x): string { return \"u\"; } }\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("lifts");
+    let vendor = read(&out.join("VENDOR-REPORT.md"));
+    assert!(
+        !vendor.contains("App\\Tests\\Fixture"),
+        "a dev-namespace symbol is the app's own, not vendor:\n{vendor}"
     );
 }
 

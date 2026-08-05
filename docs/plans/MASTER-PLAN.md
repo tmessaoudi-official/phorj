@@ -268,9 +268,9 @@ The prior standalone `architecture-decomp.plan.md` is FOLDED here (Invariant 19 
    foreign `declare` stubs opt-in (`--vendor=stub`, ruled but not yet built — refuses with its reason) because
    stubs make a program transpile-only (`E-FOREIGN-RUNTIME`). Files outside `autoload` get a ROLE from their
    CONTENT — code (LIFTED, including Doctrine migrations), configuration (`#[Config]`), bootstrap
-   (`#[Entry(kind: …)]`) — with no framework path hardcoded anywhere. **Still open after that:** whether
-   `tests/` (reachable via `autoload-dev.psr-4`) belongs in scope at all, and **phorj's own attribute
-   TARGETS** — `#[…]` is legal on a
+   (`#[Entry(kind: …)]`) — with no framework path hardcoded anywhere, and test code declared by
+   `autoload-dev` is REPORTED with `phg test` as its counterpart rather than lifted (part 3). **Still open
+   after that:** **phorj's own attribute TARGETS** — `#[…]` is legal on a
    top-level `function`/`class` only, so a Doctrine entity's property-level mappings are refused loudly
    rather than lifted. See `docs/plans/2026-08-04-lift-attr-and-hoist.plan.md` ·
    the **DEC-283 .phgml template engine** build ·

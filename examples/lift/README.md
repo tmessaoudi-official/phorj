@@ -101,6 +101,7 @@ they are classified by **content** instead, and no framework path is hardcoded a
 | declares a class / interface / trait / enum / function | code | **lifted** — it is the app's own code however composer maps it |
 | top-level `return` of DATA | configuration | reported, with `#[Config]` (DEC-318) as its replacement |
 | anything else with no declarations | bootstrap | reported, with `#[Entry(kind: …)]` as its replacement |
+| declared by composer's `autoload-dev` | test | reported, with `phg test` as its replacement |
 
 Two consequences worth stating, because both were wrong before they were measured:
 
@@ -110,6 +111,18 @@ Two consequences worth stating, because both were wrong before they were measure
   (`return function (array $context) {…}`) and a `config/*.php` file (`return [ … ]`) are *both* a
   top-level `return`. A rule that stopped there told the developer to re-express their front
   controller as typed configuration — wrong advice, confidently given.
+
+**Test code is the one role NOT decided by content**, and it cannot be: a PHPUnit class declares a
+class like any other, so content alone calls it application code and lifts it — producing a draft
+whose `extends \PHPUnit\Framework\TestCase` references a framework that will never be ported. It comes
+instead from composer's own `autoload-dev` declaration, which is still machine-readable metadata and
+not a guess at a directory named `tests/`. The honest limit: test code in a project that declares no
+`autoload-dev` is indistinguishable from application code, and *is* lifted.
+
+Dropping `autoload-dev` from the *walk* does not drop it from *namespace recognition* — those are two
+different questions. Test code is the app's own even though it is not lifted, so a reference into the
+test namespace is a sibling reference, not a composer dependency, and must not appear in
+`VENDOR-REPORT.md`.
 
 `bin/console` and `artisan` have **no extension at all**, so PHP-ness is decided by content (an
 opening `<?php`, allowing a `#!` shebang line) as well as by suffix. And composer's `bin` key is read

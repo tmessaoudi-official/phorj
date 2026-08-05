@@ -83,8 +83,30 @@ PHP-ness is decided by extension **OR** content, and the OR is load-bearing both
 `artisan` have no extension for a filter to match, while a short-tag file has no `<?php` for a content check
 to find. `examples/lift/README.md` gained the directory-lift walkthrough it had been missing since part 1.
 
-**Still pending (adjudication):** `tests/` is reachable through `autoload-dev.psr-4`, so it is currently
-lifted. Whether PHPUnit test classes belong in scope is the developer's call, given phorj has `phg test`.
+### Added — `autoload-dev` code is REPORTED, not lifted (DEC-439 part 3, 2026-08-05)
+Developer-ruled, closing part 2's pending question. A Symfony app declares
+`"autoload-dev": { "psr-4": { "App\\Tests\\": "tests/" } }`, so part 2 lifted `tests/PostTest.php` into a
+draft whose `extends \PHPUnit\Framework\TestCase` and `assertSame` reference a framework that will never be
+ported — and whose symbols then filled `VENDOR-REPORT.md` as unresolvable. phorj has `phg test`; naming that
+is more useful than emitting the draft.
+
+A fourth role, `test`, and the **one role not decided by content** — it cannot be, because a PHPUnit class
+declares a class like any other, so content alone calls it application code. It comes from composer's own
+`autoload-dev` declaration, checked before classification. That is still machine-readable metadata rather than
+a guess at a directory named `tests/`, so the no-hardcoded-framework-paths rule is intact. The honest limit,
+stated in the code: test code in a project that declares no `autoload-dev` is indistinguishable from
+application code and is lifted.
+
+**Two lists, because there are two different questions.** `autoload-dev` prefixes leave the WALK but stay in
+namespace RECOGNITION: test code is the app's own even though it is not lifted, so a reference into the test
+namespace is a sibling reference, not a composer dependency. The regression guard for that passed *before* the
+change and would have failed had the prefixes simply been removed.
+
+Invariant 13 paid in the same change: `discover.rs` had reached 399 lines, so the WALK mechanics moved to
+`lift/project/walk.rs` along the cohesion line that matters — that module answers "what did composer DECLARE",
+the new one "what does the filesystem actually HOLD", and the two have different failure modes (a wrong answer
+there mis-scopes the lift; a wrong answer here fails to terminate). Verified a pure move: the only diff
+against the original text is three `fn` → `pub(super) fn`. `discover.rs` is back to 295, under the soft cap.
 
 ### Added — attribute arguments are constant-FOLDED (DEC-438, 2026-08-05)
 Developer-ruled, narrow by construction. `#[Tag(1 + 2 * 3, -5, 1.5 + 2.0, "a" + "b")]` now emits

@@ -36,6 +36,12 @@ pub(super) enum Role {
     Config,
     /// Top-level statements, or a returned factory: a front controller, a console entry, a wiring script.
     Bootstrap,
+    /// Test code, as declared by composer's own `autoload-dev` (DEC-439 part 3).
+    ///
+    /// The one role NOT decided by [`classify`], and it cannot be: a PHPUnit class declares a class, so
+    /// content alone calls it application code. It is assigned from composer's declaration by
+    /// [`super::discover::Composer::is_dev_path`] before this function is consulted.
+    Test,
 }
 
 impl Role {
@@ -57,6 +63,10 @@ impl Role {
                  `#[Entry(kind: EntryKind.Cli)]` for a console — plus `#[Route]` handlers for whatever it \
                  registers. There is no Kernel to port",
             ),
+            Role::Test => Some(
+                "re-write against phorj's own test surface (`phg test`) — lifting a PHPUnit class would \
+                 produce a draft referencing a framework that will never be ported",
+            ),
         }
     }
 
@@ -65,6 +75,7 @@ impl Role {
             Role::Code => "code",
             Role::Config => "configuration",
             Role::Bootstrap => "bootstrap",
+            Role::Test => "test",
         }
     }
 }

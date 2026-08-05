@@ -36,6 +36,7 @@ mod classify;
 mod discover;
 mod layout;
 mod report;
+mod walk;
 
 /// What to do about composer dependencies (DEC-439).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,8 +97,9 @@ struct Failure {
     reason: String,
 }
 
-/// A PHP file that is NOT the app's own code — a framework bootstrap or a PHP configuration file. It has no
-/// phorj translation; it has a phorj replacement, which [`classify::Role::phorj_counterpart`] names.
+/// A PHP file that is REPORTED rather than lifted — a framework bootstrap, a PHP configuration file, or test
+/// code. None of them has a phorj *translation*; each has a phorj *replacement*, which
+/// [`classify::Role::phorj_counterpart`] names.
 struct Glue {
     rel: String,
     role: classify::Role,
@@ -167,8 +169,14 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
         if files.contains(&path) {
             continue;
         }
-        let src = std::fs::read_to_string(&path).unwrap_or_default();
-        match classify::classify(&src) {
+        // Composer's own `autoload-dev` declaration wins over content (DEC-439 part 3): a PHPUnit class
+        // DECLARES a class, so content alone would call it application code and lift it.
+        let role = if composer.is_dev_path(root, &path) {
+            classify::Role::Test
+        } else {
+            classify::classify(&std::fs::read_to_string(&path).unwrap_or_default())
+        };
+        match role {
             classify::Role::Code => files.push(path),
             role => glue.push(Glue {
                 rel: relative(root, &path),
@@ -191,10 +199,10 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
             ));
         }
         return Err(format!(
-            "lift: found {} PHP file(s) under `{}`, but every one is framework bootstrap or PHP \
-             configuration — none declares a class, interface, trait, enum or function, so there is no \
-             application code to lift. Point the lift at the directory holding your own classes (for a \
-             Symfony/Laravel layout that is `src/`, or whatever `composer.json`'s `autoload` maps).",
+            "lift: found {} PHP file(s) under `{}`, but not one of them is application code to lift — each \
+             is framework bootstrap, PHP configuration, or test code declared by `autoload-dev`. Point the \
+             lift at the directory holding your own classes (for a Symfony/Laravel layout that is `src/`, \
+             or whatever `composer.json`'s `autoload` maps).",
             glue.len(),
             root.display()
         ));
