@@ -6825,3 +6825,27 @@ closes. Recorded, not worked around.
 enum emitter moved to `transpile/enums.rs`, taking `classes.rs` to 448 and letting its baseline row be
 DROPPED (the ratchet tightens). `program_emit.rs` then crossed 500 from the `collect` addition, so pass-1
 name collection moved to `transpile/collect.rs`.
+
+### DEC-437 addendum (2026-08-05) — the cross-package reference bug the 6C lens caught
+
+The first build of DEC-437 indexed an attribute class by its BARE LEAF
+(`php_class_name(last_segment(name))`). Correct for a single-file program, wrong for a multi-package one:
+inside `namespace Main { … }` a bare `#[Audited(…)]` resolves to `Main\Audited` in PHP — a class that does
+not exist — so the emitted metadata would have named NOTHING while looking right.
+
+Found by the correctness lens asking which paths the emitter had not been exercised on, not by a failing
+test: the namespaced emit path is only taken for mangled (`\`-bearing) names, so no single-file test could
+reach it. Fixed by reusing `php_type_ref` — the same helper `extends`/`implements` already use for a
+cross-package type reference — which emits the absolute `\Meta\Audited` and leaves a single-package (bare)
+name unchanged, so flat output is byte-identical.
+
+[Verified end-to-end on a two-package project: `#[\Meta\Audited('cross-package')]` +
+`#[\Attribute]` inside `namespace Meta`, all three legs printing `widget`, and PHP reflection resolving
+`Meta\Audited reason=cross-package` under php-8.5.8.] Pinned by
+`tests/project.rs::cross_package_attribute_is_emitted_as_an_absolute_fqn`, and the pin was
+NEGATIVE-CONTROLLED: reverting the fix makes it fail with `#[Audited('cross-package')]`.
+
+**A process note worth keeping.** The first two attempts at that negative control silently did nothing — a
+string-replace against a line `cargo fmt` had already reshaped, so the "reverted" build was identical and
+the test "passed" both times. A negative control that cannot fail is worse than none, because it manufactures
+confidence. The assertion that the replace actually matched is what surfaced it.

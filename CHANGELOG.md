@@ -42,6 +42,12 @@ an attribute ARGUMENT is rejected by `phg check` (*"unknown identifier `Colour`"
 currently unreachable; its rendering is pinned by a raw-emit test so the emitter is right when the gap
 closes.
 
+A cross-package attribute is referenced by ABSOLUTE FQN (`#[\\Meta\\Audited(…)]`), reusing the same
+`php_type_ref` helper `extends`/`implements` already use. The first build used the bare leaf, which inside
+`namespace Main { … }` resolves to `Main\\Audited` — a class that does not exist — so the metadata would
+have named nothing while looking right; only the namespaced emit path reaches it, so no single-file test
+could have caught it.
+
 Invariant 13 debt burned down rather than deferred: `transpile/classes.rs` was a grandfathered 543-line
 breach the gate forbids growing, so the enum emitter moved to `transpile/enums.rs` — taking it to 448 and
 letting its baseline row be **dropped**, tightening the ratchet — and pass-1 name collection moved to

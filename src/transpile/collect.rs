@@ -40,10 +40,14 @@ impl Transpiler {
                         .iter()
                         .any(crate::ast::Attribute::is_attribute_marker)
                     {
-                        self.attr_classes.push((
-                            c.name.replace('\\', "."),
-                            super::php_class_name(super::last_segment(&c.name)),
-                        ));
+                        // `php_type_ref`, NOT the bare leaf: in a multi-package (namespaced) program a
+                        // cross-package attribute class must be referenced by ABSOLUTE FQN (`\Ns\Tag`),
+                        // exactly as `extends`/`implements` reference a type — a bare `#[Tag]` inside a
+                        // `namespace` block would resolve to the CURRENT namespace and name a different
+                        // class (or none). A single-package name has no `\` and stays bare, so the flat
+                        // output is unchanged.
+                        self.attr_classes
+                            .push((c.name.replace('\\', "."), super::php_type_ref(&c.name)));
                     }
                     // M8.5: a foreign class is also indexed as foreign — its definition is suppressed and
                     // construction/static calls take the `\Name` global form. Its members' return kinds

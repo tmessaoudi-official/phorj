@@ -597,3 +597,37 @@ fn project_lowercase_package_decl_is_rejected() {
     // segments are PascalCase), so the offending file is unreachable — the entry loads fine.
     loader::load(&entry).expect("lowercase-package file on disk is inert (unimportable)");
 }
+
+/// DEC-437 — a CROSS-PACKAGE attribute must be referenced by ABSOLUTE FQN in the emitted PHP.
+///
+/// A bare `#[Audited(…)]` inside `namespace Main { … }` resolves to `Main\Audited` in PHP — a class that
+/// does not exist — so this is the difference between metadata PHP can read and metadata that silently
+/// names nothing. The first draft of the emitter used the bare leaf and had exactly that bug; it is only
+/// reachable on the namespaced path, which a single-file program never takes.
+#[test]
+fn cross_package_attribute_is_emitted_as_an_absolute_fqn() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Meta.Audited;\n\
+         #[Audited(\"cross-package\")]\nclass Widget {\n    function label() -> string { return \"widget\"; }\n}\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Widget w = new Widget();\n    Output.printLine(w.label());\n}",
+    );
+    tmp.write(
+        "src/Meta/Audited.phg",
+        "package Meta;\nimport Core.Runtime.Attribute;\n#[Attribute]\npublic class Audited {\n    constructor(public string reason) {}\n}",
+    );
+    let unit = loader::load(&entry).expect("project loads");
+    let php = cli::transpile_program(&unit.program, &unit.diag_src).expect("transpiles");
+    assert!(
+        php.contains("#[\\Meta\\Audited('cross-package')]"),
+        "a cross-package attribute must be an absolute FQN:\n{php}"
+    );
+    // The marker keeps its ROOT `\Attribute` for the same reason — inside `namespace Meta { … }` a bare
+    // `#[Attribute]` would mean `Meta\Attribute`.
+    assert!(php.contains("#[\\Attribute]"), "got:\n{php}");
+    // And the program still runs identically on both engines with the attributes in place.
+    let (run, vm) = run_both(&entry);
+    assert_eq!(run, "widget\n");
+    assert_eq!(run, vm, "run and vm must be byte-identical");
+}
