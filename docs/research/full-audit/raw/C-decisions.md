@@ -6771,3 +6771,57 @@ property-level; widening phorj's OWN attribute targets is the follow-on that unb
 
 Also satisfies Invariant 17's "lift updated in the same change" for DEC-417's `#[Deprecated]`, which had
 been impossible to honour while the lexer could not see `#[`.
+
+### DEC-437 (2026-08-05) — attributes are RE-EMITTED into the transpiled PHP
+
+**Ruled by the developer**, choosing option 2 of the trade LIFT-ATTR surfaced: *"I would rather say
+option 2"* — emit PHP attributes now, so PHP-side reflection can see a transpiled program's metadata and
+`phorj → PHP → phorj` stops losing it. My own recommendation had been to leave them erased and queue the
+work with DI-v2; the ruling is the better call, and building it proved the feature is real rather than
+decorative: `ReflectionAttribute::newInstance()` constructs the attribute from transpiled output
+[Verified: `Audited=billing/2` under php-8.5.8, `tests/attribute_transpile.rs`].
+
+**What is emitted:** USER attributes (a use of a class declared `#[Attribute]`) and the `#[Attribute]`
+MARKER itself. The marker is not optional — without it PHP refuses `newInstance()` with *"Attempting to
+use non-attribute class"*, so the uses alone would be metadata PHP cannot read.
+
+**What is NOT, and why each exclusion is measured rather than assumed:**
+
+| Excluded | Reason |
+|---|---|
+| every other BUILT-IN (`#[Entry]`, `#[Route]`, `#[Config]`, `#[Injectable]`, `#[Provides]`, `#[Transient]`, `#[Invoke]`, `#[ToString]`, `#[UncheckedOverflow]`) | phorj COMPILE-TIME machinery, consumed by a desugar or refused outright. They describe how phorj compiles the program, not what the program IS — erasure is correct, not lossy. Defined against `BUILTIN_ATTRIBUTE_PATHS`, so a NEW built-in is excluded automatically instead of leaking the first time someone forgets |
+| **`#[Deprecated]`** | the sharp one. PHP 8.4's own `#[\Deprecated]` has RUNTIME behaviour — calling the function prints `Deprecated: Function greet() is deprecated, …`. phorj's is compile-time only (DEC-417: use-site warnings come from the reference pass, at CHECK time). Mapping them would make the PHP leg print a line neither phorj engine prints — a direct Invariant 1 break. [Verified under php-8.5.8: the notice appears in output.] Mapping it would require phorj to emit runtime deprecation notices too, which is a separate feature, not a spelling |
+| any attribute with a NON-CONSTANT argument | PHP parses attribute arguments as CONSTANT expressions, and a function call is *"Fatal error: Constant expression contains invalid operations"* — the whole FILE dies before any output [Verified under php-8.5.8]. That is reachable for phorj, not theoretical: `#[Tag(1 + 2)]` type-checks clean [Verified] and `1 + 2` lowers to `__phorj_checked_add(1, 2)` [Verified], so emitting it verbatim would kill the PHP leg |
+
+**The argument gate admits** literals (string/int/float/bool/null), an enum member (`Colour.Red` →
+`new Colour_Red()` — admissible because PHP 8.1 allows `new` in an attribute argument, evaluated on
+reflection rather than at parse time [Verified]), literal lists/maps of those, and a named argument
+wrapping any of them (PHP 8.0 spells named arguments identically, so nothing is reordered). All-or-nothing
+per attribute: emitting SOME arguments would silently change the metadata.
+
+**A rejected attribute is DISCLOSED in the PHP output**, not silently dropped —
+`// phorj: \`#[Tag(…)]\` not re-emitted — an argument has no PHP constant form`. Invariant 14's forbidden
+case is the *silent* downgrade; this one is visible in the artifact itself.
+
+**Name resolution reuses DEC-435's canonical-path rule** (`attr_path_matches` against the class registry),
+so the transpiler cannot bind a name to a different class than the checker validated. The index is seeded
+in the existing `collect` pass as a `Vec` in declaration order — deterministic for free (Invariant 10),
+where a `HashMap` would not be.
+
+**Follow-up, named rather than half-built: a CONSTANT FOLDER.** `#[Tag(1 + 2)]` → `#[Tag(3)]` would be
+faithful and is the obvious fix for the gate's conservatism; phorj has no constant folder at all today, so
+building one is its own slice. Also noted: a CONCATENATION argument (`"a" + "b"`) is refused even though
+PHP's `'a' . 'b'` IS a valid constant expression — the gate admits no operator at all, because telling the
+safe operators from the helper-lowering ones is the same folding problem.
+
+**A pre-existing CHECKER gap surfaced en route:** an enum member as an attribute ARGUMENT is rejected by
+`phg check` — `#[Painted(Colour.Red)]` with `enum Colour` declared in the same file reports
+*"unknown identifier `Colour`"* [Verified]. So that emission path is currently unreachable through the
+normal pipeline; the rendering is pinned by a raw-emit test so the emitter is already correct when the gap
+closes. Recorded, not worked around.
+
+**Invariant 13 debt burned down rather than deferred, twice:** `transpile/classes.rs` was a grandfathered
+543-line breach the gate forbids growing, and attribute emission needed one line in `emit_class` — so the
+enum emitter moved to `transpile/enums.rs`, taking `classes.rs` to 448 and letting its baseline row be
+DROPPED (the ratchet tightens). `program_emit.rs` then crossed 500 from the `collect` addition, so pass-1
+name collection moved to `transpile/collect.rs`.

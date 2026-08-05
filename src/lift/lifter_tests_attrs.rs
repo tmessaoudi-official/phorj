@@ -311,12 +311,20 @@ fn a_bare_hash_comment_is_still_a_comment() {
 
 #[test]
 fn a_lifted_attribute_survives_into_the_php_transpile() {
-    // Invariant 17 — transpile and lift move together. phorj attributes are COMPILE-TIME only (no
-    // runtime reflection yet), so the PHP leg does not re-emit them; what must hold is that the
-    // round trip still produces a working program rather than failing.
+    // Invariant 17 — transpile and lift move together, and since DEC-437 that is literal: a lifted
+    // attribute goes back OUT into the PHP, so `PHP → phorj → PHP` keeps the metadata instead of
+    // dropping it. (`tests/attribute_transpile.rs` closes the other direction against a real `php`.)
     let phg = lift(DECLARE_AND_USE);
     let prog = crate::cli::parse_program(&phg).expect("draft parses");
     let checked = crate::cli::check_and_expand(&prog, &phg).expect("draft checks");
     let php = crate::transpile::emit_with_source(&checked, Some(&phg)).expect("it transpiles");
     assert!(php.contains("class Widget"), "{php}");
+    assert!(
+        php.contains("#[\\Attribute]"),
+        "the marker must survive:\n{php}"
+    );
+    assert!(
+        php.contains("#[Tag('cli')]"),
+        "the attribute use must survive:\n{php}"
+    );
 }

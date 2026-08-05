@@ -6,12 +6,15 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 // cohesion split (M-Decomp): program/types/stmt/expr/call/matches clusters + the driver / state /
 // runtime-helper gates / string-escape / member-modifier / kind-mapper clusters. This root keeps
 // only the shared type definitions (`OpKind`, `Transpiler`, `Origin`, `MatchTarget`) and the wiring.
+mod attributes;
 mod call;
 mod classes;
 mod classes_synth;
+mod collect;
 mod collisions;
 pub mod db_php;
 mod driver;
+mod enums;
 mod escapes;
 mod expr;
 mod fs_php;
@@ -177,6 +180,10 @@ struct Transpiler {
     /// Switches emission from the flat single-package form to one `namespace …{}` brace-block per
     /// package + a nameless bootstrap block, and forces fully-qualified (leading-`\`) call emission.
     namespaced: bool,
+    /// DEC-437: the phorj classes declared `#[Attribute]`, as (canonical dotted path, PHP class name),
+    /// in DECLARATION order. Seeded by `collect` so attribute re-emission needs no `Program` threaded
+    /// through the function emitter, and deterministic for free (a `Vec`, not a `HashMap` — Invariant 10).
+    attr_classes: Vec<(String, String)>,
     /// The flattened `class_implements` oracle (M-RT overloading): used to order an overload set's
     /// PHP dispatch branches most-specific-first (subtypes before supertypes), so the emitted
     /// `if`-chain selects the same body the backends' `select_overload` does. Built once in `emit`.
@@ -219,6 +226,8 @@ enum MatchTarget {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_attributes;
 
 #[cfg(test)]
 mod tests_docs;

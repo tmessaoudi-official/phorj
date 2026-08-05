@@ -1,106 +1,8 @@
-//! PHP transpiler — type declarations: enums, classes, traits, members.
+//! PHP transpiler — type declarations: classes, traits, members. Enums live in `enums.rs`.
 
 use super::*;
 
 impl Transpiler {
-    /// An enum with payload variants becomes an abstract base class plus one `final`
-    /// subclass per variant, with promoted public props for the payload fields.
-    pub(super) fn emit_enum(&mut self, e: &EnumDecl) -> Result<(), String> {
-        // The base + its variant subclasses are declared inside the enum's own `namespace` block, so
-        // both use the bare trailing segment (`Acme\Geometry\Color` ⇒ `Color`); a single-package enum
-        // is unchanged. Variant subclass names are never mangled (they aren't types).
-        // Mangle a reserved enum-class name (`RoundingMode` → `RoundingMode_`) so it can't collide
-        // with a PHP built-in enum (M-NUM S2); a non-reserved name is unchanged.
-        let base = super::php_class_name(last_segment(&e.name));
-        // DEC-302 backed enum (repr B): the base carries a `value` property + static `cases()`/
-        // `from()`/`tryFrom()`; each variant sets `$this->value` in its ctor. `cases()` is also
-        // emitted for a plain payload-less enum (it's valid on any). A payload enum is unchanged.
-        let all_payload_less = e.variants.iter().all(|v| v.fields.is_empty());
-        let backed = e.backing_type.is_some();
-        if backed || all_payload_less {
-            self.line(&format!("abstract class {base} {{"));
-            self.indent += 1;
-            if let Some(bt) = &e.backing_type {
-                self.line(&format!("public {} $value;", self.emit_type(bt)));
-            }
-            // cases() → a PHP array of one fresh instance per variant, declaration order.
-            let cases: Vec<String> = e
-                .variants
-                .iter()
-                .map(|v| format!("new {}()", super::php_scoped_variant_name(&e.name, &v.name)))
-                .collect();
-            self.line("public static function cases(): array {");
-            self.indent += 1;
-            self.line(&format!("return [{}];", cases.join(", ")));
-            self.indent -= 1;
-            self.line("}");
-            if backed {
-                // from(x): first variant whose backing equals x (=== ), else throw; tryFrom: null.
-                for (method, miss) in [
-                    ("from", "throw new \\ValueError(\"no matching case\")"),
-                    ("tryFrom", "return null"),
-                ] {
-                    let ret = if method == "from" {
-                        base.clone()
-                    } else {
-                        format!("?{base}")
-                    };
-                    let bt = self.emit_type(e.backing_type.as_ref().unwrap());
-                    self.line(&format!(
-                        "public static function {method}({bt} $value): {ret} {{"
-                    ));
-                    self.indent += 1;
-                    self.line("foreach (self::cases() as $c) {");
-                    self.indent += 1;
-                    self.line("if ($c->value === $value) { return $c; }");
-                    self.indent -= 1;
-                    self.line("}");
-                    self.line(&format!("{miss};"));
-                    self.indent -= 1;
-                    self.line("}");
-                }
-            }
-            self.indent -= 1;
-            self.line("}");
-        } else {
-            self.line(&format!("abstract class {base} {{}}"));
-        }
-        for v in &e.variants {
-            // DEC-329.3: variant classes are enum-SCOPED (`Shape_Circle`) — collision-proof and
-            // never a bare reserved word; construction/`instanceof` match via `variant_ref`.
-            let vname = super::php_scoped_variant_name(&e.name, &v.name);
-            // DEC-238: record `php-class → (enum, variant)` so `__phorj_debug_render` can render a
-            // transpiled enum value as `Ty.Variant(...)` (never the mangled class shape).
-            self.debug_enum_rows.push((
-                vname.clone(),
-                last_segment(&e.name).to_string(),
-                v.name.clone(),
-            ));
-            self.line(&format!("final class {} extends {} {{", vname, base));
-            self.indent += 1;
-            if let Some(bv) = &v.backing_value {
-                // DEC-302: a backed variant's ctor sets the scalar `value` (the base declares it).
-                let lit = self.emit_expr(bv)?;
-                self.line(&format!(
-                    "public function __construct() {{ $this->value = {lit}; }}"
-                ));
-            } else if !v.fields.is_empty() {
-                let props: Vec<String> = v
-                    .fields
-                    .iter()
-                    .map(|p| format!("public {} ${}", self.emit_type(&p.ty), p.name))
-                    .collect();
-                self.line(&format!(
-                    "public function __construct({}) {{}}",
-                    props.join(", ")
-                ));
-            }
-            self.indent -= 1;
-            self.line("}");
-        }
-        Ok(())
-    }
-
     pub(super) fn emit_class(&mut self, c: &ClassDecl, program: &Program) -> Result<(), String> {
         // Names of ctor params that PHP will promote to properties.
         let mut promoted_names: HashSet<String> = HashSet::new();
@@ -158,6 +60,9 @@ impl Transpiler {
         // a parent, since the checker rejects `extends` of a non-`open` class via E-EXTEND-FINAL). An
         // `open` class emits as a plain `class` so a subclass may `extends` it.
         let final_kw = if c.open { "" } else { "final " };
+        // DEC-437: re-emit the declaration's `#[…]` attributes so PHP-side reflection can see them.
+        let attrs = self.attr_lines(&c.attrs);
+        self.out.push_str(&attrs);
         self.line(&format!(
             "{final_kw}class {disp}{extends_clause}{implements} {{"
         ));

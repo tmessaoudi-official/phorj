@@ -58,6 +58,11 @@ impl Transpiler {
         } else {
             ""
         };
+        // DEC-437: re-emit the declaration's `#[…]` attributes. An OVERLOAD set emits one body per
+        // member under a mangled name, so each carries its own attributes — which is faithful: the
+        // attributes were written on that declaration.
+        let attrs = self.attr_lines(&f.attrs);
+        self.out.push_str(&attrs);
         self.line(&format!(
             "{}function {}({}){} {{",
             static_prefix,

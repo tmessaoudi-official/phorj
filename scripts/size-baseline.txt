@@ -52,7 +52,6 @@
 635	src/serve/transport.rs
 563	src/tokenizer/strings.rs
 699	src/tokenizer/tests.rs
-543	src/transpile/classes.rs
 686	src/transpile/classes_synth.rs
 757	src/transpile/expr.rs
 1374	src/transpile/runtime_php.rs

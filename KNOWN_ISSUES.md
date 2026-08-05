@@ -182,6 +182,39 @@ coverage. The fix is a lift-side conversion (`Output.print("{e}")`, or `Conversi
 by the lifted expression's type — which the lifter does not currently track, hence a slice rather than a
 one-liner.
 
+## No CONSTANT FOLDER — an attribute with a computed argument cannot be re-emitted into PHP (found 2026-08-05, DEC-437)
+
+phorj has no constant folder at all. That is normally invisible, but DEC-437 gave it a user-visible edge:
+PHP parses attribute arguments as CONSTANT expressions, so `#[Tag(1 + 2)]` cannot be re-emitted — `1 + 2`
+lowers to `__phorj_checked_add(1, 2)`, and a function call there is
+*"Fatal error: Constant expression contains invalid operations"*, which kills the whole FILE before any
+output. [Both verified under php-8.5.8; `#[Tag(1 + 2)]` also type-checks clean, so the shape is reachable.]
+
+The attribute is therefore not emitted, and the PHP output says so
+(`// phorj: \`#[Tag(…)]\` not re-emitted — an argument has no PHP constant form`). Disclosed, never silent.
+
+**The fix is a constant folder**: fold an attribute's arguments at compile time and emit the literal
+(`#[Tag(3)]`), which is exactly faithful — an attribute argument is compile-time metadata, so folding it
+changes nothing. It also removes a second piece of conservatism: a CONCATENATION argument (`"a" + "b"`) is
+refused today even though PHP's `'a' . 'b'` IS a valid constant expression, because the gate admits no
+operator at all rather than trying to tell the safe ones from the helper-lowering ones.
+
+**Not a regression** — before DEC-437 no attribute reached PHP at all.
+
+## `phg check` rejects an enum member as an attribute ARGUMENT (found 2026-08-05, DEC-437)
+
+`#[Painted(Colour.Red)]`, with `enum Colour { Red, Green }` declared in the same file, reports
+*"unknown identifier `Colour`"* [Verified]. Attribute arguments ARE type-checked against the attribute
+class's constructor (`check_arg`, DEC-194 2b-3b), so this looks like the attribute-argument path not seeing
+enum types the way an ordinary expression position does.
+
+**Impact.** An enum-typed attribute — the natural way to write `#[Painted(Colour.Red)]` or a
+`#[Route(method: HttpMethod.Get)]` — cannot be used at all. The transpiler's rendering for it is already
+correct and pinned (`new Colour_Red()`, admissible in a PHP attribute argument since 8.1), so only the
+checker side is missing.
+
+**Found while building DEC-437**, by writing the test rather than assuming the shape worked.
+
 ## ✅ FIXED (2026-08-05, LIFT-ATTR) — the PHP lifter was blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
 
 **Was:** `src/lift/lexer.rs` treated `#` as a PHP line comment and skipped to end of line. PHP 8

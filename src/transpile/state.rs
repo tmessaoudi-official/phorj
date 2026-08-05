@@ -36,6 +36,7 @@ impl Transpiler {
             imports: HashMap::new(),
             gates: HelperGates::default(),
             namespaced: false,
+            attr_classes: Vec::new(),
             class_implements: std::collections::BTreeMap::new(),
             class_tables: crate::native::ClassTables::default(),
             debug_enum_rows: Vec::new(),

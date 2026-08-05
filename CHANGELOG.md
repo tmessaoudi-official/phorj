@@ -6,6 +6,47 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — phorj attributes are re-emitted into the transpiled PHP (DEC-437, 2026-08-05)
+Developer-ruled. Attributes used to be erased entirely on the PHP leg, which was *correct* and useless:
+`phorj → PHP → phorj` lost them, and PHP-side reflection could not see a transpiled program's metadata at
+all. Now a USER attribute (a use of a class declared `#[Attribute]`) and the `#[Attribute]` marker itself
+reach the output. The marker is not decoration — without it PHP refuses `newInstance()` with *"Attempting
+to use non-attribute class"* — and with it, reflection genuinely works: a transpiled program's `Audited`
+attribute constructs and reads back as `Audited=billing/2` under php-8.5.8.
+
+Every exclusion is measured, because an emitted attribute can break byte-identity in two different ways:
+
+- **`#[Deprecated]` is never mapped onto PHP's own `#[\Deprecated]`.** PHP 8.4's has RUNTIME behaviour —
+  calling the function prints `Deprecated: Function greet() is deprecated, …` — while phorj's is
+  compile-time only (DEC-417: use-site warnings come from the reference pass, at check time). Mapping them
+  would make the PHP leg print a line neither phorj engine prints.
+- **An attribute with a non-constant argument is not emitted.** PHP parses attribute arguments as CONSTANT
+  expressions, so a function call is *"Fatal error: Constant expression contains invalid operations"* — the
+  whole file dies before any output. That is reachable, not theoretical: `#[Tag(1 + 2)]` type-checks clean
+  and `1 + 2` lowers to `__phorj_checked_add(1, 2)`. The omission is DISCLOSED in the PHP output
+  (`// phorj: \`#[Tag(…)]\` not re-emitted — an argument has no PHP constant form`), never silent.
+- Every other built-in (`#[Entry]`, `#[Route]`, `#[Config]`, `#[Injectable]`, `#[Provides]`,
+  `#[Transient]`, `#[Invoke]`, `#[ToString]`, `#[UncheckedOverflow]`) is phorj compile-time machinery
+  consumed by a desugar, so erasing it is correct rather than lossy. The filter is defined against the
+  single `BUILTIN_ATTRIBUTE_PATHS` enumeration, so a new built-in is excluded automatically.
+
+The gate admits literals, an enum member (`Colour.Red` → `new Colour_Red()`, admissible because PHP 8.1
+allows `new` in an attribute argument — it is evaluated on reflection, not at parse time), literal
+lists/maps, and named arguments (PHP 8.0 spells them identically, so nothing is reordered) — all-or-nothing
+per attribute. Name resolution reuses DEC-435's canonical-path rule, so the transpiler cannot bind a name
+the checker validated against a different class.
+
+Follow-up named rather than half-built: a **constant folder** (`#[Tag(1 + 2)]` → `#[Tag(3)]`) would remove
+the gate's conservatism — phorj has none today. And a pre-existing CHECKER gap surfaced: an enum member as
+an attribute ARGUMENT is rejected by `phg check` (*"unknown identifier `Colour`"*), so that emission path is
+currently unreachable; its rendering is pinned by a raw-emit test so the emitter is right when the gap
+closes.
+
+Invariant 13 debt burned down rather than deferred: `transpile/classes.rs` was a grandfathered 543-line
+breach the gate forbids growing, so the enum emitter moved to `transpile/enums.rs` — taking it to 448 and
+letting its baseline row be **dropped**, tightening the ratchet — and pass-1 name collection moved to
+`transpile/collect.rs` when `program_emit.rs` crossed 500.
+
 ### Fixed — the PHP lifter was blind to EVERY `#[…]` attribute (LIFT-ATTR / DEC-436, 2026-08-05)
 A bare `#` is a line comment in PHP, and the lift lexer treated `#[Audited("billing")]` as exactly that —
 so **every attribute in every lifted file was silently swallowed**. For a tool whose contract is *refuse

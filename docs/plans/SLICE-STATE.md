@@ -24,6 +24,25 @@ hard cap exactly, so statements moved to `printer/stmts.rs` first); and LIFT-NS'
 counted a name appearing after a `.`, keeping a dead `import Attribute;` that `phg check` accepts — an
 occurrence preceded by `.` no longer counts.
 
+**Also shipped 2026-08-05 — DEC-437, the developer's ruling on the trade LIFT-ATTR surfaced:** phorj
+attributes are now **re-emitted into the transpiled PHP**, so PHP-side reflection can read a transpiled
+program's metadata and `phorj → PHP → phorj` stops losing it. [Verified: `newInstance()` on transpiled
+output returns `Audited=billing/2` under php-8.5.8.] My recommendation had been to leave them erased and
+queue it with DI-v2; the ruling was the better call.
+
+Every exclusion is MEASURED, because an emitted attribute breaks byte-identity in two distinct ways:
+`#[Deprecated]` is never mapped onto PHP's own `#[\Deprecated]` (PHP 8.4's prints a RUNTIME notice phorj's
+compile-time marker does not — a direct Invariant 1 break), and an attribute with a NON-CONSTANT argument
+is not emitted at all (PHP parses attribute args as constant expressions, so a helper call is a
+*whole-file* fatal — and `#[Tag(1 + 2)]` checks clean while lowering to `__phorj_checked_add`). Rejections
+are DISCLOSED in the PHP output, never silent. Follow-up named rather than half-built: a **constant
+folder** would remove the gate's conservatism; phorj has none today. A pre-existing CHECKER gap also
+surfaced — an enum member as an attribute ARGUMENT is `unknown identifier` at `phg check`.
+
+Invariant 13 debt burned down twice rather than deferred: the enum emitter moved to `transpile/enums.rs`
+(taking `classes.rs` from a grandfathered 543 to 448, so its baseline row was **DROPPED** — the ratchet
+tightens), and pass-1 name collection moved to `transpile/collect.rs`.
+
 **Prior slices, all shipped and gate-green (2026-08-04):** **DEC-401** `declare(strict_types=1)` in every
 transpiled file, read back by the lifter — its ruling's "no example can change behaviour" assumption was
 REFUTED by the build (a PHP runtime helper was leaning on coercion: `-tie` on a `decimal` emitted

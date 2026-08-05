@@ -200,6 +200,13 @@ current namespace, and a leading `\` means the root. Only then is it spelled for
 arguments** lift 1:1 (`#[Tag(order: 3, name: "late")]`) — phorj spells them the same way, so nothing is
 reordered; the checker normalizes them into their constructor slots.
 
+**The other direction closed too (DEC-437, developer-ruled).** `transpile` now RE-EMITS attributes into
+the PHP, so `PHP → phorj → PHP` keeps the metadata and PHP-side reflection can read it
+(`ReflectionAttribute::newInstance()` works — which is why the `#[Attribute]` marker is emitted as PHP's own
+`#[\Attribute]`). Two things are deliberately left out of the PHP, both for byte-identity: phorj's built-ins
+(compile-time machinery), and **any attribute whose argument has no PHP CONSTANT form** — PHP would fatal
+the whole file — with the omission disclosed in the output. See `CHANGELOG.md` / DEC-437.
+
 **Arguments are never rewritten, dropped or reordered.** `#[Attribute(Attribute::TARGET_CLASS)]`
 therefore lifts to a phorj marker that the CHECKER rejects (`E-ATTRIBUTE-ARGS` — target restriction is
 not implemented yet) rather than the lifter quietly dropping the restriction; likewise
