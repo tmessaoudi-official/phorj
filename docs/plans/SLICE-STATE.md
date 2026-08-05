@@ -134,13 +134,37 @@ ALL**. LIFT-ATTR was the SECOND blocker. Full analysis in
 - **The LSP advertises NO `signatureHelpProvider` at all** (confirmed during DEC-435) — Invariant 17's
   signature-help row is a pre-existing unmet gap for every call in the language, not an attribute matter.
 
-**Carried unchanged from the 2026-08-01 cursor** (the DEC-423 perf programme): 10 OWED bench rows, worst
-first — fslines 0.118, queryparse 0.224, fsforeachline 0.298, jsonround 0.300, strappend 0.490,
-floatloop 0.776, dbwork 0.833, deepjson 0.859, listcontains 0.899, floatmul 0.989 — plus DEC-431's ~320x
-`throws` JIT cliff (a fallible call anywhere takes the WHOLE function off the JIT) and DEC-434's "a closure
-is NEVER JIT-compiled". DEC-432 standing rule: nothing leaves the list until it WINS. Pending rulings:
-`MICROBENCH_RUNS` above K=3, the spread-adjusted arming rule (DEC-434.1), Json accessors, and the
-hash-flooding hasher trade.
+**RE-MEASURED 2026-08-05 (DEC-440) — the OWED list is 7, not 10, and every survivor is RULING-GATED.**
+K=9, pinned + interleaved, load 0.21, php-8.5.8 release+JIT. **Three rows WON and therefore LEAVE the list**
+per DEC-432's own rule: `floatloop` 0.776 → **1.01×**, `listcontains` 0.899 → **1.92×**, `floatmul` 0.989 →
+**1.01×** (floatmul sits ON the line — recorded as the hardware-bounded NEAR-PARITY class DEC-430 closed
+`floatloop` into, not a comfortable win). Nothing was re-baselined (DEC-365; DEC-434.1's arming rule is
+still pending). Survivors, worst first: **fslines 0.11 · queryparse 0.23 · fsforeachline 0.35 ·
+jsonround 0.31 · strappend 0.51 · dbwork 0.82 · deepjson 0.92** — of which `strappend` (83%/72% spread) and
+`dbwork` (48%/11%) are **OWED-UNMEASURABLE on this box**, recorded as such rather than reported as losses of
+a particular size.
+
+**THE BLOCKER, and it is the reason #64 cannot proceed as a build task:** each survivor's fix is already
+diagnosed in the register and each terminates in a ruling that was never given — fslines/fsforeachline =
+kind-specialized closure entries (DEC-434.2 opt. 3); jsonround = `Json.getInt`/`getString`, new stdlib
+surface (DEC-426); queryparse = lazy bags / arena, a rich-Request design change (DEC-424); deepjson =
+DEC-294 lazy-repr change; strappend = a new `TakeLocal`-shaped `Op` (DEC-431 B); the ~320x cliff = four
+options, none chosen, the leading one already REFUTED (DEC-431.2). Re-attacking any of them means
+duplicating refuted work or self-ruling a design decision.
+
+**DEC-440's one new fact — the "no new machinery" lever is BOUNDED to ~5-7%.** DEC-434.2's option 4 (cut the
+per-call frame cost) was profiled to find its ceiling before proposing it: a read-only callgrind probe over
+40 000 lines reproduces 2 775 Ir/line, of which **≈49% is closure machinery** (ruling-gated) and only **15%
+is the allocator** — against 4.95% for `memchr`, the actual line scan. Measured **2.66 mallocs per line**,
+and two of them have a named root cause: `src/phstr.rs` stores a >22-byte string as `Rc<HeapStr>` with
+`HeapStr { hash, s: String }`, so the `Rc` box and the `String` buffer are separate allocations where PHP's
+`zend_string` is one. **The fix is blocked by an invariant, not by effort** — the single-allocation form needs
+an unsized tail, which `#![deny(unsafe_code)]` forbids outside `src/jit/`, so it needs an audited unsafe
+island or an admitted crate = a dependency-policy ruling. Even a halved allocator moves `fsforeachline`
+0.35 → ~0.38, not to a WIN.
+
+Other pending rulings unchanged: `MICROBENCH_RUNS` above K=3, the spread-adjusted arming rule (DEC-434.1),
+and the hash-flooding hasher trade.
 
 > The cursor below this line is HISTORY. This header is the live one. (It was itself stale by a full
 > wave on 2026-07-30 — the same stale-label class that had four BUILT features recorded as "build

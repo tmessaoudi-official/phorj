@@ -7112,3 +7112,96 @@ soft cap, and the gate's warn count fell 144 → 143. **Next split candidate, no
 text this change moved (`[Verified: …with the cap alone…]` parses as a link attempt). It pre-exists at HEAD at
 `discover.rs:24` [Verified by stashing and re-running], and `cargo doc` is not part of the quality gate.
 Recorded so it is a known state rather than a surprise later.
+
+### DEC-440 (2026-08-05) — THE OWED LIST RE-MEASURED: 10 → 7, three rows genuinely WON; every survivor is ruling-gated
+
+Took task #64 (PERF HUNT). Re-measured before touching anything, per Rule 11 — and the list was stale.
+
+**Measured on this box, load 0.21, pinned + interleaved, K=9, php-8.5.8 release+JIT** (the local-php path
+from `scripts/microbench.sh`; not interchangeable with the docker `micro-baseline.json` ratios):
+
+| row | cursor (2026-08-01) | **now (K=9)** | spread v/p | verdict |
+|---|---|---|---|---|
+| `fslines` | 0.118 | **0.11×** | 7%/23% | LOSS |
+| `queryparse` | 0.224 | **0.23×** | 7%/6% | LOSS |
+| `fsforeachline` | 0.298 | **0.35×** | 6%/4% | LOSS |
+| `jsonround` | 0.300 | **0.31×** | 13%/4% | LOSS |
+| `strappend` | 0.490 | **0.51×** | 83%/72% | LOSS (unmeasurable spread) |
+| `dbwork` | 0.833 | **0.82×** | 48%/11% | LOSS (unmeasurable spread) |
+| `deepjson` | 0.859 | **0.92×** | 14%/38% | LOSS |
+| `floatloop` | 0.776 | **1.01×** | 4%/6% | **WIN** |
+| `listcontains` | 0.899 | **1.92×** | 12%/9% | **WIN** |
+| `floatmul` | 0.989 | **1.01×** | 4%/4% | **WIN** |
+
+**Three rows LEAVE the list, per DEC-432's own rule** ("nothing leaves until it WINS" — these won).
+`floatmul` was 1.00× at K=3 and 1.01× at K=9: it sits ON the line, so it is recorded as the same
+hardware-bounded NEAR-PARITY class DEC-430 closed `floatloop` into, not as a comfortable win.
+`listcontains` at 1.92× is the DEC-311-family vertical (task #23) finally showing up in a clean measurement.
+**Nothing was re-baselined** — DEC-365 forbids `--emit` as a response to a number, and DEC-434.1's arming
+rule is still a pending ruling.
+
+**Two rows cannot support a verdict on this box at all:** `strappend` (83%/72% spread) and `dbwork`
+(48%/11%). Both are small absolute workloads (2.4 ms / 83 ms). Recorded as OWED-UNMEASURABLE rather than
+reported as losses of a particular size — NO-HIDDEN-LOSS cuts both ways.
+
+### The finding that matters: every survivor terminates in a ruling that was never given
+
+This is why #64 cannot proceed as a build task. Each row's blocker is already diagnosed in this register;
+re-attacking any of them means either duplicating refuted work or self-ruling a design decision
+(Invariant 15 forbids).
+
+| row | blocked on | recorded in |
+|---|---|---|
+| `fslines` 0.11× | JIT programme scope ruling — kind-specialized closure entries | DEC-434.2 opt. 3 |
+| `fsforeachline` 0.35× | same | DEC-434.2 |
+| `jsonround` 0.31× | `Json.getInt`/`getString` accessors = NEW STDLIB SURFACE | DEC-426 |
+| `queryparse` 0.23× | lazy bags / arena — a rich-Request design change | DEC-424 |
+| `deepjson` 0.92× | validation records child offsets — DEC-294 lazy-repr change | DEC-426 |
+| `strappend` 0.51× | a new `Op` (`TakeLocal`-shaped) to unalias the accumulator | DEC-431 B |
+| the ~320× cliff | 4 options, none chosen; the leading one already REFUTED | DEC-431.2 |
+
+### What I added: the "no new machinery" option is BOUNDED, measured
+
+DEC-434.2 left option 4 — *"cut the per-call frame cost … the only one that helps without new
+machinery"* — as the single non-ruling-gated lever. Profiled it to find its ceiling before proposing it,
+and the ceiling is small.
+
+Read-only probe (fixture pre-written outside the program, so `fixture()` cannot dominate as it did in
+DEC-431), `callgrind`, 40 000 lines, release binary: **111.0 M Ir = 2 775 Ir/line** (the recorded figure
+was 2 806 — reproduced).
+
+| component | share | note |
+|---|---|---|
+| `exec_op` | 19.31% | interpreting the ~8-op closure body |
+| `run_until` | 10.74% | the re-entrant VM loop |
+| `call_closure_value` | 5.44% | |
+| `Vec<Value>::push_mut` | 4.54% | |
+| `Value::clone` + `drop_glue` + `do_return` | 9.18% | |
+| **closure machinery, total** | **≈49%** | needs the ruling-gated JIT work |
+| allocator (`malloc`/`free`/`_int_*`) | **14.99%** | the only part option 4 can reach |
+| `memchr_aligned` — THE ACTUAL LINE SCAN | 4.95% | |
+| `from_utf8` | 3.10% | 1 call/line |
+
+**Allocation count, measured from the callgrind call edges: 106 274 `malloc` for 40 000 lines = 2.66 per
+line** (104 748 `free`; only 610 `realloc`, so no buffer is growing repeatedly — `read_until` is called
+exactly 40 001 times and reuses its buffer).
+
+**Root cause of two of those [Verified by reading the definition]:** `src/phstr.rs` stores a >22-byte
+string as `Rc<HeapStr>` with `HeapStr { hash: Cell<u64>, s: String }` — so the `Rc` box is one allocation
+and the `String`'s buffer is a second. The bench's lines are ~48 bytes, past `INLINE_CAP = 22`, so every
+line takes the heap path. PHP's `zend_string` is a DST with its bytes in the SAME allocation: one malloc
+per line against phorj's two. (The inline ≤22-byte variant already exists and is why short-string
+workloads like `strbuild` win — this is specifically the long-string path.)
+
+**And the obvious fix is blocked by a project invariant, not by effort.** Collapsing `Rc<HeapStr>` to one
+allocation needs the bytes as an unsized tail in the same block, which Rust cannot express safely —
+`#![deny(unsafe_code)]` holds outside `src/jit/`, so this would need either an audited unsafe island or an
+admitted crate (`triomphe`/`arcstr`-shaped), i.e. an external-dependency-policy ruling.
+
+**So option 4's ceiling is ~5–7% of total Ir even if the allocator halves** — which moves
+`fsforeachline` from 0.35× to roughly 0.38×, not to a WIN. The flip needs the closure machinery (≈49%),
+which is exactly the ruling-gated work. Recorded so nobody spends the slice on the reachable 5% believing
+it closes the row.
+
+**Nothing was built.** The measurement removed three rows from the list, bounded the fourth option, and
+found one new blocked-by-invariant cause.
