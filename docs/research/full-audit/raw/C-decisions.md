@@ -6878,3 +6878,85 @@ re-verify every attribute-consuming desugar against the rewritten shapes).
 **Process note.** Two of the three findings in this correction came from writing the reproducer honestly
 rather than from a failing test — and the false one came from NOT doing that. A test built on a shape the
 language cannot express is not coverage; it is a green light wired to nothing.
+
+### DEC-438 (2026-08-05) — attribute-argument CONSTANT FOLDING (narrow by construction)
+
+**Ruled by the developer** as the sequel to DEC-437: fold a computed attribute argument to its literal so it
+can be re-emitted, instead of being refused with a disclosure comment. Scoped to attribute arguments only —
+I recommended the narrow form and the developer took it.
+
+`#[Tag(1 + 2 * 3, -5, 1.5 + 2.0, "a" + "b")]` now emits `#[Tag(7, -5, 3.5, 'ab')]`.
+
+**Why the narrow scope is not a compromise.** An attribute argument is compile-time metadata that is never
+evaluated at run time, so replacing it with its value cannot change what any program does. A GENERAL folder
+would have to answer a language question this slice deliberately avoids: does `int x = 2147483647 + 1;`
+become a compile error when the fold faults? Confined to attribute arguments there is no such question.
+
+**Two disciplines, both load-bearing:**
+1. **the arithmetic is the SINGLE-SOURCED kernel** (`crate::value::int_add`/`int_sub`/`int_mul`/`int_neg`,
+   Invariant 4 — "never re-inline them in a backend"). They return `Result`, so an OVERFLOWING argument
+   simply fails to fold and falls back to the disclosure — never wrapped, never promoted to a new compile
+   error. [Verified: `#[Over(9223372036854775807 + 1)]` is disclosed, not folded.] The kernel choice is what
+   made the hardest case fall out for free rather than needing a special case.
+2. **only exact, non-faulting operators**: `+ - *` on int/int and float/float, `+` on string/string
+   (phorj's concat), unary `-`. `/` and `%` are excluded — they fault on zero, and a folded quotient is
+   where an exactness argument would have to be made. A non-finite float result is not folded either
+   (`inf`/`NaN` have no round-tripping PHP literal).
+
+**The surprise worth recording: unary `-` was the biggest win.** `#[Tag(-5)]` parses as
+`Unary { Neg, Int(5) }`, not a literal — so before the fold a plain NEGATIVE NUMBER, the commonest computed
+argument shape in real code, was refused as "non-constant". The gate's own tests had documented that as
+deliberate conservatism; it was closer to an accident.
+
+A test asserts the fold agrees with what the INTERPRETER computes for the same expression, rather than
+trusting the shared kernel by inspection — the fold is a second arithmetic site, and Invariant 4 exists
+because those drift. Verified end to end: PHP reflection reads the folded values back
+(`n=7 neg=-5 f=3.5 s=ab` under php-8.5.8), all three legs agreeing.
+
+**Still not folded, now for the right reason:** a function CALL (`#[Tag(three())]` type-checks clean but its
+value is unknown until run time) stays disclosed. That is the case PHP would fatal on, and no folder can fix
+it.
+
+### DEC-439 (2026-08-05) — QUEUED, NOT BUILT: project-aware lifting = DIRECTORY lift + composer vendor REPORT (stubs opt-in)
+
+**Ruled by the developer, recorded here before any build** (Invariant 19: a ruled-but-unbuilt spec lives in
+the repo so a fresh context resumes from repo state). Two rulings, both option 1 of their question:
+
+**(a) `phg lift <dir>` — a DIRECTORY lift producing a phorj PROJECT.** Walk the tree, lift every `.php` in
+ONE pass so cross-file references resolve against each other, and write a generated `phorj.json` + `src/`
+layout mirroring the namespaces. This is what unblocks BOTH halves of the lift chain at once: LIFT-NS's
+`use`→`import` (`E-MODULE-NOT-FOUND` in a flat file) and LIFT-ATTR's framework attributes
+(`E-UNKNOWN-ATTRIBUTE`) fail for the same reason — one file cannot see its siblings.
+
+PSR-4 → phorj mapping is mechanical: `App\Entity` → `package App.Entity` → `src/App/Entity/`, which is the
+layout the loader already enforces (`E-PKG-PATH`), and `package_segment` already pascalizes and refuses the
+segments phorj cannot lex.
+
+**(b) composer vendor: REPORT always, foreign STUBS opt-in behind `--vendor=stub`.**
+
+Detection needs no heuristics — composer is machine-readable [Verified by inspection of the format]:
+`composer.json` `autoload.psr-4` gives the app's OWN roots (lift those); `require` +
+`vendor/composer/installed.json` give the dependencies; anything referenced outside both, and not a PHP
+builtin (already mapped by DEC-421 exceptions / DEC-420 functions), is vendor.
+
+Default: a `VENDOR-REPORT.md` listing every vendor symbol the app touches, grouped by package, with
+reference counts and file/line. No synthesized code; the report IS the migration worklist. With
+`--vendor=stub`: generate `declare class` / `declare function` foreign stubs (M8.5) from the vendor's OWN
+type hints, parsed from `vendor/` sources — not guessed.
+
+**THE DISCLOSED PRICE of stubs, measured before ruling:** a program with foreign declarations **cannot run
+on either phorj engine** — [Verified: `phg run` on a `declare class` program errors `E-FOREIGN-RUNTIME`
+("the Rust backends have no PHP runtime — transpile it instead"), while `phg check` and `phg transpile` both
+succeed]. So `--vendor=stub` produces a TRANSPILE-ONLY program: no VM, no JIT, and no byte-identity spine
+(one leg only). That is why it is opt-in rather than the default — Invariant 14 forbids trading the spine
+silently. It is also why it is worth having: with DEC-320 v1's sibling emit (`phg build --php`, composer/PSR-4
+compatible) it is the TS→JS playbook — lift the app to `.phg`, keep vendor in PHP, emit `.php` siblings
+composer autoloads next to untouched `vendor/`.
+
+**Known limit regardless of option:** many vendor signatures use PHP types phorj has no Tier-1 mapping for
+(union types, bare `array`, `iterable`, `mixed`, docblock generics). Those stubs are un-generatable and fall
+back to the report.
+
+**Recorded as the follow-on rather than built now:** registry-first resolution (try `phg add` for a phorj
+port of each composer package before stubbing). The registry has no ports yet, so today it would degenerate
+to the ruled behaviour with an extra lookup.

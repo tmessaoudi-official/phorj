@@ -6,6 +6,37 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — attribute arguments are constant-FOLDED (DEC-438, 2026-08-05)
+Developer-ruled, narrow by construction. `#[Tag(1 + 2 * 3, -5, 1.5 + 2.0, "a" + "b")]` now emits
+`#[Tag(7, -5, 3.5, 'ab')]` instead of being refused as non-constant.
+
+An attribute argument is compile-time metadata that is never evaluated at run time, so replacing it with its
+value cannot change what a program does — which is why the fold lives in the transpile gate and not in a
+checker pass. A GENERAL folder would have to answer a language question this slice deliberately avoids
+(does `int x = 2147483647 + 1;` become a compile error when the fold faults?).
+
+Two disciplines make it safe rather than clever. The arithmetic is the **single-sourced kernel**
+(`crate::value::int_add`/`int_sub`/`int_mul`/`int_neg` — Invariant 4, "never re-inline them in a backend"),
+and those return `Result`, so an **overflowing argument declines to fold** and falls back to the disclosure
+comment — never wrapped, never promoted to a new compile error. And only exact, non-faulting operators are
+folded: `+ - *` on int/int and float/float, `+` on string/string (phorj's concat), unary `-`. Division and
+modulo are excluded (they fault on zero); a non-finite float result is not folded.
+
+The biggest win was the least expected: `#[Tag(-5)]` parses as `Unary { Neg, Int(5) }`, so before the fold a
+plain **negative number** — the commonest computed argument in real code — was refused. A test now asserts the
+fold agrees with what the *interpreter* computes for the same expression, rather than trusting the shared
+kernel by inspection. A function call argument stays disclosed, correctly: its value is not known until run
+time, and that is the case PHP fatals on.
+
+### Queued — project-aware lifting ruled but NOT built (DEC-439, 2026-08-05)
+Recorded in the repo before any build (Invariant 19). `phg lift <dir>` will lift a whole tree in ONE pass into
+a generated `phorj.json` + `src/` project so cross-file references resolve — the single fix for both
+`E-MODULE-NOT-FOUND` on lifted imports and `E-UNKNOWN-ATTRIBUTE` on framework attributes. Composer vendor is
+**detected** from `autoload.psr-4` + `installed.json` and **reported** by default (a `VENDOR-REPORT.md`
+worklist); foreign `declare` stubs are opt-in behind `--vendor=stub`, because a program with foreign
+declarations cannot run on either phorj engine (`E-FOREIGN-RUNTIME`) — it becomes transpile-only, which is a
+deliberate trade, not a default. See DEC-439 for the full ruling.
+
 ### Added — phorj attributes are re-emitted into the transpiled PHP (DEC-437, 2026-08-05)
 Developer-ruled. Attributes used to be erased entirely on the PHP leg, which was *correct* and useless:
 `phorj → PHP → phorj` lost them, and PHP-side reflection could not see a transpiled program's metadata at

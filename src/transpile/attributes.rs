@@ -36,12 +36,34 @@
 //! phorj accepts a computed attribute argument today [Verified: `#[Tag(1 + 2)]` type-checks clean], so
 //! the shape is reachable.
 //!
-//! So only arguments with a faithful PHP CONSTANT form are emitted — literals, an enum member, and
+//! So only arguments with a faithful PHP CONSTANT form are emitted — literals, a construction, and
 //! literal lists/maps of those. An attribute with any other argument is **not** emitted, and the PHP
 //! output carries a comment naming it, because a dropped attribute must never be invisible (DEC-166 /
-//! Invariant 14: disclosed, never silent). Constant-FOLDING such arguments (`1 + 2` → `3`) would emit
-//! them faithfully and is the obvious next step — phorj has no constant folder yet, so it is recorded as
-//! a follow-up rather than half-built here.
+//! Invariant 14: disclosed, never silent).
+//!
+//! # Constant FOLDING (developer-ruled, narrow by construction)
+//!
+//! An arithmetic argument is now FOLDED to its literal — `#[Tag(1 + 2)]` emits `#[Tag(3)]` — which is
+//! exactly faithful rather than a convenience: an attribute argument is compile-time metadata that is
+//! never evaluated at runtime, so replacing it with its value cannot change what any program does. That
+//! is also why the fold lives HERE and not in a checker pass: a general folder would have to answer a
+//! LANGUAGE question (does `int x = 2147483647 + 1;` become a compile error?) that this slice
+//! deliberately does not touch. Confined to attribute arguments, there is no such question to answer.
+//!
+//! Two disciplines make the fold safe rather than clever:
+//!
+//! * **the arithmetic is the SINGLE-SOURCED kernel** (`crate::value`, Invariant 4 — "never re-inline
+//!   them in a backend"). `int_add`/`int_sub`/`int_mul`/`int_neg` return `Result`, so an OVERFLOWING
+//!   argument simply fails to fold and falls back to the disclosure comment. No wrapping, no new
+//!   compile error, no divergence from what the engines would have computed;
+//! * **only exact, non-faulting operators are folded** — `+ - *` on int/int and float/float, `+` on
+//!   string/string (phorj's concat), and unary `-`. `/` and `%` are excluded (they fault on zero, and a
+//!   folded division is where an exactness argument would have to be made). A non-finite float result
+//!   is not folded either.
+//!
+//! Unary `-` matters more than it looks: `#[Tag(-5)]` parses as `Unary { Neg, Int(5) }`, so before the
+//! fold a plain NEGATIVE NUMBER was refused as "non-constant" — the single most likely argument shape to
+//! hit the gate in ordinary code.
 
 use super::*;
 
@@ -128,6 +150,27 @@ fn php_single_quoted(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
+/// A folded attribute-argument value. Deliberately tiny — the only three types whose phorj arithmetic
+/// has an exact PHP literal form.
+#[derive(Clone)]
+enum ConstVal {
+    Int(i64),
+    Float(f64),
+    Str(String),
+}
+
+impl ConstVal {
+    /// The PHP literal. Shares `php_single_quoted` and the `{f:?}` float spelling with the unfolded
+    /// literal path, so a folded `1 + 2` and a written `3` cannot render differently.
+    fn render(&self) -> String {
+        match self {
+            ConstVal::Int(n) => n.to_string(),
+            ConstVal::Float(f) => format!("{f:?}"),
+            ConstVal::Str(s) => format!("'{}'", php_single_quoted(s)),
+        }
+    }
+}
+
 impl Transpiler {
     /// Every argument rendered as a PHP constant expression, or `None` if any argument has no such form.
     ///
@@ -202,6 +245,81 @@ impl Transpiler {
             // `attrs` is the root fix — recorded as its own item, because every attribute-consuming
             // desugar reads attributes STRUCTURALLY and would have to be re-checked against the change.
             Expr::New(inner, _) => self.php_const_arg(inner),
+            // FOLDED — see the header. The operand recursion means `1 + 2 * 3` folds too, and any
+            // sub-expression that is not itself foldable makes the whole argument decline.
+            Expr::Unary { op, expr, .. } => self.fold_unary(*op, expr),
+            Expr::Binary { op, lhs, rhs, .. } => self.fold_binary(*op, lhs, rhs),
+            _ => None,
+        }
+    }
+
+    /// A foldable literal VALUE of an attribute argument — the intermediate form the fold works on, so
+    /// nested arithmetic composes without re-parsing rendered strings.
+    fn const_value(&self, e: &Expr) -> Option<ConstVal> {
+        match e {
+            Expr::Int(n, _) => Some(ConstVal::Int(*n)),
+            Expr::Float(f, _) => Some(ConstVal::Float(*f)),
+            Expr::Str(parts, _) => match parts.as_slice() {
+                [StrPart::Literal(s)] => Some(ConstVal::Str(s.clone())),
+                [] => Some(ConstVal::Str(String::new())),
+                _ => None,
+            },
+            Expr::Unary { op, expr, .. } => self.fold_unary_value(*op, expr),
+            Expr::Binary { op, lhs, rhs, .. } => self.fold_binary_value(*op, lhs, rhs),
+            _ => None,
+        }
+    }
+
+    fn fold_unary(&self, op: UnaryOp, expr: &Expr) -> Option<String> {
+        Some(self.fold_unary_value(op, expr)?.render())
+    }
+
+    fn fold_binary(&self, op: BinaryOp, lhs: &Expr, rhs: &Expr) -> Option<String> {
+        Some(self.fold_binary_value(op, lhs, rhs)?.render())
+    }
+
+    /// Unary `-` only. `!` is excluded for the same reason `/` is: nothing in an attribute needs it, and
+    /// every operator admitted here is one more place the fold could disagree with an engine.
+    fn fold_unary_value(&self, op: UnaryOp, expr: &Expr) -> Option<ConstVal> {
+        let v = self.const_value(expr)?;
+        match (op, v) {
+            // `int_neg` is the single-sourced kernel: `-i64::MIN` faults there, so it declines here.
+            (UnaryOp::Neg, ConstVal::Int(n)) => crate::value::int_neg(n).ok().map(ConstVal::Int),
+            (UnaryOp::Neg, ConstVal::Float(f)) => Some(ConstVal::Float(-f)),
+            _ => None,
+        }
+    }
+
+    fn fold_binary_value(&self, op: BinaryOp, lhs: &Expr, rhs: &Expr) -> Option<ConstVal> {
+        let (a, b) = (self.const_value(lhs)?, self.const_value(rhs)?);
+        match (a, b) {
+            // Checked kernel arithmetic: an overflowing argument declines to fold and is disclosed
+            // instead — never wrapped, never promoted to a new compile error.
+            (ConstVal::Int(x), ConstVal::Int(y)) => {
+                let r = match op {
+                    BinaryOp::Add => crate::value::int_add(x, y),
+                    BinaryOp::Sub => crate::value::int_sub(x, y),
+                    BinaryOp::Mul => crate::value::int_mul(x, y),
+                    _ => return None,
+                };
+                r.ok().map(ConstVal::Int)
+            }
+            (ConstVal::Float(x), ConstVal::Float(y)) => {
+                let r = match op {
+                    BinaryOp::Add => crate::value::float_add(x, y),
+                    BinaryOp::Sub => crate::value::float_sub(x, y),
+                    BinaryOp::Mul => crate::value::float_mul(x, y),
+                    _ => return None,
+                };
+                // A non-finite result is not folded: `inf`/`NaN` have no PHP literal spelling that
+                // round-trips, and an attribute carrying one is far likelier to be a mistake than intent.
+                r.is_finite().then_some(ConstVal::Float(r))
+            }
+            // phorj spells string concatenation `+`. Folding it to one literal is exactly equivalent to
+            // PHP's `'a' . 'b'` and simpler to render.
+            (ConstVal::Str(x), ConstVal::Str(y)) if matches!(op, BinaryOp::Add) => {
+                Some(ConstVal::Str(format!("{x}{y}")))
+            }
             _ => None,
         }
     }

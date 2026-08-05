@@ -24,6 +24,22 @@ hard cap exactly, so statements moved to `printer/stmts.rs` first); and LIFT-NS'
 counted a name appearing after a `.`, keeping a dead `import Attribute;` that `phg check` accepts — an
 occurrence preceded by `.` no longer counts.
 
+**Also shipped 2026-08-05 — DEC-438, attribute-argument constant folding (developer-ruled, narrow).**
+`#[Tag(1 + 2 * 3, -5, 1.5 + 2.0, "a" + "b")]` → `#[Tag(7, -5, 3.5, 'ab')]`. Confined to attribute arguments,
+which is what keeps it free of the language question a general folder would raise (does
+`2147483647 + 1` become a compile ERROR when the fold faults?). The arithmetic is the SINGLE-SOURCED kernel
+(Invariant 4), so an overflowing argument declines to fold and stays disclosed — the hardest case fell out
+for free. Biggest win was the least expected: `#[Tag(-5)]` parses as `Unary { Neg, Int(5) }`, so a plain
+NEGATIVE NUMBER had been refused as non-constant all along.
+
+**QUEUED, ruled but NOT built — DEC-439, project-aware lifting.** `phg lift <dir>` lifts a whole tree in ONE
+pass into a generated `phorj.json` + `src/` project, so cross-file references resolve — the single fix for
+BOTH `E-MODULE-NOT-FOUND` on lifted imports and `E-UNKNOWN-ATTRIBUTE` on framework attributes. Composer
+vendor is detected from `autoload.psr-4` + `installed.json`, REPORTED by default (`VENDOR-REPORT.md`
+worklist), with foreign `declare` stubs opt-in behind `--vendor=stub` — because [Verified] a program with
+foreign declarations cannot run on either engine (`E-FOREIGN-RUNTIME`), so stubs make it transpile-only.
+**This is the next build.** Full ruling: DEC-439.
+
 **Also shipped 2026-08-05 — DEC-437, the developer's ruling on the trade LIFT-ATTR surfaced:** phorj
 attributes are now **re-emitted into the transpiled PHP**, so PHP-side reflection can read a transpiled
 program's metadata and `phorj → PHP → phorj` stops losing it. [Verified: `newInstance()` on transpiled

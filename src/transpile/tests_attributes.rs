@@ -145,17 +145,27 @@ fn a_class_valued_argument_renders_as_a_construction() {
     assert!(out.contains("#[Wrap(new Inner('x'))]"), "{out}");
 }
 
-/// …but a construction whose OWN argument is non-constant is still refused, all-or-nothing.
+/// A construction's own arguments are gated recursively — so a nested CALL still refuses the whole
+/// attribute, all-or-nothing.
 #[test]
-fn a_construction_with_a_non_constant_argument_is_still_disclosed() {
+fn a_construction_with_a_call_argument_is_still_disclosed() {
     let out = php_checked(&program(
-        "class Inner { constructor(public int n) {} }\n\n#[Attribute]\nclass Wrap { constructor(public Inner i) {} }\n\n#[Wrap(new Inner(1 + 2))]\nclass C {}",
+        "function three(): int { return 3; }\n\nclass Inner { constructor(public int n) {} }\n\n#[Attribute]\nclass Wrap { constructor(public Inner i) {} }\n\n#[Wrap(new Inner(three()))]\nclass C {}",
     ));
     assert!(!emits_attribute(&out, "Wrap"), "{out}");
     assert!(
         out.contains("// phorj: `#[Wrap(…)]` not re-emitted"),
         "{out}"
     );
+}
+
+/// …and the fold reaches INSIDE a construction: `new Inner(1 + 2)` becomes `new Inner(3)`.
+#[test]
+fn arithmetic_inside_a_construction_folds() {
+    let out = php_checked(&program(
+        "class Inner { constructor(public int n) {} }\n\n#[Attribute]\nclass Wrap { constructor(public Inner i) {} }\n\n#[Wrap(new Inner(1 + 2))]\nclass C {}",
+    ));
+    assert!(out.contains("#[Wrap(new Inner(3))]"), "{out}");
 }
 
 #[test]
@@ -167,41 +177,25 @@ fn a_list_argument_becomes_a_php_array() {
 }
 
 /// The gate that keeps the PHP leg compiling at all. PHP parses attribute arguments as CONSTANT
-/// expressions, and `1 + 2` lowers to `__phorj_checked_add(1, 2)` — a function CALL, which is
-/// *"Fatal error: Constant expression contains invalid operations"* and kills the whole file.
-/// [Verified under php-8.5.8.] So the attribute is not emitted — and the omission is DISCLOSED in the
-/// output, never silent (DEC-166).
+/// expressions, so a function CALL is *"Fatal error: Constant expression contains invalid operations"* and
+/// kills the whole file [Verified under php-8.5.8]. phorj accepts a call there [Verified:
+/// `#[Tag(three())]` type-checks clean], so the shape is reachable — and unlike arithmetic it can never be
+/// folded, because the value is not known until run time. Not emitted, and the omission is DISCLOSED in
+/// the output (DEC-166).
 #[test]
-fn a_non_constant_argument_is_disclosed_rather_than_emitted() {
+fn a_call_argument_is_disclosed_rather_than_emitted() {
     let out = php_checked(&program(
-        "#[Attribute]\nclass Tag { constructor(public int n) {} }\n\n#[Tag(1 + 2)]\nclass C {}",
+        "function three(): int { return 3; }\n\n#[Attribute]\nclass Tag { constructor(public int n) {} }\n\n#[Tag(three())]\nclass C {}",
     ));
     // Checked line-wise, NOT with a bare `contains`: the disclosure comment quotes `#[Tag(…)]` in its
-    // own text, so a substring test passes vacuously. (It did — this assertion caught my own test bug.)
+    // own text, so a substring test passes vacuously. (It did — that caught a bug in this very test.)
     assert!(
         !emits_attribute(&out, "Tag"),
-        "an attribute with a non-constant argument must not be emitted:\n{out}"
+        "an attribute with a call argument must not be emitted:\n{out}"
     );
     assert!(
         out.contains("// phorj: `#[Tag(…)]` not re-emitted"),
         "the omission must be disclosed in the output:\n{out}"
-    );
-}
-
-/// A CONCATENATION argument is disclosed too, and this one is a conservative gap rather than a hazard:
-/// PHP's `'a' . 'b'` IS a valid constant expression, so it could be emitted — the gate simply does not
-/// admit any operator, because the operator that matters (`+` on ints) lowers to a helper call and
-/// telling them apart is the constant-folding follow-up. Pinned so the conservatism is a deliberate,
-/// visible choice rather than an accident.
-#[test]
-fn a_concatenation_argument_is_disclosed_rather_than_emitted() {
-    let out = php_checked(&program(
-        "#[Attribute]\nclass Tag { constructor(public string s) {} }\n\n#[Tag(\"a\" + \"b\")]\nclass C {}",
-    ));
-    assert!(!emits_attribute(&out, "Tag"), "{out}");
-    assert!(
-        out.contains("// phorj: `#[Tag(…)]` not re-emitted"),
-        "{out}"
     );
 }
 
@@ -225,4 +219,80 @@ fn an_attribute_is_emitted_at_the_declarations_indent() {
     // At top level that means column 0 — asserted explicitly so a future namespace-mode change to the
     // indent is a visible test change rather than a silent reformat.
     assert!(out.contains("\n#[Tag(1)]\nfinal class C"), "{out}");
+}
+
+// ── constant folding (the narrow, attribute-argument-only fold) ───────────────────────────────────
+
+/// `#[Tag(-5)]` was refused before the fold, which is the most surprising thing about the old gate: a
+/// plain NEGATIVE NUMBER parses as `Unary { Neg, Int(5) }`, not a literal, so the commonest computed
+/// shape in real code was the one that failed.
+#[test]
+fn a_negative_number_argument_folds() {
+    let out = php_checked(&program(
+        "#[Attribute]\nclass Tag { constructor(public int n) {} }\n\n#[Tag(-5)]\nclass C {}",
+    ));
+    assert!(out.contains("#[Tag(-5)]"), "{out}");
+}
+
+#[test]
+fn arithmetic_folds_with_precedence_and_recursion() {
+    let out = php_checked(&program(
+        "#[Attribute]\nclass Tag { constructor(public int n) {} }\n\n#[Tag(1 + 2 * 3)]\nclass C {}",
+    ));
+    assert!(out.contains("#[Tag(7)]"), "{out}");
+}
+
+#[test]
+fn float_and_string_arguments_fold() {
+    let out = php_checked(&program(
+        "#[Attribute]\nclass Two { constructor(public float f, public string s) {} }\n\n#[Two(1.5 + 2.0, \"a\" + \"b\")]\nclass C {}",
+    ));
+    // phorj spells string concatenation `+`; folding it is exactly equivalent to PHP's `'a' . 'b'`.
+    assert!(out.contains("#[Two(3.5, 'ab')]"), "{out}");
+}
+
+/// The fold uses the SINGLE-SOURCED checked kernel (`crate::value::int_add`, Invariant 4), so an
+/// overflowing argument declines to fold and falls back to the disclosure — it is never wrapped, and it
+/// never becomes a new compile error. This is what keeps the narrow fold free of the language question a
+/// general folder would have to answer.
+#[test]
+fn an_overflowing_argument_declines_to_fold_rather_than_wrapping() {
+    let out = php_checked(&program(
+        "#[Attribute]\nclass Over { constructor(public int n) {} }\n\n#[Over(9223372036854775807 + 1)]\nclass C {}",
+    ));
+    assert!(!emits_attribute(&out, "Over"), "{out}");
+    assert!(
+        out.contains("// phorj: `#[Over(…)]` not re-emitted"),
+        "{out}"
+    );
+}
+
+/// Division stays out. It faults on zero, and a folded quotient is where an exactness argument would
+/// have to be made — so it is excluded on purpose rather than by oversight.
+#[test]
+fn division_is_deliberately_not_folded() {
+    let out = php_checked(&program(
+        "#[Attribute]\nclass Tag { constructor(public int n) {} }\n\n#[Tag(6 / 2)]\nclass C {}",
+    ));
+    assert!(!emits_attribute(&out, "Tag"), "{out}");
+}
+
+/// The fold must agree with what the ENGINES compute for the same expression — the fold is a second
+/// implementation site of arithmetic, and Invariant 4 exists because those drift. Rather than trusting
+/// the shared kernel by inspection, this runs the same expression through the interpreter and compares.
+#[test]
+fn a_folded_argument_equals_what_the_engines_compute() {
+    let expr = "1 + 2 * 3 - 4";
+    let out = php_checked(&program(&format!(
+        "#[Attribute]\nclass Tag {{ constructor(public int n) {{}} }}\n\n#[Tag({expr})]\nclass C {{}}"
+    )));
+    let engine = crate::cli::cmd_treewalk(&format!(
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void {{ Output.printLine(\"{{{expr}}}\"); }}\n"
+    ))
+    .expect("the interpreter evaluates it");
+    let expected = format!("#[Tag({})]", engine.trim());
+    assert!(
+        out.contains(&expected),
+        "the fold and the interpreter disagree — expected {expected}:\n{out}"
+    );
 }
