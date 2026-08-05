@@ -6814,11 +6814,7 @@ building one is its own slice. Also noted: a CONCATENATION argument (`"a" + "b"`
 PHP's `'a' . 'b'` IS a valid constant expression — the gate admits no operator at all, because telling the
 safe operators from the helper-lowering ones is the same folding problem.
 
-**A pre-existing CHECKER gap surfaced en route:** an enum member as an attribute ARGUMENT is rejected by
-`phg check` — `#[Painted(Colour.Red)]` with `enum Colour` declared in the same file reports
-*"unknown identifier `Colour`"* [Verified]. So that emission path is currently unreachable through the
-normal pipeline; the rendering is pinned by a raw-emit test so the emitter is already correct when the gap
-closes. Recorded, not worked around.
+**A CHECKER gap was claimed here and is RETRACTED — it was my bug.** See the DEC-437 correction below.
 
 **Invariant 13 debt burned down rather than deferred, twice:** `transpile/classes.rs` was a grandfathered
 543-line breach the gate forbids growing, and attribute emission needed one line in `emit_class` — so the
@@ -6849,3 +6845,36 @@ NEGATIVE-CONTROLLED: reverting the fix makes it fail with `#[Audited('cross-pack
 string-replace against a line `cargo fmt` had already reshaped, so the "reverted" build was identical and
 the test "passed" both times. A negative control that cannot fail is worse than none, because it manufactures
 confidence. The assertion that the replace actually matched is what surfaced it.
+
+### DEC-437 correction (2026-08-05) — the "checker gap" was mine, and it was hiding a real emitter bug
+
+The DEC-437 row above originally recorded a pre-existing CHECKER gap: an enum member as an attribute
+argument rejected with *"unknown identifier `Colour`"*. **That is withdrawn.** `#[Painted(Colour.Red)]` does
+fail — and so does `Colour c = Colour.Red;` in an ordinary function body [Verified], because `Colour.Red` is
+not valid phorj anywhere: construction is `new`-mandatory (Invariant 12 / `E-NEW-REQUIRED`). The correct
+spelling `new Colour.Red()` type-checks clean in attribute position [Verified]. I wrote invalid phorj in my
+own test and attributed my error to the checker, without running the same expression through a path that
+did not involve the component I was blaming.
+
+**The false finding was hiding a REAL bug in the code shipped one commit earlier.** Because the test used a
+shape that cannot exist, it passed against an emitter arm that could never fire: `php_const_arg` matched
+`Expr::Member` (a bare `Colour.Red`), so every enum-valued attribute silently fell through to "no PHP
+constant form" and was NOT re-emitted. The feature under-delivered exactly where the test claimed coverage.
+
+Fixed by gating on the shapes that actually arrive — a construction `Call` (enum variant, bare or
+qualified, and a declared class), with arguments gated recursively so a construction holding a non-constant
+argument is still refused — plus `Expr::New`, which still WRAPS the call at transpile time. Verified end to
+end: `#[Painted(new Colour_Red())]`, all three legs agreeing, and PHP reflection constructing the attribute
+and its enum field (`Painted c=Colour_Red` under php-8.5.8).
+
+**A third finding fell out of the same investigation, and it outlives this slice:** `Expr::New` reaching a
+backend at all contradicts Invariant 5 and `Expr::New`'s own doc comment, because neither `unwrap_new`
+(`checker/rewrite_new.rs:50`) nor `qualify_variants` (`checker/qualify_variants.rs:46`) walks `attrs`.
+`transpile/expr.rs` carries `unreachable!("Expr::New is unwrapped before transpilation")`, so a future
+`emit_expr(attr_arg)` would PANIC on valid user code — the `html"…"`-in-a-tuple class Invariant 3 was
+widened for. Recorded in `KNOWN_ISSUES` with the root fix named (teach the desugars to walk `attrs`, then
+re-verify every attribute-consuming desugar against the rewritten shapes).
+
+**Process note.** Two of the three findings in this correction came from writing the reproducer honestly
+rather than from a failing test — and the false one came from NOT doing that. A test built on a shape the
+language cannot express is not coverage; it is a green light wired to nothing.

@@ -201,19 +201,44 @@ operator at all rather than trying to tell the safe ones from the helper-lowerin
 
 **Not a regression** — before DEC-437 no attribute reached PHP at all.
 
-## `phg check` rejects an enum member as an attribute ARGUMENT (found 2026-08-05, DEC-437)
+## ❌ RETRACTED (2026-08-05) — "`phg check` rejects an enum member as an attribute argument" was MY BUG, not the checker's
 
-`#[Painted(Colour.Red)]`, with `enum Colour { Red, Green }` declared in the same file, reports
-*"unknown identifier `Colour`"* [Verified]. Attribute arguments ARE type-checked against the attribute
-class's constructor (`check_arg`, DEC-194 2b-3b), so this looks like the attribute-argument path not seeing
-enum types the way an ordinary expression position does.
+**The claim was false and is withdrawn.** I reported that `#[Painted(Colour.Red)]` fails with
+*"unknown identifier `Colour`"* and filed it as a checker gap. It does fail — but so does
+`Colour c = Colour.Red;` in an ordinary function body [Verified], because `Colour.Red` is not valid phorj
+in ANY position: construction is `new`-mandatory (Invariant 12 / `E-NEW-REQUIRED`). The correct spelling
+is `new Colour.Red()`, and it type-checks clean in attribute position [Verified].
 
-**Impact.** An enum-typed attribute — the natural way to write `#[Painted(Colour.Red)]` or a
-`#[Route(method: HttpMethod.Get)]` — cannot be used at all. The transpiler's rendering for it is already
-correct and pinned (`new Colour_Red()`, admissible in a PHP attribute argument since 8.1), so only the
-checker side is missing.
+I wrote invalid phorj in my own test, did not check whether the same expression failed elsewhere, and
+attributed my error to the checker. The lesson worth keeping: *before filing a gap in component X, run the
+same input through a path that does not involve X.* One extra command would have caught it.
 
-**Found while building DEC-437**, by writing the test rather than assuming the shape worked.
+**What the mistake was hiding — a REAL bug, in code I had just shipped.** Because the test used a shape
+that cannot exist, it passed against an emitter arm that could never fire: `php_const_arg` matched
+`Expr::Member` (bare `Colour.Red`), so EVERY enum-valued attribute fell silently through to
+"no PHP constant form" and was not re-emitted. Fixed by matching the real shapes — a construction `Call`,
+and `Expr::New`, which still wraps it here (see the next entry). Now verified end to end: reflection on the
+transpiled output constructs the attribute and its enum field (`Painted c=Colour_Red` under php-8.5.8).
+
+## `Expr::New` REACHES the transpiler inside an attribute argument — Invariant 5's claim is not true there (found 2026-08-05, DEC-437)
+
+Invariant 5 says compile-time-only sugar is expanded OUT of the AST before any backend, and
+[`Expr::New`]'s own doc comment states "the interpreter/compiler/transpiler never see it". Both are FALSE
+for attribute arguments: neither `unwrap_new` (`src/checker/rewrite_new.rs:50`) nor `qualify_variants`
+(`src/checker/qualify_variants.rs:46`) walks `attrs` — each visits function bodies and class members only
+[Verified by reading both item walks].
+
+**The latent hazard.** `transpile/expr.rs` carries
+`unreachable!("Expr::New is unwrapped before transpilation")`. Nothing routes an attribute argument through
+the ordinary expression emitter today (DEC-437's gate is the only reader, and it unwraps `New` itself), so
+there is no live panic — but one careless `emit_expr(attr_arg)` would panic the compiler on valid user
+code. That is the same class as the `html"…"`-in-a-tuple panic Invariant 3 was widened for.
+
+**The root fix** is to make the desugars walk attribute arguments so the invariant is actually true. It is
+not a one-liner: every attribute-consuming desugar (`desugar_di`, `desugar_config`, `desugar_router`, the
+`#[Entry]` reads) inspects attributes STRUCTURALLY, so each would have to be re-verified against the
+rewritten shapes, and desugar ORDER starts to matter. Recorded rather than attempted inside an unrelated
+slice.
 
 ## ✅ FIXED (2026-08-05, LIFT-ATTR) — the PHP lifter was blind to EVERY PHP 8 attribute (found 2026-07-29, DEC-417)
 

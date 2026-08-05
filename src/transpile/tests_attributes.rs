@@ -116,21 +116,46 @@ fn a_single_quote_in_a_string_argument_is_escaped() {
     assert!(out.contains(r"#[Tag('it\'s')]"), "{out}");
 }
 
-/// A payload-less enum member lowers to `new Enum_Variant()` (DEC-329.3 scoped variant classes), which
-/// IS admissible in a PHP attribute argument — PHP 8.1 allows `new` there, because an attribute's
-/// arguments are evaluated on REFLECTION, not at parse time. [Verified under php-8.5.8.]
+/// An enum-valued attribute argument. Three things had to be right for this, and my first version got
+/// all three wrong in the same way — by writing the argument as `Colour.Red`, which Invariant 12 makes
+/// invalid phorj EVERYWHERE (construction is `new`-mandatory: `E-NEW-REQUIRED`). Because the test used a
+/// shape that cannot exist, it "passed" against an emitter arm that could never fire, and I recorded a
+/// non-existent CHECKER bug in `KNOWN_ISSUES` on the strength of it.
 ///
-/// Emitted through the RAW path on purpose: the shape does not currently survive `phg check`, which
-/// reports `unknown identifier \`Colour\`` for an enum member used as an attribute ARGUMENT [Verified:
-/// `#[Painted(Colour.Red)]` with `enum Colour` declared in the same file]. That is a pre-existing CHECKER
-/// gap, recorded rather than worked around here — the rendering is pinned now so the emitter is already
-/// right when the gap closes.
+/// What is actually true:
+/// * the source spelling is `new Colour.Red()` and it type-checks clean in attribute position [Verified];
+/// * `new Enum_Variant()` IS admissible in a PHP attribute argument — PHP 8.1 allows `new` there because
+///   the argument is evaluated on REFLECTION, not at parse time [Verified under php-8.5.8];
+/// * `Expr::New` still WRAPS the call at this point, because the `unwrap_new` desugar does not walk
+///   attribute arguments [Verified] — so the gate unwraps it itself.
 #[test]
-fn an_enum_member_argument_renders_as_a_new_expression() {
-    let out = php_raw(
-        "package Main;\nenum Colour { Red, Green }\n\n#[Core.Runtime.Attribute]\nclass Painted { constructor(public Colour c) {} }\n\n#[Painted(Colour.Red)]\nclass C {}\n",
-    );
+fn an_enum_valued_argument_renders_as_a_variant_construction() {
+    let out = php_checked(&format!(
+        "{HEAD}\nenum Colour {{ Red, Green }}\n\n#[Attribute]\nclass Painted {{ constructor(public Colour c) {{}} }}\n\n#[Painted(new Colour.Red())]\nclass C {{}}\n\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void {{ Output.printLine(\"ok\"); }}\n"
+    ));
     assert!(out.contains("#[Painted(new Colour_Red())]"), "{out}");
+}
+
+/// A CLASS construction is admissible for the same reason, and its own arguments are gated recursively.
+#[test]
+fn a_class_valued_argument_renders_as_a_construction() {
+    let out = php_checked(&program(
+        "class Inner { constructor(public string s) {} }\n\n#[Attribute]\nclass Wrap { constructor(public Inner i) {} }\n\n#[Wrap(new Inner(\"x\"))]\nclass C {}",
+    ));
+    assert!(out.contains("#[Wrap(new Inner('x'))]"), "{out}");
+}
+
+/// …but a construction whose OWN argument is non-constant is still refused, all-or-nothing.
+#[test]
+fn a_construction_with_a_non_constant_argument_is_still_disclosed() {
+    let out = php_checked(&program(
+        "class Inner { constructor(public int n) {} }\n\n#[Attribute]\nclass Wrap { constructor(public Inner i) {} }\n\n#[Wrap(new Inner(1 + 2))]\nclass C {}",
+    ));
+    assert!(!emits_attribute(&out, "Wrap"), "{out}");
+    assert!(
+        out.contains("// phorj: `#[Wrap(…)]` not re-emitted"),
+        "{out}"
+    );
 }
 
 #[test]

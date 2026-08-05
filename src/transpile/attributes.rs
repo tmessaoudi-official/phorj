@@ -66,7 +66,7 @@ impl Transpiler {
                 // (`E-UNKNOWN-ATTRIBUTE`), so transpile stays silent rather than inventing a name.
                 continue;
             };
-            match php_const_args(attr) {
+            match self.php_const_args(attr) {
                 Some(args) => out.push_str(&self.attr_line(&name, &args)),
                 None => out.push_str(&self.attr_comment(&name)),
             }
@@ -122,68 +122,125 @@ fn is_builtin_attribute(attr: &Attribute) -> bool {
         .any(|(canonical, _)| crate::ast::attr_path_matches(&attr.name, canonical))
 }
 
-/// Every argument rendered as a PHP constant expression, or `None` if any argument has no such form.
-///
-/// All-or-nothing on purpose: emitting an attribute with SOME of its arguments would be a silent
-/// semantic change to the metadata, which is worse than not emitting it and saying so.
-fn php_const_args(attr: &Attribute) -> Option<Vec<String>> {
-    attr.args.iter().map(php_const_arg).collect()
-}
-
-/// One attribute argument as a PHP constant expression.
-///
-/// Deliberately narrow — a shape is admitted only when its PHP form is exactly as constant as the
-/// phorj one. `new Enum_Variant()` qualifies because PHP 8.1 allows `new` in an attribute argument
-/// (it is evaluated on reflection, not at parse time) [Verified: a `new X()` argument parses and runs
-/// clean under php-8.5.8]; an arithmetic expression does not, because it lowers to a helper CALL.
-fn php_const_arg(e: &Expr) -> Option<String> {
-    match e {
-        Expr::Int(n, _) => Some(n.to_string()),
-        Expr::Bool(b, _) => Some(if *b { "true".into() } else { "false".into() }),
-        Expr::Null(_) => Some("null".into()),
-        // The same `{x:?}` spelling the expression emitter uses (`12.0` stays `12.0`), so an attribute
-        // argument and an ordinary literal cannot render differently.
-        Expr::Float(f, _) => Some(format!("{f:?}")),
-        // A single-part string only: an INTERPOLATED string lowers to concatenation, which is not a
-        // constant expression in PHP.
-        Expr::Str(parts, _) => match parts.as_slice() {
-            [StrPart::Literal(s)] => Some(format!("'{}'", php_single_quoted(s))),
-            [] => Some("''".into()),
-            _ => None,
-        },
-        // A payload-less enum member — `Color.Red` → `new Color_Red()` (DEC-329.3 scoped variant
-        // class). `safe: true` (`Color?.Red`) is excluded: a null-short-circuit is not a constant.
-        Expr::Member {
-            object,
-            name,
-            safe: false,
-            ..
-        } => match object.as_ref() {
-            Expr::Ident(enum_name, _) => Some(format!(
-                "new {}()",
-                super::php_scoped_variant_name(enum_name.as_str(), name.as_str())
-            )),
-            _ => None,
-        },
-        Expr::List(items, _) => {
-            let rendered: Option<Vec<String>> = items.iter().map(php_const_arg).collect();
-            Some(format!("[{}]", rendered?.join(", ")))
-        }
-        Expr::Map(pairs, _) => {
-            let mut out = Vec::with_capacity(pairs.len());
-            for (k, v) in pairs {
-                out.push(format!("{} => {}", php_const_arg(k)?, php_const_arg(v)?));
-            }
-            Some(format!("[{}]", out.join(", ")))
-        }
-        // A named argument keeps its name — PHP 8.0 spells it identically.
-        Expr::NamedArg { name, value, .. } => Some(format!("{name}: {}", php_const_arg(value)?)),
-        _ => None,
-    }
-}
-
 /// A PHP single-quoted string body: only `\` and `'` are special inside one, so nothing else is
 /// touched — which is what keeps an attribute argument byte-faithful to the phorj literal.
 fn php_single_quoted(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
+impl Transpiler {
+    /// Every argument rendered as a PHP constant expression, or `None` if any argument has no such form.
+    ///
+    /// All-or-nothing on purpose: emitting an attribute with SOME of its arguments would be a silent
+    /// semantic change to the metadata, which is worse than not emitting it and saying so.
+    fn php_const_args(&self, attr: &Attribute) -> Option<Vec<String>> {
+        attr.args.iter().map(|a| self.php_const_arg(a)).collect()
+    }
+
+    /// One attribute argument as a PHP constant expression.
+    ///
+    /// Deliberately narrow — a shape is admitted only when its PHP form is exactly as constant as the
+    /// phorj one. An arithmetic expression is NOT, because it lowers to a helper CALL and PHP fatals the
+    /// whole file on a call in an attribute argument.
+    fn php_const_arg(&self, e: &Expr) -> Option<String> {
+        match e {
+            Expr::Int(n, _) => Some(n.to_string()),
+            Expr::Bool(b, _) => Some(if *b { "true".into() } else { "false".into() }),
+            Expr::Null(_) => Some("null".into()),
+            // The same `{x:?}` spelling the expression emitter uses (`12.0` stays `12.0`), so an
+            // attribute argument and an ordinary literal cannot render differently.
+            Expr::Float(f, _) => Some(format!("{f:?}")),
+            // A single-part string only: an INTERPOLATED string lowers to concatenation, which is not a
+            // constant expression in PHP.
+            Expr::Str(parts, _) => match parts.as_slice() {
+                [StrPart::Literal(s)] => Some(format!("'{}'", php_single_quoted(s))),
+                [] => Some("''".into()),
+                _ => None,
+            },
+            Expr::List(items, _) => {
+                let rendered: Option<Vec<String>> =
+                    items.iter().map(|i| self.php_const_arg(i)).collect();
+                Some(format!("[{}]", rendered?.join(", ")))
+            }
+            Expr::Map(pairs, _) => {
+                let mut out = Vec::with_capacity(pairs.len());
+                for (k, v) in pairs {
+                    out.push(format!(
+                        "{} => {}",
+                        self.php_const_arg(k)?,
+                        self.php_const_arg(v)?
+                    ));
+                }
+                Some(format!("[{}]", out.join(", ")))
+            }
+            // A named argument keeps its name — PHP 8.0 spells it identically.
+            Expr::NamedArg { name, value, .. } => {
+                Some(format!("{name}: {}", self.php_const_arg(value)?))
+            }
+            // A CONSTRUCTION — `new Colour.Red()`, `new Inner("x")`. `Expr::New` is unwrapped by the
+            // checker before any backend, so what arrives here is the inner `Call`, and only a
+            // construction is admissible: PHP 8.1 allows `new` in an attribute argument (evaluated on
+            // REFLECTION, not at parse time) [Verified under php-8.5.8], while an ordinary function call
+            // is *"Constant expression contains invalid operations"* and kills the whole file.
+            //
+            // The first version of this gate matched `Expr::Member` instead — the spelling `Colour.Red`
+            // WITHOUT `new`, which Invariant 12 makes invalid phorj everywhere (`E-NEW-REQUIRED`). So it
+            // matched a shape that can never arrive, and every enum-valued attribute silently fell
+            // through to "no PHP constant form". Found by writing the reproducer properly.
+            Expr::Call { callee, args, .. } => self.php_const_construction(callee, args),
+            // `Expr::New` REACHES the transpiler inside an attribute argument, contradicting both
+            // Invariant 5's "expanded out before any backend" discipline and `Expr::New`'s own doc
+            // comment ("the interpreter/compiler/transpiler never see it"). [Verified: neither
+            // `unwrap_new` (`checker/rewrite_new.rs:50`) nor `qualify_variants`
+            // (`checker/qualify_variants.rs:46`) walks `attrs` — both visit function bodies and class
+            // members only.] So the wrapper is unwrapped HERE.
+            //
+            // Note the latent hazard this exposes: `emit_expr` carries
+            // `unreachable!("Expr::New is unwrapped before transpilation")`, so anything that ever routes
+            // an attribute argument through the ordinary expression emitter would PANIC on valid user
+            // code. Nothing does today (this gate is the only reader), and teaching the desugars to walk
+            // `attrs` is the root fix — recorded as its own item, because every attribute-consuming
+            // desugar reads attributes STRUCTURALLY and would have to be re-checked against the change.
+            Expr::New(inner, _) => self.php_const_arg(inner),
+            _ => None,
+        }
+    }
+
+    /// A construction call rendered as `new <PhpName>(<const args>)`, or `None` when the callee is not a
+    /// class/enum-variant construction. The three callee shapes and their guards mirror
+    /// `emit_call`'s own dispatch exactly, so this cannot admit a call the emitter would treat
+    /// differently.
+    fn php_const_construction(&self, callee: &Expr, args: &[Expr]) -> Option<String> {
+        let rendered: Option<Vec<String>> = args.iter().map(|a| self.php_const_arg(a)).collect();
+        let argv = rendered?.join(", ");
+        match callee {
+            // Bare variant (`Red()` after a variant import) or a declared class (`Inner("x")`).
+            Expr::Ident(name, _) => {
+                if let Some(en) = self.variant_owner.get(name) {
+                    return Some(format!("new {}({argv})", self.variant_ref(en, name)));
+                }
+                if self.classes.contains(name) {
+                    return Some(format!("new {}({argv})", super::php_type_ref(name)));
+                }
+                None
+            }
+            // Qualified variant (`Colour.Red()`) — the canonical form `qualify_variants` produces.
+            Expr::Member {
+                object,
+                name,
+                safe: false,
+                ..
+            } => match object.as_ref() {
+                Expr::Ident(en, _)
+                    if !self.is_local(en)
+                        && self.enums.contains(en)
+                        && self.variants.contains(name) =>
+                {
+                    Some(format!("new {}({argv})", self.variant_ref(en, name)))
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }

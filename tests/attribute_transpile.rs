@@ -144,3 +144,58 @@ fn attributes_survive_a_phorj_to_php_to_phorj_round_trip() {
         "the attribute use did not survive:\n{lifted}"
     );
 }
+
+/// An ENUM-VALUED attribute, end to end against a real `php`. This is the case my first build silently
+/// dropped: the gate matched `Colour.Red` (a bare member access), which Invariant 12 makes invalid phorj
+/// everywhere, so the arm could never fire and every enum-valued attribute fell through to
+/// "no PHP constant form". The real source spelling is `new Colour.Red()`, and `Expr::New` still wraps it
+/// here because the `unwrap_new` desugar does not walk attribute arguments.
+///
+/// Reflection reading the enum FIELD (`get_class($i->c)`) is the acceptance test — it proves PHP both
+/// parsed the argument and constructed the variant object.
+#[test]
+fn php_reflection_can_read_an_enum_valued_attribute() {
+    let src = r#"
+package Main;
+import Core.Output;
+import Core.Runtime.Attribute;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+enum Colour { Red, Green }
+
+#[Attribute]
+class Painted {
+    constructor(public Colour c) {}
+}
+
+#[Painted(new Colour.Red())]
+class Widget {}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine("ok");
+}
+"#;
+    let interp = phorj::cli::cmd_treewalk(src).expect("interpreter runs it");
+    let vm = phorj::cli::cmd_run(src).expect("VM runs it");
+    assert_eq!(interp, vm, "interp ≡ VM");
+    let emitted = transpile(src);
+    assert!(
+        emitted.contains("#[Painted(new Colour_Red())]"),
+        "{emitted}"
+    );
+    let Some(php) = php_or_gate("php_reflection_can_read_an_enum_valued_attribute") else {
+        return;
+    };
+    let probe = format!(
+        "{emitted}\n$rc = new ReflectionClass('Widget');\nforeach ($rc->getAttributes() as $a) {{\n    echo $a->getName(), ' c=', get_class($a->newInstance()->c), \"\\n\";\n}}\n"
+    );
+    let out = run_php(&php, &probe, "enumarg");
+    assert!(
+        out.contains("Painted c=Colour_Red"),
+        "reflection could not read the enum-valued attribute:\n{out}"
+    );
+    // …and the emitted attribute did not disturb program output.
+    assert!(out.starts_with(&interp), "output changed:\n{out}");
+}

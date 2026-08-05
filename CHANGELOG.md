@@ -42,6 +42,16 @@ an attribute ARGUMENT is rejected by `phg check` (*"unknown identifier `Colour`"
 currently unreachable; its rendering is pinned by a raw-emit test so the emitter is right when the gap
 closes.
 
+An **enum-valued or class-valued** attribute argument re-emits as a construction
+(`#[Painted(new Colour_Red())]`), with the construction's own arguments gated recursively. The first build
+matched `Colour.Red` — a bare member access, which Invariant 12 makes invalid phorj everywhere
+(`E-NEW-REQUIRED`) — so that arm could never fire and every enum-valued attribute silently fell through to
+"no PHP constant form". Verified end to end: PHP reflection constructs the attribute and its enum field
+(`Painted c=Colour_Red`). Two further findings came out of the same investigation: a claimed CHECKER gap was
+**retracted** (it was my invalid test input, not the checker — see `KNOWN_ISSUES`), and `Expr::New` turns out
+to REACH the transpiler inside an attribute argument, contradicting Invariant 5 and its own doc comment,
+because neither `unwrap_new` nor `qualify_variants` walks `attrs`.
+
 A cross-package attribute is referenced by ABSOLUTE FQN (`#[\\Meta\\Audited(…)]`), reusing the same
 `php_type_ref` helper `extends`/`implements` already use. The first build used the bare leaf, which inside
 `namespace Main { … }` resolves to `Main\\Audited` — a class that does not exist — so the metadata would
