@@ -7419,9 +7419,9 @@ summary. The register discussed this class only through two fs bench rows; the c
 inline it (`bench/micro` has nothing of this shape):
 
 ```phorj
-function applyTwice((int) => int f, int x) -> int { return f(f(x)); }
+function applyTwice((int) => int f, int x): int { return f(f(x)); }
 
-function bench(int iters) -> int {
+function bench(int iters): int {
     mutable int acc = 0; mutable int i = 0;
     while (i < iters) { acc = applyTwice(function(int x) => x * 2 + 1, i) % 1000003; i = i + 1; }
     return acc;
@@ -7473,3 +7473,78 @@ already shipped once, for a closely-related reason (seeding param kinds the JIT 
 That makes a STATIC variant of option 3 available which DEC-434.2 did not consider: deterministic, no runtime
 observation, no entry guards, no deopt path, and no new runtime machinery. Whether to take it, or the general
 observed-kind version, or both, is the ruling being asked for. **Nothing built.**
+
+### DEC-444 (2026-08-05) — `userhof` bench SHIPPED; and my own recommendation, CORRECTED by one measurement
+
+Developer accepted both DEC-443 recommendations: **static kind seeding (Q1.1)** and **add the bench (Q2.1)**.
+The bench shipped. The mechanism did not survive contact with the next measurement, and this entry is the
+correction — recorded before any code was written against the wrong plan, which is now the fourth time that
+discipline has paid on this JIT (DEC-429, DEC-431.2, DEC-434.2, DEC-441).
+
+### SHIPPED: `bench/micro/userhof.{phg,php}`
+
+Enters the ratchet as `not in baseline (new) — ratio=0.183 (loss)`, non-blocking [Verified]. Checksums agree
+(`999978` both legs). `phg format`-canonical, so the repo-wide format sweep passes.
+
+**The pair is the deliverable, not the row.** `closurecall` and `userhof` run the *same lambda*
+(`function(int x) => x * 2 + 1`) over the same arithmetic; the ONLY variable is whether the closure crosses a
+function boundary:
+
+| bench | how the lambda is reached | ratio vs php |
+|---|---|---|
+| `closurecall` | bound to a LOCAL, called in the loop | **4.14× WIN** |
+| `userhof` | passed as a PARAMETER to a user function | **0.19× LOSS** |
+
+**A 22× spread between two programs doing identical arithmetic.** The bench header says explicitly never to
+treat `closurecall` as coverage for `userhof` — the same trap DEC-431 documented when `strbuild` was masking
+`strappend`.
+
+### THE CORRECTION: declared types cannot fix this, because the missing fact is IDENTITY, not type
+
+DEC-443 recommended seeding param kinds from the checker, extending the `dyn_params` precedent. Reading the
+emitter shows why that is necessary-but-INSUFFICIENT for this shape.
+
+`Kind::Fn(usize)` already exists, and `arm_call_value` (`emit_unboxed/call_plumbing.rs:272`) compiles a
+`CallValue` **only when the callee operand's kind is `Kind::Fn(f)` — a statically known function INDEX**,
+because it lowers to `emit_call_to`, a direct call. It declines otherwise:
+
+```rust
+let Kind::Fn(f_peek) = fk_peek else {
+    return Err(JitError::Unsupported(format!("unboxed: CallValue on {fk_peek:?} (deferred)")));
+};
+```
+
+That is exactly the decline DEC-443 measured. And **a declared type cannot supply it**: `(int) => int` says
+*"some function with this signature"*, never *"function #7"*. So static type seeding fixes scalar params
+(`int x` → `Kind::Int`) and would help the lattice's other `Unknown` cases — but it cannot make `applyTwice`
+compile, because what is lost at the boundary is the callee's IDENTITY.
+
+`closurecall` wins precisely because the identity is *not* lost there: the lambda is a local, so
+`MakeClosure` puts `Kind::Fn(idx)` straight into the slot and the `CallValue` resolves.
+
+### The revised mechanism — still static, still no runtime observation
+
+The right vehicle is already in the analyzer and neither DEC-434.2 nor DEC-443 noticed it: **the call-site
+fixpoint's `param_over`**, documented at `analyze/mod.rs:592` as *"Call-site-recorded overrides … beat usage
+proofs"*. It already propagates argument kinds at a call site into the callee's param kinds. Two facts make
+`Kind::Fn` a candidate to ride it:
+
+* `join_kind` has **no `Fn` arm**, so it falls to `_ => None` — two DIFFERENT targets correctly refuse to
+  join — while the `a == b` fast-path means `Fn(7) ⊔ Fn(7) = Fn(7)` **survives**. Single-target call sites
+  are admitted and polymorphic ones fail closed, which is the correct default without any new lattice work.
+* the information is visible statically in the bytecode (`MakeClosure(lambda); …; Call(applyTwice)`), so
+  **no runtime observation, no entry guard, and no deopt path** — which keeps the developer's ruling
+  (static, Q1.1) intact and avoids the re-execution trap that killed DEC-431.2's leading candidate.
+
+So the ruled direction stands; only the propagated FACT changes, from "declared scalar types" to "the
+callee's identity across a call boundary". **Both are worth doing and they are not alternatives** — type
+seeding widens what the lattice can prove generally; `Fn`-through-`param_over` is what this bench needs.
+
+**Not built. Next increment is a spike: allow `Kind::Fn` into `param_over` and read `PHORJ_JIT_EXPLAIN` on
+`userhof` — compile the thing and read the error (DEC-434.2's local rule), rather than costing it from the
+outside a fifth time.**
+
+**Ratchet note, deliberately not acted on.** This run reports three RECOVERED rows — `floatloop` 0.776→1.020,
+`floatmul` 0.989→1.009, `listcontains` 0.899→1.975 — and prints *"re-emit so the ratchet protects it"*.
+Confirms DEC-440 independently. **Nothing was re-emitted:** DEC-434.1's spread-adjusted arming rule is still a
+PENDING RULING, and it armed a lucky draw once already. Arming these is the developer's call, not the gate's.

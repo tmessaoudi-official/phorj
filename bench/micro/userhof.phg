@@ -1,0 +1,53 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Microbench: a USER-WRITTEN higher-order function against PHP's `callable` — the shape the whole
+// suite was blind to until DEC-443, and the one that measures what a phorj USER actually writes.
+//
+// WHY IT EXISTS, and why `closurecall` is NOT coverage for it. `closurecall` binds the lambda to a
+// LOCAL and calls it in the loop, so the JIT proves `Kind::Fn(idx)` for the callee and compiles the
+// whole thing — it reports a 4.13x WIN. This file passes the SAME lambda across a FUNCTION BOUNDARY
+// instead. A bare param read has no type source, so the callee's identity is lost, `applyTwice`
+// declines on `CallValue on Unknown`, `bench` declines transitively, and the JIT contributes nothing:
+// measured 0.97x leverage (JIT ON is marginally SLOWER than `--no-jit`) and 0.20x against php.
+//
+// The pair is the point, exactly as `fslines` / `fsforeachline` are a pair: the ONLY variable between
+// `closurecall` and this file is whether the closure crosses a call boundary, so the delta between the
+// two phorj numbers IS the cost of losing the callee's identity at that boundary.
+//
+// Never treat `closurecall` as coverage for this, and never treat this as a compiler-corner bench the
+// way `fallibleloop` was declined (DEC-431): callbacks, comparators, strategy/visitor shapes and
+// user-written map/filter helpers are ordinary application code, not a limitation exhibit.
+//
+// Both legs fold every result into the checksum: that defeats dead-code elimination AND gates
+// output-identity, so a timing is only trusted when the two legs agree.
+// The higher-order function. Deliberately NOT a native — no per-native JIT vertical can inline it,
+// which is what makes this measure user code rather than stdlib coverage.
+function applyTwice((int) => int f, int x): int {
+    return f(f(x));
+}
+
+function bench(int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        acc = applyTwice(function(int x) => x * 2 + 1, i) % 1000003;
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("userhof\t{d + guard}\t{acc}");
+}
