@@ -1,6 +1,9 @@
 # Product-driven gap programme — rent-watch + twes-in
 
-> **Round 1 of N: VERIFICATION + VISION GATING + THE ADJUDICATION BATCH.** No implementation, and no
+> **Rounds 1–2 of N: VERIFICATION + VISION GATING + THE ADJUDICATION BATCH.** Round 2 (§4b) probed the
+> real PHP 8.5.8 gate oracle and the decision register; it **flipped two recommendations, refuted two of
+> my own claims, and added one sub-question.** Read §4b before §4's Q1/Q2/Q4/Q7/Q14 — it supersedes
+> their Round-1 leans. No implementation, and no
 > per-item spec yet — deliberately. Under Invariant 15 the dependency admissions and the surface
 > shapes below are the developer's to rule, and a spec written against an unruled admission is a spec
 > written twice. Round 2 writes `docs/specs/*.md` for whatever survives the ruling.
@@ -263,6 +266,99 @@ spec says `Naming.SnakeToCamel`, the code still does `Naming.Exact()`.
 so it needs a CHANGELOG line and probably an example.
 *After (re-rule to `Exact`):* the spec is corrected instead, and the divergence closes the other way —
 also valid, and cheaper.
+
+---
+
+## 4b. ROUND 2 — what probing the ORACLE and our own register changed
+
+Round 1's recommendations were leans. Round 2 tested them against the actual PHP 8.5.8 transpile-floor
+oracle and against the decision register. **Two recommendations flipped, two of my own claims were
+wrong, and one new question appeared.** Everything below is a live command's output, not recall.
+
+### The oracle probe — `Dom\HTMLDocument`, CSS selectors and C14N are all in PHP 8.5 core
+
+[Verified 2026-08-06, `/stack/tools/phpbrew/php/php-8.5.8/bin/php`, one program, output pasted:]
+
+```php
+$d = Dom\HTMLDocument::createFromString("<table><tr><td>Rue A<td>1200 &euro;</table>", LIBXML_NOERROR);
+foreach ($d->querySelectorAll("td") as $c) echo "cell: ", $c->textContent, "\n";
+$x = Dom\XMLDocument::createFromString('<a xmlns:z="urn:z"  b="2" a="1"><z:c/></a>');
+echo "c14n: ", $x->documentElement->C14N(), "\n";
+```
+```
+cell: Rue A
+cell: 1200 €
+c14n: <a xmlns:z="urn:z" a="1" b="2"><z:c></z:c></a>
+```
+
+Read what that output proves, precisely: the **HTML5 error-recovery algorithm ran** (unclosed `<td>`s,
+an implied `<tbody>`, an entity decoded); **CSS selectors work**; and **C14N canonicalized** — it sorted
+`b="2" a="1"` into `a="1" b="2"` and expanded the empty element, which is the whole of what
+canonicalization means. Extension census on the same build: `dom` YES · `libxml` YES · `bcmath` YES ·
+`mbstring` YES · **`intl` no** · `imap_open` no · `mailparse` no.
+
+**So XML+C14N and HTML5+selectors are both Invariant-14 ladder case 1 — they transpile, faithfully, on
+the oracle we actually gate against.** Neither owes an `E-TRANSPILE-*`, a quarantine, or a disclosure.
+
+### What that flips
+
+- **Q2 stops being a policy-exception argument and becomes a PARITY argument.** PHP ships a
+  spec-compliant HTML5 parser and CSS selectors *in core*; phorj cannot parse HTML at all. That is
+  phorj being **behind PHP** on a mainstream capability — the one thing the whole project is against.
+  The policy collision also resolves better than I framed it: the exclusion list names *"JSON, TOML,
+  YAML, HTTP parsing"*, and we implemented every one of those in `std` (`Core.Json`, `Core.Ini`,
+  `Core.Csv`, the HTTP wire reader) — so that clause has a consistent meaning: **small, unambiguous,
+  non-recovering grammars.** HTML5 is categorically different: a ~120-page *error-recovery* state
+  machine with insertion modes and the adoption-agency algorithm, fed attacker-controlled markup. That
+  is the **regex shape** — *"an untrusted-input parser where a safe engine cannot be built in std"* —
+  which the policy admits **by name**. My Round-1 lean (decline) was wrong on the evidence.
+- **Q1(b) C14N-in-v1 stops resting on twes-in's word.** `DOMNode::C14N()` is core and verified working,
+  so the PHP leg of canonicalization costs nothing. C14N in v1 is now recommended on our own evidence.
+- **A NEW sub-question, Q1(c) — re-opening DEC-382, with the new evidence stated.** The same test that
+  admits HTML5 argues *against* an XML crate: **XML is draconian by specification** — any
+  well-formedness error is fatal, there is no recovery algorithm — so XML is the *JSON* shape, not the
+  *regex* shape, and clause 1 as written points at a `std` implementation. DEC-382 admitted a crate
+  before that distinction was drawn. New evidence: (1) the policy's own recovering-vs-format split;
+  (2) XML's non-recovery, which is a spec property, not an opinion; (3) our four in-`std` format
+  parsers as precedent; (4) `DOMNode::C14N()` making the transpile leg free either way.
+- **Q4 gains a hard constraint I did not have.** **`intl` is NOT compiled into the gate oracle.** Any
+  transpiled output calling `MessageFormatter` would fail our own differential today. There *is*
+  precedent for leaning on an optional extension — the decimal leg emits `bcadd`/`bcdiv`/`bccomp`
+  (`src/transpile/runtime_php.rs:209-317`) — but bcmath is near-universal and ICU is not, and
+  `src/transpile/tests.rs:327` already pins that other emitters stay free of `mb_`/`ctype_`/`iconv`.
+  So the recommendation sharpens: **emit a `__phorj_plural_*` helper carrying the CLDR rules inline**
+  (Invariant 16 explicitly sanctions this, and requires the trade be surfaced — it is, here), which
+  keeps ladder case 1 and pushes no ICU requirement onto anyone running transpiled phorj.
+- **Q5 gets cheaper than I said.** `sleep`/`usleep` are present, and `Time.freeze` **already
+  transpiles** as `__phorj_now_freeze()` (`src/native/time.rs:92`) — the frozen flag is *already* on the
+  PHP side. Making `sleep` consult it is a few lines in an existing helper, symmetric across all three
+  legs.
+- **Q3 hardens.** `imap_open` absent, `mailparse` absent: IMAP is unambiguously ladder case 2,
+  native-only, owing `E-TRANSPILE-IMAP` + quarantine + disclosure. That is the honest price tag.
+
+### Two claims of mine that Round 2 refuted
+
+1. **`Core.Mail` is NOT "TLS-or-refuse".** DEC-265 (`C-decisions.md:1605`, shipped block `:1912`) is
+   *"SMTP **requires TLS when credentials are set**"* — unauthenticated sends stay `Opportunistic` so
+   local fakers work, the only escape is a loud `allowInsecureAuth = true`, and an unrecognized mode
+   value **fails safe to required-TLS**. I stated it as a blanket refusal in Round 1 and built Q7's
+   recommendation on that. The real precedent is *better* and transfers exactly: **a Postgres DSN
+   carrying a password requires TLS; a passwordless local connection stays opportunistic.** Q7 is
+   re-recommended on the corrected precedent.
+2. **DEC-403 is not an unbuilt divergence — it is RULED and BUILD-QUEUED**, *"queued with
+   DEC-398/399"*, and the register already specifies the migration (`examples/database/*.phg`
+   re-baselined, `naming.phg` rewritten to show the default first). Calling it a defect in §2b
+   overstated it. Q14 shrinks to a scheduling question.
+
+Also worth recording, because it changes Q7's dependency framing: `postgres` is admitted with **TLS
+deliberately left off** (`Cargo.toml:111-116` — *"TLS left off → no OpenSSL"*), and `rustls` +
+`webpki-roots` are already in the tree for `http-client`. Adding Postgres TLS is therefore **one bridge
+crate inside two already-admitted domains** (SQL + TLS) — not a new domain, and no new trust store.
+
+And for Q6: `Core.Json` is a genuine recursive ADT — `enum Json { Null(), Bool, Int, Float, String,
+Array(List<Json>), Object(Map<string, Json>) }` (`src/cli/preludes.rs:15`) — so nested runtime config is
+already expressible with an exhaustive `match` today. Task **#60** (`Json.getInt`/`getString` accessors)
+is a pending ergonomics ruling layered on top, **not** a blocker for Q6.
 
 ---
 
