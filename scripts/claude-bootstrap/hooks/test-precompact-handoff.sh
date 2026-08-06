@@ -150,5 +150,72 @@ else
   ok "hook never stages, commits or pushes"
 fi
 
+# ── 5. A hand-written latest.md marked `<!-- manual -->` must survive a compaction ───
+# `.claude/skills/handoff/SKILL.md` documents this marker as claiming latest.md. Until 2026-08-06
+# nothing here implemented it, so following the documented ritual lost the note at the next
+# auto-compaction. Ported from rent-watch, which found and fixed the same inert promise.
+rm -rf "$TMP/out"; mkdir -p "$TMP/out"
+printf 'MY HAND-WRITTEN STATE\n<!-- manual -->\n' > "$TMP/out/latest.md"
+run_hook "$(printf '{"transcript_path":"%s","cwd":"%s","session_id":"manual-test"}' "$TRANSCRIPT" "$TMP")"
+check "exit 0 with a manual latest.md present" "$RC" "0"
+if grep -q 'MY HAND-WRITTEN STATE' "$TMP/out/latest.md"; then
+  ok "manual latest.md is preserved, not overwritten"
+else
+  bad "manual latest.md was CLOBBERED — the documented <!-- manual --> marker is inert"
+fi
+if ls "$TMP/out"/handoff-*.md >/dev/null 2>&1; then
+  ok "auto handoff still written to its own archive file"
+else
+  bad "no archive copy written — the auto handoff was lost instead"
+fi
+
+# The CONVERSE: without the marker, latest.md IS refreshed. A guard that never refreshes would pass
+# every assertion above while quietly breaking the hook's whole purpose.
+rm -rf "$TMP/out"; mkdir -p "$TMP/out"
+printf 'stale auto content\n' > "$TMP/out/latest.md"
+run_hook "$(printf '{"transcript_path":"%s","cwd":"%s","session_id":"auto-test"}' "$TRANSCRIPT" "$TMP")"
+if grep -q 'stale auto content' "$TMP/out/latest.md"; then
+  bad "unmarked latest.md was NOT refreshed — the guard is too broad"
+else
+  ok "unmarked latest.md is refreshed as before"
+fi
+
+# ── 6. The guard must hold on the OPT-IN LLM path too ────────────────────────────────
+# rent-watch's first version of this guard protected only the default write and left the LLM path
+# clobbering unconditionally — the log claimed "kept" two lines before overwriting the file. A stub
+# `claude` on PATH exercises that second write without a network call.
+STUB=$(mktemp -d /tmp/test-precompact-stub-XXXXXX)
+cat > "$STUB/claude" <<'STUBEOF'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '{"result":"STUB NARRATIVE"}\n'
+STUBEOF
+chmod +x "$STUB/claude"
+
+rm -rf "$TMP/out"; mkdir -p "$TMP/out"
+printf 'MY HAND-WRITTEN STATE\n<!-- manual -->\n' > "$TMP/out/latest.md"
+PATH="$STUB:$PATH" PHORJ_HANDOFF_LLM=1 run_hook "$(printf '{"transcript_path":"%s","cwd":"%s","session_id":"llm-manual"}' "$TRANSCRIPT" "$TMP")"
+check "exit 0 on the LLM path with a manual latest.md" "$RC" "0"
+if grep -q 'MY HAND-WRITTEN STATE' "$TMP/out/latest.md"; then
+  ok "manual latest.md survives the LLM path too"
+else
+  bad "manual latest.md CLOBBERED by the LLM path — guard not honoured on both writes"
+fi
+if grep -q 'STUB NARRATIVE' "$TMP"/out/handoff-*.md 2>/dev/null; then
+  ok "LLM narrative still appended to the archive"
+else
+  bad "LLM narrative missing from the archive — the narrative was lost, not just withheld"
+fi
+
+# Converse on the LLM path: an unmarked latest.md must RECEIVE the narrative.
+rm -rf "$TMP/out"; mkdir -p "$TMP/out"
+PATH="$STUB:$PATH" PHORJ_HANDOFF_LLM=1 run_hook "$(printf '{"transcript_path":"%s","cwd":"%s","session_id":"llm-auto"}' "$TRANSCRIPT" "$TMP")"
+if grep -q 'STUB NARRATIVE' "$TMP/out/latest.md" 2>/dev/null; then
+  ok "unmarked latest.md receives the LLM narrative"
+else
+  bad "unmarked latest.md did not receive the narrative — the LLM refresh path is broken"
+fi
+rm -rf "$STUB"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 ]]

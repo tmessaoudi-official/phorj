@@ -157,7 +157,28 @@ cursor_block() {
   exit 0
 }
 
-cp -f "$ARCHIVE" "$LATEST" 2>/dev/null || log_obs WARN precompact-handoff "could not refresh $LATEST"
+# A handoff a human wrote by hand outranks an auto-generated one. `.claude/skills/handoff/SKILL.md`
+# documents appending `<!-- manual -->` to claim `latest.md` — *"this marker tells the stop hook that a
+# human explicitly saved state — it will skip overwriting with an auto-generated handoff"*. That promise
+# was INERT here until 2026-08-06: this hook overwrote `latest.md` unconditionally, so following the
+# documented ritual silently lost the note at the next compaction. The archive copy is always written,
+# so nothing is lost either way.
+#
+# Decided ONCE, here, and honoured by EVERY path that writes $LATEST — including the opt-in LLM path
+# below. rent-watch's first version of this guard protected only the default path and left the LLM path
+# overwriting unconditionally, so with `*_HANDOFF_LLM=1` the marker was still ignored and the log
+# claimed "kept" two lines before clobbering the file. One variable is what makes that class of bug
+# impossible rather than merely unlikely.
+LATEST_IS_MANUAL=0
+if [[ -f "$LATEST" ]] && grep -q '<!-- manual -->' "$LATEST" 2>/dev/null; then
+  LATEST_IS_MANUAL=1
+fi
+
+if (( LATEST_IS_MANUAL )); then
+  log_obs INFO precompact-handoff "latest.md is manual — kept; auto handoff is at $ARCHIVE"
+else
+  cp -f "$ARCHIVE" "$LATEST" 2>/dev/null || log_obs WARN precompact-handoff "could not refresh $LATEST"
+fi
 
 # ── Optional LLM narrative — OFF by default, see header note 1 ─────────────────────────────────
 if [[ "${PHORJ_HANDOFF_LLM:-0}" == "1" && -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]]; then
@@ -175,8 +196,13 @@ if [[ "${PHORJ_HANDOFF_LLM:-0}" == "1" && -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]
     SUMMARY=$(printf '%s' "$RAW" | jq -r '.result // empty' 2>/dev/null)
     if [[ -n "$SUMMARY" ]]; then
       { printf '\n## LLM narrative (PHORJ_HANDOFF_LLM=1)\n\n%s\n' "$SUMMARY"; } >> "$ARCHIVE"
-      cp -f "$ARCHIVE" "$LATEST" 2>/dev/null || true
-      log_obs INFO precompact-handoff "LLM narrative appended"
+      if (( LATEST_IS_MANUAL )); then
+        log_obs INFO precompact-handoff "LLM narrative appended to $ARCHIVE; manual latest.md left intact"
+      else
+        cp -f "$ARCHIVE" "$LATEST" 2>/dev/null \
+          || log_obs WARN precompact-handoff "could not refresh $LATEST after LLM narrative"
+        log_obs INFO precompact-handoff "LLM narrative appended"
+      fi
     else
       log_obs WARN precompact-handoff "LLM narrative requested but the call returned nothing"
     fi
