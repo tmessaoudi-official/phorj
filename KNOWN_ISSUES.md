@@ -234,6 +234,12 @@ the ordinary expression emitter today (DEC-437's gate is the only reader, and it
 there is no live panic — but one careless `emit_expr(attr_arg)` would panic the compiler on valid user
 code. That is the same class as the `html"…"`-in-a-tuple panic Invariant 3 was widened for.
 
+**NOW GUARDED (2026-08-05, DEC-449).** The hazard was recorded but untested. `tests/attribute_transpile.rs`
+::`attribute_arguments_are_expanded_and_never_panic_a_backend` pins the three shapes that could reach a
+backend — a nested `new`, an alias-typed foldable argument, and an `html"…"` argument (declined with the
+disclosure, which is what keeps the `unreachable!` unreached). A future `emit_expr(attr_arg)` now fails a
+test instead of shipping.
+
 **The root fix** is to make the desugars walk attribute arguments so the invariant is actually true. It is
 not a one-liner: every attribute-consuming desugar (`desugar_di`, `desugar_config`, `desugar_router`, the
 `#[Entry]` reads) inspects attributes STRUCTURALLY, so each would have to be re-verified against the

@@ -199,3 +199,61 @@ function main(): void {
     // …and the emitted attribute did not disturb program output.
     assert!(out.starts_with(&interp), "output changed:\n{out}");
 }
+
+/// RETRACTION PIN (DEC-449, retracting task #67). The backlog carried *"desugars must walk attribute
+/// arguments — `Expr::New` reaches the transpiler, latent `unreachable!()` panic"*. Investigated: **no
+/// panic is reachable**, and attribute arguments ARE expanded. This pins both halves so the retraction
+/// cannot silently rot back into a real defect.
+///
+/// Why no panic: the only sugar that could survive to a backend is gated three ways. The interpreter and
+/// VM never EVALUATE an attribute argument (it is metadata), and the transpiler's argument gate declines
+/// anything without a PHP constant form and emits a disclosure comment instead. So an unexpanded node
+/// yields a *degraded re-emission*, never a crash — a real Invariant-5 concern, but a far smaller one
+/// than the backlog claimed.
+#[test]
+fn attribute_arguments_are_expanded_and_never_panic_a_backend() {
+    // (a) A nested construction survives intact — this is the `Expr::New` the backlog named.
+    let out = transpile(
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\n\
+         import Core.Runtime.EntryKind;\nimport Core.Runtime.Attribute;\n\
+         #[Attribute] class Inner { constructor(public int v) {} }\n\
+         #[Attribute] class Tag { constructor(public Inner i) {} }\n\
+         #[Tag(new Inner(7))] function f(): int { return 1; }\n\
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{f()}\"); }",
+    );
+    assert!(
+        out.contains("#[Tag(new Inner(7))]"),
+        "a nested construction must re-emit, not panic or degrade:\n{out}"
+    );
+
+    // (b) A type ALIAS in the attribute's own signature, plus a foldable argument: the alias is erased
+    // and the arithmetic folds (DEC-438), so the expansion chain genuinely reaches attribute arguments.
+    let out = transpile(
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\n\
+         import Core.Runtime.EntryKind;\nimport Core.Runtime.Attribute;\n\
+         type Count = int;\n\
+         #[Attribute] class Tag { constructor(public Count n) {} }\n\
+         #[Tag(41 + 1)] function f(): int { return 1; }\n\
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{f()}\"); }",
+    );
+    assert!(
+        out.contains("#[Tag(42)]"),
+        "the alias must erase and the argument must fold:\n{out}"
+    );
+
+    // (c) An `html\"…\"` argument — the shape that would hit
+    // `unreachable!(\"html literal not resolved before transpilation\")` if the gate let it through.
+    // It must be DECLINED with the disclosure, and the program must still transpile.
+    let out = transpile(
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\n\
+         import Core.Runtime.EntryKind;\nimport Core.Runtime.Attribute;\nimport Core.Html;\n\
+         #[Attribute] class Banner { constructor(public Html markup) {} }\n\
+         #[Banner(html\"<h1>hi</h1>\")] function f(): int { return 1; }\n\
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{f()}\"); }",
+    );
+    assert!(
+        out.contains("not re-emitted"),
+        "an html argument must be declined with the disclosure, never panic:\n{out}"
+    );
+    assert!(out.contains("function f(): int"), "the program must still transpile:\n{out}");
+}

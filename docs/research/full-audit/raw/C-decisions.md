@@ -7794,3 +7794,53 @@ which is the harness correctly discounting a box that has taken a lot of builds 
 deletes most of the 21% that is `push_mut` + `drop_glue` + `clone`), register-based bytecode, and
 operand-specialized handlers. Each changes the value representation or the bytecode, so each is adjudicable
 rather than self-rulable. The redundant-work seam is now closed.
+
+### DEC-449 (2026-08-05) — task #67 was a MIS-SUMMARY, not a defect (and `KNOWN_ISSUES` had it right all along)
+
+Went to build the highest-value un-gated item — a crash on valid user code outranks more perf work — and the
+investigation dissolved the crash.
+
+**A correction I owe to my own framing first.** I set out to "retract a false finding" like #66/DEC-437, and
+that is NOT what this is. `KNOWN_ISSUES.md`'s entry was **already accurate**: it states in terms that
+*"there is no live panic — but one careless `emit_expr(attr_arg)` would panic the compiler on valid user
+code"*, and calls it a LATENT HAZARD. The over-claim was in the task-list title alone — *"`Expr::New`
+reaches the transpiler (latent `unreachable!()` panic)"* — which reads as a live bug once the qualifier is
+dropped. So the register entry stays, the backlog row goes, and the difference is worth recording: a
+one-line task summary lost the word that carried all the meaning.
+
+**Tested every shape that could reach it [Verified]:**
+
+| shape | result |
+|---|---|
+| `#[Banner(html"<h1>hi</h1>")]` — `check` and `run` | clean; attribute args are metadata, never evaluated |
+| the same, `transpile` | **declined with the disclosure comment**, program transpiles fine |
+| `#[Tag(new Inner(7))]` — the named `Expr::New` | re-emits correctly as `#[Tag(new Inner(7))]` |
+| type alias in the attribute's signature + `#[Tag(41 + 1)]` | alias erased, argument folds to `#[Tag(42)]` |
+
+**No panic is reachable, and the expansion chain does reach attribute arguments.** The exposure is bounded
+three ways: the interpreter and VM never EVALUATE an attribute argument, and the transpiler's argument gate
+declines anything without a PHP constant form. So an unexpanded node produces a **degraded re-emission with
+a disclosure**, never a crash — a genuine Invariant-5 concern, but a far smaller one than "latent panic".
+
+**What I added is the missing guard.** The hazard was recorded but untested, so nothing stopped a future
+`emit_expr(attr_arg)` from turning it live. `attribute_arguments_are_expanded_and_never_panic_a_backend`
+now pins all three shapes — including the `html"…"` one that would hit the `unreachable!` if the gate ever
+let it through. The KNOWN_ISSUES entry keeps its "root fix" note (make the desugars walk `attrs`), which is
+still genuinely owed and still not a one-liner: every attribute-consuming desugar inspects attributes
+structurally, so desugar ORDER starts to matter.
+
+### The recommendation this frees up: LSP signature help (Invariant 17's 100% RULE)
+
+**Verified gap:** `grep signatureHelp` across `src/lsp/` and `vscode/` returns **nothing**. The server
+advertises eight providers — `completion`, `definition`, `documentFormatting`, `documentHighlight`,
+`documentSymbol`, `hover`, `references`, `rename` — and **no `signatureHelpProvider`**.
+
+Invariant 17's THE 100% RULE names signature help explicitly in its definition-of-done list, so this is not
+a nice-to-have: it is an invariant obligation, currently unmet **for every call in the language** rather than
+for one feature. SLICE-STATE already carried it as *"a pre-existing unmet gap"* (found during DEC-435) and
+nothing has closed it. It needs no ruling — the invariant already ruled it — and it is directly user-facing:
+today a phorj user typing `foo(` gets no parameter names, no types, no active-parameter highlight, in either
+editor.
+
+Recommended as the next slice, ahead of `--vendor=stub` (a smaller audience, and DEC-439 is already useful
+without it) and ahead of the remaining perf work (all of which is now structural and awaiting a ruling).
