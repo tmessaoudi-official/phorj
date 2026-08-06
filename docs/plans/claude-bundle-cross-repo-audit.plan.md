@@ -65,10 +65,11 @@ line logged in a real session went somewhere nobody could read. Now
 `$CLAUDE_PROJECT_DIR/var/claude/logs/` (gitignored via `/var`), `$OBS_LOG` still honoured for tests.
 `install.sh` now also pre-creates `var/claude/`.
 
-### P1 — five global-framework rules point at machinery that does not exist here
+### P1 — five global-framework rules pointed at machinery that does not exist here (FIXED)
 
-rent-watch adapted its `CLAUDE-global.md` to its real container; phorj's is still upstream boilerplate.
-**Rule 10 is the sharpest: it directly contradicts phorj's own project CLAUDE.md.**
+rent-watch adapted its `CLAUDE-global.md` to its real container; phorj's was still upstream boilerplate.
+**Rule 10 was the sharpest: it directly contradicted phorj's own project CLAUDE.md.** All five adapted
+2026-08-06, each keeping the upstream text visible as "what it used to say" so the change is auditable:
 
 | rule | phorj's global copy says | reality in phorj |
 |---|---|---|
@@ -93,7 +94,24 @@ exactly that shape; phorj ships one agent, so the mandated panel is **structural
 
 This is the largest remaining gap and the reason a whole session's 3C/6C gates ran "self-graded,
 disclosed" — attributed to `advisor()` being unavailable, when the deeper cause is that two of the three
-lenses were never authored. **Not yet done — needs the lens split ruled (see "Open" below).**
+lenses were never authored.
+
+**RESOLVED 2026-08-06.** Developer approved the split; both agents authored (not copied — the other
+repos' versions are domain-specific):
+
+- `safety-promises-reviewer` — the `unsafe` island (`#![deny(unsafe_code)]` + the one scoped `allow` in
+  `src/jit/`, CI-enforced), Invariant-14 LADDER exclusions and their disclosures
+  (`E-CONCURRENCY-NO-PHP` / `E-FOREIGN-RUNTIME` / `E-TRANSPILE-{DB,HTTPCLIENT,MAIL}`), determinism and
+  the network boundary, EV-7 no-crash, the narrow security surfaces (DEC-363 header CRLF/NUL, SQL
+  prepared statements, argon2, RE2-not-backtracking, rustls, secrets), and the honesty promises
+  (dependency count SSOT, NO-HIDDEN-LOSS, Invariant 11, the anti-bandaid gate).
+- `completeness-reviewer` — tests EXECUTED not merely written, Rule 6's four dimensions with the blast
+  radius grep re-run independently, Invariant 9 examples-ship-with-features (the example corpus IS the
+  byte-identity coverage), Invariant 17's 100% RULE across transpile/lift/LSP/both editors, Invariant 19
+  SSOT-quartet consistency, and the mechanical caps.
+
+`CLAUDE.md` § "Certification ladder" now carries the lens→agent table, so a future session finds the
+panel instead of falling through to the self-graded rung.
 
 ### P2 — smaller divergences
 
@@ -107,12 +125,8 @@ lenses were never authored. **Not yet done — needs the lens split ruled (see "
 
 All 13 core skills are present and identical in name across phorj/rent-watch; phorj is not missing any.
 
-## Open — needs a ruling
+## Open — needs a ruling (the P2 tranche)
 
-1. **The two missing panel agents.** What are phorj's other two lenses? The natural split, given the
-   invariants: a **safety/promises** reviewer (byte-identity spine claims, LADDER disclosures, the
-   `unsafe` island, fault-body parity) and a **completeness** reviewer (the Rule-6 four-dimension
-   evidence gate, examples-ship-with-features, LSP+editors currency, SSOT quartet consistency). Both are
-   authoring tasks, not copies — the other repos' versions are domain-specific.
-2. **Write-time `PostToolUse` hooks for Rust** — worth it, or is the tiered git-hook gate enough?
-3. Whether to import `qa-sweep`.
+1. **Write-time `PostToolUse` hooks for Rust** — worth it, or is the tiered git-hook gate enough?
+2. Whether to import `qa-sweep` from pdfturbo.
+3. Whether `permissions.deny` is worth adding with no `.env` in this repo.

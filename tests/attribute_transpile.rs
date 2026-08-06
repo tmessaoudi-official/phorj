@@ -255,5 +255,8 @@ fn attribute_arguments_are_expanded_and_never_panic_a_backend() {
         out.contains("not re-emitted"),
         "an html argument must be declined with the disclosure, never panic:\n{out}"
     );
-    assert!(out.contains("function f(): int"), "the program must still transpile:\n{out}");
+    assert!(
+        out.contains("function f(): int"),
+        "the program must still transpile:\n{out}"
+    );
 }

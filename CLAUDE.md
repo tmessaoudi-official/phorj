@@ -103,6 +103,19 @@ ask-human, never silently proceed. Availability chain: `advisor()` if it activat
 reviewer subagents → 3 distinct-lens self-passes + mandatory disclosure. The quality gate above
 is always the floor, never the certification.
 
+**THE THREE LENSES NOW EXIST AS AGENTS** (2026-08-06 — until then only the first did, so the mandated
+panel was structurally impossible and every gate fell through to the self-graded rung):
+
+| lens | agent | spawn it when |
+|---|---|---|
+| correctness + regression | `.claude/agents/backend-parity-reviewer.md` | any backend, value kernel, `Op` set, checker or transpiler change |
+| security + safety-promises | `.claude/agents/safety-promises-reviewer.md` | `src/jit/`, a network verb, an `ext/` module, or any claim a reader relies on |
+| completeness + blast-radius | `.claude/agents/completeness-reviewer.md` | **every** gate — it is the lens that catches "declared done, one surface left behind" |
+
+Spawn all three in ONE message so they run concurrently on independent contexts. They are read-only
+(`Read, Grep, Glob, Bash`) and each ends with `PANEL VERDICT: CLEAN — …` or `PANEL VERDICT: FINDINGS — n`.
+Self-grading is now the LAST rung, not the default — and using it still requires the disclosure.
+
 ## Git autonomy (overrides global Rule 10 — authorized by the developer, 2026-06-16)
 
 Autonomous `git add` + `git commit` + `git push` are **authorized** (push added by developer ruling

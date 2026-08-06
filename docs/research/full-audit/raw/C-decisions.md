@@ -7844,3 +7844,78 @@ editor.
 
 Recommended as the next slice, ahead of `--vendor=stub` (a smaller audience, and DEC-439 is already useful
 without it) and ahead of the remaining perf work (all of which is now structural and awaiting a ruling).
+
+### DEC-450 (2026-08-06) — the DEC-268 panel finally EXISTS (3 agents, was 1); five global-framework rules adapted to this container
+
+Developer-approved tranches 1 and 2 of the cross-repo Claude-bundle audit
+(`docs/plans/claude-bundle-cross-repo-audit.plan.md`).
+
+### 1 — the mandated 3-lens panel was structurally impossible
+
+DEC-268 has required a **3-lens fresh-context reviewer PANEL** since 2026-07-16. phorj shipped exactly ONE
+agent (`backend-parity-reviewer`, the correctness lens). Every other repo in the family ships the full
+shape — rent-watch, twes-in and pdfturbo each have a correctness lens, a security/safety lens, and a
+`completeness-reviewer`. **So for three weeks the ladder's top rung could not be reached at all**, and
+every 3C/6C gate fell through to the self-graded rung. That was disclosed each time as "advisor()
+unavailable", which was true but not the whole cause: two of the three lenses had never been authored.
+This is the second time in two days that a *disclosed* fallback turned out to have a deeper reason nobody
+had checked (the first: DEC-441's leverage arithmetic behind the "320× cliff").
+
+Authored, not copied — the other repos' non-completeness lenses are domain-specific (tenure
+classification, billing, PDF export fidelity), so only the SHAPE ports:
+
+- **`safety-promises-reviewer`** — the security + safety-promises lens. Attacks: the `unsafe` island
+  (`#![deny(unsafe_code)]` on both crate roots, the single scoped `allow` in `src/jit/`, CI-enforced —
+  any `unsafe` outside it is P0); Invariant-14 LADDER exclusions and the disclosure that must travel with
+  them (`E-CONCURRENCY-NO-PHP`, `E-FOREIGN-RUNTIME`, `E-TRANSPILE-{DB,HTTPCLIENT,MAIL}` — verified
+  present); weakening a hard error into a fallback = case (3), forbidden; determinism and the network
+  boundary (only `add`/`install`/`update`/`remove` and the sha256-verified stub download); EV-7 no-crash;
+  the narrow real security surfaces (DEC-363 header CRLF/NUL, SQL prepared statements, argon2,
+  RE2-not-backtracking, rustls, secrets — noting this repo is PUBLIC); and the honesty promises
+  (dependency-count SSOT, NO-HIDDEN-LOSS, Invariant 11, the anti-bandaid gate).
+- **`completeness-reviewer`** — the completeness + blast-radius lens, and deliberately the one that runs at
+  EVERY gate. Attacks: were the tests **executed** or only written (Rule 7 calls "the tests compile" a lie
+  of omission), does the count go up, **does the new test fail without the change**, and is any assertion
+  vacuous (a `contains()` matching a disclosure comment rather than the artefact has already false-greened
+  here); Rule 6's four dimensions with the **blast-radius grep re-run independently** rather than trusted;
+  Invariant 9 (the example corpus IS the byte-identity coverage, so a feature with no example has ZERO
+  parity coverage); Invariant 17's 100% RULE across transpile/lift/LSP/**both** editors; Invariant 19
+  SSOT-quartet consistency (SLICE-STATE has been stale by a full wave before); and the mechanical caps —
+  including the note that shaving comments to get back under the size gate is gaming it.
+
+Both are read-only (`Read, Grep, Glob, Bash`), both end in `PANEL VERDICT: CLEAN — …` / `FINDINGS — n`,
+and both restate DEC-268's two-consecutive-clean-rounds rule so a reviewer cannot soften a finding to help
+a round close. `CLAUDE.md` § "Certification ladder" now carries the lens→agent table with when-to-spawn
+guidance and the instruction to spawn all three in ONE message. **Self-grading is now the last rung, not
+the default.**
+
+### 2 — five global-framework rules pointed at machinery that does not exist here
+
+`scripts/claude-bootstrap/CLAUDE-global.md` was still upstream boilerplate where rent-watch's copy had been
+adapted to its real container. Each is now corrected with the upstream text kept visible as "what it used
+to say", so the adaptation is auditable rather than a silent rewrite:
+
+| rule | was | now |
+|---|---|---|
+| **10 git** | *"Never commit or push without explicit user request"* | **OVERRIDDEN for phorj** — add/commit/push authorised (DEC-417), with the real limits enumerated (no force, no history rewrite, no concurrent commits per DEC-378, keep the developer's author identity) |
+| **13 observability** | `~/.claude/logs/`; cited `session-remember`/`claude-cleanup.sh` | `var/claude/logs/` in-repo; those two paths do not exist here |
+| **15 loop** | *"invoke the `loop` skill — non-negotiable"* | no such skill exists; use background `Bash`/`Monitor`, never a foreground `sleep`; the host's `/loop` is preferred when present |
+| **17 plans** | location chosen by a `~/.claude/projects/<slug>/plan-location` sentinel | settled `docs/plans/<topic>.plan.md`; the sentinel **must not be created** (Invariant 19) |
+| Memory toggles | presented as live configuration | retitled **NOT APPLICABLE HERE** with a banner: the pipeline is absent, a session must not claim to have "written to memory" |
+
+**Rule 10 was the sharpest and was a live contradiction**, not merely staleness: the global copy forbade
+exactly what the project file authorises, so a session reading only the global rule would refuse work it
+already had permission for, or ask twice. It has been wrong since the bundle landed on 2026-07-19.
+
+Also ported from rent-watch: `THINKING.md`'s maintenance rule now says to edit the **repo** copy and never
+`~/.claude/THINKING.md`, because `install.sh` copies one-directionally with `cp -u` — a hand-edit there is
+permanently newer and diverges **silently and unrecoverably**.
+
+**Verified:** all three agents parse (frontmatter `name`/`description`/`tools`, `name` == filename);
+`install.sh` runs and `~/.claude/CLAUDE.md` is byte-identical to the repo copy afterwards; the handoff
+suite is 34/34; doc-guards and size-gate green.
+
+**Still OPEN — the P2 tranche, awaiting the developer's decision:** write-time `PostToolUse` lint hooks for
+Rust (phorj has none; others have 2–5, though phorj's `cargo fmt`/`clippy` already run in the tiered git
+hooks), importing `qa-sweep` from pdfturbo, and whether `permissions.deny` earns its keep with no `.env`
+in this repo.

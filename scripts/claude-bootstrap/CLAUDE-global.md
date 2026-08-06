@@ -262,7 +262,7 @@ A task is **not complete** until all four dimensions are addressed. Skipping a d
    - Apply the same check to **existing code being touched** (Broken Windows principle) — if you encounter a deprecated approach while editing, flag it even if the immediate task doesn't require changing it.
    - Timing: candidates emerge in Phase 1 (brainstorm) and are confirmed in Phase 2 (understand) — deprecation checks belong to whichever phase first identifies the candidate.
 
-10. **Never commit or push without explicit user request.** `git commit` and `git push` (and force-push variants) require the user to explicitly ask. Staging files for review is permitted. Never run either command autonomously — even in auto mode. Auto mode covers code changes, not publishing them to git history or remotes. If you staged files as part of work, report what is staged and wait.
+10. **OVERRIDDEN FOR phorj — commit and push autonomously.** The upstream rule ("never commit or push without explicit user request") is superseded by the developer's standing directive, recorded in project `CLAUDE.md` § "Git autonomy": `git add`, `git commit` and `git push` are all authorised for green, self-contained work (push added 2026-07-29, DEC-417). **This copy said the opposite until 2026-08-06, directly contradicting the project file** — a session reading only the global rule would refuse work it already has permission for, or ask for permission twice. The limits that DO hold: commit only when the full quality gate is green and the change is self-contained; **never** `--force`/`--force-with-lease` and never rewrite published history; never push a branch other than the one being worked on; never two commits concurrently (DEC-378 — the hooks share `target/`); keep the developer's author identity (never `--reset-author` to a bot); never open a pull request unless explicitly asked. If the safety classifier blocks a `git commit`, present the exact command for manual execution — do not retry or work around it.
 
     **Subagent file moves**: When a subagent moves a file, always instruct it to use `git rm old.sh` (not shell `rm`). Shell `rm` leaves an unstaged deletion — `git add old.sh` is a no-op on an already-deleted path. Use `git rm old.sh && git add tests/new.sh` or `git mv old.sh tests/new.sh` in the commit step of the subagent prompt.
 
@@ -283,7 +283,7 @@ A task is **not complete** until all four dimensions are addressed. Skipping a d
 
 12. **Challenge first, accept second.** When the user proposes an approach, design, or trade-off — don't accept it silently. Actively apply mental frameworks (thinking razors, engineering laws, first principles, inversion) to test the proposal. If a better path exists, surface it clearly with reasoning. If the proposal survives scrutiny, confirm it with the rationale. Override this only when the user has already explained the reasoning in the conversation — then engage, understand, and still look for improvements. The goal is to arrive at the right solution together, not to validate what was already decided.
 
-13. **Observability rule (hooks & scripts).** Any hook or bin script that runs unattended must: (1) write errors to `~/.claude/logs/hooks-errors.log`; (2) log state-changing actions (file created/deleted, API called, session saved) at INFO level; (3) stay silent on no-ops. Log format: `YYYY-MM-DDTHH:MM:SS | LEVEL | script | message`. Use `log_obs()` from `~/.claude/hooks/log-helpers.sh` — source it at the top of the script. Never fatal — all log writes must use `|| true`. **Prerequisite**: `jq` must be installed — it is used by `~/.claude/hooks/session-remember/common.sh` (JSON state tracking) and `~/.claude/bin/claude-cleanup.sh`. Verify with `which jq`.
+13. **Observability rule (hooks & scripts).** Any hook or script that runs unattended must: (1) write errors to **`var/claude/logs/hooks-errors.log` in the repo** (gitignored via `/var`) — **not** `~/.claude/logs/`, which dies with the container, so a line logged there is unreadable by anyone; (2) log state-changing actions (file created/deleted, API called, session saved) at INFO level; (3) stay silent on no-ops. Log format: `YYYY-MM-DDTHH:MM:SS | LEVEL | script | message`. Use `log_obs()` from **`scripts/claude-bootstrap/hooks/log-helpers.sh`** — source it at the top of the script; it defaults to the repo path above and honours `$OBS_LOG` for tests. Never fatal — all log writes must use `|| true`. **Prerequisite**: `jq`, used by the PreCompact handoff hook to parse the transcript. Verify with `which jq`. (The upstream text cited `~/.claude/hooks/session-remember/common.sh` and `~/.claude/bin/claude-cleanup.sh`; neither exists here — the memory pipeline is not installed.)
 
 
 14. **Root cause before fix — no exceptions, no bandaids.** Never write a fix, fallback, default value, error handler, or workaround without first confirming the root cause with hard physical evidence. Reasoning and assumptions do
@@ -307,7 +307,7 @@ not count. Required evidence: measured timing, captured log output, stack trace,
    **Confidence requirement**: the root cause must reach [Verified] grade (Rule 18 — evidence grade) — directly confirmed with measured, observed, reproducible evidence — before implementing any fix. "It should work" or "probably X" is [Inferred] at best; that is not sufficient for a fix. If investigation is
 blocked (no reproducer, no access, no tooling), say so explicitly and stop rather than patching around the unknown. See Rule 18 (evidence grade) for the evidence-grade format applied to all substantive outputs beyond fixes.
 
-15. **Loop is mandatory for iterative work.** When a task involves polling external state, waiting for a condition, recurring checks, background monitoring, or any "keep doing X" signal — invoke the `loop` skill before proceeding. Never handle iteration inline when `loop` applies. This is non-negotiable.
+15. **Iterative work needs an explicit mechanism — but there is no `loop` SKILL here.** Upstream made invoking a `loop` skill "non-negotiable"; that skill exists in neither `.claude/skills/` nor `~/.claude/skills/`, and a mandate pointing at absent machinery is worse than none. What applies instead, when a task involves polling external state, waiting on a condition, recurring checks or any "keep doing X" signal: use the harness's own facilities — a background `Bash` command that exits when the condition is met (one notification), or `Monitor` for per-occurrence events — and **never a foreground `sleep` poll**. The host does provide a `/loop` command in this container (project `CLAUDE.md` § "Global Skills Reference" records it as host-provided); prefer it when present.
 Trigger words that signal `loop` is needed: *"keep doing"*, *"monitor"*, *"every X minutes/seconds"*, *"until it"*, *"poll for"*, *"watch for"*, *"check repeatedly"*, *"keep trying"*, *"continuously"*, *"recurring"*.
 
 16. **Phase tracking is mandatory — no silent transitions.** Every task (not a pure information answer) must make phase progression visible and verifiable:
@@ -318,7 +318,7 @@ Trigger words that signal `loop` is needed: *"keep doing"*, *"monitor"*, *"every
    - **Small tasks — compact skip block**: Small tasks skip phases 0, 1, 2, 3, 3L, 4, 7. Instead of individual skip lines (which get omitted in practice), emit one compact block immediately after the sequence declaration: `Skipped: 0 (no prior context) | 1 (obvious approach) | 2 (no unknowns) | 3/3L/4 (n/a for Small) | 7 (single-file fix)` — adjust reasons to match the actual task. Replaces individual skip markers for Small tasks only.
    - **No exceptions**: applies to all task sizes including Small. The user must be able to verify the workflow is being followed at any point in the conversation.
 
-17. **Persist plans and decisions — no exceptions, no deferrals.** Every session involving agreed decisions or a formal plan must maintain a durable plan file in the location determined by the per-project sentinel `~/.claude/projects/<slug>/plan-location` (content: `repo` | `global`). This file survives `/compact`, session resets, and context compression — it lives on disk, not in memory.
+17. **Persist plans and decisions — no exceptions, no deferrals.** Every session involving agreed decisions or a formal plan must maintain a durable plan file at **`docs/plans/<topic>.plan.md` in the repo** — settled, with no sentinel and no question. (Upstream selected the location via a `~/.claude/projects/<slug>/plan-location` sentinel; that mechanism does not exist here and **must not be created** — Invariant 19 requires every plan to live IN the repo, because the container is reclaimed and only committed state survives.) This file survives `/compact`, session resets, and context compression — it lives on disk, not in memory.
 
    - **`repo`** → `docs/plans/<topic>.plan.md` in the working repo (team-visible, git-trackable)
    - **`global`** → `~/.claude/projects/<slug>/plans/<topic>.plan.md` (machine-local, Claude-private)
@@ -384,7 +384,13 @@ Trigger words that signal `loop` is needed: *"keep doing"*, *"monitor"*, *"every
 
    **Relationship to other rules**: Rule 11 (verify proposals) defines *how* to check a claim; this rule defines *how to label* the result — every Rule 11 check ends in a Rule 18 grade. Rule 14 (root cause) is the fix-scoped case of this same discipline: a root cause must reach [Verified] here before Rule 14 permits writing a fix.
 
-## Memory System Toggles
+## Memory System Toggles — NOT APPLICABLE HERE
+
+> The `session-remember` pipeline this section configures is **not installed in this container** — there is no
+> `~/.claude/hooks/session-remember/`, no `MEMORY.md`, and no per-project memory directory. Everything below is
+> retained verbatim as upstream reference for a workstation that HAS it; none of it takes effect here, and a
+> session must not report having "written to memory". Durable state goes to the repo instead: the SSOT quartet
+> and `docs/plans/*.plan.md` (rule 17).
 
 The session-remember pipeline (`~/.claude/hooks/session-remember/`) has two file-presence kill switches:
 
