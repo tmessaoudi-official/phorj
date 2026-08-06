@@ -135,9 +135,15 @@ pub(super) fn pop_call_args(
                     "unboxed: Dyn argument into a non-Dyn param (deferred)".to_string(),
                 ));
             }
-            k if k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_)) => {
+            // SPIKE (DEC-444): a FUNCTION argument carries its target in its compile-time KIND
+            // (`Kind::Fn(f)`), so the runtime word is the same filler `arm_call_value` discards
+            // (`_fv`). Pass it through unchanged — the callee's `CallValue` reads the identity off
+            // the kind, never off the word. Nothing is allocated, cloned or freed, so this crosses
+            // no ownership boundary.
+            Kind::Fn(_) => v,
+            k if k.is_handle() || k == Kind::EnumInt => {
                 return Err(JitError::Unsupported(
-                    "unboxed: handle/enum/fn argument to Call (deferred)".to_string(),
+                    "unboxed: handle/enum argument to Call (deferred)".to_string(),
                 ));
             }
             _ => v,

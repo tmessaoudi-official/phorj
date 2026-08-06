@@ -14,6 +14,7 @@ mod accumulator_elision;
 mod boxed;
 mod decline_reasons;
 mod extreme_by;
+mod fn_arg_identity;
 mod hof_filter_map;
 mod json_adt;
 mod listcontains;

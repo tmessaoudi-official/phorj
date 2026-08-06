@@ -7548,3 +7548,68 @@ outside a fifth time.**
 `floatmul` 0.989→1.009, `listcontains` 0.899→1.975 — and prints *"re-emit so the ratchet protects it"*.
 Confirms DEC-440 independently. **Nothing was re-emitted:** DEC-434.1's spread-adjusted arming rule is still a
 PENDING RULING, and it armed a lucky draw once already. Arming these is the developer's call, not the gate's.
+
+### DEC-445 (2026-08-05) — TRACK A INCREMENT 1 BUILT: a function keeps its IDENTITY across a call boundary. `userhof` 0.19× → 12.5×
+
+DEC-444's corrected mechanism, built and measured. The spike was two arms.
+
+**The change, in full.** A function argument was refused outright by BOTH sides of the JIT:
+
+* `analyze/mod.rs` (the `Op::Call` sig loop) lumped `Kind::Fn(_)` in with handles and enums:
+  `"unboxed: handle/enum/fn argument to Call (deferred)"`;
+* `emit_unboxed/call_plumbing.rs` (`pop_call_args`) refused it identically.
+
+Both now admit it. Analyze records `Kind::Fn(f)` in the call signature, so the fixpoint's `param_over`
+carries the callee's IDENTITY into the callee's param slot; emit passes the word through unchanged,
+because the word is the same never-read filler `arm_call_value` already discards (`_fv`). **Nothing is
+allocated, cloned or freed — no ownership boundary is crossed**, which is why this needed no new lattice
+work and no new runtime machinery.
+
+**Result — measured, `bench/micro/userhof`:**
+
+| | before | after |
+|---|---|---|
+| phorj leg | 1 195 454 357 ns | **11 762 269 ns** (**102× faster**) |
+| ratio vs php+JIT | **0.19× LOSS** | **11.99–12.53× WIN** |
+
+Checksum `999978` identical across **all four legs** — JIT, VM (`--no-jit`), tree-walker, and php.
+
+**Why this is a large win rather than a tuning nudge:** it is DEC-441's leverage arithmetic running the
+right way. `bench`'s hot loop was declining, so the fallback was the VM at ~16× php's instruction count;
+compiling it collects the 28–334× JIT leverage the winning rows already enjoy.
+
+**Polymorphic sites fail CLOSED, for free and by test.** `join_kind` has no `Fn` arm, so `Fn(a) ⊔ Fn(b)`
+falls to `_ => None` and the sig merge reports *"conflicting call argument kinds (deferred)"*; only
+`Fn(a) ⊔ Fn(a)` survives, on the `a == b` fast path. A miscompile here would have silently called the
+WRONG lambda while looking entirely plausible, so it is pinned by
+`two_different_lambdas_at_two_sites_fail_closed_rather_than_miscompiling` plus a companion asserting the
+declined program still produces the ORACLE's answer on the VM — a decline is only safe if the fallback is
+correct, so the decline alone is not evidence.
+
+**`src/jit/tests/fn_arg_identity.rs`, 5 tests, and the hit counter is asserted in every positive one.** A
+silent VM fallback is byte-identical, so an output-only assertion proves nothing — the same false-assurance
+shape that let this row hide until DEC-443 measured it. **Negative control run and verified: with the two
+arms reverted, 3 of the 5 fail** (the anchors were asserted to match, because a revert that silently
+no-ops has already produced a false green twice in this session).
+
+**One test documents a limit rather than a feature.** `applyTwice` compiled STANDALONE still declines on
+`CallValue on Unknown`, and that is correct: with no call site there is no `param_over`, so there is no
+identity. This pins DEC-434.2's central insight from the other direction — *a closure only has known
+operand kinds in the context of its CALL SITE* — and explains why the fix propagates identity through the
+signature rather than stamping it on the function.
+
+**What this does NOT fix, stated because the numbers are easy to over-read.** The fs rows are UNMOVED:
+`fsforeachline` 0.30×, `fslines` 0.11×. They reach their closure through
+`Vm::call_closure_value` (the native higher-order path), not `Op::Call`, so this change cannot see them —
+they still need DEC-434.2's closure-path work. **The OWED list is still 7.** What moved is the whole class
+of USER-written higher-order code, which was never on the list because nothing measured it.
+
+**Gate:** 2843 tests (+5), both differential legs, clippy `--all-features` and `--no-default-features`,
+`cargo check --no-default-features`, fmt, size-gate, doc-guards, release build. `microbench-gate`: **PASS,
+0 blocking regressions, all output-identical**; `closurecall` 2.20→2.09 and `hofpipe` 5.81→5.94 (both still
+WIN, both inside spread). Nothing re-baselined — `userhof` reports `not in baseline (new) — ratio=12.351`.
+
+**Invariant 13 paid in the same change**, and it caught a real defect: `analyze/mod.rs` grew 2476 → 2491
+and the gate FAILED *"split it, do not grow it"*. The cause was my own revert/re-apply cycle leaving the
+rationale comment DUPLICATED in the source. Deduplicated, and the explanation moved to the `Kind::Fn` doc
+in `kinds.rs` where it belongs — `analyze/mod.rs` is now **2475**, one line BELOW its frozen baseline.

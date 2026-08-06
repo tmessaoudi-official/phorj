@@ -2060,13 +2060,12 @@ pub(super) fn unboxed_analyze(
                             Kind::DynList(_) => {
                                 sig.push(Kind::DynList(Own::Owned));
                             }
-                            k if k.is_handle()
-                                || k == Kind::EnumInt
-                                || matches!(k, Kind::Fn(_)) =>
-                            {
+                            // A function argument crosses as its compile-time IDENTITY, so that
+                            // `param_over` carries it into the callee — see [`Kind::Fn`] (DEC-444).
+                            Kind::Fn(f) => sig.push(Kind::Fn(f)),
+                            k if k.is_handle() || k == Kind::EnumInt => {
                                 return Err(JitError::Unsupported(
-                                    "unboxed: handle/enum/fn argument to Call (deferred)"
-                                        .to_string(),
+                                    "unboxed: handle/enum argument to Call (deferred)".to_string(),
                                 ));
                             }
                             other => sig.push(other),

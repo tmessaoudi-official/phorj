@@ -41,6 +41,26 @@ Three defects came out of a review round, each measured rather than reasoned:
 into one `usage_exit()` and extracting `phg build`'s flag parsing to `cli::build_flags` — it is a
 grandfathered size-gate breach Invariant 13 forbids growing.
 
+### Fixed — a function keeps its IDENTITY across a call boundary; user higher-order code JITs (DEC-445, 2026-08-05)
+Passing a lambda to a function used to take the caller's whole hot loop off the JIT. Both sides refused an
+`Fn` argument: the analyzer's `Op::Call` signature loop and the emitter's `pop_call_args`. Analyze now
+records `Kind::Fn(f)` in the call signature, so the fixpoint's `param_over` carries the callee's IDENTITY
+into the callee's param slot; emit passes the runtime word through unchanged, because it is the never-read
+filler `arm_call_value` already discards. Nothing is allocated, cloned or freed.
+
+`bench/micro/userhof` goes **0.19× LOSS → 12.5× WIN** — the phorj leg 102× faster (1 195 454 357 →
+11 762 269 ns) — with checksum `999978` identical on all four legs (JIT, VM, tree-walker, php). The size of
+the win is DEC-441's leverage arithmetic running the right way: the loop was declining, so the fallback was
+the VM at ~16× php's instruction count.
+
+Polymorphic call sites fail **closed**, for free: `join_kind` has no `Fn` arm, so two different targets
+reaching one param report "conflicting call argument kinds" and fall back to the VM; only a single target
+survives. That is tested, because a miscompile would have silently called the *wrong* lambda.
+
+Does NOT fix the fs rows (`fsforeachline` 0.30×, `fslines` 0.11×) — they reach their closure through the
+NATIVE higher-order path, not `Op::Call`. The OWED list is still 7; what moved is user-written higher-order
+code, which no bench measured until `userhof` shipped.
+
 ### Added — the files outside `autoload` get a ROLE, from their CONTENT (DEC-439 part 2, 2026-08-05)
 Developer-ruled, closing part 1's open question. A Symfony app keeps `public/index.php`, `bin/console`,
 `migrations/` and `config/*.php` outside `autoload.psr-4`; a Laravel app keeps `artisan` and `routes/web.php`

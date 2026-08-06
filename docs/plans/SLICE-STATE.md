@@ -213,6 +213,26 @@ check only.** microbench-gate 45 WIN / 7 loss, 0 blocking regressions, nothing r
 caught a real breach on the way (`mod.rs` 624→652, `tests.rs` 576→596, gate FAILED "split it, do not grow
 it") → extracted `src/vm/stack.rs` (152 lines); mod.rs now 541.
 
+**TRACK A INCREMENT 1 SHIPPED 2026-08-05 (DEC-445) — a function keeps its IDENTITY across a call
+boundary. `userhof` 0.19× LOSS → 12.5× WIN, the phorj leg 102× faster** (1 195 454 357 → 11 762 269 ns),
+checksum `999978` identical on all FOUR legs (JIT / VM / tree-walker / php). Two arms: `analyze`'s
+`Op::Call` sig loop and `emit`'s `pop_call_args` both refused `Kind::Fn` outright; analyze now records it
+so the fixpoint's `param_over` carries the callee's identity into the param slot, and emit passes the word
+through unchanged — it is the never-read filler `arm_call_value` already discards, so nothing is allocated,
+cloned or freed. This is DEC-441's leverage arithmetic running the right way: the hot loop was declining, so
+the fallback was the VM at ~16× php; compiling it collects the 28–334× leverage. Polymorphic sites fail
+CLOSED for free (`join_kind` has no `Fn` arm ⇒ `Fn(a) ⊔ Fn(b)` = None ⇒ "conflicting call argument kinds";
+only `Fn(a) ⊔ Fn(a)` survives) and that is TESTED, because a miscompile would have silently called the wrong
+lambda. `src/jit/tests/fn_arg_identity.rs`, 5 tests, hit counter asserted in every positive one; **negative
+control verified — 3 of 5 fail with the arms reverted.** Invariant 13 caught a real defect on the way (a
+duplicated comment from my own revert/re-apply cycle pushed `analyze/mod.rs` 2476→2491 and FAILED the gate;
+deduplicated, rationale moved to the `Kind::Fn` doc, now 2475 — one line BELOW baseline).
+**What it does NOT fix, stated so the number is not over-read: the fs rows are UNMOVED** (`fsforeachline`
+0.30×, `fslines` 0.11×) — they reach their closure via `Vm::call_closure_value`, the NATIVE higher-order
+path, not `Op::Call`, so this cannot see them; they still need DEC-434.2's closure-path work. **The OWED
+list is still 7.** What moved is the whole class of USER-written higher-order code, which was never on the
+list because nothing measured it.
+
 **Track B increment 2, the next blocker — measured, not guessed:** `pop2_int` (6.6%), `push_i` (3.7%) and
 `pop` (2.3%) are STILL out-of-line even with `#[inline(always)]`, and their signatures say why —
 **`Result<_, String>` on every arithmetic op**, whose 24-byte `String` error slot makes every `Result` large

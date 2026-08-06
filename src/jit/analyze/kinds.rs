@@ -89,6 +89,18 @@ pub(in crate::jit) enum Kind {
     /// native call — no closure object, no indirection, zero allocation. The runtime word is a
     /// never-read filler. Capturing closures are default-denied (collect + analyze); two
     /// different targets merging at a leader disagree on the kind → VM fallback (sound).
+    ///
+    /// **It also crosses a CALL BOUNDARY as an argument (DEC-444).** Because the identity lives in
+    /// the kind and the word is a filler, recording `Fn(f)` in a call signature lets the fixpoint's
+    /// `param_over` carry the callee's identity into the callee's param slot — nothing is allocated,
+    /// cloned or freed, so no ownership boundary is crossed. That is the entire difference between
+    /// `bench/micro/closurecall` (lambda in a LOCAL: **4.14× WIN**) and `bench/micro/userhof` (the
+    /// same lambda passed as a PARAMETER: **0.19× LOSS** before this, 12.5× WIN after) — a 22× spread
+    /// between two programs doing identical arithmetic.
+    ///
+    /// Polymorphic sites fail CLOSED for free: [`join_kind`] has no `Fn` arm, so `Fn(a) ⊔ Fn(b)`
+    /// falls to `None` and the sig merge reports "conflicting call argument kinds"; `Fn(a) ⊔ Fn(a)`
+    /// survives on the `a == b` fast path. Pinned by `jit::tests::fn_arg_identity`.
     Fn(usize),
     /// A ONE-INT-CAPTURE first-class function value (the hofpipe vertical): the target index
     /// rides the compile-time kind and the runtime word in the cell IS the single captured
