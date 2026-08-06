@@ -619,10 +619,12 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Http"],
         qualifier: "Http",
-        // Two fragments (Inv-13 split): the classic surface + the DEC-331 slice-2 rich Request.
+        // Three fragments (Inv-13 split): the classic surface, the DEC-331 slice-2 rich Request,
+        // and the slice-3 D4 serve configuration.
         srcs: &[
             crate::cli::http_prelude::HTTP_PRELUDE,
             crate::cli::http_request_prelude::REQUEST_PRELUDE,
+            crate::cli::serve_config_prelude::SERVE_CONFIG_PRELUDE,
         ],
         respond_bridge: Some(HTTP_RESPOND_BRIDGE),
         member_gated: true,
@@ -637,7 +639,10 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
             "ParamBag",
             "Request",
             "RequestBody",
+            // DEC-331 slice 3 (D4 / Rich-Request D8a).
+            "RequestParsing",
             "Response",
+            "ServeConfig",
             "Route",
             "Router",
             "SameSite",

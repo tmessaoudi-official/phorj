@@ -47,6 +47,24 @@ omitted the S3 slice entirely — so a fresh context resuming from here would ha
 half-built slice to start a new front. That is the Invariant 19 failure this file exists to prevent,
 committed in the same change that added a reviewer lens for it.)*
 
+**S3.2 IS STARTED AND BLOCKED (2026-08-06).** Part A shipped — `Http.ServeConfig` +
+`Http.RequestParsing` with D4's exact field set and defaults, in `src/cli/serve_config_prelude.rs`
+(Inv-13: `http_prelude.rs` was at 297 vs the 300 soft cap), wired as the third `Core.Http` `srcs`
+fragment; suite 2849/2849 under `PHORJ_REQUIRE_PHP=1 --all-features`. **Blocked on a pre-existing P0**
+before Part B (N-param `#[Config]` injection — `desugar_config.rs:199` hard-limits to ONE param, while
+D4's §1 surface injects two) and Part C (the precedence chain): `new Module.Class(...)` skips DEC-236
+defaults and DEC-297 named args and the VM PANICS — see `KNOWN_ISSUES.md` § "`new Module.Class(...)`",
+reproduced on clean `903384f` against the shipped `Http.Cookie`. Root cause is one line
+(`src/checker/calls/variants.rs:77`, bare-keyed `self.classes` vs a dotted name). **Fix sequencing is
+PENDING A RULING**; the S3.2 example + differential case are deliberately deferred to the fix rather
+than written against a workaround (Inv 9).
+
+**Also open, independent of the above:** Part C's env-var and CLI-flag tiers are RUNTIME reads while
+DEC-318's injection is a pure compile-time desugar inside the byte-identity spine — for a `Cli` entry
+taking a config type, the PHP leg must read the same sources or Invariant 1 breaks, and an example that
+reads env is not a deterministic input (Invariant 10). The spec locks the chain's ORDER but not that
+parity story; it needs a ruling before Part C is built.
+
 **Then the loose backlog:** **#71 `phg --help` omits the four package-manager verbs** — `add`/`install`/`update`/
 `remove` work but are invisible in the top-level help (Invariant 17; first recorded 2026-07-25 as H6 in
 `docs/research/2026-07-25-global-review/H-docs-consistency.md`, re-found 2026-08-06, also in

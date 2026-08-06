@@ -25,6 +25,7 @@ pub(crate) mod http_prelude;
 pub(crate) mod http_request_prelude;
 pub mod pm;
 mod rewrite_new;
+pub(crate) mod serve_config_prelude;
 mod test_runner;
 pub use benchmark::{
     cmd_benchmark, cmd_benchmark_json, cmd_benchmark_vs_php, cmd_benchmark_vs_php_json,

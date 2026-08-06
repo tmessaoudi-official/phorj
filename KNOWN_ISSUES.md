@@ -2672,3 +2672,56 @@ a gap in the gates, and it is why this entry exists.
 Fix: add the four verbs to the commands block in the CLI help string, **plus a test asserting every
 dispatchable verb appears in `--help`**, so the class cannot recur. Rust change → full correctness gate.
 
+
+## `new Module.Class(...)` — a QUALIFIED constructor skips defaults and named args, and the VM PANICS (P0, 2026-08-06)
+
+Constructing a prelude/module class through its **qualified** name silently bypasses both DEC-236
+default-filling and DEC-297 named-argument normalization. The `Expr::NamedArg` node then survives into
+the backends, which assert it cannot exist, so the VM and the transpiler **panic** — on valid user code.
+
+Reproduced on clean `903384f` (no local changes), against the SHIPPED `Http.Cookie`:
+
+```
+new Http.Cookie("sid", "abc")          # positional, 4 of 6 defaults omitted
+  run --tree-walker : runtime error at 9: constructor of `Cookie` expects 6 args, got 2
+  run              : PANIC  src/vm/exec.rs:178:35
+
+new Http.Cookie(name: "sid", value: "abc")
+  run              : PANIC  src/compiler/expr/core.rs:124:17
+                     "internal error: entered unreachable code: Expr::NamedArg is normalized to
+                      positional before backends (DEC-297)"
+  transpile        : PANIC  src/transpile/expr.rs:254:17  (same assertion)
+```
+
+The unqualified spelling (`new Cookie(...)`) is correctly refused by the wind rule
+(`E-INJECTED-BARE`), so today there is **no working way** to construct such a class with defaults
+omitted or arguments named.
+
+**Three invariants at once.** (1) **EV-7** — a panic reached from valid input; the same class as the
+`html"…"`-inside-a-tuple case that widened Invariant 3. (2) **Invariant 1** — the tree-walker emits a
+clean error while the VM panics, so the legs disagree on *failure behaviour*, which the spine covers.
+(3) **DEC-297's register row overstates its scope**: it claims `BUILT FULL SCOPE (free fns +
+constructors + methods incl. static)` with "8 rejects (all unhandled paths)" including
+`E-NAMED-ARG-UNSUPPORTED`. Qualified classes are a ninth unhandled path and they panic instead of
+reaching that clean reject — the guard has a hole precisely where coverage is claimed.
+
+**Root cause** (one line): `src/checker/calls/variants.rs:77` resolves the constructor with
+`self.classes.get(name)`, but `self.classes` is keyed **bare** while `name` here is dotted
+(`Http.Cookie`). The branch misses, so the whole DEC-297 + DEC-236 path inside it is skipped. This is
+the same "classes are keyed bare" fact LIFT-ATTR hit from the other direction (`#[App.Meta.Tag]`
+matching nothing).
+
+**Found by** building S3.2: DEC-331 D4's ruled surface is
+`new Http.ServeConfig(host: "0.0.0.0", port: 8443, cert: …, key: …)` — named arguments on a qualified
+prelude class, i.e. exactly the broken path. `Http.ServeConfig` and `Http.RequestParsing` ship in the
+same commit as this entry and are **correct as written but not yet reachable through that surface**;
+the S3.2 example and its differential case are deliberately deferred to the fix rather than written
+against a workaround (Invariant 9 — a feature with no example has zero parity coverage, and an example
+built around a defect would encode it).
+
+**Fix + sequencing PENDING A RULING** (options put to the developer 2026-08-06): resolve the qualified
+name to the same `ClassInfo` the bare name reaches, with differential coverage for named-args AND
+default-fill on a qualified prelude class plus an assertion that the panic is now a clean result — as
+its own commit before S3.2 resumes (recommended), folded into S3.2, or replaced by a deliberate clean
+REJECTION of the qualified-construction surface, which is user-visible and therefore the developer's
+call (Invariant 15).
