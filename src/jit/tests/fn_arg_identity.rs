@@ -42,6 +42,20 @@ const ONE_TARGET_SRC: &str =
       return acc; }\n\
     #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(500)}\"); }";
 
+/// The same thing through a METHOD rather than a free function — the strategy/visitor shape, and the
+/// second of the three call arms that refused an `Fn` argument.
+const METHOD_SRC: &str =
+    "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+    import Core.Output;\n\
+    class Runner { constructor(public int base) {}\n\
+      public function run((int) => int f, int x): int { return this.base + f(x); } }\n\
+    function bench(int n): int {\n\
+      Runner r = new Runner(1);\n\
+      mutable int acc = 0; mutable int i = 0;\n\
+      while (i < n) { acc = (acc + r.run(function(int a) => a * 2, i)) % 1000003; i = i + 1; }\n\
+      return acc; }\n\
+    #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{bench(500)}\"); }";
+
 /// THE acceptance test for the increment: the `userhof` shape compiles natively AND agrees with the
 /// tree-walking oracle (Invariant 2 — the interpreter is right by definition).
 #[test]
@@ -135,5 +149,30 @@ fn the_polymorphic_program_still_runs_correctly_on_the_fallback() {
     assert_eq!(
         jit_out, oracle,
         "a declined graph must still run correctly on the VM"
+    );
+}
+
+/// A lambda passed to a METHOD — the strategy/visitor shape. `CallMethod` builds a call signature and
+/// records it exactly like `Op::Call`, so the same identity propagation applies; before the fix the
+/// arm refused an `Fn` argument outright and took the caller's whole loop off the JIT.
+#[test]
+fn a_lambda_passed_to_a_method_compiles_and_matches_the_oracle() {
+    let oracle = crate::cli::cmd_treewalk(METHOD_SRC).expect("interpreter oracle ok");
+    let jit_out = crate::cli::cmd_run(METHOD_SRC).expect("jit-wired run ok");
+    assert_eq!(jit_out, oracle, "jit output must match the interpreter");
+
+    let program = compile_source(METHOD_SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual jit-wired output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the JIT must actually run this — a silent VM fallback false-greens byte-identity"
     );
 }

@@ -233,6 +233,19 @@ path, not `Op::Call`, so this cannot see them; they still need DEC-434.2's closu
 list is still 7.** What moved is the whole class of USER-written higher-order code, which was never on the
 list because nothing measured it.
 
+**Extended 2026-08-05 (DEC-446): identity propagation now covers `CallMethod`** (the strategy/visitor
+shape — a lambda passed to a method), same one-line fix since that arm already records `call_sigs`; three
+legs agree, no decline. `FnCap1` stays refused (its capture rides the runtime word, not the kind).
+**`Op::CallValue` is NOT done and the reason is structural:** its analyze arm builds NO signature at all, so
+relaxing its guard would weaken it for zero gain — the callee's param would stay `Unknown` and decline
+anyway. Guards deduplicated into `blocked_as_call_arg`. **Process note: I was gaming the size gate** —
+shaved comments three times to squeeze `analyze/mod.rs` back under its 2476 baseline before doing the right
+thing and SPLITTING it: `analyze/graph_info.rs` (155 lines, the per-graph fixpoint state; verified a pure
+move) takes it to **2339** with real headroom. Ratchet: **46 WIN / 7 loss** — the 7 are exactly the OWED
+survivors — `userhof` 14.8×, 0 blocking regressions. `methodcall` 2.918→2.393 was CHECKED not waved off:
+that bench passes zero function values, so the changed path is unreachable for it; the delta is
+cross-php-source baseline drift.
+
 **Track B increment 2, the next blocker — measured, not guessed:** `pop2_int` (6.6%), `push_i` (3.7%) and
 `pop` (2.3%) are STILL out-of-line even with `#[inline(always)]`, and their signatures say why —
 **`Result<_, String>` on every arithmetic op**, whose 24-byte `String` error slot makes every `Result` large

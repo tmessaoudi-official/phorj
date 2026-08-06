@@ -109,6 +109,11 @@ pub(in crate::jit) enum Kind {
     /// (the HOF loop arms) direct-calls the target with the capture PREPENDED as arg 0,
     /// matching the VM's `[caps.., args..]` lambda frame layout. ≥ 2 captures / non-int
     /// captures stay default-denied (collect + analyze).
+    ///
+    /// **Unlike [`Kind::Fn`], this does NOT cross a call boundary as an argument** (DEC-445): the
+    /// captured `Int` rides the runtime WORD, so the kind is not a pure compile-time fact and
+    /// propagating it through a call signature would need the capture's lifetime reasoned about
+    /// rather than the word simply passed through. Refused in the `Call`/`CallMethod` arg arms.
     FnCap1(usize),
     /// Lever-3 pointer-walk iteration (the for-in desugar): the END pointer of a FLAT int
     /// list being iterated — the desugar's elems cell, rewritten at the `IterElems; Const(0)`
