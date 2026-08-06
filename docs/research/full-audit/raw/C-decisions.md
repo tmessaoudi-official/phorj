@@ -7732,3 +7732,65 @@ Each is a design change to the value representation or the bytecode, i.e. adjudi
 self-rulable. **This is now the third cheap-looking VM/JIT fix refuted by measurement in this slice**
 (release-profile LTO, DEC-441; my own recommended static type seeding, DEC-444; the error type, here) — and
 the third time the cost was minutes because the thing was built and measured instead of costed from outside.
+
+### DEC-448 (2026-08-05) — track B increment 3 BUILT: the dispatch cache. 167.6 → 163.2 Ir/op
+
+The one item DEC-447 said was still real: `run_to_completion`'s per-op scaffolding, 25.5% of the VM loop and
+genuinely REDUNDANT work rather than the relocatable kind increment 2 died on.
+
+**What the loop did per single instruction:** `self.frames[fr].func`, `self.frames[fr].ip`, then
+`program.functions[func].chunk.code` (a bounds-checked index plus a two-hop deref), then `code.len()`,
+`&code[ip]`, then `self.frames[fr].ip += 1` — five bounds-checked accesses and a re-walk of the function
+table, for every op.
+
+**Two changes, both to `run_to_completion` AND `run_until`** (the re-entrant loop every higher-order native
+drives per element):
+
+1. **A `func → code` dispatch cache.** Sound for a reason worth stating: a function's code slice is
+   IMMUTABLE for the program's lifetime, so the cache is correct whatever the frame stack does — including
+   recursion, where a brand-new frame with the same `func` legitimately HITS. It is keyed on `func`, never on
+   frame identity, so "invalidate on any frame change" would be both slower and wrong-headed.
+2. **One `frames.last_mut()` instead of three indexed accesses** — read `func`, read `ip`, and pre-increment,
+   all inside a single borrow that ends before `exec_op` needs `&mut self`.
+
+**Measured:**
+
+| | before | after |
+|---|---|---|
+| main loop (`loop.phg`, callgrind, startup subtracted) | 167.6 Ir/op | **163.2 Ir/op (−2.6%)** |
+| closure path (read-only `forEachLine`, 40 000 lines, JIT-on both) | 2 775.6 Ir/line | **2 698.6 Ir/line (−2.8%)** |
+| gap vs php's VM | 15.1× | **14.7×** |
+
+**Cumulative for track B: 176.1 → 163.2 Ir/op, −7.3%; gap 15.8× → 14.7×.**
+
+**One behavioural subtlety, checked not assumed.** `ip` is now pre-incremented BEFORE the
+`ip >= code.len()` end-of-code test, where it used to be incremented after. That is safe only because
+`do_return` POPS the frame [Verified by reading it], so the incremented value is discarded. The fault path is
+unaffected — it already relied on the pre-increment (`ip - 1` is the faulting op).
+
+**`tests/vm_dispatch.rs`, 4 tests, and both loops are SABOTAGE-VERIFIED.** Each asserts agreement with the
+TREE-WALKER (Invariant 2) rather than a typed-in number. The cases are chosen for what could actually break:
+mutual recursion (the top frame's function changes on nearly every call/return — the cache is stale more
+often than fresh), deep self-recursion (a cache HIT on a frame never seen, which is the soundness claim
+itself), a throw unwinding across frames (`unwind_throw` moves the frame AND rewrites `ip`), and a closure
+driven per element (the `run_until` loop).
+
+Negative control, run twice: replacing the cache's `cf == func` guard with an unconditional hit
+**broke 2 of 4** in `run_to_completion` and, sabotaged separately, **broke the closure test** in `run_until`.
+The two that survived the first sabotage are correctly insensitive to it — self-recursion has one `func`
+either way, and the closure case lives in the other loop. Anchors were asserted before each sabotage, since
+a silently-no-op edit has produced a false green twice in this session.
+
+**What it does NOT move:** `fsforeachline` 0.30×, `fslines` 0.12× — unchanged. A −2.8% instruction reduction
+cannot shift a 3.3× gap, and saying so is the point: this increment is a real but small win on a large
+deficit, not a fix for those rows.
+
+**Gate:** 2848 tests (+4), both differential legs, clippy `--all-features` and `--no-default-features`, fmt,
+size-gate, doc-guards, release build. microbench-gate PASS, 0 blocking regressions, all output-identical —
+and it flagged `mapinsert` itself as *"not confirmed on re-measure (1.044) — load noise, not a regression"*,
+which is the harness correctly discounting a box that has taken a lot of builds today.
+
+**Track B's remaining levers are now all structural**, as DEC-447 concluded: NaN-boxing (an 8-byte `Value`
+deletes most of the 21% that is `push_mut` + `drop_glue` + `clone`), register-based bytecode, and
+operand-specialized handlers. Each changes the value representation or the bytecode, so each is adjudicable
+rather than self-rulable. The redundant-work seam is now closed.

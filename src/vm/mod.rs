@@ -394,14 +394,38 @@ impl<'a> Vm<'a> {
         // borrow of `self`): `code`/`op` below then borrow `program` (lifetime `'a`), leaving `self`
         // free for the `&mut` `exec_op` call — so the op need not be cloned each fetch (M-perf).
         let program = self.program;
+        // DISPATCH CACHE (DEC-448). `func → code` is IMMUTABLE for the program's lifetime, so caching
+        // the last one is sound whatever the frame stack does — including recursion, where a new frame
+        // with the same `func` wants the very same slice. Without it every single op re-walked
+        // `program.functions[func].chunk.code`: a bounds-checked index plus a two-hop deref, per
+        // instruction.
+        let mut cached: Option<(usize, &'a [Op])> = None;
         loop {
+            // ONE `last_mut` instead of three bounds-checked `self.frames[fr]` indexes: read `func`
+            // and `ip`, and do the pre-increment, inside a single borrow. The borrow ends here so
+            // `self` is free for the `&mut exec_op` call below.
             let fr = self.frames.len() - 1;
-            let func = self.frames[fr].func;
-            let ip = self.frames[fr].ip;
-            let code = &program.functions[func].chunk.code;
+            let (func, ip) = {
+                let f = self
+                    .frames
+                    .last_mut()
+                    .expect("vm frame stack empty (compiler bug)");
+                let ip = f.ip;
+                f.ip = ip + 1;
+                (f.func, ip)
+            };
+            let code = match cached {
+                Some((cf, c)) if cf == func => c,
+                _ => {
+                    let c = program.functions[func].chunk.code.as_slice();
+                    cached = Some((func, c));
+                    c
+                }
+            };
             if ip >= code.len() {
                 // The compiler emits a trailing `Return` for every function (P3-7); reaching
                 // the end without one is a compiler bug — treat as an implicit `Unit` return.
+                // `ip` was pre-incremented above; nothing reads it again on this path.
                 self.do_return(Value::Unit);
                 if self.frames.is_empty() {
                     return Ok(());
@@ -410,7 +434,6 @@ impl<'a> Vm<'a> {
             }
             // Borrow the op from `program` (no clone — see the note on `exec_op`).
             let op = &code[ip];
-            self.frames[fr].ip += 1;
             // `ip` is the *pre-increment* index — the op that actually executes. On a fault,
             // locate it via this function's `Chunk.lines[ip]` and surface a positioned runtime
             // `Diagnostic`. (The tree-walker can't supply a line — a deliberate backend

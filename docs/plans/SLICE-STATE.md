@@ -262,6 +262,21 @@ frame table re-indexed 3×, function table re-walked, `code.len()` re-checked, e
 cheap fix refuted by measurement in this slice (LTO, static type seeding, the error type) — each costing
 minutes because it was built and measured rather than costed from outside.
 
+**Track B increment 3 SHIPPED (DEC-448): the dispatch cache. 167.6 → 163.2 Ir/op (−2.6%), closure path
+2775.6 → 2698.6 Ir/line (−2.8%), gap 15.1× → 14.7×. Cumulative track B: 176.1 → 163.2, −7.3%, 15.8× →
+14.7×.** Two changes to BOTH dispatch loops (`run_to_completion` + `run_until`): a `func → code` cache —
+sound because a function's code slice is IMMUTABLE for the program's lifetime, so it is correct whatever the
+frame stack does, including a new recursive frame legitimately HITTING — and one `frames.last_mut()` in place
+of three bounds-checked indexes (read func, read ip, pre-increment, one borrow). `ip` is now pre-incremented
+BEFORE the end-of-code test, safe only because `do_return` pops the frame [verified by reading it].
+`tests/vm_dispatch.rs`, 4 tests asserting agreement with the TREE-WALKER, **both loops sabotage-verified**
+(unconditional cache hit broke 2/4 in the main loop and the closure test in `run_until`, sabotaged
+separately; anchors asserted first). **Does NOT move the fs rows** (0.30× / 0.12× unchanged) — a −2.8%
+instruction cut cannot shift a 3.3× gap, and this is a real-but-small win on a large deficit.
+**The redundant-work seam is now CLOSED: every remaining track-B lever is structural and adjudicable** —
+NaN-boxing (8-byte `Value` deletes most of the 21% that is push_mut+drop_glue+clone), register-based
+bytecode, operand-specialized handlers.
+
 **SUPERSEDED — increment 2's original premise:** `pop2_int` (6.6%), `push_i` (3.7%) and
 `pop` (2.3%) are STILL out-of-line even with `#[inline(always)]`, and their signatures say why —
 **`Result<_, String>` on every arithmetic op**, whose 24-byte `String` error slot makes every `Result` large

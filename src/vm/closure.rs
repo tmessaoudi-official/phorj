@@ -101,17 +101,36 @@ impl<'a> Vm<'a> {
         // See the main loop in `mod.rs`: copy the `&'a` program reference out of `self` so `op` can
         // be borrowed from it (not cloned) while `self` is free for the `&mut` `exec_op` call.
         let program = self.program;
+        // Same dispatch cache + single-borrow frame read as the main loop (DEC-448) — `func → code` is
+        // immutable, so caching the last slice is sound across frame churn. This loop is the PER-ELEMENT
+        // path for every higher-order native, so its per-op cost is paid once per list element / file
+        // line: DEC-434 measured `run_until` at 10.6% of `fsforeachline`'s whole per-line budget.
+        let mut cached: Option<(usize, &'a [Op])> = None;
         while self.frames.len() > target_depth {
             let fr = self.frames.len() - 1;
-            let func = self.frames[fr].func;
-            let ip = self.frames[fr].ip;
-            let code = &program.functions[func].chunk.code;
+            let (func, ip) = {
+                let f = self
+                    .frames
+                    .last_mut()
+                    .expect("vm frame stack empty (compiler bug)");
+                let ip = f.ip;
+                f.ip = ip + 1;
+                (f.func, ip)
+            };
+            let code = match cached {
+                Some((cf, c)) if cf == func => c,
+                _ => {
+                    let c = program.functions[func].chunk.code.as_slice();
+                    cached = Some((func, c));
+                    c
+                }
+            };
             if ip >= code.len() {
+                // `ip` was pre-incremented above; `do_return` pops this frame, so it is discarded.
                 self.do_return(Value::Unit);
                 continue;
             }
             let op = &code[ip];
-            self.frames[fr].ip += 1;
             match self.exec_op(op, fr, func) {
                 Ok(Flow::Next) => {}
                 // `Flow::Done` is only ever returned by `main`'s `Return`; at `target_depth >= 1`
