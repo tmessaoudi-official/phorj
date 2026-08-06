@@ -10,8 +10,13 @@
 //! as a TYPED ENTRY PARAMETER through the DEC-318 `#[Config]` injection — which is a pure pre-check
 //! desugar (Invariant 5). Keeping the class in phorj means all three legs see the same class and the
 //! same defaults by construction, so the config surface stays inside the byte-identity spine for
-//! `Cli` entries. (`Web` entries hit `E-TRANSPILE-SERVE` under the Invariant-14 ladder, but the
-//! CLASS itself is legal everywhere — a `Cli` entry may take a `ServeConfig` and print it.)
+//! `Cli` entries. The CLASS itself is legal everywhere — a `Cli` entry may take a `ServeConfig` and
+//! print it. NOTE, stated carefully because an earlier draft of this comment got it wrong: the
+//! Invariant-14 tier-2 refusal for `Web` entries, `E-TRANSPILE-SERVE`, is **RULED BUT NOT BUILT** —
+//! it appears in the register and the specs and sits in `scripts/doc-guards-baseline.txt` under
+//! PROMISED-BUT-UNBUILT, with no quoted-string site in `src/`. Verified 2026-08-06: a `Web` entry
+//! constructing a `ServeConfig` with `cert:` set type-checks clean AND transpiles with exit 0, no
+//! diagnostic. Do not read this fragment as evidence the ladder guard is live; it lands with S3.3.
 //! [Verified 2026-08-06 on the exact shape below — a promoted constructor with defaults, a `string?`
 //! defaulting to `null`, an `8_388_608` underscore literal and a zero-payload enum default: `run` ≡
 //! `run --tree-walker` ≡ `run --no-jit` ≡ transpiled php-8.5.8, all four byte-identical. The PHP leg

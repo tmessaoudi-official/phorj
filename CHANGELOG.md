@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A qualified constructor dropped its defaults and named arguments, and the VM panicked** (DEC-452).
+  `new Http.Cookie("sid", "abc")` — omitting four defaulted parameters on a SHIPPED stdlib class —
+  reported a bogus `expects 6 args, got 2` on the tree-walker and **panicked** the VM; the named form
+  `new Http.Cookie(name: …, value: …)` panicked the VM and the transpiler. Any `new Module.Class(…)`
+  was affected, so DEC-331 D4's ruled `new Http.ServeConfig(host: …, port: …)` surface could not work
+  either. The two qualified-construction branches in the checker computed the DEC-297 named-arg
+  normalization and the DEC-236 default-fill into a side table and never consumed it, so the rewrite
+  was silently discarded and an `Expr::NamedArg` reached backends that assert it cannot exist.
+
+### Added
+
+- **`Http.ServeConfig` + `Http.RequestParsing`** (DEC-331 D4, S3.2 part A) — the web runtime's
+  configuration contract as an immutable value with a promoted constructor: `host`, `port`, `workers`
+  (0 = auto), `timeout` (0 = none), `cert?`, `key?`, `serverName?`, `maxBodySize` (8 MiB),
+  `tlsMinVersion`, `requestParsing` (`Eager` default). Not yet consumed — `Http.serve` lands in S3.3.
+
 ### Added — `phg lift <dir>`: a PHP tree becomes a phorj PROJECT (DEC-439 part 1, 2026-08-05)
 Developer-ruled. `phg lift <dir> -o <out>` lifts every file in ONE pass into a generated `phorj.json` +
 `src/` layout mirroring the namespaces, so **cross-file references resolve** — the single fix for both

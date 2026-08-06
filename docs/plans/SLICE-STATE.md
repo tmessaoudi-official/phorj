@@ -37,7 +37,8 @@ conformant — recorded explicitly as *not* a defect so a later session does not
 **NEXT — THE IN-FLIGHT RULED SLICE COMES FIRST.** **DEC-331 SLICE 3 (`S3.2`…`S3.5`)** is half-built:
 `S3.1` (`#[Entry(kind:)]` + checker + example migration) SHIPPED, and the slice's own ordering below
 (§"DEC-331 SLICE 3 FIRST") states each sub-slice must land green + byte-identical + SSOT-updated
-in-change. **`S3.2` is the next step**: `Http.ServeConfig` stdlib class + `#[Config]`-provider-by-TYPE
+in-change. **`S3.2` is IN PROGRESS — Part A shipped (see the block below); Part B is the next step.**
+The slice as ruled: `Http.ServeConfig` stdlib class + `#[Config]`-provider-by-TYPE
 resolution + the precedence chain (CLI flag > env > `#[Config]` > `phorj.json` static > attr default),
 building on shipped DEC-318. Then `S3.3` (`Http.serve(cfg, handler)`, retire `respond` — breaking #2),
 `S3.4` (role-mismatch UX), `S3.5` (inbound TLS via rustls).
@@ -47,17 +48,27 @@ omitted the S3 slice entirely — so a fresh context resuming from here would ha
 half-built slice to start a new front. That is the Invariant 19 failure this file exists to prevent,
 committed in the same change that added a reviewer lens for it.)*
 
-**S3.2 IS STARTED AND BLOCKED (2026-08-06).** Part A shipped — `Http.ServeConfig` +
+**S3.2 PART A SHIPPED + THE P0 IT EXPOSED IS FIXED (2026-08-06).** Part A: `Http.ServeConfig` +
 `Http.RequestParsing` with D4's exact field set and defaults, in `src/cli/serve_config_prelude.rs`
 (Inv-13: `http_prelude.rs` was at 297 vs the 300 soft cap), wired as the third `Core.Http` `srcs`
-fragment; suite 2849/2849 under `PHORJ_REQUIRE_PHP=1 --all-features`. **Blocked on a pre-existing P0**
-before Part B (N-param `#[Config]` injection — `desugar_config.rs:199` hard-limits to ONE param, while
-D4's §1 surface injects two) and Part C (the precedence chain): `new Module.Class(...)` skips DEC-236
-defaults and DEC-297 named args and the VM PANICS — see `KNOWN_ISSUES.md` § "`new Module.Class(...)`",
-reproduced on clean `903384f` against the shipped `Http.Cookie`. Root cause is one line
-(`src/checker/calls/variants.rs:77`, bare-keyed `self.classes` vs a dotted name). **Fix sequencing is
-PENDING A RULING**; the S3.2 example + differential case are deliberately deferred to the fix rather
-than written against a workaround (Inv 9).
+fragment.
+
+**The P0 it exposed is CLOSED (DEC-452).** `new Module.Class(...)` skipped DEC-236 defaults and
+DEC-297 named args and the VM PANICKED — on the SHIPPED `Http.Cookie`, not merely on the new class.
+Root cause, **corrected**: the first diagnosis recorded here blamed `src/checker/calls/variants.rs:77`
+(bare-keyed `self.classes` vs a dotted name). That was WRONG — the qualified branch already passes the
+BARE name, so the class lookup always succeeded. The real cause is that `try_variant_or_class_call`
+COMPUTES the fill into `pending_named`/`pending_fill` and relies on its CALLER to consume it via
+`record_pending_fill`; five call sites do, and the two qualified-construction branches in
+`src/checker/calls/core.rs` did not — so the rewrite was computed and silently dropped. Fixed by
+consuming it in both. Pinned by
+`tests/differential.rs::qualified_class_construction_fills_defaults_and_named_args`; gate 2850/2850
+`--all-features` with the PHP oracle, clippy clean on both feature legs.
+
+**Part B is now UNBLOCKED** — extend `#[Config]` injection past the one-parameter limit at
+`src/checker/desugar_config.rs:199`, because D4's §1 surface injects TWO typed parameters
+(`function web(Http.ServeConfig cfg, AppSettings app)`). The S3.2 example + its differential case ship
+with Part B (Inv 9), where there is a full surface to demonstrate.
 
 **Also open, independent of the above:** Part C's env-var and CLI-flag tiers are RUNTIME reads while
 DEC-318's injection is a pure compile-time desugar inside the byte-identity spine — for a `Cli` entry

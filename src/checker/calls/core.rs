@@ -140,6 +140,16 @@ impl Checker {
                             if let Some(t) = self.try_variant_or_class_call(name, args, span, false)
                             {
                                 self.reject_turbofish(&tf, name, span);
+                                // DEC-297/DEC-236 (fixed 2026-08-06): CONSUME the fill that
+                                // `try_variant_or_class_call` just recorded. It sets `pending_named`
+                                // (named args front-normalized to positional) or `pending_fill`
+                                // (omitted trailing defaults) and relies on the caller to splice the
+                                // rewrite into `default_fills`. Every OTHER call path does that via
+                                // `record_pending_fill`; these two qualified-construction branches
+                                // did not, so the work was computed and dropped — the arg list stayed
+                                // as written and an `Expr::NamedArg` reached backends that assert it
+                                // cannot exist. See `qualified_class_construction_fills_defaults_and_named_args`.
+                                self.record_pending_fill(callee, args, span);
                                 return t;
                             }
                         }
@@ -180,6 +190,12 @@ impl Checker {
                             if let Some(t) = self.try_variant_or_class_call(name, args, span, false)
                             {
                                 self.reject_turbofish(&tf, name, span);
+                                // Consume the DEC-297/DEC-236 fill — see the sibling branch above.
+                                // `callee` is the original `Member` node, so the spliced replacement
+                                // keeps the qualified shape and `unwrap_new` erases it afterwards
+                                // exactly as before (`apply_default_fills` runs FIRST, ahead of
+                                // `resolve_html`/`unwrap_new` — see `checker::resolutions`).
+                                self.record_pending_fill(callee, args, span);
                                 return t;
                             }
                         }

@@ -515,6 +515,74 @@ function area(Shape s): float {
     );
 }
 
+/// DEC-297/DEC-236 — a QUALIFIED construction of an injected class (`new Http.Cookie(…)`) must fill
+/// omitted constructor defaults and normalize named arguments, exactly as the bare form does.
+///
+/// THE BUG THIS PINS (found 2026-08-06 while building S3.2, reproduced on clean `903384f`): the two
+/// qualified-construction branches in `checker/calls/core.rs` called `try_variant_or_class_call`
+/// DIRECTLY and never called `record_pending_fill`. So `pending_named` / `pending_fill` were computed
+/// and then silently dropped: the arg list was never rewritten, omitted defaults were never appended,
+/// and an `Expr::NamedArg` survived into backends that assert it cannot exist. Observed:
+///
+/// * `new Http.Cookie("sid","abc")`      -> tree-walker "expects 6 args, got 2"; VM PANIC (`vm/exec.rs`)
+/// * `new Http.Cookie(name:…, value:…)`  -> VM PANIC (`compiler/expr/core.rs`, the DEC-297 `unreachable!`)
+///
+/// Three invariants at once: EV-7 (a panic reached from valid user input), Invariant 1 (the
+/// tree-walker faulted cleanly while the VM panicked — different failure behaviour IS a spine
+/// divergence), and DEC-297's register claim of "BUILT FULL SCOPE … incl. static" with "8 rejects (all
+/// unhandled paths)" — qualified prelude classes were a ninth path, and it panicked instead of
+/// reaching the clean `E-NAMED-ARG-UNSUPPORTED` reject.
+///
+/// `Http.Cookie` is shipped stdlib, so this was live for every user, not just the unbuilt S3.2 surface.
+#[test]
+fn qualified_class_construction_fills_defaults_and_named_args() {
+    // `agree_out_php`, NOT bare `agree` — this file's own helper doc says a CONSTRUCTION test needs
+    // the stronger check, because a shared *failure* makes `agree` pass vacuously (both legs "agree"
+    // on the rejection). The first version of this test used `agree` and was exactly that: had the
+    // fix regressed into a checker rejection it would have stayed green. It also never transpiled, so
+    // the THIRD panic site in the original reproducer (`src/transpile/expr.rs:254`, the transpiler's
+    // own `unreachable!`) was unpinned. `agree_out_php` covers interp ≡ VM ≡ real php AND the exact
+    // bytes. Found by the DEC-268 safety lens.
+
+    // DEC-236 — omitted trailing defaults on a QUALIFIED injected class: 2 of 6 args given.
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Http;
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+    Http.Cookie c = new Http.Cookie("sid", "abc");
+    Output.printLine("{c.name}={c.value} path={c.cookiePath} secure={c.isSecure}");
+}"#,
+        "sid=abc path=/ secure=true\n",
+        "dec452_qualified_ctor_fills_omitted_defaults",
+    );
+    // DEC-297 — named arguments on the same qualified class, deliberately OUT OF ORDER, so a
+    // reorder bug cannot pass: swapping name/value would print `abc=sid`.
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Http;
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+    Http.Cookie c = new Http.Cookie(value: "abc", name: "sid");
+    Output.printLine("{c.name}={c.value} path={c.cookiePath}");
+}"#,
+        "sid=abc path=/\n",
+        "dec452_qualified_ctor_normalizes_named_args",
+    );
+    // Both together, on the shape DEC-331 D4's ruled surface actually uses: named args selecting two
+    // of ten fields, the other eight defaulted — including a spliced zero-payload enum default.
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Http;
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+    Http.ServeConfig d = new Http.ServeConfig();
+    Http.ServeConfig s = new Http.ServeConfig(port: 8443, host: "0.0.0.0");
+    Output.printLine("{d.host}:{d.port} workers={d.workers} max={d.maxBodySize} tls={d.tlsMinVersion}");
+    Output.printLine("{s.host}:{s.port} max={s.maxBodySize}");
+}"#,
+        "127.0.0.1:8080 workers=0 max=8388608 tls=1.2\n0.0.0.0:8443 max=8388608\n",
+        "dec452_serveconfig_named_plus_defaults",
+    );
+}
+
 /// M-RT S6a — single inheritance: an inherited method, an overridden method (via a subclass ref),
 /// and dynamic dispatch (via a superclass-typed ref holding the subclass) all resolve identically on
 /// `run` and the VM. The interpreter walks the parent chain; the compiler pre-flattens the same

@@ -8,6 +8,7 @@
 // METHODS (instance + static); generic/overloaded/native calls and variadics take positional args only.
 package Main;
 
+import Core.Http;
 import Core.Output;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
@@ -36,4 +37,13 @@ function main(): void {
     var b = new Box(label: "crate", height: 4);
     // METHOD — a named arg on an instance method.
     Output.printLine("{b.label} area = {b.area()}");
+    // QUALIFIED construction of a STDLIB class — `Module.Class`, named args, defaults skipped.
+    // Regression cover for DEC-452: this exact shape used to skip default-filling and named-arg
+    // normalization entirely and PANIC the VM and the transpiler, while the tree-walker reported a
+    // bogus arity error. Nothing in `examples/` constructed a qualified injected CLASS with named
+    // args (only qualified enum VARIANTS), so the byte-identity corpus never covered it.
+    Http.Cookie session = new Http.Cookie(value: "s3cr3t", name: "session");
+    Output.printLine(
+        "{session.name}={session.value} path={session.cookiePath} secure={session.isSecure}"
+    );
 }

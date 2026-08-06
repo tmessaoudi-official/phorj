@@ -2673,7 +2673,7 @@ Fix: add the four verbs to the commands block in the CLI help string, **plus a t
 dispatchable verb appears in `--help`**, so the class cannot recur. Rust change → full correctness gate.
 
 
-## `new Module.Class(...)` — a QUALIFIED constructor skips defaults and named args, and the VM PANICS (P0, 2026-08-06)
+## ✅ FIXED 2026-08-06 — `new Module.Class(...)` skipped defaults/named args and the VM PANICKED (was P0)
 
 Constructing a prelude/module class through its **qualified** name silently bypasses both DEC-236
 default-filling and DEC-297 named-argument normalization. The `Expr::NamedArg` node then survives into
@@ -2693,9 +2693,16 @@ new Http.Cookie(name: "sid", value: "abc")
   transpile        : PANIC  src/transpile/expr.rs:254:17  (same assertion)
 ```
 
-The unqualified spelling (`new Cookie(...)`) is correctly refused by the wind rule
-(`E-INJECTED-BARE`), so today there is **no working way** to construct such a class with defaults
-omitted or arguments named.
+The unqualified spelling with only `import Core.Http;` is correctly refused by the wind rule
+(`E-INJECTED-TYPE-BARE`).
+
+**CORRECTION (DEC-268 panel, 2026-08-06):** an earlier version of this paragraph said there was
+"**no working way**" to construct such a class with defaults omitted or arguments named. That was
+FALSE. **Member-import works and always did** — `import Core.Http.Cookie;` then `new Cookie("sid",
+"abc")` routes through `check_call`'s `Expr::Ident` arm, whose `record_pending_fill` at
+`src/checker/calls/core.rs:75` predates all of this and was never touched. Verified against the
+parent commit as well as HEAD. The false claim mattered: it was used to justify deferring the
+Invariant-9 example on the grounds that no workaround existed to write one against.
 
 **Three invariants at once.** (1) **EV-7** — a panic reached from valid input; the same class as the
 `html"…"`-inside-a-tuple case that widened Invariant 3. (2) **Invariant 1** — the tree-walker emits a
@@ -2705,8 +2712,10 @@ constructors + methods incl. static)` with "8 rejects (all unhandled paths)" inc
 `E-NAMED-ARG-UNSUPPORTED`. Qualified classes are a ninth unhandled path and they panic instead of
 reaching that clean reject — the guard has a hole precisely where coverage is claimed.
 
-**Root cause** (one line): `src/checker/calls/variants.rs:77` resolves the constructor with
-`self.classes.get(name)`, but `self.classes` is keyed **bare** while `name` here is dotted
+**Root cause — ⚠ THE PARAGRAPH BELOW IS THE WRONG DIAGNOSIS, RETRACTED. See "RESOLVED" further
+down for the real one.** Kept because it was plausible and its host is real (`variants.rs:77` IS
+`self.classes.get(name)`), which is exactly what would make a reader trust it. ~~`src/checker/calls/variants.rs:77` resolves the constructor with
+`self.classes.get(name)`, but `self.classes` is keyed **bare** while `name` here is dotted~~
 (`Http.Cookie`). The branch misses, so the whole DEC-297 + DEC-236 path inside it is skipped. This is
 the same "classes are keyed bare" fact LIFT-ATTR hit from the other direction (`#[App.Meta.Tag]`
 matching nothing).
@@ -2715,13 +2724,78 @@ matching nothing).
 `new Http.ServeConfig(host: "0.0.0.0", port: 8443, cert: …, key: …)` — named arguments on a qualified
 prelude class, i.e. exactly the broken path. `Http.ServeConfig` and `Http.RequestParsing` ship in the
 same commit as this entry and are **correct as written but not yet reachable through that surface**;
-the S3.2 example and its differential case are deliberately deferred to the fix rather than written
-against a workaround (Invariant 9 — a feature with no example has zero parity coverage, and an example
-built around a defect would encode it).
+~~the S3.2 example and its differential case are deliberately deferred to the fix~~ — **SHIPPED WITH
+THE FIX.** `examples/guide/named-args.phg` now constructs `new Http.Cookie(value: …, name: …)`, putting
+the qualified surface inside `all_examples_transpile_and_match_php`. The panel measured that the
+deferral argument did not survive contact: nothing in `examples/` had ever constructed a qualified
+injected CLASS with named args (only qualified enum VARIANTS), so the byte-identity corpus had a hole
+exactly where this defect lived (Invariant 9 — a feature with no example has zero parity coverage).
 
-**Fix + sequencing PENDING A RULING** (options put to the developer 2026-08-06): resolve the qualified
-name to the same `ClassInfo` the bare name reaches, with differential coverage for named-args AND
-default-fill on a qualified prelude class plus an assertion that the panic is now a clean result — as
-its own commit before S3.2 resumes (recommended), folded into S3.2, or replaced by a deliberate clean
-REJECTION of the qualified-construction surface, which is user-visible and therefore the developer's
-call (Invariant 15).
+**Fix + sequencing — RULED by the developer, 2026-08-06.** Three options were put to them (fix as
+its own commit before S3.2 resumes / fold into S3.2 / deliberately REJECT the qualified-construction
+surface, which is user-visible and therefore theirs under Invariant 15). They chose **option 1**, in
+the words *"Okay go with your recommendation"* against a message that named option 1 as the
+recommendation. So the surface stays supported and the fix shipped standalone as DEC-452. Recorded
+here explicitly because the panel found this paragraph still reading "PENDING" underneath a ✅ FIXED
+heading, with no trace of who decided — exactly the ambiguity Invariant 15 exists to prevent.
+
+**RESOLVED** — `record_pending_fill` is now called in BOTH qualified-construction branches of
+`src/checker/calls/core.rs`. Root cause, corrected from the first diagnosis written here: it was NOT a
+bare-vs-dotted key miss (the qualified path already passes the bare name, so the class lookup always
+succeeded). `try_variant_or_class_call` COMPUTES the fill into `pending_named` / `pending_fill` and
+relies on its caller to splice the rewrite into `default_fills`; every other call path does that, and
+these two branches did not — so the work was done and silently dropped. Ordering is safe:
+`apply_default_fills` runs FIRST, ahead of `resolve_html`/`unwrap_new`, so the replacement keeps the
+qualified `Member` callee and `unwrap_new` erases it afterwards exactly as before.
+
+Pinned by `tests/differential.rs::qualified_class_construction_fills_defaults_and_named_args` (three
+cases: omitted defaults, out-of-order named args, and both together on `Http.ServeConfig`). Verified on
+the shipped binary across `run` ≡ `--tree-walker` ≡ `--no-jit` ≡ php-8.5.8.
+
+## `default_fills` is keyed by a per-file byte offset — two files can COLLIDE and silently swap call arguments (P0, 2026-08-06)
+
+**Silently wrong output on all four legs**, so Invariant 1's harness cannot see it: every leg agrees,
+and they agree on the wrong answer.
+
+`record_pending_fill` stores its replacement as `default_fills.insert(span.start, replacement)`
+(`src/checker/calls/args.rs:256`). `Span.start` is a byte offset into **its own file**
+(`src/token.rs`), and each project file is lexed with its own offsets (`src/loader/fs.rs`). Two calls
+in two different files of one project can therefore share a `span.start`; one `insert` overwrites the
+other, and `apply_default_fills` splices file A's replacement over file B's call.
+
+**Reproducer** (two files identical except a padding comment that aligns the offsets to 197):
+
+```
+src/main.phg     Cookie a = new Cookie("AAA", "111");   // offset 197
+src/App/Two.phg  Cookie b = new Cookie("BBB", "222");   // offset 197 after padding
+
+control (no padding):  A AAA=111 p=/   B BBB=222 p=/     <- correct
+aligned:               A AAA=111 p=/   B AAA=111 p=/     <- file B got file A's arguments
+```
+
+**PRE-EXISTING — verified, not assumed.** Reproduced at `903384f`, before both DEC-452 and the
+`ServeConfig` commit, on the member-import path (`import Core.Http.Cookie;` → `check_call`'s
+`Expr::Ident` arm → `record_pending_fill` at `src/checker/calls/core.rs:75`), which neither commit
+touches. DEC-452 does **widen the exposed surface**: qualified constructions (`new Http.Cookie(…)`)
+now enter `default_fills` where they previously panicked instead, so a shape that used to crash loudly
+can now, in the aligned case, be silently wrong. That is still the right trade — a panic on every use
+is worse than a collision that needs byte-offset alignment — but it is a real widening and is recorded
+as such rather than left implicit.
+
+**NOT a duplicate of § span-collision (P1, 2026-07-17)**, and this is the important part. That entry
+names `default_fills` but scopes the problem to *injected Core preludes* ("parsed with their OWN
+offsets"), and its owed fix is to "re-base every **injected module's** `Span.start` into a per-module
+high offset window at injection time". **That fix does not close this axis** — two ordinary user files
+in one project would still share the offset space. Its recorded symptom is also `interp ≠ VM`, which
+the spine can catch; this one is all-legs-agree-and-all-wrong, which it cannot.
+
+**Fix direction** (not built): key the side-tables by `(file_id, offset)` rather than a bare offset, or
+carry a file discriminator in `Span`. That is a broad change across every span-keyed rewrite map
+(`default_fills`, `ufcs_resolutions`, `reflect`, `cast`, `overload`, `variant_resolutions`,
+`for_iter_lowerings`, …), so it wants its own slice and a ruling — not a fold-in.
+
+**One caveat on the reproducer's reach:** the analogous probe on a defaulted **free function** did NOT
+collide for me under the same alignment, so the axis may be narrower than "any two calls". The
+constructor and member-import forms are confirmed; the free-function form is not. Do not widen the
+claim beyond what is reproduced here.
+
