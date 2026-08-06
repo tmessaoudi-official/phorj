@@ -7409,3 +7409,67 @@ re-derivation DEC-441 identified — increment 3), `Vec::push_mut` 9.5%, `drop_g
 **Honest scale statement:** −4.9% against a 15.1× gap is increment 1 of a multi-increment programme, exactly
 as DEC-441 predicted when it refuted the one-line-flag hypothesis. Nobody should read this as the VM gap
 closing.
+
+### DEC-443 (2026-08-05) — track A scoping evidence: user-written higher-order code is 5× behind php and invisible to the scoreboard
+
+Measured before asking for track A's ruling (DEC-442), so the question carries a program rather than a
+summary. The register discussed this class only through two fs bench rows; the class is much wider.
+
+**The minimal program** — a USER-written higher-order function, no native involved, so no vertical can
+inline it (`bench/micro` has nothing of this shape):
+
+```phorj
+function applyTwice((int) => int f, int x) -> int { return f(f(x)); }
+
+function bench(int iters) -> int {
+    mutable int acc = 0; mutable int i = 0;
+    while (i < iters) { acc = applyTwice(function(int x) => x * 2 + 1, i) % 1000003; i = i + 1; }
+    return acc;
+}
+```
+
+| | ns (best-of-3, pinned) | |
+|---|---|---|
+| phorj, JIT on | 743 736 443 | |
+| phorj, `--no-jit` | 730 324 332 | **leverage 0.97× — the JIT made it marginally SLOWER** |
+| php 8.5.8 + JIT | 147 667 485 | **ratio 0.20× — phorj is 5× behind** |
+
+Checksums match (`999978` both legs), so this is a real comparison, not a broken one.
+
+**`PHORJ_JIT_EXPLAIN=1` shows the cascade exactly** — and confirms DEC-434's finding from the other side:
+
+```
+phg: jit declined `applyTwice` — Unsupported("unboxed: CallValue on Unknown (deferred) [in `applyTwice`]")
+phg: jit declined `bench`      — Unsupported("unboxed: CallValue on Unknown (deferred) [in `applyTwice`]")
+```
+
+There is **no line at all for the lambda** — it was never even asked, because the hot hook exists only in the
+`Op::Call` arm (`src/vm/exec.rs:504`). The decline then cascades: the lambda is never compiled, `applyTwice`
+declines on `CallValue on Unknown`, and `bench` declines transitively for the same reason.
+
+**Why this widens track A's scope beyond two bench rows.** Callbacks, strategy/visitor shapes, comparators,
+user-written `map`/`filter` helpers — any user higher-order code — sit in this class. `listfilter` 8.0× /
+`listmap` 7.2× win only because a per-native VERTICAL inlines the lambda into the caller's graph; nothing
+inlines a user function, so the same lambda in user code is 0.97× instead. **The scoreboard cannot see any of
+it**, which is exactly the blindness DEC-431 called out for `strbuild` vs `strappend`.
+
+### THE FINDING THAT SHOULD SHAPE THE RULING: phorj is statically typed, and the plumbing already exists
+
+DEC-434.2 framed option 3 as *"compile a closure entry specialized to the argument kinds OBSERVED at the
+native call site, keyed on `(closure_fn_idx, arg_kinds)`"* — monomorphization, borrowed from DYNAMIC-language
+JITs that have no other source of type information.
+
+**phorj does not have that problem.** `applyTwice((int) => int f, int x)` declares its kinds, and the checker
+has already proven them. The kind lattice's own doc concedes the point — `Kind::Unknown` exists because a
+bare param read has no type source, and `src/jit/analyze/kinds.rs:15` says types *"come in u2 with a real
+type source"*, i.e. a type source was always the intended answer.
+
+**And the mechanism is already built and shipped.** `chunk::Function` carries
+`dyn_params: Vec<bool>` — described in its own doc as a *"compiler-stamped checker fact, read ONLY by the
+unboxed JIT to seed such params as tagged `Dyn` cells"* (W7, JIT union params). So stamping declared param
+kinds onto `Function` for the JIT to read is not new plumbing; it is a second instance of a pattern that has
+already shipped once, for a closely-related reason (seeding param kinds the JIT could not otherwise prove).
+
+That makes a STATIC variant of option 3 available which DEC-434.2 did not consider: deterministic, no runtime
+observation, no entry guards, no deopt path, and no new runtime machinery. Whether to take it, or the general
+observed-kind version, or both, is the ruling being asked for. **Nothing built.**
