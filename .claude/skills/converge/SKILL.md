@@ -5,24 +5,50 @@ description: Run the project's DEC-268 MAXIMAL certification ladder, or a deeper
 user-invocable: true
 args: "[--cycles=N] [--converge=K] [--scope=dec268|3C|6C|custom] [--angles='angle1;angle2;angle3'] [--certify=reviewer|self] [--auto] [--auto-cap=N]"
 side-effects: None — read-only analysis loop; findings incorporated into conversation context only.
+disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
-  phorj CONTAINER ADAPTATION (DEC-354, built 2026-07-27). Imported from the developer's machine
-  bundle `claude-setup-global-20260722`; DEC-354 ruled 7 of its 48 skills IN, each ADAPTED.
+  phorj CONTAINER ADAPTATION (DEC-354, built 2026-07-27; deltas 2/4/5/6 added or widened
+  2026-08-06 by the second cross-repo bundle round). Imported from the developer's machine bundle
+  `claude-setup-global-20260722`; DEC-354 ruled 7 of its 48 skills IN, each ADAPTED.
   These deltas OVERRIDE the body below wherever they conflict:
 
   1. QUESTIONS ARE PLAIN TEXT. `AskUserQuestion` silently fails in this container (observed 4x on
      2026-07-26), so a gate that "asks" cannot fire. Every "invoke ask-human" below means: print the
-     question, its options and the recommendation as ordinary prose, then STOP and wait for a reply.
+     question, a minimal concrete example, numbered options, and the recommended option FIRST with
+     its reason, as ordinary prose — then STOP and wait. Protocol:
+     `.claude/skills/ask-human/SKILL.md`. This file's frontmatter carries
+     `disallowed-tools: AskUserQuestion`, which IS honoured: the running Claude Code reads that key
+     from SKILL.md frontmatter and removes the tool while this file is active. So the forbidden tool
+     is mechanically unavailable here, not merely discouraged — but the plain-text SHAPE of the
+     question is still discipline, and that part nothing enforces.
   2. NO `advisor()` HERE. Independent certification = fresh-context read-only reviewer subagents
-     (project CLAUDE.md, DEC-268 MAXIMAL ladder). Self-grading is the last resort and must be
+     (project CLAUDE.md, DEC-268 MAXIMAL ladder), run as the three phorj lenses:
+     `backend-parity-reviewer` (correctness+regression), `safety-promises-reviewer`
+     (security+safety-promises), `completeness-reviewer` (completeness+blast-radius). All three are
+     REAL agent definitions in `.claude/agents/` as of 2026-08-06 — spawn them BY NAME via the Agent
+     tool, in ONE message so they run concurrently, rather than re-describing their charter inline,
+     so each lens's attack surface stays in one place. Self-grading is the LAST rung and must be
      DISCLOSED as self-graded in the output.
   3. REPORTS GO TO `var/claude/…` in the repo — gitignored (`/var`), survives compaction inside the
      session, never committed. NOT `~/.claude/projects/…`: that is wiped when the container is
      reclaimed, so a report written there is lost (Invariant 19 — only committed repo state survives).
-  4. PROJECT RULES WIN on any conflict: `/home/user/phorj/CLAUDE.md` — the invariants, the full
-     correctness gate, the git-autonomy override, Invariant 19's canonical plan/decision homes.
+     Never `git add` a report regardless — being ignored is what keeps them out of history, not what
+     makes staging them harmless.
+  4. `--scope=global|both` IS REMOVED wherever it appears. `~/.claude/` in this container is
+     GENERATED from repo files by `scripts/claude-bootstrap/install.sh`, which since 2026-08-06
+     overwrites them UNCONDITIONALLY on every SessionStart — so auditing `~/.claude` audits a copy,
+     and a finding against it is fixed in `scripts/claude-bootstrap/` or not at all.
+  5. ≤5 CONCURRENT SUBAGENTS (10 caused ~50% rate-limit failures upstream), and every pipeline agent
+     writes its raw output to `var/claude/<stage>/raw/` BEFORE returning — in-conversation results do
+     not survive autocompact, only disk files do. `Explore` cannot Write: use `general-purpose` for
+     any agent that must persist a file.
+  6. EVERY REPLY ENDS WITH A MARKER LINE — `❓ QUESTION — …` or `⏹ NO QUESTION — …` as its literal
+     last line (project CLAUDE.md § "Reply convention"). This skill's output is a reply like any other.
+  7. PROJECT RULES WIN on any conflict: `/home/user/phorj/CLAUDE.md` — the invariants, the full
+     correctness gate, the git-autonomy override (`master` only, plain `git push`, no trailers),
+     Invariant 19's canonical plan/decision homes.
 ═══════════════════════════════════════════════════════════════════════════════════════════════ -->
 
 ## --help

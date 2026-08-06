@@ -1,6 +1,50 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ CURRENT CURSOR (2026-08-05) — **LIFT-ATTR SHIPPED; the lift chain now reaches attributes**
+## ✅ CURRENT CURSOR (2026-08-06) — **the Claude bundle unified across all five repos (DEC-450 + DEC-451)**
+
+**Shipped 2026-08-06.** Two rounds of the cross-repo Claude-bundle audit, plan
+`docs/plans/claude-bundle-cross-repo-audit.plan.md`, register rows **DEC-450** and **DEC-451**.
+
+- **DEC-450 (round 1):** the DEC-268 3-lens panel finally EXISTS — phorj had shipped ONE agent since
+  2026-07-16, so the mandated panel was *structurally impossible* and every 3C/6C gate had been falling
+  through to the self-graded rung. `safety-promises-reviewer` + `completeness-reviewer` authored (not
+  copied — the siblings' are domain-specific). Plus: a dormant credential-exfiltration block deleted
+  from `install.sh` (a PUBLIC repo), the `<!-- manual -->` handoff guard made real on BOTH write paths,
+  `log_obs` pointed at `var/claude/logs/` instead of the container-ephemeral `~/.claude/logs/`, and five
+  global-framework rules adapted to this container — Rule 10 among them, which had directly contradicted
+  this repo's own git-autonomy override since the bundle landed.
+- **DEC-451 (round 2):** `install.sh` now copies UNCONDITIONALLY (`cp -f` — *the repo is always the
+  truth*), guarded by a new 18-assertion `test-install.sh`; the **`deny` list is ruled permanently
+  EMPTY** (a denied command in a web session is an unrecoverable dead end — there is no terminal);
+  the siblings' `disallowed-tools:` frontmatter was first wrongly called INERT and the port refused — **corrected the same day** by the panel: the key IS read, so all 14 skills now carry it and Invariant 15's ban finally has mechanical backing; skill
+  **content** compared for the first time (phorj's was the shortest of all five repos in all 13 rows)
+  and unified on one canonical 7-delta banner; `/cross-check` gained `--drift` and stopped writing into
+  the tracked tree; `/qa-sweep` WRITTEN for phorj's surfaces (10 journeys, incl. the first live LSP
+  capability audit); the three lenses hardened with *do not invent a subject* and *verify a negative
+  with a control*; and a warn-only `PostToolUse` size/format advisory added.
+
+**Also shipped 2026-08-06, before the bundle work:** the perf pair **DEC-445/446** (a function keeps its
+identity across a call boundary — `userhof` 0.19× → 12.5×) and **DEC-447/448** (track-B increment 2
+measured at ZERO and reverted; the VM dispatch cache, 167.6 → 163.2 Ir/op), plus **DEC-449** — the
+attribute-argument hazard GUARDED, with the finding that task #67's "latent panic" title was a
+**mis-summary**: `KNOWN_ISSUES.md` had said all along there was no live panic.
+
+**Confirmed by live protocol probe (DEC-451 §6), not by grep:** the LSP advertises no
+`signatureHelpProvider`, `codeActionProvider`, `semanticTokensProvider` or `inlayHintProvider`. Task
+**#70** is therefore real and has **three siblings** under Invariant 17's 100% RULE. Its exit codes ARE
+conformant — recorded explicitly as *not* a defect so a later session does not "fix" it.
+
+**NEXT (queued):** **#71 `phg --help` omits the four package-manager verbs** — `add`/`install`/`update`/
+`remove` work but are invisible in the top-level help (Invariant 17; first recorded 2026-07-25 as H6 in
+`docs/research/2026-07-25-global-review/H-docs-consistency.md`, re-found 2026-08-06, also in
+`KNOWN_ISSUES.md`) · #70 LSP signature help (+ the three newly-confirmed capability gaps:
+`codeActionProvider`, `semanticTokensProvider`, `inlayHintProvider`) · #69 `phg build --vendor=stub`
+(DEC-439 follow-on) · #64 track A/B perf, which still needs the developer's rulings on NaN-boxing vs
+register bytecode, arming the three RECOVERED ratchet rows, and `CallValue` signature recording.
+
+---
+
+## ⏳ (history) CURSOR as of 2026-08-05 — **LIFT-ATTR SHIPPED; the lift chain now reaches attributes**
 
 **Shipped 2026-08-05, gate green (2792/2792 under `PHORJ_REQUIRE_PHP=1 --all-features`):**
 **#46 LIFT-ATTR / DEC-436** — the lifter sees `#[…]`. It had been treating a bare `#` as a PHP line

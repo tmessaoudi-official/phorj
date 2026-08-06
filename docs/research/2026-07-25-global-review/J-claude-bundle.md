@@ -17,7 +17,7 @@ The bundle's Part-3 import **already happened on 2026-07-22** and is live in the
 
 | Already IN | Where | Mechanism |
 |---|---|---|
-| Global reasoning framework | `scripts/claude-bootstrap/CLAUDE-global.md` → `~/.claude/CLAUDE.md` | SessionStart hook `scripts/claude-bootstrap/install.sh` (`cp -u`) |
+| Global reasoning framework | `scripts/claude-bootstrap/CLAUDE-global.md` → `~/.claude/CLAUDE.md` | SessionStart hook `scripts/claude-bootstrap/install.sh` (unconditional `cp -f` since DEC-451 — the repo is the truth) |
 | `THINKING.md` | same dir → `~/.claude/THINKING.md` | same |
 | `BLAST-RADIUS.md` | same dir → `~/.claude/BLAST-RADIUS.md` | same |
 | 5 skills: `ask-human`, `gaps`, `handoff`, `pre-commit`, `retrospective` | repo-native `.claude/skills/*/SKILL.md` | read in place, no install |

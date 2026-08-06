@@ -2653,3 +2653,22 @@ legs for symmetry.
    (inert when unused; skipped when the block declares the name), so `FileSystem.exists` from
    `package Acme.Fs` runs on the PHP leg. Verified on the recorded reproduction (FS + Uri shape).
 
+## `phg --help` omits the four package-manager verbs (P1, task #71)
+
+`phg add`, `phg install`, `phg update` and `phg remove` (DEC-316) all work and each answers
+`<verb> --help` with its own description, but **none of them appears anywhere in `phg --help`**, which
+lists 16 commands and stops at `explain`. A user cannot discover the package manager from the CLI.
+Invariant 17 (always-current surfaces).
+
+[Verified 2026-08-06: `./target/release/phg --help | grep -E 'add|install|update|remove'` returns
+nothing; `./target/release/phg add --help` prints *"add — add a dependency to phorj.json and install it
+(DEC-316)"*.]
+
+First recorded **2026-07-25** as §H6 of `docs/research/2026-07-25-global-review/H-docs-consistency.md`
+and re-found on 2026-08-06 by applying `/qa-sweep` journey 0 by hand. It rotted for twelve days because
+its only home was a dated research file — never SLICE-STATE, never here. That is the actual failure, not
+a gap in the gates, and it is why this entry exists.
+
+Fix: add the four verbs to the commands block in the CLI help string, **plus a test asserting every
+dispatchable verb appears in `--help`**, so the class cannot recur. Rust change → full correctness gate.
+

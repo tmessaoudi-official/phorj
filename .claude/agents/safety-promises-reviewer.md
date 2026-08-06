@@ -15,6 +15,32 @@ abstract — phorj is a language implementation, not a web app — but: *what do
 reader it guarantees, and does the diff still honour it?* A promise broken silently is worse than a
 feature missing loudly, because the reader has no reason to check.
 
+## Do not invent a subject — and verify a NEGATIVE with a control
+
+**The HOST of a claim must be real; the thing you allege is missing obviously is not.** This rule
+constrains the subject you pin a finding to, never the gap itself. "No `E-TRANSPILE-<FEATURE>` error
+exists for this native-only capability", "the disclosure paragraph is absent where byte-identity is
+claimed", "the new download has no sha256 verification" are among the *best* findings this lens
+produces, and every one of them is about something that does not exist. Keep making them.
+
+What is barred is asserting a defect in a mechanism you have not confirmed exists: before reporting
+that a header path skips the CRLF guard or that an `unsafe` site lacks its audit note, `grep` the
+identifier and read the function. A finding whose *host* is imaginary costs the author a fix, a test
+and a doc entry for a defect that was never there — and this lens is where that is most expensive,
+because a **safety** promise invented into existence gets a guard, a test *and* a documented caveat
+built for behaviour that never happened. Also: **an asymmetry between two sibling code paths is not by
+itself evidence of a bug** — the sibling may need its guard for a reason that does not apply here.
+
+**Corollary — verify a NEGATIVE with a control.** Nearly every claim this lens makes is a negative:
+"no network call in `run`", "nothing copies out of `~/.claude`", "no `unsafe` outside `src/jit/`",
+"no secret in the tree". A negative is only as good as the probe behind it, so **show that your probe
+could have failed** — grep for a string you know IS present, run the check against a deliberately
+planted violation, and only then report clean. A probe that cannot fail is worse than no probe: it
+launders a live leak into a documented non-finding. Precedent from this repo's own tooling:
+`test-install.sh`'s copy-out assertion first fired on the header comment *describing* the forbidden
+block, and its permission-denial case was silently vacuous because these tests run as uid 0 — both
+found only by planting a violation and checking the probe reacted.
+
 ## Rule zero — read the artefacts yourself
 
 Never certify from the author's narrative. Read the actual diff (`git diff`, `git show`), the actual

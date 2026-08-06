@@ -15,6 +15,18 @@
   documents, on BOTH `latest.md` write paths, with tests.
 - [2026-08-06] AGREED (P1, applied): `log_obs` defaults to `var/claude/logs/` in-repo, not
   `~/.claude/logs/`, which dies with the container.
+- [2026-08-06] AGREED (round 2, applied): `install.sh` copies UNCONDITIONALLY — the repo is always the
+  truth. `cp -u` was nondeterministic in both directions and its header claim was false.
+- [2026-08-06] RULED by the developer: **`permissions.deny` stays empty, permanently.** In a web session
+  a denied command is an unrecoverable dead end — there is no terminal to run it in. Closes round-1
+  open question 3, and makes every `PostToolUse` hook warn-only by construction.
+- [2026-08-06] AGREED (round 2): the siblings' `disallowed-tools:` frontmatter is INERT — Claude Code
+  does not read the key. Port REFUSED; an inert key that reads as enforcement retires the vigilance
+  without replacing it.
+- [2026-08-06] AGREED (round 2, applied): `/qa-sweep` is WRITTEN for phorj's own surfaces, not ported
+  from pdfturbo's browser/PDF machinery. Closes round-1 open question 2.
+- [2026-08-06] AGREED (round 2, applied): write-time `PostToolUse` lint hooks are worth it, warn-only,
+  and the load-bearing part is the Invariant 13 size advisory. Closes round-1 open question 1.
 
 ## Chronology (integration order, oldest → newest)
 
@@ -121,12 +133,46 @@ panel instead of falling through to the self-graded rung.
 | `PostToolUse` write-time lint hooks | **none** | rent-watch 3, stack 5, pdfturbo 2 | phorj's equivalents (`cargo fmt`, `clippy`) are in git hooks instead — arguably already covered, but not at write time |
 | `SubagentStop` reminder | none | stack 1 | stack-specific |
 | `qa-sweep` skill | absent | pdfturbo | phorj's CLAUDE.md already lists it as "queued, not yet imported" |
-| `THINKING.md` maintenance rule | "run `wc -l ~/.claude/THINKING.md`" | "edit the REPO copy — `cp -u` makes a hand-edit permanently newer and diverges **silently and unrecoverably**" | a real trap; port the wording |
+| `THINKING.md` maintenance rule | "run `wc -l ~/.claude/THINKING.md`" | "edit the REPO copy — `~/.claude` is generated" | a real trap; wording ported. (Both repos then cited `cp -u`; round 2 §R1 replaced it with `cp -f`, so the failure mode is now "silently overwritten" rather than "permanently newer" — the rule is unchanged, `~/.claude` is generated either way.) |
 
-All 13 core skills are present and identical in name across phorj/rent-watch; phorj is not missing any.
+~~All 13 core skills are present and identical in name across phorj/rent-watch; phorj is not missing
+any.~~ **WRONG — and wrong in an instructive way. Corrected in round 2, §R4:** that was a *name-level*
+check written up as a content-level conclusion, which is exactly the single-direction comparison the
+bidirectionality rule exists to prevent. Comparing bodies, phorj's copy was the shortest of all five
+repos in every one of the 13 rows.
 
-## Open — needs a ruling (the P2 tranche)
+## Round 2 (2026-08-06) — all four siblings re-read at their NEW heads
 
-1. **Write-time `PostToolUse` hooks for Rust** — worth it, or is the tiered git-hook gate enough?
-2. Whether to import `qa-sweep` from pdfturbo.
-3. Whether `permissions.deny` is worth adding with no `.env` in this repo.
+The developer finished unifying every sibling and asked for another pass. Heads audited:
+rent-watch `b7867a4`, twes-in `10aa265`, stack `47d3353`, pdfturbo `3f041a1`.
+Full detail is **DEC-451** in the register; this is the index.
+
+| § | item | outcome |
+|---|---|---|
+| R1 | `install.sh` — `cp -u` → unconditional `cp -f`, "the repo is always the truth" | PORTED + `test-install.sh` (18 assertions). rent-watch flagged this as *port-OUT item 0 for all four siblings* |
+| R2 | `permissions.deny` (was open question 3) | **RULED: stays EMPTY, permanently.** Developer, 2026-08-06 — a deny in a web session is an unrecoverable dead end because there is no terminal to run the command in |
+| R3 | `disallowed-tools:` frontmatter, declared 13/13 by the siblings | **PORTED, 14/14 — after this round first got it WRONG.** The refusal ("the key is INERT") was graded `[Verified]` against a **stale npm copy of the CLI**; the running binary does read it. The DEC-268 panel caught it the same day. See DEC-451 §3 — the postmortem is the round's most useful output |
+| R4 | skill **content** (not names) compared across all five repos | phorj carried a 4-delta banner vs the siblings' 9, and **no banner at all** on 5 skills → one canonical 7-delta banner on all 13 |
+| R5 | `/cross-check` `--drift` mode | PORTED, re-grounded on phorj's checkable claims. Also fixed: it wrote its report to a **tracked** path, contradicting its own delta 3 |
+| R6 | `/qa-sweep` (was open question 2) | **WRITTEN, not ported** — pdfturbo's is browser/PDF-specific. 10 journeys over the surfaces `cargo test` never reaches. Includes the first live LSP capability audit |
+| R7 | "do not invent a subject" + "verify a NEGATIVE with a control" | PORTED to **all three** lenses, re-grounded on phorj incidents (#67's mis-titled panic; two silently-no-op reverts) |
+| R8 | write-time `PostToolUse` lint hooks (was open question 1) | **BUILT, warn-only** — `rustfmt`/`phg format` plus an Invariant 13 size advisory that fires at write time, when the cheap fix is still to split rather than to shave comments |
+
+**No open questions remain from the round-1 P2 tranche.** All three were ruled or built above.
+
+### Port-OUT items — things phorj found that the four siblings should take
+
+1. ~~**`disallowed-tools:` is inert**~~ — **WITHDRAWN, it was phorj's error.** The siblings were right
+   and stack's "partial mechanical backing" is accurate. What phorj offers instead is the postmortem
+   (DEC-451 §3): the check read `/opt/node22/.../claude-code/cli.js` (v2.1.42, no skill loader at all)
+   rather than the running `2.1.220`, so the answer was determined by the artefact chosen — a probe with
+   no ability to fail. And a second reviewer "confirmed" it because its spawn prompt NAMED that path.
+   **Give a reviewer the claim, never your evidence path** — a lens told where to look can only audit
+   your reading, not your choice of what to read. That is the portable lesson.
+2. **rent-watch's `test-install.sh` non-fatal-`mkdir` case is vacuous** (R1). It uses `chmod 500` on the
+   project dir; the suite runs as uid 0, which ignores mode bits, so the assertion never exercised the
+   failure. Use a path whose parent is a regular file (ENOTDIR, fails for every uid). Doing so here
+   immediately exposed a live defect the mode version could not see: `set -e` plus an unguarded trailing
+   `mkdir` took the entire SessionStart hook down with exit 1.
+3. **A skill that writes its report next to the source file** (R5) may be writing into the tracked tree.
+   Check each skill's Step-4 output path against `.gitignore`, not against intent.

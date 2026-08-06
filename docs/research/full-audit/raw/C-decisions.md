@@ -7908,8 +7908,9 @@ exactly what the project file authorises, so a session reading only the global r
 already had permission for, or ask twice. It has been wrong since the bundle landed on 2026-07-19.
 
 Also ported from rent-watch: `THINKING.md`'s maintenance rule now says to edit the **repo** copy and never
-`~/.claude/THINKING.md`, because `install.sh` copies one-directionally with `cp -u` — a hand-edit there is
-permanently newer and diverges **silently and unrecoverably**.
+`~/.claude/THINKING.md`, because `install.sh` copies one-directionally — a hand-edit there diverges silently.
+(That wording cited `cp -u`; DEC-451 replaced it with an unconditional `cp -f`, so the hand-edit is now
+overwritten rather than made permanently newer. Either way `~/.claude` is generated, never authored.)
 
 **Verified:** all three agents parse (frontmatter `name`/`description`/`tools`, `name` == filename);
 `install.sh` runs and `~/.claude/CLAUDE.md` is byte-identical to the repo copy afterwards; the handoff
@@ -7919,3 +7920,218 @@ suite is 34/34; doc-guards and size-gate green.
 Rust (phorj has none; others have 2–5, though phorj's `cargo fmt`/`clippy` already run in the tiered git
 hooks), importing `qa-sweep` from pdfturbo, and whether `permissions.deny` earns its keep with no `.env`
 in this repo.
+
+### DEC-451 (2026-08-06) — bundle round 2: the repo is the truth; the `deny` list stays empty; and the sibling repos' "mechanical backing" is inert
+
+Second pass of the cross-repo Claude-bundle audit (`docs/plans/claude-bundle-cross-repo-audit.plan.md`),
+run against all four siblings at their NEW heads after the developer had finished unifying each of them
+(rent-watch `b7867a4`, twes-in `10aa265`, stack `47d3353`, pdfturbo `3f041a1`). Round 1 was DEC-450.
+
+**The round's most useful output is a REFUSAL, not a port.** See §3.
+
+### 1 — `install.sh`: the repo is always the truth (`cp -f`, was `cp -u`)
+
+Developer ruling, recorded in rent-watch `b7867a4` and explicitly flagged there as "port-OUT item 0 for
+all four siblings, none of which has it": *"it would be better to always copy what is in the repo to the
+global folder! the repo is always the truth!"*
+
+The `cp -u` it replaces carried a header claim — *"a hand-edited (newer) `~/.claude` file is never
+clobbered"* — that was **false**, and the behaviour was nondeterministic in both directions: `cp -u`
+copies when the **source** is newer, and a fresh `git clone` stamps every file with the clone time, so in
+this container it clobbered anyway; while after a hand-edit of the *target* it silently did nothing and
+the repo quietly stopped being the truth. Neither outcome was chosen; both depended on mtimes nobody was
+tracking. `~/.claude` is a GENERATED directory, and that is now stated where a reader meets it.
+
+Safety net: a file that predates the hook is snapshotted ONCE to `<name>.pre-bootstrap.bak` and never
+rewritten. The never-rewrite half is load-bearing precisely in the multi-repo case — all five siblings
+ship this hook, so a rent-watch session installs ITS `CLAUDE-global.md` over ours, and on the next phorj
+session the target differs from our source again; without the `! -e "$backup"` guard we would snapshot
+rent-watch's copy on top of the developer's irreplaceable original.
+
+New `scripts/claude-bootstrap/test-install.sh`, **18 assertions**, sabotage-verified — dropping the
+snapshot guard fails exactly 1, reverting to `cp -u` fails 2, dropping the final `mkdir`'s `|| true`
+fails 1. Written FIRST and run against the old script, where it failed 6/18.
+
+**One divergence from rent-watch's suite, and it is a fix, not a port.** Its non-fatal-`mkdir` case uses
+`chmod 500` on the project dir, which is **vacuous when the tests run as uid 0** — root ignores the mode
+bits, so the assertion passed without ever exercising the failure. phorj uses a path whose parent is a
+regular file (ENOTDIR, which fails for every uid), and that immediately exposed a real defect the mode
+version could not see: `set -e` plus an unguarded trailing `mkdir` took the **whole SessionStart hook**
+down with exit 1. Now `|| true`, with the measurement recorded inline as the anti-bandaid evidence.
+
+### 2 — the `deny` list stays EMPTY, permanently (developer ruling)
+
+Verbatim: *"there should be no permissions denies! in this env claude code in the web! because if you are
+denied to do something I can't run it myself! so there must be full autonomy."*
+
+In a cloud/web session there is **no terminal for the developer to drop into**, so the standard escape
+hatch for a blocked command — "present it for manual execution" — does not exist; a `deny` entry is not a
+speed bump but an unrecoverable dead end. Recorded in `CLAUDE.md` § "Claude config in this repo" so no
+future session re-proposes one. Consequences: rent-watch's four `Read`/`Edit` denies on `./.env` are
+**not** adopted (they would also be inert — this repo has no `.env` — but "harmless" was the wrong test),
+and the new `PostToolUse` hook is **warn-only, always exit 0**, because a write-time hook that blocks is a
+deny by another name. Stack reached the identical conclusion independently the same day.
+
+### 3 — `disallowed-tools:` — THIS SECTION WAS WRONG, AND THE WAY IT WAS WRONG IS THE LESSON
+
+**Superseded within hours of being written, by the DEC-268 panel's first real run.** The original §3
+claimed all four siblings' `disallowed-tools: AskUserQuestion` frontmatter is INERT, that stack's
+"partial mechanical backing" was a false claim, and REFUSED to port it — graded `[Verified]`, and
+propagated to seventeen places including a lock telling future rounds not to "fix" phorj by adding it
+back. **All of that was false.**
+
+The running Claude Code DOES read the key from SKILL.md frontmatter. Its schema documents it verbatim
+as *"Tools removed from the model while this file is active. Comma-separated string or YAML list.
+Cleared when the user sends the next message."*, and the loader destructures
+`a["disallowed-tools"] ?? a.disallowedTools` through the same normaliser it applies to `allowed-tools`,
+inside the same function that performs the `${CLAUDE_SKILL_DIR}` substitution. 17 occurrences, not 1.
+
+**Root cause: the probe read the wrong artefact and could not have failed.** The check grepped
+`/opt/node22/lib/node_modules/@anthropic-ai/claude-code/cli.js` — a stale npm install pinned at
+**2.1.42**, 178 versions behind, which contains **no skill-frontmatter loader at all**
+(`CLAUDE_SKILL_DIR` → 0 hits). The binary actually running is **2.1.220** at
+`/root/.local/share/claude/versions/`, and that path had already been printed earlier in the same
+session before the wrong file was grepped anyway. So `disallowed-tools` appearing once, as a CLI flag,
+was a *guaranteed* result of the artefact chosen — a probe with no ability to return the other answer.
+
+This is the precise failure the SAME COMMIT added to all three reviewer lenses as *"verify a NEGATIVE
+with a control"*, and it was not applied to the commit's own headline claim. Two aggravating factors
+worth recording, because both generalise:
+
+- **A second lens "confirmed" the error.** The safety-promises reviewer reported the claim TRUE and
+  said it could not refute it — because its spawn prompt NAMED the stale path, which it dutifully
+  read. Seeding a reviewer with your own artefact contaminates the control; a lens told *where* to
+  look can only audit your reading, not your choice of what to read. Give reviewers the claim, never
+  the evidence path.
+- **The fallback reasoning was independently wrong.** The refusal also argued the mechanical
+  alternative was unsafe because "an allowlist that under-enumerates dead-ends a skill mid-run".
+  `disallowed-tools` is a **denylist** — it removes one named tool and touches nothing else, so the
+  dead-end risk that justified the refusal does not exist for it. The one option with no downside was
+  discarded twice over.
+
+**Resolution:** every skill now carries `disallowed-tools: AskUserQuestion` (14/14), matching the
+siblings. `AskUserQuestion` is now mechanically unavailable while any of them is active, so Invariant
+15's ban has real backing for the first time. What remains discipline-only is the plain-text SHAPE of
+a question — context, example, numbered options, recommendation first, escape hatch, STOP.
+
+**The port-OUT item is withdrawn.** The siblings were right and phorj was the outlier. What phorj can
+offer them instead is this postmortem.
+
+### 4 — skill CONTENT compared, not just names (a bidirectionality failure closed)
+
+Round 1 concluded *"all 13 core skills are present and identical in name; phorj is not missing any"* —
+which was a **name-level** check presented as a content-level one, exactly the single-direction comparison
+Phase 2's bidirectionality rule exists to prevent. Comparing bodies: phorj's copy was the **shortest of
+all five repos in every one of the 13 rows** (handoff 61 lines vs rent-watch's 142; sweep 121 vs 223;
+pre-commit 140 vs 225), because phorj carried a **4-delta** container-adaptation banner where the siblings
+carry 9, and **five skills carried no banner at all** (`ask-human`, `gaps`, `handoff`, `pre-commit`,
+`retrospective`).
+
+Fixed: one canonical **7-delta** phorj banner on all 13 (`forge` keeps its richer skill-specific one,
+extended; `ask-human` gets a tailored variant, since delta 1 is that skill's entire subject). The three
+genuinely new deltas are the ones phorj most needed: `--scope=global|both` is REMOVED because `~/.claude`
+is generated (§1 makes that sharper, not softer); the ≤5-concurrent-subagent cap plus
+raw-output-to-disk-before-returning; and the three lens agents are now named so a session spawns them
+instead of re-describing their charter inline.
+
+### 5 — `/cross-check` gained `--drift`, and stopped writing into the tracked tree
+
+Ported Mode B (doc vs reality) from the siblings, re-grounded on phorj's actual checkable claims:
+dependency count (`Cargo.toml` is the SSOT — the recorded ~3× understatement is the canonical precedent),
+the `Op` triad's wildcard-freedom, the size baseline, SSOT-quartet consistency, CLI verbs (`phg vendor`
+retired and must error; no `runvm`), the three legs, transpile-AND-lift, the LSP capability set, the
+example corpus as byte-identity coverage, and OWED bench verdicts.
+
+Separately, a real defect in phorj's copy: Step 4 said to write `<spec-file>.validation.md` **beside the
+source**, a **tracked** path — so following the skill's own instruction dropped a report into the working
+tree, contradicting delta 3 of its own banner. Now `var/claude/reports/`.
+
+### 6 — `/qa-sweep` WRITTEN, not ported; and a live LSP capability audit
+
+pdfturbo's `qa-sweep` drives a browser over a PDF editor with axe-core and CSP workarounds — no analogue
+here, so copying it would have produced a skill about machinery this repo does not own. What transfers is
+the premise: *every one of this repo's worst defects was invisible to the suite meant to catch it*
+(`html"…"` in a tuple reaching `unreachable!()` on valid user code; the playground VM pane compiling
+around `check_and_expand_reified`, which is why Invariant 6 exists; SLICE-STATE stale by a full wave; a
+test asserting on a disclosure comment). `cargo nextest` drives the library in-process — it never runs the
+installed binary, never speaks JSON-RPC to the language server, never opens an editor, never renders the
+playground. Ten journeys over exactly those surfaces, each one verified runnable before being written down.
+
+**Live LSP handshake over real stdio** (the first time this has been done here rather than grepped):
+`completionProvider`, `hoverProvider`, `definitionProvider`, `referencesProvider`,
+`documentSymbolProvider`, `renameProvider`, `documentFormattingProvider` are advertised;
+**`signatureHelpProvider`, `codeActionProvider`, `semanticTokensProvider` and `inlayHintProvider` are
+not** — so task #70 is confirmed by protocol, not inference, and it has three siblings under Invariant
+17's 100% RULE. Exit codes ARE conformant (`shutdown`+`exit` → 0, cold stdin close → 1); that was probed
+and is explicitly recorded as **not** a defect, so a later session does not "fix" it.
+
+### 7 — the reviewer panel hardened with the two rules that cost the most when missing
+
+Both adapted from pdfturbo's 13-finding review round, re-grounded on phorj's own incidents, and added to
+**all three** lenses rather than one:
+
+- **Do not invent a subject** — the *host* of a claim must be real; the thing alleged missing obviously is
+  not. The distinction matters most for the completeness lens, whose best findings are all absences. An
+  earlier upstream draft barred "a finding about a test or file that does not exist", which would have
+  downgraded that lens to code-only correctness. phorj's precedent: task #67 rode the backlog as "latent
+  panic in attribute arguments" while `KNOWN_ISSUES.md` said there was no live panic — the title was the
+  defect. Also: an asymmetry between two sibling code paths is not by itself evidence of a bug.
+- **Verify a NEGATIVE with a control** — a probe that cannot fail is worse than no probe. phorj's
+  precedents: twice on 2026-08-06 a revert-based negative control silently did not apply, so "no
+  measurable difference" was read off an unchanged tree; and a `contains(…)` matched a disclosure comment
+  instead of the emitted artefact and passed green. This rule paid for itself inside the hour it was
+  written — the LSP exit-code probe in §6 looked like a defect until a control showed it was conformant.
+
+### 8 — write-time advisory hook (tranche 3a)
+
+`.claude/hooks/lint-on-write.sh` on `PostToolUse(Edit|Write)`: `rustfmt --check` on `.rs`,
+`phg format --check` on `.phg`, and an **Invariant 13 size advisory**. The size half is the one with
+teeth, and it exists for a specific failure: on 2026-08-06 a file was pushed back under its baseline
+three times by SHAVING COMMENTS before the author did the right thing and split it. `size-gate.sh`
+catches the breach at push, by which time the feature is written and the cheap move is to shave. Told at
+write time the cheap move is to split — which is what Invariant 13 actually asks for. Guard:
+`test-lint-on-write.sh`, 18 assertions, sabotage-verified.
+
+Honest note on one of those sabotages: adding `set -e` left all 18 green, because every fallible command
+is already explicitly guarded. That is recorded in the script's header rather than papered over — the
+suite does not cover that flag, and claiming it did would be the false-green class this whole round is
+about.
+
+### Verified
+
+`test-install.sh` 18/18 · `test-lint-on-write.sh` 18/18 · `test-precompact-handoff.sh` green ·
+all 14 skills and 3 agents parse (frontmatter `name` == directory/filename) · `bash -n` clean on every
+bundle and hook script.
+
+**Rust gate:** this change touches no `.rs`/`.phg`/`Cargo.*`, so the pre-commit hook took its
+DOCS-ONLY fast path and no cargo tier ran as part of the commit. An earlier draft of this block said
+"full correctness gate green (see the commit)", which was a broken pointer — the commit reports no such
+run. The full gate WAS executed independently by the DEC-268 panel and is green:
+`2849 tests run: 2849 passed, 3 skipped` under
+`PHORJ_REQUIRE_PHP=1 cargo nextest run --workspace --all-features`.
+
+**No visual surface** — the change is docs, `.claude/` config and shell; nothing rendered.
+
+### 9 — a defect the new `/qa-sweep` found while it was being WRITTEN
+
+Journey 0 says *"a verb documented but absent — or present but undocumented — is a finding"*. Applying
+it once, by hand, to the shipped binary: **`phg add` / `install` / `update` / `remove` (the DEC-316
+package manager) appear NOWHERE in `phg --help`.** All four exist, all four answer `<verb> --help` with
+their own one-line description, and none is discoverable from the top-level help — which lists 16
+commands and stops at `explain`. [Verified: `./target/release/phg --help | grep -E 'add|install|update|remove'`
+returns nothing, while `./target/release/phg add --help` prints *"add — add a dependency to phorj.json
+and install it (DEC-316)"*.]
+
+That is an Invariant 17 always-current-surface gap: a user cannot find the package manager. Logged as
+task **#71**, and recorded in `KNOWN_ISSUES.md` + SLICE-STATE's NEXT queue, rather than fixed here,
+because the CLI help string is Rust and this change is docs/config/shell only.
+
+**Correction (same day, completeness lens):** this was NOT a new discovery, and the diagnosis first
+written here — *"it survived every green gate, because no gate asks whether the binary can describe
+itself"* — was wrong. It was already recorded on 2026-07-25 as
+`docs/research/2026-07-25-global-review/H-docs-consistency.md` **§H6, same four verbs, same evidence,
+same P1 severity**. What survived for twelve days was the **backlog**, not the gates — a materially
+different and more actionable diagnosis. It rotted because H6 lived only in a dated research file and
+never reached SLICE-STATE or `KNOWN_ISSUES.md`, which is exactly the mechanism that nearly repeated
+here: the first version of this row filed #71 in register prose alone. That is why it is now in all
+three places.

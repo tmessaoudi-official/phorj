@@ -3,7 +3,51 @@ name: retrospective
 spotlight: true
 description: Use at the end of a long or complex session for deliberate end-of-session learning extraction and memory capture across hidden dependencies, naming surprises, behavioral quirks, and decision rationale.
 user-invocable: true
+disallowed-tools: AskUserQuestion
 ---
+
+<!-- ═══════════════════════════════════════════════════════════════════════════════════
+  phorj CONTAINER ADAPTATION (DEC-354, built 2026-07-27; deltas 2/4/5/6 added or widened
+  2026-08-06 by the second cross-repo bundle round). Imported from the developer's machine bundle
+  `claude-setup-global-20260722`; DEC-354 ruled 7 of its 48 skills IN, each ADAPTED.
+  These deltas OVERRIDE the body below wherever they conflict:
+
+  1. QUESTIONS ARE PLAIN TEXT. `AskUserQuestion` silently fails in this container (observed 4x on
+     2026-07-26), so a gate that "asks" cannot fire. Every "invoke ask-human" below means: print the
+     question, a minimal concrete example, numbered options, and the recommended option FIRST with
+     its reason, as ordinary prose — then STOP and wait. Protocol:
+     `.claude/skills/ask-human/SKILL.md`. This file's frontmatter carries
+     `disallowed-tools: AskUserQuestion`, which IS honoured: the running Claude Code reads that key
+     from SKILL.md frontmatter and removes the tool while this file is active. So the forbidden tool
+     is mechanically unavailable here, not merely discouraged — but the plain-text SHAPE of the
+     question is still discipline, and that part nothing enforces.
+  2. NO `advisor()` HERE. Independent certification = fresh-context read-only reviewer subagents
+     (project CLAUDE.md, DEC-268 MAXIMAL ladder), run as the three phorj lenses:
+     `backend-parity-reviewer` (correctness+regression), `safety-promises-reviewer`
+     (security+safety-promises), `completeness-reviewer` (completeness+blast-radius). All three are
+     REAL agent definitions in `.claude/agents/` as of 2026-08-06 — spawn them BY NAME via the Agent
+     tool, in ONE message so they run concurrently, rather than re-describing their charter inline,
+     so each lens's attack surface stays in one place. Self-grading is the LAST rung and must be
+     DISCLOSED as self-graded in the output.
+  3. REPORTS GO TO `var/claude/…` in the repo — gitignored (`/var`), survives compaction inside the
+     session, never committed. NOT `~/.claude/projects/…`: that is wiped when the container is
+     reclaimed, so a report written there is lost (Invariant 19 — only committed repo state survives).
+     Never `git add` a report regardless — being ignored is what keeps them out of history, not what
+     makes staging them harmless.
+  4. `--scope=global|both` IS REMOVED wherever it appears. `~/.claude/` in this container is
+     GENERATED from repo files by `scripts/claude-bootstrap/install.sh`, which since 2026-08-06
+     overwrites them UNCONDITIONALLY on every SessionStart — so auditing `~/.claude` audits a copy,
+     and a finding against it is fixed in `scripts/claude-bootstrap/` or not at all.
+  5. ≤5 CONCURRENT SUBAGENTS (10 caused ~50% rate-limit failures upstream), and every pipeline agent
+     writes its raw output to `var/claude/<stage>/raw/` BEFORE returning — in-conversation results do
+     not survive autocompact, only disk files do. `Explore` cannot Write: use `general-purpose` for
+     any agent that must persist a file.
+  6. EVERY REPLY ENDS WITH A MARKER LINE — `❓ QUESTION — …` or `⏹ NO QUESTION — …` as its literal
+     last line (project CLAUDE.md § "Reply convention"). This skill's output is a reply like any other.
+  7. PROJECT RULES WIN on any conflict: `/home/user/phorj/CLAUDE.md` — the invariants, the full
+     correctness gate, the git-autonomy override (`master` only, plain `git push`, no trailers),
+     Invariant 19's canonical plan/decision homes.
+═══════════════════════════════════════════════════════════════════════════════════════════════ -->
 
 ## --help
 
@@ -26,7 +70,7 @@ Manual trigger for end-of-session learning extraction. Companion to the automati
 | Flag | Behavior |
 |------|----------|
 | `--quick` | Skip to the 2 highest-signal lenses only (Failure pattern + Decision rationale); skips all 6-lens scan; output is a compact 2-question pass. |
-| `--source=project\|all` | (default: `all`) — `all` enables cross-project index enrichment (Step 2.5): before saving, scan all other projects' MEMORY.md indices to detect duplicates and flag promotion candidates; `project` uses old single-project behavior. |
+| `--source=…` | **REMOVED (adaptation).** There is no cross-project memory index in this container — no `~/.claude/projects/*/memory/`, no `MEMORY.md`. See the note below. |
 
 ---
 
@@ -40,7 +84,10 @@ git log --oneline -10
 
 If git shows nothing (e.g. session worked on `~/.claude/` or other untracked paths), fall back to:
 ```bash
-find ~/.claude -newer ~/.claude/projects -name "*.md" -o -name "*.sh" -o -name "*.json" 2>/dev/null | head -20
+# ADAPTATION: there is no ~/.claude memory tree here, and ~/.claude itself is GENERATED from
+# scripts/claude-bootstrap/ (overwritten every SessionStart), so scanning it tells you nothing about
+# the session. Look at the repo instead — that is the only thing that survives the container:
+git -C "${CLAUDE_PROJECT_DIR:-$PWD}" status --porcelain; ls var/claude/ 2>/dev/null
 ```
 Also check the conversation context directly — it is the authoritative record of what was done.
 
@@ -72,10 +119,12 @@ For each of these lenses, ask the question and answer honestly — skip any wher
 CURRENT_SLUG=$(echo "${CLAUDE_PROJECT_DIR:-$PWD}" | sed 's|^/|-|; s|/|-|g')
 ```
 
-**Index scan** — read every other project's MEMORY.md index (text only, no full file reads):
+**Index scan — NOT APPLICABLE HERE (adaptation).** The upstream step read every other project's
+`MEMORY.md`; the session-remember pipeline is not installed in this container, so there is nothing to
+scan and a session must never report having "written to memory". Durable learning goes to the repo:
+a `KNOWN_ISSUES.md` entry, a register row, or `docs/plans/*.plan.md`. Skip this step and say so.
 ```bash
-# All MEMORY.md files excluding current project
-ls ~/.claude/projects/*/memory/MEMORY.md | grep -v "$CURRENT_SLUG"
+# (removed — no cross-project MEMORY.md index exists in this container)
 ```
 
 For each proposed entry from Step 2, compare its description + key terms against the index lines of all other projects:
@@ -133,13 +182,30 @@ If the user replies 'skip' or there are no discoveries: report "No memories save
 
 For each confirmed entry (all, or the numbered subset the user approved):
 
-- If it's about **the project** (a quirk, a hidden dep, a workaround): save to `project_*.md` memory
-- If it's about **how to collaborate** (a preference revealed, an approach that worked well): save to `feedback_*.md` memory
-- If it's about **the user** (a skill gap revealed, a domain they know deeply): save to `user_*.md` memory
+**ADAPTATION — there is no memory store here, so route by DURABLE HOME instead of by memory-file type.**
+The upstream trio (`project_*.md` / `feedback_*.md` / `user_*.md`) lives under
+`~/.claude/projects/<slug>/memory/`, which does not exist in this container and would be wiped with it.
+Only committed repo state survives, so:
+
+- **A project quirk, hidden dependency or workaround** → `KNOWN_ISSUES.md` if it is a limitation a user
+  could hit, otherwise a decision-register row in `docs/research/full-audit/raw/C-decisions.md`.
+- **A rule about how to work here** (a gate that must run, a trap to avoid) → the relevant section of
+  project `CLAUDE.md`, or a reviewer-agent def under `.claude/agents/` if it is an attack surface a
+  future review should carry.
+- **A ruling or design decision** → a register row, mirrored into MASTER-PLAN + SLICE-STATE in the same
+  change (Invariant 19).
+- **Anything genuinely session-scoped** → `var/claude/` (gitignored). It dies with the container, and
+  that is the correct lifetime for it.
+
+Say which home you used, so the developer reviews it as an ordinary diff. **Never report having
+"written to memory"** — `scripts/claude-bootstrap/CLAUDE-global.md` § "Memory System Toggles — NOT
+APPLICABLE HERE" states plainly that the pipeline is absent.
 
 Write each discovery as a standalone memory entry — not a bullet in an existing file unless it naturally extends one. Keep entries focused: one fact, one "Why:", one "How to apply:".
 
-Update `MEMORY.md` index for any new files.
+There is no `MEMORY.md` index in this container. Instead, land the learning where it survives: a
+`KNOWN_ISSUES.md` entry, a decision-register row, or the relevant `docs/plans/*.plan.md` — and note in
+the output which of those you used, so the developer can review it as a normal diff.
 
 ---
 

@@ -5,6 +5,7 @@ description: >
   clear numbered options, a recommended option first with its reason, then STOP and wait.
 user-invocable: true
 model: sonnet
+disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
@@ -18,6 +19,39 @@ model: sonnet
 
   The developer's instruction, verbatim: *"never use askUserQuestion — you must put the
   context clearly with clear options and clear examples with a recommended option"*.
+
+  IT IS MECHANICALLY ENFORCED — AND A PRIOR CLAIM HERE THAT IT WAS NOT WAS WRONG (corrected
+  2026-08-06, same day it was written). Every skill in this repo now carries
+  `disallowed-tools: AskUserQuestion` in its frontmatter, matching all four sibling repos, and the
+  running Claude Code DOES read that key: its SKILL.md frontmatter schema documents it as *"Tools
+  removed from the model while this file is active. Comma-separated string or YAML list."*, and the
+  loader destructures `a["disallowed-tools"] ?? a.disallowedTools` through the same normaliser it
+  uses for `allowed-tools`, inside the same function that performs the `${CLAUDE_SKILL_DIR}`
+  substitution. So stack's CLAUDE.md is right to call this mechanical backing.
+
+  Earlier on 2026-08-06 this block asserted the opposite — that the key is inert and the siblings'
+  declarations decoration — and that claim was propagated to seventeen places before the DEC-268
+  panel refuted it. The cause is worth keeping, because it is the exact failure this repo added a
+  rule about in the same commit: the check grepped a STALE npm copy of the CLI
+  (`/opt/node22/.../claude-code/cli.js`, version 2.1.42) which has no skill-frontmatter loader at
+  all, instead of the binary actually running (2.1.220). A probe that cannot fail is worse than no
+  probe — and the right path had already been printed earlier in that same session. Never grade a
+  claim `[Verified]` against an artefact you have not confirmed is the live one.
+
+  What is NOT mechanical is the SHAPE of the question — context, example, numbered options,
+  recommendation first, escape hatch, STOP. Nothing enforces that; it is yours to keep.
+
+  The remaining container deltas that apply to this skill (the canonical set the other skills carry —
+  `ls .claude/skills/` is the authoritative list, never a count in prose; delta 1 is this skill's
+  entire subject, so it is not restated):
+    • REPORTS/notes go to `var/claude/…` in the repo — never `~/.claude/projects/…`, wiped when
+      the container is reclaimed. Never `git add` one.
+    • `~/.claude/` here is GENERATED from `scripts/claude-bootstrap/` and overwritten
+      unconditionally each SessionStart — a fix belongs in the repo copy, never in `~/.claude`.
+    • EVERY REPLY ENDS WITH A MARKER LINE — `❓ QUESTION — …` or `⏹ NO QUESTION — …` as its literal
+      last line (project CLAUDE.md § "Reply convention"). A question asked WITHOUT the `❓` marker
+      is the exact failure this protocol exists to prevent: indistinguishable from a pause.
+    • PROJECT RULES WIN on any conflict: `/home/user/phorj/CLAUDE.md`.
 ═══════════════════════════════════════════════════════════════════════════════════ -->
 
 ## --help

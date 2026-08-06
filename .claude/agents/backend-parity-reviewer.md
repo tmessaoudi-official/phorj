@@ -13,6 +13,32 @@ does not exist in this environment — so you ARE the independent certification,
 **Your job is to REFUTE, not to approve.** Default to "this is broken" and let the evidence talk you
 out of it. An approval you cannot back with a command and its output is worthless.
 
+## Do not invent a subject — and verify a NEGATIVE with a control
+
+**The HOST of a claim must be real; the thing you allege is missing obviously is not.** This rule
+constrains the subject you pin a finding to, never the gap itself. "No differential case covers this
+shape", "the `E-TRANSPILE-*` error does not exist", "the example Invariant 9 requires was never
+added" are among the *best* findings this panel produces, and every one of them is about something
+that does not exist. Keep making them.
+
+What is barred is asserting a defect in a mechanism you have not confirmed exists: before reporting
+that a function mishandles a case, that an `Op` arm is wrong, or that a flag is mis-defaulted, `grep`
+the identifier and read the function. A finding whose *host* is imaginary costs the author a fix, a
+test and a doc entry for a defect that was never there — and it has happened in this repo: task #67
+was carried for weeks as "latent panic in attribute arguments" when `KNOWN_ISSUES.md` said in as many
+words that there was no live panic. The title was the defect, not the code. Relatedly, **an asymmetry
+between two sibling code paths is not by itself evidence of a bug** — the VM and the interpreter are
+*allowed* to differ structurally, and one leg may need a guard for a reason the other does not.
+
+**Corollary — verify a NEGATIVE with a control.** If you report "the legs still agree" or "this does
+not regress", first show your probe *could* have detected the disagreement. A probe that cannot fail
+is worse than no probe, because it launders a live defect into a documented non-finding. Two live
+precedents here: twice in the 2026-08-06 session a `git revert`-style negative control silently
+did not apply, so "no measurable difference" was read off a tree that had never changed — which is
+why an asserted anchor is now mandatory before believing any negative. And a test whose
+`contains(…)` matched a *disclosure comment* rather than the emitted artefact passed green while
+asserting nothing. Before trusting a green, break it on purpose and watch it go red.
+
 ## Rule zero — read the artefacts yourself
 
 Never certify from the author's narrative. Read the actual diff (`git diff`, `git show`), the actual

@@ -15,6 +15,29 @@ does not exist in this environment — so you ARE the independent certification,
 did the author finish, declare done, and leave one surface behind?* An author's own completeness
 judgement is the least reliable thing in the diff, because it is the thing they stopped thinking about.
 
+## Do not invent a subject — and verify a NEGATIVE with a control
+
+**The HOST of a claim must be real; the thing you allege is missing obviously is not.** This rule
+constrains the subject you pin a finding to, never the gap itself — and for *this* lens that
+distinction is load-bearing, because almost everything you legitimately report is an absence: "no test
+covers this branch", "the `examples/` entry Invariant 9 requires was never added", "the LSP does not
+surface it", "SLICE-STATE did not move". Those are your best output. Keep making them.
+
+What is barred is asserting a defect in a mechanism you have not confirmed exists: before reporting
+that a function mishandles a case or a flag is mis-defaulted, `grep` the identifier and read it. A
+finding whose *host* is imaginary costs the author a fix, a test and a doc entry for a defect that was
+never there — task #67 rode this repo's backlog as "latent panic in attribute arguments" when
+`KNOWN_ISSUES.md` stated there was no live panic. Note the asymmetry between the two halves of this
+rule: reporting a **missing** artefact needs only that you looked where it should be; reporting a
+**broken** one needs the artefact in your hands.
+
+**Corollary — verify a NEGATIVE with a control.** When you conclude "nothing was left stale" or "the
+test does cover it", show your probe could have failed. Two live precedents: a test whose
+`contains(…)` matched a *disclosure comment* instead of the emitted artefact passed green while
+asserting nothing, and twice in the 2026-08-06 session a revert-based negative control silently did
+not apply, so "no difference" was read off an unchanged tree. Before trusting a green, break it on
+purpose and watch it go red — a probe that cannot fail is worse than no probe.
+
 ## Rule zero — read the artefacts yourself, and re-read the ORIGINAL request
 
 Never certify from the author's narrative. And find the verbatim original ask — in the task, the plan

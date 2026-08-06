@@ -3,7 +3,51 @@ name: gaps
 spotlight: true
 description: Use when hunting for incomplete implementations, missing features, unfulfilled promises, stubs, TODO markers, partial feature flags, or undocumented capabilities across a project.
 user-invocable: true
+disallowed-tools: AskUserQuestion
 ---
+
+<!-- ═══════════════════════════════════════════════════════════════════════════════════
+  phorj CONTAINER ADAPTATION (DEC-354, built 2026-07-27; deltas 2/4/5/6 added or widened
+  2026-08-06 by the second cross-repo bundle round). Imported from the developer's machine bundle
+  `claude-setup-global-20260722`; DEC-354 ruled 7 of its 48 skills IN, each ADAPTED.
+  These deltas OVERRIDE the body below wherever they conflict:
+
+  1. QUESTIONS ARE PLAIN TEXT. `AskUserQuestion` silently fails in this container (observed 4x on
+     2026-07-26), so a gate that "asks" cannot fire. Every "invoke ask-human" below means: print the
+     question, a minimal concrete example, numbered options, and the recommended option FIRST with
+     its reason, as ordinary prose — then STOP and wait. Protocol:
+     `.claude/skills/ask-human/SKILL.md`. This file's frontmatter carries
+     `disallowed-tools: AskUserQuestion`, which IS honoured: the running Claude Code reads that key
+     from SKILL.md frontmatter and removes the tool while this file is active. So the forbidden tool
+     is mechanically unavailable here, not merely discouraged — but the plain-text SHAPE of the
+     question is still discipline, and that part nothing enforces.
+  2. NO `advisor()` HERE. Independent certification = fresh-context read-only reviewer subagents
+     (project CLAUDE.md, DEC-268 MAXIMAL ladder), run as the three phorj lenses:
+     `backend-parity-reviewer` (correctness+regression), `safety-promises-reviewer`
+     (security+safety-promises), `completeness-reviewer` (completeness+blast-radius). All three are
+     REAL agent definitions in `.claude/agents/` as of 2026-08-06 — spawn them BY NAME via the Agent
+     tool, in ONE message so they run concurrently, rather than re-describing their charter inline,
+     so each lens's attack surface stays in one place. Self-grading is the LAST rung and must be
+     DISCLOSED as self-graded in the output.
+  3. REPORTS GO TO `var/claude/…` in the repo — gitignored (`/var`), survives compaction inside the
+     session, never committed. NOT `~/.claude/projects/…`: that is wiped when the container is
+     reclaimed, so a report written there is lost (Invariant 19 — only committed repo state survives).
+     Never `git add` a report regardless — being ignored is what keeps them out of history, not what
+     makes staging them harmless.
+  4. `--scope=global|both` IS REMOVED wherever it appears. `~/.claude/` in this container is
+     GENERATED from repo files by `scripts/claude-bootstrap/install.sh`, which since 2026-08-06
+     overwrites them UNCONDITIONALLY on every SessionStart — so auditing `~/.claude` audits a copy,
+     and a finding against it is fixed in `scripts/claude-bootstrap/` or not at all.
+  5. ≤5 CONCURRENT SUBAGENTS (10 caused ~50% rate-limit failures upstream), and every pipeline agent
+     writes its raw output to `var/claude/<stage>/raw/` BEFORE returning — in-conversation results do
+     not survive autocompact, only disk files do. `Explore` cannot Write: use `general-purpose` for
+     any agent that must persist a file.
+  6. EVERY REPLY ENDS WITH A MARKER LINE — `❓ QUESTION — …` or `⏹ NO QUESTION — …` as its literal
+     last line (project CLAUDE.md § "Reply convention"). This skill's output is a reply like any other.
+  7. PROJECT RULES WIN on any conflict: `/home/user/phorj/CLAUDE.md` — the invariants, the full
+     correctness gate, the git-autonomy override (`master` only, plain `git push`, no trailers),
+     Invariant 19's canonical plan/decision homes.
+═══════════════════════════════════════════════════════════════════════════════════════════════ -->
 
 ## --help
 
@@ -15,8 +59,8 @@ user-invocable: true
 > Flags:
 >   --quick                        Run agents A, F, H only (~3 min, debt markers/test gaps/error handling)
 >   --focus=<A|B|C|D|E|F|G|H|I|J> Run a single detection agent
->   --target=<path>                Analyze a specific directory (overrides --scope)
->   --scope=project|global|both    Set analysis scope (default: project = $CLAUDE_PROJECT_DIR)
+>   --target=<path>                Analyze a specific directory
+>   --scope=project|global|both is REMOVED here — see the adaptation header, delta 4.
 >   --priority=high                Report Now items only — skip Soon/Later
 > ```
 
@@ -28,21 +72,19 @@ Hunt for incomplete implementations, missing features, unfulfilled promises, and
 
 Differentiation from `/inspect`: `/inspect` finds *what's wrong with existing things*. `/gaps` finds *what's missing or unfinished* — features described but not implemented, code started but not completed, documentation that promises things the code doesn't deliver.
 
-Use `--quick` (agents A, F, H only — debt markers, test gaps, error handling; ~3 min), `--focus=<A|B|C|D|E|F|G|H|I|J>` (single agent), `--target=<path>` (analyze a specific directory; overrides `--scope`), `--scope=project|global|both` (project: `$CLAUDE_PROJECT_DIR` [default]; global: `~/.claude/`; both: run project then global, two separate reports), `--priority=high` (Now items only — skip Soon/Later).
+Use `--quick` (agents A, F, H only — debt markers, test gaps, error handling; ~3 min), `--focus=<A|B|C|D|E|F|G|H|I|J>` (single agent), `--target=<path>` (analyze a specific directory), `--priority=high` (Now items only — skip Soon/Later).
 
 ---
 
 ## Step 0: Setup
 
 ```bash
-# --scope flag (--target overrides --scope when both are provided — explicit path wins):
-#   --scope=project (default when no --target): TARGET=$CLAUDE_PROJECT_DIR
-#   --scope=global:                             TARGET=~/.claude/
-#   --scope=both:                               run entire skill twice — project first, then global
+# There is no --scope here (adaptation delta 4): ONE pass over $TARGET. `~/.claude/` in this
+# container is GENERATED from repo files by scripts/claude-bootstrap/install.sh, which overwrites it
+# unconditionally every SessionStart — so auditing it audits a copy, and a finding against it is
+# fixed in scripts/claude-bootstrap/ or not at all.
 TARGET="${target_arg:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 if [[ -z "${target_arg:-}" ]]; then
-  [[ "$ARGUMENTS" =~ --scope=global ]] && TARGET="$HOME/.claude/"
-  # --scope=both: run a second pass with TARGET=~/.claude/ after completing the project pass
 fi
 PROJECT_SLUG=$(echo "$TARGET" | sed 's|^/|-|; s|/|-|g')
 GAPS_DIR="$HOME/.claude/projects/$PROJECT_SLUG/gaps"
@@ -56,7 +98,9 @@ Announce: "Scanning gaps: `$TARGET` → saving to `$REPORT_PATH`"
 
 If a prior `/gaps` run exists: note its date. Agents will flag items that have been pending since the prior run as [STALE], helping prioritize chronic incompleteness over fresh debt.
 
-**`--scope=both` handling**: If `--scope=both` was passed and `--target` was NOT explicitly set, run the entire skill once for the project scope (`TARGET=$CLAUDE_PROJECT_DIR`), then automatically re-invoke the full skill a second time with `TARGET=~/.claude/` — two separate reports. Announce both paths at the end.
+**No `--scope` handling** (adaptation delta 4): a single pass over `$TARGET`. If a caller passes
+`--scope=global` or `--scope=both`, say plainly that the flag was removed for this repo and why, then
+run the project pass — matching the wording `forge`, `inspect` and `sleuth` already use.
 
 ## Step 1: Detect Project Context
 

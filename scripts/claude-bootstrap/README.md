@@ -10,11 +10,20 @@ per-session (Invariant 19: only committed state survives).
 | `CLAUDE-global.md` | The 8-phase workflow + core rules + mental models, with a phorj adaptation header. The body is the dev's bundle verbatim **except** the DEC-354 amendments listed in that header | Dev's machine bundle `claude-setup-global-20260722` |
 | `THINKING.md` | Thinking-frameworks library (loaded on demand, not at start) | Same bundle, verbatim |
 | `BLAST-RADIUS.md` | Pre-flight state checks for destructive/risky commands | Same bundle, verbatim |
-| `install.sh` | Idempotent `cp -u` into `~/.claude/` (never clobbers a newer user copy) | New |
+| `install.sh` | Unconditional `cp -f` into `~/.claude/` — **the repo is always the truth** (developer ruling 2026-08-06). Idempotent: the same bytes land every session. A file that predates the hook is snapshotted once to `<name>.pre-bootstrap.bak` and never touched again. | New |
+| `test-install.sh` | **Guard for the above — run it after any edit** (`bash scripts/claude-bootstrap/test-install.sh`). 18 assertions, no deps. Sabotage-verified: dropping the snapshot guard fails exactly 1, reverting to `cp -u` fails 2, dropping the final `mkdir`'s `\|\| true` fails 1. | New |
 | `hooks/precompact-handoff.sh` | **PreCompact hook** — writes a deterministic handoff to `var/claude/handoff/` just before context compaction | Bundle hook, substantially adapted (DEC-354) |
 | `hooks/log-helpers.sh` | `log_obs()` structured logging, never fatal (Rule 13) | Bundle, + `mkdir -p` for the log dir |
-| `hooks/test-precompact-handoff.sh` | 26-assertion test suite for the hook — run it after any change | New |
-| `apply-pending-settings.sh` | Applies a `settings.json.pending` that Claude is classifier-blocked from writing (see below) | New |
+| `hooks/test-precompact-handoff.sh` | 34-assertion test suite for the hook — run it after any change | New |
+| `apply-pending-settings.sh` | Applies a `settings.json.pending` when Claude cannot write `.claude/settings.json` directly (see below — as of 2026-08-06 it CAN, so this is a fallback, not the normal path) | New |
+
+Two more live in `.claude/hooks/` rather than here, because they are project hooks rather than bundle
+files:
+
+| File | What |
+|---|---|
+| `.claude/hooks/lint-on-write.sh` | **`PostToolUse(Edit\|Write)` advisory, warn-only, always exit 0.** `rustfmt --check` on `.rs`, `phg format --check` on `.phg`, and an **Invariant 13 size advisory** (soft 300 / hard 500, and grandfathered-must-not-GROW). Blocking is forbidden — see `CLAUDE.md` § "the `deny` list stays EMPTY" |
+| `.claude/hooks/test-lint-on-write.sh` | 18-assertion guard for it. Sabotage-verified; it pins "exit 0 even when a sub-tool errors", which a `set -e` sabotage slipped past until that assertion existed |
 
 Two companion scripts live one level up in `scripts/`, written **instead of** importing bundle skills
 whose machinery does not exist here (DEC-388):
@@ -28,7 +37,9 @@ Runs automatically via the `SessionStart` hook in `.claude/settings.json`.
 
 ## Skills — repo-native, no install
 
-The 13 skills live under `.claude/skills/` and Claude Code reads them in place.
+The skills live under `.claude/skills/` and Claude Code reads them in place. **`ls .claude/skills/` is
+the authoritative list — never restate a count in prose.** (This line said "The 13 skills" while a 14th
+was being added in the same change, which is exactly the drift the rule is for.)
 
 - **Ruled IN by DEC-354** (7 of the bundle's 48, each **adapted** — see each file's adaptation header):
   `/converge` (the DEC-268 ladder, mechanised — its defaults ARE the project tier), `/sweep`
@@ -44,11 +55,20 @@ The 13 skills live under `.claude/skills/` and Claude Code reads them in place.
 
 ### Agent definitions
 
-`.claude/agents/backend-parity-reviewer.md` — the correctness+regression lens of DEC-268's mandated
-3-lens panel, encoding the triple-spine attack surface (coverage-first, the `Op` triad, single-sourced
-kernels, reified operands, the CTy trap, scratch slots, sugar expansion, transpile-AND-lift currency,
-the PHP-8.5 floor). Before this there was no `.claude/agents/` at all and the panel was improvised
-from memory at every gate. The other two lenses stay undefined on purpose — they are generic.
+**All three lenses of DEC-268's mandated panel now EXIST** (DEC-450, 2026-08-06). Until then only the
+first did, so the mandated panel was *structurally impossible* and every 3C/6C gate fell through to the
+self-graded rung — disclosed each time as "advisor() unavailable", which was true but not the whole
+cause. Spawn all three in ONE message so they run concurrently on independent contexts.
+
+| Lens | Agent |
+|---|---|
+| correctness + regression | `.claude/agents/backend-parity-reviewer.md` — the triple-spine attack surface: coverage-first, the `Op` triad, single-sourced kernels, reified operands, the CTy trap, scratch slots, sugar expansion, transpile-AND-lift currency, the PHP-8.5 floor |
+| security + safety-promises | `.claude/agents/safety-promises-reviewer.md` — the `unsafe` island in `src/jit/`, Invariant-14 LADDER exclusions and their disclosures, determinism and the network boundary, EV-7 no-crash, the narrow security surfaces, and the honesty promises |
+| completeness + blast-radius | `.claude/agents/completeness-reviewer.md` — tests EXECUTED not merely written, Rule 6's four dimensions with the blast-radius grep re-run independently, Invariant 9 examples-ship-with-features, Invariant 17's 100% RULE, Invariant 19 SSOT consistency |
+
+All three carry **"do not invent a subject"** (the *host* of a claim must be real; an alleged absence
+obviously is not) and **"verify a NEGATIVE with a control"** (a probe that cannot fail is worse than no
+probe) — added 2026-08-06 from two documented false-green incidents in this repo.
 
 ### Questions are PLAIN TEXT — `AskUserQuestion` is forbidden here
 
@@ -74,24 +94,33 @@ Ruled OUT with reasons — the full 199-file audit is
 - **The 4 `ask-human`/gate Stop hooks** — they would double-gate against the container's own Stop
   hooks, and the guard they implement is for a tool that is now banned anyway.
 - **`statusline.sh`, `session-start-banner.sh`** — render `~/.claude/run/` sentinels absent here.
-- **The `deny` and `ask` permission tiers** — developer-ruled: in a remote container he has no
-  terminal, so a `deny` blocks *him* too. Machine-level protections stay in his personal global
-  settings, which this repo never touches.
+- **The `deny` and `ask` permission tiers** — developer-ruled, and **re-ruled permanently on
+  2026-08-06**: in a web/remote session he has no terminal, so a denied command is not a speed bump but
+  an unrecoverable dead end that strands the session. Canonical statement: `CLAUDE.md` § "Claude config
+  in this repo — the `deny` list stays EMPTY". Consequence: every `PostToolUse` hook here is warn-only,
+  because one that blocks a write is a `deny` by another name. Machine-level protections stay in his
+  personal global settings, which this repo never touches.
 - **`/recent`** — **obsolete**, not merely unwanted: the PreCompact hook already emits git state,
   uncommitted paths and recent commits automatically.
 - **`/skill-audit`** — its "10+ skills" precondition is now met (13), but it audits *skills*; the audit
   itself called that value circular.
-- **`/qa-sweep`** — **queued, CLI-mode-only, after Wave 0.** `phg` has 17 subcommands and no systematic
-  CLI QA; the browser half needs Playwright MCP, which is ruled OUT.
+- ~~**`/qa-sweep`**~~ — **BUILT 2026-08-06 (DEC-451 §6), and WRITTEN rather than imported.** pdfturbo's
+  version drives a browser over a PDF editor with axe-core and CSP workarounds; none of that has an
+  analogue here, so it was rebuilt around phorj's own surfaces: 10 journeys over the shipped binary, the
+  LSP over real stdio JSON-RPC, the package-manager lifecycle, transpile↔lift round-trip, the editors,
+  the playground, and the gate scripts. The browser half stays out (Playwright MCP is ruled OUT); the
+  playground journey uses screenshots per the Completion Gate's visual-evidence clause.
 - **`/mega-analysis` and a phorj-native `/full-review`** — deferred; `/aggregate-findings` already does
   the synthesis half, and fanning out 8 review skills is the most expensive thing available.
 - **The other 39 skills, 34 `bin/` files, 3 refs** — config-portability and memory-pipeline machinery.
 
 ## `settings.json` — the hand-over loop
 
-Claude Code's classifier blocks Claude from writing `.claude/settings.json` (it is Claude's own
-permission surface), and in a remote container the developer has no terminal. So a settings change
-travels through the repo:
+**Corrected 2026-08-06:** Claude *can* write `.claude/settings.json` in this container — the
+`PostToolUse` hook of DEC-451 §8 was added directly, no hand-over needed. The claim below that the
+classifier blocks it was true when written and is no longer; it is kept because the hand-over loop is
+still the correct fallback the moment a write IS refused, and in a remote container the developer has
+no terminal to run the command in. If a settings write is blocked, the change travels through the repo:
 
 1. Claude writes `scripts/claude-bootstrap/settings.json.pending` and commits it.
 2. The developer pulls, runs `bash scripts/claude-bootstrap/apply-pending-settings.sh`, reviews the
@@ -99,9 +128,10 @@ travels through the repo:
 3. Claude pulls to re-sync. The script **deletes the pending file** on success, so the repo never
    carries two copies of the settings.
 
-Current settings shape (DEC-354): `defaultMode: auto`, an **allow-list only** — no `deny`, no `ask` —
-and two hooks: `SessionStart` → `install.sh`, `PreCompact` (both `auto` and `manual` matchers) →
-`hooks/precompact-handoff.sh`.
+Current settings shape: `defaultMode: auto`, an **allow-list only** — no `deny`, no `ask`, and per the
+2026-08-06 ruling there never will be — and three hooks: `SessionStart` → `install.sh`, `PreCompact`
+(both `auto` and `manual` matchers) → `hooks/precompact-handoff.sh`, and `PostToolUse(Edit|Write)` →
+`.claude/hooks/lint-on-write.sh`.
 
 ## The PreCompact handoff
 
@@ -120,5 +150,7 @@ Contract: a PreCompact hook must never block compaction, so it **always exits 0*
 still logs a reason through `log_obs`. Verify with:
 
 ```bash
-bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 26 assertions
+bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 34 assertions
+bash scripts/claude-bootstrap/test-install.sh                    # 18 assertions
+bash .claude/hooks/test-lint-on-write.sh                         # 18 assertions
 ```

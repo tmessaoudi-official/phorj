@@ -3,6 +3,7 @@ name: forge
 spotlight: true
 description: Use when you want adversarial critique of architecture, design patterns, and structural decisions in a codebase. Demands justification for every structural choice using the Chesterton's Fence protocol. 9 parallel analysis agents, each with exclusive ownership rules, feed a synthesis agent that deduplicates and produces a clean action list. Never auto-applies anything.
 user-invocable: true
+disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
@@ -18,7 +19,20 @@ user-invocable: true
   3. REPORTS GO TO `var/claude/forge/` in the repo — gitignored, survives compaction, never
      committed. NOT `~/.claude/projects/…`, which is wiped when the container is reclaimed.
   4. `--scope=global|both` REMOVED (`~/.claude/` here is generated from repo files).
-  5. PROJECT RULES WIN: `/home/user/phorj/CLAUDE.md` — invariants, quality gate, git autonomy.
+  5. NO `advisor()` HERE. Independent certification = the three phorj lenses, which are REAL agent
+     definitions in `.claude/agents/` as of 2026-08-06: `backend-parity-reviewer`,
+     `safety-promises-reviewer`, `completeness-reviewer`. Spawn them BY NAME via the Agent tool, in
+     ONE message so they run concurrently, rather than re-describing their charter inline.
+     Self-grading is the LAST rung and must be DISCLOSED as self-graded.
+  6. ≤5 CONCURRENT SUBAGENTS (10 caused ~50% rate-limit failures upstream) — which is why `--quick`'s
+     three agents is the default tier and the full 9-agent run must be batched, not fired at once.
+     Every agent writes its raw output to `var/claude/forge/raw/` BEFORE returning: in-conversation
+     results do not survive autocompact, only disk files do. `Explore` cannot Write — use
+     `general-purpose` for any agent that must persist a file.
+  7. EVERY REPLY ENDS WITH A MARKER LINE — `❓ QUESTION — …` or `⏹ NO QUESTION — …` as its literal
+     last line (project CLAUDE.md § "Reply convention").
+  8. PROJECT RULES WIN: `/home/user/phorj/CLAUDE.md` — invariants, quality gate, git autonomy
+     (`master` only, plain `git push`, no trailers).
 
   WHY THIS SKILL EARNS ITS PLACE HERE. Its Chesterton's Fence protocol only escalates a structural
   choice when NO recorded rationale exists AND all four fields populate (named principle, concrete
