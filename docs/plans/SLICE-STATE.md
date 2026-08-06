@@ -34,7 +34,20 @@ attribute-argument hazard GUARDED, with the finding that task #67's "latent pani
 **#70** is therefore real and has **three siblings** under Invariant 17's 100% RULE. Its exit codes ARE
 conformant — recorded explicitly as *not* a defect so a later session does not "fix" it.
 
-**NEXT (queued):** **#71 `phg --help` omits the four package-manager verbs** — `add`/`install`/`update`/
+**NEXT — THE IN-FLIGHT RULED SLICE COMES FIRST.** **DEC-331 SLICE 3 (`S3.2`…`S3.5`)** is half-built:
+`S3.1` (`#[Entry(kind:)]` + checker + example migration) SHIPPED, and the slice's own ordering below
+(§"DEC-331 SLICE 3 FIRST") states each sub-slice must land green + byte-identical + SSOT-updated
+in-change. **`S3.2` is the next step**: `Http.ServeConfig` stdlib class + `#[Config]`-provider-by-TYPE
+resolution + the precedence chain (CLI flag > env > `#[Config]` > `phorj.json` static > attr default),
+building on shipped DEC-318. Then `S3.3` (`Http.serve(cfg, handler)`, retire `respond` — breaking #2),
+`S3.4` (role-mismatch UX), `S3.5` (inbound TLS via rustls).
+
+*(Correction, 2026-08-06: the first version of this cursor listed the loose backlog below as "NEXT" and
+omitted the S3 slice entirely — so a fresh context resuming from here would have abandoned a ruled,
+half-built slice to start a new front. That is the Invariant 19 failure this file exists to prevent,
+committed in the same change that added a reviewer lens for it.)*
+
+**Then the loose backlog:** **#71 `phg --help` omits the four package-manager verbs** — `add`/`install`/`update`/
 `remove` work but are invisible in the top-level help (Invariant 17; first recorded 2026-07-25 as H6 in
 `docs/research/2026-07-25-global-review/H-docs-consistency.md`, re-found 2026-08-06, also in
 `KNOWN_ISSUES.md`) · #70 LSP signature help (+ the three newly-confirmed capability gaps:
