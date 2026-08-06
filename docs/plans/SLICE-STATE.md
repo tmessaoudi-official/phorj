@@ -84,6 +84,20 @@ parity story; it needs a ruling before Part C is built.
 (DEC-439 follow-on) · #64 track A/B perf, which still needs the developer's rulings on NaN-boxing vs
 register bytecode, arming the three RECOVERED ratchet rows, and `CallValue` signature recording.
 
+**⚠ OPEN — a 14-question adjudication batch is WAITING on the developer (2026-08-06).** Plan:
+`docs/plans/product-driven-gap-programme.plan.md` (Round 1 — verification + vision gating + the batch).
+Two external requirement documents (`rent-watch` and `twes-in`, both `docs/PHORJ-REQUIREMENTS.md`) were
+read and **every claim re-verified: six did not survive**, four of them things we already ship — and one
+of those six was caused by OUR stale doc (`examples/README.md:238` still says `using`/`Closable` is
+deferred, which DEC-364 closed on 2026-07-31). Our doc rot is now externally visible. The plan
+classifies each gap as Tier A (already-ruled roadmap work, now with a consumer: XML+C14N per DEC-382,
+`Core.Intl` per DEC-271, `sleep`, migrations), Tier B (holes in SHIPPED features — a live duplicate-header
+bug in the HTTP client, Postgres `sslmode` silently serving plaintext, `NUMERIC` binding, the savepoint
+observability seam, the stale docs) or a QUESTION. **Nothing was declined by Claude** — per the
+developer's no-silent-drop directive the plan's Tier C carries no verdicts, only evidence plus the
+question number that decides it. **No implementation may start until §4 is ruled**; Round 2 then writes
+one `docs/specs/*.md` per admitted item and mirrors the SSOT quartet in the same change.
+
 ---
 
 ## ⏳ (history) CURSOR as of 2026-08-05 — **LIFT-ATTR SHIPPED; the lift chain now reaches attributes**
