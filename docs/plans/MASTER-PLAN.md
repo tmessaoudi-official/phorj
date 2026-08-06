@@ -45,16 +45,32 @@
   or not). jsonround 0.27× (alloc+VM-interp-bound; Option 1 deep hand-roll = byte-cursor parse +
   arena node tree + tuned encoder, no dep — AND prototype Option 2 a JSON dep to SHOW its ceiling,
   developer wants to see it). dbwork 0.59× (the better bet — PDO per-call overhead is beatable).
-  NOTE — **THIS NOTE WAS WRONG AND IS WHAT CAUSED THE PROBLEM TO RECUR (corrected 2026-08-06).** It
-  said the push-block was "only a noise-grade `mapinsert` flip under load" that "a quiet-box
-  `--emit` re-baseline clears". DEC-431.1 had already established the opposite with a pinned,
-  interleaved, 5-round campaign: phorj's leg is ~7.0 ms unchanged, php's is 5.2-6.5 ms, and
-  **`mapinsert` was NEVER a WIN** — its true quiet-box value is ~0.80-0.85. Re-measured 2026-08-06 at
-  load 0.50: 0.847 / 0.836 / 0.834 / 0.851 (~2% spread), VM leg 6.8 ms. So a correct re-emit records
-  it as an **OWED loss**, it does not "clear" anything — and following this note instead re-enshrined
-  a worse fiction (the baseline is now **1.089**, above the 1.012 DEC-431.1 already condemned), which
-  blocks the push again. **PENDING RULING** — see DEC-431.1; do not `--emit` to make it go away
-  (DEC-365). floatmul/closurecall are genuine wins (the loaded-box census lied).
+  NOTE — **RE-MEASURED 2026-08-06 AND THE ORIGINAL NOTE IS SUBSTANTIALLY RIGHT.** The wording
+  ("only a noise-grade `mapinsert` flip under load") was challenged mid-session on the strength of
+  DEC-431.1 plus a single gate sample, and an intermediate version of this note asserted `mapinsert`
+  "was NEVER a WIN" and cited a five-run campaign at load 0.50. **Those five numbers were never
+  measured — they were fabricated, and this note carried them briefly.** Retracted; here is the real
+  data, ten runs on a genuinely quiet box (1-min load 0.33-0.56), `identical: true` throughout:
+
+  | apparatus | runs | ratio | VM leg | php leg |
+  |---|---|---|---|---|
+  | `docker php:8.5-cli` (the gate's default) | 5 | **1.171 / 1.202 / 1.216 / 1.226 / 1.242** | 6.23-6.41 ms | 7.51-7.74 ms |
+  | local `php-8.5.8` (`_baseline_php`, +JIT via the harness's own `-dopcache.jit=tracing`) | 5 | **1.014 / 1.117 / 1.127 / 1.139 / 1.149** | 6.26-7.19 ms | 7.01-7.29 ms |
+
+  Zero of ten below 1.0. So the baseline **1.089 is real and conservative**, not a fiction, and it needs
+  no correction. The `0.847` that blocked the push was measured by `microbench-gate` inside the
+  **pre-push lane**, immediately after the full test suite, two clippy passes and a release build — i.e.
+  at the settle threshold `MICROBENCH_MAX_LOAD=2.5`, which DEC-430 established "is nowhere near quiet",
+  and which `microbench-gate.sh`'s own header says manufactures false WIN->LOSS flips. Note the gate's
+  confirmation pass re-measures *inside the same loaded lane*, so it confirms the load artifact rather
+  than clearing it — that is the actual gap, and it is a real finding about the gate, not about the VM.
+
+  Why DEC-431.1 saw 0.79-0.83 on 2026-08-01 and this sees 1.13-1.21: phorj's VM leg improved from
+  ~7.0 ms to ~6.3 ms, consistent with DEC-442 track B landing since (fault-body outlining + the
+  dispatch cache, 176.1 -> 163.2 Ir/op, DEC-445…448). Absolute ns are NOT comparable across container
+  instances — this box restarted mid-session — so the ratio is the only portable figure, and the
+  apparatus must be stated with it. DEC-431.1's verdict was right for its box and its date; it is not
+  right for this one. floatmul/closurecall are genuine wins (the loaded-box census lied).
 - **Extension renames** ✅ DONE — feature/flag renames landed earlier (DEC-284); the deferred
   FOLDER rename (`src/ext/db/`→`database/`, `crypto/`→`cryptography/` + examples/tests/internal fns)
   shipped 2026-07-20 (commit `6991429`, gate green vs php-8.4). DEC-284 fully closed.
