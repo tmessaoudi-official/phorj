@@ -7669,3 +7669,66 @@ on `closurecall`. Not a regression from this change.
 
 **Gate:** 2844 tests (+1), both differential legs, clippy `--all-features` and `--no-default-features`,
 fmt, size-gate, doc-guards, release build, microbench-gate PASS.
+
+### DEC-447 (2026-08-05) — track B increment 2 BUILT, MEASURED AT ZERO, REVERTED. The 24.6% was never call overhead
+
+DEC-442 recorded increment 2 as: *"`pop2_int` (6.6%), `push_i` (3.7%) and `pop` (2.3%) are still out-of-line
+even with `#[inline(always)]`, and their signatures say why — `Result<_, String>` on every arithmetic op …
+Increment 2 is to shrink the VM error type … it is what unlocks the remaining ~12%."*
+
+**Built it. The premise is REFUTED.**
+
+The fault consts in `src/value/arith.rs` are ALREADY `&'static str` (`FAULT_INT_OVERFLOW` et al.) — the
+kernels merely `.to_string()` them, so the error type was the only obstacle and the messages were never at
+risk. Converted all 12 kernels (11 in `arith.rs` + `int_pow` in `decimal.rs`) to
+`Result<_, &'static str>` — **16 bytes with NO drop glue against 24 with** — plus `push_i`/`push_f`, and the
+five call sites that fell out (`interpreter/kernels.rs`, `jit/boxed.rs`'s kernel fn-pointer table and three
+fault sites, two `native/math.rs` natives). `?` auto-converts `&'static str` → `String` via `From`, so
+callers returning `Result<_, String>` needed no change at all.
+
+**Measured: 167.6 → 167.8 Ir/op. +0.1%. Nothing.**
+
+**And the profile says exactly why, which is the finding worth keeping.** The inlining DID happen —
+`pop2_int` and `push_i` vanished from the profile entirely. But:
+
+| | after increment 1 | after increment 2 |
+|---|---|---|
+| `exec_op` | 41.60% | **44.73%** |
+| `run_to_completion` | 25.11% | 25.50% |
+| `Vec::push_mut` | 9.47% | **12.36%** |
+| `pop_int` | *(inlined, absent)* | **6.02% — back out-of-line** |
+| `pop2_int`, `push_i` | 6.6% / 3.7% | *(inlined, absent)* |
+
+**The work RELOCATED. It did not disappear.** Inlining moved instructions into `exec_op` (which grew by the
+same 3pp) and pushed a different helper out; the total is identical because the instructions are the actual
+WORK, not call overhead.
+
+**So DEC-441's "24.6% is stack traffic as OUT-OF-LINE CALLS" was a mis-reading of its own profile.** Those
+symbols were not overhead recoverable by inlining — they are the cost of the stack discipline itself:
+bounds-checked `Vec<Value>` indexing, 32-byte `Value` moves, and the `Rc`-arm drop glue / clone that a
+32-byte enum drags through every push and pop. **`#[inline]` cannot remove work; it can only move it.**
+
+**REVERTED** per Invariant 11 and the precedent DEC-429 set on exactly this shape ("built, fully tested,
+measured at zero, and REVERTED"). Revert verified clean: 167.6 Ir/op, delta −0.00% against the committed
+increment 1; 2844 tests green. Nothing kept, so there is no dead code to explain later.
+
+### What this leaves, and it is the cross-language survey's structural half
+
+Increment 3 was going to be the `run_to_completion` scaffolding (25.5%) — still the largest single
+identified item, still un-attacked, and still genuinely per-op redundant work (the frame table re-indexed
+three times, the function table re-walked, `code.len()` re-checked, all per instruction). That one is real
+and remains the next candidate.
+
+But increments 2's failure reframes the rest: with `exec_op` at 44.7% and the Value-representation costs
+(`push_mut` 12.4% + `drop_glue` 4.7% + `clone` 3.9% = **21%**) being work rather than overhead, the
+remaining levers are the ones DEC-441's survey listed as STRUCTURAL and phorj has none of:
+
+* **NaN-boxing / pointer tagging** — an 8-byte `Value` deletes most of that 21% outright (no drop glue for a
+  tagged scalar, no 32-byte move per push).
+* **register-based bytecode** — deletes the push/pop traffic rather than inlining it.
+* **operand-specialized handlers / superinstructions** — fewer dispatches, php's own technique.
+
+Each is a design change to the value representation or the bytecode, i.e. adjudicable rather than
+self-rulable. **This is now the third cheap-looking VM/JIT fix refuted by measurement in this slice**
+(release-profile LTO, DEC-441; my own recommended static type seeding, DEC-444; the error type, here) — and
+the third time the cost was minutes because the thing was built and measured instead of costed from outside.

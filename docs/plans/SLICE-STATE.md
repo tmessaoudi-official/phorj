@@ -246,7 +246,23 @@ survivors — `userhof` 14.8×, 0 blocking regressions. `methodcall` 2.918→2.3
 that bench passes zero function values, so the changed path is unreachable for it; the delta is
 cross-php-source baseline drift.
 
-**Track B increment 2, the next blocker — measured, not guessed:** `pop2_int` (6.6%), `push_i` (3.7%) and
+**Track B increment 2 BUILT, MEASURED AT ZERO, REVERTED (DEC-447).** The recorded premise below was
+WRONG. The kernels' fault consts are already `&'static str`, so converting all 12 to
+`Result<_, &'static str>` (16 bytes, no drop glue, vs 24) was clean and message-safe — and it moved
+167.6 → **167.8** Ir/op, **+0.1%, nothing**. The profile says why: `pop2_int`/`push_i` DID inline and vanish,
+but `exec_op` grew 41.6→44.7%, `push_mut` 9.5→12.4%, and `pop_int` came back out-of-line. **The work
+RELOCATED; it did not disappear.** So DEC-441's "24.6% is stack traffic as out-of-line calls" mis-read its
+own profile: those symbols are the cost of the stack DISCIPLINE (bounds-checked `Vec<Value>`, 32-byte
+`Value` moves, `Rc`-arm drop glue), not call overhead. `#[inline]` cannot remove work, only move it.
+Reverted per Invariant 11 / DEC-429's precedent; revert verified at 167.6, delta −0.00%, 2844 tests green.
+**Still real: increment 3**, the `run_to_completion` scaffolding (25.5% — genuinely redundant per-op work:
+frame table re-indexed 3×, function table re-walked, `code.len()` re-checked, every instruction).
+**Everything beyond it is structural and adjudicable** — NaN-boxing (an 8-byte `Value` deletes most of the
+21% that is `push_mut`+`drop_glue`+`clone`), register-based bytecode, operand-specialized handlers. Third
+cheap fix refuted by measurement in this slice (LTO, static type seeding, the error type) — each costing
+minutes because it was built and measured rather than costed from outside.
+
+**SUPERSEDED — increment 2's original premise:** `pop2_int` (6.6%), `push_i` (3.7%) and
 `pop` (2.3%) are STILL out-of-line even with `#[inline(always)]`, and their signatures say why —
 **`Result<_, String>` on every arithmetic op**, whose 24-byte `String` error slot makes every `Result` large
 and drags drop glue through every helper. Increment 2 is to shrink the VM error type to a `&'static str` /
