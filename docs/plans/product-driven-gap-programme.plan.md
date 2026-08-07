@@ -51,11 +51,11 @@
   quiet box"* and calls the emitted WIN a *"fiction"*; (3) **seven fresh readings taken 2026-08-07 on a
   BYTE-IDENTICAL binary** — 0.877 / 0.829 / 0.831 / 0.848 / 0.841 at loads 0.46→2.31 and at both K=3 and
   **K=9** (raising K refutes the sampling-artifact hypothesis, since it tightens the VM-side bound and the
-  value did not move). Twelve readings across two dates now cluster at **0.79–0.88**; only `4dcb76d`'s
+  value did not move). Twelve readings across two dates now cluster at **0.79–0.88**; only `4dcb76d` (`mapinsert re-measured`, itself wrong)'s
   campaign says otherwise, and that is the same commit in which four numbers were fabricated. **The
   honest position: `mapinsert` is a real LOSS at ~0.84 and the 1.089 baseline is the artifact.** Checked and
   cleared: `4dcb76d` did **not** re-emit `bench/micro-baseline.json` (last touched by `6d71227`), so no
-  laundering occurred. MASTER-PLAN carries `4dcb76d`'s claim and needs the same retraction — held for a
+  laundering occurred. MASTER-PLAN carries `4dcb76d` (`mapinsert re-measured`) and its claim and needs the same retraction — held for a
   ruling rather than edited unilaterally, because DEC-431.1's status is *push held*.
 
 ---
@@ -602,7 +602,7 @@ floor for everything else. To beat php's 5.8 ms the scan has to *go away*, not g
 Developer ruled Q-A option ①. Executed as a **quiet-box re-emit** (load 0.11, inside the stricter
 `MICROBENCH_EMIT_MAX_LOAD=0.7` bar; `MICROBENCH_RUNS=7`), which is the *only* sanctioned route —
 `_owed` is DERIVED at `--emit`, never hand-maintained, and the file says a feature *"leaves this list by
-being FIXED and re-emitted, never by being edited out."* Direct precedent: `6d71227` (DEC-434.1,
+being FIXED and re-emitted, never by being edited out."* Direct precedent: `6d71227` (`floatloop never won — the ratchet armed a lucky draw; quiet-box re-emit`) (DEC-434.1,
 *"floatloop never won — the ratchet armed a lucky draw; quiet-box re-emit"*), the same class of fix.
 
 **Result: `mapinsert` 1.089 (fictional WIN) → 0.851 OWED**, matching all thirteen independent readings
@@ -628,7 +628,7 @@ pathology that produced this session's blocker**: `mapinsert` was armed at 1.089
 docs-only push for hours. Arming a row whose true value is 1.00 ± 0.05 guarantees a future false block.
 
 Worse, **ten rows moved >15% with no code change between two baselines both emitted on a "quiet" box** —
-so the emit is not reproducible to better than roughly ±20%, and the previous baseline (`6d71227`) was
+so the emit is not reproducible to better than roughly ±20%, and the previous baseline (`6d71227`, `floatloop never won … quiet-box re-emit`) was
 itself labelled a quiet-box emit. The new baseline is therefore *more honest* about `mapinsert`/`mapget`
 but is **not authoritative to better than ~±20%** on any row, and this file should not be read as claiming
 otherwise.
@@ -641,7 +641,7 @@ false block that has now cost two sessions.
 
 ### 4b. ⚠ ROUND 5 RETRACTS §4 BELOW — the fix I proposed ALREADY EXISTS, and my root cause was wrong
 
-**Read this before §4.** §4 (written minutes earlier, commit `54c5efb`) concluded the cost was the O(n)
+**Read this before §4.** §4 (written minutes earlier, commit `54c5efb` (`round 4 — mapinsert root-caused to the O(n) map scan`) concluded the cost was the O(n)
 association-list scan in `map_set` and proposed adding a hash index to `Value::Map` — 100 sites, 30+ files.
 **Both halves are wrong, and I would have done a large invasive change for zero gain.**
 
