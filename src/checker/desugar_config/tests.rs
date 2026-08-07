@@ -199,6 +199,30 @@ fn a_generic_config_type_still_resolves() {
     ));
 }
 
+/// Pins the CURRENT (and disliked) behaviour recorded as DEC-455.6, PENDING a developer ruling: a
+/// multi-parameter entry whose parameter types have no providers is still a config candidate, so it
+/// reports `E-CONFIG-MISSING` per parameter rather than the `E-ENTRY-SIG` that names the valid `Cli`
+/// shapes. Before Part B this program said `E-ENTRY-SIG` + `E-MAIN-SIGNATURE`.
+///
+/// This test exists so the trade-off is VISIBLE and any change to it is deliberate — it is not an
+/// endorsement. If DEC-455.6 rules for option (a) or (b), this test changes with it.
+#[test]
+fn a_multi_param_entry_of_non_provider_types_reports_config_missing() {
+    let src = format!(
+        "{BASE}#[Entry(kind: EntryKind.Cli)] function main(int argc, string argv): void {{ }}\n"
+    );
+    let ds = run_diags(&src);
+    assert_eq!(
+        ds.iter().map(|(c, ..)| c.as_str()).collect::<Vec<_>>(),
+        vec!["E-CONFIG-MISSING", "E-CONFIG-MISSING"],
+        "DEC-455.6: current behaviour is per-parameter E-CONFIG-MISSING, not E-ENTRY-SIG: {ds:?}"
+    );
+    assert!(
+        ds[0].3.contains("`int`") && ds[1].3.contains("`string`"),
+        "each primitive parameter type is named: {ds:?}"
+    );
+}
+
 #[test]
 fn missing_provider_is_e_config_missing() {
     let src = format!(

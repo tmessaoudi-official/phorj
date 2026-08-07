@@ -61,6 +61,19 @@ fn front_end_diagnostics_agrees_with_check() {
             true,
         ),
     ];
+    // The CODES the LSP path reports, in order — a bool cannot see multiplicity, and multiplicity is
+    // exactly what this feature produces (one `E-CONFIG-MISSING` per unresolved parameter). The
+    // DEC-268 completeness lens proved the boolean-only form was too weak by mutating
+    // `front_end_diagnostics` to `.take(1)` — dropping every diagnostic but the first — and watching
+    // this test still pass. It no longer does.
+    fn fe_codes(prog: &Program) -> Vec<String> {
+        front_end_diagnostics(prog)
+            .iter()
+            .filter(|d| d.code.is_none_or(|c| !c.starts_with("W-")))
+            .map(|d| d.code.unwrap_or_default().to_string())
+            .collect()
+    }
+
     for (src, expect_error) in cases {
         let prog = lex_parse(src).expect("parse");
         let fe = has_error(&prog);
@@ -71,4 +84,16 @@ fn front_end_diagnostics_agrees_with_check() {
         );
         assert_eq!(fe, *expect_error, "wrong error-verdict for `{src}`");
     }
+
+    // MULTIPLICITY gate: two unresolved config parameters must surface as TWO diagnostics on the LSP
+    // path, not one. This is the DEC-252 property the boolean loop above structurally cannot check.
+    let multi = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+                 import Core.Runtime.Config; class A { } class B { } \
+                 #[Entry(kind: EntryKind.Cli)] function main(A a, B b) -> void { }";
+    let prog = lex_parse(multi).expect("parse");
+    assert_eq!(
+        fe_codes(&prog),
+        vec!["E-CONFIG-MISSING", "E-CONFIG-MISSING"],
+        "the LSP path must report one diagnostic PER unresolved config parameter"
+    );
 }

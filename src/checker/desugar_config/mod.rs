@@ -23,7 +23,14 @@
 //! and `(Request) -> Response` (web) all have `entry_role(f) != None` and pass through unchanged. Only
 //! an entry with `entry_role == None`, ONE OR MORE named-type parameters (generic ones included —
 //! they key on the bare head; see `config_entry_params`), and a CLI return
-//! (`void`/`int`/none) is a config-entry candidate; anything else keeps its ordinary `E-ENTRY-SIG`.
+//! (`void`/`int`/none) is a config-entry candidate; a signature that is not that shape at all (e.g. a
+//! non-CLI return) keeps its ordinary `E-ENTRY-SIG`.
+//!
+//! ⚠ NOT a filter on the parameter TYPES: since Part B any multi-parameter CLI-return entry is a
+//! candidate, so `main(int argc, string argv)` — a plain signature mistake — now reports
+//! `E-CONFIG-MISSING` per parameter instead of the `E-ENTRY-SIG` that names the valid shapes. That
+//! diagnostic-quality regression is real, is NOT self-rulable (every obvious fix deletes something
+//! that works), and is recorded as **DEC-455.6, PENDING a developer ruling**.
 //!
 //! Provider rules (each `E-CONFIG-SIG` unless noted): zero parameters; a concrete named return type
 //! (not `void`); top-level function only (`E-CONFIG-TARGET` on a method); at most one provider per
@@ -219,7 +226,9 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
 ///
 /// **S3.2 Part B widened this from exactly-one to N** — a multi-parameter config entry was rejected
 /// outright before. ALL-OR-NOTHING: every parameter must be a named type, or the function is not a
-/// config-entry candidate at all and keeps its ordinary `E-ENTRY-SIG`.
+/// config-entry candidate at all and keeps its ordinary `E-ENTRY-SIG`. NOTE this is about the SHAPE
+/// (arity ≥ 1, named types, CLI return), not about whether the types are plausible config types — see
+/// DEC-455.6 for the diagnostic-quality cost of that, pending a ruling.
 ///
 /// A GENERIC parameter type is ACCEPTED, deliberately — and two drafts of this comment got that wrong
 /// in opposite directions, so the history is recorded rather than quietly settled.

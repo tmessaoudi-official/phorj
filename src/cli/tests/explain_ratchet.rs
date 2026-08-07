@@ -98,3 +98,45 @@ fn every_emitted_diagnostic_code_has_an_explanation() {
          (add an arm to `explain_text`): {undocumented:?}"
     );
 }
+
+/// CONTENT coverage for the `#[Config]` codes, not just presence.
+///
+/// `explain_ratchet` above asserts only `explain_text(code).is_some()`, so a `phg explain` entry can
+/// go stale without any test noticing — which is exactly what happened: after DEC-331 S3.2 Part B
+/// widened injection from one parameter to N, both entries still described a one-parameter world, and
+/// the DEC-268 completeness lens caught it in round 1. The round-1 fix had zero coverage of its own,
+/// so the same staleness could return silently; this pins the load-bearing claims.
+///
+/// Deliberately asserts SUBSTRING presence rather than exact prose, so wording may be improved freely
+/// while the facts a reader depends on stay pinned.
+#[test]
+fn config_explain_text_describes_the_multi_parameter_world() {
+    let missing = super::super::explain::explain_text("E-CONFIG-MISSING")
+        .expect("E-CONFIG-MISSING must have an explain entry");
+    assert!(
+        missing.contains("ONCE PER"),
+        "E-CONFIG-MISSING must say it is reported once per unresolved parameter — a reader seeing it \
+         twice needs to know that means TWO unprovided types, not one reported twice. Got:\n{missing}"
+    );
+    assert!(
+        missing.contains("SEVERAL config parameters"),
+        "E-CONFIG-MISSING must state that an entry may take several config parameters. Got:\n{missing}"
+    );
+
+    let sig = super::super::explain::explain_text("E-CONFIG-SIG")
+        .expect("E-CONFIG-SIG must have an explain entry");
+    assert!(
+        sig.contains("SEVERAL such parameters") && sig.contains("DECLARATION order"),
+        "E-CONFIG-SIG must describe multi-parameter injection AND that providers run in declaration \
+         order — the order is user-visible (providers may print). Got:\n{sig}"
+    );
+
+    // No entry may re-introduce the colon-parameter syntax the language does not have (Invariant 12).
+    for (code, text) in [("E-CONFIG-MISSING", missing), ("E-CONFIG-SIG", sig)] {
+        assert!(
+            !text.contains("main(config:"),
+            "{code} uses `main(config: T)` — phorj parameters are `Type name`, so that illustration \
+             does not parse"
+        );
+    }
+}
