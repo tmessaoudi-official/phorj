@@ -84,7 +84,7 @@ parity story; it needs a ruling before Part C is built.
 (DEC-439 follow-on) · #64 track A/B perf, which still needs the developer's rulings on NaN-boxing vs
 register bytecode, arming the three RECOVERED ratchet rows, and `CallValue` signature recording.
 
-**⚠ OPEN — a 14-question adjudication batch is WAITING on the developer (2026-08-06).** Plan:
+**⚠ OPEN — a 23-question adjudication batch is WAITING on the developer (2026-08-06/07).** Plan:
 `docs/plans/product-driven-gap-programme.plan.md` (Round 1 — verification + vision gating + the batch).
 Two external requirement documents (`rent-watch` and `twes-in`, both `docs/PHORJ-REQUIREMENTS.md`) were
 read and **every claim re-verified: six did not survive**, four of them things we already ship — and one
@@ -95,8 +95,23 @@ classifies each gap as Tier A (already-ruled roadmap work, now with a consumer: 
 bug in the HTTP client, Postgres `sslmode` silently serving plaintext, `NUMERIC` binding, the savepoint
 observability seam, the stale docs) or a QUESTION. **Nothing was declined by Claude** — per the
 developer's no-silent-drop directive the plan's Tier C carries no verdicts, only evidence plus the
-question number that decides it. **No implementation may start until §4 is ruled**; Round 2 then writes
-one `docs/specs/*.md` per admitted item and mirrors the SSOT quartet in the same change.
+question number that decides it. **No implementation may start until §4 is ruled**; the next round then
+writes one `docs/specs/*.md` per admitted item and mirrors the SSOT quartet in the same change.
+
+**THE PARITY DOCTRINE (developer, 2026-08-07): *"all php does phorj must do and we must do it better"*.**
+This **replaces the plan's §3 gating rule** — an item earns its place by PHP having the capability, not by
+closing MASTER-PLAN §0.3 residual. §4c re-derives the gap list from PHP 8.5.8's own surface [Verified:
+`php -m` + `get_defined_functions()` — **975 internal functions, 217 classes**] and finds five gaps larger
+than anything either product raised: **dates-with-timezones** (`Core.Time` is UTC-only *by design*,
+`src/cli/preludes.rs:295`, against PHP's full IANA tz + DST), **crypto beyond password hashing**
+(`Core.Cryptography` is argon2 only, against bundled `openssl`+`sodium`), **charset transcoding**
+(`Core.Encoding` is base64/hex only, against `iconv`+`mbstring`), **compression** (nothing — and `flate2`
+is NOT in `Cargo.toml` despite DEC-407 admitting it), and **process spawn** (`Core.Process` is argv+env
+only). Also: PHP 8.5 added **`lexbor`** and **`uri`**, landing in two gaps of ours. Two questions gate the
+rest and are the developer's alone — **Q16** (timezones collide head-on with Invariant 10; the proposed
+resolution is tz-as-pinned-DATA, which is deterministic *and* better than PHP's host-tzdata dependence)
+and **Q23** (read literally the doctrine reverses DEC-409 `ini_set`, DEC-410 enum-extends, gradual typing,
+`eval`, `&` references and DEC-273 self-hosting — so its BOUNDARY must be pinned, never guessed).
 
 ---
 

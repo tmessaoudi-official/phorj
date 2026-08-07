@@ -1,12 +1,16 @@
 # Product-driven gap programme — rent-watch + twes-in
 
-> **Rounds 1–2 of N: VERIFICATION + VISION GATING + THE ADJUDICATION BATCH.** Round 2 (§4b) probed the
+> **Rounds 1–3 of N: VERIFICATION + VISION GATING + THE ADJUDICATION BATCH.** Round 2 (§4b) probed the
 > real PHP 8.5.8 gate oracle and the decision register; it **flipped two recommendations, refuted two of
-> my own claims, and added one sub-question.** Read §4b before §4's Q1/Q2/Q4/Q7/Q14 — it supersedes
-> their Round-1 leans. No implementation, and no
+> my own claims, and added one sub-question.** Round 3 (§4c) applies the developer's 2026-08-07 doctrine
+> — *"all php does phorj must do and we must do it better"* — which **replaces the gating rule in §3**:
+> the gap list is re-derived from PHP's own 975-function capability surface rather than from what two
+> products asked for, and it turns up items **larger than anything in either requirement document**
+> (dates-with-timezones, crypto beyond password hashing, charset transcoding, compression, process spawn).
+> Read §4c before §3 — it supersedes §3's gating frame. No implementation, and no
 > per-item spec yet — deliberately. Under Invariant 15 the dependency admissions and the surface
 > shapes below are the developer's to rule, and a spec written against an unruled admission is a spec
-> written twice. Round 2 writes `docs/specs/*.md` for whatever survives the ruling.
+> written twice. The NEXT round writes `docs/specs/*.md` for whatever survives the ruling.
 >
 > Source: two requirement documents produced independently by other CLIs against phorj at
 > `1.0.0-nightly.0` / `b9e74cd` —
@@ -30,6 +34,13 @@
   scope, which is the forbidden move under Invariant 15 and under this directive both. **Every item
   either enters the build queue or becomes a numbered question. Nothing is closed by recommendation.**
   Tier C is now a question list, and §5's "not in the sequence" list is now "pending a ruling".
+- [2026-08-07] AGREED — **THE PARITY DOCTRINE** (developer, verbatim: *"all php does phorj must do and we
+  must do it better"*). This **replaces §3's gating rule**: an item no longer earns its place by closing
+  MASTER-PLAN §0.3 residual, it earns it by PHP having the capability. §4c re-derives the gap list from
+  PHP 8.5.8's own 975-function surface, which turns up five items larger than anything either product
+  raised. Two consequences are the developer's to rule before anything is built: the doctrine collides
+  head-on with Invariant 10 on timezones (Q16), and read literally it reverses a dozen ruled language
+  rejections (Q23) — so its BOUNDARY must be pinned, not guessed.
 
 ---
 
@@ -155,10 +166,13 @@ option 1, where it can be overruled in one word.
 engineering. Ruling these one at a time serialises the programme behind fourteen separate
 conversations; ruling them as a batch is the single biggest schedule compressor available.
 
-Each question states its own after-state. **All fourteen are PENDING — nothing here is ruled, and
+Each question states its own after-state. **All twenty-three are PENDING — nothing here is ruled, and
 nothing outside this list was closed by me.** Q1–Q7 are the load-bearing policy calls (a dependency
 domain or a user-visible semantic hangs on each). Q8–Q14 are the smaller ones that an earlier draft
 would have quietly declined; they are cheap to answer — often one word — and each names my lean first.
+**Q16–Q23 come from Round 3's doctrine** and are the heaviest of the three groups: two of them (Q16
+timezones, Q23 the doctrine's boundary) collide with already-ratified invariants and rulings, so they
+gate the others.
 
 **Q1 — XML crate admission: confirm DEC-382's slot, and confirm C14N is in v1 scope.**
 DEC-382 already ruled "admit a `quick-xml`-class crate as the 15th dependency" (and DEC-407 then took
@@ -267,6 +281,77 @@ so it needs a CHANGELOG line and probably an example.
 *After (re-rule to `Exact`):* the spec is corrected instead, and the divergence closes the other way —
 also valid, and cheaper.
 
+### Q16–Q23 — raised by the doctrine, not by either product (Round 3)
+
+**Q16 — TIMEZONES: how does the doctrine resolve against Invariant 10?** THE question of this round.
+`Core.Time` is UTC-only and the source says why: *"timezones are non-deterministic and would break the
+byte-identity spine"* (`src/cli/preludes.rs:295`). PHP has full IANA tz + DST.
+*After (tz as pure DATA, recommended):* admit the IANA database as a **versioned, pinned data table**
+rather than a system-clock read — `Instant.at(Zone.of("Europe/Paris"))` is then a pure function of
+(instant, pinned-tzdata), so it is deterministic, byte-identical, and *better than PHP*, whose result
+depends on whatever tzdata the host happens to have. Invariant 10 survives intact because nothing
+non-deterministic is read; what was excluded was the *ambient* timezone, which stays excluded.
+*After (stay UTC-only):* Invariant 10 untouched, and phorj cannot render a local time — which no
+business application can accept, so this option is honest only if paired with telling users to convert
+at the edges.
+*After (ambient tz like PHP):* parity, and Invariant 1 breaks — the same program prints differently on
+two machines.
+
+**Q17 — CRYPTO: how far past `hashPassword` do we go?** Today `Core.Cryptography` is argon2 only; PHP
+ships `openssl` + `sodium`. This is the policy's **first admitted domain** (*"never roll your own"*), so
+the crate side is uncontroversial — the *scope* is yours.
+*After (AEAD + Ed25519 + HKDF, recommended):* authenticated symmetric encryption (misuse-resistant API
+— nonce generated for you, no ECB, no bare CBC), detached signatures, and key derivation. Covers the
+overwhelming majority of application crypto and is *better than PHP*, whose `openssl_encrypt` lets you
+pick a broken mode.
+*After (+X.509/CSR parsing):* much larger, and needed only for certificate tooling.
+*After (hold at argon2):* phorj cannot encrypt anything at rest.
+
+**Q18 — CHARSET TRANSCODING + folding (subsumes Q11).** `Core.Encoding` is base64/hex only; PHP has
+`iconv` + `mbstring`.
+*After (recommended):* `Encoding.decode(bytes, Charset.Windows1252): string` + the reverse + a
+transpilable `String.foldAccents`, with a **typed `Charset` enum** rather than PHP's stringly-typed
+`"WINDOWS-1252"` — a typo becomes a compile error instead of a silent mojibake, which is the "better".
+Scope to the charsets that actually occur (UTF-8/16, Latin-1/9, Windows-1252, ASCII), not all of ICU.
+
+**Q19 — COMPRESSION, and DEC-407's unbuilt admission.** `flate2` was admitted (DEC-407) and is **not in
+`Cargo.toml`** [Verified]. PHP has zlib.
+*After (recommended):* build gzip/deflate/raw over `flate2` as `Core.Compress`, wire it to
+`Accept-Encoding` in the HTTP client and the serve loop (which today advertises `identity` only), and
+close the ruled-unbuilt row. Archives (zip/tar) stay separate and unruled.
+
+**Q20 — the two "partial" rows: WHATWG URL, and MIME-from-content.**
+*After (recommended, both):* add a WHATWG normalization mode + IDN/punycode beside the existing RFC 3986
+`Uri` (PHP 8.5 now ships both, so parity means both), and add content-sniffed MIME with the **security
+posture stated**: for uploads, trust the content and never the extension — PHP's `fileinfo` gives you the
+rope to do either, and doing only the safe one is the "better".
+
+**Q21 — PROCESS SPAWN.** `Core.Process` is argv+env only; PHP has `proc_open`/`exec`.
+*After (recommended):* a typed, **shell-free** `Process.run(program, args): ProcessResult` with explicit
+argv (no string interpolation into a shell), captured stdout/stderr, exit code, and an optional timeout.
+That is *better than PHP*, where `exec("… $userInput")` is the single most common RCE in the language.
+Ladder case 1 (`proc_open` exists), but Invariant 10 means examples must spawn only deterministic
+programs.
+
+**Q22 — the not-on-any-roadmap block: `gd`/images, `ldap`, `soap`, `xsl`, `ftp`, `gettext`, `gmp`.** PHP
+bundles all of them, so the doctrine reaches them, but they are large and several are legacy.
+*After (recommended — split it):* `gmp` (arbitrary-precision **integers**, a small gap beside the shipped
+`Core.Decimal`) and `gettext` (subsumed by Q4's `Core.Intl` catalogues) are **in**; `xsl` follows XML if
+Q1 builds; **`gd`/`ldap`/`soap`/`ftp` are declined with a recorded reason** — SOAP and FTP are legacy
+protocols PHP itself no longer promotes, LDAP is enterprise-specific, and image manipulation is a
+genuinely separate discipline. Each decline gets a named ledger row, DEC-413-style, never silence.
+*After (all in):* a very large programme with no consumer for most of it.
+
+**Q23 — the doctrine's BOUNDARY: capabilities, or language features too?** Read literally, *"all php
+does"* reverses ruled rejections: `ini_set` (DEC-409 — action at a distance, breaks Invariants 1 and 10),
+enum inheritance (DEC-410 — rejected on soundness with seven languages agreeing), gradual typing, `eval`,
+`goto`, `$$var`, `&` references, self-hosting (DEC-273).
+*After (capabilities only — recommended):* the doctrine means *"every DOMAIN PHP can work in, phorj can
+work in, better"*, and the ruled language-level rejections stand — they are all cases where phorj is
+better *by not* having the feature, which is the same goal.
+*After (literally everything):* say so and I will re-open each rejection with a spec; several are
+mutually exclusive with Invariant 1, so that answer needs to say which invariant yields.
+
 ---
 
 ## 4b. ROUND 2 — what probing the ORACLE and our own register changed
@@ -362,6 +447,88 @@ is a pending ergonomics ruling layered on top, **not** a blocker for Q6.
 
 ---
 
+## 4c. ROUND 3 — the doctrine changes the GATE, so the gap list is re-derived from PHP itself
+
+Developer directive, 2026-08-07, verbatim: *"all php does phorj must do and we must do it better"*.
+
+**That is a different and stricter gate than §3 used.** §3 asked *"does this close MASTER-PLAN §0.3
+residual?"* — a roadmap question. The doctrine asks *"does PHP do it?"* — a **parity** question, and it
+does not care which product asked. So the honest response is not to re-rank §3's list: it is to
+**enumerate PHP's actual capability surface and diff ours against it.** Round 3 does that, and the result
+contains items **larger than anything in either requirement document**, none of which the products raised.
+
+### The census — what the gate oracle actually ships
+
+[Verified 2026-08-06, `php -m` and `get_defined_functions()` on `php-8.5.8`: **975 internal functions,
+217 classes**, extensions —] `bcmath Core ctype date dom fileinfo filter hash iconv json lexbor libxml
+mbstring pcre PDO pdo_sqlite Phar posix random Reflection session SimpleXML SPL sqlite3 standard
+tokenizer uri xml xmlreader xmlwriter OPcache`.
+
+Two of those are **new in PHP 8.5** and land squarely in gaps of ours: **`lexbor`** (the HTML5 engine
+behind `Dom\HTMLDocument`) and **`uri`** (a native RFC 3986 *and* WHATWG URL API). PHP is not standing
+still, and it just moved into two places we are empty.
+
+Bundled with PHP but not compiled into *this* build (so absent from the oracle, though present in a
+normal distribution — a distinction that matters for what we may emit): `curl openssl intl sodium zip
+zlib gd pgsql mysqli soap xsl ftp ldap exif gettext gmp bz2 calendar pcntl xmlrpc tidy`.
+
+### The diff — every row [Verified] against `src/` on 2026-08-06
+
+| PHP capability (core/bundled) | phorj today | Verdict under the doctrine |
+|---|---|---|
+| `date` — `DateTimeImmutable`, **`DateTimeZone`/DST**, `DateInterval` (month/year-aware), `date()` patterns, `strtotime` | `Core.Time` — `Instant`/`Duration`/`Date`, **UTC-ONLY BY DESIGN** (`src/cli/preludes.rs:295`), `toIso`, `addDays`, civil conversions. Pure phorj, so byte-identical by construction | **The marquee collision — see Q16.** No timezones, no pattern formatting, no flexible parsing, no calendar-aware month arithmetic |
+| `openssl` + `sodium` — AES-GCM, RSA/Ed25519, X.509, sign/verify, key derivation | `Core.Cryptography` = **`hashPassword`/`verifyPassword` only** (argon2). `Core.Hash` = `hmac`/`hkdf`/`pbkdf2`/`equals` | **Largest security-shaped gap.** No symmetric encryption, no asymmetric anything, no certificates, no signing — see Q17 |
+| `iconv` + `mbstring` — charset transcoding, multibyte string ops | `Core.Encoding` = **`base64`/`hex` only**. No transcoding at all | **Gap — see Q18.** ISO-8859-1/Windows-1252 → UTF-8 is table stakes for mail, legacy CSV and scraped HTML |
+| `zlib`/`bz2`/`zip`/`Phar` — compression + archives | **Nothing.** And `flate2` is **not in `Cargo.toml`** despite DEC-407 admitting it | **Gap + a ruled-unbuilt admission — see Q19** |
+| `lexbor` / `Dom\HTMLDocument` — HTML5 parse + CSS selectors | `Core.Html` is **emit-only**: `text`/`raw`/`render`/`attribute`/`element`/`voidElement`/`concat`. No parser, no selectors | **Gap — Q2, now doctrine-forced** |
+| `dom`/`SimpleXML`/`xmlreader`/`xmlwriter` + `C14N()` | **Nothing** | **Gap — Q1, doctrine-forced** |
+| `uri` (8.5) — RFC 3986 **and** WHATWG URL | `Core.UriModule` — RFC 3986 only (`parse`/`resolve`/`with*`/`equals`) | **Partial.** No WHATWG normalization, no IDN/punycode — see Q20 |
+| `fileinfo` — MIME from **content** (magic bytes) | Extension-based only (`src/serve/static_files.rs`) | **Gap — see Q20.** Extension-trust is also a security posture question for uploads |
+| `proc_open`/`exec`/`pcntl` — spawn, pipes, signals to children | `Core.Process` = `arguments`/`get`/`all` — **argv + env only, no spawn** | **Gap — see Q21** |
+| `intl` — collation, CLDR plurals, locale dates, transliteration | **Nothing** | Gap — Q4, and note the oracle lacks `intl`, so we cannot *emit* it (§4b) |
+| `gd`/`imagick`, `ldap`, `soap`, `xsl`, `ftp`, `gettext`, `gmp` | **Nothing** | **Not previously on any roadmap — see Q22** |
+| `PDO`/`sqlite3`/`pgsql`/`mysqli` | `Core.Database` (SQLite + PG + MySQL) | ✅ at parity |
+| `session`, `hash`, `random`, `filter`, `SPL`, `Reflection`, `tokenizer`, `pcre`, `bcmath`, `json` | `Core.SessionModule`, `Core.Hash`, `Core.Random`, `Core.Runtime.Validate`, `Deque`/`PriorityQueue`/`List`/`Map`/`Set`, `Core.Reflect`, `Core.Regex`, `Core.Decimal`, `Core.Json` | ✅ at parity or better (typed, exhaustive-matched) |
+
+### Three consequences of the doctrine that only the developer can rule
+
+These are not gap rows. They are what the doctrine *implies about our own rules*, and each one collides
+with something already ratified — which is exactly the Invariant 15 surface.
+
+1. **Timezones vs Invariant 10.** `Core.Time` is UTC-only *on purpose*, and the reason is recorded in
+   the source: *"timezones are non-deterministic and would break the byte-identity spine."* PHP has full
+   IANA tz + DST. The doctrine says we must have it **and do it better**. Both cannot hold as written —
+   Q16.
+2. **"Better" implies new dependency admissions.** Doing dates-with-tz properly needs the IANA database;
+   crypto needs a vetted primitive (RustCrypto/ring — *"never roll your own"* is the policy's own first
+   admitted domain); compression needs `flate2`. Each is a **policy amendment**, not a crate row — Q17/Q19.
+3. **Does "all php does" mean CAPABILITIES or also LANGUAGE FEATURES?** Read literally it reverses
+   ruled rejections: `ini_set` (DEC-409 rejected — action at a distance, breaks Invariants 1 and 10),
+   enum inheritance (DEC-410 rejected on soundness, with seven languages agreeing), gradual typing,
+   `eval`, `goto`, `$$var`, `&` references, self-hosting (DEC-273). I do **not** believe you meant those,
+   but the doctrine as phrased covers them, and guessing is the forbidden move — Q23.
+
+### Round 3's effect on the existing batch
+
+- **Q1 (XML) and Q2 (HTML5) are answered by the doctrine** — PHP does both, in core, so phorj must.
+  What survives is only *how*: Q1(a) crate-vs-`std`, Q1(b) C14N-in-v1 (recommended yes, the transpile
+  leg is free), Q1(c) whether DEC-382's crate slot is still the right shape.
+- **Q3 (IMAP) is NOT answered by it** — PHP **unbundled** `ext/imap` to PECL in 8.4, and `imap_open` is
+  absent from the oracle [Verified]. PHP core does not do IMAP, so the doctrine does not reach it.
+  DEC-413's deferral survives Round 3 intact.
+- **Q8 (PDF), Q9 (XAdES)** — no PHP core equivalent (`pdflib` is PECL, `xmlseclibs` is userland). Not
+  doctrine-forced. Recommendations unchanged.
+- **Q10 (UUID)** — no PHP core UUID either (`ext-uuid` is PECL). Not forced; recommendation unchanged.
+- **Q11 (accent folding)** — PHP does it (`iconv //TRANSLIT`, `Normalizer`). **Now doctrine-forced**, and
+  it folds naturally into Q18's transcoding surface rather than standing alone.
+- **Q12 (cookies), Q13 (streaming)** — `curl` does both, and is bundled. **Now doctrine-forced**, which
+  upgrades them from "fold into a perf slice" to real parity rows.
+- **Q7 (Postgres TLS)** — `pgsql`/`pdo_pgsql` support `sslmode`. **Doctrine-forced**, and "better" is
+  precisely the DEC-265 fail-safe posture, which PHP does *not* do (PHP's `Prefer` default downgrades
+  silently — the identical bug we have).
+
+---
+
 ## 5. Sequencing, if the batch rules "go"
 
 Ordered by *residual closed per unit of risk*, not by product priority. The two products barely
@@ -406,7 +573,7 @@ Recorded here so Round 2's specs do not have to re-derive them:
 
 ---
 
-## 7. What Round 2 produces, once §4 is ruled
+## 7. What the NEXT round produces, once §4 is ruled
 
 One `docs/specs/<date>-<topic>.md` per admitted item, each carrying: surface (runnable phorj), the
 ladder case, the backend/transpile story, the error taxonomy, the example + differential plan, the
