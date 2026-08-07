@@ -8,14 +8,30 @@
 use phorj::lift::project::{lift_directory, VendorMode};
 use std::path::{Path, PathBuf};
 
-/// A scratch directory that cleans itself up, pid-scoped so concurrent test binaries cannot collide
-/// (DEC-378's root cause was fixed-path fixtures).
+/// A scratch directory that cleans itself up. Scoped by pid AND by a per-call counter, so neither two
+/// concurrent test BINARIES nor two concurrent tests INSIDE one binary can collide.
+///
+/// The counter is the load-bearing half, and it was missing. pid-scoping alone made the path unique
+/// across processes but SHARED across every test in the same binary that passed the same label — and
+/// `framework_shaped_tree()` has five callers, all using `Tmp::new("framework")`. Because `new` starts
+/// with `remove_dir_all`, a second test entering the fixture **deleted the first test's output
+/// mid-run**. That surfaced in CI as two unrelated-looking failures in one job:
+/// `a_declaring_file_outside_the_autoload_map_is_lifted` panicking with
+/// `package dir: Os { code: 2, kind: NotFound }` (its `out/` had just been wiped) and
+/// `a_front_controller_returning_a_closure_is_bootstrap_not_configuration` panicking with
+/// `output directory … is not empty` (it inherited a sibling's `out/`).
+///
+/// It is a LATENT race, not a new bug: the same test code passed on the previous commit, and the
+/// build-profile change that landed alongside it only shifted timing enough to lose the coin flip.
+/// A test that passes because of scheduling luck is not a passing test.
 struct Tmp(PathBuf);
 
 impl Tmp {
     fn new(label: &str) -> Tmp {
+        static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir =
-            std::env::temp_dir().join(format!("phorj_liftproj_{label}_{}", std::process::id()));
+            std::env::temp_dir().join(format!("phorj_liftproj_{label}_{}_{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
         Tmp(dir)
