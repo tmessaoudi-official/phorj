@@ -545,6 +545,81 @@ with something already ratified — which is exactly the Invariant 15 surface.
 
 ---
 
+## 4d. ROUND 4 — `mapinsert` root-caused. The loss is REAL, and the fix is a named slice.
+
+Developer directive: *"work on the perf, don't accept it"*. So this round stops classifying the loss and
+attacks it. Every number below is pasted from the run that produced it.
+
+### 1. The loss is real, reproducible, and my earlier "it's load noise" reading was wrong
+
+Interleaved, quiet box (**load 0.07**), php invoked with the gate's own JIT flags
+(`-dopcache.enable_cli=1 -dopcache.jit_buffer_size=128M -dopcache.jit=tracing`, `jit.on === true`
+probed):
+
+| round | phorj | php+JIT | ratio |
+|---|---|---|---|
+| 1 | 7.29 ms | 5.86 ms | 0.803 |
+| 2 | 6.83 | 5.74 | 0.842 |
+| 3 | 7.17 | 5.90 | 0.823 |
+| 4 | 6.92 | 5.93 | 0.856 |
+| 5 | 6.92 | 5.79 | 0.837 |
+
+**A trap worth recording:** running php WITHOUT the JIT flags gives phorj a 3.4–4.7× *win*
+(phorj 6.8 ms vs php 23.1 ms). That comparison is meaningless — G-8 is against release-php **+JIT** — and
+it is exactly the shape of mistake that would let someone "disprove" a real loss. Always probe
+`opcache_get_status()["jit"]["on"]`.
+
+### 2. Root cause, by controlled experiment rather than inspection
+
+`Value::Map` is `Rc<Vec<(HKey, Value)>>` (`src/value/types.rs:147`) — an **association list**, so
+`m[k] = v` is an O(n) scan. Varying ONLY the number of distinct keys, everything else identical:
+
+| distinct keys | phorj total |
+|---|---|
+| 1 | 4.93 ms |
+| 2 | 4.88 ms |
+| 4 | 5.34 ms |
+| 8 | **6.91 ms** |
+
+So **~2.0 ms of the 6.9 ms (29%) is the linear scan**, at ~0.57 ns per comparison, against a ~4.9 ms
+floor for everything else. To beat php's 5.8 ms the scan has to *go away*, not get cheaper.
+
+### 3. Two of my own optimisation hypotheses, both REFUTED — recorded so they are not retried
+
+- **"Give short literals the cached-hash/pointer fast path."** Wrong premise: `phstr.rs:404` asserts
+  *"Literals are always heap (interned + hash-cached), even short ones"*, so these keys are already
+  `Heap` and `PhStr::eq`'s `Rc::ptr_eq` fast path already fires. There was nothing to win.
+- **"Stop cloning the key on every lookup/overwrite."** Real waste — `map_index`/`map_set` projected the
+  index into an owned `HKey` *before* scanning, spending an `Rc` inc+dec per operation purely to compare.
+  Implemented behind a new `HKey::matches_value` with a 169-pair agreement test pinning it to
+  `from_value` (including the `"ab"` vs `"ab\0"` case, where the inline buffers are identical and only
+  the length differs). Measured: **best-of-7 6.800 ms vs 6.83 ms before — 0.4%, inside noise. FLAT.**
+  **REVERTED**, not banked: Invariant 11 wants a measured before/after, the measurement said zero, and a
+  null-effect change to the single-sourced value kernel is risk without benefit.
+
+### 4. The fix that actually closes it — an ordered hash map (PHP's own design)
+
+Keep the `Vec` of entries (insertion order *is* part of the value — R1, and it is what keeps
+`keys()`/iteration byte-identical with PHP), and add a **hash index** beside it: exactly zend's
+`HashTable` (`arData` + hash slots), and what `indexmap` is. `PhStr` **already caches FNV-1a** on `Heap`
+strings (`phstr.rs:38-42`), so the index gets literal-key hashes for free — the machinery was built for
+this and is currently unused by the map.
+
+- *Projected effect:* removing the ~2.0 ms scan puts phorj at ~4.9–5.1 ms against php's 5.8 ms →
+  **ratio ≈1.14–1.18, a WIN.** ⚠ **[Inferred, NOT measured]** — it is arithmetic on the measured floor,
+  and it is exactly the kind of number that must not be quoted as fact until the slice runs.
+- *It fixes every map operation*, not this micro: reads, writes, `Set`, and the near-parity cluster
+  DEC-431.1 lists alongside `mapinsert`.
+- *Blast radius, counted:* **100 `Value::Map` sites across 30+ files**, including
+  `src/jit/handles/maps_ext.rs` and `src/vm/exec.rs`. This is a real slice with a JIT surface — not a
+  turn-tail edit, and not something to land unverified.
+
+**Status: NOT accepted, NOT laundered, NOT fixed yet.** Recorded as an OWED loss with its true value
+(~0.84) per DEC-365, with the fix designed and sized. DEC-431.1's *"PENDING RULING — push held"* still
+governs, which is why the two doc commits sit unpushed.
+
+---
+
 ## 5. Sequencing, if the batch rules "go"
 
 Ordered by *residual closed per unit of risk*, not by product priority. The two products barely
