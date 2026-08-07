@@ -8,7 +8,10 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
             "E-CONFIG-SIG — a `#[Config]` provider with the wrong shape.\n\n\
              A typed-config provider (DEC-318) is a top-level function with NO parameters and a\n\
              concrete return type: `#[Config] function appConfig() -> AppConfig { ... }`. The\n\
-             runtime injects its result into `#[Entry(kind: EntryKind.Cli)] function main(config: AppConfig)`.\n"
+             runtime injects its result into an entry that declares a parameter of that type, e.g.\n\
+             `#[Entry(kind: EntryKind.Cli)] function main(AppConfig config)`. An entry may declare\n\
+             SEVERAL such parameters (DEC-331 S3.2 Part B) — each is resolved by its own type and the\n\
+             providers are called in DECLARATION order.\n"
         }
         "E-CONFIG-DUP" => {
             "E-CONFIG-DUP — two `#[Config]` providers return the same type.\n\n\
@@ -18,10 +21,13 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
         }
         "E-CONFIG-MISSING" => {
             "E-CONFIG-MISSING — the entry asks for a config type nobody provides.\n\n\
-             `#[Entry(kind: EntryKind.Cli)] function main(config: T)` needs a matching `#[Config] function ... -> T`\n\
-             in the project (DEC-318). Declare one:\n\n\
+             An entry parameter of type `T` needs a matching `#[Config] function ... -> T` in the\n\
+             project (DEC-318). Declare one:\n\n\
                  import Core.Runtime.Config;\n\
-                 #[Config] function appConfig() -> T { return new T(...); }\n"
+                 #[Config] function appConfig() -> T { return new T(...); }\n\n\
+             An entry may take SEVERAL config parameters (DEC-331 S3.2 Part B), and this error is\n\
+             reported ONCE PER unresolved parameter — so seeing it twice means two types are\n\
+             unprovided, not that one is reported twice.\n"
         }
         "E-VARIANT-AMBIGUOUS" => {
             "E-VARIANT-AMBIGUOUS — a bare variant name is declared by more than one enum.\n\n\

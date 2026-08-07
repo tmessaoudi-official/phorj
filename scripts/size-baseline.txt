@@ -13,7 +13,7 @@
 667	src/checker/tests/throws.rs
 680	src/checker/tests/unions.rs
 1998	src/cli/explain.rs
-899	src/cli/pipeline.rs
+860	src/cli/pipeline.rs
 1438	src/cli/preludes.rs
 872	src/cli/tests.rs
 505	src/compiler/cty.rs

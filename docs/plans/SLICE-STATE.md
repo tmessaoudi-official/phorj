@@ -65,10 +65,13 @@ consuming it in both. Pinned by
 `tests/differential.rs::qualified_class_construction_fills_defaults_and_named_args`; gate 2850/2850
 `--all-features` with the PHP oracle, clippy clean on both feature legs.
 
-**Part B is now UNBLOCKED** — extend `#[Config]` injection past the one-parameter limit at
-`src/checker/desugar_config.rs:199`, because D4's §1 surface injects TWO typed parameters
-(`function web(Http.ServeConfig cfg, AppSettings app)`). The S3.2 example + its differential case ship
-with Part B (Inv 9), where there is a full surface to demonstrate.
+**Part B SHIPPED 2026-08-07 (DEC-455)** — the one-parameter limit is lifted in
+`src/checker/desugar_config/` (split from the single file per Invariant 13), because D4's §1 surface injects TWO typed parameters
+(`function web(Http.ServeConfig cfg, AppSettings app)`). ⚠ SUPERSEDED: this line promised *"the S3.2 example + its
+differential case ship with Part B"*. Part B shipped with a widened `examples/guide/config.phg`, but
+`Http.ServeConfig` itself still has NO runnable example and no `examples/README.md` row — it is a value
+whose consumer (`Http.serve`) does not exist until S3.3, so the example rides with S3.3. Tracked as
+**DEC-455.3 (OWED)**, not satisfied.
 
 **Also open, independent of the above:** Part C's env-var and CLI-flag tiers are RUNTIME reads while
 DEC-318's injection is a pure compile-time desugar inside the byte-identity spine — for a `Cli` entry
@@ -110,8 +113,20 @@ backend/transpile story, error taxonomy, example + differential plan, LSP/editor
 RULE), dependency row — mirrored into MASTER-PLAN + SLICE-STATE + the register in the same change.
 **Unconditional first, independent of everything else:** fix `examples/README.md:238`, which still defers
 `using`/`Closable` to DEC-203 though DEC-364 closed it 2026-07-31 — two external readers repeated our stale
-doc back to us. **Still in flight and NOT superseded:** DEC-331 **S3.2 Part B** (task #35 — extend
-`#[Config]` injection past the one-parameter limit at `src/checker/desugar_config.rs:199`), then S3.3–S3.5.
+doc back to us. **DEC-331 S3.2 Part B SHIPPED 2026-08-07 (DEC-455)** — `#[Config]` injection now takes N typed
+parameters, resolved by type, injected in declaration order (observable: the example prints from each
+provider); module split to `src/checker/desugar_config/{mod,tests}.rs` per Invariant 13. It also fixed a
+**pre-existing** bug: a single generic parameter such as `Map<string, int>` had its type arguments dropped
+and produced a nonsense `E-CONFIG-MISSING` naming bare `Map` (DEC-455.1 — and my first write-up of that
+history was wrong; the safety lens refuted it with a probe).
+**⚠ S3.2 IS PARTIAL, NOT SHIPPED — do not read Part B as unblocking D4's §1.** `entry_role`
+(`src/ast/entry.rs:167-169`) defines a `Web` entry as EXACTLY `(Request): Response`, so a `Web` entry
+cannot carry config parameters and §1 verbatim still fails `E-ENTRY-SIG` [Verified]. What works today is a
+multi-parameter **`Cli`** entry. **NEXT: S3.3** (`Http.serve(cfg, handler)`, retire `respond`) — which is
+also where the `Web`-role gate and the OWED `Http.ServeConfig` runnable example + `examples/README.md` row
+belong (DEC-455.3). Then S3.4, S3.5. **A PENDING RULING blocks Part C** (the precedence chain): its env/CLI
+tiers are runtime reads inside a spine DEC-318 keeps pure, so the PHP leg must read the same sources or
+Invariant 1 breaks, and an env-reading example is not deterministic (Invariant 10).
 
 **PERF — DEC-431.1 RULED AND EXECUTED (2026-08-07).** `mapinsert` **1.089 (fictional WIN) → 0.851 OWED**
 via a quiet-box re-emit at load 0.11 (`f0d2e32`); gate PASSES, 0 blocking regressions. `mapget`

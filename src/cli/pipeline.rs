@@ -850,50 +850,11 @@ pub(super) fn disasm_program(p: &BytecodeProgram) -> String {
     out
 }
 
+// The DEC-252 drift-guard tests live in a sibling file, reached with `#[path]` so this module keeps
+// its historical path `src/cli/pipeline.rs` — ~10 documents (research dossiers, MILESTONES, the
+// decision register) cite that path, and `scripts/doc-guards.sh` G1 fails on every stale reference.
+// Renaming a widely-cited file to make room for test fixtures is the wrong trade; moving the tests
+// out satisfies Invariant 13's no-growth rule on a grandfathered file without touching the path.
 #[cfg(test)]
-mod front_end_diagnostics_tests {
-    use super::*;
-
-    /// DEC-252 drift guard: `front_end_diagnostics` (the LSP path) and `check_and_expand` (the CLI
-    /// gate) MUST agree on error-presence for every program — they run the same injection + desugar
-    /// sequence, so if a future diagnostic-emitting pass is added to one but not the other, this fails.
-    #[test]
-    fn front_end_diagnostics_agrees_with_check() {
-        // A front-end diagnostic is an ERROR unless its code is a `W-` warning.
-        fn has_error(prog: &Program) -> bool {
-            front_end_diagnostics(prog)
-                .iter()
-                .any(|d| d.code.is_none_or(|c| !c.starts_with("W-")))
-        }
-        let cases: &[(&str, bool)] = &[
-            // (source, expect_error)
-            ("package Main; function main() -> void {}", false),
-            (
-                "package Main; function main() -> void { var x = nope; }",
-                true,
-            ),
-            // Injected-type program (the DEC-252 case): clean under both.
-            (
-                "package Main; import Core.Output; import Core.Secret; import Core.String; \
-                 function main() -> void { var t = new Secret(\"k\"); \
-                 Output.printLine(\"{String.length(t.expose())}\"); }",
-                false,
-            ),
-            // Injected import + a genuine error: error under both.
-            (
-                "package Main; import Core.Secret; function main() -> void { var y = missing; }",
-                true,
-            ),
-        ];
-        for (src, expect_error) in cases {
-            let prog = lex_parse(src).expect("parse");
-            let fe = has_error(&prog);
-            let cli = check_and_expand(&prog, src).is_err();
-            assert_eq!(
-                fe, cli,
-                "front_end_diagnostics vs check_and_expand disagree on `{src}` (fe={fe}, cli={cli})"
-            );
-            assert_eq!(fe, *expect_error, "wrong error-verdict for `{src}`");
-        }
-    }
-}
+#[path = "pipeline_tests.rs"]
+mod tests;

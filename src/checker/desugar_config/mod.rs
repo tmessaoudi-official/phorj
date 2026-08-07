@@ -1,8 +1,8 @@
 //! DEC-318 — typed-config entry injection: `#[Config]` provider + `#[Entry] main(config: T)`.
 //!
 //! A `#[Config]`-attributed ZERO-ARG top-level function returning a concrete type is the program's
-//! typed-config provider. An `#[Entry]` function may then declare ONE parameter of that type, and this
-//! pass injects the wiring:
+//! typed-config provider. An `#[Entry]` function may then declare ONE OR MORE parameters of provider
+//! types — each resolved BY TYPE — and this pass injects the wiring:
 //!
 //! ```text
 //!   #[Config] function appConfig() -> AppConfig { return new AppConfig(...); }
@@ -21,7 +21,7 @@
 //!
 //! PRECEDENCE — never touch a signature that is already a valid entry: `()`, `(List<string>)` (argv)
 //! and `(Request) -> Response` (web) all have `entry_role(f) != None` and pass through unchanged. Only
-//! an entry with `entry_role == None`, EXACTLY ONE plain named-type parameter, and a CLI return
+//! an entry with `entry_role == None`, ONE OR MORE plain named-type parameters, and a CLI return
 //! (`void`/`int`/none) is a config-entry candidate; anything else keeps its ordinary `E-ENTRY-SIG`.
 //!
 //! Provider rules (each `E-CONFIG-SIG` unless noted): zero parameters; a concrete named return type
@@ -135,7 +135,7 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
         let any_candidate = program
             .items
             .iter()
-            .any(|it| matches!(it, Item::Function(f) if config_entry_param(f).is_some()));
+            .any(|it| matches!(it, Item::Function(f) if config_entry_params(f).is_some()));
         if !any_candidate {
             return Ok(program);
         }
@@ -145,41 +145,55 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
     let mut prog = program;
     for it in &mut prog.items {
         let Item::Function(f) = it else { continue };
-        let Some((param_ty_name, param_span)) = config_entry_param(f) else {
+        let Some(params) = config_entry_params(f) else {
             continue;
         };
-        match providers.get(leaf(&param_ty_name)) {
-            Some(provider) => {
-                let p = f.params.remove(0);
-                let init = Expr::Call {
-                    callee: Box::new(Expr::Ident(provider.clone(), param_span)),
+        // Resolve EVERY parameter before mutating anything: a partially-rewritten entry (some params
+        // injected, one left declared) would be a shape no later stage expects. Every unresolved type
+        // is reported, not just the first — a two-param entry with neither provider declared must not
+        // cost the developer two compiles to learn the second name.
+        let mut resolved: Vec<&String> = Vec::with_capacity(params.len());
+        for (ty_name, span) in &params {
+            match providers.get(leaf(ty_name)) {
+                Some(provider) => resolved.push(provider),
+                None => errs.push(err(
+                    *span,
+                    format!(
+                        "entry takes `{ty_name}` but no `#[Config]` provider returns `{ty_name}`"
+                    ),
+                    "E-CONFIG-MISSING",
+                    Some(format!(
+                        "declare one: `#[Config] function appConfig() -> {} {{ ... }}` (import Core.Runtime.Config;)",
+                        leaf(ty_name)
+                    )),
+                )),
+            }
+        }
+        if resolved.len() != params.len() {
+            continue; // errors already recorded; leave the signature intact for the diagnostic
+        }
+        // Inject in DECLARATION ORDER. The providers are ordinary calls, so their order is observable
+        // (a provider may print, or construct in a sequence the PHP leg must match) — splicing the
+        // whole block at the front preserves it, where a loop of `insert(0, …)` would reverse it.
+        let decls: Vec<Stmt> = f
+            .params
+            .drain(..)
+            .zip(resolved)
+            .zip(params.iter().map(|(_, span)| *span))
+            .map(|((p, provider), span)| Stmt::VarDecl {
+                ty: p.ty,
+                name: p.name,
+                init: Expr::Call {
+                    callee: Box::new(Expr::Ident(provider.clone(), span)),
                     args: Vec::new(),
                     type_args: Vec::new(),
-                    span: param_span,
-                };
-                f.body.insert(
-                    0,
-                    Stmt::VarDecl {
-                        ty: p.ty,
-                        name: p.name,
-                        init,
-                        mutable: false,
-                        span: param_span,
-                    },
-                );
-            }
-            None => errs.push(err(
-                param_span,
-                format!(
-                    "entry takes `{param_ty_name}` but no `#[Config]` provider returns `{param_ty_name}`"
-                ),
-                "E-CONFIG-MISSING",
-                Some(format!(
-                    "declare one: `#[Config] function appConfig() -> {} {{ ... }}` (import Core.Runtime.Config;)",
-                    leaf(&param_ty_name)
-                )),
-            )),
-        }
+                    span,
+                },
+                mutable: false,
+                span,
+            })
+            .collect();
+        f.body.splice(0..0, decls);
     }
 
     if errs.is_empty() {
@@ -190,13 +204,34 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
 }
 
 /// The config-entry candidate test: an `#[Entry]` function that is NOT already a valid entry role,
-/// with exactly one plain named-type parameter (not `List<string>`/`Request` — those belong to the
-/// argv/web roles) and a CLI-shaped return. Returns the parameter's type name + span.
-fn config_entry_param(f: &FunctionDecl) -> Option<(String, crate::token::Span)> {
+/// with ONE OR MORE named-type parameters and a CLI-shaped return. Returns each parameter's type name
+/// + span, in declaration order.
+///
+/// **S3.2 Part B widened this from exactly-one to N** — a multi-parameter config entry was rejected
+/// outright before. ALL-OR-NOTHING: every parameter must be a named type, or the function is not a
+/// config-entry candidate at all and keeps its ordinary `E-ENTRY-SIG`.
+///
+/// A GENERIC parameter type is ACCEPTED, deliberately — and two drafts of this comment got that wrong
+/// in opposite directions, so the history is recorded rather than quietly settled.
+///
+/// I first added an `args.is_empty()` guard here, believing generic parameters had only ever produced a
+/// nonsense `E-CONFIG-MISSING` naming the bare head. **The DEC-268 parity lens refuted that with an
+/// executed HEAD control:** `#[Config] function settings(): Map<string, string>` +
+/// `main(Map<string, string> cfg)` **worked, and was byte-identical on all three legs.** It works
+/// because provider keys and parameter keys are built the SAME lossy way — both take `Type::Named`'s
+/// `name` and DROP `args` (see `ret_name` above) — so `Map<string, string>` keys as `Map` on both
+/// sides and the lookup matches. Rejecting generics would have deleted a working, three-leg-green
+/// language surface, which Invariant 15 makes the developer's call, not a session's.
+///
+/// What IS a real (pre-existing) defect, left as a PENDING question rather than "fixed" by removing the
+/// feature: because both sides drop `args`, providers returning `Map<string, int>` and
+/// `Map<string, string>` collide under one key `Map` — so one spuriously reports `E-CONFIG-DUP`, and a
+/// mismatched pairing would inject the wrong provider. Recorded in the register under DEC-455.
+fn config_entry_params(f: &FunctionDecl) -> Option<Vec<(String, crate::token::Span)>> {
     if !f.attrs.iter().any(|a| a.is_entry()) || crate::ast::entry_role(f).is_some() {
         return None;
     }
-    if f.params.len() != 1 {
+    if f.params.is_empty() {
         return None;
     }
     let ret_cli = match &f.ret {
@@ -209,10 +244,16 @@ fn config_entry_param(f: &FunctionDecl) -> Option<(String, crate::token::Span)> 
     if !ret_cli {
         return None;
     }
-    match &f.params[0].ty {
-        Type::Named { name, span, .. } => Some((name.clone(), *span)),
-        _ => None,
-    }
+    f.params
+        .iter()
+        .map(|p| match &p.ty {
+            // NOTE: no `args.is_empty()` filter — see the doc above. A generic parameter type keys the
+            // same lossy way the provider's return type does, so `Map<string, string>` resolves and has
+            // always resolved. Adding a filter here regressed that surface and was reverted.
+            Type::Named { name, span, .. } => Some((name.clone(), *span)),
+            _ => None,
+        })
+        .collect()
 }
 
 fn err(
@@ -234,127 +275,4 @@ fn leaf(name: &str) -> &str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::desugar_config;
-    use crate::parser::Parser;
-    use crate::tokenizer::lex;
-
-    fn run(src: &str) -> Result<crate::ast::Program, Vec<String>> {
-        let prog = Parser::new(lex(src).expect("lex"))
-            .parse_program()
-            .expect("parse");
-        desugar_config(prog).map_err(|ds| {
-            ds.into_iter()
-                .map(|d| d.code.unwrap_or_default().to_string())
-                .collect()
-        })
-    }
-
-    const BASE: &str = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Runtime.Config;\n\
-                        class AppConfig { }\n";
-
-    #[test]
-    fn injects_provider_call_and_drops_the_param() {
-        let src = format!(
-            "{BASE}#[Config] function appConfig(): AppConfig {{ return new AppConfig(); }}\n\
-             #[Entry(kind: EntryKind.Cli)] function main(AppConfig config): void {{ }}\n"
-        );
-        let prog = run(&src).expect("desugar ok");
-        let main = prog
-            .items
-            .iter()
-            .find_map(|it| match it {
-                crate::ast::Item::Function(f) if f.name == "main" => Some(f),
-                _ => None,
-            })
-            .expect("main present");
-        assert!(main.params.is_empty(), "param must be dropped");
-        match main.body.first() {
-            Some(crate::ast::Stmt::VarDecl { name, ty, init, .. }) => {
-                assert_eq!(name, "config");
-                assert!(matches!(ty, crate::ast::Type::Named { name, .. } if name == "AppConfig"));
-                assert!(matches!(init, crate::ast::Expr::Call { callee, .. }
-                    if matches!(&**callee, crate::ast::Expr::Ident(n, _) if n == "appConfig")));
-            }
-            other => panic!("expected injected VarDecl, got {other:?}"),
-        }
-        // Post-rewrite, the entry classifies as an ordinary CLI role.
-        assert!(matches!(
-            crate::ast::entry_role(main),
-            Some(crate::ast::EntryRole::Cli)
-        ));
-    }
-
-    #[test]
-    fn missing_provider_is_e_config_missing() {
-        let src = format!(
-            "{BASE}#[Entry(kind: EntryKind.Cli)] function main(AppConfig config): void {{ }}\n"
-        );
-        assert_eq!(run(&src).unwrap_err(), vec!["E-CONFIG-MISSING"]);
-    }
-
-    #[test]
-    fn duplicate_providers_are_e_config_dup() {
-        let src = format!(
-            "{BASE}#[Config] function a(): AppConfig {{ return new AppConfig(); }}\n\
-             #[Config] function b(): AppConfig {{ return new AppConfig(); }}\n\
-             #[Entry(kind: EntryKind.Cli)] function main(AppConfig config): void {{ }}\n"
-        );
-        assert_eq!(run(&src).unwrap_err(), vec!["E-CONFIG-DUP"]);
-    }
-
-    #[test]
-    fn provider_with_params_or_void_is_e_config_sig() {
-        let with_params =
-            format!("{BASE}#[Config] function a(int x): AppConfig {{ return new AppConfig(); }}\n");
-        assert_eq!(run(&with_params).unwrap_err(), vec!["E-CONFIG-SIG"]);
-        let void_ret = format!("{BASE}#[Config] function a(): void {{ }}\n");
-        assert_eq!(run(&void_ret).unwrap_err(), vec!["E-CONFIG-SIG"]);
-    }
-
-    #[test]
-    fn valid_entry_shapes_pass_through_untouched() {
-        // argv + zero-arg entries have entry_role != None and must not be rewritten,
-        // even with a provider present.
-        let src = format!(
-            "{BASE}#[Config] function appConfig(): AppConfig {{ return new AppConfig(); }}\n\
-             #[Entry(kind: EntryKind.Cli)] function main(List<string> args): void {{ }}\n"
-        );
-        let prog = run(&src).expect("ok");
-        let main = prog
-            .items
-            .iter()
-            .find_map(|it| match it {
-                crate::ast::Item::Function(f) if f.name == "main" => Some(f),
-                _ => None,
-            })
-            .expect("main");
-        assert_eq!(main.params.len(), 1, "argv param must survive");
-    }
-
-    #[test]
-    fn config_marker_with_args_is_e_attribute_args() {
-        let src = format!(
-            "{BASE}#[Config(\"x\")] function a(): AppConfig {{ return new AppConfig(); }}\n"
-        );
-        assert_eq!(run(&src).unwrap_err(), vec!["E-ATTRIBUTE-ARGS"]);
-    }
-
-    #[test]
-    fn no_config_no_candidate_is_identity() {
-        let src = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n#[Entry(kind: EntryKind.Cli)] function main(): void { }\n";
-        let prog = run(src).expect("ok");
-        let main = prog
-            .items
-            .iter()
-            .find_map(|it| match it {
-                crate::ast::Item::Function(f) if f.name == "main" => Some(f),
-                _ => None,
-            })
-            .expect("main");
-        assert!(
-            main.params.is_empty() && main.body.is_empty(),
-            "must be untouched"
-        );
-    }
-}
+mod tests;

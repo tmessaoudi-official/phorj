@@ -1,11 +1,19 @@
-// Typed configuration with `#[Config]` + entry injection (DEC-318).
+// Typed configuration with `#[Config]` + entry injection (DEC-318, widened by DEC-331 S3.2 Part B).
 //
 // A `#[Config]`-attributed zero-arg function is the program's typed-config PROVIDER; the
-// `#[Entry(kind: EntryKind.Cli)]` function declares a parameter of that type and the compiler injects the
-// provider's result — no
-// container, no reflection, no config-file parser. Config is plain phorj code, so it is type-checked,
-// refactorable, and completion-aware like everything else — and because the injection desugars to an
-// ordinary call BEFORE any backend runs, it is pure and byte-identical across interp / VM / PHP.
+// `#[Entry(kind: EntryKind.Cli)]` function declares parameters of those types and the compiler injects
+// each provider's result — no container, no reflection, no config-file parser. Config is plain phorj
+// code, so it is type-checked, refactorable, and completion-aware like everything else — and because
+// the injection desugars to ordinary calls BEFORE any backend runs, it is pure and byte-identical
+// across interp / VM / PHP.
+//
+// S3.2 Part B: an entry may take MORE THAN ONE config parameter, each resolved BY TYPE. That is the
+// shape DEC-331 D4's §1 surface needs (`function web(Http.ServeConfig cfg, AppSettings app)`) — app
+// settings are a separate injected parameter and are never mixed into the serve config.
+//
+// The providers below PRINT as they run, which makes the injection ORDER observable rather than merely
+// internal: the compiler injects them in DECLARATION order, so `appConfig` must be called before
+// `serverLimits`, and all three legs must agree on that sequence.
 //
 //   phg run examples/guide/config.phg
 package Main;
@@ -19,19 +27,33 @@ class AppConfig {
     constructor(public string appName, public int workers, public bool verbose) {}
 }
 
+class Limits {
+    constructor(public int maxBodySize, public int timeoutSeconds) {}
+}
+
 #[Config]
 function appConfig(): AppConfig {
+    Output.printLine("[provider] appConfig");
     return new AppConfig("demo-app", 4, false);
 }
 
+#[Config]
+function serverLimits(): Limits {
+    Output.printLine("[provider] serverLimits");
+    return new Limits(8388608, 30);
+}
+
 #[Entry(kind: EntryKind.Cli)]
-function main(AppConfig config): void {
-    // `config` arrives injected: the compiler rewrote this entry to call `appConfig()` first.
-    Output.printLine("app     = {config.appName}");
-    Output.printLine("workers = {config.workers}");
+function main(AppConfig config, Limits limits): void {
+    // Both parameters arrive injected: the compiler rewrote this entry to a zero-arg one whose body
+    // opens with `AppConfig config = appConfig();` then `Limits limits = serverLimits();` — in that order.
+    Output.printLine("app      = {config.appName}");
+    Output.printLine("workers  = {config.workers}");
     mutable var verbose = "no";
     if (config.verbose) {
         verbose = "yes";
     }
-    Output.printLine("verbose = " + verbose);
+    Output.printLine("verbose  = " + verbose);
+    Output.printLine("maxBody  = {limits.maxBodySize}");
+    Output.printLine("timeout  = {limits.timeoutSeconds}");
 }

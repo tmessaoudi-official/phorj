@@ -8,8 +8,28 @@
 
 - **S3.1 ✅ SHIPPED** — `#[Entry(kind:)]` + `E-ENTRY-KIND-REQUIRED` (full `--all-features` gate
   green incl. PHP byte-identity; recorded in SLICE-STATE, never mirrored here until now).
-- **D4/D5/D6/D7 (and the D2/D3 points folded into D1) — RULED, NOT BUILT** as of the 2026-07-25
-  verification: `Http.ServeConfig` exists only as a code comment, `respond` is still the live
+- **S3.2 ⚠ PARTIAL (2026-08-06/07) — two of its three ruled pieces.** Part A: `Http.ServeConfig` +
+  `Http.RequestParsing` with D4's field set and default VALUES, in `src/cli/serve_config_prelude.rs`
+  (one deviation: D4 §2 writes `tlsMinVersion?="1.2"` and the class declares it NON-optional
+  `public string tlsMinVersion = "1.2"` — tracked, not silently absorbed). Part B: **the `#[Config]`
+  injection now accepts N typed parameters** — the pass had a hard one-parameter limit and rejected
+  multi-parameter config entries outright.
+  **⚠ READ THIS BEFORE ASSUMING §1 WORKS: it does NOT.** Part B is necessary but NOT sufficient for
+  §1's `function web(Http.ServeConfig cfg, AppSettings app)`, because `entry_role`
+  (`src/ast/entry.rs:167-169`) defines a `Web` entry as EXACTLY `(Request): Response` — so a `Web`
+  entry can never carry config parameters, and §1 verbatim still fails `E-ENTRY-SIG`. [Verified
+  2026-08-07 by running `phg check` on §1's program.] The second gate is unbuilt and belongs with
+  S3.3, where `Http.serve(cfg, handler)` gives the `Web` role a shape that can accept config. What
+  Part B DOES deliver today is a multi-parameter **`Cli`** entry taking config types. Injection is in DECLARATION order (observable: `examples/guide/config.phg` prints
+  from each provider), every unresolved parameter gets its own `E-CONFIG-MISSING`, and a GENERIC parameter
+  type is declined rather than mis-resolved. Part A also exposed and fixed a pre-existing P0 (DEC-452:
+  a QUALIFIED constructor dropped defaults and named args, panicking the VM on the shipped `Http.Cookie`).
+  **Still NOT built from S3.2 as ruled: the precedence chain** (CLI flag > env > `#[Config]` >
+  `phorj.json` > attribute default) — its env/CLI tiers are RUNTIME reads inside a spine DEC-318 keeps
+  pure, so for a `Cli` entry the PHP leg would have to read the same sources or Invariant 1 breaks, and an
+  env-reading example is not a deterministic input (Invariant 10). That parity story needs a ruling.
+- **D5/D6/D7 (and the D2/D3 points folded into D1) — RULED, NOT BUILT** as of the 2026-07-25
+  verification: `respond` is still the live
   `SERVE_ENTRY`, `E-NO-ENTRY-FOR-ROLE` has 0 src hits, and there is no `http-server-tls` feature.
   See the DEC-331 register block (`docs/research/full-audit/raw/C-decisions.md`) — "LOCKED" there
   means ruled, not built.
