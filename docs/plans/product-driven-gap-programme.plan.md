@@ -597,6 +597,48 @@ floor for everything else. To beat php's 5.8 ms the scan has to *go away*, not g
   **REVERTED**, not banked: Invariant 11 wants a measured before/after, the measurement said zero, and a
   null-effect change to the single-sourced value kernel is risk without benefit.
 
+### 4a. DEC-431.1 IS NOW RULED AND EXECUTED (2026-08-07) — `mapinsert` carried as OWED at 0.851
+
+Developer ruled Q-A option ①. Executed as a **quiet-box re-emit** (load 0.11, inside the stricter
+`MICROBENCH_EMIT_MAX_LOAD=0.7` bar; `MICROBENCH_RUNS=7`), which is the *only* sanctioned route —
+`_owed` is DERIVED at `--emit`, never hand-maintained, and the file says a feature *"leaves this list by
+being FIXED and re-emitted, never by being edited out."* Direct precedent: `6d71227` (DEC-434.1,
+*"floatloop never won — the ratchet armed a lucky draw; quiet-box re-emit"*), the same class of fix.
+
+**Result: `mapinsert` 1.089 (fictional WIN) → 0.851 OWED**, matching all thirteen independent readings
+(0.79–0.88). Gate now **PASSES**: 43 WIN / 10 loss / 10 OWED / **0 blocking regressions**, all
+output-identical. The push is unblocked honestly, not bypassed.
+
+**Every row that moved is listed here, because a re-emit is exactly where laundering would hide:**
+
+| row | before → after | assessment |
+|---|---|---|
+| `mapinsert` | 1.089 → **0.851 OWED** | the ruling's whole point; 13 readings agree |
+| `mapget` | 1.042 → **0.953 OWED** | a SECOND row that was never a real win. Direct re-measure: 0.931/1.031/0.951/1.032/0.957 — straddles 1.0, and OWED is the conservative direction |
+| `floatloop` | 0.776 OWED → **1.014 WIN** | **defensible, not laundering** — re-measured 1.059/1.028/1.028/0.859/1.013, and DEC-434.1's 0.776 predates this session's JIT work (DEC-445/446, tasks #57/#59). A real fix landed |
+| `floatmul` | 0.989 OWED → **1.001 WIN** | ⚠ **NOT defensible as a WIN — see the hazard below** |
+| `userhof` | (absent) → 11.458 WIN | was reported every run as *"not in baseline (new)"*; now snapshotted |
+| 8 others >15% | `floatarith` −26%, `intadd` +53%, `listmap` −24%, `hofpipe` −17%, `objalloc` +17%, `methodcall` −16%, `webish` −17%, `forin` +16% | no code changed, so this is harness spread — see the hazard |
+
+### ⚠ HAZARD RECORDED, not silently accepted: the emit arms flip-checks on coin-flip rows
+
+`floatmul` is now baselined at **1.001** and therefore *armed* by the WIN→LOSS flip check, while five
+direct readings give 0.972 / 0.998 / 0.990 / 0.955 / 1.050 — it straddles 1.0. **That is the exact
+pathology that produced this session's blocker**: `mapinsert` was armed at 1.089 and then false-blocked a
+docs-only push for hours. Arming a row whose true value is 1.00 ± 0.05 guarantees a future false block.
+
+Worse, **ten rows moved >15% with no code change between two baselines both emitted on a "quiet" box** —
+so the emit is not reproducible to better than roughly ±20%, and the previous baseline (`6d71227`) was
+itself labelled a quiet-box emit. The new baseline is therefore *more honest* about `mapinsert`/`mapget`
+but is **not authoritative to better than ~±20%** on any row, and this file should not be read as claiming
+otherwise.
+
+**Proposed fix (a harness change, so PENDING a ruling — Q-C):** give the flip check a **dead band** — do
+not arm a row whose emitted ratio is within ±5% of 1.0; carry it in a `_marginal` list that is reported
+loudly every run but never blocks. A row leaves `_marginal` by measuring a *robust* win. This keeps the
+ratchet's teeth for real regressions (a 2.4× row falling to 0.9 still blocks) while removing the class of
+false block that has now cost two sessions.
+
 ### 4b. ⚠ ROUND 5 RETRACTS §4 BELOW — the fix I proposed ALREADY EXISTS, and my root cause was wrong
 
 **Read this before §4.** §4 (written minutes earlier, commit `54c5efb`) concluded the cost was the O(n)
