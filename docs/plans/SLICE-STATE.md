@@ -84,6 +84,55 @@ parity story; it needs a ruling before Part C is built.
 (DEC-439 follow-on) · #64 track A/B perf, which still needs the developer's rulings on NaN-boxing vs
 register bytecode, arming the three RECOVERED ratchet rows, and `CallValue` signature recording.
 
+## ✅ CURRENT CURSOR (2026-08-07) — **the parity doctrine is RULED (DEC-453) and the 23-question batch is CLEARED (DEC-454)**
+
+**DEC-453 — THE PARITY DOCTRINE replaces the roadmap gating rule.** Developer, verbatim: *"all php does
+phorj must do and we must do it better."* An item now earns its place by **PHP having the capability**, not
+by closing a `MASTER-PLAN` §0.3 ledger row. **Boundary ruled (capabilities only):** it does NOT reverse
+DEC-409 `ini_set`, DEC-410 enum-extends, gradual typing, `eval`, `&` references or DEC-273 self-hosting —
+those are cases where phorj is better *by not* having the feature.
+
+**DEC-454 — all 23 questions ruled.** BUILD: XML + C14N-in-v1 (and **DEC-382's crate slot re-opened** —
+XML is non-recovering, i.e. the `std` shape) · **HTML5 + CSS selectors ADMITTED** (PHP has them in core;
+this was a *flip* from Round 1's lean) · minimal `Core.Intl` via a `__phorj_plural_*` helper (ext-intl is
+absent from the oracle) · `sleep` with `Time.freeze` suppressing it · Postgres TLS **mirroring DEC-265**
+(password in DSN ⇒ require TLS; DEC-265 is credential-conditional, **not** blanket TLS-or-refuse — my
+earlier claim was wrong) · UUID v4+v7 · charset transcoding with a **typed `Charset` enum** · `Core.Compress`
+(closing DEC-407's unbuilt admission — `flate2` is not in `Cargo.toml`) · WHATWG URL + content-sniffed MIME ·
+shell-free `Process.run` · `gmp` + `gettext`. **HOLD:** IMAP (DEC-413 survives — PHP unbundled `ext/imap`
+to PECL in 8.4). **DECLINED with named rows:** PDF, XAdES, `gd`, `ldap`, `soap`, `ftp`. **TIMEZONES
+(DEC-454.16): tz as PINNED DATA** — a pure function of (instant, versioned table), so deterministic,
+byte-identical, and better than PHP's host-tzdata dependence; Invariant 10 intact because the *ambient*
+zone stays excluded.
+
+**NEXT: write the specs.** One `docs/specs/<date>-<topic>.md` per admitted item — surface, ladder case,
+backend/transpile story, error taxonomy, example + differential plan, LSP/editor row (Invariant 17's 100%
+RULE), dependency row — mirrored into MASTER-PLAN + SLICE-STATE + the register in the same change.
+**Unconditional first, independent of everything else:** fix `examples/README.md:238`, which still defers
+`using`/`Closable` to DEC-203 though DEC-364 closed it 2026-07-31 — two external readers repeated our stale
+doc back to us. **Still in flight and NOT superseded:** DEC-331 **S3.2 Part B** (task #35 — extend
+`#[Config]` injection past the one-parameter limit at `src/checker/desugar_config.rs:199`), then S3.3–S3.5.
+
+**PERF — DEC-431.1 RULED AND EXECUTED (2026-08-07).** `mapinsert` **1.089 (fictional WIN) → 0.851 OWED**
+via a quiet-box re-emit at load 0.11 (`f0d2e32`); gate PASSES, 0 blocking regressions. `mapget`
+1.042 → 0.953 OWED is a **second** row that was never a win. `floatloop` 0.776 → 1.014 leaving OWED is
+defensible (real DEC-445/446 work landed), not laundering. **MASTER-PLAN's "the baseline 1.089 is real and
+conservative" is RETRACTED IN FULL** — four independent sources give 0.79–0.88; the lone contrary
+ten-run table originates in the commit that carried fabricated numbers.
+**No algorithmic map fix is outstanding:** the JIT **already** has an ordered open-addressed map
+(`UB_TAG_AMB`, the mapinsert vertical), and a proposed **100-site** change to `Value::Map` was stopped by a
+one-line control (`--no-jit`: 6.8 ms JIT vs 256.9 ms VM ⇒ the hot loop never touches `map_set`). Even
+all-inline-overwrite measures 6.17 ms vs php 5.8 — the residual is probe/cache cost, carried as OWED.
+**Rule earned: before attributing a cost to code, prove that code executes on the measured path.**
+**DEC-454.23 (Q-C) DEFERRED by the developer** — *"we will revisit this later if it stays."* `floatmul` is
+armed at **1.001** while readings straddle 1.0, so it will likely false-block a future push; the ±5%
+dead-band fix is designed, not built. **Revisit trigger: the first time it blocks.** And no row of the
+current baseline is authoritative better than ~±20% (ten rows moved >15% with no code change).
+
+---
+
+## ⏳ (history) the batch while it was still OPEN — **superseded by the cursor above**
+
 **⚠ OPEN — a 23-question adjudication batch is WAITING on the developer (2026-08-06/07).** Plan:
 `docs/plans/product-driven-gap-programme.plan.md` (Round 1 — verification + vision gating + the batch).
 Two external requirement documents (`rent-watch` and `twes-in`, both `docs/PHORJ-REQUIREMENTS.md`) were

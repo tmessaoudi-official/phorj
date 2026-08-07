@@ -58,7 +58,43 @@
   | local `php-8.5.8` (`_baseline_php`, +JIT via the harness's own `-dopcache.jit=tracing`) | 5 | **1.014 / 1.117 / 1.127 / 1.139 / 1.149** | 6.26-7.19 ms | 7.01-7.29 ms |
 
   Zero of ten below 1.0. So the baseline **1.089 is real and conservative**, not a fiction, and it needs
-  no correction. The `0.847` that blocked the push was measured by `microbench-gate` inside the
+  no correction.
+
+  > ### ⚠⚠ RETRACTED IN FULL, 2026-08-07 — the conclusion in the paragraph above is WRONG
+  >
+  > **`mapinsert` was never a WIN. The 1.089 baseline WAS the fiction, and it has now been corrected to
+  > `0.851` OWED** by a quiet-box re-emit at load 0.11 — commit `f0d2e32`
+  > (`mapinsert was never a WIN — quiet-box re-emit carries it OWED at 0.851`). The developer ruled
+  > DEC-431.1 option ① on 2026-08-07.
+  >
+  > **Four independent sources agree on ~0.79–0.88; the ten-run table above is the lone outlier:**
+  >
+  > | source | reading |
+  > |---|---|
+  > | DEC-431.1's five quiet runs (2026-08-01, load 0.33–0.44) | 0.83 / 0.81 / 0.79 / 0.81 / 0.80 |
+  > | `microbench-gate.sh`'s own header, lines 113–119 | *"its true value re-measures at 0.80-0.85 on a quiet box"*, calling the emitted WIN a *"fiction"* |
+  > | 2026-08-07 interleaved, load **0.07**, `opcache_get_status()["jit"]["on"]` verified `true` | 0.803 / 0.842 / 0.823 / 0.856 / 0.837 |
+  > | 2026-08-07 quiet-box `--emit`, load 0.11, `MICROBENCH_RUNS=7` | **0.851** |
+  >
+  > **Where the table above diverges, and why it cannot be reconciled:** it reports the *php* leg at
+  > 7.01–7.29 ms; on 2026-08-07 the same binary with the same JIT flags measures **5.74–5.93 ms**, and
+  > phorj's leg measures **6.83–7.29 ms**, not the 6.26–7.19 claimed. So the ratio inverts. I cannot prove
+  > the table's ten runs were not performed — but it originates in `4dcb76d` (`mapinsert re-measured`), the
+  > same commit that carried four fabricated numbers, and it is the only apparatus that has ever produced
+  > a `mapinsert` reading above 1.0. Treated as unreliable, not as evidence.
+  >
+  > **The "VM leg improved from ~7.0 to ~6.3 ms via DEC-445…448" explanation below is therefore also
+  > void** — phorj's leg still measures 6.8–7.3 ms. Those JIT commits are real and did land; they simply
+  > do not explain this row.
+  >
+  > Root cause of the row itself was chased and is recorded in
+  > `docs/plans/product-driven-gap-programme.plan.md` §4b: the JIT **already** has an ordered
+  > open-addressed map (`UB_TAG_AMB`, the mapinsert vertical), so there is no algorithmic fix outstanding —
+  > and a proposed 100-site change to `Value::Map` was stopped by the `--no-jit` control (6.8 ms JIT vs
+  > 256.9 ms VM: the hot loop never touches `map_set`). The residual is ~7–17% probe/cache cost against a
+  > well-tuned zend hash, carried as OWED.
+
+  The `0.847` that blocked the push was measured by `microbench-gate` inside the
   **pre-push lane**, immediately after the full test suite, two clippy passes and a release build — i.e.
   at the settle threshold `MICROBENCH_MAX_LOAD=2.5`, which DEC-430 established "is nowhere near quiet",
   and which `microbench-gate.sh`'s own header says manufactures false WIN->LOSS flips. Note the gate's
