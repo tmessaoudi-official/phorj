@@ -597,7 +597,53 @@ floor for everything else. To beat php's 5.8 ms the scan has to *go away*, not g
   **REVERTED**, not banked: Invariant 11 wants a measured before/after, the measurement said zero, and a
   null-effect change to the single-sourced value kernel is risk without benefit.
 
-### 4. The fix that actually closes it — an ordered hash map (PHP's own design)
+### 4b. ⚠ ROUND 5 RETRACTS §4 BELOW — the fix I proposed ALREADY EXISTS, and my root cause was wrong
+
+**Read this before §4.** §4 (written minutes earlier, commit `54c5efb`) concluded the cost was the O(n)
+association-list scan in `map_set` and proposed adding a hash index to `Value::Map` — 100 sites, 30+ files.
+**Both halves are wrong, and I would have done a large invasive change for zero gain.**
+
+**What I failed to check:** which leg actually runs. [Verified, quiet box, load 0.07:] `phg run` **6.822 ms**
+· `--no-jit` **256.9 ms** · `--tree-walker` **546.6 ms**. The JIT is **37× faster than the VM here**, so
+the benchmark's hot loop *never touches `map_set`* — the association-list scan I measured and blamed is on
+a path this micro does not execute. I ran that probe **after** writing the diagnosis.
+
+**What is actually there:** `src/jit/handles/mod.rs` documents `UB_TAG_AMB` as *"the **mapinsert
+vertical**: a MUTABLE `Map<string,int>` … converted from a sealed flat map by the first `m[k] = v`
+(`Op::SetIndexLocal`)"*, whose record buffer is a **PACKED open-addressed bucket table**
+`{canon: u64, value: i64}` at load ≤ ½, followed by `count` rank canons in **INSERTION order**. That is —
+precisely — the ordered hash map §4 proposed building. It already exists, it is already O(1), and
+`seal_flat_entries` builds the same structure for sealed flat maps. §4's "the machinery exists and the map
+does not use it" was exactly backwards.
+
+**The re-measured decomposition** [Verified, best-of-3 each, same box]:
+
+| variant | time | what it isolates |
+|---|---|---|
+| 8 keys, inserts + periodic reset (the shipped micro) | 6.822 ms | — |
+| 8 keys, no periodic reset | 6.710 ms | reset + flat→builder conversion ≈ **0.11 ms** |
+| **8 keys all pre-inserted — every op a fully-inline overwrite** | **6.171 ms** | the insert/helper path ≈ **0.55 ms** |
+| 1 distinct key | 4.93 ms | — |
+| **php+JIT** | **5.74–5.93 ms** | — |
+
+So: **even with every operation on the fully-inline fast path, phorj is still ~6.17 ms against php's
+5.8 ms.** The insert helper and the per-cycle conversion together are only ~0.66 ms of the 6.8. And the
+1-key vs 8-key gap (4.93 → 6.17 ms) persists *in the all-overwrite variant*, where no algorithmic
+difference exists at all — so that scaling is **probe distance and cache locality** (eight distinct key
+slots, hash/canon loads spread across lines) rather than the O(n) scan I attributed it to.
+
+**Verdict, stated plainly: NO WIN FOUND, and no algorithmic one appears to be left.** The data structure
+is already correct. The residual is ~7–17% on a ~6 ms loop against a zend hash that is genuinely
+well-tuned for this exact shape, and closing it means instruction-level work on the emitted probe (canon
+layout, key-slot packing, hoisting the table base out of the loop) with uncertain payoff. That is a real
+perf slice with a measurement-first discipline, not something to claim in advance.
+
+**What this round DID buy:** it stopped a 100-site invasive change to the single-sourced value kernel that
+would have added a second hash index behind the one that already exists. The recurring failure is now
+explicit and worth stating as a rule: **before attributing a cost to code, prove that code executes on the
+measured path.** `--no-jit` is a one-line control and I ran it last instead of first.
+
+### 4. ⚠ SUPERSEDED BY §4b — the reasoning below is retained only as the record of a wrong turn
 
 Keep the `Vec` of entries (insertion order *is* part of the value — R1, and it is what keeps
 `keys()`/iteration byte-identical with PHP), and add a **hash index** beside it: exactly zend's
