@@ -1,4 +1,4 @@
-//! DEC-318 — typed-config entry injection: `#[Config]` provider + `#[Entry] main(config: T)`.
+//! DEC-318 — typed-config entry injection: `#[Config]` provider + `#[Entry] main(T config)`.
 //!
 //! A `#[Config]`-attributed ZERO-ARG top-level function returning a concrete type is the program's
 //! typed-config provider. An `#[Entry]` function may then declare ONE OR MORE parameters of provider
@@ -6,11 +6,11 @@
 //!
 //! ```text
 //!   #[Config] function appConfig() -> AppConfig { return new AppConfig(...); }
-//!   #[Entry(kind: EntryKind.Cli)]  function main(config: AppConfig) -> void { ... }
+//!   #[Entry(kind: EntryKind.Cli)]  function main(AppConfig config): void { ... }
 //! ```
 //! desugars the entry to
 //! ```text
-//!   #[Entry(kind: EntryKind.Cli)]  function main() -> void { AppConfig config = appConfig(); ... }
+//!   #[Entry(kind: EntryKind.Cli)]  function main(): void { AppConfig config = appConfig(); ... }
 //! ```
 //!
 //! A PRE-CHECK desugar (mirrors [`crate::checker::desugar_di`] / `desugar_db`): the rewrite happens
@@ -21,7 +21,8 @@
 //!
 //! PRECEDENCE — never touch a signature that is already a valid entry: `()`, `(List<string>)` (argv)
 //! and `(Request) -> Response` (web) all have `entry_role(f) != None` and pass through unchanged. Only
-//! an entry with `entry_role == None`, ONE OR MORE plain named-type parameters, and a CLI return
+//! an entry with `entry_role == None`, ONE OR MORE named-type parameters (generic ones included —
+//! they key on the bare head; see `config_entry_params`), and a CLI return
 //! (`void`/`int`/none) is a config-entry candidate; anything else keeps its ordinary `E-ENTRY-SIG`.
 //!
 //! Provider rules (each `E-CONFIG-SIG` unless noted): zero parameters; a concrete named return type
@@ -76,10 +77,19 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
                     ));
                     continue;
                 }
-                // Key by the type's LEAF segment (audit 2026-07-22, P1): the entry may spell the
-                // type qualified (`Cfg.AppConfig`) while the provider's return is bare in its own
-                // package — one type, two legal spellings. Leaf collisions across packages are
-                // refused loudly below (E-CONFIG-DUP), never guessed.
+                // Key by the type's LEAF segment (audit 2026-07-22, P1). Leaf collisions across
+                // packages are refused loudly below (E-CONFIG-DUP), never guessed.
+                //
+                // ⚠ This comment used to claim the leafing exists so "the entry may spell the type
+                // qualified (`Cfg.AppConfig`) while the provider's return is bare — one type, two
+                // legal spellings". The DEC-268 parity lens disproved that with a project control:
+                // in a real multi-package project a qualified parameter spelling FAILS
+                // (`entry takes `Cfg.AppConfig` but no `#[Config]` provider returns
+                // `Cfg.AppConfig`` — the parameter key is NOT leafed, only the provider key is),
+                // and in-file the checker rejects `Main.AppConfig` outright with E-UNKNOWN-TYPE.
+                // So the two-spellings story is undeliverable either way. Pre-existing (identical
+                // text at 92aa1dc), left as-is behaviourally and recorded rather than reworded into
+                // something equally unverified — it is the same `leaf()` lossiness as DEC-455.4.
                 let ty = leaf(&ret_name.expect("checked above")).to_string();
                 if let Some(first) = providers.get(&ty) {
                     errs.push(err(

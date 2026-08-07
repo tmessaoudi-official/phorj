@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added
+
+- **`#[Config]` entry injection takes N typed parameters** (DEC-331 S3.2 Part B / DEC-455). An entry may
+  declare several config parameters — `function main(AppConfig config, Limits limits, Map<string, string> labels)`
+  — each resolved by its own TYPE, with the providers called in DECLARATION order and every unresolved type
+  getting its own `E-CONFIG-MISSING`. Previously the limit was exactly one parameter. Generic config types
+  work (`Map<string, string>` resolves on the type's bare head) and `examples/guide/config.phg` now ships one,
+  so the shape is byte-identity-gated by the differential rather than merely asserted in a unit test.
+  **S3.2 remains PARTIAL:** a `Web` entry still cannot carry config parameters (`entry_role` defines `Web` as
+  exactly `(Request): Response`), so DEC-331 D4's §1 surface does not type-check yet — that gate lands with
+  S3.3. Two user-visible edges are recorded as PENDING developer rulings rather than shipped silently:
+  two `Map<…>` providers collide under one key (DEC-455.4), and a repeated parameter type invokes its provider
+  once per parameter (DEC-455.5).
+
 ### Fixed
 
 - **A qualified constructor dropped its defaults and named arguments, and the VM panicked** (DEC-452).

@@ -21,8 +21,11 @@
   2026-08-07 by running `phg check` on §1's program.] The second gate is unbuilt and belongs with
   S3.3, where `Http.serve(cfg, handler)` gives the `Web` role a shape that can accept config. What
   Part B DOES deliver today is a multi-parameter **`Cli`** entry taking config types. Injection is in DECLARATION order (observable: `examples/guide/config.phg` prints
-  from each provider), every unresolved parameter gets its own `E-CONFIG-MISSING`, and a GENERIC parameter
-  type is declined rather than mis-resolved. Part A also exposed and fixed a pre-existing P0 (DEC-452:
+  from each provider), and every unresolved parameter gets its own `E-CONFIG-MISSING`. A GENERIC parameter
+  type is ACCEPTED — it keys on the bare head, so `Map<string, string>` resolves; a briefly-added filter
+  that rejected generics deleted a working surface and was reverted, and the resulting sharp edge (two
+  `Map<…>` providers colliding under one key) is **DEC-455.4, pending a ruling**.
+  Part A also exposed and fixed a pre-existing P0 (DEC-452:
   a QUALIFIED constructor dropped defaults and named args, panicking the VM on the shipped `Http.Cookie`).
   **Still NOT built from S3.2 as ruled: the precedence chain** (CLI flag > env > `#[Config]` >
   `phorj.json` > attribute default) — its env/CLI tiers are RUNTIME reads inside a spine DEC-318 keeps

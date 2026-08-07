@@ -19,6 +19,7 @@
 package Main;
 
 import Core.Output;
+import Core.Map;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 import Core.Runtime.Config;
@@ -31,10 +32,23 @@ class Limits {
     constructor(public int maxBodySize, public int timeoutSeconds) {}
 }
 
+// A config type may also be GENERIC — it resolves by the type's bare head, so a provider returning
+// `Map<string, string>` satisfies a `Map<string, string>` parameter. This is here for coverage, not
+// decoration: the differential globs `examples/**/*.phg`, so shipping it makes the generic-config
+// surface byte-identity-gated on every run. A filter that rejected generics was briefly added and
+// reverted (DEC-455.1) precisely because nothing gated this shape.
+// ⚠ Sharp edge, pending a ruling (DEC-455.4): because the key is the bare head, two providers
+// returning `Map<string, int>` and `Map<string, string>` would collide under one key `Map`.
 #[Config]
 function appConfig(): AppConfig {
     Output.printLine("[provider] appConfig");
     return new AppConfig("demo-app", 4, false);
+}
+
+#[Config]
+function envLabels(): Map<string, string> {
+    Output.printLine("[provider] envLabels");
+    return ["env" => "prod", "region" => "eu"];
 }
 
 #[Config]
@@ -44,7 +58,7 @@ function serverLimits(): Limits {
 }
 
 #[Entry(kind: EntryKind.Cli)]
-function main(AppConfig config, Limits limits): void {
+function main(AppConfig config, Limits limits, Map<string, string> labels): void {
     // Both parameters arrive injected: the compiler rewrote this entry to a zero-arg one whose body
     // opens with `AppConfig config = appConfig();` then `Limits limits = serverLimits();` — in that order.
     Output.printLine("app      = {config.appName}");
@@ -56,4 +70,5 @@ function main(AppConfig config, Limits limits): void {
     Output.printLine("verbose  = " + verbose);
     Output.printLine("maxBody  = {limits.maxBodySize}");
     Output.printLine("timeout  = {limits.timeoutSeconds}");
+    Output.printLine("env      = " + (Map.get(labels, "env") ?? "?"));
 }

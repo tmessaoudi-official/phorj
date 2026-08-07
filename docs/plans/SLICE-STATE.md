@@ -115,10 +115,13 @@ RULE), dependency row — mirrored into MASTER-PLAN + SLICE-STATE + the register
 `using`/`Closable` to DEC-203 though DEC-364 closed it 2026-07-31 — two external readers repeated our stale
 doc back to us. **DEC-331 S3.2 Part B SHIPPED 2026-08-07 (DEC-455)** — `#[Config]` injection now takes N typed
 parameters, resolved by type, injected in declaration order (observable: the example prints from each
-provider); module split to `src/checker/desugar_config/{mod,tests}.rs` per Invariant 13. It also fixed a
-**pre-existing** bug: a single generic parameter such as `Map<string, int>` had its type arguments dropped
-and produced a nonsense `E-CONFIG-MISSING` naming bare `Map` (DEC-455.1 — and my first write-up of that
-history was wrong; the safety lens refuted it with a probe).
+provider); module split to `src/checker/desugar_config/{mod,tests}.rs` per Invariant 13. ⚠ **RETRACTED (round 2): an earlier version of this
+line claimed Part B also "fixed a pre-existing bug" by rejecting generic parameter types. It did not.** The
+filter I added deleted a WORKING surface — `Map<string, string>` config types resolved and ran
+byte-identically on all three legs before it — so it was reverted, and the two regression tests that line
+cited never existed. See **DEC-455.1 (retracted)**; the live pin is `a_generic_config_type_still_resolves`,
+and the remaining sharp edge (two `Map<…>` providers colliding under one key) is **DEC-455.4, PENDING a
+developer ruling**.
 **⚠ S3.2 IS PARTIAL, NOT SHIPPED — do not read Part B as unblocking D4's §1.** `entry_role`
 (`src/ast/entry.rs:167-169`) defines a `Web` entry as EXACTLY `(Request): Response`, so a `Web` entry
 cannot carry config parameters and §1 verbatim still fails `E-ENTRY-SIG` [Verified]. What works today is a
@@ -2475,7 +2478,7 @@ backlog ledger, ✅ marks done):**
     through the dependency policy like http-client did).
 
 0. ✅ **DONE 2026-07-22 — Log-v2 (DEC-317 core) + `#[Config]` injection (DEC-318) BOTH SHIPPED.**
-   DEC-318: `desugar_config.rs` pre-check pass, byte-identical all legs, `examples/guide/config.phg`.
+   DEC-318: `src/checker/desugar_config/` pre-check pass, byte-identical all legs, `examples/guide/config.phg`.
    DEC-317: channels/PSR-3 levels/Stream+File+RotatingFile handlers/Line+Json formatters, `Logger`
    handle (`Channel` name is taken by concurrency), `src/native/log/{mod,state,prelude}.rs`,
    `__phorj_log_*` PHP helpers (`transpile/log_php.rs`), 3-leg content parity in `tests/log.rs`,
