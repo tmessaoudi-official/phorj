@@ -8329,3 +8329,31 @@ decide what to do with it"*) turned every one into a numbered question. All 23 r
 | DEC-454.21 | **process spawn** | **BUILD a typed, SHELL-FREE `Process.run(program, args): ProcessResult`** — explicit argv (no interpolation into a shell), captured stdout/stderr, exit code, optional timeout. `Core.Process` is argv+env only today [Verified]. **Better than PHP by construction:** `exec("… $userInput")` is the single most common RCE in the language, and this surface makes it unexpressible. Ladder case 1 (`proc_open`); Invariant 10 means examples spawn only deterministic programs |
 | DEC-454.22 | **the not-on-any-roadmap block** | **SPLIT.** IN: `gmp` (arbitrary-precision **integers**, a small gap beside shipped `Core.Decimal`) and `gettext` (subsumed by DEC-454.4's catalogues). `xsl` FOLLOWS XML if DEC-454.1 builds. **DECLINED with named ledger rows, DEC-413-style, never silence: `gd`/images, `ldap`, `soap`, `ftp`** — SOAP and FTP are legacy protocols PHP itself no longer promotes, LDAP is enterprise-specific, image manipulation is a separate discipline |
 | DEC-454.23 | **Q-C — the ratchet's flip-check dead band** | **DEFERRED by the developer: *"we will revisit this later if it stays."*** The hazard is recorded, not fixed: `floatmul` is now baselined at **1.001** and therefore *armed* by the WIN→LOSS flip check, while five direct readings give 0.972 / 0.998 / 0.990 / 0.955 / 1.050 — it straddles 1.0. That is the exact pathology that had `mapinsert` armed at 1.089 and false-blocking a docs-only push for hours. Proposed-but-not-built: a **±5% dead band** — a row emitted within 5% of 1.0 goes to a `_marginal` list, reported loudly every run, never blocking, leaving only on a robust win. **Revisit trigger: the first time `floatmul` blocks a push.** Also recorded: ten rows moved >15% between two baselines both emitted on a "quiet" box with no code change, so **no row of the current baseline is authoritative better than ~±20%** |
+
+### DEC-454.23 ADDENDUM (2026-08-07, same day) — the gate now PRINTS advice that would rebuild the trap
+
+Immediately after the re-emit landed, the pre-push lane reported:
+
+```
+RECOVERED mapinsert: owed at 0.851, now 1.120 (a WIN) — re-emit so the ratchet protects it
+```
+
+**Do NOT follow that instruction.** The *same binary* in the *same lane* read **0.829** earlier the same
+day and FAILED the gate on it. So `mapinsert` swings **0.83 ↔ 1.12** — a **35% range** — with zero code
+change, and re-emitting on the high draw would arm the flip check at 1.120 and recreate exactly the
+false-block that cost two sessions.
+
+**Which reading is authoritative:** the quiet-box ones, per the gate's own documented doctrine
+(`microbench-gate.sh:106-113` — absolute native-vs-php ratios *"swing 3-4x on this shared box under load"*
+and a loaded sample *"yields FALSE WIN->LOSS flips"*). Quiet evidence is consistent and plentiful — 0.79 /
+0.80 / 0.81 / 0.81 / 0.83 (DEC-431.1, load 0.33–0.44) and 0.803 / 0.823 / 0.837 / 0.842 / 0.856
+(2026-08-07, load 0.07, `jit.on` verified) and 0.851 (the `--emit`, load 0.11). The 1.120 came at lane load
+~2.3. **`0.851 OWED` stands.**
+
+Note the direction, because DEC-431.1 assumed the opposite: here **load inflates the ratio** (making phorj
+look better), while DEC-431.1's blocked push had load *deflating* it. So load does not bias one way — it
+just widens the distribution, which is why a row whose true value is near 1.0 must never be armed at all.
+**This is the strongest evidence yet for the deferred ±5% dead band**, and it upgrades the revisit trigger:
+not only *"the first time `floatmul` blocks"*, but also **the first time anyone is tempted to act on a
+`RECOVERED` line for a marginal row.** A `RECOVERED` message is only trustworthy for a row that recovers on
+a QUIET box.
