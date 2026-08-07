@@ -41,6 +41,22 @@
   raised. Two consequences are the developer's to rule before anything is built: the doctrine collides
   head-on with Invariant 10 on timezones (Q16), and read literally it reverses a dozen ruled language
   rejections (Q23) — so its BOUNDARY must be pinned, not guessed.
+- [2026-08-07] ⚠ **RETRACTION — `4dcb76d`'s `mapinsert` conclusion is WRONG and must not be relied on.**
+  That commit concluded *"the baseline 1.089 is real and CONSERVATIVE"* from a ten-run campaign reading
+  1.014–1.242. It contradicts three independent sources I failed to read before concluding: (1) **DEC-431.1**,
+  whose title is *"the ratchet BLOCKED a push, and it is right to: `mapinsert` was never a WIN … PENDING
+  RULING — push held"*, with five quiet-box runs at load 0.33–0.44 giving **0.83 / 0.81 / 0.79 / 0.81 / 0.80**
+  and an interleaved pinned control proving phorj's own leg unchanged at ~7.0 ms; (2) the gate's own header
+  (`scripts/microbench-gate.sh:113-119`), which states mapinsert's *"true value re-measures at 0.80-0.85 on a
+  quiet box"* and calls the emitted WIN a *"fiction"*; (3) **seven fresh readings taken 2026-08-07 on a
+  BYTE-IDENTICAL binary** — 0.877 / 0.829 / 0.831 / 0.848 / 0.841 at loads 0.46→2.31 and at both K=3 and
+  **K=9** (raising K refutes the sampling-artifact hypothesis, since it tightens the VM-side bound and the
+  value did not move). Twelve readings across two dates now cluster at **0.79–0.88**; only `4dcb76d`'s
+  campaign says otherwise, and that is the same commit in which four numbers were fabricated. **The
+  honest position: `mapinsert` is a real LOSS at ~0.84 and the 1.089 baseline is the artifact.** Checked and
+  cleared: `4dcb76d` did **not** re-emit `bench/micro-baseline.json` (last touched by `6d71227`), so no
+  laundering occurred. MASTER-PLAN carries `4dcb76d`'s claim and needs the same retraction — held for a
+  ruling rather than edited unilaterally, because DEC-431.1's status is *push held*.
 
 ---
 
