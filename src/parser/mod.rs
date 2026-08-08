@@ -144,7 +144,7 @@ impl Parser {
         let sp = self.peek_span();
         Diagnostic::new(
             Stage::Parse,
-            format!("expected {}, found {:?}", what, self.peek()),
+            format!("expected {}, found {}", what, self.peek().describe()),
             sp.line,
             sp.col,
         )
