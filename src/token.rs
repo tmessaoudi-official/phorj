@@ -242,6 +242,60 @@ pub fn opens_doc_comment(src: &[u8], at: usize) -> bool {
         && src.get(at + 3) != Some(&b'/')
 }
 
+impl TokenKind {
+    /// The token as a USER sees it in their own source — `` `;` ``, not `Semicolon`.
+    ///
+    /// `Parser::error` used to format the found token with `{:?}`, so the most common diagnostic in
+    /// the language read *"expected an expression, found Semicolon"*. `Semicolon` is the name of a
+    /// Rust enum variant; it appears nowhere in the user's file, and nothing tells them it means `;`.
+    /// Measured 2026-08-08 while auditing uncoded diagnostics — the lexer/parser class is both
+    /// codeless and, until now, spoke in the compiler's vocabulary rather than the language's.
+    ///
+    /// Punctuation and keywords render as their exact source spelling. Literal-bearing variants
+    /// render as a CATEGORY (`a string literal`) rather than their contents, because the span already
+    /// points at the text and echoing it twice adds nothing. The `_ =>` fallback keeps this total
+    /// without pinning every future variant: an unmapped token degrades to today's debug rendering
+    /// rather than failing to compile, which is the right trade for a message-formatting helper.
+    pub fn describe(&self) -> String {
+        let s = match self {
+            TokenKind::Int(_) => "an integer literal",
+            TokenKind::Float(_) => "a float literal",
+            TokenKind::Decimal(..) => "a decimal literal",
+            TokenKind::Str(_) => "a string literal",
+            TokenKind::Bytes(_) => "a bytes literal",
+            TokenKind::TaggedTemplate(..) => "a tagged template",
+            TokenKind::Ident(name) => return format!("`{name}`"),
+            TokenKind::Eof => "end of file",
+            TokenKind::Semicolon => "`;`",
+            TokenKind::Comma => "`,`",
+            TokenKind::Colon => "`:`",
+            TokenKind::ColonColon => "`::`",
+            TokenKind::Dot => "`.`",
+            TokenKind::Arrow => "`->`",
+            TokenKind::FatArrow => "`=>`",
+            TokenKind::LParen => "`(`",
+            TokenKind::RParen => "`)`",
+            TokenKind::LBrace => "`{`",
+            TokenKind::RBrace => "`}`",
+            TokenKind::LBracket => "`[`",
+            TokenKind::RBracket => "`]`",
+            TokenKind::HashBracket => "`#[`",
+            TokenKind::Eq => "`=`",
+            TokenKind::EqEq => "`==`",
+            TokenKind::Question => "`?`",
+            TokenKind::Bang => "`!`",
+            TokenKind::Plus => "`+`",
+            TokenKind::Minus => "`-`",
+            TokenKind::Star => "`*`",
+            TokenKind::Slash => "`/`",
+            TokenKind::Lt => "`<`",
+            TokenKind::Gt => "`>`",
+            other => return format!("{other:?}"),
+        };
+        s.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
