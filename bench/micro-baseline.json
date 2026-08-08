@@ -9,6 +9,9 @@
     "deepjson": {
       "ratio": 0.885
     },
+    "floatloop": {
+      "ratio": 0.776
+    },
     "fsforeachline": {
       "ratio": 0.318
     },
@@ -19,7 +22,7 @@
       "ratio": 0.293
     },
     "listcontains": {
-      "ratio": 0.860
+      "ratio": 0.86
     },
     "mapget": {
       "ratio": 0.953
@@ -60,7 +63,7 @@
       "identical": true
     },
     "floatloop": {
-      "ratio": 1.014,
+      "ratio": 0.776,
       "identical": true
     },
     "floatmul": {
@@ -108,7 +111,7 @@
       "identical": true
     },
     "listcontains": {
-      "ratio": 0.860,
+      "ratio": 0.86,
       "identical": true
     },
     "listfilter": {
@@ -188,7 +191,7 @@
       "identical": true
     },
     "minby": {
-      "ratio": 5.130,
+      "ratio": 5.13,
       "identical": true
     },
     "objalloc": {
