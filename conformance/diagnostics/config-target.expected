@@ -1,0 +1,5 @@
+type error at 6:5: `#[Config]` on a method — providers are top-level functions only
+    #[Config]
+    ^
+  [E-CONFIG-TARGET]
+  hint: move the provider to a top-level function

@@ -1,0 +1,7 @@
+package Main;
+
+type A = B;
+type B = A;
+
+function main(): void {
+}

@@ -1,0 +1,5 @@
+type error at 6:7: a `catch` type must implement `Error`, found `int`
+    } catch (int e) {
+      ^
+  [E-CATCH-TYPE]
+  hint: catch a type defined `class Foo implements Error { … }` (or the `Error` base itself)

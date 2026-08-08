@@ -1,0 +1,5 @@
+package Main;
+
+function main(): void {
+    1 = 2;
+}

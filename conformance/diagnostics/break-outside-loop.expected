@@ -1,0 +1,5 @@
+type error at 4:5: `break` outside a loop
+    break;
+    ^
+  [E-BREAK-OUTSIDE-LOOP]
+  hint: `break` may only appear inside a `for`/`while`/`do-while` loop

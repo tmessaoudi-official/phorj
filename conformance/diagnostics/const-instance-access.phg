@@ -1,0 +1,10 @@
+package Main;
+
+class Cfg {
+    const int LIMIT = 5;
+}
+
+function main(): void {
+    Cfg c = new Cfg();
+    int v = c.LIMIT;
+}
