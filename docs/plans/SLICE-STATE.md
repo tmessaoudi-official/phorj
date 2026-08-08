@@ -22,6 +22,25 @@ everything gets switched off.
 
 **A gap the fixtures exposed, worth its own row: SOME DIAGNOSTICS CARRY NO CODE.** `conformance/diagnostics/assign-type.expected` pins a real type error — ``expected `string`, found `int``` — that renders with **no `[E-…]` code at all**, so `phg explain` cannot help a user who hits it and the surface ratchet cannot count it. That is an Invariant-17 gap the code-based metric is structurally blind to: the ratchet measures codes, and an uncoded diagnostic is invisible to it. Not fixed here; recorded so the next pass measures *diagnostics* rather than only *codes*.
 
+**MEASURED 2026-08-08, and it is a CATEGORY rather than a backlog.** Of **67 raw `Diagnostic::new`
+sites**, only **6** attach a code within three lines, and the uncoded ones concentrate in the LEXER and
+PARSER — `src/tokenizer/strings.rs` (23), `tokenizer/scan.rs` (6), `parser/exprs/primary.rs` (5),
+`checker/intrinsic_imports.rs` (5). So **the ordinary syntax error a user makes every day is uncoded**:
+
+    int x = ;
+    -> parse error at 3:13: expected an expression, found Semicolon      (no [E-...] code)
+    -> `phg explain` has nothing to offer, because there is no code to pass it
+
+This reframes the 100% target. `phg explain` covers **305/307 semantic CODES** and therefore looks
+complete, but that denominator excludes the entire lex/parse class, and the new surface ratchet inherits
+the same blind spot because it counts codes. **"100% of codes" is NOT "100% of what a user can hit"** —
+worth settling before anyone declares the percentage won.
+
+**A second, smaller defect from the same probe: the parser leaks Rust token debug names.** The message
+says *"found Semicolon"* where the user's source says `;` — `Semicolon` is a `Token` enum variant name,
+absent from the user's file. Cheap to fix (a `Display` over the token) and it sits on the
+highest-traffic diagnostic in the language.
+
 **STILL NOT 100%, and the number says so on every run** — 228 codes unasserted, four LSP providers
 missing, JetBrains grammar absent. The gate now prints the percentage and the gap every push, so it
 cannot quietly rot again. Paying it down is ordinary queued work: write a fixture, re-emit the floor.
