@@ -1,0 +1,5 @@
+type error at 3:1: type alias cycle: B → A
+type A = B;
+^
+  [E-ALIAS-CYCLE]
+  hint: break the cycle so every alias bottoms out at a built-in, class, or enum type

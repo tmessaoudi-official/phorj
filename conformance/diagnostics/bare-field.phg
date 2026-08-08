@@ -1,0 +1,10 @@
+package Main;
+
+class Point {
+    int x;
+}
+
+function main(): void {
+    Point p = new Point(1);
+    int v = x;
+}

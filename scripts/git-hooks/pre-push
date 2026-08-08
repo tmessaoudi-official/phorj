@@ -47,6 +47,11 @@ cargo fmt --check
 echo "[pre-push] size-gate (Invariant 13 file-size ratchet)"
 bash "$_gate_root/scripts/size-gate.sh"
 
+# Invariant 17's 100% RULE + Invariant 9, made mechanical: the LSP/editor/example/diagnostic surface
+# may not shrink. Cheap (greps, no build). Detail + rationale: scripts/surface-ratchet.sh.
+echo "[pre-push] surface-ratchet (Invariant 17 coverage floors)"
+bash "$_gate_root/scripts/surface-ratchet.sh"
+
 # Infra syntax gate (DEC-388). `bash -n` over every tracked shell script + the git hooks, plus a
 # parse of every tracked YAML and JSON. This is the Coverage evidence global Rule 7 REQUIRES for infra
 # changes — wired here so it is produced mechanically rather than hand-rolled per session. Cheap

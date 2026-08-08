@@ -1,0 +1,5 @@
+type error at 4:5: `continue` outside a loop
+    continue;
+    ^
+  [E-CONTINUE-OUTSIDE-LOOP]
+  hint: `continue` may only appear inside a `for`/`while`/`do-while` loop

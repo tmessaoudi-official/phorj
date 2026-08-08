@@ -1,0 +1,11 @@
+package Main;
+
+abstract class Shape {
+    abstract function area(): int;
+}
+
+class Square extends Shape {
+}
+
+function main(): void {
+}

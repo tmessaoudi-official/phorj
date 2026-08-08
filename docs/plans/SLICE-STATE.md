@@ -1,5 +1,31 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ✅ CURRENT CURSOR (2026-08-08) — **Invariant 17's 100% RULE is now MEASURED and RATCHETED**
+
+**The 100% RULE was prose, and prose alone had let it drift.** Measured 2026-08-07: **307 `E-*` codes
+emitted in `src/`, only 62 asserted by any test (20%)**; `conformance/` referenced **9**; the LSP
+advertised 8 providers with `signatureHelp`/`codeAction`/`semanticTokens`/`inlayHint` **absent**; and
+`editors/phpstorm/` held nothing but a README. The one complete surface, `phg explain` (305/307), is
+complete *because* `explain_ratchet` fails the build — which is the whole lesson.
+
+**Built: `scripts/surface-ratchet.sh` + `scripts/surface-baseline.txt`, wired into pre-push.** Same
+shape as `size-gate.sh` and `doc-guards.sh`: freeze the debt as a FLOOR that may only rise. A new
+diagnostic code must now arrive with coverage or the push fails. It deliberately does NOT demand 100%
+on day one — that would mean ~246 fixtures before anything else could land, and a gate that blocks
+everything gets switched off.
+
+**Debt paid down in the same change: 12 new `conformance/diagnostics` fixtures** (`.phg` + blessed
+`.expected`, pinning the exact rendered diagnostic) — `E-BREAK-OUTSIDE-LOOP`, `E-CONTINUE-OUTSIDE-LOOP`,
+`E-ABSTRACT-INSTANTIATE`, `E-ABSTRACT-UNIMPL`, `E-ASSIGN-IMMUTABLE`, `E-ASSIGN-TARGET`, `E-ALIAS-CYCLE`,
+`E-CONFIG-TARGET`, `E-CATCH-TYPE`, `E-CONST-INSTANCE-ACCESS`, `E-FIELD-UNINITIALIZED`, `E-UNKNOWN-IDENT`.
+**Coverage 20% → 25% (62 → 79 of 307); conformance 9 → 21.**
+
+**STILL NOT 100%, and the number says so on every run** — 228 codes unasserted, four LSP providers
+missing, JetBrains grammar absent. The gate now prints the percentage and the gap every push, so it
+cannot quietly rot again. Paying it down is ordinary queued work: write a fixture, re-emit the floor.
+
+---
+
 ## ✅ CURRENT CURSOR (2026-08-06) — **the Claude bundle unified across all five repos (DEC-450 + DEC-451)**
 
 **Shipped 2026-08-06.** Two rounds of the cross-repo Claude-bundle audit, plan

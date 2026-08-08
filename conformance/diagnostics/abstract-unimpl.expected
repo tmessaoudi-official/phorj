@@ -1,0 +1,5 @@
+type error at 7:1: class `Square` must implement abstract method `area` from `Shape`
+class Square extends Shape {
+^
+  [E-ABSTRACT-UNIMPL]
+  hint: provide `function area(…)` in `Square`, or declare `Square` `abstract`

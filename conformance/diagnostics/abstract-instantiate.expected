@@ -1,0 +1,5 @@
+type error at 8:15: cannot instantiate abstract class `Shape`
+    Shape s = new Shape();
+              ^
+  [E-ABSTRACT-INSTANTIATE]
+  hint: `Shape` is `abstract`; instantiate a concrete subclass that implements its abstract methods

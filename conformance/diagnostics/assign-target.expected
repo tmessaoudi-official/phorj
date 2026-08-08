@@ -1,0 +1,5 @@
+type error at 4:5: assignment target must be a variable, an indexed element, or a field
+    1 = 2;
+    ^
+  [E-ASSIGN-TARGET]
+  hint: only `name = e;`, `container[i] = e;`, and `obj.field = e;` are supported; nested places (`a.b.c`, `this.f[i]`) land in a later slice

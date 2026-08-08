@@ -1,0 +1,11 @@
+# Surface-coverage FLOOR (scripts/surface-ratchet.sh). Each number may only GO UP.
+# Re-freeze with `bash scripts/surface-ratchet.sh --emit` after coverage improves, and say in the
+# commit message what was added. Lowering a number by hand is laundering the gate, not fixing it.
+#
+# codes_total is informational and may move in EITHER direction (a code can be legitimately retired);
+# the ratio floors below are what actually gate.
+codes_total 307
+codes_asserted 79
+codes_in_conformance 21
+lsp_providers 8
+examples 277

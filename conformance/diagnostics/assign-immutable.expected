@@ -1,0 +1,5 @@
+type error at 5:5: `x` is immutable and cannot be reassigned
+    x = 2;
+    ^
+  [E-ASSIGN-IMMUTABLE]
+  hint: declare it `mutable` (e.g. `mutable int x = …;`)

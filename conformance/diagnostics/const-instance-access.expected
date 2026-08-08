@@ -1,0 +1,5 @@
+type error at 9:14: `LIMIT` is a constant of `Cfg` — read it as `Cfg.LIMIT`, not through an instance
+    int v = c.LIMIT;
+             ^
+  [E-CONST-INSTANCE-ACCESS]
+  hint: write `Cfg.LIMIT`

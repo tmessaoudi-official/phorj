@@ -1,0 +1,11 @@
+package Main;
+
+import Core.Runtime.Config;
+
+class Holder {
+    #[Config]
+    function provide(): int { return 1; }
+}
+
+function main(): void {
+}
