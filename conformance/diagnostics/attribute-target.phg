@@ -1,0 +1,12 @@
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+class Holder {
+    #[Entry(kind: EntryKind.Cli)]
+    function m(): void { }
+}
+
+function main(): void {
+}

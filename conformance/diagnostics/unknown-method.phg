@@ -1,0 +1,8 @@
+package Main;
+
+class Widget { }
+
+function main(): void {
+    Widget w = new Widget();
+    w.missing();
+}

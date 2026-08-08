@@ -1,0 +1,8 @@
+package Main;
+
+function f(): int {
+    return "not an int";
+}
+
+function main(): void {
+}

@@ -1,0 +1,11 @@
+package Main;
+
+class Widget {
+    int x;
+    function construct(int x) { this.x = x; }
+}
+
+function main(): void {
+    Widget w = new Widget(1);
+    int v = w.nope;
+}

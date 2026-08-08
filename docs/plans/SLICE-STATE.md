@@ -18,7 +18,9 @@ everything gets switched off.
 `.expected`, pinning the exact rendered diagnostic) — `E-BREAK-OUTSIDE-LOOP`, `E-CONTINUE-OUTSIDE-LOOP`,
 `E-ABSTRACT-INSTANTIATE`, `E-ABSTRACT-UNIMPL`, `E-ASSIGN-IMMUTABLE`, `E-ASSIGN-TARGET`, `E-ALIAS-CYCLE`,
 `E-CONFIG-TARGET`, `E-CATCH-TYPE`, `E-CONST-INSTANCE-ACCESS`, `E-FIELD-UNINITIALIZED`, `E-UNKNOWN-IDENT`.
-**Coverage 20% → 25% (62 → 79 of 307); conformance 9 → 21.**
+**Coverage 20% → 27% (62 → 83 of 307); conformance 9 → 25.**
+
+**A gap the fixtures exposed, worth its own row: SOME DIAGNOSTICS CARRY NO CODE.** `conformance/diagnostics/assign-type.expected` pins a real type error — ``expected `string`, found `int``` — that renders with **no `[E-…]` code at all**, so `phg explain` cannot help a user who hits it and the surface ratchet cannot count it. That is an Invariant-17 gap the code-based metric is structurally blind to: the ratchet measures codes, and an uncoded diagnostic is invisible to it. Not fixed here; recorded so the next pass measures *diagnostics* rather than only *codes*.
 
 **STILL NOT 100%, and the number says so on every run** — 228 codes unasserted, four LSP providers
 missing, JetBrains grammar absent. The gate now prints the percentage and the gap every push, so it
