@@ -8370,3 +8370,35 @@ a QUIET box.
 | DEC-455.6 | **PENDING DEVELOPER QUESTION (Invariant 15) — widening the arity COST an accurate diagnostic on the commonest entry-signature mistake.** Before Part B, `#[Entry(kind: EntryKind.Cli)] function main(int argc, string argv): void` reported `E-ENTRY-SIG` naming the valid shapes (*"a `Cli` entry is `(): void`, `(): int`, or `(List<string>): void|int`"*) plus `E-MAIN-SIGNATURE`. Now EVERY multi-parameter CLI-return entry is a config candidate, so it reports one `E-CONFIG-MISSING` per parameter with an unfollowable hint — [Verified 2026-08-07 on the release binary: *``entry takes `int` but no `#[Config]` provider returns `int``* with hint *``declare one: `#[Config] function appConfig() -> int`` *; writing that hint literally then fails `E-TYPE-ARG-COUNT` for a generic, and for `int` produces a provider nobody wants]. Pre-existing at ONE parameter; this widened it to the common case. **Not self-ruled, because every obvious fix trades something real:** (a) decline when NO parameter resolves to a provider — restores `E-ENTRY-SIG` for the mistake case, but a genuine typo in a config type name would also lose its helpful `E-CONFIG-MISSING`; (b) exclude primitive types from config candidacy — but scalar providers demonstrably WORK (`#[Config] function port(): int` + `main(int p)` runs on all four legs, verified by the parity lens), so this deletes a working surface, the exact mistake DEC-455.1 records; (c) emit BOTH diagnostics — accurate but noisy; (d) accept as-is and reword the hint. **Caught by the DEC-268 completeness lens with a parent-vs-HEAD executed control.** Current behaviour is now pinned by `a_multi_param_entry_of_non_provider_types_reports_config_missing` so the choice is visible and any change is deliberate | **PENDING — developer** |
 | DEC-455.2 | **S3.2 is PARTIAL, not shipped — the label was corrected before commit.** An intermediate spec edit read *"S3.2 ✅ SHIPPED … Part B, which §1's `function web(…)` requires"*, implying §1 now works | **It does NOT, and the claim was narrowed.** `entry_role` (`src/ast/entry.rs:167-169`) defines a `Web` entry as EXACTLY `(Request): Response`, so a `Web` entry can never carry config parameters and §1 verbatim fails FOUR `E-INJECTED-TYPE-BARE` errors before it ever reaches the entry-role gate — its own listing writes `import Core.Config;` (the marker is `Core.Runtime.Config`) and never imports `EntryKind`/`Request`/`Response`. The STRUCTURAL claim still holds and was verified on an import-corrected copy: `` `#[Entry(kind: EntryKind.Web)]` function `web`'s signature doesn't match — a `Web` entry is `(Request): Response` `` `[E-ENTRY-SIG]`. ⚠ An earlier version of this row said "[Verified by running `phg check` on it]" for the `E-ENTRY-SIG` outcome, which is NOT what that program emits — the same cite-a-verification-you-did-not-run failure the round-1 lenses flagged. Part B is necessary but not sufficient; the second gate belongs with **S3.3**, where `Http.serve(cfg, handler)` gives the `Web` role a shape that can accept config. S3.2's ruled scope is THREE pieces and the **precedence chain** (CLI flag > env > `#[Config]` > `phorj.json` > attribute default) is also unbuilt — its env/CLI tiers are RUNTIME reads inside a spine DEC-318 keeps pure, so for a `Cli` entry the PHP leg must read the same sources or Invariant 1 breaks, and an env-reading example is not a deterministic input (Invariant 10). **That parity story is a PENDING developer question, not self-rulable.** Also tracked, not absorbed: D4 §2 writes `tlsMinVersion?="1.2"` while the class declares it non-optional | **PARTIAL — S3.3 + a ruling owed** |
 | DEC-455.3 | **Invariant 9 debt from Part A, surfaced by the completeness lens's sibling:** `Http.ServeConfig`/`Http.RequestParsing` shipped with **no runnable example and no `examples/README.md` row**, while SLICE-STATE had promised *"The S3.2 example + its differential case ship with Part B"* | **OWED, recorded not waived.** The class is a value whose consumer (`Http.serve`) does not exist until S3.3, so a runnable example that *does* something with it cannot be written yet — which is an argument for shipping the example WITH S3.3, not for having no row. A `FEATURES.md` row was added immediately (marked ⚠, values-not-consumed); the runnable example + README row ride with S3.3 | **OWED → S3.3** |
+
+
+### DEC-454.23 ADDENDUM 2 (2026-08-08) — `floatloop` restored to OWED; Q-C's prediction came true, from my own hand
+
+The deferred dead-band question (Q-C / DEC-454.23) stopped being hypothetical: `floatloop` blocked a
+push, and **I am the one who armed it.**
+
+Sequence, stated plainly. Before 2026-08-07 `floatloop` sat at **OWED 0.776** — a carried loss, honest
+and non-blocking, emitted on a quiet box by DEC-434.1 (`6d71227`, `floatloop never won — the ratchet
+armed a lucky draw; quiet-box re-emit`). My quiet-box re-emit for `mapinsert` (`2bbd412`) swept it up and
+moved it to **features WIN 1.014**, which ARMED the flip check on a row whose readings span 0.86–1.06. The
+safety lens called that move "defensible" on the evidence and I accepted it. It was defensible; it was
+also exactly the pattern I had written up as Q-C two commits earlier, and I armed it anyway.
+
+It then failed a push at **0.607 / 0.724 confirmed**, with a direct five-run re-measure at
+**0.823 / 0.697 / 0.620 / 0.682 / 0.831** — but at load 0.80–1.78, where every earlier reading was taken
+at 0.07–0.58. **Whether phorj's `floatloop` leg genuinely regressed is UNRESOLVED and is not claimed
+either way here.**
+
+**Developer ruling: carry it as OWED so it stops blocking, and come back to it.** Executed as a targeted
+edit restoring the value it held BEFORE my re-emit (0.776) rather than inventing a number from a loaded
+box, and deliberately NOT as a full `--emit`: the box is not under the 0.7 emit bar, and a full re-emit
+would re-freeze all 53 rows at loaded values — which is precisely how `floatloop` and `floatmul` slipped
+out of `_owed` the first time. Moving INTO `_owed` is the sanctioned direction (that is what the list is
+for); the prohibition in DEC-365 is on moving OUT of it without a fix, and on reporting a loss as a win.
+Gate after the change: 43 WIN / 10 loss / **11 OWED** / 0 blocking regressions, and the row now reports
+`owed floatloop: 0.776 -> 0.928 (still losing; carried, not laundered)`.
+
+**Owed follow-up, unchanged:** re-measure on a genuinely quiet box to settle whether 0.78-vs-0.93 is a
+real regression or load, and apply Q-C's dead band. That is now a ~5-line change, not a new mechanism —
+the gate ALREADY has the band and uses it for warnings (`warn floatmul: near-parity wobble … within 0.95
+noise band; not blocking`); the flip check simply does not consult it.
