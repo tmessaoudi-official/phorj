@@ -1,0 +1,21 @@
+type error at 5:5: `construct` must declare a return type
+    function construct(int x) { this.x = x; }
+    ^
+  [E-MISSING-RETURN-TYPE]
+  hint: every function and method declares its return type — add `-> void` for a side-effecting function (or `-> empty` to return the holdable empty value)
+type error at 5:33: field `x` of `Widget` is immutable and cannot be assigned
+    function construct(int x) { this.x = x; }
+                                ^
+  [E-ASSIGN-IMMUTABLE]
+  hint: declare it `mutable` (e.g. `mutable int x;`)
+type error at 4:5: field `x` is never initialized — it must be set on every path of the constructor, or given an initializer
+    int x;
+    ^
+  [E-FIELD-UNINITIALIZED]
+  hint: assign `this.x = …` unconditionally in the constructor, give the field an initializer (`int x = 0;`), make it a promoted ctor param (`constructor(public int x)`), or make it optional (`int? x;`, defaults to null)
+type error at 9:16: `Widget` expects 0 argument(s), found 1
+    Widget w = new Widget(1);
+               ^
+type error at 10:14: type `Widget` has no field `nope`
+    int v = w.nope;
+             ^

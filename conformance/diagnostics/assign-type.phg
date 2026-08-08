@@ -1,0 +1,8 @@
+package Main;
+
+function main(): void {
+    int x = 1;
+    mutable int y = 2;
+    y = x;
+    string s = y;
+}

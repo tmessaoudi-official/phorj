@@ -1,0 +1,5 @@
+type error at 10:18: call to `risky` can throw `BadInputError`, which is not handled here
+    int v = risky();
+                 ^
+  [E-CALL-UNHANDLED]
+  hint: wrap the call in `try { … } catch (BadInputError e) { … }`, or propagate it with `?` and declare `throws BadInputError`

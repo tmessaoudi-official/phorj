@@ -1,0 +1,5 @@
+type error at 7:5: `#[Entry]` on an instance method — an entry runs without an instance
+    #[Entry(kind: EntryKind.Cli)]
+    ^
+  [E-ENTRY-TARGET]
+  hint: make the method `static`, or move the entry to a top-level function

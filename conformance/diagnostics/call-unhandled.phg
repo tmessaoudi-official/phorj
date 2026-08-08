@@ -1,0 +1,11 @@
+package Main;
+
+class BadInputError implements Error { }
+
+function risky(): int throws BadInputError {
+    throw new BadInputError();
+}
+
+function main(): void {
+    int v = risky();
+}
