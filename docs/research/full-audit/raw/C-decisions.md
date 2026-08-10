@@ -2721,7 +2721,7 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   master push with the 4 platform archives attached; **stable** = `v*` tagged releases (the SemVer
   contract's channel). LTS = post-1.0 decision, recorded not scheduled. BUILD: the dev's push trigger
   built archives but never published (attach step gated on the `release` event; no nightly tag existed)
-  — fixed by the `publish-nightly` job in `.github/workflows/release.yml` (downloads the matrix
+  — fixed by the `publish-dev` job in `.github/workflows/release.yml` (downloads the matrix
   artifacts, force-moves the `nightly` tag, delete-then-recreates the prerelease via `gh`;
   `--latest=false` keeps the Latest badge on stable). Verified LIVE: release `nightly (10262b6)` with
   4 sha256-digested assets. Docs: SEMVER.md §Release channels + SECURITY.md supported-versions row.

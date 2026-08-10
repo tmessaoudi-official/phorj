@@ -2362,7 +2362,7 @@ userland `.phg` packages + a native Rust trait-seam SPI (build-your-own `phg`; `
 examples, src comments, and the playground wasm surface swept; historical records left as written.
 
 **2026-07-22 SESSION LOG:** dev updated deps (cranelift 0.133→0.134), version → `1.0.0-nightly.0`, added
-release.yml push trigger. This session: **(a) nightly channel FIXED + LIVE** (DEC-323 — `publish-nightly`
+release.yml push trigger. This session: **(a) nightly channel FIXED + LIVE** (DEC-323 — `publish-dev`
 job; release `nightly` re-points with 4 sha256 assets each master push); **(b) LSP completion field-bug
 FIXED** (dev report "no autocomplete": general completion now survives mid-typing parse errors via the
 repaired parse, imported module qualifiers offered, import catalog unions native-only modules —

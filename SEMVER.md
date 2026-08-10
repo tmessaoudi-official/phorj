@@ -7,7 +7,7 @@ pre-1.0 compatibility CONTRACT below still applies until a stable `1.0.0`.
 ## Release channels (DEC-323)
 
 - **nightly** — every push to `master` rebuilds the four platform archives and re-points the rolling
-  `nightly` tag + prerelease at that commit (`.github/workflows/release.yml`, `publish-nightly` job).
+  `nightly` tag + prerelease at that commit (`.github/workflows/release.yml`, `publish-dev` job).
   Bleeding edge: no compatibility promise, assets are replaced on every push — never pin to them.
 - **stable** — the `v*` tagged releases. This is the channel the contract below governs, and the only
   channel to pin in anything durable.

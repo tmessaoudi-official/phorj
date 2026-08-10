@@ -4,8 +4,8 @@
 # binary is correctly linked — and it fills the macOS gap that `phg build --target` defers.
 #
 # Release channels (DEC-323):
-#   nightly — every push to master rebuilds the 4 archives and the `publish-nightly` job re-points
-#             the rolling `nightly` tag + prerelease at that commit with the fresh binaries attached.
+#   dev — every push to master rebuilds the 4 archives and the `publish-dev` job re-points
+#             the rolling `dev` tag + prerelease at that commit with the fresh binaries attached.
 #   stable  — publishing a `v*` Release triggers the same matrix and each job attaches its archive
 #             to that release (the pre-existing path, unchanged).
 # `workflow_dispatch` builds the archives and uploads them as run artifacts only (pipeline dry-run).
@@ -99,14 +99,14 @@ jobs:
             ${{ matrix.asset }}.tar.gz
             ${{ matrix.asset }}.zip
 
-  # The nightly channel (DEC-323): on every master push, re-point the rolling `nightly` tag at this
+  # The dev channel (DEC-323): on every master push, re-point the rolling `dev` tag at this
   # commit and publish a prerelease carrying all four archives. Delete-then-recreate (instead of
-  # editing in place) so stale assets from the previous nightly can never linger. Runs AFTER the whole
-  # matrix so a nightly is only cut when all four platforms built. No recursion: events created with
-  # the workflow's own GITHUB_TOKEN do not trigger new workflow runs, so publishing the nightly
+  # editing in place) so stale assets from the previous dev can never linger. Runs AFTER the whole
+  # matrix so a dev is only cut when all four platforms built. No recursion: events created with
+  # the workflow's own GITHUB_TOKEN do not trigger new workflow runs, so publishing the dev
   # release does NOT re-fire this workflow's `release:` trigger.
-  publish-nightly:
-    name: publish nightly prerelease
+  publish-dev:
+    name: publish dev prerelease
     needs: build
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -122,18 +122,18 @@ jobs:
 
       # `gh` is preinstalled on GitHub runners; GITHUB_TOKEN + `contents: write` (set at workflow
       # level) covers release + tag management. `--latest=false` keeps the "Latest" badge on the
-      # newest stable `v*` release — nightly is a prerelease channel, never the storefront.
-      - name: Recreate the rolling nightly release
+      # newest stable `v*` release — nigdevhtly is a prerelease channel, never the storefront.
+      - name: Recreate the rolling dev release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           ls -l assets/
-          gh release delete nightly --yes || true
-          git push origin :refs/tags/nightly || true
-          git push origin "+${GITHUB_SHA}:refs/tags/nightly"
-          gh release create nightly assets/* \
+          gh release delete dev --yes || true
+          git push origin :refs/tags/dev || true
+          git push origin "+${GITHUB_SHA}:refs/tags/dev"
+          gh release create dev assets/* \
             --prerelease \
             --latest=false \
-            --title "nightly (${GITHUB_SHA:0:7})" \
-            --notes "Rolling nightly build from \`master\` @ ${GITHUB_SHA}. Rebuilt and re-pointed on every push to master — do not pin to these assets; use a \`v*\` release for anything durable."
+            --title "dev (${GITHUB_SHA:0:7})" \
+            --notes "Rolling dev build from \`master\` @ ${GITHUB_SHA}. Rebuilt and re-pointed on every push to master — do not pin to these assets; use a \`v*\` release for anything durable."
