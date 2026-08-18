@@ -17,13 +17,15 @@ ok()  { printf '  ok   — %s\n' "$1"; PASS=$((PASS+1)); }
 bad() { printf '  FAIL — %s\n' "$1"; FAIL=$((FAIL+1)); }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/src" "$TMP/scripts" "$TMP/tests" "$TMP/scripts/claude-bootstrap/hooks"
+mkdir -p "$TMP/src" "$TMP/scripts" "$TMP/tests" "$TMP/.claude/hooks"
 : > "$TMP/scripts/size-baseline.txt"
 # Symlink the REAL log-helpers.sh into the sandbox at the path the hook sources it from. Without
 # this the hook's `. … || log_obs(){ :; }` fallback fires and the observability assertion below
 # passes vacuously against a no-op — the sandbox would be testing the fallback, not the wiring.
-ln -sf "$HERE/../../scripts/claude-bootstrap/hooks/log-helpers.sh" \
-       "$TMP/scripts/claude-bootstrap/hooks/log-helpers.sh"
+# Path changed 2026-08-18: log-helpers.sh moved from scripts/claude-bootstrap/hooks/ to
+# .claude/hooks/ when the container-era bootstrap was removed. It is vendored in-repo rather
+# than sourced from ~/.claude/ so a clean clone still logs.
+ln -sf "$HERE/log-helpers.sh" "$TMP/.claude/hooks/log-helpers.sh"
 
 # Run the hook with a sandbox project root, feeding a PostToolUse-shaped payload on stdin.
 # Returns "rc|stderr" so a single call can assert both halves of the contract.

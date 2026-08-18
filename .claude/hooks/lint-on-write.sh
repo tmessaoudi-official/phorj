@@ -36,7 +36,7 @@ HARD=500
 
 root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 # shellcheck source=/dev/null
-. "$root/scripts/claude-bootstrap/hooks/log-helpers.sh" 2>/dev/null || log_obs() { :; }
+. "$root/.claude/hooks/log-helpers.sh" 2>/dev/null || log_obs() { :; }
 
 payload="$(cat 2>/dev/null || true)"
 file="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
