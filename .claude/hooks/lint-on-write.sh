@@ -35,8 +35,10 @@ SOFT=300
 HARD=500
 
 root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# log_obs comes from the GLOBAL install (global-is-reference ruling, 2026-08-18 — no repo copy);
+# absent it, the no-op stub keeps the hook alive on machines without ~/.claude (e.g. CI).
 # shellcheck source=/dev/null
-. "$root/.claude/hooks/log-helpers.sh" 2>/dev/null || log_obs() { :; }
+. "$HOME/.claude/hooks/log-helpers.sh" 2>/dev/null || log_obs() { :; }
 
 payload="$(cat 2>/dev/null || true)"
 file="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"

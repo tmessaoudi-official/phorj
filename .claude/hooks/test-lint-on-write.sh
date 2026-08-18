@@ -19,13 +19,13 @@ bad() { printf '  FAIL — %s\n' "$1"; FAIL=$((FAIL+1)); }
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/src" "$TMP/scripts" "$TMP/tests" "$TMP/.claude/hooks"
 : > "$TMP/scripts/size-baseline.txt"
-# Symlink the REAL log-helpers.sh into the sandbox at the path the hook sources it from. Without
-# this the hook's `. … || log_obs(){ :; }` fallback fires and the observability assertion below
-# passes vacuously against a no-op — the sandbox would be testing the fallback, not the wiring.
-# Path changed 2026-08-18: log-helpers.sh moved from scripts/claude-bootstrap/hooks/ to
-# .claude/hooks/ when the container-era bootstrap was removed. It is vendored in-repo rather
-# than sourced from ~/.claude/ so a clean clone still logs.
-ln -sf "$HERE/log-helpers.sh" "$TMP/.claude/hooks/log-helpers.sh"
+# The hook sources the GLOBAL ~/.claude/hooks/log-helpers.sh (global-is-reference ruling,
+# 2026-08-18 — the repo copy is gone). This test runs on the developer's machine where the global
+# copy exists, so the observability assertion below exercises the REAL log_obs (honouring the
+# OBS_LOG override). On a machine without ~/.claude the hook's no-op fallback fires and the
+# assertion fails LOUDLY — that is the signal this test needs the global install, not a defect.
+[[ -f "$HOME/.claude/hooks/log-helpers.sh" ]] \
+  || echo "WARN: no global log-helpers.sh — the observability assertion will fail" >&2
 
 # Run the hook with a sandbox project root, feeding a PostToolUse-shaped payload on stdin.
 # Returns "rc|stderr" so a single call can assert both halves of the contract.
