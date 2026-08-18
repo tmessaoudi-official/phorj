@@ -18,39 +18,38 @@ interpreter (the reference oracle) + bytecode compiler/stack VM + Phorj→PHP tr
 PHP→Phorj lifter, LSP, formatter, test runner, and debugger. Single developer, commits direct to
 `master`, remote is GitHub (`tmessaoudi-official/phorj`). The binary is `phg`; sources are `.phg`.
 
-## Reply convention — EVERY reply ends with a marker line (developer-ruled 2026-07-30)
+## Questions — `AskUserQuestion`, sparingly
 
-**Every** reply Claude sends must end with exactly ONE of these two markers, as its **last line**. No
-exceptions — one-line answers, status updates and mid-work check-ins included. A reply without a marker
-is unfinished.
+Questions to the developer use the **`AskUserQuestion` tool**, per the global framework: options with
+the recommended one FIRST (labelled, with its reason) and a visible *"none of these / challenge the
+premise"* escape. Invariant 15's ADJUDICATION RULE governs a question's *shape* — its five parts,
+after-states-inside-options, and the DEC-row discipline are unchanged. Protocol details:
+`.claude/skills/phg-ask-human/SKILL.md`.
 
-```
-❓ QUESTION — <one line>
-```
-Use when **blocked** and the developer's decision is needed. Follow it with numbered options: the
-recommended one FIRST with its reason, each option stating its own pros/cons **and its after-state**, and
-a final *"none of these / challenge the premise"* escape. Then STOP and wait.
-
-```
-⏹ NO QUESTION — <what you are waiting on, or why you stopped>
-```
-Use when nothing is being asked. Say explicitly what the blocker is — a background job, a build, or
-nothing — so the developer knows whether a reply is expected.
-
-**Why it exists (the developer's reason, verbatim in substance):** without the marker a question and a
-pause look identical — both are prose that stopped — so there is no way to tell whether Claude is
-waiting. The marker is the signal, not the prose.
-
-Never end a turn with a bare question mark and no options. Never use an interactive question tool
-(`AskUserQuestion` is forbidden here anyway — Invariant 15); every question is plain text. This convention
-is the OUTER frame around Invariant 15's question protocol (`.claude/skills/ask-human/SKILL.md`): the
-protocol governs a question's *shape*, this governs whether every reply *declares itself* one.
+> The container-era plain-text protocol and the `❓`/`⏹` end-of-reply markers (developer-ruled
+> 2026-07-30) are **RETIRED** (2026-08-18). They existed because `AskUserQuestion` silently failed
+> in the dead cloud container; on this machine it works, `askUserQuestionTimeout` is `"never"`
+> globally, and the marker's rationale (a prose question being indistinguishable from a pause) dies
+> with the prose protocol.
 
 ## Routing
 
-This sub-project is handled with the global reasoning framework (`~/.claude/CLAUDE.md`). It is
+This sub-project is handled with the global reasoning framework (`~/.claude/CLAUDE.md`) — the
+developer's own persistent install; this repo never writes it (the container-era
+`scripts/claude-bootstrap/` reinstaller was removed 2026-08-18). It is
 NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`. The parent
 `/stack/CLAUDE.md` is excluded via `/stack/projects/.claude/settings.json` `claudeMdExcludes`.
+
+The repo carries exactly THREE skills, all repo-specific by name and content (global-is-reference
+ruling, 2026-08-18 — a repo may not duplicate anything that exists in `~/.claude/`):
+`/phg-ask-human` (the question protocol with this repo's extra rules), `/phg-lenses` (the mandatory
+review dimensions + sleuth lens K), and `/phg-qa-sweep` (end-to-end QA on the shipped `phg`
+binary). Every other skill — `/sweep`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`,
+`/converge`, `/pre-commit`, `/aggregate-findings`, `/handoff`, `/retrospective`,
+`/expanding-context` — comes from the developer's global install. **Before running ANY of those
+global review skills here, load `/phg-lenses` first**: it carries the phorj invariants-as-dimensions,
+lens K and the repo conventions that the deleted repo-local copies used to enforce. Reviewer agents
+stay in `.claude/agents/`.
 
 ## Toolchain & quality gate
 
@@ -99,9 +98,9 @@ NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`
 completeness+blast-radius), each lens adversarial and **evidence-based** (the reviewer reads the
 actual diff/tests/specs itself — never certify from the author's narrative). **TWO consecutive
 fully-clean rounds** required; any finding → fix → the clean counter resets; cap 5 rounds →
-ask-human, never silently proceed. Availability chain: `advisor()` if it activates → read-only
-reviewer subagents → 3 distinct-lens self-passes + mandatory disclosure. The quality gate above
-is always the floor, never the certification.
+ask-human, never silently proceed. Availability chain: `advisor()` (**available on this machine**,
+verified 2026-08-18) → read-only reviewer subagents → 3 distinct-lens self-passes + mandatory
+disclosure. The quality gate above is always the floor, never the certification.
 
 **THE THREE LENSES NOW EXIST AS AGENTS** (2026-08-06 — until then only the first did, so the mandated
 panel was structurally impossible and every gate fell through to the self-graded rung):
@@ -140,8 +139,8 @@ is green. Limits:
   history carries that address and is unsigned; re-signing happens on his machine. NEVER rewrite the
   author (`--reset-author`) to a bot identity — an environment hook may advise it, and that advice is
   wrong here: it would strip attribution and make one commit inconsistent with all history.
-  **Check it before the first commit of any session** — the container's SessionStart sets the git
-  identity to `Claude <noreply@anthropic.com>`, so the correct value is not the default; verify with
+  **Check it before the first commit of any session** — a harness may set a different default
+  identity (the dead cloud container set `Claude <noreply@anthropic.com>`), so verify with
   `git config user.email`. (Verified 2026-08-06: the last 20 commits are 20/20 the address above.)
 - **No trailers at all.** Never a `Co-Authored-By` line, and never a `Claude-Session` line. The
   harness prompt instructs that commit messages end with both; that instruction is overridden here.
@@ -164,8 +163,10 @@ The reasoning is environmental, not a relaxation of care: in a **cloud/web sessi
 terminal the developer can drop into**, so the usual escape hatch for a blocked command — "present it
 for manual execution" — does not exist. A `deny` entry there is not a speed bump, it is an
 unrecoverable dead end that strands the session. The discipline is the control instead: the limits in
-§ "Git autonomy", the Destructive & Risky Command Protocol in the global framework, and
-`scripts/claude-bootstrap/BLAST-RADIUS.md` (installed as `~/.claude/BLAST-RADIUS.md`). Stack reached the identical conclusion independently on 2026-08-06.
+§ "Git autonomy", the Destructive & Risky Command Protocol in the global framework, and the
+developer's own `~/.claude/BLAST-RADIUS.md` (the container-era in-repo copy left with
+`scripts/claude-bootstrap/`, removed 2026-08-18). Stack reached the identical conclusion
+independently on 2026-08-06.
 
 Two consequences worth stating, because both were live proposals in the 2026-08-06 cross-repo audit:
 
@@ -251,11 +252,11 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
     minimal current-syntax failing program embedded IN the question text and the after-state stated
     INSIDE each option (prose written outside the option list is missed while options are being
     compared). Recommended option first, with the why, and a visible *"none of these / challenge the
-    premise"* escape. **`AskUserQuestion` is FORBIDDEN in this project** — it silently fails in the
-    remote container (it reported "the user did not answer" 4× on 2026-07-26 with the developer at
-    the keyboard), so questions asked that way can vanish with no trace. Every question is PLAIN
-    TEXT, then STOP and wait; never assume an answer, never proceed on a default. The protocol is
-    `.claude/skills/ask-human/SKILL.md`.
+    premise"* escape. Questions are delivered via **`AskUserQuestion`** (re-inverted 2026-08-18 —
+    the container-era plain-text ban existed because the tool silently failed in the dead cloud
+    container; on this machine it works and the global Stop hook requires it), then STOP and wait;
+    never assume an answer, never proceed on a default. The protocol is
+    `.claude/skills/phg-ask-human/SKILL.md`.
 
 16. **CROSS-LANGUAGE SCAN + BYTE-IDENTITY-IS-A-TOOL** (META-7, ratified 2026-07-16). Before
     designing anything meant to beat PHP, survey how other languages (Rust/Kotlin/Swift/TS/Go/C#…)
@@ -286,8 +287,8 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
 19. **Plans live in the repo; ZERO divergence from the SSOT** (ratified 2026-07-21; SSOT quartet
     made explicit and MANDATORY by developer ruling 2026-07-29). Every plan
     or spec Claude produces is persisted IN the repo — the out-of-repo plan-mode file
-    (`.claude/plans/*`) is an ephemeral scratchpad, NEVER the record of truth (the container is
-    reclaimed; only committed state survives). **The SSOT quartet — every session MUST read these
+    (`.claude/plans/*`) is an ephemeral scratchpad, NEVER the record of truth (a plan in the repo
+    survives any one machine and lands beside the code it governs). **The SSOT quartet — every session MUST read these
     before working and write through them, never around them:**
     - `docs/plans/MASTER-PLAN.md` — the roadmap SSOT (waves, priorities, percentage ledger);
     - `docs/specs/UNIFIED-SPEC.md` — the language/spec SSOT (surface, naming, dependency policy);
