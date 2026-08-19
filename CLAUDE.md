@@ -37,7 +37,10 @@ after-states-inside-options, and the DEC-row discipline are unchanged. Protocol 
 This sub-project is handled with the global reasoning framework (`~/.claude/CLAUDE.md`) — the
 developer's own persistent install; this repo never writes it (the container-era
 `scripts/claude-bootstrap/` reinstaller was removed 2026-08-18). It is
-NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`. The parent
+NOT `/stack` infrastructure, and there is **no orchestrator agent to route to** — the
+`global-stack-lead-dev` agent was deleted 2026-08-19 at the developer's request; never recreate it,
+and never route work here (or in `/stack`) to it. Work is done directly in this conversation; the
+read-only reviewer agents in `.claude/agents/` are unaffected. The parent
 `/stack/CLAUDE.md` is excluded via `/stack/projects/.claude/settings.json` `claudeMdExcludes`.
 
 The repo carries exactly THREE skills, all repo-specific by name and content (global-is-reference
