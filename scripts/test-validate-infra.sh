@@ -44,6 +44,50 @@ out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
 [[ $rc -ne 0 ]] && ok "non-zero exit on a shell syntax error" || bad "non-zero exit on a shell syntax error"
 grep -qiE 'fail' <<<"$out" && ok "names the failing shell file" || bad "names the failing shell file"
 
+# ── 2b. A pinned php-oracle path FAILS — and a pin in a NON-hook script fails too ────────
+# The check shipped 2026-08-20 with no test and, in this harness's fixture, scanned ZERO files while
+# printing a pass — the probe-that-cannot-fail shape. These cases are the guard against it going
+# dark again: one red per scanned surface, one green proving comments are not flagged, and an
+# explicit assertion that the scan inspected a non-zero number of files.
+# Assembled, never written literally: this file is itself scanned by the check under test, and a
+# literal pin here would (correctly) fail the gate. The FIXTURE gets the full literal; the harness
+# source does not.
+PINPATH="/stack/tools/phpbrew/php/php-8.5.${PINPATCH:-8}/bin/php"
+R="$TMP/pinhook"; mkrepo "$R"
+mkdir -p "$R/scripts/git-hooks"
+printf '#!/usr/bin/env bash\nexport PHORJ_PHP=%s\n' "$PINPATH" > "$R/scripts/git-hooks/pre-push"
+( cd "$R" && git add -A && git -c user.email=t@t -c user.name=t commit -qm x ) 2>/dev/null
+out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
+[[ $rc -ne 0 ]] && ok "non-zero exit on a pinned php path in a git hook" || bad "non-zero exit on a pinned php path in a git hook (got $rc)"
+grep -qF 'pinned php path' <<<"$out" && ok "names the pin" || bad "names the pin"
+
+R="$TMP/pinscript"; mkrepo "$R"
+printf '#!/usr/bin/env bash\nPHP=%s\necho "$PHP"\n' "$PINPATH" > "$R/scripts/perf-thing.sh"
+( cd "$R" && git add -A && git -c user.email=t@t -c user.name=t commit -qm x ) 2>/dev/null
+out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
+[[ $rc -ne 0 ]] && ok "non-zero exit on a pinned php path in an ordinary script" || bad "non-zero exit on a pinned php path in an ordinary script (got $rc)"
+
+# The real line number, not one from a comment-stripped stream.
+R="$TMP/pinline"; mkrepo "$R"
+{ printf '#!/usr/bin/env bash\n'; for _ in $(seq 8); do printf '# filler comment\n'; done
+  printf 'PHP=%s\n' "$PINPATH"; } > "$R/scripts/deep.sh"
+( cd "$R" && git add -A && git -c user.email=t@t -c user.name=t commit -qm x ) 2>/dev/null
+out=$(cd "$R" && bash "$TOOL" 2>&1)
+grep -qF 'deep.sh: pinned php path — 10:' <<<"$out" \
+  && ok "reports the file's real line number (10), not the filtered-stream one" \
+  || bad "reports the file's real line number; got: $(grep -F 'deep.sh' <<<"$out" | head -1)"
+
+# A pin named only inside a COMMENT is documentation (toolchain.env's own root-cause narrative
+# names the stale versions) and must not fail the gate.
+R="$TMP/pincomment"; mkrepo "$R"
+printf '#!/usr/bin/env bash\n# we used to pin %s here\necho ok\n' "$PINPATH" > "$R/scripts/documented.sh"
+( cd "$R" && git add -A && git -c user.email=t@t -c user.name=t commit -qm x ) 2>/dev/null
+out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
+[[ $rc -eq 0 ]] && ok "a pin mentioned in a comment does not fail the gate" || bad "a pin in a comment wrongly failed (got $rc)"
+grep -qE '\| no pinned php oracle \| [0-9]+/[1-9][0-9]* clean \|' <<<"$out" \
+  && ok "the pin scan inspected a non-zero number of files" \
+  || bad "the pin scan inspected ZERO files (dark check): $(grep -F 'no pinned php oracle' <<<"$out")"
+
 # ── 3. Malformed YAML FAILS ──────────────────────────────────────────────────────────────
 R="$TMP/badyml"; mkrepo "$R"
 printf 'name: ci\non: [push\njobs:\n  a: {{{\n' > "$R/.github/workflows/broken.yml"

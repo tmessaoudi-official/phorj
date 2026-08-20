@@ -72,17 +72,33 @@ done
 # versions in prose, and a check that red-fails on documentation fails for the wrong reason.
 say ""
 say "-- no hardcoded php-oracle pin (single source of truth: scripts/toolchain.env) --"
-for f in scripts/toolchain.env scripts/git-hooks/*; do
-  [[ -n "$f" && -f "$f" ]] || continue
+# Scope: EVERY tracked shell script and workflow, not just the two files that broke — a pin added
+# tomorrow in scripts/perf-gate.sh or a CI workflow is the same defect, and a check that only looks
+# where the bug already was cannot catch the next one. `grep -n` runs on the FILE (not on a filtered
+# stream) so the reported line number is the real one; comment hits are dropped afterwards, because
+# the root-cause narratives in toolchain.env legitimately NAME the stale versions.
+# Known limitation, accepted: a path assembled from a variable (`php-$V/bin/php`) does not match.
+# That is not a pin — it is a resolver — and matching it would flag toolchain.env's own glob.
+mapfile -t PIN_FILES < <(printf '%s\n' "${SH_FILES[@]:-}" scripts/toolchain.env "${YML_FILES[@]:-}" | sort -u)
+for f in "${PIN_FILES[@]:-}"; do
+  [[ -n "$f" && -f "$f" && -r "$f" ]] || continue
   PIN_N=$((PIN_N + 1))
-  hits=$(grep -vE '^[[:space:]]*#' "$f" | grep -nE 'phpbrew/php/php-[0-9]+\.[0-9]+\.[0-9]+' || true)
+  hits=$(grep -nE 'phpbrew/php/php-[0-9]+\.[0-9]+\.[0-9]+' "$f" | grep -vE '^[0-9]+:[[:space:]]*#' || true)
   if [[ -z "$hits" ]]; then
-    PIN_OK=$((PIN_OK + 1)); say "  PASS $f"
+    PIN_OK=$((PIN_OK + 1))
   else
     say "  FAIL $f: pinned php path — $(head -1 <<<"$hits")"
     record_fail "php-pin FAIL $f: $(head -1 <<<"$hits")"
   fi
 done
+say "  ${PIN_OK}/${PIN_N} clean"
+# A scan that inspected nothing must never read as a pass — that is the shape the example-glob
+# no-op wore for weeks. Zero files means the scan is broken (wrong cwd, renamed paths), not that
+# the repo is clean.
+if [[ $PIN_N -eq 0 ]]; then
+  say "  FAIL: the pin scan inspected ZERO files — the check is dark, not clean"
+  record_fail "php-pin FAIL: scan inspected 0 files"
+fi
 
 # ── YAML: parse with python3 (yamllint is absent here; a parse is the load-bearing check) ──────
 say ""
@@ -123,11 +139,12 @@ fi
 # ── Optional tools: absent means SKIPPED-OUT-LOUD, never a silent pass ─────────────────────────
 say ""
 say "-- optional linters --"
+LINT_PRESENT=(); LINT_ABSENT=()
 for tool in shellcheck yamllint hadolint; do
   if command -v "$tool" >/dev/null 2>&1; then
-    say "  $tool present"
+    LINT_PRESENT+=("$tool"); say "  $tool present — but NOT RUN by this gate (PostToolUse hooks lint on write)"
   else
-    say "  SKIPPED: $tool absent from PATH — its checks did NOT run"
+    LINT_ABSENT+=("$tool"); say "  SKIPPED: $tool absent from PATH — its checks did NOT run"
   fi
 done
 
@@ -138,10 +155,14 @@ say ""
 say "| Check | Result |"
 say "|---|---|"
 say "| bash -n | ${SH_OK}/${SH_N} pass |"
-say "| no pinned php oracle | ${PIN_OK}/${PIN_N} pass |"
+say "| no pinned php oracle | ${PIN_OK}/${PIN_N} clean |"
 say "| YAML parse | ${YML_OK}/${YML_N} pass |"
 say "| JSON parse | ${JSON_OK}/${JSON_N} pass |"
-say "| shellcheck / yamllint / hadolint | SKIPPED — absent from PATH |"
+# Report what is TRUE, computed — this row was a hardcoded "SKIPPED — absent from PATH" literal
+# while all three tools were installed, i.e. the Rule-6 Coverage evidence this script exists to
+# produce contained a false row (panel finding, 2026-08-20). Present-but-not-run is still not a
+# check; it is stated as such rather than dressed up as one.
+say "| shellcheck / yamllint / hadolint | present: ${LINT_PRESENT[*]:-none} (NOT RUN here) · absent: ${LINT_ABSENT[*]:-none} |"
 say ""
 
 if [[ $FAILURES -gt 0 ]]; then
@@ -151,8 +172,10 @@ if [[ $FAILURES -gt 0 ]]; then
 fi
 
 if [[ $QUIET -eq 1 ]]; then
-  printf 'validate-infra: OK (%d sh, %d yaml, %d json)\n' "$SH_N" "$YML_N" "$JSON_N"
+  # PIN_N is in the quiet line on purpose: --quiet is the mode pre-push runs, and without the count
+  # the hook cannot tell "3 files scanned" from "0 files scanned" — the dark-check state.
+  printf 'validate-infra: OK (%d sh, %d yaml, %d json, %d php-pin)\n' "$SH_N" "$YML_N" "$JSON_N" "$PIN_N"
 else
-  say "validate-infra: OK — ${SH_N} shell, ${YML_N} YAML, ${JSON_N} JSON checked."
+  say "validate-infra: OK — ${SH_N} shell, ${YML_N} YAML, ${JSON_N} JSON, ${PIN_N} php-pin checked."
 fi
 exit 0

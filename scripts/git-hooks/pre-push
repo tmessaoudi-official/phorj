@@ -98,6 +98,13 @@ bash "$_gate_root/scripts/doc-guards.sh"
 echo "[pre-push] test-microbench-gate (the ratchet's own behaviour tests)"
 bash "$_gate_root/scripts/test-microbench-gate.sh"
 
+# Same reasoning, same failure already observed once: validate-infra.sh HAD a behaviour suite
+# (scripts/test-validate-infra.sh) that no gate ever ran, so a check could go dark unnoticed — and
+# one promptly did (the 2026-08-20 php-pin check shipped scanning zero files in that suite's own
+# fixture while printing a pass). ~1s, no builds.
+echo "[pre-push] test-validate-infra (the infra gate's own behaviour tests)"
+bash "$_gate_root/scripts/test-validate-infra.sh"
+
 # Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
 # ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, database, database-postgres,
 # database-mysql, mail, http-client) — the old `--features jit`-only gate never touched those files, hiding

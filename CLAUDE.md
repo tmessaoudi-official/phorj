@@ -85,11 +85,18 @@ stay in `.claude/agents/`.
   features (`http-client`, `mail`, `database-postgres`, `database-mysql`) are otherwise NEVER compiled/linted/tested
   by the gate — the `--features jit`-only gate hid real clippy lints in those files (DEC-264 build).
   The live DB/mail/http round-trips self-skip when their `PHORJ_*_TEST_DSN`/server env is absent
-  (skip-loud). The oracle is resolved by `scripts/toolchain.env` and NOWHERE else — it globs
-  `php-8.5.*` newest-first, requires `bcmath`, and capability-checks even an inherited `PHORJ_PHP`
-  (a stale export from a long-lived shell is warned about and ignored, not trusted). No other script
-  may pin a patch version; `scripts/validate-infra.sh` enforces that mechanically, because a second
-  pin has now broken the gate three times. With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
+  (skip-loud). **Locally** the oracle is resolved by `scripts/toolchain.env` and nothing else — it globs
+  `php-8.5.*` newest-first, requires `bcmath` (probing with a DRAINING pipe: `grep -q` closes the pipe
+  early, php dies with SIGPIPE, and under `pipefail` a valid oracle is rejected ~13% of the time —
+  measured, DEC-456), and capability-checks even an inherited `PHORJ_PHP`, so a stale export from a
+  long-lived shell is announced and ignored rather than trusted. **CI does NOT source it** — the
+  workflows set only `PHORJ_REQUIRE_PHP=1` and rely on the test-side `PHORJ_PHP`-or-`php` fallback
+  present in 9 test files, with `setup-php` supplying an 8.5+bcmath build; that is correct today but
+  is a SECOND resolution path, so a change here is not automatically a change there. No script may pin
+  a patch version — `scripts/validate-infra.sh` enforces that over every tracked shell script and
+  workflow (a variable-built path is a resolver, not a pin, and is deliberately not flagged), and
+  `scripts/test-validate-infra.sh` (run by pre-push) keeps the check itself from going dark.
+  With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
   Transpile floor = **PHP 8.5** (`php-8.5.9` on this box today — resolved, not pinned); the bare `php` on PATH is 8.6-dev and too
   permissive — never gate against it (CI runs it only as a non-gating canary).
 - **Perf:** `phg benchmark <file>` (median-of-N, output-identity gated) for before/after numbers;

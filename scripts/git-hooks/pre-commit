@@ -49,11 +49,19 @@ fi
 # the fast path. `cargo fmt --check` is kept either way: it is sub-second and needs no build.
 _staged="$(git diff --cached --name-only)"
 if [[ -n "$_staged" ]] && ! grep -qE '(\.rs|\.phg)$|^Cargo\.(toml|lock)$' <<<"$_staged"; then
-  echo "[pre-commit] DOCS-ONLY fast path (no *.rs / *.phg / Cargo.toml / Cargo.lock staged)"
+  echo "[pre-commit] NO-RUST fast path (no *.rs / *.phg / Cargo.toml / Cargo.lock staged)"
   echo "[pre-commit]   skipping: phg format --check, the Rust test tier"
   echo "[pre-commit] cargo fmt --check"
   cargo fmt --check
-  echo "[pre-commit] OK (docs-only)"
+  # NOT docs-only in general: shell scripts and the hooks themselves take this path, and the Rust
+  # tier could never have caught a defect in them. A commit that rewrote the PHP-oracle RESOLVER
+  # printed "DOCS-ONLY" on 2026-08-20 — the label was wrong and nothing syntax-checked the staged
+  # shell. validate-infra is greps + `bash -n`, ~1s, no build, so it belongs on the fast path.
+  if grep -qE '\.(sh|ya?ml|json)$|^scripts/git-hooks/' <<<"$_staged"; then
+    echo "[pre-commit] validate-infra (staged shell/YAML/JSON)"
+    bash "$(git rev-parse --show-toplevel)/scripts/validate-infra.sh" --quiet
+  fi
+  echo "[pre-commit] OK (no-rust path)"
   exit 0
 fi
 

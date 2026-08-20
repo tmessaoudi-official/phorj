@@ -22,6 +22,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **The PHP-oracle capability probe was non-deterministic — it rejected a VALID oracle ~13% of the time**
+  (DEC-456, found by the certification panel). `php -m | grep -qx bcmath` under `set -o pipefail`: `grep -q`
+  exits on the first match, php dies of SIGPIPE (255), and `pipefail` reports the whole pipeline as failed,
+  so the probe concludes "no bcmath" about a php that has it. Measured on `php-8.5.9`: **20/150 and 8/200
+  failures with `grep -qx`, 0/200 with a draining `grep -cx` count, 0/150 with no pipe at all.** Both probe
+  sites now share a `_phorj_has_bcmath()` helper that drains. This is the defect the removed pin had been
+  masking, and being a coin flip is why it never reproduced when chased. The pin scan now covers **every**
+  tracked shell script and workflow (23 files, not 3), refuses to report a pass when it inspected zero files,
+  and reports the file's real line number; `scripts/test-validate-infra.sh` gains six cases for it and is
+  now RUN by pre-push — it had never been executed by any gate, which is how the check shipped scanning zero
+  files in that harness's own fixture while printing a pass. The pre-commit "DOCS-ONLY" fast path is renamed
+  NO-RUST and runs `validate-infra --quiet` when shell/YAML/JSON is staged: it had labelled a rewrite of the
+  oracle resolver as docs.
 - **The pre-push gate failed on a phantom PHP oracle after a stack patch bump.** `scripts/git-hooks/pre-push`
   kept a hardcoded `${PHORJ_PHP:-…/php-8.5.8/bin/php}` fallback — a second source of truth beside
   `scripts/toolchain.env`, which has globbed `php-8.5.*` and capability-checked `bcmath` since the
