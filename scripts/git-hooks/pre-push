@@ -35,8 +35,23 @@ export CARGO_INCREMENTAL=0
 _gate_root="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 # shellcheck source=/dev/null
 [[ -f "$_gate_root/scripts/toolchain.env" ]] && source "$_gate_root/scripts/toolchain.env"
-export PHORJ_PHP="${PHORJ_PHP:-/stack/tools/phpbrew/php/php-8.5.8/bin/php}"
+# NO fallback pin here — toolchain.env is the ONLY resolver (it globs php-8.5.* newest-first and
+# capability-checks bcmath). This line used to read `${PHORJ_PHP:-…/php-8.5.8/bin/php}`, a second
+# source of truth that went stale when the stack moved to 8.5.9: the hook then handed the suite a
+# path that does not exist, and the failure surfaced as three opaque `php required (PHORJ_REQUIRE_PHP=1)
+# but not found` asserts in tests/attribute_transpile.rs instead of toolchain.env's actionable
+# warning (observed 2026-08-20 on a docs-only push). Fail LOUD and early instead — an unresolvable
+# oracle means the byte-identity spine cannot be gated, which must never look like a test bug.
+# scripts/validate-infra.sh enforces the no-pin rule mechanically.
+if [[ -z "${PHORJ_PHP:-}" ]]; then
+  echo "[pre-push] FATAL: no PHP 8.5 build with bcmath resolved — see the toolchain.env warning above." >&2
+  echo "[pre-push] The PHP leg of the byte-identity spine cannot be gated without it." >&2
+  echo "[pre-push] Fix: install a php-8.5.* under /stack/tools/phpbrew/php/, or export PHORJ_PHP=<path>." >&2
+  exit 1
+fi
+export PHORJ_PHP
 export PHORJ_REQUIRE_PHP=1
+echo "[pre-push] PHP oracle: $PHORJ_PHP"
 
 echo "[pre-push] cargo fmt --check"
 cargo fmt --check

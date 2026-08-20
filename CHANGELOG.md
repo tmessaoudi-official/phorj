@@ -22,6 +22,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **The pre-push gate failed on a phantom PHP oracle after a stack patch bump.** `scripts/git-hooks/pre-push`
+  kept a hardcoded `${PHORJ_PHP:-…/php-8.5.8/bin/php}` fallback — a second source of truth beside
+  `scripts/toolchain.env`, which has globbed `php-8.5.*` and capability-checked `bcmath` since the
+  2026-08-18 fix. When the stack moved to `php-8.5.9`, the hook handed the suite a path that does not
+  exist, and a docs-only push failed with three opaque `php required (PHORJ_REQUIRE_PHP=1) but not found`
+  asserts in `tests/attribute_transpile.rs` — a gate defect wearing the costume of a code defect (the
+  same three tests pass 5/5 against the resolved 8.5.9 oracle). The fallback is gone: an unresolved
+  oracle now exits 1 with an actionable message, and the hook echoes which php it gated against.
+  `scripts/toolchain.env` additionally capability-checks an INHERITED `PHORJ_PHP` (refining DEC-331 D10d's
+  "an explicit override always wins") — a stale export from a long-lived shell is warned about and
+  resolved past, never trusted. `scripts/validate-infra.sh` grows a mechanical no-pinned-php-path check
+  over `scripts/toolchain.env` + `scripts/git-hooks/*` (comment lines stripped, so the root-cause
+  narratives that NAME the stale versions do not red-fail it), because this class has now bitten the
+  gate three times and a comment has twice failed to prevent it.
 - **A qualified constructor dropped its defaults and named arguments, and the VM panicked** (DEC-452).
   `new Http.Cookie("sid", "abc")` — omitting four defaulted parameters on a SHIPPED stdlib class —
   reported a bogus `expects 6 args, got 2` on the tree-walker and **panicked** the VM; the named form

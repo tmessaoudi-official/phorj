@@ -33,6 +33,7 @@ FAILURES=0
 SH_OK=0;   SH_N=0
 YML_OK=0;  YML_N=0
 JSON_OK=0; JSON_N=0
+PIN_OK=0;  PIN_N=0
 declare -a FAILED_LINES=()
 
 record_fail() { FAILURES=$((FAILURES + 1)); FAILED_LINES+=("$1"); }
@@ -57,6 +58,31 @@ for f in "${SH_FILES[@]:-}"; do
   fi
 done
 [[ $SH_N -eq 0 ]] && say "  (no shell files found)"
+
+# ── No hardcoded php-oracle pin in the gate scripts ────────────────────────────────────────────
+# The oracle is resolved ONCE, by scripts/toolchain.env, which globs `php-8.5.*` newest-first and
+# capability-checks bcmath. A literal `phpbrew/php/php-<x.y.z>/` anywhere else is a SECOND source of
+# truth that goes stale the moment the stack bumps a patch version — and it fails WORSE than having
+# no fallback at all: the gate then hands the test suite a path that does not exist, so the failure
+# surfaces as an opaque `php required but not found` assert instead of toolchain.env's loud,
+# actionable warning. That is not hypothetical: on 2026-08-20 a push failed exactly this way, with
+# `pre-push` substituting a pinned `php-8.5.8` after the stack had moved to `php-8.5.9`. Third time
+# this class has bitten the gate — hence a mechanical check rather than another careful comment.
+# Comment lines are stripped first: toolchain.env's own root-cause narrative NAMES the stale
+# versions in prose, and a check that red-fails on documentation fails for the wrong reason.
+say ""
+say "-- no hardcoded php-oracle pin (single source of truth: scripts/toolchain.env) --"
+for f in scripts/toolchain.env scripts/git-hooks/*; do
+  [[ -n "$f" && -f "$f" ]] || continue
+  PIN_N=$((PIN_N + 1))
+  hits=$(grep -vE '^[[:space:]]*#' "$f" | grep -nE 'phpbrew/php/php-[0-9]+\.[0-9]+\.[0-9]+' || true)
+  if [[ -z "$hits" ]]; then
+    PIN_OK=$((PIN_OK + 1)); say "  PASS $f"
+  else
+    say "  FAIL $f: pinned php path — $(head -1 <<<"$hits")"
+    record_fail "php-pin FAIL $f: $(head -1 <<<"$hits")"
+  fi
+done
 
 # ── YAML: parse with python3 (yamllint is absent here; a parse is the load-bearing check) ──────
 say ""
@@ -112,6 +138,7 @@ say ""
 say "| Check | Result |"
 say "|---|---|"
 say "| bash -n | ${SH_OK}/${SH_N} pass |"
+say "| no pinned php oracle | ${PIN_OK}/${PIN_N} pass |"
 say "| YAML parse | ${YML_OK}/${YML_N} pass |"
 say "| JSON parse | ${JSON_OK}/${JSON_N} pass |"
 say "| shellcheck / yamllint / hadolint | SKIPPED — absent from PATH |"

@@ -85,9 +85,12 @@ stay in `.claude/agents/`.
   features (`http-client`, `mail`, `database-postgres`, `database-mysql`) are otherwise NEVER compiled/linted/tested
   by the gate — the `--features jit`-only gate hid real clippy lints in those files (DEC-264 build).
   The live DB/mail/http round-trips self-skip when their `PHORJ_*_TEST_DSN`/server env is absent
-  (skip-loud). The oracle php path lives in `scripts/toolchain.env` (the single editable knob; bump it
-  there when the stack php version changes). With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
-  Transpile floor = **PHP 8.5** (currently `php-8.5.8`); the bare `php` on PATH is 8.6-dev and too
+  (skip-loud). The oracle is resolved by `scripts/toolchain.env` and NOWHERE else — it globs
+  `php-8.5.*` newest-first, requires `bcmath`, and capability-checks even an inherited `PHORJ_PHP`
+  (a stale export from a long-lived shell is warned about and ignored, not trusted). No other script
+  may pin a patch version; `scripts/validate-infra.sh` enforces that mechanically, because a second
+  pin has now broken the gate three times. With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
+  Transpile floor = **PHP 8.5** (`php-8.5.9` on this box today — resolved, not pinned); the bare `php` on PATH is 8.6-dev and too
   permissive — never gate against it (CI runs it only as a non-gating canary).
 - **Perf:** `phg benchmark <file>` (median-of-N, output-identity gated) for before/after numbers;
   CI regression gate: `scripts/perf-gate.sh`.
