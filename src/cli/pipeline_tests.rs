@@ -118,3 +118,49 @@ fn front_end_diagnostics_agrees_with_check() {
         "the LSP path must report one diagnostic PER unresolved config parameter"
     );
 }
+
+/// DEC-331 S3.3b blast radius, caught by S3.3a's first failing test rather than by S3.3b's own.
+///
+/// The `Core.Http` respond-bridge substitutes the WEB ENTRY's name into `handle(req).serialize()`,
+/// resolving that entry by its DECLARED kind. S3.3b legalized `(): void` for `kind: Web` without
+/// narrowing the bridge, so a D5-shaped web entry got spliced in as `web(req).serialize()` — an
+/// arity error plus `type void has no method serialize`, reported against `import Core.Http;` on a
+/// program that is perfectly well-formed.
+///
+/// The bridge now filters on the STRUCTURAL shape (`entry_role`), which is the narrower question it
+/// always needed and which only diverged from the declared kind in S3.3b.
+#[test]
+fn a_void_web_entry_does_not_get_the_legacy_respond_bridge() {
+    let src = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+               import Core.Http; \
+               #[Entry(kind: EntryKind.Web)] function web() -> void { } \
+               #[Entry(kind: EntryKind.Cli)] function main() -> void { }";
+    let prog = lex_parse(src).expect("parse");
+    let ds = front_end_diagnostics(&prog);
+    let codes: Vec<_> = ds
+        .iter()
+        .map(|d| format!("{:?}: {}", d.code, d.message))
+        .collect();
+    assert!(
+        !codes
+            .iter()
+            .any(|m| m.contains("serialize") || m.contains("expects 0 argument")),
+        "the legacy bridge must not be synthesized for a `(): void` web entry: {codes:?}"
+    );
+
+    // CONTROL: the legacy `(Request): Response` web entry must STILL get the bridge — narrowing the
+    // filter must not switch it off for the shape it exists to serve. Five shipped examples/web/*
+    // depend on it until S3.3c.
+    let legacy = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+                  import Core.Http; import Core.Http.Request; import Core.Http.Response; \
+                  #[Entry(kind: EntryKind.Web)] function handle(Request r) -> Response { return Response.text(200, \"ok\"); }";
+    let lp = lex_parse(legacy).expect("parse");
+    let expanded = check_and_expand(&lp, legacy).expect("legacy web program still checks");
+    assert!(
+        expanded
+            .items
+            .iter()
+            .any(|it| matches!(it, crate::ast::Item::Function(f) if f.name == "respond")),
+        "the legacy (Request): Response entry must still get its `respond` bridge"
+    );
+}

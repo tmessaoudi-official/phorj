@@ -1183,13 +1183,20 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
                     .items
                     .iter()
                     .any(|x| matches!(x, Item::Function(f) if f.name == "respond"));
-                let web =
-                    crate::ast::entry_for(p, crate::ast::EntryRole::Web).map(
-                        |(cls, f)| match cls {
-                            Some(c) => format!("{c}.{}", f.name),
-                            None => f.name.clone(),
-                        },
-                    );
+                // The STRUCTURAL shape decides here, not the declared kind — the two stopped being
+                // the same question in S3.3b. `entry_for` finds the entry DECLARED `kind: Web`, but
+                // this bridge substitutes the callee into `handle(req).serialize()`, so it is only
+                // valid for the legacy `(Request): Response` shape. A D5 `(): void` web entry (whose
+                // body calls `Http.serve`) would be spliced in as `web(req).serialize()` — an arity
+                // error plus `type void has no method serialize`, on a program that is perfectly
+                // well-formed. S3.3b legalized that shape without narrowing this, and no test caught
+                // it; `http_serve_closure_handler_is_servable` does now.
+                let web = crate::ast::entry_for(p, crate::ast::EntryRole::Web)
+                    .filter(|(_, f)| crate::ast::entry_role(f) == Some(crate::ast::EntryRole::Web))
+                    .map(|(cls, f)| match cls {
+                        Some(c) => format!("{c}.{}", f.name),
+                        None => f.name.clone(),
+                    });
                 if let (Some(callee), false) = (web, has_respond) {
                     let src = bridge_src.replace("handle(req)", &format!("{callee}(req)"));
                     if let Ok(bridge) = lex_parse(&src) {
