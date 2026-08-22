@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The surface ratchet was measuring wrong and under-protecting 169 diagnostic codes.**
+  `scripts/surface-ratchet.sh` decided "is this code asserted?" with `grep --include`, which matches the
+  **basename, not the path** — so its patterns (`tests/**.rs`, `*tests*.rs`, `tests.rs`) missed the
+  commonest test shape in the repo: a module in a `tests/` **directory** (`src/checker/tests/mutation.rs`).
+  **101 files were invisible**, and the gate reported 83/307 asserted (27%) when the truth was 252/307 (82%).
+  The wrong percentage was the harmless half — the FLOOR sat at 83, so **169 codes' coverage was
+  unprotected**: deleting the only test asserting `E-ASSIGN-TYPE` did not trip the gate. It now does
+  (verified by sabotage: `codes_asserted = 249, floor is 250`). Same class as the DEC-191 no-op example glob.
+  Two further measurement defects fixed in the same pass: the check was a SUBSTRING test, so
+  `E-MISSING-RETURN` was credited as covered by a fixture rendering `E-MISSING-RETURN-TYPE` (now a
+  whole-line match — and a real `conformance/diagnostics/missing-return.phg` fixture was added to earn the
+  conformance count back to 25 rather than lowering the floor); and the emitted-code denominator was
+  scanned over all of `src/`, so `E-MULTIPLE-MAIN` (no emit site) and `E-VARIADIC` (a test-only literal)
+  counted as both emitted and asserted. Floor re-emitted at **250/305**; read against the old 83/307 as a
+  measurement correction, not a coverage jump — nothing is tested that was not tested before. Real
+  remaining debt is **55 codes, not 224**.
+
 ### Changed
 
 - **A `Web` entry may now be `(): void`** (DEC-331 S3.3b). Under D5 the web handler is a closure passed to

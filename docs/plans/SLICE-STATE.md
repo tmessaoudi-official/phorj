@@ -40,7 +40,39 @@ Http.serve" startup error needs a real code + `explain` entry, not an afterthoug
 serve` still resolves `respond`. No previously-working program changed behaviour; the legalized
 shape did not compile at all before.
 
-## ✅ CURRENT CURSOR (2026-08-08) — **Invariant 17's 100% RULE is now MEASURED and RATCHETED**
+## ⚠ CURRENT CURSOR (2026-08-22b) — **the surface ratchet was MEASURING WRONG, and under-protecting 169 codes**
+
+**The 2026-08-08 cursor below reports 83/307 asserted (27%). The true figure was 252/307 (82%).**
+`scripts/surface-ratchet.sh` decided "is this code asserted?" with `grep --include`, which matches the
+**basename, not the path** — so its three patterns (`tests/**.rs`, `*tests*.rs`, `tests.rs`) silently
+missed the commonest test shape in this repo: a module in a `tests/` **DIRECTORY**
+(`src/checker/tests/mutation.rs`). **101 files, invisible.**
+
+**The wrong percentage was the harmless half.** The damage was that the FLOOR sat at 83, so the
+coverage of **169 codes was unprotected** — deleting the only test asserting `E-ASSIGN-TYPE` would
+not have tripped the gate. Verified by sabotage: under the old script that deletion passed; under the
+fixed one it FAILS (`codes_asserted = 249, floor is 250`). Same class as the DEC-191 no-op glob P0 —
+a gate that reads green while not actually covering. **The lesson repeats: verify a gate RUNS over
+what you think it runs over, not merely that it is green.**
+
+**Two more measurement defects found and fixed in the same pass:**
+- **Prefix false positives.** The check was a SUBSTRING test, so `E-MISSING-RETURN` was credited as
+  covered because a fixture rendered `E-MISSING-RETURN-**TYPE**` — one code's coverage credited to a
+  different code. Now a whole-line match. That legitimately dropped `codes_in_conformance` 25 → 24,
+  so a REAL `conformance/diagnostics/missing-return.phg` fixture was written to earn it back to 25
+  rather than lowering the floor.
+- **A polluted denominator.** "Codes emitted by the compiler" was scanned over ALL of `src/`, test
+  files included, so a token existing only in a test counted as BOTH emitted and asserted:
+  `E-MULTIPLE-MAIN` (no emit site — `src/ast/entry.rs` names it only in a NOTE saying it is not the
+  rule) and `E-VARIADIC` (only ever a test literal; the real codes are its `E-VARIADIC-*` children).
+  Now scanned over non-test src, which also generalizes the ad-hoc `E-FOO|E-NOPE|E-TYPE` blocklist.
+
+**Floor re-emitted at 250/305 (81%).** Read that against the old 83/307 (27%) as a MEASUREMENT
+correction, not a coverage jump: nothing was tested that was not tested before. The real remaining
+debt is **55 codes**, not 224 — which also means the "~246 fixtures before anything else could land"
+worry in the cursor below was itself an artifact of the same bug.
+
+## ✅ CURRENT CURSOR (2026-08-08) — **Invariant 17's 100% RULE is now MEASURED and RATCHETED** ⚠ ITS NUMBERS ARE SUPERSEDED — see 2026-08-22b above
 
 **The 100% RULE was prose, and prose alone had let it drift.** Measured 2026-08-07: **307 `E-*` codes
 emitted in `src/`, only 62 asserted by any test (20%)**; `conformance/` referenced **9**; the LSP

@@ -35,29 +35,63 @@ EMIT=0
 [[ "${1:-}" == "--emit" ]] && EMIT=1
 
 # ── Measure ───────────────────────────────────────────────────────────────────────────────────────
-# Codes EMITTED by the compiler. `E-FOO`/`E-NOPE`/`E-TYPE` are test fixtures inside #[cfg(test)] and
-# are filtered out so they cannot inflate either side of the ratio.
+# Codes EMITTED by the compiler — scanned over NON-TEST src only. Scanning all of `src/` counted a
+# token that exists solely in a test as both an emitted code AND an asserted one, inflating both
+# sides of the ratio: `E-MULTIPLE-MAIN` (no emit site at all — `src/ast/entry.rs` names it only in a
+# NOTE explaining it is not the rule) and `E-VARIADIC` (only ever a quoted literal in a test; the
+# real codes are its `E-VARIADIC-*` children). The `E-FOO`/`E-NOPE` fixtures were the same class,
+# handled by an ad-hoc blocklist that did not scale — excluding test files by PATH generalizes it.
+# `E-TYPE` still needs the blocklist: it lives in a `#[cfg(test)]` module INSIDE a non-test file.
+mapfile -t src_files < <(
+  git ls-files -- 'src/*.rs' 'src/**/*.rs' \
+    | grep -vE '(^|/)tests/|(^|/)tests\.rs$|[^/]*tests[^/]*\.rs$'
+)
 mapfile -t codes < <(
-  grep -rhoE '"E-[A-Z0-9-]+"' src/ --include=*.rs \
+  grep -rhoE '"E-[A-Z0-9-]+"' "${src_files[@]}" \
     | tr -d '"' | sort -u \
-    | grep -vxE 'E-FOO|E-NOPE|E-TYPE'
+    | grep -vxE 'E-TYPE'
 )
 total="${#codes[@]}"
 
-asserted=0
-conformance=0
-for c in "${codes[@]}"; do
-  # "Asserted" = pinned by something that FAILS when the code stops rendering: a Rust test, or a
-  # conformance/diagnostics fixture (whose `.expected` pins the exact rendered output, so it is an
-  # assertion in every sense that matters — it was wrongly excluded in the first draft of this script).
-  if grep -rq --include=*.rs "$c" tests/ 2>/dev/null \
-    || grep -rq --include='*tests*.rs' "$c" src/ 2>/dev/null \
-    || grep -rq --include='tests.rs' "$c" src/ 2>/dev/null \
-    || grep -rq "$c" conformance/ 2>/dev/null; then
-    asserted=$((asserted + 1))
-  fi
-  grep -rq "$c" conformance/ 2>/dev/null && conformance=$((conformance + 1))
-done
+# Every file that can ASSERT a code. `grep --include` matches the BASENAME, not the path, so the
+# three original patterns (`tests/**.rs`, `*tests*.rs`, `tests.rs`) silently missed the commonest
+# shape in this repo by far: a test module in a `tests/` DIRECTORY, e.g. `src/checker/tests/
+# mutation.rs`. That is 101 files, and it made the ratchet report 83/307 (27%) when the true figure
+# was 253/307 (82%). The percentage being wrong was the harmless half — the damage was that the
+# FLOOR sat at 83, so the coverage of 170 codes was unprotected: deleting the only test asserting
+# `E-ASSIGN-TYPE` would not have tripped this gate. Enumerate by PATH instead, and never reintroduce
+# a basename-only filter here.
+mapfile -t test_files < <(
+  git ls-files -- 'tests/*.rs' 'tests/**/*.rs' \
+    'src/**/tests/*.rs' 'src/**/*tests*.rs' 'src/**/tests.rs' 2>/dev/null | sort -u
+)
+if ((${#test_files[@]} == 0)); then
+  echo "surface-ratchet: FAIL — found NO test files; the assertion scan would count every code as" >&2
+  echo "  unasserted and the ratchet would be measuring nothing. Refusing to report a number." >&2
+  exit 1
+fi
+
+# One pass over the test corpus + conformance, rather than 4 recursive greps per code (307 codes ×
+# 4 = 1228 full-tree scans). Substring presence, matching the original semantics exactly.
+mapfile -t asserted_list < <(
+  {
+    grep -rhoE 'E-[A-Z0-9-]+' "${test_files[@]}" 2>/dev/null || true
+    grep -rhoE 'E-[A-Z0-9-]+' conformance/ 2>/dev/null || true
+  } | sort -u
+)
+mapfile -t conformance_list < <(
+  grep -rhoE 'E-[A-Z0-9-]+' conformance/ 2>/dev/null | sort -u || true
+)
+# Intersect the emitted set with each scanned set. `-x` (WHOLE-LINE match) is load-bearing, not
+# tidiness: the old substring test counted `E-MISSING-RETURN` as covered because a fixture rendered
+# `E-MISSING-RETURN-TYPE`, i.e. one code's coverage was credited to a DIFFERENT code that merely
+# has it as a prefix. That inflated `codes_in_conformance` to 25 when the honest count was 24.
+# `|| true` because grep exits 1 on no match, and under `set -e` + `pipefail` an empty intersection
+# would abort the script rather than report zero.
+asserted=$(printf '%s\n' "${codes[@]}" \
+  | grep -cFxf <(printf '%s\n' "${asserted_list[@]}") || true)
+conformance=$(printf '%s\n' "${codes[@]}" \
+  | grep -cFxf <(printf '%s\n' "${conformance_list[@]}") || true)
 
 # LSP capabilities actually advertised in the initialize response.
 lsp=$(grep -rhoE '"[a-zA-Z]+Provider"' src/lsp/ --include=*.rs 2>/dev/null | sort -u | wc -l)

@@ -1,0 +1,11 @@
+package Main;
+
+function classify(int n): string {
+    if (n > 0) {
+        return "positive";
+    }
+}
+
+function main(): void {
+    discard classify(1);
+}
