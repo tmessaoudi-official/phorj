@@ -228,7 +228,17 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
             "E-ENTRY-SIG — an `#[Entry(kind: …)]` function whose signature does not match its kind.\n\n\
              The role is declared by `kind:` (DEC-331 D1) and the signature must AGREE with it: a\n\
              `Cli` entry is `(): void`, `(): int`, `(List<string>): void` or `(List<string>): int`\n\
-             (an `int` return is the process exit status); a `Web` entry is `(Request): Response`.\n\
+             (an `int` return is the process exit status); a `Web` entry is `(): void`, whose body\n\
+             calls `Http.serve(cfg, handler)` — the handler is a closure ARGUMENT, not the entry\n\
+             itself (DEC-331 D5). The legacy `(Request): Response` web entry is still accepted and\n\
+             is being retired with `respond`.\n\n\
+             `(): void` is legal for BOTH kinds, which is not a contradiction: the role comes from\n\
+             `kind:`, not from the shape. What a `Web` entry may NOT borrow are the Cli-only shapes —\n\
+             `(): int` is a process exit code and `(List<string>)` is argv, and neither means\n\
+             anything to a server.\n\n\
+             Config parameters are not part of the shape: `#[Config]` providers are injected by a\n\
+             pre-check that erases the parameters before this rule runs, so\n\
+             `function web(Http.ServeConfig cfg): void` is checked as `(): void`.\n\
              Adjust the signature to the declared kind's shape.\n"
         }
         "E-ENTRY-TARGET" => {

@@ -143,14 +143,19 @@ impl Checker {
                     }
                     crate::ast::EntryKind::Active(role) => role,
                 };
-                // The declared kind must AGREE with the signature shape.
-                if crate::ast::entry_role(f) != Some(role) {
+                // The declared kind must AGREE with the signature shape. `entry_shape_matches`, not
+                // `entry_role`: since S3.1 retired DEC-191 inference the question is "is this shape
+                // legal FOR the declared role?", and `(): void` is legal for both Cli and Web (a Web
+                // entry calls `Http.serve(cfg, handler)` in its body — DEC-331 S3.3b).
+                if !crate::ast::entry_shape_matches(f, role) {
                     let (kind_name, shape) = match role {
                         crate::ast::EntryRole::Cli => (
                             "Cli",
                             "`(): void`, `(): int`, or `(List<string>): void|int`",
                         ),
-                        crate::ast::EntryRole::Web => ("Web", "`(Request): Response`"),
+                        crate::ast::EntryRole::Web => {
+                            ("Web", "`(): void`, or the legacy `(Request): Response`")
+                        }
                     };
                     self.err_coded(
                         f.span,

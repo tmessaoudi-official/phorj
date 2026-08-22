@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed
+
+- **A `Web` entry may now be `(): void`** (DEC-331 S3.3b). Under D5 the web handler is a closure passed to
+  `Http.serve(cfg, handler)` *inside* the entry, so the entry itself is zero-arg — and with `#[Config]`
+  parameters erased by the `desugar_config` pre-check before the checker runs, DEC-331 D4's §1 surface
+  (`function web(Http.ServeConfig cfg, AppSettings app): void`) arrives zero-arg and now checks clean. It
+  previously failed `E-ENTRY-SIG`, which is the blocker the S3.2 notes below describe.
+  The gate is now `ast::entry_shape_matches(f, declared)` — *"is this shape legal FOR the declared role?"* —
+  replacing `entry_role(f) == Some(role)`, which asked *"what role does this shape imply?"*. That was the
+  right question only while DEC-191 inferred the role; S3.1 retired inference, and one shape can be legal for
+  two roles. `(): void` is therefore legal for both `Cli` and `Web`, while the Cli-only shapes stay rejected
+  for `Web`: `(): int` is a process exit code and `(List<string>)` is argv, and neither means anything to a
+  server. The legacy `(Request): Response` web entry still checks, and retires with `respond` in S3.3c.
+  `phg explain E-ENTRY-SIG` updated in the same change.
+  **Not yet servable:** `phg serve` still resolves the `respond` entry, so a `(): void` Web entry checks but
+  does not run until S3.3a lands `Http.serve`. No previously-working program changed behaviour — the shape
+  being legalized did not compile at all before. Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md`.
+
 ### Added
 
 - **`#[Config]` entry injection takes N typed parameters** (DEC-331 S3.2 Part B / DEC-455). An entry may

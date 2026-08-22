@@ -1,5 +1,39 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ▶ CURRENT CURSOR (2026-08-22) — **DEC-331 S3.3 STARTED; S3.3b (the `Web` role gate) SHIPPED**
+
+**Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md`** — read it before touching serve. It carries
+the architecture the spec does not: under D5 the handler is a closure VALUE built inside the Web
+entry, and closure values are `Rc`-bearing, so they **cannot cross a thread boundary** to the worker
+pool. Resolution recorded there: **invert the loop, do not move the closure** — the parent resolves
+`ServeConfig` from its `#[Config]` provider (required anyway, since `workers` is itself a config
+field), binds ONE `TcpListener` and shares it as `Arc`; each worker runs the **Web entry itself** on
+its own thread, building its own closure on its own `Rc` heap, and `Http.serve` runs the accept loop
+on the calling thread. Nothing `Rc`-bearing crosses a thread; the `Send + Sync` boundary is unmoved.
+
+**S3.3b SHIPPED — the blocker the 2026-08-06 cursor named is gone.** That cursor said a `Web` entry
+"can never carry config parameters" because `entry_role` defines Web as exactly `(Request): Response`.
+The real diagnosis is one step further on: config parameters never reach the checker at all — the
+`desugar_config` PRE-check (`src/cli/pipeline.rs:130`) erases them — so spec §1's entry arrives
+zero-arg and failed `E-ENTRY-SIG` because `(): void` reads as `Cli`. Fixed by
+`ast::entry_shape_matches(f, declared)`, which asks *"is this shape legal FOR the declared role?"*
+rather than *"what role does this shape imply?"* — the latter was only ever the right question while
+DEC-191 inferred roles, and S3.1 retired that. `(): void` is now legal for BOTH kinds; the Cli-only
+shapes (`(): int`, `(List<string>)`) are still rejected for `Web`. `phg explain E-ENTRY-SIG` updated
+in the same change (Invariant 17).
+
+**NEXT: S3.3a** — the `Http.serve(cfg, handler)` native + the inverted loop. Then S3.3c (retire
+`respond`), S3.3d (migrate `examples/web/*`, `playground/web/examples.js`, `src/cli/help.rs`),
+S3.3e (Invariant 9 + 17: the OWED `Http.ServeConfig` example + `examples/README.md` row, LSP, both
+editors). **⚠ ONE PENDING ADJUDICATION blocks S3.3c only** — does `handle(Request): Response` retire
+alongside `respond`, or survive as sugar? D5 retires `respond` and calls `(Request): Response` "THE
+web handler", but in §1 that signature is the CLOSURE passed to `Http.serve`, not the entry. Every
+shipped `examples/web/*` uses `handle`. Recorded, not self-ruled (Invariant 15).
+
+**Intermediate state, deliberate:** a `(): void` Web entry now checks but cannot yet serve — `phg
+serve` still resolves `respond`. No previously-working program changed behaviour; the legalized
+shape did not compile at all before.
+
 ## ✅ CURRENT CURSOR (2026-08-08) — **Invariant 17's 100% RULE is now MEASURED and RATCHETED**
 
 **The 100% RULE was prose, and prose alone had let it drift.** Measured 2026-08-07: **307 `E-*` codes

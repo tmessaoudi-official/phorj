@@ -173,6 +173,37 @@ pub fn entry_role(f: &FunctionDecl) -> Option<EntryRole> {
     None
 }
 
+/// DEC-331 S3.3b: does `f`'s signature agree with an explicitly DECLARED `kind:`? This — not
+/// [`entry_role`] — is the checker's `E-ENTRY-SIG` gate, because the two are no longer the same
+/// question. `entry_role` asks *"what role would this shape imply?"*, which was the right question
+/// only while DEC-191 inferred the role; S3.1 retired inference, so the question is now *"is this
+/// shape legal FOR the role the author declared?"* — and one shape can be legal for two roles.
+///
+/// Concretely: under D5 a `Web` entry is `(): void`, whose body calls `Http.serve(cfg, handler)`
+/// (the handler is a closure argument, not the entry itself). Config parameters never reach here —
+/// the `desugar_config` PRE-check (`src/cli/pipeline.rs:130`) erases them before the checker runs —
+/// so spec §1's `function web(Http.ServeConfig cfg, AppSettings app): void` arrives zero-arg.
+/// `(): void` is therefore legal for BOTH roles, which is fine: the role came from `kind:`.
+///
+/// `Web` keeps the legacy `(Request): Response` until S3.3c retires `respond` and migrates the
+/// examples. `Cli` is deliberately NOT widened — it must never accept `(Request): Response`.
+#[must_use]
+pub fn entry_shape_matches(f: &FunctionDecl, declared: EntryRole) -> bool {
+    match declared {
+        EntryRole::Cli => entry_role(f) == Some(EntryRole::Cli),
+        // `(): void` — the D5 serve shape. Read off `entry_role` deliberately NARROWED: a `Cli`
+        // shape also covers `(): int` and `(List<string>): …`, and neither is a web entry.
+        EntryRole::Web => {
+            entry_role(f) == Some(EntryRole::Web)
+                || (f.params.is_empty()
+                    && f.ret.as_ref().is_some_and(|t| {
+                        matches!(t, crate::ast::Type::Named { name, args, .. }
+                            if name == "void" && args.is_empty())
+                    }))
+        }
+    }
+}
+
 /// DEC-331 D1: the reserved-but-unbuilt `#[Entry(kind: …)]` names — recognized by the checker (so
 /// `kind: Desktop` is a clear "reserved kind" error, never "unknown"), none built yet.
 pub const RESERVED_ENTRY_KINDS: [&str; 4] = ["Desktop", "Mobile", "Worker", "Embedded"];

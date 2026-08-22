@@ -165,11 +165,23 @@ fn reserved_entry_kind_is_reserved_error() {
 }
 
 #[test]
-fn web_kind_on_cli_signature_is_sig_error() {
-    // Declared `kind: Web` but the signature is CLI-shaped — the kind↔signature disagreement.
-    let src =
-        "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Web)] function main(): void { }";
-    assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
+fn web_kind_on_a_cli_only_signature_is_sig_error() {
+    // RULE CHANGED BY S3.3b, deliberately: this test used to assert that `kind: Web` on `(): void`
+    // was `E-ENTRY-SIG`. Under D5 that is the CANONICAL web entry shape (its body calls
+    // `Http.serve(cfg, handler)`), so the old assertion encoded a retired rule and is now covered by
+    // `web_entry_may_be_zero_arg_void`.
+    //
+    // What survives is the narrower, still-true claim the test was named for: the Cli shapes that a
+    // Web entry must NOT borrow. `(): int` is a process exit code and `(List<string>)` is argv —
+    // neither means anything to a server, so both stay a kind↔signature disagreement.
+    for sig in [
+        "function main(): int { return 0; }",
+        "function main(List<string> args): void { }",
+        "function main(List<string> args): int { return 0; }",
+    ] {
+        let src = format!("import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Web)] {sig}");
+        assert!(has(&src, "E-ENTRY-SIG"), "{sig}: {:?}", errors_of(&src));
+    }
 }
 
 #[test]
@@ -265,8 +277,11 @@ fn entry_diagnostics_quote_the_qualified_form_not_bare() {
     // DEC-337: even for a VALIDLY-declared entry, the E-ENTRY-SIG and E-DUPLICATE-ENTRY-KIND
     // message text must quote `#[Entry(kind: EntryKind.Cli)]` — never the now-rejected bare form
     // (the checker would otherwise suggest a spelling it itself rejects as E-INJECTED-VARIANT-BARE).
-    let sig =
-        "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Web)] function main(): void { }";
+    // FIXTURE REPOINTED (S3.3b): this used `Web` + `(): void`, which S3.3b makes LEGAL — so the
+    // fixture stopped producing the E-ENTRY-SIG this test reads the wording of. The SUBJECT is
+    // unchanged (DEC-337 message wording); only the shape that provokes the error moved to one that
+    // is still invalid for `Web`.
+    let sig = "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Web)] function main(int x): string { return \"\"; }";
     let sig_msg = errors_of(sig)
         .into_iter()
         .find(|e| e.code == Some("E-ENTRY-SIG"))
@@ -327,4 +342,45 @@ fn variant_resolutions_side_table_maps_uses_to_owning_enums() {
         "construction + pattern resolutions recorded: {table:?}"
     );
     assert!(table.len() >= 2, "both use-sites recorded: {table:?}");
+}
+
+// ── DEC-331 S3.3b — the `Web` role gate ────────────────────────────────────────────────────────
+// Under D5 the web handler is a closure passed to `Http.serve(cfg, handler)` INSIDE the entry, so a
+// `Web` entry's shape is `(): void` — not `(Request): Response`. Config parameters are erased by the
+// `desugar_config` PRE-check (`src/cli/pipeline.rs:130`) before the checker runs, so by the time this
+// gate sees spec §1's `function web(Http.ServeConfig cfg, AppSettings app): void` it is already
+// zero-arg. The declared `kind:` is the role (DEC-191 inference retired by S3.1); this gate only
+// rejects a shape that could not be an entry at all.
+
+#[test]
+fn web_entry_may_be_zero_arg_void() {
+    // The D5 shape. Failed `E-ENTRY-SIG` before S3.3b because `entry_role` read `(): void` as `Cli`.
+    let src =
+        "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Web)] function web(): void { }";
+    assert!(!has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn web_entry_still_accepts_the_legacy_request_response_shape() {
+    // `(Request): Response` stays valid until S3.3c retires it — widening must not narrow.
+    let src = "import Core.Runtime.EntryKind; import Core.Http.Request; import Core.Http.Response; \
+               #[Entry(kind: EntryKind.Web)] function web(Request r): Response { return Response.text(\"ok\"); }";
+    assert!(!has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn web_entry_with_a_nonsense_shape_is_still_a_sig_error() {
+    // The CONTROL. Widening `Web` to admit `(): void` must not turn the gate off: a shape that is
+    // neither `(): void` nor `(Request): Response` must still be rejected. Without this, deleting the
+    // check entirely would pass the two tests above.
+    let src = "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Web)] function web(int x): string { return \"\"; }";
+    assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn cli_entry_is_not_widened_by_the_web_change() {
+    // The second CONTROL, in the other direction: `Cli` must NOT start accepting `(Request): Response`.
+    let src = "import Core.Runtime.EntryKind; import Core.Http.Request; import Core.Http.Response; \
+               #[Entry(kind: EntryKind.Cli)] function cli(Request r): Response { return Response.text(\"ok\"); }";
+    assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
