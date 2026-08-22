@@ -61,6 +61,60 @@ impl<'a> Vm<'a> {
         Ok(self.pop())
     }
 
+    /// Run a first-class closure VALUE as this VM's ROOT frame, returning its result plus captured
+    /// stdout — the closure twin of [`run_entry`](Vm::run_entry), used once per request by the
+    /// DEC-331 D5 web serve path.
+    ///
+    /// **This is deliberately NOT [`call_closure_value`](Vm::call_closure_value) with an empty frame
+    /// stack, and the difference is not stylistic.** That method ends in `self.pop()`, which is
+    /// correct only because a re-entrant call always has a caller frame beneath it: `do_return`
+    /// pushes the return value `if !self.frames.is_empty()`, so at depth 0 the value is never pushed
+    /// and the `pop` would take an unrelated stack slot (or underflow). The bottom-frame contract is
+    /// `exit_value` instead — the same one [`run_entry`](Vm::run_entry) and the coop scheduler's
+    /// `run_task_function` use. Verified by
+    /// `a_closure_called_as_the_root_frame_returns_its_value`, which fails on the `call_closure_value`
+    /// spelling.
+    pub fn run_closure_entry(
+        mut self,
+        closure: &Value,
+        args: &[Value],
+    ) -> Result<(Value, String), Diagnostic> {
+        self.program.validate().map_err(Diagnostic::runtime)?;
+        let cd = match closure {
+            Value::Closure(cd) => cd.clone(),
+            v => {
+                return Err(Diagnostic::runtime(format!(
+                    "cannot call {} as a function",
+                    v.type_name()
+                )))
+            }
+        };
+        let (func_idx, captures): (usize, &[Value]) = match cd.as_ref() {
+            crate::value::ClosureData::Byte { func, captures } => (*func, captures),
+            _ => return Err(Diagnostic::runtime("expected a bytecode closure")),
+        };
+        let func_arity = self.program.functions[func_idx].arity;
+        let n_captures = self.program.functions[func_idx].n_captures;
+        let n_params = func_arity - n_captures;
+        if args.len() != n_params {
+            return Err(Diagnostic::runtime(format!(
+                "wrong number of arguments: expected {n_params}, got {}",
+                args.len()
+            )));
+        }
+        // Frame layout `[captures.., args..]` at `slot_base = 0` — identical to
+        // [`call_closure_value`]'s layout, but as the BOTTOM frame (the `run_entry` window).
+        self.stack.extend(captures.iter().cloned());
+        self.stack.extend(args.iter().cloned());
+        self.frames.push(Frame {
+            func: func_idx,
+            ip: 0,
+            slot_base: 0,
+        });
+        self.run_to_completion()?;
+        Ok((self.exit_value, self.out))
+    }
+
     /// Invoke a plain (capture-less) function by its table index re-entrantly and return its result —
     /// the `Op::SpawnCall` analogue of [`call_closure_value`] (S4.3). Used by the eager `spawn` path to
     /// run a free function inline, and by the cooperative driver to run a task's root call. Pushes the

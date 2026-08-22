@@ -625,6 +625,7 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
             crate::cli::http_prelude::HTTP_PRELUDE,
             crate::cli::http_request_prelude::REQUEST_PRELUDE,
             crate::cli::serve_config_prelude::SERVE_CONFIG_PRELUDE,
+            crate::cli::http_serve_prelude::HTTP_SERVE_PRELUDE,
         ],
         respond_bridge: Some(HTTP_RESPOND_BRIDGE),
         member_gated: true,
@@ -634,6 +635,9 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
             // DEC-363 — the header-safety policy + the ruled public pre-check helpers.
             "HeaderSafety",
             "FileBag",
+            // DEC-331 D5 (S3.3a) — the `Http.serve` receiver. A class whose name equals its own
+            // module qualifier; `Core.Input`'s `class Input` is the shipped precedent.
+            "Http",
             "HeaderBag",
             "MultipartPart",
             "ParamBag",

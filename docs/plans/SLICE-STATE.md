@@ -1,15 +1,20 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-08-22) — **DEC-331 S3.3 STARTED; S3.3b (the `Web` role gate) SHIPPED**
+## ▶ CURRENT CURSOR (2026-08-22) — **DEC-331 S3.3: S3.3a + S3.3b SHIPPED; NEXT = S3.3c**
 
-**Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md`** — read it before touching serve. It carries
-the architecture the spec does not: under D5 the handler is a closure VALUE built inside the Web
-entry, and closure values are `Rc`-bearing, so they **cannot cross a thread boundary** to the worker
-pool. Resolution recorded there: **invert the loop, do not move the closure** — the parent resolves
-`ServeConfig` from its `#[Config]` provider (required anyway, since `workers` is itself a config
-field), binds ONE `TcpListener` and shares it as `Arc`; each worker runs the **Web entry itself** on
-its own thread, building its own closure on its own `Rc` heap, and `Http.serve` runs the accept loop
-on the calling thread. Nothing `Rc`-bearing crosses a thread; the `Send + Sync` boundary is unmoved.
+**Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md`** — read it before touching serve, and read
+**§3b, not §3**: the inverted-loop architecture in §3 is SUPERSEDED and must not be built.
+
+**The SHIPPED architecture (S3.3a).** Under D5 the handler is a closure VALUE built inside the Web
+entry, and closure values are `Rc`-bearing, so they cannot cross a thread boundary to the worker
+pool. The resolution is NOT to invert the loop: `Http.serve(cfg, handler)` **registers and returns**,
+and `serve_program` drives the same accept loop it always has. Two slots, deliberately different
+kinds (`src/native/http/serve_register.rs`): the handler goes to a **thread-local** because it is
+`Rc`-bearing; the config goes to a **process global** because the parent thread needs
+`workers`/`host`/`port` before any worker exists. `serve::web_handlers` then runs the Web entry once
+per worker thread to obtain that worker's own closure, and calls it per request on a FRESH
+interpreter/VM — which is what makes the ruled semantics true: CAPTURES persist, program STATICS
+re-seed. Nothing `Rc`-bearing crosses a thread; the `Send + Sync` boundary is unmoved.
 
 **S3.3b SHIPPED — the blocker the 2026-08-06 cursor named is gone.** That cursor said a `Web` entry
 "can never carry config parameters" because `entry_role` defines Web as exactly `(Request): Response`.
@@ -24,23 +29,32 @@ DEC-191 inferred roles, and S3.1 retired that. `(): void` is now legal for BOTH 
 shapes (`(): int`, `(List<string>)`) are still rejected for `Web`. `phg explain E-ENTRY-SIG` updated
 in the same change (Invariant 17).
 
-**NEXT: S3.3a** — the `Http.serve(cfg, handler)` registration native + prelude bridge. ⚠ **Read the
-plan's §3b, NOT §3: the inverted-loop architecture is SUPERSEDED** (a native cannot call a method, so
-`Response` → bytes needs a phorj-side bridge; and the `ClosureInvoker` does not outlive the native
-call, so a native cannot own an accept loop). The replacement is strictly smaller — `Http.serve`
-registers and returns, `serve_program` drives the same loop it always has. The executable spec is
-already written: `tests/serve.rs::http_serve_closure_handler_is_servable`, confirmed RED for the
-stated reason and shipped `#[ignore]`d — remove the ignore and build. Then S3.3c (retire
-`respond`), S3.3d (migrate `examples/web/*`, `playground/web/examples.js`, `src/cli/help.rs`),
-S3.3e (Invariant 9 + 17: the OWED `Http.ServeConfig` example + `examples/README.md` row, LSP, both
-editors). **✅ Q1 RULED 2026-08-22 — `handle(Request): Response` RETIRES with `respond`** (developer):
-one handler model, per D5's own "one handler model (BREAKING)" heading. Keeping `handle` would have
-preserved exactly the magic-name entry resolution the `#[Entry(kind:)]` migration retired. S3.3c is
-unblocked and its scope grew — `HTTP_RESPOND_BRIDGE`, the `respond_bridge` field, `SERVE_ENTRY` and
-the by-name entry resolution all go, and five `examples/web/*` + `playground/web/examples.js` +
-site-mode `index.phg` + `src/cli/help.rs` migrate in-slice. Consequence for S3.3a: with no
-named-entry fallback left, `Http.serve` is the ONLY way to serve, so its "Web entry never called
-Http.serve" startup error needs a real code + `explain` entry, not an afterthought.
+**NEXT: S3.3c** — retire `respond`: delete `SERVE_ENTRY`, `HTTP_RESPOND_BRIDGE`, the
+`respond_bridge` field and the by-name entry resolution. **✅ Q1 RULED 2026-08-22 —
+`handle(Request): Response` RETIRES with `respond`** (developer): one handler model, per D5's own
+"one handler model (BREAKING)" heading. Keeping `handle` would have preserved exactly the magic-name
+entry resolution the `#[Entry(kind:)]` migration retired. Scope therefore grew: five
+`examples/web/*` + `playground/web/examples.js` + site-mode `index.phg` + `src/cli/help.rs` migrate
+in-slice. Then S3.3d (the migration itself — **count non-skips**, the DEC-191 lesson) and S3.3e
+(Invariant 9 + 17: the OWED `Http.ServeConfig` example + `examples/README.md` row, LSP, both
+editors).
+
+**⚠ TRAP FOR S3.3d, verified not guessed — an `Http.serve` example WILL fail the differential.**
+`uses_impure_native` (`tests/differential.rs`) decides quarantine from a program's IMPORT LINES, and
+`Core.Native.Http` has **no `twin()` entry**, so `import Core.Http;` does NOT quarantine anything.
+That is deliberate and must stay (a twin entry would quarantine all five shipped `examples/web/*`
+wholesale) — but it means any example that CALLS `Http.serve` goes straight into
+`all_examples_transpile_and_match_php`, where transpile now hard-errors with `E-TRANSPILE-SERVE`.
+Marking `registerServe` `pure: false` does NOT save it: the check never looks at call sites. The
+precedent to extend is the concurrency quarantine (`E-CONCURRENCY-NO-PHP`, Invariant 14), not the
+impurity mechanism. Solve this BEFORE writing the S3.3d/S3.3e examples, not after the glob goes red.
+
+**⚠ OWED, carried from S3.3a into S3.3c — the startup error has NO diagnostic code.** "The Web entry
+returned without calling `Http.serve`" ships as a bare `Diagnostic::runtime`, not an `E-` code with
+an `explain` arm. That is tolerable ONLY while `respond` is still live and `Http.serve` is not yet
+the only way to serve; the moment S3.3c removes the named-entry fallback it becomes the primary
+failure mode of the whole verb and needs a real code, an `explain` arm and a ratchet bump. Do not
+let it stay an afterthought.
 
 **Intermediate state, deliberate:** a `(): void` Web entry now checks but cannot yet serve — `phg
 serve` still resolves `respond`. No previously-working program changed behaviour; the legalized

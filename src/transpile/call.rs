@@ -2,8 +2,41 @@
 
 use super::*;
 
+/// The Invariant-14 tier-2 refusal code for `Http.serve` (DEC-331 D5/D7), as a NAMED CONST rather
+/// than inline in the message.
+///
+/// This is not tidiness. Both coverage ratchets — `cli::tests::explain_ratchet` and
+/// `scripts/surface-ratchet.sh` — recognize a diagnostic code only as a STANDALONE quoted string or
+/// a bracketed `[E-…]`. A code buried at the head of a longer sentence is invisible to both, which is
+/// how `E-CONCURRENCY-NO-PHP` (spelled exactly that way in `transpile/expr.rs`) reached this many
+/// releases without either ratchet knowing it exists. Naming it makes the `phg explain` entry
+/// MECHANICALLY required instead of merely intended.
+const E_TRANSPILE_SERVE: &str = "E-TRANSPILE-SERVE";
+
 impl Transpiler {
     pub(super) fn emit_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<String, String> {
+        // INVARIANT 14, TIER 2 (DEC-331 D5/D7) — `Http.serve` has no faithful idiomatic PHP mapping:
+        // PHP is *served by* a web server rather than being one, so any emission would be a silent
+        // semantic downgrade, which the ladder forbids outright. Refuse loudly instead, exactly as
+        // `Expr::Spawn` does for green threads (`E-CONCURRENCY-NO-PHP`, `transpile/expr.rs`).
+        //
+        // KEYED ON THE CALL, deliberately — not on the `Core.Http` import and not on the `Web` entry
+        // kind. The injected `class Http` is present in EVERY `import Core.Http;` program, and
+        // `#[Entry(kind: EntryKind.Web)]` programs transpile clean today (verified on
+        // `examples/web/core-http.phg` + `handler.phg`), so either cheaper key would refuse the five
+        // shipped `examples/web/*` and break Invariant 1's example corpus. The `serve` here is the
+        // injected prelude's static method; the prelude DEFINES it but never CALLS it, so this arm
+        // cannot fire on the injected source itself.
+        if let Expr::Member { object, name, .. } = callee {
+            if name == "serve" && matches!(object.as_ref(), Expr::Ident(o, _) if o == "Http") {
+                return Err(format!(
+                    "{E_TRANSPILE_SERVE}: `Http.serve` cannot be transpiled to PHP — PHP is served \
+                     BY a web server rather than being one, and no faithful idiomatic mapping \
+                     exists (THE LADDER RULE, Invariant 14 tier 2). Run this program with \
+                     `phg serve`."
+                ));
+            }
+        }
         if let Expr::Ident(name, _) = callee {
             // Fault intrinsics (M-faults 2a) → PHP exceptions (a `throw` expression, PHP 8.0+). The
             // fault text is single-sourced on `FaultMsg::message` so it reads identically to the

@@ -23,6 +23,7 @@ mod explain_invoke;
 mod format_cmd;
 pub(crate) mod http_prelude;
 pub(crate) mod http_request_prelude;
+pub(crate) mod http_serve_prelude;
 pub mod pm;
 mod rewrite_new;
 pub(crate) mod serve_config_prelude;

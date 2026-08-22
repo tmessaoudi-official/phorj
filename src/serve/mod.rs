@@ -37,9 +37,11 @@ const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 mod handlers;
 mod static_files;
 mod transport;
+mod web_handlers;
 pub use handlers::*;
 pub use static_files::resolve_site_dir;
 pub use transport::*;
+pub use web_handlers::{web_interp_factory, web_vm_factory};
 
 /// DEC-282 site mode — the process-global docroot (`phg serve <DIR>` sets it once before any
 /// worker runs; one serve per process, the same justification as `Core.Process`'s argv global).

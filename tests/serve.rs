@@ -877,27 +877,223 @@ import Core.Http.ServeConfig;
 #[Entry(kind: EntryKind.Cli)] function main() -> void { }
 "#;
 
-#[test]
-#[ignore = "DEC-331 S3.3a: `Http.serve` is not built yet — this test IS the executable spec for it. \
-Written and confirmed RED for the stated reason (`unknown identifier Http`). THREE pieces are needed \
-before it can go green, not two: (1) the `Core.Native.Http.registerServe` native, (2) the `Http.serve` \
-prelude bridge, and (3) a WEB HandlerFactory — and this test currently drives `ifac`, the LEGACY \
-respond factory, so it must be re-pointed at the new one or it will still report 'serve needs a \
-`respond(bytes): bytes` entry' with all three built. See docs/plans/2026-08-22-s3-3-http-serve.plan.md section 3b."]
-fn http_serve_closure_handler_is_servable() {
-    let prog = phorj::cli::parse_checked_program(HTTP_SERVE_PROGRAM)
-        .expect("Http.serve program type-checks");
-    let mut fx = FixtureTransport::new(vec![
-        b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
-        b"GET /missing HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
-        b"not a request".to_vec(),
-    ]);
-    serve(&ifac(&prog), &mut fx, false).expect("serve loop completes");
+/// Build the interpreter WEB factory (DEC-331 D5) — the `#[Entry(kind: EntryKind.Web)]` closure
+/// factory path, not the legacy named-`respond` one.
+fn web_ifac(src: &str) -> HandlerFactory {
+    let prog = phorj::cli::parse_checked_program(src).expect("web program type-checks");
+    phorj::serve::web_interp_factory(Arc::new(prog)).expect("web entry registers a handler")
+}
 
-    assert_eq!(fx.sent.len(), 3, "one response per request");
+/// Build the VM WEB factory — the default `phg serve` backend on the D5 path.
+fn web_vfac(src: &str) -> HandlerFactory {
+    let (prog, reified) =
+        phorj::cli::parse_checked_program_reified(src).expect("web program type-checks");
+    phorj::serve::web_vm_factory(Arc::new(prog), Arc::new(reified))
+        .expect("web program compiles and registers")
+}
+
+/// DEC-331 D5 / S3.3a — the executable spec for `Http.serve(cfg, handler)`, now green.
+///
+/// BOTH backends run it and must agree byte for byte. Serve is Invariant-14 quarantined, so
+/// `tests/differential.rs` never sees this program: this assertion is the only thing standing
+/// between the two legs and a silent divergence on the web path.
+#[test]
+fn http_serve_closure_handler_is_servable() {
+    for (backend, fac) in [
+        ("interp", web_ifac(HTTP_SERVE_PROGRAM)),
+        ("vm", web_vfac(HTTP_SERVE_PROGRAM)),
+    ] {
+        let mut fx = FixtureTransport::new(vec![
+            b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
+            b"GET /missing HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
+            b"not a request".to_vec(),
+        ]);
+        serve(&fac, &mut fx, false).expect("serve loop completes");
+
+        assert_eq!(fx.sent.len(), 3, "{backend}: one response per request");
+        assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"), "{backend}");
+        assert_eq!(
+            fx.sent[1],
+            http("HTTP/1.1 404 Not Found", "missing"),
+            "{backend}"
+        );
+        // Malformed -> 400, from the SAME phorj-side bridge the legacy `handle` path uses. Keeping
+        // that policy in the prelude rather than in Rust is what makes it identical on both legs.
+        assert_eq!(
+            fx.sent[2],
+            http("HTTP/1.1 400 Bad Request", "Bad Request"),
+            "{backend}"
+        );
+    }
+}
+
+/// A web entry whose handler CAPTURES a counter and also mutates a program STATIC, reporting both.
+/// The two must behave DIFFERENTLY across requests, and that difference IS the ruled per-request
+/// semantics (plan section 3b): captures persist because they live in the closure value; statics
+/// re-seed because they live in the machine, and a fresh machine is built per request.
+const HTTP_SERVE_STATE_PROGRAM: &str = r#"
+package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.ServeConfig;
+class Counter { public mutable int n; constructor() { this.n = 0; } }
+class Seen { static mutable int total = 0; }
+#[Entry(kind: EntryKind.Web)] function web(): void {
+  Counter c = new Counter();
+  Http.serve(new ServeConfig(), function(Request req): Response {
+    c.n = c.n + 1;
+    Seen.total = Seen.total + 1;
+    return Response.text(200, "captured={c.n} static={Seen.total}");
+  });
+}
+#[Entry(kind: EntryKind.Cli)] function main(): void { }
+"#;
+
+/// The per-request state contract, pinned on BOTH backends.
+///
+/// This is the assertion a future refactor that reuses one interpreter/VM across requests would
+/// break — and nothing else would notice, because serve sits outside the byte-identity differential.
+#[test]
+fn captures_persist_across_requests_while_statics_reseed() {
+    for (backend, fac) in [
+        ("interp", web_ifac(HTTP_SERVE_STATE_PROGRAM)),
+        ("vm", web_vfac(HTTP_SERVE_STATE_PROGRAM)),
+    ] {
+        let req = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec();
+        let mut fx = FixtureTransport::new(vec![req.clone(), req.clone(), req]);
+        serve(&fac, &mut fx, false).expect("serve loop completes");
+
+        assert_eq!(fx.sent.len(), 3, "{backend}");
+        assert_eq!(
+            fx.sent[0],
+            http("HTTP/1.1 200 OK", "captured=1 static=1"),
+            "{backend}"
+        );
+        assert_eq!(
+            fx.sent[1],
+            http("HTTP/1.1 200 OK", "captured=2 static=1"),
+            "{backend}: the capture must COUNT UP and the static must RE-SEED"
+        );
+        assert_eq!(
+            fx.sent[2],
+            http("HTTP/1.1 200 OK", "captured=3 static=1"),
+            "{backend}"
+        );
+    }
+}
+
+/// A web entry that never calls `Http.serve` registers nothing. That is a STARTUP error naming the
+/// missing call — not an empty handler that 500s every request with something opaque.
+#[test]
+fn a_web_entry_that_never_calls_serve_is_a_named_startup_error() {
+    let src = r#"
+package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Http;
+#[Entry(kind: EntryKind.Web)] function web(): void { }
+#[Entry(kind: EntryKind.Cli)] function main(): void { }
+"#;
+    let prog = phorj::cli::parse_checked_program(src).expect("program type-checks");
+    // `HandlerFactory` is a boxed `dyn Fn`, so it is not `Debug` and `expect_err` cannot be used.
+    let msg = match phorj::serve::web_interp_factory(Arc::new(prog)) {
+        Ok(_) => panic!("a web entry that registers nothing must not produce a factory"),
+        Err(d) => format!("{d:?}"),
+    };
+    assert!(
+        msg.contains("Http.serve"),
+        "the error must name the missing call: {msg}"
+    );
+}
+
+/// Invariant 14, tier 2 — `Http.serve` has NO faithful idiomatic PHP mapping (PHP is *served by* a
+/// web server rather than being one), so `phg transpile` REFUSES a program that calls it.
+///
+/// This landed with S3.3a and not later, and the reason is a rule rather than a preference: before
+/// this slice an `Http.serve` program did not type-check, so the transpiler never saw one. The moment
+/// it checks clean, "checks clean AND transpiles to something" is precisely the tier-3 silent
+/// semantic downgrade the ladder forbids. `E-TRANSPILE-SERVE` was already RULED (spec D7, register
+/// DEC-331) and was listed in `docs/plans/product-driven-gap-programme.plan.md` as documented-but-
+/// unbuilt; this is the build.
+#[test]
+fn transpiling_a_program_that_calls_http_serve_is_refused() {
+    let prog = phorj::cli::parse_program(HTTP_SERVE_PROGRAM).expect("parses");
+    let err = phorj::cli::transpile_program(&prog, HTTP_SERVE_PROGRAM)
+        .expect_err("a program calling Http.serve must not transpile");
+    assert!(
+        err.contains("E-TRANSPILE-SERVE"),
+        "the refusal must carry the ruled code: {err}"
+    );
+}
+
+/// THE FALSE-POSITIVE GUARD, and the reason the refusal is keyed on the CALL rather than on the
+/// `Core.Http` import or on the `Web` entry kind.
+///
+/// Both of the obvious cheaper keys are wrong here, and each was checked rather than assumed:
+///   * the injected `class Http` is present in EVERY `import Core.Http;` program, so an import-keyed
+///     refusal would reject the five shipped `examples/web/*`;
+///   * `#[Entry(kind: EntryKind.Web)]` programs transpile clean TODAY — verified on
+///     `examples/web/core-http.phg` and `examples/web/handler.phg` — so an entry-kind-keyed refusal
+///     would break them too, notwithstanding the spec sentence claiming that is "already the rule".
+///
+/// Either mistake breaks the example byte-identity glob, which is Invariant 1's corpus enforcement.
+#[test]
+fn a_legacy_web_program_that_never_calls_http_serve_still_transpiles() {
+    let src = r#"
+package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+#[Entry(kind: EntryKind.Web)] function handle(Request req): Response {
+  return Response.text(200, "ok");
+}
+#[Entry(kind: EntryKind.Cli)] function main(): void { }
+"#;
+    let prog = phorj::cli::parse_program(src).expect("parses");
+    let php = phorj::cli::transpile_program(&prog, src)
+        .expect("a legacy web program must keep transpiling");
+    assert!(php.starts_with("<?php"), "{php}");
+}
+
+/// A web entry that REGISTERS and then FAULTS must not poison the thread for the next program.
+///
+/// This is the failure mode `web_handlers::register_on_this_thread`'s `reset()` exists for, written
+/// down because a defensive line with no test is indistinguishable from a bandaid. The path: the
+/// entry calls `Http.serve` (slot now full), then faults, so the run returns `Err` and the slot is
+/// never TAKEN. Without the `reset`, the very next registration on that thread hits "called twice"
+/// and a perfectly good program refuses to serve — with an error blaming a second `Http.serve` call
+/// that does not exist in its source.
+///
+/// Deleting the `reset()` turns this test red; nothing else in the suite notices, which is how the
+/// line came to be uncovered in the first place.
+#[test]
+fn a_faulting_web_entry_does_not_poison_the_next_registration_on_this_thread() {
+    let poisoner = r#"
+package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.ServeConfig;
+import Core.Abort.panic;
+#[Entry(kind: EntryKind.Web)] function web(): void {
+  Http.serve(new ServeConfig(), function(Request req): Response {
+    return Response.text(200, "never reached");
+  });
+  panic("boom");
+}
+#[Entry(kind: EntryKind.Cli)] function main(): void { }
+"#;
+    let prog = phorj::cli::parse_checked_program(poisoner).expect("type-checks");
+    assert!(
+        phorj::serve::web_interp_factory(Arc::new(prog)).is_err(),
+        "an entry that faults after registering must fail at startup"
+    );
+
+    // SAME THREAD, immediately after: a clean program must still register and serve.
+    let mut fx = FixtureTransport::new(vec![b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec()]);
+    serve(&web_ifac(HTTP_SERVE_PROGRAM), &mut fx, false).expect("serve loop completes");
     assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
-    assert_eq!(fx.sent[1], http("HTTP/1.1 404 Not Found", "missing"));
-    // Malformed → 400, from the SAME phorj-side bridge the `handle` path uses. Keeping that policy in
-    // the prelude rather than in Rust is what makes it byte-identical across both backends.
-    assert_eq!(fx.sent[2], http("HTTP/1.1 400 Bad Request", "Bad Request"));
 }

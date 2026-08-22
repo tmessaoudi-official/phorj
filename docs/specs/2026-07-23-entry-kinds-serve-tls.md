@@ -122,7 +122,12 @@ function tool(): void { /* the same program can also ship a CLI role */ }
 ## 4. Backends (Invariant 17)
 
 Roles/config are host-side (CLI + serve loop): interp ≡ VM by construction. Transpile: `Cli`
-entries transpile as today; `Web` entries hit `E-TRANSPILE-SERVE` (already the rule);
+entries transpile as today; a call to `Http.serve` hits `E-TRANSPILE-SERVE` (BUILT in S3.3a,
+`src/transpile/call.rs`). **Corrected 2026-08-22:** this line previously said `Web` *entries* hit it
+and called that "already the rule" — both halves were false. The refusal is keyed on the CALL, and
+was verified against the corpus: `examples/web/core-http.phg` and `examples/web/handler.phg` are
+`Web` entries that transpile clean today, so an entry-kind key would have broken the five shipped
+`examples/web/*` and Invariant 1's corpus enforcement with them;
 `#[Config]` providers transpile as plain functions (DEC-318 machinery shipped). Lift:
 unchanged (PHP has no entry-role concept; lifted code keeps the inferred entry).
 

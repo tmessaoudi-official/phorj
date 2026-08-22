@@ -380,94 +380,9 @@ fn catch_type_names(ty: &crate::ast::Type) -> Vec<String> {
     }
 }
 
-/// Call a single named top-level function with pre-built `args`, returning its value plus the
-/// captured stdout. The serve runtime (M6 W3, `crate::serve`) uses this to invoke
-/// `respond(bytes) -> bytes` once per request — the one entry the socket bridge needs. The
-/// interpreter is the reference backend; interp ≡ VM (the differential harness) guarantees the
-/// VM would compute identical bytes, so the spike does not need a VM `call_named` (deferred — the
-/// VM has no return-value capture today). Mirrors [`interpret`] exactly, but enters an arbitrary
-/// named function with caller-supplied arguments instead of an argument-less `main`.
-pub fn call_named(
-    program: &Program,
-    name: &str,
-    args: Vec<Value>,
-) -> Result<(Value, String), Diagnostic> {
-    let mut interp = Interp {
-        funcs: HashMap::new(),
-        classes: HashMap::new(),
-        class_implements: std::collections::BTreeMap::new(),
-        class_tables: crate::native::ClassTables::default(),
-        method_origins: std::collections::BTreeMap::new(),
-        variants: HashMap::new(),
-        enum_variants: HashMap::new(),
-        enum_backing: HashMap::new(),
-        statics: HashMap::new(),
-        consts: HashMap::new(),
-        field_inits: HashMap::new(),
-        layouts: HashMap::new(),
-        frame: CallScopes::new(),
-        this: None,
-        cur_class: None,
-        cur_unchecked: false,
-        parent_parents: std::collections::BTreeMap::new(),
-        parent_mro: std::collections::BTreeMap::new(),
-        imports: HashMap::new(),
-        out: String::new(),
-        trace_stack: Vec::new(),
-        depth: 0,
-        pending_throw: None,
-        coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
-        coop_suspend: None,
-        program: None,
-        debug: None,
-    };
-    interp.collect(program);
-    let set = match interp.funcs.get(name) {
-        Some(v) => v.clone(),
-        None => return Err(Diagnostic::runtime(format!("no `{name}` function"))),
-    };
-    // M-RT overloading: select the overload by the supplied argument values (single-overload sets
-    // return directly). A selection fault surfaces as a runtime diagnostic.
-    let f = match interp.select_free_overload(name, &set, &args) {
-        Ok(f) => f,
-        Err(Signal::Runtime(d)) => return Err(d),
-        Err(_) => return Err(Diagnostic::runtime(format!("cannot resolve `{name}`"))),
-    };
-    if f.params.len() != args.len() {
-        return Err(Diagnostic::runtime(format!(
-            "`{name}` expects {} argument(s), got {}",
-            f.params.len(),
-            args.len()
-        )));
-    }
-    let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-    match interp.run_call(
-        &f.name,
-        &names,
-        &f.body,
-        args,
-        None,
-        None,
-        attrs_unchecked(&f.attrs),
-    ) {
-        Ok(v) => Ok((v, interp.out)),
-        Err(Signal::Return(v)) => Ok((v, interp.out)),
-        // NOTE: the clean-exit sentinel is NOT intercepted here — this is the per-call entry the
-        // serve runtime uses, where an `exit` inside a handler surfaces as an error (a 500), never
-        // a silent worker death. Whole-program exit is intercepted in `run_program_main`.
-        Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
-        Err(Signal::Throw(v)) => Err(Diagnostic::runtime(format!(
-            "uncaught exception `{}`",
-            throw_what(&v)
-        ))
-        .with_frames(interp.snapshot_frames())),
-        Err(Signal::Break | Signal::Continue) => {
-            Err(Diagnostic::runtime("internal error: loop control escaped"))
-        }
-    }
-}
-
 // cohesion split (M-Decomp W4): stmt/expr/call/construct clusters.
+mod entry;
+pub use entry::{call_closure_in, call_named};
 mod call;
 mod helpers;
 use helpers::*;

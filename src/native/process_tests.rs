@@ -66,10 +66,18 @@ fn every_other_native_is_pure() {
     // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the
     // CSPRNG `secure*` natives read OS entropy → impure, oracle-quarantined.
     let mixed_impure_random = ["secureBytes", "secureInt"];
+    // `Core.Native.Http` is MIXED (DEC-331 S3.3a): the header/parse natives are pure, but
+    // `registerServe` mutates registration state (a thread-local handler slot + a process-global
+    // config), so it cannot be const-folded or treated as replayable. The module deliberately does
+    // NOT become whole-module impure: it has no `twin()` entry in `uses_impure_native`, but making
+    // the whole module impure would still be a lie about `headerFault` and friends, which every
+    // `import Core.Http` program reaches through the prelude.
+    let mixed_impure_http = ["registerServe"];
     for n in registry() {
         let impure = impure_modules.contains(&n.module)
             || (n.module == "Core.Cryptography" && n.name == "hashPassword")
             || (n.module == "Core.File" && mixed_impure_file.contains(&n.name))
+            || (n.module == "Core.Native.Http" && mixed_impure_http.contains(&n.name))
             || (n.module == "Core.Random" && mixed_impure_random.contains(&n.name));
         assert_eq!(
             n.pure, !impure,

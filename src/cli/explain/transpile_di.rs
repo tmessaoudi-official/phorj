@@ -74,6 +74,18 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              spine. So `spawn`/channel programs run on `phg run` only (byte-identically),\n\
              and `phg transpile` rejects them rather than emitting misleading PHP (M6 W4).\n"
         }
+        "E-TRANSPILE-SERVE" => {
+            "E-TRANSPILE-SERVE — a program that calls `Http.serve` cannot be transpiled to PHP.\n\n\
+             PHP is served BY a web server (php-fpm, Apache, the built-in dev server); it does not\n\
+             contain the accept loop itself. There is no faithful idiomatic mapping for\n\
+             `Http.serve(cfg, handler)` — its worker pool, keep-alive, TLS and per-request state model\n\
+             have no PHP counterpart — so emitting anything would be a silent semantic downgrade,\n\
+             which THE LADDER RULE (Invariant 14) forbids. `phg transpile` refuses loudly instead.\n\n\
+             Run the program with `phg serve <file>`. Note the refusal is keyed on the CALL, not on\n\
+             `import Core.Http` and not on the `Web` entry kind: a web program that does not call\n\
+             `Http.serve` — a `handle(Request): Response` handler, the pre-DEC-331-D5 shape — still\n\
+             transpiles, and so do the `Request`/`Response`/`Router` types on their own.\n"
+        }
         "E-TRANSPILE-UNCHECKED" => {
             "E-TRANSPILE-UNCHECKED — an `#[UncheckedOverflow]` function cannot be transpiled to PHP.\n\n\
              `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow) makes a function's int `+`/`-`/`*`/unary-`-` WRAP on\n\

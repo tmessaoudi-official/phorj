@@ -13,6 +13,7 @@ use std::rc::Rc;
 mod multipart;
 mod query;
 mod request;
+pub(crate) mod serve_register;
 mod spill;
 pub(crate) use multipart::parse_multipart;
 pub(crate) use query::{decode_path, parse_query_pairs};
@@ -257,6 +258,10 @@ pub(crate) fn http_natives() -> Vec<NativeFn> {
             lift_from: &[],
             php: |a| format!("__phorj_http_parse_request({})", parg(a, 0)),
         },
+        // DEC-331 D5 (S3.3a) — `Http.serve`'s registration half. Its row lives in its own module
+        // because the state it owns (a thread-local handler slot + a process-global config) needs
+        // the safety argument written down beside it, not in a registry list.
+        serve_register::row(),
     ]
 }
 

@@ -11,12 +11,13 @@
 //! desugar (Invariant 5). Keeping the class in phorj means all three legs see the same class and the
 //! same defaults by construction, so the config surface stays inside the byte-identity spine for
 //! `Cli` entries. The CLASS itself is legal everywhere — a `Cli` entry may take a `ServeConfig` and
-//! print it. NOTE, stated carefully because an earlier draft of this comment got it wrong: the
-//! Invariant-14 tier-2 refusal for `Web` entries, `E-TRANSPILE-SERVE`, is **RULED BUT NOT BUILT** —
-//! it appears in the register and the specs and sits in `scripts/doc-guards-baseline.txt` under
-//! PROMISED-BUT-UNBUILT, with no quoted-string site in `src/`. Verified 2026-08-06: a `Web` entry
-//! constructing a `ServeConfig` with `cert:` set type-checks clean AND transpiles with exit 0, no
-//! diagnostic. Do not read this fragment as evidence the ladder guard is live; it lands with S3.3.
+//! print it. The Invariant-14 tier-2 refusal `E-TRANSPILE-SERVE` is **BUILT** as of S3.3a
+//! (`src/transpile/call.rs`), and it is keyed on a `Http.serve` CALL — NOT on the `Web` entry kind,
+//! which two earlier drafts of this comment and the specs both assumed. That distinction is load
+//! bearing here: a `Web` entry constructing a `ServeConfig` with `cert:` set still type-checks clean
+//! AND transpiles with exit 0, exactly as verified on 2026-08-06, because it never calls
+//! `Http.serve`. Keying the refusal on the entry kind would have broken that shape and the five
+//! shipped `examples/web/*` with it.
 //! [Verified 2026-08-06 on the exact shape below — a promoted constructor with defaults, a `string?`
 //! defaulting to `null`, an `8_388_608` underscore literal and a zero-payload enum default: `run` ≡
 //! `run --tree-walker` ≡ `run --no-jit` ≡ transpiled php-8.5.8, all four byte-identical. The PHP leg

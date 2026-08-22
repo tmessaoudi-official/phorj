@@ -6,6 +6,41 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added
+
+- **`Http.serve(cfg, handler)` — the DEC-331 D5 web entry point (S3.3a).** A
+  `#[Entry(kind: EntryKind.Web)]` function is now a closure FACTORY: it calls
+  `Http.serve(cfg, handler)` with a typed `(Request) => Response`, and that handler is what runs per
+  request. `Http.serve` **registers and returns** — it does not own an accept loop; `serve_program`
+  drives the same loop it always has. Green on BOTH backends.
+  - The `§3` inverted-loop design in the plan was DISPROVED and is superseded by `§3b`: a native
+    cannot call `.serialize()` on the `Response` it gets back, and the `ClosureInvoker` does not
+    outlive the native call, so a native cannot own a loop that invokes the handler. The wrapping
+    therefore lives in phorj (`src/cli/http_serve_prelude.rs`), which also keeps the malformed-request
+    policy (400) identical to the legacy `respond` bridge by construction.
+  - Two registration slots, deliberately different kinds (`src/native/http/serve_register.rs`): the
+    handler is `Rc`-bearing so it goes to a **thread-local**; the config is `Send` scalars and goes to
+    a **process global**, because the parent thread needs `workers`/`host`/`port` before any worker
+    exists. Nothing `Rc`-bearing crosses a thread boundary.
+  - Per-request semantics are pinned on both legs by
+    `captures_persist_across_requests_while_statics_reseed`: the handler's CAPTURES persist across
+    requests, program STATICS re-seed. Serve is Invariant-14 quarantined, so the byte-identity
+    differential cannot see this — that test is the only thing standing between the two backends and a
+    silent divergence.
+  - **Scope, stated plainly:** `phg serve` still resolves the legacy `respond` entry and still binds
+    host/port from CLI flags. The registered config is stored and round-trip tested but not yet read.
+    Wiring it, and retiring `respond`, is S3.3c. The "Web entry never called `Http.serve`" startup
+    error currently ships WITHOUT a diagnostic code or `explain` arm — recorded as OWED in
+    `docs/plans/SLICE-STATE.md`, and it must land before S3.3c removes the named-entry fallback.
+
+- **`E-TRANSPILE-SERVE` — the Invariant 14 tier-2 refusal, now BUILT** (it had been in the register
+  and the specs for weeks with no site in `src/`). A program that CALLS `Http.serve` is refused by
+  `phg transpile`: PHP is served BY a web server rather than being one, so no faithful idiomatic
+  mapping exists and a silent downgrade is forbidden. Keyed on the CALL — **not** on the `Web` entry
+  kind and **not** on the `Core.Http` import, both of which were checked against the corpus and would
+  have refused the five shipped `examples/web/*`. The spec sentence claiming `Web` entries already hit
+  it was false on both halves and is corrected in this change (DEC-455.7).
+
 ### Fixed
 
 - **The surface ratchet was measuring wrong and under-protecting 169 diagnostic codes.**

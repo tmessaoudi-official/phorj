@@ -81,6 +81,19 @@ fn front_end_diagnostics_agrees_with_check() {
              #[Entry(kind: EntryKind.Web)] function web(Settings s) -> void { }",
             true,
         ),
+        // DEC-331 S3.3a — the `Http.serve` fragment is a FOURTH injected `Core.Http` source, so it
+        // flows through both paths from now on. A drift here (one path injecting it, the other not)
+        // would make `Http.serve` resolve under `phg check` and squiggle red in the editor, or the
+        // reverse — exactly the DEC-252 failure this table exists to catch.
+        (
+            "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+             import Core.Http; import Core.Http.Request; import Core.Http.Response; \
+             import Core.Http.ServeConfig; \
+             #[Entry(kind: EntryKind.Web)] function web() -> void { \
+               Http.serve(new ServeConfig(), function(Request r): Response { \
+                 return Response.text(200, \"ok\"); }); }",
+            false,
+        ),
     ];
     // The CODES the LSP path reports, in order — a bool cannot see multiplicity, and multiplicity is
     // exactly what this feature produces (one `E-CONFIG-MISSING` per unresolved parameter). The
@@ -163,4 +176,49 @@ fn a_void_web_entry_does_not_get_the_legacy_respond_bridge() {
             .any(|it| matches!(it, crate::ast::Item::Function(f) if f.name == "respond")),
         "the legacy (Request): Response entry must still get its `respond` bridge"
     );
+}
+
+/// A class whose name EQUALS its own module qualifier must not shadow the qualified TYPE form.
+///
+/// `Http.serve` (DEC-331 D5) forced the `Core.Http` prelude to define a `class Http`, while `Http` is
+/// also that module's import qualifier — so `new Http.ServeConfig()` and `Http.serve(…)` now want the
+/// same leading name to mean two different things. `Core.Input` has shipped the same shape since
+/// DEC-281 (`class Input` under qualifier `Input`), but only its STATIC-METHOD half is exercised
+/// anywhere: `Input.InputLines` is written in no test, example or doc, so the type half had no
+/// coverage at all and the precedent did not actually cover this case.
+///
+/// Both spellings are pinned here because `serve_config_prelude` promises the spec's
+/// `new Http.ServeConfig(...)` form in its own doc comment, and it type-checked clean BEFORE this
+/// change [verified 2026-08-22 on `phg check`, exit 0] — so a regression would be a silent breakage
+/// of a documented surface.
+#[test]
+fn a_class_named_like_its_qualifier_does_not_shadow_the_qualified_type_form() {
+    for src in [
+        // The qualified TYPE form, through the qualifier.
+        "package Main; import Core.Http; import Core.Output; \
+         function main(): void { var c = new Http.ServeConfig(); Output.printLine(\"{c.port}\"); }",
+        // The MEMBER-IMPORT spelling: `Http` is now a bare_type, so `import Core.Http.Http;` is a
+        // legal import that binds the class alone. It must reach `Http.serve` without the whole-module
+        // import — the "nothing in the wind" discipline says every symbol is import-gated, and this
+        // pins that the new class is gated the same way every other injected type is.
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+         import Core.Http.Http; import Core.Http.Request; import Core.Http.Response; \
+         import Core.Http.ServeConfig; \
+         #[Entry(kind: EntryKind.Web)] function web(): void { \
+           Http.serve(new ServeConfig(), function(Request r): Response { \
+             return Response.text(200, \"ok\"); }); }",
+        // The static-METHOD form, through the class of the same name, in the same program as the
+        // type form — the two resolutions have to coexist within one file, not merely one repo.
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+         import Core.Http; import Core.Http.Request; import Core.Http.Response; \
+         #[Entry(kind: EntryKind.Web)] function web(): void { \
+           Http.serve(new Http.ServeConfig(), function(Request r): Response { \
+             return Response.text(200, \"ok\"); }); }",
+    ] {
+        let prog = lex_parse(src).expect("parse");
+        assert!(
+            check_and_expand(&prog, src).is_ok(),
+            "qualifier/class coexistence broke for: {src}"
+        );
+    }
 }
