@@ -20,7 +20,15 @@
   entry can never carry config parameters, and §1 verbatim still fails `E-ENTRY-SIG`. [Verified
   2026-08-07 by running `phg check` on §1's program.] The second gate is unbuilt and belongs with
   S3.3, where `Http.serve(cfg, handler)` gives the `Web` role a shape that can accept config. What
-  Part B DOES deliver today is a multi-parameter **`Cli`** entry taking config types. Injection is in DECLARATION order (observable: `examples/guide/config.phg` prints
+  Part B DOES deliver today is a multi-parameter **`Cli`** entry taking config types.
+  **✅ SUPERSEDED 2026-08-22 — that second gate is BUILT (S3.3b).** And the diagnosis above is one
+  step short: config parameters never reach `entry_role` at all, because `desugar_config` is a
+  PRE-check (`src/cli/pipeline.rs:130`) and erases them — so a config-carrying `Web` entry arrived
+  ZERO-ARG and failed `E-ENTRY-SIG` only because `(): void` read as `Cli`. The gate is now
+  `ast::entry_shape_matches(f, declared)` (*"is this shape legal FOR the declared role?"*), and a
+  config-carrying `Web` entry checks clean on both the CLI and LSP paths. **Still true, and the
+  reason this row is not simply deleted: §1 VERBATIM does not check yet** — its body calls
+  `Http.serve`, which lands with S3.3a. Injection is in DECLARATION order (observable: `examples/guide/config.phg` prints
   from each provider), and every unresolved parameter gets its own `E-CONFIG-MISSING`. A GENERIC parameter
   type is ACCEPTED — it keys on the bare head, so `Map<string, string>` resolves; a briefly-added filter
   that rejected generics deleted a working surface and was reverted, and the resulting sharp edge (two

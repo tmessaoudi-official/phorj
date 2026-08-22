@@ -15,7 +15,9 @@ on the calling thread. Nothing `Rc`-bearing crosses a thread; the `Send + Sync` 
 "can never carry config parameters" because `entry_role` defines Web as exactly `(Request): Response`.
 The real diagnosis is one step further on: config parameters never reach the checker at all — the
 `desugar_config` PRE-check (`src/cli/pipeline.rs:130`) erases them — so spec §1's entry arrives
-zero-arg and failed `E-ENTRY-SIG` because `(): void` reads as `Cli`. Fixed by
+zero-arg and failed `E-ENTRY-SIG` because `(): void` reads as `Cli`. **What is fixed is §1's entry
+signature/role gate, NOT §1 verbatim** — its body calls `Http.serve`, which does not exist until
+S3.3a. Fixed by
 `ast::entry_shape_matches(f, declared)`, which asks *"is this shape legal FOR the declared role?"*
 rather than *"what role does this shape imply?"* — the latter was only ever the right question while
 DEC-191 inferred roles, and S3.1 retired that. `(): void` is now legal for BOTH kinds; the Cli-only

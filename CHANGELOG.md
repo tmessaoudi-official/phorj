@@ -10,9 +10,11 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 - **A `Web` entry may now be `(): void`** (DEC-331 S3.3b). Under D5 the web handler is a closure passed to
   `Http.serve(cfg, handler)` *inside* the entry, so the entry itself is zero-arg — and with `#[Config]`
-  parameters erased by the `desugar_config` pre-check before the checker runs, DEC-331 D4's §1 surface
-  (`function web(Http.ServeConfig cfg, AppSettings app): void`) arrives zero-arg and now checks clean. It
-  previously failed `E-ENTRY-SIG`, which is the blocker the S3.2 notes below describe.
+  parameters erased by the `desugar_config` pre-check before the checker runs, a config-carrying Web entry
+  (`function web(Settings s): void`) arrives zero-arg and now checks clean. It previously failed
+  `E-ENTRY-SIG`, which is the blocker the S3.2 notes below describe.
+  **Scoped claim:** what is fixed is DEC-331 D4 §1's *entry signature/role gate*. §1 **verbatim** still does
+  not check, because its body calls `Http.serve`, which does not exist until S3.3a.
   The gate is now `ast::entry_shape_matches(f, declared)` — *"is this shape legal FOR the declared role?"* —
   replacing `entry_role(f) == Some(role)`, which asked *"what role does this shape imply?"*. That was the
   right question only while DEC-191 inferred the role; S3.1 retired inference, and one shape can be legal for

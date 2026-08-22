@@ -60,6 +60,27 @@ fn front_end_diagnostics_agrees_with_check() {
              #[Entry(kind: EntryKind.Cli)] function main(A a, B b) -> void { }",
             true,
         ),
+        // DEC-331 S3.3b — a **Web** entry CARRYING config parameters. This is the interaction the
+        // checker-level tests in `checker/tests/entry_point.rs` structurally cannot reach: they call
+        // `errors_of`, which does not run the `desugar_config` PRE-check, so they only ever see the
+        // already-zero-arg entry. Here the full pipeline runs, so this is the only place that proves
+        // the two halves compose — desugar erases the parameters, and the widened role gate then
+        // accepts the `(): void` that comes out. Before S3.3b this was `E-ENTRY-SIG`.
+        (
+            "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+             import Core.Runtime.Config; class Settings { } \
+             #[Config] function provide() -> Settings { return new Settings(); } \
+             #[Entry(kind: EntryKind.Web)] function web(Settings s) -> void { }",
+            false,
+        ),
+        // …and the Web entry must NOT get a free pass on a genuinely missing provider: the config
+        // machinery still applies to it exactly as it does to a Cli entry.
+        (
+            "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+             import Core.Runtime.Config; class Settings { } \
+             #[Entry(kind: EntryKind.Web)] function web(Settings s) -> void { }",
+            true,
+        ),
     ];
     // The CODES the LSP path reports, in order — a bool cannot see multiplicity, and multiplicity is
     // exactly what this feature produces (one `E-CONFIG-MISSING` per unresolved parameter). The

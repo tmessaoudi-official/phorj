@@ -384,3 +384,27 @@ fn cli_entry_is_not_widened_by_the_web_change() {
                #[Entry(kind: EntryKind.Cli)] function cli(Request r): Response { return Response.text(\"ok\"); }";
     assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
+
+#[test]
+fn a_web_only_program_has_no_cli_entry_even_though_its_shape_is_cli_shaped() {
+    // The REGRESSION GUARD for S3.3b. Legalizing `(): void` for `Web` made one shape legal for two
+    // roles for the first time — so if `entry_for` selected STRUCTURALLY, `phg run` would now pick a
+    // Web entry up as `main` and execute it. It does not: `entry_for` matches on
+    // `entry_declared_role` (the `kind:`), and this pins that, because four backends depend on it —
+    // `vm_factory`, `compiler/program.rs`, `interpreter/mod.rs` and `transpile/program_emit.rs` all
+    // call `entry_for(program, Cli)`.
+    let src = "package Main;\nimport Core.Runtime.EntryKind;\n\
+               #[Entry(kind: EntryKind.Web)] function web(): void { }\n";
+    let toks = crate::tokenizer::lex(src).expect("lex");
+    let prog = crate::parser::Parser::new(toks)
+        .parse_program()
+        .expect("parse");
+    assert!(
+        crate::ast::entry_for(&prog, crate::ast::EntryRole::Cli).is_none(),
+        "a Web-declared entry must never be selected as the Cli entry"
+    );
+    assert!(
+        crate::ast::entry_for(&prog, crate::ast::EntryRole::Web).is_some(),
+        "it is still the Web entry"
+    );
+}
