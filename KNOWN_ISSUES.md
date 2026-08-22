@@ -1,5 +1,37 @@
 # Known Issues & Limitations
 
+## TRANSPILE-NS-PRELUDE — a PROJECT that uses an injected prelude with `__phorj_*` helpers emits PHP that FATALS (found 2026-08-22, DEC-455.10)
+
+**Severity: blocks DEC-331 S3.3d.** The namespaced (multi-file / project) transpile emit puts injected
+prelude CLASSES inside `namespace Main { }` but their `__phorj_*` runtime HELPERS inside the trailing
+global `namespace { }` block, where the helpers reference those classes **unqualified**. PHP then
+resolves the name against the global namespace and fatals.
+
+Reproduced on a two-file project whose `main.phg` calls `Core.Http`'s `Request.parse`:
+
+```
+PHP Fatal error:  Uncaught Error: Class "RequestBody" not found in /tmp/ch.php:781
+Stack trace:
+#0 /tmp/ch.php(451): __phorj_http_parse_request('GET /hi HTTP/1....')
+```
+
+In that emit, `final class RequestBody` is declared at line **424 inside `namespace Main {`**, while
+`__phorj_http_parse_request` is at line **781 inside `namespace { }`** and calls `new RequestBody(…)`.
+
+**Control — this is the NAMESPACED path only, not a general transpiler regression:** the identical
+program as a FLAT single file transpiles and its PHP output matches the interpreter byte for byte.
+That is also why no test caught it: every `Core.Http` example is a flat single file, and no example
+PROJECT imports an injected prelude that ships helpers.
+
+**Blast radius:** every injected prelude with a `__phorj_*` helper — Http, Regex, Json, Decimal,
+Session — used from any multi-file project.
+
+**Fix direction (not built):** either emit injected prelude classes into the global namespace, or
+fully-qualify the helpers' class references (`\Main\RequestBody`). Note
+`all_example_projects_transpile_and_match_php` has NO ladder-skip arm and PANICS on a transpile error,
+so the first example project to use `Core.Http` takes the suite red rather than skipping — the fix
+must land before, not with, such an example.
+
 ## PERF-closures-never-jit — a closure is NEVER JIT-compiled, however hot (found 2026-08-01, DEC-434)
 
 The JIT hot hook lives at exactly ONE call site: `src/vm/exec.rs:504`, inside the `Op::Call` arm. It is

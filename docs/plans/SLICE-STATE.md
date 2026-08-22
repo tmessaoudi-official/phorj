@@ -49,7 +49,22 @@ serve program takes that path exactly once. `web_entry_name` now refuses a PARAM
 before calling it. The check is on ARITY, not on the parameter type: `(): void` is the only shape the
 factory can run.
 
-**NEXT: S3.3d** — migrate the corpus and narrow the CHECKER (`entry_shape_matches`) to reject
+**⛔ S3.3d IS BLOCKED — read this before starting it.** The developer ruled its shape (Q2b,
+2026-08-22): each of the four PHP-oracle-gated web examples becomes a small PROJECT —
+`src/…` logic + `src/main.phg` (Cli entry, PHP-gated by the project glob) — with the Web entry in a
+sibling `serve.phg` that neither differential glob collects. Prototyping that on `core-http`
+uncovered a **pre-existing transpiler defect that makes the structure impossible today**:
+`TRANSPILE-NS-PRELUDE` (KNOWN_ISSUES; DEC-455.10). The namespaced emit puts injected prelude classes
+in `namespace Main` and their `__phorj_*` helpers in the GLOBAL namespace referencing them
+unqualified, so any PROJECT using `Core.Http` emits PHP that fatals with
+`Class "RequestBody" not found`. The whole point of the split is that `src/main.phg` KEEPS its PHP
+leg — and it cannot while this stands. Worse, `all_example_projects_transpile_and_match_php` has no
+ladder-skip arm and PANICS on a transpile error, so landing the structure first takes the suite red.
+**Fix `TRANSPILE-NS-PRELUDE` first, as its own slice with its own gate** (its blast radius is every
+injected prelude with helpers — Http, Regex, Json, Decimal, Session — so it is not a side-quest).
+The prototype was reverted; `examples/web/core-http.phg` is byte-identical to its committed self.
+
+**THEN S3.3d** — migrate the corpus and narrow the CHECKER (`entry_shape_matches`) to reject
 `(Request): Response` for `kind: Web`. **The FULL surface, enumerated — an incomplete list is the
 DEC-191 lesson, and the first draft of this line already missed four entries** [enumerated 2026-08-22
 with `git grep -ln "respond\|handle(Request" -- examples/ playground/`]:
