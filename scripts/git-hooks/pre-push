@@ -105,6 +105,16 @@ bash "$_gate_root/scripts/test-microbench-gate.sh"
 echo "[pre-push] test-validate-infra (the infra gate's own behaviour tests)"
 bash "$_gate_root/scripts/test-validate-infra.sh"
 
+# Third instance of the SAME failure, and the worst so far: surface-ratchet.sh shipped 2026-08-08
+# with no behaviour suite, and had been measuring the wrong thing from day one — `grep --include`
+# matches the BASENAME, not the path, so 101 test files in `tests/` DIRECTORIES were invisible. It
+# reported 27% coverage against a true 82%, and froze its floor at 83, leaving 169 codes'
+# coverage unprotected: deleting the only test asserting a code did not trip the gate.
+# These cases re-run that sabotage proof (which was done by HAND, the state that let the bug live).
+# ~2s, no builds, no network.
+echo "[pre-push] test-surface-ratchet (the coverage gate's own behaviour tests)"
+bash "$_gate_root/scripts/test-surface-ratchet.sh"
+
 # Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
 # ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, database, database-postgres,
 # database-mysql, mail, http-client) — the old `--features jit`-only gate never touched those files, hiding

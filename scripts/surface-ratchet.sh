@@ -46,12 +46,28 @@ mapfile -t src_files < <(
   git ls-files -- 'src/*.rs' 'src/**/*.rs' \
     | grep -vE '(^|/)tests/|(^|/)tests\.rs$|[^/]*tests[^/]*\.rs$'
 )
+# An empty array would pass `grep` NO file operands, at which point it reads STDIN and blocks
+# forever. A gate that hangs is worse than one that fails — CI just times out with no diagnosis, and
+# locally it looks like a slow build. Fail fast and say why.
+if ((${#src_files[@]} == 0)); then
+  echo "surface-ratchet: FAIL — found NO non-test src files to scan for diagnostic codes." >&2
+  echo "  Refusing to run: the code scan would read stdin and hang." >&2
+  exit 1
+fi
 mapfile -t codes < <(
   grep -rhoE '"E-[A-Z0-9-]+"' "${src_files[@]}" \
     | tr -d '"' | sort -u \
     | grep -vxE 'E-TYPE'
 )
 total="${#codes[@]}"
+# `pct` below divides by `total`, so zero codes kills the script with a bash arithmetic error
+# instead of a diagnosis. Zero is never legitimate here — this repo emits hundreds — so it means the
+# scan broke, which is precisely the silent-miscount failure this ratchet was fixed for.
+if ((total == 0)); then
+  echo "surface-ratchet: FAIL — scanned ${#src_files[@]} src file(s) and found ZERO diagnostic codes." >&2
+  echo "  That is never legitimate here; the scan is broken. Refusing to report a ratio." >&2
+  exit 1
+fi
 
 # Every file that can ASSERT a code. `grep --include` matches the BASENAME, not the path, so the
 # three original patterns (`tests/**.rs`, `*tests*.rs`, `tests.rs`) silently missed the commonest

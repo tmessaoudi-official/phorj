@@ -67,14 +67,23 @@ what you think it runs over, not merely that it is green.**
   rule) and `E-VARIADIC` (only ever a test literal; the real codes are its `E-VARIADIC-*` children).
   Now scanned over non-test src, which also generalizes the ad-hoc `E-FOO|E-NOPE|E-TYPE` blocklist.
 
-**⚠ OWED (recorded, not hidden — in a commit about unrecorded gaps): the ratchet fix has NO
-regression test.** The repo pattern is `scripts/test-<name>.sh` run by pre-push, exactly as
-`test-validate-infra.sh` keeps `validate-infra.sh` from going dark. The new hard-fail on an EMPTY
-test-file enumeration only catches total blindness; someone "simplifying" the path filter back to a
-`--include` basename rule would still pass it, and the sabotage proof that caught this was run BY
-HAND and nothing re-runs it. Scoped follow-up: `scripts/test-surface-ratchet.sh`, asserting that a
-code asserted only in a `src/**/tests/*.rs` file counts, that a prefix (`E-X` vs `E-X-Y`) does NOT
-count, and that an empty enumeration fails.
+**✅ PAID SAME DAY — `scripts/test-surface-ratchet.sh`, 18 assertions, wired into pre-push.** It was
+recorded as OWED an hour earlier; leaving a hand-run proof as the only evidence is precisely the state
+that let the original bug live for two weeks. The suite builds throwaway git repos and runs a COPY of
+the tool inside each (the tool resolves its root from `BASH_SOURCE`, so running it elsewhere would
+still measure this repo). It pins: a code asserted only from a `tests/` DIRECTORY counts; the frozen
+floor actually FAILS when that assertion is deleted; a longer code does not credit its prefix; a
+test-only token stays out of the denominator; and an empty enumeration fails loudly.
+**Meta-verified:** reintroducing the basename-only filter turns 4 cases red — including the damage
+signature itself, *"deleting the only assertion FAILS the gate (exit 0)"*.
+
+**Two further defects the suite drove out of `surface-ratchet.sh`, neither previously reachable:**
+an empty `src_files` array passed `grep` no file operands, so it read STDIN and **hung forever** (a
+gate that hangs is worse than one that fails — CI just times out with no diagnosis); and `total = 0`
+hit `pct=$((asserted * 100 / total))`, killing the script with a bash arithmetic error instead of a
+diagnosis. Both are now hard failures that say why. ⚠ One case initially passed **dishonestly** —
+it fed the tool `</dev/null`, which hands grep an immediate EOF and makes the hang structurally
+impossible to observe. Green while proving nothing, in a suite written about exactly that failure.
 
 **Floor re-emitted at 250/305 (81%).** Read that against the old 83/307 (27%) as a MEASUREMENT
 correction, not a coverage jump: nothing was tested that was not tested before. The real remaining
