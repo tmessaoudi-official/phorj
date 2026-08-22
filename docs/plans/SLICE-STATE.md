@@ -27,10 +27,14 @@ in the same change (Invariant 17).
 **NEXT: S3.3a** — the `Http.serve(cfg, handler)` native + the inverted loop. Then S3.3c (retire
 `respond`), S3.3d (migrate `examples/web/*`, `playground/web/examples.js`, `src/cli/help.rs`),
 S3.3e (Invariant 9 + 17: the OWED `Http.ServeConfig` example + `examples/README.md` row, LSP, both
-editors). **⚠ ONE PENDING ADJUDICATION blocks S3.3c only** — does `handle(Request): Response` retire
-alongside `respond`, or survive as sugar? D5 retires `respond` and calls `(Request): Response` "THE
-web handler", but in §1 that signature is the CLOSURE passed to `Http.serve`, not the entry. Every
-shipped `examples/web/*` uses `handle`. Recorded, not self-ruled (Invariant 15).
+editors). **✅ Q1 RULED 2026-08-22 — `handle(Request): Response` RETIRES with `respond`** (developer):
+one handler model, per D5's own "one handler model (BREAKING)" heading. Keeping `handle` would have
+preserved exactly the magic-name entry resolution the `#[Entry(kind:)]` migration retired. S3.3c is
+unblocked and its scope grew — `HTTP_RESPOND_BRIDGE`, the `respond_bridge` field, `SERVE_ENTRY` and
+the by-name entry resolution all go, and five `examples/web/*` + `playground/web/examples.js` +
+site-mode `index.phg` + `src/cli/help.rs` migrate in-slice. Consequence for S3.3a: with no
+named-entry fallback left, `Http.serve` is the ONLY way to serve, so its "Web entry never called
+Http.serve" startup error needs a real code + `explain` entry, not an afterthought.
 
 **Intermediate state, deliberate:** a `(): void` Web entry now checks but cannot yet serve — `phg
 serve` still resolves `respond`. No previously-working program changed behaviour; the legalized
