@@ -850,3 +850,49 @@ fn dec363_a_clean_response_still_serializes_and_does_not_split() {
         "interp ≡ VM"
     );
 }
+
+// ── DEC-331 S3.3a — `Http.serve(cfg, handler)` ──────────────────────────────────────────────────
+// D5's one handler model: the handler is a CLOSURE passed to `Http.serve` inside a `Web` entry, not
+// a magic-named top-level function. `respond`/`handle` still work until S3.3c retires them (Q1,
+// developer-ruled 2026-08-22), so this must pass ALONGSIDE the two tests above, not instead of them.
+//
+// The entry is a closure FACTORY, nothing more: `Http.serve` registers the closure and RETURNS, and
+// `serve_program` drives the same loop it always has. That keeps the transport, keep-alive,
+// static-file interception and the `(Value, String)` stdout contract untouched.
+const HTTP_SERVE_PROGRAM: &str = r#"
+package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.ServeConfig;
+#[Entry(kind: EntryKind.Web)] function web() -> void {
+  Http.serve(new ServeConfig(), function(Request req) -> Response {
+    if (req.path == "/") {
+      return Response.text(200, "home");
+    }
+    return Response.text(404, "missing");
+  });
+}
+#[Entry(kind: EntryKind.Cli)] function main() -> void { }
+"#;
+
+#[test]
+#[ignore = "DEC-331 S3.3a: `Http.serve` is not built yet — this test IS the spec for it. Written and confirmed RED for the stated reason (`unknown identifier Http`); remove the ignore when the registration native + prelude bridge land. See docs/plans/2026-08-22-s3-3-http-serve.plan.md"]
+fn http_serve_closure_handler_is_servable() {
+    let prog = phorj::cli::parse_checked_program(HTTP_SERVE_PROGRAM)
+        .expect("Http.serve program type-checks");
+    let mut fx = FixtureTransport::new(vec![
+        b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
+        b"GET /missing HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
+        b"not a request".to_vec(),
+    ]);
+    serve(&ifac(&prog), &mut fx, false).expect("serve loop completes");
+
+    assert_eq!(fx.sent.len(), 3, "one response per request");
+    assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
+    assert_eq!(fx.sent[1], http("HTTP/1.1 404 Not Found", "missing"));
+    // Malformed → 400, from the SAME phorj-side bridge the `handle` path uses. Keeping that policy in
+    // the prelude rather than in Rust is what makes it byte-identical across both backends.
+    assert_eq!(fx.sent[2], http("HTTP/1.1 400 Bad Request", "Bad Request"));
+}
