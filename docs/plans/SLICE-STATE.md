@@ -24,7 +24,13 @@ DEC-191 inferred roles, and S3.1 retired that. `(): void` is now legal for BOTH 
 shapes (`(): int`, `(List<string>)`) are still rejected for `Web`. `phg explain E-ENTRY-SIG` updated
 in the same change (Invariant 17).
 
-**NEXT: S3.3a** — the `Http.serve(cfg, handler)` native + the inverted loop. Then S3.3c (retire
+**NEXT: S3.3a** — the `Http.serve(cfg, handler)` registration native + prelude bridge. ⚠ **Read the
+plan's §3b, NOT §3: the inverted-loop architecture is SUPERSEDED** (a native cannot call a method, so
+`Response` → bytes needs a phorj-side bridge; and the `ClosureInvoker` does not outlive the native
+call, so a native cannot own an accept loop). The replacement is strictly smaller — `Http.serve`
+registers and returns, `serve_program` drives the same loop it always has. The executable spec is
+already written: `tests/serve.rs::http_serve_closure_handler_is_servable`, confirmed RED for the
+stated reason and shipped `#[ignore]`d — remove the ignore and build. Then S3.3c (retire
 `respond`), S3.3d (migrate `examples/web/*`, `playground/web/examples.js`, `src/cli/help.rs`),
 S3.3e (Invariant 9 + 17: the OWED `Http.ServeConfig` example + `examples/README.md` row, LSP, both
 editors). **✅ Q1 RULED 2026-08-22 — `handle(Request): Response` RETIRES with `respond`** (developer):
