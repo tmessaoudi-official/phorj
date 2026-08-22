@@ -34,6 +34,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `E-ENTRY-SIG`, which is the blocker the S3.2 notes below describe.
   **Scoped claim:** what is fixed is DEC-331 D4 §1's *entry signature/role gate*. §1 **verbatim** still does
   not check, because its body calls `Http.serve`, which does not exist until S3.3a.
+  **Blast radius found and fixed in the same batch:** legalizing `(): void` for `kind: Web` broke the
+  `Core.Http` respond-bridge, which resolves the web entry by its DECLARED kind and splices the name into
+  `handle(req).serialize()` — so a `(): void` web entry that imported `Core.Http` got `web(req).serialize()`
+  and two bogus errors (`expects 0 argument(s), found 1`, `type void has no method serialize`) reported
+  against its import line. The bridge now filters on the STRUCTURAL shape (`entry_role`), which is the
+  narrower question it always needed. So a config-carrying Web entry checks clean **including** with
+  `import Core.Http;` — which was not true between the two commits.
   The gate is now `ast::entry_shape_matches(f, declared)` — *"is this shape legal FOR the declared role?"* —
   replacing `entry_role(f) == Some(role)`, which asked *"what role does this shape imply?"*. That was the
   right question only while DEC-191 inferred the role; S3.1 retired inference, and one shape can be legal for

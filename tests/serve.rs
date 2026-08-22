@@ -878,7 +878,12 @@ import Core.Http.ServeConfig;
 "#;
 
 #[test]
-#[ignore = "DEC-331 S3.3a: `Http.serve` is not built yet — this test IS the spec for it. Written and confirmed RED for the stated reason (`unknown identifier Http`); remove the ignore when the registration native + prelude bridge land. See docs/plans/2026-08-22-s3-3-http-serve.plan.md"]
+#[ignore = "DEC-331 S3.3a: `Http.serve` is not built yet — this test IS the executable spec for it. \
+Written and confirmed RED for the stated reason (`unknown identifier Http`). THREE pieces are needed \
+before it can go green, not two: (1) the `Core.Native.Http.registerServe` native, (2) the `Http.serve` \
+prelude bridge, and (3) a WEB HandlerFactory — and this test currently drives `ifac`, the LEGACY \
+respond factory, so it must be re-pointed at the new one or it will still report 'serve needs a \
+`respond(bytes): bytes` entry' with all three built. See docs/plans/2026-08-22-s3-3-http-serve.plan.md section 3b."]
 fn http_serve_closure_handler_is_servable() {
     let prog = phorj::cli::parse_checked_program(HTTP_SERVE_PROGRAM)
         .expect("Http.serve program type-checks");
