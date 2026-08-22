@@ -158,9 +158,15 @@ zone stays excluded.
 **NEXT: write the specs.** One `docs/specs/<date>-<topic>.md` per admitted item — surface, ladder case,
 backend/transpile story, error taxonomy, example + differential plan, LSP/editor row (Invariant 17's 100%
 RULE), dependency row — mirrored into MASTER-PLAN + SLICE-STATE + the register in the same change.
-**Unconditional first, independent of everything else:** fix `examples/README.md:238`, which still defers
+~~**Unconditional first, independent of everything else:** fix `examples/README.md:238`, which still defers
 `using`/`Closable` to DEC-203 though DEC-364 closed it 2026-07-31 — two external readers repeated our stale
-doc back to us. **DEC-331 S3.2 Part B SHIPPED 2026-08-07 (DEC-455)** — `#[Config]` injection now takes N typed
+doc back to us.~~ ✅ **DONE 2026-08-07 — this instruction is itself now the stale one.** Verified
+2026-08-22: `examples/README.md:238` already carries the corrected text (*"`using`/`Closable` auto-close
+SHIPPED 2026-07-31 (DEC-364), which explicitly closed DEC-203's deferral"*), so a fresh session reading
+this cursor was being sent after a PHANTOM. Struck rather than deleted, because the failure mode is the
+point: **a cursor that records a fix as OWED after it lands is the same doc-rot class it was written to
+prevent** — one layer up. Rule 11 (grep-verify every claimed gap, including this file's own) is what
+caught it. **DEC-331 S3.2 Part B SHIPPED 2026-08-07 (DEC-455)** — `#[Config]` injection now takes N typed
 parameters, resolved by type, injected in declaration order (observable: the example prints from each
 provider); module split to `src/checker/desugar_config/{mod,tests}.rs` per Invariant 13. ⚠ **RETRACTED (round 2): an earlier version of this
 line claimed Part B also "fixed a pre-existing bug" by rejecting generic parameter types. It did not.** The
