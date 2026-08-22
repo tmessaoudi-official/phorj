@@ -24,15 +24,12 @@ pub fn install_shutdown_handler() -> Arc<AtomicBool> {
     flag
 }
 
-/// The default Phorj entry the runtime calls per request: `respond(bytes) -> bytes`.
-pub const SERVE_ENTRY: &str = "respond";
-
 /// The checker's reified-operand side-table (`expr span → Ty`), threaded into [`compile_with`] so the
 /// VM specializes arithmetic operands exactly as the byte-identical `phg run` path does (Invariant 6).
 pub type Reified = std::collections::HashMap<usize, crate::types::Ty>;
 
 /// A per-thread request handler: given the raw request bytes, invoke the served program's
-/// `respond(bytes) -> bytes` entry, returning its value + captured stdout (or a runtime fault). It is
+/// registered web handler, returning its value + captured stdout (or a runtime fault). It is
 /// **not** `Send` — the VM handler owns an `Rc`-bearing compiled [`BytecodeProgram`], and values never
 /// cross threads — so exactly one is built **per worker thread** (never shared).
 pub type Handler = Box<dyn FnMut(&[u8]) -> Result<(Value, String), Diagnostic>>;
@@ -44,85 +41,6 @@ pub type Handler = Box<dyn FnMut(&[u8]) -> Result<(Value, String), Diagnostic>>;
 /// is why serve compiles once per worker rather than sharing one bytecode program: a `BytecodeProgram`
 /// holds `Rc` class layouts and is not `Send`.
 pub type HandlerFactory = Box<dyn Fn() -> Handler + Send + Sync>;
-
-/// The tree-walking-interpreter backend (the correctness oracle; `phg serve --tree-walker`). Each
-/// request builds a fresh interpreter via [`call_named`] — verbatim the pre-VM serve behaviour.
-#[must_use]
-pub fn interp_factory(program: std::sync::Arc<Program>) -> HandlerFactory {
-    Box::new(move || {
-        let program = std::sync::Arc::clone(&program);
-        Box::new(move |raw: &[u8]| {
-            call_named(
-                &program,
-                SERVE_ENTRY,
-                vec![Value::Bytes(Rc::new(raw.to_vec()))],
-            )
-        })
-    })
-}
-
-/// The bytecode-VM backend (the default `phg serve` — faster than the tree-walker, ~2.3× lower
-/// end-to-end latency measured on a representative handler; byte-identical by [`Vm::run_entry`] ≡
-/// [`call_named`]). Validates the compile + resolves the `respond` entry index
-/// **once up front** (surfacing any error before the socket binds), then hands back a factory whose
-/// handlers recompile per worker (deterministic ⇒ the same entry index). A fresh [`Vm`] per request
-/// re-seeds program statics, matching the interpreter's fresh-per-request state.
-///
-/// An **overloaded** `respond` is rejected here (the entry is a single fixed `bytes -> bytes`
-/// contract) — a degenerate config; `phg serve --tree-walker` still serves it. A missing `respond`
-/// is likewise a startup error.
-pub fn vm_factory(
-    program: std::sync::Arc<Program>,
-    reified: std::sync::Arc<Reified>,
-) -> Result<HandlerFactory, Diagnostic> {
-    use crate::ast::Item;
-    let respond_defs = program
-        .items
-        .iter()
-        .filter(|it| matches!(it, Item::Function(f) if f.name == SERVE_ENTRY))
-        .count();
-    if respond_defs > 1 {
-        return Err(Diagnostic::runtime(format!(
-            "serve entry `{SERVE_ENTRY}` cannot be overloaded on the VM backend — run \
-             `phg serve --tree-walker` to serve an overloaded entry"
-        )));
-    }
-    // The bytecode compiler requires an entry, but a serve/web program legitimately has no `main`
-    // (its entry is `respond`). Inject an inert one so it compiles — never invoked, so byte-inert and
-    // matching the interpreter's `call_named`, which never runs `main` either. Do it on the shared
-    // program the factory captures, so every per-worker recompile sees the same entry.
-    let program = if crate::ast::entry_for(&program, crate::ast::EntryRole::Cli).is_none() {
-        let mut p = (*program).clone();
-        p.items.push(crate::ast::synth_empty_main());
-        std::sync::Arc::new(p)
-    } else {
-        program
-    };
-    // Compile once up front: validates it (a checked program should always compile) AND resolves the
-    // stable free-function index of `respond`. Free functions compile first and bare-named, so a
-    // by-name `position` finds the free `respond` (never a method of the same name — those come after).
-    let compiled =
-        compile_with(&program, &reified).map_err(|e| Diagnostic::runtime(e.to_string()))?;
-    let entry = compiled
-        .functions
-        .iter()
-        .position(|f| f.name == SERVE_ENTRY)
-        .ok_or_else(|| {
-            Diagnostic::runtime(format!(
-                "serve needs a `{SERVE_ENTRY}(bytes): bytes` entry (define one, or `import Core.Http` \
-                 and a `handle(Request): Response`)"
-            ))
-        })?;
-    Ok(Box::new(move || {
-        // Per-worker compile from the shared (Send+Sync) checked program: the resulting Rc-bearing
-        // `BytecodeProgram` stays owned by this handler, on this thread. Deterministic ⇒ `entry` holds.
-        let compiled: BytecodeProgram =
-            compile_with(&program, &reified).expect("serve program compiled cleanly at startup");
-        Box::new(move |raw: &[u8]| {
-            Vm::new(&compiled).run_entry(entry, vec![Value::Bytes(Rc::new(raw.to_vec()))])
-        })
-    }))
-}
 
 /// Seam between the serve loop and the world. [`TcpTransport`] is the real socket; `tests/serve.rs`
 /// swaps an in-memory transport (the env-update HTTP-fixture-seam pattern) so the loop needs no port
@@ -141,7 +59,7 @@ pub trait Transport {
 pub(super) const MAX_CONSECUTIVE_TRANSPORT_ERRORS: usize = 64;
 
 /// Serve requests from `transport`, routing each raw buffer through the program's
-/// `respond(bytes) -> bytes`. **Resilient by design (GA blockers B3/B4):** a fault on one request
+/// registered web handler. **Resilient by design (GA blockers B3/B4):** a fault on one request
 /// degrades to a 500, a `send` failure (client reset / broken pipe) is logged and skipped, and a
 /// `recv` error (e.g. a transient `accept()`) is logged and retried — only `MAX_CONSECUTIVE_…` recv
 /// errors in a row with no progress ends the loop. Returns `Ok` when the transport reports
@@ -180,7 +98,7 @@ pub fn serve<T: Transport>(
     }
 }
 
-/// Invoke `respond(bytes) -> bytes` once. Any captured stdout (a handler calling `Output.printLine`)
+/// Invoke the registered handler once. Any captured stdout (a handler calling `Output.printLine`)
 /// goes to the server's real STDOUT — `Output.*` is ALWAYS stdout (DEC-220 removed the old
 /// serve-only Output→stderr "log" redirect; leveled server logging is now `Core.Log` → stderr, and
 /// the browser body comes from the returned `Response`). The stdout write's flush error is swallowed
@@ -207,7 +125,7 @@ pub(super) fn respond_once(handler: &mut Handler, raw: &[u8], dev: bool) -> Vec<
         }
         Ok((other, _)) => {
             eprintln!(
-                "serve: `{SERVE_ENTRY}` returned {}, expected bytes",
+                "serve: the web handler returned {}, expected bytes",
                 other.type_name()
             );
             http_500()

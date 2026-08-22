@@ -247,7 +247,7 @@ pub(crate) fn http_natives() -> Vec<NativeFn> {
         // DEC-338: the whole wire→`Request` parse, nativized to flip the `queryparse` 0.10× loss
         // (the phorj `Request.parse` was interpreter-bound per parse). Builds the full bag graph in
         // Rust; the PHP twin `__phorj_http_parse_request` builds the identical object graph. `null` =
-        // malformed/oversize (the eager D8a contract — never a fault), so the respond bridge still 400s.
+        // malformed/oversize (the eager D8a contract — never a fault), so the serve bridge still 400s.
         NativeFn {
             module: "Core.Native.Http",
             name: "parseRequest",

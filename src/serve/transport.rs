@@ -490,7 +490,7 @@ mod tests {
         let diag =
             crate::diagnostic::Diagnostic::runtime_at_line("boom <script>", 3).with_frames(vec![
                 crate::diagnostic::Frame {
-                    function: "respond".into(),
+                    function: "web".into(),
                     file: None,
                     line: 3,
                     col: 0,
@@ -502,7 +502,7 @@ mod tests {
         assert!(s.contains("text/html"), "{s}");
         assert!(s.contains("&lt;script&gt;"), "message must be escaped: {s}");
         assert!(!s.contains("<script>"), "no raw script tag: {s}");
-        assert!(s.contains("respond"), "frame shown: {s}");
+        assert!(s.contains("web"), "frame shown: {s}");
         assert!(
             s.contains("/x?&lt;a&gt;"),
             "request line shown + escaped: {s}"

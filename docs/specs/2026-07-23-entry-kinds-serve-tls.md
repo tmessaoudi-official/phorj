@@ -96,9 +96,15 @@ function tool(): void { /* the same program can also ship a CLI role */ }
   `port=8080`, `workers=<cores>`, `timeout=0` (secs, 0=none), `cert?`, `key?`, `serverName?`,
   `maxBodySize=8_388_608`, `tlsMinVersion?="1.2"`, plus `requestParsing=Eager` (Rich-Request
   spec D8a). App settings are a SEPARATE injected parameter — never mixed into ServeConfig.
-- **D5 — one handler model (BREAKING)**: typed `(Request): Response` is THE web handler;
-  `respond(bytes): bytes` is RETIRED — its docs, `examples/web/*`, and site-mode `index.phg`
-  migrate in this same slice. Immutable `Response` makes "headers already sent" structurally
+- **D5 — one handler model (BREAKING)**: typed `(Request): Response` is THE web handler — as the
+  CLOSURE passed to `Http.serve(cfg, handler)`, not as the entry itself; the `Web` entry is a `(): void`
+  closure FACTORY. **✅ BUILT: `Http.serve` in S3.3a; `respond(bytes): bytes` RETIRED in S3.3c**
+  (2026-08-22), together with the `handle(Request): Response` entry the `Core.Http` bridge used to wrap
+  — Q1, developer-ruled. An unservable program is refused at startup with `E-SERVE-NO-HANDLER`.
+  ⚠ `examples/web/*`, `playground/web/examples.js` and site-mode `index.phg` did NOT migrate "in this
+  same slice": they ride with S3.3d, deliberately, so that removing the bridge does not fail
+  `phg check` on the shipped corpus in the same commit. They still check/run/transpile; `phg serve`
+  refuses them until then. Immutable `Response` makes "headers already sent" structurally
   impossible. Static-file site mode (public/, MIME/ETag/traversal guards, DEC-282) unchanged.
 - **D6 — role mismatch UX**: `phg run` on a Web-only program (or `phg serve` on Cli-only) →
   `E-NO-ENTRY-FOR-ROLE` naming the mismatch + the right command, THEN a TTY-guarded

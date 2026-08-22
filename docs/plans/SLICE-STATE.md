@@ -29,36 +29,82 @@ DEC-191 inferred roles, and S3.1 retired that. `(): void` is now legal for BOTH 
 shapes (`(): int`, `(List<string>)`) are still rejected for `Web`. `phg explain E-ENTRY-SIG` updated
 in the same change (Invariant 17).
 
-**NEXT: S3.3c** — retire `respond`: delete `SERVE_ENTRY`, `HTTP_RESPOND_BRIDGE`, the
-`respond_bridge` field and the by-name entry resolution. **✅ Q1 RULED 2026-08-22 —
-`handle(Request): Response` RETIRES with `respond`** (developer): one handler model, per D5's own
-"one handler model (BREAKING)" heading. Keeping `handle` would have preserved exactly the magic-name
-entry resolution the `#[Entry(kind:)]` migration retired. Scope therefore grew: five
-`examples/web/*` + `playground/web/examples.js` + site-mode `index.phg` + `src/cli/help.rs` migrate
-in-slice. Then S3.3d (the migration itself — **count non-skips**, the DEC-191 lesson) and S3.3e
-(Invariant 9 + 17: the OWED `Http.ServeConfig` example + `examples/README.md` row, LSP, both
-editors).
+**DEC-331 S3.3c ✅ SHIPPED 2026-08-22 — `respond` is RETIRED.** Deleted: `SERVE_ENTRY`, both legacy
+by-name factories (`interp_factory`/`vm_factory`), `HTTP_RESPOND_BRIDGE`, the `respond_bridge` field
+and its 34 initializers. `phg serve` now routes through `web_interp_factory`/`web_vm_factory` on both
+backends, so `Http.serve(cfg, handler)` is the ONLY way a program registers a handler. Q1 was ruled
+2026-08-22 (developer): `handle(Request): Response` retires WITH `respond` — one handler model, per
+D5's own "one handler model (BREAKING)" heading; keeping `handle` would have preserved exactly the
+magic-name entry resolution the `#[Entry(kind:)]` migration retired.
 
-**⚠ TRAP FOR S3.3d, verified not guessed — an `Http.serve` example WILL fail the differential.**
-`uses_impure_native` (`tests/differential.rs`) decides quarantine from a program's IMPORT LINES, and
-`Core.Native.Http` has **no `twin()` entry**, so `import Core.Http;` does NOT quarantine anything.
-That is deliberate and must stay (a twin entry would quarantine all five shipped `examples/web/*`
-wholesale) — but it means any example that CALLS `Http.serve` goes straight into
-`all_examples_transpile_and_match_php`, where transpile now hard-errors with `E-TRANSPILE-SERVE`.
-Marking `registerServe` `pure: false` does NOT save it: the check never looks at call sites. The
-precedent to extend is the concurrency quarantine (`E-CONCURRENCY-NO-PHP`, Invariant 14), not the
-impurity mechanism. Solve this BEFORE writing the S3.3d/S3.3e examples, not after the glob goes red.
+**The OWED code is CLOSED: `E-SERVE-NO-HANDLER`**, with an `explain` arm carrying a before/after
+migration snippet. It covers both ways a program can reach the serve runtime unservable — the entry
+returned without calling `Http.serve`, and the entry is the retired `(Request): Response` shape.
 
-**⚠ OWED, carried from S3.3a into S3.3c — the startup error has NO diagnostic code.** "The Web entry
-returned without calling `Http.serve`" ships as a bare `Diagnostic::runtime`, not an `E-` code with
-an `explain` arm. That is tolerable ONLY while `respond` is still live and `Http.serve` is not yet
-the only way to serve; the moment S3.3c removes the named-entry fallback it becomes the primary
-failure mode of the whole verb and needs a real code, an `explain` arm and a ratchet bump. Do not
-let it stay an afterthought.
+**A defect S3.3c had to fix that was NOT in the plan:** with the by-name fallback gone, a legacy
+example resolves its `(Request): Response` entry (S3.3b kept that shape legal for `kind: Web`) and the
+factory calls it with no arguments — so the startup message was `` `handle` expects 1 argument(s),
+got 0 ``, an opaque arity complaint about a program that was well-formed one release ago. Every pre-D5
+serve program takes that path exactly once. `web_entry_name` now refuses a PARAMETERISED web entry
+before calling it. The check is on ARITY, not on the parameter type: `(): void` is the only shape the
+factory can run.
 
-**Intermediate state, deliberate:** a `(): void` Web entry now checks but cannot yet serve — `phg
-serve` still resolves `respond`. No previously-working program changed behaviour; the legalized
-shape did not compile at all before.
+**NEXT: S3.3d** — migrate the corpus and narrow the CHECKER (`entry_shape_matches`) to reject
+`(Request): Response` for `kind: Web`. **The FULL surface, enumerated — an incomplete list is the
+DEC-191 lesson, and the first draft of this line already missed four entries** [enumerated 2026-08-22
+with `git grep -ln "respond\|handle(Request" -- examples/ playground/`]:
+
+| surface | note |
+|---|---|
+| `examples/web/{core-http,handler,json-api,server}.phg` | the four `Web` entries that are PHP-oracle-gated today — the coverage-loss decision below is about these |
+| `examples/session/counter.phg` | a fifth `Web` entry, outside `examples/web/` |
+| `examples/web/{controller,rich_request,route-constraints,router}.phg` | `Cli`-entry examples whose PROSE describes the `handle`/`respond` model |
+| `examples/web/README.md` (11K) | describes the respond model throughout |
+| `examples/web/server.php` | the `php -S` front-controller bridge — it calls the lifted `handle` |
+| `examples/README.md`, `examples/errors/README.md` | rows naming the retired shape |
+| `examples/guide/entry.phg:5` | states `kind: EntryKind.Web` = *"the `phg serve` handler (`(Request): Response`)"* — now wrong |
+| `playground/web/examples.js` | two embedded sources carrying `respond`/`handle` |
+| site-mode `public/index.phg` | **no such file exists in-repo** — site mode is documented in `help.rs` and `static_files.rs` but ships no example; that is Invariant-9 debt to settle in S3.3e, not a migration | The checker was deliberately NOT narrowed in S3.3c:
+doing so would have failed `phg check` on those examples in the same commit that removed their
+bridge, taking the example byte-identity glob red for a reason unrelated to what it gates. Then S3.3e
+(Invariant 9 + 17: the OWED `Http.ServeConfig` example + `examples/README.md` row, LSP, both editors).
+
+**⚠ Intermediate state, disclosed rather than discovered:** between S3.3c and S3.3d the five shipped
+`examples/web/*` still CHECK, RUN and TRANSPILE — they are byte-identity-gated exactly as before —
+but `phg serve <that example>` refuses with `E-SERVE-NO-HANDLER`. Nothing silently misbehaves; the
+refusal names the migration.
+
+**⚠ CORRECTED — the previous "TRAP FOR S3.3d" note was WRONG about the mechanism, and would have sent
+S3.3d solving the wrong problem.** It claimed an `Http.serve` example "WILL fail the differential"
+because `uses_impure_native` is import-keyed. The import-keyed part is true (and must stay: a
+`Core.Native.Http` → `Core.Http` `twin()` entry would quarantine all five shipped web examples
+wholesale). The conclusion is not:
+
+- `all_examples_transpile_and_match_php` already has a **generic `Err(e) if e.contains("E-TRANSPILE-")`
+  arm** — the native-only-ladder skip. `E-TRANSPILE-SERVE` matches it, so such an example is
+  auto-quarantined from the PHP oracle with no test edit. No new quarantine mechanism is needed.
+- `all_examples_match_between_backends` only requires the example to RUN under the tree-walker.
+  `Http.serve` registers and returns, so a program whose `main` does the printing runs fine.
+
+**[Verified 2026-08-22, by running it — not reasoned.]** A throwaway `examples/guide/zz-trapcheck.phg`
+calling `Http.serve` was dropped into the corpus and both globs run: it printed
+`differential: examples/guide/zz-trapcheck.phg` (RAN on both backends, not skipped) and
+`SKIP (native-only ladder module) examples/guide/zz-trapcheck.phg` (auto-quarantined from the oracle),
+2 tests passed. The file was then deleted and `scripts/surface-baseline.txt` re-emitted — note the
+first `--emit` had captured `examples 278` with the throwaway still present, which would have frozen a
+floor no clean tree could meet.
+
+**A measurement caveat for whoever does that counting:** the oracle test's own closing line
+(`php oracle: N examples gated`) is `files.len() - deferred` — it counts every file it LOOKED at,
+including the ones it skipped. It went 220 → 221 for the throwaway that was skipped. It is therefore
+NOT a coverage number, and must not be used as the before/after measure; count the non-skip lines.
+
+**The REAL S3.3d cost is a coverage LOSS, and it needs a decision, not a mechanism.** The four web
+examples that are PHP-oracle-gated today (`core-http`, `handler`, `json-api`, `server`) drop OUT of
+that oracle the moment they call `Http.serve`, because the whole FILE stops transpiling. Options:
+keep the handler logic in a PHP-gated file and add a thin quarantined serve wrapper beside it, or
+accept the loss and disclose it. Silently letting four examples fall out of the oracle is the DEC-191
+failure mode — **count non-skips before and after.**
 
 ## ⚠ CURRENT CURSOR (2026-08-22b) — **the surface ratchet was MEASURING WRONG, and under-protecting 169 codes**
 

@@ -52,7 +52,7 @@ pub struct FunctionDecl {
 }
 
 /// A synthetic, inert `function main(): void {}` item. The bytecode compiler requires an entry
-/// (`ast::entry_point`), but a serve/web program legitimately has none — its entry is `respond`, run
+/// (`ast::entry_point`), but a serve/web program legitimately has none — its entry is the `Web` one, run
 /// via [`crate::vm::Vm::run_entry`], never `main`. Injecting this satisfies the compiler while staying
 /// byte-inert: the synthetic `main` is never invoked, exactly as the interpreter's `call_named` never
 /// runs `main`. (The future JIT's library/serve compile will reuse it.)

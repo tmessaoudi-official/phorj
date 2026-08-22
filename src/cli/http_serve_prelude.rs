@@ -10,10 +10,10 @@
 //! (`(Request) => Response`), but the serve runtime's contract is raw `bytes -> bytes`
 //! (`serve::Handler`). Something has to bridge the two, and that bridge is HTTP POLICY — which
 //! request shapes are malformed, and what a malformed one produces. Keeping it in phorj means all
-//! three legs would see one definition by construction, exactly as the legacy `HTTP_RESPOND_BRIDGE`
-//! does; the 400-on-unparseable body below is character-for-character the bridge's, so the two paths
-//! cannot answer that question differently while both exist (they overlap until S3.3c retires
-//! `respond`).
+//! three legs see one definition by construction, exactly as the legacy `HTTP_RESPOND_BRIDGE` did;
+//! the 400-on-unparseable body below is character-for-character that bridge's. Since S3.3c deleted
+//! the bridge, this is now the SOLE definition of that policy — there is no second path left to
+//! diverge from.
 //!
 //! WHY A CLASS NAMED `Http`, WHICH IS ALSO THE MODULE QUALIFIER. `Http.serve` is D5's ruled
 //! spelling, and a prelude fragment can only define items, so the receiver has to be a class of that

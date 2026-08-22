@@ -323,7 +323,8 @@ fn main() {
         }
     }
     // `serve <file> [--address ADDR]` runs the blocking HTTP server (project-aware load; the
-    // program defines `respond(bytes): bytes`; runs until killed; default 127.0.0.1:8080).
+    // program's `Web` entry registers a handler via `Http.serve`; runs until killed; default
+    // 127.0.0.1:8080).
     if cmd == "serve" {
         let mut file: Option<&str> = None;
         let mut addr = "127.0.0.1:8080";
@@ -337,7 +338,7 @@ fn main() {
         let mut workers: usize = 0;
         // `--tree-walker` serves on the interpreter oracle instead of the (default) VM — mirrors
         // `phg run --tree-walker`. The VM is faster (measured ~2.3× lower latency) and
-        // byte-identical; the interpreter also serves an overloaded `respond` (VM path rejects).
+        // byte-identical.
         let mut tree_walker = false;
         let mut i = 2;
         while i < args.len() {

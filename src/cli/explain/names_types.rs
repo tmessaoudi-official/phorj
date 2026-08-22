@@ -230,8 +230,8 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              `Cli` entry is `(): void`, `(): int`, `(List<string>): void` or `(List<string>): int`\n\
              (an `int` return is the process exit status); a `Web` entry is `(): void`, whose body\n\
              calls `Http.serve(cfg, handler)` — the handler is a closure ARGUMENT, not the entry\n\
-             itself (DEC-331 D5). The legacy `(Request): Response` web entry is still accepted and\n\
-             is being retired with `respond`.\n\n\
+             itself (DEC-331 D5). The legacy `(Request): Response` web entry still CHECKS, but is no\n\
+             longer servable — `phg serve` refuses it with `E-SERVE-NO-HANDLER` (retired in S3.3c).\n\n\
              `(): void` is legal for BOTH kinds, which is not a contradiction: the role comes from\n\
              `kind:`, not from the shape. What a `Web` entry may NOT borrow are the Cli-only shapes —\n\
              `(): int` is a process exit code and `(List<string>)` is argv, and neither means\n\
@@ -240,6 +240,26 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              pre-check that erases the parameters before this rule runs, so\n\
              `function web(Http.ServeConfig cfg): void` is checked as `(): void`.\n\
              Adjust the signature to the declared kind's shape.\n"
+        }
+        "E-SERVE-NO-HANDLER" => {
+            "E-SERVE-NO-HANDLER — `phg serve` found nothing registered to handle requests.\n\n\
+             A web entry is a closure FACTORY: `#[Entry(kind: EntryKind.Web)] function web(): void`\n\
+             whose body calls `Http.serve(cfg, handler)`. `serve` REGISTERS the handler and returns;\n\
+             the runtime then calls that handler once per request. If the entry returns without\n\
+             calling it, no request can ever be answered — so this is a startup error rather than a\n\
+             server that accepts connections and 500s on every one of them.\n\n\
+             MIGRATING FROM `respond`/`handle` (DEC-331 S3.3c): the named `respond(bytes): bytes`\n\
+             entry, and the `handle(Request): Response` entry that `import Core.Http` used to wrap in\n\
+             a synthesized `respond`, are BOTH retired. Move the old body into a closure:\n\n\
+             \x20   // before\n\
+             \x20   #[Entry(kind: EntryKind.Web)] function handle(Request req): Response { … }\n\n\
+             \x20   // after\n\
+             \x20   #[Entry(kind: EntryKind.Web)] function web(): void {\n\
+             \x20     Http.serve(new ServeConfig(), function(Request req): Response { … });\n\
+             \x20   }\n\n\
+             The handler is now an ordinary value, so it can capture state that persists across\n\
+             requests — which a top-level entry could not. `phg check` still accepts the old shape\n\
+             (nothing about it is ill-typed); it is the serve runtime that refuses it.\n"
         }
         "E-ENTRY-TARGET" => {
             "E-ENTRY-TARGET — `#[Entry]` on an instance method.\n\n\

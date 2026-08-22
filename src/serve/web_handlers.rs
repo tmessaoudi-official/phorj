@@ -19,6 +19,11 @@
 //!    on one leg — a divergence the byte-identity differential cannot see, because serve is
 //!    Invariant-14 quarantined.
 //!
+//! BOTH factories return `Result`, which the legacy pair did not: `interp_factory` resolved its entry
+//! lazily, per request, so it could not fail at startup at all. Since S3.3c made `Http.serve` the only
+//! way to register a handler, "this program is not servable" is a STARTUP error on both backends —
+//! the tree-walker no longer discovers it one request at a time.
+//!
 //! A registration failure is NOT a panic and NOT a silent empty handler: the factory's `Result` is
 //! captured and every request on that worker returns the diagnostic, which the serve loop degrades
 //! to a 500. `HandlerFactory` returns a `Handler`, not a `Result<Handler>`, so this is the only place
@@ -30,15 +35,46 @@ use crate::native::http::serve_register;
 use std::rc::Rc;
 use std::sync::Arc;
 
-/// Resolve the program's `Web` entry to a free-function name.
+/// The startup refusal raised when a program reaches the serve runtime with nothing registered to
+/// handle requests. A NAMED const, not an inline literal, so `scripts/doc-guards.sh` and
+/// `scripts/surface-ratchet.sh` can both see it — an inline literal is how `E-CONCURRENCY-NO-PHP`
+/// stayed invisible to the ratchets for releases.
+///
+/// ONE code, two messages. Both are the same condition from the user's side — "nothing will answer a
+/// request" — and splitting them would mean a second `phg explain` entry that says the same thing
+/// with a different first paragraph. The messages differ because the FIXES differ: write the call, or
+/// migrate a retired shape.
+pub(super) const E_SERVE_NO_HANDLER: &str = "E-SERVE-NO-HANDLER";
+
+/// Resolve the program's `Web` entry to a free-function name, and REFUSE the shapes this factory
+/// cannot run.
 ///
 /// A CLASS-BOUND web entry (`entry_for` returning `Some(class)`) is refused with a named error rather
 /// than silently resolving some other function of the same name. It is not supported yet, and a
 /// misresolved entry index would serve the wrong function while looking healthy — this stack's
 /// characteristic failure mode.
+///
+/// A PARAMETERISED web entry is the retired `(Request): Response` shape (S3.3c). It is refused HERE,
+/// before the entry is called, because the alternative is not a missing check but a WRONG error: the
+/// factory would call the legacy entry with no arguments and the user's startup message would be
+/// `` `handle` expects 1 argument(s), got 0 `` — an opaque arity complaint about a program that was
+/// well-formed one release ago. Every pre-D5 serve program takes this path exactly once, which makes
+/// it the most-read diagnostic of the whole retirement. The check is on ARITY, not on the parameter's
+/// type: `(): void` is the only shape this factory can run, so anything else is refused whatever it
+/// takes. Note the CHECKER still accepts the legacy shape for `kind: Web` — narrowing it there is
+/// S3.3d's job, in the same change that migrates the examples.
 fn web_entry_name(program: &Program) -> Result<String, Diagnostic> {
     match crate::ast::entry_for(program, crate::ast::EntryRole::Web) {
-        Some((None, f)) => Ok(f.name.clone()),
+        Some((None, f)) if f.params.is_empty() => Ok(f.name.clone()),
+        Some((None, f)) => Err(Diagnostic::runtime(format!(
+            "serve: the web entry `{}` takes {} parameter(s) — the `respond`/`handle` \
+             `(Request): Response` entry was RETIRED in DEC-331 S3.3c. A web entry is now a closure \
+             FACTORY: make it `(): void` and call `Http.serve(cfg, handler)` in its body, passing the \
+             old body as the handler.",
+            f.name,
+            f.params.len()
+        ))
+        .with_code(E_SERVE_NO_HANDLER)),
         Some((Some(cls), f)) => Err(Diagnostic::runtime(format!(
             "serve: the web entry `{cls}.{}` is a class method — only a free function is supported \
              (DEC-331 S3.3a)",
@@ -47,7 +83,8 @@ fn web_entry_name(program: &Program) -> Result<String, Diagnostic> {
         None => Err(Diagnostic::runtime(
             "serve needs an `#[Entry(kind: EntryKind.Web)]` function that calls `Http.serve(cfg, handler)`"
                 .to_string(),
-        )),
+        )
+        .with_code(E_SERVE_NO_HANDLER)),
     }
 }
 
@@ -64,6 +101,7 @@ fn register_on_this_thread(program: &Program, entry: &str) -> Result<Value, Diag
             "serve: the web entry `{entry}` returned without calling `Http.serve(cfg, handler)` — \
              nothing was registered to handle requests"
         ))
+        .with_code(E_SERVE_NO_HANDLER)
     })
 }
 
@@ -80,6 +118,7 @@ fn register_on_this_thread_vm(
              registered to handle requests"
                 .to_string(),
         )
+        .with_code(E_SERVE_NO_HANDLER)
     })
 }
 

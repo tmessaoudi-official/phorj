@@ -21,7 +21,7 @@ pub fn help_text() -> String {
          disassemble print the compiled bytecode\n  \
          benchmark  benchmark the interpreter vs the VM (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
-         serve      serve the program over HTTP (calls respond(bytes): bytes per request)\n  \
+         serve      serve the program over HTTP (calls the registered web handler per request)\n  \
          lsp        run the language server over stdio (LSP; for editors)\n  \
          debug      run the program under the interactive debugger (dev; --dap for DAP)\n  \
          test       discover and run `test` blocks (under tests/, or a given file/dir)\n  \
@@ -208,11 +208,15 @@ pub fn help_for(cmd: &str) -> String {
                     web entry is <dir>/public/index.phg. Code lives OUTSIDE public/ (src/,\n\
                     vendor/) — structurally unreachable from the web.\n\n\
                     HANDLER MODE: `phg serve <file>` — no docroot, no statics (dev/demos).\n\n\
-                    The program must define `respond(bytes): bytes`: the runtime frames each\n\
-                    incoming request, calls `respond` (where the program's own `parse_request` /\n\
-                    router / `serialize_response` live — all pure Phorj), and writes the bytes back\n\
-                    (`Connection: close`, one request per connection). A request fault degrades to a\n\
-                    500; a malformed request is the program's concern (→ a 400 from `respond`).\n\n\
+                    The program must have a WEB ENTRY that registers a handler (DEC-331 D5):\n\
+                    `#[Entry(kind: EntryKind.Web)] function web(): void` whose body calls\n\
+                    `Http.serve(cfg, handler)` with a `(Request) => Response` closure. `serve`\n\
+                    registers and returns; the runtime frames each incoming request, calls that\n\
+                    handler, and writes the bytes back (`Connection: close`, one request per\n\
+                    connection). A request fault degrades to a 500; a malformed request 400s. If\n\
+                    nothing is registered, `phg serve` refuses at startup — see\n\
+                    `phg explain E-SERVE-NO-HANDLER`, which also covers migrating a pre-DEC-331\n\
+                    `respond(bytes): bytes` or `handle(Request): Response` entry.\n\n\
                     Concurrency (--workers, M6 W3): each request is handled on its own worker thread\n\
                     with its own value heap (the Rc heap is never shared — values don't cross threads),\n\
                     so the server scales across CPU cores. Default = number of cores; --workers 1 is the\n\
@@ -222,8 +226,7 @@ pub fn help_for(cmd: &str) -> String {
                     served.\n\n\
                     Requests run on the bytecode VM by default (faster than the tree-walker —\n\
                     measured ~2.3x lower end-to-end latency on a representative handler, byte-identical\n\
-                    output); --tree-walker selects the interpreter oracle instead (and is required to\n\
-                    serve an overloaded `respond`, which the VM path rejects).\n\n\
+                    output); --tree-walker selects the interpreter oracle instead.\n\n\
                     usage:\n  phg serve <file> [--address 127.0.0.1:8080] [--timeout SECONDS] [--workers N] [--tree-walker]\n\n\
                     options:\n  \
                     --address ADDR       host:port to bind (default 127.0.0.1:8080)\n  \

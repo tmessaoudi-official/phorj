@@ -185,8 +185,12 @@ pub fn entry_role(f: &FunctionDecl) -> Option<EntryRole> {
 /// so spec §1's `function web(Http.ServeConfig cfg, AppSettings app): void` arrives zero-arg.
 /// `(): void` is therefore legal for BOTH roles, which is fine: the role came from `kind:`.
 ///
-/// `Web` keeps the legacy `(Request): Response` until S3.3c retires `respond` and migrates the
-/// examples. `Cli` is deliberately NOT widened — it must never accept `(Request): Response`.
+/// `Web` still ACCEPTS the legacy `(Request): Response`, deliberately: S3.3c retired that shape from
+/// the serve RUNTIME (`E-SERVE-NO-HANDLER` refuses it with a migration message), but narrowing the
+/// CHECKER is S3.3d's job — doing it here would make the five shipped `examples/web/*` fail
+/// `phg check` in the same commit that removed their bridge, taking the example byte-identity glob
+/// red for a reason unrelated to what it gates. `Cli` is deliberately NOT widened — it must never
+/// accept `(Request): Response`.
 #[must_use]
 pub fn entry_shape_matches(f: &FunctionDecl, declared: EntryRole) -> bool {
     match declared {

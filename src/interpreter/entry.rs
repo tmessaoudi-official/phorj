@@ -95,7 +95,7 @@ pub fn call_closure_in(
 
 /// Call a single named top-level function with pre-built `args`, returning its value plus the
 /// captured stdout. The serve runtime (M6 W3, `crate::serve`) uses this to invoke
-/// `respond(bytes) -> bytes` once per request — the one entry the socket bridge needs. The
+/// the registered web handler once per request — the one call the socket bridge needs. The
 /// interpreter is the reference backend; interp ≡ VM (the differential harness) guarantees the
 /// VM would compute identical bytes, so the spike does not need a VM `call_named` (deferred — the
 /// VM has no return-value capture today). Mirrors [`interpret`] exactly, but enters an arbitrary

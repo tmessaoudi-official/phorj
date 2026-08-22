@@ -4,7 +4,7 @@
 //! Design (panel-certified plan, SLICE-STATE 2026-07-24):
 //!   * bags are pure-phorj classes over native-parsed data → they transpile as class shape for free;
 //!   * `Request.parse` is the EAGER-validating wire constructor (D8a's ruled default): null on any
-//!     malformed/oversize input, so the untouched `respond` bridge 400s it — parse NEVER faults;
+//!     malformed/oversize input, so the `Http.serve` bridge 400s it — parse NEVER faults;
 //!   * `Request.fake` + the withers rebuild from the ORIGINAL raw target/header lines/body through
 //!     the SAME parse path (one parsing story; never from decoded bags — decode is not idempotent);
 //!   * withers FAULT on CR/LF in header names/values (fail-loud on a programming error — the
@@ -131,7 +131,7 @@ class Request {
   // Route-param sugar over the attributes bag (Router.handle writes them there).
   function param(string name): string? { return this.attributes.get(name); }
   // ---- construction --------------------------------------------------------------------------
-  // The EAGER wire constructor: null = malformed or oversize (the respond bridge's 400), NEVER a
+  // The EAGER wire constructor: null = malformed or oversize (the serve bridge's 400), NEVER a
   // fault. Also the single path fake/withers rebuild through (one parsing story).
   static function parse(bytes raw): Request? {
     // DEC-338: the entire wire→Request parse is nativized (Core.Native.Http.parseRequest) to flip the

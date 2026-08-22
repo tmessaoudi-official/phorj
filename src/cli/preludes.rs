@@ -102,18 +102,11 @@ class InputLines implements Iterator<string> {
 
 // DEC-273 wave 3: the session prelude source moved to `crate::ext::session_prelude` (colocation).
 
-/// The `phg serve` bridge: the runtime's `respond(bytes): bytes` entry, synthesized to wrap a
-/// user-defined `handle(Request): Response` (closes Batch-1 C). Injected only when `Core.Http` is
-/// imported, a `handle` exists, and the user hasn't written their own `respond`. A malformed request
-/// (parse returns null) becomes a 400 — HTTP policy lives here in Phorj, not in the Rust runtime.
-pub(super) const HTTP_RESPOND_BRIDGE: &str = r#"
-function respond(bytes raw): bytes {
-  if (var req = Request.parse(raw)) {
-    return handle(req).serialize();
-  }
-  return Response.text(400, "Bad Request").serialize();
-}
-"#;
+// DEC-331 S3.3c: `HTTP_RESPOND_BRIDGE` — the synthesized `respond(bytes): bytes` wrapper around a
+// `handle(Request): Response` entry — is DELETED. `Http.serve(cfg, handler)` is now the only way a
+// program registers a handler, and its 400-on-unparseable policy moved VERBATIM into
+// `cli::http_serve_prelude`, which is still phorj source for the same reason this was: all three
+// legs then see one definition by construction.
 
 // The opaque compiled-`Regex` value model, injected when a program imports `Core.Regex` (Fork A,
 // `docs/specs/2026-06-28-core-regex-design.md`). A `Regex` value is built only by `Regex.compile`
@@ -486,9 +479,6 @@ pub(crate) struct VirtualModule {
     /// `module_of` but inject no enum/class prelude. Plural since DEC-331 slice 2: `Core.Http`
     /// splits its source across two consts (Inv-13) — the fold treats the fragments as one prelude.
     pub(crate) srcs: &'static [&'static str],
-    /// The conditionally-injected `respond` serve-bridge source (Http only) — appended when the
-    /// program defines `handle` and no `respond`. The one honest residual special-case.
-    respond_bridge: Option<&'static str>,
     /// `true` → a member-import (`import Core.Http.Router`) also pulls the prelude in
     /// ([`imports_module_or_member`]); `false` → only a whole-module import (`import Core.Json`).
     member_gated: bool,
@@ -541,7 +531,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Decimal"],
         qualifier: "Decimal",
         srcs: &[ROUNDING_MODE_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &["RoundingMode"],
     },
@@ -549,7 +538,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Option"],
         qualifier: "Option",
         srcs: &[OPTION_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &[],
     },
@@ -557,7 +545,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Result"],
         qualifier: "Result",
         srcs: &[RESULT_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &[],
     },
@@ -566,7 +553,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "DebugModule"],
         qualifier: "DebugModule",
         srcs: &[crate::ext::debug_prelude::PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &["Debug", "Dumped"],
     },
@@ -575,7 +561,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "Debug"],
         qualifier: "Native.Debug",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -585,7 +570,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "SessionModule"],
         qualifier: "SessionModule",
         srcs: &[crate::ext::session_prelude::PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &["Session"],
     },
@@ -594,7 +578,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "Session"],
         qualifier: "Native.Session",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -603,7 +586,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Input"],
         qualifier: "Input",
         srcs: &[INPUT_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &["Input", "InputLines"],
     },
@@ -612,7 +594,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "Input"],
         qualifier: "Native.Input",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -627,7 +608,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
             crate::cli::serve_config_prelude::SERVE_CONFIG_PRELUDE,
             crate::cli::http_serve_prelude::HTTP_SERVE_PRELUDE,
         ],
-        respond_bridge: Some(HTTP_RESPOND_BRIDGE),
         member_gated: true,
         bare_types: &[
             "AttrBag",
@@ -659,7 +639,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "Http"],
         qualifier: "Native.Http",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -669,7 +648,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Json"],
         qualifier: "Json",
         srcs: &[JSON_PRELUDE],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -677,7 +655,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Regex"],
         qualifier: "Regex",
         srcs: &[crate::ext::regex_prelude::PRELUDE],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -685,7 +662,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Time"],
         qualifier: "Time",
         srcs: &[TIME_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &["Duration", "Date", "Instant"],
     },
@@ -694,7 +670,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "UriModule"],
         qualifier: "UriModule",
         srcs: &[crate::ext::uri_prelude::PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &[
             "Uri",
@@ -717,7 +692,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Database"],
         qualifier: "Database",
         srcs: &[crate::ext::database_prelude::PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &[
             "Connection",
@@ -752,7 +726,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "IteratorModule"],
         qualifier: "IteratorModule",
         srcs: &[ITERATOR_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &["Iterator"],
     },
@@ -763,7 +736,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Mail"],
         qualifier: "Mail",
         srcs: &[crate::ext::mail_prelude::PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &[
             "Mailer",
@@ -794,7 +766,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "FileSystemModule"],
         qualifier: "FileSystemModule",
         srcs: &[crate::native::fs_prelude::FS_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &[
             "FileSystem",
@@ -827,7 +798,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "ErrorModule"],
         qualifier: "ErrorModule",
         srcs: &[crate::native::error_prelude::ERROR_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &[
             "RuntimeError",
@@ -842,7 +812,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "ClosableModule"],
         qualifier: "ClosableModule",
         srcs: &[CLOSABLE_PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &["Closable"],
     },
@@ -851,7 +820,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "FileSystem"],
         qualifier: "Native.FileSystem",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -860,7 +828,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "HttpClientModule"],
         qualifier: "HttpClientModule",
         srcs: &[crate::ext::http_client_prelude::PRELUDE],
-        respond_bridge: None,
         member_gated: true,
         bare_types: &[
             "HttpClient",
@@ -887,7 +854,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Secret"],
         qualifier: "Secret",
         srcs: &[SECRET_PRELUDE],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -897,7 +863,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Deque"],
         qualifier: "Deque",
         srcs: &[DEQUE_PRELUDE],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -908,7 +873,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "PriorityQueue"],
         qualifier: "PriorityQueue",
         srcs: &[PRIORITY_QUEUE_PRELUDE],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -919,7 +883,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "Database"],
         qualifier: "Native.Database",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -928,7 +891,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "HttpClient"],
         qualifier: "Native.HttpClient",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -938,7 +900,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "Mail"],
         qualifier: "Native.Mail",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -947,7 +908,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Runtime", "Integer"],
         qualifier: "Runtime.Integer",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &["UncheckedOverflow"],
     },
@@ -955,7 +915,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Runtime"],
         qualifier: "Runtime",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         // DEC-191: `#[Entry]` is import-gated (wind rule), like the UncheckedOverflow precedent one
         // row up; DEC-318 adds the `#[Config]` provider marker under the same gate. DEC-337 adds
@@ -967,7 +926,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "DependencyInjection"],
         qualifier: "DependencyInjection",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &["Injectable", "Provides", "Transient"],
     },
@@ -981,7 +939,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Log"],
         qualifier: "Log",
         srcs: &[crate::native::log::PRELUDE],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[
             "Level",
@@ -1002,7 +959,6 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         module: &["Core", "Native", "Log"],
         qualifier: "Native.Log",
         srcs: &[],
-        respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
@@ -1087,8 +1043,7 @@ pub(crate) fn core_module_of(name: &str) -> Option<&'static str> {
 /// Inject every applicable `Core.*` prelude at the program head, in registry order. Replaces the
 /// eight chained `inject_*_prelude` fns with one uniform fold (UA-L2). For each module whose import
 /// is present, each prelude item is prepended only if absent (imports by path; classes/enums/fns by
-/// name), injected enums are marked `injected` (qualified-variant discipline), and Http's `respond`
-/// bridge is appended when the program defines `handle` and no `respond`. A no-op (borrowed) for a
+/// name) and injected enums are marked `injected` (qualified-variant discipline). A no-op (borrowed) for a
 /// program that imports no injected Core module — such programs stay byte-for-byte unchanged.
 pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
@@ -1176,40 +1131,6 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
                         i.injected = true;
                     }
                     prepend.push(it);
-                }
-            }
-            // Http serve bridge (DEC-191): synthesize `respond` wrapping the program's #[Entry]
-            // WEB handler (`(Request): Response`, resolved by ATTRIBUTE — the magic `handle` name is
-            // retired), when no `respond` exists. The wrapper calls the entry by its actual path
-            // (top-level name, or `Class.method` for a static entry).
-            if let Some(bridge_src) = m.respond_bridge {
-                let has_respond = p
-                    .items
-                    .iter()
-                    .any(|x| matches!(x, Item::Function(f) if f.name == "respond"));
-                // The STRUCTURAL shape decides here, not the declared kind — the two stopped being
-                // the same question in S3.3b. `entry_for` finds the entry DECLARED `kind: Web`, but
-                // this bridge substitutes the callee into `handle(req).serialize()`, so it is only
-                // valid for the legacy `(Request): Response` shape. A D5 `(): void` web entry (whose
-                // body calls `Http.serve`) would be spliced in as `web(req).serialize()` — an arity
-                // error plus `type void has no method serialize`, on a program that is perfectly
-                // well-formed. S3.3b legalized that shape without narrowing this, and no test caught
-                // it; `http_serve_closure_handler_is_servable` does now.
-                let web = crate::ast::entry_for(p, crate::ast::EntryRole::Web)
-                    .filter(|(_, f)| crate::ast::entry_role(f) == Some(crate::ast::EntryRole::Web))
-                    .map(|(cls, f)| match cls {
-                        Some(c) => format!("{c}.{}", f.name),
-                        None => f.name.clone(),
-                    });
-                if let (Some(callee), false) = (web, has_respond) {
-                    let src = bridge_src.replace("handle(req)", &format!("{callee}(req)"));
-                    if let Ok(bridge) = lex_parse(&src) {
-                        prepend.extend(
-                            bridge.items.into_iter().filter(
-                                |it| matches!(it, Item::Function(f) if f.name == "respond"),
-                            ),
-                        );
-                    }
                 }
             }
             // Gated in and handled: never reconsider this row, even when it contributed no items (an

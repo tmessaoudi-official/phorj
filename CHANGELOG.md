@@ -27,11 +27,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
     requests, program STATICS re-seed. Serve is Invariant-14 quarantined, so the byte-identity
     differential cannot see this — that test is the only thing standing between the two backends and a
     silent divergence.
-  - **Scope, stated plainly:** `phg serve` still resolves the legacy `respond` entry and still binds
-    host/port from CLI flags. The registered config is stored and round-trip tested but not yet read.
-    Wiring it, and retiring `respond`, is S3.3c. The "Web entry never called `Http.serve`" startup
-    error currently ships WITHOUT a diagnostic code or `explain` arm — recorded as OWED in
-    `docs/plans/SLICE-STATE.md`, and it must land before S3.3c removes the named-entry fallback.
+  - **Scope:** the registered config is stored and round-trip tested but not yet read — see S3.3c below.
+
+- **`E-SERVE-NO-HANDLER` + `phg explain` arm — and `respond` is RETIRED (S3.3c).** The named
+  `respond(bytes): bytes` serve entry, the `handle(Request): Response` entry that `import Core.Http`
+  used to wrap in a synthesized `respond`, and both legacy by-name handler factories are DELETED.
+  `phg serve` routes through the D5 web factories on both backends, so `Http.serve(cfg, handler)` is
+  the only way a program registers a handler. `phg serve --help` and the `serve` summary line were
+  rewritten in the same change.
+  - **BREAKING for pre-DEC-331 serve programs.** A `respond` or `handle` entry no longer serves. The
+    refusal names the migration and `phg explain E-SERVE-NO-HANDLER` carries a before/after snippet.
+    Such programs still CHECK, RUN and TRANSPILE unchanged — only `phg serve` refuses them.
+  - **The refusal had to be added, not just reworded.** With the by-name fallback gone, a legacy
+    entry is still resolved (S3.3b kept `(Request): Response` legal for `kind: Web`) and was then
+    called with no arguments — so the startup message was `` `handle` expects 1 argument(s), got 0 ``,
+    an opaque arity complaint on the one diagnostic every migrating user reads exactly once. The web
+    factory now refuses a parameterised web entry before calling it, keyed on ARITY.
+  - The CHECKER still accepts the legacy shape for `kind: Web`; narrowing it rides with the example
+    migration (S3.3d), so that this change does not take the example byte-identity glob red for a
+    reason unrelated to what it gates.
+  - `ServeConfig` is still stored-and-unread: making it win over `--address` requires the
+    flag-vs-config conflict to hard-error rather than silently pick a winner, which is the pending
+    S3.2 Part C precedence ruling. Setting `port` does not yet move the socket.
 
 - **`E-TRANSPILE-SERVE` — the Invariant 14 tier-2 refusal, now BUILT** (it had been in the register
   and the specs for weeks with no site in `src/`). A program that CALLS `Http.serve` is refused by

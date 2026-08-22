@@ -2,11 +2,14 @@
 //!
 //! `tests/differential.rs` never touches `src/serve.rs` (the determinism quarantine); this file
 //! drives the serve loop over a deterministic in-memory [`Transport`] so no socket is needed. It
-//! asserts each response is exactly the expected raw HTTP/1.1 bytes AND that the loop's output
-//! equals calling the program's `respond(bytes) -> bytes` directly (self-consistency). One
-//! `#[ignore]`d smoke test exercises the real `TcpTransport` end to end.
+//! asserts each response is exactly the expected raw HTTP/1.1 bytes AND that the loop's output equals
+//! calling the registered handler directly (self-consistency). One `#[ignore]`d smoke test exercises
+//! the real `TcpTransport` end to end.
+//!
+//! Since DEC-331 S3.3c every program here registers its handler with `Http.serve(cfg, handler)` from
+//! a `(): void` `Web` entry — the named `respond(bytes): bytes` entry, and the `handle` bridge that
+//! synthesized it, are both retired.
 use std::collections::VecDeque;
-use std::rc::Rc;
 
 use std::sync::Arc;
 
@@ -14,102 +17,68 @@ use phorj::interpreter::call_named;
 use phorj::serve::{serve, HandlerFactory, Transport};
 use phorj::value::Value;
 
-/// Build the interpreter-backend request factory from a checked program — the pre-VM serve behaviour,
+/// Build the interpreter-backend request factory from a checked program — the correctness oracle,
 /// and the byte-identity reference every existing test below asserts against.
+///
+/// S3.3c repointed this at the D5 WEB factory: the named-`respond` entry it used to resolve no longer
+/// exists, so every serve program in this file is now a `Web` closure factory. The loop, transport and
+/// response-shaping tests below are unchanged by that — they assert the LOOP's behaviour, and the loop
+/// never knew how its handler was obtained.
 fn ifac(prog: &phorj::ast::Program) -> HandlerFactory {
-    phorj::serve::interp_factory(Arc::new(prog.clone()))
+    phorj::serve::web_interp_factory(Arc::new(prog.clone())).expect("web entry registers a handler")
 }
 
 /// Build the bytecode-VM factory from inline source (the default `phg serve` backend). Uses the same
-/// reified-operand path the CLI does, so `Vm::run_entry` ≡ `call_named` on the served `respond`.
+/// reified-operand path the CLI does, so `Vm::run_closure_entry` ≡ `call_closure_in` on the
+/// registered handler.
 fn vfac(src: &str) -> HandlerFactory {
     let (prog, reified) =
         phorj::cli::parse_checked_program_reified(src).expect("serve program type-checks");
-    phorj::serve::vm_factory(Arc::new(prog), Arc::new(reified)).expect("serve program compiles")
+    phorj::serve::web_vm_factory(Arc::new(prog), Arc::new(reified))
+        .expect("serve program compiles and registers")
 }
 
-/// A small but complete serve program: W1-style parse/serialize + a 2-route dispatch + the single
-/// `respond(bytes) -> bytes` entry (malformed → 400, all in pure Phorj). `main` keeps it a valid
-/// `package Main` entry, but the tests call `respond`/`serve`, never `main`.
+/// The serve program the loop/transport tests below drive: a two-route dispatch registered through
+/// `Http.serve(cfg, handler)` — the D5 shape, and since S3.3c the ONLY shape a program can be served
+/// in.
+///
+/// It used to hand-roll its own `Request`/`Response` classes plus parse/serialize in pure Phorj, and
+/// register through a top-level `respond(bytes): bytes`. That is no longer expressible here: `Http.serve`
+/// takes a `(Request) => Response` in CORE.HTTP's types, so a program declaring its own classes of
+/// those names cannot pass its handler to it. The hand-rolled-HTTP demonstration is not lost — it is
+/// what `examples/web/server.phg` exists to show, and that one is byte-identity-gated by
+/// `tests/differential.rs`. Here it was incidental: every test below asserts the LOOP, not the parser.
 const SERVE_PROGRAM: &str = r#"
 package Main;
 import Core.Runtime.Entry; import Core.Runtime.EntryKind;
 import Core.Output;
-import Core.Bytes;
-import Core.String;
-
-class Request {
-  constructor(public string method, public string path, public bytes body) {}
-}
-class Response {
-  constructor(public int status, public bytes body, public List<string> headerLines) {}
-}
-
-function reasonPhrase(int s) -> string {
-  return if (s == 200) { "OK" }
-    else { if (s == 400) { "Bad Request" }
-    else { if (s == 404) { "Not Found" }
-    else { "Internal Server Error" } } };
-}
-
-function parseRequest(bytes raw) -> Request? {
-  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-  int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
-  if (sep < 0) { return null; }
-  bytes headBytes = Bytes.slice(raw, 0, sep);
-  bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
-  string head = Bytes.toString(headBytes) ?? "";
-  List<string> lines = String.split(head, nl);
-  string requestLine = lines[0];
-  List<string> rl = String.split(requestLine, " ");
-  string method = rl[0];
-  string path = rl[1];
-  return new Request(method, path, body);
-}
-
-function serializeResponse(Response resp) -> bytes {
-  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-  string reason = reasonPhrase(resp.status);
-  int st = resp.status;
-  string statusLine = "HTTP/1.1 {st} {reason}";
-  int bodyLen = Bytes.length(resp.body);
-  string userHeaders = String.join(resp.headerLines, nl);
-  string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
-  return Bytes.concat(Bytes.fromString(head), resp.body);
-}
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.ServeConfig;
 
 function dispatch(Request req) -> Response {
-  if (req.method == "GET") {
-    if (req.path == "/") {
-      return new Response(200, Bytes.fromString("home"), ["Content-Type: text/plain"]);
-    }
+  if (req.path == "/") {
+    return Response.text(200, "home");
   }
-  return new Response(404, Bytes.fromString("not found"), ["Content-Type: text/plain"]);
+  return Response.text(404, "not found");
 }
 
-function badRequest() -> Response {
-  return new Response(400, Bytes.fromString("bad request"), ["Content-Type: text/plain"]);
-}
-
-function respond(bytes raw) -> bytes {
-  if (var req = parseRequest(raw)) {
-    return serializeResponse(dispatch(req));
-  } else {
-    return serializeResponse(badRequest());
-  }
+#[Entry(kind: EntryKind.Web)] function web() -> void {
+  Http.serve(new ServeConfig(), function(Request req) -> Response { return dispatch(req); });
 }
 
 #[Entry(kind: EntryKind.Cli)] function main() -> void {
-  bytes raw = b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
-  int len = Bytes.length(respond(raw));
-  Output.printLine("served {len} bytes");
+  Output.printLine("dispatch is driven by tests/serve.rs, not by main");
 }
 "#;
 
-/// slice B1: a Core.Http program that defines ONLY `handle(Request) -> Response` — no parse/serialize,
-/// no `respond`. The Core.Http injection supplies `Request`/`Response` and synthesizes the
-/// `respond(bytes) -> bytes` serve bridge that wraps `handle` (malformed → 400). Closes Batch-1 C: a
-/// bare handler is directly servable.
+/// The RETIRED web-entry shape: `#[Entry(kind: EntryKind.Web)] function handle(Request) -> Response`.
+///
+/// Until S3.3c this was servable — `Core.Http` injected a `respond(bytes): bytes` bridge that wrapped
+/// it. The bridge is deleted, so this program's only remaining job is to be REFUSED, with a message
+/// that tells its author what to write instead. It still type-checks (narrowing the checker is S3.3d's
+/// job, with the example migration), which is exactly why the serve factory has to catch it.
 const HTTP_HANDLE_PROGRAM: &str = r#"
 package Main;
 import Core.Runtime.Entry; import Core.Runtime.EntryKind;
@@ -121,6 +90,24 @@ import Core.Http.Response;
     return Response.text(200, "home");
   }
   return Response.text(404, "missing");
+}
+#[Entry(kind: EntryKind.Cli)] function main() -> void { }
+"#;
+
+/// A web program whose registered HANDLER faults on every request (an out-of-range index). Drives the
+/// per-request resilience assertions: a fault degrades to a 500 and the loop continues.
+const FAULTING_WEB_PROGRAM: &str = r#"
+package Main;
+import Core.Runtime.Entry; import Core.Runtime.EntryKind;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.ServeConfig;
+#[Entry(kind: EntryKind.Web)] function web() -> void {
+  Http.serve(new ServeConfig(), function(Request req) -> Response {
+    List<int> xs = [1];
+    return Response.text(200, "{xs[5]}");
+  });
 }
 #[Entry(kind: EntryKind.Cli)] function main() -> void { }
 "#;
@@ -179,20 +166,25 @@ fn serves_known_unknown_and_malformed() {
     assert_eq!(fx.sent.len(), 3, "one response per request");
     assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
     assert_eq!(fx.sent[1], http("HTTP/1.1 404 Not Found", "not found"));
-    assert_eq!(fx.sent[2], http("HTTP/1.1 400 Bad Request", "bad request"));
+    // "Bad Request" (not the old "bad request"): the malformed-request policy now lives in ONE place,
+    // the `Http.serve` prelude bridge, instead of being re-spelled by every serve program.
+    assert_eq!(fx.sent[2], http("HTTP/1.1 400 Bad Request", "Bad Request"));
 
-    // Self-consistency: the serve loop's output equals calling `respond` directly.
+    // Self-consistency: the loop's bytes equal the registered handler's own return, obtained WITHOUT
+    // the loop. This bypasses `respond_once` entirely — the static-file intercept, the stdout drain
+    // and the 500 shaping — so a loop that mangled, reordered or duplicated a response still fails
+    // here even though both sides now share the web factory.
+    let mut direct = ifac(&prog)();
     for (req, expected) in [
         (get_root, &fx.sent[0]),
         (get_missing, &fx.sent[1]),
         (malformed, &fx.sent[2]),
     ] {
-        let (v, out) =
-            call_named(&prog, "respond", vec![Value::Bytes(Rc::new(req))]).expect("respond ok");
-        assert!(out.is_empty(), "respond emits no stdout");
+        let (v, out) = direct(&req).expect("the registered handler answers");
+        assert!(out.is_empty(), "the handler emits no stdout");
         match v {
             Value::Bytes(b) => assert_eq!(b.as_ref(), expected),
-            other => panic!("respond returned {}, expected bytes", other.type_name()),
+            other => panic!("the handler returned {}, expected bytes", other.type_name()),
         }
     }
 }
@@ -227,49 +219,22 @@ fn vm_serve_is_byte_identical_to_interpreter() {
     );
     assert_eq!(vm.len(), 3, "three responses (not both empty/broken)");
     assert_eq!(vm[0], http("HTTP/1.1 200 OK", "home"));
-    assert_eq!(vm[2], http("HTTP/1.1 400 Bad Request", "bad request"));
+    // Body "Bad Request" since S3.3c: the malformed-request 400 is the `Http.serve` prelude bridge's,
+    // single-sourced in phorj so both legs cannot answer it differently.
+    assert_eq!(vm[2], http("HTTP/1.1 400 Bad Request", "Bad Request"));
 
     // Production 500: a `respond` that faults degrades to the bare 500 on BOTH backends (dev = false).
-    let fault = "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
-         function respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n";
+    let fault = FAULTING_WEB_PROGRAM;
     let req = || vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()];
     let i500 = run(&ifac(&checked(fault)), req());
     let v500 = run(&vfac(fault), req());
     assert_eq!(i500, v500, "production 500 must byte-match across backends");
     assert!(v500[0].starts_with(b"HTTP/1.1 500 Internal Server Error"));
 
-    // The injected Core.Http `respond` bridge is resolved + served identically on the VM.
-    let hp = phorj::cli::parse_checked_program(HTTP_HANDLE_PROGRAM).expect("http program checks");
-    let ihttp = run(&ifac(&hp), routes());
-    let vhttp = run(&vfac(HTTP_HANDLE_PROGRAM), routes());
-    assert_eq!(
-        ihttp, vhttp,
-        "injected-bridge serve must byte-match across backends"
-    );
-    assert_eq!(vhttp[0], http("HTTP/1.1 200 OK", "home"));
-}
-
-#[test]
-fn core_http_handle_is_servable_via_injected_respond_bridge() {
-    // The program has no `respond` of its own — the Core.Http injection supplies it, wrapping `handle`.
-    let prog = phorj::cli::parse_checked_program(HTTP_HANDLE_PROGRAM)
-        .expect("Core.Http handle program type-checks");
-    let get_root = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec();
-    let get_missing = b"GET /missing HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec();
-    let malformed = b"not a request".to_vec();
-
-    let mut fx = FixtureTransport::new(vec![
-        get_root.clone(),
-        get_missing.clone(),
-        malformed.clone(),
-    ]);
-    serve(&ifac(&prog), &mut fx, false).expect("serve loop completes");
-
-    assert_eq!(fx.sent.len(), 3, "one response per request");
-    assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
-    assert_eq!(fx.sent[1], http("HTTP/1.1 404 Not Found", "missing"));
-    // A malformed request → the injected bridge's 400 (body "Bad Request").
-    assert_eq!(fx.sent[2], http("HTTP/1.1 400 Bad Request", "Bad Request"));
+    // The third block here used to serve `HTTP_HANDLE_PROGRAM` through the injected `respond` bridge
+    // on both backends. S3.3c deleted that bridge, and the Core.Http path it covered is now asserted
+    // on both backends by `http_serve_closure_handler_is_servable` (S3.3a) — including the malformed
+    // -> 400 case this block never checked. Coverage rose; it did not move here.
 }
 
 /// A transport with a scripted sequence of `recv` results (including errors), so the loop's
@@ -344,9 +309,7 @@ fn unrecoverable_listener_eventually_stops() {
 /// next request (one bad request never aborts the server).
 #[test]
 fn respond_fault_degrades_to_500_and_loop_continues() {
-    let prog = checked(
-        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
-    );
+    let prog = checked(FAULTING_WEB_PROGRAM);
     let req = b"GET / HTTP/1.1\r\n\r\n".to_vec();
     let mut fx = FixtureTransport::new(vec![req.clone(), req]);
     serve(&ifac(&prog), &mut fx, false).expect("loop completes despite per-request faults");
@@ -370,9 +333,7 @@ fn respond_fault_degrades_to_500_and_loop_continues() {
 #[test]
 fn dev_profile_shows_rich_error_page_release_shows_bare_500() {
     use phorj::profile::Profile;
-    let prog = checked(
-        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
-    );
+    let prog = checked(FAULTING_WEB_PROGRAM);
     let req = b"GET /boom HTTP/1.1\r\n\r\n".to_vec();
 
     // Dev profile → rich HTML page.
@@ -414,13 +375,21 @@ fn dev_profile_shows_rich_error_page_release_shows_bare_500() {
     );
 }
 
-/// P1-e: a `respond` that returns a non-`bytes` value also degrades to a 500 (the runtime never
-/// trusts the return type — it checks the actual value).
+/// P1-e: a handler that returns a non-`bytes` value degrades to a 500 (the runtime never trusts the
+/// declared return type — it checks the actual value).
+///
+/// Driven by a SYNTHETIC `Handler` rather than a phorj program, because S3.3c made this
+/// unrepresentable in source: `Http.serve` takes a `(Request) => Response`, the prelude wraps it into
+/// `(bytes) => bytes`, and the checker rejects anything else long before the runtime sees it. The
+/// branch stays because the `Handler` TYPE still admits any `Value` — a future registration path, or a
+/// native returning the wrong thing, lands right here — and an untested defensive branch is how a
+/// panic reaches production. `HandlerFactory` is public precisely so a caller can supply its own.
 #[test]
-fn respond_non_bytes_return_degrades_to_500() {
-    let prog = checked("package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nfunction respond(bytes raw) -> int { return 7; }\n");
+fn a_non_bytes_handler_return_degrades_to_500() {
+    let factory: HandlerFactory =
+        Box::new(|| Box::new(|_raw: &[u8]| Ok((Value::Int(7), String::new()))));
     let mut fx = FixtureTransport::new(vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()]);
-    serve(&ifac(&prog), &mut fx, false).expect("loop completes");
+    serve(&factory, &mut fx, false).expect("loop completes");
     assert_eq!(fx.sent.len(), 1);
     assert!(fx.sent[0].starts_with(b"HTTP/1.1 500 Internal Server Error"));
 }
@@ -877,21 +846,6 @@ import Core.Http.ServeConfig;
 #[Entry(kind: EntryKind.Cli)] function main() -> void { }
 "#;
 
-/// Build the interpreter WEB factory (DEC-331 D5) — the `#[Entry(kind: EntryKind.Web)]` closure
-/// factory path, not the legacy named-`respond` one.
-fn web_ifac(src: &str) -> HandlerFactory {
-    let prog = phorj::cli::parse_checked_program(src).expect("web program type-checks");
-    phorj::serve::web_interp_factory(Arc::new(prog)).expect("web entry registers a handler")
-}
-
-/// Build the VM WEB factory — the default `phg serve` backend on the D5 path.
-fn web_vfac(src: &str) -> HandlerFactory {
-    let (prog, reified) =
-        phorj::cli::parse_checked_program_reified(src).expect("web program type-checks");
-    phorj::serve::web_vm_factory(Arc::new(prog), Arc::new(reified))
-        .expect("web program compiles and registers")
-}
-
 /// DEC-331 D5 / S3.3a — the executable spec for `Http.serve(cfg, handler)`, now green.
 ///
 /// BOTH backends run it and must agree byte for byte. Serve is Invariant-14 quarantined, so
@@ -900,8 +854,8 @@ fn web_vfac(src: &str) -> HandlerFactory {
 #[test]
 fn http_serve_closure_handler_is_servable() {
     for (backend, fac) in [
-        ("interp", web_ifac(HTTP_SERVE_PROGRAM)),
-        ("vm", web_vfac(HTTP_SERVE_PROGRAM)),
+        ("interp", ifac(&checked(HTTP_SERVE_PROGRAM))),
+        ("vm", vfac(HTTP_SERVE_PROGRAM)),
     ] {
         let mut fx = FixtureTransport::new(vec![
             b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
@@ -958,8 +912,8 @@ class Seen { static mutable int total = 0; }
 #[test]
 fn captures_persist_across_requests_while_statics_reseed() {
     for (backend, fac) in [
-        ("interp", web_ifac(HTTP_SERVE_STATE_PROGRAM)),
-        ("vm", web_vfac(HTTP_SERVE_STATE_PROGRAM)),
+        ("interp", ifac(&checked(HTTP_SERVE_STATE_PROGRAM))),
+        ("vm", vfac(HTTP_SERVE_STATE_PROGRAM)),
     ] {
         let req = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec();
         let mut fx = FixtureTransport::new(vec![req.clone(), req.clone(), req]);
@@ -1004,6 +958,12 @@ import Core.Http;
     assert!(
         msg.contains("Http.serve"),
         "the error must name the missing call: {msg}"
+    );
+    // S3.3c: with the named-`respond` fallback gone this is the ONLY way a program can fail to be
+    // servable, so it carries a code that `phg explain` can reach.
+    assert!(
+        msg.contains("E-SERVE-NO-HANDLER"),
+        "the error must carry its code: {msg}"
     );
 }
 
@@ -1094,6 +1054,33 @@ import Core.Abort.panic;
 
     // SAME THREAD, immediately after: a clean program must still register and serve.
     let mut fx = FixtureTransport::new(vec![b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec()]);
-    serve(&web_ifac(HTTP_SERVE_PROGRAM), &mut fx, false).expect("serve loop completes");
+    serve(&ifac(&checked(HTTP_SERVE_PROGRAM)), &mut fx, false).expect("serve loop completes");
     assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
+}
+
+/// S3.3c — the RETIRED `(Request): Response` web entry is refused at startup with a NAMED code and a
+/// migration message.
+///
+/// Without this shape check the failure is an ARITY FAULT: `web_entry_name` resolves the legacy entry
+/// (S3.3b deliberately kept that shape legal for `kind: Web`), the factory calls it with no arguments,
+/// and the user's "startup error" is an opaque complaint about parameter counts on a program that was
+/// perfectly well-formed one release ago. Every pre-D5 serve program takes this path exactly once, so
+/// it is the single most-read diagnostic of the whole retirement.
+#[test]
+fn a_legacy_request_response_web_entry_is_refused_with_the_migration_code() {
+    let prog = phorj::cli::parse_checked_program(HTTP_HANDLE_PROGRAM)
+        .expect("the legacy shape still CHECKS");
+    // `HandlerFactory` is a boxed `dyn Fn`, so it is not `Debug` and `expect_err` cannot be used.
+    let msg = match phorj::serve::web_interp_factory(Arc::new(prog)) {
+        Ok(_) => panic!("the retired `(Request): Response` web entry must not produce a factory"),
+        Err(d) => format!("{d:?}"),
+    };
+    assert!(
+        msg.contains("E-SERVE-NO-HANDLER"),
+        "the refusal must carry the code so `phg explain` can reach it: {msg}"
+    );
+    assert!(
+        msg.contains("Http.serve"),
+        "the refusal must name what to migrate TO: {msg}"
+    );
 }

@@ -132,50 +132,55 @@ fn front_end_diagnostics_agrees_with_check() {
     );
 }
 
-/// DEC-331 S3.3b blast radius, caught by S3.3a's first failing test rather than by S3.3b's own.
+/// DEC-331 S3.3c — `import Core.Http;` synthesizes NO `respond` entry, for ANY web-entry shape.
 ///
-/// The `Core.Http` respond-bridge substitutes the WEB ENTRY's name into `handle(req).serialize()`,
-/// resolving that entry by its DECLARED kind. S3.3b legalized `(): void` for `kind: Web` without
-/// narrowing the bridge, so a D5-shaped web entry got spliced in as `web(req).serialize()` — an
-/// arity error plus `type void has no method serialize`, reported against `import Core.Http;` on a
-/// program that is perfectly well-formed.
-///
-/// The bridge now filters on the STRUCTURAL shape (`entry_role`), which is the narrower question it
-/// always needed and which only diverged from the declared kind in S3.3b.
+/// This test used to assert the opposite for the legacy `(Request): Response` shape: the bridge was
+/// the mechanism that made a bare `handle` servable, and five shipped `examples/web/*` depended on it.
+/// S3.3c deleted it, so the assertion is inverted and the two shapes become one case — which is the
+/// point of the retirement. What made it worth keeping as a test at all is the S3.3b defect it caught:
+/// the bridge resolved the web entry by its DECLARED kind and spliced the name into
+/// `handle(req).serialize()`, so once `(): void` became legal for `kind: Web` a well-formed D5 program
+/// got `web(req).serialize()` — an arity error plus `type void has no method serialize`, reported
+/// against the import line. A synthesized item that misreads the program is a whole class of bug; the
+/// only structural cure is to synthesize nothing, and that is what is pinned here.
 #[test]
-fn a_void_web_entry_does_not_get_the_legacy_respond_bridge() {
-    let src = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
-               import Core.Http; \
-               #[Entry(kind: EntryKind.Web)] function web() -> void { } \
-               #[Entry(kind: EntryKind.Cli)] function main() -> void { }";
-    let prog = lex_parse(src).expect("parse");
-    let ds = front_end_diagnostics(&prog);
-    let codes: Vec<_> = ds
-        .iter()
-        .map(|d| format!("{:?}: {}", d.code, d.message))
-        .collect();
-    assert!(
-        !codes
+fn importing_core_http_synthesizes_no_respond_entry_for_any_web_shape() {
+    for (label, src) in [
+        (
+            "D5 `(): void` factory",
+            "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+             import Core.Http; \
+             #[Entry(kind: EntryKind.Web)] function web() -> void { } \
+             #[Entry(kind: EntryKind.Cli)] function main() -> void { }",
+        ),
+        (
+            "the RETIRED `(Request): Response` shape",
+            "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
+             import Core.Http; import Core.Http.Request; import Core.Http.Response; \
+             #[Entry(kind: EntryKind.Web)] function handle(Request r) -> Response { return Response.text(200, \"ok\"); }",
+        ),
+    ] {
+        let prog = lex_parse(src).expect("parse");
+        let ds = front_end_diagnostics(&prog);
+        let codes: Vec<_> = ds
             .iter()
-            .any(|m| m.contains("serialize") || m.contains("expects 0 argument")),
-        "the legacy bridge must not be synthesized for a `(): void` web entry: {codes:?}"
-    );
-
-    // CONTROL: the legacy `(Request): Response` web entry must STILL get the bridge — narrowing the
-    // filter must not switch it off for the shape it exists to serve. Five shipped examples/web/*
-    // depend on it until S3.3c.
-    let legacy = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
-                  import Core.Http; import Core.Http.Request; import Core.Http.Response; \
-                  #[Entry(kind: EntryKind.Web)] function handle(Request r) -> Response { return Response.text(200, \"ok\"); }";
-    let lp = lex_parse(legacy).expect("parse");
-    let expanded = check_and_expand(&lp, legacy).expect("legacy web program still checks");
-    assert!(
-        expanded
-            .items
-            .iter()
-            .any(|it| matches!(it, crate::ast::Item::Function(f) if f.name == "respond")),
-        "the legacy (Request): Response entry must still get its `respond` bridge"
-    );
+            .map(|d| format!("{:?}: {}", d.code, d.message))
+            .collect();
+        assert!(
+            !codes
+                .iter()
+                .any(|m| m.contains("serialize") || m.contains("expects 0 argument")),
+            "{label}: no bridge may be synthesized against it: {codes:?}"
+        );
+        let expanded = check_and_expand(&prog, src).expect("program still checks");
+        assert!(
+            !expanded
+                .items
+                .iter()
+                .any(|it| matches!(it, crate::ast::Item::Function(f) if f.name == "respond")),
+            "{label}: `respond` was RETIRED in S3.3c — nothing may synthesize it"
+        );
+    }
 }
 
 /// A class whose name EQUALS its own module qualifier must not shadow the qualified TYPE form.

@@ -14,7 +14,7 @@
 //! method-dispatchable identically to phorj-constructed ones (the multipart-carrier precedent).
 //!
 //! `null` (→ `Value::Null`) = malformed/oversize (the eager D8a contract — NEVER a fault, so the
-//! respond bridge 400s it); a spill-store IO failure is the sole genuine `Err` (an ambient error).
+//! serve bridge 400s it); a spill-store IO failure is the sole genuine `Err` (an ambient error).
 use super::query::{decode_path, parse_query_pairs};
 use super::{pairs_to_map, parse_multipart, stash_decision};
 use crate::value::{ClassLayout, Instance, Value};

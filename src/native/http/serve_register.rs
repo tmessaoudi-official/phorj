@@ -18,12 +18,13 @@
 //!   global**, because the parent thread needs `workers`/`host`/`port` to decide how many workers to
 //!   spawn and where to bind — a decision that necessarily happens outside any worker.
 //!
-//! The config half is written but not yet consumed: `phg serve` still resolves the legacy `respond`
-//! entry and takes its host/port from CLI flags. Wiring it is increment 2, where the flag-vs-config
-//! conflict must HARD-ERROR rather than pick a winner (D1 ruled the precedence ordering; the
-//! machinery that implements it is the pending S3.2 Part C ruling). It is stored now, and covered by
-//! `config_round_trips_through_the_global`, so that the increment that reads it inherits a tested
-//! path rather than an untested one.
+//! The config half is written but STILL not consumed, and that is not an oversight of S3.3c: `phg
+//! serve` takes its host/port from CLI flags, and making the registered config win instead requires
+//! the flag-vs-config conflict to HARD-ERROR rather than silently pick a winner. D1 ruled the
+//! precedence ORDERING; the machinery that implements it is the pending S3.2 Part C ruling, so
+//! wiring it now would mean inventing a precedence rule the developer has not made. Setting `port`
+//! on a `ServeConfig` therefore does not yet move the socket. It is stored and covered by
+//! `config_round_trips_through_the_global` so the slice that reads it inherits a tested path.
 
 use super::{parg, NativeEval, NativeFn};
 use crate::types::Ty;

@@ -190,7 +190,9 @@ Build cluster, in order (D10a):
 - **(3) `#[Entry(kind: EntryKind.{Cli|Web|Desktop|Mobile|Worker|Embedded})]`** (DEC-337: injected enum
   variant, qualified + import-gated, never in the wind — import-gating since superseded by DEC-353: injected `Entry`/`EntryKind` auto-provided) + per-type `#[Config]`-injected
   typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
-  contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`.
+  contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`
+  (**✅ the `respond` retirement SHIPPED 2026-08-22, S3.3c — `Http.serve(cfg, handler)` is now the
+  only registration path; cursor in SLICE-STATE**).
 - **Separate QUEUED design slices (specs frozen, same wave + DEC-335):** labeled
   `break`/`continue` (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self`
   return), `eval` (position spec: rejection + substitutes; `Core.Sandbox` builds in v1),
@@ -2314,8 +2316,9 @@ SURFACE changes; several are BREAKING (migrate all examples + Core), so each is 
   "bring it forward"), before DEC-256/243/242/258. **SHIPPED 2026-07-17 fable** — attribute-keyed
   resolution on every backend (entry NAME free), roles + E-MULTIPLE-ENTRY/E-ENTRY-SIG/
   E-ENTRY-TARGET, throwing entries legal (supersedes main-no-throws), respond bridge wraps the
-  attributed web handler, corpus fully migrated (275 examples + all harnesses), lifter emits the
-  attribute; found+tracked the latent prelude/user span-collision P1 (KNOWN_ISSUES) en route.
+  attributed web handler (**that bridge was DELETED 2026-08-22 in DEC-331 S3.3c — this line records
+  DEC-191 as shipped then, not the surface today**), corpus fully migrated (275 examples + all
+  harnesses), lifter emits the attribute; found+tracked the latent prelude/user span-collision P1 (KNOWN_ISSUES) en route.
 - **DEC-192 — mandatory `override function` keyword (the override enforcer).** Overriding a parent method
   REQUIRES `override function foo()` (E-MISSING-OVERRIDE if absent); marking a non-override is
   E-NOT-AN-OVERRIDE (typo/signature-drift guard). Keyword form (consistent with `open function`), the

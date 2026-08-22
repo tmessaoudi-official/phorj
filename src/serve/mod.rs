@@ -2,9 +2,10 @@
 //! deliberately OUTSIDE the byte-identity spine: `tests/differential.rs` never imports this module —
 //! its conformance is covered by `tests/serve.rs` over a deterministic in-memory [`Transport`].
 //!
-//! The portable unit stays `handle(Request) -> Response` (W1) *inside* the served program; the
-//! runtime only shuttles raw bytes to a single Phorj entry **`respond(bytes) -> bytes`** ([`SERVE_ENTRY`])
-//! and writes the result back. HTTP/1.1 with **keep-alive** (S4.1) when a `--timeout` is configured —
+//! The portable unit is the `(Request) => Response` closure the served program registers with
+//! **`Http.serve(cfg, handler)`** (DEC-331 D5); the runtime only shuttles raw bytes to that handler
+//! and writes the result back. The named `respond(bytes) -> bytes` entry it used to resolve was
+//! RETIRED in S3.3c — a web entry is now a closure FACTORY ([`web_interp_factory`]). HTTP/1.1 with **keep-alive** (S4.1) when a `--timeout` is configured —
 //! a connection is reused until `Connection: close`, the per-connection cap, or the idle timeout; with
 //! no timeout it is one request per connection (the idle-socket guard).
 //!
@@ -15,15 +16,12 @@
 //! plan (which would have been single-core + needs unstable/unsafe std machinery) — see
 //! `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md` (deleted spec; upstream git history).
 use crate::ast::Program;
-use crate::chunk::BytecodeProgram;
 use crate::compiler::compile_with;
 use crate::diagnostic::Diagnostic;
-use crate::interpreter::call_named;
 use crate::value::Value;
 use crate::vm::Vm;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
