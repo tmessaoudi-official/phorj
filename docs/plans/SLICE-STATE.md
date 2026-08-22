@@ -67,6 +67,15 @@ what you think it runs over, not merely that it is green.**
   rule) and `E-VARIADIC` (only ever a test literal; the real codes are its `E-VARIADIC-*` children).
   Now scanned over non-test src, which also generalizes the ad-hoc `E-FOO|E-NOPE|E-TYPE` blocklist.
 
+**⚠ OWED (recorded, not hidden — in a commit about unrecorded gaps): the ratchet fix has NO
+regression test.** The repo pattern is `scripts/test-<name>.sh` run by pre-push, exactly as
+`test-validate-infra.sh` keeps `validate-infra.sh` from going dark. The new hard-fail on an EMPTY
+test-file enumeration only catches total blindness; someone "simplifying" the path filter back to a
+`--include` basename rule would still pass it, and the sabotage proof that caught this was run BY
+HAND and nothing re-runs it. Scoped follow-up: `scripts/test-surface-ratchet.sh`, asserting that a
+code asserted only in a `src/**/tests/*.rs` file counts, that a prefix (`E-X` vs `E-X-Y`) does NOT
+count, and that an empty enumeration fails.
+
 **Floor re-emitted at 250/305 (81%).** Read that against the old 83/307 (27%) as a MEASUREMENT
 correction, not a coverage jump: nothing was tested that was not tested before. The real remaining
 debt is **55 codes**, not 224 — which also means the "~246 fixtures before anything else could land"
