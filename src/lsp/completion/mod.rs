@@ -9,8 +9,10 @@
 //!
 //! Type-aware member completion is DECLARED-type only (params, `Type x` locals, fields, ctor-promoted
 //! params, `this`); an inferred `var x = …` receiver or a method-chain resolves to nothing — the
-//! conservative gate (a wrong member list is worse than none). Prelude-class members (Date/Uri…) need
-//! the injected prelude program, a documented follow-up.
+//! conservative gate (a wrong member list is worse than none). A receiver whose declared type is a
+//! STDLIB class (`ServeConfig`/`Request`/`Date`/`Uri`…) is answered from the prelude registry
+//! (`catalog::prelude_class_members`, S3.3e) — the user program is consulted first, so a project's
+//! own class of the same name shadows the stdlib one rather than merging with it.
 use super::catalog;
 use super::keywords::KEYWORDS;
 use crate::ast::Program;
@@ -190,10 +192,23 @@ pub(super) fn complete(
                 match prog.and_then(|p| {
                     super::scope::receiver_type_name(p, offset, &recv).map(|ty| (p, ty))
                 }) {
-                    Some((p, ty)) => catalog::class_members(p, &ty)
-                        .into_iter()
-                        .map(|(m, kind)| completion_item(&m, kind, "member"))
-                        .collect(),
+                    Some((p, ty)) => {
+                        // The user program is consulted FIRST; a stdlib class is the fallback for a
+                        // type the buffer does not declare. So a project's own `class Response`
+                        // shadows the prelude one, exactly as it does for the compiler — the two
+                        // lists are never merged.
+                        let mut members = catalog::class_members(p, &ty);
+                        if members.is_empty() {
+                            members = super::prelude_catalog::prelude_class_members(&ty);
+                        }
+                        members
+                            .into_iter()
+                            .map(|(m, kind)| completion_item(&m, kind, "member"))
+                            .collect()
+                    }
+                    // No receiver type at all — but a DECLARED prelude type may still be nameable
+                    // when the repaired parse loses the enclosing item; the conservative gate stays,
+                    // so this stays empty rather than guessing.
                     None => Vec::new(),
                 }
             }
@@ -434,3 +449,5 @@ fn parse_repaired(text: &str, offset: usize) -> Option<Program> {
 mod tests;
 #[cfg(test)]
 mod tests_attributes;
+#[cfg(test)]
+mod tests_preludes;

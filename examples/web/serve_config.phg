@@ -1,0 +1,108 @@
+// `Http.ServeConfig` — the web runtime's configuration contract (DEC-331 D4), socket-free.
+//
+// This is the value `Http.serve(cfg, handler)` is given: one immutable record with a promoted
+// constructor, so every field is optional at the call site and NAMED arguments select the ones you
+// actually set. `examples/web/{core-http,json-api,server}/serve.phg` each pass one to `Http.serve`;
+// here it is only CONSTRUCTED and read, which is what keeps this file byte-identity-gated — a file
+// that CALLS `Http.serve` is refused by `phg transpile` (`E-TRANSPILE-SERVE`, Invariant 14 tier 2),
+// so the config surface could not otherwise be shown against the PHP leg at all.
+//
+// Three defaults worth knowing, all visible below:
+//   * `workers = 0` means AUTO — one worker per core, resolved by the serve loop. The default is a
+//     literal 0 rather than the core count so the class stays a deterministic value: baking a
+//     machine-dependent number in would make the two native legs and the PHP leg disagree.
+//   * `timeout = 0` means NO timeout, the same sentinel shape.
+//   * HTTPS auto-enables **iff BOTH `cert` and `key` are set** (D7) — there is no separate `--tls`
+//     flag, and a lone `cert` is not a half-configured server, it is a plain-HTTP one.
+//
+// `RequestParsing` (Rich-Request D8a) says WHEN the body is parsed: `Eager` (the default) answers
+// 400 at the edge before the handler runs; `Lazy` defers it to first access.
+//
+// ⚠ The serve LOOP does not read the registered config yet: `phg serve` still binds host/port from
+// its CLI flags, so setting `port` here does not move the socket. That wiring waits on the S3.2
+// Part C flag-vs-config precedence ruling (FEATURES.md, `Http.ServeConfig` row). What this file
+// shows — the field set, the defaults and the sentinels — is exactly what `Http.serve` receives.
+//
+// Byte-identical on the interpreter, the VM and real PHP.
+package Main;
+
+import Core.Output;
+import Core.Http;
+import Core.Http.ServeConfig;
+import Core.Http.RequestParsing;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+function parsingName(RequestParsing p): string {
+    return match (p) { RequestParsing.Eager() => "eager", RequestParsing.Lazy() => "lazy" };
+}
+
+// `workers = 0` is the AUTO sentinel, `timeout = 0` is "no timeout" — render both as words rather
+// than as a bare 0, which is what the sentinel actually means to a reader.
+function workersName(int workers): string {
+    if (workers == 0) {
+        return "auto(one per core)";
+    }
+    return "{workers}";
+}
+
+function timeoutName(int seconds): string {
+    if (seconds == 0) {
+        return "none";
+    }
+    return "{seconds}s";
+}
+
+// HTTPS is a function of the config, not a flag: BOTH halves present, or plain HTTP.
+function scheme(ServeConfig cfg): string {
+    if (var c = cfg.cert) {
+        if (var k = cfg.key) {
+            return "https(min TLS {cfg.tlsMinVersion})";
+        }
+    }
+    return "http";
+}
+
+function describe(string label, ServeConfig cfg): void {
+    Output.printLine("{label}:");
+    Output.printLine("  bind         {cfg.host}:{cfg.port} over {scheme(cfg)}");
+    Output.printLine("  workers      {workersName(cfg.workers)}");
+    Output.printLine("  timeout      {timeoutName(cfg.timeout)}");
+    Output.printLine("  maxBodySize  {cfg.maxBodySize}");
+    Output.printLine("  serverName   {cfg.serverName ?? \"(none)\"}");
+    Output.printLine("  parsing      {parsingName(cfg.requestParsing)}");
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Every field defaulted — what `new ServeConfig()` in a `serve.phg` actually means.
+    describe("defaults", new ServeConfig());
+    // Named arguments select what you set; the rest keep their defaults. Order is free.
+    describe("tuned", new ServeConfig(port: 3000, workers: 4, timeout: 30));
+    // HTTPS: both halves, so the scheme flips. `serverName` is the virtual host name.
+    describe(
+        "tls",
+        new ServeConfig(
+            host: "0.0.0.0",
+            port: 8443,
+            cert: "certs/site.pem",
+            key: "certs/site.key",
+            serverName: "example.test",
+            tlsMinVersion: "1.3"
+        )
+    );
+    // A LONE `cert` does NOT enable HTTPS — the D7 rule is "iff both". Shown because a config that
+    // silently serves plain HTTP while looking encrypted is the footgun worth seeing once.
+    describe("cert-only", new ServeConfig(port: 8443, cert: "certs/site.pem"));
+    // Lazy body parsing, and a body cap raised to 32 MiB (the default is 8 MiB).
+    describe(
+        "lazy-uploads",
+        new ServeConfig(maxBodySize: 33554432, requestParsing: new RequestParsing.Lazy())
+    );
+    // The value is immutable: reading a field never changes it, so the same instance describes the
+    // same server twice. (Withers are a Request affordance; a ServeConfig is built once, at startup.)
+    ServeConfig shared = new ServeConfig(port: 9000);
+    Output.printLine(
+        "re-read       {shared.host}:{shared.port} workers={workersName(shared.workers)}"
+    );
+}

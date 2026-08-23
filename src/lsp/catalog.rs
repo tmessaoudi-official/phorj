@@ -14,8 +14,8 @@ use crate::native;
 /// USER class `class_name`, INCLUDING members inherited from its transitive `extends` supertypes
 /// (via `class_supertypes` — the same hierarchy the backends use). Sorted + deduped (a subclass member
 /// shadows an inherited one). Empty when `class_name` is not a user class/interface/trait in `program`
-/// — prelude classes (Date/Instant/Uri…) need the injected prelude program (a follow-up). Kind:
-/// Method=2, Field/property=5.
+/// — a STDLIB class (Date/Instant/Uri/ServeConfig…) is answered by [`prelude_class_members`], which
+/// the caller falls back to precisely when this returns empty. Kind: Method=2, Field/property=5.
 pub(super) fn class_members(program: &Program, class_name: &str) -> Vec<(String, u32)> {
     let supers = class_supertypes(program);
     let mut chain: Vec<&str> = vec![class_name];
@@ -124,51 +124,10 @@ pub(super) fn module_members(qualifier: &str) -> Vec<String> {
         .filter(|n| n.module.rsplit('.').next() == Some(qualifier))
         .map(|n| n.name.to_string())
         .collect();
-    names.extend(prelude_class_statics(qualifier));
+    names.extend(super::prelude_catalog::prelude_class_statics(qualifier));
     names.sort();
     names.dedup();
     names
-}
-
-/// The PUBLIC static methods of the prelude class named `qualifier`, if some `CORE_MODULES` row
-/// injects such a class. `private` statics are omitted: they are internals (`FileSystem.acquireLock`
-/// is the `using` subject behind `withLock`), and offering them would advertise the very shape the
-/// DEC-348 ruling rejected. Parsed from the registry's own prelude source, so a new prelude static is
-/// completable the moment it is written — no LSP edit, which is what Invariant 17 requires.
-fn prelude_class_statics(qualifier: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    for vm in crate::cli::preludes::CORE_MODULES {
-        if !vm.bare_types.contains(&qualifier) {
-            continue;
-        }
-        for src in vm.srcs {
-            let Ok(prog) = crate::cli::parse_program(&format!("package Main;\n{src}\n")) else {
-                continue; // unreachable: registry preludes parse
-            };
-            for it in &prog.items {
-                let Item::Class(c) = it else { continue };
-                if c.name != qualifier {
-                    continue;
-                }
-                for m in &c.members {
-                    if let ClassMember::Method(f) = m {
-                        let is_static = f
-                            .modifiers
-                            .iter()
-                            .any(|md| matches!(md, crate::ast::Modifier::Static));
-                        let is_private = f
-                            .modifiers
-                            .iter()
-                            .any(|md| matches!(md, crate::ast::Modifier::Private));
-                        if is_static && !is_private {
-                            out.push(f.name.clone());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    out
 }
 
 /// Completable ATTRIBUTE names for the `#[` context, as `(label, detail)`.

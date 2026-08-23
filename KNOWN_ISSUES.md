@@ -2822,3 +2822,29 @@ collide for me under the same alignment, so the axis may be narrower than "any t
 constructor and member-import forms are confirmed; the free-function form is not. Do not widen the
 claim beyond what is reproduced here.
 
+
+## §LSP-PRELUDE-DEFINITION — go-to-definition on a stdlib symbol opens nothing (P2, 2026-08-23)
+
+**S3.3e closed the COMPLETION half of this and deliberately left the NAVIGATION half open**, so the
+boundary is worth stating rather than discovering. `catalog::prelude_class_members` now answers member
+completion for every prelude class (`cfg.port`, `req.headers`, `Date`/`Instant`/`Uri`/`Session`…), and
+`prelude_class_statics` already answered `Http.serve`. But `textDocument/definition` on a stdlib symbol
+still resolves through `resolve_decl` over the USER program only, so it returns nothing.
+
+**This is a design question, not an oversight.** A prelude declaration has no file to open: it lives in
+a `&'static str` inside `src/cli/*_prelude.rs`, injected as a virtual module. Serving a location for it
+means choosing one of:
+
+  * synthesize a read-only virtual document (`phorj-stdlib:/Core.Http/ServeConfig.phg`) and answer with
+    a URI the client must then be able to fetch — the LSP has no such `textDocument/content` route today;
+  * point at the Rust source line that holds the string, which is honest but opens a `.rs` file in a
+    `.phg` editing session;
+  * answer with the injected span, which lands at a byte offset **inside the user's own buffer** — the
+    hazard §span-collision already records. Never do this.
+
+**Same gap, same reason, for hover and signature help on a prelude symbol.** Hover currently shows
+nothing for `cfg.port`; the fix rides whichever answer the definition question gets, since both need a
+location or a rendered declaration for a decl that has no file.
+
+**Not a regression** — it predates S3.3e and no shipped behaviour changed. Recorded so the next slice
+there starts from the ruling, not from re-deriving the three options.

@@ -8,6 +8,40 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **S3.3e — the `Http.ServeConfig` example, and LSP completion for EVERY stdlib class (DEC-455.3
+  closed, DEC-455.13).** The two Invariant 9 + 17 rows S3.3 had been carrying since S3.2 Part A.
+  - **`examples/web/serve_config.phg`** shows the config surface `Http.serve(cfg, handler)` receives:
+    a promoted constructor whose every field is optional, so named arguments select what you set; the
+    `workers = 0` AUTO and `timeout = 0` no-timeout sentinels (literal, so the class stays a
+    deterministic value across all three legs); the D7 rule that HTTPS auto-enables **iff BOTH `cert`
+    and `key` are set** — a lone `cert` still serves plain HTTP; and `RequestParsing.Eager`/`Lazy`.
+    It deliberately does NOT call `Http.serve`: `phg transpile` refuses any file that does
+    (`E-TRANSPILE-SERVE`), so this is the ONLY shape in which the config surface can face the PHP
+    oracle. Byte-identical on `run`, `run --tree-walker`, `run --no-jit` and php-8.5.9.
+  - **Counted, not assumed** (the DEC-191 lesson): flat corpus RUN 198 → 199, SKIP 19 → 19 — the
+    example is gated, not quarantined. `scripts/surface-baseline.txt` re-emitted, examples 287 → 288.
+  - **The LSP hole was wider than the row that surfaced it.** `catalog::class_members` only ever read
+    the USER program, so a receiver whose declared type was ANY stdlib class — `Request`, `Response`,
+    `Date`, `Instant`, `Uri`, `Session`, `ServeConfig` — completed to NOTHING. Two source comments
+    called it "a documented follow-up"; neither had been measured. `src/lsp/prelude_catalog.rs` (a new
+    file — the `catalog.rs` split Invariant 13 requires) answers instance members by parsing the
+    `CORE_MODULES` registry's own prelude source on demand, the same mechanism `prelude_class_statics`
+    already used for `Http.serve` — so a new prelude class is completable the moment it is written,
+    with no LSP edit.
+  - Pinned by tests: the LEAF names the class (`Http.ServeConfig cfg` ≡ bare `ServeConfig cfg`);
+    `private`/`protected` and `static` members are filtered (`Request`'s `rawTarget`/`rawHeaderLines`/
+    `rawBody` are private PROMOTED ctor params, i.e. real members a naive walk offers, and
+    `req.parse(…)` is not a call anyone can write); and the user program is consulted FIRST, so a
+    project's own `class Response` shadows the stdlib one rather than merging with it.
+    Sabotage-verified twice; restores byte-identical.
+  - **Editors: a verified no-op.** `editors/vscode/syntaxes/phorj.tmLanguage.json` carries no stdlib
+    names (it is purely syntactic) and both editors consume the same LSP, so completion improved with
+    no editor change. S3.3e introduced no new syntax.
+  - **Left open and recorded, not skipped:** go-to-definition and hover on a stdlib symbol still return
+    nothing — a prelude declaration has no file to open, and the three candidate answers each trade
+    something real (one would land inside the user's own buffer, the §span-collision hazard).
+    KNOWN_ISSUES §LSP-PRELUDE-DEFINITION.
+
 - **The web example corpus moved to the D5 model, and the checker narrowed to match (S3.3d,
   DEC-455.12).** `(Request): Response` under `kind: EntryKind.Web` no longer type-checks:
   `E-ENTRY-SIG`, with a hint naming `Http.serve` and pointing at

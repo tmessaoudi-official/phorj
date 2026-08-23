@@ -14,11 +14,14 @@
 //! `scope.rs`/`symbols.rs`; `occurrences` is the shared references/highlight/rename engine; formatting
 //! reuses `crate::format::format` ≡ `phg format`; hover/def are cross-file over open buffers).
 //! Completion (`completion.rs`): import-path (Core + project pkgs), member (module natives + instance/
-//! `this` declared-type + inherited), open-sibling project symbols. Follow-ups: prelude members, inference.
+//! `this` declared-type + inherited), stdlib/prelude class members (S3.3e), open-sibling project
+//! symbols. Follow-ups: inference; go-to-definition INTO a prelude declaration (it has no file to
+//! open — see KNOWN_ISSUES §LSP-PRELUDE-DEFINITION).
 
 mod catalog;
 mod completion;
 mod keywords;
+mod prelude_catalog;
 mod references;
 mod scope;
 mod symbols;

@@ -8,4 +8,4 @@ codes_total 307
 codes_asserted 252
 codes_in_conformance 25
 lsp_providers 8
-examples 287
+examples 288

@@ -20,7 +20,10 @@ server power the JetBrains/PhpStorm setup — see `../phpstorm/README.md`.)
 - **Hover** — the declaration signature of the symbol under the cursor.
 - **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration.
 - **Completion** — top-level symbols, in-scope locals/params, and keywords; `import Core.` → importable
-  module paths (Core + your own packages); `List.` / `this.` / `myVar.` → that receiver's members; and
+  module paths (Core + your own packages); `List.` / `this.` / `myVar.` → that receiver's members —
+  including the members of a **stdlib** type, so `ServeConfig cfg` → `cfg.port` and `Request req` →
+  `req.headers` complete (internal `private` fields and `static` methods are filtered out, and your own
+  class of the same name shadows the stdlib one); and
   `#[` → **attribute names** (`Entry`, `Config`, `Route`, `Deprecated`, `Invoke`, `ToString`, the DI
   set, plus your own `#[Attribute]`-marked classes), offered in both the bare (`#[Entry`) and
   canonical-path (`#[Core.Runtime.Entry`) spellings. `.` and `[` are advertised as trigger characters,

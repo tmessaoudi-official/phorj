@@ -55,7 +55,10 @@ tokenizer skips the shebang; `phg run ./bin/console` works). To light these up i
   matches by name pattern; add each executable entry, or a `bin/*`-style glob.)
    - **Completion** (the `.` and `[` trigger characters are advertised, so it fires as you type)
      offers: `import Core.` → the importable Core module paths; `List.` / `Output.` → that Core
-     module's members; `#[` → the attribute names (`Entry`, `Config`, `Route`, `Deprecated`,
+     module's members; `this.` / `myVar.` → the receiver's members, **stdlib types included**
+     (`ServeConfig cfg` → `cfg.port`, `Request req` → `req.headers`; internal `private` fields and
+     `static` methods are filtered, and your own class of the same name shadows the stdlib one);
+     `#[` → the attribute names (`Entry`, `Config`, `Route`, `Deprecated`,
      `Invoke`, `ToString`, the DI set, plus your own `#[Attribute]`-marked classes), in both the bare
      (`#[Entry`) and canonical-path (`#[Core.Runtime.Entry`) spellings; plus in-scope top-level
      symbols, locals/params, and keywords. It is **parse-tolerant** — it works mid-edit on a buffer

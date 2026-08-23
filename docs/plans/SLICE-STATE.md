@@ -1,6 +1,48 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-08-23) — **DEC-331 S3.3d is SHIPPED. S3.3e is NEXT.**
+## ▶ CURRENT CURSOR (2026-08-23) — **DEC-331 S3.3 is COMPLETE. S3.3e SHIPPED.**
+
+**Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md` (status header) + DEC-455.13.** Invariant 9's
+debt and Invariant 17's LSP row both closed, in one change.
+
+**The example (DEC-455.3, OWED since S3.2 Part A).** `examples/web/serve_config.phg` — defaults,
+named arguments, the `workers = 0` AUTO and `timeout = 0` sentinels, the D7 *HTTPS iff BOTH `cert`
+and `key`* rule, `RequestParsing.Eager`/`Lazy`. It deliberately does **not** call `Http.serve`: a file
+that does is refused by `phg transpile` (`E-TRANSPILE-SERVE`), so this is the only shape in which the
+config surface can face the PHP oracle at all. Counts MEASURED, not assumed (the DEC-191 lesson):
+flat RUN **198 → 199**, SKIP **19 → 19**, projects 18 — the example is GATED, not quarantined.
+`scripts/surface-baseline.txt` re-emitted, `examples` **287 → 288**.
+
+**The LSP hole was wider than the row that surfaced it.** `catalog::class_members` only ever read the
+USER program, so a receiver whose declared type was ANY stdlib class — `Request`, `Response`, `Date`,
+`Instant`, `Uri`, `Session`, `ServeConfig` — completed to NOTHING. Two source comments called it "a
+documented follow-up"; neither had been measured. The fix is generic: `src/lsp/prelude_catalog.rs`
+parses the `CORE_MODULES` registry's own prelude source on demand, the same mechanism
+`prelude_class_statics` already used for `Http.serve`, so **a new prelude class is completable the
+moment it is written, with no LSP edit**. Three things pinned by tests: the LEAF names the class (so
+`Http.ServeConfig cfg` ≡ bare `ServeConfig cfg`); `private`/`protected` and `static` members are
+FILTERED (`Request`'s `rawTarget`/`rawHeaderLines`/`rawBody` are private PROMOTED ctor params — real
+members a naive walk offers — and `req.parse(…)` is not a call anyone can write); and the user program
+is consulted FIRST, so a project's own `class Response` SHADOWS the stdlib one.
+
+**Editors: a VERIFIED no-op, not an omission.** `editors/vscode/syntaxes/phorj.tmLanguage.json` is
+purely syntactic — it carries no stdlib names at all (grepped) — and both editors consume the same
+LSP, so completion improved with no editor change. S3.3e introduced no new syntax.
+
+**Left open ON PURPOSE, recorded rather than skipped:** go-to-definition and hover on a stdlib symbol
+still return nothing. A prelude declaration has no file to open (it is a `&'static str` in
+`src/cli/*_prelude.rs`), and the three candidate answers each trade something real — one of them
+would land at a byte offset inside the user's own buffer, the §span-collision hazard. That is a
+ruling, not an oversight: KNOWN_ISSUES §LSP-PRELUDE-DEFINITION.
+
+**What remains under the S3.3 bullet is NOT S3.3:** the serve loop still binds host/port from CLI
+flags rather than from the registered `ServeConfig`, because making the config win requires the
+flag-vs-config conflict to hard-error rather than silently pick a winner — the **pending S3.2 Part C
+precedence ruling** (a developer question under Invariant 15, DEC-455.2/455.6). Next is **S3.4**.
+
+---
+
+## CURSOR (2026-08-23) — **DEC-331 S3.3d is SHIPPED. S3.3e is NEXT.** ⚠ SUPERSEDED by the cursor above
 
 **Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md` (status header) + DEC-455.12.** The checker
 is narrowed and the corpus is migrated, in one change because either alone reddens a gate.
@@ -848,8 +890,9 @@ Building it forced two fixes beyond the feature:
   name, so `FileSystem.` offered the INTERNAL natives (`lockAcquire`/`lockRelease` — the leak-prone manual
   API the ruling rejected) and offered NEITHER `withLock` nor `tryWithLock`. So `withLock` shipped
   invisible to the editor, breaking DEC-417's 100% bar before `tryWithLock` existed. Now unions prelude
-  class PUBLIC statics and excludes the `Core.Native.*` twins; `private` statics stay hidden. This also
-  closes the "prelude-class members (Date/Uri…) are a follow-up" gap the catalog documented.
+  class PUBLIC statics and excludes the `Core.Native.*` twins; `private` statics stay hidden. ⚠ This entry
+  also claimed to close the "prelude-class members (Date/Uri…) are a follow-up" gap; **it closed only the
+  STATICS half** — instance members stayed empty until S3.3e (DEC-455.13), corrected 2026-08-23.
 
 ### DEC-419 doc comments — BUILT 2026-07-31
 
