@@ -6,8 +6,8 @@
 // route params) — and `body` (`bytes()` / `text()` / `json(): Json?`, memoized). Bags share the
 // API `get(k): string?` / `getOrDefault(k, fallback)` / `getAll(k): List<...>` / `has(k)`;
 // repeated keys are FIRST-wins with `getAll` for the rest (parameter-pollution-safe).
-// `Request.parse(bytes)` is the eager wire constructor (null on malformed/oversize → the serve
-// bridge's 400); `Request.fake(method, target)` + `withHeader`/`withCookie`/`withBody` build
+// `Request.parse(bytes)` is the eager wire constructor (null on malformed/oversize → the 400 the
+// serve runtime answers with); `Request.fake(method, target)` + `withHeader`/`withCookie`/`withBody` build
 // requests for tests by REBUILDING through the same parse (one parsing story; CR/LF in a header
 // faults — the builder is not an injection primitive). Byte-identical on interp, VM, and real PHP.
 package Main;
@@ -80,8 +80,8 @@ function main(): void {
     Request j = Request.fake("POST", "/api").withBody(Bytes.fromString("[10, 20, 30]"));
     j.attributes.set("traceId", "T-42");
     show(j);
-    // The wire side: `Request.parse` on raw bytes (decoded path), and malformed → null (→ 400
-    // under `phg serve`'s bridge). An oversize body parses to null the same way (eager, D8a).
+    // The wire side: `Request.parse` on raw bytes (decoded path), and malformed → null (which is
+    // the 400 `phg serve` answers with). An oversize body parses to null the same way (eager, D8a).
     bytes raw = b"GET /caf%C3%A9?ok=1 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
     if (var req = Request.parse(raw)) {
         Output.printLine(

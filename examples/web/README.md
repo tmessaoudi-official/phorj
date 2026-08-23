@@ -106,8 +106,7 @@ phg serve: listening on http://127.0.0.1:8080
 
 $ curl -i http://127.0.0.1:8080/
 HTTP/1.1 200 OK
-Content-Length: 17
-Connection: close
+Content-Length: 18
 Content-Type: text/plain
 
 Phorj web — home

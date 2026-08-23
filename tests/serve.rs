@@ -1067,6 +1067,7 @@ fn no_shipped_example_declares_the_retired_web_entry_shape() {
 #[test]
 fn every_example_serve_phg_registers_serves_and_is_transpile_quarantined() {
     let mut found = 0usize;
+    let mut responses: Vec<(&str, Vec<u8>)> = Vec::new();
     let mut dirs: Vec<_> = std::fs::read_dir("examples/web")
         .expect("examples/web is readable")
         .map(|e| e.expect("dir entry").path())
@@ -1084,31 +1085,55 @@ fn every_example_serve_phg_registers_serves_and_is_transpile_quarantined() {
         // `loader::load` does NOT inject preludes — `unit.program` still has no `Core.Http`, so a
         // factory built from it dies with `undefined variable Http` at the `Http.serve` call. The
         // expansion chokepoint is what every backend goes through (Invariant 5), and it is what
-        // `cli::treewalk_program` uses on the very same unit.
+        // `cli::treewalk_program` uses on the very same unit. The REIFIED form is the VM's — going
+        // through `check_and_expand_reified` + the VM factory is Invariant 6: a vm-compile path that
+        // skips it hides a VM≠tree-walker divergence off the differential's CLI path.
         let expanded = phorj::cli::check_and_expand(&unit.program, &unit.diag_src)
             .unwrap_or_else(|e| panic!("{label}: must type-check: {e}"));
+        let (rprog, reified) = phorj::cli::check_and_expand_reified(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("{label}: must type-check (reified): {e}"));
 
-        // 1. It registers — `web_interp_factory` runs the `Web` entry and TAKES the handler slot.
-        let fac = phorj::serve::web_interp_factory(Arc::new(expanded))
-            .unwrap_or_else(|e| panic!("{label}: web entry must register a handler: {e}"));
-
-        // 2. It actually answers a request, over the deterministic in-memory transport.
-        let mut fx =
-            FixtureTransport::new(vec![b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec()]);
-        serve(&fac, &mut fx, false).unwrap_or_else(|e| panic!("{label}: serve loop failed: {e}"));
+        // BOTH BACKENDS. `phg serve`'s DEFAULT is the VM; asserting only the interpreter would leave
+        // the shipped demos' real backend uncertified, and a multi-package unit is precisely the
+        // layout the inline single-source serve tests never exercise.
+        for (backend, fac) in [
+            (
+                "interp",
+                phorj::serve::web_interp_factory(Arc::new(expanded))
+                    .unwrap_or_else(|e| panic!("{label} [interp]: must register a handler: {e}")),
+            ),
+            (
+                "vm",
+                phorj::serve::web_vm_factory(Arc::new(rprog), Arc::new(reified))
+                    .unwrap_or_else(|e| panic!("{label} [vm]: must register a handler: {e}")),
+            ),
+        ] {
+            // It actually answers a request, over the deterministic in-memory transport.
+            let mut fx =
+                FixtureTransport::new(vec![b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec()]);
+            serve(&fac, &mut fx, false)
+                .unwrap_or_else(|e| panic!("{label} [{backend}]: serve loop failed: {e}"));
+            assert_eq!(
+                fx.sent.len(),
+                1,
+                "{label} [{backend}]: exactly one response per request"
+            );
+            assert!(
+                fx.sent[0].starts_with(b"HTTP/1.1 "),
+                "{label} [{backend}]: not an HTTP/1.1 wire form: {:?}",
+                String::from_utf8_lossy(&fx.sent[0])
+                    .chars()
+                    .take(60)
+                    .collect::<String>()
+            );
+            responses.push((backend, fx.sent[0].clone()));
+        }
+        // Invariant 1 on the serve path: the two legs must agree BYTE for byte.
         assert_eq!(
-            fx.sent.len(),
-            1,
-            "{label}: exactly one response per request"
+            responses[0].1, responses[1].1,
+            "{label}: interp and VM disagree on the served response"
         );
-        assert!(
-            fx.sent[0].starts_with(b"HTTP/1.1 "),
-            "{label}: response is not an HTTP/1.1 wire form: {:?}",
-            String::from_utf8_lossy(&fx.sent[0])
-                .chars()
-                .take(60)
-                .collect::<String>()
-        );
+        responses.clear();
 
         // 3. It is quarantined from the PHP leg — this is what lets the logic in `src/` keep ITS leg.
         match phorj::cli::transpile_program(&unit.program, &unit.diag_src) {
