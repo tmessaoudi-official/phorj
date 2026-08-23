@@ -18,6 +18,11 @@ impl Transpiler {
         // would resolve to `\Obj` (global) and never match the real `\Main\Obj` — every `instanceof`
         // would fall through to the object branch (the multi-package core.json bug). Qualify the
         // variant class references with `\Main\` when namespaced; empty (bare) when flat.
+        // ⚠ DEC-455.11: do NOT copy this per-family `jp` pattern to a new prelude. It was applied
+        // here and never carried to Http/Regex/Decimal/Session, which is exactly how those four
+        // came to emit PHP that fatalled from a project. `emit_program_namespaced` now aliases every
+        // Main-bucket class into the global block, so a new prelude's helpers need nothing at all.
+        // This prefix is kept only because it is already correct and removing it is pure churn.
         let jp = if self.namespaced { "\\Main\\" } else { "" };
         if self.gates.uses_json_encode {
             self.line("function __phorj_json_encode($j) {");
