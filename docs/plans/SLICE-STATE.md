@@ -1,6 +1,42 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-08-22) — **DEC-331 S3.3: S3.3a + S3.3b SHIPPED; NEXT = S3.3c**
+## ▶ CURRENT CURSOR (2026-08-23) — **`TRANSPILE-NS-PRELUDE` is FIXED; S3.3d is UNBLOCKED and is NEXT**
+
+**Plan: `docs/plans/2026-08-23-transpile-ns-prelude.plan.md`.** The blocker the 2026-08-22 cursor
+below records is gone (DEC-455.11). A multi-file PROJECT using an injected prelude no longer emits
+PHP that fatals, so the ruled S3.3d structure — `src/…` logic + `src/main.phg` keeping its PHP leg,
+with the Web entry in a sibling `serve.phg` — is now buildable.
+
+**The fix is CENTRAL, and the reason matters more than the diff.** DEC-455.10 recorded two candidate
+directions; **neither was taken.** Fully-qualifying the helpers' class references is what already
+existed and is what FAILED: `emit_json_helpers` prefixes ITS references with `\Main\` when
+namespaced — a per-family fix applied to Json and never carried to Http, Regex, Decimal or Session.
+Extending it a fourth and fifth time would have left the sixth prelude to fail identically. Instead
+`emit_program_namespaced` emits `use \Main\<name>;` for every non-function Main-bucket name at the
+top of the trailing global block — the SAME mechanism DEC-325 already applies to every non-Main
+package block, which the global block was simply never given. **FUNCTIONS are not aliased**: helper
+bodies call PHP builtins bare (`count`, `strlen`, `implode`) and `use function \Main\count;` would
+hijack them.
+
+**The gate is `examples/project/preludes/`** — multi-package, exercising Http + Regex + Json in one
+program so the fix is proven generic rather than shaped to the one fatal first seen. Verified RED
+with that exact fatal before the fix, green after, sabotage-verified by deleting the alias loop.
+
+**⚠ A sibling recorded at its true grade, not upgraded:** `__phorj_reflect_of` and
+`__phorj_debug_enums` key their tables on the `get_class()` **string**, which `use` aliasing cannot
+reach. Whether they actually diverge under namespacing is **[Inferred], NOT measured** — two probe
+attempts were spent on language-surface errors and the attempt was stopped rather than allowed to eat
+this slice. What IS verified is the certain half: **no example project exercises either table**
+(`phg transpile examples/project/shapes` emits neither helper). KNOWN_ISSUES
+§`TRANSPILE-NS-REFLECT-TABLES` — the next slice there writes the probe FIRST and reads the result
+before deciding there is a bug.
+
+**S3.3d's own open decision is unchanged and is still a DECISION, not a mechanism:** the four web
+examples PHP-oracle-gated today drop OUT of that oracle the moment they call `Http.serve`. Count
+non-skips before and after — see the 2026-08-22 cursor below, which remains accurate on that point.
+
+
+## CURSOR (2026-08-22) — **DEC-331 S3.3: S3.3a/b/c SHIPPED** ⚠ its "S3.3d IS BLOCKED" paragraph is SUPERSEDED — see the 2026-08-23 cursor above
 
 **Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md`** — read it before touching serve, and read
 **§3b, not §3**: the inverted-loop architecture in §3 is SUPERSEDED and must not be built.
@@ -49,7 +85,7 @@ serve program takes that path exactly once. `web_entry_name` now refuses a PARAM
 before calling it. The check is on ARITY, not on the parameter type: `(): void` is the only shape the
 factory can run.
 
-**⛔ S3.3d IS BLOCKED — read this before starting it.** The developer ruled its shape (Q2b,
+**⛔ S3.3d WAS BLOCKED — ✅ UNBLOCKED 2026-08-23 by DEC-455.11 (see the cursor above). The diagnosis below is kept because it is still the best description of the defect and of WHY the structure needs it; only the "cannot be built today" conclusion is superseded.** The developer ruled its shape (Q2b,
 2026-08-22): each of the four PHP-oracle-gated web examples becomes a small PROJECT —
 `src/…` logic + `src/main.phg` (Cli entry, PHP-gated by the project glob) — with the Web entry in a
 sibling `serve.phg` that neither differential glob collects. Prototyping that on `core-http`
@@ -60,7 +96,7 @@ unqualified, so any PROJECT using `Core.Http` emits PHP that fatals with
 `Class "RequestBody" not found`. The whole point of the split is that `src/main.phg` KEEPS its PHP
 leg — and it cannot while this stands. Worse, `all_example_projects_transpile_and_match_php` has no
 ladder-skip arm and PANICS on a transpile error, so landing the structure first takes the suite red.
-**Fix `TRANSPILE-NS-PRELUDE` first, as its own slice with its own gate** (its blast radius is every
+**✅ DONE: `TRANSPILE-NS-PRELUDE` was fixed as its own slice with its own gate** (its blast radius is every
 injected prelude with helpers — Http, Regex, Json, Decimal, Session — so it is not a side-quest).
 The prototype was reverted; `examples/web/core-http.phg` is byte-identical to its committed self.
 

@@ -348,6 +348,32 @@ impl Transpiler {
         }
         self.line("namespace {");
         self.indent += 1;
+        // DEC-455.11: the `__phorj_*` runtime helpers below live in the GLOBAL namespace, but the
+        // injected preludes they instantiate (`new RequestBody(…)`, `new RegexMatch(…)`, …) are
+        // `package Main` classes emitted into `namespace Main {}`. A bare name here resolves to
+        // `\RequestBody` and PHP fatals with `Class "RequestBody" not found` — for every project
+        // touching Http, Regex, Json, Decimal or Session. Alias the Main-bucket names in, exactly as
+        // the DEC-325 loop does for each non-Main package block.
+        //
+        // Why centrally and not per helper family: `emit_json_helpers` already qualifies ITS class
+        // references with a `\Main\` prefix (`runtime_tables.rs`), and that per-family fix was never
+        // carried to the other four preludes — which is precisely how this defect survived. One
+        // alias block covers every prelude that exists and every one added later.
+        //
+        // FUNCTIONS are deliberately NOT aliased. The helper bodies call PHP builtins bare
+        // (`count`, `strlen`, `implode`), and inside the global block a bare call already resolves
+        // to the builtin; a `use function \Main\count;` would hijack it. Class aliases carry no such
+        // hazard — the helpers spell every PHP builtin CLASS fully qualified (`\RuntimeException`,
+        // `\OutOfRangeException`, `\Closure`), and the global block declares no classes of its own.
+        //
+        // Emitted BEFORE the bootstrap statement: a `use` only binds names that follow it.
+        if self.split != split::SplitPass::File {
+            for (is_fn, name) in &main_names {
+                if !*is_fn {
+                    self.line(&format!("use \\Main\\{name};"));
+                }
+            }
+        }
         if self.split == split::SplitPass::Off
             && crate::ast::entry_for(program, crate::ast::EntryRole::Cli).is_some()
         {

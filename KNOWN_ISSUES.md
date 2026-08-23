@@ -1,36 +1,27 @@
 # Known Issues & Limitations
 
-## TRANSPILE-NS-PRELUDE — a PROJECT that uses an injected prelude with `__phorj_*` helpers emits PHP that FATALS (found 2026-08-22, DEC-455.10)
+## TRANSPILE-NS-REFLECT-TABLES — the two `get_class()`-keyed helper tables are UNGATED on the namespaced path (found 2026-08-23, DEC-455.11)
 
-**Severity: blocks DEC-331 S3.3d.** The namespaced (multi-file / project) transpile emit puts injected
-prelude CLASSES inside `namespace Main { }` but their `__phorj_*` runtime HELPERS inside the trailing
-global `namespace { }` block, where the helpers reference those classes **unqualified**. PHP then
-resolves the name against the global namespace and fatals.
+**Severity: unknown, and that is the issue.** `__phorj_reflect_of` (`Core.Reflect`) and
+`__phorj_debug_enums` (`Debug.dump` of an enum) look their static tables up by the **string**
+`get_class($v)` returns. Under namespaced (project) emission `get_class` returns `Main\Color_Green`,
+while the table key is built from the bare Phorj name — so the lookup reads like it must miss, which
+would render an enum as a plain object instead of `Color.Green`.
 
-Reproduced on a two-file project whose `main.phg` calls `Core.Http`'s `Request.parse`:
+**What is actually established, and what is not.** The mismatch is [Inferred] from reading
+`runtime_tables.rs` and `runtime_php.rs`, **not measured** — do not repeat it as fact. What IS
+verified: **no example project exercises either table.** `phg transpile examples/project/shapes/src/main.phg`
+emits neither helper, because both are gated on use, and no project example uses `Core.Reflect` or
+dumps an enum [Verified 2026-08-23: grepped the emit, zero hits for both names].
 
-```
-PHP Fatal error:  Uncaught Error: Class "RequestBody" not found in /tmp/ch.php:781
-Stack trace:
-#0 /tmp/ch.php(451): __phorj_http_parse_request('GET /hi HTTP/1....')
-```
+So the coverage hole is the certain part and the divergence is the suspected part. The next slice
+here writes the probe first (a project that dumps a cross-package enum), reads the result, and only
+then decides whether there is a bug to fix.
 
-In that emit, `final class RequestBody` is declared at line **424 inside `namespace Main {`**, while
-`__phorj_http_parse_request` is at line **781 inside `namespace { }`** and calls `new RequestBody(…)`.
-
-**Control — this is the NAMESPACED path only, not a general transpiler regression:** the identical
-program as a FLAT single file transpiles and its PHP output matches the interpreter byte for byte.
-That is also why no test caught it: every `Core.Http` example is a flat single file, and no example
-PROJECT imports an injected prelude that ships helpers.
-
-**Blast radius:** every injected prelude with a `__phorj_*` helper — Http, Regex, Json, Decimal,
-Session — used from any multi-file project.
-
-**Fix direction (not built):** either emit injected prelude classes into the global namespace, or
-fully-qualify the helpers' class references (`\Main\RequestBody`). Note
-`all_example_projects_transpile_and_match_php` has NO ladder-skip arm and PANICS on a transpile error,
-so the first example project to use `Core.Http` takes the suite red rather than skipping — the fix
-must land before, not with, such an example.
+**Why `use \Main\…` aliasing does not cover it:** the DEC-455.11 fix binds *names*; these two sites
+compare *strings*. Sites that strip the namespace prefix explicitly — `__phorj_round_mode`,
+`__phorj_class_name`, and the `Secret` redaction in `__phorj_debug_render` — are already
+namespace-safe [Verified: read in the emitted PHP].
 
 ## PERF-closures-never-jit — a closure is NEVER JIT-compiled, however hot (found 2026-08-01, DEC-434)
 

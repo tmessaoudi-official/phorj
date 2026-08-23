@@ -1,0 +1,9 @@
+// The library half of the project. It uses NONE of the injected preludes itself — the point of the
+// split is that the prelude classes are injected into `package Main` while these helpers are emitted
+// into the trailing global PHP block, and this package proves the cross-package `use \Main\…`
+// aliasing (DEC-325) still holds beside the new global-block aliasing (DEC-455.11).
+package Acme.Wire;
+
+function tag(string label, string body): string {
+    return "{label}=<{body}>";
+}

@@ -60,6 +60,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **A multi-file PROJECT using an injected prelude emitted PHP that FATALLED (DEC-455.11).** The
+  namespaced emit buckets injected prelude classes into `namespace Main {}` while their `__phorj_*`
+  runtime helpers go into the trailing global `namespace {}` block, where they named those classes
+  **unqualified** — so PHP resolved `new RequestBody(…)` against the global namespace and died with
+  `Class "RequestBody" not found`. Every project touching `Core.Http`, `Core.Regex`, `Core.Decimal`
+  or `Core.Session` was affected. The identical program as a FLAT single file was always correct,
+  which is why no test caught it: every prelude example is a flat single file, and no example project
+  imported a prelude that ships helpers. This BLOCKED DEC-331 S3.3d, whose ruled structure exists
+  precisely so `src/main.phg` keeps its PHP leg.
+  - Fixed **centrally**, not per family: `emit_program_namespaced` now emits `use \Main\<name>;` for
+    every non-function Main-bucket name at the top of the global block — the same mechanism DEC-325
+    already applies to each non-Main package block. The per-family alternative is what FAILED:
+    `emit_json_helpers` had qualified ITS references with `\Main\` in an earlier pass, and that fix
+    was never carried to the other four preludes.
+  - **Functions are deliberately not aliased** — helper bodies call PHP builtins bare (`count`,
+    `strlen`, `implode`) and a `use function \Main\count;` would hijack them. Class aliases are safe:
+    the helpers spell every builtin CLASS fully qualified and the global block declares no classes.
+  - Gated by a new example PROJECT, `examples/project/preludes/`, exercising three prelude families
+    so the fix is proven generic rather than shaped to the one fatal first observed. Verified RED with
+    that exact fatal before the fix, green after, and sabotage-verified by deleting the alias loop.
+
+
 - **The surface ratchet was measuring wrong and under-protecting 169 diagnostic codes.**
   `scripts/surface-ratchet.sh` decided "is this code asserted?" with `grep --include`, which matches the
   **basename, not the path** — so its patterns (`tests/**.rs`, `*tests*.rs`, `tests.rs`) missed the

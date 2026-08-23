@@ -1,0 +1,51 @@
+// An injected PRELUDE used from a multi-file PROJECT (DEC-455.11).
+//
+// A prelude like `Core.Http` or `Core.Regex` is injected into the program as `package Main` classes,
+// but its `__phorj_*` runtime helpers are emitted into the trailing global `namespace { }` block of
+// the namespaced PHP output. Those helpers name the prelude classes UNQUALIFIED, so before the fix
+// PHP resolved `new RequestBody(…)` against the global namespace and fatalled with
+// `Class "RequestBody" not found` — for every project touching Http, Regex, Json, Decimal or Session.
+// A flat single-file program never took that path, which is why no example caught it.
+//
+// This project is that gate: it is multi-package (so the namespaced emit path runs) and it exercises
+// several prelude families in one program, so the coverage is not shaped to the one fatal that was
+// first observed.
+package Main;
+
+import Core.Output;
+import Core.Http.Request;
+import Core.Regex;
+import Core.Json;
+import Acme.Wire;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // 1. Core.Http — the family the defect was found on. `Request.parse` runs
+    //    `__phorj_http_parse_request`, whose body builds `RequestBody`, `HeaderBag`, `ParamBag`,
+    //    `FileBag` and `AttrBag`: five prelude classes named from the global block.
+    bytes raw = b"GET /orders HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
+    if (var req = Request.parse(raw)) {
+        Output.printLine(Wire.tag("method", req.method));
+        Output.printLine(Wire.tag("path", req.path));
+        Output.printLine(Wire.tag("host", req.headers.get("Host") ?? "(none)"));
+    } else {
+        Output.printLine("malformed request");
+    }
+    // 2. Core.Regex — a second family, so the fix is proven generic rather than Http-shaped.
+    //    `Regex.findGroups` builds a `RegexMatch`, likewise named bare from the global block.
+    var pair = Regex.compile("(?<k>\\w+)=(?<v>\\d+)");
+    if (var g = Regex.findGroups(pair, "qty=42")) {
+        string k = g["k"];
+        string v = g["v"];
+        Output.printLine(Wire.tag("regex", "{k}/{v}"));
+    } else {
+        Output.printLine("no match");
+    }
+    // 3. Core.Json — the ONE family already qualified (`\Main\Json_*`, the earlier per-family fix).
+    //    Kept as the control: it must stay correct, and it shows why the per-family approach was
+    //    replaced by one central alias block rather than extended a fourth and fifth time.
+    Json doc = new Json.Object(["qty" => new Json.Int(42), "ok" => new Json.Bool(true)]);
+    Output.printLine(Wire.tag("json", Json.stringify(doc)));
+}
