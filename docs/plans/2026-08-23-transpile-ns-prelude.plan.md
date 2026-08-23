@@ -1,6 +1,6 @@
 # TRANSPILE-NS-PRELUDE — injected preludes must resolve from the global helper block
 
-**Status: BUILT 2026-08-23 (DEC-455.11).** Unblocks DEC-331 S3.3d, which could not start while any
+**Status: BUILT + FULLY CERTIFIED BY EXECUTION 2026-08-23 (DEC-455.11).** Unblocks DEC-331 S3.3d, which could not start while any
 PROJECT using `Core.Http` emitted PHP that fatalled.
 
 ## Decisions Log
@@ -60,6 +60,33 @@ package block; the global block was simply never given the same treatment.
 | Fixed | same test green; interpreter and PHP legs byte-identical |
 | Sabotage | delete the alias loop → the project oracle goes red with the same fatal; restore byte-for-byte |
 | Not a regression | `all_example_projects_match_between_backends` green throughout (the defect was PHP-leg only) |
+
+## Certification closed 2026-08-23 (the commit message's `UNCERTIFIED-BY-EXECUTION` no longer stands)
+
+`da2c4ded`'s message records that the cargo harness could not be rebuilt — four OOM kills mid-
+`Compiling phorj` with ~0.3-2 GB free — so the workspace suite, both clippy passes and the release
+build were **not run** when the fix landed, and the evidence was a release-binary corpus replay
+instead. A commit message cannot be amended after the fact; this section is the amendment.
+
+**The box freed up (10.4 GB available, load 4.4) and the full gate was run on the committed tree:**
+
+| Step | Result |
+|---|---|
+| `cargo fmt --check` | clean |
+| `cargo nextest run --workspace --all-features` (`PHORJ_REQUIRE_PHP=1`) | **2871 passed, 0 failed**, 3 skipped |
+| `cargo clippy --all-targets --all-features` | clean, 0 warnings |
+| `cargo clippy --all-targets --no-default-features` | clean, 0 warnings |
+| `cargo build --release` | ok — `target/release/phg`, 19.9M |
+
+The 3 skips are pre-existing `#[ignore]`s, none of them this change's: two JIT timing measurements
+(`src/jit/tests/{unboxed_flow,boxed}.rs`) and the W5-13 interpolation-line known issue
+(`tests/differential.rs:389`). Counted rather than assumed — the DEC-191 no-op-glob lesson is that a
+green run over a shrunken denominator reads exactly like a green run.
+
+**One process note, recorded because it cost a run:** the first attempt was killed at ~10 minutes
+mid-compile and looked like a fifth OOM. It was not — memory held at 7-11 GB throughout and dmesg
+showed no OOM. It was the 600 s background-tool timeout killing the task and taking cargo with it.
+A long gate must be launched detached (`setsid nohup … & disown`) so it outlives the tool call.
 
 ## Out of scope, recorded not waived
 

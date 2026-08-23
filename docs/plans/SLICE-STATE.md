@@ -31,6 +31,13 @@ this slice. What IS verified is the certain half: **no example project exercises
 §`TRANSPILE-NS-REFLECT-TABLES` — the next slice there writes the probe FIRST and reads the result
 before deciding there is a bug.
 
+**✅ CERTIFIED BY EXECUTION 2026-08-23.** `da2c4ded` shipped with an `UNCERTIFIED-BY-EXECUTION`
+disclosure because the harness could not be rebuilt (four OOM kills). The box freed up and the full
+all-features gate was then run on the committed tree: **2871 passed / 0 failed**, both clippy passes
+clean, release build ok. The 3 skips are pre-existing `#[ignore]`s (2 JIT timing, 1 W5-13), counted
+not assumed. Detail + the amendment to that commit message:
+`docs/plans/2026-08-23-transpile-ns-prelude.plan.md` §"Certification closed".
+
 **S3.3d's own open decision is unchanged and is still a DECISION, not a mechanism:** the four web
 examples PHP-oracle-gated today drop OUT of that oracle the moment they call `Http.serve`. Count
 non-skips before and after — see the 2026-08-22 cursor below, which remains accurate on that point.
