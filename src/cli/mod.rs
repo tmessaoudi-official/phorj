@@ -42,12 +42,14 @@ mod help;
 pub(crate) mod module_catalog;
 mod pipeline;
 mod prelude_spans;
+mod serve_pipeline;
 pub(crate) use prelude_spans::INJECTED_SPAN_BASE;
 pub(crate) mod preludes;
 
 pub use self::help::*;
 pub use self::pipeline::*;
 pub(crate) use self::preludes::*;
+pub use self::serve_pipeline::serve_program;
 // Public seam for the test harnesses: which feature-gated Core modules are absent in this build
 // (differential/example sweeps skip their examples loudly instead of failing E-EXTENSION-DISABLED).
 pub use self::preludes::unavailable_gated_modules;

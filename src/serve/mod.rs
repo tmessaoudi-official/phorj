@@ -33,10 +33,14 @@ use std::time::Duration;
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 mod handlers;
+mod settings;
 mod static_files;
 mod transport;
 mod web_handlers;
 pub use handlers::*;
+pub use settings::{
+    resolve as resolve_settings, ServeFlags, ServeSettings, DEFAULT_ADDR, DEFAULT_TIMEOUT_SECS,
+};
 pub use static_files::resolve_site_dir;
 pub use transport::*;
 pub use web_handlers::{web_interp_factory, web_vm_factory};

@@ -80,18 +80,10 @@ pub fn take_handler() -> Option<Value> {
 
 /// Read the last registered configuration.
 ///
-/// DEAD IN THE LIB TODAY, and marked so rather than hidden: nothing reads it until increment 2 wires
-/// `phg serve` to bind `host:port` from the registered config instead of from CLI flags. The
-/// alternative — not storing it until there is a reader — would mean the increment that adds the
-/// reader also adds the store, untested, at the moment it matters most. `expect` (not `allow`) so the
-/// attribute itself fails the build once a real caller appears and it is no longer true.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "DEC-331 S3.3a increment-2 consumer; stored + tested now so the wiring inherits a tested path"
-    )
-)]
+/// Its reader arrived in S3.2 Part C (DEC-455.14): `cli::serve_program` calls this after the
+/// factory's startup run has populated it, and hands it to `serve::settings::resolve` to decide what
+/// the socket binds. The `#[expect(dead_code)]` this carried through S3.3a is therefore gone — which
+/// is exactly what `expect` (rather than `allow`) was chosen to force.
 #[must_use]
 pub fn config() -> Option<ServeCfg> {
     CONFIG.lock().ok().and_then(|g| g.clone())

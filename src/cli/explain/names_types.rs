@@ -266,6 +266,26 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              This code remains the startup guard for the other way a program can be unservable:\n\
              a well-formed `(): void` entry that simply never calls `Http.serve`.\n"
         }
+        "W-SERVE-CONFIG-OVERRIDDEN" => {
+            "W-SERVE-CONFIG-OVERRIDDEN — a `phg serve` flag overrode the program's `ServeConfig`.\n\n\
+             Not an error, and not something to fix: it is the ruled precedence being explicit.\n\
+             The registered `Http.ServeConfig` is the DEFAULT source for what the serve loop binds;\n\
+             a flag you actually passed, whose value DIFFERS, wins — and says so rather than\n\
+             quietly discarding what the program asked for (DEC-455.14, S3.2 Part C).\n\n\
+             \x20   // serve.phg\n\
+             \x20   Http.serve(new ServeConfig(port: 3000, workers: 4), handler);\n\n\
+             \x20   $ phg serve serve.phg                          -> binds 127.0.0.1:3000, 4 workers\n\
+             \x20   $ phg serve serve.phg --address 127.0.0.1:8080 -> binds 8080, and prints this\n\n\
+             To silence it, remove the flag (let the program decide) or remove the field from the\n\
+             `ServeConfig` (let the command line decide). A flag that merely RESTATES what the config\n\
+             already says is not an override and prints nothing.\n\n\
+             ONE LIMITATION worth knowing: on the config side, \"set\" is inferred by VALUE, because a\n\
+             constructed object carries no provenance — `new ServeConfig()` fills `port` with 8080 and\n\
+             nothing distinguishes that from a program that wrote `port: 8080` by hand. So a field left\n\
+             at its class default reads as unset. In particular `new ServeConfig(timeout: 0)` cannot\n\
+             express \"no timeout\" (0 IS the default); use `--timeout 0`, where the flag being present\n\
+             is itself the signal. KNOWN_ISSUES section SERVE-CONFIG-PROVENANCE.\n"
+        }
         "E-ENTRY-TARGET" => {
             "E-ENTRY-TARGET — `#[Entry]` on an instance method.\n\n\
              An entry runs before any instance exists. Put `#[Entry(kind: …)]` on a top-level function\n\

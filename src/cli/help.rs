@@ -224,14 +224,21 @@ pub fn help_for(cmd: &str) -> String {
                     --timeout so a slow/idle client cannot wedge a worker (slowloris). A per-connection\n\
                     read/write error never ends the server — it is logged and the next connection is\n\
                     served.\n\n\
+                    CONFIG vs FLAGS (DEC-455.14, S3.2 Part C): the `ServeConfig` the program passes to\n\
+                    `Http.serve` is the DEFAULT source for the address, worker count and timeout — so\n\
+                    `Http.serve(new ServeConfig(port: 3000), h)` binds 3000 with no flags at all. A flag\n\
+                    you actually pass, whose value differs, WINS — and prints one\n\
+                    `W-SERVE-CONFIG-OVERRIDDEN` line naming the field, so an override is never silent.\n\
+                    A field left at its class default reads as unset (a constructed object carries no\n\
+                    provenance); see `phg explain W-SERVE-CONFIG-OVERRIDDEN`.\n\n\
                     Requests run on the bytecode VM by default (faster than the tree-walker —\n\
                     measured ~2.3x lower end-to-end latency on a representative handler, byte-identical\n\
                     output); --tree-walker selects the interpreter oracle instead.\n\n\
                     usage:\n  phg serve <file> [--address 127.0.0.1:8080] [--timeout SECONDS] [--workers N] [--tree-walker]\n\n\
                     options:\n  \
-                    --address ADDR       host:port to bind (default 127.0.0.1:8080)\n  \
-                    --timeout SECONDS  per-connection read/write timeout; 0 = none (default 30)\n  \
-                    --workers N        request concurrency; 1 = single-threaded (default = CPU cores)\n  \
+                    --address ADDR       host:port to bind (default: the ServeConfig, else 127.0.0.1:8080)\n  \
+                    --timeout SECONDS  per-connection read/write timeout; 0 = none (default: the ServeConfig, else 30)\n  \
+                    --workers N        request concurrency; 1 = single-threaded (default: the ServeConfig, else CPU cores)\n  \
                     --tree-walker      run requests on the interpreter oracle, not the (default) VM\n  \
                     --dev              rich HTML error page on an uncaught fault (DEV ONLY; prod = bare 500)\n\n\
                     examples:\n  \

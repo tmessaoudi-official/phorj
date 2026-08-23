@@ -8,6 +8,50 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **S3.2 Part C — `Http.ServeConfig` now binds the socket; a flag that disagrees says so
+  (DEC-455.14, developer-ruled).** Until this change the registered config was INERT:
+  `serve_register::config()` carried `#[expect(dead_code)]` and had no caller, so
+  `Http.serve(new ServeConfig(port: 3000), h)` still bound 8080.
+  - **The rule: the CLI flag wins, but LOUDLY.** The config is the DEFAULT source for the four
+    settings the serve loop binds — `host`+`port`, `workers`, `timeout` — so `phg serve serve.phg`
+    with no flags binds what the program asked for. A flag that was PASSED and whose value DIFFERS
+    wins, after one `W-SERVE-CONFIG-OVERRIDDEN` line per field on **stderr** (stdout belongs to the
+    served program's `Output.*`, DEC-220). A flag that merely RESTATES the config prints nothing — a
+    notice that fires when nothing changed trains the reader to ignore the one that matters.
+  - **Ordering is load-bearing**: the config is readable only AFTER `web_*_factory`, whose startup
+    validation run is what executes the `Web` entry and populates the global — still before any
+    socket binds. Reading it earlier always sees `None`, i.e. the config silently never applies.
+  - **Provenance is approximated by VALUE, and the limitation is recorded rather than hidden.** A
+    constructed object carries no provenance, so a field counts as set iff it differs from D4's class
+    default (`settings::class_defaults`, pinned against the prelude SOURCE by
+    `class_defaults_match_the_prelude_source`). Consequence: `new ServeConfig(timeout: 0)` cannot
+    express "no timeout" — `--timeout 0` can. KNOWN_ISSUES §SERVE-CONFIG-PROVENANCE; the real fix is
+    a nullable D4 field set, which changes a ruled class shape and is its own Invariant 15 question.
+  - **Why not read the config unconditionally:** D4 declares `timeout = 0` while `phg serve` defaults
+    to 30s, so that would have SILENTLY disabled the B4 idle-socket guard for every existing server.
+    The differs-from-default rule keeps `new ServeConfig()` byte-for-byte as it was.
+  - **Scope is those four fields and no more**: `cert`/`key`/`tlsMinVersion` await D7 (inbound TLS is
+    unbuilt — `rustls` is linked only by the outbound http-client), `maxBodySize` belongs to the wire
+    parser, `serverName` has no consumer. Wiring a field whose reader does not exist would be a
+    config that still does nothing.
+  - **A negative config value reads as unset, fail-safe** (6C finding): `timeout: -3` differs from the
+    class default so it reads as SET, and falling back to `0` there would mean *no timeout* — a typo
+    silently disabling the B4 idle-socket guard. It falls back to the DEFAULT instead, with the
+    already-fail-safe negative `workers` as the control. Real range validation stays OWED and is now
+    written down rather than assumed.
+  - Resolution is a PURE function (`src/serve/settings.rs`, `cores` injected) so it is unit-testable:
+    11 tests, written RED first against a stub reproducing the ignore-the-config behaviour, and
+    sabotage-verified twice (silence the notices → 1 red; invert the ruling so the config beats a
+    passed flag → 2 red), both restores byte-identical. **The WIRING is pinned separately**
+    (`src/cli/serve_pipeline_tests.rs`, also a 6C finding): those 11 tests all pass `cfg` explicitly,
+    so they prove the rule and nothing about the chain. `prepare_serve` was split out of
+    `serve_program` so the chain can be tested short of the blocking bind — hoisting the `config()`
+    read above the factory build reds 2 of its 3 tests with the config silently inert. Verified
+    end-to-end on a real socket both ways. `phg explain W-SERVE-CONFIG-OVERRIDDEN`, `phg serve --help` and `examples/web/README.md`
+    updated in the same change (Invariant 17).
+  - `src/cli/serve_pipeline.rs` split out of `pipeline.rs`: the wiring pushed that grandfathered file
+    past its `scripts/size-baseline.txt` row, and a grandfathered file may only shrink (Invariant 13).
+
 - **S3.3e — the `Http.ServeConfig` example, and LSP completion for EVERY stdlib class (DEC-455.3
   closed, DEC-455.13).** The two Invariant 9 + 17 rows S3.3 had been carrying since S3.2 Part A.
   - **`examples/web/serve_config.phg`** shows the config surface `Http.serve(cfg, handler)` receives:

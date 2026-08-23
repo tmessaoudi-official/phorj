@@ -327,15 +327,19 @@ fn main() {
     // 127.0.0.1:8080).
     if cmd == "serve" {
         let mut file: Option<&str> = None;
-        let mut addr = "127.0.0.1:8080";
+        // S3.2 Part C (DEC-455.14): these stay `None` until a flag is actually PASSED. The whole
+        // precedence rule turns on that distinction — pre-defaulting them here would make every run
+        // look like an explicit override of the program's own `ServeConfig`. Defaults live in
+        // `serve::settings` and are applied there, once, alongside the config.
+        let mut addr: Option<String> = None;
         // Per-connection read/write timeout (GA blocker B4): default 30s; `--timeout 0` disables it.
-        let mut timeout_secs: u64 = 30;
+        let mut timeout_secs: Option<u64> = None;
         // `--dev` opts into the rich HTML error page on an uncaught handler fault. OFF by default:
         // production must never leak a stack trace / source (a security rule) — it returns a bare 500.
         let mut dev = false;
         // `--workers N` request concurrency (M6 W3). 0 (the sentinel) = auto = CPU cores; 1 = the
         // single-threaded path. Resolved after parsing.
-        let mut workers: usize = 0;
+        let mut workers: Option<usize> = None;
         // `--tree-walker` serves on the interpreter oracle instead of the (default) VM — mirrors
         // `phg run --tree-walker`. The VM is faster (measured ~2.3× lower latency) and
         // byte-identical.
@@ -346,19 +350,20 @@ fn main() {
                 // `--addr` is a deprecated alias for `--address` (DEC-276 earned-shortcut rule:
                 // word truncations are not earned), silently accepted — remove in a future version.
                 "--address" | "--addr" => {
-                    addr = args.get(i + 1).map(String::as_str).unwrap_or_else(|| {
+                    addr = Some(args.get(i + 1).cloned().unwrap_or_else(|| {
                         usage_exit();
-                    });
+                    }));
                     i += 2;
                 }
                 "--timeout" => {
-                    timeout_secs = args
-                        .get(i + 1)
-                        .and_then(|s| s.parse::<u64>().ok())
-                        .unwrap_or_else(|| {
-                            eprintln!("phg serve: --timeout expects a whole number of seconds");
-                            exit(2);
-                        });
+                    timeout_secs = Some(
+                        args.get(i + 1)
+                            .and_then(|s| s.parse::<u64>().ok())
+                            .unwrap_or_else(|| {
+                                eprintln!("phg serve: --timeout expects a whole number of seconds");
+                                exit(2);
+                            }),
+                    );
                     i += 2;
                 }
                 "--dev" => {
@@ -370,14 +375,15 @@ fn main() {
                     i += 1;
                 }
                 "--workers" => {
-                    workers = args
-                        .get(i + 1)
-                        .and_then(|s| s.parse::<usize>().ok())
-                        .filter(|n| *n >= 1)
-                        .unwrap_or_else(|| {
-                            eprintln!("phg serve: --workers expects a positive whole number");
-                            exit(2);
-                        });
+                    workers = Some(
+                        args.get(i + 1)
+                            .and_then(|s| s.parse::<usize>().ok())
+                            .filter(|n| *n >= 1)
+                            .unwrap_or_else(|| {
+                                eprintln!("phg serve: --workers expects a positive whole number");
+                                exit(2);
+                            }),
+                    );
                     i += 2;
                 }
                 a if !a.starts_with('-') && file.is_none() => {
@@ -412,16 +418,17 @@ fn main() {
             }
         }
         let file: &str = entry_path.to_string_lossy().into_owned().leak();
-        let timeout = (timeout_secs > 0).then(|| std::time::Duration::from_secs(timeout_secs));
         // DEC-281: web input is the `Request` — a worker blocking on the terminal's stdin would
         // hang the server, so `Core.Input` reads behave as an exhausted pipe under serve.
         phorj::native::set_stdin_disabled();
-        // Resolve the worker count: explicit `--workers N` wins; otherwise auto = available CPU cores
-        // (fall back to 1 if the platform can't report it).
-        let workers = if workers >= 1 {
-            workers
-        } else {
-            std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
+        // The worker count, the address and the timeout are all resolved in ONE place —
+        // `serve::settings::resolve` — because each of them now has two possible sources (this flag
+        // and the program's registered `ServeConfig`) and the precedence between them is a ruled
+        // rule, not three independent `unwrap_or`s scattered across the argument parser.
+        let serve_flags = phorj::serve::ServeFlags {
+            addr,
+            timeout_secs,
+            workers,
         };
         let unit = match loader::load(std::path::Path::new(file)) {
             Ok(u) => u,
@@ -441,10 +448,8 @@ fn main() {
         match cli::serve_program(
             &unit.program,
             &unit.diag_src,
-            addr,
-            timeout,
+            &serve_flags,
             profile,
-            workers,
             tree_walker,
         ) {
             Ok(text) => {

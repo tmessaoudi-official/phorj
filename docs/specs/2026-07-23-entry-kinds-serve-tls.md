@@ -35,7 +35,12 @@
   `Map<…>` providers colliding under one key) is **DEC-455.4, pending a ruling**.
   Part A also exposed and fixed a pre-existing P0 (DEC-452:
   a QUALIFIED constructor dropped defaults and named args, panicking the VM on the shipped `Http.Cookie`).
-  **Still NOT built from S3.2 as ruled: the precedence chain** (CLI flag > env > `#[Config]` >
+  **✅ BUILT 2026-08-23 (S3.2 Part C, DEC-455.14) for the SERVE surface: the CLI flag wins LOUDLY** —
+  the registered `ServeConfig` is the default source for `host`+`port`/`workers`/`timeout`, a passed
+  flag whose value differs overrides it with a `W-SERVE-CONFIG-OVERRIDDEN` line. The env and
+  `phorj.json` tiers of the chain below remain unbuilt, and for a `Cli` entry they still carry the
+  Invariant 1 parity problem DEC-455.2 records (the serve path does not: it has no PHP leg).
+  **Originally recorded as NOT built from S3.2: the precedence chain** (CLI flag > env > `#[Config]` >
   `phorj.json` > attribute default) — its env/CLI tiers are RUNTIME reads inside a spine DEC-318 keeps
   pure, so for a `Cli` entry the PHP leg would have to read the same sources or Invariant 1 breaks, and an
   env-reading example is not a deterministic input (Invariant 10). That parity story needs a ruling.

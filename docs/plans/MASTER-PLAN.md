@@ -196,10 +196,12 @@ Build cluster, in order (D10a):
   `(Request): Response` under `kind: Web` no longer type-checks, and the web example corpus moved to
   the D5 model (three examples became projects pairing a PHP-gated `src/` with a sibling `serve.phg`).
   ✅ S3.3e SHIPPED 2026-08-23 — `examples/web/serve_config.phg` + its README row close DEC-455.3,
-  and the LSP now completes the INSTANCE members of every stdlib/prelude class. **S3.3 IS COMPLETE**;
-  what remains under this bullet is the S3.2 Part C flag-vs-config PRECEDENCE ruling (a pending
-  developer question), without which the serve loop still binds host/port from CLI flags rather
-  than from the registered `ServeConfig`. Cursor in SLICE-STATE**).
+  and the LSP now completes the INSTANCE members of every stdlib/prelude class. **S3.3 IS COMPLETE.**
+  ✅ **S3.2 Part C SHIPPED 2026-08-23 (DEC-455.14, developer-ruled): the CLI flag wins LOUDLY** — the
+  registered `ServeConfig` is the default source for `host`+`port`/`workers`/`timeout`, a passed flag
+  whose value differs overrides it with a `W-SERVE-CONFIG-OVERRIDDEN` line. What is left under this
+  bullet is **D7 inbound TLS**, still unbuilt (`cert`/`key`/`tlsMinVersion` have no reader).
+  Cursor in SLICE-STATE**).
 - **Separate QUEUED design slices (specs frozen, same wave + DEC-335):** labeled
   `break`/`continue` (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self`
   return), `eval` (position spec: rejection + substitutes; `Core.Sandbox` builds in v1),

@@ -667,41 +667,6 @@ pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, Strin
     })
 }
 
-/// `serve` on an already-loaded program (M6 W4): type-check, build the request handler factory, then
-/// run the blocking HTTP serve loop ([`crate::serve::serve_tcp`]) until the process is killed. Defaults
-/// to the **bytecode VM** (faster than the tree-walker — measured ~2.3× lower end-to-end latency on a
-/// representative handler; byte-identical via [`Vm::run_closure_entry`] ≡ `call_closure_in`);
-/// `tree_walker` selects the interpreter oracle (`phg serve --tree-walker`). The single-threaded path
-/// runs on the 256 MB deep-stack worker (native-stack headroom for re-entrant natives / the
-/// interpreter's deep recursion); `--workers N` pool threads are plain `std::thread::spawn` (~8 MB),
-/// not that worker — the VM is iterative so it is far less exposed than the tree-walker was, but a
-/// `--tree-walker` pool worker has less headroom than the single-threaded path (pre-existing).
-pub fn serve_program(
-    prog: &Program,
-    diag_src: &str,
-    addr: &str,
-    timeout: Option<std::time::Duration>,
-    profile: crate::profile::Profile,
-    workers: usize,
-    tree_walker: bool,
-) -> Result<String, String> {
-    on_deep_stack(|| {
-        // Reified side-table is threaded into the VM compile (Invariant 6); the interp path ignores it.
-        let (checked, reified) = check_and_expand_reified(prog, diag_src)?;
-        let checked = std::sync::Arc::new(checked);
-        // `render`, not `to_string`: Display drops the code that `--help` sends the reader to explain.
-        let factory = if tree_walker {
-            crate::serve::web_interp_factory(checked).map_err(|e| e.render(diag_src))?
-        } else {
-            crate::serve::web_vm_factory(checked, std::sync::Arc::new(reified))
-                .map_err(|e| e.render(diag_src))?
-        };
-        crate::serve::serve_tcp(factory, addr, timeout, profile, workers)
-            .map_err(|e| format!("serve: {e}"))?;
-        Ok(String::new())
-    })
-}
-
 /// Build a standalone executable for the host from `src`. `input_path` names the source (used to
 /// derive the default output name); `out_path` overrides it. Validates the program first (never emits
 /// a broken binary), then delegates to `bundle::cross::build_host`, which reuses this phg binary as

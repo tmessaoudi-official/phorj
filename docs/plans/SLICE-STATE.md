@@ -1,6 +1,48 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-08-23) — **DEC-331 S3.3 is COMPLETE. S3.3e SHIPPED.**
+## ▶ CURRENT CURSOR (2026-08-23) — **S3.2 Part C SHIPPED. `ServeConfig` finally binds the socket.**
+
+**DEC-455.14 — developer-ruled: the CLI flag wins, but LOUDLY.** Until this slice the registered
+config was INERT: `serve_register::config()` carried `#[expect(dead_code)]` and had no caller, so
+`Http.serve(new ServeConfig(port: 3000), h)` still bound 8080.
+
+**The rule.** The config is the DEFAULT source for the four settings the loop binds — `host`+`port`,
+`workers`, `timeout`. A flag that was PASSED and whose value DIFFERS wins, after one
+`W-SERVE-CONFIG-OVERRIDDEN` line per field on stderr. A flag that merely RESTATES the config prints
+nothing.
+
+**Three things that will bite whoever touches this next:**
+- **Ordering is load-bearing.** The config can only be read AFTER `web_*_factory` — its startup
+  validation run is what executes the `Web` entry and populates the global — and that is still before
+  any socket binds. Reading it earlier always sees `None`, i.e. the config silently never applies.
+- **Provenance is approximated by VALUE.** A constructed object carries none, so a field is "set" iff
+  it differs from D4's class default (`settings::class_defaults`, pinned against the prelude SOURCE).
+  `new ServeConfig(timeout: 0)` therefore cannot express *no timeout*; `--timeout 0` can.
+  KNOWN_ISSUES §SERVE-CONFIG-PROVENANCE — the real fix is a nullable D4 field set, its own Invariant
+  15 question.
+- **Do NOT read the config unconditionally.** D4 declares `timeout = 0` while `phg serve` defaults to
+  30s, so that would have silently disabled the B4 idle-socket guard for every existing server.
+  `an_all_default_config_is_indistinguishable_from_no_config` is the pin.
+
+**Scope is those four fields and no more:** `cert`/`key`/`tlsMinVersion` await D7 (inbound TLS is
+unbuilt — `rustls` is linked only by the outbound http-client), `maxBodySize` belongs to the wire
+parser, `serverName` has no consumer. Wiring a field whose reader does not exist is a config that
+still does nothing.
+
+Resolution is a PURE function (`src/serve/settings.rs`, `cores` injected) — 9 tests, red-first
+against a stub reproducing the ignore-the-config behaviour, sabotage-verified twice.
+**[Verified end-to-end on a real socket both ways.]** `src/cli/serve_pipeline.rs` was split out
+because the wiring pushed grandfathered `pipeline.rs` past its size-baseline row.
+
+**Next: S3.4.**
+
+---
+
+## CURSOR (2026-08-23) — **DEC-331 S3.3 is COMPLETE. S3.3e SHIPPED.** ⚠ SUPERSEDED by the cursor above
+
+> ⚠ Its closing paragraph calls the S3.2 Part C precedence ruling *pending* and predicts a
+> hard-error resolution. It was ruled the same day and the ruling went the OTHER way — the CLI flag
+> wins, loudly (DEC-455.14) — and is BUILT. See the current cursor.
 
 **Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md` (status header) + DEC-455.13.** Invariant 9's
 debt and Invariant 17's LSP row both closed, in one change.
@@ -37,7 +79,7 @@ ruling, not an oversight: KNOWN_ISSUES §LSP-PRELUDE-DEFINITION.
 
 **What remains under the S3.3 bullet is NOT S3.3:** the serve loop still binds host/port from CLI
 flags rather than from the registered `ServeConfig`, because making the config win requires the
-flag-vs-config conflict to hard-error rather than silently pick a winner — the **pending S3.2 Part C
+flag-vs-config conflict to hard-error rather than silently pick a winner — the **S3.2 Part C
 precedence ruling** (a developer question under Invariant 15, DEC-455.2/455.6). Next is **S3.4**.
 
 ---

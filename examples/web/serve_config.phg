@@ -18,10 +18,13 @@
 // `RequestParsing` (Rich-Request D8a) says WHEN the body is parsed: `Eager` (the default) answers
 // 400 at the edge before the handler runs; `Lazy` defers it to first access.
 //
-// ⚠ The serve LOOP does not read the registered config yet: `phg serve` still binds host/port from
-// its CLI flags, so setting `port` here does not move the socket. That wiring waits on the S3.2
-// Part C flag-vs-config precedence ruling (FEATURES.md, `Http.ServeConfig` row). What this file
-// shows — the field set, the defaults and the sentinels — is exactly what `Http.serve` receives.
+// The serve loop READS this (S3.2 Part C, DEC-455.14): a `ServeConfig` passed to `Http.serve` is the
+// DEFAULT source for the address, worker count and timeout, so `Http.serve(new ServeConfig(port:
+// 3000), h)` binds 3000 with no flags at all. A `phg serve` flag you actually pass, whose value
+// differs, WINS — and prints one `W-SERVE-CONFIG-OVERRIDDEN` line naming the field, so an override
+// is never silent. A field left at its class default reads as UNSET, because a constructed object
+// carries no provenance: `new ServeConfig(timeout: 0)` cannot express "no timeout" (0 is the
+// default) — `--timeout 0` is how you say that. `phg explain W-SERVE-CONFIG-OVERRIDDEN`.
 //
 // Byte-identical on the interpreter, the VM and real PHP.
 package Main;

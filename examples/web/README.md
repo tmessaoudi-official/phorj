@@ -80,6 +80,40 @@ runtime, which is why neither appears in the example.
 If nothing registers, `phg serve` refuses at startup rather than serving an empty app — see
 `phg explain E-SERVE-NO-HANDLER`.
 
+**The `ServeConfig` decides what gets bound — and a flag that disagrees says so** (S3.2 Part C,
+DEC-455.14). The `cfg` you pass to `Http.serve` is the DEFAULT source for the address, worker count
+and timeout, so this needs no flags at all:
+
+```phorj
+Http.serve(new ServeConfig(port: 3000, workers: 4), handler);
+```
+
+```
+$ phg serve serve.phg
+phg serve: listening on http://127.0.0.1:3000
+phg serve: per-connection timeout 30s; HTTP/1.1 keep-alive; 4 workers
+```
+
+A flag you actually pass, whose value DIFFERS, wins — loudly, one line per field:
+
+```
+$ phg serve serve.phg --address 127.0.0.1:8080 --workers 2
+serve: --address overrides ServeConfig.host/port (127.0.0.1:3000 → 127.0.0.1:8080) [W-SERVE-CONFIG-OVERRIDDEN]
+serve: --workers overrides ServeConfig.workers (4 → 2) [W-SERVE-CONFIG-OVERRIDDEN]
+phg serve: listening on http://127.0.0.1:8080
+```
+
+A flag that merely restates what the config already says prints nothing — a notice that fires when
+nothing changed trains you to ignore the one that matters. And a field left at its class default
+reads as UNSET, because a constructed object carries no provenance: `new ServeConfig(timeout: 0)`
+cannot express "no timeout" (`0` IS the default, so the CLI's 30s guard applies) — `--timeout 0` is
+how you say that, since there the flag being present is itself the signal.
+`phg explain W-SERVE-CONFIG-OVERRIDDEN`. The field set itself is `web/serve_config.phg`.
+
+Four fields are resolved this way — `host`+`port`, `workers`, `timeout` — and that is the whole
+surface the serve loop binds. `cert`/`key`/`tlsMinVersion` wait on D7 (inbound TLS is unbuilt),
+`maxBodySize` belongs to the wire parser, and `serverName` has no consumer yet.
+
 **Backend:** the registered handler runs on the **bytecode VM by default** — byte-identical to the interpreter
 (`Vm::run_entry` ≡ `call_named`, asserted in `tests/serve.rs`) and materially faster per request
 (measured ~2.3× lower end-to-end latency than the tree-walker on a representative handler; the pure
