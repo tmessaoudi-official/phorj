@@ -1,0 +1,50 @@
+// A JSON API endpoint — `Core.Json` paired with the Core.Http `Request`/`Response` value model.
+//
+// This is the portable, socket-free core of a web handler: a Request carries a JSON body, the
+// handler parses it with `Core.Json`, computes a result, and returns a Response whose body is a JSON
+// document. Pure value-in / value-out, so it runs byte-identically on both backends and real PHP.
+//
+// This file is the CLI entry: it drives the endpoint over canned wire requests, which is what keeps
+// the whole pipeline byte-identity-gated. The SERVED form is `../serve.phg` — a separate compilation
+// unit, because `Http.serve` has no faithful PHP mapping (`E-TRANSPILE-SERVE`, Invariant 14) and
+// keeping it out of this unit is what lets the logic keep its PHP leg.
+package Main;
+
+import Core.Output;
+import Core.Bytes;
+import Core.Http.Request;
+import Core.Http.Response;
+import Acme.SumApi;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Build a canned POST from a JSON body, as raw HTTP/1.1 wire bytes (deterministic — no socket).
+function post(string body): Request? {
+    int n = Bytes.length(Bytes.fromString(body));
+    // CRLF comes from a `b"…"` byte literal — `\x` escapes are byte-literal-only, not string syntax.
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+    string head = "POST /sum HTTP/1.1{nl}Host: localhost{nl}Content-Type: application/json{nl}Content-Length: {n}{nl}{nl}";
+    return Request.parse(Bytes.concat(Bytes.fromString(head), Bytes.fromString(body)));
+}
+
+function show(string body): void {
+    if (var req = post(body)) {
+        Response resp = SumApi.handle(req);
+        Output.printLine("status: {resp.status}");
+        Output.printLine(Bytes.toString(resp.body) ?? "");
+    } else {
+        Output.printLine("malformed request");
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    show("[1, 2, 3, 4]");
+    // 200, count 4 / sum 10
+    show("[10, 20, 30]");
+    // 200, count 3 / sum 60
+    show("42");
+    // 400, not an array
+    show("[1, 2");
+}
+// 400, malformed

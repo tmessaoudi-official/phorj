@@ -22,10 +22,22 @@ import Core.SessionModule.Session;
 import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;
+import Core.Http.ServeConfig;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
+// The served application, registered the D5 way (DEC-331 D5): a `(): void` `Web` entry whose body
+// hands `Http.serve` a `(Request) => Response` closure. `handle` below stays an ORDINARY function so
+// the Cli entry can drive it over canned requests — which is what keeps this example gated on both
+// backends. Unlike `examples/web/{core-http,json-api,server}/`, this file does NOT split into a
+// project: its PHP leg is already quarantined (`Core.SessionModule` is impure), and a project would
+// be forced INTO the PHP oracle — `all_example_projects_transpile_and_match_php` has no skip arm of
+// any kind (DEC-455.12).
 #[Entry(kind: EntryKind.Web)]
+function web(): void {
+    Http.serve(new ServeConfig(), function(Request req): Response { return handle(req); });
+}
+
 function handle(Request req): Response {
     Session s = Session.start(req);
     int visits = (String.parseInt(s.get("visits") ?? "0") ?? 0) + 1;

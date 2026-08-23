@@ -1,0 +1,26 @@
+// The SERVED form of the `server` application (DEC-331 D5) — this is what `phg serve` runs.
+//
+// `phg serve examples/web/server/serve.phg` binds a socket, frames each HTTP/1.1 request, calls the
+// registered handler, and writes the bytes back. `Http.serve(cfg, handler)` REGISTERS and returns —
+// the runtime drives the accept loop — and the handler is a `(Request) => Response` closure, so
+// there is no magic entry name. A malformed request 400s and a handler fault degrades to a 500,
+// both inside the runtime, which is why neither appears here.
+//
+// A SEPARATE compilation unit from `src/main.phg` on purpose: `phg transpile` refuses any file that
+// calls `Http.serve` (`E-TRANSPILE-SERVE`, Invariant 14 tier 2), so keeping the call here is what
+// lets the routing in `src/` keep its PHP leg. The loader reaches that package because a project
+// root's `src/` is a search root for an entry sitting beside it (DEC-282).
+package Main;
+
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.ServeConfig;
+import Acme.Routing;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Web)]
+function web(): void {
+    Http.serve(new ServeConfig(), function(Request req): Response { return Routing.handle(req); });
+}

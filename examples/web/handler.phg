@@ -4,8 +4,8 @@ package Main;
 //
 // This is the value-level contract (PSR-7/15 shaped): a Request and Response are immutable values,
 // and `parseRequest` / `serializeResponse` are Phorj code — there is NO socket here (W3's
-// `phorj serve`). The same `handle` transpiles to idiomatic PHP and runs under `php -S` via a thin
-// front-controller (W4). The whole pipe is byte-identical on both backends + real PHP.
+// `phg serve`). The same `handle` transpiles to idiomatic PHP and runs under `php -S` via a thin
+// front-controller. The whole pipe is byte-identical on both backends + real PHP.
 //
 // Design notes (docs/specs/2026-06-18-m6-w1-handler-design.md):
 //   * Bodies are `bytes` (HTTP bodies are octets — the reason W0 landed). The head (always ASCII per
@@ -85,7 +85,14 @@ function serializeResponse(Response resp): bytes {
 }
 
 // The application: greet by path, echoing the Host header.
-#[Entry(kind: EntryKind.Web)]
+//
+// An ORDINARY function, not an entry. This file teaches the wire format by hand; being servable was
+// never its point, and it carried a `#[Entry(kind: EntryKind.Web)]` only as an artifact of the
+// `respond(bytes): bytes` bridge that DEC-331 S3.3c retired. Under D5 a `Web` entry is `(): void`
+// and the handler is a closure passed to `Http.serve` — which takes CORE.HTTP's `Request`, not the
+// hand-rolled one below, so this file cannot be a serve demo without abandoning what it teaches
+// (DEC-455.12). `examples/web/rich_request.phg` has the same shape: a Cli entry driving an ordinary
+// `handle`. The servable Core.Http applications are `examples/web/{core-http,json-api,server}/`.
 function handle(Request req): Response {
     string host = req.header("Host") ?? "world";
     string path = req.path;

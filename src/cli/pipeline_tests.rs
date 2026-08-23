@@ -145,16 +145,23 @@ fn front_end_diagnostics_agrees_with_check() {
 /// only structural cure is to synthesize nothing, and that is what is pinned here.
 #[test]
 fn importing_core_http_synthesizes_no_respond_entry_for_any_web_shape() {
-    for (label, src) in [
+    for (label, still_checks, src) in [
         (
             "D5 `(): void` factory",
+            true,
             "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
              import Core.Http; \
              #[Entry(kind: EntryKind.Web)] function web() -> void { } \
              #[Entry(kind: EntryKind.Cli)] function main() -> void { }",
         ),
         (
+            // DEC-455.12 (S3.3d): this shape no longer type-checks at all — the narrowing moved the
+            // retirement from the serve RUNTIME to the CHECKER. It is kept as a case because the
+            // "no bridge is synthesized" assertion below runs on the PARSED program and is still
+            // meaningful: prelude injection happens before checking, so a bridge could in principle
+            // still be spliced into a program that later fails.
             "the RETIRED `(Request): Response` shape",
+            false,
             "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
              import Core.Http; import Core.Http.Request; import Core.Http.Response; \
              #[Entry(kind: EntryKind.Web)] function handle(Request r) -> Response { return Response.text(200, \"ok\"); }",
@@ -172,14 +179,26 @@ fn importing_core_http_synthesizes_no_respond_entry_for_any_web_shape() {
                 .any(|m| m.contains("serialize") || m.contains("expects 0 argument")),
             "{label}: no bridge may be synthesized against it: {codes:?}"
         );
-        let expanded = check_and_expand(&prog, src).expect("program still checks");
-        assert!(
-            !expanded
-                .items
-                .iter()
-                .any(|it| matches!(it, crate::ast::Item::Function(f) if f.name == "respond")),
-            "{label}: `respond` was RETIRED in S3.3c — nothing may synthesize it"
-        );
+        match check_and_expand(&prog, src) {
+            Ok(expanded) => {
+                assert!(still_checks, "{label}: expected this shape to be REJECTED, but it checked");
+                assert!(
+                    !expanded
+                        .items
+                        .iter()
+                        .any(|it| matches!(it, crate::ast::Item::Function(f) if f.name == "respond")),
+                    "{label}: `respond` was RETIRED in S3.3c — nothing may synthesize it"
+                );
+            }
+            Err(e) => {
+                assert!(!still_checks, "{label}: expected this shape to CHECK: {e}");
+                assert!(
+                    e.to_string().contains("E-ENTRY-SIG"),
+                    "{label}: the retired shape must be rejected by the ENTRY-SHAPE gate, not \
+                     incidentally by something else: {e}"
+                );
+            }
+        }
     }
 }
 

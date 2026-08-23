@@ -230,8 +230,10 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              `Cli` entry is `(): void`, `(): int`, `(List<string>): void` or `(List<string>): int`\n\
              (an `int` return is the process exit status); a `Web` entry is `(): void`, whose body\n\
              calls `Http.serve(cfg, handler)` — the handler is a closure ARGUMENT, not the entry\n\
-             itself (DEC-331 D5). The legacy `(Request): Response` web entry still CHECKS, but is no\n\
-             longer servable — `phg serve` refuses it with `E-SERVE-NO-HANDLER` (retired in S3.3c).\n\n\
+             itself (DEC-331 D5). The legacy `(Request): Response` web entry is RETIRED and no longer\n\
+             checks at all (DEC-455.12): S3.3c removed it from the serve runtime, and S3.3d\n\
+             narrowed this gate so you hit it here rather than at startup. `phg explain\n\
+             E-SERVE-NO-HANDLER` carries the before/after migration.\n\n\
              `(): void` is legal for BOTH kinds, which is not a contradiction: the role comes from\n\
              `kind:`, not from the shape. What a `Web` entry may NOT borrow are the Cli-only shapes —\n\
              `(): int` is a process exit code and `(List<string>)` is argv, and neither means\n\
@@ -258,8 +260,11 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              \x20     Http.serve(new ServeConfig(), function(Request req): Response { … });\n\
              \x20   }\n\n\
              The handler is now an ordinary value, so it can capture state that persists across\n\
-             requests — which a top-level entry could not. `phg check` still accepts the old shape\n\
-             (nothing about it is ill-typed); it is the serve runtime that refuses it.\n"
+             requests — which a top-level entry could not.\n\n\
+             Since DEC-455.12 (S3.3d) `phg check` REJECTS the old shape outright with\n\
+             `E-ENTRY-SIG`, so you normally meet the retirement at check time rather than here.\n\
+             This code remains the startup guard for the other way a program can be unservable:\n\
+             a well-formed `(): void` entry that simply never calls `Http.serve`.\n"
         }
         "E-ENTRY-TARGET" => {
             "E-ENTRY-TARGET — `#[Entry]` on an instance method.\n\n\

@@ -116,9 +116,21 @@ fn two_class_static_entries_is_duplicate_kind() {
 #[test]
 fn cli_and_web_entries_may_coexist() {
     // DEC-331 D1: one Cli + one Web entry in one program is legal — run/serve pick their kind.
-    let src = "import Core.Runtime.EntryKind; import Core.Http.Request; import Core.Http.Response; \
+    // Under D5 BOTH are `(): void`; the kind comes from `kind:`, never from the shape (DEC-455.12).
+    //
+    // The imports were REMOVED, not forgotten. This test previously wrote the Web entry as
+    // `(Request): Response` with `import Core.Http.Request;` — but `errors_of` runs the RAW checker
+    // with no prelude injection, so that program failed with `E-UNKNOWN-TYPE` and never reached the
+    // shape gate at all: its `!has(E-ENTRY-SIG)` assertion held for ANY shape rule, including the one
+    // S3.3d now forbids. The zero-diagnostic assertion below is what makes it non-vacuous.
+    let src = "import Core.Runtime.EntryKind; \
                #[Entry(kind: EntryKind.Cli)] function cli(): void { } \
-               #[Entry(kind: EntryKind.Web)] function web(Request r): Response { return Response.text(\"ok\"); }";
+               #[Entry(kind: EntryKind.Web)] function web(): void { }";
+    assert!(
+        errors_of(src).is_empty(),
+        "the coexistence program must type-check CLEANLY, or the assertions below are vacuous: {:?}",
+        errors_of(src)
+    );
     assert!(!has(src, "E-DUPLICATE-ENTRY-KIND"), "{:?}", errors_of(src));
     assert!(!has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
@@ -190,8 +202,16 @@ fn well_formed_cli_and_web_kinds_are_clean() {
         "import Core.Runtime.EntryKind; #[Entry(kind: EntryKind.Cli)] function main(): void { }",
         "E-ENTRY-KIND-REQUIRED"
     ));
-    let web = "import Core.Runtime.EntryKind; import Core.Http.Request; import Core.Http.Response; \
-               #[Entry(kind: EntryKind.Web)] function h(Request r): Response { return Response.text(\"ok\"); }";
+    // D5 shape (DEC-455.12): a `Web` entry is `(): void`. The Core.Http imports were REMOVED, not
+    // forgotten — `errors_of` injects no prelude, so importing `Request`/`Response` made this program
+    // fail with `E-UNKNOWN-TYPE` and its `!has(E-ENTRY-SIG)` assertion hold for ANY shape rule.
+    let web = "import Core.Runtime.EntryKind; \
+               #[Entry(kind: EntryKind.Web)] function h(): void { }";
+    assert!(
+        errors_of(web).is_empty(),
+        "must type-check CLEANLY or the assertion below is vacuous: {:?}",
+        errors_of(web)
+    );
     assert!(!has(web, "E-ENTRY-SIG"), "{:?}", errors_of(web));
 }
 
@@ -361,11 +381,27 @@ fn web_entry_may_be_zero_arg_void() {
 }
 
 #[test]
-fn web_entry_still_accepts_the_legacy_request_response_shape() {
-    // `(Request): Response` stays valid until S3.3c retires it — widening must not narrow.
-    let src = "import Core.Runtime.EntryKind; import Core.Http.Request; import Core.Http.Response; \
-               #[Entry(kind: EntryKind.Web)] function web(Request r): Response { return Response.text(\"ok\"); }";
-    assert!(!has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
+fn web_entry_no_longer_accepts_the_legacy_request_response_shape() {
+    // INVERTED by DEC-455.12 (S3.3d), and the inversion is the point — this test previously asserted
+    // the opposite, with the comment "stays valid until S3.3c retires it". Under D5 a `Web` entry is
+    // `(): void` whose body calls `Http.serve(cfg, handler)` with a `(Request) => Response` CLOSURE;
+    // the entry ITSELF being `(Request): Response` is retired. S3.3c removed that shape from the
+    // serve RUNTIME (`E-SERVE-NO-HANDLER` refuses it with a migration message); S3.3d narrows the
+    // CHECKER so it never type-checks at all, which is the diagnostic a migrating user should hit.
+    //
+    // The narrowing lives in `entry_shape_matches` and must NEVER be pushed down into `entry_role`:
+    // `desugar_config` (`src/checker/desugar_config/mod.rs:250`) skips config param-erasure whenever
+    // `entry_role(f).is_some()`, so narrowing there would make the erasure fire on this shape and
+    // the user would get an opaque arity complaint instead of `E-ENTRY-SIG`.
+    //
+    // `Request`/`Response` are declared LOCALLY, not imported: `errors_of` runs the RAW checker with
+    // no prelude injection, so `import Core.Http.Request;` yields `E-UNKNOWN-TYPE` and the program
+    // never reaches the shape gate. That matters asymmetrically — a `has(E-ENTRY-SIG)` assertion
+    // still fires on such a program (the shape gate reads type NAMES), but a `!has(...)` one is
+    // VACUOUS. Two `!has` assertions in this file were hollow for exactly that reason.
+    let src = "import Core.Runtime.EntryKind; class Request { } class Response { } \
+               #[Entry(kind: EntryKind.Web)] function web(Request r): Response { return new Response(); }";
+    assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
 
 #[test]

@@ -8,6 +8,59 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **The web example corpus moved to the D5 model, and the checker narrowed to match (S3.3d,
+  DEC-455.12).** `(Request): Response` under `kind: EntryKind.Web` no longer type-checks:
+  `E-ENTRY-SIG`, with a hint naming `Http.serve` and pointing at
+  `phg explain E-SERVE-NO-HANDLER`'s before/after. S3.3c had retired that shape from the serve
+  RUNTIME; the checker kept accepting it only because narrowing it before the examples moved would
+  have reddened the byte-identity glob for a reason unrelated to what it gates. Both halves land
+  here, together.
+  - **The narrowing is in `entry_shape_matches`, NOT `entry_role`** — `desugar_config` skips config
+    param-erasure whenever `entry_role(f).is_some()`, so narrowing there would erase the `Request`
+    parameter and turn the diagnostic into an opaque arity complaint.
+  - **Three examples became PROJECTS**: `examples/web/{core-http,json-api,server}/` each pair a
+    PHP-gated `src/` (the logic, driven by a Cli entry) with a sibling `serve.phg` holding the `Web`
+    entry. `phg transpile` refuses any file calling `Http.serve`, so the split is what lets the LOGIC
+    keep its PHP leg. Neither differential glob collects a `serve.phg` — `collect_phg` skips any
+    directory containing `src/` — so `tests/serve.rs` gained
+    `every_example_serve_phg_registers_serves_and_is_transpile_quarantined`, which loads every
+    shipped `serve.phg`, drives one real request through the serve loop, and asserts the transpile
+    refusal. Those files were gated by NOTHING before it.
+  - **`handler.phg` stayed FLAT** and simply dropped its `Web` attribute: it exists to show the wire
+    format by hand, and `Http.serve` takes Core.Http's `Request`, not a hand-rolled one. The
+    hand-built parse/serialize pedagogy therefore did not leave the corpus. `server/` adopted the
+    stdlib types (deleting only its duplicate of what `handler.phg` teaches) because being servable
+    IS its purpose. `examples/session/counter.phg` migrated in place and deliberately did NOT become
+    a project: `all_example_projects_transpile_and_match_php` has no skip arm, so a project faces the
+    PHP oracle unconditionally, and counter is impurity-quarantined from it.
+  - **Corpus counts, measured before and after**: flat RUN 201 → 198, flat SKIP 19 → 19, projects
+    15 → 18. Total gated programs unchanged at 216 — nothing left the oracle.
+  - `server.php` moved into the project and was rewritten to rebuild the raw request and call the
+    transpiled `respond(bytes): bytes`. Its documented `sed '$d'` recipe was WRONG for a project: the
+    `\Main\main();` bootstrap is emitted inside the trailing global namespace block ahead of the
+    runtime helpers, so it is not the last line and `$d` deleted a helper's closing brace. Now
+    `sed '/^ *\\Main\\main();$/d'`, verified end-to-end under `php -S`.
+
+### Fixed
+
+- **The playground example sweep was missing `Core.FileSystemModule` (DEC-455.12).**
+  `gen_examples.py`'s `SYSCALL_IMPORTS` listed `Core.File` — a different, still-live module — but not
+  `Core.FileSystemModule`, so `examples/fs/*` leaked into the browser WASM build, where they would
+  fault with an unknown-module error. Same shape as the `Core.Regex` omission fixed in 2026-07.
+  Found only because `examples.js` had drifted out of date with the corpus and regenerating it made
+  the leak visible; the regenerated file also picks up four guide examples that were simply missing.
+
+- **Two checker tests were VACUOUS and are now real (DEC-455.12).**
+  `cli_and_web_entries_may_coexist` and `well_formed_cli_and_web_kinds_are_clean` asserted
+  `!has(E-ENTRY-SIG)` on programs that imported `Core.Http.Request` — but the raw checker used by
+  those tests injects no preludes, so the programs failed with `E-UNKNOWN-TYPE` and never reached the
+  shape gate. Their assertions held for ANY shape rule, including the one being retired. Both now
+  assert the program type-checks CLEANLY first. (The asymmetry matters: a `has(...)` assertion still
+  fires on such a program, because the shape gate reads type NAMES; only `!has(...)` goes hollow.)
+
+- **`tests/serve.rs`'s module doc claimed its TCP smoke test was `#[ignore]`d.** `tcp_smoke` carries
+  no such attribute and runs on every suite invocation.
+
 - **`Http.serve(cfg, handler)` — the DEC-331 D5 web entry point (S3.3a).** A
   `#[Entry(kind: EntryKind.Web)]` function is now a closure FACTORY: it calls
   `Http.serve(cfg, handler)` with a typed `(Request) => Response`, and that handler is what runs per

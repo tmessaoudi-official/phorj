@@ -1,15 +1,17 @@
-// Core.Http — the portable HTTP handler model, now in the stdlib.
+// Core.Http — the portable HTTP handler model, in the stdlib.
 //
-// M6 W1 shipped `Request`/`Response`/parse/serialize as pure Phorj written *in* the example
-// (examples/web/handler.phg). Core.Http promotes them to the standard library: `import Core.Http;`
-// gives you the `Request` and `Response` types with a static-method API —
+// `import Core.Http;` gives you the `Request` and `Response` types with a static-method API —
 //   * `Request.parse(bytes) -> Request?`   — parse a raw HTTP/1.1 request (null if malformed)
 //   * `req.headers.get(name) -> string?`   — case-insensitive header lookup (rich Request, DEC-331)
 //   * `Response.text(status, body)`        — a text/plain response
 //   * `resp.serialize() -> bytes`          — render to the HTTP/1.1 wire form
-// The application is a single `handle(Request) -> Response`. Under `phg serve`, Core.Http injects a
-// `respond(bytes) -> bytes` bridge that calls your `handle` (a malformed request → 400), so a bare
-// handler is directly servable. both backends and real PHP are byte-identical.
+//
+// The application is an ordinary `handle(Request) -> Response` function. This file is the CLI
+// entry: it drives `handle` over canned requests, so the whole pipeline stays byte-identity-gated
+// on both backends AND through real PHP. The SERVED form lives in `../serve.phg` — a `Web` entry
+// whose body calls `Http.serve(cfg, handler)` (DEC-331 D5). The two are separate compilation units
+// on purpose: `Http.serve` has no faithful PHP mapping (`E-TRANSPILE-SERVE`, Invariant 14), so
+// keeping it out of this unit is what lets the logic below keep its PHP leg.
 package Main;
 
 import Core.Output;
@@ -17,15 +19,9 @@ import Core.Bytes;
 import Core.String;
 import Core.Http.Request;
 import Core.Http.Response;
+import Acme.Greeter;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
-
-// The whole application: greet by path, echoing the Host header.
-#[Entry(kind: EntryKind.Web)]
-function handle(Request req): Response {
-    string host = req.headers.get("Host") ?? "world";
-    return Response.text(200, "Hello {req.path} (host {host})");
-}
 
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
@@ -38,7 +34,7 @@ function main(): void {
         Output.printLine("method={m} path={p}");
         Output.printLine("host={req.headers.get(\"Host\") ?? \"(none)\"}");
         // Run the handler and serialize the response to the wire form.
-        Response resp = handle(req);
+        Response resp = Greeter.handle(req);
         bytes wire = resp.serialize();
         int n = Bytes.length(wire);
         // CRLFs shown as " | " so the output stays one clean ASCII line.

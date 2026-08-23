@@ -1,6 +1,55 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-08-23) — **`TRANSPILE-NS-PRELUDE` is FIXED; S3.3d is UNBLOCKED and is NEXT**
+## ▶ CURRENT CURSOR (2026-08-23) — **DEC-331 S3.3d is SHIPPED. S3.3e is NEXT.**
+
+**Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md` (status header) + DEC-455.12.** The checker
+is narrowed and the corpus is migrated, in one change because either alone reddens a gate.
+
+**What landed.** `(Request): Response` under `kind: EntryKind.Web` no longer type-checks —
+`E-ENTRY-SIG`, with a hint naming `Http.serve` and pointing at `phg explain E-SERVE-NO-HANDLER`.
+The narrowing is in `entry_shape_matches` and **must never be pushed down into `entry_role`**:
+`desugar_config` (`src/checker/desugar_config/mod.rs:250`) skips config param-erasure whenever
+`entry_role(f).is_some()`, so narrowing there would erase the `Request` parameter and turn the
+diagnostic into an opaque arity complaint.
+
+**The corpus split BY PURPOSE, not uniformly** (DEC-455.12 — Q2b had assumed four uniform project
+trees; two of the four could not have one):
+- `examples/web/{core-http,json-api,server}/` are PROJECTS — a PHP-gated `src/` plus a sibling
+  `serve.phg` holding the `Web` entry. `phg transpile` refuses any file calling `Http.serve`, so
+  the split is what preserves the logic's PHP leg.
+- `examples/web/handler.phg` STAYED FLAT and merely dropped its `Web` attribute — it teaches the
+  wire format by hand, and `Http.serve` takes Core.Http's `Request`. The hand-built parse/serialize
+  pedagogy did NOT leave the corpus.
+- `examples/session/counter.phg` migrated IN PLACE. It must not become a project:
+  `all_example_projects_transpile_and_match_php` has **no skip arm of any kind**, so a project faces
+  the PHP oracle unconditionally, and counter is impurity-quarantined from it.
+
+**Counts MEASURED before and after, because that was the slice's actual open question:** flat RUN
+201 → 198, flat SKIP 19 → 19, projects 15 → 18. **Total gated programs unchanged at 216.**
+
+**A gap that existed and is now closed:** a `serve.phg` at a project root is collected by NEITHER
+differential glob (`collect_phg` returns early from any directory containing `src/`; the project
+harness only ever picks `main.phg`). Those files were gated by NOTHING. `tests/serve.rs` gained
+`every_example_serve_phg_registers_serves_and_is_transpile_quarantined` — loads each one, drives one
+real request through the serve loop, asserts the `E-TRANSPILE-SERVE` refusal, and carries a
+zero-denominator guard. Sabotage-verified (remove a registration → red).
+
+**Two things found along the way, both fixed here, both worth remembering:**
+- **Two checker tests were VACUOUS.** `!has(E-ENTRY-SIG)` assertions on programs importing
+  `Core.Http.Request` — the raw checker injects no preludes, so they died at `E-UNKNOWN-TYPE` and
+  never reached the shape gate; they would have passed under any rule. The asymmetry is the lesson:
+  a `has(...)` assertion still fires there (the gate reads type NAMES), only `!has(...)` goes hollow.
+- **`gen_examples.py` was missing `Core.FileSystemModule`** from `SYSCALL_IMPORTS` (it listed
+  `Core.File`, a different live module), so `examples/fs/*` leaked into the browser WASM build where
+  they would fault. Visible only because `examples.js` had drifted stale and regenerating it exposed
+  the leak.
+
+**S3.3e is what remains of S3.3** (Invariant 9 + 17): the OWED runnable `Http.ServeConfig` example
+and its `examples/README.md` row, plus LSP surfacing and both editors.
+
+---
+
+## CURSOR (2026-08-23) — **`TRANSPILE-NS-PRELUDE` is FIXED; S3.3d is UNBLOCKED** ⚠ SUPERSEDED by the cursor above
 
 **Plan: `docs/plans/2026-08-23-transpile-ns-prelude.plan.md`.** The blocker the 2026-08-22 cursor
 below records is gone (DEC-455.11). A multi-file PROJECT using an injected prelude no longer emits
@@ -118,7 +167,7 @@ with `git grep -ln "respond\|handle(Request" -- examples/ playground/`]:
 | `examples/session/counter.phg` | a fifth `Web` entry, outside `examples/web/` |
 | `examples/web/{controller,rich_request,route-constraints,router}.phg` | `Cli`-entry examples whose PROSE describes the `handle`/`respond` model |
 | `examples/web/README.md` (11K) | describes the respond model throughout |
-| `examples/web/server.php` | the `php -S` front-controller bridge — it calls the lifted `handle` |
+| `examples/web/server.php` | the `php -S` front-controller bridge — it calls the lifted `handle` (MOVED to `examples/web/server/server.php`) |
 | `examples/README.md`, `examples/errors/README.md` | rows naming the retired shape |
 | `examples/guide/entry.phg:5` | states `kind: EntryKind.Web` = *"the `phg serve` handler (`(Request): Response`)"* — now wrong |
 | `playground/web/examples.js` | two embedded sources carrying `respond`/`handle` |

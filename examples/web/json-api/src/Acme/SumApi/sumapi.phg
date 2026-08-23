@@ -1,0 +1,52 @@
+// The JSON endpoint itself, in its own package so BOTH entries can import it.
+//
+// The lesson here is `Core.Json` — parsing a request body into a `Json` tree, branching on its
+// SHAPE with a `match`, and rendering a `Json` document back out. The HTTP types are `Core.Http`'s
+// (DEC-455.12): this file used to declare its own two-field `Request`/`Response`, described in its
+// own comment as "minimal request/response values" — scaffolding, not the lesson. Using the stdlib
+// types costs the example nothing and is what lets `../serve.phg` hand this handler to `Http.serve`,
+// which takes a `(Request) => Response` over CORE.HTTP's types and no others.
+package Acme.SumApi;
+
+import Core.Bytes;
+import Core.Json;
+import Core.Http.Request;
+import Core.Http.Response;
+
+// Extract an integer from a JSON node (non-ints contribute 0 — a deliberately lenient sum).
+function intOf(Json j): int {
+    return match (j) { Json.Int(n) => n, default => 0 };
+}
+
+// Summarize a JSON array into a small JSON object. Statements (the loop) live here, not in a `match`
+// arm — the arm just binds `items` and delegates.
+function summarize(List<Json> items): Json {
+    mutable int count = 0;
+    mutable int sum = 0;
+    for (Json x in items) {
+        count = count + 1;
+        sum = sum + intOf(x);
+    }
+    return new Json.Object(["count" => new Json.Int(count), "sum" => new Json.Int(sum)]);
+}
+
+// A 400 whose body is itself a JSON document — the error path stays in the same content type.
+function badRequest(string message): Response {
+    string body = Json.stringify(new Json.Object(["error" => new Json.String(message)]));
+    return new Response(400, Bytes.fromString(body), ["Content-Type: application/json"]);
+}
+
+// The endpoint: parse the JSON request body, branch on its shape, return a JSON response.
+//
+// Contract: POST a JSON array of integers, get back `{"count": N, "sum": S}`; a non-array body is
+// `400 {"error": "expected a JSON array"}`; malformed JSON is `400 {"error": "invalid JSON"}`.
+function handle(Request req): Response {
+    var parsed = Json.parse(req.body.text());
+    if (var doc = parsed) {
+        return match (doc) {
+            Json.Array(items) => Response.json(Json.stringify(summarize(items))),
+            default => badRequest("expected a JSON array")
+        };
+    }
+    return badRequest("invalid JSON");
+}

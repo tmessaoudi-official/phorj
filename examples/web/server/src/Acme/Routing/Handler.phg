@@ -1,0 +1,5 @@
+// The handler IDENTITY, kept separate from the functions so the route table stays a plain value:
+// matching decides WHICH handler, dispatch decides what it does.
+package Acme.Routing;
+
+enum Handler { Home, Greet, Health, NotFound }

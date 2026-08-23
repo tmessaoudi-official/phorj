@@ -1,0 +1,72 @@
+// Routing — the W4 contribution of this example, in its own package so BOTH entries can import it.
+//
+// The HTTP types are `Core.Http`'s (DEC-455.12). This example used to hand-roll `Request`,
+// `Response`, `parseRequest` and `serializeResponse` alongside the routing below; those four are a
+// DUPLICATE of what `examples/web/handler.phg` exists to teach, and keeping them here would make
+// this file unservable — `Http.serve` takes a `(Request) => Response` over CORE.HTTP's types and no
+// others, and two `Request` leaves cannot share one import scope. The hand-built wire format did not
+// leave the corpus: it is still in `handler.phg`, fully PHP-gated. What lives here is what this
+// example is actually for — matching a method+path to a handler and dispatching on the result.
+package Acme.Routing;
+
+import Core.Bytes;
+import Core.Http.Request;
+import Core.Http.Response;
+import Acme.Routing.Handler;
+import Acme.Routing.Route;
+
+function routes(): List<Route> {
+    return [
+        new Route("GET", "/", new Home()),
+        new Route("GET", "/greet", new Greet()),
+        new Route("GET", "/health", new Health())
+    ];
+}
+
+// First exact method+path match wins; anything else is the 404 tag. A method mismatch on a known
+// path is a miss, not a 405 — deliberately the simplest rule that still shows the shape.
+function matchRoute(string method, string path): Handler {
+    for (Route r in routes()) {
+        if (r.method == method) {
+            if (r.path == path) {
+                return r.tag;
+            }
+        }
+    }
+    return new NotFound();
+}
+
+function handleHome(Request req): Response {
+    return new Response(200, Bytes.fromString("Phorj web — home"), ["Content-Type: text/plain"]);
+}
+
+function handleGreet(Request req): Response {
+    string host = req.headers.get("Host") ?? "world";
+    return new Response(200, Bytes.fromString("Hello {host}"), ["Content-Type: text/plain"]);
+}
+
+function handleHealth(Request req): Response {
+    return new Response(200, Bytes.fromString("ok"), ["Content-Type: text/plain"]);
+}
+
+function handleNotFound(Request req): Response {
+    string m = req.method;
+    string p = req.path;
+    return new Response(404, Bytes.fromString("not found: {m} {p}"), ["Content-Type: text/plain"]);
+}
+
+// A request that did not parse at all — the serve runtime's own 400 has the same shape.
+function badRequest(): Response {
+    return new Response(400, Bytes.fromString("bad request"), ["Content-Type: text/plain"]);
+}
+
+// The portable handler — the value unit that also round-trips to PHP (`server.php` calls this).
+function handle(Request req): Response {
+    Handler tag = matchRoute(req.method, req.path);
+    return match (tag) {
+        Home() => handleHome(req),
+        Greet() => handleGreet(req),
+        Health() => handleHealth(req),
+        NotFound() => handleNotFound(req)
+    };
+}

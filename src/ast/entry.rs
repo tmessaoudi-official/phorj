@@ -185,12 +185,22 @@ pub fn entry_role(f: &FunctionDecl) -> Option<EntryRole> {
 /// so spec §1's `function web(Http.ServeConfig cfg, AppSettings app): void` arrives zero-arg.
 /// `(): void` is therefore legal for BOTH roles, which is fine: the role came from `kind:`.
 ///
-/// `Web` still ACCEPTS the legacy `(Request): Response`, deliberately: S3.3c retired that shape from
-/// the serve RUNTIME (`E-SERVE-NO-HANDLER` refuses it with a migration message), but narrowing the
-/// CHECKER is S3.3d's job — doing it here would make the five shipped `examples/web/*` fail
-/// `phg check` in the same commit that removed their bridge, taking the example byte-identity glob
-/// red for a reason unrelated to what it gates. `Cli` is deliberately NOT widened — it must never
-/// accept `(Request): Response`.
+/// `Web` accepts ONLY `(): void` (DEC-455.12, S3.3d). The pre-DEC-331 shape — the entry ITSELF being
+/// `(Request): Response` — was retired from the serve RUNTIME by S3.3c (`E-SERVE-NO-HANDLER` refuses
+/// it with a migration message); S3.3d narrows the CHECKER so it never type-checks at all, which is
+/// the diagnostic a migrating user should actually hit. The narrowing waited for S3.3d because it
+/// and the example migration must land together: narrowing alone would fail `phg check` on the
+/// shipped `examples/web/*` and redden the byte-identity glob for a reason unrelated to what it
+/// gates.
+///
+/// **The narrowing is HERE and must never be pushed down into [`entry_role`].** `desugar_config`
+/// (`src/checker/desugar_config/mod.rs:250`) skips config param-erasure whenever
+/// `entry_role(f).is_some()`. If `entry_role` stopped calling `(Request): Response` a `Web` shape,
+/// that erasure would fire on it and the user would get an opaque arity complaint instead of
+/// `E-ENTRY-SIG`. `entry_role` answers "what shape is this?"; this function answers "is that shape
+/// legal for the DECLARED kind?" — only the second question changed.
+///
+/// `Cli` is deliberately NOT widened — it must never accept `(Request): Response`.
 #[must_use]
 pub fn entry_shape_matches(f: &FunctionDecl, declared: EntryRole) -> bool {
     match declared {
@@ -198,12 +208,11 @@ pub fn entry_shape_matches(f: &FunctionDecl, declared: EntryRole) -> bool {
         // `(): void` — the D5 serve shape. Read off `entry_role` deliberately NARROWED: a `Cli`
         // shape also covers `(): int` and `(List<string>): …`, and neither is a web entry.
         EntryRole::Web => {
-            entry_role(f) == Some(EntryRole::Web)
-                || (f.params.is_empty()
-                    && f.ret.as_ref().is_some_and(|t| {
-                        matches!(t, crate::ast::Type::Named { name, args, .. }
-                            if name == "void" && args.is_empty())
-                    }))
+            f.params.is_empty()
+                && f.ret.as_ref().is_some_and(|t| {
+                    matches!(t, crate::ast::Type::Named { name, args, .. }
+                        if name == "void" && args.is_empty())
+                })
         }
     }
 }

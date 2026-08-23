@@ -1,0 +1,8 @@
+// One row of the route table: a method, an exact path, and the handler tag to dispatch on.
+package Acme.Routing;
+
+import Acme.Routing.Handler;
+
+class Route {
+    constructor(public string method, public string path, public Handler tag) {}
+}

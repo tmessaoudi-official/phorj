@@ -192,7 +192,11 @@ Build cluster, in order (D10a):
   typed-parameter config (precedence CLI > env > `#[Config]` > `phorj.json` > attr) + `Http.ServeConfig`
   contract + inbound rustls TLS (native-only, auto-on-cert) + retire raw `respond(bytes)`
   (**✅ the `respond` retirement SHIPPED 2026-08-22, S3.3c — `Http.serve(cfg, handler)` is now the
-  only registration path; cursor in SLICE-STATE**).
+  only registration path. ✅ S3.3d SHIPPED 2026-08-23, DEC-455.12 — the checker narrowed so
+  `(Request): Response` under `kind: Web` no longer type-checks, and the web example corpus moved to
+  the D5 model (three examples became projects pairing a PHP-gated `src/` with a sibling `serve.phg`).
+  ⚠ S3.3e REMAINS: the OWED `Http.ServeConfig` runnable example + README row + LSP/editors
+  (Invariant 9 + 17). Cursor in SLICE-STATE**).
 - **Separate QUEUED design slices (specs frozen, same wave + DEC-335):** labeled
   `break`/`continue` (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self`
   return), `eval` (position spec: rejection + substitutes; `Core.Sandbox` builds in v1),
@@ -1471,7 +1475,7 @@ verification, then this section collapses to "done + never reintroduce" (G-7):
 - ☑ B3-7 percentage staleness — re-scored in §11.2 (this file).
 - ☐ B3-8 undocumented shipped features (W3-4 crypto FEATURES row; S1/S2 import discipline
   user-facing doc; decimal row; ctrlc/corosensei named; playground-member deps in the dep policy).
-- ☐ B3-9 the 5 `examples/project/` dirs indexed nowhere + `web/json-api.phg` index row.
+- ☐ B3-9 the `examples/project/` dirs indexed nowhere. (The `web/json-api` half is CLOSED 2026-08-23, DEC-455.12: it is now `web/json-api/` with an `examples/README.md` row; a duplicate stale `web/json-api.phg` row was removed in the same change.)
 - ☑ B3-10 stale counts in plans (KNOWN_ISSUES 1133, differential.rs 3308, explain ≈200 codes,
   28 stdlib modules / 236 natives; "S1 uncommitted" claim — S1 shipped `cd29f3c`) — corrected here.
 - ☐ B3-11 KNOWN_ISSUES stale content (`\Main\Obj`, the contradicted "not yet implemented" list,

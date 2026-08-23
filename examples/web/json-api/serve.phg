@@ -1,0 +1,24 @@
+// The SERVED form of the `json-api` endpoint (DEC-331 D5).
+//
+// `phg serve examples/web/json-api/serve.phg` binds a socket and calls the registered handler once
+// per request. `Http.serve(cfg, handler)` REGISTERS and returns — the runtime drives the accept loop
+// — and the handler is a `(Request) => Response` closure, so there is no magic entry name.
+//
+// A SEPARATE compilation unit from `src/main.phg` on purpose: `phg transpile` refuses any file that
+// calls `Http.serve` (`E-TRANSPILE-SERVE`, Invariant 14 tier 2), so keeping the call here is what
+// lets the endpoint in `src/` keep its PHP leg. The loader reaches that logic because a project
+// root's `src/` is a search root for an entry sitting beside it (DEC-282).
+package Main;
+
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.ServeConfig;
+import Acme.SumApi;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Web)]
+function web(): void {
+    Http.serve(new ServeConfig(), function(Request req): Response { return SumApi.handle(req); });
+}

@@ -2,7 +2,9 @@
 // magic name, and the ROLE is declared, not inferred. The kind is an injected enum variant, reached
 // QUALIFIED and import-gated ("nothing in the wind") — `import Core.Runtime.EntryKind;`, then
 // `kind: EntryKind.Cli` = the `phg run` entry (`(): void`, `(): int`, or `(List<string>): void|int`);
-// `kind: EntryKind.Web` = the `phg serve` handler (`(Request): Response`). A bare `kind: Cli` is
+// `kind: EntryKind.Web` = the `phg serve` entry — `(): void`, whose body registers the handler with
+// `Http.serve(cfg, handler)` (DEC-331 D5). The pre-D5 `(Request): Response` entry is RETIRED and no
+// longer type-checks (`E-ENTRY-SIG`, with a migration hint). A bare `kind: Cli` is
 // rejected (`E-INJECTED-VARIANT-BARE`), like every other injected variant (`Option.Some`, …). One of
 // each role may coexist. The signature must match the declared kind. An `int` return IS the process
 // exit status (0–255); `void` exits 0 on a clean run. Entries may declare `throws` — an escaped

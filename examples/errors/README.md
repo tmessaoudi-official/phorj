@@ -39,7 +39,8 @@ drawn from that file's source.
 
 ## In the browser (`phg serve --dev`)
 
-When a served handler (`respond(bytes) -> bytes`) hits an uncaught fault, **`phg serve --dev`** returns
+When a served handler (the `(Request) => Response` closure registered with `Http.serve`) hits an
+uncaught fault, **`phg serve --dev`** returns
 a styled HTML **500 page** with the same fault message, the call stack, and the request's start-line +
 headers — every interpolated value HTML-escaped (the `Core.Html` discipline), so the page is XSS-safe.
 

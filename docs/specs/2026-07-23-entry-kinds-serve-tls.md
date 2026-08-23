@@ -133,7 +133,11 @@ entries transpile as today; a call to `Http.serve` hits `E-TRANSPILE-SERVE` (BUI
 and called that "already the rule" — both halves were false. The refusal is keyed on the CALL, and
 was verified against the corpus: `examples/web/core-http.phg` and `examples/web/handler.phg` are
 `Web` entries that transpile clean today, so an entry-kind key would have broken the five shipped
-`examples/web/*` and Invariant 1's corpus enforcement with them;
+`examples/web/*` and Invariant 1's corpus enforcement with them (**superseded 2026-08-23, DEC-455.12:**
+neither file is a `Web` entry any more — `core-http` became a project whose `Web` entry lives in a
+sibling `serve.phg`, and `handler.phg` dropped its `Web` attribute entirely. The reasoning stands and
+its conclusion is now structural: the CALL key is what lets `src/main.phg` keep its PHP leg while the
+registering file does not);
 `#[Config]` providers transpile as plain functions (DEC-318 machinery shipped). Lift:
 unchanged (PHP has no entry-role concept; lifted code keeps the inferred entry).
 

@@ -42,8 +42,14 @@ SKIP_DIRS = {"project", "interop", "lift", "benchmark"}
 # `default-features = false` (Cryptography→argon2, Regex→regex crate). `Core.Cryptography` was
 # already correctly excluded; `Core.Regex` was MISSING (→ regex.phg leaked into the playground and
 # faulted with an unknown-module error). Added `Core.Regex` 2026-07-05.
+# `Core.FileSystemModule` added 2026-08-23 (DEC-455.12): it was MISSING, so `examples/fs/*` leaked
+# into the playground and would fault with an unknown-module error in the browser — the same shape as
+# the `Core.Regex` omission fixed above. `Core.File` is a DIFFERENT, still-live module (guide/file.phg
+# imports it); this list needed both, not a rename. Found by regenerating a file that had drifted out
+# of date with the corpus, which is the only reason the omission was visible at all.
 SYSCALL_IMPORTS = (
     "Core.File",
+    "Core.FileSystemModule",
     "Core.Http",
     "Core.Process",
     "Core.Random",

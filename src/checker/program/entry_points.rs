@@ -153,9 +153,21 @@ impl Checker {
                             "Cli",
                             "`(): void`, `(): int`, or `(List<string>): void|int`",
                         ),
-                        crate::ast::EntryRole::Web => {
-                            ("Web", "`(): void`, or the legacy `(Request): Response`")
-                        }
+                        crate::ast::EntryRole::Web => ("Web", "`(): void`"),
+                    };
+                    // DEC-455.12: the ONE mistake worth a bespoke hint. `(Request): Response` was the
+                    // pre-DEC-331 web entry, so a migrating user writes it by muscle memory; a generic
+                    // "adjust the signature" would leave them guessing what replaced it. Detected via
+                    // `entry_role`, which still classifies that shape as `Web` — it is `entry_shape_matches`
+                    // that stopped accepting it, precisely so this branch can still recognise it.
+                    let hint = if role == crate::ast::EntryRole::Web
+                        && crate::ast::entry_role(f) == Some(crate::ast::EntryRole::Web)
+                    {
+                        "the entry itself is no longer the handler: make it `(): void` and pass the \
+                         handler to `Http.serve(cfg, handler)` as a `(Request) => Response` closure \
+                         — `phg explain E-SERVE-NO-HANDLER` has a before/after"
+                    } else {
+                        "adjust the signature to the declared kind's shape"
                     };
                     self.err_coded(
                         f.span,
@@ -164,7 +176,7 @@ impl Checker {
                             f.name
                         ),
                         "E-ENTRY-SIG",
-                        Some("adjust the signature to the declared kind's shape".into()),
+                        Some(hint.into()),
                     );
                     return;
                 }

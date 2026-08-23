@@ -3,8 +3,8 @@
 //! `tests/differential.rs` never touches `src/serve.rs` (the determinism quarantine); this file
 //! drives the serve loop over a deterministic in-memory [`Transport`] so no socket is needed. It
 //! asserts each response is exactly the expected raw HTTP/1.1 bytes AND that the loop's output equals
-//! calling the registered handler directly (self-consistency). One `#[ignore]`d smoke test exercises
-//! the real `TcpTransport` end to end.
+//! calling the registered handler directly (self-consistency). `tcp_smoke` exercises the real
+//! `TcpTransport` end to end and RUNS — it is not `#[ignore]`d (this line used to claim it was).
 //!
 //! Since DEC-331 S3.3c every program here registers its handler with `Http.serve(cfg, handler)` from
 //! a `(): void` `Web` entry — the named `respond(bytes): bytes` entry, and the `handle` bridge that
@@ -998,23 +998,135 @@ fn transpiling_a_program_that_calls_http_serve_is_refused() {
 ///     would break them too, notwithstanding the spec sentence claiming that is "already the rule".
 ///
 /// Either mistake breaks the example byte-identity glob, which is Invariant 1's corpus enforcement.
+///
+/// REPLACED by DEC-455.12 (S3.3d). This slot used to hold
+/// `a_legacy_web_program_that_never_calls_http_serve_still_transpiles`, which pinned that a legacy
+/// `(Request): Response` web entry kept transpiling so the shipped `examples/web/*` stayed green.
+/// The narrowing makes that condition unreachable — such a program no longer type-checks, and the
+/// corpus contains none. Rather than delete the slot, it now guards the state that REPLACED it: no
+/// shipped example may reintroduce the retired shape. That is the regression this directory actually
+/// needs, and nothing else in the suite asserts it.
 #[test]
-fn a_legacy_web_program_that_never_calls_http_serve_still_transpiles() {
-    let src = r#"
-package Main;
-import Core.Runtime.Entry; import Core.Runtime.EntryKind;
-import Core.Http;
-import Core.Http.Request;
-import Core.Http.Response;
-#[Entry(kind: EntryKind.Web)] function handle(Request req): Response {
-  return Response.text(200, "ok");
+fn no_shipped_example_declares_the_retired_web_entry_shape() {
+    let mut checked = 0usize;
+    let mut offenders = Vec::new();
+    let mut stack = vec![std::path::PathBuf::from("examples")];
+    while let Some(dir) = stack.pop() {
+        for e in std::fs::read_dir(&dir).expect("examples/ is readable") {
+            let path = e.expect("dir entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().and_then(|x| x.to_str()) == Some("phg") {
+                checked += 1;
+                let src = std::fs::read_to_string(&path).expect("example is readable");
+                // The retired shape is a `Web` ENTRY whose own signature takes a Request. Read the
+                // parameter list of the first `function` after the attribute and nothing else — a
+                // naive window would flag the `function(Request req)` CLOSURE that every correct D5
+                // entry passes to `Http.serve`, i.e. it would fire on precisely the migrated shape it
+                // is meant to bless (it did, on all four, before this was narrowed).
+                // Split on the attribute AT LINE START. Matching it anywhere flags PROSE that merely
+                // quotes it — `examples/web/handler.phg`'s migration note does exactly that, and this
+                // test named it as an offender until the anchor was added.
+                for w in src.split("\n#[Entry(kind: EntryKind.Web)]").skip(1) {
+                    let Some(after_fn) = w.split_once("function ") else {
+                        continue;
+                    };
+                    let Some((params, _)) = after_fn.1.split_once(')') else {
+                        continue;
+                    };
+                    let Some((_, params)) = params.split_once('(') else {
+                        continue;
+                    };
+                    if params.contains("Request") {
+                        offenders.push(path.display().to_string());
+                    }
+                }
+            }
+        }
+    }
+    // Zero-denominator guard: a green run over no files proves nothing (the DEC-191 no-op-glob lesson).
+    assert!(
+        checked > 100,
+        "expected the whole example corpus, walked only {checked} files — the walk is broken"
+    );
+    assert!(
+        offenders.is_empty(),
+        "these examples declare the RETIRED `(Request): Response` web entry: {offenders:?}"
+    );
 }
-#[Entry(kind: EntryKind.Cli)] function main(): void { }
-"#;
-    let prog = phorj::cli::parse_program(src).expect("parses");
-    let php = phorj::cli::transpile_program(&prog, src)
-        .expect("a legacy web program must keep transpiling");
-    assert!(php.starts_with("<?php"), "{php}");
+
+/// DEC-455.12 (S3.3d) — every `examples/web/*/serve.phg` REGISTERS a handler, SERVES a real request,
+/// and is transpile-quarantined.
+///
+/// These files are gated by NOTHING else, and that is structural rather than accidental:
+/// `collect_phg` returns early from any directory containing `src/`, so both differential globs skip
+/// a project wholesale, and `find_main_phg` only ever picks a file named `main.phg`. A `serve.phg`
+/// sitting at a project root is therefore invisible to the byte-identity corpus BY DESIGN — serve is
+/// Invariant-14 quarantined and has no PHP leg to compare against. Without this test the shipped
+/// serve demos could rot silently, which is exactly the DEC-191 failure shape.
+#[test]
+fn every_example_serve_phg_registers_serves_and_is_transpile_quarantined() {
+    let mut found = 0usize;
+    let mut dirs: Vec<_> = std::fs::read_dir("examples/web")
+        .expect("examples/web is readable")
+        .map(|e| e.expect("dir entry").path())
+        .filter(|p| p.is_dir())
+        .collect();
+    dirs.sort();
+    for dir in dirs {
+        let entry = dir.join("serve.phg");
+        if !entry.is_file() {
+            continue;
+        }
+        found += 1;
+        let label = entry.display().to_string();
+        let unit = phorj::loader::load(&entry).unwrap_or_else(|e| panic!("load {label}: {e}"));
+        // `loader::load` does NOT inject preludes — `unit.program` still has no `Core.Http`, so a
+        // factory built from it dies with `undefined variable Http` at the `Http.serve` call. The
+        // expansion chokepoint is what every backend goes through (Invariant 5), and it is what
+        // `cli::treewalk_program` uses on the very same unit.
+        let expanded = phorj::cli::check_and_expand(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("{label}: must type-check: {e}"));
+
+        // 1. It registers — `web_interp_factory` runs the `Web` entry and TAKES the handler slot.
+        let fac = phorj::serve::web_interp_factory(Arc::new(expanded))
+            .unwrap_or_else(|e| panic!("{label}: web entry must register a handler: {e}"));
+
+        // 2. It actually answers a request, over the deterministic in-memory transport.
+        let mut fx =
+            FixtureTransport::new(vec![b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec()]);
+        serve(&fac, &mut fx, false).unwrap_or_else(|e| panic!("{label}: serve loop failed: {e}"));
+        assert_eq!(
+            fx.sent.len(),
+            1,
+            "{label}: exactly one response per request"
+        );
+        assert!(
+            fx.sent[0].starts_with(b"HTTP/1.1 "),
+            "{label}: response is not an HTTP/1.1 wire form: {:?}",
+            String::from_utf8_lossy(&fx.sent[0])
+                .chars()
+                .take(60)
+                .collect::<String>()
+        );
+
+        // 3. It is quarantined from the PHP leg — this is what lets the logic in `src/` keep ITS leg.
+        match phorj::cli::transpile_program(&unit.program, &unit.diag_src) {
+            Ok(_) => {
+                panic!("{label}: a file calling `Http.serve` must NOT transpile (Invariant 14)")
+            }
+            Err(e) => assert!(
+                e.to_string().contains("E-TRANSPILE-SERVE"),
+                "{label}: must be refused by the LADDER code, not incidentally: {e}"
+            ),
+        }
+    }
+    // Zero-denominator guard — if the layout changes and no serve.phg is found, fail loudly rather
+    // than pass over an empty set.
+    assert!(
+        found >= 3,
+        "expected the shipped serve demos under examples/web/*/serve.phg, found {found}"
+    );
 }
 
 /// A web entry that REGISTERS and then FAULTS must not poison the thread for the next program.
@@ -1068,8 +1180,14 @@ import Core.Abort.panic;
 /// it is the single most-read diagnostic of the whole retirement.
 #[test]
 fn a_legacy_request_response_web_entry_is_refused_with_the_migration_code() {
-    let prog = phorj::cli::parse_checked_program(HTTP_HANDLE_PROGRAM)
-        .expect("the legacy shape still CHECKS");
+    // DEC-455.12 (S3.3d): the CHECKER now rejects this shape (`E-ENTRY-SIG`, with a migration hint),
+    // so a real program can no longer reach the runtime check below — `parse_checked_program` would
+    // fail here, which is why the program is built UNCHECKED. The runtime check is kept as
+    // defence-in-depth and this test is what keeps it covered: an untested defensive branch is how a
+    // panic ships. The user-facing diagnostic of the retirement is now the checker's, asserted by
+    // `checker::tests::entry_point::web_entry_no_longer_accepts_the_legacy_request_response_shape`.
+    let prog =
+        phorj::cli::parse_program(HTTP_HANDLE_PROGRAM).expect("the legacy shape still PARSES");
     // `HandlerFactory` is a boxed `dyn Fn`, so it is not `Debug` and `expect_err` cannot be used.
     let msg = match phorj::serve::web_interp_factory(Arc::new(prog)) {
         Ok(_) => panic!("the retired `(Request): Response` web entry must not produce a factory"),

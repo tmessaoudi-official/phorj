@@ -1,0 +1,15 @@
+// The application itself, in its own package so BOTH entries can import it.
+//
+// `src/main.phg` (the CLI entry, PHP-gated) and `../serve.phg` (the Web entry, which calls
+// `Http.serve` and is therefore untranspilable) are separate compilation units — a package is how
+// they share code without sharing a unit. Nothing here knows it is being served.
+package Acme.Greeter;
+
+import Core.Http.Request;
+import Core.Http.Response;
+
+// The whole application: greet by path, echoing the Host header.
+function handle(Request req): Response {
+    string host = req.headers.get("Host") ?? "world";
+    return Response.text(200, "Hello {req.path} (host {host})");
+}
