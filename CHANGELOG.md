@@ -8,6 +8,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **S3.4 — the wrong verb now says so: `E-NO-ENTRY-FOR-ROLE` (DEC-331 D6, DEC-455.15).** `phg run` on
+  a program whose only entry is `#[Entry(kind: EntryKind.Web)]` — and `phg serve` on a
+  `kind: EntryKind.Cli` one — used to report a bare absence, in text identical to what a genuine
+  library is told, though the two fixes differ completely: a library needs an entry *written*, this
+  needs a different command *typed*. The new diagnostic names the missing role, the declared one, and
+  the verb that works; on an interactive terminal it then offers to run that verb, **defaulting to
+  NO**. A pipe or CI run gets the diagnostic, exit 1, and stdin is never read, so a script cannot hang
+  on a question nobody is there to answer. The offer is withheld where it could not be taken — `-e`
+  and stdin sources, and `phg serve <dir>` site mode, because `phg run` accepts neither a directory
+  nor inline source. Programs with *no* entry keep `no entry point` / `E-SERVE-NO-HANDLER`, and a
+  reserved kind keeps `E-ENTRY-KIND-RESERVED`: those are different diagnoses, not this one.
+  `phg explain E-NO-ENTRY-FOR-ROLE`, both `--help` texts and `examples/web/README.md` updated in the
+  same change. Accepting the offer runs the other verb exactly as if it had been typed: the run→serve
+  direction goes through the same preamble a real `phg serve` uses, and the serve→run direction is
+  decided BEFORE serve disables stdin — otherwise the switched program would have read an exhausted
+  pipe instead of the terminal.
+
+### Changed
+
+- **`src/main.rs` shrank from 622 to 496 lines and left `scripts/size-baseline.txt`** (Invariant 13,
+  the ratchet tightens): the 140-line `phg serve` argv branch — flag parsing, DEC-282 site-mode
+  resolution, the process preamble — moved to a new `src/cli/serve_cli.rs`, where it sits beside the
+  rest of the serve pipeline instead of inside a dispatcher. Behaviour is unchanged by the move
+  (verified by diffing the extracted body against the previous `main.rs`).
+
 - **S3.2 Part C — `Http.ServeConfig` now binds the socket; a flag that disagrees says so
   (DEC-455.14, developer-ruled).** Until this change the registered config was INERT:
   `serve_register::config()` carried `#[expect(dead_code)]` and had no caller, so

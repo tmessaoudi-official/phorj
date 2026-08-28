@@ -56,6 +56,14 @@ fn disabled() -> bool {
     STDIN_DISABLED.read().map(|g| *g).unwrap_or(false)
 }
 
+/// Read-only view of the flag above, for tests that assert the `phg serve` preamble sets it (S3.4's
+/// guard ordering depends on that being true, and on there being no inverse).
+#[cfg(test)]
+#[must_use]
+pub(crate) fn stdin_disabled() -> bool {
+    disabled()
+}
+
 /// Drain the remaining override bytes, or `None` when no override is active.
 fn override_read_all() -> Option<Vec<u8>> {
     let mut g = STDIN_OVERRIDE.write().ok()?;

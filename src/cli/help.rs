@@ -52,6 +52,8 @@ pub fn help_for(cmd: &str) -> String {
                   oracle — slow by design, byte-identical to the VM; for validation, not everyday use)\n  \
                   --no-jit        run on the pure VM without native codegen (JIT is on by default;\n                  \
                   byte-identical to the JIT — an escape hatch, no rebuild needed)\n\n\
+                  A program whose only entry is `#[Entry(kind: EntryKind.Web)]` is served, not run:\n\
+                  `phg run` reports E-NO-ENTRY-FOR-ROLE and, on a terminal, offers `phg serve <file>`.\n\n\
                   examples:\n  \
                   phg run hello.phg\n  \
                   phg run -e 'package Main; import Core.Output; function main(): void { Output.printLine(\"hi\"); }'\n  \
@@ -216,7 +218,10 @@ pub fn help_for(cmd: &str) -> String {
                     connection). A request fault degrades to a 500; a malformed request 400s. If\n\
                     nothing is registered, `phg serve` refuses at startup — see\n\
                     `phg explain E-SERVE-NO-HANDLER`, which also covers migrating a pre-DEC-331\n\
-                    `respond(bytes): bytes` or `handle(Request): Response` entry.\n\n\
+                    `respond(bytes): bytes` or `handle(Request): Response` entry. A program whose only\n\
+                    entry is `#[Entry(kind: EntryKind.Cli)]` is a different case — the verb, not the\n\
+                    program, is wrong: `phg serve` reports E-NO-ENTRY-FOR-ROLE and, on a terminal,\n\
+                    offers `phg run <file>` (never for a site directory, which `phg run` cannot take).\n\n\
                     Concurrency (--workers, M6 W3): each request is handled on its own worker thread\n\
                     with its own value heap (the Rc heap is never shared — values don't cross threads),\n\
                     so the server scales across CPU cores. Default = number of cores; --workers 1 is the\n\

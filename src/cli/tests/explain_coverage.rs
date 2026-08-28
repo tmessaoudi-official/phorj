@@ -202,3 +202,22 @@ fn explain_known_code_returns_paragraph_unknown_errors() {
     assert!(ok.len() > 40, "explanation too short: {ok}");
     assert!(cmd_explain("E-NOPE").is_err());
 }
+
+#[test]
+fn explain_covers_role_mismatch_code() {
+    // DEC-331 S3.4: the wrong-verb diagnostic self-documents via `phg explain`, and the message it
+    // renders points the reader there — a code with no entry fails `explain_ratchet` outright, so
+    // this asserts the CONTENT the reader actually needs rather than mere existence.
+    let body = explain_text(crate::cli::E_NO_ENTRY_FOR_ROLE).expect("E-NO-ENTRY-FOR-ROLE explains");
+    assert!(body.starts_with(crate::cli::E_NO_ENTRY_FOR_ROLE), "{body}");
+    for expected in ["phg run", "phg serve", "EntryKind.Cli", "EntryKind.Web"] {
+        assert!(
+            body.contains(expected),
+            "explain must name {expected}: {body}"
+        );
+    }
+    assert!(
+        body.contains("E-SERVE-NO-HANDLER") && body.contains("E-ENTRY-KIND-RESERVED"),
+        "and must distinguish itself from the two diagnoses it is NOT: {body}"
+    );
+}

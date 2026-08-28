@@ -243,6 +243,29 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              `function web(Http.ServeConfig cfg): void` is checked as `(): void`.\n\
              Adjust the signature to the declared kind's shape.\n"
         }
+        "E-NO-ENTRY-FOR-ROLE" => {
+            "E-NO-ENTRY-FOR-ROLE \u{2014} the verb does not match the entry the program declares.\n\n\
+             `phg run` runs the `#[Entry(kind: EntryKind.Cli)]` function; `phg serve` runs the\n\
+             `#[Entry(kind: EntryKind.Web)]` one (DEC-331 D1). This error means the program declares\n\
+             one of them and you asked for the other \u{2014} so the fix is almost always a different\n\
+             command, not a different program.\n\n\
+             \x20   phg run app.phg      # app.phg declares only kind: EntryKind.Web\n\
+             \x20   phg serve app.phg    # <- what you meant\n\n\
+             On a terminal, `phg` offers to run the other verb for you; the answer defaults to NO, and\n\
+             the prompt is skipped entirely when the session is not interactive \u{2014} the check is on\n\
+             STDIN and STDERR, the two streams the prompt uses, so a pipe or a CI run never blocks on\n\
+             a question nobody is there to answer. Redirecting only stdout\n\
+             (`phg run app.phg > out.txt` from a terminal) still prompts, which is correct: the\n\
+             conversation is with the terminal, not with the program's output. It is also skipped for `-e` and stdin sources, and for\n\
+             `phg serve <dir>`, because `phg run` takes neither a directory nor inline source \u{2014}\n\
+             the suggestion would name a command that cannot run.\n\n\
+             A program may declare BOTH kinds (at most one of each \u{2014} `E-DUPLICATE-ENTRY-KIND`),\n\
+             in which case both verbs work and this error cannot occur.\n\n\
+             NOT this error: a program with NO entry at all is a library. `phg run` reports `no entry\n\
+             point` and `phg serve` reports `E-SERVE-NO-HANDLER`, because there is no other verb to\n\
+             suggest. A `kind:` that is reserved-but-unbuilt (Desktop/Mobile/Worker/Embedded) declares\n\
+             no active role either and reports `E-ENTRY-KIND-RESERVED`.\n"
+        }
         "E-SERVE-NO-HANDLER" => {
             "E-SERVE-NO-HANDLER — `phg serve` found nothing registered to handle requests.\n\n\
              A web entry is a closure FACTORY: `#[Entry(kind: EntryKind.Web)] function web(): void`\n\

@@ -44,11 +44,17 @@
   `phorj.json` > attribute default) — its env/CLI tiers are RUNTIME reads inside a spine DEC-318 keeps
   pure, so for a `Cli` entry the PHP leg would have to read the same sources or Invariant 1 breaks, and an
   env-reading example is not a deterministic input (Invariant 10). That parity story needs a ruling.
-- **D5/D6/D7 (and the D2/D3 points folded into D1) — RULED, NOT BUILT** as of the 2026-07-25
-  verification: `respond` is still the live
-  `SERVE_ENTRY`, `E-NO-ENTRY-FOR-ROLE` has 0 src hits, and there is no `http-server-tls` feature.
+- **D5 — BUILT** (S3.3a–e, 2026-08-22/23): `Http.serve(cfg, handler)` is the only way to register a
+  handler; `respond`/`handle` and `SERVE_ENTRY` are deleted.
+- **D6 — BUILT** (S3.4, 2026-08-28): `E-NO-ENTRY-FOR-ROLE`, symmetric both directions, with the
+  TTY-guarded switch prompt and the non-TTY error. `src/cli/role_mismatch.rs`.
+- **D7 — RULED, NOT BUILT**: there is still no `http-server-tls` feature; inbound TLS is S3.5.
   See the DEC-331 register block (`docs/research/full-audit/raw/C-decisions.md`) — "LOCKED" there
   means ruled, not built.
+
+  > The 2026-07-25 verification line this replaced read *"D5/D6/D7 … `respond` is still the live
+  > `SERVE_ENTRY`, `E-NO-ENTRY-FOR-ROLE` has 0 src hits"*. Two thirds of it are now false; the third
+  > is still true and is what S3.5 closes.
 
 ## 1. Surface
 

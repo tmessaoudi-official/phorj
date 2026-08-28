@@ -199,8 +199,11 @@ Build cluster, in order (D10a):
   and the LSP now completes the INSTANCE members of every stdlib/prelude class. **S3.3 IS COMPLETE.**
   ✅ **S3.2 Part C SHIPPED 2026-08-23 (DEC-455.14, developer-ruled): the CLI flag wins LOUDLY** — the
   registered `ServeConfig` is the default source for `host`+`port`/`workers`/`timeout`, a passed flag
-  whose value differs overrides it with a `W-SERVE-CONFIG-OVERRIDDEN` line. What is left under this
-  bullet is **D7 inbound TLS**, still unbuilt (`cert`/`key`/`tlsMinVersion` have no reader).
+  whose value differs overrides it with a `W-SERVE-CONFIG-OVERRIDDEN` line.
+  ✅ **S3.4 SHIPPED 2026-08-28 (DEC-455.15): role-mismatch UX** — `E-NO-ENTRY-FOR-ROLE`, symmetric
+  both directions, with the TTY-guarded *"Did you mean `phg serve <file>`?"* switch and a non-TTY
+  error that never reads stdin. What is left under this bullet is **D7 inbound TLS** (S3.5), still
+  unbuilt (`cert`/`key`/`tlsMinVersion` have no reader) — the LAST item of DEC-331 Slice 3.
   Cursor in SLICE-STATE**).
 - **Separate QUEUED design slices (specs frozen, same wave + DEC-335):** labeled
   `break`/`continue` (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self`

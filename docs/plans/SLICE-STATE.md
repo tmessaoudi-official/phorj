@@ -1,6 +1,52 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-08-23) — **S3.2 Part C SHIPPED. `ServeConfig` finally binds the socket.**
+## ▶ CURRENT CURSOR (2026-08-28) — **S3.4 SHIPPED. The wrong verb now says so.**
+
+**DEC-331 D6 built: `E-NO-ENTRY-FOR-ROLE`, symmetric.** `phg run` on a program whose only entry is
+`kind: EntryKind.Web` — and `phg serve` on a `kind: EntryKind.Cli` one — no longer reports a bare
+absence. It names the role that is missing, the role that IS declared, and the verb that would have
+worked; on an interactive terminal it then offers to run that verb, defaulting to NO.
+
+**`src/cli/role_mismatch.rs` is the whole rule, and it is pure.** TTY-ness and the answer are the
+caller's, the way `serve::settings::resolve` takes its `cores` — so the ruling is exercised by the
+suite rather than by a human at a prompt.
+
+**Four things that will bite whoever touches this next:**
+- **The guard is at each RUN VERB, not at a chokepoint, and that is deliberate.** The obvious shared
+  steps — `parse_checked`, `check_and_expand{,_reified}` — are also `check`'s, `transpile`'s and
+  `benchmark`'s, where a web-only program is perfectly legal. `pipeline::run_guard` is called from the
+  nine run paths; `prepare_serve` carries the Web half.
+- **It runs BEFORE the check.** A program that is both role-mismatched and type-broken reports the
+  mismatch: the verb is wrong regardless, and the user was not trying to run this program at all.
+  Pinned by `the_role_mismatch_is_reported_before_type_errors`.
+- **`detect` fires only when the OTHER role is present.** A program with neither role is a library and
+  keeps `no entry point` / `E-SERVE-NO-HANDLER`; a reserved kind (`Desktop`…) declares no active role
+  and keeps `E-ENTRY-KIND-RESERVED`. Both pinned — the second only because `entry_declared_role` is
+  `Active`-only, which a later widening could silently undo.
+- **The prompt shows exactly what it runs**, so accepting goes through `cli::serve_with_defaults` →
+  the SHARED `serve_preamble`. A hand-assembled preamble at the switch site would silently inherit
+  `phg run`'s `Dev` profile and serve stack traces from a command typed as `serve`.
+- **The serve→run direction is fixed by ORDERING, and it has to be.** `serve_preamble` disables stdin
+  process-wide and `src/native/input.rs` has NO inverse, so a switch taken after it would run a CLI
+  program with stdin dead. `serve_cli` therefore runs the role guard BEFORE any serve setup;
+  `prepare_serve` keeps its own guard as the invariant for other callers, which is why that one never
+  fires on this path. Do not "simplify" by deleting either.
+
+`main.rs` fell from 622 to 496 lines and **left `scripts/size-baseline.txt` entirely** (the ratchet
+tightens): the 140-line `serve` argv branch moved to `src/cli/serve_cli.rs`, which is where the
+switch's sibling wiring belongs anyway.
+
+**[Certified by execution both ways on a real pty]** — `n`, bare Enter, `y`→serve (which bound the
+program's own `ServeConfig` port, not 8080), and `y`→run. Non-TTY never reads stdin. Sabotage-verified
+twice: no-op'ing `run_guard` and deleting the `prepare_serve` guard each turn the suite red; restore
+verified byte-for-byte by checksum.
+
+**Next: S3.5** — inbound TLS via rustls, feature-gated `http-server-tls`. It is the last of DEC-331
+Slice 3.
+
+---
+
+## CURSOR (2026-08-23) — **S3.2 Part C SHIPPED. `ServeConfig` finally binds the socket.** ⚠ SUPERSEDED by the cursor above
 
 **DEC-455.14 — developer-ruled: the CLI flag wins, but LOUDLY.** Until this slice the registered
 config was INERT: `serve_register::config()` carried `#[expect(dead_code)]` and had no caller, so
@@ -34,7 +80,7 @@ against a stub reproducing the ignore-the-config behaviour, sabotage-verified tw
 **[Verified end-to-end on a real socket both ways.]** `src/cli/serve_pipeline.rs` was split out
 because the wiring pushed grandfathered `pipeline.rs` past its size-baseline row.
 
-**Next: S3.4.**
+**Next: S3.4.** *(Done — 2026-08-28, see the current cursor.)*
 
 ---
 

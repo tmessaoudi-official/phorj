@@ -1,5 +1,41 @@
 # Known Issues & Limitations
 
+## TEST-RAW-CHECKER — `phg test` checks the RAW program, so any injected-prelude symbol is a spurious `E-UNKNOWN-IDENT` (PRE-EXISTING, surfaced 2026-08-28 during S3.4)
+
+**Not caused by S3.4** — recorded because it was found there. `phg test <file>` runs a `<check>`
+pseudo-test that calls `crate::checker::check_tests(&unit.program)` directly
+(`src/cli/test_runner.rs:90`). That is the RAW checker: no prelude injection, no intrinsic/variant
+import resolution, no DI/Db desugar. Every symbol that exists only in an injected prelude is therefore
+unknown to it.
+
+```console
+$ phg test web_only.phg          # a file that `phg run` and `phg check` both accept
+web_only.phg :: <check> ... FAILED
+    type error at 12:3: unknown identifier `Http`                     [E-UNKNOWN-IDENT]
+    type error at 12:14: unknown function `ServeConfig`
+    type error at 12:14: `new` is only for constructing a class or enum variant
+    type error at 12:30: a named argument (`name: value`) is only allowed in a call's argument list
+```
+
+[Verified 2026-08-28: identical output from `target/release/phg` built at `6145a64d`, i.e. before the
+S3.4 change — this predates it.]
+
+**This is exactly the hole DEC-252 closed for the LSP and left open here.** That row's own words:
+the old direct `checker::check` call "produced a wall of spurious `E-UNKNOWN-IDENT`s on injected-type
+programs". `src/lsp/mod.rs:534` was routed through `cli::front_end_diagnostics`; `phg test` was not,
+so `phg check` ≡ LSP holds while `phg check` ≢ `phg test`.
+
+**Blast radius is wider than `Core.Http`**: any program importing an injected module — `Core.Http`,
+`Core.Database`, `Core.Secret`, `Core.DI`'s `inject<T>()`, `Core.Runtime.EntryKind` — cannot be
+`phg test`ed at all, and the failure is reported as the user's type error rather than as a tooling
+gap. Note the cascade in the sample above: three of the four messages are consequences of the first,
+so the output badly misdirects.
+
+**The fix looks small but is not obviously a one-liner**: `check_tests` allows `test` items, which
+`check_and_expand`'s path does not, so routing through the front end needs the test-mode flag threaded
+rather than the call simply swapped. Sizing it — and whether the same raw-checker call appears
+elsewhere — is its own slice.
+
 ## TRANSPILE-NS-REFLECT-TABLES — the two `get_class()`-keyed helper tables are UNGATED on the namespaced path (found 2026-08-23, DEC-455.11)
 
 **Severity: unknown, and that is the issue.** `__phorj_reflect_of` (`Core.Reflect`) and

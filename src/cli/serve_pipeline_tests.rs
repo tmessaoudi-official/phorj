@@ -96,3 +96,80 @@ fn a_program_that_registers_nothing_keeps_the_cli_defaults() {
         "want the startup refusal, got: {err}"
     );
 }
+
+#[test]
+fn serve_on_a_cli_only_program_names_the_mismatch_and_the_run_verb() {
+    // DEC-331 S3.4 (spec D6), the wiring pin for the serve half. `prepare_serve` — not `main.rs` —
+    // is where the guard lives, precisely so this test can go red when it is removed.
+    let cli_only = crate::cli::parse_program(
+        "package Main;\n\
+         import Core.Runtime.Entry;\n\
+         import Core.Runtime.EntryKind;\n\
+         #[Entry(kind: EntryKind.Cli)]\n\
+         function main(): void { }\n",
+    )
+    .expect("the fixture parses");
+    // `.err()`, not `.unwrap_err()`: the Ok type is a boxed handler factory and is not `Debug`.
+    let err = prepare_serve(&cli_only, "", &ServeFlags::default(), true)
+        .err()
+        .expect("a CLI-only program cannot be served");
+    assert!(
+        err.contains(crate::cli::E_NO_ENTRY_FOR_ROLE),
+        "the wrong verb must be named as such: {err}"
+    );
+    assert!(err.contains("phg run"), "and the verb that works: {err}");
+    assert!(
+        !err.contains("E-SERVE-NO-HANDLER"),
+        "a CLI program is NOT an unservable web program — that diagnosis sends the user to rewrite \
+         a program that was already correct: {err}"
+    );
+}
+
+#[test]
+fn serve_on_a_library_still_reports_no_handler() {
+    // The other side of the same coin: a program with NEITHER role is not a wrong-verb mistake, so
+    // `E-SERVE-NO-HANDLER` must survive S3.4 intact.
+    let lib =
+        crate::cli::parse_program("package Main;\nfunction helper(int n): int { return n + 1; }\n")
+            .expect("the fixture parses");
+    let err = prepare_serve(&lib, "", &ServeFlags::default(), true)
+        .err()
+        .expect("a library has nothing to serve");
+    assert!(err.contains("E-SERVE-NO-HANDLER"), "{err}");
+    assert!(
+        !err.contains(crate::cli::E_NO_ENTRY_FOR_ROLE),
+        "a library declares no role at all, so there is no mismatch: {err}"
+    );
+}
+
+#[test]
+fn serve_preamble_disables_stdin_which_is_why_the_role_guard_must_run_first() {
+    // S3.4 ordering pin. `serve_cli` runs the role guard BEFORE `serve_preamble`, and the reason is
+    // this assertion: the preamble disables stdin process-wide and `src/native/input.rs` offers NO
+    // inverse, so a serve->run switch taken afterwards would run the user's CLI program with stdin
+    // already dead — `Input.readLine()` returning null instead of the line they typed. That is not
+    // what `phg run <file>` does, which breaks the very "what is displayed is what runs" promise the
+    // preamble exists to keep in the other direction.
+    //
+    // If someone later hoists `serve_preamble` above the guard, this test still passes — it cannot
+    // see call order. What it protects is the PREMISE: the day `set_stdin_disabled` stops being
+    // one-way (or the preamble stops setting it), the comment justifying the ordering becomes false
+    // and this goes red, which is the moment to revisit it.
+    //
+    // Safe as a process global: no other lib test executes a stdin read (verified by grep), and
+    // nextest runs one process per test anyway.
+    assert!(
+        !crate::native::stdin_disabled(),
+        "precondition: nothing has disabled stdin yet in this test process"
+    );
+    let profile = crate::cli::serve_preamble(false);
+    assert!(
+        crate::native::stdin_disabled(),
+        "serve disables stdin (DEC-281) — the fact the S3.4 guard ordering depends on"
+    );
+    assert_eq!(
+        profile,
+        crate::profile::Profile::Release,
+        "and a serve with no --dev is Release, not the Dev a `phg run` would have left set"
+    );
+}

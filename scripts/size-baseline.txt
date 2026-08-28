@@ -34,7 +34,6 @@
 699	src/loader/resolve.rs
 667	src/loader/tests.rs
 710	src/lsp/mod.rs
-622	src/main.rs
 656	src/native/list.rs
 754	src/native/list_registry.rs
 740	src/native/list_tests.rs

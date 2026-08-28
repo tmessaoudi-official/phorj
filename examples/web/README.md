@@ -163,6 +163,52 @@ quarantine): `every_example_serve_phg_registers_serves_and_is_transpile_quaranti
 shipped `serve.phg`, drives one real request through the serve loop, and asserts `phg transpile`
 refuses it with `E-TRANSPILE-SERVE`.
 
+## Wrong verb — `E-NO-ENTRY-FOR-ROLE` (DEC-331 S3.4)
+
+`phg run` runs the `#[Entry(kind: EntryKind.Cli)]` function; `phg serve` runs the
+`#[Entry(kind: EntryKind.Web)]` one. Every example in this directory declares only the web entry, so
+running one is a mistake the tooling names rather than a puzzle:
+
+```console
+$ phg run serve.phg
+E-NO-ENTRY-FOR-ROLE: `phg run` needs an `#[Entry(kind: EntryKind.Cli)]` function, but this program
+declares an `#[Entry(kind: EntryKind.Web)]` web entry and no command-line one. The verb is the
+mismatch, not the program — serve it with `phg serve`, or add a command-line entry.
+(`phg explain E-NO-ENTRY-FOR-ROLE`)
+Did you mean `phg serve serve.phg`? [y/N]
+```
+
+This is a **fault, not a runnable example** — Invariant 9's own carve-out — so it is captured here
+rather than as a `.phg` under `examples/`.
+
+Four properties worth knowing, each of them pinned by a test rather than by this paragraph:
+
+- **It is symmetric.** `phg serve` on a program whose only entry is `kind: EntryKind.Cli` reports the
+  same code and offers `phg run` instead.
+- **The prompt defaults to NO.** A bare Enter declines; only `y`/`yes` accepts. Accepting runs the
+  user's program, so an ambiguous answer never does.
+- **A pipe is never asked.** When stdin or stderr is not a terminal — CI, a pipe, a test harness —
+  the diagnostic is printed, the exit status is 1, and stdin is never read. A script cannot hang on a
+  question nobody is there to answer.
+- **What is displayed is what runs.** The prompt offers `phg serve <file>` with no flags, so accepting
+  binds exactly what a bare `phg serve <file>` binds — including the program's own `ServeConfig`
+  (DEC-455.14), so a program that registers `port: 42911` is served on 42911, not on 8080. (Note
+  `serve_config.phg` in this directory cannot demonstrate that: it documents the config surface
+  without calling `Http.serve`, deliberately, so that it keeps a PHP leg — a file that calls
+  `Http.serve` is refused by `phg transpile` with `E-TRANSPILE-SERVE`.)
+
+Three cases that are deliberately NOT this error, because their fix is different:
+
+| case | what you get instead | why |
+|---|---|---|
+| no `#[Entry]` at all | `no entry point` (run) / `E-SERVE-NO-HANDLER` (serve) | a library, not a wrong verb — there is no other command to suggest |
+| a `Web` entry that never calls `Http.serve` | `E-SERVE-NO-HANDLER` | the verb was right; the entry registered nothing |
+| `kind: Desktop`/`Mobile`/`Worker`/`Embedded` | `E-ENTRY-KIND-RESERVED` | a reserved kind declares no active role, so neither verb applies |
+
+The prompt is also skipped — diagnostic only — for `-e` and stdin sources, and for `phg serve <dir>`
+site mode: `phg run` takes neither a directory nor inline source, so naming one back would offer a
+command that cannot run.
+
 ## Run it on PHP — `php -S`
 
 The same program transpiles to idiomatic PHP. `server.php` is a hand-written front-controller (the

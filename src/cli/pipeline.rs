@@ -360,10 +360,35 @@ pub fn check_and_expand_for_debug(prog: &Program, diag_src: &str) -> Result<Prog
     Ok(checked)
 }
 
+/// The S3.4 role guard for every `phg run` path (DEC-331 D6): refuse a program that declares only a
+/// `Web` entry before the checker runs, naming the verb that would have worked.
+///
+/// **Why this is called at each run entry point rather than at one chokepoint.** The nine run paths
+/// (string/`Unit` × plain/`_exit` × interp/VM, plus the two `cmd_*_exit`) share no single step before
+/// the checker: `cmd_treewalk` parses-and-checks in one call, `cmd_run` parses then checks, and the
+/// `Unit` paths arrive already parsed. The obvious chokepoints — `parse_checked`,
+/// `check_and_expand{,_reified}` — are shared with `check`, `transpile` and `benchmark`, where a
+/// web-only program is perfectly legal and must NOT be refused. Guarding at the verb boundary is what
+/// keeps the refusal scoped to running.
+///
+/// The guard runs BEFORE the check (plan §3, ruled 2026-08-28): a program that is both role-mismatched
+/// and type-broken reports the mismatch, because the verb is wrong regardless of the type errors and
+/// the user was not trying to run this program at all.
+fn run_guard(prog: &Program) -> Result<(), String> {
+    crate::cli::role_mismatch::guard(prog, crate::ast::EntryRole::Cli)
+}
+
+/// [`parse_checked`] for the run verbs: parse, apply [`run_guard`], then check.
+fn parse_checked_for_run(src: &str) -> Result<Program, String> {
+    let prog = lex_parse(src)?;
+    run_guard(&prog)?;
+    check_and_expand(&prog, src)
+}
+
 pub fn cmd_treewalk(src: &str) -> Result<String, String> {
     crate::native::log::reset_channels();
     on_deep_stack(|| {
-        let prog = parse_checked(src)?;
+        let prog = parse_checked_for_run(src)?;
         foreign_runtime_gate(&prog)?;
         // S4.3 cutover: a program that uses `spawn` runs on the cooperative green-thread driver (real
         // task interleaving); every other program stays on the unchanged synchronous interpreter. wasm
@@ -408,6 +433,7 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
     crate::native::log::reset_channels();
     on_deep_stack(|| {
         let parsed = lex_parse(src)?;
+        run_guard(&parsed)?;
         let (prog, reified) = check_and_expand_reified(&parsed, src)?;
         foreign_runtime_gate(&prog)?;
         let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
@@ -425,7 +451,7 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
 /// (`-e`/stdin and standalone built binaries); the project-loader path is [`treewalk_program_exit`].
 pub fn cmd_treewalk_exit(src: &str) -> Result<(String, i64), String> {
     on_deep_stack(|| {
-        let prog = parse_checked(src)?;
+        let prog = parse_checked_for_run(src)?;
         foreign_runtime_gate(&prog)?;
         #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
         if crate::ast::uses_concurrency(&prog) {
@@ -439,6 +465,7 @@ pub fn cmd_treewalk_exit(src: &str) -> Result<(String, i64), String> {
 pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let parsed = lex_parse(src)?;
+        run_guard(&parsed)?;
         let (prog, reified) = check_and_expand_reified(&parsed, src)?;
         foreign_runtime_gate(&prog)?;
         let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
@@ -469,6 +496,7 @@ pub fn cmd_check(src: &str) -> Result<String, String> {
 /// caret is drawn against the innermost frame's source (project mode) or the single `diag_src` (loose).
 pub fn treewalk_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
+        run_guard(&unit.program)?;
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
         #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
@@ -490,6 +518,7 @@ pub fn treewalk_program(unit: &crate::loader::Unit) -> Result<String, String> {
 /// The VM leg on a loaded [`Unit`] (bytecode + VM backend). Same trace rendering as [`treewalk_program`].
 pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
+        run_guard(&unit.program)?;
         let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
         let program = compile_with(&checked, &reified).map_err(|e| e.to_string())?;
@@ -513,6 +542,7 @@ pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
 /// to set the process exit status; the stdout-only [`treewalk_program`] stays for the differential.
 pub fn treewalk_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
     on_deep_stack(|| {
+        run_guard(&unit.program)?;
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
         #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
@@ -532,6 +562,7 @@ pub fn treewalk_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64)
 /// Like [`run_program`], but also returns `main`'s exit code (Batch-1 B).
 pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
     on_deep_stack(|| {
+        run_guard(&unit.program)?;
         let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
         let program = compile_with(&checked, &reified).map_err(|e| e.to_string())?;

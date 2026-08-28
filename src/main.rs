@@ -324,143 +324,10 @@ fn main() {
     }
     // `serve <file> [--address ADDR]` runs the blocking HTTP server (project-aware load; the
     // program's `Web` entry registers a handler via `Http.serve`; runs until killed; default
-    // 127.0.0.1:8080).
+    // 127.0.0.1:8080). The branch itself lives in `cli::serve_cli` (Invariant 13) — 140 lines of
+    // flag parsing and site-mode resolution belong with the serve pipeline, not in a dispatcher.
     if cmd == "serve" {
-        let mut file: Option<&str> = None;
-        // S3.2 Part C (DEC-455.14): these stay `None` until a flag is actually PASSED. The whole
-        // precedence rule turns on that distinction — pre-defaulting them here would make every run
-        // look like an explicit override of the program's own `ServeConfig`. Defaults live in
-        // `serve::settings` and are applied there, once, alongside the config.
-        let mut addr: Option<String> = None;
-        // Per-connection read/write timeout (GA blocker B4): default 30s; `--timeout 0` disables it.
-        let mut timeout_secs: Option<u64> = None;
-        // `--dev` opts into the rich HTML error page on an uncaught handler fault. OFF by default:
-        // production must never leak a stack trace / source (a security rule) — it returns a bare 500.
-        let mut dev = false;
-        // `--workers N` request concurrency (M6 W3). 0 (the sentinel) = auto = CPU cores; 1 = the
-        // single-threaded path. Resolved after parsing.
-        let mut workers: Option<usize> = None;
-        // `--tree-walker` serves on the interpreter oracle instead of the (default) VM — mirrors
-        // `phg run --tree-walker`. The VM is faster (measured ~2.3× lower latency) and
-        // byte-identical.
-        let mut tree_walker = false;
-        let mut i = 2;
-        while i < args.len() {
-            match args[i].as_str() {
-                // `--addr` is a deprecated alias for `--address` (DEC-276 earned-shortcut rule:
-                // word truncations are not earned), silently accepted — remove in a future version.
-                "--address" | "--addr" => {
-                    addr = Some(args.get(i + 1).cloned().unwrap_or_else(|| {
-                        usage_exit();
-                    }));
-                    i += 2;
-                }
-                "--timeout" => {
-                    timeout_secs = Some(
-                        args.get(i + 1)
-                            .and_then(|s| s.parse::<u64>().ok())
-                            .unwrap_or_else(|| {
-                                eprintln!("phg serve: --timeout expects a whole number of seconds");
-                                exit(2);
-                            }),
-                    );
-                    i += 2;
-                }
-                "--dev" => {
-                    dev = true;
-                    i += 1;
-                }
-                "--tree-walker" => {
-                    tree_walker = true;
-                    i += 1;
-                }
-                "--workers" => {
-                    workers = Some(
-                        args.get(i + 1)
-                            .and_then(|s| s.parse::<usize>().ok())
-                            .filter(|n| *n >= 1)
-                            .unwrap_or_else(|| {
-                                eprintln!("phg serve: --workers expects a positive whole number");
-                                exit(2);
-                            }),
-                    );
-                    i += 2;
-                }
-                a if !a.starts_with('-') && file.is_none() => {
-                    file = Some(a);
-                    i += 1;
-                }
-                _ => {
-                    usage_exit();
-                }
-            }
-        }
-        let file = file.unwrap_or_else(|| {
-            eprintln!(
-                "usage: phg serve <file | site-dir> [--address 127.0.0.1:8080] [--timeout 30] [--workers N] [--tree-walker]"
-            );
-            exit(2);
-        });
-        // DEC-282 site mode: `phg serve <DIR>` — DIR is the explicit app root; docroot = DIR/public
-        // (the ONLY web surface; static assets served with guards, .phg source never), entry =
-        // DIR/public/index.phg. A file argument keeps today's handler-only mode (no docroot).
-        let mut entry_path = std::path::PathBuf::from(file);
-        if entry_path.is_dir() {
-            match phorj::serve::resolve_site_dir(&entry_path) {
-                Ok((docroot, entry)) => {
-                    phorj::serve::set_docroot(docroot);
-                    entry_path = entry;
-                }
-                Err(err) => {
-                    eprintln!("{err}");
-                    exit(2);
-                }
-            }
-        }
-        let file: &str = entry_path.to_string_lossy().into_owned().leak();
-        // DEC-281: web input is the `Request` — a worker blocking on the terminal's stdin would
-        // hang the server, so `Core.Input` reads behave as an exhausted pipe under serve.
-        phorj::native::set_stdin_disabled();
-        // The worker count, the address and the timeout are all resolved in ONE place —
-        // `serve::settings::resolve` — because each of them now has two possible sources (this flag
-        // and the program's registered `ServeConfig`) and the precedence between them is a ruled
-        // rule, not three independent `unwrap_or`s scattered across the argument parser.
-        let serve_flags = phorj::serve::ServeFlags {
-            addr,
-            timeout_secs,
-            workers,
-        };
-        let unit = match loader::load(std::path::Path::new(file)) {
-            Ok(u) => u,
-            Err(err) => {
-                eprintln!("{err}");
-                exit(1);
-            }
-        };
-        // M-DX S0: `--dev` selects the Dev profile (rich fault pages); the default is the secure
-        // Release profile (bare 500, no trace/source leak). Set it as the process profile too.
-        let profile = if dev {
-            phorj::profile::Profile::Dev
-        } else {
-            phorj::profile::Profile::Release
-        };
-        phorj::profile::set_active(profile);
-        match cli::serve_program(
-            &unit.program,
-            &unit.diag_src,
-            &serve_flags,
-            profile,
-            tree_walker,
-        ) {
-            Ok(text) => {
-                print!("{text}");
-                return;
-            }
-            Err(err) => {
-                eprintln!("{err}");
-                exit(1);
-            }
-        }
+        cli::serve_main(&args, usage_exit);
     }
     // `bench` accepts an optional `--vs-php` flag (transpile + median-time the PHP backend too).
     // Strip it before source resolution so it isn't mistaken for a file/flag.
@@ -509,6 +376,8 @@ fn main() {
             phorj::profile::set_active(phorj::profile::Profile::Dev);
             phorj::dump::set_enabled(dump_on_fault);
         }
+        // S3.4: captured before `spec` is consumed below; `None` for stdin/`-e` (unservable sources).
+        let switch_target = cli::role_mismatch::prompt_target(&spec);
         let unit = match spec {
             cli::SourceSpec::File(path) => loader::load(std::path::Path::new(&path)),
             cli::SourceSpec::Stdin => loader::load_loose_src(&read_stdin()),
@@ -537,7 +406,24 @@ fn main() {
                 }
                 Err(err) => {
                     eprintln!("{err}");
-                    exit(1);
+                    // S3.4/D6, the run->serve half; silent unless a role mismatch on a nameable file
+                    // was offered on an interactive terminal and accepted.
+                    match cli::role_mismatch::switch_run_to_serve(
+                        &err,
+                        switch_target.as_deref(),
+                        &unit,
+                        tree_walker,
+                    ) {
+                        Some(Ok(text)) => {
+                            print!("{text}");
+                            return;
+                        }
+                        Some(Err(e)) => {
+                            eprintln!("{e}");
+                            exit(1);
+                        }
+                        None => exit(1),
+                    }
                 }
             }
         }
