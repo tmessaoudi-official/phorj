@@ -27,11 +27,15 @@
 //! NO VALIDATION HERE, deliberately. D4 specifies the FIELD SET and the DEFAULTS; it does not specify
 //! constructor guards, and the values are not consumed until `Http.serve` lands in S3.3. Two checks
 //! belong there rather than here, because that is where the decision is actually made:
-//!   * `cert`/`key` one-without-the-other. D7 says HTTPS auto-enables "iff BOTH are set", so a lone
-//!     `cert` would silently serve plain HTTP — a security footgun of exactly the shape DEC-363 was
-//!     written about. Rejecting it is the reading this repo's posture implies, but the spec is
-//!     genuinely ambiguous, so it is surfaced for a ruling with S3.3 rather than decided here.
-//!   * `port` / `maxBodySize` / `timeout` ranges, and `tlsMinVersion` ∈ {"1.2","1.3"}.
+//!   * `cert`/`key` one-without-the-other — **RESOLVED in S3.5 the way this note predicted**, in
+//!     `src/serve/tls.rs`: a lone `cert` is `E-SERVE-TLS-INCOMPLETE`, not a quiet fall back to plain
+//!     HTTP. The spec's literal "iff BOTH are set" would have made it the footgun DEC-363 was written
+//!     about, so the refusal is the ruling. `tlsMinVersion` ∈ {"1.2","1.3"} is checked there too
+//!     (`E-SERVE-TLS-MIN-VERSION`), and only when TLS is actually requested — the field has a
+//!     non-null class default, so validating it unconditionally would let a typo in an unused field
+//!     refuse a plain-HTTP server.
+//!   * `port` / `maxBodySize` / `timeout` ranges — still unvalidated
+//!     (KNOWN_ISSUES §SERVE-CONFIG-PROVENANCE).
 //!
 //! A guard added here would also have to raise through a native (the `HeaderSafety.reject` →
 //! `NativeHttp.headerFault` route), which is a larger surface than this fragment needs.

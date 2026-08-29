@@ -1,6 +1,53 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-08-28) — **S3.4 SHIPPED. The wrong verb now says so.**
+## ▶ CURRENT CURSOR (2026-08-29) — **S3.5 SHIPPED. DEC-331 SLICE 3 IS CLOSED.**
+
+**DEC-331 D7 built: `phg serve` terminates TLS**, feature-gated `http-server-tls`. HTTPS enables iff
+BOTH `cert` and `key` are set on the registered `ServeConfig` — no `--tls` flag, no switch;
+`tlsMinVersion` (`"1.2"` default, `"1.3"`) is the floor. **All five of Slice 3 are now built**
+(D1/D4/D5/D6/D7).
+
+**It added NO crate.** rustls 0.23 has no client/server feature split, so the outbound HTTP client's
+existing feature set already compiled `ServerConfig`/`ServerConnection`/`StreamOwned`. PEM decoding is
+hand-rolled (`src/serve/pem.rs`, ~85 lines) rather than admitting a fifteenth dependency. If someone
+later proposes a PEM crate: the decoder is tested to yield FEWER blocks on malformed input, never a
+wrong one, which is the only property `tls::build` relies on.
+
+**Six things that will bite whoever touches this next:**
+- **A lone `cert` is an ERROR, not plain HTTP.** D7's surface says "iff BOTH are set", and the literal
+  reading is a silent downgrade to clear text on a port the operator believes is encrypted. The
+  refusal is the ruling (`E-SERVE-TLS-INCOMPLETE`); do not "fix" it back toward the spec text.
+- **`TlsServer` is an UNINHABITED enum without the feature** — not a struct that is never built. That
+  is what makes "a non-TLS build cannot serve a TLS-configured program in the clear" a fact about the
+  types; `Conn::accept` discharges the branch with `match *never {}`. Turning it into a struct would
+  silently delete the guarantee while every test still passed.
+- **Config errors outrank build errors**, pinned by a test: a lone `cert` on a feature-off build
+  reports `-INCOMPLETE`, not `-DISABLED`, because the config is wrong however phg was compiled.
+- **The stream is wrapped only AFTER blocking mode + timeouts are set on the raw `TcpStream`.** rustls
+  fails outright on a non-blocking socket, and running the handshake through those same timeouts is
+  what bounds a TLS-level slowloris. Both accept paths already did this; do not hoist the wrap.
+- **The handshake happens in the WORKER, never the accept loop.** `StreamOwned` drives it on first
+  read, so a stalled client cannot serialize `accept()` and starve the pool.
+- **TLS is read directly from the config, NOT through `settings::resolve`.** That function is the
+  flag-vs-config PRECEDENCE rule and D7 rules there is no TLS flag — one source, no precedence. It
+  would also give `ServeSettings` (which derives `PartialEq, Eq`) a field whose type has neither.
+
+`src/serve/transport.rs` fell 635 → 455 lines and **left `scripts/size-baseline.txt`** (the ratchet
+tightens): the wire framing moved to `src/serve/framing.rs`, which is where it belonged — every
+function there is generic over `Read` or pure over `&[u8]`.
+
+**Deferred BY RULING, not oversight** (KNOWN_ISSUES §SERVE-TLS): HTTP→HTTPS redirect, HSTS,
+certificate hot-reload, mTLS. Cert paths resolve against the process cwd, not the site-mode app root;
+passphrase-protected keys are not supported.
+
+**Next: DEC-331 is done — the queue is open.** Two items are carried OWED and are the natural
+candidates: the **G-8 microbench ratchet** (skipped since S3.4; needs a quiet box) and
+**KNOWN_ISSUES §TEST-RAW-CHECKER** (`phg test` checks the raw program, so injected-prelude symbols
+are spurious `E-UNKNOWN-IDENT` — the hole DEC-252 closed for the LSP).
+
+---
+
+## CURSOR (2026-08-28) — **S3.4 SHIPPED. The wrong verb now says so.**
 
 **DEC-331 D6 built: `E-NO-ENTRY-FOR-ROLE`, symmetric.** `phg run` on a program whose only entry is
 `kind: EntryKind.Web` — and `phg serve` on a `kind: EntryKind.Cli` one — no longer reports a bare

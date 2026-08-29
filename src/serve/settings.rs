@@ -7,12 +7,19 @@
 //! already writes (CLI > env > `#[Config]` > `phorj.json` > attribute default) *and* the repo's
 //! no-silent-winner posture: the override still works, it just cannot be invisible.
 //!
-//! **Only FOUR fields are resolved here, and that is the whole surface the serve loop binds:**
-//! `host`+`port` (one address), `workers`, `timeout`. The rest of D4's field set is consumed by
-//! nobody today and is deliberately NOT wired in this slice — `cert`/`key`/`tlsMinVersion` belong to
-//! D7 (inbound TLS is unbuilt; `rustls` is linked only by the outbound http-client),
-//! `maxBodySize` belongs to the wire parser in `Core.Native.Http`, and `serverName` has no consumer
-//! at all. Wiring a field whose reader does not exist would be a config that still does nothing.
+//! **Only FOUR fields are resolved here, and that is the whole surface this function binds:**
+//! `host`+`port` (one address), `workers`, `timeout`.
+//!
+//! **`cert`/`key`/`tlsMinVersion` are read, but NOT here** (S3.5, D7). They go through
+//! `serve::tls::requested` in `prepare_serve` instead, for a reason worth stating so nobody
+//! "unifies" the two later: this function is the flag-vs-config PRECEDENCE rule, and D7 rules that
+//! TLS has no CLI flag at all. With only one source there is no precedence to resolve, and threading
+//! TLS through here would invent a conflict that cannot occur — while giving `ServeSettings` a field
+//! whose type (`rustls::ServerConfig`) has neither `PartialEq` nor `Eq`.
+//!
+//! Still consumed by nobody, and still deliberately unwired: `maxBodySize` belongs to the wire parser
+//! in `Core.Native.Http`, and `serverName` has no consumer at all. Wiring a field whose reader does
+//! not exist would be a config that still does nothing.
 //!
 //! ## Provenance is approximated by VALUE, and that is a real limitation
 //!

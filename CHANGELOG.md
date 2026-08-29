@@ -8,6 +8,61 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **S3.5 — `phg serve` speaks HTTPS, and refuses rather than falls back (DEC-331 D7).** Inbound TLS,
+  feature-gated `http-server-tls`. HTTPS enables **iff both `cert` and `key`** are set on the
+  registered `ServeConfig` — no `--tls` flag, no switch; `tlsMinVersion` (`"1.2"` default, or
+  `"1.3"`) is the floor. **This closes DEC-331 Slice 3** (D1/D4/D5/D6/D7 all built).
+
+  **No new crate.** rustls 0.23 has no client/server feature split, so the outbound HTTP client's
+  existing feature set already compiled `ServerConfig`/`ServerConnection`/`StreamOwned`; the second
+  consumer needed neither a dependency nor a rustls feature. PEM decoding is hand-rolled in
+  `src/serve/pem.rs` (~85 lines) rather than admitting a fifteenth crate to strip two marker lines.
+
+  **The slice is mostly its refusals, deliberately.** Every failure mode here degrades identically if
+  handled loosely: the port binds, requests are answered, and the traffic is in the clear with
+  nothing in the response to say so. So each condition is a startup error, and each explanation says
+  why the "helpful" alternative was rejected:
+
+  * `E-SERVE-TLS-INCOMPLETE` — a lone `cert` or `key`. D7's surface text says HTTPS enables "iff BOTH
+    are set", which read literally makes a half-configured server serve plaintext. That reading is
+    rejected; `src/cli/serve_config_prelude.rs` had already flagged it in prose as "a security
+    footgun of exactly the shape DEC-363 was written about".
+  * `E-SERVE-TLS-MIN-VERSION` — `"1.1"` and friends are refused, never silently raised to 1.2. A
+    floor is a security control; guessing at intent is how one ends up lower than its author thinks.
+  * `E-SERVE-TLS-DISABLED` — cert+key on a build without the feature. **Enforced by the type system:**
+    without `http-server-tls` the internal `TlsServer` is an *uninhabited* enum, so no refactor can
+    produce one and `Conn::accept` discharges the branch with `match *never {}`.
+  * `E-SERVE-TLS-CERT` — unreadable, malformed or mismatched pair, at STARTUP. A server with no usable
+    identity binds its port perfectly well and then fails every handshake — a failure clients report
+    rather than the server.
+
+  Config errors outrank build errors (pinned): a lone `cert` on a feature-off build reports
+  `-INCOMPLETE`, because the config is wrong however the binary was compiled.
+
+  Two ordering facts, both load-bearing. **Stated at the wiring site and exercised END-TO-END rather
+  than pinned by a unit test** — the handshake tests drive `rustls` over their own listener, so the
+  `transport.rs` wiring is covered by a live `phg serve` + `curl` run on both accept paths, not by the
+  suite: the handshake runs in the **worker**, never the accept loop, so a stalled client cannot serialize `accept()`; and the
+  stream is wrapped only **after** blocking mode and the read/write timeouts are set on the raw
+  socket — rustls fails outright on a non-blocking socket, and running the handshake through those
+  same timeouts is what bounds a TLS-level slowloris.
+
+  **Certified by execution end-to-end on BOTH accept paths** — a `--features http-server-tls` release
+  binary running the README walkthrough verbatim: the pool path (8 workers) and the single-threaded
+  `TcpTransport` path (`--workers 1`) each banner `listening on https://127.0.0.1:8443`, answer
+  `curl --cacert … https://localhost:8443/hello` with `served over TLS: /hello`, and refuse a
+  plaintext client. That run is the ONLY coverage of the `transport.rs` wiring: the handshake tests
+  bind their own listener, so a 6C finding caught that every line changed there was otherwise
+  exercised by nothing.
+
+  TLS is read **directly from the config**, not through `serve::settings::resolve`: that function is
+  the flag-vs-config precedence rule, and D7 rules TLS has no flag — one source, no precedence.
+
+  Also: `src/serve/transport.rs` fell 635 → 455 lines and **left `scripts/size-baseline.txt`**, the
+  wire framing having moved to `src/serve/framing.rs` (Invariant 13). v1 is terminating TLS only —
+  HTTP→HTTPS redirect, HSTS, cert hot-reload and mTLS are ruled-and-deferred (KNOWN_ISSUES
+  §SERVE-TLS), and cert paths resolve against the process cwd, not the site-mode app root.
+
 - **S3.4 — the wrong verb now says so: `E-NO-ENTRY-FOR-ROLE` (DEC-331 D6, DEC-455.15).** `phg run` on
   a program whose only entry is `#[Entry(kind: EntryKind.Web)]` — and `phg serve` on a
   `kind: EntryKind.Cli` one — used to report a bare absence, in text identical to what a genuine

@@ -48,7 +48,6 @@
 559	src/parser/tests/exprs.rs
 656	src/parser/tests/items.rs
 622	src/parser/tests/stmts.rs
-635	src/serve/transport.rs
 563	src/tokenizer/strings.rs
 699	src/tokenizer/tests.rs
 686	src/transpile/classes_synth.rs

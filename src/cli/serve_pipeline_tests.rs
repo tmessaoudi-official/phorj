@@ -40,7 +40,7 @@ fn serve_settings_are_resolved_from_the_registered_config() {
     // The wiring pin. If the `config()` read is ever hoisted above the factory build it returns
     // `None`, the defaults win, and this reds — which is the whole point.
     let prog = program(42317, 3);
-    let (_factory, settings) =
+    let (_factory, settings, _tls) =
         prepare_serve(&prog, "", &ServeFlags::default(), true).expect("prepare");
     assert_eq!(
         settings.addr, "127.0.0.1:42317",
@@ -61,7 +61,7 @@ fn a_passed_flag_overrides_the_registered_config_through_the_real_chain() {
         addr: Some("127.0.0.1:42318".to_string()),
         ..ServeFlags::default()
     };
-    let (_factory, settings) = prepare_serve(&prog, "", &flags, true).expect("prepare");
+    let (_factory, settings, _tls) = prepare_serve(&prog, "", &flags, true).expect("prepare");
     assert_eq!(settings.addr, "127.0.0.1:42318", "the flag wins");
     assert_eq!(
         settings.workers, 3,

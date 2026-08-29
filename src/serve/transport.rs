@@ -1,13 +1,21 @@
 //! Serve — TCP transport, worker pool, HTTP request framing, keep-alive.
 
 use super::*;
+// Wire framing lives in the sibling `framing` module (Invariant 13 carve-out, S3.5): same functions,
+// same behaviour, moved so this file could take TLS without growing past its ratchet.
+use super::framing::{
+    read_http_request, request_wants_keepalive, response_keeps_alive, MAX_REQUESTS_PER_CONN,
+};
 
 /// Production transport: a single-threaded `TcpListener`, one request per accepted connection
 /// (`Connection: close`). `recv` *frames* the request (reads up to `\r\n\r\n`, then `Content-Length`
 /// bytes) — framing only; the program's `parse_request` does the semantic parse.
 pub struct TcpTransport {
     listener: TcpListener,
-    current: Option<TcpStream>,
+    current: Option<super::tls::Conn>,
+    /// S3.5: the TLS server configuration, when the program's `ServeConfig` asked for HTTPS. `None`
+    /// = plain HTTP. Set once before the loop starts, exactly like the timeout and shutdown flag.
+    tls: Option<super::tls::TlsServer>,
     /// Per-connection read/write timeout (slowloris guard, GA blocker B4). `None` = no timeout.
     timeout: Option<Duration>,
     /// S4.1 keep-alive: whether the request just `recv`'d asked to keep the connection open (decided in
@@ -27,6 +35,7 @@ impl TcpTransport {
     pub fn bind(addr: &str) -> io::Result<Self> {
         Ok(Self {
             listener: TcpListener::bind(addr)?,
+            tls: None,
             current: None,
             timeout: None,
             req_wants_keepalive: false,
@@ -42,6 +51,11 @@ impl TcpTransport {
     }
     /// Set the graceful-shutdown flag (S4.2). When it flips, `recv` stops accepting and returns
     /// `Ok(None)` (clean exhaustion). When `None` (the default), the server accepts forever.
+    /// S3.5: terminate TLS on every accepted connection. Must be set before serving begins.
+    pub fn set_tls(&mut self, tls: Option<super::tls::TlsServer>) {
+        self.tls = tls;
+    }
+
     pub fn set_shutdown(&mut self, shutdown: Arc<AtomicBool>) {
         self.shutdown = Some(shutdown);
     }
@@ -86,7 +100,7 @@ impl Transport for TcpTransport {
                     return Ok(None); // graceful shutdown — the serve loop exits cleanly
                 }
             }
-            let (mut stream, _peer) = match self.listener.accept() {
+            let (stream, _peer) = match self.listener.accept() {
                 Ok(pair) => pair,
                 Err(e) if polling && e.kind() == io::ErrorKind::WouldBlock => {
                     std::thread::sleep(ACCEPT_POLL_INTERVAL);
@@ -100,6 +114,16 @@ impl Transport for TcpTransport {
                 let _ = stream.set_read_timeout(Some(t));
                 let _ = stream.set_write_timeout(Some(t));
             }
+            // S3.5: wrap AFTER blocking mode and the timeouts are set on the raw socket — rustls
+            // fails outright on a non-blocking one, and running the handshake through these same
+            // timeouts is what bounds a client that connects and then stalls mid-handshake.
+            let mut stream = match super::tls::Conn::accept(stream, self.tls.as_ref()) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("serve: dropping connection (tls setup): {e}");
+                    continue;
+                }
+            };
             match read_http_request(&mut stream) {
                 Ok(raw) => {
                     self.req_wants_keepalive = request_wants_keepalive(&raw);
@@ -146,21 +170,24 @@ pub fn serve_tcp(
     timeout: Option<Duration>,
     profile: crate::profile::Profile,
     workers: usize,
+    tls: Option<super::tls::TlsServer>,
 ) -> io::Result<()> {
     // M-DX S0: the build profile is the source of truth; serve's fault pages are a Dev-only
     // side-channel (they leak traces/source). Derive the leaf `dev` bool here at the CLI boundary.
     let dev = profile.is_dev();
     // S4.2: SIGINT/SIGTERM → graceful shutdown (drain in-flight, exit 0). Installed once for either path.
     let shutdown = install_shutdown_handler();
+    let scheme = scheme(tls.as_ref());
     if workers <= 1 {
         let mut t = TcpTransport::bind(addr)?;
         t.set_timeout(timeout);
+        t.set_tls(tls);
         t.set_shutdown(Arc::clone(&shutdown));
-        eprintln!("phg serve: listening on http://{}", t.local_addr()?);
+        eprintln!("phg serve: listening on {scheme}://{}", t.local_addr()?);
         serve_banner(timeout, dev, 1);
         return serve(&factory, &mut t, dev);
     }
-    serve_tcp_pool(factory, addr, timeout, dev, workers, shutdown)
+    serve_tcp_pool(factory, addr, timeout, dev, workers, shutdown, tls)
 }
 
 /// The startup banner (bind/timeout/workers + the untrusted-network note).
@@ -199,11 +226,35 @@ fn serve_tcp_pool(
     dev: bool,
     workers: usize,
     shutdown: Arc<AtomicBool>,
+    tls: Option<super::tls::TlsServer>,
 ) -> io::Result<()> {
     let listener = TcpListener::bind(addr)?;
-    eprintln!("phg serve: listening on http://{}", listener.local_addr()?);
+    eprintln!(
+        "phg serve: listening on {}://{}",
+        scheme(tls.as_ref()),
+        listener.local_addr()?
+    );
     serve_banner(timeout, dev, workers);
-    serve_pool_with(listener, factory, timeout, dev, workers, Some(shutdown))
+    serve_pool_with(
+        listener,
+        factory,
+        timeout,
+        dev,
+        workers,
+        Some(shutdown),
+        tls,
+    )
+}
+
+/// The URL scheme the bind line announces. Derived from whether a TLS server was actually BUILT, not
+/// from whether the config mentioned a certificate — so the banner cannot claim `https` for a server
+/// that is about to answer in the clear.
+fn scheme(tls: Option<&super::tls::TlsServer>) -> &'static str {
+    if tls.is_some() {
+        "https"
+    } else {
+        "http"
+    }
 }
 
 /// The pool accept-loop over an already-bound `listener` — the testable seam (a test binds
@@ -216,7 +267,7 @@ pub fn serve_pool(
     dev: bool,
     workers: usize,
 ) -> io::Result<()> {
-    serve_pool_with(listener, factory, timeout, dev, workers, None)
+    serve_pool_with(listener, factory, timeout, dev, workers, None, None)
 }
 
 /// [`serve_pool`] plus the S4.2 graceful-shutdown flag. When the flag flips, the accept loop stops,
@@ -231,18 +282,25 @@ pub fn serve_pool_with(
     dev: bool,
     workers: usize,
     shutdown: Option<Arc<AtomicBool>>,
+    tls: Option<super::tls::TlsServer>,
 ) -> io::Result<()> {
     // The factory is `Send + Sync`; share it across workers, each of which calls it once to build its
     // own (non-`Send`) per-thread handler — the VM handler compiles its own `Rc`-bearing program there.
     let factory = Arc::new(factory);
+    // S3.5: the rustls config is `Send + Sync` behind an `Arc`, so every worker terminates TLS with
+    // the same certificate. The RAW `TcpStream` still crosses the channel — the handshake happens in
+    // the worker, never in the accept loop, so a client that stalls mid-handshake cannot serialize
+    // `accept()` and starve every other connection.
+    let tls = tls.map(Arc::new);
     let (tx, rx) = sync_channel::<TcpStream>(workers);
     let rx = Arc::new(Mutex::new(rx));
     let mut handles = Vec::with_capacity(workers);
     for _ in 0..workers {
         let factory = Arc::clone(&factory);
         let rx = Arc::clone(&rx);
+        let tls = tls.clone();
         handles.push(std::thread::spawn(move || {
-            worker_loop(&factory, &rx, timeout, dev);
+            worker_loop(&factory, &rx, timeout, dev, tls.as_deref());
         }));
     }
 
@@ -298,6 +356,7 @@ fn worker_loop(
     rx: &Mutex<std::sync::mpsc::Receiver<TcpStream>>,
     timeout: Option<Duration>,
     dev: bool,
+    tls: Option<&super::tls::TlsServer>,
 ) {
     // Build this worker's own handler once (its own compiled program for the VM backend), reused for
     // every connection + request this thread handles — the whole point of compiling per worker.
@@ -308,13 +367,22 @@ fn worker_loop(
             let guard = rx.lock().unwrap_or_else(|e| e.into_inner());
             guard.recv()
         };
-        let Ok(mut stream) = stream else {
+        let Ok(stream) = stream else {
             return; // channel closed → the server is shutting down
         };
         if let Some(t) = timeout {
             let _ = stream.set_read_timeout(Some(t));
             let _ = stream.set_write_timeout(Some(t));
         }
+        // S3.5: wrap AFTER the timeouts land on the raw socket (see `Conn::accept`). A TLS setup
+        // failure drops this connection only — the worker stays in the pool for the next one.
+        let mut stream = match super::tls::Conn::accept(stream, tls) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("serve: dropping connection (tls setup): {e}");
+                continue;
+            }
+        };
         // S4.1: serve multiple requests on this socket when keep-alive applies. Keep-alive is only
         // entered when a timeout is configured, so an idle client is reaped by the read timeout and can
         // never pin a worker (with no timeout this serves exactly one request, verbatim pre-S4.1).
@@ -359,131 +427,9 @@ fn worker_loop(
     }
 }
 
-/// Cap a single request at 8 MiB — keeps a hostile or runaway client from exhausting memory (EV-7).
-const MAX_REQUEST: usize = 8 * 1024 * 1024;
-
-/// Read one HTTP/1.1 request from `stream`: everything up to and including `\r\n\r\n`, then the
-/// `Content-Length` body (0 if absent). Capped at [`MAX_REQUEST`]. Framing only — no semantic
-/// validation; a partial/malformed buffer flows to the program's `parse_request`, which returns
-/// `null` and yields a 400. Generic over [`Read`] so the framing is unit-testable over a `Cursor`
-/// (P1-d) without binding a socket.
-fn read_http_request<R: Read>(stream: &mut R) -> io::Result<Vec<u8>> {
-    const SEP: &[u8] = b"\r\n\r\n";
-    let mut buf = Vec::new();
-    let mut chunk = [0u8; 4096];
-    // Only re-scan newly-arrived bytes for the header terminator (with a `SEP.len()-1` overlap so a
-    // terminator split across two reads is still found). Scanning the whole buffer every chunk is
-    // O(n²) — a CPU-DoS on a large no-terminator request; this keeps it linear.
-    let mut scanned = 0usize;
-    let head_end = loop {
-        let from = scanned.saturating_sub(SEP.len() - 1);
-        if let Some(rel) = find_subslice(&buf[from..], SEP) {
-            break from + rel + SEP.len();
-        }
-        scanned = buf.len();
-        if buf.len() > MAX_REQUEST {
-            return Ok(buf);
-        }
-        let n = stream.read(&mut chunk)?;
-        if n == 0 {
-            return Ok(buf); // EOF before full headers → partial (parse → 400)
-        }
-        buf.extend_from_slice(&chunk[..n]);
-    };
-    let want = head_end
-        .saturating_add(parse_content_length(&buf[..head_end]))
-        .min(MAX_REQUEST);
-    while buf.len() < want {
-        let n = stream.read(&mut chunk)?;
-        if n == 0 {
-            break;
-        }
-        buf.extend_from_slice(&chunk[..n]);
-    }
-    Ok(buf)
-}
-
-/// Max requests served on one kept-alive connection before it is closed (EV-7 — bounds a client that
-/// pins a connection/worker forever). The client simply reconnects for more.
-const MAX_REQUESTS_PER_CONN: usize = 100;
-
-/// Whether the **request** asks to keep the connection open (HTTP/1.1 S4.1 keep-alive). HTTP/1.1
-/// defaults to keep-alive unless `Connection: close`; HTTP/1.0 defaults to close unless
-/// `Connection: keep-alive`. Header value matched case-insensitively (a comma-list like
-/// `keep-alive, foo` counts). Framing-only parse over the raw bytes — mirrors `parse_content_length`.
-fn request_wants_keepalive(raw: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(raw);
-    let head = text.split("\r\n\r\n").next().unwrap_or("");
-    let mut lines = head.split("\r\n");
-    let is_http11 = lines
-        .next()
-        .is_some_and(|req_line| req_line.contains("HTTP/1.1"));
-    let conn = head_value(head, "connection");
-    match conn {
-        Some(v) if v.eq_ignore_ascii_case("close") || token_list_has(&v, "close") => false,
-        Some(v) if token_list_has(&v, "keep-alive") => true,
-        _ => is_http11, // no Connection header → HTTP/1.1 keeps alive, HTTP/1.0 closes
-    }
-}
-
-/// Whether the **response** permits keep-alive — false when the server's own headers say
-/// `Connection: close` (the `http_500`/error responses do, so a faulted exchange always closes). A
-/// kept-alive response must be self-delimiting; every Phorj response carries `Content-Length` (set by
-/// `serialize_response` / the error helpers), so reuse is safe.
-fn response_keeps_alive(resp: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(resp);
-    let head = text.split("\r\n\r\n").next().unwrap_or("");
-    match head_value(head, "connection") {
-        Some(v) => !(v.eq_ignore_ascii_case("close") || token_list_has(&v, "close")),
-        None => true,
-    }
-}
-
-/// The (trimmed) value of header `name` (case-insensitive) in an HTTP head, or `None`.
-fn head_value(head: &str, name: &str) -> Option<String> {
-    head.split("\r\n").skip(1).find_map(|line| {
-        line.split_once(':').and_then(|(k, v)| {
-            k.trim()
-                .eq_ignore_ascii_case(name)
-                .then(|| v.trim().to_string())
-        })
-    })
-}
-
-/// Whether a comma-separated header value contains `token` (case-insensitive, trimmed) — e.g.
-/// `Connection: keep-alive, Upgrade` contains `keep-alive`.
-fn token_list_has(value: &str, token: &str) -> bool {
-    value
-        .split(',')
-        .any(|t| t.trim().eq_ignore_ascii_case(token))
-}
-
-/// Parse the `Content-Length` header from a request head (0 if absent or unparseable).
-fn parse_content_length(head: &[u8]) -> usize {
-    let text = String::from_utf8_lossy(head);
-    for line in text.split("\r\n") {
-        if let Some((name, value)) = line.split_once(':') {
-            if name.trim().eq_ignore_ascii_case("content-length") {
-                return value.trim().parse().unwrap_or(0);
-            }
-        }
-    }
-    0
-}
-
-/// First index of `needle` in `hay`, or `None`. An empty needle matches at 0 (defensive; the only
-/// caller passes the non-empty `\r\n\r\n`).
-fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() {
-        return Some(0);
-    }
-    hay.windows(needle.len()).position(|w| w == needle)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
 
     #[test]
     fn dev_error_page_escapes_and_includes_frames_and_request() {
@@ -510,126 +456,6 @@ mod tests {
         assert!(
             !s.contains("BODY"),
             "request body is not included (head only): {s}"
-        );
-    }
-
-    // --- find_subslice -----------------------------------------------------
-
-    #[test]
-    fn find_subslice_basics() {
-        assert_eq!(find_subslice(b"abc\r\n\r\nxyz", b"\r\n\r\n"), Some(3));
-        assert_eq!(find_subslice(b"no terminator here", b"\r\n\r\n"), None);
-        assert_eq!(find_subslice(b"", b"\r\n\r\n"), None);
-        assert_eq!(find_subslice(b"anything", b""), Some(0)); // empty needle → 0
-    }
-
-    // --- parse_content_length ---------------------------------------------
-
-    #[test]
-    fn content_length_absent_is_zero() {
-        assert_eq!(
-            parse_content_length(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"),
-            0
-        );
-    }
-
-    #[test]
-    fn content_length_present_is_parsed() {
-        assert_eq!(
-            parse_content_length(b"POST / HTTP/1.1\r\nContent-Length: 42\r\n\r\n"),
-            42
-        );
-    }
-
-    #[test]
-    fn content_length_is_case_insensitive_and_trims() {
-        assert_eq!(
-            parse_content_length(b"POST / HTTP/1.1\r\ncOnTeNt-LeNgTh:   7  \r\n\r\n"),
-            7
-        );
-    }
-
-    #[test]
-    fn content_length_malformed_is_zero() {
-        // Non-numeric value parses to 0 (framing reads no body; the program's parser handles it).
-        assert_eq!(
-            parse_content_length(b"POST / HTTP/1.1\r\nContent-Length: not-a-number\r\n\r\n"),
-            0
-        );
-    }
-
-    // --- read_http_request (over a Cursor, no socket) ----------------------
-
-    #[test]
-    fn reads_headers_only_request() {
-        let req = b"GET / HTTP/1.1\r\nHost: x\r\n\r\n".to_vec();
-        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
-        assert_eq!(got, req);
-    }
-
-    #[test]
-    fn reads_request_with_body() {
-        let req = b"POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello".to_vec();
-        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
-        assert_eq!(got, req, "head + the declared 5 body bytes");
-    }
-
-    #[test]
-    fn eof_before_headers_returns_partial() {
-        // No CRLFCRLF, then EOF → returns whatever was read (parse → 400 downstream), never hangs.
-        let req = b"GET / HTTP/1.1 no terminator".to_vec();
-        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
-        assert_eq!(got, req);
-    }
-
-    /// A reader that yields its data in fixed-size pieces — exercises the accumulation loop with the
-    /// `\r\n\r\n` terminator split across multiple `read` calls.
-    struct ChunkedReader {
-        data: Vec<u8>,
-        pos: usize,
-        chunk: usize,
-    }
-    impl Read for ChunkedReader {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            let remaining = &self.data[self.pos..];
-            let n = remaining.len().min(self.chunk).min(buf.len());
-            buf[..n].copy_from_slice(&remaining[..n]);
-            self.pos += n;
-            Ok(n)
-        }
-    }
-
-    #[test]
-    fn terminator_and_body_split_across_chunks() {
-        let req = b"POST /x HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc".to_vec();
-        let mut r = ChunkedReader {
-            data: req.clone(),
-            pos: 0,
-            chunk: 1, // one byte per read → terminator and body span many reads
-        };
-        let got = read_http_request(&mut r).unwrap();
-        assert_eq!(got, req);
-    }
-
-    /// A reader that never produces a terminator — drives the [`MAX_REQUEST`] cap.
-    struct InfiniteReader;
-    impl Read for InfiniteReader {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            for b in buf.iter_mut() {
-                *b = b'a';
-            }
-            Ok(buf.len())
-        }
-    }
-
-    #[test]
-    fn max_request_cap_terminates() {
-        // No `\r\n\r\n` ever arrives; the read must stop near the cap rather than loop forever.
-        let got = read_http_request(&mut InfiniteReader).unwrap();
-        assert!(got.len() > MAX_REQUEST, "stopped at the cap");
-        assert!(
-            got.len() <= MAX_REQUEST + 4096,
-            "no more than one chunk past the cap"
         );
     }
 }

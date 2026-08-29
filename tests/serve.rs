@@ -593,6 +593,7 @@ fn pool_graceful_shutdown_drains_and_returns() {
             false,
             2,
             Some(server_flag),
+            None, // S3.5: plain HTTP — the graceful-shutdown contract is transport-independent
         )
     });
 

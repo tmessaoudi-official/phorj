@@ -110,8 +110,9 @@ cannot express "no timeout" (`0` IS the default, so the CLI's 30s guard applies)
 how you say that, since there the flag being present is itself the signal.
 `phg explain W-SERVE-CONFIG-OVERRIDDEN`. The field set itself is `web/serve_config.phg`.
 
-Four fields are resolved this way — `host`+`port`, `workers`, `timeout` — and that is the whole
-surface the serve loop binds. `cert`/`key`/`tlsMinVersion` wait on D7 (inbound TLS is unbuilt),
+Four fields are resolved this way — `host`+`port`, `workers`, `timeout` — because those are the ones
+with two possible sources. `cert`/`key`/`tlsMinVersion` are read too (S3.5, see § HTTPS below) but
+NOT through this precedence rule: TLS has no CLI flag, so there is nothing to resolve against.
 `maxBodySize` belongs to the wire parser, and `serverName` has no consumer yet.
 
 **Backend:** the registered handler runs on the **bytecode VM by default** — byte-identical to the interpreter
@@ -208,6 +209,69 @@ Three cases that are deliberately NOT this error, because their fix is different
 The prompt is also skipped — diagnostic only — for `-e` and stdin sources, and for `phg serve <dir>`
 site mode: `phg run` takes neither a directory nor inline source, so naming one back would offer a
 command that cannot run.
+
+## HTTPS (S3.5)
+
+`phg serve` terminates TLS itself. There is **no `--tls` flag and no switch to turn on** — HTTPS is
+enabled because the `ServeConfig` sets **both** `cert` and `key`, and for no other reason.
+
+```phg
+Http.serve(new ServeConfig(port: 8443, cert: "certs/site.pem", key: "certs/site.key"), handler);
+```
+
+TLS is **not in the default build**. `phg serve`'s default posture is a loopback development server,
+and linking a TLS stack a server never uses is attack surface for nothing:
+
+```console
+$ cargo build --release --features http-server-tls
+```
+
+The whole walkthrough, from nothing to a verified request — `examples/web/serve-tls/serve.phg` is the
+program:
+
+```console
+$ cd examples/web/serve-tls
+$ mkdir -p certs
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+    -subj /CN=localhost -keyout certs/site.key -out certs/site.pem
+$ phg serve serve.phg
+phg serve: listening on https://127.0.0.1:8443
+```
+
+```console
+$ curl --cacert certs/site.pem https://localhost:8443/hello
+served over TLS: /hello
+```
+
+`--cacert` is needed because the certificate is self-signed; a real one from a CA needs no flag.
+`certs/` is gitignored — **a certificate and its private key are never committed to this repository**,
+which is why this section is a set of commands rather than a fixture you can run directly.
+
+### The four ways to get it wrong, and what each prints
+
+Every one of these is a **refusal at startup**, and that is the design. Each condition has an obvious
+"helpful" behaviour available — serve plain HTTP, raise the version, carry on without TLS — and every
+one of them ends the same way: a server that binds the port, answers requests, and is not encrypted,
+with nothing in the response to say so.
+
+| What you wrote | Code | Why not just fall back |
+|---|---|---|
+| `cert:` without `key:` (or the reverse) | `E-SERVE-TLS-INCOMPLETE` | D7 reads "HTTPS iff BOTH are set"; taken literally that serves clear text on a port you believe is encrypted |
+| `tlsMinVersion: "1.1"` | `E-SERVE-TLS-MIN-VERSION` | silently raising a security floor decides policy on your behalf |
+| cert+key, but built without the feature | `E-SERVE-TLS-DISABLED` | the binary cannot encrypt; starting anyway would serve the request in the clear |
+| a missing / malformed / mismatched pair | `E-SERVE-TLS-CERT` | a server with no usable identity binds fine and then fails every handshake — a failure clients report, not the server |
+
+`phg explain E-SERVE-TLS-INCOMPLETE` (and the other three) carries the long form.
+
+If a config error and a build error are both present, the **config** one is reported: it is wrong
+however the binary was compiled, so rebuilding would not fix it.
+
+### What is not here yet
+
+Terminating TLS only. Ruled and deferred to a later slice (`KNOWN_ISSUES.md` §SERVE-TLS): HTTP→HTTPS
+redirect, HSTS, certificate hot-reload, and mTLS (client certificates). Certificate paths resolve
+against the directory you ran `phg serve` **from**, not the application root in site mode — which is
+why the walkthrough above `cd`s first.
 
 ## Run it on PHP — `php -S`
 

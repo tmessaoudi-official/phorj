@@ -1,5 +1,29 @@
 # Known Issues & Limitations
 
+## SERVE-TLS — inbound TLS v1 is TERMINATING ONLY; four features are ruled-and-deferred (S3.5, 2026-08-29, DEC-331 D7)
+
+`phg serve` terminates TLS (`--features http-server-tls`): both `cert` and `key` set on the
+`ServeConfig` bind HTTPS, `tlsMinVersion` is the floor. That is the whole of v1, **by ruling, not by
+oversight** — the spec deferred these four in the same breath as it ruled the feature:
+
+| Deferred | What it would take | Why it is not a silent gap |
+|---|---|---|
+| HTTP→HTTPS redirect | a second listener on the plaintext port | today you bind one scheme; there is no port that answers and redirects |
+| HSTS | a response header, and a policy about `max-age`/`preload` | a header with a long `max-age` is hard to un-send, so it wants its own ruling |
+| certificate hot-reload | re-reading cert/key without dropping connections | a renewed cert currently needs a restart |
+| mTLS (client certificates) | `with_client_cert_verifier` + a trust anchor surface | there is no way to require a client certificate |
+
+Two more limits worth knowing, both stated in `src/serve/tls.rs` rather than discovered later:
+
+* **`cert`/`key` paths resolve against the process working directory**, not the application root in
+  site mode (`phg serve <dir>`). A relative `certs/site.pem` follows your shell, not your project.
+* **Encrypted (passphrase-protected) private keys are not supported** — PKCS#8, PKCS#1 and SEC1 are
+  read, and a still-encrypted key fails with `E-SERVE-TLS-CERT`. Decrypt it first.
+
+Not deferred and not owed: the refusals. A half-configured, unruled-floor, unbuildable or unreadable
+TLS setup is a startup error (`E-SERVE-TLS-{INCOMPLETE,MIN-VERSION,DISABLED,CERT}`), never a server
+that quietly answers in the clear.
+
 ## TEST-RAW-CHECKER — `phg test` checks the RAW program, so any injected-prelude symbol is a spurious `E-UNKNOWN-IDENT` (PRE-EXISTING, surfaced 2026-08-28 during S3.4)
 
 **Not caused by S3.4** — recorded because it was found there. `phg test <file>` runs a `<check>`

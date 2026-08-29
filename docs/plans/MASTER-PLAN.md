@@ -136,7 +136,9 @@
   inventory hole) · bz2 as a format row in the queued Core.Compress slice.
 - **W5/W6 runtime+ops:** `Runtime.cpuTime()` (getrusage twin, feeds Metrics) · `phg env` doctor command
   (deterministic, secret-free, `--json` — the phpinfo answer) · **`phg serve` TLS posture — RULED as DEC-331 D7
-  (LOCKED 2026-07-22)**: native rustls termination behind `http-server-tls` (serve+TLS native-only) — build queued.
+  (LOCKED 2026-07-22)**: native rustls termination behind `http-server-tls` (serve+TLS native-only) —
+  ✅ **BUILT 2026-08-29 as S3.5** (DEC-455.16). v1 is terminating TLS only; HTTP→HTTPS redirect, HSTS,
+  cert hot-reload and mTLS are ruled-and-deferred (KNOWN_ISSUES §SERVE-TLS).
 - **post-1.0:** server-side HTTP/2 (rides the TLS ruling) · graceful reload (SIGHUP handover) ·
   `phg run-script` (explicit-only, never on install) · LDAP extension candidate.
 - **Appendix-A rows — RECORDED AS DEFERRED (DEC-413, developer-ruled 2026-07-29; reasons attached, door left open — NOT rejected, and no longer silent drops):** SOAP · IMAP (PHP itself
@@ -202,8 +204,12 @@ Build cluster, in order (D10a):
   whose value differs overrides it with a `W-SERVE-CONFIG-OVERRIDDEN` line.
   ✅ **S3.4 SHIPPED 2026-08-28 (DEC-455.15): role-mismatch UX** — `E-NO-ENTRY-FOR-ROLE`, symmetric
   both directions, with the TTY-guarded *"Did you mean `phg serve <file>`?"* switch and a non-TTY
-  error that never reads stdin. What is left under this bullet is **D7 inbound TLS** (S3.5), still
-  unbuilt (`cert`/`key`/`tlsMinVersion` have no reader) — the LAST item of DEC-331 Slice 3.
+  error that never reads stdin.
+  ✅ **S3.5 SHIPPED 2026-08-29 (DEC-455.16): inbound TLS** — `phg serve` terminates TLS behind
+  `http-server-tls`; HTTPS iff BOTH `cert` and `key`, `tlsMinVersion` the floor, and every
+  misconfiguration is a startup REFUSAL rather than a silent fall back to plaintext
+  (`E-SERVE-TLS-{INCOMPLETE,MIN-VERSION,DISABLED,CERT}`). No new crate — rustls 0.23 has no
+  client/server feature split. **DEC-331 SLICE 3 IS COMPLETE** (D1/D4/D5/D6/D7 all built).
   Cursor in SLICE-STATE**).
 - **Separate QUEUED design slices (specs frozen, same wave + DEC-335):** labeled
   `break`/`continue` (safe nested-loop escape; raw goto stays rejected), typed LSB (`Self`

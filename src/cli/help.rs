@@ -236,6 +236,13 @@ pub fn help_for(cmd: &str) -> String {
                     `W-SERVE-CONFIG-OVERRIDDEN` line naming the field, so an override is never silent.\n\
                     A field left at its class default reads as unset (a constructed object carries no\n\
                     provenance); see `phg explain W-SERVE-CONFIG-OVERRIDDEN`.\n\n\
+                    HTTPS (DEC-331 D7): there is NO --tls flag. TLS turns on because the ServeConfig\n\
+                    sets BOTH `cert` and `key`, and for no other reason; `tlsMinVersion` (\"1.2\"\n\
+                    default, or \"1.3\") is the floor. Requires a binary built with\n\
+                    `--features http-server-tls` — TLS is not in the default build. Setting one of\n\
+                    cert/key without the other is E-SERVE-TLS-INCOMPLETE: `phg serve` refuses to\n\
+                    start rather than quietly serving plain HTTP on a port you believe is encrypted.\n\
+                    See `phg explain E-SERVE-TLS-INCOMPLETE` and examples/web/README.md.\n\n\
                     Requests run on the bytecode VM by default (faster than the tree-walker —\n\
                     measured ~2.3x lower end-to-end latency on a representative handler, byte-identical\n\
                     output); --tree-walker selects the interpreter oracle instead.\n\n\

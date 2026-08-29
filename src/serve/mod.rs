@@ -20,7 +20,7 @@ use crate::compiler::compile_with;
 use crate::diagnostic::Diagnostic;
 use crate::value::Value;
 use crate::vm::Vm;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::sync_channel;
@@ -32,14 +32,22 @@ use std::time::Duration;
 /// bounding shutdown latency without busy-spinning.
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
+mod framing;
 mod handlers;
+#[cfg(feature = "http-server-tls")]
+mod pem;
 mod settings;
 mod static_files;
+pub mod tls;
 mod transport;
 mod web_handlers;
+/// The registered `Http.ServeConfig` as the serve loop sees it. Re-exported here because `serve` is
+/// the module that CONSUMES it — `native::http` is where it is populated, not where it is read.
+pub use crate::native::http::serve_register::ServeCfg;
 pub use handlers::*;
 pub use settings::{
-    resolve as resolve_settings, ServeFlags, ServeSettings, DEFAULT_ADDR, DEFAULT_TIMEOUT_SECS,
+    class_defaults, resolve as resolve_settings, ServeFlags, ServeSettings, DEFAULT_ADDR,
+    DEFAULT_TIMEOUT_SECS,
 };
 pub use static_files::resolve_site_dir;
 pub use transport::*;

@@ -27,7 +27,7 @@ pub fn serve_program(
     tree_walker: bool,
 ) -> Result<String, String> {
     on_deep_stack(|| {
-        let (factory, settings) = prepare_serve(prog, diag_src, flags, tree_walker)?;
+        let (factory, settings, tls) = prepare_serve(prog, diag_src, flags, tree_walker)?;
         // The "loudly" half of the ruling. stderr, not stdout: stdout belongs to the served program's
         // `Output.*` (DEC-220), and a server's startup notes must not land in a piped response body.
         for note in &settings.notices {
@@ -39,6 +39,7 @@ pub fn serve_program(
             settings.timeout,
             profile,
             settings.workers,
+            tls,
         )
         .map_err(|e| format!("serve: {e}"))?;
         Ok(String::new())
@@ -98,12 +99,18 @@ pub fn serve_with_defaults(
 /// fail when someone hoists the read. `serve_program` above is now a shell whose only untestable part
 /// is the blocking `serve_tcp` call; every decision lives here, where
 /// `serve_settings_are_resolved_from_the_registered_config` exercises it.
+type PreparedServe = (
+    crate::serve::HandlerFactory,
+    crate::serve::ServeSettings,
+    Option<crate::serve::tls::TlsServer>,
+);
+
 pub(crate) fn prepare_serve(
     prog: &Program,
     diag_src: &str,
     flags: &crate::serve::ServeFlags,
     tree_walker: bool,
-) -> Result<(crate::serve::HandlerFactory, crate::serve::ServeSettings), String> {
+) -> Result<PreparedServe, String> {
     // S3.4 (DEC-331 D6): the wrong-verb refusal comes FIRST — before the check, and before the
     // factory whose `web_entry_name` would otherwise report the absence with `E-SERVE-NO-HANDLER`.
     // The two diagnoses differ: `E-SERVE-NO-HANDLER` means *nothing will answer a request*, which is
@@ -128,9 +135,24 @@ pub(crate) fn prepare_serve(
     // `None`, i.e. the config would silently never apply.
     let cfg = crate::native::http::serve_register::config();
     let cores = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    // S3.5 (DEC-331 D7): TLS is read from the config DIRECTLY, not through `resolve_settings`. That
+    // function is the flag-vs-config PRECEDENCE rule, and D7 rules there is no `--tls` flag — with
+    // only one source there is no precedence to resolve, and threading it through would invent a
+    // conflict that cannot occur. Both steps are fallible and their ORDER is the ruled one: a config
+    // that is wrong (`E-SERVE-TLS-INCOMPLETE`) is reported before a build that cannot honour it
+    // (`E-SERVE-TLS-DISABLED`), because the config is wrong regardless of how phg was compiled.
+    //
+    // This runs BEFORE any socket binds. A server whose certificate is missing or malformed must
+    // fail to START, not bind the port and then fail every handshake — the latter looks like a
+    // working server to everything except a client.
+    let tls = match cfg.as_ref().map(crate::serve::tls::requested).transpose()? {
+        Some(Some(req)) => Some(crate::serve::tls::build(&req)?),
+        _ => None,
+    };
     Ok((
         factory,
         crate::serve::resolve_settings(flags, cfg.as_ref(), cores),
+        tls,
     ))
 }
 

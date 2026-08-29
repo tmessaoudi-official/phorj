@@ -48,13 +48,19 @@
   handler; `respond`/`handle` and `SERVE_ENTRY` are deleted.
 - **D6 — BUILT** (S3.4, 2026-08-28): `E-NO-ENTRY-FOR-ROLE`, symmetric both directions, with the
   TTY-guarded switch prompt and the non-TTY error. `src/cli/role_mismatch.rs`.
-- **D7 — RULED, NOT BUILT**: there is still no `http-server-tls` feature; inbound TLS is S3.5.
-  See the DEC-331 register block (`docs/research/full-audit/raw/C-decisions.md`) — "LOCKED" there
-  means ruled, not built.
+- **D7 — ✅ BUILT (S3.5, 2026-08-29)**: `http-server-tls` exists (`Cargo.toml`), `src/serve/tls.rs`
+  is the rule and `src/serve/pem.rs` the decoder. HTTPS auto-enables iff both `cert` and `key` are
+  set; `tlsMinVersion` is the floor. **With one deviation from the surface text, deliberate and
+  ruled:** D7's "iff BOTH are set" is NOT read as "a lone `cert` means plain HTTP" — that is
+  `E-SERVE-TLS-INCOMPLETE`. The literal reading is a silent downgrade to clear text on a port the
+  operator believes is encrypted, which `src/cli/serve_config_prelude.rs` had already flagged in
+  prose as "a security footgun of exactly the shape DEC-363 was written about".
+  Deferred as ruled: HTTP→HTTPS redirect, HSTS, cert hot-reload, mTLS (KNOWN_ISSUES §SERVE-TLS).
 
-  > The 2026-07-25 verification line this replaced read *"D5/D6/D7 … `respond` is still the live
-  > `SERVE_ENTRY`, `E-NO-ENTRY-FOR-ROLE` has 0 src hits"*. Two thirds of it are now false; the third
-  > is still true and is what S3.5 closes.
+  > **This slice closes DEC-331 Slice 3 entirely** (D1/D4/D5/D6/D7 all built). The 2026-07-25
+  > verification line the previous version of this block replaced read *"D5/D6/D7 … `respond` is
+  > still the live `SERVE_ENTRY`, `E-NO-ENTRY-FOR-ROLE` has 0 src hits"*. All three are now false —
+  > which is the intended end state, not drift.
 
 ## 1. Surface
 

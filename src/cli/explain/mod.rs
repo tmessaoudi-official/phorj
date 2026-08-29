@@ -8,6 +8,7 @@ mod imports_casts;
 mod match_overloads;
 mod members_destructure;
 mod names_types;
+mod serve_tls;
 mod transpile_di;
 mod types_traits;
 
@@ -24,6 +25,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         .or_else(|| transpile_di::text(code))
         .or_else(|| db_generics::text(code))
         .or_else(|| declfile_enums::text(code))
+        .or_else(|| serve_tls::text(code))
         .or_else(|| super::explain_invoke::sub_catalog(code))
         .map(str::to_string)
 }

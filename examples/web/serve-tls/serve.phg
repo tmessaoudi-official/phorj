@@ -1,0 +1,53 @@
+// HTTPS with `phg serve` — DEC-331 D7, shipped in S3.5.
+//
+//   $ cargo build --release --features http-server-tls        # TLS is NOT in the default build
+//   $ cd examples/web/serve-tls
+//   $ openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+//       -subj /CN=localhost -keyout certs/site.key -out certs/site.pem
+//   $ phg serve serve.phg
+//   phg serve: listening on https://127.0.0.1:8443
+//   $ curl --cacert certs/site.pem https://localhost:8443/
+//
+// The full walkthrough — including what each way of getting it wrong prints — is in
+// `examples/web/README.md` § "HTTPS (S3.5)". A certificate cannot be committed to a repository, so
+// the runnable half of this example is the two commands above rather than a fixture.
+//
+// THREE THINGS THIS FILE IS SHOWING:
+//
+//   1. There is no `--tls` flag and no `enableTls` switch. HTTPS turns on because BOTH `cert` and
+//      `key` are set, and for no other reason. Setting just one is `E-SERVE-TLS-INCOMPLETE` — a
+//      refusal, not a quiet fall back to plain HTTP on a port you believe is encrypted.
+//   2. `tlsMinVersion` is a floor, and it is strict: "1.2" or "1.3", nothing else. "1.1" is refused
+//      rather than raised, because silently raising a security floor decides policy on your behalf.
+//   3. The paths resolve against the directory you RUN from, not the project root — which is why the
+//      commands above `cd` first.
+//
+// Like every other `serve.phg` in `examples/web/`, this is a separate compilation unit from `src/`:
+// `Http.serve` has no faithful idiomatic PHP mapping, so `phg transpile` refuses any file that calls
+// it (`E-TRANSPILE-SERVE`, Invariant 14 tier 2). Keeping the call here is what lets the application
+// logic in `src/` keep its PHP leg and stay byte-identity-gated.
+package Main;
+
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.ServeConfig;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Web)]
+function web(): void {
+    // `cert` + `key` are the entire TLS switch: both halves, or neither. `tlsMinVersion` is
+    // optional and defaults to "1.2"; "1.3" here refuses older clients the handshake outright.
+    ServeConfig config = new ServeConfig(
+        host: "127.0.0.1",
+        port: 8443,
+        cert: "certs/site.pem",
+        key: "certs/site.key",
+        tlsMinVersion: "1.3"
+    );
+    Http.serve(
+        config,
+        function(Request req): Response { return Response.text(200, "served over TLS: {req.path}\n"); }
+    );
+}

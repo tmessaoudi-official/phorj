@@ -1,0 +1,62 @@
+// The CLI half of the `serve-tls` example (DEC-331 D7, S3.5).
+//
+// `../serve.phg` is the served form — it needs a socket and a certificate, so it cannot be part of
+// the byte-identity corpus. This file is what CAN run everywhere: it builds the same `ServeConfig`
+// values and prints what each one means, so the RULE is demonstrated on both backends and through
+// real PHP even though the handshake is not.
+//
+// Run it:  phg run examples/web/serve-tls/src/main.phg
+package Main;
+
+import Core.Output;
+import Core.Http.ServeConfig;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// What `phg serve` would do with this config, stated as the rule rather than as an outcome the
+// runtime happens to produce. HTTPS turns on iff BOTH halves are present; anything else is a
+// refusal at startup, never a quiet downgrade to clear text.
+function posture(ServeConfig cfg): string {
+    // `is null` narrows an optional — `!= null` is a cross-type comparison the checker rejects.
+    if (cfg.cert instanceof null && cfg.key instanceof null) {
+        return "http (no TLS requested)";
+    }
+    if (cfg.cert instanceof null) {
+        return "REFUSED — E-SERVE-TLS-INCOMPLETE: key without cert";
+    }
+    if (cfg.key instanceof null) {
+        return "REFUSED — E-SERVE-TLS-INCOMPLETE: cert without key";
+    }
+    return "https (floor TLS {cfg.tlsMinVersion})";
+}
+
+function describe(string label, ServeConfig cfg): void {
+    Output.printLine("{label}");
+    Output.printLine("  bind    {cfg.host}:{cfg.port}");
+    Output.printLine("  scheme  {posture(cfg)}");
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // The default: a loopback development server, in the clear, and TLS is not linked in unless the
+    // binary was built with `--features http-server-tls`.
+    describe("default", new ServeConfig());
+    // Both halves — the only shape that enables HTTPS.
+    describe("https", new ServeConfig(port: 8443, cert: "certs/site.pem", key: "certs/site.key"));
+    // The floor raised to 1.3: clients that can only speak TLS 1.2 are refused the handshake
+    // outright rather than served over the older version.
+    describe(
+        "https, 1.3 floor",
+        new ServeConfig(
+            port: 8443,
+            cert: "certs/site.pem",
+            key: "certs/site.key",
+            tlsMinVersion: "1.3"
+        )
+    );
+    // The case worth seeing once. Read literally, D7's "HTTPS iff BOTH are set" would make this
+    // plain HTTP on port 8443 — a server the operator believes is encrypted and is not. `phg serve`
+    // refuses to start instead.
+    describe("cert without key", new ServeConfig(port: 8443, cert: "certs/site.pem"));
+    describe("key without cert", new ServeConfig(port: 8443, key: "certs/site.key"));
+}

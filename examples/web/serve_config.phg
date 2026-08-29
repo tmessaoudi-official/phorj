@@ -13,7 +13,9 @@
 //     machine-dependent number in would make the two native legs and the PHP leg disagree.
 //   * `timeout = 0` means NO timeout, the same sentinel shape.
 //   * HTTPS auto-enables **iff BOTH `cert` and `key` are set** (D7) — there is no separate `--tls`
-//     flag, and a lone `cert` is not a half-configured server, it is a plain-HTTP one.
+//     flag. As of S3.5 a LONE `cert` (or key) is `E-SERVE-TLS-INCOMPLETE`: `phg serve` refuses to
+//     start rather than quietly serving plain HTTP on a port you believe is encrypted. (This line
+//     used to say a lone `cert` "is a plain-HTTP one" — that was the reading S3.5 rejected.)
 //
 // `RequestParsing` (Rich-Request D8a) says WHEN the body is parsed: `Eager` (the default) answers
 // 400 at the edge before the handler runs; `Lazy` defers it to first access.
@@ -94,8 +96,10 @@ function main(): void {
             tlsMinVersion: "1.3"
         )
     );
-    // A LONE `cert` does NOT enable HTTPS — the D7 rule is "iff both". Shown because a config that
-    // silently serves plain HTTP while looking encrypted is the footgun worth seeing once.
+    // A LONE `cert` does NOT enable HTTPS — the D7 rule is "iff both". Constructing one is legal
+    // (this is a value, not a server), but `phg serve` REFUSES to start on it as of S3.5:
+    // `E-SERVE-TLS-INCOMPLETE`. A config that serves plain HTTP while looking encrypted is the
+    // footgun worth seeing once, which is why it stays in this example.
     describe("cert-only", new ServeConfig(port: 8443, cert: "certs/site.pem"));
     // Lazy body parsing, and a body cap raised to 32 MiB (the default is 8 MiB).
     describe(
