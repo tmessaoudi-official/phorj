@@ -307,7 +307,7 @@ Named with what I actually ran — a clean lens is only meaningful if the checks
 *Recorded DONE but NOT:*
 33. **W2-4 `->` retirement** — `function twice(int n) -> int` *and* `function main() -> void` both still
     parse and run (`42`). Unbuilt, confirmed.
-34. **Wildcard spec header self-contradiction** — `docs/specs/2026-07-24-wildcard-imports.md:1` and `:3` say
+34. **Wildcard spec header self-contradiction** — `docs/archive/specs/2026-07-24-wildcard-imports.md:1` and `:3` say
     *"NOT YET BUILT" / "BUILD-READY, NOT BUILT"* while `:228` says `## ✅ Q-A DONE (2026-07-25 — DEC-268
     certified)`. Exactly the contradiction claimed.
 35. **`E-RETIRED-FORIN` absent** and **`E-MULTIPLE-MAIN` explained-but-never-emitted** — both confirmed

@@ -1,4 +1,4 @@
-//! The DEC-331 slice-2 rich `Request` prelude source (spec `docs/specs/2026-07-23-rich-request.md`),
+//! The DEC-331 slice-2 rich `Request` prelude source (spec `docs/specs/UNIFIED-SPEC.md#rich-request--bags-uploads-eager-vs-lazy-parsing`),
 //! injected as part of `Core.Http` (second `srcs` fragment beside `http_prelude.rs` — Inv-13 split).
 //!
 //! Design (panel-certified plan, SLICE-STATE 2026-07-24):

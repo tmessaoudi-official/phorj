@@ -229,13 +229,13 @@ Build cluster, in order (D10a):
 - **Import & visibility design cluster (dev-ruled AskUserQuestion, 2026-07-24; specs are SSOT,
   SLICE-STATE carries the live pointer):** **Q-A wildcard/group imports ✅ DONE (2026-07-25,
   DEC-268 two-clean-round panel certified)**
-  (`docs/specs/2026-07-24-wildcard-imports.md` — `import X.Y.*` / `{A,B}` / `except {…}`, eager
+  (`docs/archive/specs/2026-07-24-wildcard-imports.md` — `import X.Y.*` / `{A,B}` / `except {…}`, eager
   collisions, compile-time expansion → per-symbol PHP `use`, `E-IMPORT-UNKNOWN`; deferrals
   P-Q-A-1 Core-submodule wildcards, P-Q-A-3 W-UNUSED-IMPORT, P-Q-A-4 group-`{}` sort (since ruled
   a delete-the-no-op by DEC-386), P-Q-A-5
   Inv-13 file-size debt (since RESOLVED — every named file split/gone, `size-gate.sh` `fails=0`) —
   the rest dev-owned follow-ups); **Q-B
-  visibility-model completeness** (`docs/specs/2026-07-24-visibility-model.md` — package HIERARCHY,
+  visibility-model completeness** (`docs/archive/specs/2026-07-24-visibility-model.md` — package HIERARCHY,
   `internal` REDEFINED = package + descendants on both axes, member `internal` added, folds the
   G4 P0 static-field visibility spine-fix) — **✅ DONE 2026-07-25:** DV-1+DV-2 (package hierarchy +
   top-level `internal`=subtree) `de75201`; DV-3 (member `internal`, package-subtree via mangled-name

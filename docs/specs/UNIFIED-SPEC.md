@@ -102,6 +102,9 @@
   - [`using` — the scope guard](#using--the-scope-guard) *(2026-07-30 — DEC-364, SHIPPED)*
   - [Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`](#mechanical-exhaustiveness-for-exprstmtpattern) *(2026-07-26 — DEC-356; core SHIPPED, rewriter sweep OWED)*
   - [Block-scope shadowing — the redeclaration rule](#block-scope-shadowing--the-redeclaration-rule) *(2026-07-26 — DEC-339, SHIPPED)*
+  - [`#[Invoke]` and `#[ToString]`](#invoke-and-tostring) *(2026-07-23 — DEC-331 D9; slice 1 SHIPPED, 1b DEFERRED)*
+  - [Visibility and access model](#visibility-and-access-model) *(2026-07-24 — SHIPPED + certified)*
+  - [Wildcard and group imports](#wildcard-and-group-imports) *(2026-07-24 — Q-A SHIPPED; follow-ups open)*
 - **Part IV — Standard library & policy**
   - [Standard library charter](#standard-library-charter) *(2026-06-29 — ADOPTED, governing)*
   - [Typed auto-escaping HTML](#typed-auto-escaping-html) *(2026-06-19 — SHIPPED)*
@@ -110,10 +113,13 @@
   - [PHP extension tiers](#php-extension-tiers) *(2026-06-19 — scope narrowed to transpile-leg by DEC-273)*
   - [PHP parity and beyond gap audit](#php-parity-and-beyond-gap-audit) *(2026-06-21 — HISTORICAL)*
   - [Core.Sql — SQL DBAL (instance model)](#coresql--sql-dbal-instance-model) *(2026-07-11 — SUPERSEDED by DEC-208)*
-  - [Core.Database — the enhanced-PDO database primitive (DEC-208)](#coredb--the-enhanced-pdo-database-primitive-dec-208) *(2026-07-14 — SHIPPED, slices A–K)*
+  - [Core.Database — the enhanced-PDO database primitive (DEC-208)](#coredatabase--the-enhanced-pdo-database-primitive-dec-208) *(2026-07-14 — SHIPPED, slices A–K)*
   - [Core.Mail — native mailer (DEC-223)](#coremail--native-mailer-dec-223) *(2026-07-15 — SHIPPED)*
   - [Dependency injection & attribute reflection (DI v2 / L1–L2)](#dependency-injection--attribute-reflection-di-v2--l1l2) *(2026-07-11 — DESIGN; DI v1 SHIPPED; L1/L2 advanced by DEC-261)*
   - [Response-side header injection guard](#response-side-header-injection-guard) *(2026-07-26 — DEC-363, SHIPPED)*
+  - [Entry kinds, `Http.ServeConfig`, and inbound TLS](#entry-kinds-httpserveconfig-and-inbound-tls) *(2026-07-23 — DEC-331 Slice 3, SHIPPED)*
+  - [Rich `Request` — bags, uploads, eager vs lazy parsing](#rich-request--bags-uploads-eager-vs-lazy-parsing) *(2026-07-23 — DEC-331 D8, SHIPPED)*
+  - [Transaction depth semantics](#transaction-depth-semantics) *(2026-07-26 — DEC-340; Rust legs SHIPPED, PHP leg mid-slice)*
 - **Part V — Build & distribution (M2.5)**
   - [phg build master design](#phg-build-master-design) *(2026-06-16)*
   - [Phase 2 cross-OS builds](#phase-2-cross-os-builds) *(2026-06-16 — SHIPPED v0.4.0)*
@@ -775,6 +781,174 @@ recursive lvalue eval descending with `make_mut`/`borrow_mut`, setting via the s
 stack marker + ordered `Field`/`Index` steps), navigating in place, never putting a `&mut` on the
 value stack; extends the three coupled matches per the Op-coupling invariant. Compound-assign on a
 deep path (`grid[i][j] += 1`) rides the same walker (read-path + set-path desugar).
+
+## Wildcard and group imports
+
+**Status: Q-A SHIPPED 2026-07-25 (DEC-268-certified); dev-owned follow-ups P-Q-A-1..5 remain open.**
+Source: `2026-07-24-wildcard-imports.md`.
+
+**Cross-language survey (META-7).** Go has no wildcard at all (package-qualified `p.Name`); Rust has
+`use p::*` but Clippy warns and `use p::{A,B}` is idiomatic; Java allows `import x.*` while style
+guides forbid it; TypeScript's `import * as ns` binds a namespace object; C# and Kotlin import flat.
+The consensus: **the group form is the safe idiom, flat `*` is convenient but collision-prone, and
+namespace-binding is collision-free but changes call syntax.**
+
+### The unifying principle — zero new semantics
+
+> `import X.Y.*` ≡ writing an explicit `import X.Y.Z;` for **every member Z of `X.Y` you would be
+> allowed to import individually** — same visibility rules, same collision rules.
+
+It is **compile-time sugar expanded before any backend** (Invariant 5), so the interpreter, the VM and
+the transpiled PHP never see a `*`; PHP `use` stays per-symbol and byte-identity is preserved. The
+expanded set is **sorted** (Invariant 10).
+
+### The rulings
+
+- **Both forms.** `import X.Y.*;` and `import X.Y.{A, B};`, sharing one resolver and one expansion.
+- **Collisions are an EAGER error.** If two wildcard imports bring the same name, the program does not
+  compile (`E-IMPORT-AMBIGUOUS`) **whether or not the name is used** — deliberately stricter than the
+  lazy use-site alternative. The escape hatches are naming the winner explicitly, or `except`.
+- **What `*` binds:** every member an individual import could reach, **shallow** — public
+  cross-package, and public + `internal` within the declaring package **or a descendant** package,
+  since `internal` is subtree-scoped. Never `private` (file-scoped). Not sub-packages. `protected` is
+  N/A, being a class-member modifier rather than a top-level visibility. *(The earlier shorthand "all
+  PUBLIC + INTERNAL" was rewritten by DEC-392 because it read as a cross-package `internal` grant,
+  which would have made `*` a visibility bypass **wider than a named import**.)*
+- **Scope: submodules only.** Project packages, vendored packages and stdlib SUBMODULES
+  (`import Core.Http.*;`) are allowed; bare-root `import Core.*;` is `E-WILDCARD-STDLIB-ROOT`, since it
+  would flood the file with the entire stdlib.
+- **`except { A, B }`** (the keyword is `except`, not `hiding`) removes names before expansion — the
+  ergonomic escape hatch for the strict eager-collision rule. Excepting a name **not** in the resolved
+  set is a hard error (`E-EXCEPT-UNKNOWN`) with a did-you-mean hint.
+- **Aliasing is group-and-re-import only.** `import X.{A as B, C};` is fine; `import X.* as Y;` is
+  `E-WILDCARD-ALIAS`, because a flat wildcard has no single name. Namespace-object `* as ns` is
+  explicitly not this slice.
+- **An empty or no-op wildcard is a HARD ERROR** (`E-WILDCARD-EMPTY`) — a `*` or `except` set binding
+  zero new names fails to compile. (The developer overrode a warn-only proposal.) This is distinct
+  from `E-IMPORT-GROUP-EMPTY`, which is a literal empty `{}`.
+- **`E-IMPORT-UNKNOWN` lands here too.** `import Acme.Nothing;` was silently accepted while unused; an
+  import naming a non-existent package or member is now a compile error at the import line whether or
+  not it is used, across single, group and wildcard forms, in loose, project and vendored modes. This
+  is the Go model, and it beats PHP's silent `use`.
+- **`W-UNUSED-IMPORT`**, scoped to the wildcard and group forms. This is phorj's **first** unused-*
+  lint. Recorded coherence note: a future `W-UNUSED-*` family should ABSORB it and extend the warning
+  to single imports, so the language does not settle permanently into "warns on an unused `*` but not
+  on an unused single import".
+- **`phg format` sorts members alphabetically** inside both `{ … }` and `except { … }` — canonical,
+  deterministic, and matching the sorted `*` expansion, so there is zero re-run churn.
+
+**Implementation placement.** Group expansion is purely syntactic and happens in the parser; `*` needs
+the target package's member set and visibility, which the loader already indexes, so `*`/`except`
+expand in the loader and produce plain per-symbol imports before any backend. That was an
+implementation-placement call, not a user-visible fork — the ruled semantics are unchanged.
+
+## Visibility and access model
+
+**Status: SHIPPED — ruled 2026-07-24, built and DEC-268-certified 2026-07-25.** Source:
+`2026-07-24-visibility-model.md`. It was spawned from the wildcard-import design when the developer
+spotted that the visibility matrix was incomplete and asymmetric.
+
+### A package HIERARCHY is introduced
+
+`Acme.App` is an **ancestor** of `Acme.App.Sub` (and of `Acme.App.Sub.Deep`) by dotted-prefix relation.
+This is genuinely new machinery: before it, the loader compared packages by **exact string equality**
+and had no parent/child notion at all, so a child package could not see its parent's internals. Any
+subtree-visibility rule required introducing that relation first.
+
+`internal` is REDEFINED to mean "this package **and all its descendants**" (it previously meant the
+exact package). For user PROGRAMS this is **loosening only**, so it is backward-compatible; a handful
+of negative conformance tests re-baseline.
+
+### The ruled matrix
+
+| Level | Top-level items | Class members |
+|---|---|---|
+| `private` | this **FILE** only — not importable elsewhere, even in the same package | this **CLASS** only |
+| `protected` | — (N/A: no inheritance at top level) | this class **+ subclasses** |
+| `internal` | this package **+ descendant packages** (redefined) | this package **+ descendant packages** (new) |
+| `public` (default) | everywhere | everywhere |
+
+`internal` is deliberately the **same concept and the same keyword on both axes**. `protected` stays
+members-only. The member default stays `public`. Additionally, `private(set)` (DEC-241) reads at the
+declared visibility but permits assignment only in the owning class, mapping to PHP 8.4's
+`private(set)`.
+
+**The C#-style combinations `protected internal` and `private protected` were REJECTED** — four clean
+levels, no combinations.
+
+### One item still open
+
+**P-Q-B-1 — visibility narrowing on an overloaded interface method** is pre-existing and awaits a
+developer ruling; it is not closed by this build. A separate global completeness sweep (DV-5) is a
+research pass, not part of this slice.
+
+## `#[Invoke]` and `#[ToString]`
+
+**Status: slice 1 SHIPPED + byte-identity-green (DEC-331 D9, ruled and built 2026-07-23); slice 1b
+DEFERRED and reopenable — see below.** Source: `2026-07-23-invoke-tostring.md`.
+
+Attributes designate conventional methods — phorj's unified model, with **no magic method names**:
+
+```phg
+class Adder {
+    constructor(public int bias) {}
+    #[Invoke]   function add(int x): int { return x + this.bias; }
+    #[Invoke]   function addPair(int x, int y): int { return x + y + this.bias; }
+    #[ToString] function describe(): string { return "Adder(+{this.bias})"; }
+}
+// a(5) → 15 · a(1, 2) → 13 · a.add(5) → 15 (direct call ALWAYS stays legal) · "{a}" → Adder(+10)
+```
+
+### Semantics
+
+- **`#[Invoke]`** — `x(args)` on a class instance is statically rewritten by the CHECKER to the
+  matching method call. Multiple `#[Invoke]` methods with DIFFERENT signatures are all call targets
+  (their method names are arbitrary); two with the SAME signature is `E-INVOKE-DUPLICATE`.
+- **`#[ToString]`** — STRICT signature: zero params, returns `string` (`E-TOSTRING-SIGNATURE`),
+  exactly one per class (`E-TOSTRING-DUPLICATE`), auto-called in string context. An object WITHOUT
+  one in string context is a **compile error** (`E-NO-TOSTRING`) — deliberately stricter than PHP's
+  runtime warning.
+- Both attributed methods **stay normally callable by name**; the attribute adds sugar only.
+- Attributes are **inherited with the method**, and a subclass override keeps the role. A subclass may
+  not add a second `#[ToString]` — the override IS the one.
+- Legal only on instance methods — not statics, not free functions, not constructors
+  (`E-ATTRIBUTE-TARGET`).
+- **One stringification story:** `Conversion.toString(obj)` lowers to the same `#[ToString]` call, and
+  string context is lowered EVERYWHERE it occurs — method, constructor and hook bodies **and field
+  initializers**, on classes and traits. (The field-initializer case was a real gap caught in review
+  and fixed before ship.)
+
+**Resolution rule, recorded because it is observable:** `#[Invoke]` marks a method NAME callable, so
+all overloads of a marked name participate, and the call picks the **first arity/type match in
+declaration order**. That is deterministic and there is no runtime re-dispatch — the rewrite names one
+concrete method, so every backend runs the checker's pick.
+
+### The ladder check for transpile
+
+PHP has ONE `__invoke` per class, so this needed a ruling rather than an assumption. Single
+`#[Invoke]` emits a native `__invoke` (faithful, tier 1); **multi-`#[Invoke]` emits
+`__invoke(...$args)` plus a `__phorj_invoke_dispatch` arity/type shim** — a `__phorj_*` helper is an
+accepted tool under META-7, and the trade was surfaced and ruled rather than self-decided.
+`#[ToString]` emits a native `__toString`.
+
+### Slice 1b — DEFERRED, and what it costs today
+
+The deferred cluster is "instance as a first-class callable VALUE": function-type assignability (a
+class with exactly one matching `#[Invoke]` being assignable to `(T…) => U`, for route handlers and
+callbacks), the PHP `__invoke` emit including the multi-invoke shim, and lifting PHP `__invoke` back
+to `#[Invoke]`. The emit and lift halves were deferred **together, deliberately, to keep transpile and
+lift symmetric**.
+
+**The consequence, stated rather than discovered:** a phorj `#[Invoke]` class does **not** round-trip
+through transpile→lift in slice 1 (`#[ToString]` does). Slice-1 direct calls transpile as ordinary
+`$x->method(args)`.
+
+**Known slice-1 limitations, all over-rejection and never unsound:** an interface- or enum-typed
+receiver used as `x(args)` or in string context reports `E-NOT-CALLABLE`/`E-NO-TOSTRING` with
+class-oriented wording; and a class that acquires `#[ToString]` ONLY via a `use`d trait gets no PHP
+`__toString` delegate emitted, because the emitter scans the class's own members — phorj-internal
+string context still works through the named-method rewrite, so only external PHP-host coercion
+(`echo $obj`) is affected.
 
 ## Block-scope shadowing — the redeclaration rule
 
@@ -1502,7 +1676,7 @@ answer); versioned/i18n/video docs.
 **Status: SUPERSEDED by DEC-208 (2026-07-13) — kept for rationale.** The in-language SQL query
 builder (both the 2026-07-10 static-factory slices AND the instance model below) **left the language
 entirely**: DEC-208 ruled a query builder is 100% userland; Core gained the enhanced-PDO
-[`Core.Database` primitive](#coredb--the-enhanced-pdo-database-primitive-dec-208) instead (SHIPPED — see
+[`Core.Database` primitive](#coredatabase--the-enhanced-pdo-database-primitive-dec-208) instead (SHIPPED — see
 that section). The shipped `Core.Sql` prelude was REMOVED in the DEC-208 supersession commit. What
 survives from this design: always-alias + `E-SQL-AMBIGUOUS-COLUMN` thinking informed the
 `W-SQL-INJECTION` lint; the decoupled-dialect principle became `DriverConn` dispatch-at-execute;
@@ -1725,6 +1899,268 @@ mirroring the `String.length`/`Bytes.length` and `String.count`/`Bytes.count` pa
   Pulling a byte result into a `String.format` template requires an explicit `bytes → string` conversion
   that FAULTS on invalid UTF-8 (correct: a half-codepoint isn't text — never a silent broken string).
 - **`%b` is NOT available** for this — it is already taken for binary-integer formatting (`5`→`101`).
+
+## Transaction depth semantics
+
+**Status: the RULE and the Rust legs SHIPPED (DEC-340, ruled 2026-07-26, built 2026-07-29). The PHP
+leg is MID-SLICE and its remaining step needs a developer ruling — see the end of this section.**
+Source: `2026-07-26-transaction-depth-semantics.md`.
+
+### The bug — P1, silent data loss, reproduced live
+
+`db.transaction(fn)` called `rollback_inner` exactly ONCE on the throw path, and `rollback` unwound
+only the innermost level. So a `begin()` leaked anywhere inside the closure — including inside a helper
+the closure calls — consumed that single rollback, leaving the transaction's **own** level open with
+its work live. A later `commit()` from unrelated code then made it permanent, *after* the error handler
+had been told the transaction rolled back.
+
+**Correction to the register's framing, recorded because it changes how ordinary the bug is:** GR-2
+described this as "leaving an outer tx open". There is **no outer transaction** in the repro — the leak
+is inside the closure and the surviving work is the transaction's own. The trigger is ordinary, not an
+exotic nesting scenario.
+
+### The rule
+
+> **Auto-rollback unwinds to the depth recorded on ENTRY** — "restore the depth I found" — not to
+> depth 0.
+
+**Depth 0 was the register's original recommendation and is explicitly REJECTED.** A caller that owns
+an outer transaction (`db.begin(); db.transaction(fn);`) would have *its* transaction rolled back too,
+destroying work `db.transaction` was never given authority over — trading this bug for a rarer but
+worse one. That nesting case is handled correctly today, and entry-depth unwinding keeps it correct
+while still fixing the leak.
+
+### API additions
+
+| API | Semantics |
+|---|---|
+| `rollbackAll(): void throws DatabaseError` | Unwind to depth 0. For the **manual** `begin`/`commit` path, where the caller does own the outermost level. **Not** what auto-rollback uses. |
+| `transactionDepth(): int` | Current depth (0 = none). Depth had been unobservable from phorj — the native returned it and the prelude discarded the payload — so the invariant could not be asserted by a test or by user code. |
+
+**Sequencing note:** `using` (DEC-364) was deliberately sequenced immediately AFTER this slice. A
+leaked `begin()` is only expressible because no scope guard existed; fixing the depth arithmetic closes
+the live data-loss bug but does not prevent the next leak.
+
+### The PHP leg — a Ladder case-2 → case-1 move, in progress
+
+`Core.Database` is not merely unimplemented on the PHP leg, it is deliberately **QUARANTINED**:
+transpiling any program importing it is a clean `E-TRANSPILE-DB`. So the original plan to "emit a
+savepoint helper" was incomplete — the placeholder emitter it would have replaced was **unreachable**,
+because the quarantine fires first. Only lifting the quarantine makes the leg work, and that is a
+case-2 → case-1 move for the *entire module*, which Invariants 14 and 16 put with the developer. The
+developer has since ruled: **go for case 1.**
+
+Two findings shaped the slice, and both came from running real oracles rather than reading code:
+
+- `SplObjectStorage::contains()` is **deprecated as of PHP 8.5 — the transpile floor** — so every depth
+  read printed a deprecation notice onto **stdout**. Lifting the leg with that in place would have
+  broken byte-identity outright, in the subtlest possible way. It is now `offsetExists()`.
+- Keying "unique violation" on SQLite's driver code 19 mis-classified a **NOT NULL** violation: 19 is
+  the GENERIC `SQLITE_CONSTRAINT`, and the extended codes the Rust driver keys on are **not exposed
+  through PDO's `errorInfo`**, so on SQLite the message is the only discriminator. A handler catching
+  the wrong error type is exactly the silent downgrade this work exists to prevent.
+
+**The real blocker was never savepoints — it is the ERROR CONTRACT.** The Rust legs reconstruct a
+7-kind taxonomy and every native returns `DatabaseResult.Ok/Err` which the prelude turns into a typed
+throw; the PHP emitters were raw PDO calls with zero mapping. Lifting as-is would mean
+`catch (UniqueViolationError)` never matches and `db.transaction(fn, retries)` — which retries only
+`SerializationFailureError` — silently never retries. That is the same forbidden downgrade relocated
+from "no transactions" to "wrong error types", which is worse because it looks like it works.
+
+**Step 1 BUILT** — `__phorj_db_classify` maps a real PDO exception onto the same 7-kind taxonomy with
+the same `<<Kind>>` marker the prelude already parses, driver-agnostic SQLSTATE first. An unmatched
+error stays UNTAGGED deliberately, mapping to the base `DatabaseError` exactly as an unmatched Rust
+error does; inventing a kind would be worse than staying generic. A drift guard asserts the PHP
+classifier can still produce every kind the Rust side tags.
+
+**Step 2 STARTED, then STOPPED — and the earlier estimate was wrong.** It was described as "~20
+emitters; mechanical". That is false: three emitters are outright placeholders, and most of the rest
+are *wrong* rather than merely unwrapped. The reason is a genuine design mismatch — phorj's `Statement`
+binds onto a SHARED raw handle in place and returns it (a deliberate DEC-266 allocation lever), while
+PDO's `bindValue` needs a 1-based index, so the PHP twin must carry its own parameter accumulator and
+positional counter, and `prepare` must return a **wrapper object** rather than a bare `PDOStatement`.
+That wrapper's shape determines what every other emitter can assume.
+
+> **Open: step 2 needs a design ruling before it is written.** Recommended shape, NOT ruled: a
+> `__phorj_db_stmt` wrapper holding `[PDOStatement, sql, params[], nextIndex]`, with `prepare` returning
+> it, the bind family appending, and `query`/`exec`/`executeMany` calling `execute($params)` — which is
+> also what makes `executeMany` expressible at all.
+
+**Step 3 also needs a ruling:** the `decimal` mapping. Ints and floats are NOT a problem (PDO+SQLite
+returns native `int`/`float` — an earlier assumption to the contrary was wrong), but a `NUMERIC` column
+returns float `19.99` where phorj `decimal` is exact fixed-point. Bind and fetch decimals as TEXT and
+reconstruct exactly, or accept float on the PHP leg and disclose it.
+
+**Then** `E-TRANSPILE-DB` can be flipped off. The DIFFERENTIAL quarantine stays regardless — it rests
+on its own separate reason (live DB I/O is not byte-identical across drivers), which none of this
+changes.
+
+One property is pinned by test and worth keeping: **only `PDOException` is caught.** A `TypeError` or a
+bug in an emitted expression is not a database error, and laundering it into `DatabaseResult.Err` would
+let a real defect be caught by `catch (DatabaseError e)` and misreported.
+
+## Rich `Request` — bags, uploads, eager vs lazy parsing
+
+**Status: SHIPPED — DEC-331 D8, ruled 2026-07-23, built 2026-07-24, three-leg byte-identity-green.**
+Source: `2026-07-23-rich-request.md`.
+
+### The type
+
+`Request` is a native-backed class that REPLACED the thin original.
+
+| member | type | notes |
+|---|---|---|
+| `method` | `string` | uppercase |
+| `path` | `string` | decoded path, no query |
+| `query` | `ParamBag` | first-wins `.get`, plus `.getAll` |
+| `headers` | `HeaderBag` | **case-insensitive** keys (ParamBag keys are case-SENSITIVE) |
+| `cookies` | `ParamBag` | split on the FIRST `=` |
+| `form` | `ParamBag` | urlencoded + multipart fields |
+| `files` | `FileBag` | `get(k): UploadedFile?`, `getAll(k)` |
+| `body` | `RequestBody` | `.bytes()`, `.text()`, `.json(): Json?` (memoized) |
+| `attributes` | `AttrBag` | `string → string`; the ONE mutable bag — middleware scratch **and** route params (PSR-7 convention) |
+
+Two names in that table were **forced by language rules, not preference**, and are recorded rather
+than silently absorbed: `Body` is built as **`RequestBody`** because a bare `Body` would capture user
+classes under the injected-type discipline (the FS-taxonomy / DEC-202 precedent); and `get(k, default)`
+is built as **`getOrDefault(k, fallback)`** because `E-OVERLOAD-RETURN` forbids return-type-differing
+overloads (the `Core.Map.getOrDefault` precedent).
+
+Uniform bag API: `.get(k): string?` · `.getOrDefault(k, fallback): string` · `.has(k): bool` ·
+`.all(): Map<string, List<string>>`. **Query and form values are always `string`** — the caller
+coerces. `UploadedFile { name, size: int, contentType: string, bytes(): Bytes }`, with a **256 KiB
+temp-spill threshold** and `ServeConfig.maxBodySize` as the cap.
+
+Uploads spill behind **deterministic integer handles — the temp path never enters a phorj value**,
+which is what keeps Invariant 10 intact. `body.json()` goes through the always-registered
+`Core.Native.Http.jsonParse`, so with the `json` feature off it is a flag-naming fault rather than a
+method that silently vanished.
+
+`Request.fake(method, target)` plus `withHeader`/`withCookie`/`withBody` withers exist so handlers can
+be unit-tested without a socket. **The withers REBUILD from the original raw target, header lines and
+body through the same parse** — one parsing story, and decode is never round-tripped. CR/LF in a
+header name or value FAULTS.
+
+### Eager vs lazy
+
+`ServeConfig.requestParsing = RequestParsing.Eager (default) | RequestParsing.Lazy` — an **identical
+handler API**; only WHEN parsing happens changes. Eager 400s malformed input before the handler runs;
+lazy surfaces bad input at the access point as `null` or a canonical fault.
+
+**Why lazy is sound:** one request = one worker thread = one heap, and the `Request` never crosses
+threads, so parse-on-first-access cached in a `OnceCell`-style slot is observationally immutable.
+
+### Backends
+
+Construction happens native-side in the serve loop, and both engines call the same native builder — so
+interpreter ≡ VM by construction. For transpile, `Http.serve` is already native-only, so `Request`
+exists only behind serve and adds **no new transpile surface**; the TYPE still transpiles as a class
+shape for code that merely mentions it.
+
+### Recorded deviations and deferrals
+
+- `Router.handle` now **MUTATES its argument** (route params into `attributes`) rather than copying
+  via the old `withParams` — a deliberate change, recorded.
+- A multipart content-type with an EMPTY body parses to empty form/files: **no body ≠ malformed body**.
+  The multipart part cap is 1024, and over-cap is malformed, deliberately.
+- **Superglobal lift mappings are DEFERRED.** The lifter recognizes no `$_GET`/`$_POST`/`$_FILES`/
+  `getallheaders()` today, so the spec's "where already recognized" was vacuously satisfied. A faithful
+  mapping needs an ambient→parameter transform — the enclosing function must gain a `Request` param —
+  which is a design slice of its own.
+- **Perf, honestly recorded:** the initial `queryparse` microbench was a HARD-FLAGGED ~8× loss against
+  an idiomatic PHP full-request parse. It was then fixed rather than suppressed — DEC-338's nativized
+  `Request.parse` moved it from 0.10× to ~0.88× (near parity, ~9× faster); a WIN over PHP is **not**
+  claimed, and the exact ratio remains owed on the dev-box harness.
+
+## Entry kinds, `Http.ServeConfig`, and inbound TLS
+
+**Status: SHIPPED — DEC-331 Slice 3 (D1/D4/D5/D6/D7), ruled 2026-07-23, completed 2026-08-29.**
+Source: `2026-07-23-entry-kinds-serve-tls.md`. The per-slice BUILD STATUS ledger that spec carried is
+SLICE-STATE-class content and deliberately does not travel here; the archive README's row records the
+final status. This slice contained the cluster's **two breaking changes**: `respond(bytes)` retired,
+and bare `#[Entry]` now requiring `kind:`.
+
+### The surface
+
+```phg
+#[Config]
+function serveConfig(): Http.ServeConfig {
+    return new Http.ServeConfig(host: "0.0.0.0", port: 8443,
+                                cert: "certs/site.pem", key: "certs/site.key");
+}
+
+#[Entry(kind: EntryKind.Web)]
+function web(Http.ServeConfig cfg, AppSettings app): void {
+    Http.serve(cfg, function(Request req): Response {
+        return Response.text("{app.greeting} {req.path}");
+    });
+}
+```
+
+**The kind is an INJECTED enum variant** (DEC-337), reached QUALIFIED and import-gated — `import
+Core.Runtime.EntryKind;` then `kind: EntryKind.Cli`. A bare `kind: Cli` is `E-INJECTED-VARIANT-BARE`
+("nothing in the wind", like `Option.Some`); an unimported `EntryKind.Cli` is `E-UNIMPORTED`; the
+fully-qualified `Core.Runtime.EntryKind.Cli` is self-gating. It is a compile-time-only marker
+(Invariant 5).
+
+### The rulings
+
+- **D1 — roles and config.** Active kinds `Cli` and `Web`; `Desktop`/`Mobile`/`Worker`/`Embedded` are
+  RESERVED — recognized and parsed, refused with `E-ENTRY-KIND-RESERVED`. Config arrives as **typed
+  entry parameters** (DEC-318 injection): the parameter TYPE is the config declaration, so nothing is
+  named twice. `#[Entry]` and `#[Config]` work on class static methods too. Precedence, highest
+  first: **CLI flag > env var > `#[Config]` provider > `phorj.json` static block > attribute inline
+  default.** Injection happens in DECLARATION order, and every unresolved parameter gets its own
+  `E-CONFIG-MISSING`.
+- **D4 — `Http.ServeConfig`**, the runtime's contract as ordinary stdlib source: `host="127.0.0.1"`,
+  `port=8080`, `workers=<cores>`, `timeout=0` (seconds; 0 = none), `cert?`, `key?`, `serverName?`,
+  `maxBodySize=8_388_608`, `tlsMinVersion="1.2"`, plus `requestParsing=Eager`. **App settings are a
+  SEPARATE injected parameter and are never mixed into `ServeConfig`.**
+- **D5 — one handler model (BREAKING).** The typed `(Request): Response` is THE web handler — as the
+  **closure passed to `Http.serve(cfg, handler)`**, not as the entry itself. A `Web` entry is a
+  `(): void` closure FACTORY. `respond(bytes): bytes` and the `handle(Request): Response` entry are
+  RETIRED; an unservable program is refused at startup with `E-SERVE-NO-HANDLER`. Immutable
+  `Response` makes "headers already sent" structurally impossible.
+- **D6 — role-mismatch UX.** `phg run` on a Web-only program (and `phg serve` on a Cli-only one) is
+  `E-NO-ENTRY-FOR-ROLE`, naming the missing role, the declared one and the verb that works. On an
+  interactive terminal it then offers to run it, **defaulting to NO**; a pipe or CI gets the error and
+  a non-zero exit and is **never blocked on stdin**.
+- **D7 — inbound TLS.** Native-only, inheriting `E-TRANSPILE-SERVE` (ladder tier 2: a loud refusal,
+  never a silent downgrade to PHP's built-in server). HTTPS enables **iff BOTH `cert` and `key`** are
+  set — there is no `--tls` flag and no switch — with `tlsMinVersion` as the floor. Terminating TLS
+  only, via rustls behind the non-default `http-server-tls` feature.
+
+### One deliberate deviation from D7's surface text
+
+D7's "iff BOTH are set" is **NOT** read as "a lone `cert` means plain HTTP". A lone `cert` or `key` is
+`E-SERVE-TLS-INCOMPLETE`. The literal reading is a silent downgrade to clear text on a port the
+operator believes is encrypted — a security footgun of exactly the shape the header-injection guard
+was written about. **Do not "fix" this back toward the spec sentence.** Ruled and deferred alongside
+it: HTTP→HTTPS redirect, HSTS, certificate hot-reload, mTLS.
+
+### Checker and CLI rules
+
+1. Multiple entries are allowed **iff their kinds differ**; two of the same kind is
+   `E-DUPLICATE-ENTRY-KIND`. `Cli` and `Web` may coexist in one program.
+2. Every entry parameter must resolve to exactly one `#[Config]` provider (or a precedence-chain
+   source) **by type**; ambiguity or absence is a compile error naming the type. A GENERIC parameter
+   type is accepted — it keys on the bare head, so `Map<string, string>` resolves. (A filter that
+   rejected generics deleted a working surface and was reverted; the resulting sharp edge — two
+   `Map<…>` providers colliding under one key — is DEC-455.4, **pending a ruling**.)
+3. `phg run` selects the `Cli` entry, `phg serve` the `Web` entry; otherwise D6's mismatch UX.
+4. **Bare `#[Entry]` is `E-ENTRY-KIND-REQUIRED`** — DEC-191 signature inference is retired.
+
+### Backends
+
+Roles and config are host-side (the CLI and the serve loop), so interpreter ≡ VM by construction.
+`Cli` entries transpile as before; a **call** to `Http.serve` hits `E-TRANSPILE-SERVE`. That refusal is
+keyed on the CALL — an earlier version of this text said `Web` *entries* hit it and called that
+"already the rule", and both halves were false.
+
+**Still unbuilt from this slice:** the env and `phorj.json` tiers of the precedence chain. Their
+env/CLI reads are runtime reads inside a spine DEC-318 keeps pure, so for a `Cli` entry the PHP leg
+would have to read the same sources or Invariant 1 breaks, and an env-reading example is not a
+deterministic input (Invariant 10). That parity story needs a ruling before it is built.
 
 ## Response-side header injection guard
 

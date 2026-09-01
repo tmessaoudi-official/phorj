@@ -38,7 +38,7 @@ real inconsistency a reader will hit; LOW = cosmetic / historical-plan-text drif
   the two specs + SLICE-STATE + MASTER-PLAN, but **never in the decision register**. Inv 19 names the
   register as a canonical home for "every DEC row / ruling."
 - **Correct state:** a DEC row (or an explicit dated ruling block) for the import/visibility cluster,
-  cross-linked to `docs/specs/2026-07-24-wildcard-imports.md` + `-visibility-model.md`, recording the
+  cross-linked to `docs/archive/specs/2026-07-24-wildcard-imports.md` + `-visibility-model.md`, recording the
   sub-decisions + the DEC-268 certification outcomes; MASTER-PLAN/specs then point to it.
 - **Fix:** append the register entries (assign a DEC number or an explicit "2026-07-24 import/visibility
   cluster" heading matching the register's existing ruling-block style).
@@ -118,7 +118,7 @@ real inconsistency a reader will hit; LOW = cosmetic / historical-plan-text drif
 ## LOW
 
 ### L1 — Wildcard spec build-plan example path is wrong vs shipped [divergence, historical plan text]
-- **Where:** `docs/specs/2026-07-24-wildcard-imports.md:131` (step 7) — `examples/guide/wildcard-imports.phg`.
+- **Where:** `docs/archive/specs/2026-07-24-wildcard-imports.md:131` (step 7) — `examples/guide/wildcard-imports.phg`.
 - **Divergence:** the shipped example is the directory `examples/project/wildcard-imports/` (verified on
   disk; `examples/guide/wildcard-imports.phg` does not exist). Wildcards need a cross-package project, so
   it landed under `project/`, correctly referenced by FEATURES:94 + examples/README:236. The spec's
@@ -128,7 +128,7 @@ real inconsistency a reader will hit; LOW = cosmetic / historical-plan-text drif
   project/…" note).
 
 ### L2 — Visibility spec DV-3 "v1 carve-out" contradicts its own follow-up section [intra-spec staleness]
-- **Where:** `docs/specs/2026-07-24-visibility-model.md:124-125` (DV-3 §"v1 carve-out") vs `:139-150`
+- **Where:** `docs/archive/specs/2026-07-24-visibility-model.md:124-125` (DV-3 §"v1 carve-out") vs `:139-150`
   (§follow-up) + status header `:6-7`.
 - **Divergence:** the DV-3 body still states `internal` on a ctor-promoted param = `E-INTERNAL-PROMOTION`
   as current behavior, while the follow-up section + header + source say it was removed

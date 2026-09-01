@@ -1800,7 +1800,7 @@ challenge the premise"* escape — then STOP and wait. The protocol is `.claude/
   `rollbackAll()` + `transactionDepth()`. **PHP leg: emit a `__phorj_*` savepoint helper** (the current
   emitter is a placeholder comment; PDO `beginTransaction()` does not nest). **GR-26/DEC-364
   (`using`/`defer`) is sequenced immediately after** as the structural fix.
-  **Canonical rule: `docs/specs/2026-07-26-transaction-depth-semantics.md`.** NOT YET BUILT.
+  **Canonical rule: `docs/archive/specs/2026-07-26-transaction-depth-semantics.md`.** NOT YET BUILT.
   - Reproduced live on both Rust backends: bal 100 → transaction reports rolled back → **999 persisted**
     after a later `commit()`. The register's "leaves an outer tx open" framing was wrong — there is no
     outer tx; the transaction's OWN level survives, so the trigger is ordinary code.
@@ -1965,7 +1965,7 @@ agenda — while he slept, with **no questions and no decisions taken** (Invaria
 3. `docs/research/2026-07-25-global-review/` — 13 raw per-topic evidence reports (every claim `file:line`
    + evidence-graded). Committed because the container is ephemeral.
 
-**This discharges the already-RULED DV-5** research pass (`docs/specs/2026-07-24-visibility-model.md`:
+**This discharges the already-RULED DV-5** research pass (`docs/archive/specs/2026-07-24-visibility-model.md`:
 *"global completeness sweep is its OWN research pass … synthesized into ONE ranked completeness register"*).
 
 ### ⚠ THE P0 — fix before any feature work (DEC-339 / GR-1)
@@ -2043,8 +2043,8 @@ printer dropped attribute ARGS → emitted bare `#[Entry]`, which DEC-331's chec
 spurious `build --release`/`build.rs` reds. Fix: `rm -rf` php-src + `target/debug/incremental` +
 `target/release` (regenerable) to reclaim GBs without a full cold recompile. Watch `df -h /` between builds.
 **NEXT (after oracle green):** (1) Q-A wildcard/group imports — spec
-`docs/specs/2026-07-24-wildcard-imports.md` (RULED, BUILD-READY), TDD + DEC-268 panel → commit+push;
-(2) Q-B visibility-model `docs/specs/2026-07-24-visibility-model.md` (RULED) incl. G4 static-field
+`docs/archive/specs/2026-07-24-wildcard-imports.md` (RULED, BUILD-READY), TDD + DEC-268 panel → commit+push;
+(2) Q-B visibility-model `docs/archive/specs/2026-07-24-visibility-model.md` (RULED) incl. G4 static-field
 fix; (3) continue the ruled queue.
 **AST grounding:** `Item::Import { path: Vec<String>, alias: Option<String>, span }`
 @ `src/ast/decls.rs:455`; expand wildcard/group/except → per-symbol `Import` in `cli::check_and_expand`
@@ -2120,7 +2120,7 @@ If reclaimed, resume from this block.
 
 **⚖️ DEV RULING (AskUserQuestion, 2026-07-24) — NEXT-WORK ORDER for the big continuous session:**
 **(1) DEC-331 SLICE 3 FIRST** — `#[Entry(kind:)]` + `Http.ServeConfig` + `serve{}` + inbound rustls
-TLS + retire `respond` (spec: `docs/specs/2026-07-23-entry-kinds-serve-tls.md`). This is the
+TLS + retire `respond` (spec: `docs/archive/specs/2026-07-23-entry-kinds-serve-tls.md`). This is the
 "entry-per-type" the dev asked about. **(2) THEN the JIT loss-flips** — RESUME the in-flight
 Json-ADT slice at its emit/analyze arms (helpers 5a/5b-i/ii/iii already committed behind
 `#[allow(dead_code)]` gates — a clean pause point, no broken state), flipping `jsonround`+`deepjson`;
@@ -2164,7 +2164,7 @@ in the browser (its own slice; touches `gen_examples.py` + `main.js` + the wasm 
 
 **⚖️ QUEUED — IMPORT & VISIBILITY DESIGN CLUSTER (dev ruled AskUserQuestion, 2026-07-24; specs are the
 SSOT — this is a pointer per Inv 19, not a duplicate):**
-- **QUEUED Q-A — Wildcard & group imports** — spec `docs/specs/2026-07-24-wildcard-imports.md`
+- **QUEUED Q-A — Wildcard & group imports** — spec `docs/archive/specs/2026-07-24-wildcard-imports.md`
   (**RULED — BUILD-READY**). Forms `import X.Y.*;` + `import X.Y.{A,B};` + `except {…}`;
   eager-collision error (`E-IMPORT-AMBIGUOUS`); individually-importable binding (public
   cross-package, public+internal in the declaring package or a descendant — DEC-392), shallow
@@ -2173,7 +2173,7 @@ SSOT — this is a pointer per Inv 19, not a duplicate):**
   (Inv 5) → sorted per-symbol PHP `use`; format sorts members; `W-UNUSED-IMPORT` (wildcard-scoped);
   **`E-IMPORT-UNKNOWN`**. New codes: E-IMPORT-AMBIGUOUS/WILDCARD-STDLIB-ROOT/WILDCARD-ALIAS/
   WILDCARD-EMPTY/EXCEPT-UNKNOWN/IMPORT-UNKNOWN + W-UNUSED-IMPORT.
-- **QUEUED Q-B — Visibility-model completeness** — spec `docs/specs/2026-07-24-visibility-model.md`
+- **QUEUED Q-B — Visibility-model completeness** — spec `docs/archive/specs/2026-07-24-visibility-model.md`
   (RULED). Package HIERARCHY (dotted-prefix ancestor); `internal` REDEFINED = package + descendants,
   reused on BOTH axes; member `internal` added; **folds the G4 P0 static-field visibility fix**
   (run≡vm≢PHP break). Built AFTER Q-A.

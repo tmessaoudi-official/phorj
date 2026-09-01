@@ -9,7 +9,7 @@ summary of §8's live push-blocker so a fresh context sees it immediately; that 
 **What produced it.** The developer reviewed the project himself, produced ~15 findings/questions, and
 asked for them to be challenged and verified against real code, widened into a global project review, and
 turned into an agenda he can rule on one item at a time — while he slept. This fulfils the already-RULED
-**DV-5** pass (`docs/specs/2026-07-24-visibility-model.md`: *"global completeness sweep is its OWN research
+**DV-5** pass (`docs/archive/specs/2026-07-24-visibility-model.md`: *"global completeness sweep is its OWN research
 pass … synthesized into ONE ranked completeness register"*).
 
 **Evidence base:** `docs/research/2026-07-25-global-review/` (13 per-topic reports, every claim cited to
@@ -102,7 +102,7 @@ spine coverage. *Why A:* it fixes the bug without paying a language-surface tax 
 > **ENTRY depth** ("restore the depth I found"); depth-0 would roll back a **caller-owned** outer
 > transaction. This section's mechanism description is also wrong: the leak is *inside* the closure and it
 > is the transaction's **own** level that survives — there is no outer tx. **Do not act on the options
-> below** — canonical rule: `docs/specs/2026-07-26-transaction-depth-semantics.md`.
+> below** — canonical rule: `docs/archive/specs/2026-07-26-transaction-depth-semantics.md`.
 
 **Q:** Fix `db.transaction(fn)` auto-rollback to unwind ALL depth, and add an explicit abort?
 - **(A) Auto-rollback unwinds to depth 0 + add `rollbackAll()` (RECOMMENDED)** → a leaked inner `begin()`
@@ -411,7 +411,7 @@ still lists as open** (now `E-STATIC-VIA-INSTANCE`; the whole static/instance ma
 package-decl casing dead on CLI paths** (`E-PKG-CASE` fires) · **P2 `E-ALIAS-CYCLE` uncoded + unused cycle
 passes** (both halves) · **P3 `E-OVERLOAD-SELECT-CONFLICT`** (entry removed) · and **all 9** findings of the
 earlier same-day plans-divergence audit. Separately, `DV-4`'s G4 was already verified fixed. **Recommend
-closing `G5` in `docs/specs/2026-07-24-visibility-model.md` and dropping the fixed rows from
+closing `G5` in `docs/archive/specs/2026-07-24-visibility-model.md` and dropping the fixed rows from
 `KNOWN_ISSUES.md`.**
 
 ### 6.4 — Seven MORE rulings (GR-18 … GR-24), same Invariant-15 shape

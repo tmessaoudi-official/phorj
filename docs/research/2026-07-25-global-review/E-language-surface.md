@@ -21,7 +21,7 @@ correspondingly overcounted by a small amount. [Verified: `grep -rc 'NativeFn {'
 
 ## Ground truth (evidence)
 
-- Spec: `docs/specs/2026-07-24-wildcard-imports.md` — status header line 1 still reads
+- Spec: `docs/archive/specs/2026-07-24-wildcard-imports.md` — status header line 1 still reads
   *"SPEC (RULED — BUILD-READY, NOT YET BUILT)"* but line 228 carries `## ✅ Q-A DONE (2026-07-25 —
   DEC-268 certified)`. **The header contradicts the body — E1 below.** [Verified: read lines 1, 228.]
 - `docs/plans/SLICE-STATE.md:43-53` — `✅ Q-A WILDCARD IMPORTS — DONE (2026-07-25, DEC-268 CERTIFIED)`,
@@ -69,7 +69,7 @@ Vendored fixture: `vproj/vendor/Vend/Util/` (`public function shout`, `public cl
 | W26 | transpiled PHP of the shipped wildcard example | ✅ no `*` leaks (Inv 5 honored) — emits **fully-qualified** `\Acme\Geometry\Rect`, not per-symbol `use` | `phg transpile src/main.phg` |
 | W27 | `phg format` on `* except { Shape, Paint }` | ✅ sorts → `except { Paint, Shape }`; group `{}` **not** sorted (expanded at parse — P-Q-A-4) | before/after diff |
 
-## Recorded follow-ups, verbatim (`docs/specs/2026-07-24-wildcard-imports.md:168-213`)
+## Recorded follow-ups, verbatim (`docs/archive/specs/2026-07-24-wildcard-imports.md:168-213`)
 
 - **P-Q-A-1 — Core-submodule wildcards (`import Core.Http.*`) DEFERRED.** *"the loader's
   native/prelude pre-pass intercepts `Core.*` imports BEFORE the wildcard-expansion hook, so a Core
@@ -102,7 +102,7 @@ Vendored fixture: `vproj/vendor/Vend/Util/` (`public function shout`, `public cl
 
 ## Gaps
 
-- **E1 — [P2, Verified]** The spec's own status header lies. `docs/specs/2026-07-24-wildcard-imports.md:1`
+- **E1 — [P2, Verified]** The spec's own status header lies. `docs/archive/specs/2026-07-24-wildcard-imports.md:1`
   says *"RULED — BUILD-READY, NOT YET BUILT"*; line 228 says `✅ Q-A DONE`. A fresh context reading
   the header first concludes nothing was built. Inv 19 ("zero divergence from the SSOT") violation
   inside a single file. One-line fix.

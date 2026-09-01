@@ -1,6 +1,6 @@
 # PLAN — S3.5: inbound TLS for `phg serve` (DEC-331 D7, build slice 3 of 3, item 5 of 5)
 
-> Closes DEC-331 Slice 3. Spec: `docs/specs/2026-07-23-entry-kinds-serve-tls.md` §1/§2 D7, §5, §6 P2.
+> Closes DEC-331 Slice 3. Spec: `docs/archive/specs/2026-07-23-entry-kinds-serve-tls.md` §1/§2 D7, §5, §6 P2.
 > Status at authoring: D7 **RULED, NOT BUILT** — `http-server-tls` does not exist, `rustls` is linked
 > only by the outbound http-client.
 > **STATUS NOW: SHIPPED 2026-08-29** (DEC-455.16, `cf6875db` `feat(serve): HTTPS that refuses rather

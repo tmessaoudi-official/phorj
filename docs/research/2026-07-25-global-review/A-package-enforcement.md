@@ -118,7 +118,7 @@ DEC-282 addendum (i) (`:2250-2257`) also fixes the root semantics:
 > `package Model;`). **Entries live ANYWHERE under the app root** (bin/, xyz/, public/, root)."*
 > [Verified]
 
-### `docs/specs/2026-07-24-wildcard-imports.md`
+### `docs/archive/specs/2026-07-24-wildcard-imports.md`
 
 No package↔folder ruling. It reuses the loader's index (`:22-23`, `:107-108`) and adds
 `E-IMPORT-UNKNOWN` / `E-IMPORT-AMBIGUOUS`. Relevant only as confirmation that

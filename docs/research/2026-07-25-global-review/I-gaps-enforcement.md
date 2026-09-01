@@ -1,6 +1,6 @@
 # Agent I — Incompleteness + Missing-Enforcement Sweep (fresh pass, 2026-07-25)
 
-> Fulfils the **fresh-sweep half** of `docs/specs/2026-07-24-visibility-model.md` **DV-5**
+> Fulfils the **fresh-sweep half** of `docs/archive/specs/2026-07-24-visibility-model.md` **DV-5**
 > ("global completeness sweep is its OWN research pass … Reuse the rich existing audits + a fresh
 > `/gaps` sweep, synthesized into ONE ranked completeness register").
 >
@@ -384,7 +384,7 @@ DEC-ruled features are absent from it:
 |---|---|---|---|
 | **Named arguments** (DEC-297) | ✅ | `examples/guide/named-args.phg`, `examples/README.md:107`; probe `e1-named.phg` → clean | **0 hits** |
 | **Variadic parameters** (DEC-298) | ✅ | `examples/guide/variadics.phg`, `examples/README.md:108`; probe `v1-variadic.phg` → `check` clean, VM `6`, tree-walker `6`, transpiles | **0 hits** |
-| `#[Invoke]` callable instances | ✅ (slice 1, `docs/specs/2026-07-23-invoke-tostring.md` §8) | probe `f3-invoke.phg` → `E-NOT-CALLABLE` + *"add an `#[Invoke]` method to make instances callable"* | **0 hits** |
+| `#[Invoke]` callable instances | ✅ (slice 1, `docs/archive/specs/2026-07-23-invoke-tostring.md` §8) | probe `f3-invoke.phg` → `E-NOT-CALLABLE` + *"add an `#[Invoke]` method to make instances callable"* | **0 hits** |
 
 `grep -c -i` on `FEATURES.md`: `named arg` = 0, `variadic` = 0, `invoke` = 0; on `examples/README.md`:
 2, 2, 3. Correctly-omitted-because-not-built (verified via probe, so the matrix is right to be silent):

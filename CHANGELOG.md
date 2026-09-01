@@ -1983,7 +1983,7 @@ whole of what would make `catch (UniqueViolationError e)` work there — and wha
   reachable here, so adding one there without adding it here fails a test instead of silently degrading.
 - `Core.Database` remains Ladder case 2 for now. Steps 2 and 3 — `DatabaseResult` construction across ~20
   `php:` emitters, and the `decimal` mapping (PDO yields float where phorj is exact) — are scoped in
-  `docs/specs/2026-07-26-transaction-depth-semantics.md`; the quarantine flips after those.
+  `docs/archive/specs/2026-07-26-transaction-depth-semantics.md`; the quarantine flips after those.
 
 ### Fixed — the savepoint helpers printed PHP-8.5 deprecation notices onto stdout (2026-07-29, DEC-340)
 `SplObjectStorage::contains()` is deprecated as of PHP 8.5 — which is the transpile floor — so every depth
@@ -2070,7 +2070,7 @@ phorj's nesting at all, since PDO's own `beginTransaction()` does not nest.
 quarantined by `E-TRANSPILE-DB` (Ladder case 2), so the emitters never run. Making the leg live means
 lifting that quarantine — a case-2 → case-1 move for the whole module, which Invariants 14 and 16 leave
 to the developer. Analysis and the open question are recorded in
-`docs/specs/2026-07-26-transaction-depth-semantics.md`.
+`docs/archive/specs/2026-07-26-transaction-depth-semantics.md`.
 
 ### Fixed — **P0**: block-scope shadowing broke byte-identity on the PHP leg (2026-07-29, DEC-339)
 Phorj has block scope; PHP does not. A declaration reusing the name of a live local or parameter meant

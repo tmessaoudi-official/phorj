@@ -2,7 +2,7 @@
 
 > **Status: SHIPPED (2026-08-28), DEC-455.15.** Slice S3.4 of DEC-331. Predecessors S3.1, S3.2 A/B/C and
 > S3.3 a–e are all shipped; S3.5 (inbound TLS via rustls) stays after this one, per SLICE-STATE's
-> own sequencing. Spec: `docs/specs/2026-07-23-entry-kinds-serve-tls.md` §D6.
+> own sequencing. Spec: `docs/archive/specs/2026-07-23-entry-kinds-serve-tls.md` §D6.
 
 ## 1. What is ruled, and what is being built
 

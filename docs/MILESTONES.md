@@ -232,7 +232,7 @@ construction (PHP has no file/package-private declarations). Codes `E-VIS-PRIVAT
 (with `phg explain`); example `examples/project/visibility/`. Design
 `docs/specs/2026-06-21-visibility-modifiers-design.md`.
 
-**Q-B update (✅ 2026-07-25, DEC-268-certified — `docs/specs/2026-07-24-visibility-model.md`):** a package
+**Q-B update (✅ 2026-07-25, DEC-268-certified — `docs/archive/specs/2026-07-24-visibility-model.md`):** a package
 HIERARCHY was introduced and `internal` REDEFINED to "this package **+ descendant packages**" (subtree,
 via a dotted-prefix ancestor relation), not just the exact package. Member-level `internal` was added
 (fields/methods/consts/statics/constructor + constructor-promoted params), and member visibility is now

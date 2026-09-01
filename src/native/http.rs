@@ -1,5 +1,5 @@
 //! `Core.Native.Http` — the wire-parsing natives behind the DEC-331 slice-2 rich `Request`
-//! (spec `docs/specs/2026-07-23-rich-request.md`). Std-only in its no-feature baseline; with the
+//! (spec `docs/specs/UNIFIED-SPEC.md#rich-request--bags-uploads-eager-vs-lazy-parsing`). Std-only in its no-feature baseline; with the
 //! `json` feature, [`json_parse_bytes`] delegates to the real `Core.Json` parser. The friendly
 //! surface (Request + bags) is phorj prelude source in `cli::http_request_prelude` — these natives
 //! do only what phorj can't express efficiently: percent/form decoding, multipart splitting, the

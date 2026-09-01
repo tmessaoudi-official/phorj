@@ -12,7 +12,7 @@ output — the thing to actually read — is:
 > **`docs/research/2026-07-25-completeness-register.md`**
 
 That register is the deliverable of the already-RULED **DV-5** research pass
-(`docs/specs/2026-07-24-visibility-model.md`: *"global completeness sweep is its OWN research pass …
+(`docs/archive/specs/2026-07-24-visibility-model.md`: *"global completeness sweep is its OWN research pass …
 synthesized into ONE ranked completeness register"*). These raw files are its citations, committed
 because the remote container is ephemeral and only committed state survives (**Invariant 19**).
 
