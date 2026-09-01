@@ -382,7 +382,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `phg explain E-ENTRY-SIG` updated in the same change.
   **Not yet servable:** `phg serve` still resolves the `respond` entry, so a `(): void` Web entry checks but
   does not run until S3.3a lands `Http.serve`. No previously-working program changed behaviour — the shape
-  being legalized did not compile at all before. Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md`.
+  being legalized did not compile at all before. Plan: `docs/archive/plans/2026-08-22-s3-3-http-serve.plan.md`.
 
 ### Added
 

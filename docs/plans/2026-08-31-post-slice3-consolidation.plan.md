@@ -22,7 +22,7 @@ code bug, the rest doc drift.
 4. **Consolidate docs — NOTHING deleted, everything moved to `docs/archive/plans/` and
    `docs/archive/specs/` (developer-ruled location) with pointer READMEs**: archive 6 finished
    plan files (rescuing 2 unique rationale sections first); fold 10 shipped specs into
-   UNIFIED-SPEC (8 unbuilt specs STAY canonical); migrate the existing `docs/specs/archive/`
+   UNIFIED-SPEC (8 unbuilt specs STAY canonical); migrate the existing `docs/archive/specs/`
    into `docs/archive/specs/`; shrink SLICE-STATE (4,288 lines → current cursor only); refresh
    MASTER-PLAN's 6-week-stale cursor.
 5. **Two small code slices**: TEST-RAW-CHECKER fix (`phg test` spurious prelude errors); G-8 perf
@@ -62,7 +62,7 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
 - [2026-08-31] AGREED: archival convention = archive dirs + pointer READMEs, nothing deleted;
   MASTER-PLAN's "git history" convention line is superseded and gets edited.
 - [2026-09-01] AGREED (refinement): archive LOCATION = `docs/archive/plans/` and
-  `docs/archive/specs/` — one root; the existing `docs/specs/archive/` content migrates into
+  `docs/archive/specs/` — one root; the existing `docs/archive/specs/` content migrates into
   `docs/archive/specs/` in the same pass.
 - [2026-08-31] AGREED: milestone 3-lens panel run on frozen `cf6875db` (discharges S3.5 plan §5's
   run-the-panel obligation). Round 1 = 1 CLEAN + 11 findings across two lenses → the milestone
@@ -176,7 +176,7 @@ MUST NOT delete, merge away, or "simplify" any of the following:
 4. **KNOWN_ISSUES.md, CHANGELOG.md, docs/HISTORY.md, docs/MILESTONES.md, docs/INVARIANTS.md,
    docs/ARCHITECTURE.md, FEATURES.md** — distinct chartered roles; drift-fixes only (Part 3).
 5. **`var/phorj-app`** — the developer's live comparison app; never propose deleting (standing rule).
-6. **The archived originals + archive READMEs** — `docs/specs/archive/` content (20 folded
+6. **The archived originals + archive READMEs** — `docs/archive/specs/` content (20 folded
    originals + README) MOVES to `docs/archive/specs/` (Step 4) but is never deleted or pruned.
 
 ---
@@ -189,7 +189,7 @@ IT, and other docs point at it.
 
 **Step 2 — discharge the two conditional-archival prerequisites** (BEFORE any file moves):
 - 2a. Migrate the rejected-architecture rationale out of
-  `docs/plans/2026-08-22-s3-3-http-serve.plan.md` §3/§3b/§3c (lines ~184-253): the
+  `docs/archive/plans/2026-08-22-s3-3-http-serve.plan.md` §3/§3b/§3c (lines ~184-253): the
   inverted-loop design, the explicit "Kept, not deleted: a fresh session must not rebuild this"
   warning, and the two killing facts (a native cannot call a method; the invoker does not outlive
   the native call). Destination: a new dated NOTE row appended to the DEC-331 block in
@@ -200,7 +200,7 @@ IT, and other docs point at it.
   that G-8 remains OWED. The S3.5 plan file then holds nothing unique.
 
 **Step 3 — create `docs/archive/plans/`** (developer-ruled location, 2026-09-01) with a pointer
-README modeled on `docs/specs/archive/README.md` (per-file → where-its-content-now-lives table).
+README modeled on `docs/archive/specs/README.md` (per-file → where-its-content-now-lives table).
 `git mv` these six (all survey-verified SHIPPED, register-confirmed):
 - `2026-08-22-s3-3-http-serve.plan.md` (after 2a)
 - `2026-08-28-s3-4-role-mismatch.plan.md` (DEC-455.15 mirrors it fully)
@@ -212,8 +212,8 @@ Then edit MASTER-PLAN.md:4-6 to state the `docs/archive/` convention (supersedes
 
 **Step 4 — fold the 10 SHIPPED loose specs into UNIFIED-SPEC.md**, then `git mv` each original to
 `docs/archive/specs/` and add its row to the archive README pointer table. First migrate the
-EXISTING `docs/specs/archive/` (20 previously-folded originals + its README) into
-`docs/archive/specs/` via `git mv`, then `git grep 'docs/specs/archive'` and repoint every inbound
+EXISTING `docs/archive/specs/` (20 previously-folded originals + its README) into
+`docs/archive/specs/` via `git mv`, then `git grep 'docs/archive/specs'` and repoint every inbound
 reference (UNIFIED-SPEC header included) — zero stale hits before proceeding. The 10 to fold:
 `2026-07-22-transpile-into-project.md`, `2026-07-23-entry-kinds-serve-tls.md`,
 `2026-07-23-invoke-tostring.md` (slice 1b deferral noted in the folded section),
@@ -257,12 +257,12 @@ left at the bottom of SLICE-STATE. Nothing is deleted; `git grep` still finds it
    range-validation list (E-SERVE-TLS-MIN-VERSION shipped in S3.5, `src/serve/tls.rs:38`,
    narrowing ruled in DEC-455.16 ruling 3 at C-decisions.md:8421). Residual owed:
    `port`/`maxBodySize`/`timeout` bounds only.
-2. `docs/plans/2026-08-22-s3-3-http-serve.plan.md:218-223` §3b — add the same inline
+2. `docs/archive/plans/2026-08-22-s3-3-http-serve.plan.md:218-223` §3b — add the same inline
    `SUPERSEDED` marker its siblings §3 (:184) and §3c (:225) carry (shipped behavior is the
    OPPOSITE: flag wins loudly, W-SERVE-CONFIG-OVERRIDDEN, DEC-455.14). Do before Step 3 archival.
 3. Same file `:262` build-order table — S3.3d row missing its ✅ (shipped 2026-08-23, `12341ca7`,
    DEC-455.12).
-4. `docs/plans/2026-08-29-s3-5-inbound-tls.plan.md:3-5` header — still "RULED, NOT BUILT"; change
+4. `docs/archive/plans/2026-08-29-s3-5-inbound-tls.plan.md:3-5` header — still "RULED, NOT BUILT"; change
    to SHIPPED 2026-08-29, DEC-455.16. Do before Step 3 archival.
 5. `C-decisions.md:2915` DEC-331 block label — still "(INTERACTIVE DESIGN, QUEUED; … no side plan
    doc)"; append-only discipline: add a dated correction row (see item 10).
@@ -283,7 +283,7 @@ left at the bottom of SLICE-STATE. Nothing is deleted; `git grep` still finds it
    claim S3.5 REJECTED: "(a lone `cert` still serves plain HTTP)". Contradicts row :215 four
    lines up and the example's own corrected header. Security-relevant claim surface — fix the
    parenthetical to "a lone one is `E-SERVE-TLS-INCOMPLETE`".
-12. **[panel P2]** `docs/plans/2026-08-22-s3-3-http-serve.plan.md:7` — the header that declares
+12. **[panel P2]** `docs/archive/plans/2026-08-22-s3-3-http-serve.plan.md:7` — the header that declares
    itself authoritative says "D7 inbound TLS, still unbuilt. Next slice is S3.4" — both false
    since 2026-08-28/29. Fix before Step 3 archival (same pass as items 2/3).
 13. **[panel P3]** `docs/plans/SLICE-STATE.md:50` — the 2026-08-28 S3.4 cursor lacks the

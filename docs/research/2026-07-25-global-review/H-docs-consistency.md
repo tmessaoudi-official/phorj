@@ -1478,10 +1478,10 @@ of the ten high-traffic files are entirely clean; the rot is concentrated in `do
 
 ### H47 — **P2: archive hygiene — 0 of 20 archived specs carries a successor pointer**
 
-`docs/specs/archive/README.md`'s table correctly lists **all 20** files on disk (verified row-for-row
+`docs/archive/specs/README.md`'s table correctly lists **all 20** files on disk (verified row-for-row
 — no missing, no phantom). But:
 
-> `grep -l 'UNIFIED-SPEC' docs/specs/archive/*.md | grep -v README | wc -l` → **0**
+> `grep -l 'UNIFIED-SPEC' docs/archive/specs/*.md | grep -v README | wc -l` → **0**
 
 All 20 originals still open with their **original** status line and no supersession banner. Read in
 isolation — exactly how a grep-driven agent finds them — they read as current:

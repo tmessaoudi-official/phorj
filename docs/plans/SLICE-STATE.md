@@ -169,7 +169,7 @@ because the wiring pushed grandfathered `pipeline.rs` past its size-baseline row
 > hard-error resolution. It was ruled the same day and the ruling went the OTHER way — the CLI flag
 > wins, loudly (DEC-455.14) — and is BUILT. See the current cursor.
 
-**Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md` (status header) + DEC-455.13.** Invariant 9's
+**Plan: `docs/archive/plans/2026-08-22-s3-3-http-serve.plan.md` (status header) + DEC-455.13.** Invariant 9's
 debt and Invariant 17's LSP row both closed, in one change.
 
 **The example (DEC-455.3, OWED since S3.2 Part A).** `examples/web/serve_config.phg` — defaults,
@@ -211,7 +211,7 @@ precedence ruling** (a developer question under Invariant 15, DEC-455.2/455.6). 
 
 ## CURSOR (2026-08-23) — **DEC-331 S3.3d is SHIPPED. S3.3e is NEXT.** ⚠ SUPERSEDED by the cursor above
 
-**Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md` (status header) + DEC-455.12.** The checker
+**Plan: `docs/archive/plans/2026-08-22-s3-3-http-serve.plan.md` (status header) + DEC-455.12.** The checker
 is narrowed and the corpus is migrated, in one change because either alone reddens a gate.
 
 **What landed.** `(Request): Response` under `kind: EntryKind.Web` no longer type-checks —
@@ -260,7 +260,7 @@ and its `examples/README.md` row, plus LSP surfacing and both editors.
 
 ## CURSOR (2026-08-23) — **`TRANSPILE-NS-PRELUDE` is FIXED; S3.3d is UNBLOCKED** ⚠ SUPERSEDED by the cursor above
 
-**Plan: `docs/plans/2026-08-23-transpile-ns-prelude.plan.md`.** The blocker the 2026-08-22 cursor
+**Plan: `docs/archive/plans/2026-08-23-transpile-ns-prelude.plan.md`.** The blocker the 2026-08-22 cursor
 below records is gone (DEC-455.11). A multi-file PROJECT using an injected prelude no longer emits
 PHP that fatals, so the ruled S3.3d structure — `src/…` logic + `src/main.phg` keeping its PHP leg,
 with the Web entry in a sibling `serve.phg` — is now buildable.
@@ -294,7 +294,7 @@ disclosure because the harness could not be rebuilt (four OOM kills). The box fr
 all-features gate was then run on the committed tree: **2871 passed / 0 failed**, both clippy passes
 clean, release build ok. The 3 skips are pre-existing `#[ignore]`s (2 JIT timing, 1 W5-13), counted
 not assumed. Detail + the amendment to that commit message:
-`docs/plans/2026-08-23-transpile-ns-prelude.plan.md` §"Certification closed".
+`docs/archive/plans/2026-08-23-transpile-ns-prelude.plan.md` §"Certification closed".
 
 **S3.3d's own open decision is unchanged and is still a DECISION, not a mechanism:** the four web
 examples PHP-oracle-gated today drop OUT of that oracle the moment they call `Http.serve`. Count
@@ -303,7 +303,7 @@ non-skips before and after — see the 2026-08-22 cursor below, which remains ac
 
 ## CURSOR (2026-08-22) — **DEC-331 S3.3: S3.3a/b/c SHIPPED** ⚠ its "S3.3d IS BLOCKED" paragraph is SUPERSEDED — see the 2026-08-23 cursor above
 
-**Plan: `docs/plans/2026-08-22-s3-3-http-serve.plan.md`** — read it before touching serve, and read
+**Plan: `docs/archive/plans/2026-08-22-s3-3-http-serve.plan.md`** — read it before touching serve, and read
 **§3b, not §3**: the inverted-loop architecture in §3 is SUPERSEDED and must not be built.
 
 **The SHIPPED architecture (S3.3a).** Under D5 the handler is a closure VALUE built inside the Web
@@ -822,7 +822,7 @@ DELETED a special case) and named attribute args are accepted.
 LIFT-ATTR/hoist plan returned **31 findings, NOT CERTIFIABLE**, and the biggest was not about attributes:
 `namespace` and `use` were hard parse errors, so **no Symfony / Laravel / Doctrine file could be lifted AT
 ALL**. LIFT-ATTR was the SECOND blocker. Full analysis in
-`docs/plans/2026-08-04-lift-attr-and-hoist.plan.md`.
+`docs/archive/plans/2026-08-04-lift-attr-and-hoist.plan.md`.
 
 **STILL OPEN on the lift chain — named, not implied fixed:**
 - **project-aware lifting.** A lifted `import` cannot resolve in a flat file (`E-MODULE-NOT-FOUND`), and a

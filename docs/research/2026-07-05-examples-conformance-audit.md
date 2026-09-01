@@ -19,7 +19,7 @@ Real verbs are full-name-only. README/FEATURES/examples-README already correct (
 - **[FIX] `src/cli/bench.rs:339`** output string `"phg bench — median of…"` → `phg benchmark` + its two tests (`src/cli/tests.rs:329,549`). (user-facing output)
 - **[FIX]** `examples/bench/README.md`, `workload.phg` comments, `bench/manual/*` — `phg bench`/`phg disasm` → full names.
 - **[FIX, low-pri] internal doc-comments** in ~15 `src/**` files say `phg fmt`/`phg bench` (dev-facing rustdoc). Module `src/fmt/` + file `fmt_cmd.rs` names are fine; only the `phg fmt` prose is wrong.
-- **[LEAVE] historical**: `docs/specs/archive/`, `docs/research/`, `CHANGELOG.md`, dated `GA-CHECKLIST.md` lines (`phg fmt` was the real name then).
+- **[LEAVE] historical**: `docs/archive/specs/`, `docs/research/`, `CHANGELOG.md`, dated `GA-CHECKLIST.md` lines (`phg fmt` was the real name then).
 
 ## 3. Naming — stdlib method casing (Invariant 12: camelCase)
 - **[COMPILER, breaking] `String.uppercase` → `upperCase`** (`src/native/text.rs:436`; ~13 sites: registry + fault + PHP emit `strtoupper` + tests + examples + docs).

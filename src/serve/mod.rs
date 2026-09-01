@@ -41,7 +41,7 @@
 //! config in a process-global `Mutex<Option<ServeCfg>>` of plain `Send` scalars. Two slots,
 //! deliberately different kinds.
 //!
-//! Rescued verbatim in substance from `docs/plans/2026-08-22-s3-3-http-serve.plan.md` §3/§3c before
+//! Rescued verbatim in substance from `docs/archive/plans/2026-08-22-s3-3-http-serve.plan.md` §3/§3c before
 //! that plan was archived; the register carries the same note on the DEC-331 block.
 use crate::ast::Program;
 use crate::compiler::compile_with;

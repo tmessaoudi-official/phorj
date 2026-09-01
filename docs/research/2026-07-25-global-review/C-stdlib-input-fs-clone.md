@@ -140,7 +140,7 @@ confirmed.]
   (glob/stat/perms/mtime/tempFile/scandir — **DEFER file-handle streams**)"*.
 - `docs/research/roadmap-completeness/raw/A.md:56` — historic charter row:
   `| A-streams | Stream wrappers / resources (fopen, filters) | omit | weak | reject | — (M6 IO instead) | L |`
-- `docs/specs/archive/2026-06-21-php-parity-and-beyond.md:253-254` — same reject, plus
+- `docs/archive/specs/2026-06-21-php-parity-and-beyond.md:253-254` — same reject, plus
   `| L-lazy-seq | … Lazy iterators / Seq<T> generator protocol | new | weak | **reject** |`.
   **NOTE: the `L-lazy-seq` reject is now stale** — DEC-257 shipped exactly that protocol
   (`docs/plans/MASTER-PLAN.md:483-487` "DEC-257 COMPLETE").

@@ -10,7 +10,18 @@
 >
 > **Spec SSOT:** the frozen per-topic specs were folded into ONE spec —
 > `docs/specs/UNIFIED-SPEC.md` (ruled 2026-07-03). Every "the X spec" reference below means the
-> relevant section of UNIFIED-SPEC; the original per-file texts are in git history.
+> relevant section of UNIFIED-SPEC; the original per-file texts are in `docs/archive/specs/`.
+>
+> **ARCHIVAL CONVENTION (ruled 2026-08-31, location refined 2026-09-01 — this SUPERSEDES "the
+> originals are in git history" wherever this file says it).** A plan or spec whose work has SHIPPED
+> is `git mv`d into `docs/archive/plans/` or `docs/archive/specs/`, and gains a row in that
+> directory's pointer README recording what shipped and where the content now lives. **Nothing is
+> deleted.** Git history was the previous convention and it is not sufficient: a reader who does not
+> already know a file existed cannot discover it there, and `git grep` — which is how this repo
+> actually looks things up — does not search it. Unique content is migrated to a live home BEFORE the
+> file moves (the S3.3 plan's rejected-architecture reasoning went to `src/serve/mod.rs` and the
+> register on 2026-09-02 for precisely this reason). Precedence is unchanged and stated in both
+> archive READMEs: where an archived document and a live SSOT disagree, the live SSOT wins.
 > Decisions register: `docs/research/full-audit/raw/C-decisions.md` (canonical — all DEC rows +
 > supersession chains; DEC-267 + META-7 as of the 2026-07-16 full-reopen audit).
 > Delivery rules: `/stack/projects/phorj/CLAUDE.md` + `docs/INVARIANTS.md` — read both first.
@@ -352,7 +363,7 @@ The prior standalone `architecture-decomp.plan.md` is FOLDED here (Invariant 19 
    `autoload-dev` is REPORTED with `phg test` as its counterpart rather than lifted (part 3). **Still open
    after that:** **phorj's own attribute TARGETS** — `#[…]` is legal on a
    top-level `function`/`class` only, so a Doctrine entity's property-level mappings are refused loudly
-   rather than lifted. See `docs/plans/2026-08-04-lift-attr-and-hoist.plan.md` ·
+   rather than lifted. See `docs/archive/plans/2026-08-04-lift-attr-and-hoist.plan.md` ·
    the **DEC-283 .phgml template engine** build ·
    the **GA programme** (spec freeze, reference/tour/migration docs, fuzzing, release engineering)
    + the **DEC-267 JIT-coverage perf metric** (unlocks the withheld M-perf points 90→100).
@@ -778,7 +789,7 @@ wrong; Runtime-pillar packs adjust to ENRICH these, review sweep will inventory 
 1. `queryInto<T>` turbofish wiring (deferred at turbofish merge `69a9151e`).
 2. Db streaming/`streamInto` (item H) — seeds the ONE lazy Iterator protocol (collections/files/rows).
 3. MySQL driver (item J) + DEC-208 slice K.
-4. Core.Mail build per locked spec `docs/specs/archive/2026-07-15-core-mail.md` (DEC-223).
+4. Core.Mail build per locked spec `docs/archive/specs/2026-07-15-core-mail.md` (DEC-223).
 5. DEC-224/225/226 rulings under bounded autonomy (225 folds into concurrency v2; 226 into Decimal/BigInt).
 6. Perf ladder L3 (in-island refcounted handles, src/jit/handles.rs) → ≥1.0×; re-ratchet 21 micros.
 7. FULL review sweep → KNOWN_ISSUES.
@@ -1574,7 +1585,7 @@ from; do not run it as a separate queue.*
     `docs/specs/2026-*.md`** (developer ruled "review-then-archive"; faithfulness already verified —
     closeout TASK-3 PASS). Repoint map: closeout TASK-4 list (README/FEATURES/VISION/STABILITY/
     THIRD-PARTY-NOTICES/docs/examples are live pointers; CHANGELOG + `src/*.rs` provenance comments
-    may stay as historical). `git mv` originals into `docs/specs/archive/`.
+    may stay as historical). `git mv` originals into `docs/archive/specs/`.
   - **NEW — fix `playground/web/gen_examples.py` non-determinism** (Rule 10 violation): it emits the
     example list in filesystem/dict order → the committed `examples.js` reorders on every regen
     (proven pure-reorder, 0 content delta). Sort deterministically, regenerate, commit once. (Bucket-1.)

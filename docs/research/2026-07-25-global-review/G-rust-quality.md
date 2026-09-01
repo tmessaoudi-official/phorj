@@ -453,12 +453,12 @@ sound (no `Backend` trait — none of the 6 is a backend abstraction). Only a fa
   question about `docs/adr/README.md`'s own rules — the developer's call, not mine.**
 
 ### G16 — 18 of 27 spec/plan paths cited in Rust comments point at deleted files — P1
-[Verified: extracted every distinct `docs/**.md` path from `src/**/*.rs` comments (27 unique), tested each with `[ -f ]`, and checked each miss against `docs/specs/archive/`]
+[Verified: extracted every distinct `docs/**.md` path from `src/**/*.rs` comments (27 unique), tested each with `[ -f ]`, and checked each miss against `docs/archive/specs/`]
 
 | Outcome | Count |
 |---|---|
 | Resolves | 6 |
-| **Recoverable — moved to `docs/specs/archive/`** | **3** (`2026-06-27-dependency-policy.md`, `2026-06-28-public-surface-file-rule-design.md`, `2026-06-28-secret-type-design.md`) |
+| **Recoverable — moved to `docs/archive/specs/`** | **3** (`2026-06-27-dependency-policy.md`, `2026-06-28-public-surface-file-rule-design.md`, `2026-06-28-secret-type-design.md`) |
 | **Truly gone — not in `archive/` either** | **18** |
 
 The 18: `docs/plans/{2026-06-25-overnight-design-forks-review.plan.md, di-attributes.plan.md,
@@ -486,7 +486,7 @@ points to it**"*. 18 pointers point at nothing. The content was presumably conso
 target — they just weren't re-pointed when the consolidation happened.
 
 - **Option A:** re-point all 21 misses (18 → `docs/specs/UNIFIED-SPEC.md §<section>`, 3 →
-  `docs/specs/archive/…`) **and** add a CI check that every `docs/…md` and `src/…rs` path appearing
+  `docs/archive/specs/…`) **and** add a CI check that every `docs/…md` and `src/…rs` path appearing
   in a comment resolves. The check is ~15 lines of bash and is the only thing that stops this
   recurring.
 - **Option B:** re-point only the ~6 that make a *normative* claim ("developer-locked",
