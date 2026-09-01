@@ -254,7 +254,7 @@ pub fn help_for(cmd: &str) -> String {
                     --tree-walker      run requests on the interpreter oracle, not the (default) VM\n  \
                     --dev              rich HTML error page on an uncaught fault (DEV ONLY; prod = bare 500)\n\n\
                     examples:\n  \
-                    phg serve examples/web/server.phg\n  \
+                    phg serve examples/web/server/serve.phg\n  \
                     phg serve app.phg --address 0.0.0.0:3000 --timeout 15 --workers 8\n"
         }
         "lsp" => {

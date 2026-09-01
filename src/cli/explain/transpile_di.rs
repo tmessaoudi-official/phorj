@@ -84,7 +84,12 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              Run the program with `phg serve <file>`. Note the refusal is keyed on the CALL, not on\n\
              `import Core.Http` and not on the `Web` entry kind: a web program that does not call\n\
              `Http.serve` — a `handle(Request): Response` handler, the pre-DEC-331-D5 shape — still\n\
-             transpiles, and so do the `Request`/`Response`/`Router` types on their own.\n"
+             transpiles, and so do the `Request`/`Response`/`Router` types on their own.\n\n\
+             The same code also fires on `import Core.Native.Http;` — the RAW twin under\n\
+             `Core.Http`, whose `registerServe` is the same registration by another name. That\n\
+             refusal is keyed on the IMPORT rather than the call, like the four sibling raw\n\
+             modules (`Core.Native.{Database,Session,HttpClient,Mail}`, DEC-277): reach these\n\
+             natives through the friendly `Core.Http` surface, which transpiles.\n"
         }
         "E-TRANSPILE-UNCHECKED" => {
             "E-TRANSPILE-UNCHECKED — an `#[UncheckedOverflow]` function cannot be transpiled to PHP.\n\n\

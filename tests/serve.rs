@@ -988,6 +988,92 @@ fn transpiling_a_program_that_calls_http_serve_is_refused() {
     );
 }
 
+/// A program calling the RAW native under `Core.Http` — `Core.Native.Http.registerServe` — reached
+/// the emitter, and the emitted PHP fatalled at runtime.
+///
+/// The call-keyed refusal above reads `Http.serve` and nothing else, so spelling the same
+/// registration through the raw twin walked straight past it: `phg transpile` exited 0 and emitted
+/// `__phorj_http_register_serve(...)`, a helper NO family defines. The native legs ran fine and the
+/// PHP leg died with `Call to undefined function` (exit 255) — Invariant 1's byte-identity spine
+/// broken by a program that the toolchain reported as successfully transpiled. Invariant 14 tier 2
+/// demands a hard error at transpile time, never a silent divergence discovered at runtime.
+///
+/// The bypass was not obscure: `E-IMPORT-NATIVE-MEMBER` (`checker/program/imports.rs`) actively
+/// RECOMMENDS the whole-module import spelling that reaches it.
+///
+/// Closed the way DEC-277 closed the same hole for the four sibling raw twins
+/// (`Core.Native.{Database,Session,HttpClient,Mail}`) — a module row in `NATIVE_ONLY`, keyed on the
+/// USER's import. That layer and the call-keyed layer above coexist deliberately: this one cannot
+/// fire on the injected prelude, because `reject_native_only_transpile` runs on the RAW program
+/// before `check_and_expand` injects anything, so the prelude's own
+/// `import Core.Native.Http as NativeHttp;` is invisible to it. The companion test below pins that
+/// property — it is the whole reason a module-keyed row is safe here.
+#[test]
+fn transpiling_a_program_that_imports_the_raw_serve_native_is_refused() {
+    const RAW_NATIVE_BYPASS: &str = r#"
+package Main;
+
+import Core.Native.Http as NativeHttp;
+import Core.Http;
+import Core.Http.ServeConfig;
+
+function main(): void {
+  NativeHttp.registerServe(new ServeConfig(), function(bytes raw): bytes {
+    return raw;
+  });
+}
+"#;
+    let prog = phorj::cli::parse_program(RAW_NATIVE_BYPASS).expect("parses");
+    let err = phorj::cli::transpile_program(&prog, RAW_NATIVE_BYPASS)
+        .expect_err("a program importing the raw serve native must not transpile");
+    assert!(
+        err.contains("E-TRANSPILE-SERVE"),
+        "the refusal must carry the same ruled code as the friendly spelling: {err}"
+    );
+}
+
+/// THE FALSE-POSITIVE GUARD FOR THE MODULE-KEYED LAYER above — the one that would have made the row
+/// unsafe if it were wrong.
+///
+/// The injected HTTP preludes import `Core.Native.Http as NativeHttp` themselves
+/// (`src/cli/http_request_prelude.rs`), and the serve prelude's `Http.serve` body CALLS
+/// `NativeHttp.registerServe`. So a module-keyed refusal that ran AFTER prelude injection would
+/// reject every `import Core.Http;` program in the repo — the whole `examples/web/*` corpus, i.e.
+/// exactly the Invariant-1 corpus the refusal exists to protect.
+///
+/// It does not, because both refusal sites run pre-expansion (`cmd_transpile` refuses the
+/// `lex_parse` output; `transpile_program` refuses before `check_and_expand`). This test pins that
+/// ordering from the outside: an ordinary `Core.Http` program that never registers a handler must
+/// still transpile. If someone moves the gate after expansion, this goes red rather than the
+/// breakage reaching the corpus.
+#[test]
+fn an_ordinary_core_http_program_still_transpiles_after_the_module_keyed_refusal() {
+    const FRIENDLY_HTTP_PROGRAM: &str = r#"
+package Main;
+
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Output;
+
+function reply(Request req): Response {
+  return Response.text(200, req.path);
+}
+
+function main(): void {
+  Output.printLine("ok");
+}
+"#;
+    let prog = phorj::cli::parse_program(FRIENDLY_HTTP_PROGRAM).expect("parses");
+    let php = phorj::cli::transpile_program(&prog, FRIENDLY_HTTP_PROGRAM)
+        .expect("a Core.Http program that never registers a handler must still transpile");
+    assert!(
+        php.contains("class Request"),
+        "the injected Core.Http surface must still be emitted: {}",
+        &php[..php.len().min(200)]
+    );
+}
+
 /// THE FALSE-POSITIVE GUARD, and the reason the refusal is keyed on the CALL rather than on the
 /// `Core.Http` import or on the `Web` entry kind.
 ///

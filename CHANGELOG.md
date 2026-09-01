@@ -6,6 +6,53 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The transpile ladder had a bypass, and it shipped: `Core.Native.Http.registerServe` emitted PHP
+  that could not run.** `E-TRANSPILE-SERVE` was keyed on the `Http.serve` call and nothing else, so
+  registering a handler through the raw twin instead — `import Core.Native.Http as NativeHttp;` then
+  `NativeHttp.registerServe(cfg, h)` — walked straight past it. `phg transpile` exited 0 and emitted
+  `__phorj_http_register_serve(...)`, a helper no family defines; the native legs ran clean while the
+  PHP leg died with `Call to undefined function` (exit 255). That is Invariant 1's byte-identity spine
+  broken by a transpile the toolchain reported as a success, and tier 2 of THE LADDER RULE
+  (Invariant 14) requires a hard error at transpile time instead. The bypass was not an obscure
+  corner either: `E-IMPORT-NATIVE-MEMBER` actively recommends the whole-module import spelling that
+  reaches it.
+
+  Closed the way DEC-277 closed the identical hole for the four sibling raw twins
+  (`Core.Native.{Database,Session,HttpClient,Mail}`) — a module row in `reject_native_only_transpile`
+  carrying the same `E-TRANSPILE-SERVE` code as the friendly spelling. The two layers now coexist:
+  one keyed on the call, one on the user's import.
+
+  **Stated consequence:** `Core.Native.Http`'s other members (`parseQuery`, `cookiePairs`, …) have
+  real PHP twins and lose their transpile leg along with `registerServe`, exactly as the four
+  siblings' non-placeholder members did. Nothing in the corpus imports the raw module — the only two
+  hits are the injected preludes — and the friendly `Core.Http` surface, which transpiles, is the
+  supported way to reach them.
+
+  A module row is safe here **only because the gate runs pre-expansion**: `cmd_transpile` refuses the
+  `lex_parse` output and `transpile_program` refuses before `check_and_expand`, so the preludes' own
+  `import Core.Native.Http as NativeHttp` — and `Http.serve`'s body, which calls `registerServe` — are
+  invisible to it. Applied after injection, the same row would reject every `import Core.Http;`
+  program, i.e. the whole `examples/web/*` corpus the refusal exists to protect. A companion test
+  pins that ordering from the outside, and a sabotage run confirms the pair goes red on the mutation
+  and green on the restore.
+
+- **The ladder gate moved out of `pipeline.rs` into `src/cli/ladder.rs`.** Adding the row above took
+  `pipeline.rs` from 860 to 882 lines and the Invariant-13 size gate refused the push — "split it, do
+  not grow it". The gate is a cohesive unit (one table, one walk, one job), so it became its own
+  module rather than being trimmed elsewhere to make room: `pipeline.rs` is back to 786 and
+  `ladder.rs` is 110. Its module doc records the property the rows depend on — that it runs
+  pre-expansion — so the next person to add a row reads it before choosing a key. Pure move plus the
+  doc; the three callers are repointed and no behavior changed. In passing, the doc comment that sat
+  above the function actually described `transpile_program` in its first two lines and the ladder in
+  the rest; each half now sits on what it documents.
+
+- **`phg serve --help` pointed at a file that no longer exists.** Its example line named
+  `examples/web/server.phg`, which S3.3d deleted when the servable examples became projects; it now
+  names `examples/web/server/serve.phg`, which the suite actually serves. Found by the 2026-08-31
+  milestone panel.
+
 ### Added
 
 - **S3.5 — `phg serve` speaks HTTPS, and refuses rather than falls back (DEC-331 D7).** Inbound TLS,

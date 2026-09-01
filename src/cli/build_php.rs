@@ -22,7 +22,7 @@ const GENERATED_MARKER: &str =
 /// or skipped, the runtime path, and the one-time composer diff when the runtime is new).
 pub fn cmd_build_php(entry: &Path, unit: &crate::loader::Unit) -> Result<String, String> {
     let split = on_deep_stack(|| {
-        super::pipeline::reject_native_only_transpile(&unit.program)?;
+        super::ladder::reject_native_only_transpile(&unit.program)?;
         let checked = super::pipeline::check_and_expand(&unit.program, &unit.diag_src)?;
         // A single-file (loose) load carries no attribution map — every user item then belongs to
         // the entry file itself (its sibling), and only helpers/preludes go to the runtime.

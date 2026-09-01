@@ -1,6 +1,7 @@
 //! The front-end pipeline chokepoints (`check_and_expand` / reified variants — Invariants
 //! 5+6) and the `cmd_*` entry points every backend rides through.
 
+use super::ladder::reject_native_only_transpile;
 use super::*;
 
 /// Run a pipeline closure on a worker thread with a large (256 MB) stack. The tokenizer is iterative,
@@ -619,77 +620,6 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
 
 /// `transpile` on an already-loaded program (emit PHP). Multi-namespace emission for a multi-package
 /// project is S2c; S2b emits the existing flat form (correct for `package Main` / single-package).
-/// THE LADDER RULE (MASTER-PLAN G-rules; first applications: concurrency, `Core.Database`, `Core.Mail`):
-/// a native-only Core module — one whose semantics have no faithful PHP byte-identity mapping (live
-/// DB I/O, SMTP delivery) — HARD-ERRORS on transpile with a module-specific `E-TRANSPILE-<FEATURE>`
-/// code. Never a silent degrade, and never the wall of prelude-internal errors the check would
-/// otherwise produce. New native-only module = one row here.
-pub(super) fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
-    const NATIVE_ONLY: &[(&[&str], &str, &str)] = &[
-        (
-            &["Core", "Database"],
-            "E-TRANSPILE-DB",
-            "`Core.Database` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run`.",
-        ),
-        (
-            &["Core", "SessionModule"],
-            "E-TRANSPILE-SESSION",
-            "`Core.SessionModule` is native-only PERMANENTLY (DEC-313): entropy-random session ids (observable via Session.id()), a wall-clock idle TTL, and the persistent in-process store make it not byte-identically transpilable to PHP's per-request $_SESSION model (THE LADDER RULE: refusing beats silent divergence). Run session programs with `phg run` / `phg serve`.",
-        ),
-        (
-            &["Core", "HttpClientModule"],
-            "E-TRANSPILE-HTTPCLIENT",
-            "`Core.HttpClientModule` is native-only: live network I/O cannot be byte-identical across the phorj client and a PHP mapping, so transpiling it is refused rather than silently diverging (THE LADDER RULE). A faithful curl-mapping is a recorded future lift. Run this program with `phg run`.",
-        ),
-        (
-            &["Core", "Mail"],
-            "E-TRANSPILE-MAIL",
-            "`Core.Mail` is native-only (DEC-223): PHP's mail() has no SMTP auth, no TLS, and is header-injection-prone — any mapping would silently drop auth/TLS/attachments (THE LADDER RULE forbids the downgrade). Run this program with `phg run`.",
-        ),
-        // DEC-277: the RAW `Core.Native.*` twins of the native-only modules above. Importing the
-        // raw natives directly must not bypass the ladder gate — several of their `php` emitters
-        // are placeholders (e.g. `Core.Native.Database` close/transaction), so a transpile would
-        // silently diverge instead of refusing. (`Core.Native.Uri`/`Core.Native.Debug` stay
-        // transpilable — their emitters are real twins.)
-        (
-            &["Core", "Native", "Database"],
-            "E-TRANSPILE-DB",
-            "`Core.Native.Database` (the raw natives under `Core.Database`) is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO (THE LADDER RULE). Run this program with `phg run`.",
-        ),
-        (
-            &["Core", "Native", "Session"],
-            "E-TRANSPILE-SESSION",
-            "`Core.Native.Session` (the raw natives under `Core.SessionModule`) is native-only PERMANENTLY (DEC-313, same grounds as the module). Run session programs with `phg run` / `phg serve`.",
-        ),
-        (
-            &["Core", "Native", "HttpClient"],
-            "E-TRANSPILE-HTTPCLIENT",
-            "`Core.Native.HttpClient` (the raw natives under `Core.HttpClientModule`) is native-only: live network I/O cannot be byte-identical (THE LADDER RULE). Run this program with `phg run`.",
-        ),
-        (
-            &["Core", "Native", "Mail"],
-            "E-TRANSPILE-MAIL",
-            "`Core.Native.Mail` (the raw natives under `Core.Mail`) is native-only (DEC-223, THE LADDER RULE). Run this program with `phg run`.",
-        ),
-    ];
-    use crate::ast::Item;
-    for it in &prog.items {
-        let Item::Import { path, span, .. } = it else {
-            continue;
-        };
-        for (module, code, why) in NATIVE_ONLY {
-            if path.len() >= module.len() && path.iter().zip(module.iter()).all(|(a, b)| a == b) {
-                let m = module.join(".");
-                return Err(format!(
-                    "transpile error at {}:{}: cannot transpile a program importing `{m}`\n  [{code}]\n  hint: {why}",
-                    span.line, span.col
-                ));
-            }
-        }
-    }
-    Ok(())
-}
-
 pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         reject_native_only_transpile(prog)?;
