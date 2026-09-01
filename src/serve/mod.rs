@@ -15,6 +15,34 @@
 //! `--workers 1` keeps the original single-threaded path. This supersedes the old "green-threads"
 //! plan (which would have been single-core + needs unstable/unsafe std machinery) — see
 //! `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md` (deleted spec; upstream git history).
+//!
+//! ## Why the loop is NOT inside the `Http.serve` native — do not re-derive this
+//!
+//! The obvious design, written down in full during S3.3 and DISPROVED before any of it was built, was
+//! to invert the loop: bind the listener in the parent, run the `Web` entry once per worker so each
+//! builds its own closure on its own `Rc` heap, and have the `Http.serve` native then run the accept
+//! loop **on the calling thread**, invoking the closure per request. It is an appealing shape — nothing
+//! `Rc`-bearing ever crosses a thread — and it is unbuildable, for two reasons found by reading the
+//! code rather than reasoning about it:
+//!
+//! 1. **A native cannot call a method.** The closure returns a `Response`; the loop needs bytes; the
+//!    conversion is `.serialize()`, a METHOD. `ClosureInvoker` invokes closures, not methods, so the
+//!    native has no way to perform it. Keeping that step in phorj is also what keeps the
+//!    400-on-malformed behaviour byte-identical across backends.
+//! 2. **The invoker does not outlive the native call.** `NativeEval::HigherOrder` receives a
+//!    `&mut ClosureInvoker` supplied by the backend for the duration of ONE dispatch. A native running
+//!    an accept loop would have to hold it for the process lifetime.
+//!
+//! So `Http.serve(cfg, handler)` REGISTERS and RETURNS, and the loop stays exactly where it always was.
+//! The `Web` entry is a closure factory and nothing more: no probe/serve mode split, and the transport,
+//! keep-alive, static-file interception and `(Value, String)` stdout contract are all untouched. The
+//! native is `NativeEval::Pure` precisely because it never invokes the closure — it stores the handler
+//! in a THREAD-LOCAL (a closure `Value` is `Rc`-bearing and must never enter a process global) and the
+//! config in a process-global `Mutex<Option<ServeCfg>>` of plain `Send` scalars. Two slots,
+//! deliberately different kinds.
+//!
+//! Rescued verbatim in substance from `docs/plans/2026-08-22-s3-3-http-serve.plan.md` §3/§3c before
+//! that plan was archived; the register carries the same note on the DEC-331 block.
 use crate::ast::Program;
 use crate::compiler::compile_with;
 use crate::diagnostic::Diagnostic;

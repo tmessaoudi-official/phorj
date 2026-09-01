@@ -2943,6 +2943,24 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   would reject every `import Core.Http;` program. Gate + rows now live in `src/cli/ladder.rs`, whose
   module doc states the property; `an_ordinary_core_http_program_still_transpiles_after_the_module_keyed_refusal`
   (tests/serve.rs) pins it from the outside.
+  ⊳ **NOTE 2026-09-02 — the REJECTED serve architecture, rescued here so it is never rebuilt.** The
+  S3.3 plan carried a full design for inverting the loop — bind the listener in the parent, run the
+  `Web` entry once per worker so each builds its closure on its own `Rc` heap, then have the
+  `Http.serve` native run the accept loop ON THE CALLING THREAD and invoke the closure per request.
+  Its appeal is real (nothing `Rc`-bearing ever crosses a thread) and it is UNBUILDABLE, for two
+  reasons found by reading the code rather than reasoning about it: (1) **a native cannot call a
+  method** — the closure returns a `Response`, the loop needs bytes, and the conversion `.serialize()`
+  is a METHOD, while `ClosureInvoker` invokes closures only; keeping that step in phorj is also what
+  keeps 400-on-malformed byte-identical across backends; (2) **the invoker does not outlive the native
+  call** — `NativeEval::HigherOrder` gets a `&mut ClosureInvoker` for the duration of ONE dispatch,
+  whereas an accept loop would hold it for the process lifetime. Hence the shipped shape:
+  `Http.serve(cfg, handler)` REGISTERS and RETURNS, the loop stays where it was, the `Web` entry is a
+  closure factory, and the native is `NativeEval::Pure` because it never invokes the closure — handler
+  in a THREAD-LOCAL (a closure `Value` is `Rc`-bearing and must never enter a process global), config
+  in a process-global `Mutex<Option<ServeCfg>>` of plain `Send` scalars. The plan file said in as many
+  words "Kept, not deleted: a fresh session must not rebuild this", so archiving it without moving the
+  reasoning first would have destroyed exactly what it warned about. Now also in `src/serve/mod.rs`'s
+  module doc, next to the code it explains.
   - **D1 (LOCKED 2026-07-22) — entry roles & config wiring.** Role declared via `#[Entry(kind: Type)]`
     (named arg). Active kinds `Cli`, `Web`; reserved (recognized, unbuilt) `Desktop`, `Mobile`, `Worker`,
     `Embedded`. Config is injected as a **typed parameter** of the entry (DEC-318 entry-param injection),

@@ -40,6 +40,38 @@ function there is generic over `Read` or pure over `&[u8]`.
 certificate hot-reload, mTLS. Cert paths resolve against the process cwd, not the site-mode app root;
 passphrase-protected keys are not supported.
 
+### ⊳ ADDENDUM 2026-09-02 — the milestone panel RAN, and the gate is still OPEN
+
+The 3-lens milestone panel that S3.5's plan §5 declared due was run 2026-08-31 against the FROZEN
+commit `cf6875db` `feat(serve): HTTPS that refuses rather than falls back — inbound TLS (S3.5, DEC-331
+D7)`, over the range `0c982019..cf6875db`. That discharges the obligation to RUN it. It does not close
+the milestone.
+
+- **security + safety-promises: CLEAN** — every promise checked against diff, source and EXECUTED
+  tests (10/10 default-feature TLS refusals; 21/21 with `http-server-tls`, a real handshake included;
+  no committed secrets; the `unsafe` island untouched).
+- **completeness + blast-radius: FINDINGS — 8** (2×P1, 2×P2, 4×P3).
+- **correctness + regression: FINDINGS — 3** (1×P1 — a live Invariant-1 spine break — and 2×P2).
+
+**Gate status: OPEN, clean counter at zero.** DEC-268 wants two consecutive fully-clean rounds; this
+was round one, with findings. Slice 3 must NOT be reported as panel-certified until the developer's
+chosen closing procedure completes — and that choice is theirs, because DEC-268's two-clean rule and
+the 2026-08-19 economize ruling (one panel per milestone; a second is the waste the rule exists to
+prevent) genuinely conflict here. Do not resolve that alone.
+
+The P1 spine break is FIXED (2026-09-02): `Core.Native.Http.registerServe` bypassed
+`E-TRANSPILE-SERVE` and emitted PHP that fatalled at runtime. The doc findings are fixed too. Range
+disclosure: the panel read only `0c982019..cf6875db`, so S3.2 Parts A/B were reviewed at HEAD state
+but their diffs were never panel-read.
+
+**G-8 remains OWED** and was re-confirmed unmeasurable on 2026-09-02: the pre-push microbench-gate
+found 1-min load 10.59, waited 90s, still 4.36 against its 2.5 ceiling, and SKIPPED rather than
+reporting a number. That is NO-HIDDEN-LOSS (DEC-365) working — never `--emit` a re-baseline to green
+it. It needs a quiet box, gated on per-core `mpstat` idle rather than load-avg.
+
+Full plan, ordering and the queued adjudications:
+`docs/plans/2026-08-31-post-slice3-consolidation.plan.md`.
+
 **Next: DEC-331 is done — the queue is open.** Two items are carried OWED and are the natural
 candidates: the **G-8 microbench ratchet** (skipped since S3.4; needs a quiet box) and
 **KNOWN_ISSUES §TEST-RAW-CHECKER** (`phg test` checks the raw program, so injected-prelude symbols

@@ -36,9 +36,10 @@
 /// stdout contract are all untouched — `serve::web_handlers` runs the entry once per worker to
 /// obtain that worker's handler, and calls it per request. The alternative (an accept loop inside
 /// the native) was designed, written down and DISPROVED — see
-/// `docs/plans/2026-08-22-s3-3-http-serve.plan.md` §3c: a native cannot call `.serialize()` on the
-/// `Response` it gets back, and the `ClosureInvoker` does not outlive the native call, so a native
-/// cannot own a loop that invokes the handler.
+/// `src/serve/mod.rs` § "Why the loop is NOT inside the `Http.serve` native" (rescued there from the
+/// since-archived S3.3 plan): a native cannot call `.serialize()` on the `Response` it gets back, and
+/// the `ClosureInvoker` does not outlive the native call, so a native cannot own a loop that invokes
+/// the handler.
 ///
 /// `NativeHttp` is the `Core.Native.Http` alias imported by the sibling `http_request_prelude`
 /// fragment. Prelude imports are program-wide once injected, so this fragment relies on it exactly
