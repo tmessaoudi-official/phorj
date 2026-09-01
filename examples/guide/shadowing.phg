@@ -8,7 +8,7 @@
 // This file is the OTHER half of that rule: every form that stays legal, because none of them shadows
 // anything live. If a future change breaks one of these, it has over-tightened the rule — that is what
 // this example exists to catch. The rejected forms cannot be shown here (they no longer compile); the
-// full 23-row matrix is `docs/specs/2026-07-26-block-scope-shadowing.md`, and
+// full 23-row matrix is `docs/specs/UNIFIED-SPEC.md#block-scope-shadowing--the-redeclaration-rule`, and
 // `phg explain E-SHADOW-LOCAL` summarises it.
 package Main;
 

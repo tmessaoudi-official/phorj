@@ -1015,7 +1015,7 @@ clippy clean at `--all-features` AND `--no-default-features`, `cargo fmt --check
 
 ### DEC-364 `using` — BUILT 2026-07-31
 
-Design + build record: `docs/specs/2026-07-30-using-scope-guard.md` (status flipped, three inline
+Design + build record: `docs/archive/specs/2026-07-30-using-scope-guard.md` (status flipped, three inline
 corrections) and the **"DEC-364 BUILT"** section at the end of the decision register. Byte-identical on
 `run` / `run --tree-walker` / php-8.5.8 for every exit path. `Connection implements Closable`.
 
@@ -1556,7 +1556,7 @@ big lever; next blockers unchanged — XML/streams/intl/SPL-heaps/mb-tail.
 
 ### ⏳ NEXT: 3.1 / **DEC-364** `using` — DESIGNED, blast radius MEASURED, not started
 
-`docs/specs/2026-07-30-using-scope-guard.md` is the canonical design. **The tree is green — nothing is
+`docs/archive/specs/2026-07-30-using-scope-guard.md` is the canonical design. **The tree is green — nothing is
 half-built.** What is decided: the `Stmt::Using { ty, name, init, body, span }` shape; **no new `Op` and no
 new `Value`** (it lowers to `try { … } finally { h.close(); }`, reusing `Stmt::Try`'s already-differentialled
 ordering); mandatory declared type implementing `Core.Closable`, enforced at compile time so the `close()`
@@ -1634,7 +1634,7 @@ developer's box (DEC-365 + DEC-370 — no Docker in the container).
 - **RE-MEASURED FIRST, and the spec's inventory had DECAYED** — the ruling's own prediction (*"D alone
   decays"*) came true before D shipped: **26** named catch-alls in `src/checker/`, not 17. By enum: 8
   `Expr` · 2 `Stmt` · 1 `Pattern` · 10 `Item` · 4 `Ty` · 1 unclassified. Full per-walker
-  missed-variant table now lives in `docs/specs/2026-07-26-ast-exhaustiveness.md`.
+  missed-variant table now lives in `docs/archive/specs/2026-07-26-ast-exhaustiveness.md`.
 - **Why the 26 are a slice of their own, measured not assumed:** `cli/pipeline.rs` runs `erase_tuples`
   AFTER seven of the rewriters, so `Expr::Tuple` really is live at their catch-alls — but the first probe
   (a generic call inside a tuple) **worked on both backends**. So a static miss is not automatically a
@@ -1785,7 +1785,7 @@ challenge the premise"* escape — then STOP and wait. The protocol is `.claude/
   parameter binding is REJECTED** (same scope or enclosing), class fields never conflict, lambdas start
   a new function. Enforced in the **checker**. Alpha-renaming was considered and **rejected**.
   **Canonical rule + the full 23-row accepted/rejected case list:
-  `docs/specs/2026-07-26-block-scope-shadowing.md`.** NOT YET BUILT.
+  `docs/archive/specs/2026-07-26-block-scope-shadowing.md`.** NOT YET BUILT.
   - Probing widened the P0 from **6 recorded shapes to 10** — new: the `for…in` loop *variable*,
     `match` arm bindings, binding-`if`, `catch` bindings. Nested `for` reusing a counter **changes
     control flow** (iteration count), not just printed output.
@@ -1812,7 +1812,7 @@ challenge the premise"* escape — then STOP and wait. The protocol is `.claude/
   settled by evidence: a handler fault is **a 500 on that request, never a panic** (`handlers.rs:143,186-188`)
   ⇒ no DoS vector. Also ruled: **NUL added to the REQUEST side too**, and
   **`Http.isValidHeaderName`/`isValidHeaderValue`** ship for the clean-400 path.
-  **Canonical rule: `docs/specs/2026-07-26-response-header-injection-guard.md`.** NOT YET BUILT.
+  **Canonical rule: `docs/archive/specs/2026-07-26-response-header-injection-guard.md`.** NOT YET BUILT.
   - Reproduced live: injected header **and a second body** while `Content-Length: 2` still describes the
     real one — a desync/smuggling shape, not only response splitting.
 
@@ -1822,7 +1822,7 @@ challenge the premise"* escape — then STOP and wait. The protocol is `.claude/
   total visitor) is a separately-ruled follow-up**, safe only after D makes the blast radius enumerable.
   `walk.rs:748` gets **named no-op arms, not `unreachable!()`**. **Invariant 3's wording is widened to name
   `Expr`/`Stmt`/`Pattern`** in the same change.
-  **Canonical rule: `docs/specs/2026-07-26-ast-exhaustiveness.md`.** NOT YET BUILT.
+  **Canonical rule: `docs/archive/specs/2026-07-26-ast-exhaustiveness.md`.** NOT YET BUILT.
 
 - **GR-19 / DEC-357 — RULED 2026-07-26.** Writing to a captured local is **REJECTED** at check time
   (silently lost today: `total=0` on all three legs, no signal). NOT an Invariant-1 break — the legs agree;
@@ -3016,7 +3016,7 @@ backlog ledger, ✅ marks done):**
    byte-identity-gated. Only these verbs network (Invariant 10). Follow-ups (documented in DEC-316): registry
    constraint-intersection, per-package `phg update`, a hosted registry index.
 1b. **Adoption-review queue (DEC-319, 2026-07-22):** `edition` field (DEC-321) ✅ SHIPPED 2026-07-22 ·
-   'transpile-into-project' (DEC-320) — BUILD APPROVED 2026-07-22 (DEC-329 — spec defaults ruled; docs/specs/2026-07-22-transpile-into-project.md) · concurrency v2
+   'transpile-into-project' (DEC-320) — BUILD APPROVED 2026-07-22 (DEC-329 — spec defaults ruled; docs/archive/specs/2026-07-22-transpile-into-project.md) · concurrency v2
    REAL PARALLELISM (DEC-322, DESIGN slice — forks adjudicated at design time). DEC-323 channels ✅ shipped.
 2. ✅ **DONE 2026-07-22 — Transpile FS emitter (DEC-313)** (helpers `transpile/fs_php.rs`, call-site Ok/Err wrap, kind pre-checks, quarantine lifted, php-leg parity test; Session→PERMANENT same slice). Original notes: — build-map in C-decisions §2026-07-20 (FileSystemResult Ok/Err, 18 natives,
    `__phorj_fs_*` helpers, kind-reconstruction; ⚠ R1 variant-class ns + R2 kind-reconstruct). Needs `runtime_php.rs`

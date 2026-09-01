@@ -5,7 +5,7 @@
 > all of them into a single navigable SSOT (+ the Core.Database and Core.Mail locked specs, folded
 > 2026-07-16 post-audit — dated specs are folded at ship-time, never left as parallel SSOTs).
 > The original files now live in
-> [`archive/`](archive/README.md) (2026-07-04) — each section's bare "Source: …md" citation names a
+> [`../archive/specs/`](../archive/specs/README.md) (2026-07-04) — each section's bare "Source: …md" citation names a
 > file under `archive/`; **this document is the reference from now on** — external pointers target
 > section anchors here.
 >
@@ -99,6 +99,9 @@
   - [Comprehensive statics](#comprehensive-statics) *(2026-06-28 — A+B SHIPPED, LSB deferred)*
   - [Secret type](#secret-type) *(2026-06-28 — SHIPPED)*
   - [Nested-value index-assignment](#nested-value-index-assignment) *(2026-07-01 — SHIPPED)*
+  - [`using` — the scope guard](#using--the-scope-guard) *(2026-07-30 — DEC-364, SHIPPED)*
+  - [Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`](#mechanical-exhaustiveness-for-exprstmtpattern) *(2026-07-26 — DEC-356; core SHIPPED, rewriter sweep OWED)*
+  - [Block-scope shadowing — the redeclaration rule](#block-scope-shadowing--the-redeclaration-rule) *(2026-07-26 — DEC-339, SHIPPED)*
 - **Part IV — Standard library & policy**
   - [Standard library charter](#standard-library-charter) *(2026-06-29 — ADOPTED, governing)*
   - [Typed auto-escaping HTML](#typed-auto-escaping-html) *(2026-06-19 — SHIPPED)*
@@ -110,10 +113,12 @@
   - [Core.Database — the enhanced-PDO database primitive (DEC-208)](#coredb--the-enhanced-pdo-database-primitive-dec-208) *(2026-07-14 — SHIPPED, slices A–K)*
   - [Core.Mail — native mailer (DEC-223)](#coremail--native-mailer-dec-223) *(2026-07-15 — SHIPPED)*
   - [Dependency injection & attribute reflection (DI v2 / L1–L2)](#dependency-injection--attribute-reflection-di-v2--l1l2) *(2026-07-11 — DESIGN; DI v1 SHIPPED; L1/L2 advanced by DEC-261)*
+  - [Response-side header injection guard](#response-side-header-injection-guard) *(2026-07-26 — DEC-363, SHIPPED)*
 - **Part V — Build & distribution (M2.5)**
   - [phg build master design](#phg-build-master-design) *(2026-06-16)*
   - [Phase 2 cross-OS builds](#phase-2-cross-os-builds) *(2026-06-16 — SHIPPED v0.4.0)*
   - [Phase 3a stub registry](#phase-3a-stub-registry) *(2026-06-17 — SHIPPED; 3b deferred)*
+  - [Transpile-into-project — file-by-file adoption inside a live PHP app](#transpile-into-project--file-by-file-adoption-inside-a-live-php-app) *(2026-07-22 — v1 SHIPPED, DEC-320/329)*
 - [Appendix A — source-file map and supersession chains](#appendix-a--source-file-map-and-supersession-chains)
 
 ---
@@ -770,6 +775,226 @@ recursive lvalue eval descending with `make_mut`/`borrow_mut`, setting via the s
 stack marker + ordered `Field`/`Index` steps), navigating in place, never putting a `&mut` on the
 value stack; extends the three coupled matches per the Op-coupling invariant. Compound-assign on a
 deep path (`grid[i][j] += 1`) rides the same walker (read-path + set-path desugar).
+
+## Block-scope shadowing — the redeclaration rule
+
+**Status: SHIPPED — DEC-339, ruled 2026-07-26, built 2026-07-29 as `E-SHADOW-LOCAL` in the checker
+(`src/checker/plumbing.rs`).** Source: `2026-07-26-block-scope-shadowing.md`; original P0 evidence
+`docs/research/2026-07-25-global-review/P0-block-shadow-byte-identity.md` (immutable). **This section is
+the rule and carries the complete case list** — the canonical home moved here when the spec was folded.
+
+**Why it exists.** Phorj has true lexical block scoping; PHP has function scoping only. The transpiler
+emits a nested declaration as a plain `$a = …`, which clobbers the enclosing binding — so a program
+correct under both Rust backends produced **different output** under the PHP leg. That is an Invariant-1
+break. It escaped the gate because the differential globs `examples/**/*.phg` and **no example shadowed a
+variable**: block scoping had zero spine coverage.
+
+### The rule
+
+> A declaration is **rejected** if its name is already bound by a **live local or parameter binding** in
+> the same function — whether in the **same** scope or an **enclosing** one.
+>
+> - **Class fields are never local bindings**, so they never conflict.
+> - **A lambda starts a new function**, so enclosing names do not reach into it.
+
+Scopes are opened by: the function body, a bare block, an `if`/`else` body, a `while` body, a `for`
+header+body, a `for…in` header+body, a `match` arm, a `catch` clause, and a binding-`if` body.
+
+**Chosen over alpha-renaming in the transpiler** because shadowing is not one construct but **ten
+declaration forms**: a renamer must be correct in every one of them forever, while the rule makes all ten
+*unrepresentable* at a single chokepoint — and protects any future backend or codegen path for free.
+
+**Enforced in the checker, not the transpiler.** That is the one pipeline every surface shares, so a
+single implementation reaches `run`, `--tree-walker`, `transpile`, `build --php`, the LSP, the formatter
+and the test runner. A transpiler-only guard would let `phg run` accept a program that cannot transpile —
+a worse asymmetry than the bug being fixed.
+
+The 2026-07-26 probing widened the known blast radius from the 6 shapes in the P0 report to **10**,
+adding four nobody had considered: the `for…in` loop *variable*, `match` arm bindings, binding-`if`
+bindings, and `catch` bindings. One shape **changes control flow**, not just printed output.
+
+### REJECTED — 1–10 diverged (correctness), 11–14 were byte-identical (hygiene)
+
+| # | Case | Example | Before the rule (vm/tw → php) |
+|---|---|---|---|
+| 1 | `if` block shadows an outer local | `int a=1; if(true){int a=2;}` | `1` → **`2`** |
+| 2 | `while` body shadows an outer local | `int a=1; while(…){int a=9;}` | `1` → **`9`** |
+| 3 | Nested bare blocks shadow an outer local | `int a=1; {{{int a=3;}}}` | `1` → **`3`** |
+| 4 | Nested `for` reuses the counter name | `for(mutable int i…){for(mutable int i…){}}` | `6` → **`3`** — **changes iteration count** |
+| 5 | `for` counter shadows an outer local | `int i=42; for(mutable int i=0;…)` | `42` → **`3`** |
+| 6 | `for…in` body local shadows an outer local | `int x=7; for(int v in …){int x=v;}` | `7` → **`2`** |
+| 7 | `for…in` loop **variable** shadows an outer local | `int v=77; for(int v in [1,2]){}` | `77` → **`2`** |
+| 8 | `match` arm binding shadows an outer local | `float r=100.0; match(s){Circle(r)=>…}` | `100` → **`2`** |
+| 9 | binding-`if` shadows an outer local | `int x=100; if(var x=j){…}` | `100` → **empty** — clobbers even when the bind **fails** |
+| 10 | `catch` binding shadows an outer local | `int e=7; try{…}catch(BoomError e){…}` | `7` → **exception dump + stack trace + absolute path** |
+| 11 | Same-scope redeclaration | `int a=1; int a=2;` | identical — rejected as the "meant to assign, accidentally re-declared, possibly at another type" typo class |
+| 12 | Local redeclares a parameter | `function f(int a){ int a=2; }` | identical — the argument is silently discarded |
+| 13 | Local redeclares a **non-promoted** ctor param | `constructor(int seed){ int seed=5; }` | identical — same as 12 |
+| 14 | Local redeclares a **promoted** ctor param | `constructor(public int myVar){ int myVar=5; }` | identical — see the note below |
+
+### ACCEPTED — all byte-identical, all must keep working
+
+| # | Case | Why it is safe |
+|---|---|---|
+| 15 | Sibling blocks reuse a name, even at different types | The first binding is dead — it can be declared after |
+| 16 | Sequential `for` loops reuse the counter | Same; ubiquitous idiom |
+| 17 | Sibling `match` arms reuse a binding name | Arms are siblings; never both live |
+| 18 | Sibling binding-`if`s reuse a name | Same |
+| 19 | Lambda param shadows an outer local (expr body) | Emits PHP `fn($x) => …`; arrow-fn params shadow correctly and auto-capture excludes params |
+| 20 | Lambda param shadows an outer local (block body) | The capture list is `free_vars` **minus params** |
+| 21 | Nested lambda params shadow each other | A new function boundary each time |
+| 22 | Method local named like a class field | `this.n` is **mandatory** (Invariant 12) — the field is not a local binding, so nothing is shadowed |
+| 23 | Loop body re-declares per iteration | Safe **because** `int a;` (uninitialized) is a parse error — a declaration always initializes, so a stale PHP `$a` is never readable |
+
+**Row 14 vs row 22 — why they differ.** A promoted ctor param is *also* a live parameter, bare-readable
+in the constructor body, so inside the constructor there IS a live binding of that name and a local
+redeclares it (row 12). In a *method*, the field name is not a local binding at all — nothing is
+shadowed, and rejecting it would poison every field name inside every method for zero correctness gain.
+The dividing line is the rule's own words: *is there a live local binding with that name?* Two
+alternatives were rejected and are recorded so they are not re-litigated — carving promoted params out
+of the rule (byte-identical and free, but the rule gains an exception), and making promoted params
+field-only inside the body (keeps the rule exception-free, but breaks a form that works today and that
+every peer language allows).
+
+**Row 23's dependency is load-bearing.** If uninitialized declarations (`int a;`) were ever admitted,
+loop-body declarations would stop being safe and would need their own rule. Any future proposal to allow
+them must revisit this section.
+
+## Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`
+
+**Status: core SHIPPED (DEC-356, ruled 2026-07-26, built 2026-07-30) — WITH A MEASURED REMAINDER that
+is still owed; see "What is not done" below.** Source: `2026-07-26-ast-exhaustiveness.md`; original
+analysis `docs/research/2026-07-25-completeness-register.md` §6.4.
+
+**The class, not the instances.** Every P0/P1 in the 2026-07-25 agenda shipped because *a match arm
+silently passed something through*. **A named catch-all (`other => other`, `leaf => leaf`) is worse
+than `_`**: it compiles cleanly, reads as deliberate, and greps as a *handled* case. One checker file
+literally declared the invariant it then broke — `desugar_db.rs` documented "keep the rewriter TOTAL …
+a new expression-bearing AST node → add its arm here" and closed with `other => other`.
+
+### The ruling
+
+> Fix the known catch-all sites **AND** land the gate that keeps them fixed, as ONE slice.
+
+D, C and B were presented as ranked alternatives; they are not alternatives. **D alone decays** —
+nothing prevents catch-all #19. **C alone ships a gate over known-broken sites**, so it passes while
+the bugs remain. **B (a single shared total visitor) becomes safe only after D**, because only once
+every site has explicit arms does the compiler *enumerate* the blast radius a shared visitor must
+preserve. B is a separately-ruled follow-up, recorded as QUEUED rather than dropped.
+
+- **D — the fix.** Explicit arms in place of the catch-alls. At `walk.rs`'s `collect_pattern_bindings`,
+  explicit **named no-op** arms, NOT `unreachable!()`: the pattern forms that bind nothing (wildcard,
+  literal, …) are perfectly *reachable*, they simply contribute no bindings, so `unreachable!()` would
+  be factually wrong and would put a panic on a checker path.
+- **C — the gate.** A never-constructed probe variant behind `#[cfg(test)]` whose addition must break
+  the build in every rewriter that should care. Honest limitation, stated at ruling time: a match that
+  still carries a catch-all keeps compiling, so C enforces "a new variant is considered" only in
+  matches D has already made total — which is exactly why they ship together.
+- **Invariant 3 was widened in the same change** to name `Expr`/`Stmt`/`Pattern` alongside `Op`, in
+  both `CLAUDE.md` and `docs/INVARIANTS.md` — written down rather than remembered.
+
+### What the ruling under-rated
+
+It called the class *structural*. It was in fact hiding **a compiler panic on valid user code**:
+`var (a, b) = (html"<p>{n}</p>", 1);` reached `unreachable!("html literal not resolved before
+compilation")`, because `rewrite_html`'s catch-all swallowed `Expr::Tuple` while `erase_tuples` runs
+after it.
+
+### The prediction came true before the fix shipped
+
+"D alone decays" was measured, not theorised: named catch-alls in `src/checker/` went from **17 at
+ruling time (2026-07-26) to 26 four days later (2026-07-30)** — five new ones arrived during the
+interval, and four `Ty` sites the original count never listed at all.
+
+### What is NOT done — carried OWED, deliberately a slice of its own
+
+`walk.rs`'s `collect_pattern_bindings` is fixed as ruled. **The 26 rewriter sites are not.** The reason
+is measured rather than assumed: the pass order runs `erase_tuples` AFTER `resolve_html`,
+`erase_generics`, `rewrite_ufcs`, `desugar_db`, `desugar_di`, `desugar_router` and
+`resolve_variant_imports`, so `Expr::Tuple` is live at all seven and their catch-alls really do swallow
+it; statically each also misses `NamedArg`, and most miss `NewColl` / `Pipe` / `Inject` /
+`TaggedTemplate`.
+
+**But a static miss is not automatically a live bug, and the first probe proved it** — a generic call
+inside a tuple works on both backends despite `erase_generics` statically missing `Tuple`. So each cell
+needs its own reproduction before a fix is written (Rule 14), and that per-cell probing plus a
+differential case per real find is what makes the remainder a slice rather than a mechanical sweep.
+
+**Technique for that fix when it happens:** an `e @ (Expr::A(..) | Expr::B(..) | …) => e` or-pattern arm
+gives full compiler enforcement — a new variant not in the list is a non-exhaustive-match error — at
+~10 lines per site instead of 37, which is what keeps the fix compatible with Invariant 13's caps.
+
+## `using` — the scope guard
+
+**Status: SHIPPED — DEC-364 / DEC-203, ruled 2026-07-30, built 2026-07-31.** Source:
+`2026-07-30-using-scope-guard.md`.
+
+`using (T h = expr) { … }` closes `h` at **every** exit path from the block — normal fall-through,
+`return`, `break`/`continue` out of the block, and a throw. It was deliberately built BEFORE
+`FileSystem.lines` (DEC-347) and `withLock` (DEC-348) so those landed on a real release guarantee
+instead of the hand-rolled `try`/`finally` every open slice was using.
+
+**`defer` stays rejected**, and its reason was re-examined rather than inherited: DEC-371 struck the
+"no PHP analog" argument as illegitimate, so the rejection now rests only on its real merits — LIFO
+ordering plus capture timing is a genuine footgun, and `using` covers the same need with block-scoped
+clarity. One mechanism beats two. This is therefore the WHOLE scope-guard surface; there is no second
+slice waiting behind it.
+
+```phorj
+using (Connection db = new Connection(":memory:")) {
+    db.exec("INSERT INTO t VALUES (1)");
+}   // db.close() has run — normal path, `return`, and throw alike
+```
+
+### The rules
+
+- **The type is mandatory** and must implement `Closable` from `Core.ClosableModule` (the `Module`
+  suffix is DEC-278's namesake rule: a module whose leaf equals its one bound type). Rejecting anything
+  else **at compile time** is what makes the synthesized `close()` total — there is no runtime "does it
+  have a close()?" probe.
+- **The binding is block-scoped**, so it cannot outlive its own release.
+- **`using` is CONTEXTUAL, not reserved** (DEC-364.1). It is significant only immediately before `(`,
+  and reserves nothing — reserving would break any identifier spelled `using`, and DEC-344 was
+  simultaneously *de*-reserving `main`, so a new reserved word cut against the direction of travel. The
+  lexer gains no keyword; the parser decides at statement position with one lookahead. Both
+  `int using = 1;` and `using (Connection db = open()) { }` must parse, and `using(1);` must stay a
+  CALL — the gate checks the header's `Type name =` shape, not merely the `(`, so a function named
+  `using` keeps working.
+
+### Why it needs no new `Op` and no new `Value`
+
+It lowers to the shape a hand-written guard already has — `try { … } finally { h.close(); }` — so all
+three backends reuse `Stmt::Try`'s machinery and the PHP leg is a literal `try`/`finally`. Invariant 1
+stays cheap because there is no new failure ORDERING to reconcile: the ordering is `Try`'s, which is
+already differentialled.
+
+### The blast radius is the receipt for DEC-356
+
+Adding the variant and letting `rustc` enumerate gave **34** sites [Verified 2026-07-31: `cargo check
+--all-targets --all-features` reported `E0004` at 34 distinct locations; the prior estimate of 35 was
+one high] — four `ast/walk.rs` arms, fifteen checker rewriters, the two `checker/stmt/core.rs` sites
+doing the real work, the compiler lowering, three formatter printers, and the two `rewrite_new` sites.
+
+That count is the point. **Before DEC-356 landed, most of those checker walks carried `leaf => leaf`,
+so `Stmt::Using` would have compiled fine and been SILENTLY PASSED THROUGH** — generics erasure, DI
+desugaring, html resolution and UFCS would each have skipped the inside of a `using` block, and nothing
+would have failed until a user hit it. The compile errors are the feature working as designed, which is
+exactly the argument for Invariant 3's no-catch-all rule.
+
+### One obligation the interface does not cover, found while building
+
+Interface conformance compares parameters and the return type but **not** `throws`, so an implementor
+may legally declare `function close(): void throws IoError`. That call is synthesized into a `finally`,
+so without a check a *checked* fault would escape a function that neither catches nor declares it.
+`E-USING-CLOSE-THROWS` applies the rule DEC-257 already ruled for a throwing iterator's `foreach`:
+caught by an enclosing `try`, or declared by the enclosing function.
+
+### LIFT is deferred, with its reason
+
+Raising a PHP `try`/`finally`-with-one-`close()` back to `using` is blocked on the whole exception
+family entering the lift subset: the lift parser rejects `try` and the lift printer lists it as outside
+its subset. This is a **lifter-wide gap, not a `using` gap**, and it is recorded in the register and
+`KNOWN_ISSUES.md` rather than left as a silent Invariant-17 miss.
 
 ---
 
@@ -1501,6 +1726,61 @@ mirroring the `String.length`/`Bytes.length` and `String.count`/`Bytes.count` pa
   that FAULTS on invalid UTF-8 (correct: a half-codepoint isn't text — never a silent broken string).
 - **`%b` is NOT available** for this — it is already taken for binary-integer formatting (`5`→`101`).
 
+## Response-side header injection guard
+
+**Status: SHIPPED — DEC-363, ruled 2026-07-26, built.** Source:
+`2026-07-26-response-header-injection-guard.md`; original analysis
+`docs/research/2026-07-25-completeness-register.md` §7.3. Code: the `HeaderSafety` class in
+`src/cli/http_prelude.rs`.
+
+**The vulnerability this closes.** `Response.withHeader(name, value)` interpolated BOTH arguments
+straight into a header line with zero validation, `Cookie.render()` did the same for its string
+fields, `serialize()` CRLF-joined the lines, and `respond_once` returned the handler's bytes verbatim —
+so no Rust-side serializer existed that could re-validate. A CR/LF payload in a header value therefore
+terminated the head early and appended a second body while `Content-Length` still described the first,
+making this a **request-smuggling / desync primitive**, not merely response splitting. The header NAME
+was equally unvalidated. What raised its priority was the asymmetry: the request side
+(`src/ext/http_client/natives.rs`) had rejected CR/LF in names and values all along.
+
+### The rule
+
+> Guard **in the phorj prelude**, as a panic-class fault, at `Response.withHeader` and at the `Cookie`
+> constructor. Rejected class: **CR, LF, NUL** in any value, plus **`:`** in a header name. Diagnostic
+> wording mirrors the request-side gate: ``header `{name}` contains a forbidden character``.
+
+Three of `Cookie`'s six fields need guarding — `name`, `value`, `cookiePath`; the other three are
+`bool` and cannot carry CR/LF/NUL.
+
+**Why the prelude, not Rust.** One implementation in phorj source means all three legs (`run`,
+`run --tree-walker`, transpiled PHP) behave identically *by construction*. A Rust-side guard in
+`respond_once` was REJECTED because `phg build --php` never executes `respond_once` — the PHP leg would
+have stayed fully exploitable, which is an Invariant-1 breach and a security asymmetry between two
+supported deployment paths.
+
+**Why the `Cookie` constructor, not `render()`.** Every builder (`path()`, `secure()`, `httpOnly()`,
+`partitioned()`) re-constructs via `new Cookie(...)`, so the constructor is one chokepoint covering all
+three string fields and all four builders.
+
+**Why panic-class, not a checked throw** — settled by evidence rather than taste. `respond_once`
+already documents and implements "a runtime fault degrades to a 500 — never a panic", and the server is
+resilient by design, so a fault here is *a 500 on that one request, never a server kill*. It is
+therefore not a remote DoS vector, which was the only real argument for making the builders throw; and
+keeping them non-throwing avoids rippling `throws` into every handler and every `examples/web/` file.
+
+**Rejected, recorded so it is not re-litigated:** guarding only in `serialize()`. One chokepoint,
+covers future fields, still byte-identical — but it fires at respond time, so the diagnostic cannot
+name the `withHeader` call that built the bad value. Worse debugging for identical safety.
+
+### Two ruled extras
+
+1. **NUL joins the rejected set on BOTH sides.** The request-side gate rejected CR/LF but not NUL,
+   while PHP's own `header()` does reject it; the request side was widened in the same change so the
+   two gates stay identical and a known header-truncation trick is closed.
+2. **Pre-check helpers ship:** `Http.isValidHeaderName(string): bool` and
+   `Http.isValidHeaderValue(string): bool`. Because a violation is a 500 rather than a 400, a handler
+   holding user-derived input would otherwise have no way to validate first and return a clean 400.
+   These make the 400 path expressible without making the builders throw.
+
 ---
 
 # Part V — Build & distribution (M2.5)
@@ -1761,6 +2041,60 @@ unverifiable scaffolding — YAGNI on cert-gated code.
 | P3-8 | CI | GitHub Actions, 2-pass, no secrets |
 
 ---
+
+## Transpile-into-project — file-by-file adoption inside a live PHP app
+
+**Status: v1 SHIPPED 2026-07-22 (DEC-320, defaults ruled in DEC-329).** Source:
+`2026-07-22-transpile-into-project.md`. Scope is **COMPILE-TIME ONLY** — the TS→JS playbook. The
+earlier live-interop rejection (on-the-spot rebuild, per-file gradual typing) STANDS untouched and is
+not reopened by this section.
+
+**Why this shape.** TypeScript did not win by being better than JavaScript in a vacuum; it won because
+`tsc` dropped `.js` files exactly where the build already expected them, so a million-line app could
+adopt it one pull-request at a time. Kotlin did the same inside javac projects, Swift inside ObjC
+targets. The common property is the one being copied here: *the new language's output lands in the old
+build's addressing scheme, and the old code is importable from the new code on day one.* For PHP that
+addressing scheme is composer PSR-4 — namespace path ≡ directory path.
+
+### The rules
+
+- **Sibling emit.** `src/Billing/Invoice.phg` emits `src/Billing/Invoice.php` — same directory, same
+  basename. The class's PSR-4 autoload path is therefore UNCHANGED, which means **zero composer.json
+  edits**; that is the whole point, and an out-dir emit (`build/php/**` plus a second PSR-4 root) was
+  rejected for v1 because it reintroduces exactly the friction this removes. Generated files carry a
+  first-line `/* @generated by phg — edit the .phg */` marker and a recommended `.gitattributes`
+  `linguist-generated` entry. Committing them or ignoring them is the team's policy — both work.
+- **Explicit one-shot rebuild.** `phg build --php [paths…]` transpiles the project's `.phg` files into
+  their siblings, skipping outputs already current. Deterministic and CI-friendly. **Composer
+  install-time hooks are REJECTED** on supply-chain grounds; that stance is recorded, not incidental.
+  A `phg watch --php` dev loop is queued as sugar over the same command, never as a second mechanism.
+- **ONE shared runtime file.** Single-file transpile embeds the gated `__phorj_*` helpers per file, so
+  two generated files loaded by one request would fatally re-declare them. The build therefore emits a
+  single `src/_phorj/runtime.php` carrying every helper, registered through composer's `files`
+  autoload. That registration is the ONLY composer.json touch, it happens once, and **phg prints it as
+  a diff rather than editing composer.json itself** — the same hand-the-command discipline used for
+  classifier-blocked commits.
+- **Typing not-yet-migrated PHP** uses the M8.5 foreign-interop surface that already exists:
+  `declare class Cart { function total(): float; }` and `declare function legacy_tax(float x): float;`.
+  Foreign refs emit `\Cart` global forms and are never re-declared. Writing declare-blocks by hand
+  works today; a `phg stubs` generator (the `.d.ts` analog, parser-based and reflection-free) is the
+  follow-on slice, and it must surface untyped params as adjudicated `mixed`-policy errors rather than
+  guessing.
+
+### Contract with the spine
+
+Per-file byte-identity holds exactly as before: a pure `.phg` is compared under the differential, and
+impure modules keep their quarantines and content-parity tests. The generated sibling is REGULAR
+transpile output. This feature adds **placement and a shared runtime — never new semantics**, so
+Invariant 5 is untouched.
+
+### Two disclosed deltas from the original spec
+
+1. **A classmap autoloader supersedes the host-PSR-4 coupling** described in the original F1/F2 text.
+2. **The `phpInterop` namespace-prefix knob (F2) is DEFERRED as a pending adjudication.** v1 keeps
+   package path = namespace, one law, loudly checked. Until that is ruled, do not add per-file
+   overrides — the original spec's own rule was "no per-file overrides in v1", and the deferral does
+   not relax it.
 
 ## Appendix A — source-file map and supersession chains
 

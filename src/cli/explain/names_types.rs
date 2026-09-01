@@ -143,7 +143,7 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
                arrow-fn params shadow correctly, so both legs already agree\n    \
                * a method local sharing a FIELD's name — `this.field` is mandatory, so a field is not a\n      \
                local binding and nothing is shadowed\n\n\
-             Full 23-row case list: `docs/specs/2026-07-26-block-scope-shadowing.md`.\n"
+             Full 23-row case list: `docs/specs/UNIFIED-SPEC.md#block-scope-shadowing--the-redeclaration-rule`.\n"
         }
         "E-SHADOW-FN" => {
             "E-SHADOW-FN — a local binding shadows a top-level function name.\n\n\

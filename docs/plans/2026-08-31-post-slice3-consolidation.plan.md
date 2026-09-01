@@ -266,7 +266,7 @@ left at the bottom of SLICE-STATE. Nothing is deleted; `git grep` still finds it
    to SHIPPED 2026-08-29, DEC-455.16. Do before Step 3 archival.
 5. `C-decisions.md:2915` DEC-331 block label — still "(INTERACTIVE DESIGN, QUEUED; … no side plan
    doc)"; append-only discipline: add a dated correction row (see item 10).
-6. `docs/specs/2026-07-26-block-scope-shadowing.md:3` — "not yet built" is FALSE (DEC-339 BUILT
+6. `docs/archive/specs/2026-07-26-block-scope-shadowing.md:3` — "not yet built" is FALSE (DEC-339 BUILT
    per register). Fix the status line; file stays live only if any part remains unbuilt — verify
    against the register first; if fully built it joins the Step 4 fold list instead.
 7. `docs/plans/2026-07-26-ruled-build-order.md:6` header + un-struck Wave 3 — handled in Step 6.

@@ -3,7 +3,7 @@
 //! Split out of `literals.rs` by cohesion (Invariant 13, M-Decomp). A lambda is its own FUNCTION
 //! BOUNDARY, which is exactly why it earns its own home: DEC-339's `fn_scope_floor` is raised here, and
 //! that is what keeps a lambda parameter legally able to shadow an enclosing local (accepted cases
-//! 19-21 of `docs/specs/2026-07-26-block-scope-shadowing.md`). Re-attached to the same `impl Checker`,
+//! 19-21 of `docs/specs/UNIFIED-SPEC.md#block-scope-shadowing--the-redeclaration-rule`). Re-attached to the same `impl Checker`,
 //! so every call site is unchanged.
 
 use super::*;

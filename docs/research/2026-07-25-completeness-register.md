@@ -84,7 +84,7 @@ the why. Ready to paste into `AskUserQuestion` one at a time.
 > *reject redeclaration of a live local/parameter binding*, enforced in the **checker**. Later probing
 > also widened the blast radius from the 6 shapes below to **10**. **Do not act on the options in this
 > section** — the canonical rule and the full 23-row accepted/rejected case list live in
-> `docs/specs/2026-07-26-block-scope-shadowing.md`. Kept below as the historical agenda entry.
+> `docs/archive/specs/2026-07-26-block-scope-shadowing.md`. Kept below as the historical agenda entry.
 
 **Q:** How should shadowing in nested blocks be made byte-identical?
 **Repro:** `int a = 1; if (true) { int a = 2; } Output.printLine("out={a}");` → vm/tw `out=1`, php `out=2`.
@@ -416,7 +416,7 @@ closing `G5` in `docs/specs/2026-07-24-visibility-model.md` and dropping the fix
 
 ### 6.4 — Seven MORE rulings (GR-18 … GR-24), same Invariant-15 shape
 
-- ✅ **GR-18 RULED 2026-07-26 — `docs/specs/2026-07-26-ast-exhaustiveness.md` is canonical.** D **and** C ship as ONE
+- ✅ **GR-18 RULED 2026-07-26 — `docs/archive/specs/2026-07-26-ast-exhaustiveness.md` is canonical.** D **and** C ship as ONE
   slice (D alone decays; C alone gates 18 known-broken sites); **B is a separately-ruled follow-up**, safe only after D.
   `walk.rs:748` gets named no-op arms, not `unreachable!()`. Invariant 3's wording is widened to cover the three enums.
 - **GR-18 (DEC-356) — Extend mechanical exhaustiveness from `Op` to `Expr`/`Stmt`/`Pattern`.**
@@ -559,7 +559,7 @@ Ranked by value ÷ effort, and deliberately precise about what is genuinely unam
 
 ### 7.3 — Two more rulings (GR-25, GR-26)
 
-- ✅ **GR-25 RULED 2026-07-26 — canonical rule now `docs/specs/2026-07-26-response-header-injection-guard.md`.**
+- ✅ **GR-25 RULED 2026-07-26 — canonical rule now `docs/archive/specs/2026-07-26-response-header-injection-guard.md`.**
   Guard in the phorj **prelude** (panic-class fault) at `withHeader` + the **`Cookie` constructor`**, rejecting
   CR/LF/**NUL** and `:` in names; **NUL added to the request side too**; `Http.isValidHeaderName`/`…Value` ship.
   A Rust `respond_once` guard was REJECTED. Read the spec, not the recommendation below.

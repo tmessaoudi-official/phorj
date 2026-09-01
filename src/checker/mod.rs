@@ -448,7 +448,7 @@ pub struct Checker {
     /// DEC-339 — the index in `scopes` at which the CURRENT function's own scopes begin. The
     /// shadowing rule only looks back as far as this, because *"a lambda starts a new function"*: an
     /// enclosing local must not make a lambda parameter of the same name illegal (accepted cases
-    /// 19-21 of `docs/specs/2026-07-26-block-scope-shadowing.md`). Saved/restored around every
+    /// 19-21 of `docs/specs/UNIFIED-SPEC.md#block-scope-shadowing--the-redeclaration-rule`). Saved/restored around every
     /// function, method and lambda body, exactly like `cur_ret`/`cur_throws`.
     fn_scope_floor: usize,
     errors: Vec<Diagnostic>,

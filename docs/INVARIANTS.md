@@ -49,7 +49,7 @@ A new `Op` variant must extend three exhaustive, wildcard-free matches (Invarian
   user code — `unreachable!("html literal not resolved before compilation")` [Verified by before/after].
 - **Exemptions are recorded, never silent.** `rewrite_ufcs`'s `apply_repl` keeps a catch-all (CD-27): its
   domain is checker-CONSTRUCTED replacement shapes, not user AST. Full rule:
-  `docs/specs/2026-07-26-ast-exhaustiveness.md`.
+  `docs/specs/UNIFIED-SPEC.md#mechanical-exhaustiveness-for-exprstmtpattern`.
 
 ## 3. Arithmetic & comparison are single-sourced in `src/value/`
 The checked integer kernels (`int_add/sub/mul/div/rem/neg → Result<i64, String>`), the float

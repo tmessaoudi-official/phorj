@@ -1,6 +1,6 @@
 //! DEC-339 (the P0) — `E-SHADOW-LOCAL`: no declaration may reuse the name of a live local or param.
 //!
-//! This pins the WHOLE ruled matrix from `docs/specs/2026-07-26-block-scope-shadowing.md`: 14 rejected
+//! This pins the WHOLE ruled matrix from `docs/specs/UNIFIED-SPEC.md#block-scope-shadowing--the-redeclaration-rule`: 14 rejected
 //! shapes and 9 accepted ones. Both halves matter equally. The rejected half is the correctness fix —
 //! phorj has block scope, PHP does not, so a shadowing declaration made the PHP leg write through to
 //! the outer variable (and in case 4 silently changed the ITERATION COUNT). The accepted half is the

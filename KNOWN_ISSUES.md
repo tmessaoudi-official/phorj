@@ -560,10 +560,15 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    `getallheaders()` today (verified), so spec §4's "where already recognized" is vacuously
    satisfied. A faithful mapping needs an ambient→parameter transform (the enclosing function must
    gain a `Request` param) — a design slice of its own.
-4. **`Response`-side CRLF is unguarded** — the slice hardens the REQUEST rebuild path
-   (fake/withers fault on CR/LF), but `Response.withHeader`/`Cookie.render` still interpolate
-   unchecked — the actual outbound injection sink. Guarding them changes shipped surface behavior
-   → RULED as DEC-363 (2026-07-26, spec `docs/specs/2026-07-26-response-header-injection-guard.md`) — build queued.
+4. ~~**`Response`-side CRLF is unguarded**~~ — **FIXED 2026-07-29 (DEC-363).** The slice had hardened
+   only the REQUEST rebuild path (fake/withers fault on CR/LF) while `Response.withHeader` and
+   `Cookie.render` still interpolated unchecked — the actual outbound injection sink, and a
+   request-smuggling shape rather than mere response splitting. The guard now lives in the phorj
+   prelude (`HeaderSafety` in `src/cli/http_prelude.rs`), so all three legs reject CR/LF/NUL — and `:`
+   in a name — identically by construction; `Http.isValidHeaderName`/`isValidHeaderValue` ship so a
+   handler can return a clean 400 for user-derived input. Rule:
+   `docs/specs/UNIFIED-SPEC.md#response-side-header-injection-guard`. (This entry said "build queued"
+   until 2026-09-02 — stale for over a month.)
 4b. ~~**P2 SECURITY-HARDENING — the DEC-316 PM git path carries none of the retired vendor path's
    argument hardening**~~ — **FIXED 2026-07-29 (Q28 / DEC-414).** `src/pm/fetch.rs` now rejects the
    injection shapes before spawning git (`ext::`/`file::` remote helpers case-insensitively, a leading

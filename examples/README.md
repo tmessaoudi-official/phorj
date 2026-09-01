@@ -408,7 +408,7 @@ variable:
 
 All fourteen are pinned by `src/checker/tests/shadowing.rs`, alongside the nine accepted shapes that
 `guide/shadowing.phg` demonstrates. Run `phg explain E-SHADOW-LOCAL` for the fix, or read the canonical
-matrix in `docs/specs/2026-07-26-block-scope-shadowing.md`.
+matrix in `docs/specs/UNIFIED-SPEC.md#block-scope-shadowing--the-redeclaration-rule`.
 
 ## Not yet supported (intentionally absent here)
 

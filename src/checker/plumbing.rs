@@ -223,7 +223,7 @@ impl Checker {
         // `fn_scope_floor` is what keeps the accepted cases working: a lambda starts a new function, so
         // its params may shadow an enclosing local. Sibling scopes are already popped, so they never
         // collide. Class fields are not in `scopes` at all, so a method local may share a field's name.
-        // Canonical 23-row case list: `docs/specs/2026-07-26-block-scope-shadowing.md`.
+        // Canonical 23-row case list: `docs/specs/UNIFIED-SPEC.md#block-scope-shadowing--the-redeclaration-rule`.
         if let Some(prev) = self.live_binding_span(name) {
             self.err_coded(
                 span,
