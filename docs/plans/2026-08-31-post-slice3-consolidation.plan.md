@@ -117,7 +117,7 @@ range `0c982019..cf6875db`): verdicts in §0.1.
 **Rulings still PENDING (developer)** — see Part 4: DEC-455.4, DEC-455.5, DEC-455.6
 (C-decisions.md:8374-8376, open since S3.2 Part B).
 
-### §0.1 Panel verdicts (2026-08-31, frozen cf6875db, ONE round — NOT a two-clean close)
+### §0.1 Panel verdicts (2026-08-31, frozen `cf6875db` `feat(serve): HTTPS that refuses rather than falls back — inbound TLS (S3.5, DEC-331 D7)`, ONE round — NOT a two-clean close)
 
 - **security + safety-promises: CLEAN.** All promises verified against diff + source + executed
   tests (10/10 default-feature TLS refusals; 21/21 with `http-server-tls` incl. a real handshake;
