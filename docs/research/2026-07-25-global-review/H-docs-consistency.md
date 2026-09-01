@@ -950,7 +950,7 @@ I re-verified each rather than re-reporting. Per-finding current status:
 | **H1** | Q-A/Q-B cluster missing from the register | **FIXED** | `C-decisions.md:3241-3256` now carries the cluster — ":3241 Canonical detail lives in the two frozen specs…; recorded here per Inv 19"; ":3254 **Q-B — visibility model completeness (RULED DV-1..DV-5; DV-1/2/3 + follow-up DONE+certified…)**". Max DEC advanced 335 → **338**. |
 | **H2** | SLICE-STATE "Pushed" cursor stale | **FIXED** | now `SLICE-STATE.md:97` — "**Pushed:** `origin/master @ dee608e` — all of Q-A + Q-B (DV-1/2/3 + ctor-promoted-param…". Tree clean, `HEAD == origin/master == 25053be`. *(Note: the cursor now names `dee608e` while HEAD is `25053be` — 4 commits have landed since. See H31.)* |
 | **H3** | MASTER-PLAN:148 listed a DONE follow-up as open | **FIXED** | `MASTER-PLAN.md:147-150` now reads "**✅ DONE 2026-07-25:** DV-1+DV-2 … DV-3 … `internal` on ctor-promoted params **✅ DONE+certified**". |
-| **M1** | MILESTONES "Visibility modifiers" stale vs Q-B | **FIXED** | `MILESTONES.md:230` now appends "**Q-B update (✅ 2026-07-25, DEC-268-certified — `docs/specs/2026-07-24-visibility-model.md`)**". |
+| **M1** | MILESTONES "Visibility modifiers" stale vs Q-B | **FIXED** | `MILESTONES.md:230` now appends "**Q-B update (✅ 2026-07-25, DEC-268-certified — `docs/archive/specs/2026-07-24-visibility-model.md`)**". |
 | **M2** | FEATURES.md had no Q-B row | **FIXED** | `FEATURES.md:95` — "| Visibility model completeness (Q-B) | ✅ | package HIERARCHY … member `internal` added …". |
 | **M3** | CHANGELOG missing Q-A/Q-B/LSP fix | **FIXED** | `CHANGELOG.md:39` "### Added — Q-A wildcard & group imports (2026-07-25, DEC-268-certified)"; `:46` "### Added — Q-B visibility model completeness". |
 | **M4** | stale "← CURRENT: S3.1 in flight" marker | **FIXED** | `grep '← CURRENT'` → **zero hits**; `SLICE-STATE.md:173` now reads "(S3.1 is DONE; **this note's original "S3.1 in flight" was stale**.)" |
@@ -1434,7 +1434,7 @@ across every file.** Backticked source paths are not.
   `:1440` `bench/micro/deepjson`, `:1690` `src/ext/crypto/`+`src/ext/db/`, `:1691` `examples/db/`.
 - **`docs/specs/UNIFIED-SPEC.md` — 4**: `:1191`+`:1377` `docs/plans/web-spine.plan.md`, `:1326`
   `docs/plans/di-attributes.plan.md`, `:1349` `src/checker/desugar_di.rs`.
-- **`docs/specs/2026-07-24-wildcard-imports.md` — 8** pre-decomposition paths in its build plan
+- **`docs/archive/specs/2026-07-24-wildcard-imports.md` — 8** pre-decomposition paths in its build plan
   (`:165,166,209,210,211`) — ironically the same spec whose `:224` reports *performing* an
   Invariant-13 decomposition without updating its own touch-list.
 - **`examples/**/README.md` — 5 genuine**: `examples/README.md:211` + `examples/web/README.md:43`

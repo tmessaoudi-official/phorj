@@ -60,6 +60,27 @@ so the output badly misdirects.
 rather than the call simply swapped. Sizing it — and whether the same raw-checker call appears
 elsewhere — is its own slice.
 
+## DOCS-STALE-SPEC-PATHS — 35 references still point at spec files archived in July (found 2026-09-02, PRE-EXISTING)
+
+Found by the post-Slice-3 consolidation's own zero-stale sweep, and **not caused by it** — verified
+stale at `cf6875db`, i.e. before that work started.
+
+Fourteen specs were folded into UNIFIED-SPEC on 2026-07-03 and 2026-07-16 and their originals moved to
+what is now `docs/archive/specs/`. **35 references across the repo still spell them as
+`docs/specs/<name>.md`**, a path that has not existed for weeks. The heaviest are
+`2026-06-27-dependency-policy.md` (8 files) and `2026-06-21-php-parity-and-beyond.md` (6).
+
+**Why it was not fixed in the same pass.** The consolidation's Part 7 check covers the files THAT
+consolidation moved — all 18 of those resolve cleanly. These 35 are older debt, and most sit inside
+historical CHANGELOG entries and frozen research reports where a mechanical repoint edits the record
+rather than a pointer. That is the same reason a 2026-07-25 review finding was left naming the broken
+anchor it had found: a finding that is silently corrected inside itself stops making sense.
+
+**The fix, when someone takes it:** the target files all exist at `docs/archive/specs/<name>.md`, so
+it is a mechanical `docs/specs/` → `docs/archive/specs/` rewrite for these fourteen names. Decide per
+file whether a historical document should be repointed at all, or left as a record of what the path
+was at the time — that judgment is the actual work, not the substitution.
+
 ## BENCHMARK-SKIPS-LADDER-GATE — `phg benchmark` reaches the PHP emitter without the native-only refusal (PRE-EXISTING, surfaced 2026-09-02)
 
 **Not caused by the `Core.Native.Http` row** — found while sweeping every emit path for it, and it

@@ -241,7 +241,7 @@ left at the bottom of SLICE-STATE. Nothing is deleted; `git grep` still finds it
 - Reconcile the three "what's next" claimants IN PLACE: §0:33 (build-order) and :293-297 (DEC-333
   perf) each get one line pointing at this plan doc as the arbitrated ordering (hybrid). Do not
   delete either section's content.
-- Fold `docs/plans/2026-07-26-ruled-build-order.md` INTO MASTER-PLAN as a section (it is the
+- Fold `docs/archive/plans/2026-07-26-ruled-build-order.md` INTO MASTER-PLAN as a section (it is the
   de-facto queue): strike the built Wave-3 rows (DEC-364/348/348.1/347 — BUILT 2026-07-31,
   register-verified), correct its false header ("every item below is RULED and NOT YET BUILT"),
   then archive the original file per Step 3's convention.
@@ -269,7 +269,7 @@ left at the bottom of SLICE-STATE. Nothing is deleted; `git grep` still finds it
 6. `docs/archive/specs/2026-07-26-block-scope-shadowing.md:3` — "not yet built" is FALSE (DEC-339 BUILT
    per register). Fix the status line; file stays live only if any part remains unbuilt — verify
    against the register first; if fully built it joins the Step 4 fold list instead.
-7. `docs/plans/2026-07-26-ruled-build-order.md:6` header + un-struck Wave 3 — handled in Step 6.
+7. `docs/archive/plans/2026-07-26-ruled-build-order.md:6` header + un-struck Wave 3 — handled in Step 6.
 8. `docs/plans/MASTER-PLAN.md:26` stale §0 cursor — handled in Step 6.
 9. **[panel P1 — CODE, not doc]** `src/cli/help.rs:257` — `phg serve --help` example line names
    `examples/web/server.phg`, a file S3.3d DELETED (now the project `examples/web/server/`).
