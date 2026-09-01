@@ -22,8 +22,9 @@ impl Transpiler {
         //
         // KEYED ON THE CALL, deliberately — not on the `Core.Http` import and not on the `Web` entry
         // kind. The injected `class Http` is present in EVERY `import Core.Http;` program, and
-        // `#[Entry(kind: EntryKind.Web)]` programs transpile clean today (verified on
-        // `examples/web/core-http.phg` + `handler.phg`), so either cheaper key would refuse the five
+        // `#[Entry(kind: EntryKind.Web)]` programs transpile clean today (verified at the time on
+        // `examples/web/core-http.phg`, since converted to the `examples/web/core-http/` project by
+        // S3.3d, plus `handler.phg`), so either cheaper key would refuse the five
         // shipped `examples/web/*` and break Invariant 1's example corpus. The `serve` here is the
         // injected prelude's static method; the prelude DEFINES it but never CALLS it, so this arm
         // cannot fire on the injected source itself.

@@ -46,8 +46,9 @@ fn vfac(src: &str) -> HandlerFactory {
 /// register through a top-level `respond(bytes): bytes`. That is no longer expressible here: `Http.serve`
 /// takes a `(Request) => Response` in CORE.HTTP's types, so a program declaring its own classes of
 /// those names cannot pass its handler to it. The hand-rolled-HTTP demonstration is not lost — it is
-/// what `examples/web/server.phg` exists to show, and that one is byte-identity-gated by
-/// `tests/differential.rs`. Here it was incidental: every test below asserts the LOOP, not the parser.
+/// what the `examples/web/server/` PROJECT exists to show (S3.3d converted the flat
+/// `examples/web/server.phg` into it), and that one is byte-identity-gated by `tests/differential.rs`.
+/// Here it was incidental: every test below asserts the LOOP, not the parser.
 const SERVE_PROGRAM: &str = r#"
 package Main;
 import Core.Runtime.Entry; import Core.Runtime.EntryKind;
@@ -1080,8 +1081,9 @@ function main(): void {
 /// Both of the obvious cheaper keys are wrong here, and each was checked rather than assumed:
 ///   * the injected `class Http` is present in EVERY `import Core.Http;` program, so an import-keyed
 ///     refusal would reject the five shipped `examples/web/*`;
-///   * `#[Entry(kind: EntryKind.Web)]` programs transpile clean TODAY — verified on
-///     `examples/web/core-http.phg` and `examples/web/handler.phg` — so an entry-kind-keyed refusal
+///   * `#[Entry(kind: EntryKind.Web)]` programs transpile clean TODAY — verified at the time on
+///     `examples/web/core-http.phg` (since converted to the `examples/web/core-http/` project by
+///     S3.3d) and `examples/web/handler.phg` — so an entry-kind-keyed refusal
 ///     would break them too, notwithstanding the spec sentence claiming that is "already the rule".
 ///
 /// Either mistake breaks the example byte-identity glob, which is Invariant 1's corpus enforcement.

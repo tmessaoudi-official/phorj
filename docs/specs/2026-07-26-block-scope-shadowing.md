@@ -1,6 +1,7 @@
 # Block-scope shadowing — the redeclaration rule (DEC-339, RULED 2026-07-26)
 
-> **Status:** RULED by the developer 2026-07-26, **not yet built**. Canonical home for the rule
+> **Status:** RULED by the developer 2026-07-26, **BUILT 2026-07-29** (`E-SHADOW-LOCAL`, enforced in
+> the checker — `src/checker/plumbing.rs`; the DEC-339 register row records the same). Canonical home for the rule
 > (Invariant 19: one canonical place). The decision *identity + status* is the DEC-339 row in
 > `docs/research/full-audit/raw/C-decisions.md`; the *original P0 evidence* is
 > `docs/research/2026-07-25-global-review/P0-block-shadow-byte-identity.md` (immutable);

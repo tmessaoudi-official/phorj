@@ -10,8 +10,9 @@
 //! hard faults — its deprecation is a queued adjudication; this module is purely additive).
 //! Listings are SORTED (determinism). Std-only, always compiled (no feature gate). The taxonomy is
 //! FileSystem-PREFIXED throughout (`FileSystemNotFoundError`, not `NotFound` — a bare generic name would CAPTURE
-//! user-space classes via the injected-type discipline; caught live when `examples/web/server.phg`'s
-//! own `NotFound` class collided).
+//! user-space classes via the injected-type discipline; caught live when the then-flat
+//! `examples/web/server.phg` — now the `examples/web/server/` project — had its own `NotFound` class
+//! collide).
 pub(crate) const FS_PRELUDE: &str = r#"
 import Core.Native.FileSystem as NativeFileSystem;
 import Core.String;

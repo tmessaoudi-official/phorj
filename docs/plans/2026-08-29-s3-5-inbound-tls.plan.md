@@ -3,6 +3,9 @@
 > Closes DEC-331 Slice 3. Spec: `docs/specs/2026-07-23-entry-kinds-serve-tls.md` §1/§2 D7, §5, §6 P2.
 > Status at authoring: D7 **RULED, NOT BUILT** — `http-server-tls` does not exist, `rustls` is linked
 > only by the outbound http-client.
+> **STATUS NOW: SHIPPED 2026-08-29** (DEC-455.16, `cf6875db` `feat(serve): HTTPS that refuses rather
+> than falls back — inbound TLS (S3.5, DEC-331 D7)`) — `http-server-tls` exists and terminates real
+> TLS on both accept paths. This closes DEC-331 Slice 3.
 
 ## Decisions Log
 

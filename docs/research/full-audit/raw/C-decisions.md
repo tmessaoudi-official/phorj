@@ -2919,6 +2919,30 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   S3.1/S3.2 (shipped), D2/D3/D5/D6/D7 remain UNBUILT as of 2026-07-25 verification (`ServeConfig`
   exists only as a code comment; `respond` is still the live `SERVE_ENTRY`; `E-NO-ENTRY-FOR-ROLE`
   → 0 src hits; no `http-server-tls` feature) — see the on-hold inventory D.2 #2.
+  ⊳ **STATUS CORRECTED 2026-09-02 — DEC-331 Slice 3 is COMPLETE, and this block's header is stale.**
+  Append-only, so the wording above stands as written; read it as of its own date. Three claims in it
+  are now false: the "(INTERACTIVE DESIGN, QUEUED …)" label, the "no side plan doc" clause, and the
+  "D2/D3/D5/D6/D7 remain UNBUILT" inventory. **D5 BUILT** 2026-08-23 (S3.3a–d, DEC-455.12 — `Http.serve`
+  registration; the `(Request): Response` web entry retired); **D6 BUILT** 2026-08-28 (S3.4, DEC-455.15
+  — `E-NO-ENTRY-FOR-ROLE`, symmetric, prompt-on-TTY defaulting to NO); **D7 BUILT** 2026-08-29 (S3.5,
+  DEC-455.16 — inbound TLS behind `http-server-tls`, every misconfiguration a startup refusal rather
+  than a fall back to plaintext). D2/D3 were folded into D1 long before (see below). The rulings that
+  carried the slice live in rows **DEC-455.11 … DEC-455.16**; the per-slice plan docs DO exist and are
+  archived under `docs/archive/plans/`. Current cursor and the queue that follows:
+  `docs/plans/2026-08-31-post-slice3-consolidation.plan.md`.
+  ⊳ **DEC-455.7 REFINED 2026-09-02 — `E-TRANSPILE-SERVE` now has TWO keys, not one.** That row says the
+  refusal is keyed on the CALL "not on the `Core.Http` import", and that an import key "would have
+  refused all five" shipped web examples. Both halves remain true **of `Core.Http`** and must not be
+  undone. A SECOND layer was added keyed on `import Core.Native.Http` — the raw twin — because keying
+  only on `Http.serve` let `NativeHttp.registerServe(...)` transpile to a `__phorj_http_register_serve`
+  call no helper family defines: exit 0 from `phg transpile`, exit 255 from PHP, native legs clean.
+  That is an Invariant-1 spine break, so tier 2 of the ladder requires the refusal. The raw-module key
+  is safe where a `Core.Http` key was not, for one reason: the gate runs **pre-expansion**, so the
+  injected preludes' own `import Core.Native.Http as NativeHttp` — and `Http.serve`'s body, which calls
+  `registerServe` — are invisible to it. Move that gate after `check_and_expand` and the row alone
+  would reject every `import Core.Http;` program. Gate + rows now live in `src/cli/ladder.rs`, whose
+  module doc states the property; `an_ordinary_core_http_program_still_transpiles_after_the_module_keyed_refusal`
+  (tests/serve.rs) pins it from the outside.
   - **D1 (LOCKED 2026-07-22) — entry roles & config wiring.** Role declared via `#[Entry(kind: Type)]`
     (named arg). Active kinds `Cli`, `Web`; reserved (recognized, unbuilt) `Desktop`, `Mobile`, `Worker`,
     `Embedded`. Config is injected as a **typed parameter** of the entry (DEC-318 entry-param injection),

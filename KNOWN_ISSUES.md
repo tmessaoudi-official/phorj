@@ -60,6 +60,40 @@ so the output badly misdirects.
 rather than the call simply swapped. Sizing it — and whether the same raw-checker call appears
 elsewhere — is its own slice.
 
+## BENCHMARK-SKIPS-LADDER-GATE — `phg benchmark` reaches the PHP emitter without the native-only refusal (PRE-EXISTING, surfaced 2026-09-02)
+
+**Not caused by the `Core.Native.Http` row** — found while sweeping every emit path for it, and it
+applies to all five native-only modules equally, so it long predates that change.
+
+Three callers refuse before emitting: `cmd_transpile`, `transpile_program` and `build_php` all run
+`ladder::reject_native_only_transpile` first. `src/cli/benchmark.rs` does not — it calls
+`crate::transpile::emit(prog)` directly to build the PHP leg it times against. So benchmarking a
+program that imports a native-only module produces PHP carrying placeholder helpers rather than the
+`E-TRANSPILE-<FEATURE>` refusal the other three give.
+
+**Severity P3, and the reason is reachability, not correctness.** The output is never shipped or
+compared for byte-identity — it is fed to `php` for a timing sample — and a benchmark of a
+`Core.Database`/`Core.Mail`/`Core.Native.Http` program would fail loudly on the undefined helper
+rather than diverge silently. No such benchmark exists in the repo. It is recorded because "every
+emit path is gated" is the kind of claim that should be true or written down as not-yet-true, and
+because a future reader adding a sixth ladder row would reasonably assume the sweep was complete.
+
+**Fix when touched:** call the gate at the head of `benchmark.rs`'s PHP-leg construction, same as
+its three siblings. One line; deliberately not bundled into the A0 fix, whose scope was the spine
+break.
+
+## CONFORMANCE-FIXTURES-FOR-SLICE3-CODES — the eight new diagnostic codes have zero conformance fixtures (tracked ratchet debt, recorded 2026-09-02)
+
+`codes_in_conformance` read 25 before the DEC-331 Slice 3 arc and 25 after, while the arc added eight
+new codes (`E-NO-ENTRY-FOR-ROLE`, the four `E-SERVE-TLS-*`, and siblings). All eight ARE asserted by
+tests and ARE covered by `phg explain` — the surface-ratchet's `codes_asserted` floor rose with them.
+What they lack is a conformance FIXTURE.
+
+This is inside the ratchet's tracked-debt design, not a hole in it: the floor holds at 25 and cannot
+regress, and the 2026-08-31 milestone panel recorded the gap as a fact rather than a defect. It is
+written here so the next conformance batch adds them deliberately instead of the debt being silently
+absorbed. Queue with that batch; do not backfill in isolation.
+
 ## TRANSPILE-NS-REFLECT-TABLES — the two `get_class()`-keyed helper tables are UNGATED on the namespaced path (found 2026-08-23, DEC-455.11)
 
 **Severity: unknown, and that is the issue.** `__phorj_reflect_of` (`Core.Reflect`) and
@@ -2937,9 +2971,11 @@ differs from the class default, so the value rule reads it as SET; the resolver 
 failure, falls back to the DEFAULT rather than to `0`, because `0` means *no timeout* and a typo must
 never silently disable the B4 idle-socket guard (caught by a 6C review; pinned by
 `a_negative_config_timeout_reads_as_unset_not_as_no_timeout`, with the already-fail-safe negative
-`workers` as its control). Real range validation — `port`/`maxBodySize`/`timeout` bounds and
-`tlsMinVersion` ∈ {"1.2","1.3"} — is the item `serve_config_prelude.rs` deferred to "the slice that
-consumes the values"; Part C consumes four of them and did NOT add it. Still owed, now in writing.
+`workers` as its control). Real range validation — `port`/`maxBodySize`/`timeout` bounds — is the
+item `serve_config_prelude.rs` deferred to "the slice that consumes the values"; Part C consumes
+four of them and did NOT add it. Still owed, now in writing. `tlsMinVersion` has LEFT this list:
+S3.5 shipped its narrowing as `E-SERVE-TLS-MIN-VERSION` (`src/serve/tls.rs`, ruled in DEC-455.16),
+so the floor is refused at startup rather than owed — `"1.1"` is rejected, never silently raised.
 A negative `port` needs no guard: it fails loudly at bind.
 
 **Why the approximation was chosen over the alternatives.** Reading the config unconditionally would
