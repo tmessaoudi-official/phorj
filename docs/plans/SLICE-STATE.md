@@ -81,8 +81,9 @@ false claims it exposed are corrected in place. **The remaining findings are NOT
 gate must not be reported as closed until they are.
 
 **CLOSED since the last cursor:** KNOWN_ISSUES §TEST-RAW-CHECKER is now **PARTIALLY** fixed — `phg test`
-shares the front end so injected-prelude types resolve, but the LSP still calls the non-test path and
-the item-level desugars skip `Item::Test`. Do not read it as done.
+shares the front end so injected-prelude types resolve, and the item-level desugars now descend into
+`Item::Test` (CD-31, see the cursor block below). **The LSP still calls the non-test path**, so it is
+still not done — that one gap is what keeps this issue open.
 
 **QUEUED — ruled 2026-09-02, none built** (Invariant 19: a ruled-but-unbuilt item belongs in the cursor,
 not only the register):

@@ -8,6 +8,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Six defects in the item-level AST walks — four crashes, an Invariant-1 spine break, and a broken
+  overload dispatch — all on valid code `phg check` called clean.** DEC-356 made the
+  `Expr`/`Stmt`/`Pattern` walks exhaustive and its ratchet watches the six extracted `*_walk.rs`
+  files; the identical defect survived one level up, in the ITEM walks of their parent files. A
+  trait's members are a full `Vec<ClassMember>` whose bodies **execute** (they flatten into the using
+  class), so every walk ending in `other => other` was skipping executable code while reading as
+  though it skipped a declaration. Each was verified end-to-end against the release binary with a
+  class control proving the asymmetry, and each is now a red-first differential test:
+  `html"…"` in a trait method and in a **field initializer** (both `unreachable!`, exit 101);
+  a UFCS call in a trait method (`unknown field`); `inject<T>()` in a trait method
+  (`unreachable!("inject() not expanded")`); a **generic method in a trait**, where both native legs
+  printed `7` while the transpiler emitted `function echoBack(U $x): U` and PHP died with
+  `TypeError: must be of type U` — three legs disagreeing, which is what Invariant 1 forbids; and a
+  return-overloaded trait method, whose call site was mangled while its declaration was not
+  (`unknown field read__ret_int`, with the PHP leg silently falling back to a different dispatch
+  model). `item_leaves!()` now joins the three macros in `src/ast/leaves.rs` — holding `Import` and
+  `TypeAlias` only, because `Interface` and `Enum` both carry `Expr` — nine item walks carry explicit
+  arms, and the DEC-356 ratchet was widened to the parent files, where it immediately caught two more
+  `_ => {}` collection loops. Two behaviours are deliberately unchanged and now visible as named arms
+  rather than swallowed (a `#[Route]` static in a trait still does not register; a `TypeAlias` name
+  still does not block a colliding variant import) — both are the developer's call. **Not closed, and
+  not claimed as closed:** no item-level pass walks param defaults or attribute arguments, for any
+  item form. CD-31 + addendum.
+
 - **`phg test` ran the RAW checker, so injected-prelude programs could not be tested at all.** The
   runner called `checker::check_tests` directly — no prelude injection, no intrinsic/variant import
   resolution, no DI/Db desugar — so every symbol existing only in an injected prelude came back as the

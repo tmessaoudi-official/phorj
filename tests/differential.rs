@@ -4198,6 +4198,34 @@ class App { use Identity; }
 }
 
 #[test]
+fn dec356_a_return_overloaded_trait_method_has_its_definition_mangled_like_a_class_one() {
+    // CD-31, the SIXTH defect — found only because the arm was challenged rather than trusted. I
+    // added `Item::Trait` to `rename_overload_defs` reasoning that leaving the declaration unmangled
+    // "would break dispatch", then let a green suite stand in for proof. It does break it:
+    // `collect_trait` builds a synthetic `ClassDecl` and calls `collect_class`, so a trait's method
+    // spans DO reach `overload_def_renames`, and `rewrite_ufcs` rewrites the call site to the mangled
+    // name. Without the arm the declaration keeps its original name and the run dies with
+    // `unknown field `read__ret_int``, while the transpiler silently falls back to the PARAMETER
+    // -overload shim (`read__ovl_0` + a variadic `read`) — a different dispatch model on the PHP leg.
+    //
+    // Reachable today only through a `this` receiver INSIDE the trait: the overload set is keyed
+    // `(trait name, method)` while an outside call resolves the using class, so `<int>app.read(…)`
+    // is `E-OVERLOAD-SELECT-UNKNOWN`. That key asymmetry is a separate, still-open gap.
+    agree_out_php(
+        "import Core.Output;
+trait Reader {
+    function read(string k) -> int { return 42; }
+    function read(string k) -> string { return \"s:{k}\"; }
+    function both() -> string { int i = <int>this.read(\"a\"); string s = <string>this.read(\"b\"); return \"{i} {s}\"; }
+}
+class App { use Reader; }
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(new App().both()); }",
+        "42 s:b\n",
+        "dec356_return_overload_in_trait",
+    );
+}
+
+#[test]
 fn s8_trait_mutable_field_is_byte_identical() {
     // M-RT S8 T2: a trait carries `mutable` instance state; the using class sets it in its ctor and a
     // trait method mutates it. Field access is by name, so the flattened field works on both backends.

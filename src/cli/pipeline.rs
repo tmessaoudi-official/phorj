@@ -76,16 +76,16 @@ pub fn check_and_expand_reified(
 /// flag through the shared body below.
 ///
 /// ⚠ **THIS DOES NOT YET MAKE `phg check` ≡ LSP ≡ `phg test`** — an earlier version of this comment
-/// claimed it did, and a 2026-09-02 milestone panel disproved it twice over. Two gaps remain, both
-/// verified:
-///   * the LSP still calls the `false` path (`src/lsp/mod.rs`), so a file containing `test` items
-///     squiggles `E-TEST-OUTSIDE-TESTS` in both editors on lines `phg test` accepts;
-///   * the pre-check desugars `resolve_variant_imports` and `desugar_router` are ITEM-level walks
-///     ending in a named `other => other`, so they never descend into `Item::Test` — variant-import
-///     resolution and the auto-router desugar are still absent inside a test body, which are two of
-///     the three causes this reroute was written to remove.
+/// claimed it did, and a 2026-09-02 milestone panel disproved it twice over. ONE gap remains:
+/// the LSP still calls the `false` path (`src/lsp/mod.rs`), so a file containing `test` items
+/// squiggles `E-TEST-OUTSIDE-TESTS` in both editors on lines `phg test` accepts.
 ///
-/// Both are tracked; do not restate the equivalence until they are closed.
+/// The second gap the panel named — the item-level desugars ending in `other => other` and so never
+/// descending into `Item::Test` — is **CLOSED** (CD-31): nine item walks carry explicit arms and the
+/// DEC-356 ratchet now covers their files. `selftest/injected_preludes.phg` exercises the
+/// `resolve_variant_imports` arm through `phg test` and goes red if it is stubbed back out.
+///
+/// The LSP gap is tracked; do not restate the equivalence until it is closed.
 pub fn check_and_expand_tests(prog: &Program, diag_src: &str) -> Result<Program, String> {
     check_and_expand_reified_mode(prog, diag_src, true).map(|(p, _)| p)
 }

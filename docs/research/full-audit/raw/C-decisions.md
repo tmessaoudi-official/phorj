@@ -8551,3 +8551,29 @@ byte-identity gate exists to catch and which no crash-shaped test would ever sur
 eight item-level parent files alongside the six `*_walk.rs` expression walkers. It caught two further
 `_ => {}` collection loops the moment it was widened — including the `#[Route]`-in-a-trait question
 above, which is precisely the kind of thing that should surface as a question rather than sit silent.
+
+**A SIXTH defect, found by challenging an arm instead of trusting it.** I added `Item::Trait` to
+`rename_overload_defs` reasoning that leaving the declaration unmangled "would break dispatch" — then
+let a green suite stand in for proof, which is the exact substitution this repo's rules forbid. Asked
+to verify it, the first read said the arm was dead: `method_fn_decls` is pushed only inside
+`collect_class`. It is not dead — `collect_trait` builds a synthetic `ClassDecl` and calls
+`collect_class`, so a trait's method spans DO reach `overload_def_renames`. Sabotage confirmed the
+defect: without the arm, `<int>this.read("a")` inside a trait runs into
+`compile error: unknown field \`read__ret_int\`` (the call site mangled, the declaration not), and the
+transpiler silently emits the PARAMETER-overload shim (`read__ovl_0` + a variadic `read`) — a
+different dispatch model on the PHP leg.
+
+It is reachable today only through a `this` receiver INSIDE the trait: the overload set is keyed
+`(trait name, method)` while a call from outside resolves the USING class, so `<int>app.read(…)` is
+`E-OVERLOAD-SELECT-UNKNOWN`. **That key asymmetry is a separate gap and remains OPEN** — a
+return-overloaded trait method is simply not callable from the class that composes it.
+
+**The `Item::Test` arms needed their own surface.** All seven differential tests exercise
+`Item::Trait` or a field initializer; a `test` body exists only under `phg test`, so the differential
+cannot reach it and neither sabotage would have noticed those arms removed —
+i.e. the panel's ACTUAL finding was the one thing with no coverage.
+`selftest/injected_preludes.phg` now uses an imported variant inside a `test` body; stubbing the
+`resolve_variant_imports` arm back to `it @ Item::Test { .. } => it` turns it red with
+`E-INJECTED-VARIANT-BARE`, and `tests/mtest.rs::the_selftest_suite_is_green` runs it in the suite. The
+other six `Item::Test` arms are covered by construction (the same shared `rblock`), not by execution,
+and that distinction is stated rather than blurred.

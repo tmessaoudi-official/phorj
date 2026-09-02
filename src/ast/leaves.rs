@@ -165,6 +165,7 @@ mod tests {
             "src/checker/rewrite_invoke_tostring.rs",
             "src/checker/desugar_di/walker.rs",
             "src/checker/desugar_di/mod.rs",
+            "src/checker/desugar_db.rs",
         ];
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut offenders = Vec::new();
@@ -192,7 +193,12 @@ mod tests {
                 .any(|p| t.starts_with(p));
                 if inert {
                     // CD-27: `apply_repl`'s domain is checker-constructed replacements, not user AST.
-                    let exempt = *rel == "src/checker/rewrite_ufcs_walk.rs"
+                    // CD-31: `desugar_db`'s `rexpr_clone` arm is the same shape — it dispatches on
+                    // borrowed sub-expressions during connection-fact analysis, not on user items —
+                    // so the FILE is watched (its item walk was converted) with that ONE arm exempt
+                    // by name. A second catch-all there still fails.
+                    let exempt = (*rel == "src/checker/rewrite_ufcs_walk.rs"
+                        || *rel == "src/checker/desugar_db.rs")
                         && t.starts_with("other => other.clone(),");
                     if !exempt {
                         offenders.push(format!("{rel}:{}: {t}", i + 1));

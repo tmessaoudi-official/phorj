@@ -56,20 +56,22 @@ gap. Note the cascade in the sample above: three of the four messages are conseq
 so the output badly misdirects.
 
 **PARTIALLY FIXED 2026-09-02 — and the first write-up of this said "FIXED", which a milestone panel
-disproved the same day. Two gaps remain, both verified by execution:**
+disproved the same day. Of the two gaps it found, ONE remains (the LSP); the item-desugar gap was
+closed later the same day by CD-31. Both are listed, the closed one struck through, because the
+sequence is the point: "FIXED" was claimed twice before it was true.**
 
 1. **The LSP still calls the non-test path** (`src/lsp/mod.rs`). A file containing `test` items —
    including every `selftest/*.phg` this repo ships — reports `E-TEST-OUTSIDE-TESTS` in VS Code and
    JetBrains on lines `phg test` accepts. Invariant 17's 100% rule and DEC-252's "same pipeline, never
    diverge" are violated in the direction OPPOSITE the one just fixed, and the parameter that would
    close it now exists and is simply not threaded there.
-2. **The item-level desugars skip `Item::Test`.** `resolve_variant_imports` and `desugar_router` are
-   item walks ending in a named `other => other`, so a `test` body still gets no variant-import
-   resolution and no auto-router desugar — two of the three causes this reroute was written to remove.
-   Proven with byte-identical bodies: in `function main()` it checks and runs clean; in
-   `test "…" { }` it fails with `E-INJECTED-VARIANT-BARE` plus the same misdirected cascade pointing
-   at `package Main;` line 1:1. It is also a DEC-356 exposure — those catch-alls now receive a variant
-   they never saw before, with no CD row.
+2. ~~**The item-level desugars skip `Item::Test`.**~~ **CLOSED 2026-09-02 (CD-31).** It was proven
+   with byte-identical bodies — clean in `function main()`, `E-INJECTED-VARIANT-BARE` in
+   `test "…" { }` — and it was indeed a DEC-356 exposure. Widening that ruling to `Item` turned up
+   five further LIVE defects, four of them crashes and one an Invariant-1 spine break; nine item
+   walks now carry explicit arms, `item_leaves!()` exists, and the DEC-356 ratchet covers the parent
+   files. `selftest/injected_preludes.phg` exercises the `resolve_variant_imports` arm through
+   `phg test` and goes red if the arm is stubbed back out. See CD-31 + its addendum.
 
 **What IS fixed:** prelude injection, so injected-prelude TYPES resolve under `phg test`.
 

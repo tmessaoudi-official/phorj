@@ -99,10 +99,10 @@ fn run_file(file: &Path, out: &mut String, outcomes: &mut Vec<Outcome>) {
     // surface it was never routed through (KNOWN_ISSUES §TEST-RAW-CHECKER).
     //
     // `check_and_expand_tests` is `check_and_expand` with the test-mode flag threaded through the
-    // shared body. ⚠ It closes the prelude-injection half and NOT the whole gap: the LSP still calls
-    // the non-test path, and the item-level desugars skip `Item::Test` (see the caveat on
-    // `cli::check_and_expand_tests`). A milestone panel disproved the earlier "≡ by construction"
-    // wording here on 2026-09-02. It returns the EXPANDED program; the runner deliberately keeps using
+    // shared body. ⚠ It does NOT yet make the three surfaces equivalent — the LSP still calls the
+    // non-test path (see the caveat on `cli::check_and_expand_tests`). A milestone panel disproved
+    // the earlier "≡ by construction" wording here on 2026-09-02. The item-desugar half of that
+    // finding is CLOSED (CD-31): the walks carry explicit `Item::Test` arms. It returns the EXPANDED program; the runner deliberately keeps using
     // `unit.program` below, because lowering test bodies into synthetic mains is its own concern and
     // each lowered body goes through the ordinary compile path afterwards.
     if let Err(rendered) = crate::cli::check_and_expand_tests(&unit.program, &unit.diag_src) {

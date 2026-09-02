@@ -22,6 +22,8 @@ import Core.Test;
 import Core.Http;
 import Core.Http.ServeConfig;
 import Core.Http.Response;
+import Core.Option;
+import Core.Option.Some;
 
 test "the injected ServeConfig carries its ruled defaults" {
     ServeConfig fresh = new ServeConfig();
@@ -42,6 +44,20 @@ test "named arguments select what a ServeConfig sets" {
 test "an injected Response builds and reports its status" {
     Response ok = Response.text(200, "ok");
     Test.assertEquals(ok.status, 200);
+}
+
+// CD-31: this is the arm the milestone panel actually reported, and it is the one the differential
+// cannot reach — a `test` body only exists under `phg test`. `resolve_variant_imports` is an
+// ITEM-level walk that ended in `other => other`, so an imported variant used inside a test body was
+// never rewritten to its qualified form and failed with `E-INJECTED-VARIANT-BARE` — while the
+// byte-identical body inside `function main()` resolved fine. Stub the `Item::Test` arm back out and
+// this test stops compiling.
+test "an imported variant resolves inside a test body, as it does in a function" {
+    Option<int> wrapped = new Some(3);
+    match (wrapped) {
+        Option.Some(v) => Test.assertEquals(v, 3),
+        Option.None() => Test.assertEquals(0, 1)
+    };
 }
 // NOT tested here, and the reason is worth recording: `EntryKind` is injected only as the
 // ATTRIBUTE-argument surface for `#[Entry(kind:)]`, not as a general value type, so
