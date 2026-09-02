@@ -60,6 +60,15 @@
 - [2026-09-02 20:30] AGREED — **SUGAR (DEC-485)**: generic bounds `T extends Iface`; general partial
   application `f(1, ?)` (subsumes the pipe `%`); `#[NoDiscard]` + unused-`Result` checker error with a
   `_ = f()` escape. **Not selected**: expression-form `is` patterns with bindings — stays a question.
+- [2026-09-02 18:06] AGREED — **LSP/CHECK TEST MODE (DEC-486)**: a document containing a `test` item is
+  checked in test mode — in the LSP AND `phg check` (and `check --json`); `run`/`transpile`/`build`
+  keep rejecting it (`E-TEST-OUTSIDE-TESTS`). Closes panel C9/K1/K7 and KNOWN_ISSUES §TEST-RAW-CHECKER.
+- [2026-09-02 18:06] AGREED — **`sleep` (DEC-487)**: `Time.sleep(Duration)` → `usleep`; no-op under a frozen
+  clock; SIGINT-interruptible. Row A9 RULED.
+- [2026-09-02 18:06] AGREED — **Q22 SPLIT (DEC-488)**: `gmp`→`Core.BigInt`, `gettext`→Intl IN; `xsl` follows
+  Xml; `gd` when a consumer appears; `ldap`/`soap`/`ftp` DECLINED with reasons.
+- [2026-09-02 18:06] AGREED — **SMALL ROWS (DEC-489)**: Q10 `Core.Uuid`, Q20 WHATWG URL + IDN + `Mime.sniff`,
+  Q12 folded into DEC-266, Q8 PDF declined with the out-of-process route documented.
 
 ## 1. Sources and their yardsticks
 
@@ -86,7 +95,7 @@ Status key: **RULED-TODAY** (build queued by a 2026-09-02 ruling) · **QUEUED** 
 | A6 | AEAD / Ed25519 / HKDF | IN (37 encrypt sites), twes-in | RULED-TODAY | Q17 |
 | A7 | gzip/deflate + HTTP wiring | IN, scout | RULED-TODAY | Q19 |
 | A8 | shell-free process spawn | IN (Chromium PDF), scout | RULED-TODAY | Q21 |
-| A9 | `sleep`, shutdown signal handler | scout `--watch` | QUEUED | W4-11, DEC-204 |
+| A9 | `sleep`, shutdown signal handler | scout `--watch` | RULED DEC-487 (`Time.sleep`) — build QUEUED | W4-11, DEC-204 |
 | A10 | XML DOM + XPath + **XSD validation + XMLDSig/XAdES signing** + C14N | IN e-invoicing, twes-in W4/5 | QUEUED (DOM, DEC-382) / NEW (XSD, XMLDSig) | Q1 scope must widen |
 | A11 | Intl: CLDR plurals, locale number/currency/date formatting, collation, XLIFF catalogues, per-recipient locale | twes-in (3 locales), IN (45) | QUEUED (DEC-271, Q4 unscoped) | Q4 |
 | A12 | money: BigInt/BigDecimal, currency-scale registry, largest-remainder allocation, `RoundingMode.Unnecessary`, scale guard, negative-zero normalisation, NUMERIC(27,12) round-trip | twes-in (440-line `Decimal.php`), IN (`BcMath.php`) | QUEUED W4-13 / PARTIAL (`decimal` i128: verify max scale vs (27,12)) | brick/money shape |

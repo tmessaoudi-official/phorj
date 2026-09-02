@@ -96,6 +96,20 @@
   captured stdout/stderr, exit code, timeout (kills the child → typed fault), env, cwd; typed
   `ProcessResult`; NO string-to-shell form exists. Transpile tier 1 via `proc_open` with an argv array.
   Examples spawn only deterministic programs (Invariant 10). Streaming pipes/PTYs out of v1 scope.
+- [2026-09-02 18:06] AGREED — **Q5 `sleep` (DEC-487): `Time.sleep(Duration)`**, transpiles to `usleep`
+  (ladder case 1); a NO-OP while the clock is frozen (`Clock.freeze` tests never wait); interruptible by
+  SIGINT so a `--watch` loop stops promptly. Pairs with the DEC-204 shutdown handler in the same slice.
+- [2026-09-02 18:06] AGREED — **Q22 SPLIT (DEC-488)**: IN — `gmp` as `Core.BigInt` (arbitrary-precision integers,
+  built with the W4-13 money slice) and `gettext` catalogues (inside DEC-484's `Core.Intl`); `xsl`
+  follows `Core.Xml` as its own question; `gd`/images becomes a question when a consumer appears;
+  `ldap`/`soap`/`ftp` DECLINED with recorded reasons (legacy protocols PHP itself no longer promotes;
+  LDAP enterprise-specific) — each a named ledger row, never silence.
+- [2026-09-02 18:06] AGREED — **SMALL STDLIB ROWS (DEC-489)**: Q10 `Core.Uuid` v4 + v7 with a "never a secret"
+  doc warning; Q20 a WHATWG URL normalization mode + IDN/punycode beside the RFC 3986 `Uri`, and
+  content-sniffed MIME (`Mime.sniff`) with the upload posture stated (trust content, never the
+  extension); Q12 client cookies + keep-alive FOLDED into the DEC-266 HTTP-client slice; Q8 PDF:
+  DECLINE the library, document the out-of-process route (Chromium via `Process.run`, Gotenberg over
+  HTTP) in EXTENSIONS.
 
 ---
 

@@ -190,6 +190,10 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
 - [2026-09-02 21:05] AGREED (certification tier, STEP 1 harness trust): **`advisor()` per gate for
   every slice of step 1, then ONE panel round on the frozen commit at the end** (DEC-481
   fix-then-verify). Red-first tests + a sabotage check per slice remain mandatory.
+- [2026-09-02 18:06] AGREED (panel C9/K1/K7, Invariant 17 `check ≡ LSP ≡ test`): **a document containing a
+  `test` item is checked in test mode — in the LSP AND `phg check`** (DEC-486). `run`/`transpile`/
+  `build` keep the strict flag. Option B (test mode only under `tests/` paths) and option C (an editor
+  setting) were rejected: both make the diagnostic depend on something other than the document.
 
 ## Execution order (global — Parts are reference material, THIS is the sequence)
 
