@@ -51,7 +51,7 @@ in-repo, disposition per finding) + its Decisions Log (the 2026-09-02 rulings).
 (1×P0 `default_fills` collision reproduced on 3 legs), completeness 16 (3×P1), safety 7. Whether a
 round 4 is owed after step 1 is the open DEC-268-vs-economize ruling (readiness plan X9).
 
-**ORDER (ruled 17:05):** (1) harness trust — panel disposition (C6 `default_fills` P0 FIXED `53df9ef1`+`1e62f74a`; the three ungated PHP-emit paths C7/C8/F1 FIXED `06e9e975`; the LSP/check test-mode path DONE (DEC-486); next: the differential floor K4, DEC-459); (2) readiness wave in
+**ORDER (ruled 17:05):** (1) harness trust — panel disposition (C6 `default_fills` P0 FIXED `53df9ef1`+`1e62f74a`; the three ungated PHP-emit paths C7/C8/F1 FIXED `06e9e975`; the LSP/check test-mode path DONE (DEC-486); the differential floor K4 DONE; next: DEC-459 prelude isolation, then the regex cluster C1–C5/C11 with REGEX-B); (2) readiness wave in
 leverage order; (3) DEC-333 perf. **Register rows: DEC-460 … DEC-489** (`C-decisions.md`, the
 2026-09-02 readiness rulings — 486 LSP/check test mode, 487 `Time.sleep`, 488 the Q22 split, 489 the small stdlib rows); MASTER-PLAN's §0 cursor is stale relative to this block until step 1's
 docs pass — this block + the two plan files' Decisions Logs are the record meanwhile (Invariant 19

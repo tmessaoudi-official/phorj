@@ -566,6 +566,11 @@ own `#[\Deprecated(message:)]` now maps onto phorj's `#[Deprecated(message:)]`.
 
 ## ✅ FIXED (2026-07-19, `a355c342`) — 🔴 was P0: the example byte-identity GLOB was a NO-OP: `all_examples_match_between_backends` skipped ALL 201 examples
 
+⊳ **Follow-up closed 2026-09-02 (panel K4):** the two single-file corpus gates now tally RUN/SKIP by
+reason, floor the RUN count (195 / 190) and require the skipped set to equal an explicit expected list
+in both directions, so this class of silent skip fails with the file named. The project-corpus gate
+(`all_example_projects_match_between_backends`, 38 files) still has a `>= 1` floor — owed.
+
 **Severity: P0 — the primary enforcement of Invariant #1 (byte-identity spine) over the example
 corpus has been DEAD since the DEC-191 `#[Entry]` migration.** Measured: `all_examples_match_between_backends`
 skips **201/201** examples, **runs 0** (`differential: SKIP (impure/quarantined)` for every file). The

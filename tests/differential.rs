@@ -1837,6 +1837,160 @@ fn uses_unavailable_gated_module(src: &str) -> bool {
     })
 }
 
+/// K4 (panel round 3, 2026-09-02): corpus-gate ACCOUNTING. A corpus gate that skips silently can be
+/// green while running nothing — the DEC-191 substring hole in `uses_impure_native` skipped 201 of
+/// 201 examples for weeks behind a passing suite. Every skip is now bucketed by reason and printed,
+/// the RUN count is floored (that guards DISCOVERY — a `collect_phg` regression drops it, which the
+/// skip set cannot see), and the skipped set must equal an explicit expected list in BOTH directions
+/// (an unexpected skip = a gate quietly stopped covering a file; an expected file that now runs = a
+/// stale list). The one exempt bucket is the feature-gated reason: its membership depends on the
+/// build's feature set, so it is counted and printed but not matched — and in a build where no module
+/// is gated (`--all-features`, the pre-push tier) `finish` requires that bucket to be EMPTY, so the
+/// exemption cannot become a permanent hole.
+struct CorpusTally {
+    gate: &'static str,
+    ran: Vec<String>,
+    skipped: std::collections::BTreeMap<&'static str, Vec<String>>,
+}
+
+impl CorpusTally {
+    fn new(gate: &'static str) -> Self {
+        Self {
+            gate,
+            ran: Vec::new(),
+            skipped: std::collections::BTreeMap::new(),
+        }
+    }
+    fn ran(&mut self, path: &std::path::Path) {
+        self.ran.push(path.display().to_string());
+    }
+    fn skip(&mut self, reason: &'static str, path: &std::path::Path) {
+        eprintln!("{}: SKIP ({reason}) {}", self.gate, path.display());
+        self.skipped
+            .entry(reason)
+            .or_default()
+            .push(path.display().to_string());
+    }
+    fn finish(self, run_floor: usize, expected_skips: &[&str], feature_gated_reason: &str) {
+        use std::collections::BTreeSet;
+        let buckets: Vec<String> = self
+            .skipped
+            .iter()
+            .map(|(r, v)| format!("{r}: {}", v.len()))
+            .collect();
+        let total_skipped: usize = self.skipped.values().map(Vec::len).sum();
+        eprintln!(
+            "{}: RUN {}, SKIP {total_skipped} ({})",
+            self.gate,
+            self.ran.len(),
+            buckets.join(", ")
+        );
+        assert!(
+            self.ran.len() >= run_floor,
+            "{}: only {} examples RAN — the floor is {run_floor}. Discovery (`collect_phg`) or a \
+             skip predicate regressed; if the corpus genuinely shrank, lower the floor deliberately.",
+            self.gate,
+            self.ran.len()
+        );
+        if phorj::cli::unavailable_gated_modules().is_empty() {
+            let gated = self
+                .skipped
+                .get(feature_gated_reason)
+                .cloned()
+                .unwrap_or_default();
+            assert!(
+                gated.is_empty(),
+                "{}: no module is gated in this build, yet these were skipped as feature-gated: {gated:?}",
+                self.gate
+            );
+        }
+        let actual: BTreeSet<&str> = self
+            .skipped
+            .iter()
+            .filter(|(r, _)| **r != feature_gated_reason)
+            .flat_map(|(_, v)| v.iter().map(String::as_str))
+            .collect();
+        // Every skipped file, the feature-gated bucket included: an expected file that this build
+        // skipped as feature-gated is not stale (`http-client/fetch.phg` is feature-gated under the
+        // default features and impure — network — under `--all-features`).
+        let all_skipped: BTreeSet<&str> = self
+            .skipped
+            .values()
+            .flat_map(|v| v.iter().map(String::as_str))
+            .collect();
+        let expected: BTreeSet<&str> = expected_skips.iter().copied().collect();
+        let unexpected: Vec<&str> = actual.difference(&expected).copied().collect();
+        let stale: Vec<&str> = expected.difference(&all_skipped).copied().collect();
+        assert!(
+            unexpected.is_empty() && stale.is_empty(),
+            "{}: skip accounting drifted.\n  UNEXPECTED skips (the gate quietly stopped covering these — \
+             a predicate widened, or a new example is impure and must be listed on purpose): {unexpected:?}\n  \
+             EXPECTED-BUT-RAN (stale entries — remove them from the list): {stale:?}",
+            self.gate
+        );
+    }
+}
+
+/// The interp ≡ VM gate's expected skips — every ambient-environment (impure) example, by exact path.
+/// A new impure example is added here ON PURPOSE (the failure message says so); a file that stops
+/// being impure is removed. Feature-gated skips are accounted separately (see `CorpusTally`).
+const INTERP_VM_EXPECTED_SKIPS: &[&str] = &[
+    "examples/benchmark/manual/stopwatch-and-memory.phg",
+    "examples/cli/stdin-filter.phg",
+    "examples/fs/foreach-line.phg",
+    "examples/fs/lines.phg",
+    "examples/fs/lock.phg",
+    "examples/fs/walk.phg",
+    "examples/guide/dates.phg",
+    "examples/guide/datetimes.phg",
+    "examples/guide/file.phg",
+    "examples/guide/imports.phg",
+    "examples/guide/logging-v2.phg",
+    "examples/guide/logging.phg",
+    "examples/guide/time.phg",
+    // Feature-gated under the default features; impure (network) once `http-client` is on.
+    "examples/http-client/fetch.phg",
+    "examples/process/args-env.phg",
+    "examples/process/main-args.phg",
+    "examples/random/dice.phg",
+    "examples/session/counter.phg",
+    "examples/web/password-verify.phg",
+];
+
+/// The PHP-oracle gate's expected skips: the impure set above PLUS the ladder-quarantined examples
+/// (`E-CONCURRENCY-NO-PHP`, `E-TRANSPILE-UNCHECKED`, native-only `E-TRANSPILE-*` modules).
+const PHP_ORACLE_EXPECTED_SKIPS: &[&str] = &[
+    "examples/benchmark/manual/stopwatch-and-memory.phg",
+    "examples/cli/stdin-filter.phg",
+    "examples/fs/foreach-line.phg",
+    "examples/fs/lines.phg",
+    "examples/fs/lock.phg",
+    "examples/fs/walk.phg",
+    "examples/guide/dates.phg",
+    "examples/guide/datetimes.phg",
+    "examples/guide/file.phg",
+    "examples/guide/imports.phg",
+    "examples/guide/logging-v2.phg",
+    "examples/guide/logging.phg",
+    "examples/guide/time.phg",
+    "examples/http-client/fetch.phg",
+    "examples/process/args-env.phg",
+    "examples/process/main-args.phg",
+    "examples/random/dice.phg",
+    "examples/session/counter.phg",
+    "examples/web/password-verify.phg",
+    // Invariant-14 ladder quarantines — disclosed, register-recorded, still interp ≡ VM gated.
+    "examples/guide/concurrency.phg",
+    "examples/guide/unchecked.phg",
+    "examples/guide/unicode-native.phg",
+];
+
+/// Today's counts minus a small margin — the floor pins DISCOVERY, not skip accounting (the exact
+/// expected-skip set does that). Lowering it is a deliberate act with a reason in the commit.
+const INTERP_VM_RUN_FLOOR: usize = 195;
+const PHP_ORACLE_RUN_FLOOR: usize = 190;
+const FEATURE_GATED: &str = "feature-gated module absent";
+
 fn uses_impure_native(src: &str) -> bool {
     use std::collections::HashSet;
     // Per-MEMBER purity (P0 fix 2026-07-19): the old check used a SUBSTRING match
@@ -2019,22 +2173,20 @@ fn all_examples_match_between_backends() {
         "expected at least the seed examples, found {}",
         files.len()
     );
+    let mut tally = CorpusTally::new("interp≡vm");
     for path in &files {
         let src = std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
         // Quarantined (ambient-environment) examples are tested in tests/process.rs, not here.
         if uses_impure_native(&src) {
-            eprintln!("differential: SKIP (impure/quarantined) {}", path.display());
+            tally.skip("impure/quarantined", path);
             continue;
         }
         // Feature-gated examples (e.g. examples/mail/ without `--features mail`): the module's
         // natives are absent in THIS build, so running would fail E-EXTENSION-DISABLED — skip
         // loudly; the feature's own gate (`cargo test --features mail --test mail`) covers them.
         if uses_unavailable_gated_module(&src) {
-            eprintln!(
-                "differential: SKIP (feature-gated module absent) {}",
-                path.display()
-            );
+            tally.skip(FEATURE_GATED, path);
             continue;
         }
         eprintln!("differential: {}", path.display()); // names the file if agree() panics
@@ -2048,7 +2200,9 @@ fn all_examples_match_between_backends() {
             cmd_treewalk(&src)
         );
         agree(&src);
+        tally.ran(path);
     }
+    tally.finish(INTERP_VM_RUN_FLOOR, INTERP_VM_EXPECTED_SKIPS, FEATURE_GATED);
 }
 
 /// M5 S2d — every multi-file **project** under `examples/` must also run byte-identically on both
@@ -3247,18 +3401,32 @@ fn all_examples_transpile_and_match_php() {
     collect_phg(std::path::Path::new("examples"), &mut files);
     files.sort();
     assert!(files.len() >= 3, "expected examples, found {}", files.len());
-    let mut deferred = 0usize;
+    let mut tally = CorpusTally::new("php-oracle");
     for path in &files {
         let label = path.display().to_string();
         let src = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {label}: {e}"));
         // Quarantined (ambient-environment) example — not byte-identity-gated against PHP (see
         // `uses_impure_native`); covered by tests/process.rs under a controlled environment.
         if uses_impure_native(&src) {
+            tally.skip("impure/quarantined", path);
+            continue;
+        }
+        // Same feature-gate skip as the interp ≡ VM gate. Before K4 this gate had none, so under the
+        // default features `http-client/fetch.phg` failed `E-EXTENSION-DISABLED` here and vanished
+        // into a silent "non-runnable" `continue` — the one file that arm ever caught.
+        if uses_unavailable_gated_module(&src) {
+            tally.skip(FEATURE_GATED, path);
             continue;
         }
         let expected = match cmd_treewalk(&src) {
             Ok(o) => o,
-            Err(_) => continue, // non-runnable example — gated by the interp ≡ VM glob, not here
+            // Unreachable at HEAD: the interp ≡ VM gate asserts every non-impure, non-gated example
+            // RUNS. A file reaching here means the two gates discover or classify differently — a
+            // finding, never a skip bucket.
+            Err(e) => panic!(
+                "{label} does not run on the interpreter, yet the interp ≡ VM gate did not catch it \
+                 (the gates' discovery or skip predicates drifted): {e}"
+            ),
         };
         let php_src = match cli::cmd_transpile(&src) {
             Ok(php) => php,
@@ -3267,7 +3435,7 @@ fn all_examples_transpile_and_match_php() {
             // example is QUARANTINED from the oracle exactly like the ambient-environment impure
             // modules. The interp ≡ VM glob still gates it byte-identically.
             Err(e) if e.contains("E-CONCURRENCY-NO-PHP") => {
-                eprintln!("SKIP (concurrency/quarantined) {label}");
+                tally.skip("concurrency/quarantined", path);
                 continue;
             }
             // `#[UncheckedOverflow]` (Core.Runtime.Integer.UncheckedOverflow) wrapping int arithmetic has NO PHP target
@@ -3275,7 +3443,7 @@ fn all_examples_transpile_and_match_php() {
             // the VM's two's-complement wrap. Quarantined from the oracle like `spawn`; interp ≡ VM still
             // gates it byte-identically.
             Err(e) if e.contains("E-TRANSPILE-UNCHECKED") => {
-                eprintln!("SKIP (unchecked/quarantined) {label}");
+                tally.skip("unchecked/quarantined", path);
                 continue;
             }
             // NATIVE-ONLY ladder modules (§14 case 2 — `E-TRANSPILE-DB`, `E-TRANSPILE-MAIL`, …):
@@ -3285,7 +3453,7 @@ fn all_examples_transpile_and_match_php() {
             // prefix is reserved for deliberate ladder artifacts, so this arm can never hide an
             // accidental transpiler regression (those surface as other codes → the panic below).
             Err(e) if e.contains("E-TRANSPILE-") => {
-                eprintln!("SKIP (native-only ladder module) {label}");
+                tally.skip("native-only ladder module", path);
                 continue;
             }
             // A transpiler feature the backend explicitly defers (e.g. literal `match` patterns,
@@ -3295,17 +3463,21 @@ fn all_examples_transpile_and_match_php() {
             // auto-enrolls in the oracle with no test edit.
             Err(e) if e.contains("not yet supported") => {
                 eprintln!("DEFER {label}: {e} (M11 transpiler gap — oracle-skipped)");
-                deferred += 1;
+                tally.skip("deferred (M11 transpiler gap)", path);
                 continue;
             }
             Err(e) => panic!("transpile {label}: {e}"),
         };
         let got = run_php(&php, &php_src, &label);
         assert_eq!(got, expected, "PHP ≠ interpreter for example {label}");
+        tally.ran(path);
     }
-    eprintln!(
-        "php oracle: {} examples gated, {deferred} deferred to M11 (transpiler feature gaps)",
-        files.len() - deferred
+    // The old summary printed `files.len() - deferred` as "examples gated" — it counted every silent
+    // skip (impure, non-runnable, quarantined) as gated, over-reporting by 20+ [K4, 2026-09-02].
+    tally.finish(
+        PHP_ORACLE_RUN_FLOOR,
+        PHP_ORACLE_EXPECTED_SKIPS,
+        FEATURE_GATED,
     );
 }
 

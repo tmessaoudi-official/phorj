@@ -8,6 +8,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **The two example-corpus gates account for every skip (panel K4).** `all_examples_match_between_backends`
+  and `all_examples_transpile_and_match_php` had two `continue` skip arms each, no counter and a floor
+  of `files.len() >= 3` — the shape that let the DEC-191 substring hole skip 201/201 examples behind a
+  green suite — and the PHP gate's summary printed "218 examples gated" while 22 of those were silent
+  skips (18 impure, one feature-gated file falling into an unlabelled "non-runnable" arm, three ladder
+  quarantines). Both gates now tally RUN/SKIP by reason (`interp≡vm: RUN 199, SKIP 19 (…)`,
+  `php-oracle: RUN 196, SKIP 22 (…)`), floor the RUN count near today's value (that pins discovery), and
+  require the skipped set to equal an explicit expected list in both directions — an unexpected skip
+  and a stale entry each fail with the file named. The feature-gated bucket is exempt from the exact
+  match because it varies by build, and a build with no gated module must show it empty. The PHP gate
+  gains the same feature-gate skip as its sibling, and its "non-runnable" arm is now a panic (the
+  interp ≡ VM gate asserts every non-impure, non-gated example runs, so a file reaching it means the
+  gates drifted). Three sabotages each red with the file named (a widened impurity predicate, a
+  raised floor, a stale expected entry). Still owed: the project-corpus gate keeps its `>= 1` floor.
 - **The loader's expression walk is total (DEC-356 class; panel K8).** `src/loader/resolve.rs`'s
   `resolve_expr` ended in a named `leaf => leaf` that swallowed eight `Expr` variants; four were live
   defects in any LIBRARY file — a same-package call inside a tuple literal, a named-argument value or
