@@ -213,6 +213,17 @@ possessive/`\h`/`\R`/`\Z`, replacement syntax, `$` before final newline all dive
 signal handler, no spawn (ruled), no IMAP/MIME/HTML parse (ruled). Items marked "ruled" have a build
 queued by today's rulings; the rest are wave items or step-1 fixes.
 
+## 5e. Found while executing step 1 (not in the panel)
+
+- **INTERP-LINE-RESET (P2, Invariant 1 failure-behaviour):** a runtime fault raised INSIDE a string
+  interpolation (`"{10 / z}"`) renders `runtime error at 8` on the interpreter but `runtime error at 1`
+  + `package …;` as the source line on the VM (with and without the JIT). Cause: the interpolation
+  sub-lexer restarts `line`/`col` at 1 and `parser/exprs/primary.rs` deliberately keeps them
+  ("interpolation diagnostics are unchanged") while re-basing only `start`; the VM's `Chunk.lines`
+  copies `span.line`, the interpreter reports the enclosing statement. Pre-existing (reproduced on the
+  binary at `260e0e50`); surfaced by the rebased-file fault probe on 2026-09-02. Fix shape: offset the
+  sub-tokens' `line` by the string's line (and `col` on line 1) as `start` already is. Owed in step 1.
+
 ## 6. Order (ruled) and the questions queue
 
 1. **Harness trust** — panel round 3 disposition (consolidation plan § "Panel round 3").

@@ -5272,6 +5272,68 @@ function trio(): void {
     }
 }
 
+/// A RUNTIME fault raised inside a rebased sibling file must render the same on the interpreter and
+/// the VM, name the sibling's own `line:col`, and never panic — the fault renderer attributes frames
+/// through `fn_files` and draws the caret from `line`/`col`, not from a byte offset into the entry.
+#[test]
+fn a_runtime_fault_in_a_rebased_project_file_renders_identically_on_both_backends() {
+    let main_src = r#"package Main;
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Lib.Box;
+import App.Two.pair;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Box x = new Box("AAA");
+    Output.printLine(x.a);
+    pair();
+}
+"#;
+    let other_src = r#"package App.Two;
+import Core.Output;
+import Lib.Box;
+function pair(): void {
+    Box x = new Box("BBB");
+    int z = 0;
+    int q = 10 / z;
+    Output.printLine("{x.a} {q}");
+}
+"#;
+    let entry = write_aligned_project(
+        "fault",
+        &[("main.phg", main_src), ("App/Two/two.phg", other_src)],
+        "new Box(",
+    );
+    let unit = loader::load(&entry).expect("the project loads");
+    let tree = cli::treewalk_program(&unit);
+    let vm = cli::run_program(&unit);
+    assert_eq!(
+        tree, vm,
+        "interp vs VM on a runtime fault in a rebased file"
+    );
+    let err = tree.expect_err("division by zero in the sibling must fault");
+    // The sibling may have received a padding line, so derive its faulting line from the file
+    // actually written rather than hard-coding it.
+    let sibling = entry
+        .parent()
+        .unwrap()
+        .join("App")
+        .join("Two")
+        .join("two.phg");
+    let written = std::fs::read_to_string(&sibling).unwrap();
+    let line = written
+        .lines()
+        .position(|l| l.contains("10 / z"))
+        .expect("the faulting statement is in the sibling")
+        + 1;
+    assert!(
+        err.contains(&format!("two.phg:{line}"))
+            && err.contains(&format!("runtime error at {line}:")),
+        "the fault must name the sibling's own line ({line}), got:\n{err}"
+    );
+}
+
 /// Re-basing a non-entry file's offsets must leave its DIAGNOSTICS untouched: `line`/`col` are the
 /// user-facing position, and a checker error in the second file must still name that file's own
 /// line and column (the same text `phg check` prints), not a rebased offset.

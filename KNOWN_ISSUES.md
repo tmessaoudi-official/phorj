@@ -2830,7 +2830,7 @@ counter/accumulator split. "Will matter when the counter is on the critical path
 Found something not listed here — especially a panic, hang, or crash on any input? That's a bug.
 Please report it (see [SUPPORT.md](SUPPORT.md); for security, [SECURITY.md](SECURITY.md)).
 
-## §span-collision — LATENT: injected-prelude spans share the user file's span space (P1, 2026-07-17)
+## FIXED — §span-collision: injected-prelude spans shared the user file's span space (P1, 2026-07-17 → prelude axis fixed 2026-07-31, user-file axis 2026-09-02)
 
 **STATUS 2026-09-02 — BOTH axes are now closed; this entry is history.** (1) The injected-prelude
 axis described below was closed on 2026-07-31 by `cli::prelude_spans::lex_parse_injected`: every
@@ -3000,7 +3000,7 @@ Pinned by `tests/differential.rs::qualified_class_construction_fills_defaults_an
 cases: omitted defaults, out-of-order named args, and both together on `Http.ServeConfig`). Verified on
 the shipped binary across `run` ≡ `--tree-walker` ≡ `--no-jit` ≡ php-8.5.8.
 
-## `default_fills` is keyed by a per-file byte offset — two files can COLLIDE and silently swap call arguments (P0, 2026-08-06)
+## FIXED — `default_fills` was keyed by a per-file byte offset: two files could COLLIDE and silently swap call arguments (P0, 2026-08-06 → fixed 2026-09-02)
 
 **FIXED 2026-09-02 (harness-trust step 1, panel round-3 C6).** The loader now gives every project
 file after the entry its own disjoint `Span.start` window (`loader::fs::SpanWindows` +

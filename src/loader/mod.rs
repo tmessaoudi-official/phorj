@@ -54,6 +54,7 @@ mod import_hygiene;
 mod imports;
 mod resolve;
 mod resolve_stmts;
+mod span_windows;
 mod unit;
 mod visibility;
 
@@ -67,6 +68,7 @@ use fs::*;
 use import_hygiene::*;
 use imports::*;
 use resolve::*;
+use span_windows::*;
 use visibility::*;
 
 /// Provenance for one top-level definition: where it was declared and how visible it is. Built in

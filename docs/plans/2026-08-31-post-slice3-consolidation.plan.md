@@ -610,7 +610,7 @@ deps 14 admitted / 9 default = UNIFIED-SPEC:1359; all 7 new codes have `phg expl
 | C3 | P1 | `runtime_php.rs:995-1004` | `a$` on `"a\n"`: native `false`, php `true` — delimiter helper emits `u` without `D` | KNOWN_ISSUES:883 covered Core.Validation only; NEW for Core.Regex |
 | C4 | P2 | same helpers | `findAll("a*","baaa")` → native 2, php 3 (empty-match placement) | KNOWN_ISSUES:2505 |
 | C5 | P1 | `natives.rs:307` | look-around siblings forwarded unvalidated: `a(?=b)`, `(a)\1`, `\h`, `\R`, `\Z`, `a{,3}b` — native fault, php `true` | class ruled REGEX-B above; sibling list NEW |
-| C6 | **P0** | `src/checker/calls/args.rs:256` | `default_fills` two-file collision reproduced at HEAD: `new Cookie(…)` at the same byte offset in two files → wrong arguments on run, --tree-walker AND php | KNOWN_ISSUES:2989 |
+| C6 | **P0** | `src/checker/calls/args.rs:256` | `default_fills` two-file collision reproduced at HEAD: `new Cookie(…)` at the same byte offset in two files → wrong arguments on run, --tree-walker AND php | **FIXED `53df9ef1`** — per-file span windows in the loader (`SpanWindows`); three-file differential pin + two sabotages; closes §default_fills and §span-collision |
 | C7 | P1 | `src/cli/benchmark.rs:80,244` | `benchmark --vs-php` transpiles a `Core.Database` program with no ladder gate → PHP fatal, "skipping", exit 0 | tracked (plan A-list) |
 | C8 | P1 | `playground/src/lib.rs:103` | `transpile_json` → `transpile::emit`, no ladder gate | tracked |
 | C9 | P2 | `src/lsp/mod.rs:496-511` | LSP diagnostics run `test_mode=false`; `check ≡ LSP ≡ test` false | tracked (= completeness #1) |
@@ -651,7 +651,7 @@ fixed; `import Core.Http as H` offers no alias bypass.
   the transpile leg, `D` in the delimiter helper, replacement-syntax normalisation, possessive/`\h`/`\R`/
   `\Z`/`{,n}` rejection or support decided per construct, each with an `agree_out_php` case (the
   reviewer confirms no existing test can go red on C1–C5).
-- **C6 P0** is step 1's first item. **C7/C8** = the ungated-emit paths (gate before `check_and_expand`,
+- **C6 P0** — DONE `53df9ef1`. **C7/C8** = the ungated-emit paths (gate before `check_and_expand`,
   as `parse_checked_for_run` does). **C9/K1/K7/K16** = the LSP test-mode + symbols + hover slice
   (developer directive: LSP/editors are first-class). **K4** = differential floor. **K8** = widen the
   CD-31 ratchet to the four remaining item arms. **K2/K3/K5/K6/K9/K10/K14/K15** = one docs pass, same

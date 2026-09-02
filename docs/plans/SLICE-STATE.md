@@ -51,7 +51,7 @@ in-repo, disposition per finding) + its Decisions Log (the 2026-09-02 rulings).
 (1×P0 `default_fills` collision reproduced on 3 legs), completeness 16 (3×P1), safety 7. Whether a
 round 4 is owed after step 1 is the open DEC-268-vs-economize ruling (readiness plan X9).
 
-**ORDER (ruled 17:05):** (1) harness trust — panel disposition, P0 first; (2) readiness wave in
+**ORDER (ruled 17:05):** (1) harness trust — panel disposition (the P0, C6 `default_fills`, is FIXED `53df9ef1`; next: the differential floor, the ungated emit paths, the LSP test-mode path, DEC-459); (2) readiness wave in
 leverage order; (3) DEC-333 perf. **Register rows: DEC-460 … DEC-481** (`C-decisions.md`, the
 2026-09-02 readiness rulings); MASTER-PLAN's §0 cursor is stale relative to this block until step 1's
 docs pass — this block + the two plan files' Decisions Logs are the record meanwhile (Invariant 19
