@@ -8,6 +8,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **A malformed `Content-Length` is a `400` and the connection closes (RFC 9112 §6.3; panel
+  C10/F4).** `Content-Length: abc`, `-1` or a 24-digit value parsed to 0 through an `unwrap_or(0)`, so
+  the framing read no body and the request was SERVED body-less with `200` — pinned as intended by a
+  unit test. The parser now accepts `1*DIGIT` only (`Ok(0)` when absent, `Err` when malformed), and all
+  three framing sites (the single-threaded transport's fresh and kept-alive paths, and the pool
+  worker's loop) answer a fixed `400` with `Connection: close` and drop the socket before any handler
+  runs — the request boundary is unknowable, so the connection cannot be reused. Red-first in
+  `tests/serve.rs` (single-threaded and pool paths, raw sockets) and the framing unit test flipped;
+  three sabotages red (each transport guard disabled, the digit check loosened).
 - **Prelude-internal bindings are isolated from user imports (DEC-459 built; panel F6;
   KNOWN_ISSUES §PRELUDE-ALIAS-COLLISION).** Every `import Core.Native.X as A;` a Core prelude declares
   is rebound at injection under `A#prelude` — `#` is not an identifier character, so no user token can

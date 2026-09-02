@@ -41,9 +41,10 @@ pub(super) fn read_http_request<R: Read>(stream: &mut R) -> io::Result<Vec<u8>> 
         }
         buf.extend_from_slice(&chunk[..n]);
     };
-    let want = head_end
-        .saturating_add(parse_content_length(&buf[..head_end]))
-        .min(MAX_REQUEST);
+    // A malformed Content-Length reads NO body: its length is unknowable, and the transport answers
+    // `400` + close for it (`content_length_is_malformed`, RFC 9112 §6.3) before any handler runs.
+    let body_len = parse_content_length(&buf[..head_end]).unwrap_or(0);
+    let want = head_end.saturating_add(body_len).min(MAX_REQUEST);
     while buf.len() < want {
         let n = stream.read(&mut chunk)?;
         if n == 0 {
@@ -109,18 +110,37 @@ fn token_list_has(value: &str, token: &str) -> bool {
         .any(|t| t.trim().eq_ignore_ascii_case(token))
 }
 
-/// Parse the `Content-Length` header from a request head (0 if absent or unparseable).
-fn parse_content_length(head: &[u8]) -> usize {
+/// Parse the `Content-Length` header from a request head: `Ok(0)` when absent, `Ok(n)` for a valid
+/// value (`1*DIGIT`, RFC 9112 §6.3 — no sign, no whitespace inside, fits `usize`), `Err(())` when
+/// present but malformed. A malformed value used to parse as 0 and the request was SERVED body-less
+/// with `200` (panel C10/F4: `abc`, `-1`, a 24-digit value); the RFC says 400 and close.
+fn parse_content_length(head: &[u8]) -> Result<usize, ()> {
     let text = String::from_utf8_lossy(head);
     for line in text.split("\r\n") {
         if let Some((name, value)) = line.split_once(':') {
             if name.trim().eq_ignore_ascii_case("content-length") {
-                return value.trim().parse().unwrap_or(0);
+                let v = value.trim();
+                if v.is_empty() || !v.bytes().all(|b| b.is_ascii_digit()) {
+                    return Err(());
+                }
+                return v.parse().map_err(|_| ());
             }
         }
     }
-    0
+    Ok(0)
 }
+
+/// Whether a framed request carries a malformed `Content-Length` (see [`parse_content_length`]). The
+/// transport answers [`BAD_CONTENT_LENGTH_RESPONSE`] and closes the connection instead of serving it.
+pub(super) fn content_length_is_malformed(raw: &[u8]) -> bool {
+    let head_end = find_subslice(raw, b"\r\n\r\n").map_or(raw.len(), |i| i + 4);
+    parse_content_length(&raw[..head_end]).is_err()
+}
+
+/// The fixed reply to a malformed `Content-Length`: `400`, no body, and `Connection: close` — the
+/// request boundary is unknowable, so the connection cannot be reused (RFC 9112 §6.3).
+pub(super) const BAD_CONTENT_LENGTH_RESPONSE: &[u8] =
+    b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
 /// First index of `needle` in `hay`, or `None`. An empty needle matches at 0 (defensive; the only
 /// caller passes the non-empty `\r\n\r\n`).
@@ -150,7 +170,7 @@ mod tests {
     fn content_length_absent_is_zero() {
         assert_eq!(
             parse_content_length(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"),
-            0
+            Ok(0)
         );
     }
 
@@ -158,7 +178,7 @@ mod tests {
     fn content_length_present_is_parsed() {
         assert_eq!(
             parse_content_length(b"POST / HTTP/1.1\r\nContent-Length: 42\r\n\r\n"),
-            42
+            Ok(42)
         );
     }
 
@@ -166,17 +186,39 @@ mod tests {
     fn content_length_is_case_insensitive_and_trims() {
         assert_eq!(
             parse_content_length(b"POST / HTTP/1.1\r\ncOnTeNt-LeNgTh:   7  \r\n\r\n"),
-            7
+            Ok(7)
         );
     }
 
     #[test]
-    fn content_length_malformed_is_zero() {
-        // Non-numeric value parses to 0 (framing reads no body; the program's parser handles it).
+    fn content_length_malformed_is_rejected() {
+        // RFC 9112 §6.3: a Content-Length that is not a valid non-negative integer is a 400 + close,
+        // never "read no body and serve it" (panel C10/F4: `abc`, `-1` and a 24-digit value all
+        // served `200`). Absent stays `Ok(0)`.
+        for bad in [
+            "not-a-number",
+            "-1",
+            "123456789012345678901234",
+            "1 2",
+            "0x10",
+            // `1*DIGIT` admits no sign: Rust's `usize::from_str` would accept this one.
+            "+5",
+            "",
+        ] {
+            let head = format!("POST / HTTP/1.1\r\nContent-Length: {bad}\r\n\r\n");
+            assert!(
+                parse_content_length(head.as_bytes()).is_err(),
+                "`Content-Length: {bad}` must be rejected"
+            );
+            assert!(content_length_is_malformed(head.as_bytes()), "{bad}");
+        }
         assert_eq!(
-            parse_content_length(b"POST / HTTP/1.1\r\nContent-Length: not-a-number\r\n\r\n"),
-            0
+            parse_content_length(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"),
+            Ok(0)
         );
+        assert!(!content_length_is_malformed(
+            b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"
+        ));
     }
 
     // --- read_http_request (over a Cursor, no socket) ----------------------

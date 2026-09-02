@@ -595,7 +595,7 @@ ran the 12 tests they named (12/12 green). Full lens reports: `var/claude/panel/
 | F2 | P2 | `src/ext/registry.rs`, `docs/EXTENSIONS.md` | `phg extensions` lists flag-only rows but has NO `http-server-tls` row, although its absence is the runtime refusal `E-SERVE-TLS-DISABLED` | NEW |
 | F3 | P2 | `KNOWN_ISSUES.md:2481-2482`, `examples/README.md:133` | "lookaround rejected at compile — never a divergence" is false on the PHP leg | NEW (= REGEX-B class) |
 | F3b | P3 | `KNOWN_ISSUES.md:2484` | claims `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, both legs agree | stale doc (= C11) |
-| F4 | P2 | `src/serve/framing.rs:118` | invalid `Content-Length` (`abc`, `-1`, 24-digit) served `200` instead of `400`+close; pinned as intended by `content_length_malformed_is_zero` | NEW (= C10) |
+| F4 | P2 | `src/serve/framing.rs:118` | invalid `Content-Length` (`abc`, `-1`, 24-digit) served `200` instead of `400`+close; pinned as intended by `content_length_malformed_is_zero` | FIXED (step 1: strict `1*DIGIT` parse, `400` + close at all three framing sites) |
 | F5 | P2 | `src/serve/settings.rs:119,149` | negative `workers`/`timeout` in `ServeConfig` silently read as unset with no `W-SERVE-CONFIG-OVERRIDDEN` notice | tracked §SERVE-CONFIG-PROVENANCE (ruled: nullable fields + range validation) |
 | F6 | P2 | `cli/http_request_prelude.rs:23`, `cli/preludes.rs:64`, `ext/uri/prelude.rs:7`, `ext/debug/prelude.rs:12` | nothing-in-the-wind: `NativeHttp`, `NativeInput`, `NativeUri`, `NativeDebug` resolve in user code with NO import; the containment arm covers only `NativeHttp.registerServe` | FIXED with DEC-459 (step 1): the four qualifiers are unknown identifiers in user code, pinned by `tests/prelude_isolation.rs` |
 | F7 | P3 | `src/cli/ladder.rs:123` | error text renders 14-space runs inside the hint | NEW |
@@ -618,7 +618,7 @@ deps 14 admitted / 9 default = UNIFIED-SPEC:1359; all 7 new codes have `phg expl
 | C7 | P1 | `src/cli/benchmark.rs:80,244` | `benchmark --vs-php` transpiles a `Core.Database` program with no ladder gate → PHP fatal, "skipping", exit 0 | **FIXED** (step 1) — gated pre-expansion on the PHP leg only |
 | C8 | P1 | `playground/src/lib.rs:103` | `transpile_json` → `transpile::emit`, no ladder gate | **FIXED** (step 1) — routed through `cli::transpile_source`, the single-source chokepoint |
 | C9 | P2 | `src/lsp/mod.rs:496-511` | LSP diagnostics run `test_mode=false`; `check ≡ LSP ≡ test` false | FIXED (DEC-486, step 1) |
-| C10 | P2 | `src/serve/framing.rs:118` | `Content-Length: abc` → `200` body-less instead of `400`; `unwrap_or(0)` has no failure-mode evidence | NEW |
+| C10 | P2 | `src/serve/framing.rs:118` | `Content-Length: abc` → `200` body-less instead of `400`; `unwrap_or(0)` has no failure-mode evidence | FIXED (= F4) |
 | C11 | P3 | `runtime_php.rs:992`, KNOWN_ISSUES:2485 | the documented `\d\w\s` ASCII-vs-Unicode edge does NOT exist (php `u` ⇒ UCP); the real edges are C1–C3 | NEW (doc wrong) |
 | C12 | P3 | `src/cli/pipeline.rs:397-420` | `benchmark --vs-php` on a Web-only program measures handler registration only and reports a speedup | NEW, by-design per comment |
 

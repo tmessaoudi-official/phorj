@@ -1355,3 +1355,65 @@ fn a_legacy_request_response_web_entry_is_refused_with_the_migration_code() {
         "the refusal must name what to migrate TO: {msg}"
     );
 }
+
+/// Panel C10/F4 (RFC 9112 §6.3): a request whose `Content-Length` is not a valid non-negative integer
+/// is answered `400 Bad Request` and the connection is CLOSED — never served as a body-less `200`
+/// (`abc`, `-1` and a 24-digit value all got `200` before). Single-threaded transport path.
+#[test]
+fn malformed_content_length_gets_400_and_the_connection_closes() {
+    use phorj::serve::TcpTransport;
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let prog = program();
+    let mut t = TcpTransport::bind("127.0.0.1:0").expect("bind ephemeral port");
+    t.set_timeout(Some(Duration::from_secs(5)));
+    let addr = t.local_addr().expect("addr");
+    std::thread::spawn(move || {
+        let _ = serve(&ifac(&prog), &mut t, false);
+    });
+    for bad in ["abc", "-1", "123456789012345678901234"] {
+        let mut s = TcpStream::connect(addr).expect("connect");
+        s.set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("client timeout");
+        s.write_all(
+            format!("POST / HTTP/1.1\r\nHost: x\r\nContent-Length: {bad}\r\n\r\n").as_bytes(),
+        )
+        .expect("write");
+        let mut resp = Vec::new();
+        s.read_to_end(&mut resp)
+            .expect("read until the server closes");
+        let text = String::from_utf8_lossy(&resp);
+        assert!(
+            text.starts_with("HTTP/1.1 400 "),
+            "`Content-Length: {bad}` must be a 400, got:\n{text}"
+        );
+        assert!(text.contains("Connection: close"), "{text}");
+    }
+}
+
+/// The same RFC 9112 §6.3 refusal on the multi-worker POOL path (the default `phg serve`), whose
+/// per-connection loop is a separate framing site from the single-threaded transport above.
+#[test]
+fn malformed_content_length_gets_400_on_the_pool() {
+    use phorj::serve::serve_pool;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+
+    let prog = program();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("addr");
+    std::thread::spawn(move || {
+        let _ = serve_pool(listener, ifac(&prog), None, false, 2);
+    });
+    let mut s = TcpStream::connect(addr).expect("connect");
+    s.write_all(b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: -1\r\n\r\n")
+        .expect("write");
+    let mut resp = Vec::new();
+    s.read_to_end(&mut resp)
+        .expect("read until the worker closes");
+    let text = String::from_utf8_lossy(&resp);
+    assert!(text.starts_with("HTTP/1.1 400 "), "{text}");
+    assert!(text.contains("Connection: close"), "{text}");
+}

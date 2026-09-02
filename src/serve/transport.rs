@@ -4,7 +4,8 @@ use super::*;
 // Wire framing lives in the sibling `framing` module (Invariant 13 carve-out, S3.5): same functions,
 // same behaviour, moved so this file could take TLS without growing past its ratchet.
 use super::framing::{
-    read_http_request, request_wants_keepalive, response_keeps_alive, MAX_REQUESTS_PER_CONN,
+    content_length_is_malformed, read_http_request, request_wants_keepalive, response_keeps_alive,
+    BAD_CONTENT_LENGTH_RESPONSE, MAX_REQUESTS_PER_CONN,
 };
 
 /// Production transport: a single-threaded `TcpListener`, one request per accepted connection
@@ -73,6 +74,13 @@ impl Transport for TcpTransport {
         // the read timeout, which is why keep-alive is only kept when a timeout is configured).
         if let Some(mut stream) = self.current.take() {
             match read_http_request(&mut stream) {
+                // RFC 9112 §6.3 (panel C10/F4): a malformed Content-Length is answered 400 and the
+                // connection is CLOSED — its request boundary is unknowable, so it cannot be reused.
+                Ok(raw) if content_length_is_malformed(&raw) => {
+                    let _ = stream
+                        .write_all(BAD_CONTENT_LENGTH_RESPONSE)
+                        .and_then(|()| stream.flush());
+                }
                 Ok(raw) if !raw.is_empty() => {
                     self.req_wants_keepalive = request_wants_keepalive(&raw);
                     self.current = Some(stream);
@@ -125,6 +133,12 @@ impl Transport for TcpTransport {
                 }
             };
             match read_http_request(&mut stream) {
+                // RFC 9112 §6.3 (panel C10/F4): 400 + close, then accept the next connection.
+                Ok(raw) if content_length_is_malformed(&raw) => {
+                    let _ = stream
+                        .write_all(BAD_CONTENT_LENGTH_RESPONSE)
+                        .and_then(|()| stream.flush());
+                }
                 Ok(raw) => {
                     self.req_wants_keepalive = request_wants_keepalive(&raw);
                     self.served_on_current = 0;
@@ -394,6 +408,13 @@ fn worker_loop(
                     // Empty buffer = the client closed (EOF before any bytes) — only meaningful on a
                     // kept-alive socket; on a fresh one it flows to `parse_request` → 400 (served == 0).
                     Ok(raw) if served > 0 && raw.is_empty() => break,
+                    // RFC 9112 §6.3 (panel C10/F4): 400 + close, never a handler call.
+                    Ok(raw) if content_length_is_malformed(&raw) => {
+                        let _ = stream
+                            .write_all(BAD_CONTENT_LENGTH_RESPONSE)
+                            .and_then(|()| stream.flush());
+                        break;
+                    }
                     Ok(raw) => {
                         let response = respond_once(&mut handler, &raw, dev);
                         if let Err(e) = stream.write_all(&response).and_then(|()| stream.flush()) {
