@@ -331,3 +331,26 @@ fn check_json_routes_through_the_shared_front_end() {
         "{json}"
     );
 }
+
+/// INTERP-LINE-RESET / W0-5 (fixed 2026-09-02): a diagnostic raised INSIDE a string interpolation
+/// names the real line and column. The interpolation sub-tokenizer restarts at 1:1; the parser now
+/// re-bases `line`/`col` (not only `start`), so `phg check` no longer reports `1:1` for an error on
+/// line 6, and the VM's fault lines agree with the interpreter (`tests/differential.rs`,
+/// `interpolation_fault_line_matches_between_backends`, un-ignored the same day).
+#[test]
+fn a_diagnostic_inside_an_interpolation_names_the_real_line_and_column() {
+    let src = "package Main;\nimport Core.Output;\n\nfunction main() -> void {\n    int n = 1;\n    Output.printLine(\"n = {n + nope}\");\n}\n";
+    let prog = lex_parse(src).expect("parse");
+    let err = check_and_expand(&prog, src).expect_err("unknown identifier");
+    assert!(
+        err.contains("at 6:32"),
+        "expected the real position 6:32, got:\n{err}"
+    );
+    // The empty interpolation reports its own position too (it used to say `1:1`).
+    let empty = "package Main;\nimport Core.Output;\nfunction main() -> void {\n    Output.printLine(\"{}\");\n}\n";
+    let err = lex_parse(empty).expect_err("empty interpolation is a parse error");
+    assert!(
+        err.contains("at 4:24"),
+        "expected the real position 4:24, got:\n{err}"
+    );
+}

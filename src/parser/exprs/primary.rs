@@ -210,7 +210,7 @@ impl Parser {
         for seg in segs {
             match seg {
                 StrSeg::Lit(s) => parts.push(StrPart::Literal(s)),
-                StrSeg::Interp(src, base) => {
+                StrSeg::Interp(src, base, line, col) => {
                     let mut sub_tokens = crate::tokenizer::lex(&src).map_err(|e| {
                         Diagnostic::new(
                             Stage::Parse,
@@ -219,12 +219,19 @@ impl Parser {
                             sp.col,
                         )
                     })?;
-                    // The sub-tokenizer restarts spans at 0; shift every token's `start` to its absolute
-                    // position in the original source so interpolated expressions carry globally-unique
-                    // offsets (a span-keyed rewrite like UFCS keys on `start`). `line`/`col` keep the
-                    // sub-tokenizer's values, so interpolation diagnostics are unchanged.
+                    // The sub-tokenizer restarts at offset 0, line 1, col 1; re-base every token to its
+                    // absolute position in the original source: `start` so interpolated expressions carry
+                    // globally-unique offsets (a span-keyed rewrite like UFCS keys on `start`), and
+                    // `line`/`col` so a diagnostic or a VM fault raised inside `{…}` names the real line
+                    // (before 2026-09-02 they kept the sub-tokenizer's values and reported line 1 —
+                    // INTERP-LINE-RESET / W0-5). A sub-token on the interpolation's first line shifts by
+                    // its column; later lines already carry their own column.
                     for t in &mut sub_tokens {
                         t.span.start += base;
+                        if t.span.line == 1 {
+                            t.span.col += col.saturating_sub(1);
+                        }
+                        t.span.line += line.saturating_sub(1);
                     }
                     let mut sub = Parser::new(sub_tokens);
                     let e = sub.parse_expr()?;

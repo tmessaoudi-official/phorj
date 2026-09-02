@@ -391,21 +391,21 @@ fn fault_line(err: &str) -> Option<usize> {
 /// divide-by-zero, force-unwrap — the H `r1`/`r6`/`r11` shapes). It fails today (VM reports 1), so it
 /// is `#[ignore]`d; **un-ignore it when W5-13 lands** and it must go green.
 #[test]
-#[ignore = "W5-13: VM reports line 1 for faults inside string interpolation (H §5); un-ignore when VM debug symbols land"]
 fn interpolation_fault_line_matches_between_backends() {
-    // (source, true line of the fault). Each faults inside a `"{…}"` on a line != 1.
+    // (source, true line of the fault — the line the `printLine` call sits on). Each faults inside a
+    // `"{…}"` on a line != 1. (The original expectations were one line short; corrected 2026-09-02.)
     let cases: &[(&str, usize)] = &[
         (
             "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n#[Entry(kind: EntryKind.Cli)] function main() -> void {\n    var xs = [1];\n    Output.printLine(\"v = {xs[9]}\");\n}",
-            5,
+            6,
         ),
         (
             "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n#[Entry(kind: EntryKind.Cli)] function main() -> void {\n    Output.printLine(\"v = {1 / 0}\");\n}",
-            4,
+            5,
         ),
         (
             "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\n#[Entry(kind: EntryKind.Cli)] function main() -> void {\n    int? n = null;\n    Output.printLine(\"v = {n!}\");\n}",
-            5,
+            6,
         ),
     ];
     for (src, want) in cases {

@@ -121,14 +121,13 @@ All stages produce `diagnostic::Diagnostic { stage, message, line, col }`. `Disp
 forms (`line==0` → no position; `col==0` → `at <line>` (VM runtime); else `at <line>:<col>`
 (front-end)). Both backends now attach a source line to runtime faults (the VM via
 `Chunk.lines[ip]`, the interpreter via its stack-trace frames) and they agree for ordinary faults.
-**Known limitation (fault-line skew — W0-5 / H §5):** a fault raised *inside* a `"{…}"` string
-interpolation is the one exception — `run` reports the true line, but the VM reports **line 1**
-(stack-trace frames likewise), because `parser::split_interpolation` re-lexes the inner expression
-with a fresh lexer that resets to line 1 and the VM has no scope IP ranges to recover the real line.
-Message, `FaultKind`, and exit code still agree, so the body-substring oracle (#1), `agree_err`, and
-the CLI differential all stay green — only the line diverges. Pinned by the `#[ignore]`d
-`interpolation_fault_line_matches_between_backends` gate in `tests/differential.rs`; the fix needs
-VM debug symbols (scope IP ranges) and is scheduled **W5-13**.
+**Former limitation (fault-line skew — W0-5 / H §5), FIXED 2026-09-02:** a fault raised *inside* a
+`"{…}"` string interpolation used to report **line 1** on the VM while `run` reported the true line,
+because the interpolation sub-tokenizer restarts at 1:1 and the parser re-based only the token
+`start`. The parser now re-bases `line`/`col` as well, so both backends agree on the line;
+`interpolation_fault_line_matches_between_backends` in `tests/differential.rs` is un-ignored and
+green. (The earlier diagnosis — "needs VM debug symbols, W5-13" — was wrong; W5-13 stays queued for
+named locals / DAP, not for this.)
 
 ## 8. Determinism — sort `HashMap`-derived lists before rendering
 Any user-facing list built from `HashMap`/`HashSet` iteration must be sorted before `join`, or the

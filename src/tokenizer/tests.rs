@@ -1,12 +1,12 @@
 use super::*;
 use crate::token::{StrSeg, TokenKind};
 
-fn kinds(src: &str) -> Vec<TokenKind> {
+pub(super) fn kinds(src: &str) -> Vec<TokenKind> {
     lex(src).unwrap().into_iter().map(|t| t.kind).collect()
 }
 
 /// A `Str` token of a single literal segment (the common no-interpolation case).
-fn lit(s: &str) -> TokenKind {
+pub(super) fn lit(s: &str) -> TokenKind {
     TokenKind::Str(vec![StrSeg::Lit(s.into())])
 }
 
@@ -270,82 +270,6 @@ fn mutable_keyword_is_recognized() {
 }
 
 #[test]
-fn string_literals() {
-    use TokenKind::*;
-    assert_eq!(kinds("\"hello\""), vec![lit("hello"), Eof]);
-    // escapes
-    assert_eq!(kinds("\"a\\nb\\t\\\"c\""), vec![lit("a\nb\t\"c"), Eof]);
-    // interpolation is now split by the tokenizer into literal + interp segments.
-    assert_eq!(
-        kinds("\"Hello {name}\""),
-        vec![
-            Str(vec![
-                StrSeg::Lit("Hello ".into()),
-                StrSeg::Interp("name".into(), 8)
-            ]),
-            Eof
-        ]
-    );
-}
-
-#[test]
-fn literal_braces_via_backslash() {
-    use TokenKind::*;
-    // `\{` / `\}` are literal braces — a single literal segment, no interpolation.
-    assert_eq!(kinds(r#""\{x\}""#), vec![lit("{x}"), Eof]);
-    // mixed: literal braces around a real interpolation.
-    assert_eq!(
-        kinds(r#""\{{n}\}""#),
-        vec![
-            Str(vec![
-                StrSeg::Lit("{".into()),
-                StrSeg::Interp("n".into(), 4),
-                StrSeg::Lit("}".into())
-            ]),
-            Eof
-        ]
-    );
-}
-
-#[test]
-fn nested_string_literal_in_interpolation() {
-    use TokenKind::*;
-    // A double-quoted string inside an interpolation expression is consumed verbatim — its inner `"`
-    // does NOT close the outer string (M-DOGFOOD W2). Inner source: `f("x")`, content starts at 7.
-    assert_eq!(
-        kinds(r#""call {f("x")}""#),
-        vec![
-            Str(vec![
-                StrSeg::Lit("call ".into()),
-                StrSeg::Interp(r#"f("x")"#.into(), 7),
-            ]),
-            Eof
-        ]
-    );
-    // A `}` (or `{`) inside the nested string is literal — it must not close the interpolation.
-    assert_eq!(
-        kinds(r#""{f("a}b")}""#),
-        vec![Str(vec![StrSeg::Interp(r#"f("a}b")"#.into(), 2)]), Eof]
-    );
-    // An escaped quote inside the nested string is kept verbatim in the inner source (re-lexed later).
-    assert_eq!(
-        kinds(r#""{f("a\"b")}""#),
-        vec![Str(vec![StrSeg::Interp(r#"f("a\"b")"#.into(), 2)]), Eof]
-    );
-}
-
-#[test]
-fn raw_strings() {
-    use TokenKind::*;
-    // No escapes, no interpolation — every byte literal.
-    assert_eq!(kinds(r#"r"a\n{x}b""#), vec![lit(r"a\n{x}b"), Eof]);
-    // `#`-delimited raw string carries embedded quotes.
-    assert_eq!(kinds(r##"r#"say "hi""#"##), vec![lit(r#"say "hi""#), Eof]);
-    // a bare `r` / `rx` is an ordinary identifier, not a raw string.
-    assert_eq!(kinds("r"), vec![Ident("r".into()), Eof]);
-}
-
-#[test]
 fn utf8_string_body_preserved() {
     use TokenKind::Eof;
     assert_eq!(kinds("\"café\""), vec![lit("café"), Eof]);
@@ -583,7 +507,7 @@ fn text_block_interpolates() {
     match first(src) {
         TokenKind::Str(segs) => {
             assert_eq!(segs[0], StrSeg::Lit("hi ".into()));
-            assert!(matches!(&segs[1], StrSeg::Interp(s, _) if s == "name"));
+            assert!(matches!(&segs[1], StrSeg::Interp(s, _, _, _) if s == "name"));
             assert_eq!(segs[2], StrSeg::Lit("!".into()));
         }
         other => panic!("expected Str, got {other:?}"),

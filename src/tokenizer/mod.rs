@@ -12,6 +12,7 @@ pub struct Lexer<'a> {
     col: u32,
 }
 
+mod escapes;
 mod ident;
 mod scan;
 mod strings;
@@ -457,3 +458,5 @@ mod tests;
 
 #[cfg(test)]
 mod tests_doc_comments;
+#[cfg(test)]
+mod tests_strings;

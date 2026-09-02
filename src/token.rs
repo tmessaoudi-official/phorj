@@ -69,7 +69,11 @@ pub enum StrSeg {
     /// two interpolations' nodes collide — fatal for any span-keyed rewrite, e.g. UFCS Slice 6). Only
     /// `start` is offset; `line`/`col` keep the sub-tokenizer's values (diagnostics inside interpolation
     /// are unchanged). With an escaped char before a token the offset is approximate but still unique.
-    Interp(String, usize),
+    /// DEC-486-adjacent fix (INTERP-LINE-RESET / W0-5, 2026-09-02): the third and fourth fields are the
+    /// 1-based LINE and COLUMN of that inner source's first byte, so the parser can re-base the re-lexed
+    /// tokens' `line`/`col` too — before this only `start` was re-based, so every diagnostic and VM
+    /// fault raised inside an interpolation reported line 1.
+    Interp(String, usize, u32, u32),
 }
 
 #[derive(Debug, Clone, PartialEq)]

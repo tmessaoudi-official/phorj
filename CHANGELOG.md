@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Diagnostics and VM faults inside a string interpolation name the real line (W0-5 / H §5,
+  INTERP-LINE-RESET; panel round 4).** The interpolation sub-tokenizer restarts at 1:1 and the parser
+  re-based only each re-lexed token's `start`, so `phg check` reported `1:1` for an error inside
+  `"{…}"` and the VM reported fault line 1 where the interpreter reported the true line — an
+  Invariant-1 failure-behaviour divergence disclosed since W0-5 and mis-diagnosed as needing VM debug
+  symbols (W5-13). `StrSeg::Interp` now carries the interpolation's own line/col and
+  `segments_to_parts` re-bases `line`/`col` too (text blocks shift lines by the block's line). The
+  `#[ignore]`d `interpolation_fault_line_matches_between_backends` gate is un-ignored and green (its
+  expected lines were one short and corrected); `a_diagnostic_inside_an_interpolation_names_the_real_line_and_column`
+  pins the front-end half and the empty `"{}"` case; a sabotage dropping the line re-base reds the gate.
+
 ### Added
 
 - **`Regex.compileBacktracking` — the opt-in backtracking engine (DEC-461, REGEX-B; `fancy-regex`

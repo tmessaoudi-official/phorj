@@ -1050,8 +1050,8 @@ holds; the PHP leg is a hard error — **the shipped code is `E-CONCURRENCY-NO-P
 "E-TRANSPILE-CONCURRENCY" was the pre-implementation name; audit B3-4 verified only
 `E-CONCURRENCY-NO-PHP` exists — use it everywhere). DEC-369 deleted the never-shipped
 `--sequential-concurrency` opt-in from this rule — the hard error + quarantine is the whole
-mechanism. Until W5-13, fault *line numbers* inside interpolation also diverge on the VM
-(disclosed, W0-5). The audit added four *undisclosed* byte-identity breaks — now tracked + ruled as
+mechanism. (Fault *line numbers* inside interpolation diverged on the VM until 2026-09-02 — W0-5,
+FIXED in the parser, W5-13 was never the real prerequisite.) The audit added four *undisclosed* byte-identity breaks — now tracked + ruled as
 UA-1 (§2.2); each fix lands its adversarial differential case same-commit (UA-0.13).
 
 **G-2 · Quality gate (green means ALL):** workspace tests + clippy (warnings deny) + fmt +
@@ -1863,7 +1863,7 @@ still escalates via `ask-human` even autonomously. Update the §0 cursor block a
 | W0-2 | Static-field visibility spine repair | ✅ (wave-0 slate `f28d950..c0f8969`) |
 | W0-3 | Static-method-via-instance error | ✅ (slate; the FIELD mirror is UA-0.6) |
 | W0-4 | Loader package gates + E-ALIAS-CYCLE | ✅ (slate, both halves) |
-| W0-5 | VM interpolation fault-line disclosure | ✅ (slate; fix = W5-13; scope widened per UA-0.14) |
+| W0-5 | VM interpolation fault-line disclosure | ✅ disclosed; ✅ FIXED 2026-09-02 (parser re-bases interpolation line/col; the W5-13 dependency was a wrong diagnosis) |
 | W0-6 | Front door: doc snippets + CLI renames + CI doc-check | ✅ halves 1/2 (slate); **remainder = W0-6b**: verb-rename sweep across the 12 enumerated files + the CI ```phorj-fence `phg check` job (fold with §2.3 B3-3) |
 | W0-7 | Doc-reconciliation + CLAUDE.md rules-only rewrite | ✅ `c66bde5` + consolidation pass |
 | W0-8 | Plan-file deletions + de-dangle | ✅ (48 + second batch) |

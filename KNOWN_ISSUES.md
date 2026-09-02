@@ -2666,9 +2666,13 @@ are byte-identical by construction — the helper throws the same string on both
   so `List.append(xs, v)` returns a *fresh* list (it clones the elements); appending N times to grow a
   list from empty is therefore O(n²). For a hot build loop prefer a list literal `[a, b, c]` when the
   size is known, or `List.fill` + index-set (O(1) per write) / `List.map(range, fn)`.
-- **Errors inside string interpolation report line 1 (W0-5 / H §5).** Because
-  `parser::split_interpolation` re-lexes the inner expression with a fresh lexer that resets to line 1,
-  anything raised *within* a `"{ … }"` interpolation loses its true line. Two cases:
+- ✅ **FIXED 2026-09-02 — errors inside string interpolation no longer report line 1 (W0-5 / H §5;
+  INTERP-LINE-RESET in the readiness plan §5e).** The cause was in the PARSER, not the VM: the
+  interpolation sub-tokenizer restarts at 1:1 and `segments_to_parts` re-based only `start`. It now
+  re-bases `line`/`col` too (the tokenizer hands it the interpolation's own position in `StrSeg::Interp`),
+  so check-time diagnostics inside `"{…}"` name the real line and column and the VM's fault lines
+  agree with the interpreter — `interpolation_fault_line_matches_between_backends` is un-ignored and
+  green, and W5-13 (VM debug symbols) is no longer its prerequisite. Historical text follows. Two cases:
   - **Front-end type errors** inside interpolation report line 1 on *both* backends (the checker is
     shared) and the caret underlines column 1 — a diagnostic-quality issue, not a backend divergence.
   - **Runtime faults** inside interpolation are a real `run` ≡ the VM **divergence**: `run` (the

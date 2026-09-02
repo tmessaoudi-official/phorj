@@ -24,6 +24,7 @@ impl Lexer<'_> {
         let mut lit: Vec<u8> = Vec::new();
         let mut interp: Option<Vec<u8>> = None; // `Some` while inside `{…}`
         let mut interp_start: usize = 0; // absolute byte offset of the active interpolation's content
+        let mut interp_pos: (u32, u32) = (line, col); // its 1-based line/col (re-based by the parser)
         loop {
             // Snapshot before consuming, so an invalid escape reports the backslash's column.
             let (el, ec) = (self.line, self.col);
@@ -93,6 +94,7 @@ impl Lexer<'_> {
                     interp = Some(Vec::new());
                     // `self.pos` is now just past the opening `{` → the first byte of the inner source.
                     interp_start = self.pos;
+                    interp_pos = (self.line, self.col);
                 }
                 // The first unescaped `}` closes the interpolation; a `}` outside one is an error
                 // (write `\}` for a literal brace).
@@ -101,6 +103,8 @@ impl Lexer<'_> {
                         String::from_utf8(interp.take().expect("inside interp"))
                             .expect("valid UTF-8"),
                         interp_start,
+                        interp_pos.0,
+                        interp_pos.1,
                     ));
                 }
                 Some(b'}') => return Err(Diagnostic::new(
@@ -281,9 +285,13 @@ impl Lexer<'_> {
         // Make interpolation offsets file-unique: the sub-tokenizer numbered them from 0 within the
         // wrapped body; shift by this block's source start (the block occupies a unique source range,
         // and the dedented body is no longer than the source, so `start + off` stays within it).
+        // Lines likewise: the sub-tokenizer numbered them from 1 within the body, whose first line is
+        // the one AFTER the opening delimiter; columns stay the dedented body's (a text block's
+        // interpolation caret is approximate by design — the body was re-indented).
         for seg in &mut segs {
-            if let StrSeg::Interp(_, off) = seg {
+            if let StrSeg::Interp(_, off, seg_line, _) = seg {
                 *off += start;
+                *seg_line += line;
             }
         }
         Ok(Token {
@@ -348,70 +356,6 @@ impl Lexer<'_> {
                 col,
             },
         })
-    }
-
-    /// Expand a `\u{HEX}` escape (the `\u` is already consumed): `{`, then 1–6 hex digits, then `}`,
-    /// naming a Unicode codepoint whose UTF-8 bytes are appended to `bytes`. `(el, ec)` is the
-    /// position of the opening backslash, for error reporting (Phase 1 string slice).
-    pub(super) fn scan_unicode_escape(
-        &mut self,
-        bytes: &mut Vec<u8>,
-        el: u32,
-        ec: u32,
-    ) -> Result<(), Diagnostic> {
-        if self.bump() != Some(b'{') {
-            return Err(Diagnostic::new(
-                Stage::Lex,
-                "expected `{` after `\\u` (e.g. `\\u{1F600}`)",
-                el,
-                ec,
-            ));
-        }
-        let mut hex = String::new();
-        loop {
-            match self.bump() {
-                Some(b'}') => break,
-                Some(c) if c.is_ascii_hexdigit() => hex.push(c as char),
-                Some(c) => {
-                    return Err(Diagnostic::new(
-                        Stage::Lex,
-                        format!("invalid hex digit `{}` in `\\u{{…}}`", c as char),
-                        el,
-                        ec,
-                    ))
-                }
-                None => {
-                    return Err(Diagnostic::new(
-                        Stage::Lex,
-                        "unterminated `\\u{…}` escape",
-                        el,
-                        ec,
-                    ))
-                }
-            }
-        }
-        if hex.is_empty() || hex.len() > 6 {
-            return Err(Diagnostic::new(
-                Stage::Lex,
-                "`\\u{…}` takes 1–6 hex digits",
-                el,
-                ec,
-            ));
-        }
-        let cp = u32::from_str_radix(&hex, 16).expect("digits validated as hex above");
-        match char::from_u32(cp) {
-            Some(ch) => {
-                let mut buf = [0u8; 4];
-                bytes.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-                Ok(())
-            }
-            None => Err(Diagnostic::new(
-                Stage::Lex,
-                format!("`\\u{{{hex}}}` is not a valid Unicode codepoint"),
-                el,
-                ec,
-            )),
-        }
     }
 
     /// Scan the body of a tagged-template literal `tag"…"` (the `tag` prefix is already consumed; the
@@ -544,20 +488,4 @@ impl Lexer<'_> {
             },
         })
     }
-
-    /// Consume one hex digit for a `\xHH` byte escape, or error at the offending position.
-    pub(super) fn hex_digit(&mut self, el: u32, ec: u32) -> Result<u8, Diagnostic> {
-        match self.bump() {
-            Some(c) if c.is_ascii_hexdigit() => Ok((c as char).to_digit(16).unwrap() as u8),
-            _ => Err(Diagnostic::new(
-                Stage::Lex,
-                "invalid \\xHH byte escape (expected two hex digits)",
-                el,
-                ec,
-            )),
-        }
-    }
-
-    // NOTE: identifiers are ASCII-only by design for v0.1 (scan_ident uses
-    // is_ascii_alphabetic / is_ascii_alphanumeric). Unicode identifiers are out of scope.
 }
