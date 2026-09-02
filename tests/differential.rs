@@ -1843,10 +1843,12 @@ fn uses_unavailable_gated_module(src: &str) -> bool {
 /// the RUN count is floored (that guards DISCOVERY — a `collect_phg` regression drops it, which the
 /// skip set cannot see), and the skipped set must equal an explicit expected list in BOTH directions
 /// (an unexpected skip = a gate quietly stopped covering a file; an expected file that now runs = a
-/// stale list). The one exempt bucket is the feature-gated reason: its membership depends on the
-/// build's feature set, so it is counted and printed but not matched — and in a build where no module
-/// is gated (`--all-features`, the pre-push tier) `finish` requires that bucket to be EMPTY, so the
-/// exemption cannot become a permanent hole.
+/// stale list). EVERY bucket is matched, the feature-gated one included — a file that is feature-gated
+/// under the default features and impure under `--all-features` (`http-client/fetch.phg`) is simply
+/// listed once, and in a build where no module is gated (`--all-features`, the pre-push tier) `finish`
+/// additionally requires the feature-gated bucket to be EMPTY. (A first version exempted that bucket
+/// from the match; a 6C review showed that left a wrongly-gated running example four files of silent
+/// headroom under the floor.)
 struct CorpusTally {
     gate: &'static str,
     ran: Vec<String>,
@@ -1904,22 +1906,16 @@ impl CorpusTally {
                 self.gate
             );
         }
-        let actual: BTreeSet<&str> = self
-            .skipped
-            .iter()
-            .filter(|(r, _)| **r != feature_gated_reason)
-            .flat_map(|(_, v)| v.iter().map(String::as_str))
-            .collect();
-        // Every skipped file, the feature-gated bucket included: an expected file that this build
-        // skipped as feature-gated is not stale (`http-client/fetch.phg` is feature-gated under the
-        // default features and impure — network — under `--all-features`).
+        // Every skipped file, whatever the bucket, must be expected — and every expected file must
+        // have been skipped for SOME reason (`http-client/fetch.phg` is feature-gated under the default
+        // features and impure — network — under `--all-features`; one entry covers both).
         let all_skipped: BTreeSet<&str> = self
             .skipped
             .values()
             .flat_map(|v| v.iter().map(String::as_str))
             .collect();
         let expected: BTreeSet<&str> = expected_skips.iter().copied().collect();
-        let unexpected: Vec<&str> = actual.difference(&expected).copied().collect();
+        let unexpected: Vec<&str> = all_skipped.difference(&expected).copied().collect();
         let stale: Vec<&str> = expected.difference(&all_skipped).copied().collect();
         assert!(
             unexpected.is_empty() && stale.is_empty(),
@@ -1989,6 +1985,8 @@ const PHP_ORACLE_EXPECTED_SKIPS: &[&str] = &[
 /// expected-skip set does that). Lowering it is a deliberate act with a reason in the commit.
 const INTERP_VM_RUN_FLOOR: usize = 195;
 const PHP_ORACLE_RUN_FLOOR: usize = 190;
+/// The project corpus as `collect_projects` discovers it: 19 projects today, none skipped.
+const PROJECTS_RUN_FLOOR: usize = 18;
 const FEATURE_GATED: &str = "feature-gated module absent";
 
 fn uses_impure_native(src: &str) -> bool {
@@ -2221,6 +2219,7 @@ fn all_example_projects_match_between_backends() {
         !projects.is_empty(),
         "expected at least one example project (examples/project/*), found none"
     );
+    let mut tally = CorpusTally::new("projects");
     for project in &projects {
         let entry = find_main_phg(project);
         eprintln!("project: {} (entry {})", project.display(), entry.display());
@@ -2239,7 +2238,9 @@ fn all_example_projects_match_between_backends() {
             "backend mismatch for project {}:\n  run={run:?}\n  vm={vm:?}",
             project.display()
         );
+        tally.ran(project);
     }
+    tally.finish(PROJECTS_RUN_FLOOR, &[], FEATURE_GATED);
 }
 
 /// The namespaced stdlib's first native: `Output.printLine` must lower + run byte-identically on both

@@ -17,11 +17,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `php-oracle: RUN 196, SKIP 22 (…)`), floor the RUN count near today's value (that pins discovery), and
   require the skipped set to equal an explicit expected list in both directions — an unexpected skip
   and a stale entry each fail with the file named. The feature-gated bucket is exempt from the exact
-  match because it varies by build, and a build with no gated module must show it empty. The PHP gate
-  gains the same feature-gate skip as its sibling, and its "non-runnable" arm is now a panic (the
-  interp ≡ VM gate asserts every non-impure, non-gated example runs, so a file reaching it means the
-  gates drifted). Three sabotages each red with the file named (a widened impurity predicate, a
-  raised floor, a stale expected entry). Still owed: the project-corpus gate keeps its `>= 1` floor.
+  match; a 6C review showed that left a wrongly-gated running example four files of silent headroom under
+  the floor, so every bucket is matched now (one entry covers `http-client/fetch.phg`, feature-gated under
+  the default features and impure under `--all-features`), and a build with no gated module must still
+  show the bucket empty. The PHP gate gains the same feature-gate skip as its sibling, and its
+  "non-runnable" arm is now a panic (the interp ≡ VM gate asserts every non-impure, non-gated example
+  runs, so a file reaching it means the gates drifted). The project-corpus gate carries the same tally
+  (`projects: RUN 19`, floor 18). Four sabotages each red with the file named (a widened impurity
+  predicate, a widened feature-gate predicate, a raised floor, a stale expected entry).
 - **The loader's expression walk is total (DEC-356 class; panel K8).** `src/loader/resolve.rs`'s
   `resolve_expr` ended in a named `leaf => leaf` that swallowed eight `Expr` variants; four were live
   defects in any LIBRARY file — a same-package call inside a tuple literal, a named-argument value or

@@ -634,7 +634,7 @@ fixed; `import Core.Http as H` offers no alias bypass.
 | K1 | P1 | `src/lsp/mod.rs:514,534` → `cli/pipeline.rs:295,326` | both LSP diagnostic paths hard-code the non-test checker; all 3 `selftest/*.phg` squiggle `E-TEST-OUTSIDE-TESTS` | FIXED (DEC-486, step 1) |
 | K2 | P1 | quartet | the 17:05 rulings (regex B, no scout port, order, perf split) exist only in this plan — no register row; MASTER-PLAN and SLICE-STATE state different "next"; DEC-457/458/459 have no MASTER-PLAN mirror | NEW — Invariant 19 |
 | K3 | P1 | `SLICE-STATE.md:137-140` vs `:83-86` | intra-file contradiction on whether `phg test` still checks the raw program | NEW |
-| K4 | P2 | `tests/differential.rs:2012-2062` | two `continue` skip arms, no counter, no expected-skip-set; floor is `files.len() >= 3` | FIXED (step 1: `CorpusTally`, RUN floors 195/190, exact expected-skip sets both gates; the project-corpus gate's `>= 1` floor still owed) |
+| K4 | P2 | `tests/differential.rs:2012-2062` | two `continue` skip arms, no counter, no expected-skip-set; floor is `files.len() >= 3` | FIXED (step 1: `CorpusTally` on all three corpus gates — RUN floors 195/190/18, every skip bucket matched against an exact expected list in both directions) |
 | K5 | P3 | `UNIFIED-SPEC.md:1209` | "no named arguments" true of natives only, reads as a language claim | NEW |
 | K6 | P2 | `UNIFIED-SPEC.md:2117-2136` | spec names none of `E-SERVE-TLS-*`, `W-SERVE-CONFIG-OVERRIDDEN`, `E-TEST-OUTSIDE-TESTS` | NEW |
 | K7 | P2 | `src/lsp/symbols.rs:153,223` | document symbols drop `Item::Test` — a named test never appears in either editor's outline | FIXED (DEC-486, step 1) |
@@ -656,7 +656,7 @@ fixed; `import Core.Http as H` offers no alias bypass.
   `\Z`/`{,n}` rejection or support decided per construct, each with an `agree_out_php` case (the
   reviewer confirms no existing test can go red on C1–C5).
 - **C6 P0** — DONE `53df9ef1`. **C7/C8/F1** — DONE `06e9e975`. **C9/K1/K7** — DONE (DEC-486; `check --json` raw-checker and loader `resolve_item` catch-all fixed alongside). **K16** = the prelude hover slice, still owed. **K8** advanced: `src/loader/resolve.rs` is wildcard-free on BOTH walks and under the DEC-356 ratchet — its `resolve_expr` had swallowed eight `Expr` variants, four live (a call inside a tuple / named arg / pipe, a `new List<T>()` type argument, in a library file), fixed red-first in `tests/project.rs`; the remaining K8 item arms elsewhere are still owed. The Pass-1 index's `_ => continue` in `assemble.rs` is a separate named gap (KNOWN_ISSUES §LOADER-ALIAS-EXPORT — public type aliases in library packages are not exported)
-  (developer directive: LSP/editors are first-class). **K4** = differential floor — DONE (the project-corpus gate `all_example_projects_match_between_backends` keeps its `>= 1` floor, owed). **K8** = widen the
+  (developer directive: LSP/editors are first-class). **K4** = differential floor — DONE on all three corpus gates. **K8** = widen the
   CD-31 ratchet to the four remaining item arms. **K2/K3/K5/K6/K9/K10/K14/K15** = one docs pass, same
   commit as the register rows. **C10** needs a failing-request test before its fix (anti-bandaid).
   **C12/K11/K12/K13** small, batched.
