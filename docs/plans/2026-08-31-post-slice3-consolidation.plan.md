@@ -68,6 +68,25 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
   run-the-panel obligation). Round 1 = 1 CLEAN + 11 findings across two lenses → the milestone
   gate stays OPEN until fixes land and the developer's chosen closing procedure completes (§0.1).
   G-8 microbench verdict remains OWED (quiet box required).
+- [2026-09-02] AGREED (certification tier, Part 0 §0.1): **ONE 3-lens panel round against HEAD, then
+  close.** The panel's frozen `cf6875db` is no longer HEAD — W1–W4 landed code after it — so a round
+  now reviews the NEW tree (the A0 ladder fix, the `ladder.rs` split, the `phg test` front-end change
+  and the whole consolidation), none of which any panel has seen. DEC-268's two-consecutive-clean rule
+  is therefore **knowingly relaxed once**, with that reason recorded, rather than silently skipped.
+- [2026-09-02] AGREED (DEC-455.4): generic config providers **key on the REIFIED type**, so
+  `Map<string,string>` and `Map<string,int>` are distinct injection keys. Rejected: a check-time
+  ambiguity error (would forbid two legitimate generic configs) and last-wins-with-warning (keeps a
+  silent-wrong-value shape one ignored warning away). The checker already proves reified types for
+  arithmetic operands, so the information exists.
+- [2026-09-02] AGREED (`Core.Database` case-1 step 2): the PHP twin is a **`__phorj_db_stmt` wrapper
+  holding `[PDOStatement, sql, params[], nextIndex]`** — `prepare` returns it, the bind family appends,
+  `query`/`exec`/`executeMany` call `execute($params)`. It mirrors phorj's accumulate-then-execute
+  semantics and is what makes `executeMany` expressible at all. This unblocks the whole DB lift.
+- [2026-09-02] AGREED (PRELUDE-ALIAS-COLLISION): **isolate prelude-internal bindings** so a prelude
+  fragment resolves its own references in a namespace user imports cannot rebind — killing the class,
+  not the instance. Rejected: a precise diagnostic (leaves the fragility) and making the serve fragment
+  self-sufficient (the "second, drifting declaration of the same alias" the prelude deliberately
+  avoids, and other fragments keep the exposure). Its own slice; adjacent to §span-collision.
 - [2026-09-02] AGREED: execution autonomy = W0→W4 straight through (commit plan → A0 + help.rs P1
   → drift fixes → full consolidation → A1/A0b), pushing green commits as they land; the session
   stops only for the Part 4 adjudication batch and the Part 0 §0.1 certification-tier question,
