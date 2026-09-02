@@ -1091,29 +1091,33 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
             let mut prepend: Vec<Item> = Vec::new();
             for it in parsed_items {
                 let absent = match &it {
-                Item::Import { path, .. } => !p.items.iter().any(|x| {
-                    matches!(x, Item::Import { path: xp, .. } if xp.join(".") == path.join("."))
-                }),
-                Item::Enum(e) => !p
-                    .items
-                    .iter()
-                    .any(|x| matches!(x, Item::Enum(y) if y.name == e.name)),
-                Item::Class(c) => !p
-                    .items
-                    .iter()
-                    .any(|x| matches!(x, Item::Class(y) if y.name == c.name)),
-                Item::Function(f) => !p
-                    .items
-                    .iter()
-                    .any(|x| matches!(x, Item::Function(y) if y.name == f.name)),
-                // DEC-257: `Core.IteratorModule` injects an INTERFACE — same same-name-shadowing
-                // discipline as classes/enums (a user declaration wins over the injection).
-                Item::Interface(i) => !p
-                    .items
-                    .iter()
-                    .any(|x| matches!(x, Item::Interface(y) if y.name == i.name)),
-                _ => false,
-            };
+                    // DEC-459: same PATH AND same ALIAS. Comparing the path alone dropped the prelude's
+                    // `import Core.Native.Http as NativeHttp;` whenever the user imported that module
+                    // under any other alias, leaving the serve prelude's own calls unbound.
+                    Item::Import { path, alias, .. } => !p.items.iter().any(|x| {
+                        matches!(x, Item::Import { path: xp, alias: xa, .. }
+                        if xp.join(".") == path.join(".") && xa == alias)
+                    }),
+                    Item::Enum(e) => !p
+                        .items
+                        .iter()
+                        .any(|x| matches!(x, Item::Enum(y) if y.name == e.name)),
+                    Item::Class(c) => !p
+                        .items
+                        .iter()
+                        .any(|x| matches!(x, Item::Class(y) if y.name == c.name)),
+                    Item::Function(f) => !p
+                        .items
+                        .iter()
+                        .any(|x| matches!(x, Item::Function(y) if y.name == f.name)),
+                    // DEC-257: `Core.IteratorModule` injects an INTERFACE — same same-name-shadowing
+                    // discipline as classes/enums (a user declaration wins over the injection).
+                    Item::Interface(i) => !p
+                        .items
+                        .iter()
+                        .any(|x| matches!(x, Item::Interface(y) if y.name == i.name)),
+                    _ => false,
+                };
                 // Multi-fragment preludes may repeat an import across fragments — dedupe within the
                 // batch too (the absent-check above only sees the pre-injection program).
                 let dup_in_batch = match &it {

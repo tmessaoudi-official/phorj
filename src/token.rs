@@ -10,6 +10,18 @@ pub struct Span {
     pub col: u32,  // 1-based
 }
 
+/// Injected (Core prelude) source is re-based to offsets `>= INJECTED_SPAN_BASE`, so a span there can
+/// never equal a user-file span (DEC-252) and user-facing rules can tell the two apart (DEC-459).
+/// Lives here rather than in `cli` so the checker can consult it without a `cli` dependency.
+pub const INJECTED_SPAN_BASE: usize = 1 << 28;
+
+impl Span {
+    /// Whether this span belongs to an injected prelude fragment rather than a user file.
+    pub fn is_injected(&self) -> bool {
+        self.start >= INJECTED_SPAN_BASE
+    }
+}
+
 /// A source comment, captured by the tokenizer's [`crate::tokenizer::lex_with_comments`] side-channel (the
 /// formatter `phg format` needs comments, which the normal token stream discards). `text` is the raw
 /// comment including its `//` or `/* */` markers (trailing whitespace trimmed for a line comment).

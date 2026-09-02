@@ -17,11 +17,58 @@ use super::*;
 ///
 /// 256 MiB is still absurdly beyond any `.phg` source: the whole example corpus is a few hundred KiB,
 /// and a single source file approaching this would be pathological long before offsets mattered.
-pub(crate) const INJECTED_SPAN_BASE: usize = 1 << 28;
+pub(crate) use crate::token::INJECTED_SPAN_BASE;
 
 /// The offset room reserved per injected module. Every shipped prelude is well under a megabyte, so
 /// 16 MiB of headroom keeps each module's range disjoint from every other's.
 pub(super) const INJECTED_SPAN_STRIDE: usize = 1 << 24;
+
+/// Appended to every prelude-declared `Core.Native.*` alias at injection (DEC-459). `#` is not an
+/// identifier character, so no user token can ever spell the isolated name.
+pub(crate) const PRELUDE_ALIAS_SUFFIX: &str = "#prelude";
+
+/// Every alias the Core preludes bind a raw `Core.Native.*` module under (`import Core.Native.Http
+/// as NativeHttp;` → `NativeHttp`), scanned once over all `CORE_MODULES` fragment sources.
+pub(crate) fn prelude_native_aliases() -> &'static std::collections::HashSet<String> {
+    use crate::token::TokenKind;
+    static SET: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
+    SET.get_or_init(|| {
+        let mut out = std::collections::HashSet::new();
+        for m in super::preludes::CORE_MODULES {
+            for src in m.srcs {
+                let Ok(tokens) = lex(src) else {
+                    continue; // unreachable: registry preludes are valid
+                };
+                let mut i = 0;
+                while i < tokens.len() {
+                    if matches!(tokens[i].kind, TokenKind::Import) {
+                        // `import Core . Native . X as A ;` — collect the path idents up to `as`.
+                        let mut path: Vec<&str> = Vec::new();
+                        let mut j = i + 1;
+                        while j < tokens.len() {
+                            match &tokens[j].kind {
+                                TokenKind::Ident(s) if s == "as" => break,
+                                TokenKind::Ident(s) => path.push(s.as_str()),
+                                TokenKind::Semicolon => break,
+                                _ => {}
+                            }
+                            j += 1;
+                        }
+                        let is_as = matches!(tokens.get(j).map(|t| &t.kind), Some(TokenKind::Ident(s)) if s == "as");
+                        if is_as && path.len() >= 3 && path[0] == "Core" && path[1] == "Native" {
+                            if let Some(TokenKind::Ident(a)) = tokens.get(j + 1).map(|t| &t.kind) {
+                                out.insert(a.clone());
+                            }
+                        }
+                        i = j;
+                    }
+                    i += 1;
+                }
+            }
+        }
+        out
+    })
+}
 
 /// Headroom the range must accommodate, in prelude FRAGMENTS. The shipped registry has **22** (21 rows
 /// with sources, one carrying two), so 128 is ~6x room — generous without pretending to a figure the
@@ -66,8 +113,20 @@ const _: () = assert!(
 pub(super) fn lex_parse_injected(src: &str, module_index: usize) -> Result<Program, String> {
     let mut tokens = lex(src).map_err(|e| e.render(src))?;
     let base = INJECTED_SPAN_BASE + module_index * INJECTED_SPAN_STRIDE;
+    let isolated = prelude_native_aliases();
     for t in &mut tokens {
         t.span.start += base;
+        // DEC-459: a prelude's raw-native qualifier (`NativeHttp`, `NativeInput`, …) is rebound under
+        // a spelling no user identifier can take, so a user alias can neither collide with it (the
+        // injection used to drop the prelude's import on a same-module user import) nor capture it,
+        // and the name is not "in the wind" for user code (panel F6). The set is computed over EVERY
+        // prelude source because a fragment may use an alias a sibling fragment declares (the serve
+        // fragment calls `NativeHttp.registerServe` through the request fragment's import).
+        if let crate::token::TokenKind::Ident(name) = &mut t.kind {
+            if isolated.contains(name.as_str()) {
+                name.push_str(PRELUDE_ALIAS_SUFFIX);
+            }
+        }
     }
     Parser::new(tokens)
         .parse_program()

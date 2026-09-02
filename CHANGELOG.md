@@ -8,6 +8,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Prelude-internal bindings are isolated from user imports (DEC-459 built; panel F6;
+  KNOWN_ISSUES §PRELUDE-ALIAS-COLLISION).** Every `import Core.Native.X as A;` a Core prelude declares
+  is rebound at injection under `A#prelude` — `#` is not an identifier character, so no user token can
+  spell it — with the alias set computed over every fragment (the serve fragment calls
+  `NativeHttp.registerServe` through the request fragment's import). Three user-visible defects fall
+  with it: a user `import Core.Native.Http as Raw;` no longer makes the injection drop the prelude's own
+  import (it compared module paths only) and fail with `E-UNKNOWN-IDENT` at prelude lines the user
+  cannot open; a user alias spelled `NativeHttp` no longer captures the prelude's calls; and
+  `NativeHttp` / `NativeInput` / `NativeUri` / `NativeDebug` no longer resolve in user code without an
+  import ("in the wind"). The by-name containment arm in the transpile ladder is removed with its test
+  flipped to `E-UNKNOWN-IDENT`. A user's own `import Core.Native.Http as NativeHttp;` (the spelling
+  `E-IMPORT-NATIVE-MEMBER` recommends) keeps binding the user's qualifier; `E-UNUSED-IMPORT` is the
+  loader's raw-file check and is unchanged. Injected imports are exempt from the
+  alias PascalCase rule by span (`Span::is_injected`, with `INJECTED_SPAN_BASE` moved to `token`).
+  Red-first in `tests/prelude_isolation.rs` (the repro runs on both backends); three sabotages red,
+  including "rename the import line but not the uses", which breaks the serve prelude; the corpus
+  gates stayed byte-identical and no isolated name reaches emitted PHP.
 - **The two example-corpus gates account for every skip (panel K4).** `all_examples_match_between_backends`
   and `all_examples_transpile_and_match_php` had two `continue` skip arms each, no counter and a floor
   of `files.len() >= 3` — the shape that let the DEC-191 substring hole skip 201/201 examples behind a

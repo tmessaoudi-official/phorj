@@ -161,7 +161,9 @@ impl Checker {
                 // alias is a value identifier (camelCase, like the function it renames — DEC-197
                 // `import Core.List.map as listMap;`); otherwise it occupies a package-qualifier position
                 // and follows the same PascalCase rule as the segments.
-                if let Some(a) = alias {
+                // DEC-459: an injected prelude's raw-native alias is isolated under a spelling that
+                // is deliberately not an identifier (`NativeHttp#prelude`) — never a user spelling.
+                if let Some(a) = alias.as_ref().filter(|_| !span.is_injected()) {
                     if member_value_leaf {
                         if !is_camel(a) {
                             self.err_coded(

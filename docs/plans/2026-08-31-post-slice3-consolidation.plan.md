@@ -597,7 +597,7 @@ ran the 12 tests they named (12/12 green). Full lens reports: `var/claude/panel/
 | F3b | P3 | `KNOWN_ISSUES.md:2484` | claims `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, both legs agree | stale doc (= C11) |
 | F4 | P2 | `src/serve/framing.rs:118` | invalid `Content-Length` (`abc`, `-1`, 24-digit) served `200` instead of `400`+close; pinned as intended by `content_length_malformed_is_zero` | NEW (= C10) |
 | F5 | P2 | `src/serve/settings.rs:119,149` | negative `workers`/`timeout` in `ServeConfig` silently read as unset with no `W-SERVE-CONFIG-OVERRIDDEN` notice | tracked §SERVE-CONFIG-PROVENANCE (ruled: nullable fields + range validation) |
-| F6 | P2 | `cli/http_request_prelude.rs:23`, `cli/preludes.rs:64`, `ext/uri/prelude.rs:7`, `ext/debug/prelude.rs:12` | nothing-in-the-wind: `NativeHttp`, `NativeInput`, `NativeUri`, `NativeDebug` resolve in user code with NO import; the containment arm covers only `NativeHttp.registerServe` | tracked KNOWN_ISSUES:125, DEC-459 unbuilt |
+| F6 | P2 | `cli/http_request_prelude.rs:23`, `cli/preludes.rs:64`, `ext/uri/prelude.rs:7`, `ext/debug/prelude.rs:12` | nothing-in-the-wind: `NativeHttp`, `NativeInput`, `NativeUri`, `NativeDebug` resolve in user code with NO import; the containment arm covers only `NativeHttp.registerServe` | FIXED with DEC-459 (step 1): the four qualifiers are unknown identifiers in user code, pinned by `tests/prelude_isolation.rs` |
 | F7 | P3 | `src/cli/ladder.rs:123` | error text renders 14-space runs inside the hint | NEW |
 
 Verified clean: `unsafe` outside `src/jit/` = 0; ladder holds on `transpile` + `build --php` for every

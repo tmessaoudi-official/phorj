@@ -95,36 +95,10 @@ pub(super) fn reject_native_only_transpile(prog: &Program) -> Result<(), String>
             "`Core.Native.Http` (the raw natives under `Core.Http`) is native-only: it registers a serve handler, and PHP is served BY a web server rather than being one, so no faithful idiomatic mapping exists (THE LADDER RULE, Invariant 14 tier 2). Importing the raw module must not bypass the `Http.serve` refusal. Run this program with `phg serve`.",
         ),
     ];
-    // THE SPELLING THE IMPORT ROW DOES NOT COVER: no raw import at all.
-    //
-    // The injected `http_request_prelude` fragment declares `import Core.Native.Http as NativeHttp;`,
-    // and prelude imports are PROGRAM-WIDE once injected — so `NativeHttp` is in scope for every
-    // `import Core.Http;` program without the user importing anything. The row below sees no user
-    // import and the `Http.serve` arm in `transpile/call.rs` reads a different callee, so the ladder
-    // was bypassable by simply not writing the import. Found by the 2026-09-02 milestone panel, after
-    // an earlier fix closed only the import spelling; verified live (`phg transpile` exit 0, PHP leg
-    // exit 255, both native legs clean) including through `phg build --php`.
-    //
-    // SOUND ONLY PRE-EXPANSION, exactly like the module rows: the prelude's own `Http.serve` body
-    // calls `registerServe`, so this arm would fire on the injected source if the gate ran any later.
-    //
-    // This is a CONTAINMENT layer, not the cure. The leak itself — a prelude alias reaching user
-    // scope — is `KNOWN_ISSUES` §PRELUDE-ALIAS-COLLISION, and DEC-459 ruled the structural fix
-    // (isolate prelude-internal bindings). When that lands, this arm becomes redundant rather than
-    // wrong, and should be removed WITH its test rather than left to rot.
-    if crate::ast::any_expr(prog, &|e| {
-        let crate::ast::Expr::Member { object, name, .. } = e else {
-            return false;
-        };
-        name == "registerServe"
-            && matches!(object.as_ref(), crate::ast::Expr::Ident(o, _) if o == "NativeHttp")
-    }) {
-        return Err(format!(
-            "transpile error: cannot transpile a program that calls `NativeHttp.registerServe`\n  [{}]\n  hint: {}",
-            "E-TRANSPILE-SERVE",
-            "`registerServe` is the raw native behind `Http.serve`, and PHP is served BY a web server              rather than being one, so no faithful idiomatic mapping exists (THE LADDER RULE,              Invariant 14 tier 2). `NativeHttp` is in scope here only because an injected prelude              leaked its alias — reaching it that way is not a supported surface. Run this program              with `phg serve`."
-        ));
-    }
+    // The by-name containment arm that used to sit here (a user call to `NativeHttp.registerServe`
+    // through the LEAKED prelude alias) was removed with DEC-459: the prelude's alias is now isolated
+    // under `NativeHttp#prelude`, so `NativeHttp` in user code is an unknown identifier and there is
+    // nothing to contain (`tests/prelude_isolation.rs`, `tests/serve.rs`).
     for it in &prog.items {
         let Item::Import { path, span, .. } = it else {
             continue;

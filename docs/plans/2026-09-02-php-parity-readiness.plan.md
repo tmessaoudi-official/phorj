@@ -224,6 +224,15 @@ queued by today's rulings; the rest are wave items or step-1 fixes.
 
 ## 5e. Found while executing step 1 (not in the panel)
 
+- **EMPTY-INTERPOLATION-POSITION (P3):** `"{}"` (an interpolation with no expression) reports `parse
+  error at 1:1: expected an expression, found end of file` with the caret on the FILE's line 1 — the
+  sub-lexer's empty source is rendered as if it were the document. Same family as INTERP-LINE-RESET
+  below; the fix is the same position re-basing. Found 2026-09-02 while reproducing DEC-459.
+- **INJECTED-LINE-CARET (P3):** a diagnostic raised inside an injected prelude renders its line/col
+  against the USER's source (`type error at 4:5` with the caret under `import Core.Output;`). After
+  DEC-459 this only surfaces on a prelude bug, but the renderer should say "in the injected `Core.Http`
+  prelude, line 4" rather than drawing a caret on an unrelated user line. Found 2026-09-02.
+
 - **INTERP-LINE-RESET (P2, Invariant 1 failure-behaviour):** a runtime fault raised INSIDE a string
   interpolation (`"{10 / z}"`) renders `runtime error at 8` on the interpreter but `runtime error at 1`
   + `package …;` as the source line on the VM (with and without the JIT). Cause: the interpolation

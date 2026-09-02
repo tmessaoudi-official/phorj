@@ -151,7 +151,20 @@ it is a mechanical `docs/specs/` → `docs/archive/specs/` rewrite for these fou
 file whether a historical document should be repointed at all, or left as a record of what the path
 was at the time — that judgment is the actual work, not the substitution.
 
-## PRELUDE-ALIAS-COLLISION — a user alias for `Core.Native.Http` breaks the injected serve prelude, and the errors point at lines the user cannot see (PRE-EXISTING, verified 2026-09-02)
+## PRELUDE-ALIAS-COLLISION — FIXED 2026-09-02 (DEC-459 built): prelude-internal bindings are isolated from user imports
+
+**FIXED.** Every `import Core.Native.X as A;` a Core prelude declares is rebound at injection under
+`A#prelude` — `#` is not an identifier character, so no user token can spell it — and the set is computed
+over every fragment (the serve fragment calls `NativeHttp.registerServe` through the request fragment's
+import). The injection's already-present check compares path AND alias, so a user `import Core.Native.Http
+as Raw;` no longer drops the prelude's import; a user alias spelled `NativeHttp` binds the user's module
+only; and `NativeHttp` / `NativeInput` / `NativeUri` / `NativeDebug` are unknown identifiers in user code
+(panel F6, nothing in the wind). The by-name containment arm in `ladder.rs` was removed with its test
+flipped. Pinned by `tests/prelude_isolation.rs` (repro runs on both backends) and `tests/serve.rs`; three
+sabotages red, the corpus gates byte-identical through the change. The prelude-line diagnostic rendering
+this entry also described (carets drawn against the USER's file for an injected line) is a separate P3,
+recorded in the readiness plan §5e. History below.
+
 
 **Reproduced, not inferred.** A `Web` program that imports the raw HTTP natives under any alias other
 than `NativeHttp` — and actually uses it — fails to type-check, with every diagnostic pointing into
