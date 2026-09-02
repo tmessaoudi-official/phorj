@@ -52,9 +52,10 @@ in-repo, disposition per finding) + its Decisions Log (the 2026-09-02 rulings).
 round 4 is owed after step 1 is the open DEC-268-vs-economize ruling (readiness plan X9).
 
 **ORDER (ruled 17:05):** (1) harness trust — panel disposition, P0 first; (2) readiness wave in
-leverage order; (3) DEC-333 perf. **Register rows for today's ~16 rulings are OWED** (next free
-DEC-460); MASTER-PLAN's §0 cursor is stale relative to this block until step 1's docs pass — the two
-plan files' Decisions Logs are the record meanwhile (Invariant 19 pointer, not a fork).
+leverage order; (3) DEC-333 perf. **Register rows: DEC-460 … DEC-481** (`C-decisions.md`, the
+2026-09-02 readiness rulings); MASTER-PLAN's §0 cursor is stale relative to this block until step 1's
+docs pass — this block + the two plan files' Decisions Logs are the record meanwhile (Invariant 19
+pointer, not a fork).
 
 **The "next" block at the bottom of the 2026-09-02 cursor below is SUPERSEDED by this one** where
 they differ (its `phg test` line predates the CD-31 fix; see panel K3).

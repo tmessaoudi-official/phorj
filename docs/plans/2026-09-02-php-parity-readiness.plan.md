@@ -28,6 +28,23 @@
   PHP-ecosystem scan. *(Pointers.)*
 - [2026-09-02 19:40] RECORDED (not ruled): the consolidated delta below — every NEW row is an
   Invariant-15 question until it carries an AGREED line here.
+- [2026-09-02 20:05] AGREED — **FRAMEWORK TIER lives in Core stdlib, staged**: first validation
+  attributes (checked against the field type), CSRF, rate limiting, signed URLs, RFC 7807 problem
+  details, OpenAPI generated from real types; then `Core.Queue` (jobs, retries, idempotency keys,
+  scheduler with overlap/one-server locks) and a query-builder ORM over `Core.Sql` as their own
+  slices. Storage/cache (A27) remain questions. Collapses A21/A23/A24 (+A22's seam is designed inside
+  the ORM slice, tenancy-first).
+- [2026-09-02 20:05] AGREED — **GENERATORS (X1)**: lazy adapters (`map/filter/take/zip/…`) land NOW on
+  the shipped `Iterator<T>` as interface methods, transpiled via a `__phorj_iter_*` helper class
+  (byte-identical, the `FileSystem.lines` precedent); `yield` stays queued at W4-2 with its
+  byte-identity-vs-PHP-`Generator` proof obligation; UNIFIED-SPEC:1633's rejection is NARROWED to
+  "lazy sequences that cannot transpile" (fibers stay rejected). Spec amendment in the adapters slice.
+- [2026-09-02 20:05] AGREED — **XML (X6, widens DEC-382/Q1)**: one `Core.Xml` domain = DOM + XPath +
+  C14N + XSD validation + XMLDSig (enveloped; RSA/ECDSA via the Q17 crypto primitives); XAdES profiles
+  as a follow-on. The schema-capable crate admission is decided inside the slice. Transpile tier 1.
+- [2026-09-02 20:05] AGREED — **GATE RULE (X9, amends DEC-268)**: two-consecutive-clean is replaced by
+  **fix-then-verify**: fix every P0/P1 in step 1, freeze, run ONE panel round; CLEAN closes the
+  milestone gate; P2/P3 residue is tracked, not blocking. DEC row to record the amendment.
 
 ## 1. Sources and their yardsticks
 
