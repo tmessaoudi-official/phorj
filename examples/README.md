@@ -300,7 +300,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `Core.Path`: `baseName`/`directoryName`/`extension`/`fileStem`/`join` (pure path strings, → `basename`/`dirname`/`pathinfo`) | `guide/paths` |
 | `Core.Set` algebra: `union`/`intersection`/`difference` | `guide/set-ops` |
 | `Set<T>`: `Core.Set` `of`/`contains`/`size` (insertion-ordered, deduped) | `guide/sets` |
-| `Core.Regex` (ReDoS-safe `regex` crate): `compile`/`matches`/`find`/`findAll`/`findGroups`/`findAllGroups`/`replace`/`replaceCallback`(typed `RegexMatch`)/`split`/`quoteMeta`; raw-string patterns, named captures → `Map`, erases to `preg_*` | `guide/regex` |
+| `Core.Regex` (ReDoS-safe `regex` crate + opt-in `fancy-regex`): `compile`/`compileBacktracking` (DEC-461)/`matches`/`find`/`findAll`/`findGroups`/`findAllGroups`/`replace`/`replaceCallback`(typed `RegexMatch`)/`split`/`quoteMeta`; raw-string patterns, named captures → `Map`, erases to `preg_*` | `guide/regex` |
 | `Secret<T>` opaque wrapper: non-printable (compile error), `.expose()` sole read path, `W-SECRET` lint on expose→sink; `final class Secret` + `#[\SensitiveParameter]` | `guide/secret` |
 | inherited / trait static methods (`Child.staticFromBase()`, trait statics); resolves via `method_origins` | `guide/static-inheritance` |
 | totality: return-on-all-paths (`E-MISSING-RETURN`), the `never` bottom type, dead-code lints (`W-UNREACHABLE`/`W-MATCH-UNREACHABLE`) | `guide/totality` |

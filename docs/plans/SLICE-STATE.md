@@ -48,8 +48,11 @@ apps + cross-language + PHP ecosystem, the ruled ORDER, the questions queue) and
 in-repo, disposition per finding) + its Decisions Log (the 2026-09-02 rulings).
 
 **Gate:** OPEN. Panel round 3 ran on frozen `6a18f71a` over `0c982019..6a18f71a`: correctness 12
-(1×P0 `default_fills` collision reproduced on 3 legs), completeness 16 (3×P1), safety 7. Whether a
-round 4 is owed after step 1 is the open DEC-268-vs-economize ruling (readiness plan X9).
+(1×P0 `default_fills` collision reproduced on 3 legs), completeness 16 (3×P1), safety 7. DEC-481
+(fix-then-verify) ruled the closing rule: every P0/P1 fixed, freeze, ONE round. **Round 4 ran on
+`bfafdd23`** (correctness 8, safety 8, completeness 13 — see the consolidation plan § "Panel round
+4"): its P1s are fixed in the commits after it; whether they close the gate or a round 5 is owed is
+the developer's call, asked at the end of step 1.
 
 **ORDER (ruled 17:05):** (1) harness trust — panel disposition (C6 `default_fills` P0 FIXED `53df9ef1`+`1e62f74a`; the three ungated PHP-emit paths C7/C8/F1 FIXED `06e9e975`; the LSP/check test-mode path DONE (DEC-486); the differential floor K4 DONE; DEC-459 prelude isolation BUILT; C10/F4 malformed Content-Length FIXED; the regex cluster C1–C5/C11 BUILT with REGEX-B (DEC-461, C4 deferred); the docs pass DONE (K2/K3/K5/K6/K9/K10/K14/K15, MASTER-PLAN §0.07 mirror rows); next: FREEZE and run the ONE panel round of DEC-481 over `0c982019..HEAD`); (2) readiness wave in
 leverage order; (3) DEC-333 perf. **Register rows: DEC-460 … DEC-489** (`C-decisions.md`, the
@@ -105,7 +108,7 @@ front end (injected-prelude types resolve), the item-level desugars descend into
 and since DEC-486 `phg check` / `check --json` / the LSP check a document that declares a `test` item in
 test mode, so `check ≡ LSP ≡ test` holds; `run`/`transpile`/`build` stay strict.
 
-**QUEUED — ruled 2026-09-02, none built** (Invariant 19: a ruled-but-unbuilt item belongs in the cursor,
+**RULED 2026-09-02 — build state per item** (Invariant 19: a ruled-but-unbuilt item belongs in the cursor,
 not only the register):
 - **DEC-457** — generic `#[Config]` providers key on the REIFIED type (`Map<string,string>` vs
   `Map<string,int>` become distinct injection keys).

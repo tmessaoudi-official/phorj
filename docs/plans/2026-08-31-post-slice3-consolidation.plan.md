@@ -584,6 +584,60 @@ MASTER-PLAN (Step 6) and the live gap-programme plan.
 
 ---
 
+## Panel round 4 — 2026-09-02, frozen `bfafdd23`, range `6a18f71a..bfafdd23` (the ONE round of DEC-481)
+
+Three unnamed lenses, concurrent, each reading the diff and EXECUTING the evidence tests (reports in
+`var/claude/panel/2026-09-02-round4/`, gitignored; transcribed here). Tally: correctness 8 (4×P1),
+safety 8 (4×P1, one a regression in the range), completeness 13 (1×P1). Every round-3 FIXED
+disposition was re-verified by execution (34/34, 16/16, 64/64 named tests green on the frozen tree).
+**Dispositions below are as of the commits that followed the freeze** (`531225ee` interpolation,
+`afe3ef9c` regex; the framing carry-over and the docs commit after them).
+
+### Correctness + regression (8)
+| # | sev | where | what | disposition |
+|---|---|---|---|---|
+| C-R1 | P1 | `ext/regex/engine.rs` scan, PHP twin | crate-only class syntax (`[a-z&&[^aeiou]]`, `[[ab]]`, `--`, `~~`) accepted by both legs with different meanings | FIXED `afe3ef9c` (`reject::pcre_divergent` on BOTH engines + PHP port) |
+| C-R2 | P1 | same | `\v` literal natively, class under PCRE | FIXED `afe3ef9c` |
+| C-R3 | P1 | `runtime_php_regex.rs` `uD` ⇒ UCP | POSIX classes ASCII natively, Unicode under PCRE; the C11 correction had a counterexample | FIXED `afe3ef9c` (POSIX classes rejected on both engines; `\p{…}` hinted) |
+| C-R4 | P1 | budget promise | a catastrophic REGULAR pattern (`^(a+)+$`) is linear natively on both constructors, PCRE trips its limit; the range turned PHP's silent `false` into a fault | RESOLVED as a LOUD, NAMED PHP-leg limitation `afe3ef9c` (disclosed in KNOWN_ISSUES/spec/example; pinned by `catastrophic_regular_pattern_is_a_loud_php_leg_limitation`) |
+| C-R5 | P2 | `ext/mod.rs:85` | `new Regex(p, e)` bypasses both gates; PHP exits 0 | FIXED `afe3ef9c` (validated at first use on every leg, memoized) |
+| C-R6 | P2 | PHP twin vs crate grammar | dynamic patterns: constructs the crate refuses and PCRE accepts run under PHP | PARTLY FIXED `afe3ef9c` (the known list rejected on both legs) + DISCLOSED (the reject lists are not the crate's grammar — KNOWN_ISSUES §Core.Regex) |
+| C-R7 | P2 | `calls/regex.rs` | `(?-u)` accepted natively, refused by PCRE | FIXED `afe3ef9c` (inline `u`/`R` flags rejected on both engines) |
+| C-R8 | P3 | `differential.rs` `FAULT_TABLE` | the budget fault body re-typed instead of derived from `STEP_BUDGET_FAULT` | tracked (integration tests cannot see lib features; parity still caught by `agree_err_php`) |
+
+### Security + safety-promises (8)
+| # | sev | where | what | disposition |
+|---|---|---|---|---|
+| S-F1 | P1 | = C-R1 | "regular subset … identically" false for class-set syntax | FIXED `afe3ef9c` |
+| S-F2 | P1 | = C-R6 | "a dynamic pattern faults on every leg" overstated | PARTLY FIXED + DISCLOSED `afe3ef9c` |
+| S-F3 | P1 | = C-R4 (regression) | `__phorj_regex_check` throws on every PCRE limit; regular catastrophic patterns diverge | RESOLVED loud + disclosed `afe3ef9c` (CHANGELOG names the behaviour change) |
+| S-F4 | P1 | `serve/framing.rs:41-53`, `native/http/request.rs:188` | a pipelined second request in the same segment becomes the first request's BODY (never truncated to `want`) | FIXED in the framing carry-over commit (bytes past the declared body carried to the next read at all three sites; pinned by a two-requests-one-write test) |
+| S-F5 | P2 | RFC 9112 §6.3 shapes | duplicate differing `Content-Length`, `Transfer-Encoding` + CL, chunked alone, whitespace before the colon, incomplete body, CL > `MAX_REQUEST` served truncated | FIXED with S-F4 for the 400/413 shapes; `Transfer-Encoding: chunked` alone → 501 (unsupported coding, §6.1) — each named in the framing comment |
+| S-F6 | P2 | UNIFIED-SPEC:1360/2244, THIRD-PARTY-NOTICES | "nine by default (of 15)" — ten; `fancy-regex` absent from the notices | FIXED (docs commit: ten/15; `fancy-regex` MIT + `bit-set`/`bit-vec` rows) |
+| S-F7 | P3 | `transport.rs` ×3 | the 400 send error discarded silently | FIXED with S-F4 (logged like the sibling path) |
+| S-F8 | P3 | `cli/ladder.rs` | `E-TRANSPILE-SERVE` for a raw import in a LIBRARY file lacks the file name | tracked (attribution only; INJECTED-LINE-CARET family) |
+
+### Completeness + blast-radius (13)
+| # | sev | where | what | disposition |
+|---|---|---|---|---|
+| K-R1 | P1 | readiness §5e | INTERP-LINE-RESET "owed in step 1", neither fixed nor re-dispositioned; duplicated W0-5/W5-13 record with a contradicting fix shape | FIXED `531225ee` (the §5e shape was right; W5-13 was a wrong diagnosis; one record now) |
+| K-R2 | P2 | MASTER-PLAN §0.07 | DEC-486 mirrored as "build in step 1" while BUILT | FIXED (docs commit) |
+| K-R3 | P2 | MASTER-PLAN §0 cursor | untouched by the docs pass; "next" contradicted the 17:05 ORDER | FIXED (docs commit: Date/HEAD + Next cells) |
+| K-R4 | P2 | SLICE-STATE:50-52, readiness X9 | "open ruling" while DEC-481 ruled it | FIXED (docs commit) |
+| K-R5 | P2 | README:93-94 | "14 vetted … 9 default" | FIXED (docs commit: 15 / 10) |
+| K-R6 | P2 | UNIFIED-SPEC:1360, 2244 | "nine by default" — ten | FIXED (docs commit) |
+| K-R7 | P2 (pre-existing) | `lsp/mod.rs:201-233` | hover on any NATIVE returns `null`; the regex slice reported "hover" as met | DISCLOSED (KNOWN_ISSUES §LSP-PRELUDE-DEFINITION extended to natives); Invariant 17 hover row NOT met for natives — owed |
+| K-R8 | P3 | examples/README.md:303 | module row omits `compileBacktracking` | FIXED (docs commit) |
+| K-R9 | P3 | `ext/regex/engine.rs` 319 lines | new file above the soft cap | FIXED `afe3ef9c` (scans split to `reject.rs`) |
+| K-R10 | P3 | SLICE-STATE:108 | "none built" beside a BUILT item | FIXED (docs commit) |
+| K-R11 | P3 | readiness X6/X8 | rows not refreshed after their own log | FIXED (docs commit) |
+| K-R12 | P3 | K11/K16 cite bare KNOWN_ISSUES line numbers | doc-rot class | FIXED (docs commit: heading anchors) |
+| K-R13 | P3 | DEC-461 row | no statement why lift needs nothing | FIXED (docs commit: the lifter has no `preg_*` model) |
+
+**Gate after round 4:** the P1s are fixed and pushed; DEC-481 says CLEAN closes. Round 4 was not
+clean, so the closing is the developer's ruling (asked at the end of step 1): close on the fixes with
+the P2/P3 residue tracked, or run a round 5 on the new freeze.
+
 ## Panel round 3 — 2026-09-02, frozen `6a18f71a`, range `0c982019..6a18f71a`
 
 Transcribed IN the repo (developer ruling 2026-09-02: the round-2 report lived only in gitignored
@@ -649,12 +703,12 @@ fixed; `import Core.Http as H` offers no alias bypass.
 | K8 | P2 | `checker/rewrite_pipe/walk.rs:33`, `qualify_variants.rs:67`, `rewrite_new.rs:57`, `cli/rewrite_new.rs:44` | four passes keep an inert `_ => {}` item arm outside the CD-31 ratchet; `rewrite_pipe` is pre-check and the "tests are checker-gated out" comment is false | NEW |
 | K9 | P2 | `KNOWN_ISSUES.md:2854-2860` | second section still says `test_runner` calls `check_tests` without prelude expansion — false since 8a83ada6 | FIXED (KNOWN_ISSUES section marked FIXED, points at §TEST-RAW-CHECKER) |
 | K10 | P2 | `CLAUDE.md:207`, `docs/INVARIANTS.md:39` | Invariant 3 still scoped to Expr/Stmt/Pattern; CD-31's `Item` widening absent | FIXED (INVARIANTS §2b + CLAUDE.md rule 3 name the `Item` widening) |
-| K11 | P2 | `src/cli/help.rs:8-30` | `phg --help` omits `add/install/update/remove` | KNOWN_ISSUES:2890 |
+| K11 | P2 | `src/cli/help.rs:8-30` | `phg --help` omits `add/install/update/remove` | tracked — KNOWN_ISSUES § "`phg --help` omits the four package-manager verbs (P1, task #71)" (anchor by heading, not line — panel R12) |
 | K12 | P2 | `examples/process/README.md`, `explain/members_destructure.rs:90` | `Process.args()` drift, 20 hits; native is `arguments` | KNOWN_ISSUES:2847 |
 | K13 | P3 | `examples/README.md:181` | only the html-in-trait CD-31 shape has an example; README row not updated | NEW |
 | K14 | P3 | `differential.rs:2011`, `UNIFIED-SPEC.md:1684,1827,1878` | dead citations (deleted design doc, two "retired" plans in no archive) | FIXED (spec "retired" sources named as folded/deleted; the three code citations repointed to UNIFIED-SPEC) |
 | K15 | P3 | `C-decisions.md:3547` | DEC-362 "build queued" while BUILT | FIXED (DEC-362 → BUILT) |
-| K16 | P2 | `src/lsp/` | no hover/signature-help consumer of `prelude_catalog` — `cfg.port`/`Http.serve` hover empty | KNOWN_ISSUES:3056 |
+| K16 | P2 | `src/lsp/` | no hover/signature-help consumer of `prelude_catalog` — `cfg.port`/`Http.serve` hover empty | tracked — KNOWN_ISSUES §LSP-PRELUDE-DEFINITION (extended 2026-09-02 to hover on natives) |
 | K-fact | — | `tests/serve_tls.rs` | handshake tier self-skips without `openssl`, no `PHORJ_REQUIRE_*` analogue | note |
 
 ### Disposition (feeds the ORDER ruling's step 1, "harness trust")

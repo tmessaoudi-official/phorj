@@ -1357,7 +1357,7 @@ escaping — a later wave (`Html.url_attr`/typed URLs; gap-audit row K-html-cont
 
 **Status: ADOPTED 2026-06-27; AMENDED 2026-07-03 (SQL driver + TLS domains) and 2026-07-06 (native
 codegen / JIT — domain #7).** This policy is why "zero external dependencies" claims in older docs are
-**false and must not be repeated**: Phorj's *core stays `std`-only*, but nine vetted, feature-gated
+**false and must not be repeated**: Phorj's *core stays `std`-only*, but ten vetted, feature-gated
 crates ship **by default** (of 15 admitted — re-derive from `Cargo.toml`, the SSOT). Source:
 `2026-06-27-dependency-policy.md`.
 
@@ -2241,7 +2241,7 @@ name the `withHeader` call that built the bad value. Worse debugging for identic
 > [dependency policy](#external-dependency-policy) and describe the artifact as "std-only /
 > zero-dependency". The accurate current framing: the **hand-rolled object-format readers, container,
 > CRC-32, SHA-256 stay std-only by policy** (no `object`/`goblin`/`sha2` in code that runs inside the
-> artifact), while the *crate as a whole* ships the vetted feature-gated deps (9 by default of 15 admitted — see §External dependency policy). The
+> artifact), while the *crate as a whole* ships the vetted feature-gated deps (10 by default of 15 admitted — see §External dependency policy). The
 > tooling-exemption principle (§ boundary below) is unchanged and remains the governing test.
 
 ## phg build master design

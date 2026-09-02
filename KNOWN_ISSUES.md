@@ -3154,6 +3154,13 @@ claim beyond what is reproduced here.
 
 ## §LSP-PRELUDE-DEFINITION — go-to-definition on a stdlib symbol opens nothing (P2, 2026-08-23)
 
+⊳ **Extended 2026-09-02 (panel round 4, completeness R7):** HOVER has the same gap for the whole
+NATIVE surface — `src/lsp/mod.rs` resolves user declarations only, so hovering `Regex.compile`,
+`Regex.compileBacktracking` or any `Output.*` returns `null` (live `phg lsp` probe; the control hover
+on a user `main` renders its signature). Invariant 17's hover row is therefore NOT met for natives
+and prelude statics; completion is (the catalog reads `native::registry()`). One fix serves both:
+a hover/definition provider over the registry + prelude catalog.
+
 **S3.3e closed the COMPLETION half of this and deliberately left the NAVIGATION half open**, so the
 boundary is worth stating rather than discovering. `catalog::prelude_class_members` now answers member
 completion for every prelude class (`cfg.port`, `req.headers`, `Date`/`Instant`/`Uri`/`Session`…), and

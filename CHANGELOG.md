@@ -45,6 +45,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   exceeded` on every leg (PHP's `PREG_BACKTRACK_LIMIT_ERROR` maps to it) instead of hanging, so ReDoS
   stays opt-in and bounded. The `Regex` value carries a second public field, `engine`. `Regex.compile`
   is untouched (linear, ReDoS-immune). Examples: `guide/regex.phg`; `phg explain E-REGEX-UNSUPPORTED`.
+  Lift needs nothing (Invariant 17): the lifter has no `preg_*` model.
 
 ### Fixed
 

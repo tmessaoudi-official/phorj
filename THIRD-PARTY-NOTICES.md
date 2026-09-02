@@ -3,7 +3,7 @@
 ## Runtime dependencies: a small, feature-gated, all-permissive set
 
 Phorj's **core is `std`-only**: built with `--no-default-features` it links **zero** external crates.
-The default build enables nine narrowly-scoped, **feature-gated** dependencies (of 14 admitted), for
+The default build enables ten narrowly-scoped, **feature-gated** dependencies (of 15 admitted), for
 capabilities `std` cannot provide safely from phorj's own `#![deny(unsafe_code)]` code (the
 audited first-party `unsafe` island — the JIT's fn-ptr call plus its `extern "C"` trampolines,
 ~48 sites — is confined to `src/jit/`) — crypto, a ReDoS-safe
@@ -15,7 +15,8 @@ with Phorj's own license; each can be switched off at build time.
 | Crate | Feature | Default? | Domain | License |
 |---|---|---|---|---|
 | [`argon2`](https://github.com/RustCrypto/password-hashes) (RustCrypto) | `cryptography` | yes | Argon2id password hashing | MIT OR Apache-2.0 |
-| [`regex`](https://github.com/rust-lang/regex) (rust-lang) | `regex` | yes | ReDoS-safe regex engine | MIT OR Apache-2.0 |
+| [`regex`](https://github.com/rust-lang/regex) (rust-lang) | `regex` | yes | ReDoS-safe regex engine (`Regex.compile`) | MIT OR Apache-2.0 |
+| [`fancy-regex`](https://github.com/fancy-regex/fancy-regex) | `regex` | yes | opt-in backtracking engine (`Regex.compileBacktracking`, DEC-461); pulls `bit-set`/`bit-vec` (MIT OR Apache-2.0) | MIT |
 | [`ctrlc`](https://github.com/Detegr/rust-ctrlc) | `signals` | yes | SIGINT/SIGTERM for `phg serve` | MIT OR Apache-2.0 |
 | [`corosensei`](https://github.com/Amanieu/corosensei) | `green` (non-wasm only) | yes | stackful coroutines for green threads | MIT OR Apache-2.0 |
 | [`cranelift`](https://github.com/bytecodealliance/wasmtime/tree/main/cranelift), `cranelift-jit`, `cranelift-module` (Bytecode Alliance) | `jit` (non-wasm only) | yes | native-codegen JIT backend | Apache-2.0 WITH LLVM-exception |

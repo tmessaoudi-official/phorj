@@ -90,8 +90,8 @@ cargo test                   # full suite
 cargo clippy --all-targets   # lints (warnings are denied)
 ```
 
-Toolchain: Rust (edition 2021). The core is std-first with **14 vetted, feature-gated
-dependencies** (9 in the default build: `argon2`, `regex`, `ctrlc`, `corosensei`, `cranelift`×3
+Toolchain: Rust (edition 2021). The core is std-first with **15 vetted, feature-gated
+dependencies** (10 in the default build: `argon2`, `regex` + `fancy-regex`, `ctrlc`, `corosensei`, `cranelift`×3
 for the JIT, `rusqlite`, `unicode-segmentation`; plus feature-gated TLS/mail/Postgres/MySQL) —
 cargo fetches them automatically; see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
