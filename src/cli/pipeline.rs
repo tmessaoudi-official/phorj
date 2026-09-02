@@ -75,19 +75,22 @@ pub fn check_and_expand_reified(
 /// test mode its own pipeline would recreate exactly the divergence this closes, so it must stay a
 /// flag through the shared body below.
 ///
-/// ⚠ **THIS DOES NOT YET MAKE `phg check` ≡ LSP ≡ `phg test`** — an earlier version of this comment
-/// claimed it did, and a 2026-09-02 milestone panel disproved it twice over. ONE gap remains:
-/// the LSP still calls the `false` path (`src/lsp/mod.rs`), so a file containing `test` items
-/// squiggles `E-TEST-OUTSIDE-TESTS` in both editors on lines `phg test` accepts.
-///
-/// The second gap the panel named — the item-level desugars ending in `other => other` and so never
-/// descending into `Item::Test` — is **CLOSED** (CD-31): nine item walks carry explicit arms and the
-/// DEC-356 ratchet now covers their files. `selftest/injected_preludes.phg` exercises the
-/// `resolve_variant_imports` arm through `phg test` and goes red if it is stubbed back out.
-///
-/// The LSP gap is tracked; do not restate the equivalence until it is closed.
+/// `phg check` ≡ LSP ≡ `phg test` holds since DEC-486 (2026-09-02): `phg check` / `check --json` use
+/// [`check_and_expand_for_check`] and the LSP [`front_end_diagnostics`], both of which derive the flag
+/// from the document ([`crate::ast::has_test_items`]) — the same shared body, the same flag. An earlier
+/// version of this comment claimed the equivalence before it held; a milestone panel disproved it, and
+/// the item-desugar gap it also named is CLOSED (CD-31: nine item walks carry explicit `Item::Test` arms).
 pub fn check_and_expand_tests(prog: &Program, diag_src: &str) -> Result<Program, String> {
     check_and_expand_reified_mode(prog, diag_src, true).map(|(p, _)| p)
+}
+
+/// `phg check`'s front end (DEC-486): [`check_and_expand`] in TEST MODE when the document declares a
+/// `test` item, the strict mode otherwise. ONLY `check`/`check --json` and the LSP derive the mode
+/// from the document — `run`/`transpile`/`build` ([`check_and_expand`]) and the bundle gate
+/// ([`cmd_check`]) stay strict, so production code cannot smuggle a test block into a release.
+pub fn check_and_expand_for_check(prog: &Program, diag_src: &str) -> Result<Program, String> {
+    let test_mode = crate::ast::has_test_items(prog);
+    check_and_expand_reified_mode(prog, diag_src, test_mode).map(|(p, _)| p)
 }
 
 fn check_and_expand_reified_mode(
@@ -293,39 +296,37 @@ fn check_and_expand_reified_mode(
 /// (tests below), which asserts the two agree on error-presence across injected/clean/error programs — so
 /// a diagnostic-emitting pass added to one but not the other fails the suite.
 pub fn front_end_diagnostics(prog: &Program) -> Vec<crate::diagnostic::Diagnostic> {
+    front_end_diagnostics_result(prog).unwrap_or_else(|errs| errs)
+}
+
+/// [`front_end_diagnostics`] with the verdict kept: `Ok(warnings)` when the program checks,
+/// `Err(errors)` otherwise. `check --json` needs the split (its exit code is the verdict); the LSP
+/// flattens it. DEC-486: the checker runs in test mode when the document declares a `test` item.
+pub fn front_end_diagnostics_result(
+    prog: &Program,
+) -> Result<Vec<crate::diagnostic::Diagnostic>, Vec<crate::diagnostic::Diagnostic>> {
+    let test_mode = crate::ast::has_test_items(prog);
     // DEC-239: mirror of `check_and_expand_reified` — pipes lower FIRST here too.
     let prog = &crate::checker::lower_pipes(prog.clone());
     let injected_violations = crate::checker::enforce_injected_discipline(prog);
     if !injected_violations.is_empty() {
-        return injected_violations;
+        return Err(injected_violations);
     }
-    let prog = match crate::checker::resolve_intrinsic_imports(prog.clone()) {
-        Ok(p) => p,
-        Err(ds) => return ds,
-    };
+    let prog = crate::checker::resolve_intrinsic_imports(prog.clone())?;
     if let Some(d) = super::preludes::unavailable_core_module(&prog) {
-        return vec![d];
+        return Err(vec![d]);
     }
     let injected = inject_core_modules(&prog);
     let routed = crate::checker::desugar_auto_router(injected.into_owned());
     let routed = crate::checker::collapse_injected_type_qualifiers(routed);
     let routed = crate::checker::resolve_variant_imports(routed);
-    let routed = match crate::checker::desugar_di(routed) {
-        Ok(p) => p,
-        Err(ds) => return ds,
-    };
-    let routed = match crate::checker::desugar_db(routed) {
-        Ok(p) => p,
-        Err(ds) => return ds,
-    };
+    let routed = crate::checker::desugar_di(routed)?;
+    let routed = crate::checker::desugar_db(routed)?;
     // DEC-318 `#[Config]` injection — mirrored from `check_and_expand_reified` (DEC-252 drift rule).
-    let routed = match crate::checker::desugar_config(routed) {
-        Ok(p) => p,
-        Err(ds) => return ds,
-    };
-    match crate::checker::check_resolutions(&routed) {
-        Ok((warnings, ..)) => warnings,
-        Err(errs) => errs,
+    let routed = crate::checker::desugar_config(routed)?;
+    match crate::checker::check_resolutions_mode(&routed, test_mode) {
+        Ok((warnings, ..)) => Ok(warnings),
+        Err(errs) => Err(errs),
     }
 }
 
@@ -617,10 +618,10 @@ pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), Str
     })
 }
 
-/// `check` on an already-loaded program.
+/// `check` on an already-loaded program — in test mode when it declares a `test` item (DEC-486).
 pub fn check_program(prog: &Program, diag_src: &str) -> Result<String, String> {
     on_deep_stack(|| {
-        check_and_expand(prog, diag_src)?;
+        check_and_expand_for_check(prog, diag_src)?;
         Ok("OK (type-checks clean)\n".to_string())
     })
 }
@@ -630,26 +631,12 @@ pub fn check_program(prog: &Program, diag_src: &str) -> Result<String, String> {
 /// [`crate::diagnostic::diagnostics_json`]) and whether any *error* was present, so the caller prints
 /// the array to **stdout** and exits 0 (clean / warnings only) or 1 (errors) — `check`'s exit
 /// semantics, but the array is always the output and nothing goes to stderr. Positions ride on each
-/// diagnostic, so no `diag_src` is needed.
+/// diagnostic, so no `diag_src` is needed. Routes through the SAME shared front end as `phg check` and
+/// the LSP (DEC-486) — it used to call the raw checker, so an injected-prelude program `phg check`
+/// accepted came back as `unknown function \`Secret\`` here [reproduced 2026-09-02].
 pub fn check_json_program(prog: &Program) -> (String, bool) {
-    // DEC-239: lower pipes first, mirroring `check_and_expand_reified` — a no-op on pipe-free
-    // (or already-lowered) programs.
-    let prog = &crate::checker::lower_pipes(prog.clone());
-    on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((
-            warnings,
-            _html,
-            _ufcs,
-            _ovl,
-            _reified,
-            _pipes,
-            _fills,
-            _for_iters,
-            _for_binds,
-            _tuple_binds,
-            _variant_enums,
-            _invoke_tostring,
-        )) => (crate::diagnostic::diagnostics_json(&[], &warnings), false),
+    on_deep_stack(|| match front_end_diagnostics_result(prog) {
+        Ok(warnings) => (crate::diagnostic::diagnostics_json(&[], &warnings), false),
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),
     })
 }

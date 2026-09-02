@@ -48,9 +48,11 @@ test "addition" {
 }
 ```
 
-A `test` block is checked like a `-> void` body (no `this`, no return value). It is valid **only**
-in a file run by `phg test`; a `test` block in a normal build (interp/VM/`transpile`) is the
-error `E-TEST-OUTSIDE-TESTS` (`phg explain E-TEST-OUTSIDE-TESTS`).
+A `test` block is checked like a `-> void` body (no `this`, no return value). It is **executed**
+only by `phg test`; `phg check` and both editors accept it — a document that declares a `test` item is
+checked in test mode (DEC-486), so `phg check selftest/arithmetic.phg` says OK and the outline lists
+each test — while a build that would run or ship the program (`run`/`transpile`/`build`) rejects it
+with `E-TEST-OUTSIDE-TESTS` (`phg explain E-TEST-OUTSIDE-TESTS`).
 
 ## The `Core.Test` assertions
 

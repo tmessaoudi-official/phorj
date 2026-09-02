@@ -187,3 +187,48 @@ fn a_test_file_using_an_injected_prelude_type_is_checked_through_the_front_end()
     assert_eq!(code, 0, "the test file should pass:\n{report}");
     assert!(report.contains("1 passed, 0 failed"), "{report}");
 }
+
+/// DEC-486 (Invariant 17): every committed `selftest/*.phg` must pass `phg check` — the same files
+/// `phg test` runs. A document containing a `test` item is checked in test mode by `check` and the
+/// editors; before this every selftest file was rejected with `E-TEST-OUTSIDE-TESTS` on lines
+/// `phg test` accepted. Runs the loader + `check_program`, exactly the CLI's `phg check <file>` path.
+#[test]
+fn every_selftest_file_type_checks_under_phg_check() {
+    let suite = Path::new(env!("CARGO_MANIFEST_DIR")).join("selftest");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(&suite).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|e| e.to_str()) != Some("phg") {
+            continue;
+        }
+        let unit = phorj::loader::load(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let ok = cli::check_program(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("`phg check {}` must pass:\n{e}", path.display()));
+        assert!(ok.contains("OK"), "{ok}");
+        checked += 1;
+    }
+    assert!(
+        checked >= 3,
+        "the selftest suite has {checked} files — the loop ran vacuously"
+    );
+}
+
+/// Project mode: a `test` item in an IMPORTED library file also puts the merged unit in test mode
+/// for `phg check`, while the run path on the very same unit still rejects it — the boundary DEC-486
+/// draws (test mode belongs to `check` and the editors, never to run/transpile/build).
+#[test]
+fn a_test_item_in_an_imported_file_checks_but_does_not_run() {
+    let dir = TempDir::new("check_project_test_item");
+    dir.write(
+        "Lib/Box.phg",
+        "package Lib;\npublic class Box { }\ntest \"a box builds\" { var b = new Box(); }\n",
+    );
+    let entry = dir.write(
+        "main.phg",
+        "package Main;\nimport Lib.Box;\nfunction main() -> void { var b = new Box(); }\n",
+    );
+    let unit = phorj::loader::load(&entry).expect("load");
+    cli::check_program(&unit.program, &unit.diag_src).expect("`phg check` accepts the test item");
+    let err = cli::treewalk_program(&unit).expect_err("the run path still rejects the test item");
+    assert!(err.contains("E-TEST-OUTSIDE-TESTS"), "{err}");
+}

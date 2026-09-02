@@ -92,11 +92,13 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              `class App { static function main(): int { return 0; } }` — same signature rules.\n"
         }
         "E-TEST-OUTSIDE-TESTS" => {
-            "E-TEST-OUTSIDE-TESTS — a `test \"name\" { … }` block appears in a normal build.\n\n\
-             A `test` block is a unit test (M-Test). It is only valid in a file run by `phg test`, so\n\
-             production code (run/check/transpile) cannot smuggle test blocks into a release. Move\n\
-             the block into a `*.phg` file under a `tests/` directory and run `phg test`. `test` is a\n\
-             contextual keyword, so it stays usable as an ordinary identifier everywhere else.\n"
+            "E-TEST-OUTSIDE-TESTS — a `test \"name\" { … }` block reached `run`, `transpile` or `build`.\n\n\
+             A `test` block is a unit test (M-Test). It is executed by `phg test`; `phg check` and the\n\
+             editors accept it (the document is checked in test mode — DEC-486), but a build that\n\
+             would ship or run the program rejects it, so production code cannot smuggle test blocks\n\
+             into a release. Run the file with `phg test <file>`, or move the block into a `*.phg`\n\
+             under `tests/`. `test` is a contextual keyword, so it stays usable as an ordinary\n\
+             identifier everywhere else.\n"
         }
         "E-STATIC-CALL" => {
             "E-STATIC-CALL — a class-name method call `ClassName.method(…)` didn't resolve to a static method.\n\n\

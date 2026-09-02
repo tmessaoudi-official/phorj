@@ -8,6 +8,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **A document with a `test` item is checked in test mode by `phg check`, `check --json` and the
+  LSP (DEC-486; Invariant 17 `check ≡ LSP ≡ test`; panel C9/K1/K7).** Both editors squiggled
+  `E-TEST-OUTSIDE-TESTS` on every `selftest/*.phg` and `phg check` rejected them, on lines `phg test`
+  accepted. The flag is now derived from the document (`ast::has_test_items`) in exactly two places —
+  `check_and_expand_for_check` (check) and `front_end_diagnostics_result` (LSP + `--json`) — while
+  `run`/`transpile`/`build` and the bundle gate stay strict, so a release still cannot carry a test
+  block; the diagnostic's wording and hint now say so. The outline lists each test (SymbolKind
+  Function), so both editors' breadcrumbs reach it with no extension change. Two siblings fell with
+  it: `phg check --json` called the RAW checker (an injected-prelude program `phg check` accepted came
+  back as `unknown function \`Secret\``, reproduced on the release binary), and the loader's
+  `resolve_item` ended in a named catch-all, so a `test` body in a library file was never mangled
+  (DEC-356 class; `new Box()` → `unknown function`). Red-first in `pipeline_tests.rs`,
+  `lsp/tests_test_mode.rs` and `tests/mtest.rs` (every selftest file through `phg check`, and a
+  two-file project whose imported test checks but does not run); six sabotage mutations each went red.
 - **The two ungated PHP-emit paths are gated (Invariant 14; panel round-3 C7/C8/F1).** The
   playground's `transpile_json` and `phg benchmark --vs-php` reached `transpile::emit` without the
   native-only ladder refusal: the playground emitted a `Core.Database`/`Core.SessionModule` program,

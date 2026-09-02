@@ -617,7 +617,7 @@ deps 14 admitted / 9 default = UNIFIED-SPEC:1359; all 7 new codes have `phg expl
 | C6 | **P0** | `src/checker/calls/args.rs:256` | `default_fills` two-file collision reproduced at HEAD: `new Cookie(…)` at the same byte offset in two files → wrong arguments on run, --tree-walker AND php | **FIXED `53df9ef1`** — per-file span windows in the loader (`SpanWindows`); three-file differential pin + two sabotages; closes §default_fills and §span-collision |
 | C7 | P1 | `src/cli/benchmark.rs:80,244` | `benchmark --vs-php` transpiles a `Core.Database` program with no ladder gate → PHP fatal, "skipping", exit 0 | **FIXED** (step 1) — gated pre-expansion on the PHP leg only |
 | C8 | P1 | `playground/src/lib.rs:103` | `transpile_json` → `transpile::emit`, no ladder gate | **FIXED** (step 1) — routed through `cli::transpile_source`, the single-source chokepoint |
-| C9 | P2 | `src/lsp/mod.rs:496-511` | LSP diagnostics run `test_mode=false`; `check ≡ LSP ≡ test` false | tracked (= completeness #1) |
+| C9 | P2 | `src/lsp/mod.rs:496-511` | LSP diagnostics run `test_mode=false`; `check ≡ LSP ≡ test` false | FIXED (DEC-486, step 1) |
 | C10 | P2 | `src/serve/framing.rs:118` | `Content-Length: abc` → `200` body-less instead of `400`; `unwrap_or(0)` has no failure-mode evidence | NEW |
 | C11 | P3 | `runtime_php.rs:992`, KNOWN_ISSUES:2485 | the documented `\d\w\s` ASCII-vs-Unicode edge does NOT exist (php `u` ⇒ UCP); the real edges are C1–C3 | NEW (doc wrong) |
 | C12 | P3 | `src/cli/pipeline.rs:397-420` | `benchmark --vs-php` on a Web-only program measures handler registration only and reports a speedup | NEW, by-design per comment |
@@ -631,13 +631,13 @@ fixed; `import Core.Http as H` offers no alias bypass.
 
 | # | sev | where | finding | status |
 |---|---|---|---|---|
-| K1 | P1 | `src/lsp/mod.rs:514,534` → `cli/pipeline.rs:295,326` | both LSP diagnostic paths hard-code the non-test checker; all 3 `selftest/*.phg` squiggle `E-TEST-OUTSIDE-TESTS` | tracked |
+| K1 | P1 | `src/lsp/mod.rs:514,534` → `cli/pipeline.rs:295,326` | both LSP diagnostic paths hard-code the non-test checker; all 3 `selftest/*.phg` squiggle `E-TEST-OUTSIDE-TESTS` | FIXED (DEC-486, step 1) |
 | K2 | P1 | quartet | the 17:05 rulings (regex B, no scout port, order, perf split) exist only in this plan — no register row; MASTER-PLAN and SLICE-STATE state different "next"; DEC-457/458/459 have no MASTER-PLAN mirror | NEW — Invariant 19 |
 | K3 | P1 | `SLICE-STATE.md:137-140` vs `:83-86` | intra-file contradiction on whether `phg test` still checks the raw program | NEW |
 | K4 | P2 | `tests/differential.rs:2012-2062` | two `continue` skip arms, no counter, no expected-skip-set; floor is `files.len() >= 3` | tracked |
 | K5 | P3 | `UNIFIED-SPEC.md:1209` | "no named arguments" true of natives only, reads as a language claim | NEW |
 | K6 | P2 | `UNIFIED-SPEC.md:2117-2136` | spec names none of `E-SERVE-TLS-*`, `W-SERVE-CONFIG-OVERRIDDEN`, `E-TEST-OUTSIDE-TESTS` | NEW |
-| K7 | P2 | `src/lsp/symbols.rs:153,223` | document symbols drop `Item::Test` — a named test never appears in either editor's outline | NEW |
+| K7 | P2 | `src/lsp/symbols.rs:153,223` | document symbols drop `Item::Test` — a named test never appears in either editor's outline | FIXED (DEC-486, step 1) |
 | K8 | P2 | `checker/rewrite_pipe/walk.rs:33`, `qualify_variants.rs:67`, `rewrite_new.rs:57`, `cli/rewrite_new.rs:44` | four passes keep an inert `_ => {}` item arm outside the CD-31 ratchet; `rewrite_pipe` is pre-check and the "tests are checker-gated out" comment is false | NEW |
 | K9 | P2 | `KNOWN_ISSUES.md:2854-2860` | second section still says `test_runner` calls `check_tests` without prelude expansion — false since 8a83ada6 | NEW |
 | K10 | P2 | `CLAUDE.md:207`, `docs/INVARIANTS.md:39` | Invariant 3 still scoped to Expr/Stmt/Pattern; CD-31's `Item` widening absent | NEW |
@@ -655,7 +655,7 @@ fixed; `import Core.Http as H` offers no alias bypass.
   the transpile leg, `D` in the delimiter helper, replacement-syntax normalisation, possessive/`\h`/`\R`/
   `\Z`/`{,n}` rejection or support decided per construct, each with an `agree_out_php` case (the
   reviewer confirms no existing test can go red on C1–C5).
-- **C6 P0** — DONE `53df9ef1`. **C7/C8** — DONE (step 1). **C9/K1/K7/K16** = the LSP test-mode + symbols + hover slice
+- **C6 P0** — DONE `53df9ef1`. **C7/C8/F1** — DONE `06e9e975`. **C9/K1/K7** — DONE (DEC-486; `check --json` raw-checker and loader `resolve_item` catch-all fixed alongside). **K16** = the prelude hover slice, still owed. **K8** partial: `src/loader/resolve.rs`'s ITEM walk is wildcard-free (DEC-486) but its `resolve_expr` still ends in `leaf => leaf`, swallowing eight `Expr` variants (`Tuple`, `NamedArg`, `NewColl`, …) — a cross-package call inside a tuple literal or a named-argument value in a library file is never mangled; the follow-up commit makes it total and adds the file to the ratchet. The Pass-1 index's `_ => continue` in `assemble.rs` is a separate named gap (KNOWN_ISSUES §LOADER-ALIAS-EXPORT — public type aliases in library packages are not exported)
   (developer directive: LSP/editors are first-class). **K4** = differential floor. **K8** = widen the
   CD-31 ratchet to the four remaining item arms. **K2/K3/K5/K6/K9/K10/K14/K15** = one docs pass, same
   commit as the register rows. **C10** needs a failing-request test before its fix (anti-bandaid).

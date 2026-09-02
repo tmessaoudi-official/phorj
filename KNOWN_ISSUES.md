@@ -24,7 +24,19 @@ Not deferred and not owed: the refusals. A half-configured, unruled-floor, unbui
 TLS setup is a startup error (`E-SERVE-TLS-{INCOMPLETE,MIN-VERSION,DISABLED,CERT}`), never a server
 that quietly answers in the clear.
 
-## TEST-RAW-CHECKER — PARTIALLY FIXED 2026-09-02: `phg test` shares the front end, but the equivalence does NOT yet hold
+## TEST-RAW-CHECKER — FIXED 2026-09-02 (DEC-486): `phg check` ≡ LSP ≡ `phg test` now holds
+
+**FIXED — third and final step, same day (DEC-486).** A document that declares a `test` item is checked
+in TEST MODE by `phg check`, `phg check --json` and the LSP (`cli::check_and_expand_for_check`,
+`cli::front_end_diagnostics_result`, both deriving the flag from `ast::has_test_items`), so every
+`selftest/*.phg` passes `phg check` and diagnoses clean in both editors; the outline lists each test.
+`run`/`transpile`/`build` and the bundle gate keep rejecting the item. Two sibling defects fell with
+it: `phg check --json` called the RAW checker (no prelude injection — an injected-prelude program came
+back as `unknown function \`Secret\``), and the loader's `resolve_item` ended in a named catch-all so a
+`test` body in a library file was never mangled (DEC-356 class). Pinned by `pipeline_tests.rs`,
+`lsp/tests_test_mode.rs` and `tests/mtest.rs`; six sabotage mutations verified red. The history below
+is kept because "FIXED" was claimed twice before it was true.
+
 
 **Not caused by S3.4** — recorded because it was found there. `phg test <file>` runs a `<check>`
 pseudo-test that calls `crate::checker::check_tests(&unit.program)` directly
@@ -60,7 +72,7 @@ disproved the same day. Of the two gaps it found, ONE remains (the LSP); the ite
 closed later the same day by CD-31. Both are listed, the closed one struck through, because the
 sequence is the point: "FIXED" was claimed twice before it was true.**
 
-1. **The LSP still calls the non-test path** (`src/lsp/mod.rs`). A file containing `test` items —
+1. ~~**The LSP still calls the non-test path**~~ **CLOSED (DEC-486, above).** A file containing `test` items —
    including every `selftest/*.phg` this repo ships — reports `E-TEST-OUTSIDE-TESTS` in VS Code and
    JetBrains on lines `phg test` accepts. Invariant 17's 100% rule and DEC-252's "same pipeline, never
    diverge" are violated in the direction OPPOSITE the one just fixed, and the parameter that would
@@ -95,6 +107,23 @@ visible on a rejection instead of an acceptance.
 *(Original sizing note, kept because it was accurate:)* `check_tests` allows `test` items, which
 `check_and_expand`'s path does not, so routing through the front end needs the test-mode flag threaded
 rather than the call simply swapped.
+
+## LOADER-ALIAS-EXPORT — a `public type` alias in a library package cannot be imported (P2, 2026-09-02)
+
+Found while probing DEC-486's loader arm, NOT caused by it. The loader's Pass-1 index
+(`src/loader/assemble.rs`, the `match item { … _ => continue }` that fills the function/type tables)
+registers functions, classes, enums, interfaces and traits — never `Item::TypeAlias` — so a library
+package that declares `public type Boxes = List<Box>;` exports nothing under that name:
+
+```console
+$ phg run main.phg          # main.phg: `import Lib.Boxes;`  Lib/Boxes.phg: `public type Boxes = List<Box>;`
+main.phg: package `Lib` exports no member `Boxes` — no such function, type, or sub-module [E-IMPORT-UNKNOWN]
+```
+
+[Reproduced 2026-09-02 on the debug binary.] Consequently `resolve_item`'s `TypeAlias` arm (the
+alias TARGET is not mangled either) has never been reachable across packages; both halves are one
+fix — index the alias in Pass 1 and resolve its target like a field type — and belong to the same
+slice. Aliases inside `package Main` are unaffected (expanded by `check_and_expand`, Invariant 5).
 
 ## DOCS-STALE-SPEC-PATHS — 35 references still point at spec files archived in July (found 2026-09-02, PRE-EXISTING)
 

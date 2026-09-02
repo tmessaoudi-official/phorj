@@ -240,9 +240,12 @@ impl Checker {
         if !self.test_mode {
             self.err_coded(
                 span,
-                "a `test` block is only allowed in a test file run by `phg test`",
+                "a `test` block cannot be run, transpiled or built — it is executed by `phg test`",
                 "E-TEST-OUTSIDE-TESTS",
-                Some("move this into a `*.phg` under `tests/` and run `phg test`".into()),
+                Some(
+                    "run it with `phg test <file>` (`phg check` and the editors accept `test` items)"
+                        .into(),
+                ),
             );
             return;
         }

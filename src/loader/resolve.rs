@@ -161,7 +161,22 @@ pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
             }
             Item::Interface(i)
         }
-        other => other,
+        // DEC-486: a `test` body in a LIBRARY file has call sites and type names to resolve exactly
+        // like a function body — `phg check` now checks it (test mode), and before this arm the
+        // named catch-all left `new Box()` unmangled, so the merged unit failed with
+        // `unknown function \`Box\`` [reproduced 2026-09-02]. Same DEC-356/CD-31 class as the nine
+        // item walks widened that day.
+        Item::Test { name, body, span } => Item::Test {
+            name,
+            body: resolve_block(body, ctx),
+            span,
+        },
+        // An import binds a qualifier — no call site. A type alias's TARGET is not resolved here, and
+        // that is untested territory: a `public type` alias in a library package is not even indexed by
+        // Pass 1 (`assemble.rs`, `_ => continue`), so importing one fails `E-IMPORT-UNKNOWN` before this
+        // arm could matter (KNOWN_ISSUES §LOADER-ALIAS-EXPORT, probed 2026-09-02). Kept explicit so a
+        // new `Item` variant must decide rather than inherit.
+        leaf @ (Item::Import { .. } | Item::TypeAlias { .. }) => leaf,
     }
 }
 

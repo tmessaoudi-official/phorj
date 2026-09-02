@@ -11,11 +11,11 @@
 // because a prelude was injected. If the runner is ever re-pointed at the raw checker, these stop
 // compiling under `phg test` — which is what `tests/mtest.rs` pins.
 //
-// NOTE, corrected 2026-09-02: an earlier version of this comment said such a file would "still pass
-// `phg check`". It would not, and neither does this one — `phg check` rejects a `test` item outright
-// with `E-TEST-OUTSIDE-TESTS`, so the property as written was unverifiable. That asymmetry is itself
-// an open gap: the LSP runs the same non-test path, so this file squiggles in both editors on lines
-// `phg test` accepts (KNOWN_ISSUES §TEST-RAW-CHECKER).
+// Since DEC-486 (2026-09-02) this file ALSO passes `phg check` and diagnoses clean in both editors: a
+// document that declares a `test` item is checked in test mode by `check` and the LSP, exactly as
+// `phg test` checks it (`tests/mtest.rs` pins `phg check` over every file here). Before that, `phg
+// check` rejected it with `E-TEST-OUTSIDE-TESTS` and the editors squiggled every test on lines `phg
+// test` accepted.
 package Main;
 
 import Core.Test;

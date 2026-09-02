@@ -29,6 +29,8 @@ mod symbols;
 mod tests;
 #[cfg(test)]
 mod tests_deprecated;
+#[cfg(test)]
+mod tests_test_mode;
 
 use crate::diagnostic::Diagnostic;
 use crate::json::Json;

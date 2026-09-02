@@ -6,7 +6,18 @@
 //! variant must decide whether it is documentable instead of inheriting `None` and losing its docs
 //! silently (Invariant 3's rule, applied to `Item`).
 
-use super::Item;
+use super::{Item, Program};
+
+/// Whether a program declares any `test "…" { }` item — the DEC-486 criterion for TEST MODE: a document
+/// containing one is checked in test mode by `phg check`, `check --json` and the LSP (the item accepted,
+/// its body type-checked), while `run`/`transpile`/`build` keep rejecting it (`E-TEST-OUTSIDE-TESTS`).
+/// Decided on the RAW program (preludes declare no tests, so injection cannot change the verdict).
+pub fn has_test_items(program: &Program) -> bool {
+    program
+        .items
+        .iter()
+        .any(|it| matches!(it, Item::Test { .. }))
+}
 
 /// The span of a top-level item's DECLARATION (its keyword/name), or `None` for items that declare no
 /// named entity (`import`, `test`).

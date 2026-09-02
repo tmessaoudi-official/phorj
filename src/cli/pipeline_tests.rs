@@ -246,3 +246,88 @@ fn a_class_named_like_its_qualifier_does_not_shadow_the_qualified_type_form() {
         );
     }
 }
+
+/// DEC-486 (Invariant 17 `check ≡ LSP ≡ test`): a document containing a `test` item is checked in
+/// TEST MODE by `phg check` and by the LSP — the item is accepted and its body type-checked — while
+/// `run`/`transpile`/`build` keep rejecting it. Before this, every `selftest/*.phg` squiggled
+/// `E-TEST-OUTSIDE-TESTS` in both editors on lines `phg test` accepted (panel C9/K1).
+#[test]
+fn a_document_with_a_test_item_is_checked_in_test_mode_by_check_and_the_lsp() {
+    let clean = "package Main; test \"adds\" { var y = 1 + 2; }";
+    let prog = lex_parse(clean).expect("parse");
+    let fe = front_end_diagnostics(&prog);
+    assert!(
+        fe.is_empty(),
+        "the LSP path must accept a `test` item (test mode), got {fe:?}"
+    );
+    assert!(
+        check_program(&prog, clean).is_ok(),
+        "`phg check` must accept a `test` item (test mode)"
+    );
+    let (json, had_errors) = check_json_program(&prog);
+    assert!(
+        !had_errors,
+        "`phg check --json` must accept a `test` item: {json}"
+    );
+
+    // The body is still type-checked: a real error inside the test fires, and it is the BODY error —
+    // never the outside-tests gate.
+    let bad = "package Main; test \"bad\" { var y = 1 + true; }";
+    let prog = lex_parse(bad).expect("parse");
+    let fe = front_end_diagnostics(&prog);
+    assert!(
+        !fe.is_empty(),
+        "a body type error inside a test must be reported"
+    );
+    assert!(
+        fe.iter().all(|d| d.code != Some("E-TEST-OUTSIDE-TESTS")),
+        "test mode must not raise the outside-tests gate: {fe:?}"
+    );
+    let err = check_program(&prog, bad).expect_err("body error under `phg check`");
+    assert!(!err.contains("E-TEST-OUTSIDE-TESTS"), "{err}");
+}
+
+/// The boundary DEC-486 draws: test mode is a property of `check` and the editors ONLY. The run path
+/// (`check_and_expand`, shared by run/transpile/build) and the bundle gate (`cmd_check`, the only
+/// production caller of which is `bundle/cross.rs`) still reject a `test` item, so production code
+/// cannot smuggle test blocks into a release.
+#[test]
+fn run_transpile_and_bundle_paths_still_reject_a_test_item() {
+    let src = "package Main; test \"adds\" { var y = 1 + 2; }";
+    let prog = lex_parse(src).expect("parse");
+    let err = check_and_expand(&prog, src).expect_err("the run path must reject a `test` item");
+    assert!(err.contains("E-TEST-OUTSIDE-TESTS"), "{err}");
+    let err = cmd_check(src).expect_err("the bundle gate must reject a `test` item");
+    assert!(err.contains("E-TEST-OUTSIDE-TESTS"), "{err}");
+}
+
+/// `phg check --json` is the editor-integration seam, and it used to call the RAW checker — no prelude
+/// injection, no desugar — so a program `phg check` accepted came back as `unknown function \`Secret\``
+/// [reproduced 2026-09-02 on the release binary]. It now routes through the same shared front end as
+/// `phg check` and the LSP, and its error verdict is asserted on both fixtures because the exit code
+/// is derived from it.
+#[test]
+fn check_json_routes_through_the_shared_front_end() {
+    let injected = "package Main; import Core.Output; import Core.Secret; import Core.String; \
+                    function main() -> void { var t = new Secret(\"k\"); \
+                    Output.printLine(\"{String.length(t.expose())}\"); }";
+    let prog = lex_parse(injected).expect("parse");
+    let (json, had_errors) = check_json_program(&prog);
+    assert!(
+        !had_errors,
+        "injected-prelude program must be `--json`-clean: {json}"
+    );
+    assert!(!json.contains("\"severity\":\"error\""), "{json}");
+
+    let broken = "package Main; function main() -> void { var x = nope; }";
+    let prog = lex_parse(broken).expect("parse");
+    let (json, had_errors) = check_json_program(&prog);
+    assert!(
+        had_errors,
+        "a genuine error must set the error verdict: {json}"
+    );
+    assert!(
+        json.contains("E-UNKNOWN-IDENT") && json.contains("\"severity\":\"error\""),
+        "{json}"
+    );
+}

@@ -80,7 +80,8 @@ pub enum Item {
     /// `test "name" { stmts }` — a unit test (M-Test T1). `test` is a *contextual* keyword (special
     /// only at item position when immediately followed by a string literal), so it stays usable as an
     /// identifier elsewhere. The body is checked like a `-> void` function body with no `this`. A test
-    /// item is valid only under `phg test` (test mode); in a normal build the checker rejects it as
+    /// item is accepted in TEST MODE — `phg test`, and (DEC-486) `phg check` / `check --json` / the LSP
+    /// on any document that declares one — while `run`/`transpile`/`build` reject it as
     /// `E-TEST-OUTSIDE-TESTS`. It is never reached by a backend in a normal compile — the `phg test`
     /// runner executes test bodies directly on the interpreter (M-Test T3).
     Test {

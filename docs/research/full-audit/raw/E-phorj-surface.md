@@ -495,7 +495,7 @@ has an explain entry — verified: zero emitted-but-unexplained codes (only test
 | E-STATIC-UNKNOWN | unknown static field |
 | E-STRUCT-FIELD-UNKNOWN | struct pattern names unknown field |
 | E-STRUCT-PAT-TYPE | struct pattern head not a class |
-| E-TEST-OUTSIDE-TESTS | `test` block outside `tests/` |
+| E-TEST-OUTSIDE-TESTS | `test` block reaching `run`/`transpile`/`build` (accepted by `check` and the editors — DEC-486) |
 | E-THROW-TYPE | only `Error` values thrown/declared |
 | E-THROW-UNDECLARED | throw neither caught nor declared |
 | E-THROWS-TOO-BROAD | `throws Error` too broad |

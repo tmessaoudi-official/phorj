@@ -51,7 +51,7 @@ in-repo, disposition per finding) + its Decisions Log (the 2026-09-02 rulings).
 (1×P0 `default_fills` collision reproduced on 3 legs), completeness 16 (3×P1), safety 7. Whether a
 round 4 is owed after step 1 is the open DEC-268-vs-economize ruling (readiness plan X9).
 
-**ORDER (ruled 17:05):** (1) harness trust — panel disposition (C6 `default_fills` P0 FIXED `53df9ef1`+`1e62f74a`; the three ungated PHP-emit paths C7/C8/F1 FIXED `06e9e975`; next: the LSP/check test-mode path (DEC-486), the differential floor, DEC-459); (2) readiness wave in
+**ORDER (ruled 17:05):** (1) harness trust — panel disposition (C6 `default_fills` P0 FIXED `53df9ef1`+`1e62f74a`; the three ungated PHP-emit paths C7/C8/F1 FIXED `06e9e975`; the LSP/check test-mode path DONE (DEC-486); next: the differential floor K4, DEC-459); (2) readiness wave in
 leverage order; (3) DEC-333 perf. **Register rows: DEC-460 … DEC-489** (`C-decisions.md`, the
 2026-09-02 readiness rulings — 486 LSP/check test mode, 487 `Time.sleep`, 488 the Q22 split, 489 the small stdlib rows); MASTER-PLAN's §0 cursor is stale relative to this block until step 1's
 docs pass — this block + the two plan files' Decisions Logs are the record meanwhile (Invariant 19
@@ -100,10 +100,10 @@ bypass reachable with NO import, via a leaked prelude alias — is FIXED and ver
 false claims it exposed are corrected in place. **The remaining findings are NOT yet worked**, and the
 gate must not be reported as closed until they are.
 
-**CLOSED since the last cursor:** KNOWN_ISSUES §TEST-RAW-CHECKER is now **PARTIALLY** fixed — `phg test`
-shares the front end so injected-prelude types resolve, and the item-level desugars now descend into
-`Item::Test` (CD-31, see the cursor block below). **The LSP still calls the non-test path**, so it is
-still not done — that one gap is what keeps this issue open.
+**CLOSED since the last cursor:** KNOWN_ISSUES §TEST-RAW-CHECKER is **FIXED** — `phg test` shares the
+front end (injected-prelude types resolve), the item-level desugars descend into `Item::Test` (CD-31),
+and since DEC-486 `phg check` / `check --json` / the LSP check a document that declares a `test` item in
+test mode, so `check ≡ LSP ≡ test` holds; `run`/`transpile`/`build` stay strict.
 
 **QUEUED — ruled 2026-09-02, none built** (Invariant 19: a ruled-but-unbuilt item belongs in the cursor,
 not only the register):
@@ -156,8 +156,7 @@ path, and the differential's missing floor assertion.
 
 **Next: DEC-331 is done — the queue is open.** Two items are carried OWED and are the natural
 candidates: the **G-8 microbench ratchet** (skipped since S3.4; needs a quiet box) and
-**KNOWN_ISSUES §TEST-RAW-CHECKER** (`phg test` checks the raw program, so injected-prelude symbols
-are spurious `E-UNKNOWN-IDENT` — the hole DEC-252 closed for the LSP).
+**KNOWN_ISSUES §TEST-RAW-CHECKER** — FIXED (see the cursor above; DEC-486 closed the last gap).
 
 ---
 

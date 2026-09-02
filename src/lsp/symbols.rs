@@ -150,6 +150,7 @@ pub fn top_level_symbols(program: &Program) -> Vec<(String, u32, bool)> {
             Item::Enum(e) => out.push((e.name.clone(), 13, false)),
             Item::Trait(t) => out.push((t.name.clone(), 22, false)),
             Item::TypeAlias { name, .. } => out.push((name.clone(), 25, false)),
+            // A test's name is a string literal — not a referenceable symbol, so never a completion.
             Item::Import { .. } | Item::Test { .. } => {}
         }
     }
@@ -220,7 +221,13 @@ pub fn document_symbols_json(text: &str, program: &Program) -> String {
             Item::TypeAlias { name, .. } => {
                 Some(symbol_node(text, name, 26, range_start, range_end, &[]))
             }
-            Item::Import { .. } | Item::Test { .. } => None,
+            // DEC-486: a named test is a runnable unit — listed as a Function (12) so the outline and
+            // breadcrumb reach it. Its name is a string literal, not an identifier token, so the
+            // selection range falls back to the `test` keyword (see `selection_range`).
+            Item::Test { name, .. } => {
+                Some(symbol_node(text, name, 12, range_start, range_end, &[]))
+            }
+            Item::Import { .. } => None,
         };
         if let Some(n) = node {
             out.push(n);

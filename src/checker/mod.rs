@@ -497,10 +497,10 @@ pub struct Checker {
     /// is forbidden even though `cur_class` is `Some`. Distinct from `in_field_init` (an *instance*
     /// field initializer, where `this` IS in scope).
     in_static_init: bool,
-    /// Set when checking a program under `phg test` (M-Test). When true, `test "name" { … }` items
-    /// are allowed and their bodies type-checked; when false (every normal build — run/check/
-    /// transpile), a `test` item is rejected as `E-TEST-OUTSIDE-TESTS` so production code cannot
-    /// smuggle test blocks. Default `false`; flipped by `check_resolutions_mode` (`phg test`) and by [`check_tests`], now test-support-only.
+    /// TEST MODE (M-Test): when true, `test "name" { … }` items are allowed and their bodies checked;
+    /// when false (run/transpile/build) a `test` item is `E-TEST-OUTSIDE-TESTS`, so production code
+    /// cannot smuggle test blocks. Default `false`; set by `check_resolutions_mode` — always under `phg
+    /// test`, and (DEC-486) under check/`--json`/LSP when the document declares a `test` item.
     test_mode: bool,
     /// Set while checking a **static method** body (Batch E, finding #5). A static method has no
     /// instance, so `this` and bare instance-field references are rejected (`E-STATIC-THIS`) even
@@ -745,7 +745,7 @@ pub fn check(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
 }
 
 /// Like [`check`], but in **test mode**: `test "name" { … }` items are accepted and their bodies
-/// type-checked (a normal build rejects them as `E-TEST-OUTSIDE-TESTS`). Used by the `phg test`
+/// type-checked (run/transpile/build reject them as `E-TEST-OUTSIDE-TESTS`). Used by the `phg test`
 /// runner (M-Test T3) so a test file is checked as a real program plus its test blocks.
 pub fn check_tests(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
     let c = run_checker_mode(program, true);
