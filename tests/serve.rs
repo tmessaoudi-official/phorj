@@ -1417,3 +1417,96 @@ fn malformed_content_length_gets_400_on_the_pool() {
     assert!(text.starts_with("HTTP/1.1 400 "), "{text}");
     assert!(text.contains("Connection: close"), "{text}");
 }
+
+/// Round-4 safety F4 (P1, pre-existing): a pipelined second request arriving in the SAME segment as
+/// the first request's body used to be handed to the handler as that body (the framing returned the
+/// whole buffer, never truncated to the declared length) and was never answered. Bytes past the
+/// declared body are now carried over to the next read, so both requests are answered — on the
+/// single-threaded transport (kept-alive path) and on the pool worker's loop.
+#[test]
+fn a_pipelined_second_request_in_the_same_segment_is_answered() {
+    use phorj::serve::TcpTransport;
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let prog = program();
+    let mut t = TcpTransport::bind("127.0.0.1:0").expect("bind ephemeral port");
+    t.set_timeout(Some(Duration::from_secs(5)));
+    let addr = t.local_addr().expect("addr");
+    std::thread::spawn(move || {
+        let _ = serve(&ifac(&prog), &mut t, false);
+    });
+    let mut s = TcpStream::connect(addr).expect("connect");
+    s.set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("client timeout");
+    s.write_all(b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nAAAAAGET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        .expect("write both requests at once");
+    let mut resp = Vec::new();
+    s.read_to_end(&mut resp).expect("read until close");
+    let text = String::from_utf8_lossy(&resp);
+    assert_eq!(
+        text.matches("HTTP/1.1 200 OK").count(),
+        2,
+        "both pipelined requests must be answered, got:\n{text}"
+    );
+    assert!(
+        !text.contains("AAAAAGET"),
+        "the second request leaked into a body:\n{text}"
+    );
+}
+
+/// Round-4 safety F5 — the remaining RFC 9112 §6.3 / §5.1 request-framing shapes each get the ruled
+/// status and the connection closes: duplicate DIFFERING `Content-Length` → 400; `Transfer-Encoding`
+/// beside `Content-Length` → 400; `Transfer-Encoding: chunked` alone → 501 (an unsupported transfer
+/// coding, §6.1); whitespace before a header's colon → 400; a declared body cut short by FIN → 400;
+/// a body over the 8 MiB cap → 413 (it used to be truncated and SERVED).
+#[test]
+fn malformed_request_framing_shapes_get_their_ruled_status_and_close() {
+    use phorj::serve::TcpTransport;
+    use std::io::{Read, Write};
+    use std::net::{Shutdown, TcpStream};
+    use std::time::Duration;
+
+    let prog = program();
+    let mut t = TcpTransport::bind("127.0.0.1:0").expect("bind ephemeral port");
+    t.set_timeout(Some(Duration::from_secs(5)));
+    let addr = t.local_addr().expect("addr");
+    std::thread::spawn(move || {
+        let _ = serve(&ifac(&prog), &mut t, false);
+    });
+    let cases: &[(&str, &[u8], &str)] = &[
+        ("duplicate differing Content-Length", b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\nContent-Length: 44\r\n\r\nAAAAA", "HTTP/1.1 400 "),
+        ("Transfer-Encoding beside Content-Length", b"POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\nContent-Length: 5\r\n\r\n0\r\n\r\n", "HTTP/1.1 400 "),
+        ("chunked alone", b"POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n", "HTTP/1.1 501 "),
+        ("whitespace before the colon", b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length : 5\r\n\r\nAAAAA", "HTTP/1.1 400 "),
+        ("body over the cap", b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 9000000\r\n\r\n", "HTTP/1.1 413 "),
+    ];
+    for (label, req, status) in cases {
+        let mut s = TcpStream::connect(addr).expect("connect");
+        s.set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("client timeout");
+        s.write_all(req).expect("write");
+        let mut resp = Vec::new();
+        s.read_to_end(&mut resp)
+            .expect("read until the server closes");
+        let text = String::from_utf8_lossy(&resp);
+        assert!(
+            text.starts_with(status),
+            "{label}: expected `{status}`, got:\n{text}"
+        );
+        assert!(text.contains("Connection: close"), "{label}: {text}");
+    }
+    // A declared body cut short by FIN: the request must not be processed (§6.3 ¶6) — 400.
+    let mut s = TcpStream::connect(addr).expect("connect");
+    s.set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("client timeout");
+    s.write_all(b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\nAAAAA")
+        .expect("write");
+    s.shutdown(Shutdown::Write).expect("FIN");
+    let mut resp = Vec::new();
+    s.read_to_end(&mut resp)
+        .expect("read until the server closes");
+    let text = String::from_utf8_lossy(&resp);
+    assert!(text.starts_with("HTTP/1.1 400 "), "incomplete body: {text}");
+}

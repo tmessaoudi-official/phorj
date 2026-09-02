@@ -8,6 +8,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Request framing: a pipelined second request is answered, and the remaining RFC 9112 framing
+  shapes get their ruled status (panel round 4, safety F4 P1 / F5 / F7).** `read_http_request`
+  returned the whole buffer it had read, never truncated to the declared body, so a second request
+  arriving in the same segment became the first request's BODY and was never answered (§9.3.2). The
+  framing now returns exactly the declared body and CARRIES the bytes past it to the next read at all
+  three sites (the single-threaded transport's kept-alive and fresh paths, the pool worker's loop —
+  each turn sees exactly one request, so the keep-alive checks stay per-request). A header VERDICT
+  (`framing_verdict`) replaces the Content-Length-only check: duplicate DIFFERING `Content-Length` →
+  400; `Transfer-Encoding` beside `Content-Length` → 400; `Transfer-Encoding` alone → **501** (no
+  transfer coding is implemented — §6.1, chosen over 400 deliberately); whitespace before a header's
+  colon → 400 (§5.1); a declared body cut short by FIN → 400 (§6.3 ¶6, it used to be served); a body
+  over the 8 MiB cap → **413** (it used to be truncated and served); a non-representable
+  `Content-Length` stays 400 like `abc`. Every reject is `Connection: close` and the send error is
+  logged like the sibling path. obs-fold continuations are still accepted (MAY). Red-first: a
+  two-requests-in-one-write raw-socket test and one per shape; framing unit tests for the carry-over
+  and every verdict; sabotages: the carry dropped (two tests red), the 501 verdict collapsed to 400.
 - **Regex: syntax the native engines and PCRE read differently is rejected on BOTH constructors, a
   directly constructed `Regex` value is validated at first use, and the PCRE backtrack limit on a
   regular pattern is a loud, named PHP-leg fault (panel round 4, correctness R1–R7 / safety F1–F3).**

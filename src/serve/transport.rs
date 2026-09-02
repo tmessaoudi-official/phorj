@@ -4,8 +4,7 @@ use super::*;
 // Wire framing lives in the sibling `framing` module (Invariant 13 carve-out, S3.5): same functions,
 // same behaviour, moved so this file could take TLS without growing past its ratchet.
 use super::framing::{
-    content_length_is_malformed, read_http_request, request_wants_keepalive, response_keeps_alive,
-    BAD_CONTENT_LENGTH_RESPONSE, MAX_REQUESTS_PER_CONN,
+    read_http_request, request_wants_keepalive, response_keeps_alive, Framed, MAX_REQUESTS_PER_CONN,
 };
 
 /// Production transport: a single-threaded `TcpListener`, one request per accepted connection
@@ -14,6 +13,9 @@ use super::framing::{
 pub struct TcpTransport {
     listener: TcpListener,
     current: Option<super::tls::Conn>,
+    /// Bytes read past the previous request on the kept-alive socket (a pipelined next request —
+    /// round-4 safety F4); consumed by the next `recv`, cleared when the connection drops.
+    carry: Vec<u8>,
     /// S3.5: the TLS server configuration, when the program's `ServeConfig` asked for HTTPS. `None`
     /// = plain HTTP. Set once before the loop starts, exactly like the timeout and shutdown flag.
     tls: Option<super::tls::TlsServer>,
@@ -38,6 +40,7 @@ impl TcpTransport {
             listener: TcpListener::bind(addr)?,
             tls: None,
             current: None,
+            carry: Vec::new(),
             timeout: None,
             req_wants_keepalive: false,
             served_on_current: 0,
@@ -73,22 +76,26 @@ impl Transport for TcpTransport {
         // one — so an idle keep-alive client can never wedge the single-threaded server (it is reaped by
         // the read timeout, which is why keep-alive is only kept when a timeout is configured).
         if let Some(mut stream) = self.current.take() {
-            match read_http_request(&mut stream) {
-                // RFC 9112 §6.3 (panel C10/F4): a malformed Content-Length is answered 400 and the
-                // connection is CLOSED — its request boundary is unknowable, so it cannot be reused.
-                Ok(raw) if content_length_is_malformed(&raw) => {
-                    let _ = stream
-                        .write_all(BAD_CONTENT_LENGTH_RESPONSE)
-                        .and_then(|()| stream.flush());
+            match read_http_request(&mut stream, &mut self.carry) {
+                // RFC 9112 §6.3 / §5.1 (panel C10/F4, round-4 F5): a request whose framing cannot be
+                // honoured gets the fixed reject and the connection is CLOSED — its boundary is
+                // unknowable, so it cannot be reused.
+                Ok(Framed::Reject(resp)) => {
+                    if let Err(e) = stream.write_all(resp).and_then(|()| stream.flush()) {
+                        eprintln!(
+                            "serve: could not send the framing reject (connection dropped): {e}"
+                        );
+                    }
+                    self.carry.clear();
                 }
-                Ok(raw) if !raw.is_empty() => {
+                Ok(Framed::Request(raw)) if !raw.is_empty() => {
                     self.req_wants_keepalive = request_wants_keepalive(&raw);
                     self.current = Some(stream);
                     return Ok(Some(raw));
                 }
                 // Empty (client closed) or a read error (idle timeout / reset) → this connection is
                 // done; fall through to accept a fresh one.
-                _ => {}
+                _ => self.carry.clear(),
             }
         }
         // S4.2: when a shutdown flag is present, poll-accept (non-blocking listener + sleep) so the loop
@@ -132,14 +139,18 @@ impl Transport for TcpTransport {
                     continue;
                 }
             };
-            match read_http_request(&mut stream) {
-                // RFC 9112 §6.3 (panel C10/F4): 400 + close, then accept the next connection.
-                Ok(raw) if content_length_is_malformed(&raw) => {
-                    let _ = stream
-                        .write_all(BAD_CONTENT_LENGTH_RESPONSE)
-                        .and_then(|()| stream.flush());
+            self.carry.clear();
+            match read_http_request(&mut stream, &mut self.carry) {
+                // RFC 9112 §6.3 / §5.1: the fixed reject + close, then accept the next connection.
+                Ok(Framed::Reject(resp)) => {
+                    if let Err(e) = stream.write_all(resp).and_then(|()| stream.flush()) {
+                        eprintln!(
+                            "serve: could not send the framing reject (connection dropped): {e}"
+                        );
+                    }
+                    self.carry.clear();
                 }
-                Ok(raw) => {
+                Ok(Framed::Request(raw)) => {
                     self.req_wants_keepalive = request_wants_keepalive(&raw);
                     self.served_on_current = 0;
                     self.current = Some(stream);
@@ -167,6 +178,8 @@ impl Transport for TcpTransport {
                 && response_keeps_alive(response);
             if keep {
                 self.current = Some(stream);
+            } else {
+                self.carry.clear(); // the socket is gone; so is anything pipelined on it
             }
         }
         Ok(())
@@ -403,19 +416,22 @@ fn worker_loop(
         let keepalive = timeout.is_some();
         let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut served = 0usize;
+            // Bytes past the previous request on this socket (pipelining) — each loop turn sees
+            // exactly ONE request, so the keep-alive and empty-buffer checks below stay per-request.
+            let mut carry: Vec<u8> = Vec::new();
             loop {
-                match read_http_request(&mut stream) {
+                match read_http_request(&mut stream, &mut carry) {
                     // Empty buffer = the client closed (EOF before any bytes) — only meaningful on a
                     // kept-alive socket; on a fresh one it flows to `parse_request` → 400 (served == 0).
-                    Ok(raw) if served > 0 && raw.is_empty() => break,
-                    // RFC 9112 §6.3 (panel C10/F4): 400 + close, never a handler call.
-                    Ok(raw) if content_length_is_malformed(&raw) => {
-                        let _ = stream
-                            .write_all(BAD_CONTENT_LENGTH_RESPONSE)
-                            .and_then(|()| stream.flush());
+                    Ok(Framed::Request(raw)) if served > 0 && raw.is_empty() => break,
+                    // RFC 9112 §6.3 / §5.1: the fixed reject + close, never a handler call.
+                    Ok(Framed::Reject(resp)) => {
+                        if let Err(e) = stream.write_all(resp).and_then(|()| stream.flush()) {
+                            eprintln!("serve: could not send the framing reject (connection dropped): {e}");
+                        }
                         break;
                     }
-                    Ok(raw) => {
+                    Ok(Framed::Request(raw)) => {
                         let response = respond_once(&mut handler, &raw, dev);
                         if let Err(e) = stream.write_all(&response).and_then(|()| stream.flush()) {
                             eprintln!("serve: send failed (connection dropped): {e}");

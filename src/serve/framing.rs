@@ -13,14 +13,40 @@ use std::io::{self, Read};
 /// Cap a single request at 8 MiB — keeps a hostile or runaway client from exhausting memory (EV-7).
 const MAX_REQUEST: usize = 8 * 1024 * 1024;
 
-/// Read one HTTP/1.1 request from `stream`: everything up to and including `\r\n\r\n`, then the
-/// `Content-Length` body (0 if absent). Capped at [`MAX_REQUEST`]. Framing only — no semantic
-/// validation; a partial/malformed buffer flows to the program's `parse_request`, which returns
-/// `null` and yields a 400. Generic over [`Read`] so the framing is unit-testable over a `Cursor`
-/// (P1-d) without binding a socket.
-pub(super) fn read_http_request<R: Read>(stream: &mut R) -> io::Result<Vec<u8>> {
+/// What the framing decided about one request off the stream.
+pub(super) enum Framed {
+    /// A complete request: the head plus exactly the declared body. Any bytes that arrived past it (a
+    /// pipelined next request, RFC 9112 §9.3.2) were CARRIED OVER for the next read — before round 4
+    /// (2026-09-02) they were handed to the handler as this request's body and never answered.
+    Request(Vec<u8>),
+    /// The request cannot be honoured (RFC 9112 §6.3 / §5.1): the fixed response to write, then close.
+    Reject(&'static [u8]),
+}
+
+/// `400` + close: a malformed or self-contradicting framing (§6.3 ¶3/¶5, §5.1 whitespace before the
+/// colon, a declared body cut short by FIN — §6.3 ¶6 "MUST NOT process").
+pub(super) const REJECT_400: &[u8] =
+    b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+/// `413` + close: a declared body over [`MAX_REQUEST`] — it used to be truncated to 8 MiB and SERVED.
+pub(super) const REJECT_413: &[u8] =
+    b"HTTP/1.1 413 Content Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+/// `501` + close: a `Transfer-Encoding` alone — chunked (or any) transfer coding is not implemented
+/// (§6.1: an unsupported transfer coding is `501`, a deliberate choice over `400`).
+pub(super) const REJECT_501: &[u8] =
+    b"HTTP/1.1 501 Not Implemented\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
+/// Read one HTTP/1.1 request from `stream`: everything up to and including `\r\n\r\n`, then exactly
+/// the `Content-Length` body. `carry` holds bytes read past the previous request on this connection
+/// (a pipelined next request) and receives any bytes past THIS one — so every request is answered
+/// (round-4 safety F4). Framing only — no semantic validation beyond the header VERDICT below; a
+/// partial/malformed buffer flows to the program's `parse_request`, which returns `null` and yields a
+/// 400. Generic over [`Read`] so the framing is unit-testable over a `Cursor` (P1-d).
+pub(super) fn read_http_request<R: Read>(
+    stream: &mut R,
+    carry: &mut Vec<u8>,
+) -> io::Result<Framed> {
     const SEP: &[u8] = b"\r\n\r\n";
-    let mut buf = Vec::new();
+    let mut buf = std::mem::take(carry);
     let mut chunk = [0u8; 4096];
     // Only re-scan newly-arrived bytes for the header terminator (with a `SEP.len()-1` overlap so a
     // terminator split across two reads is still found). Scanning the whole buffer every chunk is
@@ -33,26 +59,31 @@ pub(super) fn read_http_request<R: Read>(stream: &mut R) -> io::Result<Vec<u8>> 
         }
         scanned = buf.len();
         if buf.len() > MAX_REQUEST {
-            return Ok(buf);
+            return Ok(Framed::Request(buf)); // 8 MiB with no terminator → parse → 400 (unchanged)
         }
         let n = stream.read(&mut chunk)?;
         if n == 0 {
-            return Ok(buf); // EOF before full headers → partial (parse → 400)
+            return Ok(Framed::Request(buf)); // EOF before full headers → partial (parse → 400)
         }
         buf.extend_from_slice(&chunk[..n]);
     };
-    // A malformed Content-Length reads NO body: its length is unknowable, and the transport answers
-    // `400` + close for it (`content_length_is_malformed`, RFC 9112 §6.3) before any handler runs.
-    let body_len = parse_content_length(&buf[..head_end]).unwrap_or(0);
-    let want = head_end.saturating_add(body_len).min(MAX_REQUEST);
+    let body_len = match framing_verdict(&buf[..head_end]) {
+        Ok(n) => n,
+        Err(resp) => return Ok(Framed::Reject(resp)),
+    };
+    let want = head_end + body_len;
     while buf.len() < want {
         let n = stream.read(&mut chunk)?;
         if n == 0 {
-            break;
+            // A declared body cut short: §6.3 ¶6 — MUST NOT process it as complete.
+            return Ok(Framed::Reject(REJECT_400));
         }
         buf.extend_from_slice(&chunk[..n]);
     }
-    Ok(buf)
+    if buf.len() > want {
+        *carry = buf.split_off(want);
+    }
+    Ok(Framed::Request(buf))
 }
 
 /// Max requests served on one kept-alive connection before it is closed (EV-7 — bounds a client that
@@ -110,37 +141,56 @@ fn token_list_has(value: &str, token: &str) -> bool {
         .any(|t| t.trim().eq_ignore_ascii_case(token))
 }
 
-/// Parse the `Content-Length` header from a request head: `Ok(0)` when absent, `Ok(n)` for a valid
-/// value (`1*DIGIT`, RFC 9112 §6.3 — no sign, no whitespace inside, fits `usize`), `Err(())` when
-/// present but malformed. A malformed value used to parse as 0 and the request was SERVED body-less
-/// with `200` (panel C10/F4: `abc`, `-1`, a 24-digit value); the RFC says 400 and close.
-fn parse_content_length(head: &[u8]) -> Result<usize, ()> {
+/// The request head's framing VERDICT (RFC 9112): `Ok(body_len)` — `0` when there is no body — or the
+/// fixed reject response. Checked BEFORE any handler runs, at every framing site:
+/// * a header name followed by whitespace before its colon (`Content-Length : 5`) — §5.1 MUST 400;
+/// * `Transfer-Encoding` beside `Content-Length` — §6.3 ¶3, 400 (request smuggling shape);
+/// * `Transfer-Encoding` alone — no transfer coding is implemented: §6.1, 501;
+/// * several `Content-Length` fields that differ — §6.3 ¶5 MUST 400 (identical copies are one value);
+/// * a `Content-Length` that is not `1*DIGIT` (`abc`, `-1`, `+5`, a 24-digit value) — §6.3, 400;
+/// * a declared body over [`MAX_REQUEST`] — 413 (it used to be truncated to 8 MiB and served).
+pub(super) fn framing_verdict(head: &[u8]) -> Result<usize, &'static [u8]> {
     let text = String::from_utf8_lossy(head);
-    for line in text.split("\r\n") {
-        if let Some((name, value)) = line.split_once(':') {
-            if name.trim().eq_ignore_ascii_case("content-length") {
-                let v = value.trim();
-                if v.is_empty() || !v.bytes().all(|b| b.is_ascii_digit()) {
-                    return Err(());
-                }
-                return v.parse().map_err(|_| ());
-            }
+    let mut lengths: Vec<&str> = Vec::new();
+    let mut transfer_encoding = false;
+    for line in text.split("\r\n").skip(1) {
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if name.len() != name.trim_end().len() {
+            return Err(REJECT_400);
+        }
+        let name = name.trim();
+        if name.eq_ignore_ascii_case("content-length") {
+            lengths.push(value.trim());
+        } else if name.eq_ignore_ascii_case("transfer-encoding") {
+            transfer_encoding = true;
         }
     }
-    Ok(0)
+    if transfer_encoding {
+        return Err(if lengths.is_empty() {
+            REJECT_501
+        } else {
+            REJECT_400
+        });
+    }
+    let Some(first) = lengths.first() else {
+        return Ok(0);
+    };
+    if lengths.iter().any(|l| l != first) {
+        return Err(REJECT_400);
+    }
+    if first.is_empty() || !first.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(REJECT_400);
+    }
+    // Not representable at all (a 24-digit value) is malformed — 400, like `abc`; only a value that
+    // parses and exceeds the cap is 413.
+    let n: usize = first.parse().map_err(|_| REJECT_400)?;
+    if n > MAX_REQUEST {
+        return Err(REJECT_413);
+    }
+    Ok(n)
 }
-
-/// Whether a framed request carries a malformed `Content-Length` (see [`parse_content_length`]). The
-/// transport answers [`BAD_CONTENT_LENGTH_RESPONSE`] and closes the connection instead of serving it.
-pub(super) fn content_length_is_malformed(raw: &[u8]) -> bool {
-    let head_end = find_subslice(raw, b"\r\n\r\n").map_or(raw.len(), |i| i + 4);
-    parse_content_length(&raw[..head_end]).is_err()
-}
-
-/// The fixed reply to a malformed `Content-Length`: `400`, no body, and `Connection: close` — the
-/// request boundary is unknowable, so the connection cannot be reused (RFC 9112 §6.3).
-pub(super) const BAD_CONTENT_LENGTH_RESPONSE: &[u8] =
-    b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
 /// First index of `needle` in `hay`, or `None`. An empty needle matches at 0 (defensive; the only
 /// caller passes the non-empty `\r\n\r\n`).
@@ -168,16 +218,13 @@ mod tests {
 
     #[test]
     fn content_length_absent_is_zero() {
-        assert_eq!(
-            parse_content_length(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"),
-            Ok(0)
-        );
+        assert_eq!(framing_verdict(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"), Ok(0));
     }
 
     #[test]
     fn content_length_present_is_parsed() {
         assert_eq!(
-            parse_content_length(b"POST / HTTP/1.1\r\nContent-Length: 42\r\n\r\n"),
+            framing_verdict(b"POST / HTTP/1.1\r\nContent-Length: 42\r\n\r\n"),
             Ok(42)
         );
     }
@@ -185,8 +232,81 @@ mod tests {
     #[test]
     fn content_length_is_case_insensitive_and_trims() {
         assert_eq!(
-            parse_content_length(b"POST / HTTP/1.1\r\ncOnTeNt-LeNgTh:   7  \r\n\r\n"),
+            framing_verdict(b"POST / HTTP/1.1\r\ncOnTeNt-LeNgTh:   7  \r\n\r\n"),
             Ok(7)
+        );
+    }
+
+    /// Exactly the declared body, or the fixed reject; the carry-over is asserted by the callers below.
+    fn request_bytes<R: Read>(r: &mut R) -> Vec<u8> {
+        let mut carry = Vec::new();
+        match read_http_request(r, &mut carry).unwrap() {
+            Framed::Request(b) => b,
+            Framed::Reject(resp) => panic!("unexpected reject: {}", String::from_utf8_lossy(resp)),
+        }
+    }
+
+    #[test]
+    fn a_pipelined_request_is_carried_over_not_swallowed() {
+        let two =
+            b"POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\nAAAAAGET /b HTTP/1.1\r\n\r\n".to_vec();
+        let mut carry = Vec::new();
+        let first = match read_http_request(&mut Cursor::new(two), &mut carry).unwrap() {
+            Framed::Request(b) => b,
+            Framed::Reject(_) => panic!("first must frame"),
+        };
+        assert_eq!(
+            first,
+            b"POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\nAAAAA".to_vec()
+        );
+        assert_eq!(
+            carry,
+            b"GET /b HTTP/1.1\r\n\r\n".to_vec(),
+            "the second request is carried over"
+        );
+        // The carry is consumed by the next read on the same connection, even with nothing new arriving.
+        let second = request_bytes(
+            &mut Cursor::new(Vec::new()).chain(Cursor::new(std::mem::take(&mut carry))),
+        );
+        assert!(
+            second.starts_with(b"GET /b"),
+            "{}",
+            String::from_utf8_lossy(&second)
+        );
+    }
+
+    #[test]
+    fn framing_verdicts_follow_rfc_9112() {
+        let head = |h: &str| format!("POST / HTTP/1.1\r\n{h}\r\n\r\n");
+        assert_eq!(framing_verdict(head("Content-Length: 7").as_bytes()), Ok(7));
+        assert_eq!(framing_verdict(head("Host: x").as_bytes()), Ok(0));
+        assert_eq!(
+            framing_verdict(head("Content-Length: 5\r\nContent-Length: 5").as_bytes()),
+            Ok(5)
+        );
+        assert_eq!(
+            framing_verdict(head("Content-Length: 5\r\nContent-Length: 44").as_bytes()),
+            Err(REJECT_400)
+        );
+        assert_eq!(
+            framing_verdict(head("Transfer-Encoding: chunked\r\nContent-Length: 5").as_bytes()),
+            Err(REJECT_400)
+        );
+        assert_eq!(
+            framing_verdict(head("Transfer-Encoding: chunked").as_bytes()),
+            Err(REJECT_501)
+        );
+        assert_eq!(
+            framing_verdict(head("Content-Length : 5").as_bytes()),
+            Err(REJECT_400)
+        );
+        assert_eq!(
+            framing_verdict(head("Content-Length: 9000000").as_bytes()),
+            Err(REJECT_413)
+        );
+        assert_eq!(
+            framing_verdict(head("Content-Length: 123456789012345678901234").as_bytes()),
+            Err(REJECT_400)
         );
     }
 
@@ -207,18 +327,11 @@ mod tests {
         ] {
             let head = format!("POST / HTTP/1.1\r\nContent-Length: {bad}\r\n\r\n");
             assert!(
-                parse_content_length(head.as_bytes()).is_err(),
+                framing_verdict(head.as_bytes()).is_err(),
                 "`Content-Length: {bad}` must be rejected"
             );
-            assert!(content_length_is_malformed(head.as_bytes()), "{bad}");
         }
-        assert_eq!(
-            parse_content_length(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"),
-            Ok(0)
-        );
-        assert!(!content_length_is_malformed(
-            b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"
-        ));
+        assert_eq!(framing_verdict(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"), Ok(0));
     }
 
     // --- read_http_request (over a Cursor, no socket) ----------------------
@@ -226,14 +339,14 @@ mod tests {
     #[test]
     fn reads_headers_only_request() {
         let req = b"GET / HTTP/1.1\r\nHost: x\r\n\r\n".to_vec();
-        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
+        let got = request_bytes(&mut Cursor::new(req.clone()));
         assert_eq!(got, req);
     }
 
     #[test]
     fn reads_request_with_body() {
         let req = b"POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello".to_vec();
-        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
+        let got = request_bytes(&mut Cursor::new(req.clone()));
         assert_eq!(got, req, "head + the declared 5 body bytes");
     }
 
@@ -241,7 +354,7 @@ mod tests {
     fn eof_before_headers_returns_partial() {
         // No CRLFCRLF, then EOF → returns whatever was read (parse → 400 downstream), never hangs.
         let req = b"GET / HTTP/1.1 no terminator".to_vec();
-        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
+        let got = request_bytes(&mut Cursor::new(req.clone()));
         assert_eq!(got, req);
     }
 
@@ -270,7 +383,7 @@ mod tests {
             pos: 0,
             chunk: 1, // one byte per read → terminator and body span many reads
         };
-        let got = read_http_request(&mut r).unwrap();
+        let got = request_bytes(&mut r);
         assert_eq!(got, req);
     }
 
@@ -288,7 +401,7 @@ mod tests {
     #[test]
     fn max_request_cap_terminates() {
         // No `\r\n\r\n` ever arrives; the read must stop near the cap rather than loop forever.
-        let got = read_http_request(&mut InfiniteReader).unwrap();
+        let got = request_bytes(&mut InfiniteReader);
         assert!(got.len() > MAX_REQUEST, "stopped at the cap");
         assert!(
             got.len() <= MAX_REQUEST + 4096,
