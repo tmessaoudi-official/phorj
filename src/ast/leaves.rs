@@ -153,6 +153,18 @@ mod tests {
             "src/checker/desugar_router_walk.rs",
             "src/checker/desugar_di/walk.rs",
             "src/ast/walk.rs",
+            // CD-31 — the ITEM-level walks. DEC-356 covered `Expr`/`Stmt`/`Pattern` and listed the
+            // six extracted `*_walk.rs` expression walkers, so the same defect survived one level up
+            // in their PARENT files and shipped four crashes and a spine break. These are the files
+            // whose `other => other` item arms were replaced with explicit sets.
+            "src/checker/resolve_variant_imports.rs",
+            "src/checker/desugar_router.rs",
+            "src/checker/rewrite_ufcs.rs",
+            "src/checker/overloads.rs",
+            "src/checker/rewrite_generics.rs",
+            "src/checker/rewrite_invoke_tostring.rs",
+            "src/checker/desugar_di/walker.rs",
+            "src/checker/desugar_di/mod.rs",
         ];
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut offenders = Vec::new();

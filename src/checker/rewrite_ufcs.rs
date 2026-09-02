@@ -26,6 +26,38 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
     // frame: `rexpr` recurses once per expression-tree level, so bloating its frame overflows the
     // stack on a deeply-nested program (a regression the differential's example sweep catches).
 
+    /// Apply recorded UFCS rewrites across a member list — shared by the class and trait arms,
+    /// which carry the identical `Vec<ClassMember>` (CD-31). A field initializer is included: the
+    /// checker checks field-init expressions, so a recorded UFCS site there must be applied or the
+    /// backend sees the raw member call.
+    fn umembers(members: &mut [ClassMember], ufcs: &Map) {
+        for m in members {
+            match m {
+                ClassMember::Method(f) => {
+                    let body = std::mem::take(&mut f.body);
+                    f.body = rblock(body, ufcs);
+                }
+                ClassMember::Constructor { body, .. } => {
+                    let b = std::mem::take(body);
+                    *body = rblock(b, ufcs);
+                }
+                ClassMember::Hook { get, set, .. } => {
+                    if let Some(e) = get.take() {
+                        *get = Some(rexpr(e, ufcs));
+                    }
+                    if let Some((p, body)) = set.take() {
+                        *set = Some((p, rblock(body, ufcs)));
+                    }
+                }
+                ClassMember::Field { init, .. } => {
+                    if let Some(e) = init.take() {
+                        *init = Some(rexpr(e, ufcs));
+                    }
+                }
+            }
+        }
+    }
+
     let items = program
         .items
         .into_iter()
@@ -35,37 +67,28 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
                 Item::Function(f)
             }
             Item::Class(mut c) => {
-                for m in &mut c.members {
-                    match m {
-                        ClassMember::Method(f) => {
-                            let body = std::mem::take(&mut f.body);
-                            f.body = rblock(body, ufcs);
-                        }
-                        ClassMember::Constructor { body, .. } => {
-                            let b = std::mem::take(body);
-                            *body = rblock(b, ufcs);
-                        }
-                        ClassMember::Hook { get, set, .. } => {
-                            if let Some(e) = get.take() {
-                                *get = Some(rexpr(e, ufcs));
-                            }
-                            if let Some((p, body)) = set.take() {
-                                *set = Some((p, rblock(body, ufcs)));
-                            }
-                        }
-                        // A field initializer (Feature B) may contain UFCS — rewrite it (resolve_html
-                        // skips fields, but the checker checks field-init expressions, so a recorded
-                        // UFCS site here must be applied or the backend would see the raw member call).
-                        ClassMember::Field { init, .. } => {
-                            if let Some(e) = init.take() {
-                                *init = Some(rexpr(e, ufcs));
-                            }
-                        }
-                    }
-                }
+                umembers(&mut c.members, ufcs);
                 Item::Class(c)
             }
-            other => other,
+            // CD-31: a trait's members are the same `Vec<ClassMember>` a class carries, and they
+            // execute (they flatten into the using class). Missing this arm meant a UFCS receiver
+            // call inside a trait method was never rewritten: `phg check` clean, then the backend
+            // failed with `unknown field`. The identical body in a class worked.
+            Item::Trait(mut t) => {
+                umembers(&mut t.members, ufcs);
+                Item::Trait(t)
+            }
+            // A `test "…" { … }` body is checked and executed like a function body under `phg test`.
+            Item::Test { name, body, span } => Item::Test {
+                name,
+                body: rblock(body, ufcs),
+                span,
+            },
+            // `variants[].backing_value` is an `Expr` but is scalar-checked, so no UFCS can reach it;
+            // an interface's `methods` are signatures. Named, not folded into `item_leaves!()`, so
+            // neither is claimed to be expression-free (CD-31).
+            it @ (Item::Enum(..) | Item::Interface(..)) => it,
+            it @ (crate::item_leaves!()) => it,
         })
         .collect();
 

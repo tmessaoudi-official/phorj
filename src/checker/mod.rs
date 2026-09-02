@@ -25,6 +25,7 @@ mod function_imports;
 mod inline_parent_ctor;
 mod intrinsic_imports;
 mod overloads;
+mod overloads_rename;
 mod qualify_variants;
 mod resolve_variant_imports;
 mod rewrite_alias;
@@ -33,6 +34,7 @@ mod rewrite_foreach;
 mod rewrite_generics;
 mod rewrite_html;
 mod rewrite_invoke_tostring;
+mod rewrite_invoke_tostring_walk;
 mod rewrite_new;
 mod rewrite_pipe;
 mod rewrite_ufcs;
@@ -44,7 +46,7 @@ pub use enforce_injected::enforce_injected_discipline;
 pub use erase_tuples::erase_tuples;
 pub use inline_parent_ctor::inline_parent_ctors;
 pub use intrinsic_imports::resolve_intrinsic_imports;
-pub use overloads::rename_overload_defs;
+pub use overloads_rename::rename_overload_defs;
 pub use qualify_variants::qualify_variants;
 pub use resolve_variant_imports::resolve_variant_imports;
 pub use rewrite_alias::expand_aliases;
@@ -653,11 +655,10 @@ pub struct Checker {
     /// Span-keyed **definition renames** for return-overload members (M-RT Slice C1): a
     /// `FunctionDecl`'s `span.start` → its mangled name (`f__ret_int`). Applied by
     /// [`crate::checker::rename_overload_defs`] before any backend, so the backends see distinct,
-    /// single-overload functions (no ambiguous identical-`ParamKind` dispatch table). Single-return
-    /// names are never renamed ⇒ existing programs byte-identical.
+    /// single-overload functions. Single-return names are never renamed ⇒ programs byte-identical.
     overload_def_renames: HashMap<usize, String>,
     /// Span-keyed `Call`-node substitutions for resolved overload selectors (M-RT Slice C1): an
-    /// [`crate::ast::Expr::OverloadSelect`]'s `span.start` → the mangled `Expr::Call` the checker chose.
+    /// `Expr::OverloadSelect`'s `span.start` → the mangled `Expr::Call` the checker chose.
     /// Merged into the combined call-rewrite map and applied by [`rewrite_ufcs`] (whose `rexpr` gains an
     /// `OverloadSelect` arm), so no backend sees the selector wrapper. No new `Op`/`Value`.
     overload_resolutions: HashMap<usize, crate::ast::Expr>,
@@ -666,8 +667,7 @@ pub struct Checker {
     /// keyed by `(class, method)`. A `(class, method)` is a *pure return-overload method set* when it
     /// has ≥2 overloads sharing one parameter signature with pairwise-distinct returns. A bare call to
     /// such a method needs a `<Type>` selector (C1, like free functions without a sink) or it is
-    /// `E-OVERLOAD-NO-CONTEXT`; the selector path mangles per return before any backend. Empty for the
-    /// common case (no return-overloaded method).
+    /// `E-OVERLOAD-NO-CONTEXT`; the selector path mangles per return before any backend.
     return_overload_methods: HashMap<(String, String), Vec<(Ty, String)>>,
     /// S2.1-broad: per-expression *reified operand type*, keyed by the expression's `span.start`, for
     /// `Call`/`Member`/`Index` nodes whose checker-resolved `Ty` is concrete. The VM compiler's `ctype`

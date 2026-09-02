@@ -39,6 +39,36 @@ pub fn desugar_auto_router(program: Program) -> Program {
     }
     let routes = collect_routes(&program);
 
+    /// Desugar `Http.autoRouter()` across a member list — shared by the class and trait arms, which
+    /// carry the identical `Vec<ClassMember>` (CD-31).
+    fn rmembers(members: &mut [ClassMember], routes: &[Route]) {
+        for m in members {
+            match m {
+                ClassMember::Method(f) => {
+                    let body = std::mem::take(&mut f.body);
+                    f.body = rblock(body, routes);
+                }
+                ClassMember::Constructor { body, .. } => {
+                    let b = std::mem::take(body);
+                    *body = rblock(b, routes);
+                }
+                ClassMember::Hook { get, set, .. } => {
+                    if let Some(e) = get.take() {
+                        *get = Some(rexpr(e, routes));
+                    }
+                    if let Some((p, body)) = set.take() {
+                        *set = Some((p, rblock(body, routes)));
+                    }
+                }
+                ClassMember::Field { init, .. } => {
+                    if let Some(e) = init.take() {
+                        *init = Some(rexpr(e, routes));
+                    }
+                }
+            }
+        }
+    }
+
     let items = program
         .items
         .into_iter()
@@ -48,34 +78,31 @@ pub fn desugar_auto_router(program: Program) -> Program {
                 Item::Function(f)
             }
             Item::Class(mut c) => {
-                for m in &mut c.members {
-                    match m {
-                        ClassMember::Method(f) => {
-                            let body = std::mem::take(&mut f.body);
-                            f.body = rblock(body, &routes);
-                        }
-                        ClassMember::Constructor { body, .. } => {
-                            let b = std::mem::take(body);
-                            *body = rblock(b, &routes);
-                        }
-                        ClassMember::Hook { get, set, .. } => {
-                            if let Some(e) = get.take() {
-                                *get = Some(rexpr(e, &routes));
-                            }
-                            if let Some((p, body)) = set.take() {
-                                *set = Some((p, rblock(body, &routes)));
-                            }
-                        }
-                        ClassMember::Field { init, .. } => {
-                            if let Some(e) = init.take() {
-                                *init = Some(rexpr(e, &routes));
-                            }
-                        }
-                    }
-                }
+                rmembers(&mut c.members, &routes);
                 Item::Class(c)
             }
-            other => other,
+            // CD-31: a trait's members execute (they flatten into the using class), so an
+            // `Http.autoRouter()` written in a trait method must be desugared like one in a class.
+            // NOTE the asymmetry this arm does NOT resolve: `collect_routes` still reads `#[Route]`
+            // from free functions and classes only, so a `#[Route]` static declared IN a trait is
+            // silently not registered even though it flattens into the using class. Whether it
+            // should register is a ruling, not a mechanical fix — recorded in CD-31, not decided here.
+            Item::Trait(mut t) => {
+                rmembers(&mut t.members, &routes);
+                Item::Trait(t)
+            }
+            // A `test "…" { … }` body is checked and executed like a function body under `phg test`
+            // (the panel's reported instance of this class).
+            Item::Test { name, body, span } => Item::Test {
+                name,
+                body: rblock(body, &routes),
+                span,
+            },
+            // An enum's `backing_value` is scalar-checked and an interface's `methods` are
+            // signatures, so no `Http.autoRouter()` call can reach either. Named rather than folded
+            // into `item_leaves!()` so neither is claimed expression-free (CD-31).
+            it @ (Item::Enum(..) | Item::Interface(..)) => it,
+            it @ (crate::item_leaves!()) => it,
         })
         .collect();
 
@@ -116,7 +143,17 @@ fn collect_routes(program: &Program) -> Vec<Route> {
                     }
                 }
             }
-            _ => {}
+            // CD-31: named rather than `_ => {}`, because one of these is an OPEN QUESTION rather
+            // than an obvious no-op. A `#[Route]` static declared in a TRAIT flattens into the using
+            // class, so arguably it should register — it does not today, and this arm preserves that
+            // rather than changing routing behaviour on my own judgement (Invariant 15: a
+            // user-visible behaviour change is the developer's call). Enums, interfaces, tests and
+            // the two leaves genuinely declare no routable handler.
+            Item::Trait(..)
+            | Item::Enum(..)
+            | Item::Interface(..)
+            | Item::Test { .. }
+            | crate::item_leaves!() => {}
         }
     }
     out

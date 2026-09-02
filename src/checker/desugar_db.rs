@@ -2471,7 +2471,18 @@ impl Connection<'_> {
                 }
                 Item::Trait(t)
             }
-            other => other,
+            // A `test "…" { … }` body is checked and executed like a function body under `phg test`,
+            // so a Db call site inside one needs the same desugar (CD-31).
+            Item::Test { name, body, span } => Item::Test {
+                name,
+                body: self.rblock(body),
+                span,
+            },
+            // An enum's `backing_value` is scalar-checked and an interface's `methods` are
+            // signatures; named rather than folded into `item_leaves!()` so neither is claimed
+            // expression-free (CD-31).
+            it @ (Item::Enum(..) | Item::Interface(..)) => it,
+            it @ (crate::item_leaves!()) => it,
         }
     }
 

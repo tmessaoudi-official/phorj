@@ -8516,3 +8516,38 @@ drive-by widening.
 arm was a *named* set — `it @ (Item::Enum(..) | Item::Interface(..) | Item::Trait(..) | …)` — so it
 passed the ratchet while being false. A named leaf set is exactly as silent as a catch-all when the
 naming is wrong; the ratchet cannot tell them apart, and only a test that runs the shape can.
+
+### CD-31 addendum (2026-09-02) — the sweep found FIVE live defects, not the one reported
+
+Converting the remaining eight item-level walks turned each `other => other` into a probe. Every one
+that omitted `Item::Trait` was a live defect, because trait bodies execute. Verified end-to-end
+against the shipped release binary, each with a class control proving the asymmetry:
+
+| # | shape | before |
+|---|---|---|
+| 1 | `html"…"` in a trait method | check clean → both backends `unreachable!`, exit 101 |
+| 2 | `html"…"` in a **field initializer** | check clean → both backends `unreachable!`, exit 101 |
+| 3 | UFCS call in a trait method | check clean → backend `unknown field \`toFloat\`` |
+| 4 | `inject<T>()` in a trait method | check clean → `unreachable!("inject() not expanded")`, exit 101 |
+| 5 | generic method in a trait | **INVARIANT 1 BROKEN** — native legs print `7`, transpiler emits `function echoBack(U $x): U`, PHP dies `TypeError: must be of type U`, exit 255 |
+
+#2 deserves its own note: `rewrite_html` had `ClassMember::Field { .. } => {}` while `rewrite_ufcs`
+walked that position and its comment *named* the asymmetry — *"resolve_html skips fields"* — as
+background rather than as the bug it was. A defect can be documented and still be a defect.
+
+#5 is the one that matters most for the spine: it is not a crash, so nothing announced it. Both
+native legs were right and only the PHP leg was wrong, which is the failure shape Invariant 1's
+byte-identity gate exists to catch and which no crash-shaped test would ever surface.
+
+**Two behaviours preserved deliberately, both now named arms rather than catch-alls:**
+* `collect_routes` reads `#[Route]` from free functions and classes only. A `#[Route]` static in a
+  trait flattens into the using class, so it arguably should register; it does not, and changing
+  routing behaviour is the developer's call (Invariant 15), not a sweep's.
+* `resolve_variant_imports` does not collect `TypeAlias` names into its collision set, so
+  `type Some = …` does not block `import Core.Option.Some;`. Collecting it would change which
+  diagnostic a program gets. Both are OPEN, and both are open *visibly* now.
+
+**The gate is extended, not just the code.** `no_fixed_rewriter_regrows_a_catch_all` now covers the
+eight item-level parent files alongside the six `*_walk.rs` expression walkers. It caught two further
+`_ => {}` collection loops the moment it was widened — including the `#[Route]`-in-a-trait question
+above, which is precisely the kind of thing that should surface as a question rather than sit silent.

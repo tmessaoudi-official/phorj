@@ -95,6 +95,44 @@ not only the register):
   adjacent to §span-collision. It is also the structural cure for the P0 above, whose current fix is a
   containment arm.
 
+### ⊳ CURSOR UPDATE 2026-09-02 (later) — the panel's `Item::Test` finding was the tip of CD-31
+
+Working the panel's *"`resolve_variant_imports`/`desugar_router` skip `Item::Test`"* finding widened
+into a class. DEC-356 made `Expr`/`Stmt`/`Pattern` walks exhaustive and its ratchet lists the six
+extracted `*_walk.rs` files — so the identical defect survived one level up, in the ITEM walks of
+their parent files. **Five live defects, all verified end-to-end against the release binary with a
+class control proving the asymmetry** (`CD-31` + addendum carry the table):
+
+| shape | before |
+|---|---|
+| `html"…"` in a trait method | check clean → both backends `unreachable!`, exit 101 |
+| `html"…"` in a **field initializer** | check clean → both backends `unreachable!`, exit 101 |
+| UFCS in a trait method | check clean → backend `unknown field` |
+| `inject<T>()` in a trait method | check clean → `unreachable!("inject() not expanded")`, exit 101 |
+| generic method in a trait | **INVARIANT 1 BROKEN** — natives print `7`, PHP dies `TypeError: must be of type U`, exit 255 |
+
+**The root cause in one line:** a trait's members are a full `Vec<ClassMember>` whose bodies EXECUTE
+(they flatten into the using class), and every item walk that omitted `Item::Trait` was skipping
+executable code while reading as though it were skipping a declaration.
+
+`item_leaves!()` now joins the three macros in `src/ast/leaves.rs` — **`Import` and `TypeAlias` only**,
+because `Interface` and `Enum` both carry `Expr` (`Param.default`, `Attribute.args`,
+`variants[].backing_value`). Nine item walks carry explicit arms, and the DEC-356 ratchet was widened
+to cover the eight parent files — it immediately caught two more `_ => {}` collection loops.
+
+**Two behaviours left UNCHANGED on purpose, now visible as named arms** (Invariant 15 — a
+user-visible change is the developer's call): a `#[Route]` static declared in a trait still does not
+register, and `resolve_variant_imports` still does not collect `TypeAlias` names into its collision
+set. Both are open questions, recorded in CD-31.
+
+**What this did NOT close** (stated so it is never read as covered): no item-level pass walks param
+defaults or attribute arguments — not for `Function` or `Class` either — so a rewrite needed inside
+`function f(int n = <expr>)` or `#[Attr(<expr>)]` is missed uniformly. That is DEC-356 FOLLOW-UP B's
+territory (one shared total visitor), not a drive-by widening.
+
+**Still owed from the panel, NOT started:** the LSP non-test path, the playground's ungated PHP-emit
+path, and the differential's missing floor assertion.
+
 **Next: DEC-331 is done — the queue is open.** Two items are carried OWED and are the natural
 candidates: the **G-8 microbench ratchet** (skipped since S3.4; needs a quiet box) and
 **KNOWN_ISSUES §TEST-RAW-CHECKER** (`phg test` checks the raw program, so injected-prelude symbols

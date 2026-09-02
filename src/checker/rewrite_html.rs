@@ -411,7 +411,14 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                         *set = Some((p, rblock(body, h)));
                     }
                 }
-                ClassMember::Field { .. } => {}
+                // CD-31: a field initializer is executable code — `Html banner = html"…";` reached
+                // the backends unresolved and panicked them. `rewrite_ufcs` always walked this
+                // position and its comment even named the asymmetry; this arm closes it.
+                ClassMember::Field { init, .. } => {
+                    if let Some(e) = init.take() {
+                        *init = Some(rexpr(e, h));
+                    }
+                }
             }
         }
     }

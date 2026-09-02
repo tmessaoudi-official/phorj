@@ -355,7 +355,21 @@ fn fold_injected_fields(
                 c.members = kept;
                 Item::Class(c)
             }
-            other => other,
+            // Guarded arm above: only a class in `injectable` is rewritten. Everything else is
+            // returned as-is — including a NON-injectable class, which is why `Item::Class(..)` is
+            // named here too. This pass rewrites constructor injection into class DECLARATIONS; a
+            // trait cannot carry an `#[Injectable]` marker and a test body declares no class, so
+            // there is genuinely nothing to do for them. Named rather than swept into a catch-all so
+            // a new item form that CAN declare an injectable has to be ruled on here (CD-31); the
+            // `inject<T>()` call sites inside those bodies are the walker's job, not this one's, and
+            // that walk is where the missing trait arm actually crashed the backends.
+            it @ (Item::Class(..)
+            | Item::Function(..)
+            | Item::Trait(..)
+            | Item::Enum(..)
+            | Item::Interface(..)
+            | Item::Test { .. }
+            | crate::item_leaves!()) => it,
         })
         .collect();
     Program {

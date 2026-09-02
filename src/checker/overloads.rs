@@ -13,7 +13,7 @@
 //! parameter signature; mixing parameter- and return-overloading is rejected (`E-OVERLOAD-RETURN`).
 
 use super::*;
-use crate::ast::{ClassMember, Expr, Item, Program, Type};
+use crate::ast::{Expr, Type};
 
 /// One method declaration grouped by `(class, method)` for return-overload classification:
 /// `(decl span, resolved params, resolved return)`. See [`Checker::finalize_method_overloads`].
@@ -542,52 +542,5 @@ impl Checker {
             },
         );
         chosen.0
-    }
-}
-
-/// Rename each return-overload member's *definition* to its mangled name (M-RT Slice C1), keyed by the
-/// `FunctionDecl`'s span. The resolved call sites were already rewritten to the same mangled names by
-/// [`super::rewrite_ufcs`]; renaming the definitions makes the backends see distinct, single-overload
-/// functions (so no ambiguous identical-`ParamKind` dispatch table is ever built, and the transpiler
-/// emits each as a plain PHP function). A no-op when `renames` is empty — so a program with no
-/// return-overloading is byte-for-byte the pre-Slice-C AST. Free functions only; methods are not
-/// return-overloadable in C1, so class members are returned untouched.
-pub fn rename_overload_defs(program: Program, renames: &HashMap<usize, String>) -> Program {
-    if renames.is_empty() {
-        return program;
-    }
-    let items = program
-        .items
-        .into_iter()
-        .map(|item| match item {
-            Item::Function(mut f) => {
-                if let Some(mangled) = renames.get(&f.span.start) {
-                    f.name = mangled.clone();
-                }
-                Item::Function(f)
-            }
-            // M-RT S2.2: a class may hold return-overloaded *methods*; rename each method member whose
-            // declaration span is in the map to its mangled name (`m__ret_int`). The resolved selector
-            // call sites were rewritten to the same mangled names by `rewrite_ufcs`, so dispatch on the
-            // mangled `(class, name)` stays consistent across all backends. A no-op for a class with no
-            // return-overloaded method.
-            Item::Class(mut c) => {
-                for member in &mut c.members {
-                    if let ClassMember::Method(f) = member {
-                        if let Some(mangled) = renames.get(&f.span.start) {
-                            f.name = mangled.clone();
-                        }
-                    }
-                }
-                Item::Class(c)
-            }
-            // Every other item (enum, interface, trait, type alias, …) is returned untouched.
-            other => other,
-        })
-        .collect();
-    Program {
-        package: program.package,
-        items,
-        span: program.span,
     }
 }

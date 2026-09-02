@@ -199,7 +199,28 @@ impl Di<'_> {
                 }
                 Item::Class(c)
             }
-            other => other,
+            // CD-31: a trait's members are the same `Vec<ClassMember>` and they execute (they
+            // flatten into the using class). Without this arm an `inject<T>()` written in a trait
+            // method reached the backend unexpanded: `phg check` clean, then
+            // `unreachable!("inject() not expanded before compilation")`. The walker was total over
+            // `Expr` — which is what the standing warning covered — and not over `Item`.
+            Item::Trait(mut t) => {
+                for m in &mut t.members {
+                    self.rmember(m);
+                }
+                Item::Trait(t)
+            }
+            // A `test "…" { … }` body is checked and executed like a function body under `phg test`.
+            Item::Test { name, body, span } => Item::Test {
+                name,
+                body: self.rblock(body),
+                span,
+            },
+            // An enum's `backing_value` is scalar-checked and an interface's `methods` are
+            // signatures, so no `inject<T>()` can reach either. Named rather than folded into
+            // `item_leaves!()` so neither is claimed expression-free (CD-31).
+            it @ (Item::Enum(..) | Item::Interface(..)) => it,
+            it @ (crate::item_leaves!()) => it,
         }
     }
 

@@ -42,6 +42,101 @@ pub fn erase_generics(program: Program) -> Program {
         })
     }
 
+    /// Erase type parameters across a member list — shared by the class arm and the trait arm (CD-31).
+    /// `outer` is the declaring type's own parameter set (a class's `<T>`); a trait declares none, so it
+    /// passes an empty set and only each method's own `<U>` is erased.
+    ///
+    /// Extracted rather than copied: a trait's members are the identical `Vec<ClassMember>`, and the
+    /// missing trait arm was an Invariant-1 spine break — the transpiler emitted the un-erased parameter
+    /// as a PHP type (`function echoBack(U $x): U`) and the PHP leg died where both native legs ran.
+    fn erase_members(members: Vec<ClassMember>, outer: &[&str]) -> Vec<ClassMember> {
+        members
+            .into_iter()
+            .map(|m| match m {
+                ClassMember::Method(f) => {
+                    // erase the class's params *and* this method's own
+                    let mut set: Params = outer.iter().copied().collect();
+                    for tp in &f.type_params {
+                        set.insert(tp.as_str());
+                    }
+                    ClassMember::Method(FunctionDecl {
+                        modifiers: f.modifiers.clone(),
+                        attrs: f.attrs.clone(),
+                        vis: f.vis,
+                        name: f.name.clone(),
+                        type_params: Vec::new(), // erased
+                        type_param_bounds: Vec::new(),
+                        params: f.params.iter().map(|p| rparam(p, &set)).collect(),
+                        ret: f.ret.as_ref().map(|t| rty(t, &set)),
+                        throws: f.throws.iter().map(|t| rty(t, &set)).collect(),
+                        body: f.body.iter().map(|s| rstmt(s, &set)).collect(),
+                        foreign: f.foreign,
+                        // S2.1 (methods): recover, before erasing the method's `<T>`, which
+                        // argument the result echoes — so the VM compiler can specialize
+                        // `u.pick(7, 8) + 1` exactly as the interpreter evaluates it. Computed
+                        // from the pre-erasure signature (`generic_ret_echo_param` keys on the
+                        // method's own `type_params`, so it never fires for a class-`T` return).
+                        generic_ret_from_param: generic_ret_echo_param(&f),
+                        span: f.span,
+                    })
+                }
+                ClassMember::Field {
+                    modifiers,
+                    ty,
+                    name,
+                    init,
+                    span,
+                } => {
+                    let set: Params = outer.iter().copied().collect();
+                    ClassMember::Field {
+                        modifiers,
+                        ty: rty(&ty, &set),
+                        name,
+                        init: init.as_ref().map(|e| rexpr(e, &set)),
+                        span,
+                    }
+                }
+                ClassMember::Constructor {
+                    modifiers,
+                    params,
+                    throws,
+                    body,
+                    span,
+                } => {
+                    let set: Params = outer.iter().copied().collect();
+                    ClassMember::Constructor {
+                        modifiers,
+                        params: params.iter().map(|p| rctorparam(p, &set)).collect(),
+                        // Erase the class type params from the ctor's `throws` types, like the fn path.
+                        throws: throws.iter().map(|t| rty(t, &set)).collect(),
+                        body: body.iter().map(|s| rstmt(s, &set)).collect(),
+                        span,
+                    }
+                }
+                // A property hook (M-mut.7b): erase the class params from its type, get
+                // expression, and set parameter+block (a hook declares no `<T>` of its own).
+                ClassMember::Hook {
+                    ty,
+                    name,
+                    get,
+                    set: setter,
+                    span,
+                } => {
+                    let set: Params = outer.iter().copied().collect();
+                    ClassMember::Hook {
+                        ty: rty(&ty, &set),
+                        name,
+                        get: get.as_ref().map(|e| rexpr(e, &set)),
+                        set: setter.as_ref().map(|(p, b)| {
+                            (rparam(p, &set), b.iter().map(|s| rstmt(s, &set)).collect())
+                        }),
+                        span,
+                    }
+                }
+            })
+            .collect()
+    }
+
     let Program {
         package,
         items,
@@ -82,92 +177,7 @@ pub fn erase_generics(program: Program) -> Program {
                 if !c.type_params.is_empty() || c.members.iter().any(member_is_generic) =>
             {
                 let class_params: Vec<&str> = c.type_params.iter().map(String::as_str).collect();
-                let members = c
-                    .members
-                    .into_iter()
-                    .map(|m| match m {
-                        ClassMember::Method(f) => {
-                            // erase the class's params *and* this method's own
-                            let mut set: Params = class_params.iter().copied().collect();
-                            for tp in &f.type_params {
-                                set.insert(tp.as_str());
-                            }
-                            ClassMember::Method(FunctionDecl {
-                                modifiers: f.modifiers.clone(),
-                                attrs: f.attrs.clone(),
-                                vis: f.vis,
-                                name: f.name.clone(),
-                                type_params: Vec::new(), // erased
-                                type_param_bounds: Vec::new(),
-                                params: f.params.iter().map(|p| rparam(p, &set)).collect(),
-                                ret: f.ret.as_ref().map(|t| rty(t, &set)),
-                                throws: f.throws.iter().map(|t| rty(t, &set)).collect(),
-                                body: f.body.iter().map(|s| rstmt(s, &set)).collect(),
-                                foreign: f.foreign,
-                                // S2.1 (methods): recover, before erasing the method's `<T>`, which
-                                // argument the result echoes — so the VM compiler can specialize
-                                // `u.pick(7, 8) + 1` exactly as the interpreter evaluates it. Computed
-                                // from the pre-erasure signature (`generic_ret_echo_param` keys on the
-                                // method's own `type_params`, so it never fires for a class-`T` return).
-                                generic_ret_from_param: generic_ret_echo_param(&f),
-                                span: f.span,
-                            })
-                        }
-                        ClassMember::Field {
-                            modifiers,
-                            ty,
-                            name,
-                            init,
-                            span,
-                        } => {
-                            let set: Params = class_params.iter().copied().collect();
-                            ClassMember::Field {
-                                modifiers,
-                                ty: rty(&ty, &set),
-                                name,
-                                init: init.as_ref().map(|e| rexpr(e, &set)),
-                                span,
-                            }
-                        }
-                        ClassMember::Constructor {
-                            modifiers,
-                            params,
-                            throws,
-                            body,
-                            span,
-                        } => {
-                            let set: Params = class_params.iter().copied().collect();
-                            ClassMember::Constructor {
-                                modifiers,
-                                params: params.iter().map(|p| rctorparam(p, &set)).collect(),
-                                // Erase the class type params from the ctor's `throws` types, like the fn path.
-                                throws: throws.iter().map(|t| rty(t, &set)).collect(),
-                                body: body.iter().map(|s| rstmt(s, &set)).collect(),
-                                span,
-                            }
-                        }
-                        // A property hook (M-mut.7b): erase the class params from its type, get
-                        // expression, and set parameter+block (a hook declares no `<T>` of its own).
-                        ClassMember::Hook {
-                            ty,
-                            name,
-                            get,
-                            set: setter,
-                            span,
-                        } => {
-                            let set: Params = class_params.iter().copied().collect();
-                            ClassMember::Hook {
-                                ty: rty(&ty, &set),
-                                name,
-                                get: get.as_ref().map(|e| rexpr(e, &set)),
-                                set: setter.as_ref().map(|(p, b)| {
-                                    (rparam(p, &set), b.iter().map(|s| rstmt(s, &set)).collect())
-                                }),
-                                span,
-                            }
-                        }
-                    })
-                    .collect();
+                let members = erase_members(c.members, &class_params);
                 Item::Class(ClassDecl {
                     vis: c.vis,
                     attrs: c.attrs,
@@ -241,7 +251,31 @@ pub fn erase_generics(program: Program) -> Program {
                     span: i.span,
                 })
             }
-            other => other,
+            // CD-31 — this arm was MISSING and it was an Invariant-1 spine break. A trait declares
+            // no type parameters of its own, but its METHODS may (`function echoBack<U>(U x) -> U`),
+            // and a trait's members flatten into the using class. Falling through left `U` un-erased:
+            // both native legs ran (they ignore the stray `Ty::Param`) while the transpiler emitted
+            // `function echoBack(U $x): U` and PHP died with `TypeError: must be of type U` — the
+            // three legs disagreeing, which is exactly what Invariant 1 forbids.
+            Item::Trait(t) if t.members.iter().any(member_is_generic) => {
+                Item::Trait(crate::ast::TraitDecl {
+                    name: t.name,
+                    members: erase_members(t.members, &[]),
+                    span: t.span,
+                })
+            }
+            // Everything with nothing to erase: a non-generic function/class/trait, an enum or
+            // interface without type parameters, a test body (which declares no items), and the two
+            // genuine leaves. Named rather than swept into `other => other` so that a new `Item`
+            // form — or a new position where a type parameter can be written — has to be ruled on
+            // here instead of silently reaching a backend un-erased (CD-31).
+            it @ (Item::Function(..)
+            | Item::Class(..)
+            | Item::Trait(..)
+            | Item::Enum(..)
+            | Item::Interface(..)
+            | Item::Test { .. }
+            | crate::item_leaves!()) => it,
         })
         .collect();
     Program {

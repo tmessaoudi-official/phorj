@@ -4106,6 +4106,98 @@ class App { use Greeter; }
 }
 
 #[test]
+fn dec356_an_html_literal_in_a_field_initializer_is_resolved_before_any_backend() {
+    // CD-31, same class as the trait case: `rewrite_html`'s member walk had
+    // `ClassMember::Field { .. } => {}`, so an `html"…"` used as a field initializer reached the
+    // backends unresolved — `phg check` clean, then `unreachable!("html literal not resolved before
+    // compilation")`, exit 101. `rewrite_ufcs` walks field inits and its comment even NAMES the
+    // asymmetry ("resolve_html skips fields") without treating it as the bug it was.
+    agree_out_php(
+        "import Core.Output;
+import Core.Html;
+class Card { Html banner = html\"<b>hi</b>\"; }
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(Html.render(new Card().banner)); }",
+        "<b>hi</b>\n",
+        "dec356_html_in_field_init",
+    );
+}
+
+#[test]
+fn dec356_a_ufcs_call_inside_a_trait_method_is_rewritten_before_any_backend() {
+    // CD-31: `rewrite_ufcs`'s item walk ended in `other => other`, so a UFCS receiver call inside a
+    // TRAIT method was never rewritten to the plain call. `phg check` reported clean (the checker
+    // records the UFCS resolution), then the backend failed with `unknown field `toFloat``. The
+    // identical body in a class works — that asymmetry is the whole defect.
+    agree_out_php(
+        "import Core.Output;
+import Core.Conversion;
+trait Doubler { function twice(int n) -> string { return Conversion.toString(n.toFloat()); } }
+class App { use Doubler; }
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(new App().twice(5)); }",
+        "5\n",
+        "dec356_ufcs_in_trait",
+    );
+}
+
+#[test]
+fn dec356_a_variant_import_inside_a_trait_method_resolves_like_one_in_a_class() {
+    // CD-31: `resolve_variant_imports`'s item walk ended in `other => other`, so `import
+    // Core.Option.Some;` then `new Some(n)` was rewritten to the qualified form inside a CLASS
+    // method and left bare inside a TRAIT method — raising a spurious `E-INJECTED-VARIANT-BARE` on
+    // code that is correct. A wrong diagnostic, not a crash, but the same missing arm.
+    agree_out_php(
+        "import Core.Output;
+import Core.Option;
+import Core.Option.Some;
+trait Maker { function make(int n) -> Option<int> { return new Some(n); } }
+class App { use Maker; }
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    match new App().make(3) { Option.Some(v) => Output.printLine(\"got {v}\"), Option.None() => Output.printLine(\"none\") };
+}",
+        "got 3\n",
+        "dec356_variant_import_in_trait",
+    );
+}
+
+#[test]
+fn dec356_an_inject_call_inside_a_trait_method_is_expanded_before_any_backend() {
+    // CD-31: `desugar_di`'s item walk ended in `other => other`, so `inject<T>()` inside a TRAIT
+    // method was never expanded — `phg check` clean, then
+    // `unreachable!("inject() not expanded before compilation")`, exit 101. The project memory
+    // already warned "the DI walker MUST STAY TOTAL, else backend unreachable!"; it was total over
+    // `Expr`, and not over `Item`.
+    agree_out_php(
+        "import Core.Output;
+import Core.DependencyInjection.Injectable;
+import Core.DependencyInjection.inject;
+#[Injectable] class Clock { function now() -> string { return \"T0\"; } }
+trait Timed { function stamp() -> string { Clock c = inject<Clock>(); return c.now(); } }
+class App { use Timed; }
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(new App().stamp()); }",
+        "T0\n",
+        "dec356_inject_in_trait",
+    );
+}
+
+#[test]
+fn dec356_a_generic_method_in_a_trait_erases_its_type_params_like_one_in_a_class() {
+    // CD-31 — an INVARIANT-1 SPINE BREAK, not just a missed rewrite. `rewrite_generics`'s item walk
+    // erased type parameters for `Function`, `Class`, `Enum` and `Interface` and fell through to
+    // `other => other` for `Trait`. Both native legs ran fine (they ignore the un-erased `Ty::Param`),
+    // but the transpiler emitted `function echoBack(U $x): U` — a PHP type named `U` — so the PHP
+    // leg died with `TypeError: Argument #1 ($x) must be of type U, int given`, exit 255, while
+    // interpreter and VM printed `7`. The class control correctly emits `mixed`.
+    agree_out_php(
+        "import Core.Output;
+trait Identity { function echoBack<U>(U x) -> U { return x; } }
+class App { use Identity; }
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{new App().echoBack<int>(7)}\"); }",
+        "7\n",
+        "dec356_generic_method_in_trait",
+    );
+}
+
+#[test]
 fn s8_trait_mutable_field_is_byte_identical() {
     // M-RT S8 T2: a trait carries `mutable` instance state; the using class sets it in its ctor and a
     // trait method mutates it. Field access is by name, so the flattened field works on both backends.

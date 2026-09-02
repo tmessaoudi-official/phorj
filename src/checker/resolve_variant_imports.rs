@@ -98,7 +98,12 @@ pub fn resolve_variant_imports(program: Program) -> Program {
             Item::Function(f) => {
                 local.insert(f.name.as_str());
             }
-            _ => {}
+            // CD-31: named rather than `_ => {}`. A `Test` declares no top-level name, and the two
+            // leaves declare none either. `TypeAlias` DOES declare one (`type Some = …`) and is
+            // deliberately NOT collected — collecting it would drop a colliding variant import from
+            // the map and change which diagnostic a program gets. Behaviour is preserved here on
+            // purpose; whether an alias should shadow a variant import is a ruling, not a drive-by.
+            Item::Test { .. } | Item::TypeAlias { .. } | Item::Import { .. } => {}
         }
     }
     let mut seen: HashMap<&str, u32> = HashMap::new();
@@ -114,6 +119,36 @@ pub fn resolve_variant_imports(program: Program) -> Program {
         return program;
     }
 
+    /// Qualify imported variants across a member list — shared by the class and trait arms, which
+    /// carry the identical `Vec<ClassMember>` (CD-31).
+    fn vmembers(members: &mut [ClassMember], map: &VarMap) {
+        for m in members {
+            match m {
+                ClassMember::Method(f) => {
+                    let body = std::mem::take(&mut f.body);
+                    f.body = rblock(body, map);
+                }
+                ClassMember::Constructor { body, .. } => {
+                    let b = std::mem::take(body);
+                    *body = rblock(b, map);
+                }
+                ClassMember::Hook { get, set, .. } => {
+                    if let Some(e) = get.take() {
+                        *get = Some(rexpr(e, map));
+                    }
+                    if let Some((p, body)) = set.take() {
+                        *set = Some((p, rblock(body, map)));
+                    }
+                }
+                ClassMember::Field { init, .. } => {
+                    if let Some(e) = init.take() {
+                        *init = Some(rexpr(e, map));
+                    }
+                }
+            }
+        }
+    }
+
     let items = program
         .items
         .into_iter()
@@ -123,34 +158,29 @@ pub fn resolve_variant_imports(program: Program) -> Program {
                 Item::Function(f)
             }
             Item::Class(mut c) => {
-                for m in &mut c.members {
-                    match m {
-                        ClassMember::Method(f) => {
-                            let body = std::mem::take(&mut f.body);
-                            f.body = rblock(body, &map);
-                        }
-                        ClassMember::Constructor { body, .. } => {
-                            let b = std::mem::take(body);
-                            *body = rblock(b, &map);
-                        }
-                        ClassMember::Hook { get, set, .. } => {
-                            if let Some(e) = get.take() {
-                                *get = Some(rexpr(e, &map));
-                            }
-                            if let Some((p, body)) = set.take() {
-                                *set = Some((p, rblock(body, &map)));
-                            }
-                        }
-                        ClassMember::Field { init, .. } => {
-                            if let Some(e) = init.take() {
-                                *init = Some(rexpr(e, &map));
-                            }
-                        }
-                    }
-                }
+                vmembers(&mut c.members, &map);
                 Item::Class(c)
             }
-            other => other,
+            // CD-31: a trait's members execute (they flatten into the using class), so an imported
+            // variant used there must be qualified exactly as in a class. Without this arm,
+            // `import Core.Option.Some;` + `new Some(n)` resolved inside a class method and raised a
+            // spurious `E-INJECTED-VARIANT-BARE` inside a trait method — same code, opposite verdict.
+            Item::Trait(mut t) => {
+                vmembers(&mut t.members, &map);
+                Item::Trait(t)
+            }
+            // A `test "…" { … }` body is checked and executed like a function body under `phg test`
+            // (the panel's reported instance of this class).
+            Item::Test { name, body, span } => Item::Test {
+                name,
+                body: rblock(body, &map),
+                span,
+            },
+            // An enum's `backing_value` is scalar-checked and an interface's `methods` are
+            // signatures, so no variant construction or pattern can reach either. Named rather than
+            // folded into `item_leaves!()` so neither is claimed expression-free (CD-31).
+            it @ (Item::Enum(..) | Item::Interface(..)) => it,
+            it @ (crate::item_leaves!()) => it,
         })
         .collect();
 
