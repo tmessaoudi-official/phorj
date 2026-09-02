@@ -40,6 +40,25 @@ function there is generic over `Read` or pure over `&[u8]`.
 certificate hot-reload, mTLS. Cert paths resolve against the process cwd, not the site-mode app root;
 passphrase-protected keys are not supported.
 
+### ⊳ CURSOR 2026-09-02 (evening) — panel round 3 in-repo, the readiness wave is the next body of work
+
+**Read first:** `docs/plans/2026-09-02-php-parity-readiness.plan.md` (the delta against three real PHP
+apps + cross-language + PHP ecosystem, the ruled ORDER, the questions queue) and
+`docs/plans/2026-08-31-post-slice3-consolidation.plan.md` § "Panel round 3" (35 findings transcribed
+in-repo, disposition per finding) + its Decisions Log (the 2026-09-02 rulings).
+
+**Gate:** OPEN. Panel round 3 ran on frozen `6a18f71a` over `0c982019..6a18f71a`: correctness 12
+(1×P0 `default_fills` collision reproduced on 3 legs), completeness 16 (3×P1), safety 7. Whether a
+round 4 is owed after step 1 is the open DEC-268-vs-economize ruling (readiness plan X9).
+
+**ORDER (ruled 17:05):** (1) harness trust — panel disposition, P0 first; (2) readiness wave in
+leverage order; (3) DEC-333 perf. **Register rows for today's ~16 rulings are OWED** (next free
+DEC-460); MASTER-PLAN's §0 cursor is stale relative to this block until step 1's docs pass — the two
+plan files' Decisions Logs are the record meanwhile (Invariant 19 pointer, not a fork).
+
+**The "next" block at the bottom of the 2026-09-02 cursor below is SUPERSEDED by this one** where
+they differ (its `phg test` line predates the CD-31 fix; see panel K3).
+
 ### ⊳ ADDENDUM 2026-09-02 — the milestone panel RAN, and the gate is still OPEN
 
 The 3-lens milestone panel that S3.5's plan §5 declared due was run 2026-08-31 against the FROZEN
