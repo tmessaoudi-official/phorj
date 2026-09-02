@@ -45,6 +45,21 @@
 - [2026-09-02 20:05] AGREED — **GATE RULE (X9, amends DEC-268)**: two-consecutive-clean is replaced by
   **fix-then-verify**: fix every P0/P1 in step 1, freeze, run ONE panel round; CLEAN closes the
   milestone gate; P2/P3 residue is tracked, not blocking. DEC row to record the amendment.
+- [2026-09-02 20:30] AGREED — **SOURCE PROTECTION (DEC-482)**: `phg build` ships the reserved
+  `payload_kind=1` BYTECODE payload by default (validated `BytecodeProgram` bytes; the serializer is a
+  fourth exhaustive-match surface with its own ratchet test); `--embed-source` opt-in keeps today's
+  source payload for debug builds/stack traces. Lands before `--native` M1.
+- [2026-09-02 20:30] AGREED — **COMPOSER INTEROP (DEC-483)**: FFI stays REJECTED (Appendix A.2);
+  the LIFT bar is raised instead — `phg lift` on three real Composer packages to green (candidates
+  brick/math, ramsey/uuid, league/csv) as a tracked milestone; every un-liftable construct becomes a
+  named gap. Competitive claim: "we translate, they embed".
+- [2026-09-02 20:30] AGREED — **INTL v1 + CURRENCY TABLE (DEC-484)**: `Core.Intl` v1 = locale
+  fallback chain + CLDR plural categories + locale number/date formatting on icu4x's pinned CLDR data;
+  `Currency` (ISO 4217 minor units) is a VERSIONED TABLE owned by phorj inside the money slice, NOT
+  ICU. Collation/transliteration/bidi later as questions. PHP-leg ladder case decided in-slice.
+- [2026-09-02 20:30] AGREED — **SUGAR (DEC-485)**: generic bounds `T extends Iface`; general partial
+  application `f(1, ?)` (subsumes the pipe `%`); `#[NoDiscard]` + unused-`Result` checker error with a
+  `_ = f()` escape. **Not selected**: expression-form `is` patterns with bindings — stays a question.
 
 ## 1. Sources and their yardsticks
 
