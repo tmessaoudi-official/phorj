@@ -5152,3 +5152,162 @@ function key(): string { return "k"; }
 }"#;
     agree_out_php(src, "42\n7\nk\n", "php_builtin_function_name_collision");
 }
+
+/// Write a throwaway multi-package project whose construction sites sit at the SAME byte offset in
+/// every file. `files` is `(relative path under src/, source)`, entry FIRST; each file shorter up to
+/// `needle` gets a comment line spliced after its package line, so the alignment is computed, not a
+/// brittle literal. Returns the entry path. `Lib/Box.phg` (a defaulted constructor) is always added.
+fn write_aligned_project(tag: &str, files: &[(&str, &str)], needle: &str) -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!("phorj_span_{tag}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let src = root.join("src");
+    fn pad_to(shorter: &str, by: usize) -> String {
+        // A comment line of exactly `by` bytes ("//" + filler + "\n"), placed after `package …;\n`.
+        assert!(by >= 3, "padding must fit `//\\n`");
+        let nl = shorter.find('\n').expect("package line") + 1;
+        let filler = "x".repeat(by - 3);
+        format!("{}//{filler}\n{}", &shorter[..nl], &shorter[nl..])
+    }
+    let target = files
+        .iter()
+        .map(|(_, f)| f.find(needle).expect("needle in every file"))
+        .max()
+        .unwrap();
+    for (rel, text) in files {
+        let at = text.find(needle).unwrap();
+        let text = if at < target {
+            pad_to(text, target - at)
+        } else {
+            (*text).to_string()
+        };
+        assert_eq!(
+            text.find(needle),
+            Some(target),
+            "{rel}: the construction sites must share a byte offset for this test to mean anything"
+        );
+        let path = src.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, text).unwrap();
+    }
+    std::fs::create_dir_all(src.join("Lib")).unwrap();
+    std::fs::write(
+        src.join("Lib").join("Box.phg"),
+        "package Lib;\nclass Box { constructor(public string a, public string b = \"d\") {} }\n",
+    )
+    .unwrap();
+    src.join(files[0].0)
+}
+
+/// KNOWN_ISSUES §default_fills (P0): the checker's span-keyed rewrite maps are keyed by
+/// `Span.start`, a byte offset into EACH file, so two files of one project can collide and one
+/// file's default-filled call gets spliced over the other's — on the interpreter, the VM AND the
+/// PHP leg alike, which is why the byte-identity harness could never see it. Both confirmed shapes
+/// are pinned here at one aligned offset: a user-defined defaulted constructor across packages
+/// (`Lib.Box`) and the member-imported prelude constructor (`Core.Http.Cookie`). The expected
+/// output is stated, not derived from a leg.
+#[test]
+fn two_project_files_with_the_same_byte_offset_keep_their_own_default_fills() {
+    let main_src = r#"package Main;
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Http.Cookie;
+import Lib.Box;
+import App.Two.pair;
+import App.Three.trio;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Box x = new Box("AAA");
+    Cookie c = new Cookie("AAA", "111");
+    Output.printLine("A {x.a}={x.b} {c.name}={c.value} p={c.cookiePath}");
+    pair();
+    trio();
+}
+"#;
+    let other_src = r#"package App.Two;
+import Core.Output;
+import Core.Http.Cookie;
+import Lib.Box;
+function pair(): void {
+    Box x = new Box("BBB");
+    Cookie c = new Cookie("BBB", "222");
+    Output.printLine("B {x.a}={x.b} {c.name}={c.value} p={c.cookiePath}");
+}
+"#;
+    let third_src = r#"package App.Three;
+import Core.Output;
+import Core.Http.Cookie;
+import Lib.Box;
+function trio(): void {
+    Box x = new Box("CCC");
+    Cookie c = new Cookie("CCC", "333");
+    Output.printLine("C {x.a}={x.b} {c.name}={c.value} p={c.cookiePath}");
+}
+"#;
+    let entry = write_aligned_project(
+        "fills",
+        &[
+            ("main.phg", main_src),
+            ("App/Two/two.phg", other_src),
+            ("App/Three/three.phg", third_src),
+        ],
+        "new Box(",
+    );
+    let label = "two_project_files_with_the_same_byte_offset_keep_their_own_default_fills";
+    let expected = "A AAA=d AAA=111 p=/\nB BBB=d BBB=222 p=/\nC CCC=d CCC=333 p=/\n";
+    let unit = loader::load(&entry).unwrap_or_else(|e| panic!("{label}: load: {e}"));
+    let tree = cli::treewalk_program(&unit);
+    let vm = cli::run_program(&unit);
+    assert_eq!(tree, vm, "interp vs VM for {label}");
+    let out = tree.unwrap_or_else(|e| panic!("{label}: run: {e}"));
+    assert_eq!(
+        out, expected,
+        "interpreter output for {label} (file B must keep ITS arguments)"
+    );
+    if let Some(php) = php_or_gate(label) {
+        let php_src = cli::transpile_program(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("{label}: transpile: {e}"));
+        let got = run_php(&php, &php_src, label);
+        assert_eq!(got, expected, "PHP ≠ expected for {label}");
+    }
+}
+
+/// Re-basing a non-entry file's offsets must leave its DIAGNOSTICS untouched: `line`/`col` are the
+/// user-facing position, and a checker error in the second file must still name that file's own
+/// line and column (the same text `phg check` prints), not a rebased offset.
+#[test]
+fn a_checker_error_in_a_rebased_project_file_still_reports_its_own_line_and_col() {
+    let main_src = r#"package Main;
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Lib.Box;
+import App.Two.pair;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Box x = new Box("AAA");
+    Output.printLine(x.a);
+    pair();
+}
+"#;
+    let other_src = r#"package App.Two;
+import Core.Output;
+import Lib.Box;
+function pair(): void {
+    Box x = new Box("BBB");
+    Output.printLine(x.nope);
+}
+"#;
+    let entry = write_aligned_project(
+        "diag",
+        &[("main.phg", main_src), ("App/Two/two.phg", other_src)],
+        "new Box(",
+    );
+    let unit = loader::load(&entry).expect("the project loads (errors come from the checker)");
+    let err = cli::check_program(&unit.program, &unit.diag_src)
+        .expect_err("`x.nope` must be a checker error");
+    assert!(
+        err.contains("7:23"),
+        "the error must point at the second file's own line:col (7:23), got:\n{err}"
+    );
+}

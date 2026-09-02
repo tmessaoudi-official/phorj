@@ -8,6 +8,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Two project files at the same byte offset no longer swap each other's default-filled
+  arguments (P0, KNOWN_ISSUES §default_fills; panel round-3 C6).** Every checker rewrite map keys on
+  `Span.start`, and every file was lexed from offset 0, so `new Box("AAA")` in `main.phg` and
+  `new Box("BBB")` in a sibling file at the same offset shared one key — the later file's fill was
+  spliced into both, on the interpreter, the VM AND transpiled PHP alike (all legs agreed, all wrong,
+  so the byte-identity harness could not see it). The loader now gives every non-entry project file and
+  every ambient `*.d.phg` its own disjoint offset window (`loader::fs::SpanWindows`, cumulative, kept
+  below `INJECTED_SPAN_BASE`); the entry file stays at base 0 and `line`/`col` are untouched. Pinned by
+  a three-file differential case whose expected output is stated, plus a diagnostics case proving a
+  rebased file still reports its own `line:col`. The 2026-07-17 §span-collision entry (the prelude axis,
+  closed 2026-07-31) is corrected to say both axes are now closed.
 - **Six defects in the item-level AST walks — four crashes, an Invariant-1 spine break, and a broken
   overload dispatch — all on valid code `phg check` called clean.** DEC-356 made the
   `Expr`/`Stmt`/`Pattern` walks exhaustive and its ratchet watches the six extracted `*_walk.rs`

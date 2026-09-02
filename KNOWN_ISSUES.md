@@ -2832,6 +2832,20 @@ Please report it (see [SUPPORT.md](SUPPORT.md); for security, [SECURITY.md](SECU
 
 ## §span-collision — LATENT: injected-prelude spans share the user file's span space (P1, 2026-07-17)
 
+**STATUS 2026-09-02 — BOTH axes are now closed; this entry is history.** (1) The injected-prelude
+axis described below was closed on 2026-07-31 by `cli::prelude_spans::lex_parse_injected`: every
+prelude fragment is lexed into its own window at `INJECTED_SPAN_BASE` (256 MiB) and above, pinned by
+`injected_prelude_spans_cannot_collide_with_user_file_offsets`. (2) The user-file axis this entry did
+NOT cover — two ordinary project files sharing an offset — was the separate P0 §default_fills below,
+closed today by `loader::fs::SpanWindows`. The "one known-colliding file carries a deliberate padding
+line" sentence below is stale: no such padding exists in the tree (`grep padding src/` → nothing) and
+none is needed. What remains true: every rewrite map is still keyed by `Span.start` alone; that is now
+safe because every source that reaches the checker — entry, sibling files, decl files, preludes —
+occupies a disjoint window. A NEW parse path that feeds the checker must reserve a window
+(`SpanWindows::reserve`) or lex above `INJECTED_SPAN_BASE`; that rule is the invariant this entry
+now records.
+
+
 Every checker rewrite map (`ufcs_resolutions`, `default_fills`, `for_iter_lowerings`, …) keys on
 `Span.start` byte offsets, and injected Core preludes are parsed with their OWN offsets — so a
 user-code span can numerically COLLIDE with a prelude-internal span, making a rewrite recorded
@@ -2987,6 +3001,22 @@ cases: omitted defaults, out-of-order named args, and both together on `Http.Ser
 the shipped binary across `run` ≡ `--tree-walker` ≡ `--no-jit` ≡ php-8.5.8.
 
 ## `default_fills` is keyed by a per-file byte offset — two files can COLLIDE and silently swap call arguments (P0, 2026-08-06)
+
+**FIXED 2026-09-02 (harness-trust step 1, panel round-3 C6).** The loader now gives every project
+file after the entry its own disjoint `Span.start` window (`loader::fs::SpanWindows` +
+`parse_at_rebased`, threaded through `assemble`'s two parse loops — project files AND ambient
+`*.d.phg` files); the entry keeps base 0 so single-file runs, `phg format`, the LSP's own-buffer
+handlers and the `rewrite_new` codemod are byte-for-byte unchanged, and `line`/`col` are never touched.
+Windows are cumulative (`prev_base + prev_len + 1`) and refused before they could reach
+`INJECTED_SPAN_BASE`. Pinned by `tests/differential.rs::two_project_files_with_the_same_byte_offset_keep_their_own_default_fills`
+(THREE files with `new Box(…)`/`new Cookie(…)` at one computed offset; the expected output is stated,
+not derived from a leg; interpreter ≡ VM ≡ php-8.5.9) and
+`a_checker_error_in_a_rebased_project_file_still_reports_its_own_line_and_col`. Sabotage: forcing a
+non-entry base to 0 → file B prints A's arguments; giving every non-entry file the SAME base → file C
+prints B's — each red on exactly that test, so the DISJOINTNESS is what the suite proves, not merely
+"a base was applied". The free-function form was never reproduced and is not claimed. The record
+below is kept as the history of the defect.
+
 
 **Silently wrong output on all four legs**, so Invariant 1's harness cannot see it: every leg agrees,
 and they agree on the wrong answer.

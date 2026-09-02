@@ -187,6 +187,9 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
   `invoiceninja-needs.md` (~90 rows + 23 PHP flaws), `cross-language-delta.md` and
   `php-ecosystem-delta.md` (pending). Their consolidated delta graduates into the readiness-wave plan
   file, not into this consolidation plan.
+- [2026-09-02 21:05] AGREED (certification tier, STEP 1 harness trust): **`advisor()` per gate for
+  every slice of step 1, then ONE panel round on the frozen commit at the end** (DEC-481
+  fix-then-verify). Red-first tests + a sabotage check per slice remain mandatory.
 
 ## Execution order (global — Parts are reference material, THIS is the sequence)
 

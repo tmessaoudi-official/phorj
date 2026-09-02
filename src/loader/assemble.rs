@@ -36,6 +36,14 @@ pub(super) fn assemble(
     let mut src_map: HashMap<PathBuf, String> = HashMap::new();
     let mut fn_files: HashMap<String, PathBuf> = HashMap::new();
     let mut item_files: HashMap<String, PathBuf> = HashMap::new();
+    // Span-offset windows (KNOWN_ISSUES §default_fills): the entry keeps base 0, every other file —
+    // and every ambient decl file below — gets a disjoint window after it, so span-keyed rewrite maps
+    // can never confuse two files' sites. `sources` is sorted by path, so the entry need not be first.
+    let entry_len = match buffer {
+        Some((p, b)) if same_file(p, entry) => b.len(),
+        _ => read_file(entry)?.len(),
+    };
+    let mut windows = SpanWindows::after_entry(entry_len);
     for src_entry in &sources {
         let file = &src_entry.file;
         // The LSP buffer override (DEC-252): the entry's text may be the editor's unsaved buffer.
@@ -44,7 +52,12 @@ pub(super) fn assemble(
             _ => read_file(file)?,
         };
         src_map.insert(file.clone(), src.clone());
-        let prog = parse_at(file, &src)?;
+        let base = if same_file(file, entry) {
+            0
+        } else {
+            windows.reserve(file, src.len())?
+        };
+        let prog = parse_at_rebased(file, &src, base)?;
         validate_folder_path(&prog, file, &src_entry.root)?;
         validate_package_decl(&prog, file)?;
         validate_public_surface(&prog, file)?;
@@ -131,7 +144,8 @@ pub(super) fn assemble(
             continue;
         }
         let src = read_file(f)?;
-        let prog = parse_at(f, &src)?;
+        let base = windows.reserve(f, src.len())?;
+        let prog = parse_at_rebased(f, &src, base)?;
         validate_decl_file(&prog, f)?;
         src_map.insert(f.clone(), src);
         decl_items.extend(prog.items);
