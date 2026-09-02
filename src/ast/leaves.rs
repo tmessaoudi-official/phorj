@@ -166,11 +166,11 @@ mod tests {
             "src/checker/desugar_di/walker.rs",
             "src/checker/desugar_di/mod.rs",
             "src/checker/desugar_db.rs",
-            // NOT YET: `src/loader/resolve.rs`. DEC-486 made its ITEM walk explicit (`other => other`
-            // had swallowed `Item::Test`), but its `resolve_expr` still ends in `leaf => leaf`, which
-            // swallows eight `Expr` variants — `Tuple`, `NamedArg`, `NewColl` among them, all with
-            // sub-expressions. Adding the file here before that walk is total would fail; the
-            // follow-up commit that makes it total also adds the row (panel K8).
+            // DEC-486 + K8 — the LOADER's per-file resolver. Its item walk's `other => other` had
+            // swallowed `Item::Test`, and its `resolve_expr`'s `leaf => leaf` swallowed eight `Expr`
+            // variants (four live: a call inside a tuple / named arg / pipe, a `new List<T>()` type
+            // argument — `tests/project.rs`). Both walks are total now.
+            "src/loader/resolve.rs",
         ];
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut offenders = Vec::new();

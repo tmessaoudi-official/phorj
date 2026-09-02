@@ -8,6 +8,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **The loader's expression walk is total (DEC-356 class; panel K8).** `src/loader/resolve.rs`'s
+  `resolve_expr` ended in a named `leaf => leaf` that swallowed eight `Expr` variants; four were live
+  defects in any LIBRARY file — a same-package call inside a tuple literal, a named-argument value or
+  a pipe (both sides), and a type argument of `new List<T>()` — all surfacing on the merged unit as
+  `unknown function` / `unknown type` for a program every single-file check accepts. The arm's own
+  comment had recorded the same bug for `ParentCall` and `Map`, fixed one variant at a time; the walk
+  now carries explicit arms for all eight (`Spawn`, `TaggedTemplate`, `Inject` resolved too;
+  `OverloadSelect` is checker-constructed and kept as a visible inert arm) and ends in the
+  single-sourced `expr_leaves!()` set, so the next variant with sub-expressions fails to compile
+  instead of being swallowed. The file joins the DEC-356 source-scan ratchet. Red-first in
+  `tests/project.rs` (all four shapes in one library file, run ≡ VM); sabotaged twice (one arm
+  reverted → red; the catch-all restored → the ratchet reds).
 - **A document with a `test` item is checked in test mode by `phg check`, `check --json` and the
   LSP (DEC-486; Invariant 17 `check ≡ LSP ≡ test`; panel C9/K1/K7).** Both editors squiggled
   `E-TEST-OUTSIDE-TESTS` on every `selftest/*.phg` and `phg check` rejected them, on lines `phg test`

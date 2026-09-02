@@ -459,8 +459,61 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             args: args.into_iter().map(|e| resolve_expr(e, ctx)).collect(),
             span,
         },
-        // Leaves carry no nested call site or type name: Int / Float / Bool / Null / Bytes / This.
-        leaf => leaf,
+        // DEC-356 / K8 (2026-09-02): the eight variants a named `leaf => leaf` used to swallow. Four
+        // were LIVE defects in a library file — a same-package call inside a tuple literal, a
+        // named-argument value or a pipe, and a type argument of `new List<T>()`, all reported as
+        // `unknown function` / `unknown type` on the merged unit (`tests/project.rs`).
+        Expr::Tuple(items, span) => Expr::Tuple(
+            items.into_iter().map(|e| resolve_expr(e, ctx)).collect(),
+            span,
+        ),
+        Expr::NamedArg { name, value, span } => Expr::NamedArg {
+            name,
+            value: Box::new(resolve_expr(*value, ctx)),
+            span,
+        },
+        Expr::NewColl { kind, args, span } => Expr::NewColl {
+            kind,
+            args: args.iter().map(|t| resolve_type(t, ctx)).collect(),
+            span,
+        },
+        Expr::Pipe { lhs, rhs, span } => Expr::Pipe {
+            lhs: Box::new(resolve_expr(*lhs, ctx)),
+            rhs: Box::new(resolve_expr(*rhs, ctx)),
+            span,
+        },
+        Expr::Spawn { call, span } => Expr::Spawn {
+            call: Box::new(resolve_expr(*call, ctx)),
+            span,
+        },
+        Expr::TaggedTemplate { tag, parts, span } => Expr::TaggedTemplate {
+            tag,
+            parts: parts
+                .into_iter()
+                .map(|p| match p {
+                    StrPart::Expr(e) => StrPart::Expr(Box::new(resolve_expr(*e, ctx))),
+                    lit => lit,
+                })
+                .collect(),
+            span,
+        },
+        Expr::Inject {
+            ty,
+            qualified,
+            span,
+        } => Expr::Inject {
+            ty: ty.as_ref().map(|t| resolve_type(t, ctx)),
+            qualified,
+            span,
+        },
+        // Checker-constructed (overload selection runs after loading) — it can never reach the
+        // loader; kept explicit rather than folded into the leaf set so the claim stays visible.
+        sel @ Expr::OverloadSelect { .. } => sel,
+        // Leaves carry no nested call site or type name — the single-sourced set (DEC-356), so a new
+        // `Expr` variant with sub-expressions fails to compile here instead of being swallowed. `Ident`
+        // is in that set but is rewritten above (function/type references), hence the allow.
+        #[allow(unreachable_patterns)]
+        leaf @ (crate::expr_leaves!()) => leaf,
     }
 }
 

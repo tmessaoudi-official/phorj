@@ -631,3 +631,35 @@ fn cross_package_attribute_is_emitted_as_an_absolute_fqn() {
     assert_eq!(run, "widget\n");
     assert_eq!(run, vm, "run and vm must be byte-identical");
 }
+
+/// DEC-356 / panel K8, found while landing DEC-486: the loader's `resolve_expr` ended in a named
+/// `leaf => leaf` catch-all that swallowed EIGHT `Expr` variants — so a same-package call inside a
+/// tuple literal, a named-argument value, a pipe, or a type argument of `new List<T>()` in a LIBRARY
+/// file was never mangled, and the merged unit failed with `unknown function` / `unknown type` on a
+/// program every single-file check accepts. (Its own comment records the same bug for `ParentCall`
+/// and `Map`, fixed one variant at a time; this makes the walk total so the next variant fails to
+/// compile instead.)
+#[test]
+fn cross_package_calls_inside_tuples_named_args_pipes_and_collections_resolve() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Runtime.Entry; import Core.Runtime.EntryKind;\nimport Core.Output;\nimport Acme.Util;\n\
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {\n\
+             Output.printLine(\"{Util.viaTuple()} {Util.viaNamed()} {Util.viaPipe()} {Util.boxCount()}\");\n}",
+    );
+    tmp.write("src/Acme/Util/Box.phg", "package Acme.Util;\nclass Box { }");
+    tmp.write(
+        "src/Acme/Util/lib.phg",
+        "package Acme.Util;\nimport Core.List;\n\
+         function one() -> int { return 1; }\n\
+         function twice(int x) -> int { return x * 2; }\n\
+         function viaTuple() -> int { var (a, b) = (one(), 2); return a + b; }\n\
+         function viaNamed() -> int { return twice(x: one()); }\n\
+         function viaPipe() -> int { return one() |> twice(%); }\n\
+         function boxCount() -> int { List<Box> xs = new List<Box>(); return List.length(xs); }",
+    );
+    let (run, vm) = run_both(&entry);
+    assert_eq!(run, "3 2 2 0\n");
+    assert_eq!(run, vm, "run and vm must be byte-identical");
+}
