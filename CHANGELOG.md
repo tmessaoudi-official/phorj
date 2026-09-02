@@ -19,10 +19,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
   Fixed by threading a test-mode flag through the SHARED pipeline — `checker::check_resolutions_mode`
   and `cli::check_and_expand_tests` — rather than giving test mode a pipeline of its own, which would
-  have recreated the exact divergence being closed. `phg check` ≡ LSP ≡ `phg test` now holds by
-  construction. Guarded by a new `tests/mtest.rs` case and by `selftest/injected_preludes.phg`, a real
+  have recreated the exact divergence being closed. ⚠ **Correction (same day, by milestone panel):
+  the first version of this entry claimed `phg check` ≡ LSP ≡ `phg test` "now holds by construction".
+  It does not.** Injected-prelude TYPES resolve under `phg test` — that part is real — but the LSP still
+  calls the non-test path, so every `selftest/*.phg` squiggles `E-TEST-OUTSIDE-TESTS` in both editors;
+  and `resolve_variant_imports` / `desugar_router` are item-level walks ending in a named catch-all, so
+  they never descend into `Item::Test` and two of the three causes named above are still absent inside a
+  test body. Both gaps are recorded in KNOWN_ISSUES §TEST-RAW-CHECKER, which is now marked PARTIALLY
+  FIXED rather than fixed. Guarded by a new `tests/mtest.rs` case and by `selftest/injected_preludes.phg`, a real
   Invariant-9 surface whose every import reaches a prelude-injected type; sabotage-verified by pointing
-  the runner back at the raw checker, which turns that one test red and leaves the other eight green.
+  the runner back at the raw checker. ⚠ The first version of this entry recorded that as turning "that
+  one test red and leaving the other eight green", which is impossible at HEAD and was caught by the
+  panel: `the_selftest_suite_is_green` runs the whole `selftest/` directory, which now contains the new
+  file, so TWO tests must go red. The sabotage was genuinely run — but before the selftest file was
+  added, and the two were then described in one sentence. The check was real; the record of it was
+  wrong.
 
   Checked rather than assumed while building it: `EntryKind` is injected only as the attribute-argument
   surface for `#[Entry(kind:)]`, so using it as a value type is `E-UNKNOWN-TYPE` under `phg test` — and
@@ -46,9 +57,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   carrying the same `E-TRANSPILE-SERVE` code as the friendly spelling. The two layers now coexist:
   one keyed on the call, one on the user's import.
 
-  **Stated consequence:** `Core.Native.Http`'s other members (`parseQuery`, `cookiePairs`, …) have
-  real PHP twins and lose their transpile leg along with `registerServe`, exactly as the four
-  siblings' non-placeholder members did. Nothing in the corpus imports the raw module — the only two
+  ⚠ **Two corrections from the 2026-09-02 milestone panel, in opposite directions.**
+
+  **(a) The hole was NOT closed by the import row alone.** A third spelling needed no import at all:
+  the injected prelude leaks its `NativeHttp` alias into user scope, so `NativeHttp.registerServe(…)`
+  type-checked clean, transpiled at exit 0, ran on both native legs and fatalled on PHP at exit 255 —
+  and `phg build --php` emitted the broken helper while printing a SUCCESS banner. A call-keyed
+  containment arm now refuses it (sound only pre-expansion, like the module rows). The structural cure
+  is DEC-459's prelude-binding isolation; this arm becomes redundant when that lands.
+
+  **(b) The disclosed consequence below did not actually occur.** On the un-imported spelling
+  `parseQuery`/`cookiePairs` still work on all three legs, so the loss was over-stated at the same
+  time the closure was over-stated. It holds only for a program that DOES import the raw module:
+
+  **Stated consequence (for the import spelling only):** `Core.Native.Http`'s other members
+  (`parseQuery`, `cookiePairs`, …) have real PHP twins and lose their transpile leg along with
+  `registerServe`, exactly as the four siblings' non-placeholder members did. Nothing in the corpus imports the raw module — the only two
   hits are the injected preludes — and the friendly `Core.Http` surface, which transpiles, is the
   supported way to reach them.
 
@@ -63,8 +87,9 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 - **The ladder gate moved out of `pipeline.rs` into `src/cli/ladder.rs`.** Adding the row above took
   `pipeline.rs` from 860 to 882 lines and the Invariant-13 size gate refused the push — "split it, do
   not grow it". The gate is a cohesive unit (one table, one walk, one job), so it became its own
-  module rather than being trimmed elsewhere to make room: `pipeline.rs` is back to 786 and
-  `ladder.rs` is 110. Its module doc records the property the rows depend on — that it runs
+  module rather than being trimmed elsewhere to make room: `pipeline.rs` dropped from 882 to 786 and
+  `ladder.rs` is 110. (Both files have grown since with later commits in the same series; the point is
+  the split, not a frozen line count — quoting one was a small self-inflicted staleness.) Its module doc records the property the rows depend on — that it runs
   pre-expansion — so the next person to add a row reads it before choosing a key. Pure move plus the
   doc; the three callers are repointed and no behavior changed. In passing, the doc comment that sat
   above the function actually described `transpile_program` in its first two lines and the ladder in

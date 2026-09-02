@@ -74,6 +74,18 @@ pub fn check_and_expand_reified(
 /// The ONLY difference from the normal path is the test-mode flag threaded into the checker. Giving
 /// test mode its own pipeline would recreate exactly the divergence this closes, so it must stay a
 /// flag through the shared body below.
+///
+/// ⚠ **THIS DOES NOT YET MAKE `phg check` ≡ LSP ≡ `phg test`** — an earlier version of this comment
+/// claimed it did, and a 2026-09-02 milestone panel disproved it twice over. Two gaps remain, both
+/// verified:
+///   * the LSP still calls the `false` path (`src/lsp/mod.rs`), so a file containing `test` items
+///     squiggles `E-TEST-OUTSIDE-TESTS` in both editors on lines `phg test` accepts;
+///   * the pre-check desugars `resolve_variant_imports` and `desugar_router` are ITEM-level walks
+///     ending in a named `other => other`, so they never descend into `Item::Test` — variant-import
+///     resolution and the auto-router desugar are still absent inside a test body, which are two of
+///     the three causes this reroute was written to remove.
+///
+/// Both are tracked; do not restate the equivalence until they are closed.
 pub fn check_and_expand_tests(prog: &Program, diag_src: &str) -> Result<Program, String> {
     check_and_expand_reified_mode(prog, diag_src, true).map(|(p, _)| p)
 }

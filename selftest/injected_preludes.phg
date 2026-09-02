@@ -9,8 +9,13 @@
 // The runner now shares the same front end as `phg check` and the LSP (DEC-252's chokepoint), so
 // this file is a real assertion about that: every `import` below reaches a type that exists only
 // because a prelude was injected. If the runner is ever re-pointed at the raw checker, these stop
-// compiling under `phg test` while still passing `phg check` — which is exactly the divergence the
-// fix removes.
+// compiling under `phg test` — which is what `tests/mtest.rs` pins.
+//
+// NOTE, corrected 2026-09-02: an earlier version of this comment said such a file would "still pass
+// `phg check`". It would not, and neither does this one — `phg check` rejects a `test` item outright
+// with `E-TEST-OUTSIDE-TESTS`, so the property as written was unverifiable. That asymmetry is itself
+// an open gap: the LSP runs the same non-test path, so this file squiggles in both editors on lines
+// `phg test` accepts (KNOWN_ISSUES §TEST-RAW-CHECKER).
 package Main;
 
 import Core.Test;

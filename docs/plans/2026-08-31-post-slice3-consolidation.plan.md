@@ -22,7 +22,9 @@ code bug, the rest doc drift.
 4. **Consolidate docs — NOTHING deleted, everything moved to `docs/archive/plans/` and
    `docs/archive/specs/` (developer-ruled location) with pointer READMEs**: archive 6 finished
    plan files (rescuing 2 unique rationale sections first); fold 10 shipped specs into
-   UNIFIED-SPEC (8 unbuilt specs STAY canonical); migrate the existing `docs/archive/specs/`
+   UNIFIED-SPEC (8 unbuilt specs STAY canonical) — ⚠ **became 11 folds / 7 live**, see the Decisions
+   Log: item 6's own mandated check found DEC-339 BUILT, so block-scope-shadowing left the protected
+   list; migrate the existing `docs/specs/archive/`
    into `docs/archive/specs/`; shrink SLICE-STATE (4,288 lines → current cursor only); refresh
    MASTER-PLAN's 6-week-stale cursor.
 5. **Two small code slices**: TEST-RAW-CHECKER fix (`phg test` spurious prelude errors); G-8 perf
@@ -200,7 +202,7 @@ MUST NOT delete, merge away, or "simplify" any of the following:
 4. **KNOWN_ISSUES.md, CHANGELOG.md, docs/HISTORY.md, docs/MILESTONES.md, docs/INVARIANTS.md,
    docs/ARCHITECTURE.md, FEATURES.md** — distinct chartered roles; drift-fixes only (Part 3).
 5. **`var/phorj-app`** — the developer's live comparison app; never propose deleting (standing rule).
-6. **The archived originals + archive READMEs** — `docs/archive/specs/` content (20 folded
+6. **The archived originals + archive READMEs** — `docs/specs/archive/` content (20 folded
    originals + README) MOVES to `docs/archive/specs/` (Step 4) but is never deleted or pruned.
 
 ---
@@ -234,9 +236,10 @@ README modeled on `docs/archive/specs/README.md` (per-file → where-its-content
 - `2026-07-28-consistency-audit.plan.md` (one-shot, zero inbound refs)
 Then edit MASTER-PLAN.md:4-6 to state the `docs/archive/` convention (supersedes "git history").
 
-**Step 4 — fold the 10 SHIPPED loose specs into UNIFIED-SPEC.md**, then `git mv` each original to
+**Step 4 — fold the SHIPPED loose specs into UNIFIED-SPEC.md** (⚠ 10 listed here; it became **11** —
+see the Decisions Log. The tree matches the log, not this count.), then `git mv` each original to
 `docs/archive/specs/` and add its row to the archive README pointer table. First migrate the
-EXISTING `docs/archive/specs/` (20 previously-folded originals + its README) into
+EXISTING `docs/specs/archive/` (20 previously-folded originals + its README) into
 `docs/archive/specs/` via `git mv`, then `git grep 'docs/archive/specs'` and repoint every inbound
 reference (UNIFIED-SPEC header included) — zero stale hits before proceeding. The 10 to fold:
 `2026-07-22-transpile-into-project.md`, `2026-07-23-entry-kinds-serve-tls.md`,

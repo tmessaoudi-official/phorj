@@ -425,10 +425,22 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
 /// degrades to the eager path, which still satisfies `interp ≡ VM` — so completeness is best-effort but
 /// not load-bearing. Mirrors the exhaustive [`lambda_uses_this`] walker.
 #[must_use]
-pub fn uses_concurrency(program: &Program) -> bool {
-    fn in_expr(e: &Expr) -> bool {
+/// Does any expression anywhere in `program` satisfy `pred`?
+///
+/// The single TOTAL expression/statement/item walk in this file — shared, never copied. It carries no
+/// catch-all at any level (Invariant 3 / DEC-356), so a new `Expr`, `Stmt`, `ClassMember` or `Item`
+/// variant is a COMPILE ERROR here rather than something silently skipped. That is exactly why a
+/// second hand-rolled copy of this shape must not be added: the guarantee is the exhaustiveness, and
+/// it does not survive duplication.
+///
+/// It descends into `Item::Test` bodies as well as functions, classes and traits.
+pub fn any_expr(program: &Program, pred: &dyn Fn(&Expr) -> bool) -> bool {
+    fn in_expr(e: &Expr, pred: &dyn Fn(&Expr) -> bool) -> bool {
+        if pred(e) {
+            return true;
+        }
         match e {
-            Expr::Spawn { .. } => true,
+            Expr::Spawn { call, .. } => in_expr(call, pred),
             Expr::Int(..)
             | Expr::Float(..)
             | Expr::Decimal { .. }
@@ -440,69 +452,73 @@ pub fn uses_concurrency(program: &Program) -> bool {
             | Expr::NewColl { .. }
             | Expr::PipePlaceholder(_)
             | Expr::This(_) => false,
-            Expr::Pipe { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
+            Expr::Pipe { lhs, rhs, .. } => in_expr(lhs, pred) || in_expr(rhs, pred),
             Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
                 parts.iter().any(|p| match p {
-                    StrPart::Expr(inner) => in_expr(inner),
+                    StrPart::Expr(inner) => in_expr(inner, pred),
                     StrPart::Literal(_) => false, // named, not `_` — DEC-356
                 })
             }
-            Expr::List(items, _) | Expr::Tuple(items, _) => items.iter().any(in_expr),
-            Expr::NamedArg { value, .. } => in_expr(value),
-            Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
-            Expr::Unary { expr, .. } => in_expr(expr),
-            Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
-            Expr::InstanceOf { value, .. } => in_expr(value),
-            Expr::Cast { value, .. } => in_expr(value),
-            Expr::Call { callee, args, .. } => in_expr(callee) || args.iter().any(in_expr),
-            Expr::Member { object, .. } => in_expr(object),
-            Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),
-            Expr::Force { inner, .. } => in_expr(inner),
-            Expr::Propagate { inner, .. } => in_expr(inner),
-            Expr::OverloadSelect { call, .. } => in_expr(call),
-            Expr::ParentCall { args, .. } => args.iter().any(in_expr),
+            Expr::List(items, _) | Expr::Tuple(items, _) => items.iter().any(|x| in_expr(x, pred)),
+            Expr::NamedArg { value, .. } => in_expr(value, pred),
+            Expr::Map(pairs, _) => pairs
+                .iter()
+                .any(|(k, v)| in_expr(k, pred) || in_expr(v, pred)),
+            Expr::Unary { expr, .. } => in_expr(expr, pred),
+            Expr::Binary { lhs, rhs, .. } => in_expr(lhs, pred) || in_expr(rhs, pred),
+            Expr::InstanceOf { value, .. } => in_expr(value, pred),
+            Expr::Cast { value, .. } => in_expr(value, pred),
+            Expr::Call { callee, args, .. } => {
+                in_expr(callee, pred) || args.iter().any(|x| in_expr(x, pred))
+            }
+            Expr::Member { object, .. } => in_expr(object, pred),
+            Expr::Index { object, index, .. } => in_expr(object, pred) || in_expr(index, pred),
+            Expr::Force { inner, .. } => in_expr(inner, pred),
+            Expr::Propagate { inner, .. } => in_expr(inner, pred),
+            Expr::OverloadSelect { call, .. } => in_expr(call, pred),
+            Expr::ParentCall { args, .. } => args.iter().any(|x| in_expr(x, pred)),
             Expr::CloneWith { object, fields, .. } => {
-                in_expr(object) || fields.iter().any(|(_, e)| in_expr(e))
+                in_expr(object, pred) || fields.iter().any(|(_, e)| in_expr(e, pred))
             }
             Expr::Match {
                 scrutinee, arms, ..
             } => {
-                in_expr(scrutinee)
-                    || arms
-                        .iter()
-                        .any(|a| a.guard.as_ref().is_some_and(in_expr) || in_expr(&a.body))
+                in_expr(scrutinee, pred)
+                    || arms.iter().any(|a| {
+                        a.guard.as_ref().is_some_and(|x| in_expr(x, pred)) || in_expr(&a.body, pred)
+                    })
             }
-            Expr::Range { start, end, .. } => in_expr(start) || in_expr(end),
+            Expr::Range { start, end, .. } => in_expr(start, pred) || in_expr(end, pred),
             Expr::If {
                 cond,
                 then_expr,
                 else_expr,
                 ..
-            } => in_expr(cond) || in_expr(then_expr) || in_expr(else_expr),
+            } => in_expr(cond, pred) || in_expr(then_expr, pred) || in_expr(else_expr, pred),
             Expr::Lambda { body, .. } => match body {
-                LambdaBody::Expr(e) => in_expr(e),
-                LambdaBody::Block(stmts) => in_stmts(stmts),
+                LambdaBody::Expr(e) => in_expr(e, pred),
+                LambdaBody::Block(stmts) => in_stmts(stmts, pred),
             },
-            Expr::New(inner, _) => in_expr(inner),
+            Expr::New(inner, _) => in_expr(inner, pred),
         }
     }
-    fn in_stmts(stmts: &[Stmt]) -> bool {
+    fn in_stmts(stmts: &[Stmt], pred: &dyn Fn(&Expr) -> bool) -> bool {
         stmts.iter().any(|s| match s {
-            Stmt::VarDecl { init, .. } => in_expr(init),
-            Stmt::Return { value, .. } => value.as_ref().is_some_and(in_expr),
+            Stmt::VarDecl { init, .. } => in_expr(init, pred),
+            Stmt::Return { value, .. } => value.as_ref().is_some_and(|x| in_expr(x, pred)),
             Stmt::If {
                 cond,
                 then_block,
                 else_block,
                 ..
             } => {
-                in_expr(cond)
-                    || in_stmts(then_block)
-                    || else_block.as_ref().is_some_and(|eb| in_stmts(eb))
+                in_expr(cond, pred)
+                    || in_stmts(then_block, pred)
+                    || else_block.as_ref().is_some_and(|eb| in_stmts(eb, pred))
             }
-            Stmt::For { iter, body, .. } => in_expr(iter) || in_stmts(body),
-            Stmt::Using { init, body, .. } => in_expr(init) || in_stmts(body),
-            Stmt::While { cond, body, .. } => in_expr(cond) || in_stmts(body),
+            Stmt::For { iter, body, .. } => in_expr(iter, pred) || in_stmts(body, pred),
+            Stmt::Using { init, body, .. } => in_expr(init, pred) || in_stmts(body, pred),
+            Stmt::While { cond, body, .. } => in_expr(cond, pred) || in_stmts(body, pred),
             Stmt::CFor {
                 init,
                 cond,
@@ -511,52 +527,57 @@ pub fn uses_concurrency(program: &Program) -> bool {
                 ..
             } => {
                 init.as_deref()
-                    .is_some_and(|s| in_stmts(std::slice::from_ref(s)))
-                    || cond.as_ref().is_some_and(in_expr)
+                    .is_some_and(|s| in_stmts(std::slice::from_ref(s), pred))
+                    || cond.as_ref().is_some_and(|x| in_expr(x, pred))
                     || step
                         .as_deref()
-                        .is_some_and(|s| in_stmts(std::slice::from_ref(s)))
-                    || in_stmts(body)
+                        .is_some_and(|s| in_stmts(std::slice::from_ref(s), pred))
+                    || in_stmts(body, pred)
             }
             Stmt::Break(_) | Stmt::Continue(_) => false,
-            Stmt::Assign { target, value, .. } => in_expr(target) || in_expr(value),
+            Stmt::Assign { target, value, .. } => in_expr(target, pred) || in_expr(value, pred),
             Stmt::Destructure {
                 init, else_block, ..
-            } => in_expr(init) || else_block.as_ref().is_some_and(|eb| in_stmts(eb)),
-            Stmt::Block(stmts, _) => in_stmts(stmts),
-            Stmt::Expr(e, _) | Stmt::Discard(e, _) => in_expr(e),
-            Stmt::Throw { value, .. } => in_expr(value),
+            } => in_expr(init, pred) || else_block.as_ref().is_some_and(|eb| in_stmts(eb, pred)),
+            Stmt::Block(stmts, _) => in_stmts(stmts, pred),
+            Stmt::Expr(e, _) | Stmt::Discard(e, _) => in_expr(e, pred),
+            Stmt::Throw { value, .. } => in_expr(value, pred),
             Stmt::Try {
                 body,
                 catches,
                 finally_block,
                 ..
             } => {
-                in_stmts(body)
-                    || catches.iter().any(|c| in_stmts(&c.body))
-                    || finally_block.as_ref().is_some_and(|fb| in_stmts(fb))
+                in_stmts(body, pred)
+                    || catches.iter().any(|c| in_stmts(&c.body, pred))
+                    || finally_block.as_ref().is_some_and(|fb| in_stmts(fb, pred))
             }
         })
     }
-    fn member_spawns(m: &ClassMember) -> bool {
+    fn member_has(m: &ClassMember, pred: &dyn Fn(&Expr) -> bool) -> bool {
         match m {
-            ClassMember::Field { init, .. } => init.as_ref().is_some_and(in_expr),
-            ClassMember::Constructor { body, .. } => in_stmts(body),
-            ClassMember::Method(f) => in_stmts(&f.body),
+            ClassMember::Field { init, .. } => init.as_ref().is_some_and(|x| in_expr(x, pred)),
+            ClassMember::Constructor { body, .. } => in_stmts(body, pred),
+            ClassMember::Method(f) => in_stmts(&f.body, pred),
             ClassMember::Hook { get, set, .. } => {
-                get.as_ref().is_some_and(in_expr)
-                    || set.as_ref().is_some_and(|(_, stmts)| in_stmts(stmts))
+                get.as_ref().is_some_and(|x| in_expr(x, pred))
+                    || set.as_ref().is_some_and(|(_, stmts)| in_stmts(stmts, pred))
             }
         }
     }
     program.items.iter().any(|item| match item {
-        Item::Function(f) => in_stmts(&f.body),
-        Item::Class(c) => c.members.iter().any(member_spawns),
-        Item::Trait(t) => t.members.iter().any(member_spawns),
-        Item::Test { body, .. } => in_stmts(body),
+        Item::Function(f) => in_stmts(&f.body, pred),
+        Item::Class(c) => c.members.iter().any(|m| member_has(m, pred)),
+        Item::Trait(t) => t.members.iter().any(|m| member_has(m, pred)),
+        Item::Test { body, .. } => in_stmts(body, pred),
         // Interface methods are bodyless; enums/aliases/imports carry no executable body.
         Item::Interface(_) | Item::Enum(_) | Item::TypeAlias { .. } | Item::Import { .. } => false,
     })
+}
+
+/// `spawn` anywhere in the program — the concurrency quarantine's predicate (Invariant 14 tier 2).
+pub fn uses_concurrency(program: &Program) -> bool {
+    any_expr(program, &|e| matches!(e, Expr::Spawn { .. }))
 }
 
 fn collect_pattern_bindings(pat: &Pattern, bound: &mut std::collections::HashSet<String>) {

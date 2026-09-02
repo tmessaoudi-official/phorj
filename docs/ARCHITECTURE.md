@@ -87,7 +87,7 @@ are opposite concepts (the rename in P3.5 removed the old name collision).
 
 ## Backends today vs. planned
 Three backends exist as **free functions** dispatched by a string `match` in `main.rs`
-(`cmd_run`/`cmd_treewalk`/`cmd_transpile`, defined in `src/cli/pipeline.rs`). There is no `Backend` trait yet — `grep -rnE '^\s*(pub )?trait ' src/ | grep -v test`
+(`cmd_run`/`cmd_treewalk`/`cmd_transpile`, defined in `src/cli/pipeline.rs`; the Invariant-14 tier-2 transpile gate sits beside it in `src/cli/ladder.rs`, split out 2026-09-02 — it must run PRE-EXPANSION and its module doc says why). There is no `Backend` trait yet — `grep -rnE '^\s*(pub )?trait ' src/ | grep -v test`
 finds 5 traits (`Transport`, `DebugFrontend`, `Suspend`, `Task`, `DbObject`), none a backend abstraction;
 the backend seam is deferred to the 4th backend (`phg build`, M2.5) per the Rule of Three — see ecosystem
 spec E-1.

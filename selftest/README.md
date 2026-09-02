@@ -10,6 +10,7 @@ $ phg test selftest/
 selftest/arithmetic.phg :: addition ... ok
 selftest/arithmetic.phg :: doubling ... ok
 selftest/arithmetic.phg :: booleans and null ... ok
+selftest/faults.phg :: Math.clamp with min > max faults (UA-1.7) ... ok
 selftest/faults.phg :: indexing past the end faults ... ok
 selftest/faults.phg :: a missing map key faults ... ok
 selftest/faults.phg :: code that should NOT fault ... ok

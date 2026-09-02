@@ -1033,6 +1033,49 @@ function main(): void {
     );
 }
 
+/// THE SPELLING THE FIRST FIX MISSED, and the one a milestone panel had to find: **no raw import at
+/// all.**
+///
+/// The module-keyed row above refuses the user's `import Core.Native.Http`. It does nothing about a
+/// program that never writes that import — because it does not need to. The injected
+/// `http_request_prelude` fragment declares `import Core.Native.Http as NativeHttp;`, and prelude
+/// imports are PROGRAM-WIDE once injected, so `NativeHttp` is in scope for every `import Core.Http;`
+/// program. That leak is `KNOWN_ISSUES` §PRELUDE-ALIAS-COLLISION seen from the other direction, and
+/// DEC-459's ruled binding isolation is what removes it structurally.
+///
+/// Until then the bypass was fully live and shipped: the program below type-checked clean,
+/// `phg transpile` exited 0, both native legs printed their output, and the PHP leg died with
+/// `Call to undefined function __phorj_http_register_serve()` at exit 255. `phg build --php` — the
+/// adoption lever — emitted the same broken helper into `_phorj/runtime.php` and printed a SUCCESS
+/// banner telling the user to wire it into composer.
+///
+/// Keyed on the CALL, in the RAW program. That is only sound because the ladder gate runs
+/// pre-expansion: the prelude's own `Http.serve` body calls `registerServe`, so this arm would fire on
+/// the injected source if it ran any later. The companion test below pins that ordering.
+#[test]
+fn transpiling_a_leaked_prelude_alias_call_to_register_serve_is_refused() {
+    const LEAKED_ALIAS_BYPASS: &str = r#"
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Http;
+import Core.Http.ServeConfig;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  NativeHttp.registerServe(new ServeConfig(), function(bytes raw): bytes { return raw; });
+}
+"#;
+    let prog = phorj::cli::parse_program(LEAKED_ALIAS_BYPASS).expect("parses");
+    let err = phorj::cli::transpile_program(&prog, LEAKED_ALIAS_BYPASS)
+        .expect_err("a leaked-alias registerServe call must not transpile");
+    assert!(
+        err.contains("E-TRANSPILE-SERVE"),
+        "the refusal must carry the ruled code: {err}"
+    );
+}
+
 /// THE FALSE-POSITIVE GUARD FOR THE MODULE-KEYED LAYER above — the one that would have made the row
 /// unsafe if it were wrong.
 ///

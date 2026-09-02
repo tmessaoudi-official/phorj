@@ -72,6 +72,29 @@ it. It needs a quiet box, gated on per-core `mpstat` idle rather than load-avg.
 Full plan, ordering and the queued adjudications:
 `docs/plans/2026-08-31-post-slice3-consolidation.plan.md`.
 
+### ⊳ CURSOR UPDATE 2026-09-02 — post-consolidation state
+
+**Slice 3's milestone gate is still OPEN.** A 3-lens panel ran against frozen `d182cd45` and returned
+**24 findings** across the three lenses (1×P0, 5×P1, rest P2/P3). The P0 — a `Core.Native.Http` ladder
+bypass reachable with NO import, via a leaked prelude alias — is FIXED and verified end-to-end. The
+false claims it exposed are corrected in place. **The remaining findings are NOT yet worked**, and the
+gate must not be reported as closed until they are.
+
+**CLOSED since the last cursor:** KNOWN_ISSUES §TEST-RAW-CHECKER is now **PARTIALLY** fixed — `phg test`
+shares the front end so injected-prelude types resolve, but the LSP still calls the non-test path and
+the item-level desugars skip `Item::Test`. Do not read it as done.
+
+**QUEUED — ruled 2026-09-02, none built** (Invariant 19: a ruled-but-unbuilt item belongs in the cursor,
+not only the register):
+- **DEC-457** — generic `#[Config]` providers key on the REIFIED type (`Map<string,string>` vs
+  `Map<string,int>` become distinct injection keys).
+- **DEC-458** — the `Core.Database` PHP twin is a `__phorj_db_stmt` wrapper
+  `[PDOStatement, sql, params[], nextIndex]`. Unblocks case-1 step 2; step 3 (the `decimal` mapping)
+  still needs its own ruling.
+- **DEC-459** — isolate prelude-internal bindings so a user alias cannot rebind them. Its own slice;
+  adjacent to §span-collision. It is also the structural cure for the P0 above, whose current fix is a
+  containment arm.
+
 **Next: DEC-331 is done — the queue is open.** Two items are carried OWED and are the natural
 candidates: the **G-8 microbench ratchet** (skipped since S3.4; needs a quiet box) and
 **KNOWN_ISSUES §TEST-RAW-CHECKER** (`phg test` checks the raw program, so injected-prelude symbols

@@ -6,7 +6,7 @@
 > 2026-07-16 post-audit — dated specs are folded at ship-time, never left as parallel SSOTs).
 > The original files now live in
 > [`../archive/specs/`](../archive/specs/README.md) (2026-07-04) — each section's bare "Source: …md" citation names a
-> file under `archive/`; **this document is the reference from now on** — external pointers target
+> file under `../archive/specs/`; **this document is the reference from now on** — external pointers target
 > section anchors here.
 >
 > **Reading conventions**
@@ -1732,7 +1732,7 @@ the `throws DatabaseError` Q6 ruling carried over verbatim. Historical text foll
 rounds; per-round rulings + alternatives in `C-decisions.md` (DEC-208, DEC-220-S3, DEC-221, DEC-227,
 DEC-229). Governing philosophy: `Core.Database` is a **primitive**, not an ORM — richer + faster + safer +
 more correct than PHP's PDO; ORMs/builders/migrations stay **userland** (DEC-208, META-6).
-Source: `archive/2026-07-14-core-db.md` (the full locked build spec, all 11 slices with
+Source: `../archive/specs/2026-07-14-core-db.md` (the full locked build spec, all 11 slices with
 per-slice realization notes — the authoritative slice-level record).
 
 - **Connection & drivers**: `new Db(dsn) throws DatabaseError` (throwing ctor, DEC-221 — fail-fast,
@@ -1794,7 +1794,7 @@ AskUserQuestion; twin-of-Core.Database architecture (where a decision matches Co
 follows it verbatim). Deviations under bounded autonomy recorded as DEC-230 (REOPENABLE; re-verdicted
 by the 2026-07-16 audit): `SmtpConfig.withAuth(...)` factory + `SendmailTransport.at(path)` (no ctor
 default params at build time — DEC-249 now queued), `MailTimeoutError`/`MailIoError` subtype names,
-`Address.of(email)`. Source: `archive/2026-07-15-core-mail.md` (the full locked spec).
+`Address.of(email)`. Source: `../archive/specs/2026-07-15-core-mail.md` (the full locked spec).
 **Pending amendment: DEC-265** (audit Tier 1) — SMTP will REQUIRE TLS when credentials are set
 (+ an explicit opt-out knob); the transport table's "TLS-by-default (STARTTLS)" row hardens from
 downgradeable-opportunistic to required-with-credentials.
@@ -2212,8 +2212,11 @@ name the `withHeader` call that built the bad value. Worse debugging for identic
 1. **NUL joins the rejected set on BOTH sides.** The request-side gate rejected CR/LF but not NUL,
    while PHP's own `header()` does reject it; the request side was widened in the same change so the
    two gates stay identical and a known header-truncation trick is closed.
-2. **Pre-check helpers ship:** `Http.isValidHeaderName(string): bool` and
-   `Http.isValidHeaderValue(string): bool`. Because a violation is a 500 rather than a 400, a handler
+2. **Pre-check helpers ship** — as `HeaderSafety.isValidName(string): bool` and
+   `HeaderSafety.isValidValue(string): bool` (`src/cli/http_prelude.rs`). ⚠ The ruling text said
+   `Http.isValidHeaderName`/`isValidHeaderValue`; the SHIPPED spelling differs, recorded as CD-12 in
+   the register. This section carried the ruled names verbatim when the spec was folded on 2026-09-02
+   and a milestone panel caught the SSOT advertising an API that does not exist. Because a violation is a 500 rather than a 400, a handler
    holding user-derived input would otherwise have no way to validate first and return a clean 400.
    These make the 400 path expressible without making the builders throw.
 
@@ -2534,7 +2537,7 @@ Invariant 5 is untouched.
 
 ## Appendix A — source-file map and supersession chains
 
-| Original file (in `archive/`) | Section here | Status |
+| Original file (in `../archive/specs/`) | Section here | Status |
 |---|---|---|
 | `2026-06-15-phorj-language-design.md` | [Founding language design](#founding-language-design) | HISTORICAL (vision stands; surface details superseded inline) |
 | `2026-06-15-ecosystem-roadmap-design.md` | [Ecosystem strategy](#ecosystem-strategy) | HISTORICAL (strategy stands; milestone table → MASTER-PLAN) |

@@ -198,6 +198,12 @@ Four properties worth knowing, each of them pinned by a test rather than by this
   without calling `Http.serve`, deliberately, so that it keeps a PHP leg — a file that calls
   `Http.serve` is refused by `phg transpile` with `E-TRANSPILE-SERVE`.)
 
+> **The same code refuses two more spellings** (2026-09-02). `import Core.Native.Http;` — the raw twin,
+> and the spelling `E-IMPORT-NATIVE-MEMBER` itself suggests — is refused on the import; and a call to
+> `NativeHttp.registerServe(...)` is refused even with no import at all, because an injected prelude
+> leaks that alias into scope. Both used to emit PHP calling a helper nothing defines, so the PHP leg
+> died at runtime while `phg run` worked. Reach these natives through `Core.Http`, which transpiles.
+
 Three cases that are deliberately NOT this error, because their fix is different:
 
 | case | what you get instead | why |

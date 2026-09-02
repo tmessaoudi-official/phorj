@@ -24,7 +24,7 @@ Not deferred and not owed: the refusals. A half-configured, unruled-floor, unbui
 TLS setup is a startup error (`E-SERVE-TLS-{INCOMPLETE,MIN-VERSION,DISABLED,CERT}`), never a server
 that quietly answers in the clear.
 
-## ~~TEST-RAW-CHECKER~~ — FIXED 2026-09-02: `phg test` now shares the front end with `phg check` and the LSP
+## TEST-RAW-CHECKER — PARTIALLY FIXED 2026-09-02: `phg test` shares the front end, but the equivalence does NOT yet hold
 
 **Not caused by S3.4** — recorded because it was found there. `phg test <file>` runs a `<check>`
 pseudo-test that calls `crate::checker::check_tests(&unit.program)` directly
@@ -55,7 +55,25 @@ so `phg check` ≡ LSP holds while `phg check` ≢ `phg test`.
 gap. Note the cascade in the sample above: three of the four messages are consequences of the first,
 so the output badly misdirects.
 
-**FIXED 2026-09-02.** The sizing note below was right that it is not a call swap — the fix threads a
+**PARTIALLY FIXED 2026-09-02 — and the first write-up of this said "FIXED", which a milestone panel
+disproved the same day. Two gaps remain, both verified by execution:**
+
+1. **The LSP still calls the non-test path** (`src/lsp/mod.rs`). A file containing `test` items —
+   including every `selftest/*.phg` this repo ships — reports `E-TEST-OUTSIDE-TESTS` in VS Code and
+   JetBrains on lines `phg test` accepts. Invariant 17's 100% rule and DEC-252's "same pipeline, never
+   diverge" are violated in the direction OPPOSITE the one just fixed, and the parameter that would
+   close it now exists and is simply not threaded there.
+2. **The item-level desugars skip `Item::Test`.** `resolve_variant_imports` and `desugar_router` are
+   item walks ending in a named `other => other`, so a `test` body still gets no variant-import
+   resolution and no auto-router desugar — two of the three causes this reroute was written to remove.
+   Proven with byte-identical bodies: in `function main()` it checks and runs clean; in
+   `test "…" { }` it fails with `E-INJECTED-VARIANT-BARE` plus the same misdirected cascade pointing
+   at `package Main;` line 1:1. It is also a DEC-356 exposure — those catch-alls now receive a variant
+   they never saw before, with no CD row.
+
+**What IS fixed:** prelude injection, so injected-prelude TYPES resolve under `phg test`.
+
+The sizing note below was right that it is not a call swap — the fix threads a
 test-mode flag through the SHARED pipeline rather than giving test mode a pipeline of its own, since a
 second pipeline would recreate the very divergence being closed. `checker::check_resolutions_mode` and
 `cli::check_and_expand_tests` are the two new entries; the runner calls the latter. `phg check` ≡ LSP ≡
@@ -87,7 +105,12 @@ what is now `docs/archive/specs/`. **35 references across the repo still spell t
 `2026-06-27-dependency-policy.md` (8 files) and `2026-06-21-php-parity-and-beyond.md` (6).
 
 **Why it was not fixed in the same pass.** The consolidation's Part 7 check covers the files THAT
-consolidation moved — all 18 of those resolve cleanly. These 35 are older debt, and most sit inside
+consolidation moved. ⚠ Correction 2026-09-02: that check said "all 18 resolve cleanly" and a milestone
+panel falsified it — four BACKTICK citations of the old relative `archive/` directory survived inside
+`UNIFIED-SPEC.md` (lines 9, 1735, 1797, 2540), covering `2026-07-14-core-db.md` and
+`2026-07-15-core-mail.md`, which ARE in the moved set. They resolved before the move and did not after,
+so that was a regression the sweep caused, not July debt. Now repointed. The sweep missed them because
+it looked for markdown links and path-prefixed strings, not bare backtick directory citations. These 35 are older debt, and most sit inside
 historical CHANGELOG entries and frozen research reports where a mechanical repoint edits the record
 rather than a pointer. That is the same reason a 2026-07-25 review finding was left naming the broken
 anchor it had found: a finding that is silently corrected inside itself stops making sense.
@@ -149,7 +172,11 @@ ladder gate in `src/cli/ladder.rs` — so the friendly surface is the supported 
 applies to all five native-only modules equally, so it long predates that change.
 
 Three callers refuse before emitting: `cmd_transpile`, `transpile_program` and `build_php` all run
-`ladder::reject_native_only_transpile` first. `src/cli/benchmark.rs` does not — it calls
+`ladder::reject_native_only_transpile` first. **TWO do not** — `src/cli/benchmark.rs` and, found by the
+2026-09-02 milestone panel, **`playground/src/lib.rs`'s `transpile_json`**, which is worse than the
+benchmark leg: the playground EXECUTES the emitted PHP under php-wasm and renders a Phorj-vs-PHP
+*agreement badge*, so Invariant 14's hard error degrades into an "outputs differ" warning on a shipped
+user-facing surface rather than a refusal. `src/cli/benchmark.rs` does not — it calls
 `crate::transpile::emit(prog)` directly to build the PHP leg it times against. So benchmarking a
 program that imports a native-only module produces PHP carrying placeholder helpers rather than the
 `E-TRANSPILE-<FEATURE>` refusal the other three give.

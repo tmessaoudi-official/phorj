@@ -5,7 +5,7 @@
 //! file, or every `*.phg` under that directory.
 //!
 //! Each file is loaded through the normal loader (so a test gets packages, imports, cross-package
-//! types — a real program) and validated once in **test mode** (`check_tests`, which allows `test`
+//! types — a real program) and validated once in **test mode** (`cli::check_and_expand_tests`, which allows `test`
 //! items). Then every `test` block is run **independently on the interpreter**: the block's body is
 //! lowered into a synthetic `main` and routed through the ordinary `check_and_expand` → `interpret`
 //! pipeline, so every front-end pass (alias/generic/`html`/UFCS/`new` rewrites) processes the body
@@ -99,8 +99,10 @@ fn run_file(file: &Path, out: &mut String, outcomes: &mut Vec<Outcome>) {
     // surface it was never routed through (KNOWN_ISSUES §TEST-RAW-CHECKER).
     //
     // `check_and_expand_tests` is `check_and_expand` with the test-mode flag threaded through the
-    // shared body, so `phg check` ≡ LSP ≡ `phg test` holds by construction rather than by
-    // maintenance. It returns the EXPANDED program; the runner deliberately keeps using
+    // shared body. ⚠ It closes the prelude-injection half and NOT the whole gap: the LSP still calls
+    // the non-test path, and the item-level desugars skip `Item::Test` (see the caveat on
+    // `cli::check_and_expand_tests`). A milestone panel disproved the earlier "≡ by construction"
+    // wording here on 2026-09-02. It returns the EXPANDED program; the runner deliberately keeps using
     // `unit.program` below, because lowering test bodies into synthetic mains is its own concern and
     // each lowered body goes through the ordinary compile path afterwards.
     if let Err(rendered) = crate::cli::check_and_expand_tests(&unit.program, &unit.diag_src) {

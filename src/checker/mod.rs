@@ -498,7 +498,7 @@ pub struct Checker {
     /// Set when checking a program under `phg test` (M-Test). When true, `test "name" { … }` items
     /// are allowed and their bodies type-checked; when false (every normal build — run/check/
     /// transpile), a `test` item is rejected as `E-TEST-OUTSIDE-TESTS` so production code cannot
-    /// smuggle test blocks. Default `false`; flipped only by [`check_tests`].
+    /// smuggle test blocks. Default `false`; flipped by `check_resolutions_mode` (`phg test`) and by [`check_tests`], now test-support-only.
     test_mode: bool,
     /// Set while checking a **static method** body (Batch E, finding #5). A static method has no
     /// instance, so `this` and bare instance-field references are rejected (`E-STATIC-THIS`) even
