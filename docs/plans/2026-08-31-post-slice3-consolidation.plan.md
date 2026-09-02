@@ -72,6 +72,11 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
   → drift fixes → full consolidation → A1/A0b), pushing green commits as they land; the session
   stops only for the Part 4 adjudication batch and the Part 0 §0.1 certification-tier question,
   both of which require the developer.
+- [2026-09-02] RESOLVED (by the check Part 3 item 6 itself mandates): DEC-339 is BUILT 2026-07-29
+  (`E-SHADOW-LOCAL`, `src/checker/plumbing.rs`), so `2026-07-26-block-scope-shadowing.md` leaves Part 1's
+  protected list and joins the Step 4 fold list — **11 folds, 7 live specs remain**, not 10 and 8. Its
+  23-row case list moved INTO UNIFIED-SPEC (the register cited it as canonical, and an archive marked
+  "not current" cannot hold a canonical rule); the register citation was repointed in the same change.
 - [2026-09-02] AGREED: Part 2 consolidation is executed INLINE and sequentially — no subagent
   fan-out for the spec folds or the SLICE-STATE collapse. Rationale: the fold rule (normative
   surface text into UNIFIED-SPEC; per-file BUILD STATUS ledgers NOT copied) is judgment, and a
@@ -325,6 +330,27 @@ Never proceed on a default; PENDING answers block only their own items, not the 
    symbol — three candidate answers already enumerated there, one banned (§span-collision).
 7. **Unruled build-order leftovers**: L-22, L-25, L-33, L-86 ("L-22 and L-33 look substantial",
    ruled-build-order:128-130) — surface for ruling or explicit deferral.
+
+**FOUND WHILE EXECUTING (added 2026-09-02) — four more, none of them self-ruled:**
+
+8. **`__phorj_db_stmt` wrapper shape** (`Core.Database` Ladder case-1, step 2). phorj's `Statement`
+   binds onto a SHARED raw handle in place and returns it (a deliberate DEC-266 allocation lever),
+   while PDO's `bindValue` needs a 1-based index — so `prepare` must return a WRAPPER object carrying
+   its own parameter accumulator and positional counter, and that wrapper's shape determines what
+   every other emitter can assume. **The spec's own "~20 emitters; mechanical" estimate was retracted
+   in writing as false.** Recommended (NOT ruled): `[PDOStatement, sql, params[], nextIndex]`, which is
+   also what makes `executeMany` expressible. Blocks the whole DB case-1 lift.
+9. **`decimal` mapping on the PHP leg** (same slice, step 3). PDO+SQLite returns native `int`/`float`
+   (an earlier assumption otherwise was wrong and is corrected), but a `NUMERIC` column comes back as
+   float `19.99` where phorj `decimal` is exact fixed-point. Bind/fetch as TEXT and reconstruct
+   exactly, or accept float on the PHP leg and disclose it.
+10. **P-Q-B-1 — visibility narrowing on an overloaded interface method.** Pre-existing, open since
+    2026-07-25, surfaced by the visibility-model fold; not closed by that build.
+11. **PRELUDE-ALIAS-COLLISION** (KNOWN_ISSUES, verified 2026-09-02). Importing `Core.Native.Http` under
+    any alias but `NativeHttp` and using it suppresses the prelude's own binding, failing with
+    `E-UNKNOWN-IDENT` at prelude lines the user cannot open. The fix — making prelude-internal bindings
+    immune to user aliasing — changes the import model and sits in §span-collision territory, so it is
+    an adjudication rather than a patch.
 
 ---
 
