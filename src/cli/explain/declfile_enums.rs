@@ -172,14 +172,19 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              `enum Suit: string { Hearts = \"H\" }`.\n"
         }
         "E-REGEX-UNSUPPORTED" => {
-            "E-REGEX-UNSUPPORTED — a `Regex.compile` pattern uses syntax the LINEAR engine omits.\n\n\
-             `Regex.compile` is the ReDoS-immune engine (RE2-style, guaranteed linear time). It omits\n\
-             exactly PCRE's backtracking-only syntax: look-ahead/look-behind `(?=…)` `(?<=…)`,\n\
-             back-references `\\1` `\\k<n>`, atomic groups `(?>…)`, possessive quantifiers `a++`,\n\
-             conditionals, recursion, `(*VERB)`s, `{,n}` and the escapes `\\h` `\\R` `\\Z` `\\G` `\\K`.\n\
-             If you need them, use `Regex.compileBacktracking(...)` (DEC-461): the same API on a\n\
-             backtracking engine with a step budget — a catastrophic pattern raises a fault instead\n\
-             of hanging. Both compile to the same `preg_*` under PHP.\n"
+            "E-REGEX-UNSUPPORTED — a regex pattern uses syntax that cannot be byte-identical.\n\n\
+             Two classes, named in the message. (1) LINEAR-ONLY: `Regex.compile` is the ReDoS-immune\n\
+             engine (RE2-style, guaranteed linear time) and omits exactly PCRE's backtracking-only\n\
+             syntax — look-ahead/look-behind `(?=…)` `(?<=…)`, back-references `\\1` `\\k<n>`, atomic\n\
+             groups `(?>…)`, possessive quantifiers `a++`, conditionals, recursion, `(*VERB)`s, `{,n}`\n\
+             and the escapes `\\h` `\\R` `\\Z` `\\G` `\\K`. Use `Regex.compileBacktracking(...)`\n\
+             (DEC-461): the same API on a backtracking engine with a step budget. (2) NOT PORTABLE on\n\
+             either engine: syntax the native engines and PHP's PCRE read DIFFERENTLY, or that only one\n\
+             side accepts — class-set operators and nested classes (`[a-z&&[^aeiou]]`, `[[ab]]`), POSIX\n\
+             classes (`[[:alpha:]]`), `\\v`/`\\V`, `\\<` `\\>` `\\b{…}`, the inline `u`/`R` flags, and\n\
+             `\\Q…\\E` `(?#…)` `(?|…)` `(?'n'…)` `(?P=n)` `\\X` `\\N` `\\0` `\\e` `\\c`. Rewrite these\n\
+             portably (an explicit class, `\\p{…}`, `(?<n>…)`/`\\k<n>`). Both constructors compile to\n\
+             the same `preg_*` under PHP.\n"
         }
         "E-REGEX-INVALID" => {
             "E-REGEX-INVALID — a literal regex pattern does not parse.\n\n\

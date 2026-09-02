@@ -6,10 +6,12 @@
 //! * [`Engine::Backtracking`] — `Regex.compileBacktracking`: `fancy-regex` (the 15th vetted
 //!   dependency), PCRE-class syntax (look-around, back-references, atomic groups, possessive
 //!   quantifiers) on a backtracking VM with a STEP BUDGET that raises a typed fault instead of
-//!   hanging. It delegates the regular subset to `regex`, so the two engines agree wherever both
-//!   accept a pattern.
+//!   hanging. It delegates the regular subset to `regex` (linear, no budget needed), so the two
+//!   engines agree wherever both accept a pattern — and a catastrophic REGULAR pattern never trips
+//!   the budget natively; the PHP leg's PCRE may (a disclosed, loud limitation).
 //!
-//! The linear engine REJECTS every PCRE-only construct up front ([`linear_unsupported`]): the crate
+//! The linear engine REJECTS every PCRE-only construct up front (`reject::linear_unsupported`), and
+//! BOTH engines reject the syntax the native engines and PCRE disagree on (`reject::pcre_divergent`): the crate
 //! refuses most of them itself, but it silently read a possessive `a++` as `(a+)+` — `true` natively,
 //! `false` under PCRE, with every leg exiting 0 (panel C2). The reject list is applied twice: at
 //! compile time by the checker on a LITERAL pattern (`E-REGEX-UNSUPPORTED`), and at runtime here for a
@@ -19,6 +21,21 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
+use super::reject::{linear_unsupported, pcre_divergent, RejectKind};
+
+/// A refused pattern: the kind (for the checker's code + hint) and the fault text every leg raises.
+#[derive(Debug)]
+pub struct RegexError {
+    pub kind: RejectKind,
+    pub message: String,
+}
+
+impl From<RegexError> for String {
+    fn from(e: RegexError) -> String {
+        e.message
+    }
+}
 
 /// Which engine compiled a `Regex` value — carried on the value's `engine` field.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -71,128 +88,51 @@ thread_local! {
     static CACHE: RefCell<HashMap<(Engine, String), Rc<Compiled>>> = RefCell::new(HashMap::new());
 }
 
-/// Why the LINEAR engine refuses `pattern`, if it does. Escape- and character-class-aware, so `\+`
-/// and `[+]+` are ordinary. Names the construct so the diagnostic can point at `compileBacktracking`.
-pub fn linear_unsupported(pattern: &str) -> Option<&'static str> {
-    let b = pattern.as_bytes();
-    let mut i = 0;
-    let mut in_class = false;
-    // Whether the previous token was a quantifier (`*`, `+`, `?`, `{n,m}`), so a following `+` is
-    // possessive rather than a second quantifier the crate would nest.
-    let mut after_quantifier = false;
-    while i < b.len() {
-        let c = b[i];
-        if c == b'\\' {
-            let Some(&n) = b.get(i + 1) else { break };
-            if !in_class {
-                match n {
-                    b'1'..=b'9' | b'g' | b'k' => return Some("a back-reference"),
-                    b'h' | b'H' | b'R' | b'Z' | b'G' | b'K' => {
-                        return Some("a PCRE-only escape (`\\h`, `\\R`, `\\Z`, `\\G`, `\\K`)")
-                    }
-                    _ => {}
-                }
-            }
-            i += 2;
-            after_quantifier = false;
-            continue;
-        }
-        if in_class {
-            if c == b']' {
-                in_class = false;
-            }
-            i += 1;
-            continue;
-        }
-        match c {
-            b'[' => {
-                in_class = true;
-                // A leading `]` (or `^]`) is literal inside a class.
-                i += 1;
-                if b.get(i) == Some(&b'^') {
-                    i += 1;
-                }
-                if b.get(i) == Some(&b']') {
-                    i += 1;
-                }
-                after_quantifier = false;
-                continue;
-            }
-            b'(' => {
-                if b.get(i + 1) == Some(&b'*') {
-                    return Some("a PCRE verb `(*…)`");
-                }
-                if b.get(i + 1) == Some(&b'?') {
-                    match (b.get(i + 2), b.get(i + 3)) {
-                        (Some(b'='), _) | (Some(b'!'), _) => return Some("look-ahead"),
-                        (Some(b'<'), Some(b'=')) | (Some(b'<'), Some(b'!')) => {
-                            return Some("look-behind")
-                        }
-                        (Some(b'>'), _) => return Some("an atomic group"),
-                        (Some(b'('), _) => return Some("a conditional group"),
-                        (Some(b'R'), _) | (Some(b'0'..=b'9'), _) | (Some(b'&'), _) => {
-                            return Some("a recursive group")
-                        }
-                        _ => {}
-                    }
-                }
-                after_quantifier = false;
-            }
-            b'{' => {
-                if b.get(i + 1) == Some(&b',') {
-                    return Some("a `{,n}` quantifier");
-                }
-                // A `{n}`/`{n,m}` bound counts as a quantifier for the possessive check below.
-                if let Some(close) = b[i..].iter().position(|&x| x == b'}') {
-                    let inner = &b[i + 1..i + close];
-                    if !inner.is_empty() && inner.iter().all(|x| x.is_ascii_digit() || *x == b',') {
-                        i += close + 1;
-                        after_quantifier = true;
-                        continue;
-                    }
-                }
-                after_quantifier = false;
-            }
-            b'*' | b'+' | b'?' => {
-                if after_quantifier && c == b'+' {
-                    return Some("a possessive quantifier");
-                }
-                // `??`, `*?`, `+?` are lazy (supported); `?` after a quantifier keeps the flag off.
-                after_quantifier = c != b'?' || !after_quantifier;
-                i += 1;
-                continue;
-            }
-            _ => after_quantifier = false,
-        }
-        i += 1;
-    }
-    None
-}
-
 /// Validate `pattern` for `engine` WITHOUT compiling into the cache — the checker's compile-time gate
-/// for literal patterns. `Err` carries the fault text a runtime `compile` would raise.
-pub fn validate(pattern: &str, engine: Engine) -> Result<(), String> {
+/// for literal patterns. `Err` carries the kind and the fault text a runtime `compile` would raise.
+pub fn validate(pattern: &str, engine: Engine) -> Result<(), RegexError> {
     build(pattern, engine).map(|_| ())
 }
 
-fn build(pattern: &str, engine: Engine) -> Result<Compiled, String> {
+fn build(pattern: &str, engine: Engine) -> Result<Compiled, RegexError> {
+    // BOTH engines first: syntax the native engines and PCRE disagree on can be byte-identical on no
+    // constructor (round-4 panel R1–R3/R6–R7).
+    if let Some(what) = pcre_divergent(pattern) {
+        return Err(RegexError {
+            kind: RejectKind::NotPortable,
+            message: format!(
+                "unsupported regex: {what} — the native engines and PCRE disagree on it, so no \
+                 engine can match it byte-identically; rewrite the pattern portably \
+                 (`phg explain E-REGEX-UNSUPPORTED`)"
+            ),
+        });
+    }
     match engine {
         Engine::Linear => {
             if let Some(what) = linear_unsupported(pattern) {
-                return Err(format!(
-                    "invalid or unsupported regex: {what} is not supported by the linear engine \
-                     (use `Regex.compileBacktracking` for PCRE-class syntax)"
-                ));
+                return Err(RegexError {
+                    kind: RejectKind::LinearOnly,
+                    message: format!(
+                        "invalid or unsupported regex: {what} is not supported by the linear engine \
+                         (use `Regex.compileBacktracking` for PCRE-class syntax)"
+                    ),
+                });
             }
             ::regex::Regex::new(pattern)
                 .map(Compiled::Linear)
-                .map_err(|e| format!("invalid or unsupported regex: {e}"))
+                .map_err(|e| RegexError {
+                    kind: RejectKind::Invalid,
+                    message: format!("invalid or unsupported regex: {e}"),
+                })
         }
         Engine::Backtracking => fancy_regex::RegexBuilder::new(pattern)
             .backtrack_limit(STEP_BUDGET)
             .build()
             .map(Compiled::Backtracking)
-            .map_err(|e| format!("invalid regex: {e}")),
+            .map_err(|e| RegexError {
+                kind: RejectKind::Invalid,
+                message: format!("invalid regex: {e}"),
+            }),
     }
 }
 

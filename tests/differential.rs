@@ -5693,3 +5693,144 @@ fn an_unparseable_literal_pattern_is_e_regex_invalid_on_both_constructors() {
         assert_eq!(cmd_treewalk(&src).is_err(), cmd_run(&src).is_err());
     }
 }
+
+/// Run `src` through real PHP EXPECTING a fatal whose text contains `needle` — for the cases where
+/// the native legs SUCCEED and the PHP leg is a disclosed, loud limitation (so `agree_err_php`, which
+/// requires a native fault, cannot express them). Skips without PHP like the other oracle helpers.
+fn php_leg_fails_with(src: &str, needle: &str, label: &str) {
+    let src = with_pkg(src);
+    let Some(php) = php_bin_cached() else {
+        return;
+    };
+    let php_src = cli::cmd_transpile(&src).expect("transpile ok");
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!("phorj_phpleg_{}_{n}.php", std::process::id()));
+    std::fs::write(&path, &php_src).expect("write temp php");
+    let out = Command::new(php)
+        .args(php_n_args(php))
+        .arg(&path)
+        .output()
+        .expect("spawn php");
+    let _ = std::fs::remove_file(&path);
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !out.status.success(),
+        "{label}: PHP must fail, got exit 0:\n{all}"
+    );
+    assert!(
+        all.contains(needle),
+        "{label}: PHP failure must name `{needle}`:\n{all}"
+    );
+}
+
+/// Round-4 correctness R1–R3/R6–R7, safety F1–F2: syntax that the `regex` crate (and, by delegation,
+/// `fancy-regex`) reads DIFFERENTLY from PCRE — or that only one side accepts — is rejected on BOTH
+/// constructors, at check time for a literal and at run time on every leg for a dynamic pattern. Before
+/// this, `[a-z&&[^aeiou]]`, `[[ab]]`, `\v` and `[[:alpha:]]` matched differently under PHP with every leg
+/// exiting 0, and `\Q…\E` / `(?|…)` faulted natively while PHP ran them.
+#[test]
+fn pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg() {
+    let constructs = [
+        r"[[ab]]",
+        r"[a-z&&[^aeiou]]",
+        r"[a-z--[aeiou]]",
+        r"[a-z~~[b]]",
+        r"[[:alpha:]]",
+        r"a\v",
+        r"a\V",
+        r"(?-u)\w",
+        r"(?u)a",
+        r"\<a",
+        r"a\>",
+        r"\b{start}a",
+        r"\Qa.b\E",
+        r"(?#note)a",
+        r"(?|a)",
+        r"(?'n'a)",
+        r"(?P<n>a)(?P=n)",
+        r"a\X",
+        r"a\N",
+        r"a\0",
+        r"a\e",
+        r"a\cA",
+        r"(?C)a",
+    ];
+    for ctor in ["compile", "compileBacktracking"] {
+        for pat in constructs {
+            let src = with_pkg(&regex_prog(&format!(
+                "var re = Regex.{ctor}(r\"{pat}\");\n    Output.printLine(\"{{Regex.matches(re, \\\"ab\\\")}}\");"
+            )));
+            let err =
+                cmd_treewalk(&src).expect_err(&format!("{ctor}: literal `{pat}` must not check"));
+            assert!(err.contains("E-REGEX-UNSUPPORTED"), "{ctor} `{pat}`: {err}");
+            let (a, b) = pat.split_at(pat.len() / 2);
+            agree_err_php(&regex_prog(&format!(
+                "string p = r\"{a}\" + r\"{b}\";\n    var re = Regex.{ctor}(p);\n    Output.printLine(\"{{Regex.matches(re, \\\"ab\\\")}}\");"
+            )));
+        }
+    }
+    // Positive controls — portable syntax must keep working on both engines and all three legs.
+    for (pat, subject, expected) in [
+        (r"[a-z]+", "abc", "true"),
+        (r"[^\]]", "a", "true"),
+        (r"\p{L}+", "é", "true"),
+        (r"[\[\]]", "]", "true"),
+        (r"x{2,3}", "xx", "true"),
+        (r"(?i)a", "A", "true"),
+        (r"(?P<n>a)b", "ab", "true"),
+        (r"\bword\b", "a word", "true"),
+        (r"[a-]", "-", "true"),
+        (r"a{2}", "a", "false"),
+    ] {
+        for ctor in ["compile", "compileBacktracking"] {
+            agree_out_php(
+                &regex_prog(&format!(
+                    "var re = Regex.{ctor}(r\"{pat}\");\n    Output.printLine(\"{{Regex.matches(re, \\\"{subject}\\\")}}\");"
+                )),
+                &format!("{expected}\n"),
+                &format!("portable control {ctor} `{pat}`"),
+            );
+        }
+    }
+}
+
+/// Round-4 correctness R4 / safety F3 — the disclosed PHP-leg limitation: a catastrophic pattern that
+/// stays inside the REGULAR subset runs in linear time on both native constructors (fancy-regex
+/// delegates it; no budget is involved) but PCRE backtracks and trips its limit. The PHP helper names
+/// the cause loudly instead of returning a silent `false` (which was byte-identical only for a
+/// NON-matching subject). Not an `agree_err_php` case: the native legs succeed.
+#[test]
+fn catastrophic_regular_pattern_is_a_loud_php_leg_limitation() {
+    for ctor in ["compile", "compileBacktracking"] {
+        let src = regex_prog(&format!(
+            "var re = Regex.{ctor}(r\"^(a+)+$\");\n    Output.printLine(\"{{Regex.matches(re, \\\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab\\\")}}\");"
+        ));
+        let out = cmd_treewalk(&with_pkg(&src)).expect("linear natively");
+        assert_eq!(out, "false\n", "{ctor}");
+        assert_eq!(cmd_run(&with_pkg(&src)).expect("vm"), out, "{ctor} VM");
+        php_leg_fails_with(
+            &src,
+            "PCRE backtrack limit",
+            &format!("{ctor} catastrophic regular"),
+        );
+    }
+}
+
+/// Round-4 correctness R5 — constructing the injected carrier directly (`new Regex(p, e)`) bypasses
+/// `compile`'s gates; the value is validated at first USE on every leg instead (the PHP helpers check
+/// the engine name and run the same reject scans, memoized), so both legs fault.
+#[test]
+fn a_directly_constructed_regex_value_is_validated_at_first_use_on_every_leg() {
+    agree_err_php(&regex_prog(
+        "var re = new Regex(\"(?=a)b\", \"linear\");\n    Output.printLine(\"{Regex.matches(re, \\\"ab\\\")}\");",
+    ));
+    agree_err_php(&regex_prog(
+        "var re = new Regex(\"a\", \"bogus\");\n    Output.printLine(\"{Regex.matches(re, \\\"a\\\")}\");",
+    ));
+}

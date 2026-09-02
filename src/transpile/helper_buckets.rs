@@ -106,8 +106,8 @@
 //!   `__phorj_now_frozen` `__phorj_now_millis` `__phorj_now_unfreeze` `__phorj_number_format`
 //!   `__phorj_range` `__phorj_regex_check` `__phorj_regex_compile` `__phorj_regex_delim` `__phorj_regex_expand`
 //!   `__phorj_regex_find` `__phorj_regex_find_all` `__phorj_regex_find_all_groups` `__phorj_regex_find_groups`
-//!   `__phorj_regex_linear_unsupported` `__phorj_regex_matches` `__phorj_regex_quote_meta`
-//!   `__phorj_regex_replace` `__phorj_regex_replace_callback` `__phorj_regex_split` `__phorj_rng_int_between`
+//!   `__phorj_regex_linear_unsupported` `__phorj_regex_matches` `__phorj_regex_pcre_divergent` `__phorj_regex_quote_meta`
+//!   `__phorj_regex_replace` `__phorj_regex_replace_callback` `__phorj_regex_split` `__phorj_regex_validated` `__phorj_rng_int_between`
 //!   `__phorj_rng_next` `__phorj_rng_next_float` `__phorj_rng_seed` `__phorj_rng_state`
 //!   `__phorj_rng_step` `__phorj_sort` `__phorj_sort_with` `__phorj_take_while`
 //!   `__phorj_unique` `__phorj_uri` `__phorj_uri_parse` `__phorj_uri_resolve`
@@ -278,10 +278,12 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_regex_find_groups", 2),
     ("__phorj_regex_linear_unsupported", 2),
     ("__phorj_regex_matches", 2),
+    ("__phorj_regex_pcre_divergent", 2),
     ("__phorj_regex_quote_meta", 2),
     ("__phorj_regex_replace", 2),
     ("__phorj_regex_replace_callback", 2),
     ("__phorj_regex_split", 2),
+    ("__phorj_regex_validated", 2),
     ("__phorj_rem", 1),
     ("__phorj_result_and_then", 1),
     ("__phorj_result_get_or_else", 1),

@@ -2540,11 +2540,25 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   `Regex.compileBacktracking` (DEC-461, 2026-09-02).** The linear engine's reject list (look-around,
   back-references, atomic groups, possessive quantifiers, conditionals/recursion, `(*VERB)`s, `{,n}`,
   `\h \R \Z \G \K`) is applied at CHECK time to a literal pattern (`E-REGEX-UNSUPPORTED`) and at run
-  time to a dynamic one, with the PHP twin `__phorj_regex_compile` porting the same scan — so a pattern
-  can no longer fault natively while transpiled PCRE matched (panel C5), nor parse differently
-  (`a++` was `(a+)+` natively and possessive under PCRE, panel C2). `compileBacktracking` runs those
-  patterns on `fancy-regex` under a step budget: `regex step budget exceeded` is a typed fault on every
-  leg (PHP's `PREG_BACKTRACK_LIMIT_ERROR` maps to it), never a hang.
+  time to a dynamic one, with the PHP twin porting the same scan. **Round 4 (2026-09-02) widened this to
+  a second scan applied to BOTH constructors** — syntax the native engines and PCRE read DIFFERENTLY,
+  or that only one side accepts, all of which used to pass every leg silently: class-set operators and
+  nested classes (`[a-z&&[^aeiou]]`, `[[ab]]`), POSIX classes (`[[:alpha:]]` — ASCII natively, Unicode
+  under PCRE's UCP; write `\p{…}`), `\v`/`\V`, `\<` `\>` `\b{…}`, the inline `u`/`R` flags, and
+  `\Q…\E` `(?#…)` `(?|…)` `(?'n'…)` `(?P=n)` `(?P>n)` `(?C…)` `\X` `\N` `\0` `\e` `\c`. A value built
+  directly (`new Regex(p, e)`) is validated at first USE on every leg. **Disclosure (Invariant 14):** the
+  scans are NOT the `regex` crate's grammar. A LITERAL pattern is gated exactly on every leg (the crate
+  itself validates it at check time); a DYNAMIC pattern is gated by the ported reject lists, which cover
+  the known divergence classes — a further construct the crate refuses and PCRE accepts would still
+  fault natively and run under PHP. `compileBacktracking` runs PCRE-class patterns on `fancy-regex`
+  under a STEP BUDGET: `regex step budget exceeded` is a typed fault on every leg (PHP's
+  `PREG_BACKTRACK_LIMIT_ERROR` maps to it), never a hang — **for patterns that USE PCRE-class syntax**,
+  the only ones the backtracking VM runs. A catastrophic pattern that stays inside the REGULAR subset
+  (`^(a+)+$`) runs in linear time natively on BOTH constructors (fancy-regex delegates it) while PCRE
+  backtracks and may trip its limit: the PHP helper then raises a loud, named fault (`PCRE backtrack
+  limit exceeded on a pattern the native engines match in linear time …`) instead of the silent `false`
+  it returned before 2026-09-02 — "ReDoS-immune by construction" is a NATIVE-leg property; the PHP leg
+  inherits PCRE. This is the remaining engine-level edge beside empty-match placement (below).
 - ~~`\d` / `\w` / `\s` are Unicode-aware natively, ASCII-only in transpiled PCRE~~ — **that edge did
   not exist** (panel C11): the helper's `u` modifier turns on PCRE's UCP for `\d\w\s`, so all three
   legs agree on Unicode subjects. The real edges were C1–C3, all fixed with DEC-461.

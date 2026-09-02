@@ -4,6 +4,7 @@
 
 pub mod engine;
 pub mod natives;
+pub mod reject;
 pub mod replace;
 #[cfg(test)]
 mod tests;

@@ -66,9 +66,11 @@ function main(): void {
     Output.printLine("callback = {upped}");
     // compileBacktracking (DEC-461) — the OPT-IN backtracking engine for PCRE-class syntax the linear
     // engine deliberately omits: look-around, back-references, atomic groups, possessive quantifiers.
-    // Same API, same `preg_*` under PHP; a catastrophic pattern raises a fault ("regex step budget
-    // exceeded") instead of hanging — ReDoS stays bounded and opt-in. `Regex.compile` would reject
-    // these at CHECK time (`E-REGEX-UNSUPPORTED`) with this constructor as the hint.
+    // Same API, same `preg_*` under PHP; a catastrophic PCRE-class pattern raises a fault ("regex step
+    // budget exceeded") instead of hanging — ReDoS stays bounded and opt-in on the native legs (the PHP
+    // leg inherits PCRE, see KNOWN_ISSUES §Core.Regex). `Regex.compile` would reject these at CHECK
+    // time (`E-REGEX-UNSUPPORTED`) with this constructor as the hint; syntax the native engines and
+    // PCRE read differently (`[[:alpha:]]`, class-set operators, `\v`) is rejected on BOTH.
     var priced = Regex.compileBacktracking("(?<=\\$)\\d+");
     Output.printLine("lookbehind = {Regex.find(priced, \"cost: $42 today\") ?? \"none\"}");
     var doubled = Regex.compileBacktracking("(\\w)\\1");

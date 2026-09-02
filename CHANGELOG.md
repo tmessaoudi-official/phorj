@@ -8,6 +8,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Regex: syntax the native engines and PCRE read differently is rejected on BOTH constructors, a
+  directly constructed `Regex` value is validated at first use, and the PCRE backtrack limit on a
+  regular pattern is a loud, named PHP-leg fault (panel round 4, correctness R1–R7 / safety F1–F3).**
+  A second reject scan (`ext::regex::reject::pcre_divergent`, ported to PHP as
+  `__phorj_regex_pcre_divergent`) refuses class-set operators and nested classes, POSIX classes,
+  `\v`/`\V`, `\<` `\>` `\b{…}`, the inline `u`/`R` flags and the PCRE-only constructs neither crate
+  implements — at check time for a literal (`E-REGEX-UNSUPPORTED`, with a "rewrite portably" hint
+  distinct from the linear-only hint; `validate` now returns a typed `RejectKind`) and at run time on
+  every leg for a dynamic pattern; 23 constructs × 2 constructors × literal + dynamic pinned through
+  real PHP, plus 10 portable controls. `new Regex(p, e)` is validated at first use by the PHP helpers
+  (`__phorj_regex_validated`, memoized), so both legs fault. **Behaviour change:** the range's
+  `__phorj_regex_check` turned a PCRE backtrack-limit hit into a fault; for a catastrophic pattern that
+  stays inside the regular subset (`^(a+)+$`), which the native engines match in linear time on both
+  constructors, that replaced a silent PHP `false` (byte-identical only for a non-matching subject) with
+  a loud fault naming the PHP-leg limitation — ruled direction: loud, disclosed in KNOWN_ISSUES
+  §Core.Regex, the spec rows and the example. Four sabotages red (the Rust scan, its PHP port, the
+  first-use validation, the limit split).
 - **Diagnostics and VM faults inside a string interpolation name the real line (W0-5 / H §5,
   INTERP-LINE-RESET; panel round 4).** The interpolation sub-tokenizer restarts at 1:1 and the parser
   re-based only each re-lexed token's `start`, so `phg check` reported `1:1` for an error inside

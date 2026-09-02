@@ -32,21 +32,25 @@ impl Checker {
             } else {
                 Engine::Backtracking
             };
-            if let Err(msg) = validate(&literal, engine) {
-                let unsupported = msg.contains("linear engine");
-                let (code, hint) = if unsupported {
-                    (
+            if let Err(e) = validate(&literal, engine) {
+                use crate::ext::regex::reject::RejectKind;
+                let (code, hint) = match e.kind {
+                    RejectKind::LinearOnly => (
                         "E-REGEX-UNSUPPORTED",
                         "the linear engine is ReDoS-immune and omits PCRE's backtracking-only syntax; \
                          `Regex.compileBacktracking(...)` accepts it under a step budget",
-                    )
-                } else {
-                    (
+                    ),
+                    RejectKind::NotPortable => (
+                        "E-REGEX-UNSUPPORTED",
+                        "no engine makes this byte-identical with PHP — rewrite with an explicit \
+                         class, `\\p{…}`, or the portable spelling named in the message",
+                    ),
+                    RejectKind::Invalid => (
                         "E-REGEX-INVALID",
                         "fix the pattern — it would fault at run time on every backend",
-                    )
+                    ),
                 };
-                self.err_coded(*span, msg, code, Some(hint.to_string()));
+                self.err_coded(*span, e.message, code, Some(hint.to_string()));
             }
         }
         #[cfg(not(feature = "regex"))]
