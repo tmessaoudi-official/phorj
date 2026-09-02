@@ -111,6 +111,46 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
   fan-out for the spec folds or the SLICE-STATE collapse. Rationale: the fold rule (normative
   surface text into UNIFIED-SPEC; per-file BUILD STATUS ledgers NOT copied) is judgment, and a
   mis-fold silently loses normative spec text — the exact loss Part 1 exists to prevent.
+- [2026-09-02 16:40] AGREED (scope of the next body of work): **no scout port is built in this repo.**
+  The developer will implement a scout-class app themselves later; phorj's job is to be READY for it —
+  every capability the `/stack/projects/scout` inventory needs (regex parity, HTML5 parse + selectors +
+  entity decode, MIME/RFC822, `Core.Net` TCP+TLS, IMAP, `sleep`, shutdown signals, tz-aware time,
+  `.env`, JSON hard errors, injectable `HttpClient`, charset/QP) must exist as stdlib, each with its
+  Invariant-9 example, LSP row and flip-or-flag bench. The scout demand inventory
+  (session scratchpad `raw/scout-needs.md`, 52 rows) is the yardstick, not a deliverable.
+- [2026-09-02 16:40] AGREED: **all three streams are authorised** — (1) the PHP-readiness stdlib
+  wave above, (2) the open-bug drain (26 open, `raw/issues.md`), (3) the DEC-333 perf roadmap. The
+  ORDER is the next ruling (recommendation: harness-trust bugs → readiness wave with per-feature
+  benches → JIT/AOT roadmap). Schema-v12 SQLite compatibility with the PHP scout is MOOT (no port).
+- [2026-09-02 16:40] PENDING (regex spine break, found today on the shipped binary):
+  `Regex.compile("(?<=a)b")` → `phg check` OK, `phg run` faults (`regex` crate has no look-around),
+  `phg transpile` emits `preg_match('/(?<=a)b/')` which PHP runs and matches. Invariant 1 broken on
+  check-clean input; `src/ext/regex/natives.rs:307` emits the pattern unvalidated. Developer chose
+  "rewrite the patterns app-side" in the first question but asked for a clearer explanation before the
+  phorj-side ruling (parity-by-refusal vs opt-in backtracking vs backtracking default) — re-asked.
+- [2026-09-02 17:05] AGREED (REGEX, option B — supersedes the PENDING row above): `Regex.compile`
+  stays the linear-time `regex` engine (ReDoS-immune, unchanged); a second constructor
+  (`Regex.compileBacktracking`, name to be confirmed in its slice) accepts PCRE-class syntax
+  (look-around, backreferences, branch reset, atomic/possessive) via a `fancy-regex`-class crate as the
+  15th vetted dependency, with a step budget that raises a typed fault instead of hanging. Both
+  constructors emit the same `preg_*` PHP. Compile-time validation of LITERAL patterns on the transpile
+  leg + a runtime helper for dynamic ones close today's Invariant-1 hole regardless. DEC row owed.
+- [2026-09-02 17:05] AGREED (ORDER): (1) **harness trust** — `default_fills` span-collision P0,
+  differential floor + explicit expected-skip set, the three ungated PHP-emit paths (playground,
+  `phg benchmark`, regex literal gate), the LSP test-mode path, then DEC-459 prelude isolation;
+  (2) the **PHP-readiness wave** in leverage order (regex B → `sleep` + DEC-204 signals → DEC-247 tz →
+  `.env`/process/stderr → JSON hard errors + list-vs-object → HTML5 parse/decode/select + DEC-382 XML →
+  `Core.Net` TCP+TLS → MIME → DEC-413 IMAP → HTTP client cookies/gzip/injectable interface → DEC-271
+  charset/QP/accent-fold), every module benched flip-or-flag as it lands; (3) the DEC-333 perf roadmap.
+  Remaining open bugs interleave where they block a wave item.
+- [2026-09-02 17:05] AGREED (PERF RULINGS SPLIT): the closure-entry JIT ruling (DEC-434), the
+  fallible-call de-JIT region (DEC-431) and the `TakeLocal` op for `s = s + x` are IMPLEMENTATION
+  choices Claude makes and ships byte-identical with before/after benches; the `Json.getInt`-style
+  accessor surface is user-visible and comes back as an Invariant-15 question when its slice starts.
+- [2026-09-02 17:05] AGREED (LOST PANEL): the 24-finding panel report (cited only by SHA in
+  SLICE-STATE, never landed in the repo) is recovered by **re-running the three-lens panel NOW, on a
+  frozen commit, before any new work**. Its findings table is transcribed INTO this plan file (tracked)
+  — `var/claude/` is gitignored, which is how the previous report was lost.
 
 ## Execution order (global — Parts are reference material, THIS is the sequence)
 
