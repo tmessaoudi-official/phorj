@@ -57,6 +57,45 @@
   cleared: `4dcb76d` did **not** re-emit `bench/micro-baseline.json` (last touched by `6d71227`), so no
   laundering occurred. MASTER-PLAN carries `4dcb76d` (`mapinsert re-measured`) and its claim and needs the same retraction — held for a
   ruling rather than edited unilaterally, because DEC-431.1's status is *push held*.
+- [2026-09-02 17:40] AGREED — **Q23 BOUNDARY: the doctrine covers CAPABILITIES only** (stdlib,
+  runtime, I/O). Ruled language rejections stand with their recorded reasons (`ini_set` DEC-409,
+  `eval`, `goto`, `$$x`, dynamic properties, ambient globals); a PHP program using them lifts to a
+  diagnostic, not a feature. Nothing in this batch re-opens a language ruling.
+- [2026-09-02 17:40] AGREED — **Q16 TIMEZONES: tz as pinned DATA.** The IANA database ships as a
+  versioned, pinned table (tz crate per DEC-247); `Instant.at(Zone.of("Europe/Paris"))` is a pure
+  function of (instant, tzdata) — deterministic, byte-identical on all three legs (PHP leg emits
+  `DateTimeZone`; the differential pins the tzdata version). The AMBIENT zone stays excluded;
+  Invariant 10 untouched. `src/cli/preludes.rs:295`'s "timezones are non-deterministic" rationale is
+  to be rewritten to "the ambient zone is non-deterministic" when the slice lands.
+- [2026-09-02 17:40] AGREED — **Q3 MAIL RECEIVE: build the trio.** `Core.Net` (TcpStream, implicit TLS
+  + STARTTLS over the admitted rustls) as the shared floor; `Core.Mime` (multipart, QP, base64,
+  RFC 2047, RFC 2822 dates, typed `Charset`); `Core.Imap` read-only by default (EXAMINE, UID
+  SEARCH/FETCH, `uidValidity`, typed error taxonomy, file-backed `.eml` transport). All three
+  native-only tier 2: `E-TRANSPILE-NET`/`-MIME`?/`-IMAP` + differential quarantine + disclosure.
+  IDLE/APPEND/flag writes out of scope. Narrows and closes DEC-413's deferral.
+- [2026-09-02 17:40] AGREED — **Q18 CHARSETS: typed `Charset` enum + `Encoding.decode/encode`
+  (`encoding_rs`, format-parsing domain; scope UTF-8/16, Latin-1/9, Windows-1252, ASCII) + a
+  transpilable `String.foldAccents`** (pure table → `__phorj_fold_accents` helper, byte-identical).
+  NFD/full ICU stays in DEC-271's `Core.Intl` scope.
+- [2026-09-02 17:55] AGREED — **Q2 HTML5 PARSING: admit `html5ever` + `selectors` (Servo).**
+  `Html.parse` (lenient, never throws on bad markup), `Html.select/selectOne` (tag/class/id/descendant/
+  attribute selectors, scoped to any `Node`), `Html.text` (whitespace-normalised), `Html.attribute`
+  returning `string?` (absent ≠ empty), `Html.decodeEntities` as a standalone pure function over the
+  full HTML5 entity table. Transpile tier 1 via `Dom\HTMLDocument` + `querySelectorAll` (the oracle
+  ships lexbor). Unblocks the `tidy` deferral; XML C14N (Q1) shares the DOM shape. New domain =
+  untrusted-input parser, already admitted by name for regex.
+- [2026-09-02 17:55] AGREED — **Q17 CRYPTO: AEAD + Ed25519 + HKDF via RustCrypto, misuse-resistant.**
+  `Crypto.seal/open` (nonce generated and prefixed, no mode selection, typed `Key`), `Crypto.sign/verify`
+  (Ed25519, detached), `Crypto.deriveKey` (HKDF). Transpile tier 1 via `sodium_crypto_aead_*` /
+  `sodium_crypto_sign_*`, byte-identical on fixed vectors. X.509/CSR out of scope (own question if ever).
+- [2026-09-02 17:55] AGREED — **Q19 COMPRESSION: build `Core.Compress` over `flate2`** (gzip/deflate/
+  raw, decompression-bomb size cap → typed fault) **and wire the HTTP client (`Accept-Encoding: gzip,
+  deflate`, transparent decode) and `phg serve` (compress when accepted).** Transpile tier 1
+  (`gzencode`/`gzdecode`). Closes DEC-407's ruled-unbuilt row. zip/tar archives separate and unruled.
+- [2026-09-02 17:55] AGREED — **Q21 PROCESS SPAWN: shell-free `Process.run(program, args)`** with
+  captured stdout/stderr, exit code, timeout (kills the child → typed fault), env, cwd; typed
+  `ProcessResult`; NO string-to-shell form exists. Transpile tier 1 via `proc_open` with an argv array.
+  Examples spawn only deterministic programs (Invariant 10). Streaming pipes/PTYs out of v1 scope.
 
 ---
 

@@ -151,6 +151,42 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
   SLICE-STATE, never landed in the repo) is recovered by **re-running the three-lens panel NOW, on a
   frozen commit, before any new work**. Its findings table is transcribed INTO this plan file (tracked)
   — `var/claude/` is gitignored, which is how the previous report was lost.
+- [2026-09-02 18:15] AGREED (Part 4 item 2, DEC-455.5): a repeated config parameter type is
+  **memoized per entry** — one type, one instance, the provider runs once per process entry; config
+  and `inject<T>()` (default-SHARED) agree. DEC row to be appended.
+- [2026-09-02 18:15] AGREED (Part 4 item 3, DEC-455.6): config candidacy is **declined when NO
+  parameter resolves to a provider**, and the entry then reports the accurate `E-ENTRY-SIG`; with at
+  least one resolvable provider the unresolved ones keep `E-CONFIG-MISSING`. Scalar providers stay.
+- [2026-09-02 18:15] AGREED (Part 4 item 4, §SERVE-CONFIG-PROVENANCE root fix): **D4 `ServeConfig`
+  fields become nullable** (`int? timeout` etc.; `null` = unset, `0` = no timeout); the D4 spec text
+  is amended in the same change; `port`/`maxBodySize`/`timeout` range validation lands with it.
+  `new ServeConfig()` keeps today's behaviour byte-for-byte.
+- [2026-09-02 18:15] AGREED (Part 4 item 9, `decimal` on the PHP leg): **bind and fetch `decimal` as
+  TEXT** via the `__phorj_db_stmt` wrapper, reconstructed exactly by `getDecimal`; SQL arithmetic on
+  a decimal column is done in phorj, not SQLite's float engine. Byte-identity holds; documented as
+  TEXT-affinity on the PHP leg.
+- [2026-09-02 18:15] STANDING DIRECTIVE (developer, verbatim in substance: *"work more on the LSP,
+  the editors VSCode and PhpStorm extensions and the transpile/lift"*): the readiness wave and every
+  slice after it invests in the LSP + both editor extensions + transpile AND lift as first-class
+  deliverables, not the closing checklist row — Invariant 17's 100% rule is to be AUDITED per feature
+  (completion, hover, go-to-def, references, symbols, diagnostics with tags, signature help, grammar)
+  and the gaps worked as their own slices, and the lift (PHP→Phorj) is kept at parity with transpile.
+- [2026-09-02 18:20] STANDING GOAL (developer): **CROSS-LANGUAGE SCAN, again** — as at the start
+  (Invariant 16 / META-7), survey what other languages (Rust, Kotlin, Swift, TypeScript, Go, C#,
+  Java, Python…) can do that PHP cannot, and what they do BETTER than PHP, and bring it to phorj.
+  Output = a delta list against phorj's shipped surface AND its plan (nothing already built or
+  already queued is re-proposed); each new item becomes an Invariant-15 question, never self-ruled.
+- [2026-09-02 19:10] STANDING GOAL (developer): **PHP-ECOSYSTEM SCAN** — survey the current PHP
+  ecosystem (the developer named **TypePHP** and **phpx**, described as PHP→AOT-binary converters;
+  plus KPHP, PeachPie, HHVM/Hack, static-php-cli/phpmicro, FrankenPHP, Swoole, ReactPHP/Amp, the
+  8.5/8.6 RFC pipeline, PHPStan/Psalm taint analysis, Rector, Pest/Infection, Deptrac…) for anything
+  worth discussing, porting, implementing or improving on in phorj. Delta-only against code + plan;
+  every claim verified against a fetched primary source; each new item is an Invariant-15 question.
+- [2026-09-02 19:10] NOTE (demand inventories, this session, all in the session scratchpad
+  `raw/`): `scout-needs.md` (52 rows), `twesin-needs.md` (26 rows + 12 PHP flaws),
+  `invoiceninja-needs.md` (~90 rows + 23 PHP flaws), `cross-language-delta.md` and
+  `php-ecosystem-delta.md` (pending). Their consolidated delta graduates into the readiness-wave plan
+  file, not into this consolidation plan.
 
 ## Execution order (global — Parts are reference material, THIS is the sequence)
 
@@ -530,3 +566,91 @@ MASTER-PLAN (Step 6) and the live gap-programme plan.
 - **Commit discipline**: master only, plain `git push`, developer identity
   (`Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>`), no trailers, green
   self-contained commits, docs commits `docs:`-prefixed.
+
+---
+
+## Panel round 3 — 2026-09-02, frozen `6a18f71a`, range `0c982019..6a18f71a`
+
+Transcribed IN the repo (developer ruling 2026-09-02: the round-2 report lived only in gitignored
+`var/claude/` and was lost). Three fresh-context lenses, no cargo runs by the reviewers; the parent
+ran the 12 tests they named (12/12 green). Full lens reports: `var/claude/panel/2026-09-02-round3/`
+(gitignored — THIS table is the record).
+
+**Verdicts:** correctness+regression **FINDINGS — 12** (1×P0, 6×P1) · completeness+blast-radius
+**FINDINGS — 16** (3×P1) · security+safety-promises **FINDINGS — 7** (0×P0/P1, 6×P2, 1×P3).
+**Total 35** (1×P0, 9×P1). Gate status: **OPEN**, clean counter zero.
+
+### Security + safety-promises (7)
+
+| # | sev | where | promise broken | status |
+|---|---|---|---|---|
+| F1 | P2 | `src/cli/benchmark.rs:80`, `playground/src/lib.rs:103` | `benchmark --vs-php` EXECUTES emitted PHP for `Core.SessionModule` and reports "transpile divergence" instead of `E-TRANSPILE-SESSION`; KNOWN_ISSUES:171's "would fail loudly" reasoning is contradicted for Session | tracked, severity argument stale (= C7/C8) |
+| F2 | P2 | `src/ext/registry.rs`, `docs/EXTENSIONS.md` | `phg extensions` lists flag-only rows but has NO `http-server-tls` row, although its absence is the runtime refusal `E-SERVE-TLS-DISABLED` | NEW |
+| F3 | P2 | `KNOWN_ISSUES.md:2481-2482`, `examples/README.md:133` | "lookaround rejected at compile — never a divergence" is false on the PHP leg | NEW (= REGEX-B class) |
+| F3b | P3 | `KNOWN_ISSUES.md:2484` | claims `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, both legs agree | stale doc (= C11) |
+| F4 | P2 | `src/serve/framing.rs:118` | invalid `Content-Length` (`abc`, `-1`, 24-digit) served `200` instead of `400`+close; pinned as intended by `content_length_malformed_is_zero` | NEW (= C10) |
+| F5 | P2 | `src/serve/settings.rs:119,149` | negative `workers`/`timeout` in `ServeConfig` silently read as unset with no `W-SERVE-CONFIG-OVERRIDDEN` notice | tracked §SERVE-CONFIG-PROVENANCE (ruled: nullable fields + range validation) |
+| F6 | P2 | `cli/http_request_prelude.rs:23`, `cli/preludes.rs:64`, `ext/uri/prelude.rs:7`, `ext/debug/prelude.rs:12` | nothing-in-the-wind: `NativeHttp`, `NativeInput`, `NativeUri`, `NativeDebug` resolve in user code with NO import; the containment arm covers only `NativeHttp.registerServe` | tracked KNOWN_ISSUES:125, DEC-459 unbuilt |
+| F7 | P3 | `src/cli/ladder.rs:123` | error text renders 14-space runs inside the hint | NEW |
+
+Verified clean: `unsafe` outside `src/jit/` = 0; ladder holds on `transpile` + `build --php` for every
+`Http.serve` spelling probed; no new network use outside `src/serve/transport.rs`; TLS cert-only /
+no-feature / `tlsMinVersion "1.1"` all refuse with the port never bound; no secrets in the range;
+deps 14 admitted / 9 default = UNIFIED-SPEC:1359; all 7 new codes have `phg explain` entries.
+
+### Correctness + regression (12)
+
+| # | sev | where | finding | status |
+|---|---|---|---|---|
+| C1 | P1 | `src/ext/regex/natives.rs:178-191`, `transpile/runtime_php.rs:1053` | `Regex.replace` replacement syntax diverges silently: `\1-`, `$$`, `$1a`, `${x}` render differently native vs php, all legs exit 0 | KNOWN_ISSUES:2503 names `\1` only; 3 of 4 rows NEW |
+| C2 | P1 | `natives.rs:38,307` | possessive `a++a` on `"aaa"`: native `true` (parsed as `(a+)+`), php `false`; check-clean | NEW |
+| C3 | P1 | `runtime_php.rs:995-1004` | `a$` on `"a\n"`: native `false`, php `true` — delimiter helper emits `u` without `D` | KNOWN_ISSUES:883 covered Core.Validation only; NEW for Core.Regex |
+| C4 | P2 | same helpers | `findAll("a*","baaa")` → native 2, php 3 (empty-match placement) | KNOWN_ISSUES:2505 |
+| C5 | P1 | `natives.rs:307` | look-around siblings forwarded unvalidated: `a(?=b)`, `(a)\1`, `\h`, `\R`, `\Z`, `a{,3}b` — native fault, php `true` | class ruled REGEX-B above; sibling list NEW |
+| C6 | **P0** | `src/checker/calls/args.rs:256` | `default_fills` two-file collision reproduced at HEAD: `new Cookie(…)` at the same byte offset in two files → wrong arguments on run, --tree-walker AND php | KNOWN_ISSUES:2989 |
+| C7 | P1 | `src/cli/benchmark.rs:80,244` | `benchmark --vs-php` transpiles a `Core.Database` program with no ladder gate → PHP fatal, "skipping", exit 0 | tracked (plan A-list) |
+| C8 | P1 | `playground/src/lib.rs:103` | `transpile_json` → `transpile::emit`, no ladder gate | tracked |
+| C9 | P2 | `src/lsp/mod.rs:496-511` | LSP diagnostics run `test_mode=false`; `check ≡ LSP ≡ test` false | tracked (= completeness #1) |
+| C10 | P2 | `src/serve/framing.rs:118` | `Content-Length: abc` → `200` body-less instead of `400`; `unwrap_or(0)` has no failure-mode evidence | NEW |
+| C11 | P3 | `runtime_php.rs:992`, KNOWN_ISSUES:2485 | the documented `\d\w\s` ASCII-vs-Unicode edge does NOT exist (php `u` ⇒ UCP); the real edges are C1–C3 | NEW (doc wrong) |
+| C12 | P3 | `src/cli/pipeline.rs:397-420` | `benchmark --vs-php` on a Web-only program measures handler registration only and reports a speedup | NEW, by-design per comment |
+
+Negatives with controls: CD-31's param-default / attribute-argument gap is NOT reachable (all four
+sugars are `E-DEFAULT-PARAM-EXPR`/literal-only in those positions on 3 legs); all 9 item walks carry
+`Item::Test`; `phg test selftest` 11/11; the round-2 P1 (`NativeHttp.registerServe` bypass) confirmed
+fixed; `import Core.Http as H` offers no alias bypass.
+
+### Completeness + blast-radius (16)
+
+| # | sev | where | finding | status |
+|---|---|---|---|---|
+| K1 | P1 | `src/lsp/mod.rs:514,534` → `cli/pipeline.rs:295,326` | both LSP diagnostic paths hard-code the non-test checker; all 3 `selftest/*.phg` squiggle `E-TEST-OUTSIDE-TESTS` | tracked |
+| K2 | P1 | quartet | the 17:05 rulings (regex B, no scout port, order, perf split) exist only in this plan — no register row; MASTER-PLAN and SLICE-STATE state different "next"; DEC-457/458/459 have no MASTER-PLAN mirror | NEW — Invariant 19 |
+| K3 | P1 | `SLICE-STATE.md:137-140` vs `:83-86` | intra-file contradiction on whether `phg test` still checks the raw program | NEW |
+| K4 | P2 | `tests/differential.rs:2012-2062` | two `continue` skip arms, no counter, no expected-skip-set; floor is `files.len() >= 3` | tracked |
+| K5 | P3 | `UNIFIED-SPEC.md:1209` | "no named arguments" true of natives only, reads as a language claim | NEW |
+| K6 | P2 | `UNIFIED-SPEC.md:2117-2136` | spec names none of `E-SERVE-TLS-*`, `W-SERVE-CONFIG-OVERRIDDEN`, `E-TEST-OUTSIDE-TESTS` | NEW |
+| K7 | P2 | `src/lsp/symbols.rs:153,223` | document symbols drop `Item::Test` — a named test never appears in either editor's outline | NEW |
+| K8 | P2 | `checker/rewrite_pipe/walk.rs:33`, `qualify_variants.rs:67`, `rewrite_new.rs:57`, `cli/rewrite_new.rs:44` | four passes keep an inert `_ => {}` item arm outside the CD-31 ratchet; `rewrite_pipe` is pre-check and the "tests are checker-gated out" comment is false | NEW |
+| K9 | P2 | `KNOWN_ISSUES.md:2854-2860` | second section still says `test_runner` calls `check_tests` without prelude expansion — false since 8a83ada6 | NEW |
+| K10 | P2 | `CLAUDE.md:207`, `docs/INVARIANTS.md:39` | Invariant 3 still scoped to Expr/Stmt/Pattern; CD-31's `Item` widening absent | NEW |
+| K11 | P2 | `src/cli/help.rs:8-30` | `phg --help` omits `add/install/update/remove` | KNOWN_ISSUES:2890 |
+| K12 | P2 | `examples/process/README.md`, `explain/members_destructure.rs:90` | `Process.args()` drift, 20 hits; native is `arguments` | KNOWN_ISSUES:2847 |
+| K13 | P3 | `examples/README.md:181` | only the html-in-trait CD-31 shape has an example; README row not updated | NEW |
+| K14 | P3 | `differential.rs:2011`, `UNIFIED-SPEC.md:1684,1827,1878` | dead citations (deleted design doc, two "retired" plans in no archive) | NEW |
+| K15 | P3 | `C-decisions.md:3547` | DEC-362 "build queued" while BUILT | NEW |
+| K16 | P2 | `src/lsp/` | no hover/signature-help consumer of `prelude_catalog` — `cfg.port`/`Http.serve` hover empty | KNOWN_ISSUES:3056 |
+| K-fact | — | `tests/serve_tls.rs` | handshake tier self-skips without `openssl`, no `PHORJ_REQUIRE_*` analogue | note |
+
+### Disposition (feeds the ORDER ruling's step 1, "harness trust")
+
+- **Regex cluster C1–C5 + C11** is one slice with the REGEX-B build: compile-time literal validation on
+  the transpile leg, `D` in the delimiter helper, replacement-syntax normalisation, possessive/`\h`/`\R`/
+  `\Z`/`{,n}` rejection or support decided per construct, each with an `agree_out_php` case (the
+  reviewer confirms no existing test can go red on C1–C5).
+- **C6 P0** is step 1's first item. **C7/C8** = the ungated-emit paths (gate before `check_and_expand`,
+  as `parse_checked_for_run` does). **C9/K1/K7/K16** = the LSP test-mode + symbols + hover slice
+  (developer directive: LSP/editors are first-class). **K4** = differential floor. **K8** = widen the
+  CD-31 ratchet to the four remaining item arms. **K2/K3/K5/K6/K9/K10/K14/K15** = one docs pass, same
+  commit as the register rows. **C10** needs a failing-request test before its fix (anti-bandaid).
+  **C12/K11/K12/K13** small, batched.
