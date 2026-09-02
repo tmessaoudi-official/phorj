@@ -602,7 +602,7 @@ ran the 12 tests they named (12/12 green). Full lens reports: `var/claude/panel/
 | F1 | P2 | `src/cli/benchmark.rs:80`, `playground/src/lib.rs:103` | `benchmark --vs-php` EXECUTES emitted PHP for `Core.SessionModule` and reports "transpile divergence" instead of `E-TRANSPILE-SESSION`; KNOWN_ISSUES:171's "would fail loudly" reasoning is contradicted for Session | **FIXED** (= C7/C8) |
 | F2 | P2 | `src/ext/registry.rs`, `docs/EXTENSIONS.md` | `phg extensions` lists flag-only rows but has NO `http-server-tls` row, although its absence is the runtime refusal `E-SERVE-TLS-DISABLED` | NEW |
 | F3 | P2 | `KNOWN_ISSUES.md:2481-2482`, `examples/README.md:133` | "lookaround rejected at compile — never a divergence" is false on the PHP leg | FIXED (the claim is now true: a literal pattern is gated at check time on every leg) |
-| F3b | P3 | `KNOWN_ISSUES.md:2484` | claims `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, both legs agree | stale doc (= C11) |
+| F3b | P3 | `KNOWN_ISSUES.md:2484` | claims `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, both legs agree | FIXED with C11 (KNOWN_ISSUES §Core.Regex rewritten; example header corrected in the follow-up) |
 | F4 | P2 | `src/serve/framing.rs:118` | invalid `Content-Length` (`abc`, `-1`, 24-digit) served `200` instead of `400`+close; pinned as intended by `content_length_malformed_is_zero` | FIXED (step 1: strict `1*DIGIT` parse, `400` + close at all three framing sites) |
 | F5 | P2 | `src/serve/settings.rs:119,149` | negative `workers`/`timeout` in `ServeConfig` silently read as unset with no `W-SERVE-CONFIG-OVERRIDDEN` notice | tracked §SERVE-CONFIG-PROVENANCE (ruled: nullable fields + range validation) |
 | F6 | P2 | `cli/http_request_prelude.rs:23`, `cli/preludes.rs:64`, `ext/uri/prelude.rs:7`, `ext/debug/prelude.rs:12` | nothing-in-the-wind: `NativeHttp`, `NativeInput`, `NativeUri`, `NativeDebug` resolve in user code with NO import; the containment arm covers only `NativeHttp.registerServe` | FIXED with DEC-459 (step 1): the four qualifiers are unknown identifiers in user code, pinned by `tests/prelude_isolation.rs` |
@@ -618,7 +618,7 @@ deps 14 admitted / 9 default = UNIFIED-SPEC:1359; all 7 new codes have `phg expl
 | # | sev | where | finding | status |
 |---|---|---|---|---|
 | C1 | P1 | `src/ext/regex/natives.rs:178-191`, `transpile/runtime_php.rs:1053` | `Regex.replace` replacement syntax diverges silently: `\1-`, `$$`, `$1a`, `${x}` render differently native vs php, all legs exit 0 | FIXED (REGEX-B: phorj-owned replacement grammar, `expand_replacement` + `__phorj_regex_expand`) |
-| C2 | P1 | `natives.rs:38,307` | possessive `a++a` on `"aaa"`: native `true` (parsed as `(a+)+`), php `false`; check-clean | NEW |
+| C2 | P1 | `natives.rs:38,307` | possessive `a++a` on `"aaa"`: native `true` (parsed as `(a+)+`), php `false`; check-clean | FIXED (linear reject list: possessive → `E-REGEX-UNSUPPORTED`; `compileBacktracking` accepts it) |
 | C3 | P1 | `runtime_php.rs:995-1004` | `a$` on `"a\n"`: native `false`, php `true` — delimiter helper emits `u` without `D` | FIXED (`D` modifier in `__phorj_regex_delim`) |
 | C4 | P2 | same helpers | `findAll("a*","baaa")` → native 2, php 3 (empty-match placement) | DEFERRED by the REGEX-B boundary ruling (Decisions Log): engine-level empty-match placement, documented edge |
 | C5 | P1 | `natives.rs:307` | look-around siblings forwarded unvalidated: `a(?=b)`, `(a)\1`, `\h`, `\R`, `\Z`, `a{,3}b` — native fault, php `true` | FIXED (reject list covers every sibling; literal at check time, dynamic at run time on every leg) |
@@ -653,7 +653,7 @@ fixed; `import Core.Http as H` offers no alias bypass.
 | K12 | P2 | `examples/process/README.md`, `explain/members_destructure.rs:90` | `Process.args()` drift, 20 hits; native is `arguments` | KNOWN_ISSUES:2847 |
 | K13 | P3 | `examples/README.md:181` | only the html-in-trait CD-31 shape has an example; README row not updated | NEW |
 | K14 | P3 | `differential.rs:2011`, `UNIFIED-SPEC.md:1684,1827,1878` | dead citations (deleted design doc, two "retired" plans in no archive) | NEW |
-| K15 | P3 | `C-decisions.md:3547` | DEC-362 "build queued" while BUILT | FIXED (linear reject list: possessive → `E-REGEX-UNSUPPORTED`; `compileBacktracking` accepts it) |
+| K15 | P3 | `C-decisions.md:3547` | DEC-362 "build queued" while BUILT | NEW |
 | K16 | P2 | `src/lsp/` | no hover/signature-help consumer of `prelude_catalog` — `cfg.port`/`Http.serve` hover empty | KNOWN_ISSUES:3056 |
 | K-fact | — | `tests/serve_tls.rs` | handshake tier self-skips without `openssl`, no `PHORJ_REQUIRE_*` analogue | note |
 

@@ -29,7 +29,9 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   under PHP too. Every `preg_*` error is now a fault (`__phorj_regex_check`), never a silent
   `false`/`null`. (C11/F3) KNOWN_ISSUES §Core.Regex rewritten — the `\d\w\s` ASCII-vs-Unicode edge
   never existed (`u` ⇒ UCP). C4 (empty-match placement) is deferred by the REGEX-B boundary ruling. The
-  PHP helpers moved to `runtime_php_regex.rs`. Red-first `agree_out_php`/`agree_err_php` cases for every
+  PHP helpers moved to `runtime_php_regex.rs`. (Follow-up, same day: the example header and the natives
+  module doc still carried the retracted `\d\w\s` claim; a check-time `E-REGEX-INVALID` case added.)
+  Red-first `agree_out_php`/`agree_err_php` cases for every
   row plus the backtracking positives and the budget; four sabotages red (the `D` modifier, the PHP
   expander, the checker gate, the possessive detector).
 - **A malformed `Content-Length` is a `400` and the connection closes (RFC 9112 §6.3; panel

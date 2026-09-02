@@ -5677,3 +5677,19 @@ fn backtracking_engine_step_budget_faults_instead_of_hanging() {
     assert!(err.contains("step budget"), "{err}");
     agree_err_php(&src);
 }
+
+/// The gate's OTHER code: a literal pattern that does not parse is `E-REGEX-INVALID` at check time on
+/// BOTH constructors — and never `E-REGEX-UNSUPPORTED`, which is reserved for the linear engine's
+/// reject list. (The `unsupported` branch of the gate was the only one exercised before this case.)
+#[test]
+fn an_unparseable_literal_pattern_is_e_regex_invalid_on_both_constructors() {
+    for ctor in ["compile", "compileBacktracking"] {
+        let src = with_pkg(&regex_prog(&format!(
+            "var re = Regex.{ctor}(r\"(\");\n    Output.printLine(\"{{Regex.matches(re, \\\"a\\\")}}\");"
+        )));
+        let err = cmd_treewalk(&src).expect_err("an unbalanced pattern must not check");
+        assert!(err.contains("E-REGEX-INVALID"), "{ctor}: {err}");
+        assert!(!err.contains("E-REGEX-UNSUPPORTED"), "{ctor}: {err}");
+        assert_eq!(cmd_treewalk(&src).is_err(), cmd_run(&src).is_err());
+    }
+}

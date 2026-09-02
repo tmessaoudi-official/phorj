@@ -3,15 +3,17 @@
 //! 2nd vetted dependency, `docs/specs/2026-06-27-dependency-policy.md`): a RE2-style finite automaton
 //! with **guaranteed linear-time matching** (ReDoS-immune by construction). Its restricted feature
 //! set (no backreferences / lookaround) is exactly the *regular* subset PHP `preg_*` matches
-//! identically, so the byte-identity spine holds; an unsupported pattern is rejected at
-//! [`Regex.compile`] (a clean fault), never reaching a backend.
+//! identically, so the byte-identity spine holds; a PCRE-only pattern is rejected by `Regex.compile`
+//! at CHECK time for a literal and at run time for a dynamic one (`super::engine`), never reaching a
+//! backend. DEC-461 added `Regex.compileBacktracking` — the same API on `fancy-regex` under a step
+//! budget — for the PCRE-class syntax the linear engine omits.
 //!
-//! A compiled `Regex` value is a `Value::Instance { class: "Regex", fields: { pattern } }` carrying
-//! the **bare** pattern (no delimiters), built directly by `compile` (the hand-built-value technique,
-//! exactly like `Core.Json`'s `jnode`). The user constructs one only via `Regex.compile`. The
-//! engines are memoized in a thread-local cache keyed by the bare pattern, recovering "compile once,
-//! reuse" with no new `Value` variant. The PHP transpile is a peer emission target only — the
-//! engine runs natively on both Rust backends (the dependency-policy native-runtime rule).
+//! A compiled `Regex` value is a `Value::Instance { class: "Regex", fields: { pattern, engine } }`
+//! carrying the **bare** pattern (no delimiters) and the engine name, built directly by the two
+//! constructors (the hand-built-value technique, exactly like `Core.Json`'s `jnode`). The engines are
+//! memoized in a thread-local cache keyed by `(engine, pattern)` (`super::engine`), recovering
+//! "compile once, reuse" with no new `Value` variant. The PHP transpile is a peer emission target
+//! only — the engines run natively on both Rust backends (the dependency-policy native-runtime rule).
 
 use crate::native::*;
 use crate::types::Ty;

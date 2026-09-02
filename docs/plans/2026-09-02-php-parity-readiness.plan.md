@@ -204,7 +204,7 @@ rejection at UNIFIED-SPEC:1633 vs generators queued at MASTER-PLAN Ω-4 #8 / W4-
 | X4 | **Gapless numbering**: twes-in rejected Postgres `SEQUENCE` (non-transactional, burns numbers) for upsert+`RETURNING`; no phorj row mentions the pattern | not a conflict with a ruling; a missing capability check (A30) | verify `RETURNING` hydration on all three drivers |
 | X5 | **Composer interop**: TypePHP runs existing Composer packages through its Zend bridge; MASTER-PLAN Appendix A.2 REJECTED FFI (`.d.phg` declarations are the seam) and the lifter produces a draft | a competitor's compat story challenges a ruled rejection | **surfaced, not ruled** — next batch |
 | X6 | **XML scope**: DEC-382/Q1 ruled a `quick-xml`-class DOM + C14N question; both e-invoicing codebases need XSD validation AND XMLDSig/XAdES signing, which Q1 does not cover | scope widening, not contradiction | **ruling needed** with Q1/Q9 |
-| X7 | **`\d\w\s` doc**: KNOWN_ISSUES:2484 says `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, all legs agree (panel C11/F3b) | code right, doc wrong | docs pass |
+| X7 | **`\d\w\s` doc**: KNOWN_ISSUES:2484 says `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, all legs agree (panel C11/F3b) | code right, doc wrong | FIXED with DEC-461 (C11/F3b): KNOWN_ISSUES §Core.Regex rewritten |
 | X8 | **Named arguments**: UNIFIED-SPEC:1209 "Phorj has no named arguments" — false for user functions/constructors (probed), true for natives only | doc wrong | docs pass |
 | X9 | **Certification**: DEC-268 wants two consecutive clean panel rounds; the 2026-08-19 economize ruling wants one panel per milestone; round 3 returned 35 findings | decides whether a round 4 is owed after step 1 | **ruling needed** |
 
