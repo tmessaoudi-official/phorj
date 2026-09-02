@@ -149,3 +149,41 @@ fn a_single_file_path_runs_just_that_file() {
     assert_eq!(code, 0, "{report}");
     assert!(report.contains("1 passed, 0 failed"), "{report}");
 }
+
+/// KNOWN_ISSUES §TEST-RAW-CHECKER — `phg test` used to run the RAW checker, so every symbol that
+/// exists only in an injected prelude was reported as the user's own type error.
+///
+/// `phg check` and `phg run` both accept the program below; `phg test` rejected it with a wall of
+/// `E-UNKNOWN-IDENT` and three cascading consequences, none of which is a real defect in the file.
+/// This is precisely the hole DEC-252 closed for the LSP and left open here: the LSP was routed
+/// through the shared front end, `phg test` was not, so `phg check` ≡ LSP held while
+/// `phg check` ≢ `phg test`.
+///
+/// The blast radius is every injected module — `Core.Http`, `Core.Database`, `Core.Secret`,
+/// `Core.DI`'s `inject<T>()`, `Core.Runtime.EntryKind` — so a whole class of programs simply could
+/// not be `phg test`ed, and the failure blamed the user.
+#[test]
+fn a_test_file_using_an_injected_prelude_type_is_checked_through_the_front_end() {
+    let d = TempDir::new("prelude");
+    d.write(
+        "http_test.phg",
+        "package Main;\nimport Core.Test;\nimport Core.Http;\nimport Core.Http.ServeConfig;\n\
+         test \"the injected ServeConfig is constructible\" {\n\
+         \x20   ServeConfig cfg = new ServeConfig(port: 3000);\n\
+         \x20   Test.assertEquals(cfg.port, 3000);\n\
+         }\n",
+    );
+    let (report, code) = cli::cmd_test(&[d.path().display().to_string()]);
+    // The point of the test is the ABSENCE of the spurious diagnostic, so assert on that first —
+    // a bare exit-code check would also pass if the runner started failing for some new reason.
+    assert!(
+        !report.contains("E-UNKNOWN-IDENT"),
+        "an injected-prelude symbol must not be reported as an unknown identifier:\n{report}"
+    );
+    assert!(
+        !report.contains(":: <check> ... FAILED"),
+        "the file-level check must not reject an injected-prelude program:\n{report}"
+    );
+    assert_eq!(code, 0, "the test file should pass:\n{report}");
+    assert!(report.contains("1 passed, 0 failed"), "{report}");
+}

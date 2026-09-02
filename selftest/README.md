@@ -13,8 +13,11 @@ selftest/arithmetic.phg :: booleans and null ... ok
 selftest/faults.phg :: indexing past the end faults ... ok
 selftest/faults.phg :: a missing map key faults ... ok
 selftest/faults.phg :: code that should NOT fault ... ok
+selftest/injected_preludes.phg :: the injected ServeConfig carries its ruled defaults ... ok
+selftest/injected_preludes.phg :: named arguments select what a ServeConfig sets ... ok
+selftest/injected_preludes.phg :: an injected Response builds and reports its status ... ok
 
-6 passed, 0 failed, 6 tests in 2 files
+10 passed, 0 failed, 10 tests in 3 files
 ```
 
 Exit code is `0` iff every test passes, else `1` — so `phg test` drops straight into CI.

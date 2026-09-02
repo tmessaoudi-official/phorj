@@ -86,13 +86,24 @@ fn run_file(file: &Path, out: &mut String, outcomes: &mut Vec<Outcome>) {
             return;
         }
     };
-    // Validate the whole file once, in test mode (so `test` items are allowed).
-    if let Err(errs) = crate::checker::check_tests(&unit.program) {
-        let rendered = errs
-            .iter()
-            .map(|e| e.render(&unit.diag_src))
-            .collect::<Vec<_>>()
-            .join("\n");
+    // Validate the whole file once, in test mode (so `test` items are allowed) — through the SAME
+    // front end as `phg check` and the LSP, never the raw checker.
+    //
+    // This used to call `checker::check_tests` directly. That is the raw checker: no prelude
+    // injection, no intrinsic/variant import resolution, no DI/Db desugar — so every symbol existing
+    // only in an injected prelude came back as the user's own `E-UNKNOWN-IDENT`, and any program
+    // importing `Core.Http` / `Core.Database` / `Core.Secret` / `Core.DI` / `Core.Runtime.EntryKind`
+    // could not be `phg test`ed at all, while `phg check` and `phg run` accepted it happily. Worse,
+    // the first unknown identifier cascaded into three more messages, so the report misdirected
+    // toward the user's file. DEC-252 closed exactly this hole for the LSP; `phg test` was the
+    // surface it was never routed through (KNOWN_ISSUES §TEST-RAW-CHECKER).
+    //
+    // `check_and_expand_tests` is `check_and_expand` with the test-mode flag threaded through the
+    // shared body, so `phg check` ≡ LSP ≡ `phg test` holds by construction rather than by
+    // maintenance. It returns the EXPANDED program; the runner deliberately keeps using
+    // `unit.program` below, because lowering test bodies into synthetic mains is its own concern and
+    // each lowered body goes through the ordinary compile path afterwards.
+    if let Err(rendered) = crate::cli::check_and_expand_tests(&unit.program, &unit.diag_src) {
         out.push_str(&format!("{fname} :: <check> ... FAILED\n"));
         outcomes.push(Outcome {
             file: fname,

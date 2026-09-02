@@ -24,7 +24,7 @@ Not deferred and not owed: the refusals. A half-configured, unruled-floor, unbui
 TLS setup is a startup error (`E-SERVE-TLS-{INCOMPLETE,MIN-VERSION,DISABLED,CERT}`), never a server
 that quietly answers in the clear.
 
-## TEST-RAW-CHECKER — `phg test` checks the RAW program, so any injected-prelude symbol is a spurious `E-UNKNOWN-IDENT` (PRE-EXISTING, surfaced 2026-08-28 during S3.4)
+## ~~TEST-RAW-CHECKER~~ — FIXED 2026-09-02: `phg test` now shares the front end with `phg check` and the LSP
 
 **Not caused by S3.4** — recorded because it was found there. `phg test <file>` runs a `<check>`
 pseudo-test that calls `crate::checker::check_tests(&unit.program)` directly
@@ -55,10 +55,26 @@ so `phg check` ≡ LSP holds while `phg check` ≢ `phg test`.
 gap. Note the cascade in the sample above: three of the four messages are consequences of the first,
 so the output badly misdirects.
 
-**The fix looks small but is not obviously a one-liner**: `check_tests` allows `test` items, which
+**FIXED 2026-09-02.** The sizing note below was right that it is not a call swap — the fix threads a
+test-mode flag through the SHARED pipeline rather than giving test mode a pipeline of its own, since a
+second pipeline would recreate the very divergence being closed. `checker::check_resolutions_mode` and
+`cli::check_and_expand_tests` are the two new entries; the runner calls the latter. `phg check` ≡ LSP ≡
+`phg test` now holds by construction.
+
+Guarded by `a_test_file_using_an_injected_prelude_type_is_checked_through_the_front_end`
+(`tests/mtest.rs`) and by `selftest/injected_preludes.phg`, which is a real Invariant-9 surface: every
+import in it reaches a type that exists only because a prelude was injected. Sabotage-verified —
+pointing the runner back at the raw checker turns exactly that test red and leaves the other eight
+green.
+
+One thing the fix did NOT change, checked rather than assumed: `EntryKind` is injected only as the
+attribute-argument surface for `#[Entry(kind:)]`, so `EntryKind k = EntryKind.Web;` is `E-UNKNOWN-TYPE`
+under `phg test` — and identically under `phg check`. The agreement is the property; it is simply
+visible on a rejection instead of an acceptance.
+
+*(Original sizing note, kept because it was accurate:)* `check_tests` allows `test` items, which
 `check_and_expand`'s path does not, so routing through the front end needs the test-mode flag threaded
-rather than the call simply swapped. Sizing it — and whether the same raw-checker call appears
-elsewhere — is its own slice.
+rather than the call simply swapped.
 
 ## DOCS-STALE-SPEC-PATHS — 35 references still point at spec files archived in July (found 2026-09-02, PRE-EXISTING)
 
@@ -80,6 +96,52 @@ anchor it had found: a finding that is silently corrected inside itself stops ma
 it is a mechanical `docs/specs/` → `docs/archive/specs/` rewrite for these fourteen names. Decide per
 file whether a historical document should be repointed at all, or left as a record of what the path
 was at the time — that judgment is the actual work, not the substitution.
+
+## PRELUDE-ALIAS-COLLISION — a user alias for `Core.Native.Http` breaks the injected serve prelude, and the errors point at lines the user cannot see (PRE-EXISTING, verified 2026-09-02)
+
+**Reproduced, not inferred.** A `Web` program that imports the raw HTTP natives under any alias other
+than `NativeHttp` — and actually uses it — fails to type-check, with every diagnostic pointing into
+the INJECTED PRELUDE:
+
+```phg
+import Core.Native.Http as NH;      // any alias but `NativeHttp`
+import Core.Http;
+// … a Web entry whose handler calls NH.parseQuery("a=1") …
+```
+```
+type error at 50:5:   unknown identifier `NativeHttp`   [E-UNKNOWN-IDENT]
+type error at 84:41:  unknown identifier `NativeHttp`   [E-UNKNOWN-IDENT]
+type error at 89:25:  unknown identifier `NativeHttp`   [E-UNKNOWN-IDENT]
+type error at 122:12: unknown identifier `NativeHttp`   [E-UNKNOWN-IDENT]
+```
+
+Lines 50/84/89/122 are **prelude** lines. The user's file is a fraction of that length, so the spans
+name code they cannot open, and nothing in the output says the cause is their own alias. Spelling the
+alias `NativeHttp` type-checks clean [both verified 2026-09-02 against `target/release/phg`].
+
+**Mechanism.** `src/cli/http_serve_prelude.rs` deliberately does not re-import `Core.Native.Http` — it
+relies on the sibling `http_request_prelude` fragment's `import Core.Native.Http as NativeHttp;`,
+because prelude imports are program-wide once injected and repeating it would be a second, drifting
+declaration of the same alias. A user import of the same module replaces that binding with THEIR name,
+and the prelude's own references to `NativeHttp` then resolve to nothing.
+
+**Pre-existing, and the trigger surface is now wider.** The mechanism predates DEC-331 Slice 3, but the
+serve prelude added more `NativeHttp` reference sites, so more of them fire. Note also that
+`E-IMPORT-NATIVE-MEMBER` actively RECOMMENDS the whole-module import spelling that reaches this.
+
+**Masked in the common case:** if the user's aliased import is never used, `E-UNUSED-IMPORT` fires
+first and the collision never surfaces — which is why this looks rarer than it is.
+
+**NOT fixed here, and deliberately so.** The real fix is to make prelude-internal bindings immune to
+user import aliasing, and that is a change to the import model, not a patch: it decides whether
+injected preludes get an isolated binding namespace, and it sits in the same territory as
+§span-collision (prelude/user span keys). Self-ruling it would be exactly the kind of user-visible
+design decision Invariant 15 reserves for the developer, so it is **queued as an adjudication**
+alongside the post-Slice-3 batch rather than guessed at.
+
+**Interim guidance:** import the raw module as `NativeHttp`, or reach the natives through the friendly
+`Core.Http` surface. (Since 2026-09-02 a `Core.Native.Http` import also refuses to transpile — see the
+ladder gate in `src/cli/ladder.rs` — so the friendly surface is the supported path in both senses.)
 
 ## BENCHMARK-SKIPS-LADDER-GATE — `phg benchmark` reaches the PHP emitter without the native-only refusal (PRE-EXISTING, surfaced 2026-09-02)
 

@@ -8,6 +8,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **`phg test` ran the RAW checker, so injected-prelude programs could not be tested at all.** The
+  runner called `checker::check_tests` directly — no prelude injection, no intrinsic/variant import
+  resolution, no DI/Db desugar — so every symbol existing only in an injected prelude came back as the
+  user's own `E-UNKNOWN-IDENT`, and the first one cascaded into three more messages that all blamed the
+  user's file. Any program importing `Core.Http`, `Core.Database`, `Core.Secret`, `Core.DI` or
+  `Core.Runtime.EntryKind` was untestable while `phg check` and `phg run` accepted it happily. This is
+  precisely the hole DEC-252 closed for the LSP and left open here: the LSP was routed through the
+  shared front end, `phg test` never was, so `phg check` ≡ LSP held while `phg check` ≢ `phg test`.
+
+  Fixed by threading a test-mode flag through the SHARED pipeline — `checker::check_resolutions_mode`
+  and `cli::check_and_expand_tests` — rather than giving test mode a pipeline of its own, which would
+  have recreated the exact divergence being closed. `phg check` ≡ LSP ≡ `phg test` now holds by
+  construction. Guarded by a new `tests/mtest.rs` case and by `selftest/injected_preludes.phg`, a real
+  Invariant-9 surface whose every import reaches a prelude-injected type; sabotage-verified by pointing
+  the runner back at the raw checker, which turns that one test red and leaves the other eight green.
+
+  Checked rather than assumed while building it: `EntryKind` is injected only as the attribute-argument
+  surface for `#[Entry(kind:)]`, so using it as a value type is `E-UNKNOWN-TYPE` under `phg test` — and
+  identically under `phg check`. The agreement is the property being restored; here it simply shows up
+  on a rejection rather than an acceptance.
+
+
 - **The transpile ladder had a bypass, and it shipped: `Core.Native.Http.registerServe` emitted PHP
   that could not run.** `E-TRANSPILE-SERVE` was keyed on the `Http.serve` call and nothing else, so
   registering a handler through the raw twin instead — `import Core.Native.Http as NativeHttp;` then

@@ -6,10 +6,10 @@ use super::*;
 /// `Span.start` — fed to [`resolve_html`] so the backend-facing program is `Expr::Html`-free. Used
 /// by the interp/VM/transpile pipeline ([`crate::cli::check_and_expand`]); plain [`check`] (e.g.
 /// `phg check`) ignores the map since it never reaches a backend.
-#[allow(clippy::type_complexity)]
-pub fn check_resolutions(
-    program: &Program,
-) -> Result<
+/// The checker's full resolution output — twelve side-tables the front end threads into the
+/// rewriters and the VM compiler. Named so the two entry points below can share one signature
+/// instead of repeating it (and drifting apart).
+pub type ResolutionsOut = Result<
     (
         Vec<Diagnostic>,
         HashMap<usize, crate::ast::Expr>,
@@ -26,8 +26,23 @@ pub fn check_resolutions(
         (HashMap<usize, String>, HashMap<usize, String>),
     ),
     Vec<Diagnostic>,
-> {
-    let c = run_checker(program);
+>;
+
+pub fn check_resolutions(program: &Program) -> ResolutionsOut {
+    check_resolutions_mode(program, false)
+}
+
+/// Like [`check_resolutions`], but in **test mode**: `test "name" { … }` items are accepted and their
+/// bodies type-checked.
+///
+/// This exists so `phg test` can run the SAME front end as `phg check` and the LSP (DEC-252's
+/// chokepoint) instead of calling the raw checker directly. It used to call `checker::check_tests`,
+/// which sees no prelude injection, so every injected-prelude symbol surfaced as the user's own
+/// `E-UNKNOWN-IDENT` — `phg check` accepted programs `phg test` rejected (KNOWN_ISSUES
+/// §TEST-RAW-CHECKER). The only difference between the two entries is this flag; routing test mode
+/// through a separate pipeline would recreate the very divergence being closed.
+pub fn check_resolutions_mode(program: &Program, test_mode: bool) -> ResolutionsOut {
+    let c = crate::checker::run_checker_mode(program, test_mode);
     if c.errors.is_empty() {
         // Merge the Reflect `typeName` substitutions into the call-rewrite map applied by
         // `rewrite_ufcs`. Keys are disjoint (a `typeName` site is a native member call, never UFCS);

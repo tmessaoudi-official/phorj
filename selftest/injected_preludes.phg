@@ -1,0 +1,45 @@
+// Injected-prelude symbols are testable — the regression guard for KNOWN_ISSUES §TEST-RAW-CHECKER.
+//
+// `phg test` used to run the RAW checker: no prelude injection, no intrinsic/variant import
+// resolution, no DI/Db desugar. Every symbol that exists only in an injected prelude was therefore
+// reported as the user's own `E-UNKNOWN-IDENT`, and the first one cascaded into three more messages
+// that all blamed this file. A program `phg check` and `phg run` both accepted simply could not be
+// tested, and the report pointed at the wrong thing.
+//
+// The runner now shares the same front end as `phg check` and the LSP (DEC-252's chokepoint), so
+// this file is a real assertion about that: every `import` below reaches a type that exists only
+// because a prelude was injected. If the runner is ever re-pointed at the raw checker, these stop
+// compiling under `phg test` while still passing `phg check` — which is exactly the divergence the
+// fix removes.
+package Main;
+
+import Core.Test;
+import Core.Http;
+import Core.Http.ServeConfig;
+import Core.Http.Response;
+
+test "the injected ServeConfig carries its ruled defaults" {
+    ServeConfig fresh = new ServeConfig();
+    Test.assertEquals(fresh.host, "127.0.0.1");
+    Test.assertEquals(fresh.port, 8080);
+    // `timeout = 0` is the literal "no timeout" sentinel, not an unset field.
+    Test.assertEquals(fresh.timeout, 0);
+}
+
+test "named arguments select what a ServeConfig sets" {
+    ServeConfig tuned = new ServeConfig(port: 3000, workers: 4);
+    Test.assertEquals(tuned.port, 3000);
+    Test.assertEquals(tuned.workers, 4);
+    // Unnamed fields keep their defaults.
+    Test.assertEquals(tuned.host, "127.0.0.1");
+}
+
+test "an injected Response builds and reports its status" {
+    Response ok = Response.text(200, "ok");
+    Test.assertEquals(ok.status, 200);
+}
+// NOT tested here, and the reason is worth recording: `EntryKind` is injected only as the
+// ATTRIBUTE-argument surface for `#[Entry(kind:)]`, not as a general value type, so
+// `EntryKind web = EntryKind.Web;` is `E-UNKNOWN-TYPE` — under `phg check` AND under `phg test`,
+// identically. That agreement is the property this file guards; it just happens to be visible on a
+// rejection rather than an acceptance.

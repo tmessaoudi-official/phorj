@@ -59,6 +59,30 @@ pub fn check_and_expand_reified(
     prog: &Program,
     diag_src: &str,
 ) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+    check_and_expand_reified_mode(prog, diag_src, false)
+}
+
+/// `phg test`'s front end: [`check_and_expand`] with `test` items accepted.
+///
+/// It exists so the runner shares THIS pipeline instead of calling the raw checker. `phg test` used
+/// to call `checker::check_tests` directly, which sees no prelude injection, no intrinsic/variant
+/// import resolution and no DI/Db desugar — so every symbol that lives only in an injected prelude
+/// came back as the user's own `E-UNKNOWN-IDENT`, and a program `phg check` accepted could not be
+/// tested at all (KNOWN_ISSUES §TEST-RAW-CHECKER). That is the hole DEC-252 closed for the LSP and
+/// left open here.
+///
+/// The ONLY difference from the normal path is the test-mode flag threaded into the checker. Giving
+/// test mode its own pipeline would recreate exactly the divergence this closes, so it must stay a
+/// flag through the shared body below.
+pub fn check_and_expand_tests(prog: &Program, diag_src: &str) -> Result<Program, String> {
+    check_and_expand_reified_mode(prog, diag_src, true).map(|(p, _)| p)
+}
+
+fn check_and_expand_reified_mode(
+    prog: &Program,
+    diag_src: &str,
+    test_mode: bool,
+) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
     // DEC-239: expand the pipe operator out of the AST FIRST — before any other pass walks
     // expressions — so `Expr::Pipe`/`Expr::PipePlaceholder` exist only for the formatter and no
     // desugar/checker/backend ever sees them. Infallible (placeholder shape is parse-validated).
@@ -130,7 +154,7 @@ pub fn check_and_expand_reified(
     // desugared AST (Inv-5 — pure, so it stays INSIDE the byte-identity spine).
     let routed = crate::checker::desugar_config(routed).map_err(|ds| render_all(&ds, diag_src))?;
     let prog = &routed;
-    match crate::checker::check_resolutions(prog) {
+    match crate::checker::check_resolutions_mode(prog, test_mode) {
         Ok((
             warnings,
             html,

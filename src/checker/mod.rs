@@ -73,7 +73,7 @@ mod resolutions;
 mod resolve;
 mod stmt;
 mod throws;
-pub use resolutions::check_resolutions;
+pub use resolutions::{check_resolutions, check_resolutions_mode};
 
 // Stateless helpers live in `common`; this glob re-exposes them to `mod.rs`'s own bodies AND
 // (transitively, via each cluster's `use super::*`) to every sibling cluster file.
@@ -722,7 +722,7 @@ fn run_checker(program: &Program) -> Checker {
 
 /// The shared checker driver. `test_mode` is `true` only under `phg test` — it allows `test` items
 /// (M-Test); every other entry runs with it `false`.
-fn run_checker_mode(program: &Program, test_mode: bool) -> Checker {
+pub(crate) fn run_checker_mode(program: &Program, test_mode: bool) -> Checker {
     let mut c = Checker::new();
     c.test_mode = test_mode;
     c.collect(program);
