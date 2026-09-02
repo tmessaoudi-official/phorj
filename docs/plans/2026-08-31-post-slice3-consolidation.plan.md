@@ -640,20 +640,20 @@ fixed; `import Core.Http as H` offers no alias bypass.
 | # | sev | where | finding | status |
 |---|---|---|---|---|
 | K1 | P1 | `src/lsp/mod.rs:514,534` → `cli/pipeline.rs:295,326` | both LSP diagnostic paths hard-code the non-test checker; all 3 `selftest/*.phg` squiggle `E-TEST-OUTSIDE-TESTS` | FIXED (DEC-486, step 1) |
-| K2 | P1 | quartet | the 17:05 rulings (regex B, no scout port, order, perf split) exist only in this plan — no register row; MASTER-PLAN and SLICE-STATE state different "next"; DEC-457/458/459 have no MASTER-PLAN mirror | NEW — Invariant 19 |
-| K3 | P1 | `SLICE-STATE.md:137-140` vs `:83-86` | intra-file contradiction on whether `phg test` still checks the raw program | NEW |
+| K2 | P1 | quartet | the 17:05 rulings (regex B, no scout port, order, perf split) exist only in this plan — no register row; MASTER-PLAN and SLICE-STATE state different "next"; DEC-457/458/459 have no MASTER-PLAN mirror | FIXED (MASTER-PLAN §0.07 mirror rows DEC-457…489; SLICE-STATE + MASTER-PLAN §0 agree on "next") |
+| K3 | P1 | `SLICE-STATE.md:137-140` vs `:83-86` | intra-file contradiction on whether `phg test` still checks the raw program | FIXED (with DEC-486: SLICE-STATE carries one statement, §TEST-RAW-CHECKER FIXED) |
 | K4 | P2 | `tests/differential.rs:2012-2062` | two `continue` skip arms, no counter, no expected-skip-set; floor is `files.len() >= 3` | FIXED (step 1: `CorpusTally` on all three corpus gates — RUN floors 195/190/18, every skip bucket matched against an exact expected list in both directions) |
-| K5 | P3 | `UNIFIED-SPEC.md:1209` | "no named arguments" true of natives only, reads as a language claim | NEW |
-| K6 | P2 | `UNIFIED-SPEC.md:2117-2136` | spec names none of `E-SERVE-TLS-*`, `W-SERVE-CONFIG-OVERRIDDEN`, `E-TEST-OUTSIDE-TESTS` | NEW |
+| K5 | P3 | `UNIFIED-SPEC.md:1209` | "no named arguments" true of natives only, reads as a language claim | FIXED (UNIFIED-SPEC: natives are positional; named args are DEC-297 language surface) |
+| K6 | P2 | `UNIFIED-SPEC.md:2117-2136` | spec names none of `E-SERVE-TLS-*`, `W-SERVE-CONFIG-OVERRIDDEN`, `E-TEST-OUTSIDE-TESTS` | FIXED (UNIFIED-SPEC "The diagnostics this slice names") |
 | K7 | P2 | `src/lsp/symbols.rs:153,223` | document symbols drop `Item::Test` — a named test never appears in either editor's outline | FIXED (DEC-486, step 1) |
 | K8 | P2 | `checker/rewrite_pipe/walk.rs:33`, `qualify_variants.rs:67`, `rewrite_new.rs:57`, `cli/rewrite_new.rs:44` | four passes keep an inert `_ => {}` item arm outside the CD-31 ratchet; `rewrite_pipe` is pre-check and the "tests are checker-gated out" comment is false | NEW |
-| K9 | P2 | `KNOWN_ISSUES.md:2854-2860` | second section still says `test_runner` calls `check_tests` without prelude expansion — false since 8a83ada6 | NEW |
-| K10 | P2 | `CLAUDE.md:207`, `docs/INVARIANTS.md:39` | Invariant 3 still scoped to Expr/Stmt/Pattern; CD-31's `Item` widening absent | NEW |
+| K9 | P2 | `KNOWN_ISSUES.md:2854-2860` | second section still says `test_runner` calls `check_tests` without prelude expansion — false since 8a83ada6 | FIXED (KNOWN_ISSUES section marked FIXED, points at §TEST-RAW-CHECKER) |
+| K10 | P2 | `CLAUDE.md:207`, `docs/INVARIANTS.md:39` | Invariant 3 still scoped to Expr/Stmt/Pattern; CD-31's `Item` widening absent | FIXED (INVARIANTS §2b + CLAUDE.md rule 3 name the `Item` widening) |
 | K11 | P2 | `src/cli/help.rs:8-30` | `phg --help` omits `add/install/update/remove` | KNOWN_ISSUES:2890 |
 | K12 | P2 | `examples/process/README.md`, `explain/members_destructure.rs:90` | `Process.args()` drift, 20 hits; native is `arguments` | KNOWN_ISSUES:2847 |
 | K13 | P3 | `examples/README.md:181` | only the html-in-trait CD-31 shape has an example; README row not updated | NEW |
-| K14 | P3 | `differential.rs:2011`, `UNIFIED-SPEC.md:1684,1827,1878` | dead citations (deleted design doc, two "retired" plans in no archive) | NEW |
-| K15 | P3 | `C-decisions.md:3547` | DEC-362 "build queued" while BUILT | NEW |
+| K14 | P3 | `differential.rs:2011`, `UNIFIED-SPEC.md:1684,1827,1878` | dead citations (deleted design doc, two "retired" plans in no archive) | FIXED (spec "retired" sources named as folded/deleted; the three code citations repointed to UNIFIED-SPEC) |
+| K15 | P3 | `C-decisions.md:3547` | DEC-362 "build queued" while BUILT | FIXED (DEC-362 → BUILT) |
 | K16 | P2 | `src/lsp/` | no hover/signature-help consumer of `prelude_catalog` — `cfg.port`/`Http.serve` hover empty | KNOWN_ISSUES:3056 |
 | K-fact | — | `tests/serve_tls.rs` | handshake tier self-skips without `openssl`, no `PHORJ_REQUIRE_*` analogue | note |
 

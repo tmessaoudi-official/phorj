@@ -1812,7 +1812,7 @@ fn p4c_programs_match_between_backends() {
 /// the PHP leg runs in a separate process whose argv/env need not match the Rust process, so the
 /// output is not a fixed golden. These are tested separately under a controlled environment in
 /// `tests/process.rs` (their `examples/process/` files are walkthroughs, not gated examples — Q2-A of
-/// `docs/specs/2026-06-25-process-io-quarantine-seam-design.md`). The impure-module set is **derived
+/// the process-I/O quarantine seam, folded into `docs/specs/UNIFIED-SPEC.md`; original deleted). The impure-module set is **derived
 /// from the `NativeFn::pure` flag**, not hardcoded here, so a future impure module is covered with no
 /// harness edit (the seam the `pure` marker exists for).
 /// True iff the source imports a feature-gated Core module NOT compiled into this build (derived
@@ -2165,7 +2165,7 @@ fn find_main_phg(project_dir: &std::path::Path) -> std::path::PathBuf {
 
 /// Every runnable example under `examples/` must produce byte-identical stdout on both backends.
 /// Globbing (not an explicit list) means a newly-added example is gated with no test edit — the
-/// "add examples as we go" contract (`docs/specs/2026-06-16-examples-coverage-design.md`).
+/// "add examples as we go" contract (the examples-coverage design, folded into `docs/specs/UNIFIED-SPEC.md`; original deleted).
 #[test]
 fn all_examples_match_between_backends() {
     let mut files = Vec::new();

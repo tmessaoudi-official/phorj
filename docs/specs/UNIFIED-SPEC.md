@@ -1205,8 +1205,9 @@ String.split(s, sep)          List.map(xs, f)             Map.getOrDefault(m, ke
 String.replace(s, from, to)   List.reduce(xs, init, f)    Decimal.divide(a, b, scale, mode)
 ```
 
-This is the order UFCS method sugar (`s.split(sep)`) desugars to, and it reads left-to-right. Phorj
-has no named arguments; order the most-likely-omitted argument last.
+This is the order UFCS method sugar (`s.split(sep)`) desugars to, and it reads left-to-right. Native
+calls take POSITIONAL arguments only (named arguments — DEC-297 — are a language feature of
+user-declared functions and constructors); order the most-likely-omitted argument last.
 
 ### 3. Optional vs fault — the recoverability rule
 
@@ -1682,7 +1683,8 @@ that section). The shipped `Core.Sql` prelude was REMOVED in the DEC-208 superse
 survives from this design: always-alias + `E-SQL-AMBIGUOUS-COLUMN` thinking informed the
 `W-SQL-INJECTION` lint; the decoupled-dialect principle became `DriverConn` dispatch-at-execute;
 the `throws DatabaseError` Q6 ruling carried over verbatim. Historical text follows. Source: the retired
-`docs/plans/web-spine.plan.md` + `finishing-wave.plan.md` Decisions Log; drafts under
+`web-spine` + `finishing-wave` plans' Decisions Logs (folded into this file on 2026-07-03; the originals
+were deleted, no archive copy exists — panel K14); drafts under
 `docs/research/wave3-4-drafts/w3-1-db-access.md`.
 
 ### Instance model (developer-ruled 2026-07-11 — reaffirms Invariant 12 "prefer instances + mandatory `new`")
@@ -1825,7 +1827,7 @@ downgradeable-opportunistic to required-with-credentials.
 ## Dependency injection & attribute reflection (DI v2 / L1–L2)
 
 **Status: DESIGN — DI v1 SHIPPED; v2 + the generic L1/L2 programme to build in the finishing wave (Ω-4 +
-Ω-7).** Source: the retired `docs/plans/di-attributes.plan.md` (§0 generic thesis, §3 v2 layers) +
+Ω-7).** Source: the retired `di-attributes` plan (§0 generic thesis, §3 v2 layers; folded here, original deleted — panel K14) +
 `finishing-wave.plan.md`.
 
 ### The generic thesis (ruled) — build the primitive, not a bespoke DI feature
@@ -1876,7 +1878,7 @@ single-impl interface auto-bind; `#[Provides]` static factories (precedence over
 ## Bytes.format — byte-precise formatting (DESIGN — build in Ω-3)
 
 **Status: DESIGN, RESOLVED (developer, commit `dbc5215`) — build byte-identity-critical, multi-leg.**
-Source: the retired `docs/plans/web-spine.plan.md`. Complements `String.format` (the `%`-sprintf engine,
+Source: the retired `web-spine` plan (folded here, original deleted — panel K14). Complements `String.format` (the `%`-sprintf engine,
 SHIPPED); `String.charCount` (codepoint count, `é`=1) ships alongside as a companion to byte-based
 `String.length`.
 
@@ -2138,6 +2140,16 @@ D7's "iff BOTH are set" is **NOT** read as "a lone `cert` means plain HTTP". A l
 operator believes is encrypted — a security footgun of exactly the shape the header-injection guard
 was written about. **Do not "fix" this back toward the spec sentence.** Ruled and deferred alongside
 it: HTTP→HTTPS redirect, HSTS, certificate hot-reload, mTLS.
+
+### The diagnostics this slice names (panel K6)
+
+`E-SERVE-NO-HANDLER` (D5), `E-NO-ENTRY-FOR-ROLE` (D6), `E-SERVE-TLS-INCOMPLETE` (the deviation above),
+`E-SERVE-TLS-DISABLED` (a `cert`+`key` pair on a build without `http-server-tls`), `E-SERVE-TLS-CERT`
+(an unreadable or malformed certificate/key), `E-SERVE-TLS-MIN-VERSION` (a `tlsMinVersion` outside `1.2`/`1.3`),
+`W-SERVE-CONFIG-OVERRIDDEN` (a `ServeConfig` field overridden by a flag — §SERVE-CONFIG-PROVENANCE),
+and — from the test surface this slice's harness work touched — `E-TEST-OUTSIDE-TESTS`: a `test` item
+reaching `run`/`transpile`/`build`; `phg check`, `check --json` and the LSP accept a document that
+declares one (DEC-486). Every code has a `phg explain` entry (ratcheted).
 
 ### Checker and CLI rules
 

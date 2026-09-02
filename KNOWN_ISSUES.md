@@ -2932,9 +2932,12 @@ one known-colliding file carries a deliberate padding line + pointer here.
 the correct name; `args()` fails `E-UNKNOWN-IDENT`). Pre-existing drift found by the DEC-273
 wave-1 panel (correctness lens) — docs-only fix, its own small slice.
 
-## `phg test <dir>` whole-file validation runs the RAW checker (panel-found, pre-existing)
+## ✅ FIXED — `phg test <dir>` whole-file validation used to run the RAW checker (panel-found, pre-existing)
 
-`test_runner.rs`'s per-file validation calls `checker::check_tests` without the CLI prelude
+**FIXED 2026-09-02 (8a83ada6 + DEC-486 — see §TEST-RAW-CHECKER):** the runner goes through
+`cli::check_and_expand_tests`, the same front end as `phg check` and the LSP. Historical text follows.
+
+`test_runner.rs`'s per-file validation called `checker::check_tests` without the CLI prelude
 expansion, so injected-type files (e.g. anything using `Option`) fail `<check>` under `phg test`
 while `phg check` on the same file is clean — the same family as the LSP raw-checker gotcha
 (since fixed for the LSP by DEC-282's same-loader rule). Found by the DEC-273 wave-1 panel

@@ -1,6 +1,7 @@
 //! `Core.Regex` — a ReDoS-safe regular-expression engine over a compiler-injected `Regex` class
-//! value (`docs/specs/2026-06-28-core-regex-design.md`). Backed by the `regex` crate (the project's
-//! 2nd vetted dependency, `docs/specs/2026-06-27-dependency-policy.md`): a RE2-style finite automaton
+//! value (design folded into `docs/specs/UNIFIED-SPEC.md` — the `Core.Regex` row and §External
+//! dependency policy; the original design docs were deleted). Backed by the `regex` crate (the project's
+//! 2nd vetted dependency): a RE2-style finite automaton
 //! with **guaranteed linear-time matching** (ReDoS-immune by construction). Its restricted feature
 //! set (no backreferences / lookaround) is exactly the *regular* subset PHP `preg_*` matches
 //! identically, so the byte-identity spine holds; a PCRE-only pattern is rejected by `Regex.compile`

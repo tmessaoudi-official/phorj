@@ -204,7 +204,8 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
    (`src/vm/exec.rs:9`), `BytecodeProgram::validate` (`src/chunk/validate.rs:21`),
    `compiler::stack_effect` (`src/compiler/emit.rs:75`). All three are wildcard-free (verified
    2026-07-25) — never reintroduce a `_` arm.
-   **The same rule governs `Expr` (37) / `Stmt` (15) / `Pattern` (11):** a rewriter's total walk carries
+   **The same rule governs `Expr` (37) / `Stmt` (15) / `Pattern` (11) — and `Item` (8) since CD-31,
+   2026-09-02:** a rewriter's total walk carries
    NO catch-all, and a *named* one (`other => other`, `leaf => leaf`) is worse than `_` because it reads
    as deliberate and greps as handled. Leaf sets are single-sourced as or-pattern macros in
    `src/ast/leaves.rs` so `rustc` still enforces exhaustiveness; exemptions are recorded as CD rows,

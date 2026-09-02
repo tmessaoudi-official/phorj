@@ -65,6 +65,50 @@
 | `2026-07-26-capture-write-rejection.md` | DEC-357 | Writing to a captured local is rejected. RULED, unbuilt |
 | `2026-07-26-ufcs-lsp-companion.md` | DEC-342 / 346 / 375 | UFCS completion, import-gating, and the LSP-as-expert-companion bar. RULED, unbuilt — relevant to Invariant 17's 100% rule |
 
+## 0.07 THE 2026-09-02 RULINGS — mirror rows (DEC-457 … DEC-489)
+
+> Invariant 19 mirror (panel K2): the readiness / gap-programme / harness-trust rulings of 2026-09-02
+> exist here by identity only — the register row is the ruling, `docs/plans/2026-09-02-php-parity-readiness.plan.md`
+> (§6 ORDER + questions queue) and `docs/plans/2026-08-31-post-slice3-consolidation.plan.md` (Decisions Log,
+> panel round 3) are the plans, `SLICE-STATE.md` is the live cursor. Statuses are the register's at the time
+> of mirroring; the register wins on any difference.
+
+| DEC | subject | status (register) |
+|---|---|---|
+| DEC-457 | DEC-455.4 — two `#[Config]` providers whose generic types erase to one key. Injection keys on the bare head,… | **RULED — build QUEUED** |
+| DEC-458 | `Core.Database` Ladder case-1, step 2 — phorj's `Statement` binds onto a SHARED raw handle in place and… | **RULED — unblocks step 2; steps 2+3 QUEUED** |
+| DEC-459 | PRELUDE-ALIAS-COLLISION — importing `Core.Native.Http` under any alias but `NativeHttp` and using it… | **BUILT 2026-09-02** — prelude `Core.Native.*` aliases are rebound at injection under `NativeHttp#prelude` (an unwritable spelling; the set spans every fragment), the injection compares path AND alias, and the by-name containment arm is gone; `tests/prelude_isolation.rs` |
+| DEC-460 | Whether to port scout into | RULED |
+| DEC-461 | `Regex.compile("(?<=a)b")`: `check` OK, `run` faults, transpiled PHP matches — Invariant 1 broken on… | **BUILT 2026-09-02** — `compileBacktracking` on `fancy-regex` (15th dep) with a step budget; the `Regex` value carries `engine`; the linear reject list is applied at check time (literal) and run time (dynamic, PHP twin ported); replacement grammar owned; `D` modifier; C4 named out (plan Decisions Log) |
+| DEC-462 | Order of the three authorised | RULED |
+| DEC-463 | Four perf rulings blocking | RULED |
+| DEC-464 | The round-2 panel report (24 findings) lived only in gitignored `var/claude/` and was | RULED — executed |
+| DEC-465 | Gap-programme Q23 — the parity doctrine's | RULED |
+| DEC-466 | Q16 — time zones vs Invariant 10 (`Core.Time` UTC-only, | RULED — build QUEUED |
+| DEC-467 | Q3 — mail receive side (DEC-413 had deferred | RULED — build QUEUED |
+| DEC-468 | Q18 — charset transcoding + accent | RULED — build QUEUED |
+| DEC-469 | Q2 — HTML5 | RULED — build QUEUED |
+| DEC-470 | Q17 — crypto beyond | RULED — build QUEUED |
+| DEC-471 | Q19 — compression (DEC-407 admitted `flate2`, never | RULED — build QUEUED |
+| DEC-472 | Q21 — process | RULED — build QUEUED |
+| DEC-473 | DEC-455.5 — repeated config parameter type calls the provider N | RULED — build QUEUED |
+| DEC-474 | DEC-455.6 — widened arity lost the accurate | RULED — build QUEUED |
+| DEC-475 | §SERVE-CONFIG-PROVENANCE — a field written at its default reads as | RULED — build QUEUED |
+| DEC-476 | `Core.Database` case-1 step 3 — `decimal` on the PHP | RULED — build QUEUED |
+| DEC-477 | Standing directives (developer, same | RULED — standing |
+| DEC-478 | Framework tier — where ORM / validation attrs / auth / CSRF / rate-limit / signed URLs / RFC 7807 / OpenAPI /… | RULED — build QUEUED |
+| DEC-479 | Generators: UNIFIED-SPEC:1633 rejects lazy sequences while MASTER-PLAN Ω-4 #8 / W4-2 queues | RULED — build QUEUED |
+| DEC-480 | XML scope — DEC-382/Q1 covered DOM + C14N; both e-invoicing codebases need XSD + | RULED — build QUEUED |
+| DEC-481 | DEC-268 (two consecutive clean panel rounds) vs the 2026-08-19 economize ruling (one panel per milestone);… | RULED — amends DEC-268 |
+| DEC-482 | `phg build` embeds recoverable SOURCE and re-runs the pipeline at startup (UNIFIED-SPEC "acceptable v1");… | RULED — build QUEUED |
+| DEC-483 | TypePHP runs Composer packages through a Zend bridge; Appendix A.2 rejects FFI (`.d.phg` is the seam) and… | RULED — milestone QUEUED |
+| DEC-484 | Gap-programme Q4 (`Core.Intl` unscoped on icu4x) + readiness X3 (twes-in keeps currency scales OFF | RULED — build QUEUED |
+| DEC-485 | Survey sugar | RULED — build QUEUED |
+| DEC-486 | Panel C9/K1/K7 — the LSP and `phg check` hard-code the non-test checker, so every `selftest/*.phg` squiggles… | RULED — build in step 1 |
+| DEC-487 | Readiness A9 / gap Q5 — no `sleep`; a `--watch` loop cannot be | RULED — build QUEUED |
+| DEC-488 | Gap Q22 — PHP extensions on no roadmap: `gmp`, `gettext`, `xsl`, `gd`, `ldap`, `soap`, | RULED — partial build QUEUED, three declines |
+| DEC-489 | Gap small rows Q10 / Q20 / Q12 / | RULED — build QUEUED / one decline |
+
 ## 0.06 RULED BUILD ORDER — the 2026-07-26 agenda
 
 > **FOLDED IN 2026-09-02** from `2026-07-26-ruled-build-order.md` (original archived at
