@@ -437,3 +437,24 @@ fn general_context_offers_keywords_without_a_parse() {
         "want keyword 'package' in {got:?}"
     );
 }
+
+/// DEC-461 / Invariant 17 (100% rule): the new constructor surfaces in member completion with no LSP
+/// edit — the catalog reads `native::registry()`, where `compileBacktracking` is a row like `compile`.
+#[test]
+fn regex_member_completion_lists_both_constructors() {
+    let src = "package Main;\nimport Core.Regex;\nfunction main(): void {\n  Regex.\n}\n";
+    let offset = src.find("Regex.").unwrap() + "Regex.".len();
+    let got = labels(&complete(
+        src,
+        offset,
+        None,
+        None,
+        &std::collections::HashMap::new(),
+    ));
+    for want in ["compile", "compileBacktracking", "replace"] {
+        assert!(
+            got.iter().any(|l| l == want),
+            "`{want}` missing from `Regex.` completion: {got:?}"
+        );
+    }
+}

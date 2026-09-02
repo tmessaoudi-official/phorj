@@ -2536,12 +2536,20 @@ byte-identical by construction. The clock is the one non-deterministic surface, 
 spine (`interp ≡ VM ≡ real PHP`) holds on the **regular subset** the engine accepts; the items below
 are deliberate edges, each either rejected cleanly or kept inside ASCII where the three backends agree.
 
-- **Backreferences / lookaround are rejected at `Regex.compile`** (the engine omits them by design —
-  they would force backtracking, the ReDoS hazard). A clean fault, never a divergence. This *is* the
-  "restricted-subset dual-engine parity" — the omitted set is exactly the non-regular part of PCRE.
-- **`\d` / `\w` / `\s` are Unicode-aware on the Rust backends, ASCII-only in transpiled PCRE** (no
-  `(*UCP)`). So a Unicode-digit subject would diverge between the backends and the PHP leg. Shipped
-  examples keep **ASCII** subjects, where all three agree. (A future `(*UCP)` emission could align them.)
+- **PCRE-only syntax is rejected by `Regex.compile` on EVERY leg, and available through
+  `Regex.compileBacktracking` (DEC-461, 2026-09-02).** The linear engine's reject list (look-around,
+  back-references, atomic groups, possessive quantifiers, conditionals/recursion, `(*VERB)`s, `{,n}`,
+  `\h \R \Z \G \K`) is applied at CHECK time to a literal pattern (`E-REGEX-UNSUPPORTED`) and at run
+  time to a dynamic one, with the PHP twin `__phorj_regex_compile` porting the same scan — so a pattern
+  can no longer fault natively while transpiled PCRE matched (panel C5), nor parse differently
+  (`a++` was `(a+)+` natively and possessive under PCRE, panel C2). `compileBacktracking` runs those
+  patterns on `fancy-regex` under a step budget: `regex step budget exceeded` is a typed fault on every
+  leg (PHP's `PREG_BACKTRACK_LIMIT_ERROR` maps to it), never a hang.
+- ~~`\d` / `\w` / `\s` are Unicode-aware natively, ASCII-only in transpiled PCRE~~ — **that edge did
+  not exist** (panel C11): the helper's `u` modifier turns on PCRE's UCP for `\d\w\s`, so all three
+  legs agree on Unicode subjects. The real edges were C1–C3, all fixed with DEC-461.
+- **`$` means end of subject on every leg** (panel C3): the PHP helper emits `D` (PCRE_DOLLAR_ENDONLY),
+  so `a$` no longer matches `"a\n"` under PHP alone.
 - **Named captures only** — `findGroups`/`findAllGroups` return `Map<string,string>` keyed by group
   name (the latter one map per match); numbered groups are intentionally not exposed. A named group
   that does not participate in the match is omitted.
@@ -2557,8 +2565,10 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   to `findGroups`/`findAllGroups` (they predate it) if/when it's worth a change.
 - **Always Unicode (`/u`), case-sensitive.** Inline flags / case-insensitivity (`Regex.compileWith`)
   are deferred — add when requested.
-- **`replace` replacement syntax** uses the `$1` / `${name}` form shared by the `regex` crate and PHP
-  `preg_replace`; PCRE-only `\1` backslash references are not portable (use `$1`).
+- **`replace`'s replacement grammar is phorj's OWN, expanded identically on every leg** (panel C1;
+  `src/ext/regex/replace.rs` + `__phorj_regex_expand`): `$1`/`${1}` numbered, `$name`/`${name}` named,
+  `$$` a literal `$`; everything else — `\1` included — is literal. Before DEC-461 the crate's and PCRE's
+  expansions disagreed on `\1-`, `$$`, `$1a` and `${x}` with every leg exiting 0.
 - ⚠ **Empty/zero-width matches diverge between the `regex` crate and PCRE** (affects every
   match-iterating API: `replace`, `replaceCallback`, `findAll`, `split`). For an empty-matchable pattern
   like `\d*`, the two engines disagree on where empty matches land: `replaceCallback(compile("\\d*"),

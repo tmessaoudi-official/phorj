@@ -456,7 +456,7 @@ teaching it is wrong); the four `E-TYPE-IMPORT-*` codes re-homed as `E-IMPORT-BU
 | Module | Injected | Leaf | Discipline |
 |---|---|---|---|
 | `Core.Json` | `Json` enum | `Json` | leaf==type ⇒ compliant as-is; variants stay `Json.Object` |
-| `Core.Regex` | `Regex` class | `Regex` | compliant as-is |
+| `Core.Regex` | `Regex` class | `Regex` | compliant as-is; `compile` (linear) / `compileBacktracking` (DEC-461) |
 | `Core.Secret` | `Secret<T>` class | `Secret` | compliant as-is |
 | `Core.Decimal` | `RoundingMode` enum | `Decimal` | member ⇒ `Decimal.RoundingMode` (or member-import) |
 | `Core.Http` | `Request`,`Response`,`Route`,`Router`,`ParamBag`,`HeaderBag`,`AttrBag`,`FileBag`,`RequestBody`,`UploadedFile`,`MultipartPart`,`Cookie`,`SameSite` (+ `#[Route]`) | `Http` | members ⇒ `Http.X` / `#[Http.Route]` (bags: DEC-331 s2) |
@@ -1357,7 +1357,7 @@ escaping — a later wave (`Html.url_attr`/typed URLs; gap-audit row K-html-cont
 **Status: ADOPTED 2026-06-27; AMENDED 2026-07-03 (SQL driver + TLS domains) and 2026-07-06 (native
 codegen / JIT — domain #7).** This policy is why "zero external dependencies" claims in older docs are
 **false and must not be repeated**: Phorj's *core stays `std`-only*, but nine vetted, feature-gated
-crates ship **by default** (of 14 admitted — re-derive from `Cargo.toml`, the SSOT). Source:
+crates ship **by default** (of 15 admitted — re-derive from `Cargo.toml`, the SSOT). Source:
 `2026-06-27-dependency-policy.md`.
 
 ### The rule
@@ -1407,7 +1407,8 @@ Anything outside the admitted domains requires revisiting this policy itself, no
 | Crate | Domain | Used by | Gate | Key justification |
 |---|---|---|---|---|
 | `argon2` (RustCrypto) 0.5.x | Argon2id password hashing | `Core.Cryptography` | `cryptography` | OWASP #1 KDF; audited; emits standard PHC strings → interoperates with PHP `password_verify` |
-| `regex` (BurntSushi) 1.x | ReDoS-safe regex | `Core.Regex` | `regex` | RE2-style finite automaton, guaranteed linear-time, exhaustively fuzzed; its restricted feature set (no backref/lookaround) is exactly the regular subset PHP `preg_*` matches identically, so the byte-identity spine holds; unsupported patterns rejected at `Regex.compile` |
+| `regex` (BurntSushi) 1.x | ReDoS-safe regex | `Core.Regex` (`Regex.compile`) | `regex` | RE2-style finite automaton, guaranteed linear-time, exhaustively fuzzed; its restricted feature set (no backref/lookaround) is exactly the regular subset PHP `preg_*` matches identically, so the byte-identity spine holds; PCRE-only syntax is rejected at CHECK time for a literal pattern (`E-REGEX-UNSUPPORTED`) and at run time for a dynamic one, on every leg |
+| `fancy-regex` 0.11 | opt-in backtracking regex (DEC-461, 2026-09-02) | `Core.Regex` (`Regex.compileBacktracking`) | `regex` | PCRE-class syntax (look-around, back-references, atomic groups, possessive quantifiers) on a backtracking VM that delegates the regular subset to `regex`; a STEP BUDGET (`backtrack_limit`, 1 000 000 — PHP's default `pcre.backtrack_limit`) raises a typed fault instead of hanging, and the PHP twin maps `PREG_BACKTRACK_LIMIT_ERROR` to the same fault, so ReDoS stays opt-in and bounded on every leg |
 | `ctrlc` 3.x | OS signals (SIGINT/SIGTERM) | `phg serve` graceful shutdown | `signals` | Confines the unavoidable `unsafe`; serve is outside the byte-identity spine (quarantined), so this never touches `interpreter ≡ VM ≡ PHP` |
 | `corosensei` 0.3.x | Stackful coroutines | `spawn`/channels (green threads) | `green` (non-wasm) | Miri-tested, by the hashbrown/parking_lot author; wasm32 has no native stack to switch (verified) — on wasm the interpreter delegates to the VM's frame-swap; green threads are quarantined from the PHP oracle |
 | `cranelift-*` (Bytecode Alliance) | Native codegen (JIT) | `phg run`/`serve`/`build` hot paths | `jit` (non-wasm) | The G-8 lever — native codegen beats php+JIT (a spike showed ~3× even with boxed `Value`); `std` has no codegen and hand-emitting machine code is the unsafe-est hand-rolling. phorj's FIRST **first-party** `unsafe`, confined to the `src/jit/` island (crate root `forbid`→`deny`; CI-enforced). **In tree since codegen slice 1** (2026-07-06, `jit` feature; pure-int leaf codegen — since WIRED: `jit` is a DEFAULT feature of `phg run` as of 2026-07-09, opt out `--no-jit`) |
@@ -2228,7 +2229,7 @@ name the `withHeader` call that built the bad value. Worse debugging for identic
 > [dependency policy](#external-dependency-policy) and describe the artifact as "std-only /
 > zero-dependency". The accurate current framing: the **hand-rolled object-format readers, container,
 > CRC-32, SHA-256 stay std-only by policy** (no `object`/`goblin`/`sha2` in code that runs inside the
-> artifact), while the *crate as a whole* ships the vetted feature-gated deps (9 by default of 14 admitted — see §External dependency policy). The
+> artifact), while the *crate as a whole* ships the vetted feature-gated deps (9 by default of 15 admitted — see §External dependency policy). The
 > tooling-exemption principle (§ boundary below) is unchanged and remains the governing test.
 
 ## phg build master design

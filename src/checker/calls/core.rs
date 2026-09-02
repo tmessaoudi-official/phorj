@@ -102,6 +102,13 @@ impl Checker {
                             if n.module == "Core.String" && n.name == "format" {
                                 return self.check_string_format(args, span);
                             }
+                            // DEC-461: a LITERAL regex pattern is validated at check time with the
+                            // engine that would compile it (`E-REGEX-UNSUPPORTED` / `E-REGEX-INVALID`).
+                            if n.module == "Core.Regex"
+                                && (n.name == "compile" || n.name == "compileBacktracking")
+                            {
+                                self.gate_regex_literal(n.name, args);
+                            }
                             // DEC-331 D9b (spec §2 P2): `Conversion.toString(x)` on a class instance
                             // stringifies through the SAME `#[ToString]` call as interpolation.
                             if n.module == "Core.Conversion"

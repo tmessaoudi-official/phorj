@@ -23,7 +23,7 @@ keep the `Core.` import root.
 | jit | default | `jit` | — | native codegen for hot int/float loops — CORE-classified (the kernel list); this row documents its BUILD FLAG for discoverability (DEC-273 addendum). `--no-jit` / artifact `PHG_NO_JIT=1` = the byte-identical escape hatches |
 | json | default | `json` | Core.Json | JSON parse/render + the injected `Json` enum |
 | path | default | `path` | Core.Path | pure path-string manipulation (join/normalize/…) |
-| regex | default | `regex` | Core.Regex | regular expressions (crate-backed; PCRE-compatible surface subset) |
+| regex | default | `regex` | Core.Regex | regular expressions: `Regex.compile` (linear, ReDoS-immune) and `Regex.compileBacktracking` (PCRE-class syntax under a step budget, DEC-461) |
 | session | default | `session` | Core.SessionModule, Core.Native.Session | in-process HTTP sessions for `phg serve` (secure-default cookie via Core.Http) |
 | signals | default | `signals` | — | SIGINT/SIGTERM graceful shutdown for `phg serve` (drain in-flight, exit 0) |
 | test | default | `test` | Core.Test | the `Core.Test` assertion natives behind `phg test` |

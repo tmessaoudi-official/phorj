@@ -130,7 +130,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 ## Project qualities
 
 - **Std-first with a short, vetted, feature-gated dependency list** — `argon2` (Argon2id),
-  `regex` (`Core.Regex`), `ctrlc` (signals), `corosensei` (green threads), `rusqlite`/`postgres`/
+  `regex` + `fancy-regex` (`Core.Regex`: the linear engine and the opt-in backtracking engine, DEC-461), `ctrlc` (signals), `corosensei` (green threads), `rusqlite`/`postgres`/
   `mysql` (Core.Database drivers), `lettre` (Core.Mail SMTP), `rustls`+`webpki-roots` (TLS for
   HttpClient/Mail); nothing else (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
   `docs/specs/UNIFIED-SPEC.md#external-dependency-policy` — every admission is register-recorded).

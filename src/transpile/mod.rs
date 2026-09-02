@@ -30,6 +30,7 @@ mod names;
 mod program_emit;
 mod runtime_php;
 mod runtime_php_http;
+mod runtime_php_regex;
 mod runtime_tables;
 pub mod split;
 mod state;

@@ -104,8 +104,9 @@
 //!   `__phorj_log_write` `__phorj_map_remove` `__phorj_map_set` `__phorj_max`
 //!   `__phorj_max_by` `__phorj_min` `__phorj_min_by` `__phorj_now_freeze`
 //!   `__phorj_now_frozen` `__phorj_now_millis` `__phorj_now_unfreeze` `__phorj_number_format`
-//!   `__phorj_range` `__phorj_regex_delim` `__phorj_regex_find` `__phorj_regex_find_all`
-//!   `__phorj_regex_find_all_groups` `__phorj_regex_find_groups` `__phorj_regex_matches` `__phorj_regex_quote_meta`
+//!   `__phorj_range` `__phorj_regex_check` `__phorj_regex_compile` `__phorj_regex_delim` `__phorj_regex_expand`
+//!   `__phorj_regex_find` `__phorj_regex_find_all` `__phorj_regex_find_all_groups` `__phorj_regex_find_groups`
+//!   `__phorj_regex_linear_unsupported` `__phorj_regex_matches` `__phorj_regex_quote_meta`
 //!   `__phorj_regex_replace` `__phorj_regex_replace_callback` `__phorj_regex_split` `__phorj_rng_int_between`
 //!   `__phorj_rng_next` `__phorj_rng_next_float` `__phorj_rng_seed` `__phorj_rng_state`
 //!   `__phorj_rng_step` `__phorj_sort` `__phorj_sort_with` `__phorj_take_while`
@@ -267,11 +268,15 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_parse_int", 1),
     ("__phorj_range", 2),
     ("__phorj_reflect_of", 1),
+    ("__phorj_regex_check", 2),
+    ("__phorj_regex_compile", 2),
     ("__phorj_regex_delim", 2),
+    ("__phorj_regex_expand", 2),
     ("__phorj_regex_find", 2),
     ("__phorj_regex_find_all", 2),
     ("__phorj_regex_find_all_groups", 2),
     ("__phorj_regex_find_groups", 2),
+    ("__phorj_regex_linear_unsupported", 2),
     ("__phorj_regex_matches", 2),
     ("__phorj_regex_quote_meta", 2),
     ("__phorj_regex_replace", 2),

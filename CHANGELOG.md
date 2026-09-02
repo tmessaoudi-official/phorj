@@ -6,8 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added
+
+- **`Regex.compileBacktracking` — the opt-in backtracking engine (DEC-461, REGEX-B; `fancy-regex`
+  0.11 is the 15th vetted dependency).** PCRE-class syntax the linear engine deliberately omits —
+  look-around, back-references, atomic groups, possessive quantifiers — with the same query API and the
+  same `preg_*` under PHP, under a STEP BUDGET: a catastrophic pattern raises `regex step budget
+  exceeded` on every leg (PHP's `PREG_BACKTRACK_LIMIT_ERROR` maps to it) instead of hanging, so ReDoS
+  stays opt-in and bounded. The `Regex` value carries a second public field, `engine`. `Regex.compile`
+  is untouched (linear, ReDoS-immune). Examples: `guide/regex.phg`; `phg explain E-REGEX-UNSUPPORTED`.
+
 ### Fixed
 
+- **The regex cluster (panel C1–C3, C5, C11, F3).** (C2/C5) The linear engine now REJECTS every
+  PCRE-only construct — at check time for a literal pattern (`E-REGEX-UNSUPPORTED` / `E-REGEX-INVALID`,
+  the checker validating with the engine that would compile it) and at run time for a dynamic one, with
+  the PHP twin `__phorj_regex_compile` porting the same reject scan — so `a++` no longer parses as
+  `(a+)+` natively while PCRE reads it as possessive, and `(?=b)`/`(a)\1`/`\h`/`\R`/`\Z`/`{,n}` no
+  longer fault natively while PHP says `true`. (C1) `Regex.replace`'s replacement grammar is phorj's
+  own, expanded by `ext::regex::replace` and `__phorj_regex_expand` identically: `\1-`, `$$`, `$1a`
+  and `${x}` agree on every leg. (C3) `__phorj_regex_delim` emits `D`, so `a$` means end of subject
+  under PHP too. Every `preg_*` error is now a fault (`__phorj_regex_check`), never a silent
+  `false`/`null`. (C11/F3) KNOWN_ISSUES §Core.Regex rewritten — the `\d\w\s` ASCII-vs-Unicode edge
+  never existed (`u` ⇒ UCP). C4 (empty-match placement) is deferred by the REGEX-B boundary ruling. The
+  PHP helpers moved to `runtime_php_regex.rs`. Red-first `agree_out_php`/`agree_err_php` cases for every
+  row plus the backtracking positives and the budget; four sabotages red (the `D` modifier, the PHP
+  expander, the checker gate, the possessive detector).
 - **A malformed `Content-Length` is a `400` and the connection closes (RFC 9112 §6.3; panel
   C10/F4).** `Content-Length: abc`, `-1` or a 24-digit value parsed to 0 through an `unwrap_or(0)`, so
   the framing read no body and the request was SERVED body-less with `200` — pinned as intended by a

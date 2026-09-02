@@ -187,7 +187,7 @@ pub const EXTENSIONS: &[Extension] = &[
         enabled: cfg!(feature = "regex"),
         tier: Tier::Default,
         modules: &["Core.Regex"],
-        summary: "regular expressions (crate-backed; PCRE-compatible surface subset)",
+        summary: "regular expressions: `Regex.compile` (linear, ReDoS-immune) and `Regex.compileBacktracking` (PCRE-class syntax under a step budget, DEC-461)",
         migrated: true,
     },
     Extension {

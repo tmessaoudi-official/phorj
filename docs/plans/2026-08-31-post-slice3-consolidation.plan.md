@@ -194,6 +194,14 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
   `test` item is checked in test mode — in the LSP AND `phg check`** (DEC-486). `run`/`transpile`/
   `build` keep the strict flag. Option B (test mode only under `tests/` paths) and option C (an editor
   setting) were rejected: both make the diagnostic depend on something other than the document.
+- [2026-09-02 21:15] AGREED (REGEX-B build, two boundary decisions): **(1) the engine choice is a second
+  public field on the injected `Regex` class** (`engine`: `"linear"` | `"backtracking"`, defaulting to
+  `"linear"`), read by every query native and emitted explicitly by both constructors' PHP twins — a
+  cache keyed by pattern alone was rejected (one pattern compiled both ways in one program). **(2) C4
+  (empty-match placement, `findAll("a*","baaa")` 2 vs 3) is NAMED OUT of the REGEX-B slice**: an
+  engine-level rule (the `regex` crate skips an empty match adjacent to the previous match's end,
+  PCRE reports it) touching four helpers plus UTF-8 offset advance on the PHP side; it stays a
+  documented P2 edge (KNOWN_ISSUES §Core.Regex) with its own follow-up.
 
 ## Execution order (global — Parts are reference material, THIS is the sequence)
 
@@ -593,7 +601,7 @@ ran the 12 tests they named (12/12 green). Full lens reports: `var/claude/panel/
 |---|---|---|---|---|
 | F1 | P2 | `src/cli/benchmark.rs:80`, `playground/src/lib.rs:103` | `benchmark --vs-php` EXECUTES emitted PHP for `Core.SessionModule` and reports "transpile divergence" instead of `E-TRANSPILE-SESSION`; KNOWN_ISSUES:171's "would fail loudly" reasoning is contradicted for Session | **FIXED** (= C7/C8) |
 | F2 | P2 | `src/ext/registry.rs`, `docs/EXTENSIONS.md` | `phg extensions` lists flag-only rows but has NO `http-server-tls` row, although its absence is the runtime refusal `E-SERVE-TLS-DISABLED` | NEW |
-| F3 | P2 | `KNOWN_ISSUES.md:2481-2482`, `examples/README.md:133` | "lookaround rejected at compile — never a divergence" is false on the PHP leg | NEW (= REGEX-B class) |
+| F3 | P2 | `KNOWN_ISSUES.md:2481-2482`, `examples/README.md:133` | "lookaround rejected at compile — never a divergence" is false on the PHP leg | FIXED (the claim is now true: a literal pattern is gated at check time on every leg) |
 | F3b | P3 | `KNOWN_ISSUES.md:2484` | claims `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, both legs agree | stale doc (= C11) |
 | F4 | P2 | `src/serve/framing.rs:118` | invalid `Content-Length` (`abc`, `-1`, 24-digit) served `200` instead of `400`+close; pinned as intended by `content_length_malformed_is_zero` | FIXED (step 1: strict `1*DIGIT` parse, `400` + close at all three framing sites) |
 | F5 | P2 | `src/serve/settings.rs:119,149` | negative `workers`/`timeout` in `ServeConfig` silently read as unset with no `W-SERVE-CONFIG-OVERRIDDEN` notice | tracked §SERVE-CONFIG-PROVENANCE (ruled: nullable fields + range validation) |
@@ -609,17 +617,17 @@ deps 14 admitted / 9 default = UNIFIED-SPEC:1359; all 7 new codes have `phg expl
 
 | # | sev | where | finding | status |
 |---|---|---|---|---|
-| C1 | P1 | `src/ext/regex/natives.rs:178-191`, `transpile/runtime_php.rs:1053` | `Regex.replace` replacement syntax diverges silently: `\1-`, `$$`, `$1a`, `${x}` render differently native vs php, all legs exit 0 | KNOWN_ISSUES:2503 names `\1` only; 3 of 4 rows NEW |
+| C1 | P1 | `src/ext/regex/natives.rs:178-191`, `transpile/runtime_php.rs:1053` | `Regex.replace` replacement syntax diverges silently: `\1-`, `$$`, `$1a`, `${x}` render differently native vs php, all legs exit 0 | FIXED (REGEX-B: phorj-owned replacement grammar, `expand_replacement` + `__phorj_regex_expand`) |
 | C2 | P1 | `natives.rs:38,307` | possessive `a++a` on `"aaa"`: native `true` (parsed as `(a+)+`), php `false`; check-clean | NEW |
-| C3 | P1 | `runtime_php.rs:995-1004` | `a$` on `"a\n"`: native `false`, php `true` — delimiter helper emits `u` without `D` | KNOWN_ISSUES:883 covered Core.Validation only; NEW for Core.Regex |
-| C4 | P2 | same helpers | `findAll("a*","baaa")` → native 2, php 3 (empty-match placement) | KNOWN_ISSUES:2505 |
-| C5 | P1 | `natives.rs:307` | look-around siblings forwarded unvalidated: `a(?=b)`, `(a)\1`, `\h`, `\R`, `\Z`, `a{,3}b` — native fault, php `true` | class ruled REGEX-B above; sibling list NEW |
+| C3 | P1 | `runtime_php.rs:995-1004` | `a$` on `"a\n"`: native `false`, php `true` — delimiter helper emits `u` without `D` | FIXED (`D` modifier in `__phorj_regex_delim`) |
+| C4 | P2 | same helpers | `findAll("a*","baaa")` → native 2, php 3 (empty-match placement) | DEFERRED by the REGEX-B boundary ruling (Decisions Log): engine-level empty-match placement, documented edge |
+| C5 | P1 | `natives.rs:307` | look-around siblings forwarded unvalidated: `a(?=b)`, `(a)\1`, `\h`, `\R`, `\Z`, `a{,3}b` — native fault, php `true` | FIXED (reject list covers every sibling; literal at check time, dynamic at run time on every leg) |
 | C6 | **P0** | `src/checker/calls/args.rs:256` | `default_fills` two-file collision reproduced at HEAD: `new Cookie(…)` at the same byte offset in two files → wrong arguments on run, --tree-walker AND php | **FIXED `53df9ef1`** — per-file span windows in the loader (`SpanWindows`); three-file differential pin + two sabotages; closes §default_fills and §span-collision |
 | C7 | P1 | `src/cli/benchmark.rs:80,244` | `benchmark --vs-php` transpiles a `Core.Database` program with no ladder gate → PHP fatal, "skipping", exit 0 | **FIXED** (step 1) — gated pre-expansion on the PHP leg only |
 | C8 | P1 | `playground/src/lib.rs:103` | `transpile_json` → `transpile::emit`, no ladder gate | **FIXED** (step 1) — routed through `cli::transpile_source`, the single-source chokepoint |
 | C9 | P2 | `src/lsp/mod.rs:496-511` | LSP diagnostics run `test_mode=false`; `check ≡ LSP ≡ test` false | FIXED (DEC-486, step 1) |
 | C10 | P2 | `src/serve/framing.rs:118` | `Content-Length: abc` → `200` body-less instead of `400`; `unwrap_or(0)` has no failure-mode evidence | FIXED (= F4) |
-| C11 | P3 | `runtime_php.rs:992`, KNOWN_ISSUES:2485 | the documented `\d\w\s` ASCII-vs-Unicode edge does NOT exist (php `u` ⇒ UCP); the real edges are C1–C3 | NEW (doc wrong) |
+| C11 | P3 | `runtime_php.rs:992`, KNOWN_ISSUES:2485 | the documented `\d\w\s` ASCII-vs-Unicode edge does NOT exist (php `u` ⇒ UCP); the real edges are C1–C3 | FIXED (KNOWN_ISSUES §Core.Regex rewritten: the `\d\w\s` claim removed, `/u` ⇒ UCP) |
 | C12 | P3 | `src/cli/pipeline.rs:397-420` | `benchmark --vs-php` on a Web-only program measures handler registration only and reports a speedup | NEW, by-design per comment |
 
 Negatives with controls: CD-31's param-default / attribute-argument gap is NOT reachable (all four
@@ -645,7 +653,7 @@ fixed; `import Core.Http as H` offers no alias bypass.
 | K12 | P2 | `examples/process/README.md`, `explain/members_destructure.rs:90` | `Process.args()` drift, 20 hits; native is `arguments` | KNOWN_ISSUES:2847 |
 | K13 | P3 | `examples/README.md:181` | only the html-in-trait CD-31 shape has an example; README row not updated | NEW |
 | K14 | P3 | `differential.rs:2011`, `UNIFIED-SPEC.md:1684,1827,1878` | dead citations (deleted design doc, two "retired" plans in no archive) | NEW |
-| K15 | P3 | `C-decisions.md:3547` | DEC-362 "build queued" while BUILT | NEW |
+| K15 | P3 | `C-decisions.md:3547` | DEC-362 "build queued" while BUILT | FIXED (linear reject list: possessive → `E-REGEX-UNSUPPORTED`; `compileBacktracking` accepts it) |
 | K16 | P2 | `src/lsp/` | no hover/signature-help consumer of `prelude_catalog` — `cfg.port`/`Http.serve` hover empty | KNOWN_ISSUES:3056 |
 | K-fact | — | `tests/serve_tls.rs` | handshake tier self-skips without `openssl`, no `PHORJ_REQUIRE_*` analogue | note |
 

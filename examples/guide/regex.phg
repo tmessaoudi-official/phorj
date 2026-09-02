@@ -63,4 +63,19 @@ function main(): void {
         function(RegexMatch m): string { return "{String.upperCase(m.group(\"key\") ?? \"?\")}={m.group(\"val\") ?? \"?\"}"; }
     );
     Output.printLine("callback = {upped}");
+    // compileBacktracking (DEC-461) — the OPT-IN backtracking engine for PCRE-class syntax the linear
+    // engine deliberately omits: look-around, back-references, atomic groups, possessive quantifiers.
+    // Same API, same `preg_*` under PHP; a catastrophic pattern raises a fault ("regex step budget
+    // exceeded") instead of hanging — ReDoS stays bounded and opt-in. `Regex.compile` would reject
+    // these at CHECK time (`E-REGEX-UNSUPPORTED`) with this constructor as the hint.
+    var priced = Regex.compileBacktracking("(?<=\\$)\\d+");
+    Output.printLine("lookbehind = {Regex.find(priced, \"cost: $42 today\") ?? \"none\"}");
+    var doubled = Regex.compileBacktracking("(\\w)\\1");
+    Output.printLine(
+        "backref = {Regex.matches(doubled, \"balloon\")} {Regex.matches(doubled, \"balon\")}"
+    );
+    // replace's replacement grammar is phorj's own on every engine: `$name`/`${name}`, `$1`, `$$`.
+    var tagged = Regex.compileBacktracking("(?<=#)(?<tag>\\w+)");
+    string tags = Regex.replace(tagged, "#rust and #php", "[$\{tag\}]");
+    Output.printLine("tags = {tags}");
 }

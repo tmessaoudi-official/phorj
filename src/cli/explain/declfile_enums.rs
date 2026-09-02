@@ -171,6 +171,23 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              declares an `int`/`string` backing type). Declare a backing type, e.g.\n\
              `enum Suit: string { Hearts = \"H\" }`.\n"
         }
+        "E-REGEX-UNSUPPORTED" => {
+            "E-REGEX-UNSUPPORTED — a `Regex.compile` pattern uses syntax the LINEAR engine omits.\n\n\
+             `Regex.compile` is the ReDoS-immune engine (RE2-style, guaranteed linear time). It omits\n\
+             exactly PCRE's backtracking-only syntax: look-ahead/look-behind `(?=…)` `(?<=…)`,\n\
+             back-references `\\1` `\\k<n>`, atomic groups `(?>…)`, possessive quantifiers `a++`,\n\
+             conditionals, recursion, `(*VERB)`s, `{,n}` and the escapes `\\h` `\\R` `\\Z` `\\G` `\\K`.\n\
+             If you need them, use `Regex.compileBacktracking(...)` (DEC-461): the same API on a\n\
+             backtracking engine with a step budget — a catastrophic pattern raises a fault instead\n\
+             of hanging. Both compile to the same `preg_*` under PHP.\n"
+        }
+        "E-REGEX-INVALID" => {
+            "E-REGEX-INVALID — a literal regex pattern does not parse.\n\n\
+             The pattern was validated at check time with the engine that would compile it at run\n\
+             time, and it would fault on every backend (`invalid regex: …`). Fix the pattern; remember\n\
+             that patterns are best written as raw strings (`r\"…\"`) so `{n}` is a quantifier, not\n\
+             string interpolation.\n"
+        }
         _ => return None,
     })
 }

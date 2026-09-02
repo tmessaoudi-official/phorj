@@ -6,8 +6,8 @@
 > this to deliver correct code?* If not, it belongs in docs, not here.
 
 Phorj is a statically-typed, PHP-inspired language implemented in Rust (edition 2021; the core
-pipeline stays std-only, and **14 vetted, feature-gated crates** are admitted across the policy's
-approved domains — crypto `argon2`, `regex`, signals `ctrlc`, stackful coroutines `corosensei`,
+pipeline stays std-only, and **15 vetted, feature-gated crates** are admitted across the policy's
+approved domains — crypto `argon2`, `regex` + `fancy-regex` (DEC-461), signals `ctrlc`, stackful coroutines `corosensei`,
 graphemes `unicode-segmentation`, TLS `rustls`+`webpki-roots`, SQL `rusqlite`/`postgres`/`mysql`,
 mail `lettre`, native codegen `cranelift`+`cranelift-jit`+`cranelift-module`. **`Cargo.toml` and
 `docs/specs/UNIFIED-SPEC.md` §"External dependency policy" are the SSOT — never restate a count here

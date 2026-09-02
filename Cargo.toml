@@ -80,7 +80,10 @@ session = []
 cryptography = ["dep:argon2"]
 # DEC-256 Unicode tier: grapheme segmentation (UAX #29) only — codepoints/case are std `char`.
 unicode = ["dep:unicode-segmentation"]
-regex = ["dep:regex"]
+# DEC-461 (REGEX-B): the `regex` feature also carries `fancy-regex`, the opt-in BACKTRACKING engine
+# behind `Regex.compileBacktracking` (PCRE-class syntax, step-budgeted). One feature: a build with
+# `Core.Regex` has both constructors or neither.
+regex = ["dep:regex", "dep:fancy-regex"]
 # `phg serve` graceful shutdown (M6 W4 / S4.2): SIGINT/SIGTERM → drain in-flight → exit 0. Off for the
 # WASM playground (no sockets, no signals). See docs/specs/UNIFIED-SPEC.md#external-dependency-policy (3rd domain).
 signals = ["dep:ctrlc"]
@@ -209,6 +212,12 @@ cranelift-module = { version = "0.134", optional = true }
 # construction, unlike PHP/PCRE backtracking). Regex over untrusted input is a security-critical
 # parser; std has none; "never roll your own" applies. Feature-gated off for the playground.
 regex = { version = "1", optional = true }
+# FIFTEENTH external dependency (developer-ruled 2026-09-02, DEC-461 option B). Powers
+# `Regex.compileBacktracking` — PCRE-class syntax (look-around, backreferences, atomic/possessive) that
+# the linear engine deliberately omits. It delegates the regular subset to `regex` and runs the rest on a
+# backtracking VM with a STEP BUDGET (`backtrack_limit`) that raises a typed fault instead of hanging,
+# so ReDoS stays opt-in and bounded. `Regex.compile` is untouched (linear, ReDoS-immune by construction).
+fancy-regex = { version = "0.11", optional = true }
 
 # THIRD external dependency (developer-authorized, 2026-06-29). Powers `phg serve` graceful shutdown
 # (SIGINT/SIGTERM). std has NO signal API, and the only std-native alternative is a hand-rolled

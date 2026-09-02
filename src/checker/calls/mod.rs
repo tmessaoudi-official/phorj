@@ -13,6 +13,7 @@ mod lint;
 mod member;
 mod methods;
 mod overloads;
+mod regex;
 mod subst;
 mod ufcs;
 mod variants;

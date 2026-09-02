@@ -171,7 +171,14 @@ fn php_emission_shapes() {
         let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
         (nats.iter().find(|n| n.name == name).unwrap().php)(&args)
     };
-    assert_eq!(emit("compile", &["$p"]), "new Regex($p)");
+    assert_eq!(
+        emit("compile", &["$p"]),
+        "__phorj_regex_compile($p, 'linear')"
+    );
+    assert_eq!(
+        emit("compileBacktracking", &["$p"]),
+        "__phorj_regex_compile($p, 'backtracking')"
+    );
     assert_eq!(
         emit("matches", &["$re", "$s"]),
         "__phorj_regex_matches($re, $s)"

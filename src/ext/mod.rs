@@ -82,7 +82,7 @@ pub mod regex_prelude {
     // `Regex` carrier); these methods dispatch on both backends and transpile to a PHP `RegexMatch`
     // class. `import Core.Map;` mirrors HTTP_PRELUDE's cross-Core pattern (needed for `Map.get`).
     pub const PRELUDE: &str = r#"import Core.Map;
-class Regex { constructor(public string pattern) {} }
+class Regex { constructor(public string pattern, public string engine) {} }
 class RegexMatch {
     constructor(public string matched, public Map<string, string> groups) {}
     function full(): string { return this.matched; }

@@ -2,7 +2,9 @@
 //! Registry row: `ext::registry::EXTENSIONS`'s `"regex"` entry; build inclusion = the `regex`
 //! Cargo feature.
 
+pub mod engine;
 pub mod natives;
+pub mod replace;
 #[cfg(test)]
 mod tests;
 

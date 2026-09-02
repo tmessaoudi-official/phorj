@@ -16,81 +16,84 @@
 use crate::native::*;
 use crate::types::Ty;
 use crate::value::{build_map, Instance, Value};
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
-thread_local! {
-    /// Memoized compiled engines, keyed by the **bare** pattern. `compile` populates it (and is the
-    /// only place a compile error can surface); the query natives look up the cached engine, with a
-    /// recompile fallback that cannot fault (the pattern was already validated by `compile`). Pure
-    /// optimization — semantics are identical without the cache.
-    static CACHE: RefCell<HashMap<String, Rc<::regex::Regex>>> = RefCell::new(HashMap::new());
-}
+use super::engine::{compiled, Caps, Compiled, Engine};
+use super::replace::{expand_replacement, GroupRef};
 
-/// Compile `pattern` (bare, Unicode), memoizing the engine. Returns a clean fault on an invalid or
-/// unsupported (backref/lookaround) pattern — the `regex` crate's own compile error, surfaced
-/// uniformly so the failure is identical on both backends.
-pub(super) fn compiled(pattern: &str) -> Result<Rc<::regex::Regex>, String> {
-    if let Some(re) = CACHE.with(|c| c.borrow().get(pattern).cloned()) {
-        return Ok(re);
-    }
-    match ::regex::Regex::new(pattern) {
-        Ok(re) => {
-            let re = Rc::new(re);
-            CACHE.with(|c| c.borrow_mut().insert(pattern.to_string(), re.clone()));
-            Ok(re)
-        }
-        Err(e) => Err(format!("invalid or unsupported regex: {e}")),
-    }
-}
-
-/// Build the opaque `Regex` value holding the bare pattern. S1b: a native carrier builds its own
-/// single-field [`crate::value::ClassLayout`] (`["pattern"]`) — independent of any injected prelude,
-/// and self-consistent (every `Regex` shares the same one-slot layout, so eq/reflect parity holds).
-fn regex_value(pattern: &str) -> Value {
+/// Build the opaque `Regex` value: the bare pattern + the engine that compiled it (DEC-461). S1b: a
+/// native carrier builds its own [`crate::value::ClassLayout`] — sorted names, matching what
+/// `class_field_layout` derives for the injected `class Regex { constructor(public string pattern,
+/// public string engine) {} }`, so eq/reflect parity holds (every `Regex` shares one layout).
+fn regex_value(pattern: &str, engine: Engine) -> Value {
     let inst = Instance::new(
         "Regex".into(),
-        crate::value::ClassLayout::from_sorted_names(&["pattern"]),
+        crate::value::ClassLayout::from_sorted_names(&["engine", "pattern"]),
     );
     inst.set_field("pattern", Value::Str(pattern.into()));
+    inst.set_field("engine", Value::Str(engine.name().into()));
     Value::Instance(Rc::new(inst))
 }
 
-/// Extract the bare pattern from a `Regex` instance argument.
-fn as_pattern(v: &Value) -> Result<String, String> {
+/// The compiled engine behind a `Regex` instance argument (pattern + engine read off the value).
+fn engine_of(v: &Value) -> Result<Rc<Compiled>, String> {
     match v {
-        Value::Instance(inst) if inst.class.as_ref() == "Regex" => inst
-            .get_field("pattern")
-            .and_then(|p| match p {
-                Value::Str(s) => Some(s.as_str().to_string()),
-                _ => None,
-            })
-            .ok_or_else(|| "Regex value is missing its pattern".to_string()),
+        Value::Instance(inst) if inst.class.as_ref() == "Regex" => {
+            let field = |name: &str| match inst.get_field(name) {
+                Some(Value::Str(s)) => Ok(s.as_str().to_string()),
+                _ => Err(format!("Regex value is missing its {name}")),
+            };
+            let pattern = field("pattern")?;
+            let engine = Engine::from_name(&field("engine")?)
+                .ok_or_else(|| "Regex value carries an unknown engine".to_string())?;
+            compiled(&pattern, engine)
+        }
         _ => Err(format!("Regex value expected, got {}", v.type_name())),
     }
 }
 
+/// The participating NAMED captures of one match as `(name, text)` pairs, in group-index order.
+fn named_pairs(s: &str, names: &[String], caps: &Caps) -> Vec<(Value, Value)> {
+    names
+        .iter()
+        .zip(&caps.groups)
+        .filter(|(name, _)| !name.is_empty())
+        .filter_map(|(name, g)| {
+            g.map(|(a, b)| (Value::Str(name.as_str().into()), Value::Str(s[a..b].into())))
+        })
+        .collect()
+}
+
 // ---- natives ------------------------------------------------------------------------------------
 
-/// `Regex.compile(string) -> Regex` — validate + memoize; faults on an invalid/unsupported pattern.
+/// `Regex.compile(string) -> Regex` — the LINEAR engine: validate + memoize; faults on an invalid or
+/// PCRE-only pattern (`compileBacktracking` is the opt-in for those).
 pub(super) fn regex_compile(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => {
-            compiled(p)?; // validate now (and cache); the value carries only the bare pattern.
-            Ok(regex_value(p))
+            compiled(p, Engine::Linear)?;
+            Ok(regex_value(p, Engine::Linear))
         }
         _ => Err("Regex.compile expects (string)".into()),
+    }
+}
+
+/// `Regex.compileBacktracking(string) -> Regex` — the BACKTRACKING engine (DEC-461): PCRE-class syntax
+/// under a step budget; a catastrophic pattern raises a typed fault instead of hanging.
+pub(super) fn regex_compile_backtracking(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(p)] => {
+            compiled(p, Engine::Backtracking)?;
+            Ok(regex_value(p, Engine::Backtracking))
+        }
+        _ => Err("Regex.compileBacktracking expects (string)".into()),
     }
 }
 
 /// `Regex.matches(Regex, string) -> bool` — is there a match anywhere in the subject?
 pub(super) fn regex_matches(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [re, Value::Str(s)] => {
-            let pat = as_pattern(re)?;
-            Ok(Value::Bool(compiled(&pat)?.is_match(s)))
-        }
+        [re, Value::Str(s)] => Ok(Value::Bool(engine_of(re)?.is_match(s)?)),
         _ => Err("Regex.matches expects (Regex, string)".into()),
     }
 }
@@ -98,12 +101,9 @@ pub(super) fn regex_matches(args: &[Value], _: &mut String) -> Result<Value, Str
 /// `Regex.find(Regex, string) -> string?` — the first whole match, else `null`.
 pub(super) fn regex_find(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [re, Value::Str(s)] => {
-            let pat = as_pattern(re)?;
-            Ok(compiled(&pat)?
-                .find(s)
-                .map_or(Value::Null, |m| Value::Str(m.as_str().into())))
-        }
+        [re, Value::Str(s)] => Ok(engine_of(re)?
+            .find(s)?
+            .map_or(Value::Null, |(a, b)| Value::Str(s[a..b].into()))),
         _ => Err("Regex.find expects (Regex, string)".into()),
     }
 }
@@ -112,10 +112,10 @@ pub(super) fn regex_find(args: &[Value], _: &mut String) -> Result<Value, String
 pub(super) fn regex_find_all(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
-            let pat = as_pattern(re)?;
-            let out: Vec<Value> = compiled(&pat)?
-                .find_iter(s)
-                .map(|m| Value::Str(m.as_str().into()))
+            let out: Vec<Value> = engine_of(re)?
+                .find_all(s)?
+                .into_iter()
+                .map(|(a, b)| Value::Str(s[a..b].into()))
                 .collect();
             Ok(Value::List(Rc::new(out)))
         }
@@ -128,19 +128,14 @@ pub(super) fn regex_find_all(args: &[Value], _: &mut String) -> Result<Value, St
 pub(super) fn regex_find_groups(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
-            let pat = as_pattern(re)?;
-            let engine = compiled(&pat)?;
-            match engine.captures(s) {
+            let engine = engine_of(re)?;
+            match engine.captures_first(s)? {
                 None => Ok(Value::Null),
-                Some(caps) => {
-                    let mut pairs: Vec<(Value, Value)> = Vec::new();
-                    for name in engine.capture_names().flatten() {
-                        if let Some(m) = caps.name(name) {
-                            pairs.push((Value::Str(name.into()), Value::Str(m.as_str().into())));
-                        }
-                    }
-                    Ok(Value::Map(Rc::new(build_map(pairs)?)))
-                }
+                Some(caps) => Ok(Value::Map(Rc::new(build_map(named_pairs(
+                    s,
+                    &engine.group_names(),
+                    &caps,
+                ))?))),
             }
         }
         _ => Err("Regex.findGroups expects (Regex, string)".into()),
@@ -154,18 +149,13 @@ pub(super) fn regex_find_groups(args: &[Value], _: &mut String) -> Result<Value,
 pub(super) fn regex_find_all_groups(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
-            let pat = as_pattern(re)?;
-            let engine = compiled(&pat)?;
-            let names: Vec<&str> = engine.capture_names().flatten().collect();
+            let engine = engine_of(re)?;
+            let names = engine.group_names();
             let mut out: Vec<Value> = Vec::new();
-            for caps in engine.captures_iter(s) {
-                let mut pairs: Vec<(Value, Value)> = Vec::new();
-                for name in &names {
-                    if let Some(m) = caps.name(name) {
-                        pairs.push((Value::Str((*name).into()), Value::Str(m.as_str().into())));
-                    }
-                }
-                out.push(Value::Map(Rc::new(build_map(pairs)?)));
+            for caps in engine.captures_all(s)? {
+                out.push(Value::Map(Rc::new(build_map(named_pairs(
+                    s, &names, &caps,
+                ))?)));
             }
             Ok(Value::List(Rc::new(out)))
         }
@@ -173,18 +163,34 @@ pub(super) fn regex_find_all_groups(args: &[Value], _: &mut String) -> Result<Va
     }
 }
 
-/// `Regex.replace(Regex, string, string) -> string` — replace every match. The replacement uses the
-/// `$1` / `${name}` capture syntax shared by the `regex` crate and PHP `preg_replace`.
+/// `Regex.replace(Regex, string, string) -> string` — replace every match, expanding phorj's OWN
+/// replacement grammar (`super::replace`): `$N`/`${N}`, `$name`/`${name}`, `$$`; `\1` is literal.
 pub(super) fn regex_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s), Value::Str(repl)] => {
-            let pat = as_pattern(re)?;
-            Ok(Value::Str(
-                compiled(&pat)?
-                    .replace_all(s, repl.as_str())
-                    .into_owned()
-                    .into(),
-            ))
+            let engine = engine_of(re)?;
+            let names = engine.group_names();
+            let mut out = String::new();
+            let mut last_end = 0;
+            for caps in engine.captures_all(s)? {
+                out.push_str(&s[last_end..caps.whole.0]);
+                let text = |r: GroupRef<'_>| -> Option<String> {
+                    let idx = match r {
+                        GroupRef::Index(0) => return Some(s[caps.whole.0..caps.whole.1].into()),
+                        GroupRef::Index(n) => n.checked_sub(1)?,
+                        GroupRef::Name(n) => names.iter().position(|g| g == n)?,
+                    };
+                    caps.groups
+                        .get(idx)
+                        .copied()
+                        .flatten()
+                        .map(|(a, b)| s[a..b].to_string())
+                };
+                out.push_str(&expand_replacement(repl, &text));
+                last_end = caps.whole.1;
+            }
+            out.push_str(&s[last_end..]);
+            Ok(Value::Str(out.into()))
         }
         _ => Err("Regex.replace expects (Regex, string, string)".into()),
     }
@@ -194,9 +200,9 @@ pub(super) fn regex_replace(args: &[Value], _: &mut String) -> Result<Value, Str
 pub(super) fn regex_split(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
-            let pat = as_pattern(re)?;
-            let out: Vec<Value> = compiled(&pat)?
-                .split(s)
+            let out: Vec<Value> = engine_of(re)?
+                .split(s)?
+                .into_iter()
                 .map(|p| Value::Str(p.into()))
                 .collect();
             Ok(Value::List(Rc::new(out)))
@@ -244,21 +250,15 @@ pub(super) fn regex_replace_callback(
 ) -> Result<Value, String> {
     match args {
         [re, Value::Str(s), cb] => {
-            let pat = as_pattern(re)?;
-            let engine = compiled(&pat)?;
-            let names: Vec<&str> = engine.capture_names().flatten().collect();
+            let engine = engine_of(re)?;
+            let names = engine.group_names();
             let mut out = String::new();
             let mut last_end = 0;
-            for caps in engine.captures_iter(s) {
-                let whole = caps.get(0).expect("group 0 always exists in a match");
-                out.push_str(&s[last_end..whole.start()]);
-                let mut pairs: Vec<(Value, Value)> = Vec::new();
-                for name in &names {
-                    if let Some(m) = caps.name(name) {
-                        pairs.push((Value::Str((*name).into()), Value::Str(m.as_str().into())));
-                    }
-                }
-                let m_val = regex_match_value(whole.as_str(), pairs)?;
+            for caps in engine.captures_all(s)? {
+                let (ws, we) = caps.whole;
+                out.push_str(&s[last_end..ws]);
+                let pairs = named_pairs(s, &names, &caps);
+                let m_val = regex_match_value(&s[ws..we], pairs)?;
                 match call(cb, &[m_val])? {
                     Value::Str(r) => out.push_str(&r),
                     other => {
@@ -268,7 +268,7 @@ pub(super) fn regex_replace_callback(
                         ))
                     }
                 }
-                last_end = whole.end();
+                last_end = we;
             }
             out.push_str(&s[last_end..]);
             Ok(Value::Str(out.into()))
@@ -304,7 +304,17 @@ pub fn regex_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(regex_compile),
             lift_from: &[],
-            php: |a| format!("new Regex({})", parg(a, 0)),
+            php: |a| format!("__phorj_regex_compile({}, 'linear')", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Regex",
+            name: "compileBacktracking",
+            params: vec![Ty::String],
+            ret: regex_ty(),
+            pure: true,
+            eval: NativeEval::Pure(regex_compile_backtracking),
+            lift_from: &[],
+            php: |a| format!("__phorj_regex_compile({}, 'backtracking')", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Regex",

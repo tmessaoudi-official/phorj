@@ -133,6 +133,10 @@ enum FaultKind {
     DecimalScale,
     NegativeShift,
     NegativeExponent,
+    /// DEC-461: the backtracking engine's step budget (`fancy-regex` `backtrack_limit`; PHP's
+    /// `PREG_BACKTRACK_LIMIT_ERROR` maps to the same body) — the VM's `at N:` prefix would otherwise
+    /// split it from the interpreter's render.
+    RegexStepBudget,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -166,6 +170,7 @@ fn classify(err: &str) -> FaultKind {
 /// `every_canonical_fault_body_classifies` proves each entry round-trips to its own kind.
 #[allow(clippy::type_complexity)]
 const FAULT_TABLE: &[(&str, fn() -> FaultKind)] = &[
+    ("step budget exceeded", || FaultKind::RegexStepBudget),
     (faults::FAULT_INT_OVERFLOW, || FaultKind::IntOverflow),
     (faults::FAULT_DIV_ZERO, || FaultKind::DivZero),
     (faults::FAULT_MOD_ZERO, || FaultKind::ModZero),
@@ -3706,6 +3711,10 @@ const TIER1_PHP: &[&str] = &[
     "preg_replace",
     "preg_replace_callback",
     "preg_split",
+    // DEC-461: the regex helpers surface every PCRE error as a fault (`__phorj_regex_check`) — core
+    // PCRE, not an extension (present under `php -n`), like the `preg_*` calls above.
+    "preg_last_error",
+    "preg_last_error_msg",
     // JSON (core since 8.0)
     "json_decode",
     "json_encode",
@@ -5545,4 +5554,126 @@ function pair(): void {
         err.contains("7:23"),
         "the error must point at the second file's own line:col (7:23), got:\n{err}"
     );
+}
+
+// ── DEC-461 (REGEX-B): the two engines, the replacement grammar, and the linear engine's reject list ──
+//
+// Panel round 3 C1–C5/C11 (2026-09-02). Every case runs interp ≡ VM ≡ real PHP through `agree_out_php`
+// (or `agree_err_php` for faults), so a silent divergence between the `regex` crate and PCRE — the class
+// of every finding below — fails loudly here. Patterns and replacement templates are RAW phorj strings
+// (`r"…"`): a `{` inside a normal string is interpolation.
+
+fn regex_prog(body: &str) -> String {
+    format!(
+        "import Core.Output;\nimport Core.Regex;\n#[Entry(kind: EntryKind.Cli)] function main() -> void {{\n{body}\n}}"
+    )
+}
+
+/// C1 — `Regex.replace`'s replacement grammar is phorj's own, expanded identically on every leg:
+/// `$N`/`${N}` numbered, `${name}`/`$name` named, `$$` a literal `$`, and `\1` a LITERAL backslash-one
+/// (never a PCRE back-reference). Before: `\1-`, `$$`, `$1a` and `${x}` each rendered differently native
+/// vs PHP with every leg exiting 0.
+#[test]
+fn regex_replace_grammar_is_identical_on_every_leg() {
+    for (repl, expected, label) in [
+        (r#"r"\1-""#, "\\1--\n", "backslash-one is literal"),
+        (r#"r"$$""#, "$-\n", "dollar-dollar is one dollar"),
+        (r#"r"$1a""#, "aa-\n", "numbered group then a literal"),
+        (r#"r"[${x}]""#, "[a]-\n", "named group in braces"),
+        (r#"r"<$x>""#, "<a>-\n", "bare named group"),
+        (r#"r"${1}${1}""#, "aa-\n", "numbered group in braces"),
+    ] {
+        agree_out_php(
+            &regex_prog(&format!(
+                "var re = Regex.compile(r\"(?<x>a)\");\n    Output.printLine(Regex.replace(re, \"a-\", {repl}));"
+            )),
+            expected,
+            &format!("C1 replace grammar: {label}"),
+        );
+    }
+}
+
+/// C3 — `$` means end of SUBJECT on every leg: the PHP helper emits PCRE's `D` modifier, so `a$` no
+/// longer matches `"a\n"` under PHP while the Rust engines say false.
+#[test]
+fn regex_dollar_anchors_at_the_true_end_on_every_leg() {
+    agree_out_php(
+        &regex_prog(
+            "var re = Regex.compile(r\"a$\");\n    bool nl = Regex.matches(re, \"a\\n\");\n    bool plain = Regex.matches(re, \"a\");\n    Output.printLine(\"{nl} {plain}\");",
+        ),
+        "false true\n",
+        "C3 dollar + trailing newline",
+    );
+}
+
+/// C2/C5 — PCRE-only constructs are REJECTED by the linear engine at compile time (a literal pattern is
+/// gated by the checker, `E-REGEX-UNSUPPORTED`), so `a++` can no longer parse as `(a+)+` natively while
+/// PCRE reads it as possessive, and `(?=b)`/`(a)\1`/`\h`/`\R`/`\Z`/`a{,3}b` can no longer fault natively
+/// while PHP says `true`. A DYNAMIC pattern is rejected by the runtime on both legs (`agree_err_php`).
+#[test]
+fn linear_engine_rejects_pcre_only_constructs_on_every_leg() {
+    for pat in [
+        "a++", "a(?=b)", r"(a)\1", r"\hx", r"a\R", r"a\Z", "a{,3}b", "(?>a)b", "a*+",
+    ] {
+        // Literal: a check-time error on both native legs (the transpile leg never emits it).
+        let src = with_pkg(&regex_prog(&format!(
+            "var re = Regex.compile(r\"{pat}\");\n    Output.printLine(\"{{Regex.matches(re, \\\"ab\\\")}}\");"
+        )));
+        let err = cmd_treewalk(&src).expect_err(&format!("literal `{pat}` must not check"));
+        assert!(err.contains("E-REGEX-UNSUPPORTED"), "`{pat}`: {err}");
+        assert_eq!(
+            cmd_treewalk(&src).is_err(),
+            cmd_run(&src).is_err(),
+            "`{pat}` interp vs VM"
+        );
+        // Dynamic: the same pattern assembled at runtime faults on every leg, PHP included.
+        agree_err_php(&regex_prog(&format!(
+            "string p = r\"{}\" + r\"{}\";\n    var re = Regex.compile(p);\n    Output.printLine(\"{{Regex.matches(re, \\\"ab\\\")}}\");",
+            &pat[..1],
+            &pat[1..]
+        )));
+    }
+}
+
+/// REGEX-B — `Regex.compileBacktracking` accepts the PCRE-class syntax the linear engine refuses, and
+/// both constructors emit the same `preg_*` on the PHP leg.
+#[test]
+fn backtracking_engine_matches_pcre_class_syntax_on_every_leg() {
+    for (pat, subject, expected, label) in [
+        ("(?<=a)b", "ab", "true", "lookbehind"),
+        ("a(?=b)", "ab", "true", "lookahead"),
+        (r"(a)\1", "aa", "true", "backreference"),
+        ("a++", "aaa", "true", "possessive"),
+        ("(?>a+)b", "aab", "true", "atomic group"),
+        ("(?<=a)b", "cb", "false", "lookbehind (no match)"),
+    ] {
+        agree_out_php(
+            &regex_prog(&format!(
+                "var re = Regex.compileBacktracking(r\"{pat}\");\n    Output.printLine(\"{{Regex.matches(re, \\\"{subject}\\\")}}\");"
+            )),
+            &format!("{expected}\n"),
+            &format!("REGEX-B {label}"),
+        );
+    }
+    // The query natives read the engine off the value: `find`/`replace` on a backtracking pattern.
+    agree_out_php(
+        &regex_prog(
+            "var re = Regex.compileBacktracking(r\"(?<=x)(?<n>\\d+)\");\n    string found = Regex.find(re, \"x12 y3\") ?? \"none\";\n    string swapped = Regex.replace(re, \"x12 y3\", r\"<${n}>\");\n    Output.printLine(\"{found} {swapped}\");",
+        ),
+        "12 x<12> y3\n",
+        "REGEX-B find + replace",
+    );
+}
+
+/// REGEX-B — the step budget: a catastrophic pattern on the backtracking engine raises a typed fault
+/// on every leg (PHP's `preg_*` reports `PREG_BACKTRACK_LIMIT_ERROR` and the helper throws) instead of
+/// hanging. The look-ahead forces the backtracking VM (the regular subset would be delegated).
+#[test]
+fn backtracking_engine_step_budget_faults_instead_of_hanging() {
+    let src = regex_prog(
+        "var re = Regex.compileBacktracking(r\"^(?=a)(a|a)+$\");\n    Output.printLine(\"{Regex.matches(re, \\\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab\\\")}\");",
+    );
+    let err = cmd_treewalk(&with_pkg(&src)).expect_err("must fault, not hang");
+    assert!(err.contains("step budget"), "{err}");
+    agree_err_php(&src);
 }
