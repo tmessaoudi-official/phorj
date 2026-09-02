@@ -4085,6 +4085,27 @@ class Crier { use Loud; }
 }
 
 #[test]
+fn dec356_an_html_literal_inside_a_trait_method_is_resolved_before_any_backend() {
+    // DEC-356 (item level): `rewrite_html`'s item walk named `Item::Trait(..)` in its "no
+    // expression-bearing body" leaf set — which is FALSE: `TraitDecl.members` carries full
+    // method/constructor/hook bodies, and a trait's bodies reach both backends (they flatten into
+    // the using class). So an `html"…"` inside a trait method was never resolved, `phg check`
+    // reported `OK (type-checks clean)`, and BOTH backends then hit
+    // `unreachable!("html literal not resolved before compilation")` — exit 101 on valid user code,
+    // the exact panic this decision was ratified to prevent. Verified against the shipped release
+    // binary before the fix.
+    agree_out_php(
+        "import Core.Output;
+import Core.Html;
+trait Greeter { function greet(string who) -> Html { return html\"<p>hello {who}</p>\"; } }
+class App { use Greeter; }
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(Html.render(new App().greet(\"world\"))); }",
+        "<p>hello world</p>\n",
+        "dec356_html_in_trait",
+    );
+}
+
+#[test]
 fn s8_trait_mutable_field_is_byte_identical() {
     // M-RT S8 T2: a trait carries `mutable` instance state; the using class sets it in its ctor and a
     // trait method mutates it. Field access is by name, so the flattened field works on both backends.

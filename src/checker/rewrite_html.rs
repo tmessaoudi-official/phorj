@@ -387,6 +387,35 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
         stmts.into_iter().map(|s| rstmt(s, h)).collect()
     }
 
+    /// Rewrite every `html"…"` inside a member list — the body of a class AND of a trait, which
+    /// carry the identical `Vec<ClassMember>`. Shared so the two arms cannot drift (Invariant 13:
+    /// spelling the class arm out twice would push this file past its cap for no benefit).
+    fn rmembers(members: &mut [ClassMember], h: &Map) {
+        for m in members {
+            match m {
+                ClassMember::Method(f) => {
+                    let body = std::mem::take(&mut f.body);
+                    f.body = rblock(body, h);
+                }
+                ClassMember::Constructor { body, .. } => {
+                    let b = std::mem::take(body);
+                    *body = rblock(b, h);
+                }
+                // A property hook's get expression + set block may contain `html"…"`
+                // interpolation — rewrite both (M-mut.7b).
+                ClassMember::Hook { get, set, .. } => {
+                    if let Some(e) = get.take() {
+                        *get = Some(rexpr(e, h));
+                    }
+                    if let Some((p, body)) = set.take() {
+                        *set = Some((p, rblock(body, h)));
+                    }
+                }
+                ClassMember::Field { .. } => {}
+            }
+        }
+    }
+
     let items = program
         .items
         .into_iter()
@@ -396,30 +425,18 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 Item::Function(f)
             }
             Item::Class(mut c) => {
-                for m in &mut c.members {
-                    match m {
-                        ClassMember::Method(f) => {
-                            let body = std::mem::take(&mut f.body);
-                            f.body = rblock(body, html);
-                        }
-                        ClassMember::Constructor { body, .. } => {
-                            let b = std::mem::take(body);
-                            *body = rblock(b, html);
-                        }
-                        // A property hook's get expression + set block may contain `html"…"`
-                        // interpolation — rewrite both (M-mut.7b).
-                        ClassMember::Hook { get, set, .. } => {
-                            if let Some(e) = get.take() {
-                                *get = Some(rexpr(e, html));
-                            }
-                            if let Some((p, body)) = set.take() {
-                                *set = Some((p, rblock(body, html)));
-                            }
-                        }
-                        ClassMember::Field { .. } => {}
-                    }
-                }
+                rmembers(&mut c.members, html);
                 Item::Class(c)
+            }
+            // DEC-356 (item level): a trait's members are FULL bodies — methods, constructor, hooks —
+            // and they reach both backends by flattening into the using class
+            // (`checker/collect/inherit.rs`). This arm was missing: `Item::Trait(..)` sat in the leaf
+            // set below, so `html"…"` inside a trait method was never resolved and both engines hit
+            // `unreachable!("html literal not resolved before …")` on a program `phg check` had just
+            // called clean. Same walk as a class, because it is the same member list.
+            Item::Trait(mut t) => {
+                rmembers(&mut t.members, html);
+                Item::Trait(t)
             }
             // DEC-356: `Item::Test` carries a STATEMENT BODY, and the old `other => other` swallowed it —
             // so an `html"…"` literal inside a `test { … }` block was never resolved, which would have
@@ -430,13 +447,15 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 body: rblock(body, html),
                 span,
             },
-            // No expression-bearing body to walk. Named (DEC-356) so a new `Item` form that DOES carry
-            // one cannot join them silently.
-            it @ (Item::Enum(..)
-            | Item::Interface(..)
-            | Item::Trait(..)
-            | Item::TypeAlias { .. }
-            | Item::Import { .. }) => it,
+            // `EnumDecl.variants[].backing_value` is an `Expr` (DEC-302), so an enum is not a leaf —
+            // but an `html"…"` cannot reach one: a backed enum's value is scalar-checked downstream.
+            // Named explicitly rather than folded into `item_leaves!()` so the claim stays honest.
+            it @ Item::Enum(..) => it,
+            // Signatures only — but a signature bears expressions (`Param.default`, `Attribute.args`),
+            // which NO item-level pass walks today, for interfaces or for anything else (CD-31).
+            // A pass-through, not a leaf claim.
+            it @ Item::Interface(..) => it,
+            it @ (crate::item_leaves!()) => it,
         })
         .collect();
 

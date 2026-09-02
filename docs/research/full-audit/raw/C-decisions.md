@@ -8478,3 +8478,41 @@ milestone closes on **ONE 3-lens panel round against HEAD**, not two. The panel'
 no longer HEAD, so a round now reviews genuinely new code rather than re-reviewing the old tree.
 DEC-268's two-consecutive-clean requirement is **knowingly relaxed once**, with the reason recorded
 here rather than the rule silently skipped.
+
+### CD-31 (2026-09-02) — DEC-356 was never applied at the ITEM level, and it shipped a crash
+
+DEC-356 fixed 18 catch-alls over `Expr` / `Stmt` / `Pattern`, and Invariant 3 was widened to name those
+three. **`Item` was never in scope**, and the ratchet that guards the fix (`no_fixed_rewriter_regrows_a_
+catch_all`) lists the six extracted `*_walk.rs` expression walkers — not the item-level walks in their
+parent files. So the class survived intact one level up, and a milestone panel found it: two of those
+walks (`resolve_variant_imports.rs`, `desugar_router.rs`) skip `Item::Test`.
+
+Widening the check turned up something worse than the reported finding. `TraitDecl.members` is a full
+`Vec<ClassMember>` — methods, constructor, hooks, all with statement bodies — and a trait's bodies
+**reach both backends**, flattening into the using class (`checker/collect/inherit.rs`). Yet
+`rewrite_html.rs` named `Item::Trait(..)` in a hand-written *"No expression-bearing body to walk"* leaf
+set. Verified against the shipped release binary: an `html"…"` inside a trait method made `phg check`
+print `OK (type-checks clean)` and both engines then panic with
+`unreachable!("html literal not resolved before …")`, exit 101 — the identical failure shape DEC-356's
+own headline find had, on a documented feature (`examples/guide/traits.phg` ships trait bodies).
+A second live defect, same root: `import Core.Option.Some;` then `new Some(n)` resolves inside a class
+method and raises a spurious `E-INJECTED-VARIANT-BARE` inside a trait method.
+
+**Ruled here (mechanical, not a design choice):** `item_leaves!()` joins the three macros in
+`src/ast/leaves.rs`, and it contains **`Import` and `TypeAlias` only** — two of eight. `Interface` is
+NOT a leaf despite its empty method bodies, because `Param.default: Option<Box<Expr>>` and
+`Attribute.args: Vec<Expr>` put expressions in a signature; `Enum` is not one either
+(`variants[].backing_value` is a `parse_expr`). Both get explicit named pass-throughs at each site
+rather than leaf status, so the honest claim and the compiler's claim are the same claim.
+
+**The gap this does NOT close, stated so it is never described as covered.** No item-level pass walks
+param defaults or attribute arguments — not for `Function` or `Class` either. A rewrite needed inside
+`function f(int n = <expr>)` or `#[Attr(<expr>)]` is missed uniformly across every pass today. That is a
+real hole, it is pre-existing, and it is recorded rather than closed: closing it means every pass gains
+two more traversal surfaces, which is DEC-356 FOLLOW-UP B's job (one shared total visitor), not a
+drive-by widening.
+
+**A note on the gate.** The ratchet greps for `_ =>` / `other =>` / `leaf =>`. `rewrite_html`'s wrong
+arm was a *named* set — `it @ (Item::Enum(..) | Item::Interface(..) | Item::Trait(..) | …)` — so it
+passed the ratchet while being false. A named leaf set is exactly as silent as a catch-all when the
+naming is wrong; the ratchet cannot tell them apart, and only a test that runs the shape can.

@@ -86,6 +86,45 @@ macro_rules! pattern_leaves {
     };
 }
 
+/// Every `Item` form that carries **no nested `Expr` anywhere in its payload**.
+///
+/// | leaf | why it carries no `Expr` |
+/// |---|---|
+/// | `Import` | `path`/`alias`/`except` are strings; `wildcard` is a flag |
+/// | `TypeAlias` | `name` + a `Type` — and a `Type` is not an `Expr` |
+///
+/// **That is the whole set — two of eight.** Every other `Item` bears expressions, and three of them
+/// bear them in places that read as "declaration, not code":
+///
+/// * `Trait(TraitDecl)` — `members: Vec<ClassMember>` is FULL method, constructor and hook bodies.
+///   `rewrite_html.rs` named `Item::Trait(..)` in a hand-written "no expression-bearing body" leaf set,
+///   which shipped a crash: `html"…"` inside a trait method reached the backends unresolved, so
+///   `phg check` printed `OK (type-checks clean)` and both engines then hit
+///   `unreachable!("html literal not resolved before …")`. A trait's bodies reach both backends —
+///   they flatten into the using class (`checker/collect/inherit.rs`) — so a pre-check rewrite that
+///   skips traits is skipping executable code, not a signature.
+/// * `Enum(EnumDecl)` — `variants[].backing_value: Option<Box<Expr>>` (DEC-302), parsed with the full
+///   `parse_expr`. No live defect is known here (a non-scalar backing is rejected downstream); it is
+///   listed because it IS an `Expr` and this file's definition of "leaf" admits nothing else.
+/// * `Interface(InterfaceDecl)` — its `methods` are `FunctionDecl`s with empty bodies, so it reads
+///   inert. It is not: `Param.default: Option<Box<Expr>>` and `Attribute.args: Vec<Expr>` mean a
+///   signature carries expressions. Sites that genuinely have nothing to do for it write an explicit
+///   `Item::Interface(i) => Item::Interface(i)` pass-through rather than claiming leaf status.
+///
+/// **What this macro does NOT assert.** It says these two variants carry no `Expr`. It does not say
+/// the sites using it are total over expression *positions*: no item-level pass in the tree walks
+/// param defaults or attribute arguments today — not for `Function` or `Class` either — so a rewrite
+/// needed inside `function f(int n = <expr>)` is missed uniformly across every pass. That gap is
+/// recorded (CD-31), not closed here, and must not be described as covered.
+///
+/// Use as `it @ (item_leaves!()) => it` in a rewriter returning the node unchanged.
+#[macro_export]
+macro_rules! item_leaves {
+    () => {
+        $crate::ast::Item::Import { .. } | $crate::ast::Item::TypeAlias { .. }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     /// DEC-356's gate (C), as a source-scan ratchet.

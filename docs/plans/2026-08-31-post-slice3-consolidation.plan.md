@@ -70,6 +70,15 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
   run-the-panel obligation). Round 1 = 1 CLEAN + 11 findings across two lenses → the milestone
   gate stays OPEN until fixes land and the developer's chosen closing procedure completes (§0.1).
   G-8 microbench verdict remains OWED (quiet box required).
+- [2026-09-02] AGREED: next block = finish the A0+A1 RESIDUE the round-2 panel found — the four
+  live code findings (playground = 4th ungated PHP-emit path; LSP still on the non-test path;
+  `resolve_variant_imports`/`desugar_router` skip `Item::Test`; the differential's headline
+  over-reports with no floor assertion). Rationale: each is a hole in something already reported
+  done, and the gate cannot honestly close over them. DEC-457/458/459, Phase B and the remaining
+  adjudications queue behind it.
+- [2026-09-02] AGREED: certification tier for this block = `advisor()` at 3C and 6C, NO panel —
+  executable evidence does the refuting between gates (red-first, then a sabotage check proving
+  the suite NOTICES each guarantee breaking). The panel stays in reserve for the actual close.
 - [2026-09-02] AGREED (certification tier, Part 0 §0.1): **ONE 3-lens panel round against HEAD, then
   close.** The panel's frozen `cf6875db` is no longer HEAD — W1–W4 landed code after it — so a round
   now reviews the NEW tree (the A0 ladder fix, the `ladder.rs` split, the `phg test` front-end change

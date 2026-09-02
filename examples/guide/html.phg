@@ -34,6 +34,19 @@ function card(string title, Html bodyHtml): Html {
     return html"<section>\n    <h2>{title}</h2>\n    {bodyHtml}\n  </section>";
 }
 
+// A trait's methods are ordinary bodies — an `html"…"` inside one is resolved before any backend,
+// exactly as in a class. (It reads like a declaration, but a trait flattens into the using class and
+// its bodies execute; a rewrite that skipped traits shipped a crash on this very shape.)
+trait Titled {
+    function heading(string t): Html {
+        return html"<h2>{t}</h2>";
+    }
+}
+
+class Page {
+    use Titled;
+}
+
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     string name = "Tom & \"Jerry\"";
@@ -119,4 +132,7 @@ function main(): void {
     Html rule = Html.hr(new List<Attr>());
     // a void element: <hr/>
     Output.printLine(Html.render(rule));
+    // An html"…" written inside a trait method — same escaping, same byte output.
+    Output.printLine(Html.render(new Page().heading("Tom & Jerry")));
 }
+// <h2>Tom &amp; Jerry</h2>
