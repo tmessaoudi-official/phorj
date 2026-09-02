@@ -5,9 +5,11 @@
 //! when adding the `Core.Native.Http` row pushed that file past its Invariant-13 size baseline —
 //! the gate is a cohesive unit with a single job, which is what the split rule asks for.
 //!
-//! IT RUNS PRE-EXPANSION, and every row depends on that. **THREE** callers refuse before preludes are
-//! injected — `transpile_program` (the live CLI path, `main.rs` dispatches `transpile` here),
-//! `build_php` (the DEC-320 adoption lever), and `cmd_transpile` (test-only today) — so a row keyed on
+//! IT RUNS PRE-EXPANSION, and every row depends on that. **FOUR** callers refuse before preludes are
+//! injected — `transpile_program` (the loader path, `main.rs` dispatches `transpile` here),
+//! `build_php` (the DEC-320 adoption lever), `transpile_source` (the single-source chokepoint behind
+//! `cmd_transpile` AND the playground's `transpile_json`), and `benchmark --vs-php` (which emits and
+//! EXECUTES PHP, so it is a transpile path; panel round 3 C7/F1) — so a row keyed on
 //! a module the INJECTED preludes themselves import — as
 //! `Core.Native.Http` is — rejects only the user's own import. Move this call after expansion and
 //! the `Core.Native.Http` row alone would reject every `import Core.Http;` program in the corpus.

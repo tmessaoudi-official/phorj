@@ -168,7 +168,18 @@ alongside the post-Slice-3 batch rather than guessed at.
 `Core.Http` surface. (Since 2026-09-02 a `Core.Native.Http` import also refuses to transpile — see the
 ladder gate in `src/cli/ladder.rs` — so the friendly surface is the supported path in both senses.)
 
-## BENCHMARK-SKIPS-LADDER-GATE — `phg benchmark` reaches the PHP emitter without the native-only refusal (PRE-EXISTING, surfaced 2026-09-02)
+## FIXED — BENCHMARK-SKIPS-LADDER-GATE: `phg benchmark --vs-php` and the playground reached the PHP emitter without the native-only refusal (PRE-EXISTING, surfaced 2026-09-02 → fixed 2026-09-02)
+
+**FIXED 2026-09-02 (harness-trust step 1, panel round-3 C7/C8/F1).** Both ungated paths now refuse
+with the ladder's own code, pre-expansion like every other caller: `cli::transpile_source` is the
+single-source chokepoint (`cmd_transpile` and the playground's `transpile_json` both call it — the
+playground can no longer emit-then-execute a native-only program behind its parity badge), and
+`benchmark --vs-php` gates the raw program before `parse_checked_reified`, so a `Core.Database` program
+is `E-TRANSPILE-DB` instead of "transpile divergence, exit 0". The plain `phg benchmark` (no PHP leg) is
+deliberately NOT gated. Pinned by `playground::tests::transpile_json_refuses_a_native_only_module_like_the_cli_does`
+and `cli::benchmark::tests::vs_php_refuses_a_native_only_module_before_emitting_anything`; the ladder
+header now counts FOUR callers. The record below is kept as the history of the defect.
+
 
 **Not caused by the `Core.Native.Http` row** — found while sweeping every emit path for it, and it
 applies to all five native-only modules equally, so it long predates that change.

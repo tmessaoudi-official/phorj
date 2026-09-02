@@ -587,7 +587,7 @@ ran the 12 tests they named (12/12 green). Full lens reports: `var/claude/panel/
 
 | # | sev | where | promise broken | status |
 |---|---|---|---|---|
-| F1 | P2 | `src/cli/benchmark.rs:80`, `playground/src/lib.rs:103` | `benchmark --vs-php` EXECUTES emitted PHP for `Core.SessionModule` and reports "transpile divergence" instead of `E-TRANSPILE-SESSION`; KNOWN_ISSUES:171's "would fail loudly" reasoning is contradicted for Session | tracked, severity argument stale (= C7/C8) |
+| F1 | P2 | `src/cli/benchmark.rs:80`, `playground/src/lib.rs:103` | `benchmark --vs-php` EXECUTES emitted PHP for `Core.SessionModule` and reports "transpile divergence" instead of `E-TRANSPILE-SESSION`; KNOWN_ISSUES:171's "would fail loudly" reasoning is contradicted for Session | **FIXED** (= C7/C8) |
 | F2 | P2 | `src/ext/registry.rs`, `docs/EXTENSIONS.md` | `phg extensions` lists flag-only rows but has NO `http-server-tls` row, although its absence is the runtime refusal `E-SERVE-TLS-DISABLED` | NEW |
 | F3 | P2 | `KNOWN_ISSUES.md:2481-2482`, `examples/README.md:133` | "lookaround rejected at compile — never a divergence" is false on the PHP leg | NEW (= REGEX-B class) |
 | F3b | P3 | `KNOWN_ISSUES.md:2484` | claims `\d` is ASCII-only in transpiled PCRE; the helper appends `u`, both legs agree | stale doc (= C11) |
@@ -611,8 +611,8 @@ deps 14 admitted / 9 default = UNIFIED-SPEC:1359; all 7 new codes have `phg expl
 | C4 | P2 | same helpers | `findAll("a*","baaa")` → native 2, php 3 (empty-match placement) | KNOWN_ISSUES:2505 |
 | C5 | P1 | `natives.rs:307` | look-around siblings forwarded unvalidated: `a(?=b)`, `(a)\1`, `\h`, `\R`, `\Z`, `a{,3}b` — native fault, php `true` | class ruled REGEX-B above; sibling list NEW |
 | C6 | **P0** | `src/checker/calls/args.rs:256` | `default_fills` two-file collision reproduced at HEAD: `new Cookie(…)` at the same byte offset in two files → wrong arguments on run, --tree-walker AND php | **FIXED `53df9ef1`** — per-file span windows in the loader (`SpanWindows`); three-file differential pin + two sabotages; closes §default_fills and §span-collision |
-| C7 | P1 | `src/cli/benchmark.rs:80,244` | `benchmark --vs-php` transpiles a `Core.Database` program with no ladder gate → PHP fatal, "skipping", exit 0 | tracked (plan A-list) |
-| C8 | P1 | `playground/src/lib.rs:103` | `transpile_json` → `transpile::emit`, no ladder gate | tracked |
+| C7 | P1 | `src/cli/benchmark.rs:80,244` | `benchmark --vs-php` transpiles a `Core.Database` program with no ladder gate → PHP fatal, "skipping", exit 0 | **FIXED** (step 1) — gated pre-expansion on the PHP leg only |
+| C8 | P1 | `playground/src/lib.rs:103` | `transpile_json` → `transpile::emit`, no ladder gate | **FIXED** (step 1) — routed through `cli::transpile_source`, the single-source chokepoint |
 | C9 | P2 | `src/lsp/mod.rs:496-511` | LSP diagnostics run `test_mode=false`; `check ≡ LSP ≡ test` false | tracked (= completeness #1) |
 | C10 | P2 | `src/serve/framing.rs:118` | `Content-Length: abc` → `200` body-less instead of `400`; `unwrap_or(0)` has no failure-mode evidence | NEW |
 | C11 | P3 | `runtime_php.rs:992`, KNOWN_ISSUES:2485 | the documented `\d\w\s` ASCII-vs-Unicode edge does NOT exist (php `u` ⇒ UCP); the real edges are C1–C3 | NEW (doc wrong) |
@@ -651,8 +651,7 @@ fixed; `import Core.Http as H` offers no alias bypass.
   the transpile leg, `D` in the delimiter helper, replacement-syntax normalisation, possessive/`\h`/`\R`/
   `\Z`/`{,n}` rejection or support decided per construct, each with an `agree_out_php` case (the
   reviewer confirms no existing test can go red on C1–C5).
-- **C6 P0** — DONE `53df9ef1`. **C7/C8** = the ungated-emit paths (gate before `check_and_expand`,
-  as `parse_checked_for_run` does). **C9/K1/K7/K16** = the LSP test-mode + symbols + hover slice
+- **C6 P0** — DONE `53df9ef1`. **C7/C8** — DONE (step 1). **C9/K1/K7/K16** = the LSP test-mode + symbols + hover slice
   (developer directive: LSP/editors are first-class). **K4** = differential floor. **K8** = widen the
   CD-31 ratchet to the four remaining item arms. **K2/K3/K5/K6/K9/K10/K14/K15** = one docs pass, same
   commit as the register rows. **C10** needs a failing-request test before its fix (anti-bandaid).

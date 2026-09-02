@@ -97,10 +97,14 @@ pub fn vm_json(src: &str) -> String {
     exec_json(result)
 }
 
-/// `transpile`: emit the PHP source. The program returned by [`cli::parse_checked_program`] is already
-/// type-checked + alias/generic-expanded, exactly what [`phorj::transpile::emit`] consumes.
+/// `transpile`: emit the PHP source through [`cli::transpile_source`] — the SAME chokepoint the CLI
+/// uses, so the native-only ladder gate (Invariant 14: `E-TRANSPILE-DB`, `-MAIL`, `-SERVE`, …) refuses
+/// here exactly as `phg transpile` does. An earlier version called `parse_checked_program` +
+/// `transpile::emit` directly and was the fourth ungated PHP-emit path (panel round 3, C8/F1): a
+/// native-only program transpiled here, then EXECUTED behind the parity badge, degraded the hard
+/// error to "outputs differ". Doc comments are re-emitted as PHP docblocks now too (DEC-419).
 pub fn transpile_json(src: &str) -> String {
-    match cli::parse_checked_program(src).and_then(|prog| phorj::transpile::emit(&prog)) {
+    match cli::transpile_source(src) {
         Ok(php) => json!({ "ok": true, "php": php, "error": Value::Null }),
         Err(e) => json!({ "ok": false, "php": Value::Null, "error": e }),
     }
@@ -219,6 +223,28 @@ mod tests {
         assert_eq!(v["stdout"], json!("hi\n"));
         assert!(v["fault"].is_null());
         assert!(v["error"].is_null());
+    }
+
+    #[test]
+    fn transpile_json_refuses_a_native_only_module_like_the_cli_does() {
+        // Invariant 14 (panel round 3, C8/F1): the playground's emit path must be GATED — a
+        // `Core.Database` program is `E-TRANSPILE-DB` here exactly as under `phg transpile`, never
+        // emitted-then-executed.
+        let src = "package Main;\nimport Core.Database;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void { }\n";
+        let v = parse(&transpile_json(src));
+        assert_eq!(
+            v["ok"],
+            json!(false),
+            "a native-only module must be refused: {v}"
+        );
+        assert!(
+            v["php"].is_null(),
+            "no PHP may be emitted for a native-only program"
+        );
+        assert!(
+            v["error"].as_str().unwrap_or("").contains("E-TRANSPILE-DB"),
+            "the refusal must carry the ladder code, got: {v}"
+        );
     }
 
     #[test]

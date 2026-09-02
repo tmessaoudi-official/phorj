@@ -241,6 +241,13 @@ pub(super) fn bench_report_opts(
         // path `cmd_run` uses) so a program whose arithmetic operand is a method/field result
         // (`a.join() + b.join()`, `box.get() + 1`) compiles here exactly as it runs — not rejected
         // by `ctype` falling through to `method_rets` (a interp ≠ VM divergence).
+        // Invariant 14 (panel round 3, C7/F1): `--vs-php` EMITS and EXECUTES PHP, so it is a
+        // transpile path and must refuse native-only modules with the ladder's own code — before
+        // expansion, like every other caller of the gate — instead of emitting, running the PHP, and
+        // reporting the crash as a "transpile divergence" with exit 0.
+        if vs_php {
+            super::ladder::reject_native_only_transpile(&super::lex_parse(src)?)?;
+        }
         let (prog, reified) = parse_checked_reified(src)?;
         let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
 
@@ -399,4 +406,23 @@ pub(super) fn bench_report_opts(
         }
         Ok(out)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn vs_php_refuses_a_native_only_module_before_emitting_anything() {
+        // Invariant 14 (panel round 3, C7/F1). The gate runs BEFORE the php probe, so this holds
+        // with or without `php` on PATH.
+        let src = "package Main;\nimport Core.Database;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void { }\n";
+        let err =
+            super::cmd_benchmark_vs_php(src).expect_err("a native-only module must be refused");
+        assert!(err.contains("E-TRANSPILE-DB"), "got: {err}");
+        // The plain benchmark (no PHP leg) still accepts the same program: the gate is scoped to
+        // the path that emits PHP.
+        assert!(
+            super::cmd_benchmark(src).is_ok(),
+            "the non-PHP benchmark must not be gated"
+        );
+    }
 }

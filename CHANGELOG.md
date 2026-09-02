@@ -8,6 +8,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **The two ungated PHP-emit paths are gated (Invariant 14; panel round-3 C7/C8/F1).** The
+  playground's `transpile_json` and `phg benchmark --vs-php` reached `transpile::emit` without the
+  native-only ladder refusal: the playground emitted a `Core.Database`/`Core.SessionModule` program,
+  EXECUTED it under php-wasm and rendered "outputs differ" where `phg transpile` says `E-TRANSPILE-DB`;
+  the benchmark reported "transpile divergence" with exit 0. Both now go through the gate
+  pre-expansion — `cli::transpile_source` is the single-source chokepoint (CLI + playground), and the
+  benchmark gates only its PHP leg. Two new tests pin the refusals; `KNOWN_ISSUES
+  §BENCHMARK-SKIPS-LADDER-GATE` is closed.
 - **Two project files at the same byte offset no longer swap each other's default-filled
   arguments (P0, KNOWN_ISSUES §default_fills; panel round-3 C6).** Every checker rewrite map keys on
   `Span.start`, and every file was lexed from offset 0, so `new Box("AAA")` in `main.phg` and

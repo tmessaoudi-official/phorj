@@ -717,14 +717,21 @@ pub fn cmd_lift(src: &str) -> Result<String, String> {
     ))
 }
 
-/// `transpile`: lex -> parse -> native-only ladder gate -> check (gate) -> emit PHP source.
+/// `transpile` from one source string: lex -> parse -> **native-only ladder gate** -> check ->
+/// emit PHP source. This is THE single-source PHP-emit chokepoint (Invariant 14): every caller that
+/// turns inline source into PHP — the CLI (`cmd_transpile`), the playground (`transpile_json`) — goes
+/// through here, so none can reach `transpile::emit` with an ungated program. Runs on the calling
+/// stack (no `on_deep_stack`), which is what makes it browser-safe for the wasm playground.
+pub fn transpile_source(src: &str) -> Result<String, String> {
+    let raw = lex_parse(src)?;
+    reject_native_only_transpile(&raw)?;
+    let prog = parse_checked(src)?;
+    crate::transpile::emit_with_source(&prog, Some(src))
+}
+
+/// `transpile`: [`transpile_source`] on the deep stack (the CLI entry).
 pub fn cmd_transpile(src: &str) -> Result<String, String> {
-    on_deep_stack(|| {
-        let raw = lex_parse(src)?;
-        reject_native_only_transpile(&raw)?;
-        let prog = parse_checked(src)?;
-        crate::transpile::emit_with_source(&prog, Some(src))
-    })
+    on_deep_stack(|| transpile_source(src))
 }
 
 /// `disasm`: lex -> parse -> check (gate) -> compile -> dump the bytecode the VM will execute.
