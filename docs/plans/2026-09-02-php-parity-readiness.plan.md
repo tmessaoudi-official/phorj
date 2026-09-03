@@ -256,3 +256,73 @@ tier · A25 templates/sanitizer · A26 auth · A27 storage/cache · A28 XLSX/ZIP
 A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds · PFA · `#[NoDiscard]` ·
 `value class` · lazy adapters vs `UNIFIED-SPEC:1613` · sized-ints decline · coverage/mutation ·
 `Json.getInt` surface (perf split).
+
+## Status
+<!-- progress-block v1 -->
+| # | Step | Size | State | Evidence | Files |
+|---|------|------|-------|----------| ------- |
+| 1 | Harness trust — panel rounds 3+4 disposed, Slice-3 gate CLOSED — `docs(register): DEC-490 — the Slice-3 milestone gate is CLOSED` | L | done | 4c7bbc53 | docs/plans/* src/loader/* src/cli/* src/serve/* |
+| 2 | REGEX-B — `Regex.compileBacktracking` on fancy-regex, linear reject list (DEC-461) | L | done | 1241bdd8 | src/ext/regex/* tests/regex* |
+| 3 | Parity-% recompute — M-gap-matrix §4 (OWED at the DEC-490 close; last recompute §4.12, 2026-07-30) | S | todo | - | docs/research/full-audit/raw/M-gap-matrix.md |
+| 4 | CD-31 / K8 residue — 4 rewriter catch-alls still open after gate close (deep sweep) | M | todo | - | src/checker/rewrite_pipe/walk.rs src/checker/qualify_variants.rs src/checker/rewrite_new.rs src/cli/rewrite_new.rs |
+| 5 | Doc-drift repair — MILESTONES 6wk stale, FEATURES dep list + tuples rows wrong (deep sweep) | S | todo | - | docs/MILESTONES.md FEATURES.md |
+| 6 | `Time.sleep` + `Runtime.onShutdown` — must hook serve's single ctrlc registration (DEC-487, DEC-204) | M | todo | - | src/ext/time/* src/serve/handlers.rs |
+| 7 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
+| 8 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |
+| 9 | JSON — typed errors, list-vs-object, `Json.getInt` surface (A16) | M | todo | - | src/ext/json/* |
+| 10 | HTML5 parse (DEC-469) + `Core.Xml` incl. XSD + XMLDSig (DEC-480) | L | todo | - | src/ext/html/* src/ext/xml/* |
+| 11 | `Core.Net` + `Core.Mime` + read-only `Core.Imap` (DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
+| 12 | HTTP client — fakeable, cookies (DEC-266), `Core.Compress` wired in (A17, DEC-471) | L | todo | - | src/ext/http/* src/ext/compress/* |
+| 13 | Charset — typed `Charset` + `foldAccents` (DEC-468) — CRITICAL PATH, needed by 10/11/12 | M | todo | - | src/ext/charset/* |
+| 14 | Crypto — AEAD + Ed25519 + HKDF (DEC-470) — scope gap vs XMLDSig, see Needs input | M | todo | - | src/ext/cryptography/* |
+| 15 | Money / BigInt — decimal scale, truncation faults, `-0.000d` (A12, X2) | L | todo | - | src/value/* src/ext/decimal/* |
+| 16 | `Core.Intl` v1 + pinned currency table (DEC-484, X3) | L | todo | - | src/ext/intl/* |
+| 17 | DEC-333 perf roadmap — TypePHP benches as macro twins; string builder (§5d.1) | L | todo | - | bench/* src/jit/* |
+<!-- /progress-block -->
+### Blocked
+- Nothing hard-blocked. Steps 10 and 12 should not start before step 13 (charset) — see Needs research.
+
+### Needs input
+- **DEC-470 vs DEC-480 scope contradiction**: DEC-480 requires XMLDSig "RSA/ECDSA via DEC-470", but
+  DEC-470 rules AEAD+Ed25519+HKDF with X.509/CSR explicitly out of scope. Reordering does not fix it —
+  Invariant-15 ruling needed before step 10 or 14. [`C-decisions.md:8602`, `:8612`]
+- **Invariant 19 divergence**: `2026-08-31-post-slice3-consolidation.plan.md:531-534` forbids drifting
+  into the gap-programme build and its execution-order step 7 (`:222`) still names Phase B/DEC-333 as
+  next — but the readiness wave in flight IS that build. One file, two answers to "what's next".
+- X5 Composer interop (readiness §5c) — surfaced, not ruled.
+- The §6 questions queue: ~19 open Invariant-15 questions (A21–A28, Q4, generic bounds, PFA,
+  `#[NoDiscard]`, `value class`, sized-ints, coverage/mutation, `Json.getInt` surface).
+
+### Needs research
+- **Charset ordering**: DEC-467 (slot 11) and the HTML/HTTP slots both name a typed `Charset`, which is
+  DEC-468 at slot 13. Building in ruled order yields two definitions of the same type. Decide whether to
+  hoist step 13 ahead of steps 10–12.
+- No flip-or-flag bench exists for either shipped item; `bench/` last touched 2026-08-08, against the
+  readiness plan's per-item requirement (`:249-251`).
+
+### Fragile
+- `src/ast/leaves.rs:46,120` — leaf sets are macros on purpose; a `fn is_leaf()` reintroduces the
+  catch-all by the back door. Ratchet at `:132-200` is a hand-maintained file list.
+- `src/serve/tls.rs:144,277` — `TlsServer` is an UNINHABITED enum discharged by `match *never {}`.
+  A never-constructed struct keeps every test green and turns an impossibility into a convention;
+  failure mode is silent plaintext. Hand-written `Debug` at `:127` keeps key material out of logs.
+- `src/loader/span_windows.rs` — the entry file keeps base 0 deliberately; any parse path not going
+  through `parse_at_rebased` reopens the `default_fills` P0 (`53df9ef1`).
+- `src/cli/prelude_spans.rs:28` — `#prelude` is unspellable on purpose; a nicer prefix reopens the
+  `Core.Native.Http` ladder bypass.
+- Ordering fences: serve TLS wrap only after blocking+timeouts; config read only after `web_*_factory`
+  and never unconditionally (`SLICE-STATE.md:197` says do not "simplify" by deleting either).
+- Ratchets whose shape IS the guarantee: `scripts/size-baseline.txt`, the differential RUN FLOOR, and
+  `hits > 0` beside every JIT byte-identity assert.
+
+### Known issues
+- `KNOWN_ISSUES.md` carries ~58 live entries — the real debt register.
+- Invariant 13 regrowth landed unremarked: `src/serve/transport.rs` 498 (hard cap 500),
+  `src/serve/framing.rs` 411, `src/ext/regex/reject.rs` 318 at birth. `size-gate.sh:10-11` makes the
+  soft cap WARN-only. 53 files exceed the hard cap while M-Decomp reads COMPLETE.
+- Exactly ONE real source TODO: `src/lift/lifter/exprs.rs:360` (lifter never synthesizes PHP
+  promoted-ctor defaults) — recorded in no live register.
+- Stale comment: `tests/differential.rs:390-392` claims the test is `#[ignore]`d, failing and blocked
+  on W5-13; all three are false and the test runs green.
+- `ServeConfig.maxBodySize` still inert behind a hardcoded 8 MiB.
+- `docs/plans/claude-bundle-cross-repo-audit.plan.md` is finished and was missed by the archive sweep.
