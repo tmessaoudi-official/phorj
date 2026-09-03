@@ -187,6 +187,11 @@ Four shape rulings were made by the developer on 2026-08-31 (AskUserQuestion):
   `invoiceninja-needs.md` (~90 rows + 23 PHP flaws), `cross-language-delta.md` and
   `php-ecosystem-delta.md` (pending). Their consolidated delta graduates into the readiness-wave plan
   file, not into this consolidation plan.
+- [2026-09-03 07:52] AGREED (gate closure, DEC-490): **the Slice-3 milestone gate is CLOSED on the round-4
+  fixes** — every P1 fixed with a red-first test and a sabotage (`531225ee`, `afe3ef9c`, `ae6be18f`);
+  P2/P3 residue tracked in § "Panel round 4"; no round 5 (rejected: a round 5, a targeted single-lens
+  re-probe). The readiness wave starts with `Time.sleep` + DEC-204. OWED at this milestone close: the
+  parity-% recompute (M-gap-matrix §4) per the CLAUDE.md milestone rule — queued, not done here.
 - [2026-09-02 21:05] AGREED (certification tier, STEP 1 harness trust): **`advisor()` per gate for
   every slice of step 1, then ONE panel round on the frozen commit at the end** (DEC-481
   fix-then-verify). Red-first tests + a sabotage check per slice remain mandatory.
@@ -634,9 +639,9 @@ disposition was re-verified by execution (34/34, 16/16, 64/64 named tests green 
 | K-R12 | P3 | K11/K16 cite bare KNOWN_ISSUES line numbers | doc-rot class | FIXED (docs commit: heading anchors) |
 | K-R13 | P3 | DEC-461 row | no statement why lift needs nothing | FIXED (docs commit: the lifter has no `preg_*` model) |
 
-**Gate after round 4:** the P1s are fixed and pushed; DEC-481 says CLEAN closes. Round 4 was not
-clean, so the closing is the developer's ruling (asked at the end of step 1): close on the fixes with
-the P2/P3 residue tracked, or run a round 5 on the new freeze.
+**Gate after round 4 — CLOSED (developer, 2026-09-03 07:52, DEC-490):** the P1s are fixed and pushed with a
+red-first test and a sabotage each; the P2/P3 residue above stays tracked; no round 5. The readiness
+wave starts.
 
 ## Panel round 3 — 2026-09-02, frozen `6a18f71a`, range `0c982019..6a18f71a`
 

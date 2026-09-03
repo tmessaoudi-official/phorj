@@ -47,7 +47,8 @@ apps + cross-language + PHP ecosystem, the ruled ORDER, the questions queue) and
 `docs/plans/2026-08-31-post-slice3-consolidation.plan.md` § "Panel round 3" (35 findings transcribed
 in-repo, disposition per finding) + its Decisions Log (the 2026-09-02 rulings).
 
-**Gate:** OPEN. Panel round 3 ran on frozen `6a18f71a` over `0c982019..6a18f71a`: correctness 12
+**Gate: CLOSED (DEC-490, 2026-09-03) on the round-4 fixes** — the readiness wave is the active body of
+work; OWED at this close: the parity-% recompute (M-gap-matrix §4). History: panel round 3 ran on frozen `6a18f71a` over `0c982019..6a18f71a`: correctness 12
 (1×P0 `default_fills` collision reproduced on 3 legs), completeness 16 (3×P1), safety 7. DEC-481
 (fix-then-verify) ruled the closing rule: every P0/P1 fixed, freeze, ONE round. **Round 4 ran on
 `bfafdd23`** (correctness 8, safety 8, completeness 13 — see the consolidation plan § "Panel round
