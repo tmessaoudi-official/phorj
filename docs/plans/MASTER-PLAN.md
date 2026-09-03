@@ -1159,6 +1159,14 @@ blast radius) live in **KNOWN_ISSUES §"Parked perf"** and the §11 ledger — f
   does, better; take NONE of PHP's weaknesses.* Per row: a genuine capability → cover it in Phorj's
   better/safer form (flips toward COVERED); a pure footgun/weakness → stays excluded by design.
 
+- **D (developer-ruled 2026-09-03, DEC-493) — the 100 % bar is LITERAL: NO PARKS AT THE END.** Rule 3
+  above parks what cannot be bettered without sacrificing another dimension; that park is an **in-flight
+  deferral, never a discharge**. Before GA every parked item is resolved — the `KNOWN_ISSUES`
+  §"Parked perf" list and `PERF-native-call-in-loop` included — and the ledger closes at 100 % with zero
+  parked rows. **This supersedes DEC-269's TERMINAL allowance**: a LOSS-FLAGGED micro with anatomy and
+  queued levers remains a valid definition-of-done *in flight*, but is not an acceptable finish state.
+  The register row is the ruling.
+
 ### Global design tenets (whole wave — developer-ruled 2026-07-11)
 
 - **Prefer INSTANCES + mandatory `new`.** Every stdlib capability is proper `new`-able instances + types,

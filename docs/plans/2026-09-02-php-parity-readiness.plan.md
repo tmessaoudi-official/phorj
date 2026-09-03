@@ -26,6 +26,12 @@
   provider resolves; `ServeConfig` fields nullable; `decimal` bound/fetched as TEXT on the PHP leg.
   STANDING: LSP + both editors + transpile/lift are first-class per slice; cross-language scan;
   PHP-ecosystem scan. *(Pointers.)*
+- [2026-09-03 11:07] AGREED (goal-brief session): **charset is HOISTED to the front of the unbuilt
+  readiness work** so one typed `Charset` exists before HTML/XML, Net/Mime/Imap and the HTTP client
+  import it (DEC-491, amends the DEC-462 order); **DEC-470 is WIDENED to RSA + ECDSA** so DEC-480's
+  XMLDSig can ship as ruled (DEC-492); **the 100 % VISION bar is LITERAL — no parks at the end**, which
+  supersedes DEC-269's terminal LOSS-FLAG allowance and makes the parked-perf list blocking pre-GA work
+  (DEC-493). *(Register rows are the ruling; these are pointers.)*
 - [2026-09-02 19:40] RECORDED (not ruled): the consolidated delta below — every NEW row is an
   Invariant-15 question until it carries an AGREED line here.
 - [2026-09-02 20:05] AGREED — **FRAMEWORK TIER lives in Core stdlib, staged**: first validation
