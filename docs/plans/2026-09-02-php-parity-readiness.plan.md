@@ -251,10 +251,11 @@ queued by today's rulings; the rest are wave items or step-1 fixes.
 ## 6. Order (ruled) and the questions queue
 
 1. **Harness trust** — panel round 3 disposition (consolidation plan § "Panel round 3").
-2. **Readiness wave**, leverage order: REGEX-B → `sleep` + DEC-204 → tz (Q16) → `.env`/process/stderr
-   (A15, Q21) → JSON (A16) → HTML (Q2) + XML (Q1, widened) → `Core.Net`/`Mime`/`Imap` (Q3) → HTTP
-   client (A17, Q19) → charset (Q18) → crypto (Q17) → money (A12) → Intl (Q4). Each: example, LSP +
-   both editors, transpile AND lift, flip-or-flag bench.
+2. **Readiness wave**, leverage order: REGEX-B → **charset (Q18, DEC-468) — HOISTED to the front of
+   the unbuilt work by DEC-491** → `sleep` + DEC-204 → tz (Q16) → `.env`/process/stderr (A15, Q21) →
+   JSON (A16) → HTML (Q2) + XML (Q1, widened) → `Core.Net`/`Mime`/`Imap` (Q3) → HTTP client (A17,
+   Q19) → crypto (Q17, widened to RSA + ECDSA by DEC-492) → money (A12) → Intl (Q4). Each: example,
+   LSP + both editors, transpile AND lift, flip-or-flag bench.
 3. **Perf roadmap** (DEC-333) with TypePHP's benches as macro twins.
 
 **Questions queue (Invariant 15, ≤4 per ask):** A21 queue · A22 DB seam · A23 ORM tier · A24 framework
@@ -272,26 +273,27 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 | 3 | Parity-% recompute — M-gap-matrix §4 (OWED at the DEC-490 close; last recompute §4.12, 2026-07-30) | S | todo | - | docs/research/full-audit/raw/M-gap-matrix.md |
 | 4 | CD-31 / K8 residue — 4 rewriter catch-alls still open after gate close (deep sweep) | M | todo | - | src/checker/rewrite_pipe/walk.rs src/checker/qualify_variants.rs src/checker/rewrite_new.rs src/cli/rewrite_new.rs |
 | 5 | Doc-drift repair — MILESTONES 6wk stale, FEATURES dep list + tuples rows wrong (deep sweep) | S | todo | - | docs/MILESTONES.md FEATURES.md |
-| 6 | `Time.sleep` + `Runtime.onShutdown` — must hook serve's single ctrlc registration (DEC-487, DEC-204) | M | todo | - | src/ext/time/* src/serve/handlers.rs |
-| 7 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
-| 8 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |
-| 9 | JSON — typed errors, list-vs-object, `Json.getInt` surface (A16) | M | todo | - | src/ext/json/* |
-| 10 | HTML5 parse (DEC-469) + `Core.Xml` incl. XSD + XMLDSig (DEC-480) | L | todo | - | src/ext/html/* src/ext/xml/* |
-| 11 | `Core.Net` + `Core.Mime` + read-only `Core.Imap` (DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
-| 12 | HTTP client — fakeable, cookies (DEC-266), `Core.Compress` wired in (A17, DEC-471) | L | todo | - | src/ext/http/* src/ext/compress/* |
-| 13 | Charset — typed `Charset` + `foldAccents` (DEC-468) — CRITICAL PATH, needed by 10/11/12 | M | todo | - | src/ext/charset/* |
-| 14 | Crypto — AEAD + Ed25519 + HKDF (DEC-470) — scope gap vs XMLDSig, see Needs input | M | todo | - | src/ext/cryptography/* |
+| 6 | Charset — typed `Charset` + `foldAccents` (DEC-468); HOISTED to the front of the unbuilt work by DEC-491, so one `Charset` exists before steps 11-13 import it | M | todo | - | src/ext/charset/* |
+| 7 | `Time.sleep` + `Runtime.onShutdown` — must hook serve's single ctrlc registration (DEC-487, DEC-204) | M | todo | - | src/ext/time/* src/serve/handlers.rs |
+| 8 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
+| 9 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |
+| 10 | JSON — typed errors, list-vs-object, `Json.getInt` surface (A16) | M | todo | - | src/ext/json/* |
+| 11 | HTML5 parse (DEC-469) + `Core.Xml` incl. XSD + XMLDSig (DEC-480) | L | todo | - | src/ext/html/* src/ext/xml/* |
+| 12 | `Core.Net` + `Core.Mime` + read-only `Core.Imap` (DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
+| 13 | HTTP client — fakeable, cookies (DEC-266), `Core.Compress` wired in (A17, DEC-471) | L | todo | - | src/ext/http/* src/ext/compress/* |
+| 14 | Crypto — AEAD + Ed25519 + HKDF, WIDENED to RSA + ECDSA verification by DEC-492 so DEC-480's XMLDSig can ship (DEC-470) | M | todo | - | src/ext/cryptography/* |
 | 15 | Money / BigInt — decimal scale, truncation faults, `-0.000d` (A12, X2) | L | todo | - | src/value/* src/ext/decimal/* |
 | 16 | `Core.Intl` v1 + pinned currency table (DEC-484, X3) | L | todo | - | src/ext/intl/* |
 | 17 | DEC-333 perf roadmap — TypePHP benches as macro twins; string builder (§5d.1) | L | todo | - | bench/* src/jit/* |
 <!-- /progress-block -->
 ### Blocked
-- Nothing hard-blocked. Steps 10 and 12 should not start before step 13 (charset) — see Needs research.
+- Nothing hard-blocked. The charset-before-consumers hazard is CLOSED by DEC-491 — charset is now step 6,
+  ahead of steps 11-13, so no consumer defines its own `Charset`.
 
 ### Needs input
-- **DEC-470 vs DEC-480 scope contradiction**: DEC-480 requires XMLDSig "RSA/ECDSA via DEC-470", but
-  DEC-470 rules AEAD+Ed25519+HKDF with X.509/CSR explicitly out of scope. Reordering does not fix it —
-  Invariant-15 ruling needed before step 10 or 14. [`C-decisions.md:8602`, `:8612`]
+- ~~DEC-470 vs DEC-480 scope contradiction~~ — **RULED 2026-09-03 (DEC-492)**: DEC-470 is widened to
+  include RSA + ECDSA verification; DEC-480's XMLDSig ships as ruled. The added primitives are reviewed
+  under the external-dependency policy in-slice.
 - **Invariant 19 divergence**: `2026-08-31-post-slice3-consolidation.plan.md:531-534` forbids drifting
   into the gap-programme build and its execution-order step 7 (`:222`) still names Phase B/DEC-333 as
   next — but the readiness wave in flight IS that build. One file, two answers to "what's next".
@@ -300,9 +302,9 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
   `#[NoDiscard]`, `value class`, sized-ints, coverage/mutation, `Json.getInt` surface).
 
 ### Needs research
-- **Charset ordering**: DEC-467 (slot 11) and the HTML/HTTP slots both name a typed `Charset`, which is
-  DEC-468 at slot 13. Building in ruled order yields two definitions of the same type. Decide whether to
-  hoist step 13 ahead of steps 10–12.
+- ~~Charset ordering~~ — **RULED 2026-09-03 (DEC-491)**: charset is hoisted to the front of the unbuilt
+  work (step 6), so `Core.Net`/`Mime`/`Imap`, HTML/XML and the HTTP client all import one `Charset`
+  rather than each defining its own.
 - No flip-or-flag bench exists for either shipped item; `bench/` last touched 2026-08-08, against the
   readiness plan's per-item requirement (`:249-251`).
 
