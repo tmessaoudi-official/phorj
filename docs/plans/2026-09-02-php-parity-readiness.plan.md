@@ -20,7 +20,8 @@
   perf internals are Claude's, `Json.getInt`-style surface is asked; panel re-run NOW. *(Pointer.)*
 - [2026-09-02 17:40–17:55] AGREED (gap-programme Q23/Q16/Q3/Q18/Q2/Q17/Q19/Q21): doctrine =
   capabilities only; tz as pinned data; `Core.Net`+`Core.Mime`+read-only `Core.Imap`; typed `Charset`
-  + `foldAccents`; `html5ever`+`selectors`; AEAD+Ed25519+HKDF; `Core.Compress` wired into HTTP;
+  + `foldAccents`; `html5ever`+`selectors`; AEAD+Ed25519+HKDF *(widened to RSA+ECDSA by DEC-492)*;
+  `Core.Compress` wired into HTTP;
   shell-free `Process.run`. *(Recorded in the gap-programme plan; pointer.)*
 - [2026-09-02 18:15] AGREED (Part 4): DEC-455.5 memoize per entry; DEC-455.6 decline candidacy when no
   provider resolves; `ServeConfig` fields nullable; `decimal` bound/fetched as TEXT on the PHP leg.
@@ -98,7 +99,7 @@ Status key: **RULED-TODAY** (build queued by a 2026-09-02 ruling) · **QUEUED** 
 | A3 | `Core.Net` TCP+TLS, `Core.Mime`, read-only `Core.Imap` | scout | RULED-TODAY | Q3 |
 | A4 | tz-aware time (pinned IANA data), format patterns, RFC 2822 parse, `+1 month` arithmetic | all three | RULED-TODAY (tz) / QUEUED W4-5 (patterns) | Q16, DEC-247 |
 | A5 | charset transcoding + `foldAccents` | scout, IN | RULED-TODAY | Q18 |
-| A6 | AEAD / Ed25519 / HKDF | IN (37 encrypt sites), twes-in | RULED-TODAY | Q17 |
+| A6 | AEAD / Ed25519 / HKDF (+ RSA/ECDSA verify, DEC-492) | IN (37 encrypt sites), twes-in | RULED-TODAY | Q17 |
 | A7 | gzip/deflate + HTTP wiring | IN, scout | RULED-TODAY | Q19 |
 | A8 | shell-free process spawn | IN (Chromium PDF), scout | RULED-TODAY | Q21 |
 | A9 | `sleep`, shutdown signal handler | scout `--watch` | RULED DEC-487 (`Time.sleep`) — build QUEUED | W4-11, DEC-204 |

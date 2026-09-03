@@ -85,6 +85,8 @@
   ships lexbor). Unblocks the `tidy` deferral; XML C14N (Q1) shares the DOM shape. New domain =
   untrusted-input parser, already admitted by name for regex.
 - [2026-09-02 17:55] AGREED — **Q17 CRYPTO: AEAD + Ed25519 + HKDF via RustCrypto, misuse-resistant.**
+  *(Scope WIDENED to include RSA + ECDSA verification on 2026-09-03 by DEC-492, so DEC-480's XMLDSig can
+  ship; the §4 option text below is left as the historical record of what was offered.)*
   `Crypto.seal/open` (nonce generated and prefixed, no mode selection, typed `Key`), `Crypto.sign/verify`
   (Ed25519, detached), `Crypto.deriveKey` (HKDF). Transpile tier 1 via `sodium_crypto_aead_*` /
   `sodium_crypto_sign_*`, byte-identical on fixed vectors. X.509/CSR out of scope (own question if ever).
