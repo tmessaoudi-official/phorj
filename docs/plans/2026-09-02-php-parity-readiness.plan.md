@@ -307,7 +307,7 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 | 16 | Crypto — AEAD + Ed25519 + HKDF, WIDENED to RSA + ECDSA verification by DEC-492 so DEC-480's XMLDSig can ship (DEC-470) | M | todo | - | src/ext/cryptography/* |
 | 17 | Money / BigInt — decimal scale, truncation faults, `-0.000d` (A12, X2) | L | todo | - | src/value/* src/ext/decimal/* |
 | 18 | `Core.Intl` v1 + pinned currency table (DEC-484, X3) | L | todo | - | src/ext/intl/* |
-| 19 | DEC-333 perf roadmap — TypePHP benches as macro twins; string builder (§5d.1) | L | todo | - | bench/* src/jit/* |
+| 19 | DEC-333 perf roadmap — TypePHP benches as macro twins; string builder (§5d.1 — the VM's quadratic append behind A19's `strappend` 0.44× is FIXED, `b15ff3b1`; the builder-type question itself is unasked) | L | doing | b15ff3b1 | bench/* src/jit/* src/vm/* |
 <!-- /progress-block -->
 ### Blocked
 - Nothing hard-blocked. The charset-before-consumers hazard is CLOSED by DEC-491 AND DISCHARGED — step 6

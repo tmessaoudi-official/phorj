@@ -9,12 +9,18 @@ Landed so far: **Lane D** `58ed82d0` (the helper-bucket header ratcheted three w
 registry — it had drifted 173-vs-187 for four months under a comment claiming it could not);
 **Lane C** `71fc9377` (every `lift_from` registration proven to FIRE end to end, `array_slice` →
 `List.slice` claimed after a 7/7 three-leg oracle check; both of the lane's starting premises were
-phantom gaps and are recorded as such). In flight: **Lane A** LSP signature help + both editors.
-Queued: **Lane B** — the surface ratchet was found measuring the WRONG things (it scanned the
-`phg explain` catalog as emit sites, saw only one of three emit forms, and counted LSP providers from
-test strings); made honest first (258/311, providers 9), then the 53 truly-unasserted codes → 311/311
-(unreachable codes are RETIRED, not fixtured); **Lane F** the parity-% recompute; **Lane E** DEC-333 perf, verdicts OWED if the box
-stays busy. The readiness-wave cursor below stays valid for everything this wave does not touch —
+phantom gaps and are recorded as such). **Lane A** `39ec01a7` (LSP signature help — the last capability Invariant 17 names by name — plus
+both editors, VS Code 0.6.0); **Lane B-1** `3a44a264` (the surface ratchet had been measuring the
+WRONG things — it scanned the `phg explain` catalog as emit sites, saw only one of three emit forms,
+and counted LSP providers from test strings; made honest: 258/311, providers 9); **Lane B-2**
+`51e2efed` (the 53 truly-unasserted codes fixtured → **311/311 — Invariant 17's 100% rule for
+diagnostics is CLOSED**); **Lane F** `13e913a0` (§4.20 parity recompute: ≈71 / 59 / 72); **Lane E**
+`b15ff3b1` (DEC-431 B — the VM's quadratic `s = s + x` made amortised O(1) by a `Concat`/`SetLocal`
+lookahead, 425 ms → 18 ms on `strappend --no-jit`; no new `Op`). **OWED at this close:** the full
+pre-push gate (`nextest --all-features`, both clippies, doc-tests, `validate-infra`) — three hooked
+commits were stopped externally under a 22/8 load and the developer ruled `--no-verify` with targeted
+`-j2` verification (big-wave plan Decisions Log, 2026-09-05 00:48); every lane's own tests, sabotage
+and three-leg checks ran green in completed jobs. Run the gate on a quiet box before the next push;
 time zones (step 10) remain the next readiness step after the wave.
 
 ## ▶ CURRENT CURSOR (2026-08-29) — **S3.5 SHIPPED. DEC-331 SLICE 3 IS CLOSED.**
