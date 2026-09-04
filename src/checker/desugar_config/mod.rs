@@ -104,7 +104,10 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
                 // So the two-spellings story is undeliverable either way. Pre-existing (identical
                 // text at 92aa1dc), left as-is behaviourally and recorded rather than reworded into
                 // something equally unverified — it is the same `leaf()` lossiness as DEC-455.4.
-                let ty = leaf(&ret_name.expect("checked above")).to_string();
+                // DEC-457: key on the REIFIED type, so `Map<string, string>` and `Map<string, int>`
+                // are two providers rather than one collision.
+                let _ = ret_name.expect("checked above");
+                let ty = type_key(f.ret.as_ref().expect("a concrete return, checked above"));
                 if let Some(first) = providers.get(&ty) {
                     errs.push(err(
                         f.span,
@@ -181,7 +184,7 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
         // whether they are the RIGHT diagnostic depends on how many parameters resolved overall.
         let mut missing: Vec<Diagnostic> = Vec::new();
         for (ty_name, span) in &params {
-            match providers.get(leaf(ty_name)) {
+            match providers.get(ty_name.as_str()) {
                 Some(provider) => resolved.push(provider),
                 None => missing.push(err(
                     *span,
@@ -191,7 +194,7 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
                     "E-CONFIG-MISSING",
                     Some(format!(
                         "declare one: `#[Config] function appConfig() -> {} {{ ... }}` (import Core.Runtime.Config;)",
-                        leaf(ty_name)
+                        ty_name
                     )),
                 )),
             }
@@ -229,7 +232,7 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
         for ((p, provider), (ty_name, span)) in
             f.params.drain(..).zip(resolved).zip(params.iter().cloned())
         {
-            let key = leaf(&ty_name).to_string();
+            let key = ty_name.clone();
             let init = match seen.get(&key) {
                 // Binding to the first parameter's NAME (not re-calling) is what makes the two
                 // parameters the same instance rather than two equal ones.
@@ -311,10 +314,61 @@ fn config_entry_params(f: &FunctionDecl) -> Option<Vec<(String, crate::token::Sp
             // NOTE: no `args.is_empty()` filter — see the doc above. A generic parameter type keys the
             // same lossy way the provider's return type does, so `Map<string, string>` resolves and has
             // always resolved. Adding a filter here regressed that surface and was reverted.
-            Type::Named { name, span, .. } => Some((name.clone(), *span)),
+            // DEC-457: the parameter keys the same REIFIED way the provider's return does, so the
+            // two sides agree on `Map<string, int>` rather than both collapsing to `Map`.
+            t @ Type::Named { span, .. } => Some((type_key(t), *span)),
             _ => None,
         })
         .collect()
+}
+
+/// A config injection KEY: the type rendered with its arguments, span-free.
+///
+/// DEC-457 — the key used to be the bare head (`leaf(name)`), so `Map<string, string>` and
+/// `Map<string, int>` both keyed as `Map`: declaring providers for both was rejected as
+/// `E-CONFIG-DUP` for "duplicate provider for `Map`", and an entry taking one of them could have
+/// silently received the other. Reifying the arguments makes them distinct keys.
+///
+/// Span-free deliberately: the provider's return type and the entry's parameter type are written at
+/// different places, so any rendering that carried a span would make two spellings of ONE type
+/// unequal — which is the same defect in the opposite direction.
+///
+/// Total over `Type` with no catch-all (Invariant 3): a new variant must fail to compile here rather
+/// than silently render as something that collides with an unrelated type.
+fn type_key(t: &Type) -> String {
+    let list = |ts: &[Type], sep: &str| ts.iter().map(type_key).collect::<Vec<_>>().join(sep);
+    match t {
+        Type::Named { name, args, .. } => {
+            let head = leaf(name);
+            if args.is_empty() {
+                head.to_string()
+            } else {
+                format!("{head}<{}>", list(args, ","))
+            }
+        }
+        Type::Optional { inner, .. } => format!("{}?", type_key(inner)),
+        Type::Union(ts, _) => format!("({})", list(ts, "|")),
+        Type::Intersection(ts, _) => format!("({})", list(ts, "&")),
+        Type::Tuple(ts, _) => format!("({},)", list(ts, ",")),
+        Type::FixedList { elem, len, .. } => format!("[{};{len}]", type_key(elem)),
+        Type::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => format!(
+            "fn({})->{}{}",
+            list(params, ","),
+            type_key(ret),
+            if throws.is_empty() {
+                String::new()
+            } else {
+                format!("!{}", list(throws, ","))
+            }
+        ),
+        Type::Infer(_) => "_".to_string(),
+        Type::Erased(_) => "<erased>".to_string(),
+    }
 }
 
 fn err(
@@ -337,3 +391,5 @@ fn leaf(name: &str) -> &str {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_injection;
