@@ -1234,3 +1234,37 @@ accent-folding function; the nearest is `iconv($s, 'ASCII//TRANSLIT')`, which is
 could be credited. `foldAccents` is beyond-PHP ergonomics and belongs to the 0.30 programme leg, not
 to the 824-row parity denominator. Recorded because the tempting move at the next recompute is to
 count it under FN-ICONV or FN-STR, and that would be inflation of exactly the kind §4.14 warns about.
+
+### 4.16 Re-tally group 3 — FN-MATH: **+16 C, all of it ALREADY SHIPPED and mis-recorded**
+
+Third group mapped (after FN-FS +12 and FN-ARR ±0), and the most instructive so far: **nothing was
+built to produce this delta.** Every function §1.2 lists as gap-planned under "G-math-breadth §3 M11"
+was already registered; the matrix simply had not been re-read since the code moved.
+
+**Sixteen rows are stale, not missing** [Verified 2026-09-04 by reading `native::registry()`'s
+`Core.Math` rows rather than grepping for `name: "…"` literals]: `asin` `acos` `atan` `sinh` `cosh`
+`tanh` `asinh` `acosh` `atanh` `log2` `log1p` `expm1`, the angle pair as **`degToRad`/`radToDeg`**,
+and `atan2`/`hypot` [`Math.atan2(1.0, 1.0)` = 0.7853981633974483, `Math.hypot(3.0, 4.0)` = 5].
+
+**The method matters more than the number.** A first pass here derived the surface from
+`grep 'name: "…"' src/native/math.rs`, which misses everything registered through the `unary_float`
+helper — and on that basis fourteen duplicate natives were written, an example added, and a naming
+question put to the developer about a function that already had a name (DEC-500, void). The listing
+that is correct is what `registry()` RETURNS. FN-ARR's lesson was "raw counts mislead"; this one is
+"so do greps for registration syntax".
+
+**FN-MATH moves 17 C → 33 C** of 37 rows, with no code change. What remains, named so it is not
+credited by inference:
+- **BigInt / GMP** — arbitrary precision, still GAP (M-NUM-2). `Math.gcd`/`lcm` ship but operate on
+  `i64`, so they do NOT close a GMP row.
+- **`random_int` / `random_bytes`** — the CSPRNG GAP stands. `Core.Random` is deliberately
+  deterministic and must never be presented as a crypto-safe source.
+- **base conversions** (`bindec`/`dechex`/`base_convert`) — still partial.
+- **`setlocale`/`nl_langinfo`/`strcoll`** — GAP-by-design (§5 no-ICU), not counted against parity.
+
+`examples/guide/math.phg` already exercises 32 of the module's functions including the angle pair, so
+no example is owed; a second one was written during this pass and deleted as a near-duplicate.
+
+**The headline is NOT recomputed here.** §4.14's rule stands: the model does not document how `P`
+weights into the tier scores, and guessing it is the inflation this exercise exists to remove. Group
+3 of ~20 is mapped; the owed full re-pass is readiness step 3.
