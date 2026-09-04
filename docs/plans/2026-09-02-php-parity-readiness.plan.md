@@ -27,6 +27,11 @@
   provider resolves; `ServeConfig` fields nullable; `decimal` bound/fetched as TEXT on the PHP leg.
   STANDING: LSP + both editors + transpile/lift are first-class per slice; cross-language scan;
   PHP-ecosystem scan. *(Pointers.)*
+- [2026-09-04] AGREED (foldAccents slice): **U+00C0-U+017F, 190 rows, with expansions** —
+  `ß`→`ss`, `æ`→`ae`, `Ĳ`→`IJ`, `þ`→`th`, case preserved not title-cased; rejected strip-only
+  (leaves `Straße` unchanged) and Latin-1-only (~56 rows, silently skips Polish/Czech/Turkish).
+  DEC-496. Consequence recorded: output length may differ from input, so a fold is not a
+  per-character map.
 - [2026-09-04] AGREED (charset slice): **both legs hand-rolled from one table** — no `encoding_rs`,
   no ini extension, the tables in `src/charset.rs` formatted into the emitted `__phorj_cs_*`
   helper so the native and PHP legs cannot drift (DEC-494, amends DEC-468's crate clause); and the

@@ -8,6 +8,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **`String.foldAccents` — accent folding for slugs and search keys** (DEC-468's second half, shape
+  ruled as DEC-496). Folds all 190 accented Latin letters in U+00C0–U+017F to their ASCII base:
+  `Crème Brûlée` → `Creme Brulee`, `Łódź` → `Lodz`, `Člověk` → `Clovek`. That range is exactly the
+  alphabet `Core.Encoding`'s six charsets can produce, which is why the two shipped together.
+
+  **Case is preserved and output length can differ from input.** Folding is not lowercasing, so `À`
+  → `A`; and characters with no single-letter base expand — `ß` → `ss`, `æ` → `ae`, `Æ` → `AE`
+  (never title-cased `Ae`), `Ĳ` → `IJ`, `þ` → `th`. A fold is therefore NOT a per-character map, and
+  an index into the folded string does not point at the same place in the original. Anything outside
+  the range passes through untouched: Greek and CJK are not mangled.
+
+  The table was **generated from Unicode NFD** (decompose, drop combining marks) rather than typed,
+  with the expansions stated per character because no decomposition defines them; the PHP leg emits
+  `__phorj_fold_accents` built from that same table via core `strtr`, so the two legs cannot drift
+  and no ini extension is involved (`iconv(…,'ASCII//TRANSLIT',…)` is both an extension and
+  locale-dependent, so it is not byte-identical). `examples/guide/fold-accents.phg`.
+
 - **Charset transcoding — `Core.Encoding.decode`/`encode` over a typed `Charset` enum** (DEC-468's
   surface, DEC-494's strategy, DEC-495's shape). Six encodings ship: UTF-8, UTF-16 in both byte
   orders, ISO-8859-1, ISO-8859-15, Windows-1252 and ASCII. Both directions return an **optional** —

@@ -146,6 +146,11 @@ pub(in crate::transpile) struct HelperGates {
     /// exactness check + trailing-zero strip; non-terminating / zero divisor throws, matching the
     /// Rust `decimal_div_exact` fault boundary byte-for-byte).
     pub(in crate::transpile) uses_dec_div_exact: bool,
+    /// Set when `String.foldAccents` is emitted (DEC-468) — defines `__phorj_fold_accents`. The
+    /// table is FORMATTED FROM `crate::fold_accents::FOLD` at emit time, so the native leg and the
+    /// PHP leg read one source; `iconv(...,'ASCII//TRANSLIT',...)` is not an option (ini extension,
+    /// and locale-dependent, so not byte-identical).
+    pub(in crate::transpile) uses_fold_accents: bool,
     /// Set when `Encoding.decode`/`encode` are emitted (DEC-468/DEC-494) — defines
     /// `__phorj_cs_name` / `__phorj_cs_decode` / `__phorj_cs_encode`. The charset tables are
     /// FORMATTED FROM the Rust consts in `ext::encoding::charset` at emit time, so the PHP leg and

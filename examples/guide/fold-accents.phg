@@ -1,0 +1,67 @@
+package Main;
+
+// DEC-468 — `String.foldAccents`: every accented Latin letter in U+00C0-U+017F folded to its
+// unaccented ASCII base. The job this exists for is slugs, search keys and sort keys — the places
+// where "Crème" and "Creme" must compare equal, and where a URL or a filename cannot carry an
+// accent safely.
+//
+// Two things worth knowing before you use it. **Case is preserved** — folding is not lowercasing,
+// so `À` becomes `A` and not `a`; lowercase separately if that is what you want. And **the output
+// can be LONGER than the input**: characters with no single-letter base expand, so `ß` becomes
+// `ss` and `æ` becomes `ae`. That means a fold is not a per-character map, and an index into the
+// folded string does not point at the same place in the original.
+//
+// The full range is Latin-1 Supplement + Latin Extended-A, which is exactly the alphabet the six
+// charsets in `Core.Encoding` can produce — the two features are companions. Full Unicode
+// normalisation (NFD/NFKD) is deliberately NOT here; that belongs to `Core.Intl`.
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // French: grave, circumflex and acute all reduce to the bare letter.
+    Output.printLine(String.foldAccents("Crème Brûlée"));
+    // Creme Brulee
+    // Case survives the fold.
+    Output.printLine(String.foldAccents("ÉCOLE Élève"));
+    // ECOLE Eleve
+    // German: the eszett has no single-letter base, so it EXPANDS and the string gets longer.
+    Output.printLine(String.foldAccents("Straße"));
+    // Strasse
+    // Polish reaches into Latin Extended-A — the slashed l is a letter, not an accent.
+    Output.printLine(String.foldAccents("Łódź"));
+    // Lodz
+    // Czech carons, also Extended-A.
+    Output.printLine(String.foldAccents("Člověk žije"));
+    // Clovek zije
+    // Nordic: the slashed o and the ae ligature. Note the CASE of an expansion — a capital `Æ`
+    // folds to two capitals, `AE`, because folding preserves case and does not guess title case.
+    Output.printLine(String.foldAccents("Øystein Ærø"));
+    // Oystein AEro
+    // Turkish dotless i, and the Icelandic thorn, which expands to two letters.
+    Output.printLine(String.foldAccents("ırmak Þór"));
+    // irmak Thor
+    // Untouched: ASCII passes through, and anything outside the range is left exactly as it is —
+    // Greek and CJK are not in scope and are not mangled.
+    Output.printLine(String.foldAccents("plain ASCII 123"));
+    // plain ASCII 123
+    Output.printLine(String.foldAccents("Ωμέγα 東京"));
+    // Ωμέγα 東京
+    // The length change is observable, and is the reason a fold is not a per-character map.
+    // Measured in CODE POINTS — `String.length` is byte-based, and `ß` is already two bytes, so it
+    // would report no change here and hide the very thing this line exists to show.
+    int before = String.codepointLength("Straße");
+    int after = String.codepointLength(String.foldAccents("Straße"));
+    Output.printLine("before={before} after={after}");
+    // before=6 after=7
+    // Folding is idempotent: folded text folds to itself.
+    string once = String.foldAccents("Crème");
+    if (String.foldAccents(once) == once) {
+        Output.printLine("idempotent");
+    } else {
+        Output.printLine("NOT idempotent");
+    }
+}
+// idempotent

@@ -265,6 +265,7 @@ impl Transpiler {
             self.line("}");
         }
         self.emit_charset_helpers();
+        self.emit_fold_accents_helper();
         if self.gates.uses_dec_of {
             // `Decimal.of(s) -> decimal?`: validate the literal grammar (optional sign, digits with an
             // optional single fractional part — `12`, `12.34`, `.5`; NO exponent/underscore/whitespace)

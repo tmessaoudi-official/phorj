@@ -18,6 +18,7 @@ mod driver;
 mod enums;
 mod escapes;
 mod expr;
+mod fold_php;
 mod fs_php;
 mod functions;
 mod gates;

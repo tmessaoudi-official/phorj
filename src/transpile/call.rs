@@ -382,6 +382,10 @@ impl Transpiler {
                         if nat.module == "Core.Native.FileSystem" {
                             self.gates.uses_fs = true;
                         }
+                        // `String.foldAccents` erases to the gated `__phorj_fold_accents` helper.
+                        if nat.module == "Core.String" && nat.name == "foldAccents" {
+                            self.gates.uses_fold_accents = true;
+                        }
                         // `Encoding.decode`/`encode` erase to gated `__phorj_cs_*` helpers
                         // (DEC-468/DEC-494); base64/hex map to core PHP and need no gate.
                         if nat.module == "Core.Encoding" && matches!(nat.name, "decode" | "encode")

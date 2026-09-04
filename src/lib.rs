@@ -27,6 +27,10 @@ pub mod dispatch;
 pub mod doc_comment;
 pub mod dump;
 pub mod ext;
+// The accent-folding table behind `Core.String.foldAccents` (DEC-468) — a shared leaf like
+// `charset`, read by the native AND by `transpile::fold_php`, which formats it into the emitted
+// `__phorj_fold_accents` helper so the two legs cannot drift.
+pub mod fold_accents;
 pub mod format;
 pub mod green;
 pub mod inspect;

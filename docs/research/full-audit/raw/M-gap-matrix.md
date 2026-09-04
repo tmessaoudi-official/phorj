@@ -1227,3 +1227,10 @@ still owed; what follows is only what this slice provably closed.
   programme question (M-text), not a one-function map.
 
 Headline unchanged pending step 3: **PHP-parity ≈ 70% · floor ≈ 57% · Vision ≈ 71%**.
+
+**Addendum (same day) — `String.foldAccents` scores NOTHING here, deliberately.** PHP has no core
+accent-folding function; the nearest is `iconv($s, 'ASCII//TRANSLIT')`, which is an ini extension
+*and* locale-dependent (its output differs across glibc and musl), so it is not a parity row that
+could be credited. `foldAccents` is beyond-PHP ergonomics and belongs to the 0.30 programme leg, not
+to the 824-row parity denominator. Recorded because the tempting move at the next recompute is to
+count it under FN-ICONV or FN-STR, and that would be inflation of exactly the kind §4.14 warns about.

@@ -175,6 +175,11 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_drop_while", 2),
     ("__phorj_find", 2),
     ("__phorj_float", 1),
+    // DEC-468 — accent folding. Bucket 2: `strtr` alone would do it, but the map is a 190-entry
+    // literal generated from `crate::fold_accents::FOLD`, so the alternative is emitting 4 kB of
+    // array literal at every call site. PHP's nearest native, `iconv(…,'ASCII//TRANSLIT',…)`, is an
+    // ini extension AND locale-dependent, so it is neither tier-1 nor byte-identical.
+    ("__phorj_fold_accents", 2),
     ("__phorj_float_to_int", 1),
     ("__phorj_float_to_int_exact", 1),
     ("__phorj_format", 2),
