@@ -337,16 +337,29 @@ impl<'a> Vm<'a> {
         });
         match self.run_to_completion() {
             Ok(()) => {}
-            // `Runtime.exit(code)` (DEC-238): the clean-exit sentinel is a NORMAL completion.
+            // `Runtime.exit(code)` (DEC-238): the clean-exit sentinel is a NORMAL completion — and
+            // it is a shutdown, so the handlers run before the output is handed back (DEC-204).
             Err(e) if crate::chunk::exit_sentinel_code(&e.message).is_some() => {
                 let code = crate::chunk::exit_sentinel_code(&e.message).expect("guarded");
+                self.run_shutdown_handlers();
                 return Ok((self.out, code));
             }
-            Err(e) => return Err(e),
+            Err(e) => {
+                // A faulting `main` is still a termination, so cleanup still runs — the same reason a
+                // `finally` block is not skipped by the exception that triggered it.
+                self.run_shutdown_handlers();
+                return Err(e);
+            }
         }
         // `main`'s return value was stashed into `exit_value` by its `Op::Return` (or left `Unit` for a
-        // `void` `main`); the CLI maps the code to the process exit status.
+        // `void` `main`); the CLI maps the code to the process exit status. Read BEFORE the handlers
+        // run — each one completes as a root frame and therefore overwrites `exit_value` with its own
+        // result, which would otherwise silently become the program's exit status.
         let exit = exit_code_of(&self.exit_value);
+        // DEC-204 / DEC-497 — the shutdown handlers run HERE, the VM twin of the interpreter's drain
+        // in `run_program_main`: after `main`, while this Vm still owns both the call machinery and
+        // the output buffer, so a cleanup message lands on the same stdout `main` was writing.
+        self.run_shutdown_handlers();
         Ok((self.out, exit))
     }
 
@@ -556,6 +569,7 @@ fn compare(op: &Op, a: &Value, b: &Value) -> Result<bool, String> {
     })
 }
 
+mod shutdown;
 mod stack;
 
 #[cfg(test)]

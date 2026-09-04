@@ -244,6 +244,31 @@ pub fn interpret_debug(
     run_program_main(program, Some(session))
 }
 
+/// Run and clear this thread's `Runtime.onShutdown` handlers (DEC-204, shape DEC-497).
+///
+/// A handler's own fault is REPORTED to stderr and does not become the program's exit status: the
+/// handler runs after `main`'s result is already decided, so letting it overwrite that result would
+/// mean a cleanup routine could silently turn a successful run into a failing one — and, worse, turn
+/// a *failing* one into a differently-failing one, losing the original diagnosis. Every handler runs
+/// even if an earlier one faulted, for the same reason `finally` blocks are not skipped by each
+/// other. `take_handlers` drains, so a handler that registers another does not loop.
+fn run_shutdown_handlers(interp: &mut Interp) {
+    for h in crate::shutdown::take_handlers() {
+        if let Value::Closure(cd) = h {
+            if let Err(sig) = interp.call_closure(cd, vec![]) {
+                let what = match sig {
+                    Signal::Runtime(e) => e.message,
+                    Signal::Throw(v) => format!("uncaught exception `{}`", throw_what(&v)),
+                    _ => "control escaped a shutdown handler".to_string(),
+                };
+                eprintln!(
+                    "phg: a Runtime.onShutdown handler faulted ({what}); continuing shutdown"
+                );
+            }
+        }
+    }
+}
+
 fn run_program_main(
     program: &Program,
     debug: Option<crate::debug::DebugSession>,
@@ -314,7 +339,7 @@ fn run_program_main(
         Some(c) => format!("{c}::{}", main.name),
         None => main.name.clone(),
     };
-    match interp.run_call(
+    let outcome = interp.run_call(
         &call_name,
         &names,
         &main.body,
@@ -322,7 +347,14 @@ fn run_program_main(
         None,
         None,
         attrs_unchecked(&main.attrs),
-    ) {
+    );
+    // DEC-204 / DEC-497 — the shutdown handlers run HERE, after `main` has finished and while this
+    // interpreter still owns both the call machinery and the output buffer. A signal handler cannot
+    // run phorj code and a `Value::Closure` is not `Send`, so this (and the VM's twin in
+    // `Vm::run_main`) is the only place they legally can run. Their `Output.*` therefore appends to
+    // the same stdout `main` was writing, which is what a cleanup message has to do to be seen.
+    run_shutdown_handlers(&mut interp);
+    match outcome {
         // `run_call` converts `main`'s `return n` into `Ok(Value::Int(n))` (and a fall-off-the-end
         // `void` `main` into `Ok(Value::Unit)`); `exit_code_of` maps both to the exit status.
         Ok(v) => Ok((interp.out, exit_code_of(&v))),

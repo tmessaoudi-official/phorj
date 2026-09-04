@@ -27,6 +27,10 @@
   provider resolves; `ServeConfig` fields nullable; `decimal` bound/fetched as TEXT on the PHP leg.
   STANDING: LSP + both editors + transpile/lift are first-class per slice; cross-language scan;
   PHP-ecosystem scan. *(Pointers.)*
+- [2026-09-04] AGREED (onShutdown slice): **`Runtime.isShuttingDown(): bool` ships with it**
+  (DEC-498) — without it DEC-497's cooperative contract has no cooperating half and a watch loop
+  can never terminate, so `onShutdown` would be unreachable for the case it exists for. Rejected
+  shipping onShutdown alone, and making `Time.sleep` return `bool` (breaking, hours after ship).
 - [2026-09-04] AGREED (sleep/shutdown slice): **onShutdown handlers run at normal exit AND at
   cooperative signal checkpoints** (`Time.sleep` returning early, serve's accept loop) — a tight
   loop with no checkpoint still hard-kills, and that is disclosed, not hidden. **PHP leg is tier 1
@@ -293,7 +297,7 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 | 6 | Charset — `Encoding.decode`/`encode` + injected `Charset` enum, both legs hand-rolled from one table (DEC-468 surface, DEC-494 strategy, DEC-495 shape); `String.foldAccents` splits to step 6b | M | done | 77421c33 | src/charset.rs src/ext/encoding/* src/transpile/charset_php.rs examples/guide/charset.phg |
 | 7 | `String.foldAccents` — 190-row table U+00C0-U+017F generated from Unicode NFD, expansions ruled per character, → `__phorj_fold_accents` (DEC-468's second half, shape DEC-496) | S | done | 2b987f15 | src/fold_accents.rs src/native/registry_modules/fold.rs src/transpile/fold_php.rs examples/guide/fold-accents.phg |
 | 8 | `Time.sleep(Duration)` — frozen-clock no-op, non-positive returns at once, signal-interruptible via the new single ctrlc registration in `src/shutdown.rs` (DEC-487, ladder DEC-497) | M | done | d0005b65 | src/shutdown.rs src/native/time.rs src/transpile/fold_php.rs examples/guide/sleep.phg |
-| 9 | `Runtime.onShutdown(fn)` — the callback registry + its invocation points in both backend drivers and serve; runs at normal exit and at signal checkpoints (DEC-204, shape DEC-497) | L | todo | - | src/shutdown.rs src/native/runtime* src/cli/* |
+| 9 | `Runtime.onShutdown(fn)` — the registry + root-frame drain in BOTH backends and on `Runtime.exit`, plus `Runtime.isShuttingDown()` as the cooperating half (DEC-204, shape DEC-497, query DEC-498) | L | done | PENDING | src/shutdown.rs src/native/runtime.rs src/interpreter/mod.rs src/vm/mod.rs src/transpile/expr.rs examples/guide/on-shutdown.phg |
 | 10 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
 | 11 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |
 | 12 | JSON — typed errors, list-vs-object, `Json.getInt` surface (A16) | M | todo | - | src/ext/json/* |

@@ -1,0 +1,50 @@
+package Main;
+
+// DEC-204 — `Runtime.onShutdown(fn)`: register cleanup that runs when the program finishes, so a
+// worker loop does not die cold leaving a lock file, an open transaction or a half-written index.
+//
+// **When handlers run.** At normal termination — `main` returning, or `Runtime.exit` — and after a
+// faulting `main`, for the same reason a `finally` block is not skipped by the exception that
+// triggered it. They run in REGISTRATION order, and their output goes to the same stdout `main` was
+// writing to.
+//
+// **The cooperative half.** A signal does not run handlers by itself: a phorj closure cannot run
+// inside a signal handler. What a signal does is wake `Time.sleep` early and flip
+// `Runtime.isShuttingDown()`, so a loop can notice and return — and then the handlers run on the way
+// out. A loop that never checks still hard-kills on Ctrl-C; the guarantee is cooperative, not
+// pre-emptive, and that is stated rather than implied.
+//
+// **On the PHP leg**, handlers become `register_shutdown_function`, which covers exactly the
+// normal-exit half. `Runtime.isShuttingDown()` is always `false` there, because PHP cannot read a
+// signal flag without the `pcntl` ini extension the transpile rules forbid. Every program the oracle
+// can express is unsignalled, so all three legs agree byte-for-byte (DEC-497).
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Handlers run in the order they were registered, not in reverse.
+    Runtime.onShutdown(function() => Output.printLine("cleanup 1: released the lock"));
+    Runtime.onShutdown(function() => Output.printLine("cleanup 2: closed the connection"));
+    Output.printLine("working");
+    // The watch-loop shape this exists for. `isShuttingDown()` is false in an unsignalled run, so
+    // the loop body runs its full course here; under Ctrl-C it would go true, the loop would end,
+    // and the two handlers below would still run on the way out.
+    mutable int ticks = 0;
+    while (!Runtime.isShuttingDown() && ticks < 3) {
+        ticks = ticks + 1;
+        Output.printLine("tick {ticks}");
+    }
+    Output.printLine("loop finished after {ticks} ticks");
+}
+// Nothing more is printed by `main` — the two cleanup lines below come from the handlers, after
+// `main` has already returned.
+// working
+// tick 1
+// tick 2
+// tick 3
+// loop finished after 3 ticks
+// cleanup 1: released the lock
+// cleanup 2: closed the connection

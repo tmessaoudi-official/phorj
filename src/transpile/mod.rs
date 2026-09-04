@@ -24,6 +24,7 @@ mod functions;
 mod gates;
 mod helper_buckets;
 mod kinds;
+mod lambda_stmt;
 mod log_php;
 mod magic_php;
 mod matches;

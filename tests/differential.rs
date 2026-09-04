@@ -1948,6 +1948,12 @@ const INTERP_VM_EXPECTED_SKIPS: &[&str] = &[
     "examples/guide/imports.phg",
     "examples/guide/logging-v2.phg",
     "examples/guide/logging.phg",
+    // DEC-204/497/498 `Runtime.onShutdown` + `isShuttingDown`. Impure because `Core.Runtime`'s
+    // natives are `pure: false`, so it is quarantined by the same rule as every Core.Time example —
+    // NOT because it is untested. `shutdown_handlers_run_after_main_in_registration_order_on_every_leg`
+    // and `is_shutting_down_is_false_in_an_unsignalled_run_on_every_leg` are the targeted cases that
+    // replace the corpus coverage this skip removes, and both include the PHP oracle.
+    "examples/guide/on-shutdown.phg",
     "examples/guide/time.phg",
     // DEC-487 `Time.sleep`. Impure for the same reason every other `Core.Time` example is (the
     // clock natives are `pure: false`), so it is quarantined by the same rule — NOT because sleep is
@@ -1978,6 +1984,8 @@ const PHP_ORACLE_EXPECTED_SKIPS: &[&str] = &[
     "examples/guide/imports.phg",
     "examples/guide/logging-v2.phg",
     "examples/guide/logging.phg",
+    // DEC-204/497/498 — see the note in `INTERP_VM_EXPECTED_SKIPS`.
+    "examples/guide/on-shutdown.phg",
     "examples/guide/time.phg",
     // DEC-487 — see the note in `INTERP_VM_EXPECTED_SKIPS`.
     "examples/guide/sleep.phg",
@@ -3663,6 +3671,10 @@ const TIER1_PHP: &[&str] = &[
     "strtr",
     // DEC-487 `__phorj_sleep`. ext/standard, always compiled in — NOT an ini extension.
     "usleep",
+    // DEC-204 `Runtime.onShutdown`. ext/standard (basic_functions), always compiled in — it is how
+    // PHP itself registers shutdown callbacks and needs no extension. It covers the normal-exit half
+    // of DEC-497; the signal half would need `pcntl`, which stays forbidden and is disclosed instead.
+    "register_shutdown_function",
     "strtoupper",
     "substr",
     // core standard (ext/standard, no shared extension): the DEC-331 s2 `__phorj_http_*` helpers —
@@ -5874,8 +5886,11 @@ fn sleep_is_byte_identical_and_free_under_a_frozen_clock_on_every_leg() {
     let vm = cmd_run(src).expect("vm ok");
     assert_eq!(interp, vm, "interp vs VM");
     assert_eq!(interp, "awake\n");
+    // 60s, not 5s: this must separate "no-op" from "slept the requested HOUR", and nothing in
+    // between. A tight bound measures the box instead of the code — it passed alone in 0.67s and
+    // failed at 9.7s inside the full parallel run, which is scheduler noise, not a regression.
     assert!(
-        t0.elapsed() < std::time::Duration::from_secs(5),
+        t0.elapsed() < std::time::Duration::from_secs(60),
         "a frozen clock must make sleep free on the native legs, took {:?}",
         t0.elapsed()
     );
@@ -5891,9 +5906,158 @@ fn sleep_is_byte_identical_and_free_under_a_frozen_clock_on_every_leg() {
         let out = run_php(&php, &php_src, "sleep_frozen_noop");
         assert_eq!(out, interp, "php vs interp\n{php_src}");
         assert!(
-            t1.elapsed() < std::time::Duration::from_secs(5),
+            t1.elapsed() < std::time::Duration::from_secs(60),
             "the PHP leg slept for real under a frozen clock, took {:?}",
             t1.elapsed()
         );
     }
+}
+
+/// DEC-204 / DEC-497 — `Runtime.onShutdown` handlers run after `main`, in registration order, on
+/// BOTH native backends and on the PHP leg.
+///
+/// The VM half is the one that needed the care: a handler runs with an EMPTY frame stack, so it must
+/// use the root-frame contract (`run_to_completion` + `exit_value`) rather than the re-entrant
+/// `call_closure_value`, whose trailing `self.pop()` is only correct with a caller beneath it. The
+/// first version used the re-entrant path and panicked with `vm stack underflow (compiler bug)` —
+/// straight through the no-crash contract — which is what this test pins.
+#[test]
+fn shutdown_handlers_run_after_main_in_registration_order_on_every_leg() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Runtime;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+                   Runtime.onShutdown(function() => Output.printLine(\"first\"));\n\
+                   Runtime.onShutdown(function() => Output.printLine(\"second\"));\n\
+                   Output.printLine(\"body\");\n\
+               }";
+    let want = "body\nfirst\nsecond\n";
+    assert_eq!(cmd_treewalk(src).expect("interp ok"), want, "interpreter");
+    assert_eq!(cmd_run(src).expect("vm ok"), want, "vm");
+    if let Some(php) = php_or_gate("shutdown_order") {
+        let php_src = cli::cmd_transpile(src).expect("transpile ok");
+        assert_eq!(
+            run_php(&php, &php_src, "shutdown_order"),
+            want,
+            "php\n{php_src}"
+        );
+    }
+}
+
+/// A handler runs on `Runtime.exit` too — the exit sentinel is a termination, and cleanup that only
+/// fires on the fall-off-the-end path would miss every program that exits with a status.
+#[test]
+fn shutdown_handlers_run_on_runtime_exit() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Runtime;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               #[Entry(kind: EntryKind.Cli)] function main(): int {\n\
+                   Runtime.onShutdown(function() => Output.printLine(\"cleaned\"));\n\
+                   Output.printLine(\"before\");\n\
+                   Runtime.exit(3);\n\
+                   return 0;\n\
+               }";
+    let interp = cmd_treewalk_exit(src).expect("interp ok");
+    let vm = cmd_run_exit(src).expect("vm ok");
+    assert_eq!(interp, vm, "interp vs VM (stdout, exit)");
+    assert_eq!(
+        interp,
+        ("before\ncleaned\n".to_string(), 3),
+        "the handler must run AND the exit status must survive it"
+    );
+}
+
+/// `main`'s exit status must survive the handlers. Each handler completes as a root frame on the VM,
+/// which overwrites `exit_value` with its own result — so reading the exit code after the drain
+/// would silently hand back the last handler's value as the process status.
+#[test]
+fn a_handler_cannot_overwrite_mains_exit_status() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Runtime;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               #[Entry(kind: EntryKind.Cli)] function main(): int {\n\
+                   Runtime.onShutdown(function() => Output.printLine(\"bye\"));\n\
+                   return 7;\n\
+               }";
+    assert_eq!(cmd_run_exit(src).expect("vm ok"), ("bye\n".to_string(), 7));
+    assert_eq!(
+        cmd_treewalk_exit(src).expect("interp ok"),
+        ("bye\n".to_string(), 7)
+    );
+}
+
+/// `Runtime.isShuttingDown()` is the cooperating half of DEC-497: without it a watch loop wakes early
+/// from `Time.sleep` and then loops forever, so the handlers could never fire for the case the
+/// feature exists for. In an unsignalled run it is `false` on every leg — which is also why the PHP
+/// leg's constant `false` is correct rather than a stub.
+#[test]
+fn is_shutting_down_is_false_in_an_unsignalled_run_on_every_leg() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Runtime;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+                   mutable int n = 0;\n\
+                   while (!Runtime.isShuttingDown() && n < 3) { n = n + 1; }\n\
+                   Output.printLine(\"ticks={n}\");\n\
+               }";
+    let want = "ticks=3\n";
+    assert_eq!(cmd_treewalk(src).expect("interp ok"), want);
+    assert_eq!(cmd_run(src).expect("vm ok"), want);
+    if let Some(php) = php_or_gate("is_shutting_down") {
+        let php_src = cli::cmd_transpile(src).expect("transpile ok");
+        assert_eq!(run_php(&php, &php_src, "is_shutting_down"), want);
+    }
+}
+
+/// A lambda whose body is a void native emits PHP's `echo`, which is a STATEMENT — so the arrow form
+/// `fn() => echo "x"` does not parse. The transpiler must fall back to the block-closure form. Found
+/// by `examples/guide/on-shutdown.phg`: it ran on both native legs while the PHP leg failed to parse.
+#[test]
+fn a_lambda_whose_body_is_a_statement_emits_the_block_closure_form() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Runtime;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+                   Runtime.onShutdown(function() => Output.printLine(\"x\"));\n\
+               }";
+    let php_src = cli::cmd_transpile(src).expect("transpile ok");
+    assert!(
+        !php_src.contains("fn() => echo"),
+        "`fn() => echo …` is a PHP parse error:\n{php_src}"
+    );
+    assert!(
+        php_src.contains("function() { echo"),
+        "expected the block-closure fallback:\n{php_src}"
+    );
+    // The arrow form must survive for ordinary value-returning bodies — the fallback is narrow.
+    let arrow = "package Main;\n\
+                 import Core.Output;\n\
+                 import Core.List;\n\
+                 import Core.Runtime.Entry;\n\
+                 import Core.Runtime.EntryKind;\n\
+                 \n\
+                 #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+                     List<int> ys = List.map([1, 2], function(int x) => x + 1);\n\
+                     Output.printLine(\"{ys.length()}\");\n\
+                 }";
+    let arrow_php = cli::cmd_transpile(arrow).expect("transpile ok");
+    assert!(
+        arrow_php.contains("fn($x) =>"),
+        "value-bodied lambdas must still use the arrow form:\n{arrow_php}"
+    );
 }

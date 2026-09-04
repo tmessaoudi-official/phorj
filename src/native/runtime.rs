@@ -82,6 +82,26 @@ fn runtime_exit(args: &[Value], _out: &mut String) -> Result<Value, String> {
 
 /// The `Core.Runtime` registry entries. All `pure: false` — they read the live process, so a program
 /// that imports this module is quarantined from the byte-identity differential (see the module docs).
+/// `Runtime.onShutdown(fn)` — push the closure onto this thread's handler list.
+fn runtime_on_shutdown(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [f @ Value::Closure(_)] => {
+            crate::shutdown::register(f.clone());
+            Ok(Value::Unit)
+        }
+        _ => Err("Runtime.onShutdown expects (function)".into()),
+    }
+}
+
+/// `Runtime.isShuttingDown()` — has a signal asked the process to stop?
+fn runtime_is_shutting_down(args: &[Value], _: &mut String) -> Result<Value, String> {
+    if args.is_empty() {
+        Ok(Value::Bool(crate::shutdown::signalled()))
+    } else {
+        Err("Runtime.isShuttingDown expects ()".into())
+    }
+}
+
 pub(crate) fn runtime_natives() -> Vec<NativeFn> {
     vec![
         // `Runtime.exit(code)` (DEC-238 slice 2) — CLEAN deliberate termination: no trace, no error
@@ -103,6 +123,39 @@ pub(crate) fn runtime_natives() -> Vec<NativeFn> {
                     a.first().cloned().unwrap_or_else(|| "0".into())
                 )
             },
+        },
+        // `Runtime.onShutdown(fn)` (DEC-204, shape DEC-497) — register a zero-arg closure to run when
+        // the program finishes. Registration only; the RUNNING happens where each backend still has
+        // its call machinery in scope (after `main` returns, and inside `Runtime.exit`), because a
+        // native body has no invoker of its own and a signal handler cannot run phorj code at all.
+        NativeFn {
+            module: "Core.Runtime",
+            name: "onShutdown",
+            params: vec![Ty::Function(vec![], Box::new(Ty::Void), Vec::new())],
+            ret: Ty::Void,
+            pure: false,
+            eval: NativeEval::Pure(runtime_on_shutdown),
+            // PHP's `register_shutdown_function` is core (no ini extension) and is the faithful
+            // mapping for the normal-exit half — which is the whole half the oracle can test.
+            lift_from: &["register_shutdown_function"],
+            php: |a| format!("register_shutdown_function({})", parg(a, 0)),
+        },
+        // `Runtime.isShuttingDown()` (developer-ruled 2026-09-04) — the cooperating half of DEC-497.
+        // Without it a `while (true) { …; Time.sleep(…) }` watch loop wakes early on Ctrl-C and then
+        // loops forever, so `onShutdown` could never fire for the exact case DEC-487 was built for.
+        NativeFn {
+            module: "Core.Runtime",
+            name: "isShuttingDown",
+            params: vec![],
+            ret: Ty::Bool,
+            pure: false,
+            eval: NativeEval::Pure(runtime_is_shutting_down),
+            lift_from: &[],
+            // Always `false` on the PHP leg, and that is CORRECT rather than a stub: PHP has no flag
+            // to read without `pcntl`, so a loop transpiled to PHP simply never observes a shutdown.
+            // Same disclosed divergence as `Time.sleep` (DEC-497) — a frozen/unsignalled program,
+            // which is every program the oracle can express, agrees byte-for-byte.
+            php: |_| "false".to_string(),
         },
         NativeFn {
             module: "Core.Runtime",

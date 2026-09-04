@@ -8,6 +8,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **`Runtime.onShutdown(fn)` + `Runtime.isShuttingDown()`** (DEC-204; shape DEC-497, query DEC-498).
+  Handlers run after `main` returns, after a FAULTING `main` (same reason a `finally` block is not
+  skipped by the exception that triggered it) and on `Runtime.exit`, in registration order, with
+  their output on the same stdout `main` was writing. A signal does not run them by itself — a phorj
+  closure cannot run inside a signal handler, and a `Value::Closure` is not `Send`, so what a signal
+  does is wake `Time.sleep` early and flip `isShuttingDown()`; a loop cooperates and the handlers run
+  on the way out. A loop that never checks still hard-kills: the guarantee is cooperative, not
+  pre-emptive. Transpiles to core `register_shutdown_function`; `isShuttingDown()` emits `false` on
+  the PHP leg, which is correct rather than a stub. `examples/guide/on-shutdown.phg`.
+
 - **`String.foldAccents` — accent folding for slugs and search keys** (DEC-468's second half, shape
   ruled as DEC-496). Folds all 190 accented Latin letters in U+00C0–U+017F to their ASCII base:
   `Crème Brûlée` → `Creme Brulee`, `Łódź` → `Lodz`, `Člověk` → `Clovek`. That range is exactly the
@@ -44,6 +54,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   stays 15). `examples/guide/charset.phg`; `phg run` ≡ `--tree-walker` ≡ transpiled PHP.
 
 ### Fixed
+
+- **A lambda whose body is a void native emitted PHP that does not parse.** `Output.printLine`
+  lowers to `echo`, which is a **statement** in PHP, so `function() => Output.printLine(m)` — the
+  natural shape for a `Runtime.onShutdown` handler — emitted `fn() => echo "m", "\n"` and the
+  transpiled file died with `syntax error, unexpected token "echo"`. The program ran correctly on
+  both native backends, so only the PHP leg saw it. A statement-shaped body now falls back to the
+  block-closure form (`function() use (…) { echo …; }`), which takes statements by construction and
+  lists captures explicitly, since `function () use (…)` does not capture implicitly the way `fn`
+  does. The arrow form is unchanged for value-returning bodies, pinned by
+  `a_lambda_whose_body_is_a_statement_emits_the_block_closure_form`.
 
 - **Request framing: a pipelined second request is answered, and the remaining RFC 9112 framing
   shapes get their ruled status (panel round 4, safety F4 P1 / F5 / F7).** `read_http_request`
