@@ -23,6 +23,18 @@ pub(super) const JSON_PRELUDE: &str = "enum Json { Null(), Bool(bool value), Int
 pub(super) const ROUNDING_MODE_PRELUDE: &str =
     "enum RoundingMode { HalfUp(), HalfDown(), HalfEven(), Up(), Down(), Ceiling(), Floor() }";
 
+/// The canonical `Charset` enum, injected when a program imports `Core.Encoding` (DEC-468, and
+/// DEC-494 for the implementation strategy). Zero-payload variants — constructed
+/// `new Charset.Windows1252()`, the project's zero-payload variant convention — read by
+/// `Encoding.decode`/`encode` via the variant name, exactly as `Core.Decimal` reads
+/// [`ROUNDING_MODE_PRELUDE`]. The seven variants mirror `ext::encoding::charset::Charset`.
+///
+/// UTF-16 ships as `Utf16Le`/`Utf16Be` with **no** bare `Utf16` (developer-ruled 2026-09-04): byte
+/// order is not recoverable from the bytes without a BOM, so the caller states it and decode stays
+/// total. Adding a BOM-sniffing `Utf16()` later is purely additive.
+pub(crate) const CHARSET_PRELUDE: &str = "enum Charset { Utf8(), Utf16Le(), Utf16Be(), Latin1(), \
+     Latin9(), Windows1252(), Ascii() }";
+
 /// True if the program imports the module `module` (e.g. `["Core", "Http"]`) either as a whole
 /// (`import Core.Http`) OR via a **member-import** of one of its types, one segment deeper
 /// (`import Core.Http.Router`). Import-redesign S2: a member-import must also pull in the injected
@@ -533,6 +545,16 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         srcs: &[ROUNDING_MODE_PRELUDE],
         member_gated: true,
         bare_types: &["RoundingMode"],
+    },
+    // `Core.Encoding` (DEC-468) — the charset enum for `Encoding.decode`/`encode`. The base64/hex
+    // rows of the same module are pure natives and need no prelude; this row exists solely to inject
+    // `Charset`, which is why the module appears here at all.
+    VirtualModule {
+        module: &["Core", "Encoding"],
+        qualifier: "Encoding",
+        srcs: &[CHARSET_PRELUDE],
+        member_gated: true,
+        bare_types: &["Charset"],
     },
     VirtualModule {
         module: &["Core", "Option"],

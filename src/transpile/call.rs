@@ -382,6 +382,12 @@ impl Transpiler {
                         if nat.module == "Core.Native.FileSystem" {
                             self.gates.uses_fs = true;
                         }
+                        // `Encoding.decode`/`encode` erase to gated `__phorj_cs_*` helpers
+                        // (DEC-468/DEC-494); base64/hex map to core PHP and need no gate.
+                        if nat.module == "Core.Encoding" && matches!(nat.name, "decode" | "encode")
+                        {
+                            self.gates.uses_charset = true;
+                        }
                         // `Decimal.*` erases to gated `__phorj_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {

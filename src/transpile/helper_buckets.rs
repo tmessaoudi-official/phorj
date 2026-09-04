@@ -127,6 +127,14 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_any", 2),
     ("__phorj_capture", 1),
     ("__phorj_checked_add", 1),
+    // DEC-494 — charset transcoding. Bucket 2: PHP's only native answer is `mb_convert_encoding` /
+    // `iconv`, both ini extensions the transpile rules forbid and both absent under the oracle's
+    // `php -n`, so there is no native call to make — the codec is a loop over code points, which is
+    // not an expression. The tables are formatted from `ext::encoding::charset`'s consts at emit
+    // time, so this is one implementation rendered twice, not two implementations.
+    ("__phorj_cs_decode", 2),
+    ("__phorj_cs_encode", 2),
+    ("__phorj_cs_name", 2),
     ("__phorj_checked_int", 1),
     ("__phorj_checked_mul", 1),
     ("__phorj_checked_neg", 1),

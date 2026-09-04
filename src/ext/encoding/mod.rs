@@ -2,6 +2,7 @@
 //! Registry row: `ext::registry::EXTENSIONS`'s `"encoding"` entry; build inclusion = the `encoding`
 //! Cargo feature.
 
+pub mod charset;
 pub mod natives;
 #[cfg(test)]
 mod tests;

@@ -148,9 +148,11 @@ pub(super) fn hex_decode_native(args: &[Value], _: &mut String) -> Result<Value,
     }
 }
 
-/// The `Core.Encoding` registry entries.
+/// The `Core.Encoding` registry entries: the base64/hex codecs here, plus the DEC-468 charset
+/// transcoders from the sibling `charset` module (kept there for Invariant 13 — the tables and the
+/// UTF-16 codec do not belong in this file).
 pub fn encoding_natives() -> Vec<NativeFn> {
-    vec![
+    let mut rows = vec![
         NativeFn {
             module: "Core.Encoding",
             name: "base64Encode",
@@ -204,5 +206,7 @@ pub fn encoding_natives() -> Vec<NativeFn> {
                 )
             },
         },
-    ]
+    ];
+    rows.extend(super::charset::charset_natives());
+    rows
 }

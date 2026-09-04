@@ -146,6 +146,12 @@ pub(in crate::transpile) struct HelperGates {
     /// exactness check + trailing-zero strip; non-terminating / zero divisor throws, matching the
     /// Rust `decimal_div_exact` fault boundary byte-for-byte).
     pub(in crate::transpile) uses_dec_div_exact: bool,
+    /// Set when `Encoding.decode`/`encode` are emitted (DEC-468/DEC-494) — defines
+    /// `__phorj_cs_name` / `__phorj_cs_decode` / `__phorj_cs_encode`. The charset tables are
+    /// FORMATTED FROM the Rust consts in `ext::encoding::charset` at emit time, so the PHP leg and
+    /// the native leg cannot drift; `mb_convert_encoding`/`iconv` are forbidden ini extensions,
+    /// which is why the codec is hand-rolled rather than delegated.
+    pub(in crate::transpile) uses_charset: bool,
     /// Set when `Decimal.of(s)` is emitted — defines `__phorj_dec_of`, validating the literal grammar
     /// (a tier-1 PCRE — NOT mbstring) + i128 range, returning the normalized decimal string or `null`.
     pub(in crate::transpile) uses_dec_of: bool,

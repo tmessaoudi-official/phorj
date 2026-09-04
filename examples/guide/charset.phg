@@ -1,0 +1,83 @@
+package Main;
+
+// DEC-468 / DEC-494 — **charset transcoding**. `bytes` are raw octets and `string` is UTF-8, so
+// data that arrives in some *other* encoding (a spreadsheet exported by Windows, an old Latin-1
+// log, a UTF-16 file from a Windows API) needs an explicit step to become a `string`.
+// `Core.Encoding.decode` is that step, and `Core.Encoding.encode` is its inverse.
+//
+// The charset is named by a value, not a magic string: `Charset` is an injected enum, so a typo is
+// a compile error rather than a silent mojibake bug at runtime. Both directions return an
+// **optional** — `null` when the bytes are not valid in that charset, or when a character has no
+// representation in the target. Nothing is ever replaced or dropped behind your back.
+//
+// Six encodings ship (DEC-468's scope): UTF-8, UTF-16 in both byte orders, ISO-8859-1 (Latin-1),
+// ISO-8859-15 (Latin-9), Windows-1252 and ASCII. All of them transpile: the PHP leg emits a pure
+// helper built from the same tables, with no ini extension required (DEC-494).
+import Core.Output;
+import Core.Bytes;
+import Core.Encoding;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // "Privé" as Windows-1252 — `é` is the single byte 0xE9, which is NOT valid UTF-8.
+    bytes cp1252 = b"Priv\xe9";
+    Output.printLine(Bytes.toString(cp1252) ?? "<not utf-8>");
+    // <not utf-8>
+    Output.printLine(Encoding.decode(cp1252, new Charset.Windows1252()) ?? "?");
+    // Privé
+    // Latin-1 agrees with Windows-1252 across 0xA0-0xFF, so the same bytes decode the same way.
+    Output.printLine(Encoding.decode(cp1252, new Charset.Latin1()) ?? "?");
+    // Privé
+    // ...but the two disagree below 0xA0. 0x80 is undefined in Latin-1 and is the euro sign in
+    // Windows-1252 — the reason "just use Latin-1" is wrong for Windows data.
+    Output.printLine(Encoding.decode(b"\x80", new Charset.Windows1252()) ?? "<undefined>");
+    // €
+    // Latin-9 is Latin-1 with eight substitutions; 0xA4 is the currency sign in Latin-1 and the
+    // euro in Latin-9.
+    Output.printLine(Encoding.decode(b"\xa4", new Charset.Latin1()) ?? "?");
+    // ¤
+    Output.printLine(Encoding.decode(b"\xa4", new Charset.Latin9()) ?? "?");
+    // €
+    // UTF-16, both byte orders. "Hé" is U+0048 U+00E9.
+    Output.printLine(Encoding.decode(b"H\x00\xe9\x00", new Charset.Utf16Le()) ?? "?");
+    // Hé
+    Output.printLine(Encoding.decode(b"\x00H\x00\xe9", new Charset.Utf16Be()) ?? "?");
+    // Hé
+    // Surrogate pairs carry astral code points. U+1F600 is D83D DE00.
+    Output.printLine(Encoding.decode(b"=\xd8\x00\xde", new Charset.Utf16Le()) ?? "?");
+    // 😀
+    // Encoding is the inverse. Round-tripping through Windows-1252 gets the same bytes back.
+    bytes back = Encoding.encode("Privé", new Charset.Windows1252()) ?? b"";
+    if (back == cp1252) {
+        Output.printLine("identical");
+    } else {
+        Output.printLine("different");
+    }
+    // identical
+    // A character the target cannot represent yields `null` rather than a `?` placeholder — the
+    // loss is reported, never absorbed.
+    bytes asAscii = Encoding.encode("Privé", new Charset.Ascii()) ?? b"\x00";
+    if (asAscii == b"\x00") {
+        Output.printLine("ascii-refused");
+    } else {
+        Output.printLine("ascii-ok");
+    }
+    // ascii-refused
+    // ASCII accepts the same text once the accent is gone.
+    bytes plain = Encoding.encode("Prive", new Charset.Ascii()) ?? b"";
+    Output.printLine(Bytes.toString(plain) ?? "?");
+    // Prive
+    // Malformed input decodes to `null` too: 0xFF is not a valid UTF-8 lead byte, and an odd byte
+    // count cannot be UTF-16.
+    Output.printLine(Encoding.decode(b"\xff", new Charset.Utf8()) ?? "utf8-refused");
+    // utf8-refused
+    Output.printLine(Encoding.decode(b"H", new Charset.Utf16Le()) ?? "odd-refused");
+    // odd-refused
+    // Every one of the 256 single-byte values decodes under Windows-1252 except the five that are
+    // genuinely undefined (0x81, 0x8D, 0x8F, 0x90, 0x9D) — so the codec is total where the
+    // standard is, and honest where it is not.
+    Output.printLine(Encoding.decode(b"\x81", new Charset.Windows1252()) ?? "0x81-undefined");
+}
+// 0x81-undefined

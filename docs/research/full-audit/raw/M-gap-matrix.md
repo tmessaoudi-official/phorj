@@ -1201,3 +1201,29 @@ information for that optimiser — something PHP can never exploit.
 **Assessment: the mechanism is worth having; `PositiveNumber` is the weakest member of the family to lead
 with**, because numeric refinement is the one place arithmetic closure bites hardest. Awaiting a ruling on
 (a) whether to build the mechanism at all, and (b) if so, which instance ships first.
+
+### 4.15 Delta — charset transcoding lands (2026-09-04, DEC-468 surface / DEC-494 strategy / DEC-495 shape)
+
+**Deliberately a DELTA, not a recompute.** §4.14's lesson stands: the raw-count heuristic erred in
+both directions, and guessing how `P` weights into the tier scores "would be exactly the unverified
+inflation this exercise exists to remove". The owed full §1.2 re-pass is readiness step 3 and is
+still owed; what follows is only what this slice provably closed.
+
+**Closed.**
+- **FN-ICONV (6): the 2 GP rows** — "charset conversion contract (M-encoding-contract, M-text)".
+  `Encoding.decode(bytes, Charset)` / `Encoding.encode(string, Charset)` cover conversion in both
+  directions across UTF-8, UTF-16LE/BE, ISO-8859-1, ISO-8859-15, Windows-1252 and ASCII, on all
+  three legs (`iconv()`'s own core use). FN-ICONV moves **0 C → 2 C**.
+- **FN-MB (22): `mb_convert_encoding`** — the single most-used member of that family, now expressible
+  without the extension. Moves **6 C → 7 C** (the §4.12 tally had it at 6).
+
+**NOT closed, and named so nobody credits them later by inference.**
+- `mb_detect_encoding` — there is no detection API and DEC-495 rules the caller states byte order.
+  Charset sniffing remains a GAP row.
+- `iconv_mime_encode` / `iconv_mime_decode` (the 2 GU rows) — RFC 2047 belongs to `Core.Mime`
+  (DEC-467, readiness step 12), not here.
+- `mb_check_encoding` — partially subsumed (`decode(b, Utf8)` returning non-null *is* the check), but
+  the row is left uncredited pending the step-3 pass, since the mb_* second-family model is a
+  programme question (M-text), not a one-function map.
+
+Headline unchanged pending step 3: **PHP-parity ≈ 70% · floor ≈ 57% · Vision ≈ 71%**.

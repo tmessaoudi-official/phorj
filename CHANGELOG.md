@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added
+
+- **Charset transcoding — `Core.Encoding.decode`/`encode` over a typed `Charset` enum** (DEC-468's
+  surface, DEC-494's strategy, DEC-495's shape). Six encodings ship: UTF-8, UTF-16 in both byte
+  orders, ISO-8859-1, ISO-8859-15, Windows-1252 and ASCII. Both directions return an **optional** —
+  `null` when the bytes are not valid in the source charset or a character has no representation in
+  the target, so nothing is replaced with U+FFFD or `?` behind the caller's back. `Charset` is an
+  injected enum gated on `import Core.Encoding`, so a typo is a compile error rather than a runtime
+  mojibake bug, and UTF-16 is `Utf16Le`/`Utf16Be` with no bare `Utf16`: byte order is not
+  recoverable from the bytes without a BOM, so the caller states it and decode stays total.
+
+  **It transpiles, with no ini extension.** DEC-468 had named `encoding_rs`; that was ruled out
+  because the PHP leg has no legal move with it — `mb_convert_encoding` and `iconv` are shared
+  extensions, absent under the oracle's `php -n` and rejected by the default-deny tier-1 guard, so
+  the alternative was an `E-TRANSPILE-*` exclusion at the exact moment DEC-493 forbade parked items
+  at the finish line. Instead both legs are hand-rolled and the tables in `src/value/charset.rs` are
+  **formatted into** the emitted `__phorj_cs_decode`/`__phorj_cs_encode` helper at transpile time, so
+  the native leg and the PHP leg read one source and cannot drift. No new dependency (the count
+  stays 15). `examples/guide/charset.phg`; `phg run` ≡ `--tree-walker` ≡ transpiled PHP.
+
 ### Fixed
 
 - **Request framing: a pipelined second request is answered, and the remaining RFC 9112 framing
