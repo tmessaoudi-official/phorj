@@ -1296,3 +1296,9 @@ without the record the next pass re-does the work — or worse, re-credits it, w
 **Running tally of the re-pass: 4 of ~20 groups mapped; net delta from mapping so far is FN-FS's +12
 alone.** The headline stays where §4.14 left it — PHP-parity ≈70% · floor ≈57% · Vision ≈71% —
 pending the owed full §1.2 re-pass (readiness step 3).
+
+**Addendum to §4.17 (same day) — `wordwrap` CLOSED.** `String.wordWrap` ships (DEC-501), so FN-STR
+moves **39 C → 40 C of 93** and the still-missing GU list drops to eight: `soundex`, `metaphone`,
+`strtok`, `strpbrk`, `strspn`, `str_increment`, `str_decrement`, `strip_tags`. This is a genuine
+build, not a re-credit — the row was verified absent from `Core.String`'s live registry before the
+work started, and the §4.x delta history was checked for a prior credit (there is none).

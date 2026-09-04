@@ -146,6 +146,11 @@ pub(in crate::transpile) struct HelperGates {
     /// exactness check + trailing-zero strip; non-terminating / zero divisor throws, matching the
     /// Rust `decimal_div_exact` fault boundary byte-for-byte).
     pub(in crate::transpile) uses_dec_div_exact: bool,
+    /// Set when `String.wordWrap` is emitted — defines `__phorj_wordwrap`, the CODEPOINT algorithm.
+    /// PHP's own `wordwrap` is byte-oriented and can emit invalid UTF-8, which a phorj `string`
+    /// cannot hold, so the helper exists to keep all three legs identical rather than to work around
+    /// a missing function.
+    pub(in crate::transpile) uses_wordwrap: bool,
     /// Set when `Time.sleep` is emitted (DEC-487) — defines `__phorj_sleep`, which mirrors the
     /// native's three properties: a NO-OP under a frozen clock (so a frozen example costs nothing on
     /// this leg either), immediate return for a non-positive duration, else `usleep`. PHP cannot

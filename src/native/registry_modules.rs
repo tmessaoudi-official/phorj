@@ -2,6 +2,7 @@
 //! one `extend` per module family; feature-gated families keep their `cfg`s). Adding a stdlib
 //! module = one line here.
 mod fold;
+mod wordwrap;
 
 use super::NativeFn;
 
@@ -11,6 +12,8 @@ pub(super) fn extend_module_natives(registry: &mut Vec<NativeFn>) {
     // `Core.String.foldAccents` (DEC-468) — see `registry_modules/fold.rs` for why it is not in
     // `text_registry.rs` with its siblings.
     registry.extend(fold::fold_natives());
+    // `String.wordWrap` (FN-STR) — codepoint-based, see `registry_modules/wordwrap.rs`.
+    registry.extend(wordwrap::wordwrap_natives());
     registry.extend(super::file::file_natives());
     registry.extend(super::bytes::bytes_natives());
     registry.extend(super::html::html_natives());

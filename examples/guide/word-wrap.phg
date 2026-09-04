@@ -1,0 +1,43 @@
+package Main;
+
+// `String.wordWrap` — greedy line wrapping, the same algorithm PHP's `wordwrap` uses, with one
+// deliberate difference: **the width is counted in CHARACTERS, not bytes.**
+//
+// That difference exists because PHP's version is byte-oriented, and with cutting enabled it will
+// split a multi-byte character in half. In PHP, `wordwrap("ééééééé", 3, "|", true)` produces bytes
+// that are not valid UTF-8 at all. A phorj `string` is UTF-8 by construction and cannot hold such a
+// value, so `wordWrap` cuts between characters instead. For ASCII text — overwhelmingly what
+// wrapping is used on — the two are identical.
+//
+// Note this is NOT a byte-identity exception: the transpiled PHP runs the same codepoint algorithm
+// via a helper rather than calling PHP's `wordwrap`, so the interpreter, the VM and the PHP leg all
+// produce exactly these bytes.
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Wrapping at the last space before the width is exceeded.
+    Output.printLine(String.wordWrap("The quick brown fox sat over the lazy dog", 15, "\n", false));
+    Output.printLine("--");
+    // A word longer than the width. With cutting OFF it is left to overflow the line...
+    Output.printLine(String.wordWrap("A very looooooooooooong word", 8, "\n", false));
+    Output.printLine("--");
+    // ...and with cutting ON it is broken at exactly the width.
+    Output.printLine(String.wordWrap("A very looooooooooooong word", 8, "\n", true));
+    Output.printLine("--");
+    // The break string is yours: a pipe, a tag, anything.
+    Output.printLine(String.wordWrap("one two three four", 9, " | ", false));
+    Output.printLine("--");
+    // Multi-byte text cuts between characters, never inside one. This is the case where phorj and
+    // PHP's own `wordwrap` deliberately differ.
+    Output.printLine(String.wordWrap("ééééééé", 3, "|", true));
+    Output.printLine(String.wordWrap("日本語です", 2, "|", true));
+    Output.printLine("--");
+    // Wrapping only INSERTS breaks — it never alters the text. Strip the breaks back out of
+    // space-free input and the original returns exactly.
+    string wrapped = String.wordWrap("ábcdéfghí", 4, "|", true);
+    Output.printLine(String.replace(wrapped, "|", ""));
+}

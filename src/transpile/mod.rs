@@ -39,6 +39,7 @@ pub mod split;
 mod state;
 mod stmt;
 mod types;
+mod wordwrap_php;
 
 /// The public transpiler entry point (defined in `driver`) re-exported at `crate::transpile::emit`.
 pub use driver::{emit, emit_with_source};

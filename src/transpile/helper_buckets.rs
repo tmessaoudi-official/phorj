@@ -328,6 +328,10 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_text_trim_end", 1),
     ("__phorj_text_trim_start", 1),
     ("__phorj_trunc", 1),
+    // FN-STR — `String.wordWrap`. Bucket 1 (semantic necessity): PHP's own `wordwrap` is
+    // byte-oriented and splits multi-byte characters into invalid UTF-8, so the naive native call
+    // would be WRONG for a phorj `string`, not merely differently shaped.
+    ("__phorj_wordwrap", 1),
     ("__phorj_unique", 2),
     ("__phorj_uri", 2),
     ("__phorj_uri_parse", 2),
