@@ -171,6 +171,16 @@ mod tests {
             // variants (four live: a call inside a tuple / named arg / pipe, a `new List<T>()` type
             // argument — `tests/project.rs`). Both walks are total now.
             "src/loader/resolve.rs",
+            // CD-31 residue, closed 2026-09-04. The PIPE rewriter's walk carried both shapes: an
+            // `Item` arm that skipped `Item::Test` (whose body is a statement block full of
+            // expressions) and an `Expr` arm hiding `Tuple`, `NamedArg` and `NewColl`. Removing the
+            // catch-alls is what surfaced those three — the compiler named them immediately. No
+            // currently-constructible program was found that mis-lowers because of it (a pipe inside
+            // a `test` body and inside a collection literal both lower correctly today, because
+            // other passes run first), so this closed a LATENT hazard rather than an observed bug —
+            // recorded that way deliberately, because overclaiming a fix is how the next reader
+            // stops believing the register.
+            "src/checker/rewrite_pipe/walk.rs",
         ];
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut offenders = Vec::new();

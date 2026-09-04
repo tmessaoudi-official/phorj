@@ -29,8 +29,18 @@ fn visit_exprs_mut_ordered(program: &mut Program, pre: bool, f: &mut impl FnMut(
             Item::Function(func) => vblock(&mut func.body, pre, f),
             Item::Class(c) => vmembers(&mut c.members, pre, f),
             Item::Trait(t) => vmembers(&mut t.members, pre, f),
-            // Enums/interfaces/imports/aliases carry no expressions to rewrite.
-            _ => {}
+            // A `test` body is a statement block and DOES carry expressions. It is walked rather
+            // than skipped even though the runner lowers test items into a synthetic `main` before
+            // this pass sees them today [Verified 2026-09-04: `x |> double` inside a `test` block
+            // lowers and passes] — the skip was correct only by accident of pass ordering, and
+            // relying on that is how a later reordering turns into a silent miss.
+            Item::Test { body, .. } => vblock(body, pre, f),
+            // Enums and interfaces carry no expression phorj can rewrite here (CD-31 records the
+            // separate, uniform gap that NO item-level pass walks param defaults or attribute args).
+            Item::Enum(_) | Item::Interface(_) => {}
+            // Imports and type aliases carry no `Expr` at all — the single-sourced leaf set, so a
+            // new `Item` variant fails to compile here instead of being silently skipped (DEC-356).
+            crate::item_leaves!() => {}
         }
     }
 }
@@ -229,9 +239,27 @@ pub(super) fn vexpr(e: &mut Expr, pre: bool, f: &mut impl FnMut(&mut Expr)) {
                 vexpr(a, pre, f);
             }
         }
-        // Literals / `Ident` / `This` / `Inject` / `PipePlaceholder` have no sub-expressions.
-        // (A placeholder is substituted by its owning pipe's lowering.)
-        _ => {}
+        // The three the compiler found once `_` was removed. Two of them DO carry sub-expressions,
+        // so they are walked rather than declared inert: a `Tuple` holds its elements and a
+        // `NamedArg` holds its value. Both are expanded out before any backend, which is why no
+        // currently-constructible program was found that mis-lowers because of the old catch-all —
+        // this closes a latent hazard, it does not fix an observed bug.
+        Expr::Tuple(items, _) => {
+            for it in items {
+                vexpr(it, pre, f);
+            }
+        }
+        Expr::NamedArg { value, .. } => vexpr(value, pre, f),
+        // `NewColl` carries only TYPE arguments (`new List<int>()`), never an `Expr`.
+        Expr::NewColl { .. } => {}
+        // `Inject` is erased before this pass but is not in the shared leaf set, so it is named
+        // explicitly rather than folded into it.
+        Expr::Inject { .. } => {}
+        // The single-sourced leaf set (literals / `Ident` / `This` / `PipePlaceholder` — a
+        // placeholder is substituted by its owning pipe's lowering). Listing it instead of `_` is
+        // what makes a NEW `Expr` variant a compile error here rather than a silent non-traversal
+        // (DEC-356 / Invariant 3).
+        crate::expr_leaves!() => {}
     }
     if !pre {
         f(e);
