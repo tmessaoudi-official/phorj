@@ -1235,36 +1235,37 @@ could be credited. `foldAccents` is beyond-PHP ergonomics and belongs to the 0.3
 to the 824-row parity denominator. Recorded because the tempting move at the next recompute is to
 count it under FN-ICONV or FN-STR, and that would be inflation of exactly the kind §4.14 warns about.
 
-### 4.16 Re-tally group 3 — FN-MATH: **+16 C, all of it ALREADY SHIPPED and mis-recorded**
+### 4.16 RETRACTED and corrected — FN-MATH was ALREADY CREDITED in §4.12; this section's first version double-counted
 
-Third group mapped (after FN-FS +12 and FN-ARR ±0), and the most instructive so far: **nothing was
-built to produce this delta.** Every function §1.2 lists as gap-planned under "G-math-breadth §3 M11"
-was already registered; the matrix simply had not been re-read since the code moved.
+**This section originally claimed FN-MATH moves 17 C → 33 C. That was WRONG and is retracted.**
+§4.12 (HEAD `d2f95509`, 2026-07-19) already took the delta and names the very functions the first
+version presented as a discovery:
 
-**Sixteen rows are stale, not missing** [Verified 2026-09-04 by reading `native::registry()`'s
-`Core.Math` rows rather than grepping for `name: "…"` literals]: `asin` `acos` `atan` `sinh` `cosh`
-`tanh` `asinh` `acosh` `atanh` `log2` `log1p` `expm1`, the angle pair as **`degToRad`/`radToDeg`**,
-and `atan2`/`hypot` [`Math.atan2(1.0, 1.0)` = 0.7853981633974483, `Math.hypot(3.0, 4.0)` = 5].
+> `| FN-MATH (37) | 17/3/11/4/0/2 → 27/3/3/2/0/2 | +8 asin/acos/atan/atan2/sinh/cosh/tanh/hypot/log2/log1p/expm1; +2 CSPRNG secureInt/secureBytes |`
 
-**The method matters more than the number.** A first pass here derived the surface from
-`grep 'name: "…"' src/native/math.rs`, which misses everything registered through the `unary_float`
-helper — and on that basis fourteen duplicate natives were written, an example added, and a naming
-question put to the developer about a function that already had a name (DEC-500, void). The listing
-that is correct is what `registry()` RETURNS. FN-ARR's lesson was "raw counts mislead"; this one is
-"so do greps for registration syntax".
+So FN-MATH stands at **27 C**, as it has since 2026-07-19. The re-derivation added nothing.
 
-**FN-MATH moves 17 C → 33 C** of 37 rows, with no code change. What remains, named so it is not
-credited by inference:
-- **BigInt / GMP** — arbitrary precision, still GAP (M-NUM-2). `Math.gcd`/`lcm` ship but operate on
-  `i64`, so they do NOT close a GMP row.
-- **`random_int` / `random_bytes`** — the CSPRNG GAP stands. `Core.Random` is deliberately
-  deterministic and must never be presented as a crypto-safe source.
-- **base conversions** (`bindec`/`dechex`/`base_convert`) — still partial.
-- **`setlocale`/`nl_langinfo`/`strcoll`** — GAP-by-design (§5 no-ICU), not counted against parity.
+**A second claim in the first version was also false.** It asserted "`random_int`/`random_bytes` — the
+CSPRNG GAP stands", repeating §1.2's frozen-baseline text. They ship: `Core.Random.secureInt` and
+`Core.Random.secureBytes` [Verified 2026-09-04 by reading the registry rows], which is exactly what
+§4.12's "+2 CSPRNG" credited. Repeating a §1.2 baseline line as a current fact is how a frozen
+baseline gets mistaken for the live state — §1.2 is the FROZEN 2026-07-16 snapshot and the §4.x
+deltas are what move it.
 
-`examples/guide/math.phg` already exercises 32 of the module's functions including the angle pair, so
-no example is owed; a second one was written during this pass and deleted as a near-duplicate.
+**What is actually open, and deliberately NOT credited:** five shipped names appear in no §4.x credit
+line — `asinh`, `acosh`, `atanh`, `degToRad`, `radToDeg` (PHP `asinh`/`acosh`/`atanh`/`deg2rad`/
+`rad2deg`). Whether they are five rows, fewer, or already inside §4.12's "+8" cannot be settled
+without the row model, and §4.14's rule is explicit that guessing it "would be exactly the unverified
+inflation this exercise exists to remove". **Flagged for the owed full §1.2 re-pass (readiness step
+3); no number taken here.**
 
-**The headline is NOT recomputed here.** §4.14's rule stands: the model does not document how `P`
-weights into the tier scores, and guessing it is the inflation this exercise exists to remove. Group
-3 of ~20 is mapped; the owed full re-pass is readiness step 3.
+**The deliverable of this pass is a method warning, not a delta.** Two failure modes, both committed
+in the space of one hour:
+1. **A grep for registration SYNTAX is not an inventory of a registry.** `grep 'name: "…"'` over
+   `src/native/math.rs` misses every native registered through the `unary_float` helper — on that
+   basis fourteen duplicate natives were written and a naming question was put to the developer about
+   a function that already had a name (DEC-500, void). Read what `registry()` returns.
+2. **Check the §4.x delta history before crediting a group.** A group can look under-credited in §1.2
+   and be fully credited three sections later. The first version of THIS section quoted §4.14's
+   warning against inflation and then inflated, which is the strongest argument available that the
+   check has to be mechanical rather than remembered.
