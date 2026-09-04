@@ -8,6 +8,33 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Invariant 17's 100% rule for diagnostics is CLOSED: every emitted `E-*` code now has an
+  executing assertion (311/311; was 258/311 after the ratchet repair, "259/314" before it).** 53
+  codes had an emit site and a `phg explain` entry but no test: the whole backed-enum family (11),
+  `Core.Database` typed hydration (8), `spawn`/`Channel` (8), named arguments (4), property hooks
+  (4), `String.format` (3), attribute arity (4), and single-site rules from `E-NEW-ON-NONCONSTRUCT`
+  to `E-UFCS-AMBIGUOUS`. Writing them surfaced facts worth keeping: `E-CHANNEL-NEW-*` guard
+  `Channel.create()` (`new` is a keyword and cannot be a member name — the codes keep their M6 W4
+  names); `spawn` is a contextual keyword recognised only before an identifier, so its non-call
+  operand is a bare name, never a literal; a `List<int>` field is a legitimate array column (DEC-208
+  K), so "no column accessor" means a `Map`; `E-AMBIGUOUS-ATTRIBUTE` needs a second package imported
+  as a PACKAGE, because two leaf imports are `E-IMPORT-CONFLICT` one layer earlier; and
+  `E-TRANSPILE-VARIANT-COLLISION` is a DEFENSIVE guard no checked program can reach, since every
+  colliding spelling needs an underscore and `E-TYPE-CASE` refuses those first — asserted on the
+  emitter directly, and documented as such rather than left to look like a live user-facing error.
+
+### Changed
+
+- **Parity recomputed (M-gap-matrix §4.20): PHP-parity ≈71% · floor ≈59% · Vision ≈72%** (from
+  §4.13's 70/57/71) — the recompute SLICE-STATE recorded as OWED at the DEC-490 close. It folds the
+  §4.15 charset and §4.17 FN-STR credits, which had each left the headline "unchanged pending step
+  3", with this span's `Time.sleep` (FN-DATE `sleep`/`usleep`), `Runtime.onShutdown` (FN-FUNC
+  `register_shutdown_function`) and `Process.run` (FN-PROC `proc_open`). `exec`/`system` are
+  deliberately NOT moved to by-design: that would shrink the denominator and lift the number without
+  shipping anything. The full 631-row §1.2 re-tally is still owed; the floor is now within 12pp of
+  the headline.
+
+
 - **The surface ratchet now measures what the compiler and server actually emit.** Three blind
   spots, found the moment a new capability shipped and the numbers did not move:
   (1) it scanned the `phg explain` catalog as if explanations were emit sites, so the catalog's

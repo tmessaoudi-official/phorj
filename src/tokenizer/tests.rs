@@ -621,3 +621,14 @@ fn comment_spans_point_at_source() {
     assert_eq!(&src[c.span.start..c.span.start + c.span.len], "// indented");
     assert!(c.own_line, "whitespace-only prefix is still own-line");
 }
+
+/// `E-DECIMAL-LITERAL` — an exponent on a `decimal` literal is refused at lex time (the digits must
+/// be written out), and a literal past `i128` is refused with the same code.
+#[test]
+fn decimal_literal_rejects_an_exponent_and_overflow() {
+    let d = lex("decimal x = 1e3d;").expect_err("exponent on a decimal literal");
+    assert_eq!(d.code, Some("E-DECIMAL-LITERAL"), "{d:?}");
+    let d =
+        lex("decimal x = 99999999999999999999999999999999999999999d;").expect_err("i128 overflow");
+    assert_eq!(d.code, Some("E-DECIMAL-LITERAL"), "{d:?}");
+}

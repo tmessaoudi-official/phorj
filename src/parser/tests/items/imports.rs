@@ -166,3 +166,11 @@ fn core_submodule_wildcard_is_a_parse_error_with_prose() {
         d.message
     );
 }
+
+#[test]
+fn an_empty_import_group_is_a_parse_error() {
+    let d = parser("package Main; import Acme.{};")
+        .parse_program()
+        .expect_err("an import group must name at least one member");
+    assert_eq!(d.code, Some("E-IMPORT-GROUP-EMPTY"));
+}
