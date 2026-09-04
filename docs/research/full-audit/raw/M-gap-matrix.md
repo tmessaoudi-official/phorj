@@ -1269,3 +1269,30 @@ in the space of one hour:
    and be fully credited three sections later. The first version of THIS section quoted §4.14's
    warning against inflation and then inflated, which is the strongest argument available that the
    check has to be mechanical rather than remembered.
+
+### 4.17 Re-tally group 4 — FN-STR: **±0, and the delta history checks out**
+
+Fourth group mapped (FN-FS +12, FN-ARR ±0, FN-MATH retracted-to-±0, FN-STR ±0). Checked with the
+method §4.16 had to learn the hard way: read the live registry, then check the §4.x credit history
+BEFORE crediting anything.
+
+**§4.12's FN-STR credit is correct and must not be re-counted.** It took 30 C → 39 C for "+4 sprintf
+family→`text_registry "format"`; +5 chunk/capitalizeWords/translate/similarText/levenshtein". All
+five names ship [Verified 2026-09-04 against `Core.String`'s 46 registered members].
+
+**All nine remaining GU rows are genuinely still missing** — `wordwrap`, `soundex`, `metaphone`,
+`strtok`, `strpbrk`, `strspn`, `str_increment`, `str_decrement`, `strip_tags`. None has a
+`Core.String` counterpart under any spelling. They remain the cheapest identified parity headroom in
+this group: each is a single deterministic function with an exact core-PHP counterpart (ladder case
+1), so a future slice can close them without a design question beyond camelCase naming.
+
+**`foldAccents` (shipped 2026-09-04) scores nothing here**, per the addendum after §4.15: PHP has no
+core accent-folding function, so it is programme, not parity.
+
+**FN-STR stands at 39 C of 93. No change.** Recorded rather than left silent for the same reason
+§4.14 recorded FN-ARR's ±0: a group that has been checked and found correct is information, and
+without the record the next pass re-does the work — or worse, re-credits it, which is what §4.16 did.
+
+**Running tally of the re-pass: 4 of ~20 groups mapped; net delta from mapping so far is FN-FS's +12
+alone.** The headline stays where §4.14 left it — PHP-parity ≈70% · floor ≈57% · Vision ≈71% —
+pending the owed full §1.2 re-pass (readiness step 3).
