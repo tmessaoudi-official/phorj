@@ -1,0 +1,53 @@
+package Main;
+
+// The accumulator idiom — `s = s + x` in a loop — and its aliasing edge cases. This is the shape
+// DEC-431 B found quadratic on the VM: at the `+`, the accumulator was referenced from its slot AND
+// from the stack, so every append copied the whole string. The VM now releases the slot's reference
+// when the very next instruction stores back into it, and appends in place — amortised O(1), the same
+// refcount-1 rule PHP's `.=` uses. Nothing here is visible to a program except speed, and this file
+// exists to pin that: all three legs must print the same bytes, INCLUDING the cases where the
+// shortcut must NOT fire.
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+function twice(string s): string {
+    return s + s;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // The idiom itself: 2 000 appends of a line whose `{i}` grows from 1 to 4 digits — 78 890 bytes.
+    mutable string body = "";
+    mutable int i = 0;
+    while (i < 2000) {
+        body = body + "row {i} the quick brown fox jumps over\n";
+        i = i + 1;
+    }
+    Output.printLine("length={String.length(body)}");
+    // Self-append: the right operand IS the accumulator, so a third reference is live and the
+    // in-place path must decline. The result must still be the doubled string.
+    mutable string s = "abc";
+    s = s + s;
+    s = s + s;
+    Output.printLine(s);
+    // The accumulator flows through a call that keeps its own copy: the copy must be untouched.
+    mutable string a = "x";
+    string kept = a;
+    a = a + "y";
+    a = a + twice(kept);
+    Output.printLine("{a} {kept}");
+    // Growing past the inline size boundary, one byte at a time, then reading an early prefix.
+    mutable string g = "";
+    mutable int k = 0;
+    while (k < 40) {
+        g = g + "-";
+        k = k + 1;
+    }
+    Output.printLine("{String.length(g)} {String.substring(g, 0, 3)}");
+}
+// length=78890
+// abcabcabcabc
+// xyxx x
+// 40 ---

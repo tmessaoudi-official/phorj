@@ -185,7 +185,7 @@ impl<'a> Vm<'a> {
                 continue;
             }
             let op = &code[ip];
-            match self.exec_op(op, fr, func) {
+            match self.exec_op(op, code.get(ip + 1), fr, func) {
                 Ok(Flow::Next) => {}
                 // `Flow::Done` is only ever returned by `main`'s `Return`; at `target_depth >= 1`
                 // (always, since a native runs inside at least `main`) it is unreachable, but exit

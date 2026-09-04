@@ -7,7 +7,15 @@ impl<'a> Vm<'a> {
     /// Execute one instruction in the current frame (`fr` = top of `frames`, in function `func`).
     /// Returns `Flow::Done` once `main` returns (program complete), `Flow::Next` otherwise. A
     /// fault carries only its body string; `run` attaches the source position from `Chunk.lines`.
-    pub(super) fn exec_op(&mut self, op: &Op, fr: usize, func: usize) -> Result<Flow, String> {
+    /// `next` is the op that follows `op` in the same chunk (`None` at the chunk's end) — read by
+    /// exactly one arm, `Op::Concat(2)`, for the `s = s + x` accumulator peephole (DEC-431 B).
+    pub(super) fn exec_op(
+        &mut self,
+        op: &Op,
+        next: Option<&Op>,
+        fr: usize,
+        func: usize,
+    ) -> Result<Flow, String> {
         // `op` is borrowed from `program.functions[..].chunk.code` (lifetime `'a`, independent of
         // `self`) — the dispatch loops pass `&code[ip]`, never cloning (M-perf: `Op::clone` was ~8%
         // of executed instructions). Matching `*op` binds the `Copy` operands by value; the only
@@ -193,7 +201,49 @@ impl<'a> Vm<'a> {
             },
 
             Op::Concat(n) => {
-                let parts = self.split_off(n);
+                let mut parts = self.split_off(n);
+                // DEC-431 B — the ACCUMULATOR peephole, `s = s + x`. The bytecode is
+                // `GetLocal(k); <x>; Concat(2); SetLocal(k)`, so at this op the accumulator's
+                // `Rc` is aliased twice — the slot AND the stack copy — and `PhStr::concat` has to
+                // copy the whole string every iteration: quadratic off the JIT (492 ms at 20k lines
+                // against the JIT's 2.3 ms, measured in KNOWN_ISSUES). When the NEXT op stores back
+                // into the very slot the left operand came from, the slot's reference is about to be
+                // overwritten anyway, so it can be released NOW: take the slot (leave `Unit`), which
+                // makes the stack copy unique, and append in place — amortised O(1), the same
+                // uniqueness rule PHP's `.=` (refcount 1) and the JIT's arena slot rely on.
+                //
+                // Safe by construction: (1) the RHS is already evaluated and on the stack, so a
+                // self-reference (`s = s + s`) simply holds a third `Rc` and `append_in_place`
+                // declines — it falls through to the copying path with the right answer; (2) nothing
+                // executes between this op and the `SetLocal` that refills the slot, so the `Unit`
+                // placeholder is never observable — a two-`Str` concat cannot fault. A new `Op` was
+                // the ruled shape (`TakeLocal`); this needs none, so Invariant 3's three exhaustive
+                // matches are untouched. DEC-463 classes the fix as an implementation choice.
+                if n == 2 {
+                    if let (Some(&Op::SetLocal(slot)), [Value::Str(a), Value::Str(b)]) =
+                        (next, parts.as_slice())
+                    {
+                        let base = self.frames[fr].slot_base;
+                        let idx = self.frame_slot(base, slot);
+                        let same = matches!(
+                            (&self.stack[idx], a),
+                            (Value::Str(crate::phstr::PhStr::Heap(x)), crate::phstr::PhStr::Heap(y))
+                                if std::rc::Rc::ptr_eq(x, y)
+                        );
+                        if same {
+                            let bytes: Vec<u8> = b.as_bytes().to_vec();
+                            self.stack[idx] = Value::Unit;
+                            if let Some(Value::Str(acc)) = parts.first_mut() {
+                                if acc.append_in_place(&bytes) {
+                                    self.concat_in_place += 1;
+                                    let acc = parts.swap_remove(0);
+                                    self.stack.push(acc);
+                                    return Ok(Flow::Next);
+                                }
+                            }
+                        }
+                    }
+                }
                 // Two-`Str` fast path (`a + b`, the dominant concat shape): the single-sourced
                 // `PhStr::concat` kernel — short results stay inline, no display round-trip.
                 if let [Value::Str(a), Value::Str(b)] = parts.as_slice() {

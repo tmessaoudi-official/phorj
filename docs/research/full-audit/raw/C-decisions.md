@@ -6057,6 +6057,14 @@ immutable strings has faced this (Java's `StringBuilder`, Rust's `String::push_s
 answer, which is evidence for the `TakeLocal` shape rather than for a builder type.
 
 
+**B — BUILT 2026-09-05 (the big wave, Lane E), under DEC-463's classification as an implementation
+choice.** Not the `TakeLocal` op after all: a lookahead in `Op::Concat(2)` — when the next op is
+`SetLocal(k)` and the left operand is slot `k`'s own `Rc`, take the slot and append in place. No new
+`Op`, so Invariant 3's exhaustive matches are untouched; tree-walker deliberately unchanged. Before/after
+on `strappend` (20k lines, `--no-jit`, pinned): 425 ms → 18 ms; the JIT path unchanged; the
+in-place path proven to fire by count (`vm::tests::accumulator_append_runs_in_place_and_counts`).
+Example `examples/guide/string-accumulate.phg`. **A stays PENDING.**
+
 ## DEC-431.1 — the ratchet BLOCKED a push, and it is right to: `mapinsert` was never a WIN (2026-08-01, PENDING RULING — push held)
 
 The DEC-431 commit (`c6420f8`, docs + two bench files, **no Rust**) was blocked by the G-8 ratchet:

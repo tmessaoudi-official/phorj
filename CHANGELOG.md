@@ -8,6 +8,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **The VM's `s = s + x` accumulator is amortised O(1)** (DEC-431 B; an implementation choice per
+  DEC-463). The bytecode is `GetLocal(k); <x>; Concat(2); SetLocal(k)`, so at the `+` the accumulator
+  was referenced twice — its slot and the stack — and every append copied the whole string:
+  quadratic off the JIT. The `Concat(2)` arm now looks one op ahead: when the next op stores back into
+  the very slot the left operand came from, it takes that slot's reference (about to be overwritten
+  anyway), which makes the stack copy unique, and appends in place — the refcount-1 rule PHP's `.=`
+  and phorj's own JIT already use. No new `Op`. `bench/micro/strappend` at 20 000 lines, `--no-jit`,
+  pinned: **425 ms → 18 ms**; the JIT path is unchanged. A self-append (`s = s + s`) holds a
+  third reference and correctly declines. The fast path is proven to FIRE by count, not by wall-clock,
+  and `examples/guide/string-accumulate.phg` pins the aliasing edge cases on all three legs. The
+  tree-walker keeps its copying append on purpose (Invariant 2: the oracle stays simple).
+
+
 - **Invariant 17's 100% rule for diagnostics is CLOSED: every emitted `E-*` code now has an
   executing assertion (311/311; was 258/311 after the ratchet repair, "259/314" before it).** 53
   codes had an emit site and a `phg explain` entry but no test: the whole backed-enum family (11),

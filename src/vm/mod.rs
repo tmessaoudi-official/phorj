@@ -161,6 +161,10 @@ pub struct Vm<'a> {
     /// B). `do_return` discards a return value once the stack is empty, so it is stashed here first;
     /// [`run_main`](Vm::run_main) reads its `int` (or `0` for `Value::Unit`) as the process exit code.
     exit_value: Value,
+    /// How many `s = s + x` appends ran IN PLACE (the DEC-431 B accumulator peephole in
+    /// `Op::Concat`). A test asserts it is non-zero on the idiom — the memory rule is "prove
+    /// `hits > 0`, not wall-clock", because a fast-path that silently never fires reads green.
+    pub(crate) concat_in_place: u64,
     /// Per-site monomorphic **inline caches** for `Op::GetField`/`SetField` (M-perf S2), indexed
     /// `[func][ip]`. A site that repeatedly reads one class hits `(layout_ptr, slot)` and skips the
     /// `name → slot` hash entirely (and the name clone); a class change at the site refills it. The
@@ -246,6 +250,7 @@ impl<'a> Vm<'a> {
             handlers: Vec::new(),
             pending_throw: None,
             exit_value: Value::Unit,
+            concat_in_place: 0,
             // One cache cell per op in every function (sparse use — only field sites read it — but a
             // one-time, per-run allocation keyed directly by `ip`, so the hot path is a flat index).
             field_caches: program
@@ -315,7 +320,13 @@ impl<'a> Vm<'a> {
 
     /// Like [`run`](Vm::run), but also returns `main`'s exit code (Batch-1 B): the `int` it returned,
     /// or `0` for a `void` `main`. The CLI maps it to the process exit status.
-    pub fn run_main(mut self) -> Result<(String, i64), Diagnostic> {
+    pub fn run_main(self) -> Result<(String, i64), Diagnostic> {
+        self.run_main_counting().map(|(out, exit, _)| (out, exit))
+    }
+
+    /// [`run_main`](Vm::run_main) plus the count of in-place accumulator appends (DEC-431 B) —
+    /// for the test that proves the fast path FIRES, not merely that the answer is right.
+    pub(crate) fn run_main_counting(mut self) -> Result<(String, i64, u64), Diagnostic> {
         // Fail fast on malformed bytecode (a compiler bug) with a clean error instead of a panic
         // mid-execution — keeps the no-crash contract (EV-7). See `BytecodeProgram::validate`.
         // Bytecode-validation faults have no source line, so they surface position-less.
@@ -342,7 +353,7 @@ impl<'a> Vm<'a> {
             Err(e) if crate::chunk::exit_sentinel_code(&e.message).is_some() => {
                 let code = crate::chunk::exit_sentinel_code(&e.message).expect("guarded");
                 self.run_shutdown_handlers();
-                return Ok((self.out, code));
+                return Ok((self.out, code, self.concat_in_place));
             }
             Err(e) => {
                 // A faulting `main` is still a termination, so cleanup still runs — the same reason a
@@ -360,7 +371,7 @@ impl<'a> Vm<'a> {
         // in `run_program_main`: after `main`, while this Vm still owns both the call machinery and
         // the output buffer, so a cleanup message lands on the same stdout `main` was writing.
         self.run_shutdown_handlers();
-        Ok((self.out, exit))
+        Ok((self.out, exit, self.concat_in_place))
     }
 
     /// Invoke a single resolved top-level function `entry` with pre-built `args`, returning its return
@@ -451,7 +462,7 @@ impl<'a> Vm<'a> {
             // locate it via this function's `Chunk.lines[ip]` and surface a positioned runtime
             // `Diagnostic`. (The tree-walker can't supply a line — a deliberate backend
             // asymmetry the `agree_err` oracle tolerates: it classifies by fault body, not text.)
-            match self.exec_op(op, fr, func) {
+            match self.exec_op(op, code.get(ip + 1), fr, func) {
                 Ok(Flow::Next) => {}
                 Ok(Flow::Done) => return Ok(()),
                 Err(msg) => {

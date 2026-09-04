@@ -362,7 +362,21 @@ loop sits in a declined function. A `fallibleloop` bench is deliberately NOT add
 ~0.005 and would measure a compiler limitation rather than a feature, distorting the geomean. Recorded
 here instead of hidden — and stated so rather than silently omitted.
 
-## PERF-vm-concat-quadratic — `s = s + x` in a loop is O(n^2) off the JIT (found 2026-08-01, DEC-431)
+## PERF-vm-concat-quadratic — `s = s + x` in a loop is O(n^2) off the JIT (found 2026-08-01, DEC-431) — **VM FIXED 2026-09-05 (DEC-431 B, an implementation choice per DEC-463)**
+
+**Fixed on the VM, by a lookahead rather than a new `Op`.** At `Op::Concat(2)`, when the NEXT op is
+`SetLocal(k)` and the left operand is the very `Rc` that slot `k` holds, the slot's reference is about
+to be overwritten anyway — so the VM takes it (leaving `Unit`), which makes the stack copy unique, and
+appends in place (`PhStr::append_in_place`, the JIT's own path). Nothing executes between the two ops
+and a two-`Str` concat cannot fault, so the placeholder is never observable; a self-append (`s = s + s`)
+holds a third reference and simply declines to the copying path. Invariant 3's three exhaustive
+matches are untouched because there is no new variant. Measured on `bench/micro/strappend` at 20 000
+lines, `--no-jit`, core-pinned, on a loaded box (same box, same binary lineage, before/after):
+**425 ms → 18 ms**; the JIT path is unchanged (~1.5 ms) and the tree-walker, deliberately not
+touched (Invariant 2 — the oracle stays simple), still measures **464 ms**. Proven to FIRE, not merely
+to be fast: `vm::tests::accumulator_append_runs_in_place_and_counts` asserts ≥250 in-place appends on a
+300-line loop, and `examples/guide/string-accumulate.phg` pins the aliasing cases on all three legs.
+**Still open:** the tree-walker's quadratic append (by design, the oracle), and DEC-431 A (the JIT cliff).
 
 `PhStr::concat(a, b)` always allocates a fresh buffer and copies BOTH sides. It cannot do better as
 called: the bytecode for `body = body + x` is `GetLocal(1); Const; Concat(2); SetLocal(1)`, so at the
