@@ -36,18 +36,6 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   colliding spelling needs an underscore and `E-TYPE-CASE` refuses those first — asserted on the
   emitter directly, and documented as such rather than left to look like a live user-facing error.
 
-### Changed
-
-- **Parity recomputed (M-gap-matrix §4.20): PHP-parity ≈71% · floor ≈59% · Vision ≈72%** (from
-  §4.13's 70/57/71) — the recompute SLICE-STATE recorded as OWED at the DEC-490 close. It folds the
-  §4.15 charset and §4.17 FN-STR credits, which had each left the headline "unchanged pending step
-  3", with this span's `Time.sleep` (FN-DATE `sleep`/`usleep`), `Runtime.onShutdown` (FN-FUNC
-  `register_shutdown_function`) and `Process.run` (FN-PROC `proc_open`). `exec`/`system` are
-  deliberately NOT moved to by-design: that would shrink the denominator and lift the number without
-  shipping anything. The full 631-row §1.2 re-tally is still owed; the floor is now within 12pp of
-  the headline.
-
-
 - **The surface ratchet now measures what the compiler and server actually emit.** Three blind
   spots, found the moment a new capability shipped and the numbers did not move:
   (1) it scanned the `phg explain` catalog as if explanations were emit sites, so the catalog's
@@ -85,6 +73,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   vacuity guard so a broken slice fails loudly instead of comparing two empty sets. Sabotage-verified:
   deleting a `//!` name, decrementing a heading count and adding a bogus name each turn it red. The
   DEC-377 family reasons for the new rows are stated as that decision requires.
+
+### Changed
+
+- **Parity recomputed (M-gap-matrix §4.20): PHP-parity ≈71% · floor ≈59% · Vision ≈72%** (from
+  §4.13's 70/57/71) — the recompute SLICE-STATE recorded as OWED at the DEC-490 close. It folds the
+  §4.15 charset and §4.17 FN-STR credits, which had each left the headline "unchanged pending step
+  3", with this span's `Time.sleep` (FN-DATE `sleep`/`usleep`), `Runtime.onShutdown` (FN-FUNC
+  `register_shutdown_function`) and `Process.run` (FN-PROC `proc_open`). `exec`/`system` are
+  deliberately NOT moved to by-design: that would shrink the denominator and lift the number without
+  shipping anything. The full 631-row §1.2 re-tally is still owed; the floor is now within 12pp of
+  the headline.
+
 
 ### Added
 
