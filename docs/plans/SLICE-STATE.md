@@ -1,5 +1,22 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ▶ CURRENT CURSOR (2026-09-04 → 05) — **THE BIG WAVE is the active body of work**
+
+Developer directive, 2026-09-04: *"a very big wave … perf/lsp/editors/lift/transpile/vision … a
+continuous/autonomous very long session"*. Plan: `docs/plans/2026-09-04-big-wave.plan.md` (six
+lanes, each landed as its own green commit; its Lanes E/F are POINTERS at readiness steps 19 and 3).
+Landed so far: **Lane D** `58ed82d0` (the helper-bucket header ratcheted three ways against the
+registry — it had drifted 173-vs-187 for four months under a comment claiming it could not);
+**Lane C** `71fc9377` (every `lift_from` registration proven to FIRE end to end, `array_slice` →
+`List.slice` claimed after a 7/7 three-leg oracle check; both of the lane's starting premises were
+phantom gaps and are recorded as such). In flight: **Lane A** LSP signature help + both editors.
+Queued: **Lane B** — the surface ratchet was found measuring the WRONG things (it scanned the
+`phg explain` catalog as emit sites, saw only one of three emit forms, and counted LSP providers from
+test strings); made honest first (258/311, providers 9), then the 53 truly-unasserted codes → 311/311
+(unreachable codes are RETIRED, not fixtured); **Lane F** the parity-% recompute; **Lane E** DEC-333 perf, verdicts OWED if the box
+stays busy. The readiness-wave cursor below stays valid for everything this wave does not touch —
+time zones (step 10) remain the next readiness step after the wave.
+
 ## ▶ CURRENT CURSOR (2026-08-29) — **S3.5 SHIPPED. DEC-331 SLICE 3 IS CLOSED.**
 
 **DEC-331 D7 built: `phg serve` terminates TLS**, feature-gated `http-server-tls`. HTTPS enables iff

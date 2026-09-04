@@ -8,6 +8,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **The surface ratchet now measures what the compiler and server actually emit.** Three blind
+  spots, found the moment a new capability shipped and the numbers did not move:
+  (1) it scanned the `phg explain` catalog as if explanations were emit sites, so the catalog's
+  deliberate tombstones (`E-MODULE-UNAVAILABLE`, DEC-273) counted as "unasserted debt" no test could
+  ever pay; (2) it recognised only the standalone `"E-FOO"` form — the loader's 25 bracketed
+  `[E-FOO]` codes and the transpiler's 3 `"E-FOO: …"` prefix codes were being counted only because
+  the catalog happened to name them, and vanished the instant the catalog was excluded; (3)
+  `lsp_providers` matched `"…Provider"`, which cannot occur inside `INITIALIZE_RESULT` (every quote
+  there is `\"`), so it was counting the provider names that TESTS quoted, not what the server
+  advertised. All three fixed; the baseline is re-frozen from the honest scan. `E-VENDOR-MISSING`'s
+  explain entry — which described a live guard nothing has emitted since DEC-282/316 folded it into
+  `E-MODULE-NOT-FOUND` — is now a tombstone, and ADR 0005 no longer promises the dead code.
+
+
 - **Every registered PHP-builtin lift is now proven to FIRE**, not merely spelled. Resolution is
   arity-gated in `lift::lifter::exprs`, and a mismatch fails SILENTLY — the call stays a bare PHP
   name while the registration still greps as handled. Three builtins were checked by name
@@ -33,6 +47,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   DEC-377 family reasons for the new rows are stated as that decision requires.
 
 ### Added
+
+- **LSP signature help** (`textDocument/signatureHelp`, trigger characters `(` and `,`) — Invariant
+  17's 100% RULE names it explicitly, and it was the one named capability the server did not
+  advertise. Inside a call's parentheses the client shows the callee's signature with the argument
+  being typed marked active: your own functions (same file, or a same-package sibling in another
+  open buffer) and every `Core.*` native straight from `native::registry()`, so a new native is
+  signature-helped the moment it is registered. The parameter list is sliced from the SAME
+  signature text hover renders, so the two cannot disagree; the declaration's `/** … */` doc travels
+  with it (DEC-419). **It works while the buffer does not parse** — inside an unclosed `(` it never
+  does, so a parser-only lookup would have been silent at exactly the moment the feature is for; the
+  same-file path falls back to the `function <name>(` token sequence. Which call and which argument
+  is decided by a forward scan that skips strings (including the triple-quoted form) and comments,
+  because a `,` or `)` inside a literal would otherwise move the hint to the wrong argument of the
+  wrong call. VS Code extension `0.6.0` and the LSP4IJ guide document it in the same change
+  (DEC-181); the extension itself needs no code — both clients negotiate the capability from
+  `initialize`.
+
 
 - **`array_slice` lifts to `List.slice`** (DEC-312's inverse). Claimed after checking the two
   directions agree on every edge PHP treats specially — negative offset, negative length, over-long

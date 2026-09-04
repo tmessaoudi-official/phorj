@@ -18,6 +18,11 @@ server power the JetBrains/PhpStorm setup — see `../phpstorm/README.md`.)
   `#[…]` attributes (TextMate grammar, no server needed).
 - **Diagnostics** — type/parse errors and lints, live as you type (identical to `phg check`).
 - **Hover** — the declaration signature of the symbol under the cursor.
+- **Signature help** — inside a call's parentheses, the callee's signature with the argument being
+  typed highlighted; fires on `(` and `,`. Covers your own functions (same file, or a sibling file in
+  the package), and every `Core.*` native straight from the registry (`String.repeat("a", |` →
+  `function String.repeat(string, int): string`). Works while the buffer does not parse — which,
+  inside an unclosed `(`, is always — and carries the declaration's `/** … */` doc like hover does.
 - **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration.
 - **Completion** — top-level symbols, in-scope locals/params, and keywords; `import Core.` → importable
   module paths (Core + your own packages); `List.` / `this.` / `myVar.` → that receiver's members —
@@ -50,15 +55,15 @@ npm install          # fetches vscode-languageclient
 code .               # then press F5 → "Run Extension" to launch the dev host
 ```
 
-Open any `.phg` file in the dev host; diagnostics, hover, and go-to-definition activate automatically.
+Open any `.phg` file in the dev host; diagnostics, hover, signature help and go-to-definition activate automatically.
 
 ## Package / install locally
 
 ```sh
 npm install -g @vscode/vsce
 cd editors/vscode
-vsce package         # produces phorj-0.4.0.vsix
-code --install-extension phorj-0.4.0.vsix
+vsce package         # produces phorj-0.6.0.vsix
+code --install-extension phorj-0.6.0.vsix
 ```
 
 ## Configuration
