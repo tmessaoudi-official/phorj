@@ -6,22 +6,14 @@ use super::*;
 /// Install the graceful-shutdown signal handler (S4.2) and return the flag it flips. With the
 /// `signals` feature, SIGINT (Ctrl-C) and SIGTERM set the flag; the accept loops then stop taking new
 /// connections, drain in-flight work, and exit cleanly. Without the feature (the WASM playground), the
-/// flag is never set and the server runs until killed — verbatim pre-S4.2. `ctrlc`'s own `unsafe`
-/// signal registration is confined to that crate, so phorj's own code stays unsafe-free
-/// (`#![deny(unsafe_code)]` roots; the JIT island is the sole exception).
+/// flag is never set and the server runs until killed — verbatim pre-S4.2.
+///
+/// DEC-487: the registration itself moved to [`crate::shutdown`], because `ctrlc::set_handler` may be
+/// called only ONCE per process and `Time.sleep` is now a second interested party. Both observe the
+/// same flag, so one Ctrl-C wakes a sleeping worker AND stops the accept loop.
 #[must_use]
 pub fn install_shutdown_handler() -> Arc<AtomicBool> {
-    let flag = Arc::new(AtomicBool::new(false));
-    #[cfg(feature = "signals")]
-    {
-        let f = Arc::clone(&flag);
-        // A second Ctrl-C while draining still hard-kills (the handler only fires once; the default
-        // disposition is restored after). Errors (handler already set) are non-fatal — log and proceed.
-        if let Err(e) = ctrlc::set_handler(move || f.store(true, Ordering::SeqCst)) {
-            eprintln!("serve: could not install shutdown handler ({e}); Ctrl-C will hard-kill");
-        }
-    }
-    flag
+    crate::shutdown::flag()
 }
 
 /// The checker's reified-operand side-table (`expr span → Ty`), threaded into [`compile_with`] so the

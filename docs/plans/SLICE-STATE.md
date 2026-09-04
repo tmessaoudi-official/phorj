@@ -56,7 +56,7 @@ work; OWED at this close: the parity-% recompute (M-gap-matrix §4). History: pa
 the developer's call, asked at the end of step 1.
 
 **ORDER (ruled 17:05):** (1) harness trust — panel disposition (C6 `default_fills` P0 FIXED `53df9ef1`+`1e62f74a`; the three ungated PHP-emit paths C7/C8/F1 FIXED `06e9e975`; the LSP/check test-mode path DONE (DEC-486); the differential floor K4 DONE; DEC-459 prelude isolation BUILT; C10/F4 malformed Content-Length FIXED; the regex cluster C1–C5/C11 BUILT with REGEX-B (DEC-461, C4 deferred); the docs pass DONE (K2/K3/K5/K6/K9/K10/K14/K15, MASTER-PLAN §0.07 mirror rows); next: FREEZE and run the ONE panel round of DEC-481 over `0c982019..HEAD`); (2) readiness wave in
-leverage order — **charset BUILT 2026-09-04** (DEC-494/495 — both legs hand-rolled from one table, no crate, no ini extension); `String.foldAccents` BUILT too (step 6b, DEC-496), so DEC-468 is fully closed; next = `Time.sleep` + DEC-204; (3) DEC-333 perf. **Register rows: DEC-460 … DEC-496** (`C-decisions.md`, the
+leverage order — **charset BUILT 2026-09-04** (DEC-494/495 — both legs hand-rolled from one table, no crate, no ini extension); `String.foldAccents` BUILT too (step 6b, DEC-496), so DEC-468 is fully closed; `Time.sleep` BUILT (DEC-487, ladder DEC-497); next = `Runtime.onShutdown` (DEC-204, step 9); (3) DEC-333 perf. **Register rows: DEC-460 … DEC-497** (`C-decisions.md`, the
 2026-09-02 readiness rulings — 486 LSP/check test mode, 487 `Time.sleep`, 488 the Q22 split, 489 the small stdlib rows); MASTER-PLAN's §0 cursor is stale relative to this block until step 1's
 docs pass — this block + the two plan files' Decisions Logs are the record meanwhile (Invariant 19
 pointer, not a fork).

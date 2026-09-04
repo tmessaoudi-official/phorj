@@ -36,4 +36,31 @@ impl Transpiler {
         self.indent -= 1;
         self.line("}");
     }
+
+    /// `__phorj_sleep($ms)` (DEC-487) — the PHP half of `Time.sleep`.
+    ///
+    /// It mirrors the native's frozen-clock NO-OP by reading the SAME `__phorj_now_frozen()`
+    /// side-channel the freezable clock uses, so a program under `Time.freeze` behaves identically
+    /// on all three legs and a shipped example carrying a sleep stays instant and deterministic.
+    /// `usleep` takes MICROseconds, hence the ×1000.
+    ///
+    /// **Disclosed divergence (Invariant 14).** The native leg returns early when the process is
+    /// signalled; PHP cannot poll for SIGINT without `pcntl`, an ini extension the transpile rules
+    /// forbid, so an unfrozen `sleep` on this leg always runs to completion. Every
+    /// differential-testable program is frozen or non-signalled, so byte-identity holds for
+    /// everything the oracle can express — the gap is real, outside that set, and stated rather
+    /// than silently absorbed.
+    pub(super) fn emit_sleep_helper(&mut self) {
+        if !self.gates.uses_sleep {
+            return;
+        }
+        self.line("function __phorj_sleep($ms) {");
+        self.indent += 1;
+        self.line("if ($ms <= 0) { return null; }");
+        self.line("if (__phorj_now_frozen() !== null) { return null; }");
+        self.line("usleep($ms * 1000);");
+        self.line("return null;");
+        self.indent -= 1;
+        self.line("}");
+    }
 }

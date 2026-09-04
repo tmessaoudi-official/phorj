@@ -1949,6 +1949,11 @@ const INTERP_VM_EXPECTED_SKIPS: &[&str] = &[
     "examples/guide/logging-v2.phg",
     "examples/guide/logging.phg",
     "examples/guide/time.phg",
+    // DEC-487 `Time.sleep`. Impure for the same reason every other `Core.Time` example is (the
+    // clock natives are `pure: false`), so it is quarantined by the same rule — NOT because sleep is
+    // untested. `sleep_is_byte_identical_on_the_php_leg` below is the targeted oracle case that
+    // replaces the corpus coverage this skip removes.
+    "examples/guide/sleep.phg",
     // Feature-gated under the default features; impure (network) once `http-client` is on.
     "examples/http-client/fetch.phg",
     "examples/process/args-env.phg",
@@ -1974,6 +1979,8 @@ const PHP_ORACLE_EXPECTED_SKIPS: &[&str] = &[
     "examples/guide/logging-v2.phg",
     "examples/guide/logging.phg",
     "examples/guide/time.phg",
+    // DEC-487 — see the note in `INTERP_VM_EXPECTED_SKIPS`.
+    "examples/guide/sleep.phg",
     "examples/http-client/fetch.phg",
     "examples/process/args-env.phg",
     "examples/process/main-args.phg",
@@ -3654,6 +3661,8 @@ const TIER1_PHP: &[&str] = &[
     "strtolower",
     // core standard; the DEC-238 debug-quote escape table.
     "strtr",
+    // DEC-487 `__phorj_sleep`. ext/standard, always compiled in — NOT an ini extension.
+    "usleep",
     "strtoupper",
     "substr",
     // core standard (ext/standard, no shared extension): the DEC-331 s2 `__phorj_http_*` helpers —
@@ -5833,4 +5842,58 @@ fn a_directly_constructed_regex_value_is_validated_at_first_use_on_every_leg() {
     agree_err_php(&regex_prog(
         "var re = new Regex(\"a\", \"bogus\");\n    Output.printLine(\"{Regex.matches(re, \\\"a\\\")}\");",
     ));
+}
+
+/// DEC-487 — the targeted oracle case for `Time.sleep`, replacing the corpus coverage that
+/// `examples/guide/sleep.phg` loses by being impure-quarantined like every other `Core.Time`
+/// example.
+///
+/// The property under test is the one that can silently rot: **a frozen clock makes `sleep` a
+/// no-op on the PHP leg too.** If `__phorj_sleep` ever stops reading `__phorj_now_frozen()`, this
+/// program keeps producing identical stdout on all three legs — byte-identity would still hold —
+/// while the PHP leg quietly starts sleeping for a real hour. Only the elapsed-time assertion
+/// catches that, which is why it is here and not left to the differential's output comparison.
+#[test]
+fn sleep_is_byte_identical_and_free_under_a_frozen_clock_on_every_leg() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Time;\n\
+               import Core.Time.Duration;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+                   Time.freeze(1700000000000);\n\
+                   Time.sleep(Duration.hours(1));\n\
+                   Time.sleep(Duration.milliseconds(0));\n\
+                   Time.sleep(Duration.seconds(5).negate());\n\
+                   Output.printLine(\"awake\");\n\
+               }";
+    let t0 = std::time::Instant::now();
+    let interp = cmd_treewalk(src).expect("interp ok");
+    let vm = cmd_run(src).expect("vm ok");
+    assert_eq!(interp, vm, "interp vs VM");
+    assert_eq!(interp, "awake\n");
+    assert!(
+        t0.elapsed() < std::time::Duration::from_secs(5),
+        "a frozen clock must make sleep free on the native legs, took {:?}",
+        t0.elapsed()
+    );
+
+    if let Some(php) = php_or_gate("sleep_frozen_noop") {
+        let php_src = cli::cmd_transpile(src).expect("transpile ok");
+        assert!(
+            php_src.contains("__phorj_now_frozen()"),
+            "the emitted __phorj_sleep must consult the frozen clock, or a frozen program sleeps \
+             for real on this leg only:\n{php_src}"
+        );
+        let t1 = std::time::Instant::now();
+        let out = run_php(&php, &php_src, "sleep_frozen_noop");
+        assert_eq!(out, interp, "php vs interp\n{php_src}");
+        assert!(
+            t1.elapsed() < std::time::Duration::from_secs(5),
+            "the PHP leg slept for real under a frozen clock, took {:?}",
+            t1.elapsed()
+        );
+    }
 }

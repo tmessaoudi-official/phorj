@@ -1,0 +1,50 @@
+package Main;
+
+// DEC-487 — `Time.sleep(Duration)`. The thing you need to write a `--watch` loop, a poll loop, or
+// a retry with backoff, and the reason those could not be written before.
+//
+// Three properties are worth knowing, and this file demonstrates all three.
+//
+// 1. **A frozen clock makes `sleep` a NO-OP.** `Time.freeze` exists so that programs which read the
+//    clock stay deterministic and byte-identical across the interpreter, the VM and transpiled PHP.
+//    A `sleep` that really slept under a frozen clock would make every such program slow AND
+//    wall-clock dependent — the exact thing freezing removes. So this example runs instantly even
+//    though it asks to sleep for an hour.
+// 2. **A non-positive duration returns immediately.** `Duration.minus` can go negative, and
+//    "sleep until T" where T has already passed is a no-op, not an error.
+// 3. **It is interruptible.** On the native backends a Ctrl-C wakes a sleeping program within about
+//    50ms instead of after the full duration. That half is native-only: the transpiled PHP cannot
+//    poll for signals without the `pcntl` ini extension, which the transpile rules forbid, so an
+//    unfrozen sleep on the PHP leg always runs to completion. It is stated here rather than left to
+//    be discovered.
+import Core.Output;
+import Core.Time;
+import Core.Time.Duration;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Pin the clock. Everything after this is deterministic.
+    Time.freeze(1700000000000);
+    // An hour-long sleep under a frozen clock costs nothing at all.
+    Time.sleep(Duration.hours(1));
+    Output.printLine("an hour later, instantly");
+    // The clock did not advance either — sleeping does not move a frozen clock forward.
+    int t = Time.nowMilliseconds();
+    Output.printLine("clock={t}");
+    // A zero duration and a negative one both return at once, with no fault.
+    Time.sleep(Duration.milliseconds(0));
+    Time.sleep(Duration.seconds(5).negate());
+    Output.printLine("zero and negative are no-ops");
+    // Durations compose, so a backoff schedule is ordinary arithmetic rather than a special API.
+    Duration base = Duration.milliseconds(100);
+    Duration backoff = base.plus(base).plus(base);
+    int backoffMs = backoff.toMilliseconds();
+    Output.printLine("backoff={backoffMs}ms");
+    // Unfreeze and take one real, tiny sleep, so the example exercises the actual wait path and not
+    // only the frozen shortcut. One millisecond is below the noise floor of the test harness.
+    Time.unfreeze();
+    Time.sleep(Duration.milliseconds(1));
+    Output.printLine("slept for real");
+}

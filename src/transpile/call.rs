@@ -382,6 +382,10 @@ impl Transpiler {
                         if nat.module == "Core.Native.FileSystem" {
                             self.gates.uses_fs = true;
                         }
+                        // `Time.sleep` erases to the gated `__phorj_sleep` helper (DEC-487).
+                        if nat.module == "Core.Time" && nat.name == "sleep" {
+                            self.gates.uses_sleep = true;
+                        }
                         // `String.foldAccents` erases to the gated `__phorj_fold_accents` helper.
                         if nat.module == "Core.String" && nat.name == "foldAccents" {
                             self.gates.uses_fold_accents = true;

@@ -69,8 +69,64 @@ fn time_unfreeze(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// it is never deterministic w.r.t. the program text (unlike `Core.Random`, whose state is seeded from a
 /// constant). The PHP emission hand-rolls the same freezable clock (`__phorj_now_*`), so a *frozen*
 /// program is byte-identical across all backends.
+/// `Time.sleep(Duration)` (DEC-487) — suspend for the duration, or until the process is signalled.
+///
+/// Three properties, each of them load-bearing:
+/// * **A frozen clock makes it a NO-OP.** `Time.freeze` exists so shipped examples are
+///   deterministic; a `sleep` that really slept would make every example carrying one slow AND
+///   wall-clock dependent, which is exactly what the frozen clock removes. A frozen program's
+///   `sleep` therefore costs nothing on all three legs, and the PHP emission mirrors the check.
+/// * **It is SIGINT-interruptible**, by polling [`crate::shutdown::signalled`] in short slices
+///   rather than one long `sleep`. A `--watch` loop is the reason DEC-487 exists, and a watch loop
+///   you cannot Ctrl-C is worse than no sleep at all.
+/// * **A non-positive duration returns immediately** rather than faulting — `Duration.minus` can
+///   produce a negative, and "sleep until T" where T has passed is a no-op, not an error.
+fn time_sleep(args: &[Value], _: &mut String) -> Result<Value, String> {
+    let [d] = args else {
+        return Err("Time.sleep expects (Duration)".into());
+    };
+    let Value::Instance(inst) = d else {
+        return Err(format!(
+            "Time.sleep expects a Duration, got {}",
+            d.type_name()
+        ));
+    };
+    let Some(Value::Int(ms)) = inst.get_field("ms") else {
+        return Err("Time.sleep expects a Duration carrying an int `ms`".into());
+    };
+    if ms <= 0 || FROZEN.read().unwrap_or_else(|e| e.into_inner()).is_some() {
+        return Ok(Value::Unit);
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ms as u64);
+    // 50 ms is the responsiveness/overhead trade: a Ctrl-C is noticed within one slice, and a
+    // one-hour sleep costs 72 000 relaxed atomic loads, which is nothing.
+    let slice = std::time::Duration::from_millis(50);
+    while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
+        if crate::shutdown::signalled() {
+            return Ok(Value::Unit);
+        }
+        std::thread::sleep(left.min(slice));
+    }
+    Ok(Value::Unit)
+}
+
 pub(crate) fn time_natives() -> Vec<NativeFn> {
     vec![
+        NativeFn {
+            module: "Core.Time",
+            name: "sleep",
+            // The injected `Duration` class (`cli::preludes`, TIME_PRELUDE) as a bare `Ty::Named`,
+            // the same way `Core.Decimal` references `RoundingMode`.
+            params: vec![Ty::Named("Duration".to_string(), vec![])],
+            ret: Ty::Void,
+            pure: false,
+            eval: NativeEval::Pure(time_sleep),
+            // `sleep`/`usleep` are core PHP, but neither is a faithful lift SOURCE: PHP's `sleep`
+            // takes seconds and has no frozen-clock notion, so a lifted program would change
+            // behaviour under `Time.freeze`.
+            lift_from: &[],
+            php: |a| format!("__phorj_sleep({}->ms)", parg(a, 0)),
+        },
         NativeFn {
             module: "Core.Time",
             name: "nowMilliseconds",

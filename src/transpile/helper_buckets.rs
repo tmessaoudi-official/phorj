@@ -313,6 +313,10 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_round", 1),
     ("__phorj_round_div", 1),
     ("__phorj_round_mode", 1),
+    // DEC-487 — `Time.sleep`. Bucket 1 (semantic necessity): the naive `usleep($ms*1000)` would be
+    // WRONG under `Time.freeze`, where the native is a no-op, so a frozen example would sleep for
+    // real on this leg only and stop being byte-identical.
+    ("__phorj_sleep", 1),
     ("__phorj_sort", 2),
     ("__phorj_sort_with", 2),
     ("__phorj_str", 1),

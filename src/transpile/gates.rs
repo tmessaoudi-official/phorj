@@ -146,6 +146,11 @@ pub(in crate::transpile) struct HelperGates {
     /// exactness check + trailing-zero strip; non-terminating / zero divisor throws, matching the
     /// Rust `decimal_div_exact` fault boundary byte-for-byte).
     pub(in crate::transpile) uses_dec_div_exact: bool,
+    /// Set when `Time.sleep` is emitted (DEC-487) — defines `__phorj_sleep`, which mirrors the
+    /// native's three properties: a NO-OP under a frozen clock (so a frozen example costs nothing on
+    /// this leg either), immediate return for a non-positive duration, else `usleep`. PHP cannot
+    /// poll for SIGINT without `pcntl`, so the interruptibility half is native-only and disclosed.
+    pub(in crate::transpile) uses_sleep: bool,
     /// Set when `String.foldAccents` is emitted (DEC-468) — defines `__phorj_fold_accents`. The
     /// table is FORMATTED FROM `crate::fold_accents::FOLD` at emit time, so the native leg and the
     /// PHP leg read one source; `iconv(...,'ASCII//TRANSLIT',...)` is not an option (ini extension,

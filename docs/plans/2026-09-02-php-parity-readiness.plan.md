@@ -27,6 +27,12 @@
   provider resolves; `ServeConfig` fields nullable; `decimal` bound/fetched as TEXT on the PHP leg.
   STANDING: LSP + both editors + transpile/lift are first-class per slice; cross-language scan;
   PHP-ecosystem scan. *(Pointers.)*
+- [2026-09-04] AGREED (sleep/shutdown slice): **onShutdown handlers run at normal exit AND at
+  cooperative signal checkpoints** (`Time.sleep` returning early, serve's accept loop) — a tight
+  loop with no checkpoint still hard-kills, and that is disclosed, not hidden. **PHP leg is tier 1
+  for the testable surface with a disclosed signal gap**: `register_shutdown_function` + `usleep`,
+  no `pcntl`, no `E-TRANSPILE-*`. DEC-497. `Time.sleep` built now; `Runtime.onShutdown` split out
+  as its own step because it needs callback-invocation plumbing in both backend drivers.
 - [2026-09-04] AGREED (foldAccents slice): **U+00C0-U+017F, 190 rows, with expansions** —
   `ß`→`ss`, `æ`→`ae`, `Ĳ`→`IJ`, `þ`→`th`, case preserved not title-cased; rejected strip-only
   (leaves `Straße` unchanged) and Latin-1-only (~56 rows, silently skips Polish/Czech/Turkish).
@@ -286,17 +292,18 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 | 5 | Doc-drift repair — MILESTONES 6wk stale, FEATURES dep list + tuples rows wrong (deep sweep) | S | todo | - | docs/MILESTONES.md FEATURES.md |
 | 6 | Charset — `Encoding.decode`/`encode` + injected `Charset` enum, both legs hand-rolled from one table (DEC-468 surface, DEC-494 strategy, DEC-495 shape); `String.foldAccents` splits to step 6b | M | done | 77421c33 | src/charset.rs src/ext/encoding/* src/transpile/charset_php.rs examples/guide/charset.phg |
 | 7 | `String.foldAccents` — 190-row table U+00C0-U+017F generated from Unicode NFD, expansions ruled per character, → `__phorj_fold_accents` (DEC-468's second half, shape DEC-496) | S | done | 2b987f15 | src/fold_accents.rs src/native/registry_modules/fold.rs src/transpile/fold_php.rs examples/guide/fold-accents.phg |
-| 8 | `Time.sleep` + `Runtime.onShutdown` — must hook serve's single ctrlc registration (DEC-487, DEC-204) | M | todo | - | src/ext/time/* src/serve/handlers.rs |
-| 9 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
-| 10 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |
-| 11 | JSON — typed errors, list-vs-object, `Json.getInt` surface (A16) | M | todo | - | src/ext/json/* |
-| 12 | HTML5 parse (DEC-469) + `Core.Xml` incl. XSD + XMLDSig (DEC-480) | L | todo | - | src/ext/html/* src/ext/xml/* |
-| 13 | `Core.Net` + `Core.Mime` + read-only `Core.Imap` (DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
-| 14 | HTTP client — fakeable, cookies (DEC-266), `Core.Compress` wired in (A17, DEC-471) | L | todo | - | src/ext/http/* src/ext/compress/* |
-| 15 | Crypto — AEAD + Ed25519 + HKDF, WIDENED to RSA + ECDSA verification by DEC-492 so DEC-480's XMLDSig can ship (DEC-470) | M | todo | - | src/ext/cryptography/* |
-| 16 | Money / BigInt — decimal scale, truncation faults, `-0.000d` (A12, X2) | L | todo | - | src/value/* src/ext/decimal/* |
-| 17 | `Core.Intl` v1 + pinned currency table (DEC-484, X3) | L | todo | - | src/ext/intl/* |
-| 18 | DEC-333 perf roadmap — TypePHP benches as macro twins; string builder (§5d.1) | L | todo | - | bench/* src/jit/* |
+| 8 | `Time.sleep(Duration)` — frozen-clock no-op, non-positive returns at once, signal-interruptible via the new single ctrlc registration in `src/shutdown.rs` (DEC-487, ladder DEC-497) | M | done | PENDING | src/shutdown.rs src/native/time.rs src/transpile/fold_php.rs examples/guide/sleep.phg |
+| 9 | `Runtime.onShutdown(fn)` — the callback registry + its invocation points in both backend drivers and serve; runs at normal exit and at signal checkpoints (DEC-204, shape DEC-497) | M | todo | - | src/shutdown.rs src/native/runtime* src/cli/* |
+| 10 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
+| 11 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |
+| 12 | JSON — typed errors, list-vs-object, `Json.getInt` surface (A16) | M | todo | - | src/ext/json/* |
+| 13 | HTML5 parse (DEC-469) + `Core.Xml` incl. XSD + XMLDSig (DEC-480) | L | todo | - | src/ext/html/* src/ext/xml/* |
+| 14 | `Core.Net` + `Core.Mime` + read-only `Core.Imap` (DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
+| 15 | HTTP client — fakeable, cookies (DEC-266), `Core.Compress` wired in (A17, DEC-471) | L | todo | - | src/ext/http/* src/ext/compress/* |
+| 16 | Crypto — AEAD + Ed25519 + HKDF, WIDENED to RSA + ECDSA verification by DEC-492 so DEC-480's XMLDSig can ship (DEC-470) | M | todo | - | src/ext/cryptography/* |
+| 17 | Money / BigInt — decimal scale, truncation faults, `-0.000d` (A12, X2) | L | todo | - | src/value/* src/ext/decimal/* |
+| 18 | `Core.Intl` v1 + pinned currency table (DEC-484, X3) | L | todo | - | src/ext/intl/* |
+| 19 | DEC-333 perf roadmap — TypePHP benches as macro twins; string builder (§5d.1) | L | todo | - | bench/* src/jit/* |
 <!-- /progress-block -->
 ### Blocked
 - Nothing hard-blocked. The charset-before-consumers hazard is CLOSED by DEC-491 AND DISCHARGED — step 6
