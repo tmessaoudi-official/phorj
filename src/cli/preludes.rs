@@ -35,6 +35,32 @@ pub(super) const ROUNDING_MODE_PRELUDE: &str =
 pub(crate) const CHARSET_PRELUDE: &str = "enum Charset { Utf8(), Utf16Le(), Utf16Be(), Latin1(), \
      Latin9(), Windows1252(), Ascii() }";
 
+/// `Core.Process`'s value types (DEC-472) — injected when a program imports `Core.Process`.
+///
+/// `ProcessResult` is what `run`/`runWith` return; `ProcessOptions` carries the knobs that cannot
+/// ride on a fixed-arity native (developer-ruled 2026-09-04: `run(program, args)` for the common
+/// case, `runWith(program, args, options)` when you need more). The options class is a promoted
+/// constructor with defaults, the `Http.ServeConfig` shape, so named arguments select what you set:
+/// `new Process.ProcessOptions(timeout: 30, cwd: "/tmp")`.
+pub(super) const PROCESS_PRELUDE: &str = r#"
+import Core.Map;
+class ProcessResult {
+  constructor(public string stdout, public string stderr, public int exitCode) {}
+  // The overwhelmingly common question, so it gets a name rather than a magic comparison.
+  function succeeded() -> bool { return this.exitCode == 0; }
+}
+class ProcessOptions {
+  constructor(
+    // Seconds; 0 = wait indefinitely. A process still running at the deadline is KILLED and the
+    // call faults — see the native's doc for why that is not a ProcessResult with a sentinel code.
+    public int timeout = 0,
+    public string? cwd = null,
+    // Added to the inherited environment; a null value is not expressible, so use an empty string.
+    public Map<string, string>? env = null
+  ) {}
+}
+"#;
+
 /// True if the program imports the module `module` (e.g. `["Core", "Http"]`) either as a whole
 /// (`import Core.Http`) OR via a **member-import** of one of its types, one segment deeper
 /// (`import Core.Http.Router`). Import-redesign S2: a member-import must also pull in the injected
@@ -555,6 +581,15 @@ pub(crate) const CORE_MODULES: &[VirtualModule] = &[
         srcs: &[CHARSET_PRELUDE],
         member_gated: true,
         bare_types: &["Charset"],
+    },
+    // `Core.Process` (DEC-472) — the value types for `run`/`runWith`. `arguments` is a pure native
+    // and needs no prelude; this row exists to inject `ProcessResult`/`ProcessOptions`.
+    VirtualModule {
+        module: &["Core", "Process"],
+        qualifier: "Process",
+        srcs: &[PROCESS_PRELUDE],
+        member_gated: true,
+        bare_types: &["ProcessResult", "ProcessOptions"],
     },
     VirtualModule {
         module: &["Core", "Option"],

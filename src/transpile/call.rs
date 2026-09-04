@@ -382,6 +382,10 @@ impl Transpiler {
                         if nat.module == "Core.Native.FileSystem" {
                             self.gates.uses_fs = true;
                         }
+                        // `Process.run`/`runWith` erase to the gated `__phorj_proc_run` (DEC-472).
+                        if nat.module == "Core.Process" && matches!(nat.name, "run" | "runWith") {
+                            self.gates.uses_proc_run = true;
+                        }
                         // `String.wordWrap` erases to the gated codepoint `__phorj_wordwrap`.
                         if nat.module == "Core.String" && nat.name == "wordWrap" {
                             self.gates.uses_wordwrap = true;

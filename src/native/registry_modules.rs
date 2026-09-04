@@ -2,6 +2,7 @@
 //! one `extend` per module family; feature-gated families keep their `cfg`s). Adding a stdlib
 //! module = one line here.
 mod fold;
+mod process_run;
 mod soundex;
 mod strspan;
 mod wordwrap;
@@ -17,6 +18,8 @@ pub(super) fn extend_module_natives(registry: &mut Vec<NativeFn>) {
     // `String.wordWrap` (FN-STR) — codepoint-based, see `registry_modules/wordwrap.rs`.
     registry.extend(wordwrap::wordwrap_natives());
     // `String.soundex` (FN-STR) — PHP's phonetic key, byte-for-byte.
+    // DEC-472 — shell-free process execution.
+    registry.extend(process_run::process_run_natives());
     registry.extend(soundex::soundex_natives());
     // Four FN-STR rows: substringFromAny / countLeadingIn / increment / decrement.
     registry.extend(strspan::strspan_natives());

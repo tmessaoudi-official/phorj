@@ -30,6 +30,7 @@ mod magic_php;
 mod matches;
 mod modifiers;
 mod names;
+mod process_php;
 mod program_emit;
 mod runtime_php;
 mod runtime_php_http;

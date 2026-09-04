@@ -1964,6 +1964,10 @@ const INTERP_VM_EXPECTED_SKIPS: &[&str] = &[
     "examples/http-client/fetch.phg",
     "examples/process/args-env.phg",
     "examples/process/main-args.phg",
+    // DEC-472 `Process.run` — impure by construction (it spawns a process), quarantined like the
+    // rest of `Core.Process`. The security property and the three legs are covered by the natives'
+    // own tests and by hand-run oracle comparison, not by the corpus.
+    "examples/process/run.phg",
     "examples/random/dice.phg",
     "examples/session/counter.phg",
     "examples/web/password-verify.phg",
@@ -1992,6 +1996,8 @@ const PHP_ORACLE_EXPECTED_SKIPS: &[&str] = &[
     "examples/http-client/fetch.phg",
     "examples/process/args-env.phg",
     "examples/process/main-args.phg",
+    // DEC-472 — see the note in `INTERP_VM_EXPECTED_SKIPS`.
+    "examples/process/run.phg",
     "examples/random/dice.phg",
     "examples/session/counter.phg",
     "examples/web/password-verify.phg",
@@ -3675,6 +3681,12 @@ const TIER1_PHP: &[&str] = &[
     "strspn",
     "str_increment",
     "str_decrement",
+    // DEC-472 `__phorj_proc_run`. All ext/standard, always compiled in — no ini extension.
+    "proc_open",
+    "proc_get_status",
+    "proc_terminate",
+    "proc_close",
+    "stream_set_blocking",
     "strtr",
     // DEC-487 `__phorj_sleep`. ext/standard, always compiled in — NOT an ini extension.
     "usleep",

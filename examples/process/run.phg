@@ -1,0 +1,48 @@
+package Main;
+
+// DEC-472 — `Process.run`: running another program, WITHOUT a shell.
+//
+// There is deliberately no string form. You cannot write `Process.run("rm -rf " + dir)`, because the
+// program and its arguments are separate values and the argument vector goes to the operating system
+// directly. No shell parses it, so quoting, globbing, `;`, `&&`, backticks and `$VAR` have nowhere to
+// happen — a user-supplied string is data, never code. That is the whole reason this surface exists.
+//
+// `run(program, args)` covers the common case. `runWith(program, args, options)` adds a timeout, a
+// working directory and extra environment variables, which cannot be optional trailing arguments
+// because a native takes a fixed parameter list.
+//
+// A non-zero exit is a RESULT, not a failure: `grep` finding nothing exits 1, and only the caller
+// knows whether that is a problem. A TIMEOUT is different — the child is killed and the call faults,
+// because a killed process has no meaningful exit code and returning one would make "we gave up"
+// indistinguishable from "the program exited with that status".
+import Core.Output;
+import Core.List;
+import Core.Process;
+import Core.Process.ProcessResult;
+import Core.Process.ProcessOptions;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // stdout, stderr and the exit code all come back together.
+    ProcessResult hello = Process.run("echo", ["hello", "world"]);
+    Output.printLine("stdout={hello.stdout}exit={hello.exitCode} ok={hello.succeeded()}");
+    // A non-zero exit is data, not a fault.
+    ProcessResult no = Process.run("false", new List<string>());
+    Output.printLine("false: exit={no.exitCode} ok={no.succeeded()}");
+    // stderr is captured separately, so a diagnostic never contaminates the output you parse.
+    ProcessResult both = Process.run("sh", ["-c", "echo out; echo problem 1>&2"]);
+    Output.printLine("out={both.stdout}err={both.stderr}");
+    // A working directory, without changing this process's own.
+    ProcessResult where = Process.runWith(
+        "pwd",
+        new List<string>(),
+        new ProcessOptions(cwd: "/tmp")
+    );
+    Output.printLine("cwd={where.stdout}");
+    // The security property, shown rather than asserted: every metacharacter below is LITERAL text
+    // in a single argument. Under a shell this line would redirect, chain and delete.
+    ProcessResult literal = Process.run("echo", ["a > b ; rm -rf / && whoami | cat $HOME"]);
+    Output.printLine("literal={literal.stdout}");
+}

@@ -279,6 +279,10 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_option_to_nullable", 1),
     ("__phorj_parse_float", 1),
     ("__phorj_parse_int", 1),
+    // DEC-472 — `Process.run`. Bucket 1 (semantic necessity): PHP's `exec`/`shell_exec`/`system`
+    // all take a SHELL STRING, exactly the form the ruling refuses. Only `proc_open`'s ARRAY form
+    // passes argv without a shell, and the timeout needs a poll loop that drains both pipes.
+    ("__phorj_proc_run", 1),
     ("__phorj_range", 2),
     ("__phorj_reflect_of", 1),
     ("__phorj_regex_check", 2),
