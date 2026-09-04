@@ -1365,3 +1365,69 @@ breaking, blast radius measured), `decodeInto<T>`, decimal-preserving numbers, a
 the existing `parseLines`.
 
 Recorded because A16 reads as five missing things and is four.
+
+### 4.20 Recompute at the big wave (2026-09-05) — the OWED DEC-490 close, folded with §4.15/§4.17
+
+**Why now.** SLICE-STATE recorded a parity-% recompute OWED at the DEC-490 gate close (2026-09-03);
+§4.15 and §4.17 each landed a credit and deliberately left the headline "unchanged pending step 3".
+This section banks those three deltas together, additively on §4.13's arithmetic, with the same
+method §4.16 had to learn: the live registry first, then the §4.x credit history, then the row.
+
+**Span:** 2026-09-04 → 2026-09-05 (HEAD at the big wave's Lane B). 33+ commits: 14 docs, 10 feat,
+7 fix, 1 refactor, 1 chore — plus the wave's own commits (`58ed82d0`, `71fc9377`, `39ec01a7`,
+`3a44a264`, and Lane B).
+
+**Row flips credited [Verified: shipped, gate-green, example-covered; the §4.x history checked for a
+prior credit — there is none for any of these]:**
+
+| # | area | tier | credit | note |
+|---|---|---|---|---|
+| 1 | FN-MB — `mb_convert_encoding` (§4.15) | T2 | +1 C | `Encoding.decode`/`encode` over six charsets, both legs hand-rolled (DEC-494/495) |
+| 2 | FN-ICONV — the 2 GP conversion rows (§4.15) | T3 | +2 C | same feature, `iconv()`'s core use |
+| 3 | FN-STR — `wordwrap`, `soundex`, `strpbrk`, `strspn`, `str_increment`, `str_decrement` (§4.17 addendum) | T1 | +6 C | 39 → 45 of 93; each oracle-captured before the port |
+| 4 | FN-DATE — `sleep` / `usleep` (GU → C) | T1 | +2 C | `Time.sleep(Duration)` (DEC-487) covers both granularities; frozen-clock no-op is beyond-PHP and scores nothing extra |
+| 5 | FN-FUNC — `register_shutdown_function` (GU → C) | T1 | +1 C | `Runtime.onShutdown(fn)` (DEC-204); transpiles to the core function itself |
+| 6 | FN-PROC — `proc_open` (GU → C) | T2 | +1 C | `Process.run` / `runWith` (DEC-472), `proc_open`'s ARRAY form on the PHP leg |
+
+**Deliberately NOT credited, named so nobody credits them later by inference:**
+- **FN-PROC `exec` / `system` / `shell_exec`.** DEC-472 refuses the shell-string form by ruling. The
+  honest verdict for those rows is GD (by design), which would REMOVE them from the denominator and
+  lift the number without shipping anything — exactly the inflation §4.14 warns about. They stay GU
+  until the owed full §1.2 re-pass rules on the row class as a whole.
+- **`String.foldAccents`** — programme, not parity (the §4.15 addendum stands).
+- **`Runtime.isShuttingDown()`** — the cooperating half of DEC-204; PHP has no counterpart without
+  `pcntl` (forbidden ini extension), so it is beyond-PHP.
+- **`#[Config]` memoization + diagnostics (DEC-457/473/474), `array_slice` lift, the lift and
+  helper-header ratchets, LSP signature help, the surface-ratchet repair** — programme/tooling, so
+  they move Vision's 0.30 leg, not the FN matrix.
+- **The 55 → 53 → 0 diagnostic-coverage close (Lane B)** — enforcement, no parity row.
+
+**Arithmetic (additive on §4.13 — T1 179.5/303, T2 62/140, T3 16/75; SYN 110/129; RT 13.5/18):**
+- T1: 179.5 + 6 (FN-STR) + 2 (FN-DATE) + 1 (FN-FUNC) = **188.5 / 303**
+- T2: 62 + 1 (FN-MB) + 1 (FN-PROC) = **64 / 140**
+- T3: 16 + 2 (FN-ICONV) = **18 / 75**
+- FN usage-weighted = (3×188.5 + 2×64 + 1×18)/1264 = (565.5 + 128 + 18)/1264 = 711.5/1264 = **56.3%** (was 53.7%)
+- SYN **85.3%**, RT **75.0%** — unchanged: no syntax or runtime-model row moved this span
+- **PHP-parity = 0.35×85.3 + 0.40×56.3 + 0.25×75.0 = 29.9 + 22.5 + 18.75 ≈ 71%** (was ≈70)
+- Raw floor: FN raw 253 + 13 = 266; (110 + 266 + 13.5)/665 = 389.5/665 ≈ **59%** (was ≈57)
+
+**Vision %** — programme deltas on §4.13's mean 72.4: compile-time config hardening (DEC-457/473/474)
+**+0.5**; the editor bar (signature help — the last capability Invariant 17 names by name — plus the
+surface ratchet now measuring what the server actually advertises) **+0.5**; the enforcement floor (lift
+registrations proven to fire, the helper header ratcheted, the diagnostic-coverage close) **+0.5**.
+New mean = **73.9**. **Vision = 0.70×71.1 + 0.30×73.9 = 49.8 + 22.2 ≈ 72%** (was ≈71).
+
+**Grade, per Rule 18:**
+- Row flips 1–6 — **[Verified]**: each shipped, gate-green, with an example under `examples/` and a
+  differential or oracle-capture record; commits named in CHANGELOG.
+- Tier placements — **[Inferred]** from §4.3's ruled tiering (FUNC and DATE are ×3 by that list, PROC
+  and MB ×2, ICONV ×1); nothing was promoted.
+- Headline percentages — **[Inferred]**: an additive delta on the ratified 35/40/25 model, not a
+  re-tally.
+- Vision milestone bumps — **[Speculative]**: judgement, as in every prior recompute, and kept to
+  half-points.
+- **STILL OWED: the full 631-row §1.2 re-tally** (readiness step 3's second half — 4 of ~20 groups
+  mapped since §4.13). The floor is now within **12pp** of the headline (13 at §4.13, 17 at §4.9):
+  the model keeps converting weighted credit into real credit.
+
+**The number:** **PHP-parity ≈ 71% · floor ≈ 59% · Vision ≈ 72%** (from §4.13's 70/57/71).

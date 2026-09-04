@@ -291,7 +291,7 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 |---|------|------|-------|----------| ------- |
 | 1 | Harness trust — panel rounds 3+4 disposed, Slice-3 gate CLOSED — `docs(register): DEC-490 — the Slice-3 milestone gate is CLOSED` | L | done | 4c7bbc53 | docs/plans/* src/loader/* src/cli/* src/serve/* |
 | 2 | REGEX-B — `Regex.compileBacktracking` on fancy-regex, linear reject list (DEC-461) | L | done | 1241bdd8 | src/ext/regex/* tests/regex* |
-| 3 | Parity-% recompute — M-gap-matrix §4 (OWED at the DEC-490 close; last recompute §4.12, 2026-07-30) | S | todo | - | docs/research/full-audit/raw/M-gap-matrix.md |
+| 3 | Parity-% recompute — M-gap-matrix §4.20 (the OWED DEC-490 close; ≈71/59/72; the full §1.2 re-tally is its still-open second half) | S | doing | - | docs/research/full-audit/raw/M-gap-matrix.md |
 | 4 | CD-31 / K8 residue — the PIPE rewriter's `walk.rs` made total over `Item` and `Expr`; removing the catch-alls made the compiler name three hidden variants; added to the DEC-356 anti-regrowth ratchet | M | done | 435fd7c7 | src/checker/rewrite_pipe/walk.rs src/ast/leaves.rs |
 | 5 | Doc-drift repair — FEATURES' dependency list named 11 of 15 while claiming "nothing else"; fixed and RATCHETED against `Cargo.toml` by `tests/dependency_claims.rs` | S | done | 3a941004 | FEATURES.md tests/dependency_claims.rs |
 | 6 | Charset — `Encoding.decode`/`encode` + injected `Charset` enum, both legs hand-rolled from one table (DEC-468 surface, DEC-494 strategy, DEC-495 shape); `String.foldAccents` splits to step 6b | M | done | 77421c33 | src/charset.rs src/ext/encoding/* src/transpile/charset_php.rs examples/guide/charset.phg |
