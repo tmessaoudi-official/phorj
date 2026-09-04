@@ -121,8 +121,13 @@ fn front_end_diagnostics_agrees_with_check() {
 
     // MULTIPLICITY gate: two unresolved config parameters must surface as TWO diagnostics on the LSP
     // path, not one. This is the DEC-252 property the boolean loop above structurally cannot check.
+    // The program declares a provider for an UNRELATED type `C`, which is what makes it a config
+    // entry at all: DEC-474 (as narrowed 2026-09-04) declines candidacy when a program declares NO
+    // `#[Config]` provider, so without `C` this entry would report `E-ENTRY-SIG` and the
+    // multiplicity property would have nothing to measure.
     let multi = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; \
-                 import Core.Runtime.Config; class A { } class B { } \
+                 import Core.Runtime.Config; class A { } class B { } class C { } \
+                 #[Config] function c(): C { return new C(); } \
                  #[Entry(kind: EntryKind.Cli)] function main(A a, B b) -> void { }";
     let prog = lex_parse(multi).expect("parse");
     assert_eq!(

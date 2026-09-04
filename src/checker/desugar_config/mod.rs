@@ -26,11 +26,18 @@
 //! (`void`/`int`/none) is a config-entry candidate; a signature that is not that shape at all (e.g. a
 //! non-CLI return) keeps its ordinary `E-ENTRY-SIG`.
 //!
-//! ⚠ NOT a filter on the parameter TYPES: since Part B any multi-parameter CLI-return entry is a
-//! candidate, so `main(int argc, string argv)` — a plain signature mistake — now reports
-//! `E-CONFIG-MISSING` per parameter instead of the `E-ENTRY-SIG` that names the valid shapes. That
-//! diagnostic-quality regression is real, is NOT self-rulable (every obvious fix deletes something
-//! that works), and is recorded as **DEC-455.6, PENDING a developer ruling**.
+//! NOT a filter on the parameter TYPES: since Part B any multi-parameter CLI-return entry is a
+//! candidate. That once meant `main(int argc, string argv)` — a plain signature mistake — reported
+//! `E-CONFIG-MISSING` per parameter, advising the developer to "declare
+//! `#[Config] function appConfig() -> int`", which cannot be right.
+//!
+//! **DEC-474 closed it by candidacy, not by type filtering** (the fix that deletes nothing that
+//! works): an entry where NO parameter resolves to a provider is declined as a config entry, its
+//! buffered diagnostics are dropped, and the ordinary `E-ENTRY-SIG` names the valid shapes. With at
+//! least ONE resolvable provider the intent is clearly config injection, so the per-parameter
+//! `E-CONFIG-MISSING` stays — that half is the accurate message and is unchanged. Scalar providers
+//! remain legal: a `#[Config]` returning `int` still registers, so `main(int n)` resolves when one
+//! exists.
 //!
 //! Provider rules (each `E-CONFIG-SIG` unless noted): zero parameters; a concrete named return type
 //! (not `void`); top-level function only (`E-CONFIG-TARGET` on a method); at most one provider per
@@ -170,10 +177,13 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
         // is reported, not just the first — a two-param entry with neither provider declared must not
         // cost the developer two compiles to learn the second name.
         let mut resolved: Vec<&String> = Vec::with_capacity(params.len());
+        // DEC-474 — buffer the per-parameter misses instead of reporting them immediately, because
+        // whether they are the RIGHT diagnostic depends on how many parameters resolved overall.
+        let mut missing: Vec<Diagnostic> = Vec::new();
         for (ty_name, span) in &params {
             match providers.get(leaf(ty_name)) {
                 Some(provider) => resolved.push(provider),
-                None => errs.push(err(
+                None => missing.push(err(
                     *span,
                     format!(
                         "entry takes `{ty_name}` but no `#[Config]` provider returns `{ty_name}`"
@@ -186,8 +196,24 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
                 )),
             }
         }
-        if resolved.len() != params.len() {
-            continue; // errors already recorded; leave the signature intact for the diagnostic
+        // DEC-474, NARROWED by the developer 2026-09-04. Part B widened candidacy to any
+        // multi-parameter CLI-return entry, so `main(int argc, string argv)` — a plain signature
+        // mistake — was told per parameter to "declare `#[Config] function appConfig() -> int`",
+        // advice that cannot be right. Candidacy is declined for it, the buffered diagnostics are
+        // dropped, and the ordinary `E-ENTRY-SIG` names the shapes an entry may actually have.
+        //
+        // The gate is "the program declares NO providers", NOT DEC-474's literal "no parameter
+        // resolves". The literal rule also swallowed the commonest config mistake: a single
+        // `main(AppConfig config)` whose provider return type is typo'd would report a SIGNATURE
+        // error and never mention `#[Config]`. Once a program declares any provider the developer has
+        // demonstrably opted into config injection, so an unresolvable parameter keeps the accurate
+        // `E-CONFIG-MISSING` and names the type.
+        if providers.is_empty() {
+            continue;
+        }
+        if !missing.is_empty() {
+            errs.extend(missing);
+            continue; // leave the signature intact for the diagnostic
         }
         // Inject in DECLARATION ORDER. The providers are ordinary calls, so their order is observable
         // (a provider may print, or construct in a sequence the PHP leg must match) — splicing the

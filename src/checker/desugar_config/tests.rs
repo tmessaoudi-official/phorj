@@ -142,8 +142,12 @@ fn injects_every_param_in_declaration_order() {
 /// provider declared must not make the developer recompile twice to see the second name.
 #[test]
 fn every_missing_provider_is_reported() {
+    // A provider for an UNRELATED type, so the program has opted into config injection (DEC-474 as
+    // narrowed) and the per-parameter diagnostics are the accurate report rather than a signature
+    // complaint. Without it the entry is declined and this test would assert on an empty list.
     let src = format!(
-        "{BASE}class AppSettings {{ }}\n\
+        "{BASE}class AppSettings {{ }}\nclass Other {{ }}\n\
+         #[Config] function other(): Other {{ return new Other(); }}\n\
          #[Entry(kind: EntryKind.Cli)] function main(AppConfig cfg, AppSettings app): void {{ }}\n"
     );
     // Assert the MESSAGES and SPANS, not just the codes: a mutant that reported `params[0]` twice
@@ -208,14 +212,18 @@ fn a_generic_config_type_still_resolves() {
 /// endorsement. If DEC-455.6 rules for option (a) or (b), this test changes with it.
 #[test]
 fn a_multi_param_entry_of_non_provider_types_reports_config_missing() {
+    // With a provider present the program has opted into config injection, so primitive parameters
+    // that resolve to nothing are reported per parameter (DEC-474 as narrowed). The no-provider
+    // case is the opposite and is covered by `an_entry_with_no_resolvable_provider_is_left_for_e_entry_sig`.
     let src = format!(
-        "{BASE}#[Entry(kind: EntryKind.Cli)] function main(int argc, string argv): void {{ }}\n"
+        "{BASE}class Other {{ }}\n#[Config] function other(): Other {{ return new Other(); }}\n\
+         #[Entry(kind: EntryKind.Cli)] function main(int argc, string argv): void {{ }}\n"
     );
     let ds = run_diags(&src);
     assert_eq!(
         ds.iter().map(|(c, ..)| c.as_str()).collect::<Vec<_>>(),
         vec!["E-CONFIG-MISSING", "E-CONFIG-MISSING"],
-        "DEC-455.6: current behaviour is per-parameter E-CONFIG-MISSING, not E-ENTRY-SIG: {ds:?}"
+        "a program WITH providers reports per parameter: {ds:?}"
     );
     assert!(
         ds[0].3.contains("`int`") && ds[1].3.contains("`string`"),
@@ -225,8 +233,12 @@ fn a_multi_param_entry_of_non_provider_types_reports_config_missing() {
 
 #[test]
 fn missing_provider_is_e_config_missing() {
+    // The case DEC-474's narrowing exists to preserve: a provider IS declared, but for another
+    // type — the classic typo'd return type. This must still name `AppConfig`, not complain about
+    // the entry signature.
     let src = format!(
-        "{BASE}#[Entry(kind: EntryKind.Cli)] function main(AppConfig config): void {{ }}\n"
+        "{BASE}class Other {{ }}\n#[Config] function other(): Other {{ return new Other(); }}\n\
+         #[Entry(kind: EntryKind.Cli)] function main(AppConfig config): void {{ }}\n"
     );
     assert_eq!(run(&src).unwrap_err(), vec!["E-CONFIG-MISSING"]);
 }
@@ -390,4 +402,68 @@ class AppConfig { constructor(public int port) {} }
         inits[2].1, "ref a",
         "the third aliases the FIRST, not the second"
     );
+}
+
+// ── DEC-474 — decline candidacy when nothing resolves ──────────────────────────────────────────
+
+/// The regression DEC-474 closes: a plain signature mistake, in a program with no `#[Config]` at
+/// all, used to be told per parameter to declare a provider returning `int`. This pass must now
+/// leave it entirely alone so the downstream `E-ENTRY-SIG` can name the shapes an entry may have.
+#[test]
+fn an_entry_with_no_resolvable_provider_is_left_for_e_entry_sig() {
+    let src = r#"
+#[Entry] function main(int argc, string argv) -> void { }
+"#;
+    let prog =
+        run(src).expect("desugar must report NOTHING here — E-ENTRY-SIG is downstream's job");
+    // …and it must leave the signature intact, since the downstream diagnostic describes it.
+    let f = prog
+        .items
+        .iter()
+        .find_map(|it| match it {
+            crate::ast::Item::Function(f) if f.name == "main" => Some(f),
+            _ => None,
+        })
+        .expect("main survives");
+    assert_eq!(f.params.len(), 2, "the parameters must not be consumed");
+    assert!(
+        f.body.is_empty(),
+        "nothing may be injected into a declined candidate"
+    );
+}
+
+/// The other half, deliberately unchanged: with at least ONE resolvable provider the intent IS
+/// config injection, so an unresolvable parameter still gets the accurate `E-CONFIG-MISSING`.
+#[test]
+fn one_resolvable_provider_keeps_e_config_missing_for_the_rest() {
+    let src = r#"
+class AppConfig { constructor(public int port) {} }
+#[Config] function appConfig() -> AppConfig { return new AppConfig(1); }
+#[Entry] function main(AppConfig a, int b) -> void { }
+"#;
+    assert_eq!(run(src).unwrap_err(), vec!["E-CONFIG-MISSING"]);
+}
+
+/// Scalar providers stay legal — the fix is by CANDIDACY, not by filtering parameter types, so a
+/// `#[Config]` returning `int` still resolves an `int` parameter.
+#[test]
+fn a_scalar_provider_still_resolves_a_scalar_parameter() {
+    let src = r#"
+#[Config] function port() -> int { return 8080; }
+#[Entry] function main(int p) -> void { }
+"#;
+    let prog = run(src).expect("a scalar provider is legal");
+    let f = prog
+        .items
+        .iter()
+        .find_map(|it| match it {
+            crate::ast::Item::Function(f) if f.name == "main" => Some(f),
+            _ => None,
+        })
+        .expect("main survives");
+    assert!(
+        f.params.is_empty(),
+        "the parameter is injected, not left declared"
+    );
+    assert_eq!(f.body.len(), 1, "one injected declaration");
 }
