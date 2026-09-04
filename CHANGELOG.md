@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `__phorj_*` helper header is now RATCHETED against the registry**, not merely written beside
+  it. `src/transpile/helper_buckets.rs` declared 68 + 105 = 173 helpers while `HELPER_BUCKETS` held
+  71 + 116 = 187, with seven names absent from the `//!` lists (`cs_decode`, `cs_encode`, `cs_name`,
+  `fold_accents`, `sleep`, `wordwrap`, `proc_run`) — and the doc comment on the existing test claimed
+  the count "cannot drift again" while nothing checked it. It could, and had, for four months. The
+  new `the_module_header_matches_the_registry` asserts THREE ways per bucket — the count declared in
+  the heading, the length of the name list under it, and the registry — plus the grand total, with a
+  vacuity guard so a broken slice fails loudly instead of comparing two empty sets. Sabotage-verified:
+  deleting a `//!` name, decrementing a heading count and adding a bogus name each turn it red. The
+  DEC-377 family reasons for the new rows are stated as that decision requires.
+
 ### Added
 
 - **`Runtime.onShutdown(fn)` + `Runtime.isShuttingDown()`** (DEC-204; shape DEC-497, query DEC-498).
