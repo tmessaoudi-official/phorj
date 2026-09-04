@@ -339,6 +339,17 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
   `#[NoDiscard]`, `value class`, sized-ints, coverage/mutation, `Json.getInt` surface).
 
 ### Needs research
+- **Step 10 tz: crate vs generated table is OPEN, and the measurements are here so nobody re-takes
+  them.** DEC-466 says "the IANA database ships as a versioned table (tz crate per DEC-247)", but
+  DEC-499 now requires the SAME table to be emitted into PHP, which is a generator either way. This
+  box's system tzdata is **version 2026c** [Verified: `/usr/share/zoneinfo/tzdata.zi` line 1], and a
+  full-history TZif parse gives **662 transitions across six representative zones** — Europe/Paris
+  184, America/New_York 236, Asia/Tokyo 9, UTC 0, Australia/Sydney 142, America/Sao_Paulo 91. So a
+  generated table is ~700 lines for six zones, which breaks Invariant 13's 500-line hard cap in one
+  file and needs a per-region split and/or a bounded year range (1970..2038 cuts it sharply). The
+  open question for the developer: admit a 16th crate as DEC-466 says, or generate a pinned table
+  from TZif exactly as DEC-494 generated the charset tables and DEC-496 generated the fold table
+  from Unicode NFD — the two most recent rulings both chose "generate, do not admit".
 - **Lifting charset conversion is OWED and deliberately not built** (Invariant 17 names lift a
   same-change surface, so this is a disclosure, not an oversight). `Encoding.decode`/`encode` ship
   with `lift_from: &[]`, matching `base64Decode`/`hexDecode` next to them. Lifting
