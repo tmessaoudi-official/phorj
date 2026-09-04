@@ -1348,3 +1348,20 @@ row?) before any code.
 
 **So FN-STR's cheap headroom is exhausted at 45.** The remaining three are one C-source-reading task,
 one larger C-source-reading task, and one adjudication.
+
+### 4.19 A16 (JSON) — one of its five parts is ALREADY satisfied
+
+Checked with the corrected method (read the live registry, then the delta history). `Core.Json` ships
+five members — `parse`, `parseLines`, `stringify`, `stringifyLines`, `stringifyPretty` — and the
+injected enum is `Json { Null, Bool, Int, Float, String, Array(List<Json>), Object(Map<string, Json>) }`.
+
+**"list-vs-object distinction" is DONE.** `Array` and `Object` are separate variants, so a `match`
+already tells a JSON list from a JSON object — the `array_is_list` problem A16 names does not exist
+here. `Int` and `Float` are separate too, so integer-vs-float is preserved (full DECIMAL preservation
+is not — `decimal` is not a `Json` variant, and that part stays open).
+
+Still open, and each needs work rather than a re-read: the typed parse error (RULED as DEC-503,
+breaking, blast radius measured), `decodeInto<T>`, decimal-preserving numbers, and streaming beyond
+the existing `parseLines`.
+
+Recorded because A16 reads as five missing things and is four.

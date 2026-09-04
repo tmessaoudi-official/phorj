@@ -300,7 +300,7 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 | 9 | `Runtime.onShutdown(fn)` — the registry + root-frame drain in BOTH backends and on `Runtime.exit`, plus `Runtime.isShuttingDown()` as the cooperating half (DEC-204, shape DEC-497, query DEC-498) | L | done | 32bc87a6 | src/shutdown.rs src/native/runtime.rs src/interpreter/mod.rs src/vm/mod.rs src/transpile/expr.rs examples/guide/on-shutdown.phg |
 | 10 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
 | 11 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |
-| 12 | JSON — typed errors, list-vs-object, `Json.getInt` surface (A16) | M | todo | - | src/ext/json/* |
+| 12 | JSON — `parse` to `Result<Json, JsonError>` (DEC-503, BREAKING), `decodeInto<T>`, decimal-preserving numbers; list-vs-object is ALREADY satisfied (A16) | L | todo | - | src/ext/json/* src/checker/desugar_db.rs src/cli/http_request_prelude.rs |
 | 13 | HTML5 parse (DEC-469) + `Core.Xml` incl. XSD + XMLDSig (DEC-480) | L | todo | - | src/ext/html/* src/ext/xml/* |
 | 14 | `Core.Net` + `Core.Mime` + read-only `Core.Imap` (DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
 | 15 | HTTP client — fakeable, cookies (DEC-266), `Core.Compress` wired in (A17, DEC-471) | L | todo | - | src/ext/http/* src/ext/compress/* |
