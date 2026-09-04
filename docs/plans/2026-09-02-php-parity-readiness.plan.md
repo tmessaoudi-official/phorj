@@ -279,7 +279,7 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 | 3 | Parity-% recompute — M-gap-matrix §4 (OWED at the DEC-490 close; last recompute §4.12, 2026-07-30) | S | todo | - | docs/research/full-audit/raw/M-gap-matrix.md |
 | 4 | CD-31 / K8 residue — 4 rewriter catch-alls still open after gate close (deep sweep) | M | todo | - | src/checker/rewrite_pipe/walk.rs src/checker/qualify_variants.rs src/checker/rewrite_new.rs src/cli/rewrite_new.rs |
 | 5 | Doc-drift repair — MILESTONES 6wk stale, FEATURES dep list + tuples rows wrong (deep sweep) | S | todo | - | docs/MILESTONES.md FEATURES.md |
-| 6 | Charset — `Encoding.decode`/`encode` + injected `Charset` enum, both legs hand-rolled from one table (DEC-468 surface, DEC-494 strategy, DEC-495 shape); `String.foldAccents` splits to step 6b | M | done | - | src/value/charset.rs src/ext/encoding/* src/transpile/runtime_php.rs examples/guide/charset.phg |
+| 6 | Charset — `Encoding.decode`/`encode` + injected `Charset` enum, both legs hand-rolled from one table (DEC-468 surface, DEC-494 strategy, DEC-495 shape); `String.foldAccents` splits to step 6b | M | done | 77421c33 | src/value/charset.rs src/ext/encoding/* src/transpile/runtime_php.rs examples/guide/charset.phg |
 | 6b | `String.foldAccents` — pure accent-folding table → `__phorj_fold_accents`, transpilable (the second half of DEC-468) | S | todo | - | src/value/charset.rs src/native/string* |
 | 7 | `Time.sleep` + `Runtime.onShutdown` — must hook serve's single ctrlc registration (DEC-487, DEC-204) | M | todo | - | src/ext/time/* src/serve/handlers.rs |
 | 8 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
@@ -310,6 +310,13 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
   `#[NoDiscard]`, `value class`, sized-ints, coverage/mutation, `Json.getInt` surface).
 
 ### Needs research
+- **Lifting charset conversion is OWED and deliberately not built** (Invariant 17 names lift a
+  same-change surface, so this is a disclosure, not an oversight). `Encoding.decode`/`encode` ship
+  with `lift_from: &[]`, matching `base64Decode`/`hexDecode` next to them. Lifting
+  `mb_convert_encoding($s, $to, $from)` needs a PHP-string → `Charset`-variant map (`'Windows-1252'`
+  → `new Charset.Windows1252()`, plus the aliases `CP1252`/`ISO-8859-1`/`latin1`), and an unmapped
+  or runtime-valued charset argument has no faithful lift at all. Scope it with the `Core.Mime`
+  slice (step 12), which needs the same alias table for RFC 2047.
 - ~~Charset ordering~~ — **RULED 2026-09-03 (DEC-491)**: charset is hoisted to the front of the unbuilt
   work (step 6), so `Core.Net`/`Mime`/`Imap`, HTML/XML and the HTTP client all import one `Charset`
   rather than each defining its own.
