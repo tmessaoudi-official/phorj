@@ -131,11 +131,17 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 
 ## Project qualities
 
-- **Std-first with a short, vetted, feature-gated dependency list** — `argon2` (Argon2id),
-  `regex` + `fancy-regex` (`Core.Regex`: the linear engine and the opt-in backtracking engine, DEC-461), `ctrlc` (signals), `corosensei` (green threads), `rusqlite`/`postgres`/
-  `mysql` (Core.Database drivers), `lettre` (Core.Mail SMTP), `rustls`+`webpki-roots` (TLS for
-  HttpClient/Mail); nothing else (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
+- **Std-first with a short, vetted, feature-gated dependency list — 15 crates, all of them named
+  here** — `argon2` (Argon2id), `regex` + `fancy-regex` (`Core.Regex`: the linear engine and the
+  opt-in backtracking engine, DEC-461), `unicode-segmentation` (UAX #29 grapheme clusters, DEC-256),
+  `ctrlc` (signals), `corosensei` (green threads), `rusqlite`/`postgres`/`mysql` (Core.Database
+  drivers), `lettre` (Core.Mail SMTP), `rustls`+`webpki-roots` (TLS for HttpClient/Mail/serve), and
+  `cranelift` + `cranelift-jit` + `cranelift-module` (native codegen for the JIT); nothing else (see
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
   `docs/specs/UNIFIED-SPEC.md#external-dependency-policy` — every admission is register-recorded).
+  This list is checked against `Cargo.toml` by `every_admitted_crate_is_named_in_features_md`
+  (`tests/dependency_claims.rs`): it previously named eleven while claiming "nothing else", which is
+  precisely the understated-dependency claim the policy says must not be repeated.
 - **No `unsafe` outside one audited island** — `#![deny(unsafe_code)]` on both crate roots; the
   JIT's audited `unsafe` (confined to `src/jit/`) is the sole exception.
 - **Never panics on input** — adversarial source *and* adversarial binaries are handled cleanly
