@@ -192,24 +192,40 @@ pub fn desugar_config(program: Program) -> Result<Program, Vec<Diagnostic>> {
         // Inject in DECLARATION ORDER. The providers are ordinary calls, so their order is observable
         // (a provider may print, or construct in a sequence the PHP leg must match) — splicing the
         // whole block at the front preserves it, where a loop of `insert(0, …)` would reverse it.
-        let decls: Vec<Stmt> = f
-            .params
-            .drain(..)
-            .zip(resolved)
-            .zip(params.iter().map(|(_, span)| *span))
-            .map(|((p, provider), span)| Stmt::VarDecl {
+        //
+        // DEC-473 — MEMOIZE PER ENTRY: one type, one instance. An entry declaring the same config
+        // type twice (`main(AppConfig a, AppConfig b)`) used to emit two provider calls, so a
+        // provider that reads a file, prints, or allocates ran TWICE and the two parameters held
+        // DIFFERENT instances — observable both in output and in identity. The second and later
+        // parameters of a type now bind to the FIRST one's variable instead of re-calling.
+        let mut seen: BTreeMap<String, String> = BTreeMap::new();
+        let mut decls: Vec<Stmt> = Vec::with_capacity(f.params.len());
+        for ((p, provider), (ty_name, span)) in
+            f.params.drain(..).zip(resolved).zip(params.iter().cloned())
+        {
+            let key = leaf(&ty_name).to_string();
+            let init = match seen.get(&key) {
+                // Binding to the first parameter's NAME (not re-calling) is what makes the two
+                // parameters the same instance rather than two equal ones.
+                Some(first) => Expr::Ident(first.clone(), span),
+                None => {
+                    seen.insert(key, p.name.clone());
+                    Expr::Call {
+                        callee: Box::new(Expr::Ident(provider.clone(), span)),
+                        args: Vec::new(),
+                        type_args: Vec::new(),
+                        span,
+                    }
+                }
+            };
+            decls.push(Stmt::VarDecl {
                 ty: p.ty,
                 name: p.name,
-                init: Expr::Call {
-                    callee: Box::new(Expr::Ident(provider.clone(), span)),
-                    args: Vec::new(),
-                    type_args: Vec::new(),
-                    span,
-                },
+                init,
                 mutable: false,
                 span,
-            })
-            .collect();
+            });
+        }
         f.body.splice(0..0, decls);
     }
 
