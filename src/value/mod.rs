@@ -14,12 +14,6 @@ use std::hash::{BuildHasherDefault, Hasher};
 use std::rc::Rc;
 
 mod arith;
-/// The charset transcoding kernel (DEC-468/DEC-494). Gated on the `encoding` feature exactly like
-/// its only consumers: `ext::encoding`'s natives, and the `__phorj_cs_*` emission in
-/// `transpile::runtime_php` — which reads the tables here rather than transcribing them, so the
-/// native leg and the PHP leg cannot drift.
-#[cfg(feature = "encoding")]
-pub mod charset;
 mod collections;
 mod core_impl;
 mod db;

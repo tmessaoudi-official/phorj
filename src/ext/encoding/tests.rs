@@ -84,7 +84,7 @@ fn decode_invalid_is_null() {
 // legs are wrong together and stay green. The fixtures below are therefore checked against the
 // PUBLISHED code points, which is the only thing that can catch a transcription error.
 
-use crate::value::charset::{decode, encode, Charset};
+use crate::charset::{decode, encode, Charset};
 
 /// Every one of the 256 byte values, under each single-byte charset, against the standard.
 ///

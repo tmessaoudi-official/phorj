@@ -11,6 +11,11 @@
 
 pub mod ast;
 pub mod bundle;
+// The charset transcoding kernel (DEC-468/DEC-494) — a shared leaf like `phstr`/`json`, read by
+// `ext::encoding`'s natives AND by `transpile::charset_php`, which formats its tables straight into
+// the emitted PHP helper. Feature-gated with its consumers.
+#[cfg(feature = "encoding")]
+pub mod charset;
 pub mod checker;
 pub mod chunk;
 pub mod cli;

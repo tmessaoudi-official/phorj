@@ -3,9 +3,9 @@
 //! hand-rolled from one table (no `encoding_rs`, no ini extension), which is why the tables live in
 //! `value/` where the transpiler can read them too.
 
+use crate::charset::{decode, encode, Charset};
 use crate::native::*;
 use crate::types::Ty;
-use crate::value::charset::{decode, encode, Charset};
 use crate::value::Value;
 use std::rc::Rc;
 

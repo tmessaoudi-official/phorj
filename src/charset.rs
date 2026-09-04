@@ -1,10 +1,11 @@
 //! Charset transcoding kernel — DEC-468's surface, DEC-494's implementation strategy.
 //!
-//! Lives in `src/value/` beside `decimal.rs` for the same reason (Invariant 4): it is a kernel that
-//! THREE consumers read — the interpreter and the VM through `ext::encoding`'s natives, and the
-//! transpiler, which formats the tables below straight into its emitted PHP helper. `ext::encoding`
-//! is behind the `encoding` Cargo feature while the transpiler is always compiled, so a kernel that
-//! lived in `ext` would break `--no-default-features` — as it did, before this split.
+//! A top-level shared leaf module like `phstr`/`json`, because THREE consumers read it: the
+//! interpreter and the VM through `ext::encoding`'s natives, and `transpile::charset_php`, which
+//! formats the tables below straight into the emitted `__phorj_cs_*` helper — one source, two legs,
+//! no way for them to drift. It cannot live under `ext::encoding` (the transpiler is always
+//! compiled and that module is not — `--no-default-features` caught exactly that), and it is not a
+//! value kernel, so `src/value/` is the wrong shelf too.
 //!
 //! Six encodings: UTF-8, UTF-16 in both byte orders, ISO-8859-1 (Latin-1), ISO-8859-15 (Latin-9),
 //! Windows-1252 and ASCII. Both directions are **total functions into an optional**: `None` when

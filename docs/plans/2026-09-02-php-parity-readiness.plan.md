@@ -28,7 +28,7 @@
   STANDING: LSP + both editors + transpile/lift are first-class per slice; cross-language scan;
   PHP-ecosystem scan. *(Pointers.)*
 - [2026-09-04] AGREED (charset slice): **both legs hand-rolled from one table** — no `encoding_rs`,
-  no ini extension, the tables in `src/value/charset.rs` formatted into the emitted `__phorj_cs_*`
+  no ini extension, the tables in `src/charset.rs` formatted into the emitted `__phorj_cs_*`
   helper so the native and PHP legs cannot drift (DEC-494, amends DEC-468's crate clause); and the
   surface is **`Utf16Le`/`Utf16Be` with no bare `Utf16`, both directions returning an optional**,
   `null` rather than a lossy substitute (DEC-495). Built, 2983/2983 green on the all-features gate.
@@ -279,8 +279,8 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 | 3 | Parity-% recompute — M-gap-matrix §4 (OWED at the DEC-490 close; last recompute §4.12, 2026-07-30) | S | todo | - | docs/research/full-audit/raw/M-gap-matrix.md |
 | 4 | CD-31 / K8 residue — 4 rewriter catch-alls still open after gate close (deep sweep) | M | todo | - | src/checker/rewrite_pipe/walk.rs src/checker/qualify_variants.rs src/checker/rewrite_new.rs src/cli/rewrite_new.rs |
 | 5 | Doc-drift repair — MILESTONES 6wk stale, FEATURES dep list + tuples rows wrong (deep sweep) | S | todo | - | docs/MILESTONES.md FEATURES.md |
-| 6 | Charset — `Encoding.decode`/`encode` + injected `Charset` enum, both legs hand-rolled from one table (DEC-468 surface, DEC-494 strategy, DEC-495 shape); `String.foldAccents` splits to step 6b | M | done | 77421c33 | src/value/charset.rs src/ext/encoding/* src/transpile/runtime_php.rs examples/guide/charset.phg |
-| 6b | `String.foldAccents` — pure accent-folding table → `__phorj_fold_accents`, transpilable (the second half of DEC-468) | S | todo | - | src/value/charset.rs src/native/string* |
+| 6 | Charset — `Encoding.decode`/`encode` + injected `Charset` enum, both legs hand-rolled from one table (DEC-468 surface, DEC-494 strategy, DEC-495 shape); `String.foldAccents` splits to step 6b | M | done | 77421c33 | src/charset.rs src/ext/encoding/* src/transpile/charset_php.rs examples/guide/charset.phg |
+| 6b | `String.foldAccents` — pure accent-folding table → `__phorj_fold_accents`, transpilable (the second half of DEC-468) | S | todo | - | src/charset.rs src/native/string* |
 | 7 | `Time.sleep` + `Runtime.onShutdown` — must hook serve's single ctrlc registration (DEC-487, DEC-204) | M | todo | - | src/ext/time/* src/serve/handlers.rs |
 | 8 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
 | 9 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |

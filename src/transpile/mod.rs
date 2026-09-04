@@ -8,6 +8,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 // only the shared type definitions (`OpKind`, `Transpiler`, `Origin`, `MatchTarget`) and the wiring.
 mod attributes;
 mod call;
+mod charset_php;
 mod classes;
 mod classes_synth;
 mod collect;

@@ -21,7 +21,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   because the PHP leg has no legal move with it — `mb_convert_encoding` and `iconv` are shared
   extensions, absent under the oracle's `php -n` and rejected by the default-deny tier-1 guard, so
   the alternative was an `E-TRANSPILE-*` exclusion at the exact moment DEC-493 forbade parked items
-  at the finish line. Instead both legs are hand-rolled and the tables in `src/value/charset.rs` are
+  at the finish line. Instead both legs are hand-rolled and the tables in `src/charset.rs` are
   **formatted into** the emitted `__phorj_cs_decode`/`__phorj_cs_encode` helper at transpile time, so
   the native leg and the PHP leg read one source and cannot drift. No new dependency (the count
   stays 15). `examples/guide/charset.phg`; `phg run` ≡ `--tree-walker` ≡ transpiled PHP.
