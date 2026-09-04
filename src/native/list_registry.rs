@@ -295,7 +295,15 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_slice),
-            lift_from: &[],
+            // DEC-312's inverse: `array_slice($a, $off, $len)` lifts to `a.slice(off, len)`. Claimed
+            // after checking the two directions agree on every edge PHP treats specially — negative
+            // offset, negative length, over-long length, offset past the end, offset before the start
+            // — against real `php-8.5.9` output, 7/7 identical on all three legs. It is the ONLY
+            // uncontested core-PHP emit left: `count`, `array_values`, `array_merge`, `strlen` and
+            // `pow` are each already claimed by the dominant-idiom row (`List.length`,
+            // `List.enumerate`, `List.concat`, `String.length`, `Math.pow`), and
+            // `lift_from_builtins_are_unique` forbids a second claimant.
+            lift_from: &["array_slice"],
             php: |a| {
                 format!(
                     "array_slice({}, {}, {})",

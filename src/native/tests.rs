@@ -147,7 +147,10 @@ fn lift_from_builtins_are_unique() {
             }
         }
     }
-    assert!(seen.len() >= 50, "seed tranche present ({})", seen.len());
+    // A FLOOR, ratcheted upward as builtins are claimed (58 → 59 when `Core.List.slice` claimed
+    // `array_slice`). It only guards against the table silently emptying; `every_registered_builtin_
+    // lifts_end_to_end` is what proves each entry actually fires.
+    assert!(seen.len() >= 59, "seed tranche present ({})", seen.len());
 }
 
 #[test]

@@ -8,6 +8,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Every registered PHP-builtin lift is now proven to FIRE**, not merely spelled. Resolution is
+  arity-gated in `lift::lifter::exprs`, and a mismatch fails SILENTLY — the call stays a bare PHP
+  name while the registration still greps as handled. Three builtins were checked by name
+  (`strlen`, `strtoupper`, `sqrt`); the other 70 rested on a uniqueness test that lifts nothing.
+  `every_registered_builtin_lifts_end_to_end` now lifts all 74 registrations and demands two
+  independent signals — the module import appears AND the call comes back qualified. The second
+  signal is deliberately "qualified", not "the builtin's name is gone": 32 rows share their PHP name
+  (`sqrt`, `min`, `log`, `exp`…), so a name test would have reported every one of them dead.
+  Measured result: **no dead registrations**, and no optional-argument gap either — `substr($s, 1)`,
+  `number_format($n)`, `round($n)`, `str_pad($s, 5)`, `array_slice($a, 1)` and ten more all resolve
+  at their common shorter PHP arity.
+
+
 - **The `__phorj_*` helper header is now RATCHETED against the registry**, not merely written beside
   it. `src/transpile/helper_buckets.rs` declared 68 + 105 = 173 helpers while `HELPER_BUCKETS` held
   71 + 116 = 187, with seven names absent from the `//!` lists (`cs_decode`, `cs_encode`, `cs_name`,
@@ -20,6 +33,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   DEC-377 family reasons for the new rows are stated as that decision requires.
 
 ### Added
+
+- **`array_slice` lifts to `List.slice`** (DEC-312's inverse). Claimed after checking the two
+  directions agree on every edge PHP treats specially — negative offset, negative length, over-long
+  length, offset past the end, offset before the start — against real `php-8.5.9` output: 7/7
+  identical on the interpreter, the VM and the transpiled PHP. It is the ONLY uncontested core-PHP
+  emit left; `count`, `array_values`, `array_merge`, `strlen` and `pow` are each already claimed by
+  the dominant-idiom row, and `lift_from_builtins_are_unique` forbids a second claimant.
 
 - **`Runtime.onShutdown(fn)` + `Runtime.isShuttingDown()`** (DEC-204; shape DEC-497, query DEC-498).
   Handlers run after `main` returns, after a FAULTING `main` (same reason a `finally` block is not
