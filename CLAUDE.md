@@ -195,8 +195,14 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
    `--tree-walker` oracle) —
    identical stdout AND identical failure behaviour, for every program and every example.
    Enforced by `tests/differential.rs` (globs `examples/**/*.phg`, project-aware). Nothing is
-   "done" until the full correctness gate above has run green. The ONE disclosed exception:
-   concurrency (see rule 14 — its PHP leg is excluded, never silently degraded).
+   "done" until the full correctness gate above has run green. TWO disclosed exceptions, both
+   under rule 14 and neither a silent degrade: **concurrency** (its PHP leg is excluded outright)
+   and **`Time.sleep` under a signal** (DEC-487/DEC-497 — the wait transpiles and a frozen clock
+   is a no-op on every leg, so everything the oracle can express agrees; only the native legs'
+   early wake on SIGINT has no PHP counterpart, `pcntl` being a forbidden ini extension). Keep
+   this count correct — README's caveat block and FEATURES carry the same list, and a stale
+   "ONE" here teaches the next session that anything else it finds is a bug rather than a
+   disclosure.
 2. **The interpreter is the reference oracle.** When backends disagree, the interpreter is right
    by definition; validate the VM against it, never the reverse.
 3. **Mechanical exhaustiveness — `Op` AND `Expr`/`Stmt`/`Pattern`** (widened 2026-07-30, DEC-356).
