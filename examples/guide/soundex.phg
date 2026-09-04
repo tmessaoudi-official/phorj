@@ -1,0 +1,39 @@
+package Main;
+
+// `String.soundex` — a phonetic key: words that SOUND alike get the same four-character code, so a
+// search or a de-duplication pass can match `Robert` against `Rupert`, or `Ashcraft` against
+// `Ashcroft`, without either being a spelling mistake.
+//
+// The code is a letter followed by three digits, always exactly four characters. Input with no
+// letter in it at all — including the empty string — gives "0000".
+//
+// Two things worth knowing. It is byte-for-byte PHP's `soundex()`, deliberately: "soundex" names a
+// FAMILY of algorithms that disagree, and the textbook Russell/Odell rule gives `Ashcraft` → A261
+// where PHP gives A226. Matching PHP is the point. And it is ASCII-oriented, so a non-ASCII
+// character is skipped rather than transliterated: `éclair` keys as though it were `clair`.
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Different spellings, same sound, same key.
+    Output.printLine("{String.soundex(\"Robert\")} {String.soundex(\"Rupert\")}");
+    Output.printLine("{String.soundex(\"Ashcraft\")} {String.soundex(\"Ashcroft\")}");
+    Output.printLine("{String.soundex(\"Euler\")} {String.soundex(\"Ellery\")}");
+    // Vowels never contribute a digit, but they do SEPARATE two consonants that would otherwise
+    // collapse into one — which is why Tymczak keeps both 2s.
+    Output.printLine(String.soundex("Tymczak"));
+    // A doubled consonant collapses, so Lloyd keys as L300 rather than L430.
+    Output.printLine(String.soundex("Lloyd"));
+    // Non-letters are skipped wherever they appear, including inside the word.
+    Output.printLine("{String.soundex(\"O'Brien\")} {String.soundex(\"  hello  \")}");
+    // Non-ASCII is skipped rather than folded — `éclair` keys on `clair`. If you want accents
+    // folded first, `String.foldAccents` is the companion.
+    Output.printLine(
+        "{String.soundex(\"éclair\")} {String.soundex(String.foldAccents(\"éclair\"))}"
+    );
+    // No letter at all still yields a well-formed key.
+    Output.printLine("{String.soundex(\"\")} {String.soundex(\"123\")}");
+}

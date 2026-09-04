@@ -1297,8 +1297,12 @@ without the record the next pass re-does the work — or worse, re-credits it, w
 alone.** The headline stays where §4.14 left it — PHP-parity ≈70% · floor ≈57% · Vision ≈71% —
 pending the owed full §1.2 re-pass (readiness step 3).
 
-**Addendum to §4.17 (same day) — `wordwrap` CLOSED.** `String.wordWrap` ships (DEC-501), so FN-STR
-moves **39 C → 40 C of 93** and the still-missing GU list drops to eight: `soundex`, `metaphone`,
-`strtok`, `strpbrk`, `strspn`, `str_increment`, `str_decrement`, `strip_tags`. This is a genuine
+**Addendum to §4.17 (same day) — `wordwrap` and `soundex` CLOSED.** `String.wordWrap` (DEC-501) and
+`String.soundex` ship, so FN-STR moves **39 C → 41 C of 93** and the still-missing GU list drops to
+seven: `metaphone`, `strtok`, `strpbrk`, `strspn`, `str_increment`, `str_decrement`, `strip_tags`.
+`soundex` needed no ruling — the name and the semantics are both forced by the PHP counterpart, and
+it is verified byte-identical on 27 fixture cases captured from `php -n` before the port was written,
+including the quirks (`""` → `"0000"`, `"éclair"` → `"C460"`, and PHP's `Ashcraft` → `A226` rather
+than the textbook `A261`). This is a genuine
 build, not a re-credit — the row was verified absent from `Core.String`'s live registry before the
 work started, and the §4.x delta history was checked for a prior credit (there is none).

@@ -3668,6 +3668,8 @@ const TIER1_PHP: &[&str] = &[
     "strrpos",
     "strtolower",
     // core standard; the DEC-238 debug-quote escape table.
+    // FN-STR `String.soundex`. ext/standard/soundex.c, always compiled in — not an ini extension.
+    "soundex",
     "strtr",
     // DEC-487 `__phorj_sleep`. ext/standard, always compiled in — NOT an ini extension.
     "usleep",
