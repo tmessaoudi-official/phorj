@@ -79,6 +79,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Operator overloading | 🔲 future | not yet a user-facing surface |
 | Modules / packages | ✅ M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP; offline `vendor/` dependency resolution (DEC-282, **manifest-less** — no `phorj.toml`/`[require]`/`phg vendor`; see the Backends "Unified manifest-less loading" / "Offline vendor" rows) |
 | Concurrency (`spawn` + channels) | ✅ | uncolored, green-threaded (`corosensei`); native-only — the PHP leg is a hard error (`E-CONCURRENCY-NO-PHP`), see `examples/guide/concurrency.phg` |
+| `Time.sleep(Duration)` | ✅ | frozen-clock no-op, non-positive returns at once; transpiles to `usleep`. **Disclosed:** the native legs wake early on SIGINT, the PHP leg cannot (`pcntl` is a forbidden ini extension) — DEC-487/DEC-497, see `examples/guide/sleep.phg` |
 | Identifier casing (enforced) | ✅ | camelCase functions/methods/params/vars (`E-NAME-CASE`), PascalCase classes/enums/variants/type aliases (`E-TYPE-CASE`), PascalCase package/folder + import segments + `as` aliases (`E-PKG-CASE`, 1:1 to PHP namespaces); front-end-only — never affects the generated PHP |
 
 ## Backends & tooling

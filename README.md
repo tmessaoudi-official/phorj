@@ -294,9 +294,16 @@ Every program under [`examples/`](examples/README.md) runs byte-identically on b
 
 > **Byte-identity caveats (disclosed):** two exceptions to `interpreter ≡ VM ≡ transpiled PHP`. (1) *Concurrency*
 > (`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle — both backends still agree, the PHP leg is a
-> hard error (`E-CONCURRENCY-NO-PHP`). (2) *Fault line numbers inside `"{…}"` interpolation* diverge on the
-> VM (reports line 1 vs. the true line) until **W5-13** — message, kind, and exit code still agree. See
-> [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) and [`docs/INVARIANTS.md`](docs/INVARIANTS.md).
+> hard error (`E-CONCURRENCY-NO-PHP`). (2) *`Time.sleep` under a signal* (DEC-487/DEC-497): the wait itself
+> transpiles to `usleep`, and a **frozen** clock makes it a no-op on every leg, so every program the oracle
+> can express agrees byte-for-byte — but the native backends return early when the process is signalled and
+> the PHP leg cannot, because polling for SIGINT needs the `pcntl` ini extension the transpile rules forbid.
+> See [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) and [`docs/INVARIANTS.md`](docs/INVARIANTS.md).
+>
+> *(A third caveat listed here until 2026-09-04 — fault line numbers inside `"{…}"` interpolation reporting
+> line 1 on the VM — was fixed by `531225ee` and is removed rather than left standing: both backends now
+> report the true line. [Verified: a `10 / z` fault inside an interpolation on line 9 reports `at 9` on the
+> VM and the tree-walker alike.])*
 
 ## Phorj → PHP transpiler
 
