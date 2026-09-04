@@ -4,8 +4,8 @@
 #
 # codes_total is informational and may move in EITHER direction (a code can be legitimately retired);
 # the ratio floors below are what actually gate.
-codes_total 314
-codes_asserted 259
+codes_total 311
+codes_asserted 258
 codes_in_conformance 25
-lsp_providers 8
+lsp_providers 9
 examples 298

@@ -19,7 +19,7 @@ example suite.
 dependency's source into `vendor/<vendor>/<package>/` → content-hash → write `phorj.lock`.
 `run` / `check` / `transpile` / `build` **never fetch**; they consult `vendor/` only, and a project
 **auto-goes-offline** when `vendor/` is present. A required dependency that isn't vendored is a hard
-error (`E-VENDOR-MISSING`). Examples that need dependencies **ship their `vendor/` committed**.
+error (`E-MODULE-NOT-FOUND` — its message names `phg install`; the separate `E-VENDOR-MISSING` code this ADR originally named was folded into it by DEC-282/316). Examples that need dependencies **ship their `vendor/` committed**.
 
 ## Consequences
 

@@ -53,7 +53,8 @@ mkrepo() {
   # the floor breach the case is actually about. (It caught exactly that when first run.)
   printf 'fn smoke() { assert!(true); }\n' >"$r/tests/integration.rs"
 
-  printf 'const CAPS: &str = "hoverProvider";\n' >"$r/src/lsp/mod.rs"
+  # The REAL shape of `INITIALIZE_RESULT`: a JSON string inside a Rust string, every quote `\"`.
+  printf 'const INITIALIZE_RESULT: &str = "{\\"capabilities\\":{\\"hoverProvider\\":true}}";\n' >"$r/src/lsp/mod.rs"
   printf 'package Main;\n' >"$r/examples/a.phg"
   (
     cd "$r" && git init -q . && git add -A \
@@ -176,6 +177,44 @@ out=$(run "$R")
 rc=$?
 [[ $rc -eq 0 ]] && ok "coverage going UP passes" || bad "coverage going UP passes (exit $rc)"
 grep -qF 're-emit to lock it in' <<<"$out" && ok "invites a re-emit" || bad "invites a re-emit (got: $out)"
+
+# ── 10. A BRACKETED emit (`[E-FOO]` in a message — the loader's form) is in the denominator. ────
+# Until 2026-09-05 only `"E-FOO"` was scanned; the loader's 25 codes were counted only because the
+# `phg explain` catalog named them, and vanished when the catalog was excluded.
+R="$TMP/bracket"
+mkrepo "$R"
+printf 'fn d() { Err(format!("no such module [E-DELTA]")) }\n' >>"$R/src/checker/emit.rs"
+commit_all "$R"
+out=$(run "$R" --emit)
+grep -qE 'codes_total 4' <<<"$out" && ok "a bracketed [E-…] emit enters the denominator" || bad "a bracketed [E-…] emit enters the denominator (got: $out)"
+
+# ── 11. A PREFIX emit (`"E-FOO: …"` — the transpiler's ladder gates) is in the denominator. ──────
+printf 'fn e() { fail("E-EPSILON: native-only") }\n' >>"$R/src/checker/emit.rs"
+commit_all "$R"
+out=$(run "$R" --emit)
+grep -qE 'codes_total 5' <<<"$out" && ok "a prefix \"E-…:\" emit enters the denominator" || bad "a prefix emit enters the denominator (got: $out)"
+
+# ── 12. The `phg explain` CATALOG is not an emit site. ──────────────────────────────────────────
+# A code that exists ONLY as an explanation (a tombstone for a retired code) must not enter the
+# denominator — it is debt no test could ever pay, because nothing emits it.
+mkdir -p "$R/src/cli/explain"
+printf '"E-ZETA" => "E-ZETA — RETIRED",\n' >"$R/src/cli/explain/retired.rs"
+printf '"E-ETA" => "E-ETA — also catalog-only",\n' >"$R/src/cli/explain_config.rs"
+commit_all "$R"
+out=$(run "$R" --emit)
+grep -qE 'codes_total 5' <<<"$out" && ok "the explain catalog does not enter the denominator" || bad "the explain catalog does not enter the denominator (got: $out)"
+
+# ── 13. `lsp_providers` counts what the server ADVERTISES, not what a test happens to quote. ─────
+# The old pattern could not match `INITIALIZE_RESULT` at all (its quotes are `\"`), so it was
+# counting provider names from test assertions — the suite's vocabulary, not the server's offer.
+printf 'assert!(out.contains("completionProvider"));\n' >"$R/src/checker/tests/alpha_test.rs"
+commit_all "$R"
+out=$(run "$R" --emit)
+grep -qE 'lsp_providers 1' <<<"$out" && ok "a provider quoted only by a test does not count" || bad "a provider quoted only by a test does not count (got: $out)"
+printf 'const INITIALIZE_RESULT: &str = "{\\"capabilities\\":{\\"hoverProvider\\":true,\\"signatureHelpProvider\\":{}}}";\n' >"$R/src/lsp/mod.rs"
+commit_all "$R"
+out=$(run "$R" --emit)
+grep -qE 'lsp_providers 2' <<<"$out" && ok "a provider added to the initialize response counts" || bad "a provider added to the initialize response counts (got: $out)"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 ]]

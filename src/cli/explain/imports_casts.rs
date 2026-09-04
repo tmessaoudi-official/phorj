@@ -151,11 +151,11 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              the repeated line.\n"
         }
         "E-VENDOR-MISSING" => {
-            "E-VENDOR-MISSING — a declared dependency is not vendored.\n\n\
-             Dependencies resolve offline from the committed `vendor/` tree — Phorj never fetches on\n\
-             `run`/`check`/`transpile`. Run `phg install` to clone each `phorj.json` dependency at its\n\
-             pinned tag/rev into `vendor/` and write `phorj.lock`, then commit both (DEC-316; the\n\
-             older `phorj.toml`/`[require]`/`phg vendor` mechanism is retired — DEC-282).\n"
+            "E-VENDOR-MISSING — RETIRED (folded into E-MODULE-NOT-FOUND by DEC-282/DEC-316).\n\n\
+             Nothing emits this code any more. A dependency that is not on disk is reported as\n\
+             `E-MODULE-NOT-FOUND`, whose message already says where the compiler looked (the entry's\n\
+             directory, `src/`, `vendor/`) and that `phg install` writes `vendor/` — `run`/`check`/\n\
+             `transpile` never download code. See `phg explain E-MODULE-NOT-FOUND`.\n"
         }
         "E-VENDOR-MAIN" => {
             "E-VENDOR-MAIN — a vendored dependency declared `package Main`.\n\n\

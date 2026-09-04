@@ -42,9 +42,16 @@ EMIT=0
 # real codes are its `E-VARIADIC-*` children). The `E-FOO`/`E-NOPE` fixtures were the same class,
 # handled by an ad-hoc blocklist that did not scale — excluding test files by PATH generalizes it.
 # `E-TYPE` still needs the blocklist: it lives in a `#[cfg(test)]` module INSIDE a non-test file.
+# The `phg explain` catalog (`src/cli/explain/` + `src/cli/explain_*.rs`) is excluded for the same
+# reason `cli::tests::explain_ratchet` skips it: its string literals DEFINE explanations, they are not
+# emission sites. Counting them inflated `codes_total` with the catalog's deliberate TOMBSTONES —
+# `E-MODULE-UNAVAILABLE` (retired by DEC-273, kept so old readers are redirected) and
+# `E-VENDOR-MISSING` (folded into `E-MODULE-NOT-FOUND` by DEC-282/316) — which then showed up as
+# "unasserted debt" that no test could ever pay, because nothing emits them [found 2026-09-05].
 mapfile -t src_files < <(
   git ls-files -- 'src/*.rs' 'src/**/*.rs' \
-    | grep -vE '(^|/)tests/|(^|/)tests\.rs$|[^/]*tests[^/]*\.rs$'
+    | grep -vE '(^|/)tests/|(^|/)tests\.rs$|[^/]*tests[^/]*\.rs$' \
+    | grep -vE '^src/cli/explain(/|_[a-z_]+\.rs$)'
 )
 # An empty array would pass `grep` NO file operands, at which point it reads STDIN and blocks
 # forever. A gate that hangs is worse than one that fails — CI just times out with no diagnosis, and
@@ -54,10 +61,22 @@ if ((${#src_files[@]} == 0)); then
   echo "  Refusing to run: the code scan would read stdin and hang." >&2
   exit 1
 fi
+# THREE emit forms, matching `cli::tests::explain_ratchet`'s reading of the compiler plus one it also
+# misses: a standalone quoted code (`err_coded("E-FOO", …)`), a bracketed code inside a message
+# (`[E-FOO]` — the loader's plain-`String` errors), and a code used as a MESSAGE PREFIX
+# (`"E-FOO: …"` — the transpiler's ladder gates). Until 2026-09-05 only the first form was scanned;
+# the 25 loader codes and the 3 prefix codes were being counted only because the `phg explain`
+# catalog (now excluded above) happened to name them. Nothing new is emitted here — the scan now
+# sees what was always there.
 mapfile -t codes < <(
-  grep -rhoE '"E-[A-Z0-9-]+"' "${src_files[@]}" \
-    | tr -d '"' | sort -u \
-    | grep -vxE 'E-TYPE'
+  # `|| true` on each form: a tree with no code in ONE form makes that grep exit 1, and under
+  # `set -e` inside this process substitution that aborted the group — the remaining forms were
+  # never scanned and the script died with no message (test-surface-ratchet case 8 caught it).
+  {
+    grep -rhoE '"E-[A-Z0-9-]+"' "${src_files[@]}" | tr -d '"' || true
+    grep -rhoE '\[E-[A-Z0-9-]+\]' "${src_files[@]}" | tr -d '[]' || true
+    grep -rhoE '"E-[A-Z0-9-]+:' "${src_files[@]}" | tr -d '":' || true
+  } | sort -u | grep -vxE 'E-TYPE'
 )
 total="${#codes[@]}"
 # `pct` below divides by `total`, so zero codes kills the script with a bash arithmetic error
@@ -109,8 +128,13 @@ asserted=$(printf '%s\n' "${codes[@]}" \
 conformance=$(printf '%s\n' "${codes[@]}" \
   | grep -cFxf <(printf '%s\n' "${conformance_list[@]}") || true)
 
-# LSP capabilities actually advertised in the initialize response.
-lsp=$(grep -rhoE '"[a-zA-Z]+Provider"' src/lsp/ --include=*.rs 2>/dev/null | sort -u | wc -l)
+# LSP capabilities ACTUALLY advertised: the `…Provider` keys of `INITIALIZE_RESULT`, the JSON the
+# server sends. The previous pattern (`"[a-zA-Z]+Provider"`) could not match that constant at all —
+# inside a Rust string every quote is `\"` — so it was counting the provider names that TESTS happened
+# to quote, i.e. what the suite mentioned rather than what the server offered [found 2026-09-05 when
+# `signatureHelpProvider` shipped and the number stayed at 8].
+# `|| true`: zero providers is a legitimate reading (the floor catches it), not a script abort.
+lsp=$( (grep -hoE '[a-zA-Z]+Provider\\"' src/lsp/mod.rs 2>/dev/null || true) | sort -u | wc -l)
 
 # Runnable examples — Invariant 9's corpus, which is also the byte-identity gate.
 examples=$(find examples -name '*.phg' | wc -l)
