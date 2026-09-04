@@ -1,0 +1,42 @@
+package Main;
+
+// Four small `Core.String` functions that come up constantly in parsing and in generating
+// sequential identifiers. Each is byte-for-byte its PHP counterpart (`strpbrk`, `strspn`,
+// `str_increment`, `str_decrement`), named descriptively rather than transliterated.
+//
+// `increment`/`decrement` are the interesting pair: they treat a string as an alphanumeric counter,
+// so a sequence goes a, b, … z, aa, ab, and digits carry independently — "a9" becomes "b0". They
+// are exact inverses wherever a predecessor exists.
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // substringFromAny: everything from the first character that is in the set. The classic use is
+    // "give me the rest of the line starting at the first delimiter".
+    Output.printLine(String.substringFromAny("key=value; other", "=;") ?? "<none>");
+    // Absent means null, not an empty string — so you can tell "found nothing" from "found the end".
+    Output.printLine(String.substringFromAny("no delimiters here", "=;") ?? "<none>");
+    // countLeadingIn: how much of the front is drawn only from the set. Useful for hand-written
+    // scanners — take the digits, then look at what stopped you.
+    int digits = String.countLeadingIn("42 apples", "0123456789");
+    Output.printLine("leading digits: {digits}");
+    Output.printLine(String.substring("42 apples", 0, digits));
+    // increment: an alphanumeric counter. Letters and digits carry within their own kind.
+    Output.printLine(
+        "{String.increment(\"a\")} {String.increment(\"z\")} {String.increment(\"az\")}"
+    );
+    Output.printLine(
+        "{String.increment(\"a9\")} {String.increment(\"Az\")} {String.increment(\"9\")}"
+    );
+    // decrement is the exact inverse. Note the leading position DISAPPEARS when it borrows out:
+    // "aa" comes back to "z", not to "zz".
+    Output.printLine(
+        "{String.decrement(\"b\")} {String.decrement(\"aa\")} {String.decrement(\"b0\")}"
+    );
+    // Round-tripping any value returns it unchanged.
+    string seq = "zz9";
+    Output.printLine(String.decrement(String.increment(seq)));
+}

@@ -1298,8 +1298,12 @@ alone.** The headline stays where §4.14 left it — PHP-parity ≈70% · floor 
 pending the owed full §1.2 re-pass (readiness step 3).
 
 **Addendum to §4.17 (same day) — `wordwrap` and `soundex` CLOSED.** `String.wordWrap` (DEC-501) and
-`String.soundex` ship, so FN-STR moves **39 C → 41 C of 93** and the still-missing GU list drops to
-seven: `metaphone`, `strtok`, `strpbrk`, `strspn`, `str_increment`, `str_decrement`, `strip_tags`.
+`String.soundex` ship, so FN-STR moves **39 C → 45 C of 93** and the still-missing GU list drops to
+three: `metaphone`, `strtok`, `strip_tags`. The four `strpbrk`/`strspn`/`str_increment`/
+`str_decrement` rows ship as `substringFromAny`/`countLeadingIn`/`increment`/`decrement` (DEC-502),
+verified byte-identical on 35 fixture cases captured from `php -n` before the port was written —
+including the carry rules that cannot be guessed (`str_increment("9")` = `"10"`, and a borrow out of
+the leading position DROPS it, so `str_decrement("a0")` = `"9"`).
 `soundex` needed no ruling — the name and the semantics are both forced by the PHP counterpart, and
 it is verified byte-identical on 27 fixture cases captured from `php -n` before the port was written,
 including the quirks (`""` → `"0000"`, `"éclair"` → `"C460"`, and PHP's `Ashcraft` → `A226` rather

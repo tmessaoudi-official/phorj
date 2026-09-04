@@ -3670,6 +3670,11 @@ const TIER1_PHP: &[&str] = &[
     // core standard; the DEC-238 debug-quote escape table.
     // FN-STR `String.soundex`. ext/standard/soundex.c, always compiled in — not an ini extension.
     "soundex",
+    // Four FN-STR rows (developer-named 2026-09-04). All ext/standard/string.c, always compiled
+    // in; str_increment/str_decrement are PHP 8.3+, and the transpile floor is 8.5.
+    "strspn",
+    "str_increment",
+    "str_decrement",
     "strtr",
     // DEC-487 `__phorj_sleep`. ext/standard, always compiled in — NOT an ini extension.
     "usleep",

@@ -3,6 +3,7 @@
 //! module = one line here.
 mod fold;
 mod soundex;
+mod strspan;
 mod wordwrap;
 
 use super::NativeFn;
@@ -17,6 +18,8 @@ pub(super) fn extend_module_natives(registry: &mut Vec<NativeFn>) {
     registry.extend(wordwrap::wordwrap_natives());
     // `String.soundex` (FN-STR) — PHP's phonetic key, byte-for-byte.
     registry.extend(soundex::soundex_natives());
+    // Four FN-STR rows: substringFromAny / countLeadingIn / increment / decrement.
+    registry.extend(strspan::strspan_natives());
     registry.extend(super::file::file_natives());
     registry.extend(super::bytes::bytes_natives());
     registry.extend(super::html::html_natives());
