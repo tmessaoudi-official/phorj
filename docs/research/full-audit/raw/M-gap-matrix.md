@@ -1310,3 +1310,41 @@ including the quirks (`""` → `"0000"`, `"éclair"` → `"C460"`, and PHP's `As
 than the textbook `A261`). This is a genuine
 build, not a re-credit — the row was verified absent from `Core.String`'s live registry before the
 work started, and the §4.x delta history was checked for a prior credit (there is none).
+
+### 4.18 FN-STR's last three rows — why they are NOT cheap, with the evidence
+
+FN-STR sits at **45 C of 93** after DEC-501/502. The three GU rows left were investigated and
+deliberately not built; recording why, with the captured behaviour, so the next session starts from
+evidence instead of re-taking it.
+
+**`strip_tags` — a state machine that cannot be inferred from samples.** Reference behaviour captured
+from `php -n` (php-8.5.9):
+
+| input | `strip_tags` output |
+|---|---|
+| `<p>Hello <b>world</b></p>` | `Hello world` |
+| `a < b and c > d` | `a < b and c > d` *(unchanged — both angle brackets survive)* |
+| `<<b>>x` | `x` *(both survive nothing — the stray `>` is consumed)* |
+| `<a href="x>y">link</a>` | `link` *(a `>` inside a quoted attribute does not close the tag)* |
+| `<!-- comment -->visible` | `visible` |
+| `<?php echo 1; ?>tail` | `tail` |
+| `text<` | `text` *(a trailing `<` is dropped)* |
+| `<script>alert(1)</script>after` | `alert(1)after` *(content is kept, only the tags go)* |
+
+Rows 2 and 3 are the problem: a lone `>` SURVIVES in `a < b and c > d` and is CONSUMED in `<<b>>x`.
+No rule of the form "a `<` starts a tag only when followed by `[a-zA-Z/!?]`" explains both, so the
+real algorithm (`php_strip_tags_ex`, a five-state machine with quote tracking) has to be read rather
+than reconstructed. **A port written from these samples would be a guess**, and this session already
+demonstrated three times over what that produces. It needs the C source, not more fixtures.
+
+**`metaphone`** — the same shape, larger: a long rule table over letter contexts, again only
+faithfully portable by reading the implementation.
+
+**`strtok`** — not a porting problem but a DESIGN one: PHP's `strtok` keeps a hidden static cursor
+between calls, so `strtok($s, $d)` then `strtok($d)` walks the string. phorj has no process-global
+mutable state to hang that on, and adding one for a single function would be a poor trade. It needs a
+ruling on the shape (an explicit cursor value? fold it into the existing `split` family? decline the
+row?) before any code.
+
+**So FN-STR's cheap headroom is exhausted at 45.** The remaining three are one C-source-reading task,
+one larger C-source-reading task, and one adjudication.

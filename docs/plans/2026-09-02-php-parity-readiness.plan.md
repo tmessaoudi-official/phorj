@@ -315,6 +315,11 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
   ahead of steps 11-13, so no consumer defines its own `Charset`.
 
 ### Needs input
+- **`strtok` needs a shape ruling before it can be built** (FN-STR's last adjudication). PHP's
+  `strtok` keeps a hidden STATIC cursor between calls — `strtok($s, $d)` then `strtok($d)` walks the
+  string — and phorj has no process-global mutable state to hang that on. Options are an explicit
+  cursor value the caller threads, folding it into the existing `split`/`splitOnce` family, or
+  declining the row with a reason. Not urgent; recorded so it is not rediscovered.
 - **The pre-push gate cannot complete inside this environment's command window, so every push in
   the 2026-09-04 session used `--no-verify`.** Measured: the hook's own steps total roughly 9-10
   minutes warm (full `--all-features` suite ~100s, both clippy configs, wasm-check, three gate
