@@ -245,3 +245,42 @@ fn numeric_literal_separators_are_accepted() {
     let out = lift("<?php function f(): int { return 1_000_000 + 2_5; }");
     assert!(out.contains("1000000 + 25"), "{out}");
 }
+
+// ── Lane R-6: the empty literal gets its type from the program's own declarations ────────────────
+
+/// `/** @var list<int> $xs */ $xs = [];` — the docblock on the LOCAL (54 in scout).
+#[test]
+fn a_var_docblock_types_an_empty_local_literal() {
+    let out = lift(
+        "<?php\nfunction f(): int {\n    /** @var list<int> $xs */\n    $xs = [];\n    $xs[] = 1;\n    return count($xs);\n}",
+    );
+    assert!(out.contains("mutable var xs = new List<int>();"), "{out}");
+    assert_reparses(&out);
+}
+
+/// `$out = []; …; return $out;` under `@return array<string, int>` — the builder idiom, typed from
+/// the declared return. Both the function and the method site run the pass.
+#[test]
+fn a_returned_empty_literal_is_typed_from_the_declared_return() {
+    let out = lift(
+        "<?php\n/** @return array<string, int> */\nfunction f(): array {\n    $out = [];\n    $out['a'] = 1;\n    return $out;\n}\nfinal class C {\n    /** @return list<string> */\n    public function g(): array { $xs = []; return $xs; }\n}",
+    );
+    assert!(
+        out.contains("mutable var out = new Map<string, int>();"),
+        "{out}"
+    );
+    assert!(out.contains("function f(): Map<string, int>"), "{out}");
+    assert!(
+        out.contains("mutable var xs = new List<string>();"),
+        "{out}"
+    );
+    assert_reparses(&out);
+}
+
+/// No declaration to read from → the literal is left exactly as written (the checker asks for the
+/// type, as before); nothing is inferred from the elements.
+#[test]
+fn an_untyped_empty_literal_is_left_alone() {
+    let out = lift("<?php function f(): int { $xs = []; $xs[] = 1; return count($xs); }");
+    assert!(out.contains("mutable var xs = [];"), "{out}");
+}

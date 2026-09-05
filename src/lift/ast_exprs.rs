@@ -56,6 +56,9 @@ pub enum PhpExpr {
     },
     /// `target[]` — the APPEND slot, valid only as the target of `=` (`$xs[] = v`). Lane R-3.
     AppendSlot(Box<PhpExpr>),
+    /// `$xs = [];` under a `/** @var list<T> $xs */` docblock (Lane R-6): the empty literal with
+    /// the collection type the program itself declared for it.
+    EmptyColl(PhpType),
     /// `(int) e` / `(float) e` / `(string) e` / `(bool) e` — a primitive cast (Lane R-3). `ty` is the
     /// canonical phorj primitive (`integer`/`double`/`boolean` are folded by the parser).
     Cast {

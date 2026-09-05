@@ -48,7 +48,9 @@ function longest(array $words, int $floor = 2): string
     return $best;
 }
 
-$words = ['phorj'];
+/** @var list<string> $words */
+$words = [];
+$words[] = 'phorj';
 $words[] = 'lift';
 $words[] = 'scout';
 $r = new Ranking(bonus: 2);

@@ -5,6 +5,7 @@ use super::*;
 mod declarations;
 pub(in crate::lift) mod hoist;
 mod interfaces;
+mod seed;
 pub(in crate::lift) mod statements;
 
 pub fn lift_source(php_src: &str) -> Result<String, String> {

@@ -67,6 +67,7 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             type_name: ty.clone(),
             span: SP,
         },
+        php::PhpExpr::EmptyColl(ty) => new_coll(&lift_type(ty)?)?,
         php::PhpExpr::AppendSlot(_) => {
             return Err("lift: `$xs[]` is only meaningful as the target of `=`".into());
         }

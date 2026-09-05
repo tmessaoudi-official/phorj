@@ -472,17 +472,6 @@ impl PParser {
         Ok(PhpType::Named(name))
     }
 
-    /// `{ stmt* }`.
-    pub(super) fn parse_block(&mut self) -> Result<Vec<PhpStmt>, String> {
-        self.expect(&PTok::LBrace, "`{`")?;
-        let mut stmts = Vec::new();
-        while !self.at(&PTok::RBrace) && !self.at(&PTok::Eof) {
-            stmts.push(self.parse_stmt()?);
-        }
-        self.expect(&PTok::RBrace, "`}`")?;
-        Ok(stmts)
-    }
-
     /// Parse one statement, or — when the next token isn't `{` — a single brace-less statement (so
     /// `if ($x) return;` works). Used for `if`/`while`/`for`/`foreach` bodies.
     pub(super) fn parse_body(&mut self) -> Result<Vec<PhpStmt>, String> {

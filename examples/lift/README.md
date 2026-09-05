@@ -378,6 +378,7 @@ ordinary-looking file:
 | `/** @param list<string> $words */ … array $words` | `List<string> words` |
 | `/** @return array<string, int> */ … : array` | `Map<string, int>` |
 | `static fn (string $a, string $b): bool => …` | `function(string a, string b): bool => …` |
+| `/** @var list<string> $words */ $words = [];` | `mutable var words = new List<string>();` |
 | `$words[] = 'lift'` | `words = List.append(words, "lift")` |
 | `(float) $n / 2.0` | `(n as float) / 2.0` |
 | `new Ranking(bonus: 2)` (named argument) | `new Ranking(bonus: 2)` |
@@ -390,8 +391,9 @@ in this directory and fails if a shipped `.phg` drifts from what `phg lift` prod
 KNOWN_ISSUES §LIFT-THROWS). It checks clean and prints the same six lines on the interpreter, the VM,
 the transpiled PHP and the original PHP.
 
-Two shapes were deliberately AVOIDED here because the lifter does not carry them yet, and both are
-the next Lane R items: a local initialised as `$xs = []` and filled later (phorj needs the empty
-literal's type — a `/** @var list<T> $xs */` on the local is the mechanical fix), and `(int)` of a
-float (the `as int` conversion is fallible on the phorj side, `int?` — KNOWN_ISSUES
-§LIFT-CAST-FIDELITY).
+The `/** @var list<string> $words */ $words = [];` at the entry is the empty-literal idiom (Lane
+R-6): phorj needs an empty collection's type, and the lifter takes it ONLY from a declaration the
+program wrote — a `@var` on the local, or the enclosing function's declared return when the local
+is what gets returned — never from the elements. One shape is deliberately AVOIDED here because the
+lifter cannot carry it faithfully: `(int)` of a float (the `as int` conversion is fallible on the
+phorj side, `int?` — KNOWN_ISSUES §LIFT-CAST-FIDELITY).

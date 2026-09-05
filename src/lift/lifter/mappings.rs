@@ -124,6 +124,28 @@ pub(super) fn static_member(class: &str, name: &str) -> Expr {
 }
 
 /// `Output.print(arg)` — the lift target of a PHP `echo`.
+/// `new List<T>()` / `new Map<K, V>()` for a typed empty literal (Lane R-6) — `ty` is what
+/// `lift_type` made of a docblock generic or a declared return type.
+pub(super) fn new_coll(ty: &Type) -> Result<Expr, String> {
+    let Type::Named { name, args, .. } = ty else {
+        return Err("lift: an empty collection literal needs a List/Map type".into());
+    };
+    let kind = match name.as_str() {
+        "List" => crate::ast::CollKind::List,
+        "Map" => crate::ast::CollKind::Map,
+        other => {
+            return Err(format!(
+                "lift: `{other}` is not a collection type for an empty literal"
+            ))
+        }
+    };
+    Ok(Expr::NewColl {
+        kind,
+        args: args.clone(),
+        span: SP,
+    })
+}
+
 /// `List.append(target, value)` for `$xs[] = v` (Lane R-3); records `Core.List` for the DEC-312
 /// import pass so the draft imports what it calls.
 pub(super) fn list_append(target: Expr, value: Expr) -> Expr {

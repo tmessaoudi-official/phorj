@@ -119,6 +119,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   from `initialize`, and the READMEs plus VS Code extension `0.7.0` say so in the same change
   (DEC-181). The surface ratchet's floor is re-frozen at 11 providers / 303 examples, and its summary
   line now says the 100% rule is MET for diagnostics instead of "NOT met yet" at 311/311.
+- **Lift: an empty collection literal takes its type from the program's own declaration** (Lane
+  R-6 — scout has 128 `$x = [];` locals and phorj needs an empty collection's type). Two rules,
+  neither inferring from elements: `/** @var list<T> $xs */ $xs = [];` on a local (54 in scout)
+  lifts to `mutable var xs = new List<T>()`, read at every statement position; and the builder
+  idiom `$out = []; …; return $out;` inside a function or method whose lifted return is `List<…>`
+  / `Map<…>` (a nullable return seeds from its inner type) retypes that declaration from the
+  return — only a top-level `return` is considered, so there is no statement walker and no
+  catch-all. Any other empty literal stays `[]` and the checker asks for its type, as before. The
+  `real-shapes` example carries the idiom again.
 - **`examples/lift/real-shapes.php` / `.phg` — Invariant 9 for the whole Lane R, and the shipped
   lift pairs are now GATED.** One ordinary-looking file exercises every shape the five lift slices
   taught the lifter (interface, `readonly class`, typed constant, promoted default, docblock

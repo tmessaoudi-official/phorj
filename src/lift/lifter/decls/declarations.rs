@@ -35,6 +35,8 @@ impl Lifter {
         }
         let mut body = prelude;
         body.extend(self.lift_block(&f.body, &mut declared)?);
+        let ret = lift_ret(&f.ret, Some(&f.body))?;
+        super::seed::seed_returned_empty_literals(&mut body, &ret);
         Ok(FunctionDecl {
             modifiers: Vec::new(),
             attrs: Vec::new(),
@@ -43,7 +45,7 @@ impl Lifter {
             type_params: Vec::new(),
             type_param_bounds: Vec::new(),
             params,
-            ret: lift_ret(&f.ret, Some(&f.body))?,
+            ret,
             throws: Vec::new(),
             body,
             foreign: false,
@@ -217,10 +219,12 @@ impl Lifter {
             // preserve overridability (abstract is implicitly open, so only the concrete case).
             modifiers.push(Modifier::Open);
         }
-        let body = match &m.body {
+        let mut body = match &m.body {
             Some(b) => self.lift_block(b, &mut declared)?,
             None => Vec::new(),
         };
+        let ret = lift_ret(&m.ret, m.body.as_deref())?;
+        super::seed::seed_returned_empty_literals(&mut body, &ret);
         Ok(ClassMember::Method(FunctionDecl {
             modifiers,
             attrs: Vec::new(),
@@ -229,7 +233,7 @@ impl Lifter {
             type_params: Vec::new(),
             type_param_bounds: Vec::new(),
             params,
-            ret: lift_ret(&m.ret, m.body.as_deref())?,
+            ret,
             throws: Vec::new(),
             body,
             foreign: false,

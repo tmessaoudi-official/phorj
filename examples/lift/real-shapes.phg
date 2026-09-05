@@ -48,7 +48,8 @@ function longest(List<string> words, int floor = 2): string {
 
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
-    mutable var words = ["phorj"];
+    mutable var words = new List<string>();
+    words = List.append(words, "phorj");
     words = List.append(words, "lift");
     words = List.append(words, "scout");
     mutable var r = new Ranking(bonus: 2);

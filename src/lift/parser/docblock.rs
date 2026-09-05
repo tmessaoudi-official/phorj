@@ -124,8 +124,49 @@ impl PParser {
     ) -> Result<(), String> {
         match it {
             PhpItem::Function(f) => self.apply_doc_signature(doc, &mut f.params, &mut f.ret),
+            PhpItem::Stmt(st) => self.apply_doc_local(doc, st),
             _ => Ok(()),
         }
+    }
+
+    /// `{ stmt* }` — lives here (not in `items.rs`) so every statement passes the `@var` hook.
+    pub(super) fn parse_block(&mut self) -> Result<Vec<PhpStmt>, String> {
+        self.expect(&PTok::LBrace, "`{`")?;
+        let mut stmts = Vec::new();
+        while !self.at(&PTok::RBrace) && !self.at(&PTok::Eof) {
+            let doc = self.doc_here();
+            let mut st = self.parse_stmt()?;
+            self.apply_doc_local(doc.as_deref(), &mut st)?;
+            stmts.push(st);
+        }
+        self.expect(&PTok::RBrace, "`}`")?;
+        Ok(stmts)
+    }
+
+    /// `/** @var list<T> $xs */ $xs = [];` (Lane R-6, 54 such docblocks in scout): the empty literal
+    /// becomes [`PhpExpr::EmptyColl`] carrying the declared type — phorj needs an empty collection's
+    /// type, and the program wrote it down. Any other statement, or a non-empty literal, is untouched.
+    fn apply_doc_local(&mut self, doc: Option<&str>, st: &mut PhpStmt) -> Result<(), String> {
+        let Some(doc) = doc else {
+            return Ok(());
+        };
+        if let PhpStmt::Expr(PhpExpr::Assign { target, value }) = st {
+            if let (PhpExpr::Var(name), PhpExpr::Array(items)) = (target.as_ref(), value.as_ref()) {
+                if items.is_empty() {
+                    let ty = match doc_tag(doc, "@var", Some(name))
+                        .or_else(|| doc_tag(doc, "@var", None))
+                    {
+                        Some(t) => t,
+                        None => return Ok(()),
+                    };
+                    let ty = self.parse_doc_type(&ty)?;
+                    if matches!(ty, PhpType::Generic { .. }) {
+                        *value = Box::new(PhpExpr::EmptyColl(ty));
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn apply_doc_signature(
