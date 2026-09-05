@@ -107,7 +107,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 
 - **The `__phorj_*` helper header is now RATCHETED against the registry**, not merely written beside
-  it. `src/transpile/helper_buckets.rs` declared 68 + 105 = 173 helpers while `HELPER_BUCKETS` held
+  it. `src/transpile/helper_buckets/mod.rs` declared 68 + 105 = 173 helpers while `HELPER_BUCKETS` held
   71 + 116 = 187, with seven names absent from the `//!` lists (`cs_decode`, `cs_encode`, `cs_name`,
   `fold_accents`, `sleep`, `wordwrap`, `proc_run`) — and the doc comment on the existing test claimed
   the count "cannot drift again" while nothing checked it. It could, and had, for four months. The
@@ -2335,7 +2335,7 @@ fix: `phg check` said OK and VM, interpreter and transpiled PHP all printed the 
 
 ### Added — the `__phorj_*` helper classification registry, with a ratchet (2026-07-30, DEC-377)
 The rule is *a helper may exist ONLY when PHP cannot do natively what phorj does*, and the audit proving
-which helpers comply had been OWED. It is now `src/transpile/helper_buckets.rs`, and **bucket 3
+which helpers comply had been OWED. It is now `src/transpile/helper_buckets/mod.rs`, and **bucket 3
 ("convenience/DRY only — must be INLINED") is EMPTY**: all 17 candidates from the earlier heuristic pass
 are refuted by reading them.
 - The `uri_*` trio was suspected of "reimplementing what the target already has". It **already uses** PHP

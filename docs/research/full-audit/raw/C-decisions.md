@@ -4558,7 +4558,7 @@ and subtracting guessed artifacts. A first careful pass here read **158** — it
 form `function &__phorj_rng_state()` (used by `rng_*`, `now_*`, `db_depths` to hold mutable global state)
 and the checked-arith codegen table. `__phorj_unwrap` appears in comments but was inlined at M3 S2.5.
 
-**`src/transpile/helper_buckets.rs` is the registry, with a RATCHET** —
+**`src/transpile/helper_buckets/mod.rs` is the registry, with a RATCHET** —
 `the_helper_registry_matches_the_source_exactly` re-derives the set from source and asserts it matches
 exactly, in both directions: an unclassified helper fails, and a classified-but-deleted one fails too.
 Verified live by planting `__phorj_probe_helper` (caught by name) and removing it. This is the part that

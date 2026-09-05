@@ -1443,7 +1443,7 @@ Gate: 2631 green, clippy clean both ways, size-gate `fails=0`.
 
 ### ✅ BUILT 2026-07-30 — Wave 2.2 / **DEC-377**. The helper audit, and **bucket 3 is EMPTY**.
 
-`src/transpile/helper_buckets.rs` classifies all **165** helpers (68 bucket-1, 97 bucket-2, 0 bucket-3)
+`src/transpile/helper_buckets/mod.rs` classifies all **165** helpers (68 bucket-1, 97 bucket-2, 0 bucket-3)
 with a ratchet that re-derives the set from source and fails in BOTH directions. All 17 bucket-3
 candidates refuted by reading them; both attached findings were wrong (`uri_*` already USES PHP 8.5's URI
 extension and adds the `try`/`catch` bridge that PHP's expression grammar cannot express; `text_*` exists
