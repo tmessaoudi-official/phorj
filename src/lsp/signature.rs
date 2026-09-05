@@ -21,7 +21,11 @@
 //! The parameter list is derived by slicing the SAME signature text hover shows, so the two can never
 //! disagree about what a function's parameters are.
 
+use super::{doc_uri, escape, num, symbols, Server};
+use crate::json::Json;
 use crate::native;
+use crate::parser::Parser;
+use crate::tokenizer::lex;
 
 /// The call enclosing the cursor: the callee as written, and the 0-based index of the argument the
 /// cursor is inside.
@@ -218,4 +222,104 @@ pub(super) fn native_signature(callee: &str) -> Option<String> {
         params.join(", "),
         n.ret
     ))
+}
+
+impl Server {
+    /// `textDocument/signatureHelp` — the declaration of the call the cursor is inside, with the
+    /// argument being typed marked active. Invariant 17's 100% RULE names signature help
+    /// explicitly, and until this method the server did not advertise it.
+    ///
+    /// Resolution order: a `native::registry()` row for a dotted callee (`String.repeat`), then the
+    /// same-file declaration, then a same-package sibling in another open buffer — the order hover
+    /// uses, so the two agree on what a name means. The parameter list is sliced from the SAME
+    /// signature text hover shows, so they cannot disagree about a function's parameters either.
+    ///
+    /// **The buffer usually does not parse when this fires.** Hover runs on a saved, balanced
+    /// program; signature help runs while the user is inside an unclosed `(`, which is a parse
+    /// error by construction. So when the parse fails, the same-file lookup falls back to finding
+    /// `function <name>(` textually — a top-level declaration is exactly that token sequence, and
+    /// the fallback exists precisely for the moment the feature is for. Without it, signature help
+    /// would work on finished code and be silent while typing, which is worse than absent.
+    pub(super) fn signature_help(&self, msg: &Json) -> String {
+        let null = "null".to_string();
+        let Some(uri) = doc_uri(msg) else {
+            return null;
+        };
+        let Some(text) = self.docs.get(&uri) else {
+            return null;
+        };
+        let Some(pos) = msg.get("params").and_then(|p| p.get("position")) else {
+            return null;
+        };
+        let (Some(line), Some(character)) = (num(pos.get("line")), num(pos.get("character")))
+        else {
+            return null;
+        };
+        let Some(offset) = symbols::offset_at(text, line, character) else {
+            return null;
+        };
+        let Some(site) = call_at(text, offset) else {
+            return null;
+        };
+        let leaf = site.callee.rsplit('.').next().unwrap_or(&site.callee);
+
+        let (sig, doc) = if let Some(sig) = native_signature(&site.callee) {
+            (sig, None)
+        } else if let Some(span) = self.same_file_decl(text, offset, leaf) {
+            (
+                symbols::signature_text(text, span),
+                crate::doc_comment::doc_markdown_before(text, span.start),
+            )
+        } else if let Some((_uri, span, other)) = self.cross_file_decl(&uri, leaf) {
+            (
+                symbols::signature_text(&other, span),
+                crate::doc_comment::doc_markdown_before(&other, span.start),
+            )
+        } else {
+            return null;
+        };
+        let params: Vec<String> = split_params(&sig)
+            .iter()
+            .map(|p| format!("{{\"label\":\"{}\"}}", escape(p)))
+            .collect();
+        let documentation = match doc {
+            Some(d) if !d.is_empty() => format!(
+                ",\"documentation\":{{\"kind\":\"markdown\",\"value\":\"{}\"}}",
+                escape(&d)
+            ),
+            _ => String::new(),
+        };
+        format!(
+            "{{\"signatures\":[{{\"label\":\"{}\",\"parameters\":[{}]{}}}],\"activeSignature\":0,\"activeParameter\":{}}}",
+            escape(&sig),
+            params.join(","),
+            documentation,
+            site.active
+        )
+    }
+
+    /// The same-file TOP-LEVEL declaration of `name` for signature help: through the parser when the
+    /// buffer parses, and by the `function <name>(` token sequence when it does not (see
+    /// [`Self::signature_help`] for why the second path is the common one). A local is never a
+    /// candidate — a local's "signature" is its binding, not a parameter list.
+    fn same_file_decl(&self, text: &str, offset: usize, name: &str) -> Option<crate::token::Span> {
+        if let Ok(program) = lex(text).and_then(|t| Parser::new(t).parse_program()) {
+            return match Self::resolve_decl(offset, name, &program) {
+                Some((span, false)) => Some(span),
+                _ => None,
+            };
+        }
+        let needle = format!("function {name}(");
+        let start = text.find(&needle)?;
+        // Must be a whole-word match at the line's declaration position, not `function helperX(`
+        // matched by a shorter needle — the `(` in the needle already pins the name's end, and a
+        // top-level declaration begins its line (after optional visibility, which `find` tolerates
+        // because `function` is still the token before the name).
+        Some(crate::token::Span {
+            start,
+            len: needle.len() - 1,
+            line: 0,
+            col: 0,
+        })
+    }
 }

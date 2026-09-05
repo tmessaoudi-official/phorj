@@ -34,6 +34,11 @@ server power the JetBrains/PhpStorm setup — see `../phpstorm/README.md`.)
   canonical-path (`#[Core.Runtime.Entry`) spellings. `.` and `[` are advertised as trigger characters,
   so it fires as you type.
 - **Document symbols** — the file outline (classes/enums carry their members).
+- **Workspace symbols** — `Ctrl/Cmd+T` searches every top-level declaration across the open buffers
+  AND every `.phg` on disk under the workspace (case-insensitive substring; members of the matching
+  classes/enums are included, tagged with their container).
+- **Folding** — every multi-line top-level declaration and every multi-line class/trait member folds
+  from its first line to its closing brace (one-line declarations fold nothing).
 - **Find references** + **document highlight** — every use of the symbol under the cursor
   (scope-accurate). For a top-level symbol this is **project-wide** (DEC-327): every project `.phg` on
   disk plus the other open buffers.
@@ -55,15 +60,16 @@ npm install          # fetches vscode-languageclient
 code .               # then press F5 → "Run Extension" to launch the dev host
 ```
 
-Open any `.phg` file in the dev host; diagnostics, hover, signature help and go-to-definition activate automatically.
+Open any `.phg` file in the dev host; diagnostics, hover, signature help, go-to-definition, folding and
+`Ctrl/Cmd+T` workspace symbols activate automatically.
 
 ## Package / install locally
 
 ```sh
 npm install -g @vscode/vsce
 cd editors/vscode
-vsce package         # produces phorj-0.6.0.vsix
-code --install-extension phorj-0.6.0.vsix
+vsce package         # produces phorj-0.7.0.vsix
+code --install-extension phorj-0.7.0.vsix
 ```
 
 ## Configuration

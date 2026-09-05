@@ -10,7 +10,8 @@
 //! editor squiggles equal `phg check`.
 //!
 //! Capabilities: `publishDiagnostics` (full sync), hover, go-to-definition, completion, document
-//! symbols, references, document-highlight, rename, formatting, signature help — all front-end-only (query layer in
+//! symbols, references, document-highlight, rename, formatting, signature help, folding ranges,
+//! workspace symbols — all front-end-only (query layer in
 //! `scope.rs`/`symbols.rs`; `occurrences` is the shared references/highlight/rename engine; formatting
 //! reuses `crate::format::format` ≡ `phg format`; hover/def are cross-file over open buffers).
 //! Completion (`completion.rs`): import-path (Core + project pkgs), member (module natives + instance/
@@ -23,6 +24,7 @@ mod completion;
 mod keywords;
 mod prelude_catalog;
 mod references;
+mod rpc;
 mod scope;
 mod signature;
 mod symbols;
@@ -34,6 +36,9 @@ mod tests_deprecated;
 mod tests_signature;
 #[cfg(test)]
 mod tests_test_mode;
+#[cfg(test)]
+mod tests_workspace;
+mod workspace;
 
 use crate::diagnostic::Diagnostic;
 use crate::json::Json;
@@ -41,6 +46,9 @@ use crate::parser::Parser;
 use crate::tokenizer::lex;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
+
+pub(crate) use rpc::uri_to_path;
+use rpc::{doc_uri, error_response, escape, num, response};
 
 /// The server state: the open documents (URI → full text) and the shutdown flag.
 #[derive(Default)]
@@ -73,6 +81,8 @@ impl Server {
             "textDocument/rename" => vec![response(id, &self.rename(msg))],
             "textDocument/formatting" => vec![response(id, &self.formatting(msg))],
             "textDocument/signatureHelp" => vec![response(id, &self.signature_help(msg))],
+            "textDocument/foldingRange" => vec![response(id, &self.folding_ranges(msg))],
+            "workspace/symbol" => vec![response(id, &self.workspace_symbols(msg))],
             "textDocument/didOpen" => self.on_open(msg),
             "textDocument/didChange" => self.on_change(msg),
             "textDocument/didClose" => {
@@ -235,104 +245,6 @@ impl Server {
                 None => "null".to_string(),
             },
         }
-    }
-
-    /// `textDocument/signatureHelp` — the declaration of the call the cursor is inside, with the
-    /// argument being typed marked active. Invariant 17's 100% RULE names signature help
-    /// explicitly, and until this method the server did not advertise it.
-    ///
-    /// Resolution order: a `native::registry()` row for a dotted callee (`String.repeat`), then the
-    /// same-file declaration, then a same-package sibling in another open buffer — the order hover
-    /// uses, so the two agree on what a name means. The parameter list is sliced from the SAME
-    /// signature text hover shows, so they cannot disagree about a function's parameters either.
-    ///
-    /// **The buffer usually does not parse when this fires.** Hover runs on a saved, balanced
-    /// program; signature help runs while the user is inside an unclosed `(`, which is a parse
-    /// error by construction. So when the parse fails, the same-file lookup falls back to finding
-    /// `function <name>(` textually — a top-level declaration is exactly that token sequence, and
-    /// the fallback exists precisely for the moment the feature is for. Without it, signature help
-    /// would work on finished code and be silent while typing, which is worse than absent.
-    fn signature_help(&self, msg: &Json) -> String {
-        let null = "null".to_string();
-        let Some(uri) = doc_uri(msg) else {
-            return null;
-        };
-        let Some(text) = self.docs.get(&uri) else {
-            return null;
-        };
-        let Some(pos) = msg.get("params").and_then(|p| p.get("position")) else {
-            return null;
-        };
-        let (Some(line), Some(character)) = (num(pos.get("line")), num(pos.get("character")))
-        else {
-            return null;
-        };
-        let Some(offset) = symbols::offset_at(text, line, character) else {
-            return null;
-        };
-        let Some(site) = signature::call_at(text, offset) else {
-            return null;
-        };
-        let leaf = site.callee.rsplit('.').next().unwrap_or(&site.callee);
-
-        let (sig, doc) = if let Some(sig) = signature::native_signature(&site.callee) {
-            (sig, None)
-        } else if let Some(span) = self.same_file_decl(text, offset, leaf) {
-            (
-                symbols::signature_text(text, span),
-                crate::doc_comment::doc_markdown_before(text, span.start),
-            )
-        } else if let Some((_uri, span, other)) = self.cross_file_decl(&uri, leaf) {
-            (
-                symbols::signature_text(&other, span),
-                crate::doc_comment::doc_markdown_before(&other, span.start),
-            )
-        } else {
-            return null;
-        };
-        let params: Vec<String> = signature::split_params(&sig)
-            .iter()
-            .map(|p| format!("{{\"label\":\"{}\"}}", escape(p)))
-            .collect();
-        let documentation = match doc {
-            Some(d) if !d.is_empty() => format!(
-                ",\"documentation\":{{\"kind\":\"markdown\",\"value\":\"{}\"}}",
-                escape(&d)
-            ),
-            _ => String::new(),
-        };
-        format!(
-            "{{\"signatures\":[{{\"label\":\"{}\",\"parameters\":[{}]{}}}],\"activeSignature\":0,\"activeParameter\":{}}}",
-            escape(&sig),
-            params.join(","),
-            documentation,
-            site.active
-        )
-    }
-
-    /// The same-file TOP-LEVEL declaration of `name` for signature help: through the parser when the
-    /// buffer parses, and by the `function <name>(` token sequence when it does not (see
-    /// [`Self::signature_help`] for why the second path is the common one). A local is never a
-    /// candidate — a local's "signature" is its binding, not a parameter list.
-    fn same_file_decl(&self, text: &str, offset: usize, name: &str) -> Option<crate::token::Span> {
-        if let Ok(program) = lex(text).and_then(|t| Parser::new(t).parse_program()) {
-            return match Self::resolve_decl(offset, name, &program) {
-                Some((span, false)) => Some(span),
-                _ => None,
-            };
-        }
-        let needle = format!("function {name}(");
-        let start = text.find(&needle)?;
-        // Must be a whole-word match at the line's declaration position, not `function helperX(`
-        // matched by a shorter needle — the `(` in the needle already pins the name's end, and a
-        // top-level declaration begins its line (after optional visibility, which `find` tolerates
-        // because `function` is still the token before the name).
-        Some(crate::token::Span {
-            start,
-            len: needle.len() - 1,
-            line: 0,
-            col: 0,
-        })
     }
 
     /// A hover response: the signature in a `phorj` code fence, with the declaration's doc comment
@@ -589,7 +501,7 @@ impl Server {
 /// each change — push diagnostics, hover, go-to-definition, completion, document symbols (v2), and
 /// signature help, which fires on `(` and `,` so the hint appears as the call is typed.
 const INITIALIZE_RESULT: &str =
-    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\",\"[\"]},\"documentSymbolProvider\":true,\"referencesProvider\":true,\"documentHighlightProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true,\"signatureHelpProvider\":{\"triggerCharacters\":[\"(\",\",\"]}},\"serverInfo\":{\"name\":\"phorj-lsp\"}}";
+    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\",\"[\"]},\"documentSymbolProvider\":true,\"referencesProvider\":true,\"documentHighlightProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true,\"signatureHelpProvider\":{\"triggerCharacters\":[\"(\",\",\"]},\"foldingRangeProvider\":true,\"workspaceSymbolProvider\":true},\"serverInfo\":{\"name\":\"phorj-lsp\"}}";
 
 /// Compute the diagnostics for a document buffer — the **same** pipeline `phg check` runs (lex →
 /// parse → `check`), so editor diagnostics equal the CLI's. A lex or parse error is a single
@@ -687,72 +599,6 @@ fn range_json(sl: u32, sc: u32, el: u32, ec: u32) -> String {
     format!(
         "{{\"start\":{{\"line\":{sl},\"character\":{sc}}},\"end\":{{\"line\":{el},\"character\":{ec}}}}}"
     )
-}
-
-/// Build a JSON-RPC success response for request `id` with a raw `result` JSON fragment.
-fn response(id: Option<&Json>, result: &str) -> Out {
-    format!(
-        "{{\"jsonrpc\":\"2.0\",\"id\":{},\"result\":{result}}}",
-        id_json(id)
-    )
-}
-
-/// Build a JSON-RPC error response.
-fn error_response(id: &Json, code: i64, message: &str) -> Out {
-    format!(
-        "{{\"jsonrpc\":\"2.0\",\"id\":{},\"error\":{{\"code\":{code},\"message\":\"{}\"}}}}",
-        id_json(Some(id)),
-        escape(message)
-    )
-}
-
-/// Render an `id` (a number or string) back into the response; `null` if absent.
-fn id_json(id: Option<&Json>) -> String {
-    match id {
-        Some(Json::Num(n)) => format!("{}", *n as i64),
-        Some(Json::Str(s)) => format!("\"{}\"", escape(s)),
-        _ => "null".to_string(),
-    }
-}
-
-/// Read a JSON number as a `u32` (LSP positions are non-negative integers).
-fn num(j: Option<&Json>) -> Option<u32> {
-    match j {
-        Some(Json::Num(n)) if *n >= 0.0 => Some(*n as u32),
-        _ => None,
-    }
-}
-
-/// The document URI of a `textDocument/...` notification (`params.textDocument.uri`).
-pub(super) fn uri_to_path(uri: &str) -> Option<std::path::PathBuf> {
-    let p = std::path::PathBuf::from(uri.strip_prefix("file://").unwrap_or(uri));
-    p.is_file().then_some(p)
-}
-
-fn doc_uri(msg: &Json) -> Option<String> {
-    msg.get("params")
-        .and_then(|p| p.get("textDocument"))
-        .and_then(|td| td.get("uri"))
-        .and_then(Json::as_str)
-        .map(str::to_string)
-}
-
-/// Minimal JSON string escaping for outbound message bodies (a local copy — `diagnostic::json_escape`
-/// is private). Covers the control + quote/backslash set LSP message text needs.
-fn escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out
 }
 
 /// Run the stdio JSON-RPC loop: read `Content-Length`-framed messages from stdin, dispatch each, write

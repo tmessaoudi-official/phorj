@@ -7,7 +7,8 @@ plugin — using two built-in/marketplace mechanisms:
 1. **Syntax highlighting** — JetBrains' native **TextMate Bundles** support reads the same grammar the
    VSCode extension uses.
 2. **Language intelligence** (diagnostics, hover, signature help, go-to-definition, completion,
-   document symbols, references, rename, formatting) — the **LSP4IJ** plugin runs `phg lsp` as an external language server.
+   document symbols, workspace symbols, folding, references, rename, formatting) — the **LSP4IJ** plugin
+   runs `phg lsp` as an external language server.
 
 This is the recommended, no-build path: identical behavior to the CLI (`phg check` / `phg format`) and to
 the VSCode extension, because all three drive the *same* `phg lsp` server and the *same* grammar.
@@ -41,7 +42,9 @@ attributes). `/** … */` doc comments (DEC-419) carry their own scope
 3. Apply. Open any `.phg` file: diagnostics appear inline (identical to `phg check`), and hover
    (including a declaration's `/** … */` doc comment, rendered as markdown under its signature),
    signature help (parameter hints inside a call, `Ctrl+P`), go-to-definition (`Ctrl/Cmd+Click`),
-   completion, structure view (document symbols), find-usages
+   completion, structure view (document symbols), *Navigate → Symbol* (`Ctrl/Cmd+Alt+Shift+N`,
+   workspace symbols across the open files and every `.phg` on disk), code folding on every
+   multi-line declaration and member, find-usages
    (references), rename, and reformat (`phg format`) all work through the server.
 
 ### Extensionless `#!…phg` shebang files (executable entries)

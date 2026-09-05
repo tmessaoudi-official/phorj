@@ -186,8 +186,12 @@ check lsp_providers "$lsp" "$(get lsp_providers)"
 check examples "$examples" "$(get examples)"
 
 pct=$((asserted * 100 / total))
-echo "surface-ratchet: $asserted/$total diagnostic codes asserted (${pct}%) — the 100% RULE is NOT met yet"
-echo "surface-ratchet:   remaining debt is tracked, not hidden; see docs/plans/SLICE-STATE.md"
+if ((asserted >= total)); then
+  echo "surface-ratchet: $asserted/$total diagnostic codes asserted (${pct}%) — the 100% RULE is MET for diagnostics; the floor keeps it there"
+else
+  echo "surface-ratchet: $asserted/$total diagnostic codes asserted (${pct}%) — the 100% RULE is NOT met yet"
+  echo "surface-ratchet:   remaining debt is tracked, not hidden; see docs/plans/SLICE-STATE.md"
+fi
 
 if ((fails > 0)); then
   echo "surface-ratchet: FAILED — $fails floor(s) breached" >&2
