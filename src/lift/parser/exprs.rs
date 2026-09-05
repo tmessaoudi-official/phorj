@@ -233,7 +233,7 @@ impl PParser {
         self.expect(&PTok::LParen, "`(`")?;
         let mut args = Vec::new();
         while !self.at(&PTok::RParen) {
-            args.push(self.parse_expr()?);
+            args.push(self.parse_arg()?);
             if !self.eat(&PTok::Comma) {
                 break;
             }

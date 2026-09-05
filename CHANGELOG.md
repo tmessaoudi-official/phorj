@@ -119,6 +119,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   from `initialize`, and the READMEs plus VS Code extension `0.7.0` say so in the same change
   (DEC-181). The surface ratchet's floor is re-frozen at 11 providers / 303 examples, and its summary
   line now says the 100% rule is MET for diagnostics instead of "NOT met yet" at 311/311.
+- **Lift: docblock generics type the bare `array`; named arguments lift in every argument list.**
+  With the previous three walls down, all five scout modules stopped on PHP's `array` (60 of 120
+  files as a parameter type, 42 as a return type), which the lifter refuses to guess between
+  `List`, `Map` and `Set`. A strict codebase carries the answer in its docblocks — scout annotates
+  155 of its 192 array parameters and 82 of 112 returns — and the lexer already records every
+  `/** … */`. So at every function, member and constructor-parameter boundary the parser replaces a
+  declared `array`/`?array` whose `@param`/`@return`/`@var` carries `list<T>`, `non-empty-list<T>`,
+  `T[]`, `array<T>` or `array<K, V>` with a generic the lifter maps to `List<T>` / `Map<K, V>`
+  (`parser/docblock.rs`). This trusts the program's own unenforced claim under the existing
+  `// lifted (verify)` header — a faithful reading, not an inference: a bare `array` with no
+  annotation stays refused (the message now names the docblock fix), a refinement on any other
+  type (`@param non-empty-string $s`) is left alone, and `array{…}` shapes, `mixed`, other generics
+  and non-null unions are refused by name. A `\`-rooted class inside a generic becomes an implicit
+  `use` exactly like an inline one. Named arguments (`new TenureSignal(tier: 0, …)`, 6 scout files)
+  were read only inside attributes; one shared reader now serves attributes, calls and `new`.
 - **Lift: array append, primitive casts and root-qualified names** — the three walls the five
   scout modules hit next, taken in file-count order (Lane R-3). `$xs[] = v` (38 of 120 files) lifts
   to `xs = List.append(xs, v)` with `Core.List` imported through the DEC-312 pass — a COW value

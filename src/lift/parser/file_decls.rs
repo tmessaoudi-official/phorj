@@ -58,7 +58,8 @@ impl PParser {
             // DEC-419: a PHPDoc block sits in front of the item's FIRST token, so read the side
             // channel at `self.pos` BEFORE parsing consumes it, then key it by the parsed name.
             let doc = self.docs.get(&self.pos).cloned();
-            let item = self.parse_item()?;
+            let mut item = self.parse_item()?;
+            self.apply_doc_item(doc.as_deref(), &mut item)?;
             if let (Some(d), Some(name)) = (doc, super::super::ast::php_item_name(&item)) {
                 docs.insert(name.to_string(), d);
             }

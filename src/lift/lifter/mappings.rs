@@ -44,7 +44,10 @@ pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
     match t {
         php::PhpType::Named(name) => match name.as_str() {
             "int" | "float" | "string" | "bool" | "void" => Ok(named(name)),
-            "array" => Err("lift: an `array` type needs List/Map/Set inference (Tier-2)".into()),
+            "array" => Err("lift: an `array` type needs List/Map/Set inference (Tier-2) — annotate it \
+                            (`@param list<T> $x`, `@return array<K, V>`, `@var T[]`) and the lifter \
+                            reads the docblock"
+                .into()),
             "mixed" | "iterable" | "object" | "callable" | "self" | "static" | "parent" => {
                 Err(format!("lift: the `{name}` type is Tier-2/Tier-3"))
             }
@@ -61,6 +64,20 @@ pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
             inner: Box::new(lift_type(inner)?),
             span: SP,
         }),
+        // Lane R-4: a docblock generic the parser substituted for a bare `array`.
+        php::PhpType::Generic { name, args } => {
+            let args: Vec<Type> = args.iter().map(lift_type).collect::<Result<_, _>>()?;
+            let head = match (name.as_str(), args.len()) {
+                ("list", 1) | ("array", 1) => "List",
+                ("array", 2) => "Map",
+                _ => return Err(format!("lift: the docblock generic `{name}` is Tier-2")),
+            };
+            Ok(Type::Named {
+                name: head.into(),
+                args,
+                span: SP,
+            })
+        }
     }
 }
 

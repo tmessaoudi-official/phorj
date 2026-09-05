@@ -65,7 +65,16 @@ impl PParser {
             .map(str::to_string)
             .collect();
         let local = path.last().cloned().unwrap_or_default();
-        if path.len() > 1 && !self.implicit_uses.iter().any(|u| u.path == path) {
+        if path.len() > 1 {
+            self.note_implicit_use(path);
+        }
+        Ok(local)
+    }
+
+    /// Record a multi-segment path as an implicit `use` (once per path). Shared with the docblock
+    /// type reader, so `@return list<\\A\\B\\C>` imports `C` exactly like an inline `\\A\\B\\C`.
+    pub(super) fn note_implicit_use(&mut self, path: Vec<String>) {
+        if !self.implicit_uses.iter().any(|u| u.path == path) {
             let line = self.line();
             self.implicit_uses.push(PhpUse {
                 path,
@@ -73,7 +82,23 @@ impl PParser {
                 line,
             });
         }
-        Ok(local)
+    }
+
+    /// One call/construction/attribute argument: `name: value` (PHP 8.0 named argument — phorj
+    /// accepts them in the same positions, DEC-297 / DEC-435, so they lift 1:1) or an expression.
+    /// The `name :` lookahead cannot collide with a static access — `::` is its own token.
+    pub(super) fn parse_arg(&mut self) -> Result<PhpExpr, String> {
+        if let PTok::Ident(n) = self.peek().clone() {
+            if matches!(self.peek_at(1), PTok::Colon) {
+                self.advance(); // name
+                self.advance(); // `:`
+                return Ok(PhpExpr::NamedArg {
+                    name: n,
+                    value: Box::new(self.parse_expr()?),
+                });
+            }
+        }
+        self.parse_expr()
     }
 
     /// Fold the implicit `use`s into the explicit list — an explicit `use` of the same path wins, so a

@@ -193,7 +193,10 @@ impl PParser {
         self.expect(&PTok::LBrace, "`{`")?;
         let mut members = Vec::new();
         while !self.at(&PTok::RBrace) && !self.at(&PTok::Eof) {
-            members.push(self.parse_member()?);
+            let doc = self.doc_here();
+            let mut m = self.parse_member()?;
+            self.apply_doc_member(doc.as_deref(), &mut m)?;
+            members.push(m);
         }
         self.expect(&PTok::RBrace, "`}`")?;
         Ok(PhpClass {
@@ -379,7 +382,10 @@ impl PParser {
                 self.expect(&PTok::Semi, "`;`")?;
                 cases.push(PhpEnumCase { name: cname, value });
             } else {
-                match self.parse_member()? {
+                let doc = self.doc_here();
+                let mut mem = self.parse_member()?;
+                self.apply_doc_member(doc.as_deref(), &mut mem)?;
+                match mem {
                     PhpMember::Method(m) => methods.push(m),
                     _ => {
                         return Err(self.err("an enum may only contain cases and methods (Tier-1)"))

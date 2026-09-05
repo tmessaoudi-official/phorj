@@ -212,6 +212,9 @@ pub enum PhpType {
     Named(String),
     /// `?T` — a nullable type.
     Nullable(Box<PhpType>),
+    /// A docblock generic substituted for a bare `array` (Lane R-4): `list<T>`, `array<T>`,
+    /// `array<K, V>`, `T[]`. `name` is `list` or `array`; the lifter maps them to `List`/`Map`.
+    Generic { name: String, args: Vec<PhpType> },
 }
 
 /// A PHP statement.

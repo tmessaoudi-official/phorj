@@ -86,6 +86,7 @@ pub fn parse_php_with_docs(
 
 mod attrs;
 mod closures;
+mod docblock;
 mod exprs;
 mod file_decls;
 mod items;

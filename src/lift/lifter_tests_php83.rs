@@ -121,3 +121,68 @@ fn a_closure_typed_property_is_refused_by_name() {
         .expect_err("a bare Closure type");
     assert!(err.contains("Closure"), "{err}");
 }
+
+// ── Lane R-4: docblock generics type the bare `array` (60 + 42 of scout's 120 files) ────────────
+
+#[test]
+fn docblock_generics_type_a_bare_array_parameter_and_return() {
+    let out = lift(
+        "<?php\n/**\n * @param list<string> $xs\n * @return array<string, int>\n */\nfunction f(array $xs): array { return []; }",
+    );
+    assert!(
+        out.contains("function f(List<string> xs): Map<string, int>"),
+        "{out}"
+    );
+    assert_reparses(&out);
+}
+
+#[test]
+fn docblock_generics_cover_methods_properties_and_nullable_returns() {
+    let out = lift(
+        "<?php\nfinal class A {\n    /** @var list<int> */\n    private array $xs;\n    /** @return list<int> */\n    public function all(): ?array { return $this->xs; }\n}",
+    );
+    assert!(out.contains("List<int> xs"), "{out}");
+    assert!(out.contains("all(): List<int>?"), "{out}");
+    assert_reparses(&out);
+}
+
+/// The substitution guard: only a declared `array` is replaced — a refinement on any other type is
+/// left exactly as declared.
+#[test]
+fn a_docblock_refinement_on_a_non_array_type_is_left_alone() {
+    let out = lift(
+        "<?php\n/** @param non-empty-string $s */\nfunction f(string $s): string { return $s; }",
+    );
+    assert!(out.contains("f(string s): string"), "{out}");
+}
+
+#[test]
+fn bare_array_and_array_shapes_stay_refused_by_name() {
+    let err = super::lifter::lift_source("<?php function f(array $xs): int { return 0; }")
+        .expect_err("a bare array");
+    assert!(err.contains("@param"), "{err}");
+    let err = super::lifter::lift_source(
+        "<?php\n/** @return array{a: int} */\nfunction f(): array { return []; }",
+    )
+    .expect_err("an array shape");
+    assert!(err.contains("shape"), "{err}");
+}
+
+#[test]
+fn a_root_qualified_class_in_a_docblock_generic_is_imported() {
+    let out = lift(
+        "<?php\nnamespace App;\n/** @return list<\\Scout\\Rent\\Core\\RawListing> */\nfunction f(): array { return []; }",
+    );
+    assert!(out.contains("import Scout.Rent.Core.RawListing;"), "{out}");
+    assert!(out.contains("f(): List<RawListing>"), "{out}");
+}
+
+/// PHP 8.0 named arguments were read only inside attributes; scout writes them in `new` (6 files).
+#[test]
+fn named_arguments_lift_in_calls_and_construction() {
+    let out = lift(
+        "<?php\nfinal class S { public function __construct(public int $tier, public string $mode) {} }\nfunction f(): S { return new S(tier: 0, mode: \"a\"); }",
+    );
+    assert!(out.contains("new S(tier: 0, mode: \"a\")"), "{out}");
+    assert_reparses(&out);
+}

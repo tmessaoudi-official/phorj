@@ -34,10 +34,14 @@ literal stay as written), **Lane A** (`workspace/symbol` + `foldingRange`, provi
 editors + VS Code 0.7.0, ratchet floor re-frozen and its summary now says MET at 311/311), the
 Invariant-13 splits the size gate demanded (`vm/concat.rs`, `lsp/{signature,rpc}.rs`,
 `transpile/helper_buckets/`, the lift test modules), and **Lane R v1** — the two parser refusals
-that blocked 5/5 scout modules (`readonly class`, PHP 8.3 typed class constants) now lift. **Next
-wall** (measured, in order): arrow/block closures (script staged), `yield` (a LANGUAGE gap —
-DEC-479 generators are RULED, build QUEUED), `??=`, `list()`, `: never`, first-class callables,
-constructor-parameter defaults. Two banked questions for the developer in the plan's *Needs input*
+that blocked 5/5 scout modules (`readonly class`, PHP 8.3 typed class constants) now lift; then
+**R-2** `4cab4ed7` (arrow closures → lambdas), **R-3** `b5145855` (array append → `List.append`,
+primitive casts → `as`, root-qualified names → implicit `use`), **R-4** (docblock generics type the
+bare `array` — the wall behind all five modules; named arguments in every argument list). Each
+step was re-measured on the five modules before the next was chosen. **Deferred by ruling**
+(plan Decisions Log 11:10): `clone($x, [...])` → `with`, `list()`, `: never`, first-class
+callables, `...$spread` (no phorj form), `?? throw` (no throw expression), and `yield` (a LANGUAGE
+gap — DEC-479 generators are RULED, build QUEUED; 22 scout files). Two banked questions for the developer in the plan's *Needs input*
 (Q-W2-1 `Color.Green` cross-package, Q-W2-2 `Acme\Color.Green` rendering). **Still OWED:** the
 same full pre-push gate as above — this wave's commits also went in `--no-verify` under a load of
 20–37, with each lane's targeted tests, the size gate, fmt, a lib clippy and the T/R/A sabotage

@@ -75,17 +75,7 @@ impl PParser {
     /// attributes), so they lift 1:1 instead of being reordered away. The `name :` lookahead cannot
     /// collide with a static access — `::` lexes as its own [`PTok::DoubleColon`].
     fn parse_attr_arg(&mut self) -> Result<PhpExpr, String> {
-        if let PTok::Ident(n) = self.peek().clone() {
-            if matches!(self.peek_at(1), PTok::Colon) {
-                self.advance(); // name
-                self.advance(); // `:`
-                return Ok(PhpExpr::NamedArg {
-                    name: n,
-                    value: Box::new(self.parse_expr()?),
-                });
-            }
-        }
-        self.parse_expr()
+        self.parse_arg() // the same reader ordinary argument lists use (Lane R-4)
     }
 
     /// Refuse an attribute in a position phorj has no target for.
