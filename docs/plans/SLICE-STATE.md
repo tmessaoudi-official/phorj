@@ -37,15 +37,28 @@ Invariant-13 splits the size gate demanded (`vm/concat.rs`, `lsp/{signature,rpc}
 that blocked 5/5 scout modules (`readonly class`, PHP 8.3 typed class constants) now lift; then
 **R-2** `4cab4ed7` (arrow closures → lambdas), **R-3** `b5145855` (array append → `List.append`,
 primitive casts → `as`, root-qualified names → implicit `use`), **R-4** (docblock generics type the
-bare `array` — the wall behind all five modules; named arguments in every argument list). Each
-step was re-measured on the five modules before the next was chosen. **Deferred by ruling**
+bare `array` — the wall behind all five modules; named arguments in every argument list), **R-5**
+`691ea21c` (interfaces, parameter defaults, `@`-suppression dropped, root-qualified parents,
+`1_000`), **R-6** `be09639b` (an empty literal takes its type from a `@var` or the declared return),
+and **R-7** `acf0ba00` (`self` → the enclosing class exactly, a property default → a field
+initializer, root-qualified `instanceof`). Each step was re-measured on the five modules before the
+next was chosen, and on the whole tree at each landing: **12/120 → 42/120 → 54/121 files lift**,
+12 of them checking clean standalone (the rest reference siblings and check only as a project).
+
+The Invariant-9 example for R-7 (`de8f0276`) found two lifter bugs by being RUN rather than read: a
+root-qualified name pointing into the file's OWN namespace became an import of itself, and every
+top-level statement got a fresh already-declared set, so a file-scope reassignment re-declared its
+variable — a shape almost every PHP script contains. Both fixed and sabotage-proven; the remaining
+known gap is `§LIFT-DISCARD` (a call written for effect lifts fine, then fails `phg check`). **Deferred by ruling**
 (plan Decisions Log 11:10): `clone($x, [...])` → `with`, `list()`, `: never`, first-class
 callables, `...$spread` (no phorj form), `?? throw` (no throw expression), and `yield` (a LANGUAGE
 gap — DEC-479 generators are RULED, build QUEUED; 22 scout files). Two banked questions for the developer in the plan's *Needs input*
-(Q-W2-1 `Color.Green` cross-package, Q-W2-2 `Acme\Color.Green` rendering). **Still OWED:** the
-same full pre-push gate as above — this wave's commits also went in `--no-verify` under a load of
-20–37, with each lane's targeted tests, the size gate, fmt, a lib clippy and the T/R/A sabotage
-checks run in completed jobs.
+(Q-W2-1 `Color.Green` cross-package, Q-W2-2 `Acme\Color.Green` rendering). **The OWED gate has since RUN** (2026-09-05 12:37, on `be09639b`) and was
+RED on 2 of 9 steps — the repo format sweep (8 non-canonical `.phg`) and BOTH clippy tiers. Neither
+is reachable from the fast pre-commit tier, which is exactly the debt `--no-verify` under load
+creates. Fixed at the root in `7f441a09` (`phg lift` now writes the formatter's canonical bytes, so
+the pair gate and the format sweep stop demanding different text), after which the full ten-step
+gate was green on the frozen commit and wave-1 + wave-2 were PUSHED (`39529d95..bad2ac87`).
 
 ## ▶ CURRENT CURSOR (2026-08-29) — **S3.5 SHIPPED. DEC-331 SLICE 3 IS CLOSED.**
 

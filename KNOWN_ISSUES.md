@@ -487,6 +487,21 @@ mismatch at the first arithmetic use rather than the lifter guessing a lenient p
 not mistaken for a lifter bug. `(bool)` on a string follows PHP's truthiness through
 `Conversion.asBool` and is exact.
 
+## LIFT-DISCARD — a call written for its side effect lifts fine, then fails `phg check` (noted 2026-09-05)
+
+PHP discards a statement's value silently, so `$logger->info('x');` and `$t->add(3);` are ordinary
+statements. phorj requires the result of a non-`void` call to be used: the lifted `t.add(3);` is
+`E-UNUSED-VALUE`, with the hint to bind it or prefix `discard`. The draft therefore lifts, and the
+refusal arrives at check time rather than at lift time — which is the right place for it, but it
+means a fluent API called for effect needs a hand edit.
+
+Why the obvious fix was not taken: `discard` IS accepted on a `void` call (measured — a `discard
+noise();` where `noise(): void` runs clean), so emitting `discard` for every statement-position call
+would always be CORRECT. It would also put `discard` in front of every lifted `echo`, which is
+noise in every draft to remove one refusal in a few. The rule worth building is the typed one — emit
+it only where the callee's declared return is not `void`, which the lifter knows for a class in the
+file it is lifting.
+
 ## LIFT-ECHO-INT — `echo <non-string>` lifts to a `Output.print(int)` type error (noted 2026-08-01) — **FIXED 2026-09-05**
 
 **Fixed:** in echo position a non-string expression lifts to an interpolation (a `.`-chain flattened into one,
