@@ -22,12 +22,14 @@ function main(): void {
     // The entry package's OWN enum, dumped under the same namespaced emission (`namespace Main {`).
     discard Debug.dump(new B());
     Color c = new Green();
-    Output.printLine("kind={Reflection.kind(c)} name={Reflection.className(c) ?? "?"}");
+    Output.printLine("kind={Reflection.kind(c)} name={Reflection.className(c) ?? \"?\"}");
     discard Debug.dump(c);
     discard Debug.dump([new Red(), new Green()]);
     // The other `get_class()`-keyed table: `__phorj_reflect_of`, reached through the three list-valued
     // reflection calls on a cross-package class.
     Widget w = new Widget(3);
-    Output.printLine("methods={String.join(Reflection.methods(w), ",")} interfaces={String.join(Reflection.interfaces(w), ",")} parents={String.join(Reflection.parents(w), ",")}");
+    Output.printLine(
+        "methods={String.join(Reflection.methods(w), \",\")} interfaces={String.join(Reflection.interfaces(w), \",\")} parents={String.join(Reflection.parents(w), \",\")}"
+    );
     Output.printLine("done");
 }

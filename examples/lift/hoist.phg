@@ -2,9 +2,7 @@
 package Main;
 
 import Core.Runtime.Entry;
-
 import Core.Runtime.EntryKind;
-
 import Core.Output;
 
 function pick(): string {

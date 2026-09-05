@@ -32,11 +32,19 @@ fn every_shipped_lift_pair_is_the_lifters_own_output() {
             continue;
         }
         let src = std::fs::read_to_string(&php).unwrap();
-        let lifted = crate::lift::lifter::lift_source(&src)
-            .unwrap_or_else(|e| panic!("{name} no longer lifts: {e}"));
+        // Exactly what `phg lift` writes — banner and canonical formatting included. Comparing
+        // against the raw library call instead let the pair gate pass while the repo format sweep
+        // failed on the same files, each certain the other's shape was wrong.
+        let lifted =
+            crate::cli::cmd_lift(&src).unwrap_or_else(|e| panic!("{name} no longer lifts: {e}"));
         let expected = std::fs::read_to_string(&phg).unwrap();
-        // The CLI prefixes the banner; the library call does not — compare what `phg lift` writes.
-        let lifted = format!("{}\n{lifted}", crate::lift::LIFT_BANNER);
+        // Both sides now come from `cmd_lift`, so a banner the formatter dropped or moved would
+        // agree with itself and every shipped draft would lose its "verify" disclaimer silently.
+        // This is the only thing in the repo that pins the banner to the FIRST line of the output.
+        assert!(
+            expected.starts_with(crate::lift::LIFT_BANNER),
+            "{name}: the lifted draft no longer opens with the verify banner"
+        );
         assert_eq!(lifted.trim_end(), expected.trim_end(), "{name}: the shipped .phg is not the lifter's output — re-run `phg lift {name} > {}` or exempt it by name", phg.file_name().unwrap().to_string_lossy());
         checked += 1;
     }

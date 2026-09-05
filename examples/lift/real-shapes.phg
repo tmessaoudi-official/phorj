@@ -2,15 +2,10 @@
 package App;
 
 import Core.Runtime.Entry;
-
 import Core.Runtime.EntryKind;
-
 import Core.Output;
-
 import Core.List;
-
 import Core.Math;
-
 import Core.String;
 
 interface Scorer {
@@ -58,5 +53,5 @@ function main(): void {
     Output.print("{r.score(words).integerDivide(2)}\n");
     Output.print("{(r.score(words) as float) / 2.0}\n");
     Output.print("{Ranking::NAME} 1000\n");
-    Output.print("{r.summary(words)["total"]}\n");
+    Output.print("{r.summary(words)[\"total\"]}\n");
 }

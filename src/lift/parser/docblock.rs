@@ -161,7 +161,7 @@ impl PParser {
                     };
                     let ty = self.parse_doc_type(&ty)?;
                     if matches!(ty, PhpType::Generic { .. }) {
-                        *value = Box::new(PhpExpr::EmptyColl(ty));
+                        **value = PhpExpr::EmptyColl(ty);
                     }
                 }
             }
@@ -205,7 +205,7 @@ impl PParser {
         match ty {
             t if is_array(t) => *t = self.parse_doc_type(doc_ty)?,
             PhpType::Nullable(inner) if is_array(inner) => {
-                *inner = Box::new(self.parse_doc_type(doc_ty)?);
+                **inner = self.parse_doc_type(doc_ty)?;
             }
             _ => {}
         }

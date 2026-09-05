@@ -8,6 +8,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **`phg lift` now writes canonical phorj**, and the repo format sweep names the file it rejects.
+  The lifter's printer emitted whatever shape it happened to build, so all five regenerated
+  `examples/lift/*.phg` pairs — plus the three `examples/project/reflectdump/` files — were text
+  `phg format --check` refused. Two gates then disagreed by construction: the pair gate
+  (`src/lift/tests_examples.rs`) compared the shipped `.phg` against the RAW library call and passed,
+  while `tests/format.rs` demanded width-canonical bytes and failed on the same files. `cmd_lift`
+  now runs its draft through `cli::format_source` (one canonicaliser, not two; a draft that does not
+  parse is emitted as written), and the pair gate compares against `cmd_lift` itself — plus a new
+  assertion that the draft still OPENS with the verify banner, which nothing pinned once both sides
+  of the comparison came from the same call. Two drafts also changed shape beyond whitespace: the
+  printer writes a nested string inside an interpolation unescaped (`"{label("phorj")}"`), which the
+  lexer accepts and the formatter canonicalises to `"{label(\"phorj\")}"` — the same program, now in
+  one shape rather than two. Caught only by
+  the full pre-push gate: both sweeps are excluded from the fast pre-commit tier, and this wave's
+  commits went in `--no-verify` under load.
+- **The format sweep hid the failing path.** Its workers asserted inside `std::thread::scope`, so a
+  failure reached the run as the bare `a scoped thread panicked` — eight offending files, none of
+  them named, against a comment claiming the path was in the message. Workers now RETURN their
+  complaint and the sweep asserts on the joined list.
+- **Two `Box::new` allocations replaced by an assignment through the box** in
+  `src/lift/parser/docblock.rs` (`clippy::all` is `deny`; `--all-features` clippy is the tier the
+  wave's `--no-verify` commits never ran).
+
 - **`Debug.dump` of an enum under namespaced (project) emission** printed the mangled PHP class
   (`Acme\Color_Green {}`) where both native legs print `Acme\Color.Green` — KNOWN_ISSUES
   §TRANSPILE-NS-REFLECT-TABLES, which had only INFERRED the divergence. Measured with the new

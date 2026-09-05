@@ -135,41 +135,61 @@ fn every_repo_phg_formats_idempotently_and_safely() {
         .map(|p| p.get())
         .unwrap_or(4);
     let chunk = files.len().div_ceil(n).max(1);
-    std::thread::scope(|s| {
-        for group in files.chunks(chunk) {
-            s.spawn(move || {
-                for f in group {
-                    assert_phg_fmt_safe(f);
-                }
-            });
-        }
+    let failures: Vec<String> = std::thread::scope(|s| {
+        let workers: Vec<_> = files
+            .chunks(chunk)
+            .map(|group| {
+                s.spawn(move || {
+                    group
+                        .iter()
+                        .filter_map(|f| check_phg_fmt_safe(f))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|w| w.join().unwrap())
+            .collect()
     });
+    assert!(
+        failures.is_empty(),
+        "{} file(s) are not format-safe:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }
 
 /// Format-safety checks for one `.phg`: it formats without error, is idempotent, and (for a
 /// standalone-runnable program) preserves behavior. Split out of the corpus sweep above so that
 /// sweep can fan out across threads.
-fn assert_phg_fmt_safe(f: &Path) {
+///
+/// Returns the complaint rather than asserting, because a panic inside a scoped worker reaches the
+/// test as the bare message "a scoped thread panicked" — the offending PATH is lost, which is the
+/// one thing the failure needed to say. Observed 2026-09-05: eight non-canonical files, and the run
+/// named none of them; the sweep's own comment claimed otherwise.
+fn check_phg_fmt_safe(f: &Path) -> Option<String> {
+    let p = f.display();
     let src = std::fs::read_to_string(f).unwrap();
     // Formats without error.
-    let once =
-        cli::format_source(&src).unwrap_or_else(|e| panic!("fmt failed on {}:\n{e}", f.display()));
+    let once = match cli::format_source(&src) {
+        Ok(once) => once,
+        Err(e) => return Some(format!("  {p}: fmt failed: {e}")),
+    };
     // Canonical: every tracked `.phg` is already in width-canonical form, so `fmt(src) == src`
     // (UA-0.8 — the corpus test used to be idempotency-only, letting tracked files silently drift).
-    assert_eq!(
-        src,
-        once,
-        "not width-canonical (run `phg format {}`): fmt(src) != src",
-        f.display()
-    );
+    if src != once {
+        return Some(format!("  {p}: not width-canonical — run `phg format {p}`"));
+    }
     // Idempotent.
-    let twice = cli::format_source(&once).unwrap();
-    assert_eq!(once, twice, "not idempotent: {}", f.display());
+    if cli::format_source(&once).unwrap() != once {
+        return Some(format!("  {p}: not idempotent"));
+    }
     // Meaning preserved for a standalone-runnable program (skip multi-file project parts /
     // impure / fragment files, which don't run as a single source).
     let before = cli::cmd_treewalk(&src);
-    if before.is_ok() {
-        let after = cli::cmd_treewalk(&once);
-        assert_eq!(before, after, "fmt changed behavior of {}", f.display());
+    if before.is_ok() && cli::cmd_treewalk(&once) != before {
+        return Some(format!("  {p}: fmt changed behavior"));
     }
+    None
 }

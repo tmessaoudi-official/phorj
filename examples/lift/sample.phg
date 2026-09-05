@@ -2,9 +2,7 @@
 package Main;
 
 import Core.Runtime.Entry;
-
 import Core.Runtime.EntryKind;
-
 import Core.Output;
 
 function greet(string name): string {
@@ -21,6 +19,6 @@ open class Counter {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     mutable var c = new Counter(41);
-    Output.print("{greet("Phorj")}");
+    Output.print("{greet(\"Phorj\")}");
     Output.print(" Counter starts at {c.start}, next is {c.next()}.");
 }

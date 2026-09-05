@@ -1,5 +1,5 @@
 package Acme;
 
-public interface Buzzer {
+interface Buzzer {
     function buzz(): string;
 }

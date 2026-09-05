@@ -699,7 +699,15 @@ pub fn cmd_tokenize(src: &str) -> Result<String, String> {
 /// (never a silent guess). No `on_deep_stack`: the lift parser has its own depth guard.
 pub fn cmd_lift(src: &str) -> Result<String, String> {
     let phorj = crate::lift::lifter::lift_source(src)?;
-    Ok(format!("{}\n{phorj}", crate::lift::LIFT_BANNER))
+    let draft = format!("{}\n{phorj}", crate::lift::LIFT_BANNER);
+    // A lifted draft IS phorj source, so it leaves the tool in the formatter's canonical form — the
+    // exact bytes `phg format` would write. Without this the lifter's printer shape was whatever the
+    // printer happened to emit: every shipped `examples/lift/*.phg` was non-canonical, and the repo
+    // format sweep (`tests/format.rs`) failed on five of them at once (2026-09-05). Formatting here
+    // rather than in the printer keeps ONE canonicaliser in the codebase instead of two that can
+    // drift. A draft that does not parse is emitted as written — the reader still gets the draft,
+    // and `phg check` is the surface that reports why it does not parse.
+    Ok(crate::cli::format_source(&draft).unwrap_or(draft))
 }
 
 /// `transpile` from one source string: lex -> parse -> **native-only ladder gate** -> check ->
