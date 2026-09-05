@@ -319,6 +319,19 @@ pub enum PhpExpr {
         left: Box<PhpExpr>,
         right: Box<PhpExpr>,
     },
+    /// An ARROW closure — `fn (T $x): R => expr`, optionally `static` (which changes nothing for a
+    /// lift: phorj closures capture lexically, and `static` only forbids `$this`). Lane R, 2026-09-05:
+    /// this is the dominant closure shape in real code (every closure in scout's pure modules is
+    /// `static fn (…): T =>`), and every one of them was Tier-2 before. A `use (…)` list is accepted
+    /// and dropped — phorj captures by value lexically, which is PHP's `use` semantics — except a
+    /// by-reference `use (&$x)`, which has no faithful lift and stays refused. Block-bodied closures
+    /// (`function (…) { … }`) remain Tier-2 in this slice: a block needs the statement lifter's
+    /// scope machinery, which is a second step.
+    Closure {
+        params: Vec<PhpParam>,
+        ret: Option<PhpType>,
+        body: Box<PhpExpr>,
+    },
     /// `value instanceof ClassName` (C-46). `class` is a static type name (a dynamic
     /// `$x instanceof $cls` has no Phorj equivalent and is rejected by the parser).
     InstanceOf {

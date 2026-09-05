@@ -315,6 +315,9 @@ fn walk_expr(
         // expression parser admits them (attribute arg lists are outside every body) — recursing now
         // means that slice cannot silently skip a sighting and mis-hoist.
         E::NamedArg { value, .. } => walk_expr(value, ctx, sightings, order),
+        // An arrow closure captures by value: its body READS enclosing locals (walk them) and its
+        // parameters are its own (never a hoist candidate for the enclosing function).
+        E::Closure { body, .. } => walk_expr(body, ctx, sightings, order),
         E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => {}
         E::Interp(parts) => {
             for p in parts {

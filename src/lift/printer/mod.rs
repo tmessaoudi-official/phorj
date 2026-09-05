@@ -17,6 +17,7 @@ use crate::ast::{
 mod docs;
 mod exprs;
 mod items;
+mod lambda;
 mod setup;
 mod stmts;
 use self::exprs::*;

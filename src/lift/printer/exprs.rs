@@ -214,13 +214,15 @@ impl Printer {
                     out.join(", ")
                 ))
             }
+            Expr::Lambda {
+                params, ret, body, ..
+            } => self.lambda(params, ret.as_ref(), body),
             Expr::Bytes(_, _)
-            | Expr::Lambda { .. }
             | Expr::CloneWith { .. }
             | Expr::Inject { .. }
             | Expr::TaggedTemplate { .. }
             | Expr::Html(_, _) => Err(
-                "printer: bytes/lambda/clone-with/inject/html/tagged-template are outside the lift subset"
+                "printer: bytes/clone-with/inject/html/tagged-template are outside the lift subset"
                     .into(),
             ),
         }

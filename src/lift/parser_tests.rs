@@ -385,9 +385,10 @@ fn rejects_unsupported_keywords() {
 }
 
 #[test]
-fn rejects_closures_and_arrow_fns() {
-    assert!(perr("<?php $f = function () { return 1; };").contains("closures"));
-    assert!(perr("<?php $f = fn ($x) => $x;").contains("closures"));
+fn rejects_block_closures_and_parses_arrow_fns() {
+    assert!(perr("<?php $f = function () { return 1; };").contains("Tier-2"));
+    // Lane R (2026-09-05): the arrow form is Tier-1 — it is the closure shape real code uses.
+    assert!(matches!(expr("fn ($x) => $x"), PhpExpr::Closure { .. }));
 }
 
 #[test]

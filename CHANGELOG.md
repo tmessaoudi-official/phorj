@@ -119,6 +119,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   from `initialize`, and the READMEs plus VS Code extension `0.7.0` say so in the same change
   (DEC-181). The surface ratchet's floor is re-frozen at 11 providers / 303 examples, and its summary
   line now says the 100% rule is MET for diagnostics instead of "NOT met yet" at 311/311.
+- **Lift: PHP arrow closures** (`fn (int $v): int => $v * $k`, and the `static fn` form) lift to
+  phorj's expression-bodied lambda `function(int v): int => v * k` — the closure shape real code
+  actually uses (`static fn` in 25 of scout's 120 files, the next wall after `readonly class`). PHP
+  captures the enclosing locals by value and so does phorj, so nothing is written for the capture;
+  parameter types and the return type travel. A block-bodied `function (…) { … }` closure stays
+  Tier-2 with a message that names the arrow form — its `use (&$x)` can capture by reference and its
+  body is a statement list, neither of which has a faithful draft yet. The lift parser's
+  `fn`-leading-statement screen is gone (the expression parser owns the token), and the lift printer
+  gained its lambda arm (`printer/lambda.rs`); the parser's closure code lives in
+  `parser/closures.rs` (Invariant 13).
 - **Lift: PHP 8.2 `readonly class` and PHP 8.3 typed class constants.** Measured on a REAL app first
   (Lane R, `/stack/projects/scout`): all five pure-logic modules tried were refused at the lift
   PARSER, on exactly these two forms — `final readonly class` opens 69 of its 120 files and typed

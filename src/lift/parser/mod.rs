@@ -34,7 +34,7 @@ const UNSUPPORTED_KW: &[&str] = &[
     "const",
     "static",
     "function", // a *nested* function is a closure-ish construct; top-level fns are caught earlier
-    "fn",
+                // `fn` is NOT here: an arrow closure is an expression and the expression parser owns it (Lane R).
 ];
 
 /// PHP cast type names (`(int)$x`). Detected to reject casts loudly (Tier-2) instead of misparsing.
@@ -81,6 +81,7 @@ pub fn parse_php_with_docs(
 }
 
 mod attrs;
+mod closures;
 mod exprs;
 mod file_decls;
 mod items;

@@ -41,3 +41,28 @@ fn a_typed_class_constant_lifts_with_its_declared_type() {
     assert!(out.contains("const float UNTYPED = 1.5"), "{out}");
     assert_reparses(&out);
 }
+
+/// Lane R — arrow closures, the dominant closure shape in real code (`static fn` in 25 of scout's
+/// 120 files). `static` is a no-op, the enclosing locals are captured by value on both sides so
+/// nothing is written for it, types and the return type travel, and the draft reparses.
+#[test]
+fn arrow_closures_lift_to_lambdas() {
+    let out = lift(
+        "<?php\nfunction main(): void {\n    $k = 3;\n    $f = static fn (int $v): int => $v * $k;\n    $g = fn (string $s): bool => strlen($s) > $k;\n    echo $f(2);\n}",
+    );
+    assert!(out.contains("function(int v): int => v * k"), "{out}");
+    assert!(out.contains("function(string s): bool =>"), "{out}");
+    assert_reparses(&out);
+}
+
+/// A block-bodied `function (…) { … }` closure is still refused: its body is a statement list and
+/// its `use (…)` list can capture by reference, neither of which has a faithful draft yet.
+#[test]
+fn a_block_closure_stays_tier_2() {
+    let err = super::lifter::lift_source(
+        "<?php function main(): void { $f = function (int $x): int { return $x; }; }",
+    )
+    .expect_err("block closures are refused in this slice");
+    assert!(err.contains("Tier-2"), "{err}");
+    assert!(err.contains("fn (…) => …"), "{err}");
+}

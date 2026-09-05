@@ -1,12 +1,20 @@
 //! PHP lifter — expression lifting + leaf conversions (types, ops, params).
 
 use super::*;
+use crate::ast::LambdaBody;
 
 // ── expressions (no scope state) ──
 
 pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
     Ok(match e {
         php::PhpExpr::Int(n) => Expr::Int(*n, SP),
+        php::PhpExpr::Closure { params, ret, body } => Expr::Lambda {
+            params: lift_params(params)?,
+            ret: ret.as_ref().map(lift_type).transpose()?,
+            throws: Vec::new(),
+            body: LambdaBody::Expr(Box::new(lift_expr(body)?)),
+            span: SP,
+        },
         php::PhpExpr::Float(f) => Expr::Float(*f, SP),
         php::PhpExpr::Str(s) => Expr::Str(vec![StrPart::Literal(s.clone())], SP),
         php::PhpExpr::Interp(parts) => {

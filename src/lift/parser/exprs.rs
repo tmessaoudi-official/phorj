@@ -299,7 +299,9 @@ impl PParser {
             }
             "new" => self.parse_new(),
             "match" => self.parse_match(),
-            "function" | "fn" => Err(self.err("closures and arrow functions are Tier-2")),
+            "fn" => self.parse_arrow_closure(),
+            "static" if self.at_static_fn() => self.parse_arrow_closure(),
+            "function" => self.refuse_block_closure(),
             "clone" | "print" | "yield" | "throw" | "include" | "require" | "include_once"
             | "require_once" => Err(self.err(&format!("`{word}` is Tier-2/Tier-3"))),
             _ => {
@@ -445,7 +447,6 @@ pub(super) fn is_lvalue(e: &PhpExpr) -> bool {
 }
 
 // ── C-1: string interpolation ──
-//
 // PHP's double-quoted interpolation grammar is exactly a `$`-rooted *access chain* — a variable
 // followed by `->prop` / `[idx]` / method-call steps; a top-level operator is a PHP parse error
 // (verified against 8.5: `"{$a + $b}"` errors with `expecting "->" or "?->" or "["`). That is also
