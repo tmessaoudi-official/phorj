@@ -8,6 +8,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **`Debug.dump` of an enum under namespaced (project) emission** printed the mangled PHP class
+  (`Acme\Color_Green {}`) where both native legs print `Acme\Color.Green` — KNOWN_ISSUES
+  §TRANSPILE-NS-REFLECT-TABLES, which had only INFERRED the divergence. Measured with the new
+  `examples/project/reflectdump/` on all three legs: the entry package's own enum missed too
+  (`Main\Local_B {}`), while `__phorj_reflect_of` was already namespace-safe. The
+  `__phorj_debug_enums` row is now keyed by the FQN `get_class` returns and carries the enum name
+  exactly as the checker holds it (bare `Local`, mangled `Acme\Color`); nothing is stripped at
+  lookup, since `Acme\Color_Green` and `Other\Color_Green` share a leaf.
+- **Lift: `echo <non-string>` no longer produces a type error** (KNOWN_ISSUES §LIFT-ECHO-INT). In
+  echo position the argument becomes an interpolation: a `.`-concat chain is flattened into one
+  (`echo "x" . half($n)` → `Output.print("x{half(n)}")`), a call is wrapped (`echo half(3)` →
+  `Output.print("{half(3)}")`), int/bool literals become the text PHP prints, while a string
+  literal and a bare variable stay as written (`echo $x` → `Output.print(x)`). The round-trip harness's "raw int echo is avoided on
+  purpose" workaround is gone — an `int_echo` sample now runs through it.
+- **Invariant 13 splits** for the wave-1 growth the size gate refused: the `Concat` arm →
+  `vm/concat.rs`, the DEC-431 B tests → `vm/tests_concat.rs`, signature help → `lsp/signature.rs`
+  (an `impl Server`), the JSON-RPC plumbing → `lsp/rpc.rs`, the helper registry's tests →
+  `transpile/helper_buckets/tests.rs`, the lift ratchet + echo tests → `lift/lifter_tests_echo_registry.rs`.
+
+
 - **The VM's `s = s + x` accumulator is amortised O(1)** (DEC-431 B; an implementation choice per
   DEC-463). The bytecode is `GetLocal(k); <x>; Concat(2); SetLocal(k)`, so at the `+` the accumulator
   was referenced twice — its slot and the stack — and every append copied the whole string:
@@ -87,6 +107,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 
 ### Added
+
+- **LSP `workspace/symbol` + `textDocument/foldingRange`** (`workspaceSymbolProvider`,
+  `foldingRangeProvider`; providers 9 → 11). Workspace symbols answer over the PROJECT — every `.phg`
+  the loader sees from the first open document's app root plus the other open buffers, sorted for
+  determinism — with a case-insensitive substring filter and the outline's own `SymbolKind` numbers.
+  Folding ranges fold each top-level declaration and each class/trait member from its start line to
+  its closing brace (the whitespace before the next declaration is trimmed, and a class's last
+  member stops before the class's own `}`); one-line declarations fold nothing. Both reuse existing
+  machinery (DEC-327's project scan, `document_symbols_json`'s item ranges); editors negotiate them
+  from `initialize`, and the READMEs plus VS Code extension `0.7.0` say so in the same change
+  (DEC-181). The surface ratchet's floor is re-frozen at 11 providers / 303 examples, and its summary
+  line now says the 100% rule is MET for diagnostics instead of "NOT met yet" at 311/311.
+- **Lift: PHP 8.2 `readonly class` and PHP 8.3 typed class constants.** Measured on a REAL app first
+  (Lane R, `/stack/projects/scout`): all five pure-logic modules tried were refused at the lift
+  PARSER, on exactly these two forms — `final readonly class` opens 69 of its 120 files and typed
+  constants appear in 33. `readonly class` lifts to phorj's default (fields are immutable unless
+  `mutable`, so the lifter simply writes no `mutable`, on declared and promoted properties alike);
+  `readonly` on a promoted parameter is now retained instead of dropped; `const string NAME = …`
+  lifts with its declared type, and an untyped constant keeps inferring from the literal.
+
 
 - **LSP signature help** (`textDocument/signatureHelp`, trigger characters `(` and `,`) — Invariant
   17's 100% RULE names it explicitly, and it was the one named capability the server did not

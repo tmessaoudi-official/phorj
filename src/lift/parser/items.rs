@@ -100,7 +100,11 @@ impl PParser {
             f.attrs = attrs;
             return Ok(PhpItem::Function(f));
         }
-        if self.is_kw("class") || self.is_kw("abstract") || self.is_kw("final") {
+        if self.is_kw("class")
+            || self.is_kw("abstract")
+            || self.is_kw("final")
+            || self.is_kw("readonly")
+        {
             let mut c = self.parse_class()?;
             c.attrs = attrs;
             return Ok(PhpItem::Class(c));
@@ -158,12 +162,17 @@ impl PParser {
         let line = self.line();
         let mut is_abstract = false;
         let mut is_final = false;
+        let mut is_readonly = false;
         loop {
             if self.is_kw("abstract") {
                 is_abstract = true;
                 self.advance();
             } else if self.is_kw("final") {
                 is_final = true;
+                self.advance();
+            } else if self.is_kw("readonly") {
+                // PHP 8.2 `readonly class` — 69 of scout's 120 files open with `final readonly class`.
+                is_readonly = true;
                 self.advance();
             } else {
                 break;
@@ -193,6 +202,7 @@ impl PParser {
             name,
             is_abstract,
             is_final,
+            is_readonly,
             extends,
             implements,
             members,
@@ -256,11 +266,25 @@ impl PParser {
         }
         if self.is_kw("const") {
             self.advance();
+            // PHP 8.3 typed constant: `const string NAME = …`. Untyped is `const NAME = …`, i.e. an
+            // identifier followed directly by `=`; anything else before the name is its type.
+            let ty = if matches!(self.peek(), PTok::Ident(_))
+                && matches!(self.peek_at(1), PTok::Assign)
+            {
+                None
+            } else {
+                Some(self.parse_type()?)
+            };
             let name = self.expect_ident("const name")?;
             self.expect(&PTok::Assign, "`=` in const")?;
             let value = self.parse_expr()?;
             self.expect(&PTok::Semi, "`;`")?;
-            return Ok(PhpMember::Const { vis, name, value });
+            return Ok(PhpMember::Const {
+                vis,
+                ty,
+                name,
+                value,
+            });
         }
         if self.is_kw("function") {
             return Ok(PhpMember::Method(self.parse_method(
@@ -383,12 +407,14 @@ impl PParser {
             // Constructor promotion: a leading `public`/`private`/`protected` (optionally with
             // `readonly`) makes the param a promoted property.
             let mut promotion = None;
+            let mut is_readonly = false;
             loop {
                 if let Some(v) = self.visibility_kw() {
                     promotion = Some(v);
                     self.advance();
                 } else if self.is_kw("readonly") {
-                    self.advance(); // readonly is accepted on a promoted param; flag not retained
+                    is_readonly = true;
+                    self.advance();
                 } else {
                     break;
                 }
@@ -409,6 +435,7 @@ impl PParser {
                 name,
                 default,
                 promotion,
+                is_readonly,
             });
             if !self.eat(&PTok::Comma) {
                 break;

@@ -23,6 +23,26 @@ commits were stopped externally under a 22/8 load and the developer ruled `--no-
 and three-leg checks ran green in completed jobs. Run the gate on a quiet box before the next push;
 time zones (step 10) remain the next readiness step after the wave.
 
+**Wave 2 (2026-09-05, same directive, plan `docs/plans/2026-09-05-big-wave-2.plan.md`) — the
+developer's question *"is phorj 100% capable of implementing a project like scout / invoiceninja /
+twes-in?"* was answered NO (parity ≈71%, readiness 9/19) and turned into **Lane R**: lift REAL scout
+modules, fix what is mechanical, bank what is a ruling, stand up a real macro-benchmark twin. Landed
+in this wave: **Lane T** (namespaced `Debug.dump` of enums — the `__phorj_debug_enums` table keyed by
+FQN; `examples/project/reflectdump/` measures it on three legs), **Lane L** (LIFT-ECHO-INT fixed in
+the lifter: a non-string echo argument becomes ONE interpolation, a bare variable and a string
+literal stay as written), **Lane A** (`workspace/symbol` + `foldingRange`, providers 9 → 11, both
+editors + VS Code 0.7.0, ratchet floor re-frozen and its summary now says MET at 311/311), the
+Invariant-13 splits the size gate demanded (`vm/concat.rs`, `lsp/{signature,rpc}.rs`,
+`transpile/helper_buckets/`, the lift test modules), and **Lane R v1** — the two parser refusals
+that blocked 5/5 scout modules (`readonly class`, PHP 8.3 typed class constants) now lift. **Next
+wall** (measured, in order): arrow/block closures (script staged), `yield` (a LANGUAGE gap —
+DEC-479 generators are RULED, build QUEUED), `??=`, `list()`, `: never`, first-class callables,
+constructor-parameter defaults. Two banked questions for the developer in the plan's *Needs input*
+(Q-W2-1 `Color.Green` cross-package, Q-W2-2 `Acme\Color.Green` rendering). **Still OWED:** the
+same full pre-push gate as above — this wave's commits also went in `--no-verify` under a load of
+20–37, with each lane's targeted tests, the size gate, fmt, a lib clippy and the T/R/A sabotage
+checks run in completed jobs.
+
 ## ▶ CURRENT CURSOR (2026-08-29) — **S3.5 SHIPPED. DEC-331 SLICE 3 IS CLOSED.**
 
 **DEC-331 D7 built: `phg serve` terminates TLS**, feature-gated `http-server-tls`. HTTPS enables iff

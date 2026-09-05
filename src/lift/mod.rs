@@ -38,6 +38,10 @@ mod lifter_tests;
 #[cfg(test)]
 mod lifter_tests_attrs;
 #[cfg(test)]
+mod lifter_tests_echo_registry;
+#[cfg(test)]
 mod lifter_tests_hoist;
 #[cfg(test)]
 mod lifter_tests_ns;
+#[cfg(test)]
+mod lifter_tests_php83;

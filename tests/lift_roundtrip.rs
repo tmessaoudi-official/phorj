@@ -152,10 +152,15 @@ fn lift_roundtrip_preserves_behavior() {
         return;
     };
 
-    // Each sample echoes a STRING (lift maps `echo` → `Output.print(string)`); raw int/float echo is
-    // avoided on purpose — int echo would lift to a `Output.print(int)` type error and floats have a
-    // known interpreter-vs-PHP formatting divergence (KNOWN_ISSUES).
+    // LIFT-ECHO-INT (2026-09-05): `echo <non-string>` now lifts to an interpolation, so an int echo and
+    // a `.`-concat with an int operand round-trip too — the `int_echo` case below is the proof, and
+    // the old "raw int echo is avoided on purpose" workaround is gone. Floats stay out: they have a
+    // known interpreter-vs-PHP formatting divergence (KNOWN_ISSUES), unrelated to the lift.
     let cases: &[(&str, &str)] = &[
+        (
+            "int_echo",
+            r#"<?php function half(int $n): int { return intdiv($n, 2); } echo half(7) . "|" . half(8) . "|"; echo 42; echo true;"#,
+        ),
         (
             "concat",
             r#"<?php function greet(string $n): string { return "Hi, " . $n; } echo greet("Phorj");"#,

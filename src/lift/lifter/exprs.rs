@@ -334,7 +334,10 @@ pub(super) fn lift_params(params: &[php::PhpParam]) -> Result<Vec<Param>, String
     Ok(out)
 }
 
-pub(super) fn lift_ctor_params(params: &[php::PhpParam]) -> Result<Vec<CtorParam>, String> {
+pub(super) fn lift_ctor_params(
+    params: &[php::PhpParam],
+    readonly_class: bool,
+) -> Result<Vec<CtorParam>, String> {
     let mut out = Vec::new();
     for p in params {
         if p.default.is_some() {
@@ -349,9 +352,13 @@ pub(super) fn lift_ctor_params(params: &[php::PhpParam]) -> Result<Vec<CtorParam
         )?;
         let mut modifiers = Vec::new();
         if let Some(vis) = p.promotion {
-            // A promoted property — mirror PHP's mutability (promoted props are mutable).
+            // A promoted property — mirror PHP's mutability: mutable unless `readonly` on the
+            // parameter or on the whole class (PHP 8.2 `readonly class`), in which case phorj's
+            // default (immutable) is exactly right and no `mutable` is written.
             modifiers.push(vis_modifier(vis));
-            modifiers.push(Modifier::Mutable);
+            if !(readonly_class || p.is_readonly) {
+                modifiers.push(Modifier::Mutable);
+            }
         }
         out.push(CtorParam {
             modifiers,

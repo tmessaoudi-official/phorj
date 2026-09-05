@@ -58,7 +58,7 @@ impl Lifter {
     ) -> Result<ClassDecl, String> {
         let mut members = Vec::new();
         for m in &c.members {
-            members.push(self.lift_member(m)?);
+            members.push(self.lift_member(m, c.is_readonly)?);
         }
         Ok(ClassDecl {
             vis: crate::ast::Visibility::Public,
@@ -88,6 +88,7 @@ impl Lifter {
     pub(in crate::lift::lifter) fn lift_member(
         &mut self,
         m: &php::PhpMember,
+        readonly_class: bool,
     ) -> Result<ClassMember, String> {
         match m {
             php::PhpMember::Prop {
@@ -121,8 +122,9 @@ impl Lifter {
                 if *is_static {
                     modifiers.push(Modifier::Static);
                 }
-                // PHP properties are mutable unless `readonly`; mirror that faithfully.
-                if !is_readonly {
+                // PHP properties are mutable unless `readonly` — on the property or on the whole
+                // class (PHP 8.2 `readonly class`); mirror that faithfully.
+                if !(*is_readonly || readonly_class) {
                     modifiers.push(Modifier::Mutable);
                 }
                 let init = if *is_static {
@@ -138,30 +140,41 @@ impl Lifter {
                     span: SP,
                 })
             }
-            php::PhpMember::Const { vis, name, value } => {
-                let tyname = lit_type(value).ok_or_else(|| {
-                    format!("lift: const `{name}` has a non-literal value (Tier-2)")
-                })?;
+            php::PhpMember::Const {
+                vis,
+                ty,
+                name,
+                value,
+            } => {
+                // A typed constant (PHP 8.3) carries its own type; an untyped one infers from the
+                // literal, as before.
+                let ty = match ty {
+                    Some(t) => lift_type(t)?,
+                    None => named(lit_type(value).ok_or_else(|| {
+                        format!("lift: const `{name}` has a non-literal value (Tier-2)")
+                    })?),
+                };
                 Ok(ClassMember::Field {
                     modifiers: vec![vis_modifier(*vis), Modifier::Const],
-                    ty: named(tyname),
+                    ty,
                     name: name.clone(),
                     init: Some(lift_expr(value)?),
                     span: SP,
                 })
             }
-            php::PhpMember::Method(method) => self.lift_method(method),
+            php::PhpMember::Method(method) => self.lift_method(method, readonly_class),
         }
     }
 
     pub(in crate::lift::lifter) fn lift_method(
         &mut self,
         m: &php::PhpMethod,
+        readonly_class: bool,
     ) -> Result<ClassMember, String> {
         let mut declared = HashSet::new();
         // `__construct` → a Phorj `constructor` (with promotion), not an ordinary method.
         if m.name == "__construct" {
-            let params = lift_ctor_params(&m.params)?;
+            let params = lift_ctor_params(&m.params, readonly_class)?;
             for p in &params {
                 declared.insert(p.name.clone());
             }

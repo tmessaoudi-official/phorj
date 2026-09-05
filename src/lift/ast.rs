@@ -103,6 +103,9 @@ pub struct PhpClass {
     pub name: String,
     pub is_abstract: bool,
     pub is_final: bool,
+    /// PHP 8.2 `readonly class`: every property (declared or promoted) is readonly. Lifts to phorj's
+    /// DEFAULT — fields are immutable unless `mutable` — so the lifter simply emits no `mutable`.
+    pub is_readonly: bool,
     pub extends: Option<String>,
     pub implements: Vec<String>,
     pub members: Vec<PhpMember>,
@@ -128,6 +131,9 @@ pub enum PhpMember {
     /// `const NAME = value;`.
     Const {
         vis: PhpVisibility,
+        /// PHP 8.3 typed class constant (`const string NAME = …`). Lifted as the declared type; an
+        /// untyped constant keeps inferring its type from the literal.
+        ty: Option<PhpType>,
         name: String,
         value: PhpExpr,
     },
@@ -193,6 +199,9 @@ pub struct PhpParam {
     /// Constructor-promotion visibility: `Some(vis)` when a `__construct` param carries a
     /// `public`/`private`/`protected` modifier (PHP 8.0 promoted property), else `None`.
     pub promotion: Option<PhpVisibility>,
+    /// `readonly` on a promoted constructor parameter (PHP 8.1). Retained so the lifted field is
+    /// immutable — phorj's default — rather than `mutable`.
+    pub is_readonly: bool,
 }
 
 /// A PHP type hint. Tier-1 = a single name or a nullable single name. Union types (`A|B`) can't even

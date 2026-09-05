@@ -34,7 +34,7 @@ impl Lifter {
                 self.needs_console = true;
                 let mut out = Vec::new();
                 for a in args {
-                    out.push(Stmt::Expr(console_print(lift_expr(a)?), SP));
+                    out.push(Stmt::Expr(console_print(echo_arg(a)?), SP));
                 }
                 out
             }
@@ -257,4 +257,58 @@ fn lift_catch_type(types: &[String]) -> Type {
         [one] => named(one),
         many => Type::Union(many.iter().map(named).collect(), SP),
     }
+}
+
+/// LIFT-ECHO-INT — the argument of an `echo`, lifted so the draft CHECKS. PHP's `echo` coerces;
+/// `Output.print` takes a `string`, and phorj's `+` never coerces either — so `echo half($n);` used to
+/// lift to `Output.print(half(n))` (a type error) and `echo "x" . $n;` to `Output.print("x" + n)`
+/// (another one). The lifter tracks no types, and does not need to here: an INTERPOLATION accepts
+/// every printable scalar, so in echo position the whole argument becomes one — a `.`-concat chain is
+/// flattened into its parts (string literals inline, everything else as `{expr}`), an int/bool literal
+/// becomes the text PHP would print (`true` → `1`, `false` → nothing), and a string literal or an
+/// existing interpolation is kept exactly as written. Outside `echo`, `.` still lifts to `+` — that is
+/// a separate, stated draft limitation, not changed here.
+fn echo_arg(e: &php::PhpExpr) -> Result<Expr, String> {
+    use crate::ast::StrPart;
+    fn parts(e: &php::PhpExpr, out: &mut Vec<StrPart>) -> Result<(), String> {
+        match e {
+            php::PhpExpr::Str(s) => out.push(StrPart::Literal(s.clone())),
+            php::PhpExpr::Interp(ps) => {
+                for p in ps {
+                    match p {
+                        php::PhpStrPart::Lit(s) => out.push(StrPart::Literal(s.clone())),
+                        php::PhpStrPart::Expr(x) => {
+                            out.push(StrPart::Expr(Box::new(lift_expr(x)?)))
+                        }
+                    }
+                }
+            }
+            php::PhpExpr::Binary {
+                op: php::PhpBinOp::Concat,
+                left,
+                right,
+            } => {
+                parts(left, out)?;
+                parts(right, out)?;
+            }
+            php::PhpExpr::Int(i) => out.push(StrPart::Literal(i.to_string())),
+            php::PhpExpr::Bool(true) => out.push(StrPart::Literal("1".into())),
+            php::PhpExpr::Bool(false) | php::PhpExpr::Null => {}
+            other => out.push(StrPart::Expr(Box::new(lift_expr(other)?))),
+        }
+        Ok(())
+    }
+    // Kept as written: a string literal or interpolation (`echo "hi";` stays `Output.print("hi")`)
+    // and a bare variable (`echo $x;` stays `Output.print(x)` — its type is the checker's call, and
+    // a string variable is by far the common case). Everything else — a call whose result may be
+    // an int, a non-string literal, a `.` chain — is flattened into ONE interpolation.
+    if matches!(
+        e,
+        php::PhpExpr::Str(_) | php::PhpExpr::Interp(_) | php::PhpExpr::Var(_)
+    ) {
+        return lift_expr(e);
+    }
+    let mut out = Vec::new();
+    parts(e, &mut out)?;
+    Ok(Expr::Str(out, SP))
 }

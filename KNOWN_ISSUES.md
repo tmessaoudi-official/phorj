@@ -277,6 +277,15 @@ So the coverage hole is the certain part and the divergence is the suspected par
 here writes the probe first (a project that dumps a cross-package enum), reads the result, and only
 then decides whether there is a bug to fix.
 
+**Measured 2026-09-05 (`examples/project/reflectdump/`):** `__phorj_reflect_of` was already
+namespace-safe — its table is keyed by the mangled class name and `get_class` matches it directly;
+`methods`/`interfaces`/`parents` are byte-identical on all three legs. `__phorj_debug_enums` was NOT:
+the PHP leg printed `Acme\Color_Green {}` where both native legs print `Acme\Color.Green`. Fixed by
+keying the row by the FQN the emitter declares (no strip at lookup — `Acme\Color_Green` and
+`Other\Color_Green` would strip to the same leaf and one would take the other's enum name).
+**Latent, recorded not fixed:** `__phorj_class_name` DOES strip at lookup and carries exactly that
+two-package leaf collision; no example reaches it today.
+
 **Why `use \Main\…` aliasing does not cover it:** the DEC-455.11 fix binds *names*; these two sites
 compare *strings*. Sites that strip the namespace prefix explicitly — `__phorj_round_mode`,
 `__phorj_class_name`, and the `Secret` redaction in `__phorj_debug_render` — are already
@@ -466,7 +475,12 @@ draft-visible design choice rather than a derivation:
 Recorded as a PENDING question in the register rather than self-ruled (Invariant 15). Out of scope for
 DEC-421, which was ruled as the type MAPPING.
 
-## LIFT-ECHO-INT — `echo <non-string>` lifts to a `Output.print(int)` type error (noted 2026-08-01)
+## LIFT-ECHO-INT — `echo <non-string>` lifts to a `Output.print(int)` type error (noted 2026-08-01) — **FIXED 2026-09-05**
+
+**Fixed:** in echo position a non-string expression lifts to an interpolation (a `.`-chain flattened into one,
+a call wrapped, int/bool literals as the text PHP prints; a string literal and a bare variable stay as written); `tests/lift_roundtrip.rs` now carries an
+`int_echo` sample instead of avoiding the case. Outside `echo`, `.` still lifts to `+` — an int operand
+there remains a type error in the draft; stated, not hidden. Original entry follows.
 
 PHP's `echo` coerces; phorj's `Output.print` takes a `string`. So `echo halfOrZero($n);` lifts to
 `Output.print(halfOrZero(n));` and `phg check` reports *"`Output.print` argument 1 expects `string`,
