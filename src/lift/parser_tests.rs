@@ -392,14 +392,15 @@ fn rejects_block_closures_and_parses_arrow_fns() {
 }
 
 #[test]
-fn rejects_cast_and_dynamic_new() {
-    assert!(perr("<?php $n = (int) $s;").contains("cast expressions are Tier-2"));
+fn parses_primitive_casts_and_rejects_dynamic_new() {
+    assert!(format!("{:?}", expr("(integer) $s")).starts_with("Cast { ty: \"int\""));
+    assert!(perr("<?php $n = (array) $s;").contains("`(array)` cast is Tier-2"));
     assert!(perr("<?php $o = new $cls();").contains("dynamic `new $class` is Tier-3"));
 }
 
 #[test]
-fn rejects_array_append_and_dynamic_static() {
-    assert!(perr("<?php $a[] = 1;").contains("array append) is Tier-2"));
+fn parses_array_append_and_rejects_dynamic_static() {
+    assert!(format!("{:?}", expr("$a[] = 1")).contains("target: AppendSlot(Var("));
     assert!(perr("<?php $x = $obj::FOO;").contains("dynamic `::` access is Tier-3"));
 }
 

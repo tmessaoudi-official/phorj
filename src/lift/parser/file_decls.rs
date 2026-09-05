@@ -64,6 +64,7 @@ impl PParser {
             }
             items.push(item);
         }
+        self.merge_implicit_uses(&mut uses);
         Ok(PhpProgram {
             items,
             docs,

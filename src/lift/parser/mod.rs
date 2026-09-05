@@ -50,6 +50,9 @@ struct PParser {
     depth: usize,
     /// PHPDoc by the token index it precedes (DEC-419) — read at item boundaries only.
     docs: std::collections::HashMap<usize, String>,
+    /// `use`s implied by root-qualified inline names (`\A\B\C::m()`, a `\A\B` type) — Lane R-3;
+    /// merged into the program's explicit `use`s by `parse_program` (`names.rs`).
+    implicit_uses: Vec<PhpUse>,
 }
 
 impl PParser {
@@ -60,6 +63,7 @@ impl PParser {
             pos: 0,
             depth: 0,
             docs,
+            implicit_uses: Vec::new(),
         }
     }
 }
@@ -85,4 +89,5 @@ mod closures;
 mod exprs;
 mod file_decls;
 mod items;
+mod names;
 mod stmts;

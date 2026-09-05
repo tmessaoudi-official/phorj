@@ -178,6 +178,17 @@ impl Lifter {
     ) -> Result<Stmt, String> {
         match e {
             php::PhpExpr::Assign { target, value } => {
+                if let php::PhpExpr::AppendSlot(base) = target.as_ref() {
+                    // `$xs[] = v` → `xs = List.append(xs, v)`: a phorj list is a COW value, so the
+                    // append is a reassignment of the whole collection (O(n) per append — the
+                    // wave-2 plan's Known findings name it as the twin's expected first loss).
+                    let base = lift_expr(base)?;
+                    return Ok(Stmt::Assign {
+                        target: base.clone(),
+                        value: list_append(base, lift_expr(value)?),
+                        span: SP,
+                    });
+                }
                 if let php::PhpExpr::Var(name) = target.as_ref() {
                     if !declared.contains(name) {
                         declared.insert(name.clone());

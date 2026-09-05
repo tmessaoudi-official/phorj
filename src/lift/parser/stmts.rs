@@ -221,8 +221,8 @@ impl super::PParser {
     ///
     /// Shared by catch clauses and `new`: PHP writes root-namespace builtins qualified, so
     /// `throw new \RuntimeException(…)` inside a `catch (\RuntimeException $e)` needs BOTH to read the
-    /// same way. The `\` is kept verbatim here — the LIFTER strips the root marker, keeping the parser a
-    /// faithful reader of the source.
+    /// same way. The `\` is kept verbatim here, on the catch and `new` legs — the LIFTER strips that root
+    /// marker; in expression and type position `names.rs` resolves the path to an implicit `use` instead.
     pub(super) fn parse_qualified_name(&mut self) -> Result<String, String> {
         let mut out = String::new();
         if self.eat(&PTok::Backslash) {

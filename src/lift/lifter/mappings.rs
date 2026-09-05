@@ -48,6 +48,12 @@ pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
             "mixed" | "iterable" | "object" | "callable" | "self" | "static" | "parent" => {
                 Err(format!("lift: the `{name}` type is Tier-2/Tier-3"))
             }
+            // A bare `Closure` carries no signature; phorj's function types do.
+            "Closure" => Err(
+                "lift: a `Closure` type needs a signature — write the phorj function \
+                             type by hand (Tier-2)"
+                    .into(),
+            ),
             // A class/enum/interface name.
             _ => Ok(named(name)),
         },
@@ -101,6 +107,24 @@ pub(super) fn static_member(class: &str, name: &str) -> Expr {
 }
 
 /// `Output.print(arg)` — the lift target of a PHP `echo`.
+/// `List.append(target, value)` for `$xs[] = v` (Lane R-3); records `Core.List` for the DEC-312
+/// import pass so the draft imports what it calls.
+pub(super) fn list_append(target: Expr, value: Expr) -> Expr {
+    crate::lift::lifter::record_native_module("Core.List");
+    Expr::Call {
+        callee: Box::new(Expr::Member {
+            object: Box::new(Expr::Ident("List".into(), SP)),
+            name: "append".into(),
+            safe: false,
+            sep: crate::ast::MemberSep::Dot,
+            span: SP,
+        }),
+        args: vec![target, value],
+        type_args: Vec::new(),
+        span: SP,
+    }
+}
+
 pub(super) fn console_print(arg: Expr) -> Expr {
     Expr::Call {
         callee: Box::new(Expr::Member {

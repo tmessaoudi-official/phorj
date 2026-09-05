@@ -119,6 +119,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   from `initialize`, and the READMEs plus VS Code extension `0.7.0` say so in the same change
   (DEC-181). The surface ratchet's floor is re-frozen at 11 providers / 303 examples, and its summary
   line now says the 100% rule is MET for diagnostics instead of "NOT met yet" at 311/311.
+- **Lift: array append, primitive casts and root-qualified names** — the three walls the five
+  scout modules hit next, taken in file-count order (Lane R-3). `$xs[] = v` (38 of 120 files) lifts
+  to `xs = List.append(xs, v)` with `Core.List` imported through the DEC-312 pass — a COW value
+  append, O(n), named in the wave-2 plan as the benchmark twin's expected first loss. `(int)`,
+  `(float)`, `(string)`, `(bool)` (38 files; `integer`/`double`/`boolean` folded) lift to phorj's
+  `e as T`; `(array)` and the rest stay Tier-2 by name. A root-qualified inline name (16 files) —
+  `\Scout\Rent\Config\Criteria::m()`, `\count(…)`, a `\App\Money` type — is what PHP itself
+  treats it as: a `use` plus a reference to the last segment. The parser records the multi-segment
+  ones as IMPLICIT `use`s (`parser/names.rs`), merged into the explicit list, so the lifter's one
+  import mechanism (emit only what the draft references; refuse two imports under one local name)
+  covers both; an explicit `use` of the same path wins. A bare `\Closure` type is refused by name
+  (a phorj function type needs a signature). Disclosed, not engineered: a single-segment `\Foo`
+  loses its root marker, which changes meaning only when the file's own namespace declares a `Foo`.
 - **Lift: PHP arrow closures** (`fn (int $v): int => $v * $k`, and the `static fn` form) lift to
   phorj's expression-bodied lambda `function(int v): int => v * k` — the closure shape real code
   actually uses (`static fn` in 25 of scout's 120 files, the next wall after `readonly class`). PHP

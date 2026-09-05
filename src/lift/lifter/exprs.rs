@@ -62,6 +62,14 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             type_name: class.clone(),
             span: SP,
         },
+        php::PhpExpr::Cast { ty, value } => Expr::Cast {
+            value: Box::new(lift_expr(value)?),
+            type_name: ty.clone(),
+            span: SP,
+        },
+        php::PhpExpr::AppendSlot(_) => {
+            return Err("lift: `$xs[]` is only meaningful as the target of `=`".into());
+        }
         php::PhpExpr::Assign { .. }
         | php::PhpExpr::CompoundAssign { .. }
         | php::PhpExpr::IncDec { .. } => {

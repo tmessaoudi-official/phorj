@@ -445,14 +445,19 @@ impl PParser {
         Ok(params)
     }
 
-    /// A type hint begins with `?` (nullable) or a bare type-name identifier.
+    /// A type hint begins with `?` (nullable), a `\`-rooted path, or a bare type-name identifier.
     pub(super) fn at_type_start(&self) -> bool {
-        self.at(&PTok::Question) || matches!(self.peek(), PTok::Ident(_))
+        self.at(&PTok::Question)
+            || self.at(&PTok::Backslash)
+            || matches!(self.peek(), PTok::Ident(_))
     }
 
     pub(super) fn parse_type(&mut self) -> Result<PhpType, String> {
         if self.eat(&PTok::Question) {
             return Ok(PhpType::Nullable(Box::new(self.parse_type()?)));
+        }
+        if self.at(&PTok::Backslash) {
+            return self.parse_root_qualified_type();
         }
         let name = self.expect_ident("type name")?;
         Ok(PhpType::Named(name))

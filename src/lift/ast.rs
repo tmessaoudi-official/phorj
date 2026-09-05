@@ -332,6 +332,14 @@ pub enum PhpExpr {
         ret: Option<PhpType>,
         body: Box<PhpExpr>,
     },
+    /// `target[]` — the APPEND slot, valid only as the target of `=` (`$xs[] = v`). Lane R-3.
+    AppendSlot(Box<PhpExpr>),
+    /// `(int) e` / `(float) e` / `(string) e` / `(bool) e` — a primitive cast (Lane R-3). `ty` is the
+    /// canonical phorj primitive (`integer`/`double`/`boolean` are folded by the parser).
+    Cast {
+        ty: String,
+        value: Box<PhpExpr>,
+    },
     /// `value instanceof ClassName` (C-46). `class` is a static type name (a dynamic
     /// `$x instanceof $cls` has no Phorj equivalent and is rejected by the parser).
     InstanceOf {

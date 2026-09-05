@@ -475,6 +475,18 @@ draft-visible design choice rather than a derivation:
 Recorded as a PENDING question in the register rather than self-ruled (Invariant 15). Out of scope for
 DEC-421, which was ruled as the type MAPPING.
 
+## LIFT-CAST-FIDELITY — a lifted `(int) $s` / `(float) $s` on a STRING is strict where PHP is lenient (noted 2026-09-05)
+
+`(T) e` lifts to `e as T` (Lane R-3). For the numeric-source pairs (`int` → `float`, `int`/`float` →
+`string`, …) the as-matrix conversion is total and transpiles back to the same PHP, so the round
+trip is exact. For a STRING source the matrix types the result as fallible — `s as int` is `int?`
+and parses the whole string — while PHP's `(int) "12abc"` yields `12` and `(int) "abc"` yields `0`.
+The draft therefore carries an `int?` where the PHP had an `int`, and `phg check` reports the
+mismatch at the first arithmetic use rather than the lifter guessing a lenient parse. The
+`// lifted (verify)` header covers the review; this entry names the specific divergence so it is
+not mistaken for a lifter bug. `(bool)` on a string follows PHP's truthiness through
+`Conversion.asBool` and is exact.
+
 ## LIFT-ECHO-INT — `echo <non-string>` lifts to a `Output.print(int)` type error (noted 2026-08-01) — **FIXED 2026-09-05**
 
 **Fixed:** in echo position a non-string expression lifts to an interpolation (a `.`-chain flattened into one,

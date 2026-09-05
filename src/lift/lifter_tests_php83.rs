@@ -66,3 +66,58 @@ fn a_block_closure_stays_tier_2() {
     assert!(err.contains("Tier-2"), "{err}");
     assert!(err.contains("fn (…) => …"), "{err}");
 }
+
+// ── Lane R-3: the three walls after closures, in scout file-count order ──────────────────────────
+
+/// `$xs[] = v` (38 of scout's 120 files) → `xs = List.append(xs, v)` with `Core.List` imported.
+#[test]
+fn array_append_lifts_to_list_append_with_the_import() {
+    let out = lift(
+        "<?php\nfunction main(): void {\n    $parts = [];\n    $parts[] = 1;\n    echo count($parts);\n}",
+    );
+    assert!(out.contains("parts = List.append(parts, 1);"), "{out}");
+    assert!(out.contains("import Core.List;"), "{out}");
+    assert_reparses(&out);
+    let err = super::lifter::lift_source("<?php function main(): void { $n = $xs[]; }")
+        .expect_err("an append slot as an rvalue");
+    assert!(err.contains("target of `=`"), "{err}");
+}
+
+/// `(float) $x` (38 files) → `x as float`; `(array)` stays Tier-2 by name.
+#[test]
+fn primitive_casts_lift_to_as() {
+    let out =
+        lift("<?php function f(int $n, string $s): float { return (float) $n / 2 + (int) $s; }");
+    assert!(out.contains("n as float"), "{out}");
+    assert!(out.contains("s as int"), "{out}");
+    assert_reparses(&out);
+    let err = super::lifter::lift_source("<?php function f($a): int { return count((array) $a); }")
+        .expect_err("an (array) cast");
+    assert!(err.contains("(array)"), "{err}");
+}
+
+/// `\A\B\C::m()` inline (16 files) → `C.m()` plus an implicit `import A.B.C`; `\strtoupper` just
+/// loses its root marker; an explicit `use` of the same path is not duplicated.
+#[test]
+fn root_qualified_names_become_implicit_imports() {
+    let out = lift(
+        "<?php\nnamespace App;\nuse Scout\\Rent\\Config\\Other;\nfunction f(string $c): string { return \\Scout\\Rent\\Config\\Criteria::communeKey($c) . \\strtoupper(Other::NAME); }",
+    );
+    assert!(out.contains("import Scout.Rent.Config.Criteria;"), "{out}");
+    // DEC-207: the written `::` separator is kept on the phorj side.
+    assert!(out.contains("Criteria::communeKey(c)"), "{out}");
+    assert_eq!(
+        out.matches("import Scout.Rent.Config.Other;").count(),
+        1,
+        "{out}"
+    );
+    assert!(!out.contains('\\'), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn a_closure_typed_property_is_refused_by_name() {
+    let err = super::lifter::lift_source("<?php final class A { private \\Closure $f; }")
+        .expect_err("a bare Closure type");
+    assert!(err.contains("Closure"), "{err}");
+}

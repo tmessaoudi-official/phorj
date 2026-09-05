@@ -166,14 +166,15 @@ impl PParser {
                 e = self.parse_static_access(e)?;
             } else if self.at(&PTok::LBracket) {
                 self.advance();
-                if self.at(&PTok::RBracket) {
-                    return Err(self.err("empty `[]` (array append) is Tier-2"));
-                }
-                let index = self.parse_expr()?;
-                self.expect(&PTok::RBracket, "`]`")?;
-                e = PhpExpr::Index {
-                    base: Box::new(e),
-                    index: Box::new(index),
+                e = if self.eat(&PTok::RBracket) {
+                    PhpExpr::AppendSlot(Box::new(e)) // `$xs[]` — only ever the target of `=`
+                } else {
+                    let index = self.parse_expr()?;
+                    self.expect(&PTok::RBracket, "`]`")?;
+                    PhpExpr::Index {
+                        base: Box::new(e),
+                        index: Box::new(index),
+                    }
                 };
             } else if self.at(&PTok::Inc) || self.at(&PTok::Dec) {
                 let inc = self.at(&PTok::Inc);
@@ -190,9 +191,8 @@ impl PParser {
                 break;
             }
         }
-        // C-46: `value instanceof ClassName` — a single, non-associative trailing clause at the
-        // postfix level (binds tighter than the `!`/`-`/`~` unary layer above). A dynamic RHS
-        // (`$x instanceof $cls`) has no Phorj equivalent and is refused loudly.
+        // C-46: `value instanceof ClassName` — a single, non-associative trailing clause at the postfix
+        // level (tighter than the unary layer above). A dynamic RHS (`$x instanceof $cls`) is refused loudly.
         if matches!(self.peek(), PTok::Ident(w) if w == "instanceof") {
             self.advance();
             if matches!(self.peek(), PTok::Var(_)) {
@@ -266,11 +266,8 @@ impl PParser {
                 Ok(PhpExpr::Var(name))
             }
             PTok::LParen => {
-                // Reject a C-style cast `(int)$x` rather than misparsing it.
-                if let PTok::Ident(t) = self.peek_at(1) {
-                    if CAST_TYPES.contains(&t.as_str()) && matches!(self.peek_at(2), PTok::RParen) {
-                        return Err(self.err("cast expressions are Tier-2"));
-                    }
+                if self.at_cast() {
+                    return self.parse_cast();
                 }
                 self.advance();
                 let inner = self.parse_expr()?;
@@ -278,6 +275,7 @@ impl PParser {
                 Ok(inner)
             }
             PTok::LBracket => self.parse_array(),
+            PTok::Backslash => self.parse_root_qualified(),
             PTok::Ident(word) => self.parse_ident_primary(&word),
             _ => Err(self.err("expected an expression")),
         }
@@ -420,8 +418,7 @@ pub(super) fn infix_op(tok: &PTok) -> Option<(u8, PhpBinOp)> {
     })
 }
 
-/// Map a compound-assignment token to the `PhpBinOp` it combines with (`+=` → `Add`, `??=` →
-/// `Coalesce`, …). `None` for any non-compound token.
+/// Map a compound-assignment token to the `PhpBinOp` it combines with (`+=` → `Add`, `??=` → `Coalesce`, …); `None` for a non-compound token.
 pub(super) fn compound_op(tok: &PTok) -> Option<PhpBinOp> {
     Some(match tok {
         PTok::PlusEq => PhpBinOp::Add,
@@ -440,6 +437,7 @@ pub(super) fn is_lvalue(e: &PhpExpr) -> bool {
     matches!(
         e,
         PhpExpr::Var(_)
+            | PhpExpr::AppendSlot(_)
             | PhpExpr::Index { .. }
             | PhpExpr::Member { .. }
             | PhpExpr::StaticProp { .. }
