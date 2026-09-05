@@ -102,11 +102,6 @@ impl Lifter {
                 name,
                 default,
             } => {
-                if !is_static && default.is_some() {
-                    return Err(format!(
-                        "lift: instance field `{name}` has a default — needs constructor synthesis (Tier-2)"
-                    ));
-                }
                 let ty = lift_type(
                     ty.as_ref()
                         .ok_or_else(|| format!("lift: field `{name}` has no type (Tier-2)"))?,
@@ -129,11 +124,10 @@ impl Lifter {
                 if !(*is_readonly || readonly_class) {
                     modifiers.push(Modifier::Mutable);
                 }
-                let init = if *is_static {
-                    default.as_ref().map(lift_expr).transpose()?
-                } else {
-                    None
-                };
+                // A property default lifts to a phorj field initializer, static or instance alike
+                // (Lane R-7): phorj evaluates an instance initializer per construction and the
+                // transpiler lowers it to a constructor prelude, so `private int $n = 0;` round-trips.
+                let init = default.as_ref().map(lift_expr).transpose()?;
                 Ok(ClassMember::Field {
                     modifiers,
                     ty,

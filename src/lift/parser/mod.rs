@@ -16,6 +16,7 @@ use super::ast::{
 };
 use super::lexer::{lex_php, PTok, PTokenSpanned};
 use crate::limits::MAX_NEST_DEPTH;
+use selfref::resolve_self;
 
 /// Keywords that exist in PHP but are outside the Tier-1 subset. Encountered in statement-leading
 /// position they produce a clear "not supported" error rather than being misread as an expression.
@@ -86,4 +87,5 @@ mod file_decls;
 mod interfaces;
 mod items;
 mod names;
+mod selfref;
 mod stmts;

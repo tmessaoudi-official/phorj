@@ -202,6 +202,7 @@ impl PParser {
             members.push(m);
         }
         self.expect(&PTok::RBrace, "`}`")?;
+        resolve_self(&mut members, &name);
         Ok(PhpClass {
             // Attributes are attached by `parse_item`, the only position that admits them.
             attrs: Vec::new(),

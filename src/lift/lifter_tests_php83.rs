@@ -284,3 +284,37 @@ fn an_untyped_empty_literal_is_left_alone() {
     let out = lift("<?php function f(): int { $xs = []; $xs[] = 1; return count($xs); }");
     assert!(out.contains("mutable var xs = [];"), "{out}");
 }
+
+// ── Lane R-7: `self`, field initializers, `instanceof \A\B` ──────────────────────────────────────
+
+/// `: self` (31 uses in 10 scout files) is the enclosing class, exactly; `static` stays refused.
+#[test]
+fn self_in_a_class_body_is_the_enclosing_class() {
+    let out = lift(
+        "<?php\nfinal class Money {\n    public function __construct(public int $cents) {}\n    public function plus(self $other): self { return new Money($this->cents + $other->cents); }\n    /** @return list<self> */\n    public function halves(): array { return [$this, $this]; }\n}",
+    );
+    assert!(out.contains("function plus(Money other): Money"), "{out}");
+    assert!(out.contains("halves(): List<Money>"), "{out}");
+    assert_reparses(&out);
+    let err = super::lifter::lift_source(
+        "<?php final class A { public function me(): static { return $this; } }",
+    )
+    .expect_err("static return");
+    assert!(err.contains("static"), "{err}");
+}
+
+/// A property default is a phorj field initializer — the "needs constructor synthesis" refusal
+/// predated `guide/field-init.phg`.
+#[test]
+fn a_property_default_lifts_to_a_field_initializer() {
+    let out = lift("<?php final class Counter { private int $n = 0; public function bump(): int { $this->n++; return $this->n; } }");
+    assert!(out.contains("private mutable int n = 0;"), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn instanceof_accepts_a_root_qualified_class() {
+    let out = lift("<?php\nnamespace App;\nfunction f(Base $o): bool { return $o instanceof \\App\\Core\\Money; }");
+    assert!(out.contains("o instanceof Money"), "{out}");
+    assert!(out.contains("import App.Core.Money;"), "{out}");
+}

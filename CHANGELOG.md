@@ -142,6 +142,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   from `initialize`, and the READMEs plus VS Code extension `0.7.0` say so in the same change
   (DEC-181). The surface ratchet's floor is re-frozen at 11 providers / 303 examples, and its summary
   line now says the 100% rule is MET for diagnostics instead of "NOT met yet" at 311/311.
+- **Lift: `self` resolves to the enclosing class, a property default is a field initializer,
+  `instanceof \\A\\B` reads a root-qualified class** (Lane R-7, the mechanical residue of the
+  scout census). `: self` is the fluent return in 31 places across 10 of scout's 120 files and
+  names the enclosing class exactly, so the parser writes that name where `self` was — method
+  returns and parameters, property and constant types, through `?` and docblock generics;
+  `static` (late static binding) keeps its Tier-2 refusal because on an open class the enclosing
+  name would narrow it. `private int $n = 0;` lifts to `private mutable int n = 0;` — the
+  "needs constructor synthesis" refusal predated phorj's field initializers
+  (`guide/field-init.phg`), which the transpiler already lowers to a constructor prelude.
 - **Lift: an empty collection literal takes its type from the program's own declaration** (Lane
   R-6 — scout has 128 `$x = [];` locals and phorj needs an empty collection's type). Two rules,
   neither inferring from elements: `/** @var list<T> $xs */ $xs = [];` on a local (54 in scout)

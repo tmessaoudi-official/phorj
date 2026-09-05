@@ -198,7 +198,7 @@ impl PParser {
             if matches!(self.peek(), PTok::Var(_)) {
                 return Err(self.err("dynamic `instanceof $var` is Tier-2"));
             }
-            let class = self.expect_ident("a class name after `instanceof`")?;
+            let class = self.parse_class_ref()?; // bare, or `\\A\\B` → implicit `use`
             e = PhpExpr::InstanceOf {
                 value: Box::new(e),
                 class,
