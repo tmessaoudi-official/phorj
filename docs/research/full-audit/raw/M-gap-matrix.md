@@ -1431,3 +1431,47 @@ New mean = **73.9**. **Vision = 0.70×71.1 + 0.30×73.9 = 49.8 + 22.2 ≈ 72%** 
   the model keeps converting weighted credit into real credit.
 
 **The number:** **PHP-parity ≈ 71% · floor ≈ 59% · Vision ≈ 72%** (from §4.13's 70/57/71).
+
+### 4.21 Re-tally groups 5–8 — FN-DATE / FN-PROC / FN-FUNC / FN-JSON: **+1.5 score, headline unchanged** (2026-09-05)
+
+Registry first (`Core.Time` 4 natives + the `TIME_PRELUDE` classes `Instant`/`Date`/`Duration` — 36
+members: `civil`, `of`, `ofEpochDay/Seconds/Milliseconds`, `parse`, `now`, `day`/`month`/`year`/
+`dayOfWeek`/`isLeapYear`/`daysUntil`/`addDays`, the `Duration` factories and `to*` accessors, `toString`
+(ISO) · `Core.Process` 3 + `ProcessOptions`/`ProcessResult` · `Core.Runtime` 7 · `Core.Json` 5), then the
+§4.x credit history, then the row. Checked so nobody re-credits: `date_parse` (§4.11), `sleep`/`usleep`,
+`register_shutdown_function`, `proc_open` (all §4.20) are already banked.
+
+**FN-DATE (27).** Three GU rows move to **P**, none to C, and the reason each stops at P is stated:
+- `getdate` / `localtime` → the civil accessors give `year`/`month`/`day`/`dayOfWeek` (+ `isLeapYear`),
+  but `Instant` exposes no `hour`/`minute`/`second` accessors, so the array's time-of-day half is not
+  expressible. **+2 P** (+1.0).
+- `gettimeofday` → `Time.nowMilliseconds()` is the same clock at millisecond rather than microsecond
+  granularity. **+1 P** (+0.5).
+- `checkdate`, `mktime`, `date()` stay **P** as §1.2 had them (`Instant.civil` is the factory; whether it
+  faults on an invalid civil date was not verified here, so no upgrade); `DatePeriod`, `sun_info` stay GU;
+  the tz rows stay GP for readiness step 10.
+
+**FN-PROC (16) ±0.** `getmypid` (no pid API), `getopt` (`Process.arguments` is positional only), the
+`posix` family (none) — all correctly uncredited. `exec`/`system`/`shell_exec` stay GU by the §4.20 rule.
+
+**FN-FUNC (8) ±0.** `forward_static_call` needs late-static-binding forwarding, which `parent(A).m()`
+does not provide. Correctly GU.
+
+**FN-JSON (6) ±0.** `JsonSerializable` has no protocol counterpart (`stringify` renders the injected
+`Json` enum, not arbitrary instances) — correctly GU; DEC-503's typed parse error is queued and will not
+move a row (the `N/A` rows are `json_last_error`/`JsonException`, which the optional-return model
+replaces rather than implements).
+
+**Arithmetic (additive on §4.20 — T1 188.5/303, T2 64/140, T3 18/75):**
+- T1: 188.5 + 1.5 = **190 / 303**; FN usage-weighted = (570 + 128 + 18)/1264 = **56.6%** (was 56.3)
+- PHP-parity = 0.35×85.3 + 0.40×56.6 + 0.25×75.0 = 29.9 + 22.6 + 18.75 ≈ **71%** (unchanged)
+- Raw floor: FN raw 266 + 1.5 = 267.5; (110 + 267.5 + 13.5)/665 ≈ **59%** (unchanged)
+
+**Grade:** the registry inventory **[Verified]** (source scan of every `NativeFn` + the prelude text);
+the three P upgrades **[Verified]** as shipped surface, **[Inferred]** as partial-credit weight; the
+±0 verdicts **[Verified]** (each named PHP function checked against the live surface). **Running tally
+of the re-pass: 8 of ~20 groups mapped** (FN-FS +12, FN-ARR ±0, FN-MATH ±0 after retraction, FN-STR
++6 via §4.17's addendum, DATE +1.5, PROC/FUNC/JSON ±0). Recorded, as §4.14 ruled, because a group
+checked and found correct is information, and without the record the next pass re-does the work.
+
+**The number:** **PHP-parity ≈ 71% · floor ≈ 59% · Vision ≈ 72%** — unchanged from §4.20.
