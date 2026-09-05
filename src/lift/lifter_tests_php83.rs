@@ -358,3 +358,52 @@ fn a_reassignment_at_file_scope_is_an_assignment_not_a_redeclaration() {
     let f = lift("<?php function f(): int { $x = 1; $x = $x + 2; return $x; }");
     assert_eq!(f.matches("mutable var x").count(), 1, "{f}");
 }
+
+/// The PHP static-factory idiom — `public static function at(…): self { return new self(…); }` —
+/// is 18 `E-OPEN-STATIC` plus 17 `E-NEW-ON-NONCONSTRUCT` across scout, and both halves are one
+/// shape. A static method is never `open` (phorj rejects the pair outright, and PHP's late static
+/// binding is not method overriding), and `new self` names the enclosing class.
+#[test]
+fn a_static_factory_lifts_without_open_and_constructs_its_own_class() {
+    let out = lift(
+        "<?php\nfinal class ConfigError {\n    public function __construct(public string $msg) {}\n    public static function at(string $p, string $e): self { return new self($p . \": \" . $e); }\n    public function widen(): self { return new self($this->msg); }\n}",
+    );
+    assert!(out.contains("public static function at("), "{out}");
+    assert!(
+        !out.contains("open static"),
+        "a static method must not be open:\n{out}"
+    );
+    assert_eq!(out.matches("new ConfigError(").count(), 2, "{out}");
+    assert!(!out.contains("new self"), "{out}");
+    // A non-static method keeps `open` — PHP methods are overridable by default.
+    assert!(
+        out.contains("public open function widen(): ConfigError"),
+        "{out}"
+    );
+    assert_reparses(&out);
+    // Late static binding stays refused: `static` is the RECEIVER's class, which the enclosing name
+    // would narrow.
+    let err = super::lifter::lift_source(
+        "<?php final class A { public static function make(): A { return new static(); } }",
+    )
+    .expect_err("new static");
+    assert!(err.contains("static"), "{err}");
+}
+
+/// The third `self` site: `self::CONST` and `self::method()`. 411 occurrences in scout's source —
+/// the draft used to say `self::X`, and phorj reported `unknown identifier self`.
+#[test]
+fn self_in_static_access_position_is_the_enclosing_class() {
+    let out = lift(
+        "<?php\nfinal class Limits {\n    public const int MAX = 10;\n    public static function cap(): int { return self::MAX; }\n    public function twice(): int { return self::cap() * 2; }\n}",
+    );
+    assert!(out.contains("Limits::MAX"), "{out}");
+    assert!(out.contains("Limits::cap()"), "{out}");
+    assert!(!out.contains("self::"), "{out}");
+    assert_reparses(&out);
+    let err = super::lifter::lift_source(
+        "<?php final class A { public const int N = 1; public static function n(): int { return static::N; } }",
+    )
+    .expect_err("static::");
+    assert!(err.contains("late static binding"), "{err}");
+}

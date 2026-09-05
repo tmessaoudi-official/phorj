@@ -48,6 +48,11 @@ struct PParser {
     /// `use`s implied by root-qualified inline names (`\A\B\C::m()`, a `\A\B` type) — Lane R-3;
     /// merged into the program's explicit `use`s by `parse_program` (`names.rs`).
     implicit_uses: Vec<PhpUse>,
+    /// The class whose body is being parsed, so `new self(…)` can name it. `resolve_self`
+    /// (Lane R-7) rewrites `self` in TYPE position after the body is parsed; an expression cannot
+    /// wait for that without a total walk of the PHP expression tree, and the name is already known
+    /// here — a class's name is read before its members.
+    current_class: Option<String>,
     /// The file's own `namespace A\B;`, recorded as it is parsed (PHP requires it before any code,
     /// so it is always known by the time a body mentions a name). A root-qualified reference INTO
     /// this same namespace must not become an import of the file's own symbols — see
@@ -64,6 +69,7 @@ impl PParser {
             depth: 0,
             docs,
             implicit_uses: Vec::new(),
+            current_class: None,
             namespace: Vec::new(),
         }
     }
@@ -87,6 +93,7 @@ pub fn parse_php_with_docs(
 
 mod attrs;
 mod closures;
+mod construct;
 mod docblock;
 mod exprs;
 mod file_decls;

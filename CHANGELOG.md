@@ -8,6 +8,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Lift: the PHP static-factory idiom lifts to checkable phorj** (Lane R-8). Chosen by censusing
+  the check errors of every scout file that lifts, not by guessing: `E-OPEN-STATIC` 18 and
+  `E-NEW-ON-NONCONSTRUCT` 17 were the two largest non-cross-file classes, and both come from one
+  shape — `public static function at(…): self { return new self(…); }`. Three fixes:
+  a static method is never marked `open` (phorj rejects the pair outright, and PHP's late static
+  binding is not method overriding); `new self(…)` names the enclosing class; and `self::CONST` /
+  `self::method()` do too — the third `self` position, 411 occurrences in scout's source. `static`
+  is refused loudly in every one of them (Invariant 14: the receiver's class is not the enclosing
+  class, and narrowing it silently is the downgrade the ladder forbids). Measured over the same 121
+  files: `E-OPEN-STATIC` **18 → 0**, `E-NEW-ON-NONCONSTRUCT` **17 → 6** (the rest are `new` on a
+  class in another file), `E-UNKNOWN-IDENT` **41 → 22**; total check errors ~162 → ~98. No file
+  became check-clean, because every one of them also carries a cross-file error — that wall falls
+  to a whole-project lift, not to a per-file fix.
+
 - **Lift: a root-qualified name into the file's OWN namespace is no longer an import of itself.**
   `\App\Scorer` written inside `namespace App` is how PHP says "the `Scorer` of this very
   namespace"; the Lane R-3 implicit-`use` mechanism turned it into `import App.Scorer;`, so the

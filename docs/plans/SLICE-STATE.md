@@ -40,8 +40,10 @@ primitive casts → `as`, root-qualified names → implicit `use`), **R-4** (doc
 bare `array` — the wall behind all five modules; named arguments in every argument list), **R-5**
 `691ea21c` (interfaces, parameter defaults, `@`-suppression dropped, root-qualified parents,
 `1_000`), **R-6** `be09639b` (an empty literal takes its type from a `@var` or the declared return),
-and **R-7** `acf0ba00` (`self` → the enclosing class exactly, a property default → a field
-initializer, root-qualified `instanceof`). Each step was re-measured on the five modules before the
+**R-7** `acf0ba00` (`self` → the enclosing class exactly, a property default → a field
+initializer, root-qualified `instanceof`), and **R-8** `4cc00c6f` (the static-factory idiom: a
+static method is never `open`, `new self(…)` and `self::` name the enclosing class, `static` refused
+loudly in all three positions). Each step was re-measured on the five modules before the
 next was chosen, and on the whole tree at each landing: **12/120 → 42/120 → 54/121 files lift**,
 12 of them checking clean standalone (the rest reference siblings and check only as a project).
 
@@ -49,7 +51,14 @@ The Invariant-9 example for R-7 (`de8f0276`) found two lifter bugs by being RUN 
 root-qualified name pointing into the file's OWN namespace became an import of itself, and every
 top-level statement got a fresh already-declared set, so a file-scope reassignment re-declared its
 variable — a shape almost every PHP script contains. Both fixed and sabotage-proven; the remaining
-known gap is `§LIFT-DISCARD` (a call written for effect lifts fine, then fails `phg check`). **Deferred by ruling**
+known gap is `§LIFT-DISCARD` (a call written for effect lifts fine, then fails `phg check`).
+
+R-8 was chosen by censusing the check errors of every file that lifts, and the same census is now
+the map for what follows: `E-UNKNOWN-TYPE` 36 + `E-UNKNOWN-IDENT` 22 + `E-MODULE-NOT-FOUND` 14 are
+ONE wall (a file referencing a sibling that does not lift yet) and fall only to raising the lift
+count; of the 67 files that still refuse, the bare `array` inference wall (12) and `array{…}` shapes
+(14) are the whole ballgame, and BOTH are banked developer questions rather than autonomous work.
+`E-UNUSED-VALUE` does not appear at all — `§LIFT-DISCARD` is real but is not what blocks scout. **Deferred by ruling**
 (plan Decisions Log 11:10): `clone($x, [...])` → `with`, `list()`, `: never`, first-class
 callables, `...$spread` (no phorj form), `?? throw` (no throw expression), and `yield` (a LANGUAGE
 gap — DEC-479 generators are RULED, build QUEUED; 22 scout files). Two banked questions for the developer in the plan's *Needs input*

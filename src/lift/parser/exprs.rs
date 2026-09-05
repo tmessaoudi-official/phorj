@@ -214,6 +214,11 @@ impl PParser {
             PhpExpr::Name(n) => n,
             _ => return Err(self.err("dynamic `::` access is Tier-3")),
         };
+        // The third `self` site (Lane R-8): `self::CONST` / `self::method()` — 411 occurrences in
+        // scout's source, 19 of them in files that already lift, where the draft said `self::X` and
+        // phorj reported `unknown identifier self`. Same rule as the type and `new` positions: the
+        // enclosing class exactly, and `static::` keeps its refusal (late static binding).
+        let class = self.resolve_self_class(class)?;
         self.advance(); // `::`
         if let PTok::Var(prop) = self.peek().clone() {
             self.advance();
@@ -307,22 +312,6 @@ impl PParser {
                 Ok(PhpExpr::Name(word.to_string()))
             }
         }
-    }
-
-    pub(super) fn parse_new(&mut self) -> Result<PhpExpr, String> {
-        self.advance(); // `new`
-        if matches!(self.peek(), PTok::Var(_)) {
-            return Err(self.err("dynamic `new $class` is Tier-3"));
-        }
-        // A qualified name is accepted here (`new \RuntimeException(…)`), not just a bare ident: PHP
-        // writes root-namespace builtins that way, and `throw`/`catch` both routinely do.
-        let class = self.parse_qualified_name()?;
-        let args = if self.at(&PTok::LParen) {
-            self.parse_args()?
-        } else {
-            Vec::new()
-        };
-        Ok(PhpExpr::New { class, args })
     }
 
     pub(super) fn parse_array(&mut self) -> Result<PhpExpr, String> {

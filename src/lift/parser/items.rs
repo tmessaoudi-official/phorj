@@ -195,12 +195,14 @@ impl PParser {
         let implements = self.parse_implements()?;
         self.expect(&PTok::LBrace, "`{`")?;
         let mut members = Vec::new();
+        let outer = self.current_class.replace(name.clone());
         while !self.at(&PTok::RBrace) && !self.at(&PTok::Eof) {
             let doc = self.doc_here();
             let mut m = self.parse_member()?;
             self.apply_doc_member(doc.as_deref(), &mut m)?;
             members.push(m);
         }
+        self.current_class = outer;
         self.expect(&PTok::RBrace, "`}`")?;
         resolve_self(&mut members, &name);
         Ok(PhpClass {

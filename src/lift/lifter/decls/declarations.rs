@@ -208,9 +208,12 @@ impl Lifter {
         }
         if m.is_abstract {
             modifiers.push(Modifier::Abstract);
-        } else if !m.is_final && m.vis != php::PhpVisibility::Private {
+        } else if !m.is_final && !m.is_static && m.vis != php::PhpVisibility::Private {
             // PHP methods are overridable by default; Phorj is final-by-default, so mark `open` to
             // preserve overridability (abstract is implicitly open, so only the concrete case).
+            // NOT for a static: phorj rejects `open static` outright (`E-OPEN-STATIC`), and PHP's
+            // late static binding is not method overriding — marking it open produced 18 uncheckable
+            // drafts across scout, every one of them a static factory.
             modifiers.push(Modifier::Open);
         }
         let mut body = match &m.body {
