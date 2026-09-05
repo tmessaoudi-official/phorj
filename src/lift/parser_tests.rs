@@ -376,7 +376,8 @@ fn rejects_unsupported_keywords() {
         // `parser_tests_try.rs`. What stays here is what is still genuinely out of subset.
         ("<?php switch ($x) {}", "`switch` is not supported"),
         // `namespace`/`use` moved INTO the subset (LIFT-NS); their residual refusals live in `parser_tests_ns.rs`.
-        ("<?php interface I {}", "`interface` is not supported"),
+        // `interface` moved INTO the subset (Lane R-5, 2026-09-05); `trait` is what remains.
+        ("<?php trait T {}", "`trait` is not supported"),
         ("<?php trait T {}", "`trait` is not supported"),
     ] {
         let e = perr(src);

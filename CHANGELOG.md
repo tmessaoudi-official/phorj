@@ -119,6 +119,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   from `initialize`, and the READMEs plus VS Code extension `0.7.0` say so in the same change
   (DEC-181). The surface ratchet's floor is re-frozen at 11 providers / 303 examples, and its summary
   line now says the 100% rule is MET for diagnostics instead of "NOT met yet" at 311/311.
+- **Lift: `interface` declarations, parameter defaults, the `@` silence operator, root-qualified
+  parents, `1_000_000` separators** — the mechanical half of the first whole-tree census (12 of
+  scout's 120 files lifted end to end after the `array` slice; these five reasons headed the other
+  108). An `interface Name [extends A, B] { public function m(…): T; }` (11 files) parses to a new
+  lift item and lifts to a public `InterfaceDecl` with bodiless methods, through the same docblock
+  hook the class body runs (`HttpClient`'s `array $headers` + `@param list<string>` is exactly
+  there); constants and properties inside one are refused by name, and the lift printer, which
+  refused every interface outright, gained its arm. A default on a function or promoted constructor
+  parameter (22 files) lifts as written — the checker enforces literal-only and trailing-only, so
+  nothing is guessed — and the printer now renders a promoted default instead of silently dropping
+  it. The `@` silence operator (19 files) is dropped at the lexer: it suppresses PHP's warning on
+  the call it prefixes, and phorj natives raise no PHP warnings, so `@f(x)` and `f(x)` mean the
+  same thing on the phorj side; a backtick is refused by name as shell execution. `extends
+  \App\Base` / `implements \App\Marker` (6 files) resolve through the implicit-`use` path, and
+  numeric literals accept `_` separators. The `lift` help no longer claims `array` types and
+  string interpolation are refused. Banked for the developer (plan Q-W2-3..5): `array{…}` shapes,
+  enum methods (a language gap — Rule-11-verified against `EnumDecl`), `<=>`.
 - **Lift: docblock generics type the bare `array`; named arguments lift in every argument list.**
   With the previous three walls down, all five scout modules stopped on PHP's `array` (60 of 120
   files as a parameter type, 42 as a return type), which the lifter refuses to guess between

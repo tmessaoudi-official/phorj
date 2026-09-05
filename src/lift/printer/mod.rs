@@ -16,6 +16,7 @@ use crate::ast::{
 
 mod docs;
 mod exprs;
+mod interfaces;
 mod items;
 mod lambda;
 mod setup;

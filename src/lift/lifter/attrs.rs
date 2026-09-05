@@ -123,7 +123,7 @@ pub(in crate::lift::lifter) fn unresolved_attribute_notes(prog: &php::PhpProgram
     let all = prog.items.iter().flat_map(|it| match it {
         php::PhpItem::Function(f) => f.attrs.iter(),
         php::PhpItem::Class(c) => c.attrs.iter(),
-        php::PhpItem::Enum(_) | php::PhpItem::Stmt(_) => [].iter(),
+        php::PhpItem::Enum(_) | php::PhpItem::Interface(_) | php::PhpItem::Stmt(_) => [].iter(),
     });
     for a in all {
         // A name that failed to lift is already a hard refusal upstream — nothing to note here.

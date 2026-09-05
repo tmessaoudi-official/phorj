@@ -93,9 +93,10 @@ fn tracks_line_numbers() {
 
 #[test]
 fn rejects_unsupported_character() {
-    // A backtick (PHP shell-exec) is outside Tier-1 — lex error, not a silent skip.
+    // A backtick (PHP shell-exec) is outside Tier-1 — a lex error that NAMES the construct (Lane R-5),
+    // not a silent skip and not an anonymous "unexpected character".
     let err = lex_php("<?php $x = `ls`;").unwrap_err();
-    assert!(err.contains("unexpected character"), "{err}");
+    assert!(err.contains("backtick"), "{err}");
 }
 
 #[test]

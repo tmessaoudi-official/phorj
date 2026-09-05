@@ -11,6 +11,7 @@
 //! L1 lives in [`lexer`].
 
 pub mod ast;
+mod ast_exprs;
 pub mod lexer;
 pub mod lifter;
 pub mod parser;

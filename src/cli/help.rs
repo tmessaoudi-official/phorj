@@ -90,8 +90,8 @@ pub fn help_for(cmd: &str) -> String {
         "lift" => {
             "lift — read PHP, emit a Phorj **draft** (the inverse of transpile). Best-effort and\n       \
                    REVIEW-REQUIRED: the output is a scaffold a human checks, prefixed `// lifted\n       \
-                   (verify)`. Anything outside the Tier-1 subset (e.g. an `array` type, a backed enum,\n       \
-                   string interpolation) is refused with a clear `lift …` error rather than guessed.\n\n\
+                   (verify)`. Anything outside the Tier-1 subset (e.g. an unannotated `array`, an enum with methods,\n       \
+                   `yield`) is refused with a clear `lift …` error rather than guessed.\n\n\
                    usage:\n  phg lift <file.php | - | -e code>\n  \
                    phg lift <dir> -o <outdir> [--vendor=report|--vendor=stub]\n\n\
                    a DIRECTORY lift (DEC-439) lifts the whole tree in ONE pass into a phorj\n       \

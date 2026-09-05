@@ -328,20 +328,19 @@ pub(super) fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
 pub(super) fn lift_params(params: &[php::PhpParam]) -> Result<Vec<Param>, String> {
     let mut out = Vec::new();
     for p in params {
-        if p.default.is_some() {
-            return Err(format!(
-                "lift: default value on parameter `{}` is Tier-2 (Wave 2)",
-                p.name
-            ));
-        }
+        // Lane R-5: the default lifts as written; the checker enforces literal-only and
+        // trailing-only (`E-DEFAULT-PARAM-EXPR` / `E-DEFAULT-PARAM-ORDER`), so nothing is guessed.
+        let default = match &p.default {
+            Some(d) => Some(Box::new(lift_expr(d)?)),
+            None => None,
+        };
         let ty = lift_type(p.ty.as_ref().ok_or_else(|| {
             format!("lift: parameter `{}` has no type (Tier-1 is typed)", p.name)
         })?)?;
         out.push(Param {
             ty,
             name: p.name.clone(),
-            // Lifting a PHP default parameter is a Tier-2 follow-up; Tier-1 params have no default.
-            default: None,
+            default,
             // Lifting PHP `...$x` variadics is a Tier-2 follow-up (DEC-298 lift leg).
             variadic: false,
             span: SP,
@@ -356,12 +355,12 @@ pub(super) fn lift_ctor_params(
 ) -> Result<Vec<CtorParam>, String> {
     let mut out = Vec::new();
     for p in params {
-        if p.default.is_some() {
-            return Err(format!(
-                "lift: default value on constructor parameter `{}` is Tier-2 (Wave 2)",
-                p.name
-            ));
-        }
+        // Lane R-5: a promoted default (`public int $tier = 0`, 22 of scout's 120 files) lifts as
+        // written — DEC-236 trailing-only literal defaults on the phorj side.
+        let default = match &p.default {
+            Some(d) => Some(Box::new(lift_expr(d)?)),
+            None => None,
+        };
         let ty = lift_type(
             p.ty.as_ref()
                 .ok_or_else(|| format!("lift: ctor parameter `{}` has no type", p.name))?,
@@ -380,8 +379,7 @@ pub(super) fn lift_ctor_params(
             modifiers,
             ty,
             name: p.name.clone(),
-            // The lift draft never synthesizes defaults (PHP promoted defaults are a lift TODO).
-            default: None,
+            default,
             span: SP,
         });
     }

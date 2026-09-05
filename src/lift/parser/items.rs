@@ -119,6 +119,9 @@ impl PParser {
         if self.is_kw("enum") {
             return Ok(PhpItem::Enum(self.parse_enum()?));
         }
+        if self.is_kw("interface") {
+            return Ok(PhpItem::Interface(self.parse_interface()?));
+        }
         // Everything else at top level is a file-level statement (the reserved-keyword guard in
         // `parse_stmt` rejects Tier-1-unsupported constructs like `try`/`interface`).
         Ok(PhpItem::Stmt(self.parse_stmt()?))
@@ -185,7 +188,7 @@ impl PParser {
         let name = self.expect_ident("class name")?;
         let extends = if self.is_kw("extends") {
             self.advance();
-            Some(self.expect_ident("parent class name")?)
+            Some(self.parse_class_ref()?)
         } else {
             None
         };
@@ -219,9 +222,9 @@ impl PParser {
             return Ok(Vec::new());
         }
         self.advance();
-        let mut v = vec![self.expect_ident("interface name")?];
+        let mut v = vec![self.parse_class_ref()?];
         while self.eat(&PTok::Comma) {
-            v.push(self.expect_ident("interface name")?);
+            v.push(self.parse_class_ref()?);
         }
         Ok(v)
     }

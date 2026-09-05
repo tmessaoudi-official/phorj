@@ -11,8 +11,8 @@
 
 use super::ast::{
     PhpArrayElem, PhpAttribute, PhpBinOp, PhpCatch, PhpClass, PhpEnum, PhpEnumCase, PhpExpr,
-    PhpFunction, PhpItem, PhpMatchArm, PhpMember, PhpMethod, PhpParam, PhpProgram, PhpStmt,
-    PhpStrPart, PhpType, PhpUnOp, PhpUse, PhpVisibility,
+    PhpFunction, PhpInterface, PhpItem, PhpMatchArm, PhpMember, PhpMethod, PhpParam, PhpProgram,
+    PhpStmt, PhpStrPart, PhpType, PhpUnOp, PhpUse, PhpVisibility,
 };
 use super::lexer::{lex_php, PTok, PTokenSpanned};
 use crate::limits::MAX_NEST_DEPTH;
@@ -21,18 +21,12 @@ use crate::limits::MAX_NEST_DEPTH;
 /// position they produce a clear "not supported" error rather than being misread as an expression.
 const UNSUPPORTED_KW: &[&str] = &[
     // `try`/`catch`/`finally` (LIFT-TRY) and `throw` are now IN the subset — both removed from this list.
-    "switch",
-    "do",
+    "switch", "do",
     // `namespace`, `use` and `declare` are now IN the subset (LIFT-NS) — all removed from this list. They are
     // FILE-level, not statement-level, so `parse_program` consumes them before item dispatch; reaching
     // one in statement position (a braced `namespace A { … }` body, or a `use` inside a function) is
     // still refused, by an explicit error that names the reason rather than this generic list.
-    "trait",
-    "interface",
-    "global",
-    "goto",
-    "const",
-    "static",
+    "trait", "global", "goto", "const", "static",
     "function", // a *nested* function is a closure-ish construct; top-level fns are caught earlier
                 // `fn` is NOT here: an arrow closure is an expression and the expression parser owns it (Lane R).
 ];
@@ -89,6 +83,7 @@ mod closures;
 mod docblock;
 mod exprs;
 mod file_decls;
+mod interfaces;
 mod items;
 mod names;
 mod stmts;

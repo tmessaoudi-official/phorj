@@ -249,10 +249,6 @@ fn refuses_tier2_constructs() {
             "has methods",
         ),
         ("<?php function f(array $xs): void {}", "`array` type"),
-        (
-            "<?php function f(int $n = 7): void {}",
-            "default value on parameter",
-        ),
         ("<?php class C { private int $x = 0; }", "has a default"),
         (
             "<?php function f(array $m): void { foreach ($m as $k => $v) {} }",

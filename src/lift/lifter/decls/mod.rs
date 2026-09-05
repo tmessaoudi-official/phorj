@@ -4,6 +4,7 @@ use super::*;
 
 mod declarations;
 pub(in crate::lift) mod hoist;
+mod interfaces;
 pub(in crate::lift) mod statements;
 
 pub fn lift_source(php_src: &str) -> Result<String, String> {
@@ -121,6 +122,9 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
                 items.push(Item::Class(lifted));
             }
             php::PhpItem::Enum(e) => items.push(Item::Enum(lift_enum(e)?)),
+            php::PhpItem::Interface(i) => {
+                items.push(Item::Interface(interfaces::lift_interface(i)?));
+            }
             php::PhpItem::Stmt(s) => {
                 let mut declared = HashSet::new();
                 top_stmts.extend(l.lift_stmt(s, &mut declared)?);

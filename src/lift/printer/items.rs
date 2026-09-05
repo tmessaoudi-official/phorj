@@ -43,11 +43,9 @@ impl Printer {
             Item::Function(f) => self.function(f),
             Item::Class(c) => self.class(c),
             Item::Enum(e) => self.enum_decl(e),
-            Item::Interface(_) | Item::Trait(_) | Item::TypeAlias { .. } | Item::Test { .. } => {
-                Err(
-                    "printer: interfaces/traits/type-aliases/tests are outside the lift subset"
-                        .into(),
-                )
+            Item::Interface(i) => self.interface(i),
+            Item::Trait(_) | Item::TypeAlias { .. } | Item::Test { .. } => {
+                Err("printer: traits/type-aliases/tests are outside the lift subset".into())
             }
         }
     }
@@ -227,7 +225,12 @@ impl Printer {
         let mut out = Vec::new();
         for p in params {
             let mods = modifiers_str(&p.modifiers);
-            out.push(format!("{mods}{} {}", ty(&p.ty)?, p.name));
+            // A promoted default (DEC-236) prints its `= <expr>` — dropping it would be a silent loss.
+            let default = match &p.default {
+                Some(e) => format!(" = {}", self.expr(e)?),
+                None => String::new(),
+            };
+            out.push(format!("{mods}{} {}{default}", ty(&p.ty)?, p.name));
         }
         Ok(out.join(", "))
     }

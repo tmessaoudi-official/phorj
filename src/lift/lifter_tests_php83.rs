@@ -186,3 +186,62 @@ fn named_arguments_lift_in_calls_and_construction() {
     assert!(out.contains("new S(tier: 0, mode: \"a\")"), "{out}");
     assert_reparses(&out);
 }
+
+// ── Lane R-5: defaults, `@`, interfaces, root-qualified parents, `1_000_000` ──────────────────────
+
+#[test]
+fn parameter_defaults_lift_on_functions_and_promoted_constructor_parameters() {
+    let out = lift(
+        "<?php\nfinal class S { public function __construct(public int $tier = 0) {} }\nfunction f(int $n = 3, string $s = \"x\"): int { return $n; }",
+    );
+    assert!(out.contains("int n = 3, string s = \"x\""), "{out}");
+    assert!(out.contains("int tier = 0"), "{out}");
+    assert_reparses(&out);
+}
+
+/// `@f(x)` → `f(x)`: phorj natives raise no PHP warnings, so the silence operator has nothing to
+/// silence on the phorj side. The call itself must survive.
+#[test]
+fn the_silence_operator_is_dropped_and_the_call_survives() {
+    let out = lift("<?php function f(int $a, int $b): int { return @intdiv($a, $b); }");
+    assert!(!out.contains('@'), "{out}");
+    assert!(out.contains("integerDivide(b)"), "{out}");
+    let err = super::lifter::lift_source("<?php $x = `ls`;").expect_err("backticks");
+    assert!(err.contains("backtick"), "{err}");
+}
+
+#[test]
+fn interfaces_lift_with_docblock_typed_methods_and_root_qualified_parents() {
+    let out = lift(
+        "<?php\nnamespace App;\ninterface HttpClient extends \\App\\Contracts\\Base\n{\n    /** @param list<string> $headers */\n    public function get(string $url, array $headers): string;\n}",
+    );
+    assert!(out.contains("interface HttpClient extends Base {"), "{out}");
+    assert!(
+        out.contains("function get(string url, List<string> headers): string;"),
+        "{out}"
+    );
+    assert!(out.contains("import App.Contracts.Base;"), "{out}");
+    assert_reparses(&out);
+    let err = super::lifter::lift_source("<?php interface I { const X = 1; }")
+        .expect_err("interface const");
+    assert!(err.contains("constant"), "{err}");
+}
+
+/// A NON-exception root-qualified parent — `\RuntimeException` would pass through the DEC-421 map
+/// and prove nothing about the `extends` path.
+#[test]
+fn a_root_qualified_parent_class_becomes_an_implicit_import() {
+    let out = lift("<?php\nnamespace App;\nfinal class E extends \\App\\Core\\Base implements \\App\\Core\\Marker {}");
+    assert!(
+        out.contains("class E extends Base implements Marker"),
+        "{out}"
+    );
+    assert!(out.contains("import App.Core.Base;"), "{out}");
+    assert!(out.contains("import App.Core.Marker;"), "{out}");
+}
+
+#[test]
+fn numeric_literal_separators_are_accepted() {
+    let out = lift("<?php function f(): int { return 1_000_000 + 2_5; }");
+    assert!(out.contains("1000000 + 25"), "{out}");
+}

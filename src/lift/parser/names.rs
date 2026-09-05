@@ -57,7 +57,7 @@ impl PParser {
         Ok(PhpType::Named(self.root_qualified_local()?))
     }
 
-    fn root_qualified_local(&mut self) -> Result<String, String> {
+    pub(super) fn root_qualified_local(&mut self) -> Result<String, String> {
         let full = self.parse_qualified_name()?;
         let path: Vec<String> = full
             .trim_start_matches('\\')

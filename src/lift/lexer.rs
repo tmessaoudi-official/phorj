@@ -239,8 +239,8 @@ pub fn lex_php_with_docs(
         if c.is_ascii_digit() {
             let start = i;
             let mut is_float = false;
-            while i < chars.len() && chars[i].is_ascii_digit() {
-                i += 1;
+            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '_') {
+                i += 1; // PHP 7.4 `1_000_000` separators (Lane R-5)
             }
             if i < chars.len()
                 && chars[i] == '.'
@@ -249,11 +249,11 @@ pub fn lex_php_with_docs(
             {
                 is_float = true;
                 i += 1;
-                while i < chars.len() && chars[i].is_ascii_digit() {
-                    i += 1;
+                while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '_') {
+                    i += 1; // PHP 7.4 `1_000_000` separators (Lane R-5)
                 }
             }
-            let text: String = chars[start..i].iter().collect();
+            let text: String = chars[start..i].iter().filter(|c| **c != '_').collect();
             if is_float {
                 let v: f64 = text
                     .parse()
@@ -389,6 +389,19 @@ pub fn lex_php_with_docs(
             push(&mut out, t, line);
             i += 2;
             continue;
+        }
+        // Lane R-5: the `@` silence operator is DROPPED — it suppresses PHP's warning on the call it
+        // prefixes, and phorj natives raise no PHP warnings, so `@f(x)` and `f(x)` mean the same
+        // thing on the phorj side (19 of scout's 120 files). A backtick is shell execution: Tier-3,
+        // refused by name rather than as an "unexpected character".
+        if c == '@' {
+            i += 1;
+            continue;
+        }
+        if c == '`' {
+            return Err(format!(
+                "lift lex error: backtick shell execution is Tier-3 (line {line})"
+            ));
         }
         let one_tok = match c {
             '(' => PTok::LParen,

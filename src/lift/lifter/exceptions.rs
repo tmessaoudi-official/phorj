@@ -80,7 +80,7 @@ fn visit_exception_sites(prog: &php::PhpProgram, f: &mut impl FnMut(&str)) {
                 }
             }
             php::PhpItem::Stmt(s) => visit_body(std::slice::from_ref(s), f),
-            php::PhpItem::Enum(_) => {}
+            php::PhpItem::Enum(_) | php::PhpItem::Interface(_) => {}
         }
     }
 }
