@@ -52,7 +52,7 @@ open class Counter {
 
 function main() -> void {
     mutable var c = new Counter(41);
-    Output.print(greet("Phorj"));
+    Output.print("{greet("Phorj")}");
     Output.print(" Counter starts at {c.start}, next is {c.next()}.");
 }
 ```
@@ -362,3 +362,36 @@ be acceptable is failing it *silently*, or worse, passing it with the wrong answ
 
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.
+
+## Real-code shapes in one file — `real-shapes.php` / `real-shapes.phg` (Lane R, 2026-09-05)
+
+The wave-2 lift slices were measured on a real application (`scout`, 120 files of strict PHP 8.5),
+one wall at a time, and this pair exercises every shape those slices taught the lifter, in one
+ordinary-looking file:
+
+| PHP shape | lifted to |
+|---|---|
+| `interface Scorer { … }` with a bodiless method | `interface Scorer { function score(…): int; }` |
+| `final readonly class … implements Scorer` | a class whose fields carry no `mutable` |
+| `public const string NAME = 'lengths'` (PHP 8.3 typed constant) | `const string NAME` |
+| `public function __construct(public int $bonus = 1)` | a promoted parameter with its default |
+| `/** @param list<string> $words */ … array $words` | `List<string> words` |
+| `/** @return array<string, int> */ … : array` | `Map<string, int>` |
+| `static fn (string $a, string $b): bool => …` | `function(string a, string b): bool => …` |
+| `$words[] = 'lift'` | `words = List.append(words, "lift")` |
+| `(float) $n / 2.0` | `(n as float) / 2.0` |
+| `new Ranking(bonus: 2)` (named argument) | `new Ranking(bonus: 2)` |
+| `1_000` | `1000` |
+| `echo $r->score($words) . "\n"` | `Output.print("{r.score(words)}\n")` |
+
+The `.phg` is the lifter's output byte for byte — `src/lift/tests_examples.rs` re-lifts every pair
+in this directory and fails if a shipped `.phg` drifts from what `phg lift` produces (only
+`errors.phg` is exempt, by name, because its `throws` clauses are hand-finished — see
+KNOWN_ISSUES §LIFT-THROWS). It checks clean and prints the same six lines on the interpreter, the VM,
+the transpiled PHP and the original PHP.
+
+Two shapes were deliberately AVOIDED here because the lifter does not carry them yet, and both are
+the next Lane R items: a local initialised as `$xs = []` and filled later (phorj needs the empty
+literal's type — a `/** @var list<T> $xs */` on the local is the mechanical fix), and `(int)` of a
+float (the `as int` conversion is fallible on the phorj side, `int?` — KNOWN_ISSUES
+§LIFT-CAST-FIDELITY).

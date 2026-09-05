@@ -699,9 +699,7 @@ pub fn cmd_tokenize(src: &str) -> Result<String, String> {
 /// (never a silent guess). No `on_deep_stack`: the lift parser has its own depth guard.
 pub fn cmd_lift(src: &str) -> Result<String, String> {
     let phorj = crate::lift::lifter::lift_source(src)?;
-    Ok(format!(
-        "// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.\n{phorj}"
-    ))
+    Ok(format!("{}\n{phorj}", crate::lift::LIFT_BANNER))
 }
 
 /// `transpile` from one source string: lex -> parse -> **native-only ladder gate** -> check ->

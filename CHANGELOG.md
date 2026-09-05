@@ -119,6 +119,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   from `initialize`, and the READMEs plus VS Code extension `0.7.0` say so in the same change
   (DEC-181). The surface ratchet's floor is re-frozen at 11 providers / 303 examples, and its summary
   line now says the 100% rule is MET for diagnostics instead of "NOT met yet" at 311/311.
+- **`examples/lift/real-shapes.php` / `.phg` — Invariant 9 for the whole Lane R, and the shipped
+  lift pairs are now GATED.** One ordinary-looking file exercises every shape the five lift slices
+  taught the lifter (interface, `readonly class`, typed constant, promoted default, docblock
+  generics, arrow closure, append, cast, named argument, separator, echo interpolation); the
+  lifted draft checks clean and prints the same six lines on the interpreter, the VM, the
+  transpiled PHP and the original PHP. `src/lift/tests_examples.rs` re-lifts every pair in the
+  directory and fails when a shipped `.phg` is not the lifter's own output — nothing had checked
+  that before, and all four regenerable pairs had drifted (the printer's import spacing and the
+  echo interpolation from this wave); they are regenerated, `errors.phg` is exempt by name
+  because its `throws` clauses are hand-finished. Writing the example surfaced the next two lift
+  gaps, both recorded in its README: a local initialised as `$xs = []` and filled later has no
+  type on the phorj side, and `(int)` of a float is the fallible `int?` conversion.
 - **Lift: `interface` declarations, parameter defaults, the `@` silence operator, root-qualified
   parents, `1_000_000` separators** — the mechanical half of the first whole-tree census (12 of
   scout's 120 files lifted end to end after the `array` slice; these five reasons headed the other

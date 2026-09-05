@@ -2,7 +2,9 @@
 package Main;
 
 import Core.Runtime.Entry;
+
 import Core.Runtime.EntryKind;
+
 import Core.Output;
 
 function pick(): string {
@@ -16,5 +18,5 @@ function pick(): string {
 
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
-    Output.print(pick() + "\n");
+    Output.print("{pick()}\n");
 }

@@ -10,6 +10,11 @@
 //! L4 lifter → L6 `phg lift` CLI + playground "paste PHP → see Phorj". This file is the module root;
 //! L1 lives in [`lexer`].
 
+/// The banner `phg lift` prefixes to every draft. ONE constant, shared with the shipped-pair gate
+/// (`tests_examples.rs`), so the CLI output and the gate can never disagree about the header.
+pub const LIFT_BANNER: &str =
+    "// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.";
+
 pub mod ast;
 mod ast_exprs;
 pub mod lexer;
@@ -33,6 +38,8 @@ mod parser_tests_try;
 
 #[cfg(test)]
 mod printer_tests;
+#[cfg(test)]
+mod tests_examples;
 
 #[cfg(test)]
 mod lifter_tests;

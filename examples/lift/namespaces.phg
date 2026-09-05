@@ -2,7 +2,9 @@
 package App.CliTools;
 
 import Core.Runtime.Entry;
+
 import Core.Runtime.EntryKind;
+
 import Core.Output;
 
 function label(string who): string {
@@ -11,5 +13,5 @@ function label(string who): string {
 
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
-    Output.print(label("phorj") + "\n");
+    Output.print("{label("phorj")}\n");
 }

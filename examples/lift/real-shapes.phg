@@ -1,0 +1,61 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package App;
+
+import Core.Runtime.Entry;
+
+import Core.Runtime.EntryKind;
+
+import Core.Output;
+
+import Core.List;
+
+import Core.Math;
+
+import Core.String;
+
+interface Scorer {
+    function score(List<string> words): int;
+}
+
+class Ranking implements Scorer {
+    public const string NAME = "lengths";
+    constructor(public int bonus = 1) {}
+    public open function score(List<string> words): int {
+        mutable var total = 0;
+        foreach (words as w) {
+            total = total + (w.length() + this.bonus);
+        }
+        return total;
+    }
+    public open function summary(List<string> words): Map<string, int> {
+        return ["total" => this.score(words), "count" => words.length()];
+    }
+}
+
+/**
+ * @param list<string> $words
+ */
+function longest(List<string> words, int floor = 2): string {
+    mutable var pick = function(string a, string b): bool => a.length() >= b.length();
+    mutable var best = "";
+    foreach (words as w) {
+        if (w.length() >= floor && pick(w, best)) {
+            best = w;
+        }
+    }
+    return best;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var words = ["phorj"];
+    words = List.append(words, "lift");
+    words = List.append(words, "scout");
+    mutable var r = new Ranking(bonus: 2);
+    Output.print("{r.score(words)}\n");
+    Output.print("{longest(words)}\n");
+    Output.print("{r.score(words).integerDivide(2)}\n");
+    Output.print("{(r.score(words) as float) / 2.0}\n");
+    Output.print("{Ranking::NAME} 1000\n");
+    Output.print("{r.summary(words)["total"]}\n");
+}

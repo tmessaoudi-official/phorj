@@ -2,7 +2,9 @@
 package App.Meta;
 
 import Core.Runtime.Entry;
+
 import Core.Runtime.EntryKind;
+
 import Core.Output;
 
 #[Core.Runtime.Attribute]
@@ -22,6 +24,6 @@ open class Invoice {
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     mutable var i = new Invoice("A-1");
-    Output.print(i.label());
+    Output.print("{i.label()}");
     Output.print("\n");
 }
