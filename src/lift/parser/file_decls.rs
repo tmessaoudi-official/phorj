@@ -49,6 +49,9 @@ impl PParser {
                     ));
                 }
                 namespace = self.parse_namespace_decl()?;
+                // Kept in the parser too: `note_implicit_use` needs it to tell a reference into
+                // ANOTHER namespace (an import) from one into this file's own (already in scope).
+                self.namespace.clone_from(&namespace);
                 continue;
             }
             if self.is_kw("use") {

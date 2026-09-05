@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace App;
+namespace Main;
 
 interface Scorer
 {
@@ -35,6 +35,22 @@ final readonly class Ranking implements Scorer
     }
 }
 
+final class Tally
+{
+    private int $n = 0;
+
+    public function add(int $k): self
+    {
+        $this->n = $this->n + $k;
+        return $this;
+    }
+
+    public function total(): int
+    {
+        return $this->n;
+    }
+}
+
 /** @param list<string> $words */
 function longest(array $words, int $floor = 2): string
 {
@@ -60,3 +76,9 @@ echo intdiv($r->score($words), 2) . "\n";
 echo (float) $r->score($words) / 2.0 . "\n";
 echo Ranking::NAME . " " . 1_000 . "\n";
 echo $r->summary($words)['total'] . "\n";
+$t = new Tally();
+$t = $t->add(3)->add(4);
+echo $t->total() . "\n";
+if ($r instanceof \Main\Scorer) {
+    echo "scorer\n";
+}

@@ -8,6 +8,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **Lift: a root-qualified name into the file's OWN namespace is no longer an import of itself.**
+  `\App\Scorer` written inside `namespace App` is how PHP says "the `Scorer` of this very
+  namespace"; the Lane R-3 implicit-`use` mechanism turned it into `import App.Scorer;`, so the
+  draft failed to check with `E-MODULE-NOT-FOUND: no package App.Scorer (or App)` — a message that
+  reads as a missing dependency rather than as the self-reference it is. The parser now keeps the
+  file's own namespace and suppresses exactly that case; a reference into a DIFFERENT namespace
+  under the same root (`\App\Core\Money` from `namespace App`) still imports, since the check is
+  the full prefix and not the first segment.
+- **Lift: a reassignment at file scope is an assignment, not a redeclaration.** Every top-level
+  statement got a FRESH already-declared set, so `$x = 1; $x = $x + 2;` lifted to two
+  `mutable var x` and the draft failed with `E-SHADOW-LOCAL`. All top-level statements land in one
+  synthesized `main`, so they now share one set — as a function body always did, which is why the
+  bug was invisible everywhere except at file scope, where a PHP script does most of its assigning.
+  Both bugs were found by extending `examples/lift/real-shapes.php` and RUNNING it, not by reading
+  the lifter.
+
 - **`phg lift` now writes canonical phorj**, and the repo format sweep names the file it rejects.
   The lifter's printer emitted whatever shape it happened to build, so all five regenerated
   `examples/lift/*.phg` pairs — plus the three `examples/project/reflectdump/` files — were text

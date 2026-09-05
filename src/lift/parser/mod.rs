@@ -48,6 +48,11 @@ struct PParser {
     /// `use`s implied by root-qualified inline names (`\A\B\C::m()`, a `\A\B` type) — Lane R-3;
     /// merged into the program's explicit `use`s by `parse_program` (`names.rs`).
     implicit_uses: Vec<PhpUse>,
+    /// The file's own `namespace A\B;`, recorded as it is parsed (PHP requires it before any code,
+    /// so it is always known by the time a body mentions a name). A root-qualified reference INTO
+    /// this same namespace must not become an import of the file's own symbols — see
+    /// [`PParser::note_implicit_use`].
+    namespace: Vec<String>,
 }
 
 impl PParser {
@@ -59,6 +64,7 @@ impl PParser {
             depth: 0,
             docs,
             implicit_uses: Vec::new(),
+            namespace: Vec::new(),
         }
     }
 }

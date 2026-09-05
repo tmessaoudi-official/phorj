@@ -1,5 +1,5 @@
 // lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
-package App;
+package Main;
 
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
@@ -24,6 +24,17 @@ class Ranking implements Scorer {
     }
     public open function summary(List<string> words): Map<string, int> {
         return ["total" => this.score(words), "count" => words.length()];
+    }
+}
+
+class Tally {
+    private mutable int n = 0;
+    public open function add(int k): Tally {
+        this.n = this.n + k;
+        return this;
+    }
+    public open function total(): int {
+        return this.n;
     }
 }
 
@@ -54,4 +65,10 @@ function main(): void {
     Output.print("{(r.score(words) as float) / 2.0}\n");
     Output.print("{Ranking::NAME} 1000\n");
     Output.print("{r.summary(words)[\"total\"]}\n");
+    mutable var t = new Tally();
+    t = t.add(3).add(4);
+    Output.print("{t.total()}\n");
+    if (r instanceof Scorer) {
+        Output.print("scorer\n");
+    }
 }

@@ -74,6 +74,14 @@ impl PParser {
     /// Record a multi-segment path as an implicit `use` (once per path). Shared with the docblock
     /// type reader, so `@return list<\\A\\B\\C>` imports `C` exactly like an inline `\\A\\B\\C`.
     pub(super) fn note_implicit_use(&mut self, path: Vec<String>) {
+        // `\App\Scorer` written INSIDE `namespace App` names a symbol of this very file. PHP
+        // resolves it without a `use`, and lifting it to `import App.Scorer;` produced a package
+        // importing itself — `E-MODULE-NOT-FOUND: no package App.Scorer (or App)`, which reads as a
+        // missing dependency rather than as the self-reference it is. Found by extending
+        // `examples/lift/real-shapes.php` with an `instanceof` of its own interface (2026-09-05).
+        if path.len() > 1 && path[..path.len() - 1] == self.namespace[..] {
+            return;
+        }
         if !self.implicit_uses.iter().any(|u| u.path == path) {
             let line = self.line();
             self.implicit_uses.push(PhpUse {

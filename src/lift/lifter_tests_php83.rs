@@ -318,3 +318,43 @@ fn instanceof_accepts_a_root_qualified_class() {
     assert!(out.contains("o instanceof Money"), "{out}");
     assert!(out.contains("import App.Core.Money;"), "{out}");
 }
+
+/// A root-qualified name pointing INTO the file's own namespace is not an import. `\App\Scorer`
+/// inside `namespace App` is how PHP writes "the Scorer of this very namespace"; lifting it to
+/// `import App.Scorer;` made the package import itself, and the draft failed to check with
+/// `E-MODULE-NOT-FOUND` — a message that reads as a missing dependency rather than a self-reference.
+#[test]
+fn a_root_qualified_name_in_the_files_own_namespace_is_not_imported() {
+    let out = lift(
+        "<?php\nnamespace App;\ninterface Scorer {}\nfunction f(Scorer $s): bool { return $s instanceof \\App\\Scorer; }",
+    );
+    assert!(out.contains("s instanceof Scorer"), "{out}");
+    assert!(
+        !out.contains("import App.Scorer;"),
+        "self-import emitted:\n{out}"
+    );
+    // A DIFFERENT namespace under the same root still imports — the check is the full prefix, not
+    // the first segment.
+    let other = lift(
+        "<?php\nnamespace App;\nfunction f(Base $o): bool { return $o instanceof \\App\\Core\\Money; }",
+    );
+    assert!(other.contains("import App.Core.Money;"), "{other}");
+}
+
+/// Top-level statements share ONE already-declared set, because they all land in one synthesized
+/// `main`. Until 2026-09-05 each statement got a fresh set, so a second assignment re-DECLARED the
+/// variable (`mutable var x = x + 2;`) and the draft failed to check with `E-SHADOW-LOCAL`. The bug
+/// could only bite at file scope — a function body always threaded one set — which is precisely
+/// where a PHP script does most of its assigning.
+#[test]
+fn a_reassignment_at_file_scope_is_an_assignment_not_a_redeclaration() {
+    let out = lift("<?php\n$x = 1;\n$x = $x + 2;\n$y = $x;\n$y = $y * 2;\n");
+    assert_eq!(out.matches("mutable var x").count(), 1, "{out}");
+    assert_eq!(out.matches("mutable var y").count(), 1, "{out}");
+    assert!(out.contains("    x = x + 2;"), "{out}");
+    assert!(out.contains("    y = y * 2;"), "{out}");
+    assert_reparses(&out);
+    // The same shape inside a function was always correct — it stays correct.
+    let f = lift("<?php function f(): int { $x = 1; $x = $x + 2; return $x; }");
+    assert_eq!(f.matches("mutable var x").count(), 1, "{f}");
+}

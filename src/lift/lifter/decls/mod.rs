@@ -98,6 +98,13 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     };
     let mut items: Vec<Item> = Vec::new();
     let mut top_stmts: Vec<Stmt> = Vec::new();
+    // Every top-level statement lands in ONE synthesized `main` body, so they share one
+    // already-declared set. A fresh set per statement (the shape until 2026-09-05) made the second
+    // assignment to a variable re-DECLARE it — `$x = 1; $x = $x + 2;` lifted to two `mutable var x`
+    // and the draft failed to check with `E-SHADOW-LOCAL`. A function body always threaded one set,
+    // which is why the bug was invisible anywhere but at file scope — where PHP scripts do most of
+    // their assigning.
+    let mut top_declared = HashSet::new();
     let mut has_main = false;
     // LIFT-ATTR: attribute names resolve against the file's `namespace` + `use` map, so the context is
     // built once here rather than threaded through the Lifter walker — attribute lifting needs no
@@ -127,8 +134,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
                 items.push(Item::Interface(interfaces::lift_interface(i)?));
             }
             php::PhpItem::Stmt(s) => {
-                let mut declared = HashSet::new();
-                top_stmts.extend(l.lift_stmt(s, &mut declared)?);
+                top_stmts.extend(l.lift_stmt(s, &mut top_declared)?);
             }
         }
     }

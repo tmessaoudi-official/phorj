@@ -384,12 +384,28 @@ ordinary-looking file:
 | `new Ranking(bonus: 2)` (named argument) | `new Ranking(bonus: 2)` |
 | `1_000` | `1000` |
 | `echo $r->score($words) . "\n"` | `Output.print("{r.score(words)}\n")` |
+| `private int $n = 0;` (property default) | `private mutable int n = 0;` (field initializer) |
+| `public function add(int $k): self` | `function add(int k): Tally` — `self` is the enclosing class, exactly |
+| `$t = $t->add(3)->add(4)` (fluent chain) | the same chain, and the second `$t =` is an ASSIGNMENT |
+| `$r instanceof \Main\Scorer` | `r instanceof Scorer` — a root-qualified name in the file's OWN namespace is not an import |
 
 The `.phg` is the lifter's output byte for byte — `src/lift/tests_examples.rs` re-lifts every pair
 in this directory and fails if a shipped `.phg` drifts from what `phg lift` produces (only
 `errors.phg` is exempt, by name, because its `throws` clauses are hand-finished — see
-KNOWN_ISSUES §LIFT-THROWS). It checks clean and prints the same six lines on the interpreter, the VM,
-the transpiled PHP and the original PHP.
+KNOWN_ISSUES §LIFT-THROWS). It checks clean and prints the same eight lines on the interpreter, the
+VM, the transpiled PHP and the original PHP — verified by running all four, not inferred.
+
+The file declares `namespace Main;` on purpose: a lifted draft's `package` must match its directory
+(`E-PKG-PATH`, folder = package), so a namespaced draft is checkable only inside the tree
+`phg lift <dir> -o <out>` builds for it — `namespaces.php` is the pair that demonstrates that shape.
+Here the point is that the draft RUNS from where it sits, so the paragraph above can be a claim
+about behaviour rather than about shape.
+
+Two lifter bugs were found by writing this example and running it, not by reading the lifter:
+a root-qualified name pointing into the file's own namespace became an import of itself
+(`import Main.Scorer;` → `E-MODULE-NOT-FOUND`), and every top-level statement got a fresh
+already-declared set, so a second `$t = …` re-declared the variable (`E-SHADOW-LOCAL`) — a shape
+almost every PHP script with top-level code contains.
 
 The `/** @var list<string> $words */ $words = [];` at the entry is the empty-literal idiom (Lane
 R-6): phorj needs an empty collection's type, and the lifter takes it ONLY from a declaration the
