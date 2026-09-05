@@ -34,8 +34,10 @@
 //!     (`E-SERVE-TLS-MIN-VERSION`), and only when TLS is actually requested — the field has a
 //!     non-null class default, so validating it unconditionally would let a typo in an unused field
 //!     refuse a plain-HTTP server.
-//!   * `port` / `maxBodySize` / `timeout` ranges — still unvalidated
-//!     (KNOWN_ISSUES §SERVE-CONFIG-PROVENANCE).
+//!   * `port` / `maxBodySize` / `timeout` ranges — **RESOLVED by DEC-475** in `serve::settings`'s
+//!     `validate`, which runs before the socket binds (`E-SERVE-CONFIG-RANGE`). It could not be
+//!     written until the field set became nullable: while the class default was itself a value,
+//!     refusing a nonsense number meant refusing the default too.
 //!
 //! A guard added here would also have to raise through a native (the `HeaderSafety.reject` →
 //! `NativeHttp.headerFault` route), which is a larger surface than this fragment needs.
@@ -60,22 +62,36 @@ enum RequestParsing { Eager, Lazy }
 //   new Http.ServeConfig(host: "0.0.0.0", port: 8443, cert: "certs/site.pem", key: "certs/site.key")
 //
 // App settings are a SEPARATE injected entry parameter and are never mixed in here (D4).
+//
+// DEC-475: every field is NULLABLE and defaults to `null`, which means UNSET. A field's effective
+// value is applied where it is consumed, so `null` and "written by hand at the same value the
+// runtime would have chosen" are different things — which is what makes `timeout: 0` ("no timeout")
+// expressible at all, and what lets `phg serve` say truthfully which fields a CLI flag overrode.
+// The effective defaults are named beside each field and asserted against this source by
+// `serve::settings`' own tests, so the two cannot drift.
 class ServeConfig {
   constructor(
-    public string host = "127.0.0.1",
-    public int port = 8080,
-    // 0 = AUTO (one worker per core), resolved by the serve loop — see this fragment's Rust doc.
-    public int workers = 0,
-    // Seconds; 0 = no timeout.
-    public int timeout = 0,
+    // Effective default "127.0.0.1".
+    public string? host = null,
+    // Effective default 8080. Must be 1..=65535 when set.
+    public int? port = null,
+    // Effective default: one worker per core. 0 = AUTO (that same per-core count) written
+    // explicitly; negative is refused.
+    public int? workers = null,
+    // Seconds; effective default 30. `0` means NO TIMEOUT and is now expressible; negative is
+    // refused.
+    public int? timeout = null,
     // HTTPS auto-enables iff BOTH cert and key are set (D7) — no separate `--tls` flag.
     public string? cert = null,
     public string? key = null,
     public string? serverName = null,
-    // 8 MiB. Single-sourced with the wire-parsing limit in `Core.Native.Http` (Invariant 4).
-    public int maxBodySize = 8_388_608,
-    public string tlsMinVersion = "1.2",
-    public RequestParsing requestParsing = new RequestParsing.Eager()
+    // Effective default 8 MiB, single-sourced with the wire-parsing limit in `Core.Native.Http`
+    // (Invariant 4). Must be >= 1 when set.
+    public int? maxBodySize = null,
+    // Effective default "1.2".
+    public string? tlsMinVersion = null,
+    // Effective default `Eager`.
+    public RequestParsing? requestParsing = null
   ) {}
 }
 "#;

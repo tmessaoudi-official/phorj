@@ -27,18 +27,22 @@ import Core.Option.Some;
 
 test "the injected ServeConfig carries its ruled defaults" {
     ServeConfig fresh = new ServeConfig();
-    Test.assertEquals(fresh.host, "127.0.0.1");
-    Test.assertEquals(fresh.port, 8080);
-    // `timeout = 0` is the literal "no timeout" sentinel, not an unset field.
-    Test.assertEquals(fresh.timeout, 0);
+    // DEC-475: `new ServeConfig()` leaves every field UNSET, and the effective defaults are applied
+    // where each value is consumed. That is what makes `timeout: 0` ("no timeout") expressible —
+    // it is no longer the same thing as saying nothing.
+    Test.assertEquals(fresh.host ?? "unset", "unset");
+    Test.assertEquals(fresh.port ?? -1, -1);
+    Test.assertEquals(fresh.timeout ?? -1, -1);
+    ServeConfig noTimeout = new ServeConfig(timeout: 0);
+    Test.assertEquals(noTimeout.timeout ?? -1, 0);
 }
 
 test "named arguments select what a ServeConfig sets" {
     ServeConfig tuned = new ServeConfig(port: 3000, workers: 4);
-    Test.assertEquals(tuned.port, 3000);
-    Test.assertEquals(tuned.workers, 4);
-    // Unnamed fields keep their defaults.
-    Test.assertEquals(tuned.host, "127.0.0.1");
+    Test.assertEquals(tuned.port ?? -1, 3000);
+    Test.assertEquals(tuned.workers ?? -1, 4);
+    // Unnamed fields stay unset — the runtime applies their effective defaults later.
+    Test.assertEquals(tuned.host ?? "unset", "unset");
 }
 
 test "an injected Response builds and reports its status" {

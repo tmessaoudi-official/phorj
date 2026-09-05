@@ -89,7 +89,11 @@ pub fn requested(cfg: &ServeCfg) -> Result<Option<TlsRequest>, String> {
         (Some(cert), Some(key)) => Ok(Some(TlsRequest {
             cert: PathBuf::from(cert),
             key: PathBuf::from(key),
-            min_version: MinVersion::parse(&cfg.tls_min_version)?,
+            min_version: MinVersion::parse(
+                cfg.tls_min_version
+                    .as_deref()
+                    .unwrap_or(super::settings::DEFAULT_TLS_MIN_VERSION),
+            )?,
         })),
         (Some(_), None) => Err(incomplete("cert", "key")),
         (None, Some(_)) => Err(incomplete("key", "cert")),

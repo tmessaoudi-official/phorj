@@ -27,12 +27,14 @@ function posture(ServeConfig cfg): string {
     if (cfg.key instanceof null) {
         return "REFUSED — E-SERVE-TLS-INCOMPLETE: cert without key";
     }
-    return "https (floor TLS {cfg.tlsMinVersion})";
+    // DEC-475: every ServeConfig field is nullable, so an unset floor renders as the effective
+    // default the runtime will apply rather than as an empty space.
+    return "https (floor TLS {cfg.tlsMinVersion ?? \"1.2\"})";
 }
 
 function describe(string label, ServeConfig cfg): void {
     Output.printLine("{label}");
-    Output.printLine("  bind    {cfg.host}:{cfg.port}");
+    Output.printLine("  bind    {cfg.host ?? \"127.0.0.1\"}:{cfg.port ?? 8080}");
     Output.printLine("  scheme  {posture(cfg)}");
 }
 

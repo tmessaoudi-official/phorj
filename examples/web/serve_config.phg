@@ -38,31 +38,61 @@ import Core.Http.RequestParsing;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
-function parsingName(RequestParsing p): string {
-    return match (p) { RequestParsing.Eager() => "eager", RequestParsing.Lazy() => "lazy" };
+function parsingName(RequestParsing? p): string {
+    if (var parsing = p) {
+        return match (parsing) {
+            RequestParsing.Eager() => "eager",
+            RequestParsing.Lazy() => "lazy"
+        };
+    }
+    return "unset(eager)";
 }
 
-// `workers = 0` is the AUTO sentinel, `timeout = 0` is "no timeout" — render both as words rather
-// than as a bare 0, which is what the sentinel actually means to a reader.
-function workersName(int workers): string {
-    if (workers == 0) {
-        return "auto(one per core)";
+// DEC-475: every field is nullable and `null` means UNSET, so these renderers have THREE cases,
+// not two — unset (the runtime picks), the sentinel written on purpose, and a real value. That
+// difference is the whole point of the ruling: `timeout: 0` means "no timeout" and can finally be
+// said, because it is no longer the same thing as not saying anything.
+function workersName(int? workers): string {
+    if (var w = workers) {
+        if (w == 0) {
+            return "auto(one per core), written";
+        }
+        return "{w}";
     }
-    return "{workers}";
+    return "unset -> auto(one per core)";
 }
 
-function timeoutName(int seconds): string {
-    if (seconds == 0) {
-        return "none";
+function timeoutName(int? seconds): string {
+    if (var s = seconds) {
+        if (s == 0) {
+            return "none (no timeout)";
+        }
+        return "{s}s";
     }
-    return "{seconds}s";
+    return "unset -> 30s";
+}
+
+// An unset field renders as the effective default the runtime will apply, marked so the reader can
+// tell "the program chose this" from "the program said nothing".
+function orDefault(string? value, string fallback): string {
+    if (var v = value) {
+        return v;
+    }
+    return "unset({fallback})";
+}
+
+function intOrDefault(int? value, int fallback): string {
+    if (var v = value) {
+        return "{v}";
+    }
+    return "unset({fallback})";
 }
 
 // HTTPS is a function of the config, not a flag: BOTH halves present, or plain HTTP.
 function scheme(ServeConfig cfg): string {
     if (var c = cfg.cert) {
         if (var k = cfg.key) {
-            return "https(min TLS {cfg.tlsMinVersion})";
+            return "https(min TLS {orDefault(cfg.tlsMinVersion, \"1.2\")})";
         }
     }
     return "http";
@@ -70,17 +100,20 @@ function scheme(ServeConfig cfg): string {
 
 function describe(string label, ServeConfig cfg): void {
     Output.printLine("{label}:");
-    Output.printLine("  bind         {cfg.host}:{cfg.port} over {scheme(cfg)}");
+    Output.printLine(
+        "  bind         {orDefault(cfg.host, \"127.0.0.1\")}:{intOrDefault(cfg.port, 8080)} over {scheme(cfg)}"
+    );
     Output.printLine("  workers      {workersName(cfg.workers)}");
     Output.printLine("  timeout      {timeoutName(cfg.timeout)}");
-    Output.printLine("  maxBodySize  {cfg.maxBodySize}");
+    Output.printLine("  maxBodySize  {intOrDefault(cfg.maxBodySize, 8388608)}");
     Output.printLine("  serverName   {cfg.serverName ?? \"(none)\"}");
     Output.printLine("  parsing      {parsingName(cfg.requestParsing)}");
 }
 
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
-    // Every field defaulted — what `new ServeConfig()` in a `serve.phg` actually means.
+    // Every field UNSET — what `new ServeConfig()` in a `serve.phg` actually means. Each line says
+    // which effective default the runtime will apply, and that the program did not choose it.
     describe("defaults", new ServeConfig());
     // Named arguments select what you set; the rest keep their defaults. Order is free.
     describe("tuned", new ServeConfig(port: 3000, workers: 4, timeout: 30));
@@ -106,10 +139,18 @@ function main(): void {
         "lazy-uploads",
         new ServeConfig(maxBodySize: 33554432, requestParsing: new RequestParsing.Lazy())
     );
+    // THE case DEC-475 exists for: "no timeout", said out loud. Before the field set became
+    // nullable this was byte-for-byte the class default, so it read as unset and the 30s idle guard
+    // applied instead — the one thing the field is for could not be expressed.
+    describe("no-timeout", new ServeConfig(timeout: 0));
+    // And its twin: a value written at the effective default is still a CHOICE. `phg serve` will
+    // announce a `--address` flag overriding this one, which it could not do when "set" meant
+    // "differs from the default".
+    describe("explicit-default-port", new ServeConfig(port: 8080));
     // The value is immutable: reading a field never changes it, so the same instance describes the
     // same server twice. (Withers are a Request affordance; a ServeConfig is built once, at startup.)
     ServeConfig shared = new ServeConfig(port: 9000);
     Output.printLine(
-        "re-read       {shared.host}:{shared.port} workers={workersName(shared.workers)}"
+        "re-read       {orDefault(shared.host, \"127.0.0.1\")}:{intOrDefault(shared.port, 8080)} workers={workersName(shared.workers)}"
     );
 }

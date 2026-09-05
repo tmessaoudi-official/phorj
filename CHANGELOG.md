@@ -8,6 +8,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **DEC-475 — every `Http.ServeConfig` field is nullable, and its numbers are validated**
+  (KNOWN_ISSUES §SERVE-CONFIG-PROVENANCE, now FIXED). `null` means UNSET and the effective defaults
+  are applied where each value is consumed, which replaces an approximation that could not be made
+  correct: a field used to count as "set" only when it DIFFERED from the declared class default, so
+  `new ServeConfig(timeout: 0)` — the one thing that field exists to say — was byte-for-byte the
+  default, read as unset, and got `phg serve`'s 30s guard instead. A value written by hand at its
+  default likewise got no `W-SERVE-CONFIG-OVERRIDDEN` notice, because no difference was observable.
+  Both behave as D4 describes now. Range validation shipped with the ruling as
+  `E-SERVE-CONFIG-RANGE` (`port` 1..=65535, `workers` >= 0, `timeout` >= 0, `maxBodySize` >= 1),
+  checked BEFORE the socket binds — impossible under the old shape, where refusing a nonsense number
+  would have meant refusing the class default too, which is why `timeout: -3` used to become 30
+  seconds instead of an error. UNIFIED-SPEC's D4 is amended in this same change, as the ruling
+  requires; `examples/web/serve_config.phg` renders unset / written-sentinel / real value as three
+  distinct states and gains the `timeout: 0` and `port: 8080` cases; the three tests that pinned the
+  old behaviour are INVERTED to pin the new one rather than patched to keep passing.
+
 - **Lift: the PHP static-factory idiom lifts to checkable phorj** (Lane R-8). Chosen by censusing
   the check errors of every scout file that lifts, not by guessing: `E-OPEN-STATIC` 18 and
   `E-NEW-ON-NONCONSTRUCT` 17 were the two largest non-cross-file classes, and both come from one

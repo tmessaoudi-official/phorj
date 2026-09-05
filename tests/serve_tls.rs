@@ -16,9 +16,21 @@
 use phorj::serve::tls;
 use phorj::serve::ServeCfg;
 
-/// A `ServeCfg` at D4's declared defaults — the "nothing configured" baseline every case perturbs.
+/// A `ServeCfg` with every field UNSET — the "nothing configured" baseline every case perturbs.
+/// DEC-475 made `null` the class default, so this is exactly what `new ServeConfig()` produces, and
+/// `tlsMinVersion` unset resolves to `DEFAULT_TLS_MIN_VERSION` where it is read.
 fn cfg() -> ServeCfg {
-    phorj::serve::class_defaults()
+    ServeCfg {
+        host: None,
+        port: None,
+        workers: None,
+        timeout: None,
+        cert: None,
+        key: None,
+        server_name: None,
+        max_body_size: None,
+        tls_min_version: None,
+    }
 }
 
 #[test]
@@ -84,7 +96,7 @@ fn the_floor_accepts_exactly_the_two_ruled_versions() {
         let mut c = cfg();
         c.cert = Some("c.pem".to_string());
         c.key = Some("k.pem".to_string());
-        c.tls_min_version = raw.to_string();
+        c.tls_min_version = Some(raw.to_string());
         let req = tls::requested(&c)
             .expect("a ruled version")
             .expect("TLS requested");
@@ -101,7 +113,7 @@ fn an_unruled_floor_is_refused_and_names_what_is_allowed() {
         let mut c = cfg();
         c.cert = Some("c.pem".to_string());
         c.key = Some("k.pem".to_string());
-        c.tls_min_version = raw.to_string();
+        c.tls_min_version = Some(raw.to_string());
         let err = tls::requested(&c).expect_err("{raw} is not a ruled floor");
         assert!(
             err.starts_with(tls::E_SERVE_TLS_MIN_VERSION),
@@ -115,10 +127,11 @@ fn an_unruled_floor_is_refused_and_names_what_is_allowed() {
 fn the_floor_is_not_validated_when_no_tls_is_requested() {
     // A program that never set cert/key has no TLS posture to get wrong, so a nonsense
     // `tlsMinVersion` must not fail its plain-HTTP server. Ruled this way because the field carries a
-    // non-null class default: EVERY config has a `tlsMinVersion`, so validating it unconditionally
-    // would make the field's mere existence able to refuse a server that does not use TLS.
+    // class default: since DEC-475 an unset `tlsMinVersion` resolves at the READ site, so a config
+    // that never mentions TLS still has a floor — and validating it unconditionally would make the
+    // field's mere presence able to refuse a server that does not use TLS.
     let mut c = cfg();
-    c.tls_min_version = "nonsense".to_string();
+    c.tls_min_version = Some("nonsense".to_string());
     assert!(tls::requested(&c)
         .expect("no TLS requested → the floor is irrelevant")
         .is_none());
@@ -388,7 +401,7 @@ mod handshake {
         let mut c = cfg();
         c.cert = Some(cert.to_string_lossy().into_owned());
         c.key = Some(key.to_string_lossy().into_owned());
-        c.tls_min_version = "1.3".to_string();
+        c.tls_min_version = Some("1.3".to_string());
         let req = tls::requested(&c).expect("valid").expect("TLS requested");
         assert_eq!(req.min_version, tls::MinVersion::Tls13);
         let server = tls::build(&req).expect("builds");

@@ -39,18 +39,19 @@ use std::sync::Mutex;
 /// value the program already holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServeCfg {
-    pub host: String,
-    pub port: i64,
+    pub host: Option<String>,
+    pub port: Option<i64>,
     /// `0` = AUTO (one worker per core) — the sentinel is resolved by the serve loop, never baked
     /// into the class default, so the value stays machine-independent (Invariant 10).
-    pub workers: i64,
-    /// Seconds; `0` = no timeout.
-    pub timeout: i64,
+    pub workers: Option<i64>,
+    /// Seconds; `0` = no timeout — expressible since DEC-475, because `None` is what "unset" means
+    /// now and `0` no longer has to double as both.
+    pub timeout: Option<i64>,
     pub cert: Option<String>,
     pub key: Option<String>,
     pub server_name: Option<String>,
-    pub max_body_size: i64,
-    pub tls_min_version: String,
+    pub max_body_size: Option<i64>,
+    pub tls_min_version: Option<String>,
 }
 
 thread_local! {
@@ -100,31 +101,33 @@ fn str_field(v: &Value, name: &str) -> Option<String> {
     }
 }
 
-/// Read an `int` field off the `ServeConfig` instance, falling back to the D4 default when the field
-/// is absent or not an int. A `ServeConfig` is a promoted constructor with defaults, so every field
-/// is always populated in practice; the fallback exists so a malformed instance degrades to the
-/// documented default rather than faulting inside a registration call.
-fn int_field(v: &Value, name: &str, default: i64) -> i64 {
+/// Read an `int` field off the `ServeConfig` instance. `None` means the program did not set it
+/// (DEC-475: every field defaults to `null`), and the effective default is applied where the value
+/// is CONSUMED — so a field written by hand at the same value the runtime would have chosen is
+/// distinguishable from one left alone, which is the whole point of the nullable field set. A
+/// non-int value reads as unset for the same reason a malformed instance did before: a
+/// registration call is not the place to fault.
+fn int_field(v: &Value, name: &str) -> Option<i64> {
     match v {
         Value::Instance(i) => match i.get_field(name) {
-            Some(Value::Int(n)) => n,
-            _ => default,
+            Some(Value::Int(n)) => Some(n),
+            _ => None,
         },
-        _ => default,
+        _ => None,
     }
 }
 
 fn cfg_from_value(v: &Value) -> ServeCfg {
     ServeCfg {
-        host: str_field(v, "host").unwrap_or_else(|| "127.0.0.1".to_string()),
-        port: int_field(v, "port", 8080),
-        workers: int_field(v, "workers", 0),
-        timeout: int_field(v, "timeout", 0),
+        host: str_field(v, "host"),
+        port: int_field(v, "port"),
+        workers: int_field(v, "workers"),
+        timeout: int_field(v, "timeout"),
         cert: str_field(v, "cert"),
         key: str_field(v, "key"),
         server_name: str_field(v, "serverName"),
-        max_body_size: int_field(v, "maxBodySize", super::DEFAULT_MAX_BODY_SIZE as i64),
-        tls_min_version: str_field(v, "tlsMinVersion").unwrap_or_else(|| "1.2".to_string()),
+        max_body_size: int_field(v, "maxBodySize"),
+        tls_min_version: str_field(v, "tlsMinVersion"),
     }
 }
 
@@ -218,14 +221,18 @@ mod tests {
         native_register_serve(&[cfg_instance(), raw_handler()], &mut out)
             .expect("registration succeeds");
         let cfg = config().expect("a config was stored");
-        assert_eq!(cfg.host, "127.0.0.1");
-        assert_eq!(cfg.port, 8080);
-        assert_eq!(cfg.workers, 0, "0 is the AUTO sentinel, not a real count");
+        // DEC-475: the fixture builds a `ServeConfig` with nothing set, and UNSET is what arrives —
+        // the effective defaults are applied where each value is consumed, not baked in here. This
+        // is the property the round trip exists to pin: a field the program did not write must not
+        // arrive looking like one it did.
+        assert_eq!(cfg.host, None);
+        assert_eq!(cfg.port, None);
         assert_eq!(
-            cfg.max_body_size,
-            super::super::DEFAULT_MAX_BODY_SIZE as i64
+            cfg.workers, None,
+            "unset, not the AUTO sentinel written by hand"
         );
-        assert_eq!(cfg.tls_min_version, "1.2");
+        assert_eq!(cfg.max_body_size, None);
+        assert_eq!(cfg.tls_min_version, None);
         assert_eq!(cfg.cert, None);
         assert_eq!(cfg.key, None);
         assert!(take_handler().is_some(), "the handler was stored too");
@@ -249,12 +256,14 @@ mod tests {
         reset();
     }
 
-    /// A non-`ServeConfig` first argument degrades to the documented D4 defaults rather than
-    /// faulting — the fallback the field readers exist for.
+    /// A non-`ServeConfig` first argument reads as ENTIRELY UNSET rather than faulting — the
+    /// fallback the field readers exist for. Since DEC-475 that is also exactly what a legitimate
+    /// `new ServeConfig()` produces, so a malformed value degrades to the documented behaviour
+    /// instead of to a second, differently-defaulted one.
     #[test]
-    fn a_non_instance_config_degrades_to_the_documented_defaults() {
+    fn a_non_instance_config_reads_as_unset() {
         let cfg = cfg_from_value(&Value::Int(7));
-        assert_eq!(cfg.host, "127.0.0.1");
-        assert_eq!(cfg.port, 8080);
+        assert_eq!(cfg.host, None);
+        assert_eq!(cfg.port, None);
     }
 }

@@ -573,17 +573,20 @@ import Core.Http;
         "dec452_qualified_ctor_normalizes_named_args",
     );
     // Both together, on the shape DEC-331 D4's ruled surface actually uses: named args selecting two
-    // of ten fields, the other eight defaulted — including a spliced zero-payload enum default.
+    // of ten fields, the other eight left UNSET. Since DEC-475 every field is nullable and defaults
+    // to `null`, so this fixture pins the provenance property itself: a field nobody wrote reads as
+    // absent on all three legs, and one that WAS written carries its value — the effective defaults
+    // are applied where each value is consumed, not baked into the class.
     agree_out_php(
         r#"import Core.Output;
 import Core.Http;
 #[Entry(kind: EntryKind.Cli)] function main(): void {
     Http.ServeConfig d = new Http.ServeConfig();
     Http.ServeConfig s = new Http.ServeConfig(port: 8443, host: "0.0.0.0");
-    Output.printLine("{d.host}:{d.port} workers={d.workers} max={d.maxBodySize} tls={d.tlsMinVersion}");
-    Output.printLine("{s.host}:{s.port} max={s.maxBodySize}");
+    Output.printLine("{d.host ?? "unset"}:{d.port ?? -1} workers={d.workers ?? -1} max={d.maxBodySize ?? -1} tls={d.tlsMinVersion ?? "unset"}");
+    Output.printLine("{s.host ?? "unset"}:{s.port ?? -1} max={s.maxBodySize ?? -1}");
 }"#,
-        "127.0.0.1:8080 workers=0 max=8388608 tls=1.2\n0.0.0.0:8443 max=8388608\n",
+        "unset:-1 workers=-1 max=-1 tls=unset\n0.0.0.0:8443 max=-1\n",
         "dec452_serveconfig_named_plus_defaults",
     );
 }

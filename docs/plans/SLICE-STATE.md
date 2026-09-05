@@ -53,6 +53,13 @@ top-level statement got a fresh already-declared set, so a file-scope reassignme
 variable — a shape almost every PHP script contains. Both fixed and sabotage-proven; the remaining
 known gap is `§LIFT-DISCARD` (a call written for effect lifts fine, then fails `phg check`).
 
+**Lane F landed too — DEC-475**: every `Http.ServeConfig` field is nullable (`null` = unset), the
+effective defaults moved to the consumption sites, and `E-SERVE-CONFIG-RANGE` validates
+`port`/`workers`/`timeout`/`maxBodySize` before the socket binds. That closes
+KNOWN_ISSUES §SERVE-CONFIG-PROVENANCE: `timeout: 0` ("no timeout") is expressible for the first
+time, and a CLI flag overriding a hand-written default is announced instead of falling silent.
+UNIFIED-SPEC's D4 is amended in the same change, as the ruling requires.
+
 R-8 was chosen by censusing the check errors of every file that lifts, and the same census is now
 the map for what follows: `E-UNKNOWN-TYPE` 36 + `E-UNKNOWN-IDENT` 22 + `E-MODULE-NOT-FOUND` 14 are
 ONE wall (a file referencing a sibling that does not lift yet) and fall only to raising the lift

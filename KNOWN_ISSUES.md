@@ -3240,48 +3240,28 @@ location or a rendered declaration for a decl that has no file.
 **Not a regression** — it predates S3.3e and no shipped behaviour changed. Recorded so the next slice
 there starts from the ruling, not from re-deriving the three options.
 
-## §SERVE-CONFIG-PROVENANCE — a `ServeConfig` field written AT its class default reads as unset (P2, 2026-08-23)
+## §SERVE-CONFIG-PROVENANCE — a `ServeConfig` field written AT its class default reads as unset (P2, 2026-08-23) — **FIXED 2026-09-05 (DEC-475)**
 
-S3.2 Part C (DEC-455.14) makes the registered `Http.ServeConfig` the default source for what
-`phg serve` binds, with a passed flag overriding it loudly. That rule needs to know which config
-fields the program actually SET — and it cannot, exactly.
+**Was:** S3.2 Part C made the registered `Http.ServeConfig` the default source for what `phg serve`
+binds, with a passed flag overriding it loudly — but it could not tell which fields the program had
+actually SET. On the flag side provenance is observable (`Option::is_some`); on the config side
+`new ServeConfig()` filled `port` with `8080`, indistinguishable from a program that wrote
+`port: 8080` by hand. `serve::settings` therefore approximated "set" as *differs from the declared
+class default*, with two accepted consequences: `new ServeConfig(timeout: 0)` could not express "no
+timeout" (`0` WAS the class default, so it read as unset and the CLI's 30s default applied — the one
+thing the field exists for), and a field written at its default got no override notice. A negative
+value fell back to the default as a deliberate stopgap, because refusing it would have meant
+refusing the class default too.
 
-**Why.** On the flag side provenance is observable: `Option::is_some` says whether the flag was
-typed. On the config side it is not: `new ServeConfig()` fills `port` with `8080`, and the resolver
-receives a fully-constructed value in which that is indistinguishable from a program that wrote
-`port: 8080` by hand. So `serve::settings` approximates "set" as **differs from D4's declared class
-default** (`settings::class_defaults`, pinned against the prelude source by
-`class_defaults_match_the_prelude_source` so the two cannot drift).
+**Fixed by DEC-475:** every `ServeConfig` field is nullable and defaults to `null`, so `null` means
+unset and every other value was stated on purpose. The effective defaults moved to where each value
+is consumed (`DEFAULT_HOST` / `DEFAULT_PORT` / `DEFAULT_TIMEOUT_SECS` / `DEFAULT_TLS_MIN_VERSION`,
+pinned against the prelude's documented defaults by
+`the_effective_defaults_match_what_the_prelude_documents` so the two cannot drift). `timeout: 0` now
+means no timeout; an explicitly-written default is observably set and its override IS announced.
+Range validation landed with it as `E-SERVE-CONFIG-RANGE` — `port` 1..=65535, `workers` >= 0,
+`timeout` >= 0, `maxBodySize` >= 1 — checked before the socket binds, which the value-comparison
+rule could never have done.
 
-**The two consequences, both real and both currently accepted:**
-
-  * `new ServeConfig(timeout: 0)` cannot express *"no timeout"* — `0` IS the class default, so it
-    reads as unset and `phg serve`'s own 30s default applies. `--timeout 0` still works, because
-    there the flag's presence is itself the signal.
-  * Any field written explicitly at its default value gets no override notice, because no difference
-    is observable. A program that means `port: 8080` and a command line passing
-    `--address 127.0.0.1:8080` simply agree, silently — which is harmless, but it is not the same
-    thing as *knowing* they agree.
-
-**A NEGATIVE value reads as unset, fail-safe** — and that is a stopgap, not validation. `timeout: -3`
-differs from the class default, so the value rule reads it as SET; the resolver converts it and, on
-failure, falls back to the DEFAULT rather than to `0`, because `0` means *no timeout* and a typo must
-never silently disable the B4 idle-socket guard (caught by a 6C review; pinned by
-`a_negative_config_timeout_reads_as_unset_not_as_no_timeout`, with the already-fail-safe negative
-`workers` as its control). Real range validation — `port`/`maxBodySize`/`timeout` bounds — is the
-item `serve_config_prelude.rs` deferred to "the slice that consumes the values"; Part C consumes
-four of them and did NOT add it. Still owed, now in writing. `tlsMinVersion` has LEFT this list:
-S3.5 shipped its narrowing as `E-SERVE-TLS-MIN-VERSION` (`src/serve/tls.rs`, ruled in DEC-455.16),
-so the floor is refused at startup rather than owed — `"1.1"` is rejected, never silently raised.
-A negative `port` needs no guard: it fails loudly at bind.
-
-**Why the approximation was chosen over the alternatives.** Reading the config unconditionally would
-have silently disabled the B4 idle-socket guard for every existing server the moment Part C landed
-(D4 declares `timeout = 0`, `phg serve` defaults to 30s). The differs-from-default rule keeps
-today's behaviour byte-for-byte intact for `new ServeConfig()`, which is the shape every shipped
-example uses.
-
-**The real fix is a developer question, not a coding gap:** make the D4 field set nullable
-(`int? port = null`, resolved to the default downstream) so "unset" is representable in the type.
-That changes a ruled class shape and the output of `examples/web/serve_config.phg`, so it is an
-Invariant 15 adjudication, deliberately not self-ruled here.
+`tlsMinVersion` had already left this list in S3.5 (`E-SERVE-TLS-MIN-VERSION`), and still resolves
+its floor at the READ site, so a plain-HTTP server is never refused over a field it does not use.

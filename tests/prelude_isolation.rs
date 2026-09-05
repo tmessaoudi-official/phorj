@@ -24,7 +24,7 @@ fn program(extra_import: &str, body: &str) -> String {
 fn a_user_alias_for_a_raw_native_module_no_longer_breaks_the_injected_prelude() {
     let src = program(
         "import Core.Native.Http as Raw;",
-        "Output.printLine(\"{cfg.port} {Raw.decodePath(\\\"%41\\\")}\");",
+        "Output.printLine(\"{cfg.port ?? 8080} {Raw.decodePath(\\\"%41\\\")}\");",
     );
     let ok = cli::cmd_check(&src).unwrap_or_else(|e| panic!("must type-check clean:\n{e}"));
     assert!(ok.contains("OK"), "{ok}");
@@ -40,7 +40,7 @@ fn a_user_alias_for_a_raw_native_module_no_longer_breaks_the_injected_prelude() 
 fn a_user_alias_spelled_like_the_prelude_qualifier_cannot_capture_it() {
     let src = program(
         "import Core.Native.Input as NativeHttp;",
-        "Output.printLine(\"{cfg.port} {NativeHttp.isInteractive()}\");",
+        "Output.printLine(\"{cfg.port ?? 8080} {NativeHttp.isInteractive()}\");",
     );
     let ok = cli::cmd_check(&src).unwrap_or_else(|e| panic!("must type-check clean:\n{e}"));
     assert!(ok.contains("OK"), "{ok}");
@@ -59,7 +59,7 @@ fn prelude_qualifiers_are_not_in_user_scope() {
     for (import, call) in cases {
         let src = program(
             import,
-            &format!("Output.printLine(\"{{cfg.port}} {{{call}}}\");"),
+            &format!("Output.printLine(\"{{cfg.port ?? 8080}} {{{call}}}\");"),
         );
         let err = cli::cmd_check(&src).expect_err(&format!(
             "`{call}` must NOT resolve in user code (nothing in the wind)"
@@ -79,7 +79,7 @@ fn prelude_qualifiers_are_not_in_user_scope() {
 fn the_endorsed_user_spelling_binds_the_users_own_import() {
     let src = program(
         "import Core.Native.Http as NativeHttp;",
-        "Output.printLine(\"{cfg.port} {NativeHttp.decodePath(\\\"%41\\\")}\");",
+        "Output.printLine(\"{cfg.port ?? 8080} {NativeHttp.decodePath(\\\"%41\\\")}\");",
     );
     assert!(cli::cmd_check(&src).expect("clean").contains("OK"));
     assert_eq!(cli::cmd_run(&src).expect("runs"), "8080 A\n");

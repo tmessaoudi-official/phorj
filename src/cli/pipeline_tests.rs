@@ -225,7 +225,8 @@ fn a_class_named_like_its_qualifier_does_not_shadow_the_qualified_type_form() {
     for src in [
         // The qualified TYPE form, through the qualifier.
         "package Main; import Core.Http; import Core.Output; \
-         function main(): void { var c = new Http.ServeConfig(); Output.printLine(\"{c.port}\"); }",
+         function main(): void { var c = new Http.ServeConfig(); \
+         Output.printLine(\"{c.port ?? 8080}\"); }",
         // The MEMBER-IMPORT spelling: `Http` is now a bare_type, so `import Core.Http.Http;` is a
         // legal import that binds the class alone. It must reach `Http.serve` without the whole-module
         // import — the "nothing in the wind" discipline says every symbol is import-gated, and this

@@ -2115,10 +2115,25 @@ fully-qualified `Core.Runtime.EntryKind.Cli` is self-gating. It is a compile-tim
   first: **CLI flag > env var > `#[Config]` provider > `phorj.json` static block > attribute inline
   default.** Injection happens in DECLARATION order, and every unresolved parameter gets its own
   `E-CONFIG-MISSING`.
-- **D4 — `Http.ServeConfig`**, the runtime's contract as ordinary stdlib source: `host="127.0.0.1"`,
-  `port=8080`, `workers=<cores>`, `timeout=0` (seconds; 0 = none), `cert?`, `key?`, `serverName?`,
-  `maxBodySize=8_388_608`, `tlsMinVersion="1.2"`, plus `requestParsing=Eager`. **App settings are a
-  SEPARATE injected parameter and are never mixed into `ServeConfig`.**
+- **D4 — `Http.ServeConfig`**, the runtime's contract as ordinary stdlib source. **Every field is
+  NULLABLE and defaults to `null`, which means UNSET** (amended by DEC-475, 2026-09-05): `host?`,
+  `port?`, `workers?`, `timeout?`, `cert?`, `key?`, `serverName?`, `maxBodySize?`, `tlsMinVersion?`,
+  `requestParsing?`. The EFFECTIVE defaults are applied where each value is consumed —
+  `host="127.0.0.1"`, `port=8080`, `workers=<cores>` (`0` is that same AUTO sentinel written by
+  hand), `timeout=30s`, `maxBodySize=8_388_608`, `tlsMinVersion="1.2"`, `requestParsing=Eager`.
+  **App settings are a SEPARATE injected parameter and are never mixed into `ServeConfig`.**
+
+  Why nullable rather than defaulted-in-place: a field carrying its default value is
+  indistinguishable from one the program never wrote, so `phg serve` could not tell a deliberate
+  setting from an absent one. Two things follow that the previous shape could not express — the
+  ruled `timeout: 0` ("no timeout") is now sayable, where before it WAS the class default and read
+  as unset; and a CLI flag overriding a value the program wrote by hand is announced, where before
+  the override notice fell silent whenever the two happened to agree.
+
+  **Range validation ships with it** (`E-SERVE-CONFIG-RANGE`, checked before the socket binds):
+  `port` 1..=65535, `workers` >= 0, `timeout` >= 0 seconds, `maxBodySize` >= 1 byte. A value outside
+  its range is refused rather than reinterpreted — which only became possible once `null` carried
+  "unset", since refusing a nonsense number previously meant refusing the class default too.
 - **D5 — one handler model (BREAKING).** The typed `(Request): Response` is THE web handler — as the
   **closure passed to `Http.serve(cfg, handler)`**, not as the entry itself. A `Web` entry is a
   `(): void` closure FACTORY. `respond(bytes): bytes` and the `handle(Request): Response` entry are

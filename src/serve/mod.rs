@@ -74,8 +74,9 @@ mod web_handlers;
 pub use crate::native::http::serve_register::ServeCfg;
 pub use handlers::*;
 pub use settings::{
-    class_defaults, resolve as resolve_settings, ServeFlags, ServeSettings, DEFAULT_ADDR,
-    DEFAULT_TIMEOUT_SECS,
+    resolve as resolve_settings, validate as validate_config, ServeFlags, ServeSettings,
+    DEFAULT_ADDR, DEFAULT_HOST, DEFAULT_PORT, DEFAULT_TIMEOUT_SECS, DEFAULT_TLS_MIN_VERSION,
+    E_SERVE_CONFIG_RANGE,
 };
 pub use static_files::resolve_site_dir;
 pub use transport::*;

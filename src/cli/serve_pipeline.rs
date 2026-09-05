@@ -145,6 +145,12 @@ pub(crate) fn prepare_serve(
     // This runs BEFORE any socket binds. A server whose certificate is missing or malformed must
     // fail to START, not bind the port and then fail every handshake — the latter looks like a
     // working server to everything except a client.
+    // DEC-475: the range gate runs FIRST — before TLS is built and long before a socket binds.
+    // A config whose numbers are nonsense is wrong no matter what else succeeds, and the same
+    // reasoning the TLS ordering comment gives applies one step earlier.
+    if let Some(c) = cfg.as_ref() {
+        crate::serve::validate_config(c)?;
+    }
     let tls = match cfg.as_ref().map(crate::serve::tls::requested).transpose()? {
         Some(Some(req)) => Some(crate::serve::tls::build(&req)?),
         _ => None,

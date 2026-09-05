@@ -10,6 +10,22 @@
 
 pub(super) fn text(code: &str) -> Option<&'static str> {
     Some(match code {
+        "E-SERVE-CONFIG-RANGE" => {
+            "E-SERVE-CONFIG-RANGE — a `ServeConfig` number is outside the range its field allows.\n\n\
+             \x20   port         1..=65535   (0 asks the OS to choose; a server nobody can find)\n\
+             \x20   workers      0 or more   (0 = one worker per core, D4's AUTO sentinel)\n\
+             \x20   timeout      0 or more   (seconds; 0 = no timeout)\n\
+             \x20   maxBodySize  1 or more   (bytes; 0 would reject every request with a body)\n\n\
+             The check runs before the socket binds, so a misconfigured server fails to start rather\n\
+             than starting and behaving unlike its configuration.\n\n\
+             WHY THIS IS NEW. Until DEC-475 every field carried a VALUE and \"unset\" meant \"equal to\n\
+             the class default\", so a nonsense number could only be handled by quietly falling back\n\
+             to that default — refusing it would have meant refusing the default too. `timeout: -3`\n\
+             therefore turned into 30 seconds rather than an error, and `timeout: 0`, the one value\n\
+             the field exists to express, could not be written at all. The fields are nullable now:\n\
+             `null` is unset, every other value was stated on purpose, and one that cannot mean\n\
+             anything is reported instead of reinterpreted.\n"
+        }
         "E-SERVE-TLS-INCOMPLETE" => {
             "E-SERVE-TLS-INCOMPLETE — `ServeConfig` set one half of the TLS pair, not both.\n\n\
              HTTPS needs a certificate AND its private key. This config named one of them, so the\n\
