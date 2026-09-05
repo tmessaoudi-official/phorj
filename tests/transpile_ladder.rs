@@ -50,3 +50,31 @@ fn a_variant_that_would_collide_with_a_class_is_refused_by_the_emitter() {
     let err = phorj::transpile::emit(&prog).expect_err("the emitter must refuse the collision");
     assert!(err.contains("E-TRANSPILE-VARIANT-COLLISION"), "{err}");
 }
+
+/// TRANSPILE-NS-REFLECT-TABLES (measured 2026-09-05): under namespaced emission the
+/// `__phorj_debug_enums` row must be keyed by the FQN `get_class` returns, and carry the enum name
+/// exactly as the native legs render it — `Acme\\Color` for a library package, bare `Local` for the
+/// entry package. The differential proves the behaviour on `examples/project/reflectdump/`; this pins
+/// the MECHANISM, so a future "simplification" back to the bare key reds here with the row text.
+#[test]
+fn debug_enum_rows_are_keyed_by_fqn_under_namespaced_emission() {
+    let out = Command::new(BIN)
+        .args(["transpile", "examples/project/reflectdump/src/main.phg"])
+        .output()
+        .expect("spawn phg");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let php = String::from_utf8_lossy(&out.stdout);
+    let row = php
+        .lines()
+        .find(|l| l.contains("function __phorj_debug_enums()"))
+        .expect("the enum table is emitted");
+    assert!(
+        row.contains("'Acme\\\\Color_Green' => ['Acme\\\\Color', 'Green']"),
+        "{row}"
+    );
+    assert!(row.contains("'Main\\\\Local_B' => ['Local', 'B']"), "{row}");
+}

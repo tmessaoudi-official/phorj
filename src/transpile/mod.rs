@@ -201,6 +201,10 @@ struct Transpiler {
     /// `(php variant class, phorj enum name, phorj variant name)` rows collected by `emit_enum`,
     /// consumed by the `__PHORJ_DEBUG_ENUMS` table when `uses_debug_render`.
     debug_enum_rows: Vec<(String, String, String)>,
+    /// The `namespace … {` block currently being emitted (project/namespaced mode), `None` on the
+    /// flat single-file path. Read by `emit_enum` to key its `__phorj_debug_enums` row by the FQN
+    /// PHP's `get_class` will actually return (`Acme\Color_Green`), which is what the lookup compares.
+    current_ns: Option<String>,
     /// Classes lowering to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class — PHP has no MI, so each ancestor needs
     /// an `I<name>` interface + `T<name>` trait + a concrete `class <name>`. Built once in `emit`;

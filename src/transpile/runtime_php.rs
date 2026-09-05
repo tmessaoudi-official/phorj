@@ -617,7 +617,14 @@ impl Transpiler {
             let rows: Vec<String> = self
                 .debug_enum_rows
                 .iter()
-                .map(|(cls, en, var)| format!("'{cls}' => ['{en}', '{var}']"))
+                .map(|(cls, en, var)| {
+                    format!(
+                        "'{}' => ['{}', '{}']",
+                        super::escapes::php_escape(cls),
+                        super::escapes::php_escape(en),
+                        super::escapes::php_escape(var)
+                    )
+                })
                 .collect();
             self.line(&format!(
                 "function __phorj_debug_enums() {{ return [{}]; }}",

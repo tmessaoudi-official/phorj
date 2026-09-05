@@ -287,6 +287,7 @@ impl Transpiler {
         let mut emitted_overloads: HashSet<String> = HashSet::new();
         for (ns, items) in &buckets {
             self.line(&format!("namespace {ns} {{"));
+            self.current_ns = Some(ns.clone());
             self.indent += 1;
             if ns != "Main" {
                 let declared: HashSet<String> = items

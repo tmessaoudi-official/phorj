@@ -40,6 +40,7 @@ impl Transpiler {
             class_implements: std::collections::BTreeMap::new(),
             class_tables: crate::native::ClassTables::default(),
             debug_enum_rows: Vec::new(),
+            current_ns: None,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

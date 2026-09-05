@@ -22,8 +22,7 @@ fn the_helper_registry_matches_the_source_exactly() {
 
     let registered: std::collections::BTreeSet<&str> =
         HELPER_BUCKETS.iter().map(|(n, _)| *n).collect();
-    let found_refs: std::collections::BTreeSet<&str> =
-        found.iter().map(String::as_str).collect();
+    let found_refs: std::collections::BTreeSet<&str> = found.iter().map(String::as_str).collect();
 
     let unregistered: Vec<_> = found_refs.difference(&registered).collect();
     assert!(

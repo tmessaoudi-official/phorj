@@ -230,6 +230,7 @@ type MethodCache = std::cell::Cell<(*const u8, u32)>;
 
 // cohesion split (M-Decomp W4): exec/closure clusters.
 mod closure;
+mod concat;
 mod exec;
 
 // Cooperative green-thread driver (M6 W4 / S4.3) — native + `green` only (stackful coroutines, which
@@ -585,3 +586,5 @@ mod stack;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_concat;

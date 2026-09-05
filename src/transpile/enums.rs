@@ -76,11 +76,18 @@ impl Transpiler {
             let vname = super::php_scoped_variant_name(&e.name, &v.name);
             // DEC-238: record `php-class → (enum, variant)` so `__phorj_debug_render` can render a
             // transpiled enum value as `Ty.Variant(...)` (never the mangled class shape).
-            self.debug_enum_rows.push((
-                vname.clone(),
-                last_segment(&e.name).to_string(),
-                v.name.clone(),
-            ));
+            // TRANSPILE-NS-REFLECT-TABLES (measured 2026-09-05): under namespaced emission the
+            // class is declared inside `namespace Acme {`, so `get_class` returns `Acme\Color_Green`
+            // — the row is keyed by that FQN (never stripped at lookup: `Acme\Color_Green` and
+            // `Other\Color_Green` share a leaf). The enum NAME is `e.name` as the checker holds it —
+            // bare for the entry package (`Local`), mangled for a library package (`Acme\Color`) —
+            // which is exactly what the interpreter's dump prints, so the three legs agree.
+            let key = match &self.current_ns {
+                Some(ns) => format!("{ns}\\{vname}"),
+                None => vname.clone(),
+            };
+            self.debug_enum_rows
+                .push((key, e.name.clone(), v.name.clone()));
             self.line(&format!("final class {} extends {} {{", vname, base));
             self.indent += 1;
             if let Some(bv) = &v.backing_value {

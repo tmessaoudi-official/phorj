@@ -1,0 +1,33 @@
+package Main;
+
+// TRANSPILE-NS-REFLECT-TABLES probe (KNOWN_ISSUES, DEC-455.11): the two `get_class()`-keyed helper
+// tables — `__phorj_reflect_of` and `__phorj_debug_enums` — under NAMESPACED (project) emission,
+// where `get_class` returns `Acme\Color_Green` while the table key was suspected to be the bare
+// name. No project example exercised either table before this one; the divergence was [Inferred]
+// from a code read and never measured. This file measures it on all three legs.
+import Core.Output;
+import Core.Reflection;
+import Core.DebugModule;
+import Core.DebugModule.Debug;
+import Acme.Color;
+import Acme.Widget;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+enum Local { A, B }
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // The entry package's OWN enum, dumped under the same namespaced emission (`namespace Main {`).
+    discard Debug.dump(new B());
+    Color c = new Green();
+    Output.printLine("kind={Reflection.kind(c)} name={Reflection.className(c) ?? "?"}");
+    discard Debug.dump(c);
+    discard Debug.dump([new Red(), new Green()]);
+    // The other `get_class()`-keyed table: `__phorj_reflect_of`, reached through the three list-valued
+    // reflection calls on a cross-package class.
+    Widget w = new Widget(3);
+    Output.printLine("methods={String.join(Reflection.methods(w), ",")} interfaces={String.join(Reflection.interfaces(w), ",")} parents={String.join(Reflection.parents(w), ",")}");
+    Output.printLine("done");
+}

@@ -1,0 +1,10 @@
+package Acme;
+
+import Acme.Buzzer;
+
+public class Widget implements Buzzer {
+    constructor(public int n) {}
+    function buzz(): string {
+        return "bz{this.n}";
+    }
+}

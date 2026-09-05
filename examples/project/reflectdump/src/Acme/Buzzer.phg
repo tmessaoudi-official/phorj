@@ -1,0 +1,5 @@
+package Acme;
+
+public interface Buzzer {
+    function buzz(): string;
+}
