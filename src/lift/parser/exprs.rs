@@ -304,7 +304,10 @@ impl PParser {
             "match" => self.parse_match(),
             "fn" => self.parse_arrow_closure(),
             "static" if self.at_static_fn() => self.parse_arrow_closure(),
-            "function" => self.refuse_block_closure(),
+            "static" if matches!(self.peek_at(1), PTok::Ident(w) if w == "function") => {
+                self.parse_block_closure()
+            }
+            "function" => self.parse_block_closure(),
             "clone" | "print" | "yield" | "throw" | "include" | "require" | "include_once"
             | "require_once" => Err(self.err(&format!("`{word}` is Tier-2/Tier-3"))),
             _ => {

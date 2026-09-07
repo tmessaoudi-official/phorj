@@ -93,9 +93,8 @@ fn entry_cli_attr() -> crate::ast::Attribute {
 pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     // DEC-312: reset the per-lift native-module recorder (never leak across runs on this thread).
     let _ = super::drain_native_modules();
-    let mut l = Lifter {
-        needs_console: false,
-    };
+    super::reset_console();
+    let mut l = Lifter {};
     let mut items: Vec<Item> = Vec::new();
     let mut top_stmts: Vec<Stmt> = Vec::new();
     // Every top-level statement lands in ONE synthesized `main` body, so they share one
@@ -209,7 +208,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             span: SP,
         });
     }
-    if l.needs_console {
+    if super::took_console() {
         final_items.push(Item::Import {
             path: vec!["Core".into(), "Output".into()],
             alias: None,
@@ -473,7 +472,7 @@ fn pascalize(seg: &str) -> String {
     out
 }
 
-pub(in crate::lift::lifter) struct Lifter {
-    /// Set when an `echo` is lifted to `Output.print`, so the import is prepended.
-    needs_console: bool,
-}
+/// The lifter's walker. Stateless since 2026-09-07 — the one flag it carried (`echo` was lifted, so
+/// prepend `import Core.Output`) moved to a thread-local, because a block-closure body is lifted
+/// through the FREE `lift_expr`, which has no `Lifter` to set.
+pub(in crate::lift::lifter) struct Lifter {}

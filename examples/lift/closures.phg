@@ -1,0 +1,30 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+/**
+ * Block-bodied closures — `function (…) [use (…)] : T { … }`.
+ *
+ * phorj HAS this shape (`function(int x): int { … }`); what it has ruled OUT is by-REFERENCE
+ * capture, and `phg lift` says which is which. Lifted with `phg lift closures.php`.
+ */
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var classify = function(int x): string { if (x < 0) { return "negative"; } if (x == 0) { return "zero"; } return "positive"; };
+    Output.print("{classify(-2)}");
+    Output.print("\n");
+    Output.print("{classify(0)}");
+    Output.print("\n");
+    Output.print("{classify(7)}");
+    Output.print("\n");
+    mutable var double = function(int x): int { return x * 2; };
+    Output.print("{double(21)}");
+    Output.print("\n");
+    mutable var offset = 100;
+    mutable var shift = function(int x): int { return x + offset; };
+    Output.print("{shift(5)}");
+    Output.print("\n");
+}

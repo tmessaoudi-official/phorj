@@ -54,6 +54,14 @@ pub enum PhpExpr {
         ret: Option<PhpType>,
         body: Box<PhpExpr>,
     },
+    /// `function (params) [use (…)] : T { stmts }` — a block-bodied closure (lane L1b, 2026-09-07).
+    /// The `use` list is NOT carried: a by-VALUE capture is what a phorj lambda does anyway, and a
+    /// by-REFERENCE one is refused at the parser by name (DEC-506) rather than reaching here.
+    BlockClosure {
+        params: Vec<PhpParam>,
+        ret: Option<PhpType>,
+        body: Vec<super::ast::PhpStmt>,
+    },
     /// `target[]` — the APPEND slot, valid only as the target of `=` (`$xs[] = v`). Lane R-3.
     AppendSlot(Box<PhpExpr>),
     /// `$xs = [];` under a `/** @var list<T> $xs */` docblock (Lane R-6): the empty literal with

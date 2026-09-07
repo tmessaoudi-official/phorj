@@ -318,6 +318,14 @@ fn walk_expr(
         // An arrow closure captures by value: its body READS enclosing locals (walk them) and its
         // parameters are its own (never a hoist candidate for the enclosing function).
         E::Closure { body, .. } => walk_expr(body, ctx, sightings, order),
+        // A block closure's body is a STATEMENT list, and its statements can read enclosing
+        // variables exactly as an arrow closure's expression can. Walking it keeps a read inside a
+        // closure from being invisible to the hoist planner.
+        E::BlockClosure { body, .. } => {
+            for st in body {
+                walk_stmt(st, ctx, sightings, order);
+            }
+        }
         E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => {}
         E::Interp(parts) => {
             for p in parts {

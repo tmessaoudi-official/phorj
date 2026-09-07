@@ -31,7 +31,7 @@ impl Lifter {
             }
             php::PhpStmt::Expr(e) => self.lift_expr_stmt(e, declared)?,
             php::PhpStmt::Echo(args) => {
-                self.needs_console = true;
+                super::super::note_console();
                 let mut out = Vec::new();
                 for a in args {
                     out.push(Stmt::Expr(console_print(echo_arg(a)?), SP));

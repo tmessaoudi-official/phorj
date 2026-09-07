@@ -320,6 +320,35 @@ Two refusals guard the lowering, because the lifter never invents a name:
 - a method that already has a parameter called `tenure` (the receiver name for `enum Tenure`) —
   refused, naming the parameter.
 
+## Block-bodied closures, and the capture phorj rules out (DEC-506, 2026-09-07)
+
+`closures.php` / `closures.phg`. 23 of a 120-file real codebase write a `function (…) { … }`
+closure, and every one of them was refused with a flat *"Tier-2"* message. That message conflated
+two very different answers:
+
+- a **statement-bodied lambda**, which phorj HAS — `function(int x): int { … }` — and
+- **by-reference capture** `use (&$x)`, which phorj has deliberately RULED OUT (it contradicts the
+  value/handle split).
+
+The first now lifts. The second is refused *by name*, saying which variable and that the rejection
+is a ruling rather than a missing feature:
+
+```console
+$ phg lift byref.php
+lift parse error: a closure capturing `$acc` by reference (`use (&$acc)`) has no phorj form —
+references contradict the value/handle split and are RULED OUT (DEC-506), not merely
+unimplemented. Rewrite the closure to return its result instead of mutating a captured variable.
+```
+
+Two more rules fall out of the shape:
+
+- **`static` is dropped, not refused.** It only stops PHP binding `$this`, and a phorj lambda never
+  binds one — the modifier carries no information in the draft.
+- **A BY-VALUE `use (…)` list is dropped** and the captured names simply stay in scope, because
+  capturing enclosing locals by value is what a phorj lambda already does. Nothing is lost.
+- **No `: T` is a refusal.** phorj requires a return type on a statement-bodied lambda, and the
+  lifter does not infer one (DEC-166 — it never guesses).
+
 ## `namespace` / `use` — file-level declarations (LIFT-NS, 2026-08-04)
 
 `namespaces.php` / `namespaces.phg`. Both keywords were outside the Tier-1 subset until this slice, which

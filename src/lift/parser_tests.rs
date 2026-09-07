@@ -14,7 +14,7 @@ pub(super) fn perr(src: &str) -> String {
 }
 
 /// Convenience: parse a single top-level statement out of a `<?php …` snippet.
-fn stmt(src: &str) -> PhpStmt {
+pub(super) fn stmt_of(src: &str) -> PhpStmt {
     match parse(src).items.into_iter().next().expect("one item") {
         PhpItem::Stmt(s) => s,
         other => panic!("expected a statement, got {other:?}"),
@@ -22,8 +22,8 @@ fn stmt(src: &str) -> PhpStmt {
 }
 
 /// Convenience: parse a single expression from `<?php <expr>;`.
-fn expr(src: &str) -> PhpExpr {
-    match stmt(&format!("<?php {src};")) {
+pub(super) fn expr_of(src: &str) -> PhpExpr {
+    match stmt_of(&format!("<?php {src};")) {
         PhpStmt::Expr(e) => e,
         other => panic!("expected an expression statement, got {other:?}"),
     }
@@ -68,7 +68,7 @@ fn nullable_and_default_params() {
 #[test]
 fn php8_concat_binds_below_additive_above_comparison() {
     // `1 + 2 . "x"` ≡ `(1 + 2) . "x"` — concat is looser than `+`.
-    let e = expr(r#"1 + 2 . "x""#);
+    let e = expr_of(r#"1 + 2 . "x""#);
     let PhpExpr::Binary {
         op: PhpBinOp::Concat,
         left,
@@ -86,7 +86,7 @@ fn php8_concat_binds_below_additive_above_comparison() {
     ));
 
     // `"a" . $b == $c` ≡ `("a" . $b) == $c` — equality is looser than concat.
-    let e2 = expr(r#""a" . $b == $c"#);
+    let e2 = expr_of(r#""a" . $b == $c"#);
     let PhpExpr::Binary {
         op: PhpBinOp::Eq,
         left,
@@ -107,7 +107,7 @@ fn php8_concat_binds_below_additive_above_comparison() {
 #[test]
 fn multiplicative_binds_tighter_than_additive() {
     // `1 + 2 * 3` ≡ `1 + (2 * 3)`.
-    let e = expr("1 + 2 * 3");
+    let e = expr_of("1 + 2 * 3");
     let PhpExpr::Binary {
         op: PhpBinOp::Add,
         right,
@@ -128,7 +128,7 @@ fn multiplicative_binds_tighter_than_additive() {
 #[test]
 fn coalesce_is_right_associative() {
     // `$a ?? $b ?? $c` ≡ `$a ?? ($b ?? $c)`.
-    let e = expr("$a ?? $b ?? $c");
+    let e = expr_of("$a ?? $b ?? $c");
     let PhpExpr::Binary {
         op: PhpBinOp::Coalesce,
         right,
@@ -148,13 +148,13 @@ fn coalesce_is_right_associative() {
 
 #[test]
 fn ternary_and_elvis() {
-    let e = expr("$a ? $b : $c");
+    let e = expr_of("$a ? $b : $c");
     let PhpExpr::Ternary { then, .. } = &e else {
         panic!("{e:?}");
     };
     assert!(then.is_some());
 
-    let e2 = expr("$a ?: $c");
+    let e2 = expr_of("$a ?: $c");
     let PhpExpr::Ternary { then, .. } = &e2 else {
         panic!("{e2:?}");
     };
@@ -163,7 +163,7 @@ fn ternary_and_elvis() {
 
 #[test]
 fn assignment_is_right_associative() {
-    let e = expr("$a = $b = 1");
+    let e = expr_of("$a = $b = 1");
     let PhpExpr::Assign { target, value } = e else {
         panic!("{e:?}");
     };
@@ -174,28 +174,28 @@ fn assignment_is_right_associative() {
 #[test]
 fn compound_assign_and_incdec() {
     assert!(matches!(
-        expr("$n += 5"),
+        expr_of("$n += 5"),
         PhpExpr::CompoundAssign {
             op: PhpBinOp::Add,
             ..
         }
     ));
     assert!(matches!(
-        expr("$s .= $t"),
+        expr_of("$s .= $t"),
         PhpExpr::CompoundAssign {
             op: PhpBinOp::Concat,
             ..
         }
     ));
     assert!(matches!(
-        expr("$x ??= 0"),
+        expr_of("$x ??= 0"),
         PhpExpr::CompoundAssign {
             op: PhpBinOp::Coalesce,
             ..
         }
     ));
     assert!(matches!(
-        expr("$i++"),
+        expr_of("$i++"),
         PhpExpr::IncDec {
             inc: true,
             prefix: false,
@@ -203,7 +203,7 @@ fn compound_assign_and_incdec() {
         }
     ));
     assert!(matches!(
-        expr("--$j"),
+        expr_of("--$j"),
         PhpExpr::IncDec {
             inc: false,
             prefix: true,
@@ -214,30 +214,33 @@ fn compound_assign_and_incdec() {
 
 #[test]
 fn postfix_call_method_static_member_index() {
-    assert!(matches!(expr("foo(1, 2)"), PhpExpr::Call { .. }));
+    assert!(matches!(expr_of("foo(1, 2)"), PhpExpr::Call { .. }));
     assert!(matches!(
-        expr("$o->run(3)"),
+        expr_of("$o->run(3)"),
         PhpExpr::MethodCall {
             nullsafe: false,
             ..
         }
     ));
     assert!(matches!(
-        expr("$o?->name"),
+        expr_of("$o?->name"),
         PhpExpr::Member { nullsafe: true, .. }
     ));
-    assert!(matches!(expr("Limits::MAX"), PhpExpr::ClassConst { .. }));
-    assert!(matches!(expr("Math::abs(-1)"), PhpExpr::StaticCall { .. }));
-    assert!(matches!(expr("Reg::$count"), PhpExpr::StaticProp { .. }));
-    assert!(matches!(expr("$xs[0]"), PhpExpr::Index { .. }));
+    assert!(matches!(expr_of("Limits::MAX"), PhpExpr::ClassConst { .. }));
+    assert!(matches!(
+        expr_of("Math::abs(-1)"),
+        PhpExpr::StaticCall { .. }
+    ));
+    assert!(matches!(expr_of("Reg::$count"), PhpExpr::StaticProp { .. }));
+    assert!(matches!(expr_of("$xs[0]"), PhpExpr::Index { .. }));
     // chained: $a->b()->c[0]
-    assert!(matches!(expr("$a->b()->c[0]"), PhpExpr::Index { .. }));
+    assert!(matches!(expr_of("$a->b()->c[0]"), PhpExpr::Index { .. }));
 }
 
 #[test]
 fn new_with_and_without_parens() {
-    assert!(matches!(expr("new Point(1, 2)"), PhpExpr::New { .. }));
-    let e = expr("new Empty");
+    assert!(matches!(expr_of("new Point(1, 2)"), PhpExpr::New { .. }));
+    let e = expr_of("new Empty");
     let PhpExpr::New { class, args } = e else {
         panic!("{e:?}");
     };
@@ -247,7 +250,7 @@ fn new_with_and_without_parens() {
 
 #[test]
 fn array_literal_list_and_map() {
-    let e = expr(r#"[1, 2, "k" => 3,]"#);
+    let e = expr_of(r#"[1, 2, "k" => 3,]"#);
     let PhpExpr::Array(elems) = e else {
         panic!("{e:?}")
     };
@@ -255,12 +258,12 @@ fn array_literal_list_and_map() {
     assert!(elems[0].key.is_none());
     assert_eq!(elems[2].key, Some(PhpExpr::Str("k".into())));
     // `array(...)` long form parses as a call to `array`.
-    assert!(matches!(expr("array(1, 2)"), PhpExpr::Call { .. }));
+    assert!(matches!(expr_of("array(1, 2)"), PhpExpr::Call { .. }));
 }
 
 #[test]
 fn match_with_multi_cond_and_default() {
-    let e = expr(r#"match ($x) { 1, 2 => "a", default => "z", }"#);
+    let e = expr_of(r#"match ($x) { 1, 2 => "a", default => "z", }"#);
     let PhpExpr::Match { arms, .. } = e else {
         panic!("{e:?}");
     };
@@ -271,15 +274,15 @@ fn match_with_multi_cond_and_default() {
 
 #[test]
 fn literals_true_false_null() {
-    assert_eq!(expr("true"), PhpExpr::Bool(true));
-    assert_eq!(expr("false"), PhpExpr::Bool(false));
-    assert_eq!(expr("null"), PhpExpr::Null);
+    assert_eq!(expr_of("true"), PhpExpr::Bool(true));
+    assert_eq!(expr_of("false"), PhpExpr::Bool(false));
+    assert_eq!(expr_of("null"), PhpExpr::Null);
 }
 
 #[test]
 fn if_elseif_else_and_else_if() {
     let PhpStmt::If { elifs, els, .. } =
-        stmt("<?php if ($a) { return 1; } elseif ($b) { return 2; } else { return 3; }")
+        stmt_of("<?php if ($a) { return 1; } elseif ($b) { return 2; } else { return 3; }")
     else {
         panic!()
     };
@@ -287,7 +290,7 @@ fn if_elseif_else_and_else_if() {
     assert!(els.is_some());
 
     // `else if` (two words) folds into an elif.
-    let PhpStmt::If { elifs, .. } = stmt("<?php if ($a) {} else if ($b) {}") else {
+    let PhpStmt::If { elifs, .. } = stmt_of("<?php if ($a) {} else if ($b) {}") else {
         panic!()
     };
     assert_eq!(elifs.len(), 1);
@@ -295,7 +298,7 @@ fn if_elseif_else_and_else_if() {
 
 #[test]
 fn braceless_if_body() {
-    let PhpStmt::If { then, .. } = stmt("<?php if ($a) return 1;") else {
+    let PhpStmt::If { then, .. } = stmt_of("<?php if ($a) return 1;") else {
         panic!()
     };
     assert_eq!(then, vec![PhpStmt::Return(Some(PhpExpr::Int(1)))]);
@@ -305,7 +308,7 @@ fn braceless_if_body() {
 fn for_loop_with_incdec_step() {
     let PhpStmt::For {
         init, cond, step, ..
-    } = stmt("<?php for ($i = 0; $i < 10; $i++) { echo $i; }")
+    } = stmt_of("<?php for ($i = 0; $i < 10; $i++) { echo $i; }")
     else {
         panic!()
     };
@@ -317,7 +320,7 @@ fn for_loop_with_incdec_step() {
 fn empty_for_clauses() {
     let PhpStmt::For {
         init, cond, step, ..
-    } = stmt("<?php for (;;) { break; }")
+    } = stmt_of("<?php for (;;) { break; }")
     else {
         panic!()
     };
@@ -326,13 +329,13 @@ fn empty_for_clauses() {
 
 #[test]
 fn foreach_value_and_keyvalue() {
-    let PhpStmt::Foreach { key, value, .. } = stmt("<?php foreach ($xs as $v) {}") else {
+    let PhpStmt::Foreach { key, value, .. } = stmt_of("<?php foreach ($xs as $v) {}") else {
         panic!()
     };
     assert_eq!(key, None);
     assert_eq!(value, "v");
 
-    let PhpStmt::Foreach { key, value, .. } = stmt("<?php foreach ($m as $k => $v) {}") else {
+    let PhpStmt::Foreach { key, value, .. } = stmt_of("<?php foreach ($m as $k => $v) {}") else {
         panic!()
     };
     assert_eq!(key, Some("k".into()));
@@ -342,10 +345,10 @@ fn foreach_value_and_keyvalue() {
 #[test]
 fn while_and_echo_multi() {
     assert!(matches!(
-        stmt("<?php while ($a) { $a = false; }"),
+        stmt_of("<?php while ($a) { $a = false; }"),
         PhpStmt::While { .. }
     ));
-    let PhpStmt::Echo(args) = stmt(r#"<?php echo $a, "b", 3;"#) else {
+    let PhpStmt::Echo(args) = stmt_of(r#"<?php echo $a, "b", 3;"#) else {
         panic!()
     };
     assert_eq!(args.len(), 3);
@@ -386,22 +389,15 @@ fn rejects_unsupported_keywords() {
 }
 
 #[test]
-fn rejects_block_closures_and_parses_arrow_fns() {
-    assert!(perr("<?php $f = function () { return 1; };").contains("Tier-2"));
-    // Lane R (2026-09-05): the arrow form is Tier-1 — it is the closure shape real code uses.
-    assert!(matches!(expr("fn ($x) => $x"), PhpExpr::Closure { .. }));
-}
-
-#[test]
 fn parses_primitive_casts_and_rejects_dynamic_new() {
-    assert!(format!("{:?}", expr("(integer) $s")).starts_with("Cast { ty: \"int\""));
+    assert!(format!("{:?}", expr_of("(integer) $s")).starts_with("Cast { ty: \"int\""));
     assert!(perr("<?php $n = (array) $s;").contains("`(array)` cast is Tier-2"));
     assert!(perr("<?php $o = new $cls();").contains("dynamic `new $class` is Tier-3"));
 }
 
 #[test]
 fn parses_array_append_and_rejects_dynamic_static() {
-    assert!(format!("{:?}", expr("$a[] = 1")).contains("target: AppendSlot(Var("));
+    assert!(format!("{:?}", expr_of("$a[] = 1")).contains("target: AppendSlot(Var("));
     assert!(perr("<?php $x = $obj::FOO;").contains("dynamic `::` access is Tier-3"));
 }
 

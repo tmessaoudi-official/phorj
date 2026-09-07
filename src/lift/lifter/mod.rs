@@ -44,8 +44,25 @@ use mappings::*;
 // `import` items at assembly. Thread-local (the lifter is stateless free functions; a lift runs on
 // one thread) — reset at the start of every `lift_program` so runs never leak into each other.
 thread_local! {
+    static CONSOLE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static LIFTED_NATIVE_MODULES: std::cell::RefCell<std::collections::BTreeSet<&'static str>> =
         const { std::cell::RefCell::new(std::collections::BTreeSet::new()) };
+}
+
+/// `echo` was lifted somewhere in this run, so the draft needs `import Core.Output`. A flag rather
+/// than a `Lifter` field since 2026-09-07: a block-closure body is lifted through the FREE
+/// `lift_expr`, which has no `Lifter` to set, and an `echo` inside one would otherwise lose its
+/// import silently.
+pub(super) fn note_console() {
+    CONSOLE.with(|c| c.set(true));
+}
+
+pub(super) fn reset_console() {
+    CONSOLE.with(|c| c.set(false));
+}
+
+pub(super) fn took_console() -> bool {
+    CONSOLE.with(|c| c.get())
 }
 
 pub(super) fn record_native_module(module: &'static str) {

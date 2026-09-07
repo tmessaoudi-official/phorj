@@ -55,16 +55,19 @@ fn arrow_closures_lift_to_lambdas() {
     assert_reparses(&out);
 }
 
-/// A block-bodied `function (…) { … }` closure is still refused: its body is a statement list and
-/// its `use (…)` list can capture by reference, neither of which has a faithful draft yet.
+/// Lane L1b (2026-09-07) made the block-bodied closure LIFT — phorj has the shape
+/// (`function(int x): int { … }`) and refusing it conflated a supported construct with a ruled-out
+/// one. This row moved to `lifter_tests_closures.rs`; what it pins here is that the ONE thing
+/// inside a block closure phorj has genuinely ruled out is still refused, by name.
 #[test]
-fn a_block_closure_stays_tier_2() {
+fn a_block_closure_lifts_but_by_reference_capture_does_not() {
+    let out = lift("<?php function main(): void { $f = function (int $x): int { return $x; }; }");
+    assert!(out.contains("function(int x): int {"), "{out}");
     let err = super::lifter::lift_source(
-        "<?php function main(): void { $f = function (int $x): int { return $x; }; }",
+        "<?php function main(): void { $n = 0; $f = function (int $x) use (&$n): int { return $x; }; }",
     )
-    .expect_err("block closures are refused in this slice");
-    assert!(err.contains("Tier-2"), "{err}");
-    assert!(err.contains("fn (…) => …"), "{err}");
+    .expect_err("by-ref capture is ruled out (DEC-506)");
+    assert!(err.contains("by reference"), "{err}");
 }
 
 // ── Lane R-3: the three walls after closures, in scout file-count order ──────────────────────────

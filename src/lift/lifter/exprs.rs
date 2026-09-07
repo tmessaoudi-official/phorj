@@ -15,6 +15,24 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             body: LambdaBody::Expr(Box::new(lift_expr(body)?)),
             span: SP,
         },
+        php::PhpExpr::BlockClosure { params, ret, body } => {
+            // A phorj lambda captures enclosing locals BY VALUE, which is exactly what PHP's
+            // by-value `use (…)` list asks for — so the list is dropped at the parser and the
+            // captured names simply stay in scope here. A by-REFERENCE capture never reaches this
+            // point: it is refused by name (DEC-506).
+            let mut declared: HashSet<String> = HashSet::new();
+            let lifted_params = lift_params(params)?;
+            for p in &lifted_params {
+                declared.insert(p.name.clone());
+            }
+            Expr::Lambda {
+                params: lifted_params,
+                ret: ret.as_ref().map(lift_type).transpose()?,
+                throws: Vec::new(),
+                body: LambdaBody::Block(Lifter {}.lift_block(body, &mut declared)?),
+                span: SP,
+            }
+        }
         php::PhpExpr::Float(f) => Expr::Float(*f, SP),
         php::PhpExpr::Str(s) => Expr::Str(vec![StrPart::Literal(s.clone())], SP),
         php::PhpExpr::Interp(parts) => {

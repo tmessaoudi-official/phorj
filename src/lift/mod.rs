@@ -31,6 +31,8 @@ mod parser_tests;
 #[cfg(test)]
 mod parser_tests_attrs;
 #[cfg(test)]
+mod parser_tests_closures;
+#[cfg(test)]
 mod parser_tests_ns;
 
 #[cfg(test)]
@@ -45,6 +47,8 @@ mod tests_examples;
 mod lifter_tests;
 #[cfg(test)]
 mod lifter_tests_attrs;
+#[cfg(test)]
+mod lifter_tests_closures;
 #[cfg(test)]
 mod lifter_tests_echo_registry;
 #[cfg(test)]
