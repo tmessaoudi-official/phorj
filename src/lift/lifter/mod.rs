@@ -29,12 +29,14 @@ const SP: Span = Span {
 /// and prints (L3). Any stage's error propagates as a `lift …` / `printer: …` string.
 mod attrs;
 mod decls;
+mod enums;
 mod exceptions;
 mod exprs;
 mod magic;
 mod mappings;
 use attrs::AttrCtx;
 pub use decls::*;
+pub(super) use enums::{enum_names_of, set_project_enum_names, EnumSymbols};
 use exprs::*;
 use mappings::*;
 

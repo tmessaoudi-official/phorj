@@ -1,0 +1,44 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+/**
+ * PHP enums, and the three things they do that have no direct phorj spelling.
+ *
+ * Lifted with `phg lift enums.php`. The paired `enums.phg` beside this file is the lifter's own
+ * output, byte for byte — a test asserts that, so the pair cannot drift.
+ */
+enum Tenure: string { LLI = "LLI", PLAI = "PLAI", UNKNOWN = "UNKNOWN" }
+
+class Listing {
+    constructor(public mutable string title, public mutable Tenure tenure) {}
+    public open function isBlocked(): bool {
+        return this.tenure == new PLAI();
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var l = new Listing("T3 Cergy", new PLAI());
+    Output.print("{l.title}");
+    Output.print("\n");
+    Output.print("{l.isBlocked()}");
+    Output.print("\n");
+    Output.print("{l.tenure.isExcluded()}");
+    Output.print("\n");
+    Output.print("{new LLI().isExcluded()}");
+    Output.print("\n");
+    Output.print("{fallback().value}");
+    Output.print("\n");
+}
+
+function isExcluded(Tenure tenure): bool {
+    return match (tenure) { PLAI() => true, default => false };
+}
+
+function fallback(): Tenure {
+    return new UNKNOWN();
+}

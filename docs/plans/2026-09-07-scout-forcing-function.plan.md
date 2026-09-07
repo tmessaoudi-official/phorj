@@ -200,8 +200,9 @@ DEC-507 applies to every one.
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------| ------- |
-| 1 | L0 — Invariant 19 docs: DEC-504…507 + the 2026-07-10 perf-refinement supersession, readiness re-order, SPEC amendments, SLICE-STATE, MASTER-PLAN mirror | M | todo | - | docs/research/full-audit/raw/C-decisions.md docs/plans/*.md docs/specs/UNIFIED-SPEC.md |
-| 2 | L1 — lifter mechanicals: enum `self`, block closures, positional `array{…}` → tuples, named by-ref diagnostic (DEC-506), assignment-target sites; re-census after each | L | todo | - | src/lift/* examples/lift/* |
+| 1 | L0 — Invariant 19 docs: DEC-504…508 + the 2026-07-10 perf-refinement supersession, readiness re-order, SPEC § `Ordering, <=>, and named-field tuples`, SLICE-STATE cursor, MASTER-PLAN §0.08 mirror | M | done | e42e9a9a | docs/research/full-audit/raw/C-decisions.md docs/plans/2026-09-07-scout-forcing-function.plan.md docs/specs/UNIFIED-SPEC.md |
+| 2 | L1a — enums (DEC-509): a case CONSTRUCTS its variant, `self` inside an enum body is the enum, a method LOWERS to a free function reached by UFCS, static call sites lower with it; 54 → **57/123** | M | done | - | src/lift/lifter/enums.rs src/lift/parser/enums.rs src/lift/lifter_tests_enums.rs examples/lift/enums.php examples/lift/enums.phg |
+| 2b | L1b — the rest of the lifter mechanicals: block closures, positional `array{…}` → tuples, named by-ref diagnostic (DEC-506), the three assignment-target sites; re-census after each | L | todo | - | src/lift/* examples/lift/* |
 | 3 | L2 — DEC-505 `<=>` operator + lexicographic tuple/list ordering, all legs + LSP + editors + example + bench | L | todo | - | src/lexer/* src/parser/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lsp/* editors/* examples/guide/* |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | todo | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |

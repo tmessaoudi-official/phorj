@@ -110,6 +110,13 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     // built once here rather than threaded through the Lifter walker — attribute lifting needs no
     // per-declaration state.
     let actx = AttrCtx::new(prog);
+    // Lane L1: which names are enums decides whether `Foo::BAR` is a case or a class constant. A
+    // single-file lift knows only this file's enums; `lift_directory` has already seeded every enum
+    // in the tree, so the union is what a cross-file `Tenure::PLAI` needs.
+    super::enums::begin_file(super::enums::enum_names_of(prog));
+    // DEC-509: free functions lowered from enum methods, and the names already taken by them.
+    let mut lowered_enum_fns: Vec<FunctionDecl> = Vec::new();
+    let mut lowered_names: HashSet<String> = HashSet::new();
 
     for item in &prog.items {
         match item {
@@ -129,7 +136,14 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
                 lifted.attrs = actx.lift_attributes(&c.attrs)?;
                 items.push(Item::Class(lifted));
             }
-            php::PhpItem::Enum(e) => items.push(Item::Enum(lift_enum(e)?)),
+            php::PhpItem::Enum(e) => {
+                items.push(Item::Enum(lift_enum(e)?));
+                lowered_enum_fns.extend(super::enums::lower_methods(
+                    &mut l,
+                    e,
+                    &mut lowered_names,
+                )?);
+            }
             php::PhpItem::Interface(i) => {
                 items.push(Item::Interface(interfaces::lift_interface(i)?));
             }
@@ -138,6 +152,10 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             }
         }
     }
+
+    // The lowered enum methods land AFTER every enum declaration, so a reader sees the type before
+    // the functions over it, and `main` (synthesized below) stays last.
+    items.extend(lowered_enum_fns.into_iter().map(Item::Function));
 
     // Top-level PHP code becomes the runnable entry `function main()` (M5 model).
     if !top_stmts.is_empty() {

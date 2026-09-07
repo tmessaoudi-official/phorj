@@ -48,6 +48,8 @@ mod lifter_tests_attrs;
 #[cfg(test)]
 mod lifter_tests_echo_registry;
 #[cfg(test)]
+mod lifter_tests_enums;
+#[cfg(test)]
 mod lifter_tests_hoist;
 #[cfg(test)]
 mod lifter_tests_ns;

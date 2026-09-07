@@ -487,6 +487,38 @@ mismatch at the first arithmetic use rather than the lifter guessing a lenient p
 not mistaken for a lifter bug. `(bool)` on a string follows PHP's truthiness through
 `Conversion.asBool` and is exact.
 
+## LIFT-ECHO-TERNARY — a ternary in an `echo` argument lifts to an `if` inside a string interpolation, which does not lex (P1, found 2026-09-07)
+
+```php
+echo $l->isBlocked() ? "blocked\n" : "allowed\n";
+```
+lifts to
+```phorj
+Output.print("{if (l.isBlocked()) { "blocked\n" } else { "allowed\n" }}");
+```
+which fails at the LEXER: `unexpected '}' in string (no matching '{')`. The draft does not merely
+mis-say something — it does not tokenise.
+
+**Cause**: Lane L's echo rule wraps a non-string, non-bare-variable argument in ONE interpolation so
+it stringifies. A PHP ternary lifts to a phorj `if`-expression, and an `if`-expression is not a valid
+interpolation body — the inner `"` and `}` close the string early. The rule is right for the
+arguments it was written for (`echo $n;`, `echo $o->count();`) and wrong for any argument whose
+lifted form contains a brace or a quote.
+
+**Found by RUNNING an example, not by reading one** — `examples/lift/enums.php` used the ternary and
+its lifted pair was accepted by the lift, by `phg check`'s file read and by the formatter's pair
+test, because none of those three runs the program. `tests/differential.rs` is what caught it, and
+only because the example carries an `#[Entry]`. That is the general lesson and it is the second time
+this week: a lift example without an entry is a lift example that is never executed.
+
+**Scope**: any `echo <expr>` whose lifted form is not a plain value. A ternary is the common case;
+a `match` expression would be the same shape.
+
+**The fix worth building** (Lane L, not taken here to keep the enum change reviewable): decide the
+wrapping on the lifted expression's SHAPE, not on the PHP argument's — an expression that already
+yields a string, or one containing a brace, is emitted as a bare argument rather than interpolated.
+Until then a ternary inside `echo` needs a hand edit in the draft.
+
 ## LIFT-DISCARD — a call written for its side effect lifts fine, then fails `phg check` (noted 2026-09-05)
 
 PHP discards a statement's value silently, so `$logger->info('x');` and `$t->add(3);` are ordinary

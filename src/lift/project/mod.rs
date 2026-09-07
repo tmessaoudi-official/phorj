@@ -208,6 +208,25 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
         ));
     }
 
+    // Lane L1 (2026-09-07): which names are ENUMS decides whether a `Foo::BAR` is a case or a class
+    // constant, and PHP spells the two identically. A single file cannot answer that for a sibling's
+    // enum, and a sibling's enum is the common case — so scan the whole tree for enum declarations
+    // BEFORE lifting anything. The scan is a lex+parse per file and tolerates failure: a file the
+    // parser rejects declares no enums we can see, which is the same answer as before this existed.
+    let mut project_enums: crate::lift::lifter::EnumSymbols = Default::default();
+    for path in &files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let Ok((toks, docs)) = crate::lift::lexer::lex_php_with_docs(&src) else {
+            continue;
+        };
+        if let Ok(prog) = crate::lift::parser::parse_php_with_docs(toks, docs) {
+            project_enums.extend(crate::lift::lifter::enum_names_of(&prog));
+        }
+    }
+    crate::lift::lifter::set_project_enum_names(project_enums);
+
     let mut lifted = 0usize;
     let mut failures: Vec<Failure> = Vec::new();
     // Every class/function the lift DECLARED, so a reference to one is not reported as vendor. Needed

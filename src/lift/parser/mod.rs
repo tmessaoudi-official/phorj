@@ -95,6 +95,7 @@ mod attrs;
 mod closures;
 mod construct;
 mod docblock;
+mod enums;
 mod exprs;
 mod file_decls;
 mod interfaces;

@@ -29,7 +29,12 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         }
         php::PhpExpr::Bool(b) => Expr::Bool(*b, SP),
         php::PhpExpr::Null => Expr::Null(SP),
-        php::PhpExpr::Var(name) if name == "this" => Expr::This(SP),
+        // Inside a lowered enum method (DEC-509) `$this` IS the receiver parameter; everywhere else
+        // it is an ordinary `this`.
+        php::PhpExpr::Var(name) if name == "this" => match super::enums::receiver() {
+            Some(recv) => Expr::Ident(recv, SP),
+            None => Expr::This(SP),
+        },
         php::PhpExpr::Var(name) | php::PhpExpr::Name(name) => Expr::Ident(name.clone(), SP),
         php::PhpExpr::Array(elems) => lift_array(elems)?,
         // LIFT-ATTR: `name: value` lifts 1:1 — phorj spells a named argument exactly the same way
@@ -160,13 +165,38 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             span: SP,
         },
         php::PhpExpr::StaticCall { class, name, args } => Expr::Call {
-            callee: Box::new(static_member(class, name)),
+            // DEC-509: a STATIC method the enum declares was lowered to a free function, so the call
+            // site is a plain call. `Tenure::from(…)`/`cases()`/`tryFrom(…)` are the backed-enum
+            // BUILTINS — not declared by the enum, so they keep naming it. Found by RUNNING the
+            // example: the draft lifted, checked, then died on a name that did not exist.
+            callee: if super::enums::is_lowered_method(class, name) {
+                Box::new(Expr::Ident(name.clone(), SP))
+            } else {
+                Box::new(static_member(class, name))
+            },
             args: lift_exprs(args)?,
             type_args: Vec::new(),
             span: SP,
         },
         php::PhpExpr::ClassConst { class, name } | php::PhpExpr::StaticProp { class, name } => {
-            static_member(class, name)
+            // `Tenure::PLAI` is an enum CASE; `Limits::MAX` is a class constant. PHP spells them
+            // identically, so the enum registry is what tells them apart (lane L1). A payload-less
+            // variant is CONSTRUCTED — `new PLAI()` — because construction is mandatory in phorj
+            // (Invariant 12); emitting `Tenure::PLAI` produced a draft that lifted and then failed
+            // `phg check` with `E-UNKNOWN-IDENT`.
+            if super::enums::is_enum(class) {
+                Expr::New(
+                    Box::new(Expr::Call {
+                        callee: Box::new(Expr::Ident(name.clone(), SP)),
+                        args: Vec::new(),
+                        type_args: Vec::new(),
+                        span: SP,
+                    }),
+                    SP,
+                )
+            } else {
+                static_member(class, name)
+            }
         }
         php::PhpExpr::Index { base, index } => Expr::Index {
             object: Box::new(lift_expr(base)?),
@@ -263,6 +293,20 @@ pub(super) fn literal_pattern(e: &php::PhpExpr) -> Result<Pattern, String> {
         php::PhpExpr::Str(s) => Pattern::Str(s.clone(), SP),
         php::PhpExpr::Bool(b) => Pattern::Bool(*b, SP),
         php::PhpExpr::Null => Pattern::Null(SP),
+        // `match ($t) { Tenure::PLAI => …, default => … }` — an ENUM CASE in pattern position is a
+        // variant pattern, not a literal (lane L1). It carries its enum as the qualifier, which the
+        // checker validates against the scrutinee, so a case from the WRONG enum is still an error
+        // rather than a silently-never-matching arm. A class constant in pattern position keeps its
+        // Tier-2 refusal below: `Limits::MAX => …` is a value comparison PHP allows and phorj's
+        // pattern grammar has no form for.
+        php::PhpExpr::ClassConst { class, name } if super::enums::is_enum(class) => {
+            Pattern::Variant {
+                name: name.clone(),
+                fields: Vec::new(),
+                enum_qualifier: Some(class.rsplit('\\').next().unwrap_or(class).to_string()),
+                span: SP,
+            }
+        }
         _ => return Err("lift: a `match` arm with a non-literal condition is Tier-2".into()),
     })
 }
@@ -270,12 +314,10 @@ pub(super) fn literal_pattern(e: &php::PhpExpr) -> Result<Pattern, String> {
 // ── enums + types + small helpers ──
 
 pub(super) fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
-    if !e.methods.is_empty() {
-        return Err(format!(
-            "lift: enum `{}` has methods — Phorj enums carry no methods (Tier-2)",
-            e.name
-        ));
-    }
+    // Methods are NOT refused any more: DEC-509 lowers each to a free function reachable by UFCS
+    // (`super::enums::lower_methods`), which the item loop emits beside the enum. Phorj enums still
+    // carry no methods — that design property is unchanged; what changed is that the lifter now has
+    // a faithful target for the PHP idiom instead of a Tier-2 refusal.
     // DEC-302: a PHP backed enum (`enum Suit: string { case Hearts = "H"; }`) lifts to a Phorj
     // backed enum — backing type + per-variant value preserved. Only `int`/`string` back an enum
     // (both PHP and Phorj), and every case of a backed enum carries a value (PHP requires it).

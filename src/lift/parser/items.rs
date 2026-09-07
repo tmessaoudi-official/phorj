@@ -362,54 +362,6 @@ impl PParser {
         })
     }
 
-    pub(super) fn parse_enum(&mut self) -> Result<PhpEnum, String> {
-        let line = self.line();
-        self.advance(); // `enum`
-        let name = self.expect_ident("enum name")?;
-        let backing = if self.eat(&PTok::Colon) {
-            Some(self.parse_type()?)
-        } else {
-            None
-        };
-        let implements = self.parse_implements()?;
-        self.expect(&PTok::LBrace, "`{`")?;
-        let mut cases = Vec::new();
-        let mut methods = Vec::new();
-        while !self.at(&PTok::RBrace) && !self.at(&PTok::Eof) {
-            self.reject_attr_here("an enum case or method")?;
-            if self.is_kw("case") {
-                self.advance();
-                let cname = self.expect_ident("case name")?;
-                let value = if self.eat(&PTok::Assign) {
-                    Some(self.parse_expr()?)
-                } else {
-                    None
-                };
-                self.expect(&PTok::Semi, "`;`")?;
-                cases.push(PhpEnumCase { name: cname, value });
-            } else {
-                let doc = self.doc_here();
-                let mut mem = self.parse_member()?;
-                self.apply_doc_member(doc.as_deref(), &mut mem)?;
-                match mem {
-                    PhpMember::Method(m) => methods.push(m),
-                    _ => {
-                        return Err(self.err("an enum may only contain cases and methods (Tier-1)"))
-                    }
-                }
-            }
-        }
-        self.expect(&PTok::RBrace, "`}`")?;
-        Ok(PhpEnum {
-            name,
-            backing,
-            implements,
-            cases,
-            methods,
-            line,
-        })
-    }
-
     /// `( param, param, … )` — tolerates a trailing comma. Each param is `[?]Type $name [= default]`.
     pub(super) fn parse_params(&mut self) -> Result<Vec<PhpParam>, String> {
         self.expect(&PTok::LParen, "`(`")?;

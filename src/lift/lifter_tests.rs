@@ -244,9 +244,12 @@ fn lifts_backed_enum() {
 #[test]
 fn refuses_tier2_constructs() {
     for (php, frag) in [
+        // DEC-509 (2026-09-07) replaced the old "enum has methods" refusal: an enum method now
+        // LOWERS to a free function reachable by UFCS, so this row pins what still refuses — a
+        // method whose lowering would need a name the lifter is not allowed to invent.
         (
-            "<?php enum E { case A; public function f(): int { return 1; } }",
-            "has methods",
+            "<?php enum E { case A; public function f(E $e): int { return 1; } }",
+            "receiver name",
         ),
         ("<?php function f(array $xs): void {}", "`array` type"),
         (

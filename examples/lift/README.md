@@ -255,8 +255,9 @@ both backends **and** real PHP, and its output matches the original `errors.php`
 
 Lift errors rather than guess when there is no faithful Phorj form *yet*: an `array` **type**
 annotation (needs `List`/`Map`/`Set` inference), a **key/value** `foreach ($xs as $k => $v)` (Phorj's
-`foreach` has no key binding yet), backed enums and enum methods, default parameter values, untyped
-parameters, the elvis `?:`, an assignment used as a sub-expression, and a non-literal `match` arm.
+`foreach` has no key binding yet), untyped parameters, the elvis `?:`, an assignment used as a
+sub-expression, and a non-literal `match` arm. (Backed enums, enum methods and default parameter
+values were on this list and are not any more — see § "Enums" below and Lane R.)
 Each is a clear `lift …` message naming what to do by hand.
 
 Interpolation is lifted only within PHP's *actual* grammar — a `$`-rooted access chain (`$x`,
@@ -264,6 +265,60 @@ Interpolation is lifted only within PHP's *actual* grammar — a `$`-rooted acce
 loudly: a top-level operator inside `{$…}` (a PHP parse error too), the removed `${…}`
 variable-variable form, and a simple-syntax bareword subscript `"$a[key]"` (whose key silently
 becomes the string `'key'` — use the explicit `"{$a['key']}"` form).
+
+## Enums — cases, `self`, and methods (DEC-509, 2026-09-07)
+
+`enums.php` / `enums.phg`. PHP enums do three things phorj has no direct spelling for, and the
+lifter got two of them wrong and refused the third outright. All three sat on the path to a real
+codebase's domain enum.
+
+**A case is not a class constant.** PHP spells `Tenure::PLAI` and `Limits::MAX` identically, so
+telling them apart needs to know which names are enums. The lifter used to emit `Tenure::PLAI`
+verbatim — which is not phorj syntax at all, so the draft "lifted" and then failed `phg check` with
+`E-UNKNOWN-IDENT`. A payload-less variant is **constructed**, like everything else in phorj
+(mandatory `new`):
+
+```php
+return $this->tenure === Tenure::PLAI;      // PHP
+```
+```phorj
+return this.tenure == new PLAI();           // lifted
+```
+
+In **pattern** position it becomes a variant pattern carrying its enum as the qualifier, so a case
+from the wrong enum is still an error rather than an arm that silently never matches:
+
+```phorj
+return match (tenure) { PLAI() => true, default => false };
+```
+
+A class constant is untouched: `Limits::MAX` still lifts to `Limits::MAX`.
+
+**`self` inside an enum body.** `self::PLAI` refused with *"`self` outside a class body"* — a message
+that reads like the file is malformed rather than like a lifter gap, because the parser never
+recorded the enclosing enum. An enum body is a class body for `self` now, in expression *and* type
+position, which is R-7's rule reaching enums at last. `static` keeps its refusal, here as in a
+class: late static binding means the receiver's class, and the enclosing name would narrow it.
+
+**A method has no phorj form, so it lowers to a free function.** Phorj enums carry no methods, by
+design — and UFCS is the substitute, so the call site does not change:
+
+```php
+public function isExcluded(): bool { return match ($this) { self::PLAI => true, default => false }; }
+```
+```phorj
+function isExcluded(Tenure tenure): bool { return match (tenure) { PLAI() => true, default => false }; }
+```
+
+`$t->isExcluded()` in PHP reads as `t.isExcluded()` in the draft and resolves through UFCS to that
+function. A **static** enum method has no `$this`, so it lowers with no receiver parameter at all.
+
+Two refusals guard the lowering, because the lifter never invents a name:
+
+- two enums in one file declaring the same method name would emit two free functions of one name —
+  refused, naming the method;
+- a method that already has a parameter called `tenure` (the receiver name for `enum Tenure`) —
+  refused, naming the parameter.
 
 ## `namespace` / `use` — file-level declarations (LIFT-NS, 2026-08-04)
 
