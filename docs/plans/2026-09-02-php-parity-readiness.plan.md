@@ -14,8 +14,21 @@
 
 ## Decisions Log
 
+- [2026-09-07 §4] AGREED — **STEPS 13 AND 14 ARE HOISTED** ahead of 10/11/12 (DEC-508): HTML5 parse +
+  CSS selectors (13) then `Core.Net` + `Core.Mime` + read-only `Core.Imap` (14) run FIRST, because they
+  are scout's only two hard blockers — the two items that make a phorj scout POSSIBLE rather than
+  merely nicer. Steps 10 (tz), 11 (`.env`/process), 12 (JSON), 15–18 keep their ruled relative order
+  behind them. This amends the §6 order the same way DEC-491 amended it for charset. The campaign that
+  consumes them is `docs/plans/2026-09-07-scout-forcing-function.plan.md`; its lanes L5/L6 ARE steps
+  13/14 and land their evidence in this status block. *(Pointer.)*
+- [2026-09-07 §9] AGREED — **DEC-507 supersedes the 2026-07-10 "MATCHES-not-beats" perf refinement**
+  for the scout campaign: every lifted or transpiled artifact must beat dockerised JIT-on PHP, and a
+  loss that cannot be flipped stops the lane and is escalated rather than logged as OWED. Step 19's
+  flip-or-flag bar is raised accordingly. *(Pointer.)*
 - [2026-09-02 16:40] AGREED: no scout port; phorj readiness is the goal; all three streams authorised
   (readiness wave / open-bug drain / DEC-333 perf). *(Recorded in the consolidation plan; pointer.)*
+  **STILL IN FORCE, restated and widened 2026-09-07 as DEC-508**: scout is a READ-ONLY forcing
+  function validating four surfaces — lift, transpile, LSP, speed.
 - [2026-09-02 17:05] AGREED: REGEX option B; ORDER = harness trust → readiness wave → perf roadmap;
   perf internals are Claude's, `Json.getInt`-style surface is asked; panel re-run NOW. *(Pointer.)*
 - [2026-09-02 17:40–17:55] AGREED (gap-programme Q23/Q16/Q3/Q18/Q2/Q17/Q19/Q21): doctrine =
@@ -301,8 +314,8 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 | 10 | Time zones — pinned tz data, not ICU (DEC-466) | L | todo | - | src/ext/time/* |
 | 11 | `.env` loader + shell-free `Process.run` + stderr; folds DEC-457/473/474/475 (A15, DEC-472) | L | todo | - | src/native/process.rs src/ext/env/* |
 | 12 | JSON — `parse` to `Result<Json, JsonError>` (DEC-503, BREAKING), `decodeInto<T>`, decimal-preserving numbers; list-vs-object is ALREADY satisfied (A16) | L | todo | - | src/ext/json/* src/checker/desugar_db.rs src/cli/http_request_prelude.rs |
-| 13 | HTML5 parse (DEC-469) + `Core.Xml` incl. XSD + XMLDSig (DEC-480) | L | todo | - | src/ext/html/* src/ext/xml/* |
-| 14 | `Core.Net` + `Core.Mime` + read-only `Core.Imap` (DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
+| 13 | HTML5 parse (DEC-469) + `Core.Xml` incl. XSD + XMLDSig (DEC-480) — **HOISTED to run first** (DEC-508, scout blocker #2); built as scout-forcing-function lane L5 | L | todo | - | src/ext/html/* src/ext/xml/* |
+| 14 | `Core.Net` + `Core.Mime` + read-only `Core.Imap` (DEC-467) — **HOISTED to run second** (DEC-508, scout blocker #1), incl. the file-backed `.eml` transport; built as scout-forcing-function lane L6 | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
 | 15 | HTTP client — fakeable, cookies (DEC-266), `Core.Compress` wired in (A17, DEC-471) | L | todo | - | src/ext/http/* src/ext/compress/* |
 | 16 | Crypto — AEAD + Ed25519 + HKDF, WIDENED to RSA + ECDSA verification by DEC-492 so DEC-480's XMLDSig can ship (DEC-470) | M | todo | - | src/ext/cryptography/* |
 | 17 | Money / BigInt — decimal scale, truncation faults, `-0.000d` (A12, X2) | L | todo | - | src/value/* src/ext/decimal/* |

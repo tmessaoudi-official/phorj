@@ -1,6 +1,51 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-09-04 → 05) — **THE BIG WAVE is the active body of work**
+## ▶ CURRENT CURSOR (2026-09-07) — **scout is the forcing function. Plan: `docs/plans/2026-09-07-scout-forcing-function.plan.md`**
+
+Developer directive, 2026-09-07: explore `/stack/projects/scout` and *"use it to
+test/validate/certify/review/audit/modify/enrich/improve phorj in a way that i will be able to do a
+phorj version of it"*, then — *"include everything! the phorj version must beat php in everything
+absolutely! every lifted or transpiled thing must!"* Twelve rulings taken interactively, recorded as
+**DEC-504…508** and in that plan's Decisions Log. The four that change how work is done here:
+
+- **scout is READ-ONLY** (DEC-508). No source edits, no docblock additions to raise liftability, no
+  bug fixes. It is a frozen yardstick — 274 PHP files / 80 035 lines, PHP 8.5, zero composer runtime
+  deps, 1 272 tests, live against eight real sources — and a measurement must never have to ask
+  whether the thing being measured moved. The 2026-09-02 16:40 **no-scout-port ruling STANDS**; the
+  developer builds the phorj scout himself later. What is validated is **four** surfaces: lift,
+  transpile, LSP, speed.
+- **DEC-507 — the ABSOLUTE perf bar, with escalation.** Every lifted or transpiled artifact is
+  benched; any ratio ≤ 1.0× must be FLIPPED before its slice closes; a loss that cannot be flipped
+  **stops the lane and is escalated**, never logged as an OWED and passed. This **supersedes the
+  2026-07-10 "MATCHES-not-beats php on 20-yr-tuned string/array/collection" refinement** for this
+  campaign. **The baseline is dockerised `php:8.5-cli` with JIT ON**, core-pinned and interleaved —
+  the on-box gate oracle is `PHP 8.5.9 (cli) (ZTS DEBUG GCOV)`, correct for byte-identity and
+  **invalid for any perf claim**. Two PHPs, two jobs.
+- **Readiness steps 13 and 14 are HOISTED** ahead of 10/11/12: HTML5 parse + selectors, then
+  `Core.Net` + `Core.Mime` + read-only `Core.Imap`. They are scout's only two hard blockers.
+- **Two language slices ruled:** DEC-505 `<=>` + lexicographic tuple/list ordering (both halves are
+  missing today, and one line of scout blocks the depth target on it); DEC-504 structural
+  named-field tuples (73 keyed `array{…}` sites — the largest lift wall). Both QUEUED in
+  UNIFIED-SPEC § "Ordering, `<=>`, and named-field tuples".
+
+**Measured starting state.** `phg lift <dir> -o <out>` writes `LIFT-REPORT.md` naming every refusal —
+**this is the durable, re-runnable census** and it replaces the lost scratchpad `raw/scout-needs.md`
+the readiness plan calls its yardstick. Today: **54 of 123 files lift, 69 refuse**. The histogram is
+**first-error-per-file**, so fixing one wall exposes the next (`yield`, in 23 files, does not appear
+in it at all) — re-census after every lifter change; never treat the 69 as a worklist.
+
+**Lane order:** L0 docs (this) → L1 lifter mechanicals (enum `self`, block closures, positional
+shapes → tuples, a NAMED by-ref diagnostic per DEC-506) → L2 DEC-505 → L3 the depth oracle → L4
+DEC-504 → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 perf twins.
+
+**The depth oracle is FOUR legs, not three.** `tests/differential.rs` proves interpreter ≡ VM ≡
+transpiled-PHP over `examples/**/*.phg`; it never touches scout's ORIGINAL PHP. scout built the
+contract for the fourth leg itself — `Rent/Core/Classification::toArray()` is documented *"stable
+structure for the cross-language differential test"* and yields
+`{tenure, confidence_bp, outcome, reasons[]}`. The eleven-property spec the port must satisfy is
+scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation contract".
+
+## ▶ PREVIOUS CURSOR (2026-09-04 → 05) — **THE BIG WAVE**
 
 Developer directive, 2026-09-04: *"a very big wave … perf/lsp/editors/lift/transpile/vision … a
 continuous/autonomous very long session"*. Plan: `docs/plans/2026-09-04-big-wave.plan.md` (six

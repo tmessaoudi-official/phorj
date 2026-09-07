@@ -101,6 +101,7 @@
   - [Nested-value index-assignment](#nested-value-index-assignment) *(2026-07-01 — SHIPPED)*
   - [`using` — the scope guard](#using--the-scope-guard) *(2026-07-30 — DEC-364, SHIPPED)*
   - [Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`](#mechanical-exhaustiveness-for-exprstmtpattern) *(2026-07-26 — DEC-356; core SHIPPED, rewriter sweep OWED)*
+  - [Ordering, `<=>`, and named-field tuples](#ordering--and-named-field-tuples) *(2026-09-07 — DEC-504/DEC-505, QUEUED)*
   - [Block-scope shadowing — the redeclaration rule](#block-scope-shadowing--the-redeclaration-rule) *(2026-07-26 — DEC-339, SHIPPED)*
   - [`#[Invoke]` and `#[ToString]`](#invoke-and-tostring) *(2026-07-23 — DEC-331 D9; slice 1 SHIPPED, 1b DEFERRED)*
   - [Visibility and access model](#visibility-and-access-model) *(2026-07-24 — SHIPPED + certified)*
@@ -1097,6 +1098,64 @@ differential case per real find is what makes the remainder a slice rather than 
 **Technique for that fix when it happens:** an `e @ (Expr::A(..) | Expr::B(..) | …) => e` or-pattern arm
 gives full compiler enforcement — a new variant not in the list is a non-exhaustive-match error — at
 ~10 lines per site instead of 37, which is what keeps the fix compatible with Invariant 13's caps.
+
+## Ordering, `<=>`, and named-field tuples
+
+> **Status: QUEUED, 2026-09-07 — DEC-505 (`<=>` + ordering) and DEC-504 (named-field tuples).**
+> Ruled by the developer while scoping the scout forcing-function campaign
+> (`docs/plans/2026-09-07-scout-forcing-function.plan.md`, DEC-508). Recorded here so the surface is
+> settled before the slices start; neither is built yet, and this section says so rather than
+> reading as shipped.
+
+### Two things a comparator needs, and phorj has neither
+
+Measured on `target/release/phg` at `6c49816d`, 2026-09-07:
+
+```
+1 <=> 2          → parse error: expected an expression, found `>`
+(1,2) < (1,3)    → type error: comparison requires matching int or float operands,
+                   found `(int, int)` and `(int, int)`
+```
+
+So the ordinary sort-comparator idiom cannot be written. PHP writes it in one line —
+`[$a->tier, $a->position] <=> [$b->tier, $b->position]` — and a phorj program has no equivalent for
+either half.
+
+### DEC-505 — `<=>` and lexicographic tuple ordering
+
+- `a <=> b` yields `int`, one of `-1` / `0` / `1`, for two operands of a single comparable type.
+- Tuples and lists compare **lexicographically, element-wise**, so `(1, 2) < (1, 3)`, and `<=>`
+  works over them.
+- The transpile leg emits **PHP's own `<=>`**, not a `__phorj_*` helper, so the leg stays
+  byte-identical by using the operator PHP already has (Invariant 16's "byte-identity is a tool"
+  does not need spending here).
+- `compare_ord` already lives in `src/value/` and is the single-sourced kernel (Invariant 4). This
+  slice is surface plus tuple ordering; it introduces no second comparison implementation.
+
+**The obligation the build must discharge:** `List.sort` must be **stable**. PHP 8's `usort` is
+stable, and a tie on the leading tuple element is exactly where a differential against PHP would
+break silently rather than loudly.
+
+### DEC-504 — named-field tuples, structural
+
+```phorj
+(tenure: Tenure, source: string, bp: int) t = classify(text);
+Tenure which = t.tenure;
+```
+
+A **structural** type: two named-field tuples with the same field names and types are the same type,
+wherever they are written. This is the phorj form of PHP's keyed docblock shape
+`array{tenure: Tenure, source: string, bp: int}`, and it exists so `phg lift` can map such a shape
+**1:1 with no invented name** — DEC-166 forbids the lifter from guessing, and synthesising a class
+per distinct shape is guessing about naming and about identity both.
+
+Positional shapes (`array{int, string}`, `array{0: float, 1: float}`) already have a phorj form: the
+existing tuple, shipped as DEC-288. Nothing new is needed for those.
+
+**Structural, not nominal.** PHP's `value class` RFC (recorded in the readiness plan §5 ecosystem
+scan) is nominal, and is a different feature; adopting it would not close this gap. No prior phorj
+ruling collides — a search of this document for `named tuple`, `value class` and `record` returned
+nothing before this section was written.
 
 ## `using` — the scope guard
 
