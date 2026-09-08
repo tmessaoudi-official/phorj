@@ -241,3 +241,26 @@ fn parse_function_type_throws_clause() {
         other => panic!("expected function type, got {other:?}"),
     }
 }
+
+/// DEC-504 — a tuple names ALL of its fields or none, and BOTH directions of the mixed form say so.
+///
+/// The reverse case (`(1, b: 2)`) used to report `expected ')' to close a tuple, found ':'` — the
+/// label parsed as an expression and the `:` surfaced as a missing paren, so the purpose-built
+/// message for it was unreachable code.
+#[test]
+fn a_partly_labelled_tuple_is_refused_in_both_directions() {
+    let err = parser("package Main; function main(): void { var t = (a: 1, 2); }")
+        .parse_program()
+        .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("a `name:` label on this field"),
+        "{err:?}"
+    );
+    let err = parser("package Main; function main(): void { var t = (1, b: 2); }")
+        .parse_program()
+        .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("no label on this field"),
+        "{err:?}"
+    );
+}

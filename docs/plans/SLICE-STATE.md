@@ -85,10 +85,57 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > specialized for checker-known scalar element types — is NOT authorized**; reopening this bench needs
 > a new lane and a new ruling.
 >
-> **BUILDING NOW: L4** (DEC-504 named-field tuples, ruled 2026-09-07) — the 73-site lift wall, and the
-> other half of what L3 (the depth oracle) is blocked on. Starting with a SURFACE MAP + collision scan,
-> the shape that produced DEC-512 out of L2; the Invariant-15 questions it turns up go to the developer
-> in ONE question before any code is written.
+> **L4 BUILT (2026-09-08)** — DEC-504 named-field tuples, the 73-site lift wall, and the other half of
+> what L3 (the depth oracle) is blocked on. Three commits: the core language slice, the lift leg +
+> refusals, and format/LSP/editors. **NEXT: L3** (the depth oracle), which L4 unblocks.
+>
+> **What L4 shipped.** `(bp: int, source: string)` as a type and `(bp: 3, source: "x")` as a literal,
+> with `t.bp` resolving to a POSITION at check time and rewritten to `t[<i>]` before erasure — so no
+> backend learns the fields had names. Labels ride in the `Ty::Tuple` payload, which makes all four of
+> the developer's Q1–Q4 rulings fall out of `PartialEq` with no new code. Lift: a KEYED `array{…}`
+> shape lifts to the named tuple its own keys describe, and `$row['bp']` against such a parameter
+> lifts to `row.bp` — without that second half a lifted body would not check against its own lifted
+> signature. Refusals by name: assignment, unknown field, field on a positional tuple, duplicate
+> label, `t?.bp`, half-keyed shapes, and keys that cannot be phorj field names.
+>
+> **The Invariant-7 trap was REAL and had THREE consumers, not one** — the register row predicted the
+> VM's `CTy::List`; it reaches further. A tuple erases to a list, whose operand type is ONE
+> homogeneous element taken from position 0, so every later field inherited position 0's type in:
+> the VM compiler (`CTy::Tuple`), the TRANSPILER (`OpKind::Tuple` — where it did not merely
+> de-specialize but picked the wrong PHP OPERATOR, emitting `$t[1] . 1` and printing `31` where both
+> native legs print `4`), and INFERRED locals (`var t = (…)` has no annotation, so both consumers fell
+> back to the already-erased literal). The third needed `ty_to_ast_type`'s tuple arm fixed: it mapped
+> EVERY `Ty::Tuple` to `Type::Erased`, one arm feeding pipe params, destructure binders and foreach
+> binders alike.
+>
+> **Two defects found by probing the refusal surface, both regressions against the positional form:**
+> `(bp: int, source: string)?` was a PARSE ERROR while `(int, string)?` parsed (the named type
+> returned early, skipping the trailing-`?` loop); and `t?.bp` typed as a non-optional `int` where
+> `b?.v` on a class correctly yields `int?`, because the rewrite drops the `safe` flag — now refused
+> as `E-TUPLE-SAFE-FIELD`.
+>
+> **`phg format` silently STRIPPED tuple labels** — found by writing the Invariant-9 example, which
+> the pre-commit hook formats. It rewrote `(bp: int, source: string)` to `(int, string)`, turning
+> every `t.bp` into `E-TUPLE-POSITIONAL-FIELD`, and `(only: 7)` to `(7)`, an int in parens. Fixed in
+> both printers and guarded by a test asserting the formatted program still RUNS THE SAME.
+>
+> ⚠ **PERF: an OWED verdict, and it is NOT the feature's.** `bench/micro/namedtuplefield` (a list of
+> named records, the scout shape) measures **0.24× — a LOSS** against idiomatic PHP associative
+> arrays. Controls run at the same moment on the same box say the cost is **not named tuples**: a
+> `List<List<int>>` doing the identical nested read is 1928 ms against the named tuple's 1879 ms —
+> statistically identical, so the feature costs ZERO over its own erased representation, exactly as a
+> compile-time sugar should. `listindex` (flat list) is 1.54× WIN and `intadd` 1.31× WIN, so it is
+> not loop overhead either. **The loss is pre-existing NESTED-LIST indexing**, which DEC-504 newly
+> makes idiomatic to write and therefore newly exposes on the motivating workload. Recorded per
+> DEC-365 (NO-HIDDEN-LOSS): the bench ships, it is NOT in `micro-baseline.json` (so it is UNPROTECTED
+> by the ratchet), and `--emit` was NOT run — `_owed` is a DERIVED field and hand-editing it would
+> forge a measurement. **This is a DEC-507 escalation and is the developer's call**, not a
+> self-decided carry.
+>
+> A first version of that bench read one loop-INVARIANT tuple and reported 0.24× too — but for the
+> wrong reason: PHP's tracing JIT constant-folded the body to `acc + 11`. Kept here because the number
+> was RIGHT and the attribution WRONG, the same shape of error as the DEC-513 residue mis-attribution
+> two lanes ago.
 >
 > **What L2b was:** FUSE the comparison in the compiler.
 > `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements of the two tuples and compares them IN PLACE on the

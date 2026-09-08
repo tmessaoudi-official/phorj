@@ -112,6 +112,10 @@ impl Parser {
                 }
                 let mut elems = vec![first];
                 loop {
+                    // DEC-504: the FIRST field was unlabelled, so this one may not carry a label
+                    // either. Checked here so `(1, b: 2)` says what is actually wrong; without it the
+                    // label parses as an expression and the `:` reports as a missing `)`.
+                    self.tuple_label_for_field(false)?;
                     elems.push(self.parse_expr()?);
                     if !self.eat(&TokenKind::Comma) {
                         break;

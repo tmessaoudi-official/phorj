@@ -1196,10 +1196,44 @@ leading element and compares the full ordering across all three legs — nothing
 
 ### DEC-504 — named-field tuples, structural
 
+**Status: SHIPPED — ruled 2026-09-07 (build shape 2026-09-08), built 2026-09-08.**
+
 ```phorj
 (tenure: Tenure, source: string, bp: int) t = classify(text);
 Tenure which = t.tenure;
 ```
+
+**Field ORDER is part of the type.** `(a: int, b: string)` and `(b: string, a: int)` are different
+types and neither is assignable to the other, because erasure is positional: a field's index IS its
+written position. A named tuple is likewise not assignable to the positional `(int, string)`. Making
+order insignificant would mean canonicalizing at erasure, divorcing the order fields are EVALUATED in
+from the order they are stored in — a byte-identity surface.
+
+**Everything else is the positional tuple's behaviour, unchanged.** The labels are a front-end fact:
+`t.bp` resolves to a POSITION during checking and is rewritten to `t[<i>]` before erasure, so the
+interpreter, VM, JIT and transpiler never learn the fields had names. The PHP leg is positional —
+`(bp: 3, source: "x")` transpiles to `[3, 'x']` — which is the Invariant-16 trade the developer ruled
+explicitly: transpiled PHP loses the field names, and a PHP→phorj→PHP round-trip of a keyed shape
+returns a positional array. Destructuring (`var (a, b) = t`) binds by POSITION and ignores the names.
+Ordering (`<=>`, `< > <= >=`) extends to named tuples, sound precisely because order is significant
+and erasure positional, so DEC-512's static-arity argument carries unchanged.
+
+**Refused by name**, each because it would otherwise do something quieter and worse:
+
+| Written | Code | Why |
+|---|---|---|
+| `(a: 1, 2)` | *(parse error, no code)* | a tuple names all of its fields or none — caught in the parser, so it never reaches the checker |
+| `(a: 1, a: 2)` | `E-TUPLE-DUP-FIELD` | a duplicate makes `t.a` ambiguous; picking a winner would be a silent semantic choice |
+| `t.nope` | `E-TUPLE-UNKNOWN-FIELD` | the field set is part of the type, so a typo is a compile error, not a runtime miss |
+| `(int, string)` `.bp` | `E-TUPLE-POSITIONAL-FIELD` | a positional tuple has positions, not names — a different mistake from a typo |
+| `t.bp = v`, `+=` | `E-ASSIGN-TARGET` | a tuple is a VALUE (DEC-288 erases it to a COW list); rebind the whole tuple |
+| `t?.bp` | `E-TUPLE-SAFE-FIELD` | a field read erases to an `Index`, which carries no null short-circuit — `?.` would type as `int?` while faulting at runtime. Narrow first, then read with `.` |
+
+**Lift.** A keyed `array{…}` shape lifts to the named tuple its own keys describe, and a `$row['bp']`
+read against such a parameter lifts to `row.bp` — without that second half a lifted body would not
+check against its own lifted signature. The names come from the docblock and are never invented
+(DEC-166): a half-keyed shape, a key that is not a legal phorj field name (`'total-cost'`), and a
+duplicate key are each refused rather than half-named, mangled or collapsed.
 
 A **structural** type: two named-field tuples with the same field names and types are the same type,
 wherever they are written. This is the phorj form of PHP's keyed docblock shape

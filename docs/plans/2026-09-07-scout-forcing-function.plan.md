@@ -20,6 +20,23 @@
 
 ## Decisions Log
 
+- [2026-09-08 L4-BUILT] L4 (DEC-504 named-field tuples) is BUILT — three commits: the core language
+  slice, the lift leg + refusals, and format/LSP/editors. **NEXT: L3** (the depth oracle), which L4
+  unblocks. Three things a reader must carry forward. (1) **The Invariant-7 trap had THREE consumers,
+  not the one the register predicted**: the VM compiler, the TRANSPILER — where it picked the wrong PHP
+  *operator*, emitting `$t[1] . 1` and printing `31` where both native legs print `4` — and INFERRED
+  locals, which needed `ty_to_ast_type`'s tuple arm fixed (it mapped EVERY `Ty::Tuple` to
+  `Type::Erased`, one arm feeding pipe params, destructure binders and foreach binders alike).
+  (2) **Writing the Invariant-9 example is what caught `phg format` silently STRIPPING tuple labels**
+  — rewriting `(bp: int, source: string)` to `(int, string)` and `(only: 7)` to `(7)` — which is the
+  argument for the invariant, not a tax it charges. (3) **The perf verdict is OWED and is NOT the
+  feature's**: `namedtuplefield` is 0.24× vs PHP associative arrays, but a `List<List<int>>` control
+  doing the identical nested read measures 1928 ms against the named tuple's 1879 ms, so named tuples
+  cost ZERO over their own erased form; the loss is pre-existing nested-list indexing that DEC-504
+  newly makes idiomatic to write. Recorded per DEC-365 — the bench ships UNPROTECTED (not in
+  `micro-baseline.json`), `--emit` NOT run, `_owed` NOT hand-edited (it is a derived field).
+  **This is a DEC-507 escalation and awaits the developer's ruling**, exactly as L2b's did.
+
 - [2026-09-08 L4-SHAPE] AGREED (developer adjudication, Invariant 15 — asked as ONE question with the
   minimal refused scout shape embedded, before any code): named-field tuples are **order-significant**,
   **positional on the PHP leg**, read via **`t.bp`** with positional destructuring retained, and

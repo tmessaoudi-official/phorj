@@ -1,0 +1,43 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: reading NAMED TUPLE fields (DEC-504) out of a LIST of records, in a hot loop. The PHP
+// counterpart is a list of ASSOCIATIVE ARRAYS, because that is what a PHP developer writes for a
+// named record — and it is literally the shape `phg lift` reads out of scout
+// (`list<array{tier: int, bp: int}>` + `$row['bp']`).
+//
+// So this measures the actual proposition: phorj resolves a field NAME to a POSITION at compile
+// time and erases to an integer index, where PHP hashes a string key on every read.
+//
+// The index VARIES with the accumulator (`(i + acc) % 8`, the `listindex` shape) so neither engine
+// can hoist the read out of the loop. An earlier version of this bench read one loop-INVARIANT
+// tuple, and PHP's tracing JIT constant-folded the whole body to `acc + 11` — that measured which
+// engine folds better on a degenerate input, and reported a phantom 0.24x LOSS.
+function bench(int iters): int {
+    List<(tier: int, bp: int)> rows = [
+        (tier: 1, bp: 3), (tier: 2, bp: 1), (tier: 3, bp: 4), (tier: 4, bp: 1),
+        (tier: 5, bp: 5), (tier: 6, bp: 9), (tier: 7, bp: 2), (tier: 8, bp: 6),
+    ];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        int idx = (i + acc) % 8;
+        acc = acc + rows[idx].bp * 2 - rows[idx].tier;
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int iters = 5000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("namedtuplefield\t{d + guard}\t{acc}");
+}
