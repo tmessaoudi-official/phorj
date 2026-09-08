@@ -459,6 +459,7 @@ use variants::{VariantIndex, VariantMeta};
 
 mod ctors;
 mod cty;
+mod cty_members;
 mod emit;
 
 #[cfg(test)]

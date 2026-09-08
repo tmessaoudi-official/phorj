@@ -16,11 +16,9 @@
 860	src/cli/pipeline.rs
 1438	src/cli/preludes.rs
 872	src/cli/tests.rs
-505	src/compiler/cty.rs
 734	src/compiler/program.rs
 772	src/format/printer/exprs.rs
 690	src/interpreter/call.rs
-518	src/interpreter/expr.rs
 2476	src/jit/analyze/mod.rs
 639	src/jit/boxed.rs
 1658	src/jit/emit_unboxed/mod.rs
@@ -40,7 +38,6 @@
 588	src/native/mod.rs
 609	src/native/text.rs
 600	src/native/text_registry.rs
-658	src/parser/exprs/climb.rs
 605	src/parser/items/decls.rs
 584	src/parser/items/types.rs
 935	src/parser/stmts.rs

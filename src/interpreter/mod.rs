@@ -420,6 +420,7 @@ mod helpers;
 use helpers::*;
 mod construct;
 mod expr;
+mod expr_leaves;
 mod stmt;
 mod variants;
 

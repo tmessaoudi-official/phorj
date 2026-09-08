@@ -4,4 +4,5 @@ use super::*;
 
 mod climb;
 mod pipe;
+mod postfix;
 mod primary;
