@@ -102,7 +102,12 @@ impl Parser {
             // as the value form, and taken before the parameter-list path so a labelled type never
             // reaches it — a function type's parameters are unlabelled, so the two cannot collide.
             if self.at_tuple_label() {
-                return self.parse_named_tuple_type(sp);
+                let t = self.parse_named_tuple_type(sp)?;
+                // A named tuple type takes the postfix `?` like every other type. This used to
+                // `return` directly, skipping the trailing-`?` loop at the end of this function, so
+                // `(bp: int, source: string)?` was a PARSE ERROR while `(int, string)?` — which
+                // falls through to that loop — parsed. Both now go through `wrap_optionals`.
+                return Ok(self.wrap_optionals(t, sp));
             }
             let mut params = Vec::new();
             if !self.check(&TokenKind::RParen) {
@@ -191,19 +196,31 @@ impl Parser {
             }
             self.expect(&TokenKind::Gt, "'>' to close type arguments")?;
         }
-        let mut t = Type::Named {
+        let t = Type::Named {
             name,
             args,
             span: sp,
         };
-        // trailing `?` makes it optional; allow stacking (`T??` -> Optional(Optional))
+        Ok(self.wrap_optionals(t, sp))
+    }
+
+    /// Wrap `t` in one `Type::Optional` per trailing `?` token.
+    ///
+    /// The loop is not stacking support: `??` lexes as a single `QuestionQuestion` (null-coalesce),
+    /// so `T??` does not reach here as two `?` tokens and is not a doubly-optional type. It stays a
+    /// loop only because that costs nothing and keeps the shape obvious.
+    ///
+    /// Shared by every type-atom exit rather than inlined at each, so a form that returns early
+    /// cannot silently lose the postfix — which is exactly how `(bp: int, source: string)?` came to
+    /// be a parse error while `(int, string)?` parsed.
+    fn wrap_optionals(&mut self, mut t: Type, sp: Span) -> Type {
         while self.eat(&TokenKind::Question) {
             t = Type::Optional {
                 inner: Box::new(t),
                 span: sp,
             };
         }
-        Ok(t)
+        t
     }
 
     /// Optional generic parameter list `<T, U>` immediately after a function name (M-RT S7).

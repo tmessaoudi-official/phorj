@@ -49,6 +49,16 @@ use matches::*;
 // one thread) — reset at the start of every `lift_program` so runs never leak into each other.
 thread_local! {
     static CONSOLE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// DEC-504 — the NAMED-TUPLE fields of each variable in the function being lifted, keyed by
+    /// variable name. Populated from the lifted parameters (a `@param array{bp: int, …} $row`
+    /// becomes a `Type::Tuple` carrying its labels), and read by the `Index` arm so `$row['bp']`
+    /// lifts to `row.bp` rather than to a string index a tuple cannot answer.
+    ///
+    /// Thread-local for the same reason as the two above: the lifter is stateless free functions, so
+    /// a fact learned in the signature has no other route to the body. FUNCTION-scoped — cleared at
+    /// the start of every function lift, because `$row` in one function is not `$row` in the next.
+    static TUPLE_FIELDS: std::cell::RefCell<std::collections::HashMap<String, Vec<String>>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
     static LIFTED_NATIVE_MODULES: std::cell::RefCell<std::collections::BTreeSet<&'static str>> =
         const { std::cell::RefCell::new(std::collections::BTreeSet::new()) };
 }
@@ -82,4 +92,45 @@ pub(super) fn drain_native_modules() -> Vec<&'static str> {
         set.clear();
         out
     })
+}
+
+/// Record the named-tuple fields of every parameter, replacing the previous function's map
+/// (DEC-504). A parameter whose lifted type is a POSITIONAL tuple contributes nothing — there are
+/// no field names to read by.
+pub(super) fn set_tuple_fields(params: &[Param]) {
+    TUPLE_FIELDS.with(|m| {
+        let mut m = m.borrow_mut();
+        m.clear();
+        for p in params {
+            if let Type::Tuple(_, Some(labels), _) = &p.ty {
+                m.insert(
+                    p.name.clone(),
+                    labels.iter().map(|l| l.name.clone()).collect(),
+                );
+            }
+        }
+    });
+}
+
+/// Whether `var` is a named tuple with a field called `field` — the test that turns `$row['bp']`
+/// into `row.bp`. A key the shape does NOT declare answers `false` and stays an index read: the
+/// lifter invents no field, and the checker is the right place for that mistake to surface.
+pub(super) fn is_tuple_field(var: &str, field: &str) -> bool {
+    TUPLE_FIELDS.with(|m| {
+        m.borrow()
+            .get(var)
+            .is_some_and(|fs| fs.iter().any(|f| f == field))
+    })
+}
+
+/// The text of a string literal that has no interpolation holes, else `None`.
+///
+/// An array key written with interpolation (`$row["$k"]`) is not a statically known field name, so
+/// it is left as an index read rather than guessed at.
+pub(super) fn str_literal_text(parts: &[StrPart]) -> Option<String> {
+    match parts {
+        [] => Some(String::new()),
+        [StrPart::Literal(t)] => Some(t.clone()),
+        _ => None,
+    }
 }

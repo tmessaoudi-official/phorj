@@ -321,11 +321,31 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
                 static_member(class, name)
             }
         }
-        php::PhpExpr::Index { base, index } => Expr::Index {
-            object: Box::new(lift_expr(base)?),
-            index: Box::new(lift_expr(index)?),
-            span: SP,
-        },
+        php::PhpExpr::Index { base, index } => {
+            let object = lift_expr(base)?;
+            let index = lift_expr(index)?;
+            // DEC-504: `$row['bp']` where `$row` is a NAMED tuple is a field read, not a string
+            // index — a tuple has no string keys, so left alone the lifted body would not check
+            // against the signature lifted beside it. Only a declared field is rewritten.
+            if let (Expr::Ident(var, _), Expr::Str(parts, _)) = (&object, &index) {
+                if let Some(field) = super::str_literal_text(parts) {
+                    if super::is_tuple_field(var, &field) {
+                        return Ok(Expr::Member {
+                            object: Box::new(object),
+                            name: field,
+                            safe: false,
+                            sep: crate::ast::MemberSep::Dot,
+                            span: SP,
+                        });
+                    }
+                }
+            }
+            Expr::Index {
+                object: Box::new(object),
+                index: Box::new(index),
+                span: SP,
+            }
+        }
         php::PhpExpr::New { class, args } => Expr::New(
             Box::new(Expr::Call {
                 // Two rules in one call (`phorj_error_name`): a PHP builtin EXCEPTION maps onto phorj's

@@ -40,15 +40,15 @@ fn a_nullable_positional_shape_is_a_nullable_tuple() {
     assert_reparses(&out);
 }
 
-/// A KEYED shape still refuses, and the refusal now points at the ruling that will close it rather
-/// than at a generic Tier-2 wall.
+/// A KEYED shape lifts to the named-field tuple its own keys describe (DEC-504). This case asserted
+/// the REFUSAL until the named-field slice landed; the shape scout writes is exactly this one.
 #[test]
-fn a_keyed_array_shape_still_refuses_and_names_the_ruling() {
-    let err = super::lifter::lift_source(
+fn a_keyed_array_shape_lifts_to_the_named_tuple_it_names() {
+    let out = lift(
         "<?php\n/**\n * @return array{tenure: string, bp: int}\n */\nfunction j(): array { return []; }",
-    )
-    .expect_err("keyed shape");
-    assert!(err.contains("named-field"), "{err}");
+    );
+    assert!(out.contains("(tenure: string, bp: int)"), "{out}");
+    assert_reparses(&out);
 }
 
 /// Indices that are not a dense ascending run from zero are NOT a tuple — refused rather than
@@ -217,4 +217,67 @@ fn an_echo_of_an_int_variable_produces_a_draft_that_checks() {
     assert!(out.contains(r#"Output.print("{n}")"#), "{out}");
     let prog = crate::cli::parse_program(&out).expect("parses");
     crate::cli::check_and_expand(&prog, &out).expect("the lifted draft type-checks");
+}
+
+/// DEC-504 — a KEYED array shape is a NAMED-FIELD tuple, and the docblock's own keys are the field
+/// names. This is the shape the scout corpus actually writes and the reason named tuples exist; it
+/// was refused by name until the named-field slice landed.
+#[test]
+fn a_keyed_array_shape_is_a_named_tuple() {
+    let out = lift(
+        "<?php\n/**\n * @return array{bp: int, source: string}\n */\nfunction row(): array { return ['bp' => 1, 'source' => 'a']; }",
+    );
+    assert!(out.contains("(bp: int, source: string)"), "{out}");
+    assert_reparses(&out);
+}
+
+/// The names come from the DOCBLOCK and are never invented (DEC-166), so a shape that keys only
+/// SOME of its fields is refused rather than half-named — naming the rest by position would be the
+/// lifter guessing. (`array{bp: int, string}` is also not a thing PHPStan emits.)
+#[test]
+fn a_half_keyed_array_shape_is_refused_rather_than_half_named() {
+    let err = super::lifter::lift_source(
+        "<?php\n/**\n * @return array{bp: int, string}\n */\nfunction row(): array { return ['bp' => 1, 'a']; }",
+    )
+    .expect_err("half-keyed shape");
+    assert!(
+        err.contains("every field") && err.contains("DEC-166"),
+        "expected a refusal naming the half-keyed shape, got: {err}"
+    );
+}
+
+/// A PHP array key is an arbitrary string; a phorj field name is not. A key that cannot BE a field
+/// name is refused rather than mangled into one — renaming it would make the lifted code disagree
+/// with the PHP it came from at every read site (DEC-166).
+#[test]
+fn an_array_shape_key_that_is_not_a_legal_field_name_is_refused() {
+    let err = super::lifter::lift_source(
+        "<?php\n/**\n * @return array{'total-cost': int, source: string}\n */\nfunction row(): array { return []; }",
+    )
+    .expect_err("illegal shape key");
+    assert!(err.contains("legal phorj field name"), "{err}");
+}
+
+/// DEC-504, the read side — and the whole point of the lift leg. A keyed shape lifts the SIGNATURE
+/// to a named tuple, so the body's `$row['bp']` must lift to `row.bp`: left as a string index it
+/// would be a Map read against a tuple, and the lifted draft would not CHECK. The field names come
+/// from the docblock the parameter already carries — nothing is invented (DEC-166).
+#[test]
+fn a_string_index_into_a_keyed_shape_param_becomes_a_field_read() {
+    let out = lift(
+        "<?php\n/**\n * @param array{bp: int, source: string} $row\n */\nfunction bp(array $row): int { return $row['bp'] + 1; }",
+    );
+    assert!(out.contains("row.bp"), "expected a field read, got: {out}");
+    assert!(!out.contains("row[\"bp\"]"), "still a string index: {out}");
+    assert_reparses(&out);
+}
+
+/// A key the shape does NOT declare stays an index read — the lifter does not invent a field, and
+/// the checker is the right place for that mistake to surface.
+#[test]
+fn a_string_index_that_is_not_a_declared_field_is_left_alone() {
+    let out = lift(
+        "<?php\n/**\n * @param array{bp: int} $row\n */\nfunction f(array $row): int { return $row['nope']; }",
+    );
+    assert!(out.contains("row[\"nope\"]"), "{out}");
 }

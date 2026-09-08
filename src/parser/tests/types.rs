@@ -161,6 +161,36 @@ fn parses_fixed_length_list_type() {
     assert!(parser("[int]").parse_type().is_err()); // missing `; N`
 }
 
+/// DEC-504 — a NAMED tuple type takes the postfix `?` exactly like every other type. The named form
+/// is parsed by its own function, which returned early and so skipped the trailing-`?` loop shared
+/// by every other atom: `(bp: int, source: string)?` was a parse error while the positional
+/// `(int, string)?` beside it parsed. Both spellings are asserted here so the two cannot drift again.
+#[test]
+fn a_named_tuple_type_is_optional_able_like_a_positional_one() {
+    assert!(matches!(ty("(int, string)?"), Type::Optional { .. }));
+    match ty("(bp: int, source: string)?") {
+        Type::Optional { inner, .. } => match inner.as_ref() {
+            Type::Tuple(members, labels, _) => {
+                assert_eq!(members.len(), 2);
+                let names: Vec<&str> = labels
+                    .as_ref()
+                    .expect("labels survive the optional wrapper")
+                    .iter()
+                    .map(|l| l.name.as_str())
+                    .collect();
+                assert_eq!(names, ["bp", "source"]);
+            }
+            other => panic!("expected a named Type::Tuple inside the optional, got {other:?}"),
+        },
+        other => panic!("expected Type::Optional, got {other:?}"),
+    }
+    // A single-field named tuple is still a tuple, not a grouped type.
+    assert!(matches!(
+        ty("(bp: int)?"),
+        Type::Optional { ref inner, .. } if matches!(inner.as_ref(), Type::Tuple(m, Some(_), _) if m.len() == 1)
+    ));
+}
+
 #[test]
 fn parses_parenthesized_return_position_function_type() {
     // spec #8: a parenthesized function type in return position. `() -> ((int) -> bool)` must parse

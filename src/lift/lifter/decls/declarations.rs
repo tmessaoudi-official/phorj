@@ -11,6 +11,9 @@ impl Lifter {
     ) -> Result<FunctionDecl, String> {
         let mut declared = HashSet::new();
         let params = lift_params(&f.params)?;
+        // DEC-504: the signature is what tells the BODY that `$row['bp']` is a field read. Set
+        // before the body is lifted, and function-scoped — `$row` here is not `$row` next door.
+        super::super::set_tuple_fields(&params);
         for p in &params {
             declared.insert(p.name.clone());
         }
@@ -200,6 +203,7 @@ impl Lifter {
             return res;
         }
         let params = lift_params(&m.params)?;
+        super::super::set_tuple_fields(&params); // DEC-504, as in `lift_function`
         for p in &params {
             declared.insert(p.name.clone());
         }

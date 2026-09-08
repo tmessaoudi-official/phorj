@@ -321,10 +321,23 @@ pub(super) fn ty(t: &Type) -> Result<String, String> {
             let m: Result<Vec<_>, _> = members.iter().map(ty).collect();
             Ok(m?.join(" | "))
         }
-        // A POSITIONAL `array{…}` shape lifts to a tuple (lane L1c) — `(int, string)`.
-        Type::Tuple(elems, _, _) => {
+        // An `array{…}` shape lifts to a tuple: positional `(int, string)` (lane L1c), or
+        // named-field `(bp: int, source: string)` when the docblock keyed it (DEC-504). Dropping the
+        // labels here would print a type that no longer matches the field reads lifted alongside it.
+        Type::Tuple(elems, labels, _) => {
             let e: Result<Vec<_>, _> = elems.iter().map(ty).collect();
-            Ok(format!("({})", e?.join(", ")))
+            let e = e?;
+            Ok(match labels {
+                Some(ls) => format!(
+                    "({})",
+                    ls.iter()
+                        .zip(e.iter())
+                        .map(|(l, t)| format!("{}: {t}", l.name))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                None => format!("({})", e.join(", ")),
+            })
         }
         _ => Err("printer: this type is outside the lift subset".into()),
     }

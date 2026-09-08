@@ -159,16 +159,19 @@ fn a_docblock_refinement_on_a_non_array_type_is_left_alone() {
     assert!(out.contains("f(string s): string"), "{out}");
 }
 
+/// A BARE `array` is still refused by name — it carries no element information at all, so lifting
+/// it would mean guessing. An array SHAPE is the opposite case: it says exactly what it holds, and
+/// since DEC-504 a keyed one lifts to the named tuple its keys describe rather than being refused.
 #[test]
-fn bare_array_and_array_shapes_stay_refused_by_name() {
+fn a_bare_array_is_refused_by_name_but_a_keyed_shape_now_lifts() {
     let err = super::lifter::lift_source("<?php function f(array $xs): int { return 0; }")
         .expect_err("a bare array");
     assert!(err.contains("@param"), "{err}");
-    let err = super::lifter::lift_source(
+    let out = super::lifter::lift_source(
         "<?php\n/** @return array{a: int} */\nfunction f(): array { return []; }",
     )
-    .expect_err("an array shape");
-    assert!(err.contains("shape"), "{err}");
+    .expect("a keyed shape lifts (DEC-504)");
+    assert!(out.contains("(a: int)"), "{out}");
 }
 
 #[test]

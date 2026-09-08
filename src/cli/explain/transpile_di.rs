@@ -75,6 +75,14 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              than a property of the value — so a positional tuple cannot grow field names later.\n\
              Either name the fields in the type, or destructure it: `var (a, b) = t;` (DEC-504).\n"
         }
+        "E-TUPLE-SAFE-FIELD" => {
+            "E-TUPLE-SAFE-FIELD — safe navigation (`t?.bp`) on a tuple field.\n\n\
+             A named-field read erases to an ordinary index (`t.bp` becomes `t[1]`), and an index\n\
+             carries no null short-circuit — so `?.` here would type as `int?`, promising that null\n\
+             is possible, while the runtime faulted on a null receiver instead of yielding null. A\n\
+             tuple position cannot be absent, so the safe form has nothing to guard at the FIELD.\n\
+             Narrow the receiver first — `if (var u = t) { u.bp }` — then read with `.` (DEC-504).\n"
+        }
         "E-TUPLE-DUP-FIELD" => {
             "E-TUPLE-DUP-FIELD — the same field name appears twice in one tuple.\n\n\
              `(a: 1, a: 2)` is refused rather than letting the first or last win. Tuple fields are\n\

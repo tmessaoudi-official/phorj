@@ -12,6 +12,13 @@
 //! built from a check-time clone goes stale when a later pass edits that subtree (the clone-
 //! staleness class that produced three real bugs on 2026-07-16).
 //!
+//! Safe navigation (`t?.bp`) is REFUSED. The rewrite turns a field read into an `Expr::Index`,
+//! which carries no `safe` flag, so a `?.` would silently erase to an ordinary index — the checker
+//! would promise `int?` (null is possible) while the runtime faulted on a null receiver instead of
+//! short-circuiting. Rather than lower it to a conditional or grow a safe-index Op for a construct
+//! that cannot be null AT a position anyway, the access is refused by name and the user narrows
+//! first (`if (var u = t) { u.bp }`).
+//!
 //! A miss is refused BY NAME. `t.nope` names the fields the tuple actually has, and `t.bp` on a
 //! POSITIONAL tuple says that the tuple has no field names at all rather than reporting an unknown
 //! field — the two are different mistakes and a reader needs to know which one they made.
@@ -25,11 +32,24 @@ impl Checker {
         &mut self,
         base: &Ty,
         name: &str,
+        safe: bool,
         span: Span,
     ) -> Option<Ty> {
         let Ty::Tuple(elems, labels) = base else {
             return None;
         };
+        if safe {
+            return Some(self.err_coded(
+                span,
+                format!("`?.` is not supported on a tuple — `{base}` has no nullable field `{name}`"),
+                "E-TUPLE-SAFE-FIELD",
+                Some(
+                    "a tuple field read erases to an index, which has no null short-circuit; narrow \
+                     the receiver first — `if (var u = t) { u.bp }` — then read the field with `.`"
+                        .into(),
+                ),
+            ));
+        }
         let Some(ls) = labels else {
             return Some(self.err_coded(
                 span,

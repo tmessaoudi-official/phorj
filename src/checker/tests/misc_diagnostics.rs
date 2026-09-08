@@ -77,6 +77,46 @@ fn tuple_destructuring_needs_a_tuple_of_the_right_arity() {
     );
 }
 
+/// DEC-504 — the four ways a named-tuple field access is refused. Each is refused BY NAME because
+/// they are DIFFERENT mistakes: a typo, a tuple that has no names at all, an ambiguous duplicate,
+/// and a `?.` whose null short-circuit cannot survive erasure to an index.
+#[test]
+fn named_tuple_field_access_is_refused_by_name() {
+    has(
+        "function main() -> void { (bp: int, source: string) t = (bp: 1, source: \"a\"); var x = t.nope; }",
+        "E-TUPLE-UNKNOWN-FIELD",
+    );
+    has(
+        "function main() -> void { (int, string) t = (1, \"a\"); var x = t.bp; }",
+        "E-TUPLE-POSITIONAL-FIELD",
+    );
+    has(
+        "function main() -> void { var t = (a: 1, a: 2); }",
+        "E-TUPLE-DUP-FIELD",
+    );
+    // `?.` erases to a plain `Index`, which has no null short-circuit — refused rather than
+    // silently typing as `int?` while faulting at runtime.
+    has(
+        "function main() -> void { (bp: int, source: string) t = (bp: 1, source: \"a\"); var x = t?.bp; }",
+        "E-TUPLE-SAFE-FIELD",
+    );
+}
+
+/// A tuple is a VALUE, not a shared-mutable instance: there is no `t.bp = v` (nor `+=`/`++`).
+/// Rebind the whole tuple instead. Pinned because the field read landing made the write LOOK
+/// available.
+#[test]
+fn a_named_tuple_field_cannot_be_assigned() {
+    has(
+        "function main() -> void { mutable (bp: int, source: string) t = (bp: 1, source: \"a\"); t.bp = 5; }",
+        "E-ASSIGN-TARGET",
+    );
+    has(
+        "function main() -> void { mutable (bp: int, source: string) t = (bp: 1, source: \"a\"); t.bp += 5; }",
+        "E-ASSIGN-TARGET",
+    );
+}
+
 #[test]
 fn a_variadic_parameter_cannot_default() {
     has(

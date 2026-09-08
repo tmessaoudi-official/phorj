@@ -44,16 +44,31 @@ pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
     match t {
         // A POSITIONAL array shape is a phorj tuple (DEC-288). The parser has already refused the
         // KEYED form by name, so anything reaching here is genuinely positional.
-        php::PhpType::Tuple(elems) => Ok(Type::Tuple(
-            elems.iter().map(lift_type).collect::<Result<_, _>>()?,
-            None,
-            crate::token::Span {
+        // An array SHAPE is a phorj tuple — positional (DEC-288) or named-field (DEC-504). The
+        // labels are the docblock's own keys; the parser has already refused a half-keyed shape and
+        // any key that is not a legal field name, so whatever reaches here can be named verbatim.
+        php::PhpType::Tuple(elems, labels) => {
+            let sp = crate::token::Span {
                 start: 0,
                 len: 0,
                 line: 0,
                 col: 0,
-            },
-        )),
+            };
+            Ok(Type::Tuple(
+                elems.iter().map(lift_type).collect::<Result<_, _>>()?,
+                labels.as_ref().map(|ns| {
+                    Box::new(
+                        ns.iter()
+                            .map(|n| crate::ast::Label {
+                                name: n.clone(),
+                                span: sp,
+                            })
+                            .collect(),
+                    )
+                }),
+                sp,
+            ))
+        }
         php::PhpType::Named(name) => match name.as_str() {
             "int" | "float" | "string" | "bool" | "void" => Ok(named(name)),
             "array" => Err("lift: an `array` type needs List/Map/Set inference (Tier-2) — annotate it \
