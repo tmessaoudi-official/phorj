@@ -119,18 +119,52 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > every `t.bp` into `E-TUPLE-POSITIONAL-FIELD`, and `(only: 7)` to `(7)`, an int in parens. Fixed in
 > both printers and guarded by a test asserting the formatted program still RUNS THE SAME.
 >
-> ⚠ **PERF: an OWED verdict, and it is NOT the feature's.** `bench/micro/namedtuplefield` (a list of
-> named records, the scout shape) measures **0.24× — a LOSS** against idiomatic PHP associative
-> arrays. Controls run at the same moment on the same box say the cost is **not named tuples**: a
-> `List<List<int>>` doing the identical nested read is 1928 ms against the named tuple's 1879 ms —
-> statistically identical, so the feature costs ZERO over its own erased representation, exactly as a
-> compile-time sugar should. `listindex` (flat list) is 1.54× WIN and `intadd` 1.31× WIN, so it is
-> not loop overhead either. **The loss is pre-existing NESTED-LIST indexing**, which DEC-504 newly
-> makes idiomatic to write and therefore newly exposes on the motivating workload. Recorded per
-> DEC-365 (NO-HIDDEN-LOSS): the bench ships, it is NOT in `micro-baseline.json` (so it is UNPROTECTED
-> by the ratchet), and `--emit` was NOT run — `_owed` is a DERIVED field and hand-editing it would
-> forge a measurement. **This is a DEC-507 escalation and is the developer's call**, not a
+> ⚠ **PERF: an OWED verdict, and it is NOT the feature's — RE-MEASURED through the harness.**
+> The first numbers here were one unpinned `phg run` per side (K=1) on a box whose own harness
+> reports a 284% spread on this bench; they are withdrawn. Re-measured with `scripts/microbench.sh`
+> at **K=7, interleaved and core-pinned** [Verified 2026-09-08]:
+>
+> | bench | VM ns | php+JIT ns | ratio |
+> |---|---|---|---|
+> | `namedtuplefield` (named tuple / PHP assoc array) | 1 840 265 519 | 467 968 425 | **0.25× LOSS** |
+> | `nestedlist` (its ERASED form / PHP list array) | 1 832 042 889 | 57 388 686 | **0.03× LOSS** |
+> | `listindex` (one level) | 11 307 087 | 16 582 928 | 1.47× WIN |
+> | `intadd` (pure arith) | 4 246 042 | 5 682 775 | 1.34× WIN |
+>
+> **The feature costs ZERO**: the two VM legs are 1840 vs 1832 ms — 0.4% apart, same checksum —
+> and `bench/micro/nestedlist` now ships as a PERMANENT paired control so the claim stays checkable
+> rather than resting on one recollection. **The loss is phorj's two-level list element read**:
+> 370 ns/iter against 4.3 ns/iter one level deep and 1.4 ns/iter for pure arithmetic. It is NOT a
+> deep copy — cost is flat across inner widths 2→128 (285/310/306/281 ms) — and the JIT does engage
+> yet does not close it (7× from `--no-jit` here against 59× for `listindex`).
+>
+> ⚠ The 0.25× row FLATTERS phorj: its PHP leg pays a string-key hash (468 ms) that the phorj leg
+> does not, while the honest positional comparison is the 0.03× row. Recorded per DEC-365
+> (NO-HIDDEN-LOSS): both benches ship, NEITHER is in `micro-baseline.json` (so both are UNPROTECTED
+> by the ratchet), `--emit` was NOT run and `_owed` was NOT hand-edited — it is a derived field.
+> **This is a DEC-507 escalation and is the developer's call**, not a
 > self-decided carry.
+>
+> ⚠ **LIFT CEILING — counted at last, and it changes the claim** [Verified 2026-09-08, read-only over
+> `/stack/projects/scout` @ f7a4345]. The 1,324 on record was every `$x['k']` read in the corpus,
+> never the liftable subset. Keyed `array{…}` shapes sit at 111 sites in 43 files; the REWRITABLE
+> reads are **140 across 16 files** — 55 direct on a keyed-shape `@var` local, 85 through a `foreach`
+> binder over a keyed collection. **The shipped rewrite covers 0 of them**: `set_tuple_fields` is
+> seeded only from PARAMS (`src/lift/lifter/decls/declarations.rs:16,206`) and scout has zero
+> `$p['k']` reads on a keyed-shape param — its shapes are `list<array{…}>` that get ITERATED, and it
+> is the binder that is indexed. L4's delivered value is the WALL (a keyed shape now has a phorj type,
+> so the file lifts at all); the read-rewrite reaches nothing in this corpus until the seed is
+> extended to `@var` locals and foreach binders. QUEUED, not done, not claimed.
+>
+> ⚠ **LSP (Invariant 17's 100% rule) — completion was shipped, the rest was never checked.** Probing
+> the running server found two defects, both now fixed with tests and three landed mutations:
+> hovering a tuple local showed the declaration text cut at its first comma — `(source: string` for a
+> named tuple, `(int` for DEC-288's positional one, an unbalanced type presented as the reader's own —
+> and hovering `t.bp` answered `null`, or, where a local happened to share the field's name, answered
+> with THAT local's type and jumped go-to-definition to it. The cut is now depth-aware and the field
+> resolves against its RECEIVER. Go-to-definition on a tuple field now answers nothing rather than
+> jumping somewhere wrong; jumping to the label inside the written type needs spans
+> `receiver_tuple_fields` does not carry, and is named here as an uncertified follow-up.
 >
 > A first version of that bench read one loop-INVARIANT tuple and reported 0.24× too — but for the
 > wrong reason: PHP's tracing JIT constant-folded the body to `acc + 11`. Kept here because the number

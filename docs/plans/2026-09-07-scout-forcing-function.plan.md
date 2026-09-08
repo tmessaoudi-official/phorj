@@ -30,11 +30,18 @@
   (2) **Writing the Invariant-9 example is what caught `phg format` silently STRIPPING tuple labels**
   — rewriting `(bp: int, source: string)` to `(int, string)` and `(only: 7)` to `(7)` — which is the
   argument for the invariant, not a tax it charges. (3) **The perf verdict is OWED and is NOT the
-  feature's**: `namedtuplefield` is 0.24× vs PHP associative arrays, but a `List<List<int>>` control
-  doing the identical nested read measures 1928 ms against the named tuple's 1879 ms, so named tuples
-  cost ZERO over their own erased form; the loss is pre-existing nested-list indexing that DEC-504
-  newly makes idiomatic to write. Recorded per DEC-365 — the bench ships UNPROTECTED (not in
-  `micro-baseline.json`), `--emit` NOT run, `_owed` NOT hand-edited (it is a derived field).
+  feature's**, and the first numbers for it were WRONG in method: one unpinned run per side, on a
+  bench whose own harness reports 284% spread. Re-measured at K=7, interleaved and core-pinned:
+  `namedtuplefield` **0.25×**, its erased-form control `nestedlist` **0.03×**, VM legs 0.4% apart —
+  so named tuples cost ZERO over their erased form, and the loss is phorj's TWO-LEVEL list element
+  read (370 ns/iter against 4.3 one level deep). `nestedlist` now SHIPS as a permanent paired
+  control, because a claim that rests on a number nobody can re-run is not evidence.
+  (4) **The lift ceiling was never counted, and counting it changed the story**: 140 rewritable
+  reads across 16 files (not the 1,324 recorded), and the shipped param-seeded rewrite covers **0**
+  of them — scout's keyed shapes are COLLECTIONS that get iterated, and it is the foreach BINDER
+  that is indexed. Closing the wall is what L4 delivered; the read-rewrite reaches nothing here yet.
+  Recorded per DEC-365 — both benches ship UNPROTECTED (not in `micro-baseline.json`), `--emit` NOT
+  run, `_owed` NOT hand-edited (it is a derived field).
   **This is a DEC-507 escalation and awaits the developer's ruling**, exactly as L2b's did.
 
 - [2026-09-08 L4-SHAPE] AGREED (developer adjudication, Invariant 15 — asked as ONE question with the
