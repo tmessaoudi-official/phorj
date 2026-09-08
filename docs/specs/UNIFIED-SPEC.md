@@ -1124,11 +1124,50 @@ either half.
 ### DEC-505 — `<=>` and lexicographic tuple ordering
 
 - `a <=> b` yields `int`, one of `-1` / `0` / `1`, for two operands of a single comparable type.
-- Tuples and lists compare **lexicographically, element-wise**, so `(1, 2) < (1, 3)`, and `<=>`
-  works over them.
+- **TUPLES** compare **lexicographically, element-wise**, so `(1, 2) < (1, 3)`, and `<=>` works over
+  them. **LISTS DO NOT COMPARE AT ALL** — see DEC-512 immediately below, which amends this bullet.
 - The transpile leg emits **PHP's own `<=>`**, not a `__phorj_*` helper, so the leg stays
   byte-identical by using the operator PHP already has (Invariant 16's "byte-identity is a tool"
-  does not need spending here).
+  does not need spending here). This is *sound only because the operands are tuples* — see DEC-512.
+
+### DEC-512 — ordering is a TUPLE capability; `List<T>` is not orderable (amends DEC-505)
+
+DEC-505 ruled two things that cannot both hold for lists: *lexicographic element-wise* ordering, and
+a transpile leg that emits PHP's own `<=>`. **PHP's array `<=>` is COUNT-FIRST, then element-wise**
+[Verified 2026-09-08 on `php-8.5.9`, the gate oracle]:
+
+```
+[2]     <=> [1,1]     PHP: -1    lexicographic: +1
+[1,2,0] <=> [1,3]     PHP: +1    lexicographic: -1
+[9]     <=> [1,1,1]   PHP: -1    lexicographic: +1
+```
+
+For **tuples** the conflict does not arise: a tuple's arity is static, so both operands always have
+the same length and count-first and lexicographic **provably coincide**. The divergence is confined
+entirely to `List<T>` of unequal length.
+
+**RULED (developer, 2026-09-08): tuples order, lists do not.**
+
+- `(1, 2) <=> (1, 3)` → `-1`. Ordering and `<=>` are available on tuples of equal arity and
+  comparable element types, and transpile to PHP's own `<=>` with **no divergence on any input**.
+- `xs <=> ys` and `xs < ys` on `List<T>` are a **checker error naming this ruling**. A list has no
+  static arity, so no ordering can be both lexicographic and byte-identical to PHP's operator.
+- `phg lift` maps a positional array literal in an ordering-operand position to a **tuple**
+  (`[a, b] <=> [c, d]` → `(a, b) <=> (c, d)`). A literal's arity is syntactically present, so this
+  reads no intent and does not violate DEC-166. This is what makes scout's
+  `Rent/Core/Classification.php:48` liftable.
+
+REJECTED: **count-first everywhere** (byte-identical and nothing refused, but phorj would inherit
+PHP's rule that a shorter list is smaller regardless of contents — `[9] < [1,1,1]` — and DEC-505's
+ruled wording would have to be amended to match PHP rather than the other way round);
+**lexicographic everywhere with a `__phorj_cmp` helper on the PHP leg for lists** (keeps the ruled
+semantics and refuses nothing, but spends Invariant 16's helper budget on a case scout does not
+exercise, and the transpiled PHP stops showing an operator PHP already has).
+
+**NaN, pinned with it** [Verified same run]: PHP yields `1` for `NAN <=> 1.0`, `1.0 <=> NAN` **and**
+`NAN <=> NAN` — its `(a==b) ? 0 : (a<b ? -1 : 1)` shape, where every NaN comparison is false.
+`compare_ord` returns `Ok(None)` for NaN, so the `None → 1` projection must be written identically at
+all three call sites (`interpreter/kernels.rs`, `vm/mod.rs`, `jit/boxed.rs`) or the legs split.
 - `compare_ord` already lives in `src/value/` and is the single-sourced kernel (Invariant 4). This
   slice is surface plus tuple ordering; it introduces no second comparison implementation.
 

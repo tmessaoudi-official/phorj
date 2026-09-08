@@ -94,6 +94,18 @@
   `T? == null` as a cross-type comparison; PHP's LOOSE `== null` is a different question (also true
   for `0`, `""`, `[]`, `false`) and is deliberately left as an equality for the checker to report.
 
+- [2026-09-08 §16] AGREED — **DEC-512, ordering is a TUPLE capability; `List<T>` is not orderable**
+  (amends DEC-505). DEC-505's two clauses — lexicographic element-wise, AND a transpile leg emitting
+  PHP's own `<=>` — are mutually exclusive for lists, because **PHP's array `<=>` is count-first**
+  (`[2] <=> [1,1]` is `-1`, not `+1`; `[9] <=> [1,1,1]` is `-1`, not `+1` — Verified on the gate
+  oracle). Tuples are immune: static arity ⇒ equal lengths ⇒ the two orderings coincide. So tuples
+  order and transpile to PHP's own operator with no divergence; `List<T>` ordering is a checker error
+  naming the ruling; and `phg lift` maps a positional array literal in an ordering-operand position
+  to a tuple, which is DEC-166-safe because a literal's arity is syntactically present — that is what
+  makes `Classification.php:48` liftable. NaN pinned alongside: PHP gives `1` for every NaN
+  comparison, so `compare_ord`'s `Ok(None)` projects to `1` at all three call sites. Full row +
+  rejected alternatives: register DEC-512; spec § `DEC-512` under `Ordering, <=>, and named-field
+  tuples`.
 - [2026-09-08 §15] CLAUDE-LEVEL, overrulable: **the lane order carried a dependency defect, found by
   re-censusing rather than by reading the plan.** L3 (depth oracle) was ordered before L4, but
   `Classification::toArray()` — the four-leg contract L3 diffs against — refuses on the very keyed

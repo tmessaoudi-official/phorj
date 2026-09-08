@@ -48,6 +48,16 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > `?? throw`. Two new banked questions in the plan's *Needs input*: **Q-0908-1 `?? throw`**
 > (throw-as-expression; phorj's `throw` is `Stmt`-only) and **Q-0908-2 spread `...`** (phorj has none
 > at all). Full detail: `docs/plans/2026-09-07-scout-forcing-function.plan.md` §1 re-census.
+>
+> **DEC-512 RULED 2026-09-08, before any L2 code was written:** ordering is a TUPLE capability;
+> `List<T>` is NOT orderable. DEC-505 ruled lexicographic element-wise ordering AND a transpile leg
+> emitting PHP's own `<=>`, and for lists those clauses are mutually exclusive because **PHP's array
+> `<=>` is COUNT-FIRST** (`[9] <=> [1,1,1]` is `-1`, not `+1`). Tuples are immune — static arity ⇒
+> equal lengths ⇒ the two orderings provably coincide — so tuples order with no divergence on any
+> input, `List<T>` ordering is a checker error naming the ruling, and `phg lift` maps a positional
+> array literal in an ordering-operand position to a tuple (DEC-166-safe: a literal's arity is
+> syntactically present). NaN pinned alongside: PHP yields `1` for every NaN comparison, so
+> `compare_ord`'s `Ok(None)` projects to `1` at all three call sites. **This is what L2 builds.**
 
 **The depth oracle is FOUR legs, not three.** `tests/differential.rs` proves interpreter ≡ VM ≡
 transpiled-PHP over `examples/**/*.phg`; it never touches scout's ORIGINAL PHP. scout built the

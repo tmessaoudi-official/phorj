@@ -65,7 +65,7 @@
 | `2026-07-26-capture-write-rejection.md` | DEC-357 | Writing to a captured local is rejected. RULED, unbuilt |
 | `2026-07-26-ufcs-lsp-companion.md` | DEC-342 / 346 / 375 | UFCS completion, import-gating, and the LSP-as-expert-companion bar. RULED, unbuilt — relevant to Invariant 17's 100% rule |
 
-## 0.08 THE 2026-09-07 SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-508)
+## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 
 > Invariant 19 mirror: the register row is the ruling,
 > `docs/plans/2026-09-07-scout-forcing-function.plan.md` is the plan, `SLICE-STATE.md` is the live
@@ -79,6 +79,7 @@
 | DEC-506 | **By-ref closure capture stays REJECTED and becomes visible** — the lifter learns block closures and emits a SPECIFIC diagnostic for `use (&$x)` instead of a generic parse error | RULED 2026-09-07 — build QUEUED (lane L1) |
 | DEC-507 | **The ABSOLUTE perf bar, with escalation** — every lifted/transpiled artifact beats dockerised JIT-on PHP or the lane STOPS; **supersedes the 2026-07-10 "MATCHES-not-beats" refinement** for this campaign; the on-box `ZTS DEBUG GCOV` oracle is invalid for perf | RULED 2026-09-07 — supersedes |
 | DEC-508 | **scout is a READ-ONLY forcing function** validating four surfaces (lift, transpile, LSP, speed); lifted `.phg` lives in `examples/lift/scout/`; depth before breadth; readiness steps 13/14 HOISTED; stop condition = every file lifts or carries a NAMED refusal | RULED 2026-09-07 — plan opened |
+| DEC-512 | **Ordering is a TUPLE capability; `List<T>` is NOT orderable** — amends DEC-505. PHP's array `<=>` is COUNT-FIRST, so DEC-505's "lexicographic" and "emits PHP's own `<=>`" clauses are mutually exclusive for lists; tuples are immune (static arity ⇒ the two coincide). Lists ordering = checker error; `phg lift` maps a positional literal in an ordering-operand position to a tuple | RULED 2026-09-08 — build QUEUED (lane L2) |
 | DEC-509 / 510 / 511 | lifter mechanicals — enum cases construct + `self` resolves + methods lower to UFCS free functions (509); PHP array destructuring un-deferred, keyed destructure refused by name (510); `.` lifts to ONE interpolation, not `+` (511) | RULED 2026-09-07 — **BUILT** (`9bd0a43e`, `78317867`) |
 
 **Lane progress (2026-09-08 re-census at `78317867`): L0 + L1a/L1b/L1c DONE, 57/123 files lift.**
