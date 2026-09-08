@@ -3,6 +3,27 @@
 
 use super::*;
 
+/// Which projection a fused tuple comparison applies to the ordering it computes (DEC-513).
+///
+/// Carried by [`Op::CmpSeq`] because the two projections genuinely differ on the unordered (NaN)
+/// case and cannot be derived from one another: `Spaceship` maps it to `1` (PHP's `<=>` yields `1`
+/// for `NAN <=> 1.0`), while every `Lt/Gt/Le/Ge` maps it to `false`. Emitting `Spaceship` and then
+/// comparing the int against zero would make `(NAN,) > (1.0,)` true — the exact leg-split
+/// `value::project_three_way` warns about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SeqOrd {
+    /// `<=>` — pushes an `int` (-1/0/1).
+    Spaceship,
+    /// `<` — pushes a `bool`.
+    Lt,
+    /// `>` — pushes a `bool`.
+    Gt,
+    /// `<=` — pushes a `bool`.
+    Le,
+    /// `>=` — pushes a `bool`.
+    Ge,
+}
+
 /// One VM instruction. Typed operands — no raw-byte decode (decision M2-7).
 /// Jump targets are absolute instruction indices (decision P2-2).
 #[derive(Debug, Clone, PartialEq)]
@@ -58,6 +79,21 @@ pub enum Op {
     /// `<=>` three-way comparison (DEC-505/DEC-512). Pops two, pushes an `int` (-1/0/1) — the only
     /// comparison Op that does NOT push a bool, which is why it needs a `CTy` arm (Invariant 7).
     Cmp,
+    /// FUSED tuple comparison (DEC-513): pops `2n` values — the `n` elements of the left tuple then
+    /// the `n` of the right, in source order — compares them lexicographically via
+    /// `value::compare_seq`, and pushes ONE result projected per the [`SeqOrd`].
+    ///
+    /// Emitted only when the compiler sees a tuple literal on BOTH sides with equal arity `n >= 1`,
+    /// which is the one shape where the tuples would otherwise be built solely to be compared and
+    /// dropped. It is the whole point of the Op that NO tuple is materialized: the VM borrows the
+    /// two element runs in place on the operand stack (`vm::cmp_seq`), so this allocates nothing —
+    /// popping the operands into a `Vec` would move the allocation rather than remove it and give
+    /// back the win DEC-513 exists to take.
+    ///
+    /// Every other shape (one side a variable, unequal arity, arity 0) keeps the generic
+    /// `MakeList` + `Cmp`/`Lt`… path. `Spaceship` pushes an `int`, so like `Cmp` it needs a `CTy`
+    /// arm (Invariant 7); the four ordering kinds push a `bool`.
+    CmpSeq(usize, SeqOrd),
     /// Discard the top of stack.
     Pop,
     /// Push a copy of the local at stack slot `n`.

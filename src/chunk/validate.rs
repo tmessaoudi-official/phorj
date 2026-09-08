@@ -144,6 +144,8 @@ impl BytecodeProgram {
                     | Op::Le
                     | Op::Ge
                     | Op::Cmp
+                    // DEC-513: carries an arity + a projection kind, not a pool index.
+                    | Op::CmpSeq(_, _)
                     | Op::Pop
                     | Op::GetLocal(_)
                     | Op::SetLocal(_)

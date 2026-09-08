@@ -19,7 +19,7 @@ use crate::ast::{
     free_vars, BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, LambdaBody,
     MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp, Visibility,
 };
-use crate::chunk::{BytecodeProgram, Chunk, ClassDesc, EnumDesc, FaultMsg, Function, Op};
+use crate::chunk::{BytecodeProgram, Chunk, ClassDesc, EnumDesc, FaultMsg, Function, Op, SeqOrd};
 use crate::diagnostic::Diagnostic;
 use crate::value::Value;
 use std::collections::HashMap;

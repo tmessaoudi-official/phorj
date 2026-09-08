@@ -20,6 +20,15 @@
 
 ## Decisions Log
 
+- [2026-09-08 L2b-SCOPE] AGREED (Claude-level scope call, not a developer adjudication): the DEC-513
+  fusion keys on the **literal tuple shape on BOTH sides**, not on the checked tuple type. The
+  allocation DEC-513 removes happens where a tuple is BUILT, not where it is compared — in
+  `var lo = (a, b); lo < hi` both tuples are already on the heap before the comparison runs, so
+  fusing there would remove a dispatch, not the ~65% materialization. Widening to the checked type
+  is therefore a DIFFERENT optimization (scalar replacement at the binding), not a wider version of
+  this one, and it is out of this lane. The narrow form needs no AST field and no checker threading.
+  Recorded because the alternative was explicitly weighed and rejected, not overlooked.
+
 - [2026-09-07 §1] AGREED: **the 2026-09-02 16:40 "no scout port" ruling STANDS.** phorj's job is to be
   READY; the developer implements the phorj scout himself later. scout is used *"for experiment and
   validation of lift/transpile/lsp/speed … because it works"* — so the validated surface is four, not
@@ -299,7 +308,7 @@ DEC-507 applies to every one.
 | 2c | L1c — positional `array{…}` → tuples (type AND the returned literal, at any depth), array destructuring (DEC-510), `.` → one interpolation (DEC-511), `echo $var` → interpolation, strict `=== null` → `is null`. Headline holds at **57/123** (denominator corrected 09-08; "125" was a typo) — first-error-per-file again: the keyed-shape row rises 14 → 15, and the `expected an expression` row stays at 5 but only **3** of those are `<=>` — the other 2 are PHP spread `...`, found 09-08 | M | done | 78317867 | src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/exprs.rs src/lift/parser/docblock.rs src/lift/parser/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/shapes.php examples/lift/shapes.phg |
 | 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + 5 `phg explain` entries. Closed by row 3b | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
 | 3b | L2 closes — `docs(lang): L2 closes` — SSOT quartet amended (the decimal narrowing never reached the SPEC/register/MASTER-PLAN in C1), the missing lift-rule tests with two mutations verified red and a third proving `positional` redundant, the Invariant-9 example, VS Code grammar, KNOWN_ISSUES § DECIMAL-ORDER, the re-census, and the DEC-507 bench — **a CONFIRMED LOSS, escalation OWED** | M | done | ab959542 | docs/specs/UNIFIED-SPEC.md docs/plans/SLICE-STATE.md docs/research/full-audit/raw/C-decisions.md src/lift/lifter_tests_ordering.rs examples/guide/spaceship.phg bench/micro/spaceshipsort.phg bench/micro/spaceshipsort.php editors/vscode/syntaxes/phorj.tmLanguage.json KNOWN_ISSUES.md |
-| 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler so `(a,b) <=> (c,d)` lowers element-wise with NO tuple materialized; reuse `value::compare_ord`/`three_way`; transpile leg unchanged. Closes the DEC-507 loss rather than carrying it | M | todo | - | src/compiler/* src/value/* tests/differential.rs bench/micro/spaceshipsort.phg |
+| 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged | L | doing | - | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | todo | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |

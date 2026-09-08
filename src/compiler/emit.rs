@@ -100,6 +100,8 @@ impl<'a> Compiler<'a> {
             Op::EnumValue | Op::EnumFrom(..) => 0,
             Op::Concat(n) | Op::MakeList(n) => 1 - *n as isize,
             Op::MakeMap(n) => 1 - 2 * *n as isize, // pops 2n (key+value pairs), pushes the map
+            // DEC-513: pops 2n (the two tuples' elements, no tuple built), pushes one result.
+            Op::CmpSeq(n, _) => 1 - 2 * *n as isize,
             // Pops `argc` args, pushes the native's return value (the old `Print` + `Const(Unit)`
             // pair collapses into one op, net delta unchanged).
             Op::CallNative(_, argc) => 1 - *argc as isize,

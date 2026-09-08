@@ -78,7 +78,7 @@ impl FaultMsg {
 
 mod op;
 mod validate;
-pub use self::op::Op;
+pub use self::op::{Op, SeqOrd};
 
 #[cfg(test)]
 mod tests;

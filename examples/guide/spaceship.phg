@@ -35,6 +35,12 @@ function byTierThenPosition(Signal a, Signal b): int {
     return (a.tier, a.position) <=> (b.tier, b.position);
 }
 
+// A tuple element with a visible side effect, used below to show WHEN elements are evaluated.
+function tick(string tag, int v): int {
+    Output.printLine("  eval {tag}");
+    return v;
+}
+
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Scalars: the three answers, and the `int`-ness of the result.
@@ -65,4 +71,28 @@ function main(): void {
     // `value::three_way`, so all three legs agree instead of drifting one at a time.
     float nan = Math.nan();
     Output.printLine("nan<=>1.0 {nan <=> 1.0}  1.0<=>nan {1.0 <=> nan}  nan<=>nan {nan <=> nan}");
+    // NaN INSIDE a tuple is why `<=>` and `< > <= >=` cannot share one projection. An unordered
+    // element makes `<=>` answer `1` while every ordering answers `false` — and PHP's array
+    // comparison agrees on both, so the two projections are each pinned against the oracle rather
+    // than against each other.
+    Output.printLine("(nan,1.0)<=>(1.0,0.0) {(nan, 1.0) <=> (1.0, 0.0)}");
+    Output.printLine("(nan,1.0)>(1.0,0.0) {(nan, 1.0) > (1.0, 0.0)}  < {(nan, 1.0) < (1.0, 0.0)}");
+    // Comparing a tuple never short-circuits the EVALUATION of its elements, only the comparison:
+    // all four run, left tuple first, in source order. DEC-513 lowers a both-sides-literal
+    // comparison so that neither tuple is ever built, and this is the part that lowering must not
+    // change — the elements are still all pushed before anything is compared.
+    Output.printLine("evaluation order:");
+    var cmp = (tick("a", 1), tick("b", 9)) <=> (tick("c", 2), tick("d", 0));
+    Output.printLine("  result {cmp}");
+    // The same comparison written through VARIABLES. Here the tuples already exist as values, so
+    // the fused lowering does not apply and the generic path runs instead. Both must agree, and
+    // the differential proves it for free: the interpreter never fuses, so `phg run` (VM, fused)
+    // versus `phg run --tree-walker` (unfused) IS the two lowerings compared against each other.
+    var lo = (1, 9);
+    var hi = (2, 0);
+    Output.printLine("literal {(1, 9) <=> (2, 0)} via variables {lo <=> hi}");
+    Output.printLine("literal {(1, 9) < (2, 0)} via variables {lo < hi}");
+    // Invariant 7: a fused `<=>` still yields an `int`, so it is still a legal arithmetic operand.
+    // The compiler resolves that from the AST operator, which the DEC-513 lowering does not touch.
+    Output.printLine("as an operand: {((1, 2) <=> (1, 3)) + 10}");
 }

@@ -217,28 +217,64 @@ pub fn compare_ord(a: &Value, b: &Value) -> Result<Option<Ordering>, String> {
         // `+1` lexicographically). It therefore faults rather than padding or comparing counts, so
         // a future caller that reaches the kernel without the checker gets an error, not a
         // silently-wrong ordering.
-        (Value::List(x), Value::List(y)) => {
-            if x.len() != y.len() {
-                return Err(format!(
-                    "cannot compare tuples of arity {} and {}",
-                    x.len(),
-                    y.len()
-                ));
-            }
-            for (ex, ey) in x.iter().zip(y.iter()) {
-                match compare_ord(ex, ey)? {
-                    None => return Ok(None),
-                    Some(Ordering::Equal) => continue,
-                    Some(o) => return Ok(Some(o)),
-                }
-            }
-            Ok(Some(Ordering::Equal))
-        }
+        (Value::List(x), Value::List(y)) => compare_seq(x, y),
         _ => Err(format!(
             "cannot compare {} and {}",
             a.type_name(),
             b.type_name()
         )),
+    }
+}
+
+/// Compare two equal-length element sequences lexicographically (DEC-512) — the ONE loop shared by
+/// both ways a tuple comparison reaches a backend (Invariant 4): the GENERIC path, where two
+/// tuples already exist as `Value::List`s and `compare_ord`'s `(List, List)` arm compares them; and
+/// the FUSED path (DEC-513), where the compiler saw a tuple literal on BOTH sides, never built the
+/// tuples, and `Op::CmpSeq` compares the elements in place on the VM's operand stack.
+///
+/// `Ok(None)` means "unordered" (a NaN element). It SHORT-CIRCUITS on the first unordered element
+/// rather than treating it as equal, because PHP's array compare does: `[NAN, 1] <=> [NAN, 2]` is
+/// `1`, not `-1` (measured on php-8.5.9). Treating `None` as "equal, keep going" would return `-1`
+/// there and split the PHP leg from the native ones on a value no scalar NaN case can expose.
+///
+/// A length mismatch is a caller error, not a comparison outcome: only equal-arity tuples
+/// type-check (`E-ORDER-TUPLE-SHAPE`) and `List<T>` is refused outright (`E-ORDER-LIST`, DEC-512 —
+/// a list's runtime arity makes PHP's count-first rule and lexicographic order disagree, since
+/// `[2] <=> [1,1]` is `-1` in PHP and `+1` lexicographically). It therefore faults rather than
+/// padding or comparing counts, so a caller that reaches the kernel without the checker gets an
+/// error, not a silently-wrong ordering.
+pub fn compare_seq(xs: &[Value], ys: &[Value]) -> Result<Option<Ordering>, String> {
+    if xs.len() != ys.len() {
+        return Err(format!(
+            "cannot compare tuples of arity {} and {}",
+            xs.len(),
+            ys.len()
+        ));
+    }
+    for (ex, ey) in xs.iter().zip(ys.iter()) {
+        match compare_ord(ex, ey)? {
+            None => return Ok(None),
+            Some(Ordering::Equal) => continue,
+            Some(o) => return Ok(Some(o)),
+        }
+    }
+    Ok(Some(Ordering::Equal))
+}
+
+/// The `<=>` projection: one ordering to one `int`, single-sourced for the generic and fused paths
+/// alike. `None` projects to `1`, **not** `0` — see `three_way`'s note for why that is
+/// parity-affecting.
+///
+/// Deliberately NOT the projection used by `< > <= >=`, which map `None` to `false` (`vm::compare`
+/// and the interpreter's own arm). A fused ordering comparison must go through THAT projection,
+/// never through this one followed by a compare against zero: this yields `1` on NaN, so
+/// `(NAN,) > (1.0,)` would come out `true` instead of `false`.
+pub fn project_three_way(o: Option<Ordering>) -> i64 {
+    match o {
+        Some(Ordering::Less) => -1,
+        Some(Ordering::Equal) => 0,
+        Some(Ordering::Greater) => 1,
+        None => 1,
     }
 }
 
@@ -251,10 +287,5 @@ pub fn compare_ord(a: &Value, b: &Value) -> Result<Option<Ordering>, String> {
 /// `NAN <=> 1.0`, `1.0 <=> NAN` **and** `NAN <=> NAN` alike (measured on php-8.5.9). Mapping it to
 /// `0` would read as "equal" and is the single easiest way to split the PHP leg from the native ones.
 pub fn three_way(a: &Value, b: &Value) -> Result<i64, String> {
-    Ok(match compare_ord(a, b)? {
-        Some(Ordering::Less) => -1,
-        Some(Ordering::Equal) => 0,
-        Some(Ordering::Greater) => 1,
-        None => 1,
-    })
+    Ok(project_three_way(compare_ord(a, b)?))
 }

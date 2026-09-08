@@ -136,6 +136,9 @@ impl Compiler<'_> {
                 self.emit(Op::Ne, line);
             }
             Lt | Gt | Le | Ge => {
+                if self.try_fuse_tuple_cmp(op, lhs, rhs, line)? {
+                    return Ok(());
+                }
                 self.expr(lhs)?;
                 self.expr(rhs)?;
                 self.emit(
@@ -152,6 +155,9 @@ impl Compiler<'_> {
             // `<=>` lowers to the single `Op::Cmp`, which pushes an int. Runtime-generic like the
             // bool comparisons: one Op covers int, float and tuple operands (DEC-505/DEC-512).
             Spaceship => {
+                if self.try_fuse_tuple_cmp(op, lhs, rhs, line)? {
+                    return Ok(());
+                }
                 self.expr(lhs)?;
                 self.expr(rhs)?;
                 self.emit(Op::Cmp, line);
@@ -179,5 +185,57 @@ impl Compiler<'_> {
             And | Or | Coalesce => unreachable!("handled above"),
         }
         Ok(())
+    }
+
+    /// DEC-513 — FUSE a tuple comparison whose operands are tuple literals on BOTH sides: emit the
+    /// `2n` elements and one [`Op::CmpSeq`], so neither tuple is ever built. Returns whether it
+    /// fired; `false` leaves the caller on the generic `MakeList` + compare path unchanged.
+    ///
+    /// The pattern matches `Expr::List` rather than `Expr::Tuple` because `checker::erase_tuples`
+    /// has already rewritten every tuple literal to its runtime list form by the time any backend
+    /// runs (Invariant 5) — `Expr::Tuple`'s backend arms are `unreachable!`.
+    ///
+    /// Matching a *list* literal here is nonetheless safe whatever the operand's static type,
+    /// because fused and unfused are equivalent by construction: the same elements are evaluated in
+    /// the same order and compared by the same `value::compare_seq` loop. `E-ORDER-LIST` (DEC-512)
+    /// is why the shape means "tuple" in practice, not why this is correct.
+    ///
+    /// Deliberately narrow, and the narrowness is the point: the allocation this removes happens
+    /// where a tuple is BUILT, so only the both-sides-literal form has it at the comparison site.
+    /// In `var lo = (a, b); lo < hi` both tuples are already on the heap before the compare runs —
+    /// fusing there would remove a dispatch, not the materialization, so it is a different
+    /// optimization (scalar replacement at the binding) and out of this lane's scope.
+    ///
+    /// Arity 0 is excluded: `CmpSeq(0, _)` would have a `+1` stack effect with nothing to compare,
+    /// and two empty tuples are a shape the generic path already handles.
+    fn try_fuse_tuple_cmp(
+        &mut self,
+        op: BinaryOp,
+        lhs: &Expr,
+        rhs: &Expr,
+        line: u32,
+    ) -> Result<bool, String> {
+        let (Expr::List(xs, _), Expr::List(ys, _)) = (lhs, rhs) else {
+            return Ok(false);
+        };
+        if xs.is_empty() || xs.len() != ys.len() {
+            return Ok(false);
+        }
+        let kind = match op {
+            BinaryOp::Spaceship => SeqOrd::Spaceship,
+            BinaryOp::Lt => SeqOrd::Lt,
+            BinaryOp::Gt => SeqOrd::Gt,
+            BinaryOp::Le => SeqOrd::Le,
+            BinaryOp::Ge => SeqOrd::Ge,
+            _ => return Ok(false),
+        };
+        // All 2n elements are evaluated, left tuple first, in source order — exactly what building
+        // the two tuples would have done. Anything lazier would drop a side effect the tree-walker
+        // and the PHP leg both still perform.
+        for e in xs.iter().chain(ys.iter()) {
+            self.expr(e)?;
+        }
+        self.emit(Op::CmpSeq(xs.len(), kind), line);
+        Ok(true)
     }
 }

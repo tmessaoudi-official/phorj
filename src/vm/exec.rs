@@ -180,6 +180,8 @@ impl<'a> Vm<'a> {
                 self.stack
                     .push(Value::Int(crate::value::three_way(&a, &b)?));
             }
+            // DEC-513: the fused form — no tuple was built, so the elements are compared in place.
+            Op::CmpSeq(n, kind) => super::cmp_seq::exec(&mut self.stack, n, kind)?,
 
             Op::Const(i) => {
                 let v = self.program.functions[func].chunk.consts[i].clone();

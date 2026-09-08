@@ -79,10 +79,63 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > carried: **RULED as DEC-513, lane L2b** (fuse the comparison in the compiler). Rejected there: JIT
 > whitelisting, and carrying it to L8. Re-census after L2 holds at **57/123** —
 > `Classification.php`'s wall moved 48 → 68, i.e. off `<=>` and onto the keyed shape L4 builds.
-> **NEXT: L2b** (DEC-513, ruled 2026-09-08) — FUSE the comparison in the compiler: lower
-> `(a, b) <=> (c, d)` element-wise so no tuple is materialized, reusing `value::compare_ord`/`three_way`
-> so Invariant 4 holds and the transpile leg keeps emitting PHP's own `<=>`. That closes the DEC-507
-> loss instead of carrying it. **THEN L4** (DEC-504 named-field tuples), which unblocks L3.
+> **BUILDING NOW: L2b** (DEC-513, ruled 2026-09-08) — FUSE the comparison in the compiler.
+> `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements of the two tuples and compares them IN PLACE on the
+> operand stack, so a both-sides-literal `(a, b) <=> (c, d)` materializes no tuple at all. The
+> in-place part is the optimization, not an implementation detail: popping the operands into a `Vec`
+> would trade two `Rc<Vec<Value>>` for one `Vec` and give the win straight back. `value::compare_seq`
+> and `value::project_three_way` are extracted so the generic and fused paths share ONE lexicographic
+> loop and ONE `None -> 1` projection (Invariant 4); `vm::cmp_seq::project_bool` is likewise the
+> single `None -> false` for the four ordering kinds. Interpreter, transpile and lift legs unchanged
+> — which is what makes the differential harness the equivalence proof: the interpreter never fuses,
+> so `phg run` (VM, fused) versus `--tree-walker` (unfused) IS the two lowerings compared against
+> each other, on every globbed example.
+>
+> **SCOPE RULING (Claude-level, 2026-09-08 — recorded because the alternative was weighed, not
+> overlooked): the fusion keys on the LITERAL tuple shape on both sides, never on the checked tuple
+> type.** The allocation DEC-513 removes happens where a tuple is BUILT, not where it is compared:
+> in `var lo = (a, b); lo < hi` both tuples are already on the heap before the comparison runs, so
+> fusing there would remove a dispatch and not the ~65% materialization. Widening to the checked type
+> is a DIFFERENT optimization (scalar replacement at the binding), not a wider version of this one,
+> and it is out of this lane. The narrow form also needs no AST field and no checker threading.
+>
+> **The Invariant-11 before-number is `ratio=0.373` (loss)** — `spaceshipsort` measured by
+> `microbench-gate`'s own protocol at settled 1-min load 2.33, not the manual 0.36–0.37× runs (the
+> two agree). Acceptance for the lane is BOTH: materialization eliminated (a `disassemble` of the
+> comparator shows `CmpSeq` and no `MakeList`) AND a re-measured ratio under the same pinned,
+> interleaved, dockerised protocol. Note the ~35% that fusion does NOT touch is the re-entrant
+> `sortWith` → VM callback per comparison, so a ratio near 1.0× rather than comfortably above it is
+> the expected best case; if it lands at or below 1.0× that is a DEC-365 OWED recorded honestly, not
+> a licence to widen scope mid-lane.
+>
+> **MEASURED OUTCOME (2026-09-08, A/B on the same quiet box — core 7 at 98.98% idle for two
+> consecutive samples, `MICROBENCH_RUNS=15`, core-pinned both sides, interleaved, vs docker
+> `php:8.5-cli`+JIT). Both legs proven by disassembly, not by which build was checked out:**
+>
+> | leg | comparator bytecode | VM ns | php+JIT ns | ratio | spread v/p |
+> |---|---|---|---|---|---|
+> | A — fusion OFF | `MakeList(2)` `MakeList(2)` `Cmp` | 124,599,687 | 46,964,085 | **0.38x** | 23%/21% |
+> | B — fusion ON | `CmpSeq(2, Spaceship)`, no `MakeList` | 100,307,950 | 46,490,679 | **0.46x** | 8%/18% |
+>
+> PHP's own time matches within 1% across the two legs, which is what makes them comparable; the
+> A-leg's 0.38x also cross-validates the recorded `0.373` gate baseline. **VM time 124.6 -> 100.3 ms:
+> a measured 19.5% improvement (1.24x).**
+>
+> **The structural goal is MET and the bar is STILL MISSED — recorded as a DEC-365 OWED, not a flip.**
+> No tuple is materialized any more (the A/B disassembly is the proof, from freshly built binaries).
+> But 0.46x means phorj still takes ~2.2x php's time on this shape.
+>
+> **The DEC-513 ruling's own prediction did NOT hold, and that matters more than the number.** It
+> expected "the ~65% construction cost leaves every literal-tuple comparison, landing near the scalar
+> `<=>` number". Removing the materialization ENTIRELY bought 19.5%, not ~65%. So the original
+> attribution was wrong: swapping the comparator body (tuple 169 ms / scalar 60 / subtraction 56)
+> changed more than materialization — it also removed the list-operand compare dispatch and the
+> `compare_ord` recursion — and the residue is dominated by the re-entrant `List.sortWith` -> VM
+> callback per comparison, which no compiler-side fusion can touch. Any further attempt on this bench
+> must attack the callback, not the comparison. **Do not re-derive the 65% figure from the register;
+> it is superseded by this measurement.**
+>
+> **THEN L4** (DEC-504 named-field tuples), which unblocks L3.
 
 **The depth oracle is FOUR legs, not three.** `tests/differential.rs` proves interpreter ≡ VM ≡
 transpiled-PHP over `examples/**/*.phg`; it never touches scout's ORIGINAL PHP. scout built the

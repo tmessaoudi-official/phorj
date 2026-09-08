@@ -10,7 +10,7 @@
 //! `"integer overflow"`, …) is preserved verbatim, keeping error parity with the interpreter
 //! (the `agree_err` oracle classifies by body, tolerating the VM-only line prefix).
 
-use crate::chunk::{BytecodeProgram, Op};
+use crate::chunk::{BytecodeProgram, Op, SeqOrd};
 use crate::diagnostic::Diagnostic;
 use crate::limits::MAX_CALL_DEPTH;
 use crate::value::{EnumVal, Instance, Value};
@@ -230,6 +230,7 @@ type MethodCache = std::cell::Cell<(*const u8, u32)>;
 
 // cohesion split (M-Decomp W4): exec/closure clusters.
 mod closure;
+mod cmp_seq;
 mod concat;
 mod exec;
 
@@ -568,17 +569,17 @@ impl<'a> Vm<'a> {
 /// comparability fault are single-sourced in `value::compare_ord` (the interpreter calls the same
 /// fn); only the `Op`→bool projection below is VM-local. NaN compares `false`.
 fn compare(op: &Op, a: &Value, b: &Value) -> Result<bool, String> {
-    use std::cmp::Ordering;
-    Ok(match crate::value::compare_ord(a, b)? {
-        Some(o) => match op {
-            Op::Lt => o == Ordering::Less,
-            Op::Gt => o == Ordering::Greater,
-            Op::Le => o != Ordering::Greater,
-            Op::Ge => o != Ordering::Less,
-            _ => unreachable!("compare only called with Lt/Gt/Le/Ge"),
-        },
-        None => false, // NaN compares false
-    })
+    let kind = match op {
+        Op::Lt => SeqOrd::Lt,
+        Op::Gt => SeqOrd::Gt,
+        Op::Le => SeqOrd::Le,
+        Op::Ge => SeqOrd::Ge,
+        _ => unreachable!("compare only called with Lt/Gt/Le/Ge"),
+    };
+    Ok(cmp_seq::project_bool(
+        crate::value::compare_ord(a, b)?,
+        kind,
+    ))
 }
 
 mod shutdown;
