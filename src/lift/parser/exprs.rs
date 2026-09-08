@@ -409,6 +409,9 @@ pub(super) fn infix_op(tok: &PTok) -> Option<(u8, PhpBinOp)> {
         PTok::EqEqEq => (6, PhpBinOp::Identical),
         PTok::NotEq => (6, PhpBinOp::NotEq),
         PTok::NotEqEq => (6, PhpBinOp::NotIdentical),
+        // `<=>` is in PHP's EQUALITY tier, alongside `==`/`!=` — and non-associative there, which a
+        // left-associative fold accepts as a superset. Same tier the Phorj parser gives it.
+        PTok::Spaceship => (6, PhpBinOp::Spaceship),
         PTok::Lt => (7, PhpBinOp::Lt),
         PTok::Le => (7, PhpBinOp::Le),
         PTok::Gt => (7, PhpBinOp::Gt),

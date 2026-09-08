@@ -68,6 +68,12 @@ impl Parser {
             T::Amp => (7, BinaryOp::BitAnd),
             T::EqEq => (8, BinaryOp::Eq),
             T::NotEq => (8, BinaryOp::NotEq),
+            // `<=>` sits in the EQUALITY tier, not the relational one — measured against the 8.5
+            // oracle rather than recalled: `1 < 2 <=> 0` parses as `(1 < 2) <=> 0` (→ `int(1)`), so
+            // `<` binds tighter. PHP additionally makes it non-associative (`1 <=> 2 <=> 3` is a
+            // parse error); phorj's fold is uniformly left-associative, so it accepts that form and
+            // the transpiler's `paren_if_compound` emits `(1 <=> 2) <=> 3` to keep the PHP leg valid.
+            T::Spaceship => (8, BinaryOp::Spaceship),
             T::Lt => (9, BinaryOp::Lt),
             T::Gt => (9, BinaryOp::Gt),
             T::Le => (9, BinaryOp::Le),

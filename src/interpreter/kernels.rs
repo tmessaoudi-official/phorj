@@ -139,6 +139,16 @@ pub(super) fn compare(op: BinaryOp, l: Value, r: Value) -> R<Value> {
     Ok(Value::Bool(res))
 }
 
+/// `<=>` three-way comparison. Both the ordering AND the `-1`/`0`/`1` projection are single-sourced
+/// in `value::three_way` (the VM and the JIT call the same fn), so unlike `compare` above there is
+/// nothing backend-local left here — only the fault-to-`R` adaptation (DEC-512).
+pub(super) fn three_way(l: Value, r: Value) -> R<Value> {
+    match crate::value::three_way(&l, &r) {
+        Ok(n) => Ok(Value::Int(n)),
+        Err(msg) => rt(msg),
+    }
+}
+
 /// Try to match `pat` against `value`, pushing any bindings. Returns whether it matched. `implements`
 /// is the shared `class_implements` table (needed by a type pattern to test an interface RHS — the
 /// same data the `instanceof` evaluation uses, so the two can't diverge).

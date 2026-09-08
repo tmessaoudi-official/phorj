@@ -84,6 +84,8 @@ pub enum PTok {
     Gt,
     Le,
     Ge,
+    /// `<=>` three-way comparison. Munched at THREE chars, ahead of `<=` (DEC-505/DEC-512).
+    Spaceship,
     AndAnd,
     OrOr,
     Not,
@@ -349,6 +351,11 @@ pub fn lex_php_with_docs(
         }
         if three == "??=" {
             push(&mut out, PTok::CoalesceEq, line);
+            i += 3;
+            continue;
+        }
+        if three == "<=>" {
+            push(&mut out, PTok::Spaceship, line);
             i += 3;
             continue;
         }

@@ -479,6 +479,9 @@ impl<'c> Interp<'c> {
             Eq => Ok(Value::Bool(l.eq_val(&r))),
             NotEq => Ok(Value::Bool(!l.eq_val(&r))),
             Lt | Gt | Le | Ge => compare(op, l, r),
+            // `<=>` yields an `int`, so it takes the shared `value::three_way` projection rather
+            // than `compare`'s op->bool one (DEC-505/DEC-512).
+            Spaceship => three_way(l, r),
             Pipe => unreachable!("`|>` is lowered to a call in the parser"),
             And | Or | Coalesce => unreachable!("handled above"),
         }

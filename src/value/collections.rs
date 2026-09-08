@@ -201,10 +201,60 @@ pub fn compare_ord(a: &Value, b: &Value) -> Result<Option<Ordering>, String> {
         // overflow, which projects to `false` like NaN — sound, since equality is `Some(Equal)` only.
         (Value::Decimal { .. }, Value::Decimal { .. } | Value::Int(_))
         | (Value::Int(_), Value::Decimal { .. }) => Ok(decimal_cmp(a, b)),
+        // TUPLES compare lexicographically (DEC-512). A tuple is erased to a plain `Value::List`
+        // before every backend (`checker::erase_tuples`) and `Value` has no `Tuple` variant, so this
+        // ONE arm serves the interpreter, the VM and the JIT alike — and equal arity is already a
+        // checker fact by the time a lifted or user program reaches it.
+        //
+        // It short-circuits on the FIRST uncomparable element rather than treating it as equal,
+        // because PHP's array compare does: `[NAN, 1] <=> [NAN, 2]` is `1`, not `-1` (measured on
+        // php-8.5.9). Treating `None` as "equal, keep going" would return `-1` there and split the
+        // PHP leg from the native ones on a value no scalar NaN case can expose.
+        //
+        // A length mismatch is checker-unreachable — only equal-arity tuples type-check, and
+        // `List<T>` is refused outright (DEC-512, because a list's runtime arity makes PHP's
+        // count-first rule and lexicographic order disagree: `[2] <=> [1,1]` is `-1` in PHP and
+        // `+1` lexicographically). It therefore faults rather than padding or comparing counts, so
+        // a future caller that reaches the kernel without the checker gets an error, not a
+        // silently-wrong ordering.
+        (Value::List(x), Value::List(y)) => {
+            if x.len() != y.len() {
+                return Err(format!(
+                    "cannot compare tuples of arity {} and {}",
+                    x.len(),
+                    y.len()
+                ));
+            }
+            for (ex, ey) in x.iter().zip(y.iter()) {
+                match compare_ord(ex, ey)? {
+                    None => return Ok(None),
+                    Some(Ordering::Equal) => continue,
+                    Some(o) => return Ok(Some(o)),
+                }
+            }
+            Ok(Some(Ordering::Equal))
+        }
         _ => Err(format!(
             "cannot compare {} and {}",
             a.type_name(),
             b.type_name()
         )),
     }
+}
+
+/// The `<=>` projection (DEC-505, amended by DEC-512), single-sourced here per Invariant 4. Unlike
+/// the `< > <= >=` projection — which stays backend-local because each backend's *op enum* differs —
+/// `<=>` maps one ordering to one `int` with no op to dispatch on, so the interpreter, the VM and the
+/// JIT all call THIS and the NaN case cannot drift between legs.
+///
+/// `None` (NaN, or an unorderable decimal alignment) projects to `1`, not `0`: PHP yields `1` for
+/// `NAN <=> 1.0`, `1.0 <=> NAN` **and** `NAN <=> NAN` alike (measured on php-8.5.9). Mapping it to
+/// `0` would read as "equal" and is the single easiest way to split the PHP leg from the native ones.
+pub fn three_way(a: &Value, b: &Value) -> Result<i64, String> {
+    Ok(match compare_ord(a, b)? {
+        Some(Ordering::Less) => -1,
+        Some(Ordering::Equal) => 0,
+        Some(Ordering::Greater) => 1,
+        None => 1,
+    })
 }

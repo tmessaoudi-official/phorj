@@ -120,6 +120,10 @@ impl Transpiler {
                 | BinaryOp::BitXor
                 | BinaryOp::Shl
                 | BinaryOp::Shr => OpKind::Int,
+                // `<=>` is the one comparison that yields an INT, so it must be an int operand for
+                // any enclosing arithmetic. The `_` arm below would silently make it `Other` and
+                // mis-route `(a <=> b) + 1`; rustc cannot flag that, so this arm is load-bearing.
+                BinaryOp::Spaceship => OpKind::Int,
                 _ => OpKind::Other,
             },
             Expr::InstanceOf { .. } => OpKind::Bool,

@@ -208,6 +208,10 @@ pub enum TokenKind {
     Gt,
     Le,
     Ge,
+    /// `<=>` three-way comparison (DEC-505, as amended by DEC-512). Claimed by the THREE-char
+    /// maximal-munch block, ahead of the two-char `<=` — otherwise `a <=> b` lexes as `Le` then `Gt`
+    /// and the parser reports `expected an expression, found `>``.
+    Spaceship,
     EqEq,
     NotEq,
     Eq,

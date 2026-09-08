@@ -72,6 +72,7 @@ pub(super) fn sexpr(e: &Expr) -> String {
                 BinaryOp::Rem => "%",
                 BinaryOp::Eq => "==",
                 BinaryOp::NotEq => "!=",
+                BinaryOp::Spaceship => "<=>",
                 BinaryOp::Lt => "<",
                 BinaryOp::Gt => ">",
                 BinaryOp::Le => "<=",

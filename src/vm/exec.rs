@@ -172,6 +172,14 @@ impl<'a> Vm<'a> {
                 let a = self.pop();
                 self.stack.push(Value::Bool(compare(op, &a, &b)?));
             }
+            // `<=>` pushes an `int`, not a bool. The projection is `value::three_way`, shared with
+            // the interpreter and the JIT so the NaN case cannot drift (DEC-512).
+            Op::Cmp => {
+                let b = self.pop();
+                let a = self.pop();
+                self.stack
+                    .push(Value::Int(crate::value::three_way(&a, &b)?));
+            }
 
             Op::Const(i) => {
                 let v = self.program.functions[func].chunk.consts[i].clone();

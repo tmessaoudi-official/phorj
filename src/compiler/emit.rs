@@ -83,6 +83,8 @@ impl<'a> Compiler<'a> {
             // Bitwise binaries pop two, push one (primitives P2).
             Op::BitAnd | Op::BitOr | Op::BitXor | Op::Shl | Op::Shr => -1,
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => -1,
+            // `<=>` pops two operands and pushes one int: net -1, same shape as the bool comparisons.
+            Op::Cmp => -1,
             Op::Pop | Op::SetLocal(_) | Op::JumpIfFalse(_) | Op::Index | Op::MakeRange(_) => -1,
             // SetIndex pops (container, index, value) and pushes the new container: net -2.
             Op::SetIndex => -2,

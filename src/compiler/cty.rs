@@ -310,6 +310,15 @@ impl Compiler<'_> {
                 _ => Err(format!("cannot infer numeric type of {e:?}")),
             },
             Expr::Unary { expr, .. } => self.ctype(expr),
+            // `<=>` yields an `int` regardless of its operands, so it must NOT fall through to the
+            // "result follows the LHS" rule below: `((1, 2) <=> (1, 3)) + 1` would otherwise resolve
+            // its operand as `CTy::List` and the VM would reject what the interpreter accepts. This
+            // is Invariant 7's MUST-CHECK, and the reason `<=>` needs an arm here while `< > <= >=`
+            // do not (their `bool` result is never a legal arithmetic operand).
+            Expr::Binary {
+                op: crate::ast::BinaryOp::Spaceship,
+                ..
+            } => Ok(CTy::Int),
             Expr::Binary { lhs, .. } => self.ctype(lhs),
             // `value instanceof C` is a `bool` — never an arithmetic operand, but a `var b = …`
             // initializer reads `ctype`, so resolve it to `Other` rather than erroring.

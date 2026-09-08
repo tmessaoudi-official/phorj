@@ -5,6 +5,60 @@
 /// Explanation text for a code in this band, or `None` when `code` is not this catalog's.
 pub(super) fn text(code: &str) -> Option<&'static str> {
     Some(match code {
+        "E-ORDER-LIST" => {
+            "E-ORDER-LIST — a `List<T>` was used with `< > <= >=` or `<=>`. Lists are not orderable.\n\n\
+             Ordering is a **tuple** capability (DEC-512). A tuple's arity is fixed at compile time,\n\
+             so element-wise lexicographic order and PHP's own count-first array rule provably give\n\
+             the same answer for every input — which is what lets `(a, b) <=> (c, d)` transpile to\n\
+             PHP's `<=>` with no divergence.\n\n\
+             A list's arity is a runtime property, and there the two rules DISAGREE: PHP compares\n\
+             counts first, so `[2] <=> [1, 1]` is `-1`, while lexicographic order says `+1`. Phorj\n\
+             refuses rather than pick one and silently diverge from its own PHP leg on the other.\n\n\
+             Fixes:\n\
+             \t• Use a tuple — `(a, b)` instead of `[a, b]` — when the arity really is fixed.\n\
+             \t• Compare explicitly (length first, then elements) when it is not.\n\
+             \t• Sorting a list is unaffected: `List.sort`/`sortWith`/`sortDescending` all work.\n"
+        }
+        "E-ORDER-DECIMAL" => {
+            "E-ORDER-DECIMAL — `<=>` (or tuple ordering) was used on a `decimal`.\n\n\
+             `<` `>` `<=` `>=` DO accept decimals; `<=>` and tuple ordering deliberately do not, and\n\
+             the asymmetry is honest rather than accidental.\n\n\
+             A `decimal` transpiles to a PHP numeric STRING (BCMath's carrier), and PHP compares\n\
+             numeric strings as floats. Past 2^53 that loses precision, so phorj's exact i128\n\
+             comparison and the PHP leg part company — `9007199254740992.00 < 9007199254740993.00`\n\
+             is `true` natively and `false` in PHP. Bare `<` carries that pre-existing hole (see\n\
+             KNOWN_ISSUES.md); the newer surfaces refuse rather than inherit it.\n\n\
+             Closing it means routing decimal comparison through a `bccomp`-backed helper, which is\n\
+             a byte-identity trade for the developer to rule (question Q-0908-3).\n\n\
+             For now: compare decimals with `< > <= >=`, or convert explicitly first.\n"
+        }
+        "E-ORDER-TUPLE-SHAPE" => {
+            "E-ORDER-TUPLE-SHAPE — two tuples of different shapes were ordered.\n\n\
+             Tuple ordering is lexicographic over matching positions, so both sides must have the\n\
+             same arity AND the same type at each position. `(int, int) < (int, int, int)` and\n\
+             `(int, int) < (int, float)` are both rejected.\n\n\
+             This is the same no-coercion stance the scalar rule takes: `1 < 2.0` is an error too.\n\
+             Convert the differing position explicitly, or compare the shared prefix.\n"
+        }
+        "E-SPACESHIP-OPERANDS" => {
+            "E-SPACESHIP-OPERANDS — `<=>` got operands it cannot compare.\n\n\
+             `<=>` yields `-1`, `0` or `1` and accepts two `int`s, two `float`s, or two tuples of\n\
+             the same shape (recursively). Both sides must be the SAME type — there is no implicit\n\
+             widening, so `1 <=> 2.0` is rejected like `1 < 2.0` is.\n\n\
+             It is the one comparison operator that produces an `int` rather than a `bool`, which is\n\
+             what makes it usable directly as a `List.sortWith` comparator:\n\n\
+             \tList.sortWith(rows, function(Row a, Row b) => (a.tier, a.position) <=> (b.tier, b.position))\n\n\
+             NaN yields `1` for every pairing, matching PHP exactly.\n"
+        }
+        "E-ORDER-OPERANDS" => {
+            "E-ORDER-OPERANDS — an ordering operator got a type that has no order.\n\n\
+             `< > <= >=` and `<=>` accept `int`, `float`, and tuples of those; `< > <= >=`\n\
+             additionally accept `decimal`. Strings, bools, maps, sets, objects and enums have no\n\
+             ordering in Phorj — there is no single defensible answer for them that also survives\n\
+             the PHP leg unchanged.\n\n\
+             Compare an explicit key instead (a field, a length, an ordinal), or sort with\n\
+             `List.sortWith` and a comparator that spells out the ordering you mean.\n"
+        }
         "E-DECIMAL-FLOAT-MIX" => {
             "E-DECIMAL-FLOAT-MIX — `decimal` and `float` were mixed in one operation.\n\n\
              `decimal` is exact fixed-point (money/fixed-point math); `float` is binary IEEE-754\n\

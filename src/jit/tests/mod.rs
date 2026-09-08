@@ -24,6 +24,7 @@ mod range_and_overflow;
 mod set_ops;
 mod string_scan;
 mod sumby;
+mod tuple_ordering;
 mod unboxed_flow;
 mod unboxed_int;
 mod verticals;

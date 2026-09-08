@@ -191,6 +191,10 @@ pub struct PhpMatchArm {
 /// Binary operators (Tier-1 subset).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PhpBinOp {
+    /// `<=>` three-way comparison. Lifts to Phorj's own `<=>` (DEC-505/DEC-512) — but only over
+    /// operands Phorj admits, so a PHP array `<=>` lifts only where both sides are positional
+    /// literals of the same arity and can therefore become tuples.
+    Spaceship,
     Add,
     Sub,
     Mul,

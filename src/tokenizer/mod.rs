@@ -336,6 +336,25 @@ fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagn
                     continue;
                 }
 
+                // `<=>` (3) three-way comparison — longest-match ahead of the two-char `<=`, exactly
+                // as `??=` sits ahead of `??` above (DEC-505/DEC-512). Ordering is load-bearing: the
+                // two-char table below would otherwise take `<=` and leave a bare `>`.
+                if b == b'<' && lx.peek2() == Some(b'=') && lx.peek3() == Some(b'>') {
+                    for _ in 0..3 {
+                        lx.bump();
+                    }
+                    out.push(Token {
+                        kind: TokenKind::Spaceship,
+                        span: Span {
+                            start,
+                            len: 3,
+                            line,
+                            col,
+                        },
+                    });
+                    continue;
+                }
+
                 // two-char operators take priority
                 let two = |k: TokenKind| Token {
                     kind: k,

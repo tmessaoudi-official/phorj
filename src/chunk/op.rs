@@ -55,6 +55,9 @@ pub enum Op {
     Gt,
     Le,
     Ge,
+    /// `<=>` three-way comparison (DEC-505/DEC-512). Pops two, pushes an `int` (-1/0/1) — the only
+    /// comparison Op that does NOT push a bool, which is why it needs a `CTy` arm (Invariant 7).
+    Cmp,
     /// Discard the top of stack.
     Pop,
     /// Push a copy of the local at stack slot `n`.

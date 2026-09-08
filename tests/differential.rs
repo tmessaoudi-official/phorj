@@ -4721,6 +4721,108 @@ fn bitwise_operators_byte_identical() {
     );
 }
 
+/// L2 / DEC-505 as amended by DEC-512 — the three-way comparison `<=>`, and ordering over TUPLES.
+/// `<=>` sits in the EQUALITY tier and is non-associative in PHP (both measured on the 8.5 oracle,
+/// not recalled), so phorj's uniformly-left-associative `parse_binary_from` must parenthesize on the
+/// PHP leg. Tuples compare lexicographically; a tuple's arity is static, so lexicographic and PHP's
+/// count-first array rule provably coincide — which is exactly why DEC-512 admits tuples and refuses
+/// `List<T>`, whose runtime arity makes the two disagree (`[2] <=> [1,1]` is `-1` in PHP, `+1`
+/// lexicographically). Carries the Invariant-7 CTy case `(a <=> b) + 1`: `<=>` yields an `int`, so
+/// the compiler's `CTy` resolver must type it as one, or the VM rejects what the interpreter accepts.
+#[test]
+fn spaceship_and_tuple_ordering_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    int a = 3;
+    int b = 7;
+    var p = (1, 2);
+    var q = (1, 3);
+    var r = (1, 2);
+    int lt = if (p < q) { 1 } else { 0 };
+    int ge = if (q >= p) { 1 } else { 0 };
+    Output.printLine(\"{a <=> b} {b <=> a} {a <=> a} {(a <=> b) + 1}\");
+    Output.printLine(\"{p <=> q} {q <=> p} {p <=> r} {lt} {ge} {(p <=> q) + 1}\");
+}",
+        "-1 1 0 0\n-1 1 0 1 1 0\n",
+        "spaceship_tuple_ordering",
+    );
+}
+
+/// DEC-512's NaN pin. PHP yields `1` for EVERY NaN comparison — `NAN <=> 1.0`, `1.0 <=> NAN` and
+/// `NAN <=> NAN` alike — and an array compare STOPS at the first uncomparable element rather than
+/// treating it as equal: `[NAN, 1] <=> [NAN, 2]` is `1`, not `-1` (measured on the oracle). So the
+/// `(List, List)` arm of `compare_ord` must return `Ok(None)` the moment an element compares `None`,
+/// and the `None -> 1` projection must be written identically in the interpreter, the VM and the JIT
+/// or the three legs split on a value no scalar case can expose.
+#[test]
+fn spaceship_nan_projection_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+import Core.Math;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    float n = Math.nan();
+    var s = (n, 1.0);
+    var t = (n, 2.0);
+    Output.printLine(\"{n <=> n} {n <=> 1.0} {1.0 <=> n} {s <=> t}\");
+}",
+        "1 1 1 1\n",
+        "spaceship_nan",
+    );
+}
+
+/// The shape scout actually uses — `/stack/projects/scout/src/php/Rent/Core/Classification.php:48`
+/// sorts by a two-key tuple inside a comparator closure:
+///
+/// ```php
+/// usort($ordered, static fn (TenureSignal $a, TenureSignal $b): int
+///     => [$a->tier, $a->position] <=> [$b->tier, $b->position]);
+/// ```
+///
+/// Two things this pins that the scalar cases do not. The comparator body is compiled as a LAMBDA,
+/// so a tuple-typed `<=>` has to survive that path and return an `int` the sort can consume — the
+/// Invariant-7 `CTy` question in its real setting rather than as `(a <=> b) + 1`. And it exercises
+/// `List.sortWith`'s stability: the two `(1, …)` entries keep their input order, which is DEC-505's
+/// build-time obligation (Rust's `sort_by` is stable, matching PHP 8.0+ `usort`), and nothing pinned
+/// it before this test.
+#[test]
+fn spaceship_tuple_comparator_sort_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+import Core.List;
+class Signal {
+    constructor(public int tier, public int position, public string tag) {}
+}
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    var rows = [new Signal(2, 10, \"b\"), new Signal(1, 30, \"a\"),
+                new Signal(2, 5, \"c\"), new Signal(1, 30, \"d\")];
+    var sorted = List.sortWith(rows, function(Signal a, Signal b) =>
+        (a.tier, a.position) <=> (b.tier, b.position));
+    mutable string out = \"\";
+    foreach (sorted as row) { out = out + row.tag; }
+    Output.printLine(out);
+}",
+        "adcb\n",
+        "spaceship_tuple_comparator",
+    );
+}
+
+/// `<=>` is NON-associative in PHP — `1 <=> 2 <=> 3` is a parse error there — while phorj's
+/// `parse_binary_from` is uniformly left-associative and accepts it. That is a deliberate superset,
+/// so the transpiler must parenthesize or it emits PHP that will not parse. Pins that `(1 <=> 2) <=> 3`
+/// is what lands on the PHP leg, and that all three legs agree on its value.
+#[test]
+fn spaceship_left_assoc_parenthesized_on_php_leg() {
+    agree_out_php(
+        "import Core.Output;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    Output.printLine(\"{1 <=> 2 <=> 3} {(3 <=> 2) <=> 0}\");
+}",
+        "-1 1\n",
+        "spaceship_left_assoc",
+    );
+}
+
 /// Primitives sweep P3 — `Output.print` (no trailing newline; space-joins like `println`). Composes
 /// with `println` and string interpolation; transpiles to a bare PHP `echo`.
 #[test]

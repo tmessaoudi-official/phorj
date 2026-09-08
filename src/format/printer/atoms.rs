@@ -155,6 +155,10 @@ pub(super) fn bin_prec(op: BinaryOp) -> u8 {
         BinaryOp::BitXor => 6,
         BinaryOp::BitAnd => 7,
         BinaryOp::Eq | BinaryOp::NotEq => 8,
+        // `<=>` shares the EQUALITY tier with `==`/`!=` — measured against the 8.5 oracle, where
+        // `1 < 2 <=> 0` parses as `(1 < 2) <=> 0`. Must move in lockstep with the parser's
+        // `infix_op`, or a formatted file re-parses to a different tree.
+        BinaryOp::Spaceship => 8,
         BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => 9,
         // DEC-239 precedence fix: `|>` sits in PHP 8.5's slot — tighter than comparison, looser
         // than shifts/arithmetic (verified against php-8.5.8).
@@ -198,6 +202,7 @@ pub(super) fn binary_op(op: BinaryOp) -> &'static str {
         BinaryOp::Gt => ">",
         BinaryOp::Le => "<=",
         BinaryOp::Ge => ">=",
+        BinaryOp::Spaceship => "<=>",
         BinaryOp::And => "&&",
         BinaryOp::Or => "||",
         BinaryOp::Pipe => "|>",

@@ -149,6 +149,13 @@ impl Compiler<'_> {
                     line,
                 );
             }
+            // `<=>` lowers to the single `Op::Cmp`, which pushes an int. Runtime-generic like the
+            // bool comparisons: one Op covers int, float and tuple operands (DEC-505/DEC-512).
+            Spaceship => {
+                self.expr(lhs)?;
+                self.expr(rhs)?;
+                self.emit(Op::Cmp, line);
+            }
             // Bitwise binaries (primitives P2): int-only (checker-guaranteed), so the int Op is
             // emitted directly — no `NumTy` dispatch.
             BitAnd | BitOr | BitXor | Shl | Shr => {

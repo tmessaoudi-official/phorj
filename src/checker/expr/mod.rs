@@ -6,3 +6,4 @@ mod core;
 mod lambda;
 mod literals;
 mod operators;
+mod ordering;

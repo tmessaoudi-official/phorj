@@ -643,6 +643,11 @@ impl Transpiler {
             NotEq => "!=",
             Lt => "<",
             Le => "<=",
+            // PHP's own `<=>`. Identical on every input this checker admits: int/float scalars, and
+            // EQUAL-ARITY tuples, where PHP's count-first array rule and lexicographic order provably
+            // coincide. `decimal` is refused by the checker (Q-0908-3), so the numeric-string carrier
+            // divergence cannot reach here. NaN agrees too: PHP yields 1, and so does `value::three_way`.
+            Spaceship => "<=>",
             Gt => ">",
             Ge => ">=",
             And => "&&",

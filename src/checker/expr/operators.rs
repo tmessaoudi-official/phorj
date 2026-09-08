@@ -47,6 +47,9 @@ impl Checker {
                 | BinaryOp::Ge
                 | BinaryOp::And
                 | BinaryOp::Or => Ty::Bool,
+                // `<=>` yields an `int`, so it recovers as one — recovering as `Ty::Error` would
+                // cascade a second, misleading error out of every enclosing arithmetic expression.
+                BinaryOp::Spaceship => Ty::Int,
                 _ => Ty::Error,
             };
         }
@@ -110,28 +113,17 @@ impl Checker {
                 }
             }
             BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                // `decimal` compares against `decimal` or `int` (numeric, scale-insensitive); same
-                // operand rule as decimal arithmetic, a `float` mix is `E-DECIMAL-FLOAT-MIX`.
-                let dec_ok = (l == Ty::Decimal && (r == Ty::Decimal || r == Ty::Int))
-                    || (r == Ty::Decimal && l == Ty::Int);
-                if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) || dec_ok {
-                    Ty::Bool
-                } else if l == Ty::Decimal || r == Ty::Decimal {
-                    self.err_coded(
-                        span,
-                        format!(
-                            "cannot compare `decimal` with `{}`",
-                            if l == Ty::Decimal { &r } else { &l }
-                        ),
-                        "E-DECIMAL-FLOAT-MIX",
-                        Some("compare a `decimal` only with another `decimal` or an `int`".into()),
-                    );
-                    Ty::Bool
-                } else {
-                    self.err(span, format!("comparison requires matching int or float operands, found `{l}` and `{r}`"));
-                    Ty::Bool
-                }
+                let sym = match op {
+                    BinaryOp::Lt => "<",
+                    BinaryOp::Gt => ">",
+                    BinaryOp::Le => "<=",
+                    _ => ">=",
+                };
+                self.check_relational(&l, &r, sym, span)
             }
+            // `<=>` shares `check_relational`'s operand predicate by construction — both live in
+            // `ordering.rs` and call one `unorderable_leaf` (DEC-505/DEC-512).
+            BinaryOp::Spaceship => self.check_spaceship(&l, &r, span),
             BinaryOp::Eq | BinaryOp::NotEq => {
                 // `decimal == int` (either order) is numeric equality (the operator-level int-widen);
                 // every other cross-type pairing still requires explicit conversion.

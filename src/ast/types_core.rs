@@ -171,6 +171,12 @@ pub enum BinaryOp {
     Gt,
     Le,
     Ge,
+    /// `<=>` three-way comparison (DEC-505, amended by DEC-512): `-1` / `0` / `1`, and `1` whenever
+    /// either operand is NaN. Unlike the four relational operators it yields an `int`, not a `bool` —
+    /// so it is a legal arithmetic operand and the compiler's `CTy` resolver must type it (Invariant
+    /// 7). Operands are `int`, `float`, or tuples of those; `List<T>` is refused (DEC-512) and
+    /// `decimal` is refused pending Q-0908-3.
+    Spaceship,
     And,
     Or,
     Pipe,

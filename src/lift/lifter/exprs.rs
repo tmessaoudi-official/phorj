@@ -133,12 +133,50 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             expr: Box::new(lift_expr(expr)?),
             span: SP,
         },
-        php::PhpExpr::Binary { op, left, right } => Expr::Binary {
-            op: lift_binop(*op)?,
-            lhs: Box::new(lift_expr(left)?),
-            rhs: Box::new(lift_expr(right)?),
-            span: SP,
-        },
+        php::PhpExpr::Binary { op, left, right } => {
+            let phorj_op = lift_binop(*op)?;
+            // DEC-512, third clause. PHP orders arrays; Phorj orders TUPLES and refuses `List<T>`
+            // (their arities are static and dynamic respectively, and PHP's count-first rule only
+            // agrees with lexicographic order when the arity is fixed). So in an ORDERING operand
+            // position specifically, a positional array LITERAL lifts to a tuple:
+            //
+            //     [$a->tier, $a->position] <=> [$b->tier, $b->position]
+            //       ->  (a.tier, a.position) <=> (b.tier, b.position)
+            //
+            // This does not violate DEC-166 ("the lifter never guesses"): a literal's arity is
+            // syntactically present in the source, so nothing is inferred or invented. It is also
+            // narrow on purpose — both sides must be positional literals of the SAME arity. A
+            // variable, a call result, or a length mismatch keeps lifting to a list and is then
+            // refused by the checker with `E-ORDER-LIST`, which is the honest outcome: the lifter
+            // cannot know a runtime array's arity, and quietly assuming one would be the guess
+            // DEC-166 forbids.
+            let ordering = matches!(
+                phorj_op,
+                BinaryOp::Spaceship | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge
+            );
+            let (mut lhs, mut rhs) = (lift_expr(left)?, lift_expr(right)?);
+            if ordering {
+                if let (
+                    php::PhpExpr::Array(le),
+                    php::PhpExpr::Array(re),
+                    Expr::List(li, _),
+                    Expr::List(ri, _),
+                ) = (&**left, &**right, &lhs, &rhs)
+                {
+                    let positional = |es: &[php::PhpArrayElem]| es.iter().all(|e| e.key.is_none());
+                    if !li.is_empty() && li.len() == ri.len() && positional(le) && positional(re) {
+                        lhs = Expr::Tuple(li.clone(), SP);
+                        rhs = Expr::Tuple(ri.clone(), SP);
+                    }
+                }
+            }
+            Expr::Binary {
+                op: phorj_op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+                span: SP,
+            }
+        }
         // C-46: PHP `value instanceof ClassName` → Phorj's existing `instanceof` (M-RT S1).
         php::PhpExpr::InstanceOf { value, class } => Expr::InstanceOf {
             value: Box::new(lift_expr(value)?),

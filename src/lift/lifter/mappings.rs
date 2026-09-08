@@ -115,6 +115,7 @@ pub(super) fn lift_binop(op: php::PhpBinOp) -> Result<BinaryOp, String> {
         // Phorj is statically typed, so loose and strict equality coincide.
         P::Eq | P::Identical => BinaryOp::Eq,
         P::NotEq | P::NotIdentical => BinaryOp::NotEq,
+        P::Spaceship => BinaryOp::Spaceship,
         P::Lt => BinaryOp::Lt,
         P::Le => BinaryOp::Le,
         P::Gt => BinaryOp::Gt,

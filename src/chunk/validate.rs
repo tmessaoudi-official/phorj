@@ -143,6 +143,7 @@ impl BytecodeProgram {
                     | Op::Gt
                     | Op::Le
                     | Op::Ge
+                    | Op::Cmp
                     | Op::Pop
                     | Op::GetLocal(_)
                     | Op::SetLocal(_)
