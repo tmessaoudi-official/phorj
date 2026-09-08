@@ -80,6 +80,7 @@
 | DEC-507 | **The ABSOLUTE perf bar, with escalation** — every lifted/transpiled artifact beats dockerised JIT-on PHP or the lane STOPS; **supersedes the 2026-07-10 "MATCHES-not-beats" refinement** for this campaign; the on-box `ZTS DEBUG GCOV` oracle is invalid for perf | RULED 2026-09-07 — supersedes |
 | DEC-508 | **scout is a READ-ONLY forcing function** validating four surfaces (lift, transpile, LSP, speed); lifted `.phg` lives in `examples/lift/scout/`; depth before breadth; readiness steps 13/14 HOISTED; stop condition = every file lifts or carries a NAMED refusal | RULED 2026-09-07 — plan opened |
 | DEC-512 | **Ordering is a TUPLE capability; `List<T>` is NOT orderable** — amends DEC-505. PHP's array `<=>` is COUNT-FIRST, so DEC-505's "lexicographic" and "emits PHP's own `<=>`" clauses are mutually exclusive for lists; tuples are immune (static arity ⇒ the two coincide). Lists ordering = checker error; `phg lift` maps a positional literal in an ordering-operand position to a tuple; `decimal` excluded by name (`E-ORDER-DECIMAL`, pending **Q-0908-3**) | RULED 2026-09-08 — **BUILT** (`eba09d4e` ``feat(lang): `<=>` and tuple ordering``, `ab959542` `docs(lang): L2 closes`) |
+| DEC-513 | **The DEC-507 loss on `<=>` is FIXED, not carried — FUSE the comparison in the compiler.** `spaceshipsort` measured 0.36-0.37x vs docker php:8.5+JIT; attribution puts ~65% of the cost in materializing two tuples per comparison, not in `Op::Cmp` (tuple 169 ms / scalar 60 ms / subtraction 56 ms). Lower `(a,b) <=> (c,d)` element-wise, reusing `value::compare_ord`/`three_way` so Invariant 4 holds; transpile leg unchanged | RULED 2026-09-08 — build QUEUED (lane **L2b**, before L4) |
 | DEC-509 / 510 / 511 | lifter mechanicals — enum cases construct + `self` resolves + methods lower to UFCS free functions (509); PHP array destructuring un-deferred, keyed destructure refused by name (510); `.` lifts to ONE interpolation, not `+` (511) | RULED 2026-09-07 — **BUILT** (`9bd0a43e`, `78317867`) |
 
 **Lane progress (2026-09-08 re-census at `78317867`): L0 + L1a/L1b/L1c DONE, 57/123 files lift.**
@@ -88,7 +89,7 @@
 `array{…}` shape L4 builds, so L3 could never have run first.
 
 **L2 IS BUILT (`eba09d4e` ``feat(lang): `<=>` and tuple ordering`` + `ab959542` `docs(lang): L2 closes`);
-NEXT IS L4.** Three things a reader must carry forward from it. (1) The shipped semantics are
+NEXT IS L2b, THEN L4.** Three things a reader must carry forward from it. (1) The shipped semantics are
 DEC-512's, not DEC-505's as written: lists are refused (`E-ORDER-LIST`) and `decimal` is refused
 (`E-ORDER-DECIMAL`). (2) **DEC-507's bar was MISSED and the loss is CONFIRMED, not suppressed** —
 `spaceshipsort` runs ~0.36–0.37× against docker `php:8.5-cli`+JIT, core-pinned and interleaved;
@@ -97,7 +98,7 @@ tuples per comparison, with `Op::Cmp` itself at parity with an integer subtracti
 recorded OWED **in the plan's prose**, NOT in `bench/micro-baseline.json._owed` — a new micro cannot
 enter `_owed` without `--emit`, which DEC-365 forbids here, so `microbench-gate.sh:223` reports it as
 a non-blocking `note … not in baseline (new)` on every run and does **not** protect it from
-deepening. The disposition is the developer's (DEC-507 escalation, in the plan's *Needs input*).
+deepening. **The disposition is RULED: DEC-513 — fuse the comparison in the compiler, as lane L2b, BEFORE L4.**
 (3) Two more banked questions: **Q-0908-3** (decimal ordering — closing it needs a `__phorj_dec_cmp`
 helper, an Invariant-16 trade) and **Q-0908-4** (phorj accepts `3 <=> 2 <=> 0` left-associatively
 where PHP makes `<=>` non-associative and refuses to parse it).

@@ -117,6 +117,14 @@
   first-error-per-file census is a snapshot of WALLS, not of work, and every lane that claims a
   critical path must be re-derived from a fresh run, not from the last one's table.
 
+- [2026-09-08 DEC-513] AGREED: **the DEC-507 loss on `<=>` is FIXED, not carried — by FUSING the
+  comparison in the compiler.** `(a, b) <=> (c, d)` lowers element-wise so no tuple is materialized;
+  it reuses `value::compare_ord`/`three_way` (Invariant 4 holds) and leaves the transpile leg emitting
+  PHP's own `<=>` untouched. Measured cause: tuple `<=>` 169 ms vs scalar `<=>` 60 ms vs subtraction
+  56 ms on one pinned core, so ~65% of the cost is tuple CONSTRUCTION, not `Op::Cmp`. Builds as **L2b,
+  BEFORE L4.** Rejected: JIT-whitelisting (speeds the allocation rather than removing it) and carrying
+  it OWED to L8 (nothing stops the loss deepening, and the fix is already located).
+
 ## 1. Measured starting state (2026-09-07, on `target/release/phg` at `6c49816d`)
 
 `phg lift /stack/projects/scout/src/php -o <out>` — a whole-tree pass that writes `LIFT-REPORT.md`
@@ -291,6 +299,7 @@ DEC-507 applies to every one.
 | 2c | L1c — positional `array{…}` → tuples (type AND the returned literal, at any depth), array destructuring (DEC-510), `.` → one interpolation (DEC-511), `echo $var` → interpolation, strict `=== null` → `is null`. Headline holds at **57/123** (denominator corrected 09-08; "125" was a typo) — first-error-per-file again: the keyed-shape row rises 14 → 15, and the `expected an expression` row stays at 5 but only **3** of those are `<=>` — the other 2 are PHP spread `...`, found 09-08 | M | done | 78317867 | src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/exprs.rs src/lift/parser/docblock.rs src/lift/parser/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/shapes.php examples/lift/shapes.phg |
 | 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + 5 `phg explain` entries. Closed by row 3b | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
 | 3b | L2 closes — `docs(lang): L2 closes` — SSOT quartet amended (the decimal narrowing never reached the SPEC/register/MASTER-PLAN in C1), the missing lift-rule tests with two mutations verified red and a third proving `positional` redundant, the Invariant-9 example, VS Code grammar, KNOWN_ISSUES § DECIMAL-ORDER, the re-census, and the DEC-507 bench — **a CONFIRMED LOSS, escalation OWED** | M | done | ab959542 | docs/specs/UNIFIED-SPEC.md docs/plans/SLICE-STATE.md docs/research/full-audit/raw/C-decisions.md src/lift/lifter_tests_ordering.rs examples/guide/spaceship.phg bench/micro/spaceshipsort.phg bench/micro/spaceshipsort.php editors/vscode/syntaxes/phorj.tmLanguage.json KNOWN_ISSUES.md |
+| 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler so `(a,b) <=> (c,d)` lowers element-wise with NO tuple materialized; reuse `value::compare_ord`/`three_way`; transpile leg unchanged. Closes the DEC-507 loss rather than carrying it | M | todo | - | src/compiler/* src/value/* tests/differential.rs bench/micro/spaceshipsort.phg |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | todo | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
@@ -416,13 +425,23 @@ the very same reason and is still 2.7× faster, so this is phorj's list-construc
 inherent cost of the idiom. It is also exactly the Op the JIT's boxed tier declines on
 (`src/jit/tests/tuple_ordering.rs`), which is why the loop takes the VM.
 
-**This is the developer's call and is being asked, not decided** (DEC-507 says stop and escalate). The
-three dispositions: **(a)** fuse the comparison in the compiler so `(a, b) <=> (c, d)` lowers to
-element-wise compares with NO tuple materialized — the real fix, reusing `compare_ord` so Invariant 4
-holds; **(b)** whitelist `Op::Cmp` plus a list-construction Op in `jit/boxed.rs` so the loop reaches
-the JIT — a bigger change than it sounds, since eligibility is computed over the whole reachable call
-graph; **(c)** carry the OWED loss and proceed to L4, revisiting under L8 (perf twins), which is the
-lane that exists for exactly this.
+**Escalated per DEC-507 (stop, do not decide) and now RULED — DEC-513, 2026-09-08: option (a), FUSE
+THE COMPARISON IN THE COMPILER.** `(a, b) <=> (c, d)` and the tuple `< > <= >=` forms lower
+ELEMENT-WISE at compile time so no tuple is ever materialized — compare position 0, consult position 1
+only on a tie. The lowering is exact and total because a tuple's arity is static, the same property
+DEC-512 rests on. It reuses `value::compare_ord` / `value::three_way` rather than re-inlining a
+comparison, so Invariant 4 holds and the three legs keep ONE kernel, and the transpile leg is
+untouched — it still emits PHP's own `<=>`, so DEC-512's byte-identity claim is unaffected. This
+builds as **lane L2b, BEFORE L4** (status row 3c).
+
+The two rejected dispositions, recorded with their reasons: **(b)** whitelisting `Op::Cmp` plus a
+list-construction Op in the boxed JIT tier — it speeds the allocation up instead of removing it, so
+its ceiling is strictly lower than (a), and eligibility is computed over the whole reachable call
+graph, so admitting a construction Op widens what compiles far beyond this shape (and the `hits > 0`
+proof is unwritable today — `src/jit/tests/tuple_ordering.rs` pins exactly that); **(c)** carrying the
+OWED loss to L8 — it unblocks L4/L3 sooner, but nothing protects the loss from DEEPENING until a
+post-fix `--emit` admits it to `_owed`, and since the cause is already located, deferring would bank a
+KNOWN regression rather than an unknown one.
 
 ### Known issues
 - **`<` on two large `decimal`s diverges from the PHP leg** (pre-existing, found by measurement while

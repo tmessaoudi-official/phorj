@@ -75,10 +75,14 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > comparison. Recorded OWED per DEC-365 (never re-baselined) **in this prose, NOT in
 > `bench/micro-baseline.json._owed`** — a new micro reaches that list only via `--emit`, which
 > DEC-365 forbids here, so `microbench-gate` prints a loud non-blocking `not in baseline (new)` note
-> every run but does NOT protect the loss from deepening. The fix is the developer's call and is being asked: fuse the compare in the compiler / open
-> the JIT whitelist / carry it to L8. Re-census after L2 holds at **57/123** —
+> every run but does NOT protect the loss from deepening — which is why it is being FIXED rather than
+> carried: **RULED as DEC-513, lane L2b** (fuse the comparison in the compiler). Rejected there: JIT
+> whitelisting, and carrying it to L8. Re-census after L2 holds at **57/123** —
 > `Classification.php`'s wall moved 48 → 68, i.e. off `<=>` and onto the keyed shape L4 builds.
-> **NEXT: L4** (DEC-504 named-field tuples), which unblocks L3.
+> **NEXT: L2b** (DEC-513, ruled 2026-09-08) — FUSE the comparison in the compiler: lower
+> `(a, b) <=> (c, d)` element-wise so no tuple is materialized, reusing `value::compare_ord`/`three_way`
+> so Invariant 4 holds and the transpile leg keeps emitting PHP's own `<=>`. That closes the DEC-507
+> loss instead of carrying it. **THEN L4** (DEC-504 named-field tuples), which unblocks L3.
 
 **The depth oracle is FOUR legs, not three.** `tests/differential.rs` proves interpreter ≡ VM ≡
 transpiled-PHP over `examples/**/*.phg`; it never touches scout's ORIGINAL PHP. scout built the
