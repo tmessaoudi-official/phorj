@@ -20,6 +20,15 @@
 
 ## Decisions Log
 
+- [2026-09-08 L4-SHAPE] AGREED (developer adjudication, Invariant 15 — asked as ONE question with the
+  minimal refused scout shape embedded, before any code): named-field tuples are **order-significant**,
+  **positional on the PHP leg**, read via **`t.bp`** with positional destructuring retained, and
+  **mixed labelling + mutation refused** while **ordering extends**. Full wording in the DEC-504 register
+  row. The four answers interlock: order-significance is what makes positional erasure well-defined, and
+  the two together are what make extending `<=>` sound under DEC-512's static-arity argument. Because the
+  PHP leg is positional, the interpreter, VM and JIT need no changes at all — erasure does the work — which
+  is what keeps a 73-site wall tractable as one slice.
+
 - [2026-09-08 L2b-OWED] AGREED (developer adjudication, escalated per DEC-507): **carry the residual
   `spaceshipsort` loss as a DEC-365 OWED and proceed to L4.** L2b met its structural goal — no tuple
   is materialized, proven by disassembly — but the bar stayed missed: 0.38x -> 0.46x, VM time -19.5%,
