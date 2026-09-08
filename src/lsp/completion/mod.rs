@@ -189,6 +189,26 @@ pub(super) fn complete(
                     None => parse_repaired(text, offset),
                 };
                 let prog = program.or(repaired.as_ref());
+                // DEC-504: a NAMED-TUPLE receiver completes its FIELDS. Tried before the class path
+                // because a tuple has no nominal head for `receiver_type_name` to return, so `t.`
+                // would otherwise offer nothing at all. A positional tuple has names to offer and is
+                // correctly silent.
+                if let Some(fields) =
+                    prog.and_then(|p| super::scope::receiver_tuple_fields(p, offset, &recv))
+                {
+                    return format!(
+                        "{{\"isIncomplete\":false,\"items\":[{}]}}",
+                        fields
+                            .into_iter()
+                            .map(|(name, ty)| completion_item(
+                                &name,
+                                5, /* Field */
+                                &format!("{ty} (tuple field)")
+                            ))
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    );
+                }
                 match prog.and_then(|p| {
                     super::scope::receiver_type_name(p, offset, &recv).map(|ty| (p, ty))
                 }) {
@@ -451,3 +471,5 @@ mod tests;
 mod tests_attributes;
 #[cfg(test)]
 mod tests_preludes;
+#[cfg(test)]
+mod tests_tuples;

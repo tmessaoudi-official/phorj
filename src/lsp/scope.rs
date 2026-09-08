@@ -316,3 +316,43 @@ fn class_receiver_type<'a>(
         _ => None,
     }
 }
+
+/// The FIELDS of a NAMED-TUPLE receiver — `(field name, rendered type)` in position order, or
+/// `None` when the receiver is not one (DEC-504).
+///
+/// A named tuple is the one receiver whose members are not a class's: there is no nominal head for
+/// `receiver_type_name` to return, so `t.` would offer nothing at all without this. A POSITIONAL
+/// tuple correctly yields `None` — it has positions, not names, and there is nothing to complete.
+pub(super) fn receiver_tuple_fields(
+    program: &Program,
+    offset: usize,
+    receiver: &str,
+) -> Option<Vec<(String, String)>> {
+    let item = enclosing_item(program, offset)?;
+    let ty = match item {
+        Item::Function(f) => typed_binder_in_fn(f, receiver),
+        Item::Class(c) => class_receiver_type(c, offset, receiver),
+        _ => None,
+    }?;
+    tuple_fields(ty)
+}
+
+/// The labelled fields of `ty`, unwrapping a top-level `T?` the way [`named_head`] does.
+fn tuple_fields(ty: &Type) -> Option<Vec<(String, String)>> {
+    match ty {
+        Type::Tuple(members, Some(labels), _) => Some(
+            labels
+                .iter()
+                .zip(members)
+                .map(|(l, m)| {
+                    (
+                        l.name.clone(),
+                        crate::format::printer::atoms::ty(m).unwrap_or_else(|_| "?".into()),
+                    )
+                })
+                .collect(),
+        ),
+        Type::Optional { inner, .. } => tuple_fields(inner),
+        _ => None,
+    }
+}

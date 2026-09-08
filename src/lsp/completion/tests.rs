@@ -3,7 +3,7 @@
 use super::complete;
 
 /// Extract every `"label":"…"` value from a completion response (assert on CONTENT, not just count).
-fn labels(resp: &str) -> Vec<String> {
+pub(super) fn labels(resp: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = resp;
     while let Some(i) = rest.find("\"label\":\"") {

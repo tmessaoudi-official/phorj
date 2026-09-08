@@ -8,7 +8,7 @@
 //! source left alone).
 
 mod doc;
-mod printer;
+pub(crate) mod printer;
 
 #[cfg(test)]
 mod tests;

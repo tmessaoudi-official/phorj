@@ -90,7 +90,7 @@ impl Printer<'_> {
     }
 }
 
-mod atoms;
+pub(crate) mod atoms;
 mod exprs;
 mod items;
 mod stmts;

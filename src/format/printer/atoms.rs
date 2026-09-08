@@ -30,7 +30,7 @@ pub(super) fn bracketed(open: &str, items: Vec<Doc>, close: &str) -> Doc {
 
 /// Render a `Type`. `Type::Infer` prints as `var` (the local-inference keyword). `Err` for nodes the
 /// lift subset never produces (function types, fixed lists, unions/intersections, erased).
-pub(super) fn ty(t: &Type) -> Result<String, String> {
+pub(crate) fn ty(t: &Type) -> Result<String, String> {
     match t {
         Type::Named { name, args, .. } => {
             if args.is_empty() {
@@ -47,11 +47,25 @@ pub(super) fn ty(t: &Type) -> Result<String, String> {
         }
         Type::Optional { inner, .. } => Ok(format!("{}?", ty(inner)?)),
         Type::Infer(_) => Ok("var".to_string()),
-        // A tuple type `(A, B)` (DEC-288) — parens, comma-separated (formatted on the raw AST, before
-        // the tuple-erasure pass, so the surface syntax round-trips).
-        Type::Tuple(members, _, _) => {
+        // A tuple type — `(A, B)` positional (DEC-288) or `(bp: int, source: string)` named-field
+        // (DEC-504). Formatted on the raw AST, before the tuple-erasure pass, so the surface syntax
+        // round-trips. The LABELS are part of the type, not decoration: printing them away would
+        // turn a named tuple into a positional one, and every `t.bp` in the file would then be
+        // refused as a field on a positional tuple. The formatter is meaning-preserving.
+        Type::Tuple(members, labels, _) => {
             let m: Result<Vec<_>, _> = members.iter().map(ty).collect();
-            Ok(format!("({})", m?.join(", ")))
+            let m = m?;
+            Ok(match labels {
+                Some(ls) => format!(
+                    "({})",
+                    ls.iter()
+                        .zip(m.iter())
+                        .map(|(l, t)| format!("{}: {t}", l.name))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                None => format!("({})", m.join(", ")),
+            })
         }
         Type::Union(members, _) => {
             // DEC-253: the `A | B | null` spelling canonicalizes to `(A | B)?` on format (a lone

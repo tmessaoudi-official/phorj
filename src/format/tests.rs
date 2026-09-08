@@ -298,3 +298,45 @@ fn nullable_union_spelling_canonicalizes() {
     assert!(out.contains("function g(): A?"), "{out}");
     assert_idempotent(src);
 }
+
+/// DEC-504 — the formatter must PRINT a named tuple's labels. They are part of the type, not
+/// decoration, so dropping them is not a cosmetic slip: `(bp: int, source: string)` printed as
+/// `(int, string)` turns every `t.bp` in the file into `E-TUPLE-POSITIONAL-FIELD`, and a one-element
+/// `(only: 7)` printed as `(7)` is the INTEGER 7 in parentheses — not a tuple at all.
+///
+/// This is a REGRESSION test with a real failure behind it: the first `named-tuples.phg` example was
+/// silently rewritten into a program that no longer type-checked, by the formatter the pre-commit
+/// hook runs over `examples/`.
+#[test]
+fn named_tuple_labels_survive_formatting() {
+    let src = "package Main;\nimport Core.Output;\n\
+               import Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n\
+               function probe(int n): (bp: int, source: string) { return (bp: n, source: \"x\"); }\n\
+               #[Entry(kind: EntryKind.Cli)]\n\
+               function main(): void {\n\
+               (source: string, bp: int) t = (source: \"cli\", bp: 3);\n\
+               var one = (only: 7);\n\
+               Output.printLine(\"{probe(1).bp + t.bp + one.only} {t.source}\");\n\
+               }\n";
+    let out = fmt(src);
+    assert!(
+        out.contains("(bp: int, source: string)"),
+        "lost the return type's labels:\n{out}"
+    );
+    assert!(
+        out.contains("(source: string, bp: int)"),
+        "lost the annotation's labels:\n{out}"
+    );
+    assert!(
+        out.contains("(source: \"cli\", bp: 3)"),
+        "lost the literal's labels:\n{out}"
+    );
+    assert!(
+        out.contains("(only: 7)"),
+        "a one-element named tuple became a parenthesized int:\n{out}"
+    );
+    assert_idempotent(src);
+    // And it must still be the SAME program — the label-stripping bug produced output that no
+    // longer type-checked at all, which this catches without needing to name a diagnostic.
+    assert_meaning_preserved(src);
+}

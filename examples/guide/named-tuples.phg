@@ -1,0 +1,80 @@
+// Named-field tuples (DEC-504) — a tuple whose positions carry NAMES: `(bp: int, source: string)`.
+// Read a field with `t.bp`. Same construct as the positional tuple in `tuples.phg`, wearing names,
+// and the same compile-time sugar: the field name resolves to a POSITION during checking, then the
+// tuple erases to a plain list before every backend. No backend ever learns the fields had names,
+// which is why `phg run` ≡ `phg run --tree-walker` ≡ transpiled PHP holds by construction.
+//
+// Use one when a positional tuple would leave the reader counting: `(bp: 3, source: "cli")` says at
+// the call site what `(3, "cli")` makes you look up.
+//
+// FIELD ORDER IS PART OF THE TYPE. `(a: int, b: string)` and `(b: string, a: int)` are different
+// types, and neither is assignable to the other — erasure is positional, so a field's index IS its
+// written position. A named tuple is likewise NOT assignable to the positional `(int, string)`.
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// A function can return a named tuple; the names are part of the written type.
+function probe(int n): (bp: int, source: string) {
+    return (bp: n * 2, source: if (n > 1) { "many" } else { "one" });
+}
+
+// Fields are read by name, so the same `.bp` resolves to position 0 in this type and position 1 in
+// the `(source: string, bp: int)` written in `main` — each to its own element type.
+function describe((bp: int, source: string) t): string {
+    return "{t.source}:{t.bp}";
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Annotated receiver. `t.bp` is a real `int` operand — `+ 1` is integer arithmetic, not a
+    // boxed fallback, even though `bp` is not the tuple's first position.
+    (source: string, bp: int) t = (source: "cli", bp: 3);
+    Output.printLine("bp+1={t.bp + 1} source={t.source}");
+    // Inferred receiver: `var` works the same way. The declaration carries no written type, so the
+    // checker's inferred one is what keeps `.rate` a `float` here.
+    var rate = (label: "eur", rate: 1.5);
+    Output.printLine("double={rate.rate * 2.0} label={rate.label}");
+    // A call's declared return type carries the names through.
+    var p = probe(4);
+    Output.printLine("probe={describe(p)} bp={p.bp}");
+    // Iterating a list of named tuples: the loop binder keeps the field names.
+    List<(bp: int, source: string)> rows = [(bp: 3, source: "a"), (bp: 4, source: "b")];
+    mutable int total = 0;
+    foreach (rows as row) {
+        total = total + row.bp;
+        Output.printLine("row {row.source} bp={row.bp}");
+    }
+    Output.printLine("total={total}");
+    // Ordering works exactly as it does for positional tuples (DEC-512): lexicographic, left to
+    // right, on a statically known arity. Ordering is a numeric capability, so it covers a tuple of
+    // `int`/`float` — a `string` element is `E-ORDER-OPERANDS`, named or not.
+    var lo = (major: 1, minor: 4);
+    var hi = (major: 1, minor: 9);
+    Output.printLine("cmp={lo <=> hi} lt={lo < hi}");
+    // Destructuring ignores the names and binds by POSITION, so the binder names are yours to pick.
+    var (bpOnly, srcOnly) = probe(1);
+    Output.printLine("bp={bpOnly} source={srcOnly}");
+    // A single-field named tuple is still a tuple.
+    var only = (only: 7);
+    Output.printLine("only={only.only + 1}");
+    // Sorting by a named field reads the way the comparator means.
+    var sorted = List.sortWith(
+        rows,
+        function((bp: int, source: string) a, (bp: int, source: string) b): int { return b.bp <=> a.bp; }
+    );
+    foreach (sorted as r) {
+        Output.printLine("desc {r.bp}");
+    }
+}
+// NOT available on a tuple, each refused BY NAME rather than silently doing something else:
+//   t.bp = 5;    // E-ASSIGN-TARGET     — a tuple is a value; rebind the whole thing instead
+//   t.nope       // E-TUPLE-UNKNOWN-FIELD
+//   t?.bp        // E-TUPLE-SAFE-FIELD  — a field read erases to an index, which has no null
+//                //                       short-circuit; narrow first, then read with `.`
+//   (a: 1, a: 2) // E-TUPLE-DUP-FIELD   — a repeated name would make `t.a` ambiguous
+// And on a POSITIONAL tuple there are no field names at all, so `(int, string).bp` is
+// E-TUPLE-POSITIONAL-FIELD rather than an unknown field.

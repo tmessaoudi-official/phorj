@@ -42,11 +42,23 @@ impl Printer<'_> {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr_doc(x)).collect();
                 Ok(bracketed("[", xs?, "]"))
             }
-            // A tuple literal `(a, b)` — parens, not brackets (DEC-288). Formatted on the raw AST,
-            // before the desugar-to-List erasure, so the surface syntax round-trips.
-            Expr::Tuple(items, _, _) => {
+            // A tuple literal — `(a, b)` positional (DEC-288) or `(bp: 3, source: "x")` named-field
+            // (DEC-504); parens, not brackets. Formatted on the raw AST, before the desugar-to-List
+            // erasure, so the surface syntax round-trips. Printing the labels away would not merely
+            // lose a name: a one-element `(only: 7)` would become `(7)`, which is the INTEGER 7 in
+            // parentheses, not a tuple at all.
+            Expr::Tuple(items, labels, _) => {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr_doc(x)).collect();
-                Ok(bracketed("(", xs?, ")"))
+                let xs = xs?;
+                let xs = match labels {
+                    Some(ls) => ls
+                        .iter()
+                        .zip(xs)
+                        .map(|(l, x)| doc::concat(vec![doc::text(format!("{}: ", l.name)), x]))
+                        .collect(),
+                    None => xs,
+                };
+                Ok(bracketed("(", xs, ")"))
             }
             // DEC-297: a named call argument `name: value` — renders the label then the value doc, so a
             // format round-trip preserves `f(x: 1)` (before the checker normalizes it to positional).

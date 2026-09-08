@@ -10,6 +10,7 @@
     { "include": "#declarations" },
     { "include": "#keywords" },
     { "include": "#constants" },
+    { "include": "#labels" },
     { "include": "#types" },
     { "include": "#numbers" },
     { "include": "#functions" },
@@ -89,6 +90,12 @@
       "patterns": [
         { "name": "constant.language.phorj", "match": "\\b(true|false|null)\\b" },
         { "name": "variable.language.this.phorj", "match": "\\b(this)\\b" }
+      ]
+    },
+    "labels": {
+      "comment": "A `name:` LABEL — a named tuple field (DEC-504) or a named call/attribute argument (DEC-297). Anchored on the `(` or `,` that must precede it, so a ternary's `x : y` keeps its operator scope; the delimiter is consumed but left unscoped.",
+      "patterns": [
+        { "match": "([(,])\\s*([a-z_][A-Za-z0-9_]*)\\s*(?=:)", "captures": { "2": { "name": "variable.parameter.label.phorj" } } }
       ]
     },
     "types": {
