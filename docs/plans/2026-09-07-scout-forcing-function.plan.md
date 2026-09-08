@@ -289,7 +289,8 @@ DEC-507 applies to every one.
 | 2 | L1a — enums (DEC-509): a case CONSTRUCTS its variant, `self` inside an enum body is the enum, a method LOWERS to a free function reached by UFCS, static call sites lower with it; 54 → **57/123** — `feat(lift): PHP enums` | M | done | 9bd0a43e | src/lift/lifter/enums.rs src/lift/parser/enums.rs src/lift/lifter_tests_enums.rs examples/lift/enums.php examples/lift/enums.phg |
 | 2b | L1b — block-bodied closures lift; `use (&$x)` refused BY NAME (DEC-506); `static` and by-value `use` dropped. Headline stays 57/123 and that is the finding: the histogram is FIRST-ERROR-per-file, so the closure files fell through to their next wall (`array` 12 → 14, a new `Closure`-type row) | M | done | f9e26192 | src/lift/parser/closures.rs src/lift/printer/lambda.rs src/lift/lifter_tests_closures.rs examples/lift/closures.php examples/lift/closures.phg |
 | 2c | L1c — positional `array{…}` → tuples (type AND the returned literal, at any depth), array destructuring (DEC-510), `.` → one interpolation (DEC-511), `echo $var` → interpolation, strict `=== null` → `is null`. Headline holds at **57/123** (denominator corrected 09-08; "125" was a typo) — first-error-per-file again: the keyed-shape row rises 14 → 15, and the `expected an expression` row stays at 5 but only **3** of those are `<=>` — the other 2 are PHP spread `...`, found 09-08 | M | done | 78317867 | src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/exprs.rs src/lift/parser/docblock.rs src/lift/parser/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/shapes.php examples/lift/shapes.phg |
-| 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + editors + example + bench | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
+| 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + 5 `phg explain` entries. Closed by row 3b | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
+| 3b | L2 closes — `docs(lang): L2 closes` — SSOT quartet amended (the decimal narrowing never reached the SPEC/register/MASTER-PLAN in C1), the missing lift-rule tests with two mutations verified red and a third proving `positional` redundant, the Invariant-9 example, VS Code grammar, KNOWN_ISSUES § DECIMAL-ORDER, the re-census, and the DEC-507 bench — **a CONFIRMED LOSS, escalation OWED** | M | done | ab959542 | docs/specs/UNIFIED-SPEC.md docs/plans/SLICE-STATE.md docs/research/full-audit/raw/C-decisions.md src/lift/lifter_tests_ordering.rs examples/guide/spaceship.phg bench/micro/spaceshipsort.phg bench/micro/spaceshipsort.php editors/vscode/syntaxes/phorj.tmLanguage.json KNOWN_ISSUES.md |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | todo | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
@@ -386,8 +387,18 @@ L1/L2/L4 will expose better-shaped versions of each):
 Three independent runs; the per-sample SPREAD markers were wide (up to 1095%/1611%), so the tails are
 untrustworthy, but the best-of-K minima agree to within 8% and all three verdicts are LOSS. **phorj is
 ~2.7× SLOWER than dockerised PHP with JIT on this scenario.** Per DEC-365 this is recorded OWED and
-reported, never re-baselined away; `microbench-gate.sh` notes it as a new feature and does not block
-(`identical: true`), so the push is not wedged.
+reported, never re-baselined away.
+
+**Where the OWED record actually lives, because it is not where a reader would look.** It lives in
+THIS prose, and **not** in `bench/micro-baseline.json._owed`. That list is DERIVED at `--emit` from
+every feature whose ratio is below 1.0, and DEC-365 forbids the `--emit` that would put
+`spaceshipsort` there — so the entry cannot be created without doing the very thing the rule bans.
+The consequence is worth stating rather than assuming: `microbench-gate.sh:223` prints a
+non-blocking `note spaceshipsort: not in baseline (new) — ratio=… ; run --emit to snapshot it` on
+**every** run, which is loud, but the deepening check keys off `_owed`, so **nothing stops this loss
+getting worse** until a legitimate future `--emit` (one that follows a fix, per the ratchet's own
+rule) admits it. That is by design, not an oversight. `identical: true` holds, so the push is not
+wedged either way.
 
 **Where the time goes — attributed, not guessed.** Same micro, same pinned core, only the comparator
 body changed:

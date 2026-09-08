@@ -59,7 +59,7 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > syntactically present). NaN pinned alongside: PHP yields `1` for every NaN comparison, so
 > `compare_ord`'s `Ok(None)` projects to `1` at all three call sites. **This is what L2 builds.**
 >
-> **L2 IS BUILT — `eba09d4e`, 2026-09-08.** `<=>` (`Op::Cmp`, equality tier; LEFT-associative where
+> **L2 IS BUILT — `eba09d4e` + `ab959542`, 2026-09-08.** `<=>` (`Op::Cmp`, equality tier; LEFT-associative where
 > PHP is non-associative — parenthesized on the PHP leg, banked as Q-0908-4) and
 > tuple `< > <= >=` on all three legs + lift + LSP + editors; `List<T>` refused as `E-ORDER-LIST`.
 > **Narrower than the ruling in one named way, amended into DEC-512 and the spec in the same batch:**
@@ -72,8 +72,10 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > comparator, 1200 rows, output-identical) measures **0.36–0.37× vs docker php:8.5+JIT** across three
 > pinned interleaved runs. Attributed, not guessed: a scalar `<=>` costs what an integer subtraction
 > costs (60 vs 56 ms), so `Op::Cmp` is fine — ~65% of the time is MATERIALIZING TWO TUPLES per
-> comparison. Recorded OWED per DEC-365 (never re-baselined); `microbench-gate` notes it and does not
-> block. The fix is the developer's call and is being asked: fuse the compare in the compiler / open
+> comparison. Recorded OWED per DEC-365 (never re-baselined) **in this prose, NOT in
+> `bench/micro-baseline.json._owed`** — a new micro reaches that list only via `--emit`, which
+> DEC-365 forbids here, so `microbench-gate` prints a loud non-blocking `not in baseline (new)` note
+> every run but does NOT protect the loss from deepening. The fix is the developer's call and is being asked: fuse the compare in the compiler / open
 > the JIT whitelist / carry it to L8. Re-census after L2 holds at **57/123** —
 > `Classification.php`'s wall moved 48 → 68, i.e. off `<=>` and onto the keyed shape L4 builds.
 > **NEXT: L4** (DEC-504 named-field tuples), which unblocks L3.
