@@ -94,6 +94,15 @@
   `T? == null` as a cross-type comparison; PHP's LOOSE `== null` is a different question (also true
   for `0`, `""`, `[]`, `false`) and is deliberately left as an equality for the checker to report.
 
+- [2026-09-08 §15] CLAUDE-LEVEL, overrulable: **the lane order carried a dependency defect, found by
+  re-censusing rather than by reading the plan.** L3 (depth oracle) was ordered before L4, but
+  `Classification::toArray()` — the four-leg contract L3 diffs against — refuses on the very keyed
+  shape L4 builds, so L3 could never have run first. Recorded in `Blocked` and in §1's re-census
+  table; the status block's numbering is left alone so evidence shas stay attached to their rows.
+  The general lesson is the one §4 already states and this session still had to relearn: a
+  first-error-per-file census is a snapshot of WALLS, not of work, and every lane that claims a
+  critical path must be re-derived from a fresh run, not from the last one's table.
+
 ## 1. Measured starting state (2026-09-07, on `target/release/phg` at `6c49816d`)
 
 `phg lift /stack/projects/scout/src/php -o <out>` — a whole-tree pass that writes `LIFT-REPORT.md`
@@ -128,6 +137,28 @@ build QUEUED) — it is masked behind an earlier refusal in every one of them.
 | `Rent/Core/Classification.php:47` | expected an expression, found `>` | `[$a->tier,$a->position] <=> [$b->tier,$b->position]` | 6 |
 | `Rent/Core/TenureClassifier.php:344` | expected `)` | block closure **+ `use (&$doubts)`** | 23 block / 5 by-ref |
 | `Core/Text.php:293` | `array{…}` shape | `@return array{int, string}\|null` — **positional**, a tuple | 12 positional |
+
+### Re-census 2026-09-08 (at `78317867`) — the cluster MOVED, and the lane order was wrong
+
+L1a/L1b/L1c changed four of those five rows. Re-run, never re-quote — this is first-error-per-file:
+
+| file | 09-07 refusal | 09-08 refusal | lane |
+|---|---|---|---|
+| `Rent/Core/Tenure.php` | `self` outside a class body | **LIFTS** | closed by L1a |
+| `Rent/Core/TenureSignal.php` | lifts | **LIFTS** | — |
+| `Rent/Core/Classification.php` | `<=>` (`:48`) | **keyed `array{…}`** (`:57`) | **L4**, then L2 — it needs BOTH |
+| `Rent/Core/TenureClassifier.php` | `expected )` | **named by-ref refusal** (`:344`, 1 site) | L1b closed it; hand-port per §3 |
+| `Core/Text.php` | positional shape | **`?? throw`** (`:426`) | banked, below |
+
+**L3 IS BLOCKED ON L4 — a dependency the lane list got backwards.** `Classification.php:57` is
+`toArray()`'s keyed shape, and `toArray()` *is* the four-leg contract §2 diffs against. Under §8
+(read-only) and DEC-166 (never guess) the lifter cannot produce that file until named-field tuples
+exist. The depth path is **L2 + L4 → L3**, not L2 → L3 → L4. The status block's `#` order is
+retained for row stability; the `Blocked` section carries the truth.
+
+**Whole-tree headline unchanged at 57/123** — the cluster's walls moved without moving the count,
+which is exactly what first-error-per-file does and why §4 forbids quoting the histogram as a
+worklist.
 
 **Answered from the tree, not from the developer** — `/stack/projects/scout/docs/PHORJ-REQUIREMENTS.md`
 is stale and its four open questions now resolve as: ③ `sleep` **SHIPPED** (`d0005b65`); Q1 request
@@ -215,9 +246,9 @@ DEC-507 applies to every one.
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------| ------- |
 | 1 | L0 — Invariant 19 docs: DEC-504…508 + the 2026-07-10 perf-refinement supersession, readiness re-order, SPEC § `Ordering, <=>, and named-field tuples`, SLICE-STATE cursor, MASTER-PLAN §0.08 mirror | M | done | e42e9a9a | docs/research/full-audit/raw/C-decisions.md docs/plans/2026-09-07-scout-forcing-function.plan.md docs/specs/UNIFIED-SPEC.md |
-| 2 | L1a — enums (DEC-509): a case CONSTRUCTS its variant, `self` inside an enum body is the enum, a method LOWERS to a free function reached by UFCS, static call sites lower with it; 54 → **57/123** | M | done | - | src/lift/lifter/enums.rs src/lift/parser/enums.rs src/lift/lifter_tests_enums.rs examples/lift/enums.php examples/lift/enums.phg |
-| 2b | L1b — block-bodied closures lift; `use (&$x)` refused BY NAME (DEC-506); `static` and by-value `use` dropped. Headline stays 57/123 and that is the finding: the histogram is FIRST-ERROR-per-file, so the closure files fell through to their next wall (`array` 12 → 14, a new `Closure`-type row) | M | done | - | src/lift/parser/closures.rs src/lift/printer/lambda.rs src/lift/lifter_tests_closures.rs examples/lift/closures.php examples/lift/closures.phg |
-| 2c | L1c — positional `array{…}` → tuples (type AND the returned literal, at any depth), array destructuring (DEC-510), `.` → one interpolation (DEC-511), `echo $var` → interpolation, strict `=== null` → `is null`. Headline holds at **57/125** — first-error-per-file again: the keyed-shape row rises 14 → 15 and `<=>` falls 5 → 3 as files reach their next wall | M | done | - | src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/exprs.rs src/lift/parser/docblock.rs src/lift/parser/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/shapes.php examples/lift/shapes.phg |
+| 2 | L1a — enums (DEC-509): a case CONSTRUCTS its variant, `self` inside an enum body is the enum, a method LOWERS to a free function reached by UFCS, static call sites lower with it; 54 → **57/123** — `feat(lift): PHP enums` | M | done | 9bd0a43e | src/lift/lifter/enums.rs src/lift/parser/enums.rs src/lift/lifter_tests_enums.rs examples/lift/enums.php examples/lift/enums.phg |
+| 2b | L1b — block-bodied closures lift; `use (&$x)` refused BY NAME (DEC-506); `static` and by-value `use` dropped. Headline stays 57/123 and that is the finding: the histogram is FIRST-ERROR-per-file, so the closure files fell through to their next wall (`array` 12 → 14, a new `Closure`-type row) | M | done | f9e26192 | src/lift/parser/closures.rs src/lift/printer/lambda.rs src/lift/lifter_tests_closures.rs examples/lift/closures.php examples/lift/closures.phg |
+| 2c | L1c — positional `array{…}` → tuples (type AND the returned literal, at any depth), array destructuring (DEC-510), `.` → one interpolation (DEC-511), `echo $var` → interpolation, strict `=== null` → `is null`. Headline holds at **57/123** (denominator corrected 09-08; "125" was a typo) — first-error-per-file again: the keyed-shape row rises 14 → 15, and the `expected an expression` row stays at 5 but only **3** of those are `<=>` — the other 2 are PHP spread `...`, found 09-08 | M | done | 78317867 | src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/exprs.rs src/lift/parser/docblock.rs src/lift/parser/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/shapes.php examples/lift/shapes.phg |
 | 3 | L2 — DEC-505 `<=>` operator + lexicographic tuple/list ordering, all legs + LSP + editors + example + bench | L | todo | - | src/lexer/* src/parser/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lsp/* editors/* examples/guide/* |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | todo | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
@@ -228,6 +259,10 @@ DEC-507 applies to every one.
 <!-- /progress-block -->
 
 ### Blocked
+- **L3 depends on L4** (found by the 09-08 re-census, §1). `Classification::toArray()` is the
+  four-leg contract itself and refuses on its keyed `array{…}` shape, so the depth oracle cannot be
+  built before named-field tuples exist. L2 is still required by the same file (`:48`) and is still
+  the right next build — smaller, ruled, unblocked — but it does not on its own unblock L3.
 - L6 depends on L5 for alert-email parsing (an alert body IS an HTML document).
 
 ### Needs input
@@ -240,6 +275,22 @@ L1/L2/L4 will expose better-shaped versions of each):
 - **`yield` / generators** (23 files) — DEC-479 RULED, build QUEUED; masked behind earlier refusals.
 - **Q-W2-1 / Q-W2-2** carried over from `2026-09-05-big-wave-2.plan.md` (cross-package `Color.Green`;
   `Acme\Color.Green` rendering).
+- **Q-0908-1 — `?? throw`: PHP 8 throw-as-expression.** phorj's `throw` is `Stmt::Throw`
+  (`src/ast/stmts.rs:90`) — statement-only, so `a ?? throw e` has no phorj form. **Exactly ONE site
+  scout-wide**, `Core/Text.php:426`, and it is on the depth critical path. Two dispositions, both
+  honest, and the choice is the developer's: **(a)** phorj gains a throw-expression (real surface,
+  all legs + LSP + editors); **(b)** the lifter LOWERS `return a ?? throw e;` to
+  `var t = a; if t is null { throw e; } return t;` — semantics-preserving, no guessing, and the
+  statement form already lifts (`src/lift/parser/stmts.rs:18`). (b) is the DEC-511 class and costs a
+  fraction of (a); (a) is warranted only if the construct is wanted in hand-written phorj. Refused
+  today at `src/lift/parser/exprs.rs:326`. Note first-error-only: `Text.php` may have further walls.
+- **Q-0908-2 — PHP spread `...`.** phorj has NO spread of any kind [Verified 09-08: zero hits for
+  `spread|Ellipsis|DotDotDot` across `src/ast/` and `src/lexer/`]. Two scout sites, both first-error:
+  `Rent/Adapters/HtmlSource.php:397` `[...$out, ...$rows]` (array spread in a literal) and
+  `Rent/Core/CriteriaEngine.php:378` `array_unshift($reasons, ...$c->reasons())` (argument
+  unpacking). These are two DIFFERENT features — a literal-spread and a call-site unpack — and the
+  second interacts with arity checking, so they may be ruled apart. Build it, or refuse it by name
+  with a DEC row; do not leave it as today's generic `expected an expression`.
 - **Q-L1c-1 — `phg format` normalizes `is null` to `instanceof null`.** Found while lifting
   `shapes.php`: `x is null` and `x instanceof null` are ONE AST node (DEC-184 makes `is` a full
   synonym), and the canonical formatter picks `instanceof`. So a lifted null test renders
@@ -251,4 +302,11 @@ L1/L2/L4 will expose better-shaped versions of each):
   the same draft, the two-gates-one-artifact trap.
 
 ### Known issues
+- **`Stmt::Destructure` carries no `mutable`**, so `[$a, $b] = f(); $a = …;` lifts to
+  `var (a, b) = f(); a = …;` and fails `phg check` with `E-ASSIGN-IMMUTABLE` — the same
+  two-halves-disagree class L1c fixed elsewhere, and NOT visible in the census (a refusal count is
+  not a check run). It surfaces the moment L3 runs `phg check` over the lifted scout tree. Found by
+  review, 2026-09-07, not yet reproduced against scout. The honest outcome if scout has the shape is
+  a NAMED refusal, not a silent `var` — the lifter cannot see whether a binder is later reassigned
+  without a pass that says so.
 - `§LIFT-DISCARD` — a call written for effect lifts fine, then fails `phg check` (carried from Lane R).

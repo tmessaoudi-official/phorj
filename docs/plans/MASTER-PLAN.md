@@ -79,6 +79,16 @@
 | DEC-506 | **By-ref closure capture stays REJECTED and becomes visible** — the lifter learns block closures and emits a SPECIFIC diagnostic for `use (&$x)` instead of a generic parse error | RULED 2026-09-07 — build QUEUED (lane L1) |
 | DEC-507 | **The ABSOLUTE perf bar, with escalation** — every lifted/transpiled artifact beats dockerised JIT-on PHP or the lane STOPS; **supersedes the 2026-07-10 "MATCHES-not-beats" refinement** for this campaign; the on-box `ZTS DEBUG GCOV` oracle is invalid for perf | RULED 2026-09-07 — supersedes |
 | DEC-508 | **scout is a READ-ONLY forcing function** validating four surfaces (lift, transpile, LSP, speed); lifted `.phg` lives in `examples/lift/scout/`; depth before breadth; readiness steps 13/14 HOISTED; stop condition = every file lifts or carries a NAMED refusal | RULED 2026-09-07 — plan opened |
+| DEC-509 / 510 / 511 | lifter mechanicals — enum cases construct + `self` resolves + methods lower to UFCS free functions (509); PHP array destructuring un-deferred, keyed destructure refused by name (510); `.` lifts to ONE interpolation, not `+` (511) | RULED 2026-09-07 — **BUILT** (`9bd0a43e`, `78317867`) |
+
+**Lane progress (2026-09-08 re-census at `78317867`): L0 + L1a/L1b/L1c DONE, 57/123 files lift.**
+**Lane order REORDERED — L3 now comes AFTER L4** (plan §15, Claude-level, overrulable):
+`Classification::toArray()` *is* the depth oracle's four-leg contract and refuses on the keyed
+`array{…}` shape L4 builds, so L3 could never have run first. L2 (DEC-505) remains the next build.
+Two new banked Invariant-15 questions, neither ruled: **Q-0908-1 `?? throw`** — PHP 8
+throw-as-expression, 1 scout site, and phorj's `throw` is `Stmt`-only, so it is either a new
+expression form or a lifter lowering; **Q-0908-2 spread `...`** — phorj has none at all, 2 scout
+sites, and literal-spread vs call-site-unpack may be ruled apart. Both in the plan's *Needs input*.
 
 ## 0.07 THE 2026-09-02 RULINGS — mirror rows (DEC-457 … DEC-489)
 

@@ -34,9 +34,20 @@ the readiness plan calls its yardstick. Today: **54 of 123 files lift, 69 refuse
 **first-error-per-file**, so fixing one wall exposes the next (`yield`, in 23 files, does not appear
 in it at all) — re-census after every lifter change; never treat the 69 as a worklist.
 
-**Lane order:** L0 docs (this) → L1 lifter mechanicals (enum `self`, block closures, positional
-shapes → tuples, a NAMED by-ref diagnostic per DEC-506) → L2 DEC-505 → L3 the depth oracle → L4
-DEC-504 → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 perf twins.
+**Lane order:** L0 docs → L1 lifter mechanicals (enum `self`, block closures, positional
+shapes → tuples, a NAMED by-ref diagnostic per DEC-506) → **L2 DEC-505 → L4 DEC-504 → L3 the depth
+oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 perf twins.
+
+> **REORDERED 2026-09-08 (plan §15, Claude-level, overrulable): L3 comes AFTER L4, not before.**
+> `Classification::toArray()` IS the four-leg contract the depth oracle diffs against, and it refuses
+> on the keyed `array{…}` shape that L4 builds — so L3 could never have run first. L2 is still the
+> next build (smaller, ruled, and `Classification.php:48` needs `<=>` too), it just does not on its
+> own unblock L3. **L0/L1a/L1b/L1c are DONE** (`e42e9a9a`, `9bd0a43e`, `f9e26192`, `78317867`);
+> re-census at `78317867` holds at **57/123** with the depth cluster's walls moved — `Tenure` now
+> LIFTS, `TenureClassifier` is a named by-ref refusal (hand-port, 1 site), `Text.php` fell through to
+> `?? throw`. Two new banked questions in the plan's *Needs input*: **Q-0908-1 `?? throw`**
+> (throw-as-expression; phorj's `throw` is `Stmt`-only) and **Q-0908-2 spread `...`** (phorj has none
+> at all). Full detail: `docs/plans/2026-09-07-scout-forcing-function.plan.md` §1 re-census.
 
 **The depth oracle is FOUR legs, not three.** `tests/differential.rs` proves interpreter ≡ VM ≡
 transpiled-PHP over `examples/**/*.phg`; it never touches scout's ORIGINAL PHP. scout built the
