@@ -7,6 +7,101 @@
 
 use super::*;
 
+/// Lane L1c (2026-09-07): a POSITIONAL `array{…}` shape lifts to a tuple TYPE, so the literal that
+/// satisfies it must lift to a tuple VALUE. `return [$n, 'x'];` under `@return array{int, string}`
+/// becomes `return (n, "x");`. Without this the lifter emits two halves that disagree with each
+/// other — the draft lifts and then `phg check` reports `expected (int, string), found List<int>`.
+///
+/// The arity must MATCH. A literal of the wrong length is left as a list rather than padded or
+/// truncated into the declared shape: the disagreement is then reported by the checker, which is the
+/// honest outcome (DEC-166 — the lifter does not guess).
+pub(super) fn seed_returned_tuple_literals(body: &mut [Stmt], ret: &Option<Type>) {
+    let Some(ret) = ret else {
+        return;
+    };
+    // A nullable tuple return (`?array` + `@return array{…}|null`) seeds the same way: `return
+    // [1, "one"];` is the tuple, and the `null` arm is unaffected.
+    let elems = match ret {
+        Type::Tuple(e, _) => e,
+        Type::Optional { inner, .. } => match inner.as_ref() {
+            Type::Tuple(e, _) => e,
+            _ => return,
+        },
+        _ => return,
+    };
+    seed_tuple_returns_in(body, elems.len());
+}
+
+/// The recursive half: EVERY `return` in the body answers to the declared return type, not only the
+/// ones at the top level — `if ($yes) { return [1, "one"]; }` is the shape the idiom actually takes.
+/// The walk descends into statement blocks ONLY and never into an expression, because a `return`
+/// inside a lambda body belongs to that lambda's own signature, not to this function's.
+///
+/// The match is exhaustive by design (Invariant 3): a new block-bearing `Stmt` must decide whether
+/// its returns are this function's, and a `_` arm would silently answer "no".
+fn seed_tuple_returns_in(body: &mut [Stmt], arity: usize) {
+    for s in body.iter_mut() {
+        match s {
+            Stmt::Return {
+                value: Some(v),
+                span,
+            } => {
+                if let Expr::List(items, _) = v {
+                    if items.len() == arity {
+                        *s = Stmt::Return {
+                            value: Some(Expr::Tuple(std::mem::take(items), SP)),
+                            span: *span,
+                        };
+                    }
+                }
+            }
+            Stmt::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                seed_tuple_returns_in(then_block, arity);
+                if let Some(e) = else_block {
+                    seed_tuple_returns_in(e, arity);
+                }
+            }
+            Stmt::For { body, .. }
+            | Stmt::While { body, .. }
+            | Stmt::CFor { body, .. }
+            | Stmt::Block(body, _)
+            | Stmt::Using { body, .. } => seed_tuple_returns_in(body, arity),
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                seed_tuple_returns_in(body, arity);
+                for c in catches.iter_mut() {
+                    seed_tuple_returns_in(&mut c.body, arity);
+                }
+                if let Some(f) = finally_block {
+                    seed_tuple_returns_in(f, arity);
+                }
+            }
+            Stmt::Destructure { else_block, .. } => {
+                if let Some(e) = else_block {
+                    seed_tuple_returns_in(e, arity);
+                }
+            }
+            // No block of this function's statements inside: nothing to descend into.
+            Stmt::Return { value: None, .. }
+            | Stmt::VarDecl { .. }
+            | Stmt::Assign { .. }
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Expr(..)
+            | Stmt::Discard(..)
+            | Stmt::Throw { .. } => {}
+        }
+    }
+}
+
 pub(super) fn seed_returned_empty_literals(body: &mut [Stmt], ret: &Option<Type>) {
     let Some(ret) = ret else {
         return;

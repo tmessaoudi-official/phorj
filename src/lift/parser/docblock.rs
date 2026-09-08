@@ -251,15 +251,65 @@ impl PParser {
         })
     }
 
+    /// An array SHAPE, `{` already eaten. Two very different things wear one syntax:
+    ///
+    /// * **positional** — `array{int, string}`, or explicit ascending indices from zero,
+    ///   `array{0: float, 1: float}` (the form PHPStan and Psalm emit). That is a phorj TUPLE.
+    /// * **keyed** — `array{tenure: Tenure, source: string}`. That needs a named-field tuple, which
+    ///   phorj does not have yet (DEC-504), so it is refused BY NAME rather than as a generic wall.
+    ///
+    /// Indices that are not a dense ascending run from zero (`array{1: int, 0: string}`) are NOT
+    /// silently reordered into a tuple — reordering would be the lifter guessing at intent, which
+    /// DEC-166 forbids.
+    fn doc_shape(&mut self, c: &mut Cursor, name: &str) -> Result<PhpType, String> {
+        let mut elems: Vec<PhpType> = Vec::new();
+        let mut indices: Vec<Option<String>> = Vec::new();
+        loop {
+            c.skip_ws();
+            if c.eat('}') {
+                break;
+            }
+            // A leading `<ident>:` or `<digits>:` is a key; without one the element is positional.
+            let save = c.i;
+            let key = c.ident();
+            c.skip_ws();
+            let key = if !key.is_empty() && c.eat(':') {
+                Some(key)
+            } else {
+                c.i = save;
+                None
+            };
+            indices.push(key);
+            elems.push(self.doc_type(c)?);
+            c.skip_ws();
+            if !c.eat(',') {
+                if !c.eat('}') {
+                    return Err(self.err(&format!("`}}` to close the array shape `{name}{{…}}`")));
+                }
+                break;
+            }
+        }
+        let positional = indices.iter().enumerate().all(|(i, k)| match k {
+            None => true,
+            Some(k) => k.parse::<usize>() == Ok(i),
+        });
+        if positional && !elems.is_empty() {
+            return Ok(PhpType::Tuple(elems));
+        }
+        Err(self.err(&format!(
+            "the array shape `{name}{{…}}` is KEYED — it needs a named-field tuple, which is ruled \
+             (DEC-504) and not built yet. A POSITIONAL shape (`array{{int, string}}`, or explicit \
+             indices ascending from zero) lifts to a tuple today."
+        )))
+    }
+
     fn doc_atom(&mut self, c: &mut Cursor) -> Result<PhpType, String> {
         let name = c.ident();
         if name.is_empty() {
             return Err(self.err(&format!("a type name in the docblock type `{}`", c.s)));
         }
         if c.eat('{') {
-            return Err(self.err(&format!(
-                "the array shape `{name}{{…}}` has no phorj type — declare a class for it (Tier-2)"
-            )));
+            return self.doc_shape(c, &name);
         }
         if c.eat('<') {
             let mut args = Vec::new();

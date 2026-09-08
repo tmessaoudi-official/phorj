@@ -59,3 +59,5 @@ mod lifter_tests_hoist;
 mod lifter_tests_ns;
 #[cfg(test)]
 mod lifter_tests_php83;
+#[cfg(test)]
+mod lifter_tests_shapes;

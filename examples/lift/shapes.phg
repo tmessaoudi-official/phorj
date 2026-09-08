@@ -1,0 +1,49 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+/**
+ * @return array{int, string}
+ */
+function pair(int n): (int, string) {
+    return (n, "n={n}");
+}
+
+/**
+ * @return array{0: float, 1: float}
+ */
+function origin(): (float, float) {
+    return (0.0, 0.0);
+}
+
+/**
+ * @return array{int, string}|null
+ */
+function maybePair(bool yes): (int, string)? {
+    if (yes) {
+        return (1, "one");
+    }
+    return null;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    var (n, label) = pair(7);
+    Output.print("{n}");
+    Output.print(" ");
+    Output.print("{label}");
+    Output.print("\n");
+    var (x, y) = origin();
+    Output.print("{x}");
+    Output.print(" ");
+    Output.print("{y}");
+    Output.print("\n");
+    if (maybePair(false) instanceof null) {
+        Output.print("none\n");
+    } else {
+        Output.print("some\n");
+    }
+}

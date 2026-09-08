@@ -1,4 +1,5 @@
-//! PHP lifter — expression lifting + leaf conversions (types, ops, params).
+//! PHP lifter — expression lifting. The declaration leaf conversions live in `leaves.rs` and the
+//! `match` cluster in `matches.rs` (split out under Invariant 13, lane L1c).
 
 use super::*;
 use crate::ast::LambdaBody;
@@ -15,6 +16,55 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             body: LambdaBody::Expr(Box::new(lift_expr(body)?)),
             span: SP,
         },
+        // DEC-511: PHP's `.` COERCES its operands to string; phorj's `+` refuses to ("no
+        // coercion"), so lifting `.` to `+` produced a draft that lifted and then failed
+        // `phg check` — ~207 sites in one real 120-file codebase. phorj already has the faithful
+        // form: an interpolation stringifies each part exactly as PHP's `.` does. A CHAIN flattens
+        // into ONE interpolation rather than a nest, which is what PHP's own evaluation produces.
+        // A STRICT comparison against `null` is phorj's `is null` narrowing test, not an equality:
+        // `$x === null` asks exactly "is this the null case of an optional", which `==` cannot
+        // express here — the checker rejects `T? == null` as a cross-type comparison, so lifting it
+        // as an equality produced a draft that lifted and then failed `phg check`. Both orderings
+        // are handled, because Yoda style (`null === $x`) is common in real PHP.
+        //
+        // STRICT ONLY. PHP's LOOSE `$x == null` is also true for `0`, `""`, `[]` and `false`, so it
+        // is NOT this test; it is left as a plain `==` and the checker then reports it, which is the
+        // honest DEC-166 outcome — the lifter does not guess which of the five the author meant.
+        php::PhpExpr::Binary {
+            op: op @ (php::PhpBinOp::Identical | php::PhpBinOp::NotIdentical),
+            left,
+            right,
+        } if matches!(left.as_ref(), php::PhpExpr::Null)
+            || matches!(right.as_ref(), php::PhpExpr::Null) =>
+        {
+            let subject = if matches!(left.as_ref(), php::PhpExpr::Null) {
+                right
+            } else {
+                left
+            };
+            let test = Expr::InstanceOf {
+                value: Box::new(lift_expr(subject)?),
+                type_name: "null".to_string(),
+                span: SP,
+            };
+            match op {
+                php::PhpBinOp::Identical => test,
+                // phorj has no `is not null`: the negation is spelled `!(x is null)`.
+                _ => Expr::Unary {
+                    op: UnaryOp::Not,
+                    expr: Box::new(test),
+                    span: SP,
+                },
+            }
+        }
+        php::PhpExpr::Binary {
+            op: php::PhpBinOp::Concat,
+            ..
+        } => {
+            let mut parts = Vec::new();
+            flatten_concat(e, &mut parts)?;
+            Expr::Str(parts, SP)
+        }
         php::PhpExpr::BlockClosure { params, ret, body } => {
             // A phorj lambda captures enclosing locals BY VALUE, which is exactly what PHP's
             // by-value `use (…)` list asks for — so the list is dropped at the parser and the
@@ -32,6 +82,16 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
                 body: LambdaBody::Block(Lifter {}.lift_block(body, &mut declared)?),
                 span: SP,
             }
+        }
+        // A destructure is a STATEMENT in phorj (`var (a, b) = …`), so it is handled in
+        // `lift_assign_like`. PHP also allows it as an expression (`f([$a, $b] = g())`), which has
+        // no phorj form — refused by name rather than mis-lifted.
+        php::PhpExpr::Destructure { .. } => {
+            return Err(
+                "lift: a destructuring assignment used as an EXPRESSION has no phorj form — \
+                        phorj's `var (a, b) = …` is a statement (Tier-2)"
+                    .into(),
+            )
         }
         php::PhpExpr::Float(f) => Expr::Float(*f, SP),
         php::PhpExpr::Str(s) => Expr::Str(vec![StrPart::Literal(s.clone())], SP),
@@ -267,206 +327,30 @@ pub(super) fn lift_array(elems: &[php::PhpArrayElem]) -> Result<Expr, String> {
     }
 }
 
-pub(super) fn lift_match(
-    subject: &php::PhpExpr,
-    arms: &[php::PhpMatchArm],
-) -> Result<Expr, String> {
-    let mut out = Vec::new();
-    for arm in arms {
-        match &arm.conds {
-            None => out.push(MatchArm {
-                pattern: Pattern::Wildcard(SP),
-                guard: None,
-                body: lift_expr(&arm.body)?,
-                span: SP,
-            }),
-            Some(conds) => {
-                // PHP shares one body across comma-separated conditions; Phorj has one pattern per
-                // arm, so duplicate the (cloned) body per literal condition.
-                let body = lift_expr(&arm.body)?;
-                for c in conds {
-                    out.push(MatchArm {
-                        pattern: literal_pattern(c)?,
-                        guard: None,
-                        body: body.clone(),
-                        span: SP,
-                    });
-                }
+/// A string LITERAL contributes its text directly (so `'a' . 'b'` is the one literal `"ab"`, not two
+/// spliced parts); anything else becomes an interpolated expression, which is where PHP's coercion
+/// happens and where phorj's interpolation does exactly the same thing. A nested interpolation on
+/// either side is spliced in rather than re-wrapped, so `"x$a" . $b` stays one flat string.
+fn flatten_concat(e: &php::PhpExpr, out: &mut Vec<StrPart>) -> Result<(), String> {
+    match e {
+        php::PhpExpr::Binary {
+            op: php::PhpBinOp::Concat,
+            left,
+            right,
+        } => {
+            flatten_concat(left, out)?;
+            flatten_concat(right, out)?;
+        }
+        php::PhpExpr::Str(s) => out.push(StrPart::Literal(s.clone())),
+        php::PhpExpr::Interp(parts) => {
+            for p in parts {
+                out.push(match p {
+                    php::PhpStrPart::Lit(s) => StrPart::Literal(s.clone()),
+                    php::PhpStrPart::Expr(inner) => StrPart::Expr(Box::new(lift_expr(inner)?)),
+                });
             }
         }
+        other => out.push(StrPart::Expr(Box::new(lift_expr(other)?))),
     }
-    Ok(Expr::Match {
-        scrutinee: Box::new(lift_expr(subject)?),
-        arms: out,
-        span: SP,
-    })
-}
-
-/// A PHP `match` condition must be a literal to become a Phorj pattern (a non-literal arm compares
-/// by `===` at runtime — no pattern equivalent, so it's a loud Tier-2 error).
-pub(super) fn literal_pattern(e: &php::PhpExpr) -> Result<Pattern, String> {
-    Ok(match e {
-        php::PhpExpr::Int(n) => Pattern::Int(*n, SP),
-        php::PhpExpr::Float(f) => Pattern::Float(*f, SP),
-        php::PhpExpr::Str(s) => Pattern::Str(s.clone(), SP),
-        php::PhpExpr::Bool(b) => Pattern::Bool(*b, SP),
-        php::PhpExpr::Null => Pattern::Null(SP),
-        // `match ($t) { Tenure::PLAI => …, default => … }` — an ENUM CASE in pattern position is a
-        // variant pattern, not a literal (lane L1). It carries its enum as the qualifier, which the
-        // checker validates against the scrutinee, so a case from the WRONG enum is still an error
-        // rather than a silently-never-matching arm. A class constant in pattern position keeps its
-        // Tier-2 refusal below: `Limits::MAX => …` is a value comparison PHP allows and phorj's
-        // pattern grammar has no form for.
-        php::PhpExpr::ClassConst { class, name } if super::enums::is_enum(class) => {
-            Pattern::Variant {
-                name: name.clone(),
-                fields: Vec::new(),
-                enum_qualifier: Some(class.rsplit('\\').next().unwrap_or(class).to_string()),
-                span: SP,
-            }
-        }
-        _ => return Err("lift: a `match` arm with a non-literal condition is Tier-2".into()),
-    })
-}
-
-// ── enums + types + small helpers ──
-
-pub(super) fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
-    // Methods are NOT refused any more: DEC-509 lowers each to a free function reachable by UFCS
-    // (`super::enums::lower_methods`), which the item loop emits beside the enum. Phorj enums still
-    // carry no methods — that design property is unchanged; what changed is that the lifter now has
-    // a faithful target for the PHP idiom instead of a Tier-2 refusal.
-    // DEC-302: a PHP backed enum (`enum Suit: string { case Hearts = "H"; }`) lifts to a Phorj
-    // backed enum — backing type + per-variant value preserved. Only `int`/`string` back an enum
-    // (both PHP and Phorj), and every case of a backed enum carries a value (PHP requires it).
-    let backing_type = match &e.backing {
-        Some(bt) => {
-            let ty = lift_type(bt)?;
-            if !matches!(&ty, Type::Named { name, .. } if name == "int" || name == "string") {
-                return Err(format!(
-                    "lift: enum `{}` backing type must be `int` or `string` (Tier-2)",
-                    e.name
-                ));
-            }
-            Some(ty)
-        }
-        None => None,
-    };
-    let variants = e
-        .cases
-        .iter()
-        .map(|c| {
-            let backing_value = match (&backing_type, &c.value) {
-                (Some(_), Some(v)) => Some(Box::new(lift_expr(v)?)),
-                (Some(_), None) => {
-                    return Err(format!(
-                        "lift: backed enum `{}` case `{}` has no value",
-                        e.name, c.name
-                    ))
-                }
-                (None, _) => None,
-            };
-            Ok(EnumVariant {
-                name: c.name.clone(),
-                fields: Vec::new(),
-                backing_value,
-                span: SP,
-            })
-        })
-        .collect::<Result<_, String>>()?;
-    Ok(EnumDecl {
-        vis: crate::ast::Visibility::Public,
-        name: e.name.clone(),
-        type_params: Vec::new(),
-        type_param_bounds: Vec::new(),
-        backing_type,
-        variants,
-        injected: false,
-        span: SP,
-    })
-}
-
-pub(super) fn lift_params(params: &[php::PhpParam]) -> Result<Vec<Param>, String> {
-    let mut out = Vec::new();
-    for p in params {
-        // Lane R-5: the default lifts as written; the checker enforces literal-only and
-        // trailing-only (`E-DEFAULT-PARAM-EXPR` / `E-DEFAULT-PARAM-ORDER`), so nothing is guessed.
-        let default = match &p.default {
-            Some(d) => Some(Box::new(lift_expr(d)?)),
-            None => None,
-        };
-        let ty = lift_type(p.ty.as_ref().ok_or_else(|| {
-            format!("lift: parameter `{}` has no type (Tier-1 is typed)", p.name)
-        })?)?;
-        out.push(Param {
-            ty,
-            name: p.name.clone(),
-            default,
-            // Lifting PHP `...$x` variadics is a Tier-2 follow-up (DEC-298 lift leg).
-            variadic: false,
-            span: SP,
-        });
-    }
-    Ok(out)
-}
-
-pub(super) fn lift_ctor_params(
-    params: &[php::PhpParam],
-    readonly_class: bool,
-) -> Result<Vec<CtorParam>, String> {
-    let mut out = Vec::new();
-    for p in params {
-        // Lane R-5: a promoted default (`public int $tier = 0`, 22 of scout's 120 files) lifts as
-        // written — DEC-236 trailing-only literal defaults on the phorj side.
-        let default = match &p.default {
-            Some(d) => Some(Box::new(lift_expr(d)?)),
-            None => None,
-        };
-        let ty = lift_type(
-            p.ty.as_ref()
-                .ok_or_else(|| format!("lift: ctor parameter `{}` has no type", p.name))?,
-        )?;
-        let mut modifiers = Vec::new();
-        if let Some(vis) = p.promotion {
-            // A promoted property — mirror PHP's mutability: mutable unless `readonly` on the
-            // parameter or on the whole class (PHP 8.2 `readonly class`), in which case phorj's
-            // default (immutable) is exactly right and no `mutable` is written.
-            modifiers.push(vis_modifier(vis));
-            if !(readonly_class || p.is_readonly) {
-                modifiers.push(Modifier::Mutable);
-            }
-        }
-        out.push(CtorParam {
-            modifiers,
-            ty,
-            name: p.name.clone(),
-            default,
-            span: SP,
-        });
-    }
-    Ok(out)
-}
-
-/// Lift a function/method's declared return type (C-45). A PHP `: T` lifts directly. **No** hint is
-/// the trap: the old code emitted a Phorj function with no return type, which *parses* but fails the
-/// checker (Tier-1 requires explicit returns) — a silent non-compiling draft. Instead: if the body
-/// never returns a value, the function is provably `void` (a fact from the body, not a guess); if it
-/// returns a value we cannot infer the type, so reject loudly rather than emit invalid Phorj.
-pub(super) fn lift_ret(
-    php_ret: &Option<php::PhpType>,
-    body: Option<&[php::PhpStmt]>,
-) -> Result<Option<Type>, String> {
-    match php_ret {
-        Some(t) => Ok(Some(lift_type(t)?)),
-        None => match body {
-            Some(b) if !body_has_value_return(b) => Ok(Some(named("void"))),
-            Some(_) => Err(
-                "lift: function has no return type but returns a value — add an explicit return type (Tier-2)"
-                    .into(),
-            ),
-            None => {
-                Err("lift: an abstract method with no return type needs an explicit one (Tier-2)".into())
-            }
-        },
-    }
+    Ok(())
 }

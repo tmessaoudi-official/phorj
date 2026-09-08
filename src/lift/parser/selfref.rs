@@ -33,7 +33,7 @@ fn resolve(t: &mut PhpType, class: &str) {
         PhpType::Named(n) if n == "self" => *n = class.to_string(),
         PhpType::Named(_) => {}
         PhpType::Nullable(inner) => resolve(inner, class),
-        PhpType::Generic { args, .. } => {
+        PhpType::Generic { args, .. } | PhpType::Tuple(args) => {
             for a in args {
                 resolve(a, class);
             }

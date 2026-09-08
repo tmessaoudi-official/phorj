@@ -14,7 +14,7 @@ open class Audited {
 open class Invoice {
     constructor(public mutable string ref) {}
     public open function label(): string {
-        return "invoice " + this.ref;
+        return "invoice {this.ref}";
     }
 }
 

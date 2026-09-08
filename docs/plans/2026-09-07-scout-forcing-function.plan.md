@@ -80,6 +80,20 @@
 
 ---
 
+- [2026-09-07 §12] AGREED — **DEC-510**: PHP array destructuring is UN-DEFERRED. `[$a,$b] = e;` and
+  `list($a,$b) = e;` both lift to `var (a, b) = e;`. A KEYED destructure is refused by name.
+- [2026-09-07 §13] AGREED — **DEC-511**: PHP's `.` lifts to ONE interpolation, not `+`. A chain
+  flattens; arithmetic `+` is untouched.
+- [2026-09-07 §14] CLAUDE-LEVEL, overrulable: two more lift-fidelity calls landed with L1c, both
+  found by RUNNING the example rather than reading the lifter, and both the same
+  "two halves of one draft disagree" class DEC-511 fixed. (a) `echo $x;` of a BARE VARIABLE is now
+  an interpolation `Output.print("{x}")`: the previous carve-out kept it bare on the grounds that a
+  string variable is the common case, which is a GUESS about a type the lifter cannot see, and wrong
+  on the int a lifted positional shape produces. Wrapping is correct for BOTH. (b) a STRICT `$x ===
+  null` (either ordering) becomes phorj's `is null` narrowing test, because the checker rejects
+  `T? == null` as a cross-type comparison; PHP's LOOSE `== null` is a different question (also true
+  for `0`, `""`, `[]`, `false`) and is deliberately left as an equality for the checker to report.
+
 ## 1. Measured starting state (2026-09-07, on `target/release/phg` at `6c49816d`)
 
 `phg lift /stack/projects/scout/src/php -o <out>` — a whole-tree pass that writes `LIFT-REPORT.md`
@@ -203,7 +217,7 @@ DEC-507 applies to every one.
 | 1 | L0 — Invariant 19 docs: DEC-504…508 + the 2026-07-10 perf-refinement supersession, readiness re-order, SPEC § `Ordering, <=>, and named-field tuples`, SLICE-STATE cursor, MASTER-PLAN §0.08 mirror | M | done | e42e9a9a | docs/research/full-audit/raw/C-decisions.md docs/plans/2026-09-07-scout-forcing-function.plan.md docs/specs/UNIFIED-SPEC.md |
 | 2 | L1a — enums (DEC-509): a case CONSTRUCTS its variant, `self` inside an enum body is the enum, a method LOWERS to a free function reached by UFCS, static call sites lower with it; 54 → **57/123** | M | done | - | src/lift/lifter/enums.rs src/lift/parser/enums.rs src/lift/lifter_tests_enums.rs examples/lift/enums.php examples/lift/enums.phg |
 | 2b | L1b — block-bodied closures lift; `use (&$x)` refused BY NAME (DEC-506); `static` and by-value `use` dropped. Headline stays 57/123 and that is the finding: the histogram is FIRST-ERROR-per-file, so the closure files fell through to their next wall (`array` 12 → 14, a new `Closure`-type row) | M | done | - | src/lift/parser/closures.rs src/lift/printer/lambda.rs src/lift/lifter_tests_closures.rs examples/lift/closures.php examples/lift/closures.phg |
-| 2c | L1c — the remaining mechanicals: positional `array{…}` → tuples, the four assignment-target sites, the `Closure`-type signature row | M | todo | - | src/lift/* examples/lift/* |
+| 2c | L1c — positional `array{…}` → tuples (type AND the returned literal, at any depth), array destructuring (DEC-510), `.` → one interpolation (DEC-511), `echo $var` → interpolation, strict `=== null` → `is null`. Headline holds at **57/125** — first-error-per-file again: the keyed-shape row rises 14 → 15 and `<=>` falls 5 → 3 as files reach their next wall | M | done | - | src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/exprs.rs src/lift/parser/docblock.rs src/lift/parser/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/shapes.php examples/lift/shapes.phg |
 | 3 | L2 — DEC-505 `<=>` operator + lexicographic tuple/list ordering, all legs + LSP + editors + example + bench | L | todo | - | src/lexer/* src/parser/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lsp/* editors/* examples/guide/* |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | todo | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
@@ -226,6 +240,15 @@ L1/L2/L4 will expose better-shaped versions of each):
 - **`yield` / generators** (23 files) — DEC-479 RULED, build QUEUED; masked behind earlier refusals.
 - **Q-W2-1 / Q-W2-2** carried over from `2026-09-05-big-wave-2.plan.md` (cross-package `Color.Green`;
   `Acme\Color.Green` rendering).
+- **Q-L1c-1 — `phg format` normalizes `is null` to `instanceof null`.** Found while lifting
+  `shapes.php`: `x is null` and `x instanceof null` are ONE AST node (DEC-184 makes `is` a full
+  synonym), and the canonical formatter picks `instanceof`. So a lifted null test renders
+  `maybePair(false) instanceof null`, which reads as a mistake — and this is REPO-WIDE, not a lift
+  issue: `examples/guide/is-narrowing.phg`, the example whose SUBJECT is `is`, prints
+  `name instanceof null` under a comment that says `is null`. Changing the canonical form is a
+  `phg format` decision with an idempotency gate behind it, so it is not L1c's to take. Deliberately
+  NOT worked around in the lift printer — that would make `lift_source` and `cmd_lift` disagree about
+  the same draft, the two-gates-one-artifact trap.
 
 ### Known issues
 - `§LIFT-DISCARD` — a call written for effect lifts fine, then fails `phg check` (carried from Lane R).

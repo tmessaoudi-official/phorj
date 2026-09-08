@@ -42,6 +42,17 @@ pub(super) fn body_has_value_return(body: &[php::PhpStmt]) -> bool {
 
 pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
     match t {
+        // A POSITIONAL array shape is a phorj tuple (DEC-288). The parser has already refused the
+        // KEYED form by name, so anything reaching here is genuinely positional.
+        php::PhpType::Tuple(elems) => Ok(Type::Tuple(
+            elems.iter().map(lift_type).collect::<Result<_, _>>()?,
+            crate::token::Span {
+                start: 0,
+                len: 0,
+                line: 0,
+                col: 0,
+            },
+        )),
         php::PhpType::Named(name) => match name.as_str() {
             "int" | "float" | "string" | "bool" | "void" => Ok(named(name)),
             "array" => Err("lift: an `array` type needs List/Map/Set inference (Tier-2) — annotate it \
@@ -60,10 +71,20 @@ pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
             // A class/enum/interface name.
             _ => Ok(named(name)),
         },
-        php::PhpType::Nullable(inner) => Ok(Type::Optional {
-            inner: Box::new(lift_type(inner)?),
-            span: SP,
-        }),
+        php::PhpType::Nullable(inner) => {
+            // PHP has no double-nullable, and two independent sources can each say "nullable" about
+            // one type: the declared `?array` and the docblock `array{…}|null` that replaces it.
+            // Collapsing here is what keeps that from printing `(int, string)??`, which does not
+            // parse. Observed on `Core/Text.php`'s `@return array{int, string}|null`.
+            let lifted = lift_type(inner)?;
+            if matches!(lifted, Type::Optional { .. }) {
+                return Ok(lifted);
+            }
+            Ok(Type::Optional {
+                inner: Box::new(lifted),
+                span: SP,
+            })
+        }
         // Lane R-4: a docblock generic the parser substituted for a bare `array`.
         php::PhpType::Generic { name, args } => {
             let args: Vec<Type> = args.iter().map(lift_type).collect::<Result<_, _>>()?;

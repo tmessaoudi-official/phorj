@@ -29,7 +29,6 @@
 674	src/jit/tests/unboxed_flow.rs
 511	src/jit/tests/unboxed_int.rs
 1411	src/jit/tests/verticals.rs
-670	src/lift/parser/exprs.rs
 559	src/lift/parser_tests.rs
 699	src/loader/resolve.rs
 667	src/loader/tests.rs

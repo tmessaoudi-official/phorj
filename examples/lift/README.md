@@ -349,6 +349,43 @@ Two more rules fall out of the shape:
 - **No `: T` is a refusal.** phorj requires a return type on a statement-bodied lambda, and the
   lifter does not infer one (DEC-166 — it never guesses).
 
+## Array shapes, destructuring and `.` — `shapes.php` / `shapes.phg` (DEC-504/510/511, 2026-09-07)
+
+PHP's `array{…}` docblock shape splits in two, and the two halves get very different answers.
+
+A **POSITIONAL** shape is a tuple, which phorj shipped as DEC-288 — so `@return array{int, string}`
+lifts to `: (int, string)`, and the same shape written with explicit ascending indices from zero
+(`array{0: float, 1: float}`, what PHPStan and Psalm emit) is the same tuple. A **KEYED** shape
+(`array{tenure: Tenure, source: string}`) needs a named-field tuple, which phorj does not have yet:
+it is ruled as **DEC-504** and keeps a refusal that names the ruling, rather than falling into a
+generic Tier-2 wall.
+
+A tuple TYPE is only half of it. The literal that satisfies it must lift to a tuple VALUE too, or
+the draft lifts and then fails `phg check` with `expected (int, string), found List<int>` — one
+draft whose two halves disagree. So a `return [$n, 'x'];` whose arity MATCHES the declared shape
+becomes `return (n, "x")`, at any depth: `if ($y) { return [1, 'one']; }` is the shape real code
+writes. A literal of the WRONG arity is left as a list — never padded or truncated into the declared
+shape (DEC-166: the lifter does not guess), and the checker then reports the disagreement.
+
+**DEC-510 — array destructuring.** `[$a, $b] = pair();` and `list($a, $b) = pair();` both lift to
+`var (a, b) = pair();`. This is the ONLY way to read a positional shape: a phorj tuple has
+destructuring-only access, so `$p[0]` has no form to lift to at all. A KEYED destructure
+(`['k' => $v] = $m`) reads a map by key — a different construct, refused by name rather than
+silently treated as positional.
+
+**DEC-511 — `.` is an interpolation, not `+`.** PHP's `.` COERCES both operands to string; phorj's
+`+` refuses to coerce anything. So `'n=' . $n` lifts to `"n={n}"`, and a CHAIN flattens into ONE
+interpolation (`'a' . $x . 'b' . $y` → `"a{x}b{y}"`) rather than a nest, which is what PHP's own
+left-associative evaluation produces. Arithmetic `+` is untouched — only `.` changes.
+
+Two more "the draft must CHECK" fixes landed with this example, both found by running it:
+
+| PHP | lifts to | why |
+|---|---|---|
+| `echo $n;` | `Output.print("{n}")` | the lifter cannot see whether `$n` is a string, and `Output.print` takes one. An interpolation is correct for BOTH — a bare `Output.print(n)` was a guess, and wrong on the int a lifted tuple produces |
+| `$x === null` / `null === $x` | `x instanceof null` (phorj's `is null` test) | the checker rejects `T? == null` as a cross-type comparison. STRICT only: PHP's loose `== null` is also true for `0`, `""`, `[]` and `false`, so it stays an equality and the checker reports it |
+| `$x !== null` | `!(x instanceof null)` | phorj has no `is not null` spelling |
+
 ## `namespace` / `use` — file-level declarations (LIFT-NS, 2026-08-04)
 
 `namespaces.php` / `namespaces.phg`. Both keywords were outside the Tier-1 subset until this slice, which

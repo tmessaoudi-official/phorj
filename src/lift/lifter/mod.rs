@@ -32,13 +32,17 @@ mod decls;
 mod enums;
 mod exceptions;
 mod exprs;
+mod leaves;
 mod magic;
 mod mappings;
+mod matches;
 use attrs::AttrCtx;
 pub use decls::*;
 pub(super) use enums::{enum_names_of, set_project_enum_names, EnumSymbols};
 use exprs::*;
+use leaves::*;
 use mappings::*;
+use matches::*;
 
 // DEC-312: the Core modules referenced by builtin→native resolutions during one lift, drained into
 // `import` items at assembly. Thread-local (the lifter is stateless free functions; a lift runs on

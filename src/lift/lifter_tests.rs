@@ -140,14 +140,22 @@ fn top_level_code_becomes_main_with_console_import() {
     assert!(out.contains("import Core.Output;"), "{out}");
     assert!(out.contains("function main(): void {"), "{out}");
     assert!(out.contains("mutable var x = 1;"), "{out}");
-    assert!(out.contains("Output.print(x);"), "{out}");
+    // Lane L1c dropped the bare-variable carve-out: `echo $x;` is an interpolation, because the
+    // lifter cannot see whether `$x` is a string and `Output.print` takes one. Correct for BOTH.
+    assert!(out.contains(r#"Output.print("{x}");"#), "{out}");
     assert_reparses(&out);
 }
 
 #[test]
-fn php_concat_becomes_plus_and_strict_eq_becomes_eq() {
+fn php_concat_becomes_an_interpolation_and_strict_eq_becomes_eq() {
+    // DEC-511 (2026-09-07) replaced `.` → `+`. PHP's `.` COERCES and phorj's `+` refuses to, so the
+    // old mapping produced a draft that lifted and then failed `phg check`. An interpolation
+    // stringifies each part exactly as PHP does, which is the faithful form.
     let out = lift(r#"<?php function g(string $a): string { return $a . "!"; }"#);
-    assert!(out.contains(r#"return a + "!";"#), "concat → +: {out}");
+    assert!(
+        out.contains(r#"return "{a}!";"#),
+        "concat → interpolation: {out}"
+    );
     let out2 = lift("<?php function h(int $a, int $b): bool { return $a === $b; }");
     assert!(out2.contains("return a == b;"), "=== → ==: {out2}");
     assert_reparses(&out);

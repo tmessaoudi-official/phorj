@@ -177,6 +177,24 @@ impl Lifter {
         declared: &mut HashSet<String>,
     ) -> Result<Stmt, String> {
         match e {
+            // DEC-510: `[$a, $b] = pair();` → `var (a, b) = pair();`. Every binder is DECLARED by the
+            // destructure, so they are seeded into `declared` — otherwise a later assignment to one
+            // would re-declare it and the draft would fail `E-SHADOW-LOCAL`, the same trap the
+            // top-level `declared` set exists to avoid.
+            php::PhpExpr::Destructure { binders, value } => {
+                for b in binders {
+                    declared.insert(b.clone());
+                }
+                Ok(Stmt::Destructure {
+                    pat: crate::ast::DestructurePat::Tuple {
+                        binders: binders.iter().map(|b| (None, b.clone(), SP)).collect(),
+                        span: SP,
+                    },
+                    init: lift_expr(value)?,
+                    else_block: None,
+                    span: SP,
+                })
+            }
             php::PhpExpr::Assign { target, value } => {
                 if let php::PhpExpr::AppendSlot(base) = target.as_ref() {
                     // `$xs[] = v` → `xs = List.append(xs, v)`: a phorj list is a COW value, so the
@@ -271,14 +289,19 @@ fn lift_catch_type(types: &[String]) -> Type {
 }
 
 /// LIFT-ECHO-INT — the argument of an `echo`, lifted so the draft CHECKS. PHP's `echo` coerces;
-/// `Output.print` takes a `string`, and phorj's `+` never coerces either — so `echo half($n);` used to
-/// lift to `Output.print(half(n))` (a type error) and `echo "x" . $n;` to `Output.print("x" + n)`
-/// (another one). The lifter tracks no types, and does not need to here: an INTERPOLATION accepts
-/// every printable scalar, so in echo position the whole argument becomes one — a `.`-concat chain is
+/// `Output.print` takes a `string` — so `echo half($n);` used to lift to `Output.print(half(n))`, a
+/// type error. The lifter tracks no types, and does not need to here: an INTERPOLATION accepts every
+/// printable scalar, so in echo position the whole argument becomes one — a `.`-concat chain is
 /// flattened into its parts (string literals inline, everything else as `{expr}`), an int/bool literal
 /// becomes the text PHP would print (`true` → `1`, `false` → nothing), and a string literal or an
-/// existing interpolation is kept exactly as written. Outside `echo`, `.` still lifts to `+` — that is
-/// a separate, stated draft limitation, not changed here.
+/// existing interpolation is kept exactly as written.
+///
+/// Lane L1c (2026-09-07) dropped the BARE-VARIABLE carve-out. `echo $x;` used to stay
+/// `Output.print(x)` on the grounds that a string variable is the common case — but that is a GUESS
+/// about a type the lifter cannot see, and it is wrong the moment the variable is an int, which is
+/// exactly what a lifted positional shape produces (`[$n, $label] = pair(7); echo $n;`). Wrapping is
+/// correct for BOTH: `"{x}"` prints a string variable unchanged. The same two-halves-disagree class
+/// as the tuple-literal seed — a draft that lifts and then fails `phg check`.
 fn echo_arg(e: &php::PhpExpr) -> Result<Expr, String> {
     use crate::ast::StrPart;
     fn parts(e: &php::PhpExpr, out: &mut Vec<StrPart>) -> Result<(), String> {
@@ -309,14 +332,10 @@ fn echo_arg(e: &php::PhpExpr) -> Result<Expr, String> {
         }
         Ok(())
     }
-    // Kept as written: a string literal or interpolation (`echo "hi";` stays `Output.print("hi")`)
-    // and a bare variable (`echo $x;` stays `Output.print(x)` — its type is the checker's call, and
-    // a string variable is by far the common case). Everything else — a call whose result may be
-    // an int, a non-string literal, a `.` chain — is flattened into ONE interpolation.
-    if matches!(
-        e,
-        php::PhpExpr::Str(_) | php::PhpExpr::Interp(_) | php::PhpExpr::Var(_)
-    ) {
+    // Kept as written: a string literal or an interpolation (`echo "hi";` stays
+    // `Output.print("hi")`) — both are already strings, so wrapping them would only add noise.
+    // EVERYTHING else, a bare variable included, is flattened into ONE interpolation.
+    if matches!(e, php::PhpExpr::Str(_) | php::PhpExpr::Interp(_)) {
         return lift_expr(e);
     }
     let mut out = Vec::new();

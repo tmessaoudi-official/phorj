@@ -321,6 +321,11 @@ pub(super) fn ty(t: &Type) -> Result<String, String> {
             let m: Result<Vec<_>, _> = members.iter().map(ty).collect();
             Ok(m?.join(" | "))
         }
+        // A POSITIONAL `array{…}` shape lifts to a tuple (lane L1c) — `(int, string)`.
+        Type::Tuple(elems, _) => {
+            let e: Result<Vec<_>, _> = elems.iter().map(ty).collect();
+            Ok(format!("({})", e?.join(", ")))
+        }
         _ => Err("printer: this type is outside the lift subset".into()),
     }
 }

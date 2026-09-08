@@ -6,7 +6,7 @@ import Core.Runtime.EntryKind;
 import Core.Output;
 
 function label(string who): string {
-    return "hi " + who;
+    return "hi {who}";
 }
 
 #[Entry(kind: EntryKind.Cli)]

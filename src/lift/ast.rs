@@ -219,6 +219,11 @@ pub enum PhpType {
     /// A docblock generic substituted for a bare `array` (Lane R-4): `list<T>`, `array<T>`,
     /// `array<K, V>`, `T[]`. `name` is `list` or `array`; the lifter maps them to `List`/`Map`.
     Generic { name: String, args: Vec<PhpType> },
+    /// A POSITIONAL array shape (lane L1c, 2026-09-07): `array{int, string}`, or the same thing
+    /// written with explicit ascending indices from zero, `array{0: float, 1: float}`. It is a
+    /// phorj TUPLE (DEC-288). A KEYED shape is a different thing entirely and keeps its refusal
+    /// until DEC-504's named-field tuples land.
+    Tuple(Vec<PhpType>),
 }
 
 /// A PHP statement.

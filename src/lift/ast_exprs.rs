@@ -24,6 +24,15 @@ pub enum PhpExpr {
     Name(String),
     /// `[a, b, k => v]` (and the `array(…)` long form, which parses as a `Call` to `Name("array")`).
     Array(Vec<PhpArrayElem>),
+    /// `[$a, $b] = expr` / `list($a, $b) = expr` — POSITIONAL array destructuring (DEC-510,
+    /// 2026-09-07). It is the only way to read a positional `array{…}` shape, because a phorj tuple
+    /// has no index access — only `var (a, b) = …`, which is exactly what this lifts to. A KEYED
+    /// destructure (`['k' => $v] = $m`) reads a map by key and is a different construct; the parser
+    /// refuses it rather than treating it as positional.
+    Destructure {
+        binders: Vec<String>,
+        value: Box<PhpExpr>,
+    },
     /// `name: value` — a NAMED argument (PHP 8.0). Needed because `#[Route(path: '/x')]` is the
     /// dominant real-world attribute spelling; phorj accepts named args in the same positions
     /// (DEC-297 for construction, DEC-435 for attributes), so this lifts 1:1 rather than being

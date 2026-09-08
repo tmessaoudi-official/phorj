@@ -37,6 +37,7 @@ impl Lifter {
         body.extend(self.lift_block(&f.body, &mut declared)?);
         let ret = lift_ret(&f.ret, Some(&f.body))?;
         super::seed::seed_returned_empty_literals(&mut body, &ret);
+        super::seed::seed_returned_tuple_literals(&mut body, &ret);
         Ok(FunctionDecl {
             modifiers: Vec::new(),
             attrs: Vec::new(),
@@ -222,6 +223,7 @@ impl Lifter {
         };
         let ret = lift_ret(&m.ret, m.body.as_deref())?;
         super::seed::seed_returned_empty_literals(&mut body, &ret);
+        super::seed::seed_returned_tuple_literals(&mut body, &ret);
         Ok(ClassMember::Method(FunctionDecl {
             modifiers,
             attrs: Vec::new(),

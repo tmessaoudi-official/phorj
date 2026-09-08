@@ -168,6 +168,23 @@ impl Printer {
             // SHAPE-RECOGNITION decision, not a printing one — the lifter would have to decide that a
             // particular try/finally *is* a scope guard, and today it faithfully lifts it as the
             // try/finally the source actually wrote. Recorded in KNOWN_ISSUES rather than guessed at.
+            // DEC-510: the TUPLE destructure `var (a, b) = …` is in the subset — it is what PHP's
+            // `[$a, $b] = …` lifts to, and the only way to read a positional shape. The struct and
+            // list forms are not produced by the lifter, and `using` is still outside it.
+            Stmt::Destructure {
+                pat: crate::ast::DestructurePat::Tuple { binders, .. },
+                init,
+                else_block: None,
+                ..
+            } => {
+                let names: Vec<&str> = binders.iter().map(|(_, n, _)| n.as_str()).collect();
+                self.line(&format!(
+                    "var ({}) = {};",
+                    names.join(", "),
+                    self.expr(init)?
+                ));
+                Ok(())
+            }
             Stmt::Using { .. } | Stmt::Destructure { .. } => {
                 Err("printer: using/destructure are outside the lift subset".into())
             }
