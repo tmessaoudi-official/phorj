@@ -20,6 +20,17 @@
 
 ## Decisions Log
 
+- [2026-09-08 L2b-OWED] AGREED (developer adjudication, escalated per DEC-507): **carry the residual
+  `spaceshipsort` loss as a DEC-365 OWED and proceed to L4.** L2b met its structural goal — no tuple
+  is materialized, proven by disassembly — but the bar stayed missed: 0.38x -> 0.46x, VM time -19.5%,
+  still ~2.2x php (the pre-push microbench-gate independently measured 0.471). The escalation offered
+  L2c (a `CmpSeq` specialized for checker-known scalar element types, which is where the residue
+  actually is) and declaring 0.46x the accepted floor; the developer ruled OWED + L4, so **L2c is NOT
+  authorized and no further work starts on this bench**. Two things stay true and unprotected, and are
+  recorded rather than fixed: `spaceshipsort` is NOT in the microbench baseline, so nothing catches
+  this loss DEEPENING, and DEC-365 forbids the `--emit` that would admit it. Reopening this is a new
+  lane and a new ruling.
+
 - [2026-09-08 L2b-SCOPE] AGREED (Claude-level scope call, not a developer adjudication): the DEC-513
   fusion keys on the **literal tuple shape on BOTH sides**, not on the checked tuple type. The
   allocation DEC-513 removes happens where a tuple is BUILT, not where it is compared — in
@@ -310,7 +321,7 @@ DEC-507 applies to every one.
 | 3b | L2 closes — `docs(lang): L2 closes` — SSOT quartet amended (the decimal narrowing never reached the SPEC/register/MASTER-PLAN in C1), the missing lift-rule tests with two mutations verified red and a third proving `positional` redundant, the Invariant-9 example, VS Code grammar, KNOWN_ISSUES § DECIMAL-ORDER, the re-census, and the DEC-507 bench — **a CONFIRMED LOSS, escalation OWED** | M | done | ab959542 | docs/specs/UNIFIED-SPEC.md docs/plans/SLICE-STATE.md docs/research/full-audit/raw/C-decisions.md src/lift/lifter_tests_ordering.rs examples/guide/spaceship.phg bench/micro/spaceshipsort.phg bench/micro/spaceshipsort.php editors/vscode/syntaxes/phorj.tmLanguage.json KNOWN_ISSUES.md |
 | 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged. MEASURED A/B on one quiet box (K=15, core-pinned, interleaved, both legs proven by disassembly): 0.38x -> 0.46x, VM time -19.5%, STILL A LOSS at ~2.2x php -> OWED per DEC-365. The ruling's ~65% prediction did not hold: construction was ~a fifth of the tuple-vs-scalar gap, and the residue is per-element `compare_ord` dispatch inside the fused Op (compiler-reachable), NOT the `sortWith` callback | L | done | d4365564 | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
-| 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | todo | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
+| 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | doing | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
 | 7 | L6 — `Core.Net` + `Core.Mime` + read-only `Core.Imap` with the file-backed `.eml` transport (readiness 14, DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
 | 8 | L7 — breadth census loop to the stop condition: every file lifts or carries a named refusal with a DEC row | L | todo | - | src/lift/* examples/lift/scout/* |

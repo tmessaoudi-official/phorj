@@ -79,7 +79,18 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > carried: **RULED as DEC-513, lane L2b** (fuse the comparison in the compiler). Rejected there: JIT
 > whitelisting, and carrying it to L8. Re-census after L2 holds at **57/123** —
 > `Classification.php`'s wall moved 48 → 68, i.e. off `<=>` and onto the keyed shape L4 builds.
-> **BUILDING NOW: L2b** (DEC-513, ruled 2026-09-08) — FUSE the comparison in the compiler.
+> **L2b is CLOSED** (DEC-513, ruled + built + pushed 2026-09-08 — `d4365564`, docs `14355d83`,
+> attribution corrected `1968de08`). Structural goal MET, perf bar MISSED, and the residual loss was
+> ESCALATED per DEC-507 and RULED by the developer: **carry the OWED, proceed to L4. L2c — a `CmpSeq`
+> specialized for checker-known scalar element types — is NOT authorized**; reopening this bench needs
+> a new lane and a new ruling.
+>
+> **BUILDING NOW: L4** (DEC-504 named-field tuples, ruled 2026-09-07) — the 73-site lift wall, and the
+> other half of what L3 (the depth oracle) is blocked on. Starting with a SURFACE MAP + collision scan,
+> the shape that produced DEC-512 out of L2; the Invariant-15 questions it turns up go to the developer
+> in ONE question before any code is written.
+>
+> **What L2b was:** FUSE the comparison in the compiler.
 > `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements of the two tuples and compares them IN PLACE on the
 > operand stack, so a both-sides-literal `(a, b) <=> (c, d)` materializes no tuple at all. The
 > in-place part is the optimization, not an implementation detail: popping the operands into a `Vec`
@@ -107,6 +118,10 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > `sortWith` → VM callback per comparison, so a ratio near 1.0× rather than comfortably above it is
 > the expected best case; if it lands at or below 1.0× that is a DEC-365 OWED recorded honestly, not
 > a licence to widen scope mid-lane.
+>
+> ⚠ **The `sortWith`-callback sentence in the paragraph above was REFUTED by the measurement** — kept
+> as the written acceptance criterion, not as a fact. The scalar comparator pays the same callback
+> and is fast, so it cancels out; see the MEASURED OUTCOME below for where the residue actually is.
 >
 > **MEASURED OUTCOME (2026-09-08, A/B on the same quiet box — core 7 at 98.98% idle for two
 > consecutive samples, `MICROBENCH_RUNS=15`, core-pinned both sides, interleaved, vs docker
