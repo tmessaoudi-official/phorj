@@ -98,6 +98,12 @@ impl Parser {
         // param list demanding its own `->`. The parens-free right-assoc form `() -> (int) -> bool`
         // already worked and parses to the same type.
         if self.eat(&TokenKind::LParen) {
+            // DEC-504: `(bp: int, source: string)` is a NAMED tuple type. Same `Ident :` lookahead
+            // as the value form, and taken before the parameter-list path so a labelled type never
+            // reaches it — a function type's parameters are unlabelled, so the two cannot collide.
+            if self.at_tuple_label() {
+                return self.parse_named_tuple_type(sp);
+            }
             let mut params = Vec::new();
             if !self.check(&TokenKind::RParen) {
                 params.push(self.parse_type()?);
@@ -138,7 +144,7 @@ impl Parser {
                         return Err(self
                             .error("a `=>` return type after `()` (an empty `()` is a function-type parameter list)"))
                     }
-                    _ => Type::Tuple(params, sp),
+                    _ => Type::Tuple(params, None, sp),
                 }
             };
             while self.eat(&TokenKind::Question) {

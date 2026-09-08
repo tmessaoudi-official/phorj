@@ -384,7 +384,7 @@ fn walk_children(e: &mut Expr, en: &Enabled, errs: &mut Vec<Diagnostic>) {
                 walk_expr(a, en, errs);
             }
         }
-        Expr::List(items, _) | Expr::Tuple(items, _) => {
+        Expr::List(items, _) | Expr::Tuple(items, _, _) => {
             for i in items {
                 walk_expr(i, en, errs);
             }

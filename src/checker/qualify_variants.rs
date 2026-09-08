@@ -330,9 +330,11 @@ mod tests {
         let prog = crate::parser::Parser::new(toks)
             .parse_program()
             .expect("parse");
-        // DEC-331: the invoke/tostring bundle is the last tuple element; `_` absorbs it so `table`
-        // still binds `variant_resolutions`.
-        let (.., table, _) = crate::checker::check_resolutions(&prog).expect("checks clean");
+        // The trailing elements are the DEC-331 invoke/tostring bundle and the DEC-504 tuple-field
+        // map; the two `_`s absorb them so `table` still binds `variant_resolutions`. Adding an
+        // element to `ResolutionsOut` without extending this pattern re-binds `table` SILENTLY to
+        // the wrong map — it type-errors here today, which is the only reason it was caught.
+        let (.., table, _, _) = crate::checker::check_resolutions(&prog).expect("checks clean");
         (prog, table)
     }
 

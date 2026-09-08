@@ -2805,9 +2805,11 @@ impl Connection<'_> {
             // Leaves (Int/Float/Decimal/Bool/Null/Bytes/Ident/This) and `Inject` (already expanded by
             // `desugar_di` upstream) carry no `queryInto` to rewrite.
             // DEC-356: these bear expressions and were silently passed through by `leaf => leaf`.
-            Expr::Tuple(items, span) => {
-                Expr::Tuple(items.into_iter().map(|e| self.rexpr(e)).collect(), span)
-            }
+            Expr::Tuple(items, labels, span) => Expr::Tuple(
+                items.into_iter().map(|e| self.rexpr(e)).collect(),
+                labels,
+                span,
+            ),
             Expr::NamedArg { name, value, span } => Expr::NamedArg {
                 name,
                 value: Box::new(self.rexpr(*value)),

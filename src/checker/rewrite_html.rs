@@ -210,9 +210,11 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
             // DEC-356: the five forms below were silently passed through by a `leaf => leaf` arm.
             // They all bear expressions, so an `html"…"` hole (or any later pass's target) inside one
             // was never rewritten.
-            Expr::Tuple(items, span) => {
-                Expr::Tuple(items.into_iter().map(|e| rexpr(e, h)).collect(), span)
-            }
+            Expr::Tuple(items, labels, span) => Expr::Tuple(
+                items.into_iter().map(|e| rexpr(e, h)).collect(),
+                labels,
+                span,
+            ),
             Expr::NamedArg { name, value, span } => Expr::NamedArg {
                 name,
                 value: Box::new(rexpr(*value, h)),

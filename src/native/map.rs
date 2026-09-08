@@ -221,7 +221,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             module: "Core.Map",
             name: "entries",
             params: vec![map()],
-            ret: Ty::List(Box::new(Ty::Tuple(vec![k(), v()]))),
+            ret: Ty::List(Box::new(Ty::Tuple(vec![k(), v()], None))),
             pure: true,
             eval: NativeEval::Pure(map_entries),
             // keys + values are equal-length, so `array_map(null, …)` pairs them (no padding) into

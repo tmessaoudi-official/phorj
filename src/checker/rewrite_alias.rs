@@ -56,9 +56,11 @@ pub fn expand_aliases(program: &Program) -> Program {
             Type::Union(members, span) => {
                 Type::Union(members.iter().map(|m| rt(m, a, depth + 1)).collect(), *span)
             }
-            Type::Tuple(members, span) => {
-                Type::Tuple(members.iter().map(|m| rt(m, a, depth + 1)).collect(), *span)
-            }
+            Type::Tuple(members, labels, span) => Type::Tuple(
+                members.iter().map(|m| rt(m, a, depth + 1)).collect(),
+                labels.clone(),
+                *span,
+            ),
             // An intersection expands each member likewise (M-RT S5).
             Type::Intersection(members, span) => {
                 Type::Intersection(members.iter().map(|m| rt(m, a, depth + 1)).collect(), *span)

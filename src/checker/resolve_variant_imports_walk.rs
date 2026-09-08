@@ -273,9 +273,11 @@ pub(super) fn rexpr(e: Expr, m: &VarMap) -> Expr {
         },
         Expr::Html(parts, span) => Expr::Html(parts, span),
         // DEC-356: these four bear expressions and were silently passed through by `leaf => leaf`.
-        Expr::Tuple(items, span) => {
-            Expr::Tuple(items.into_iter().map(|e| rexpr(e, m)).collect(), span)
-        }
+        Expr::Tuple(items, labels, span) => Expr::Tuple(
+            items.into_iter().map(|e| rexpr(e, m)).collect(),
+            labels,
+            span,
+        ),
         Expr::NamedArg { name, value, span } => Expr::NamedArg {
             name,
             value: Box::new(rexpr(*value, m)),

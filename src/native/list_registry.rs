@@ -29,7 +29,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             module: "Core.List",
             name: "zip",
             params: vec![list(t()), list(u())],
-            ret: list(Ty::Tuple(vec![t(), u()])),
+            ret: list(Ty::Tuple(vec![t(), u()], None)),
             pure: true,
             eval: NativeEval::Pure(list_zip),
             // An IIFE binds both args ONCE (no double-eval) and truncates to the shorter length —
@@ -148,7 +148,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
                 list(t()),
                 Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
             ],
-            ret: Ty::Tuple(vec![list(t()), list(t())]),
+            ret: Ty::Tuple(vec![list(t()), list(t())], None),
             pure: true,
             eval: NativeEval::HigherOrder(list_partition),
             // An IIFE binds the list + predicate ONCE, splits in one pass, and returns the erased

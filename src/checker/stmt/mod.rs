@@ -5,4 +5,6 @@ use super::*;
 mod core;
 mod flow;
 mod literals;
+mod narrow;
 mod using;
+mod var_decl;

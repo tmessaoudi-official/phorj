@@ -44,7 +44,7 @@ impl Printer<'_> {
             }
             // A tuple literal `(a, b)` — parens, not brackets (DEC-288). Formatted on the raw AST,
             // before the desugar-to-List erasure, so the surface syntax round-trips.
-            Expr::Tuple(items, _) => {
+            Expr::Tuple(items, _, _) => {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr_doc(x)).collect();
                 Ok(bracketed("(", xs?, ")"))
             }

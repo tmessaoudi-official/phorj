@@ -15,7 +15,9 @@ mod methods;
 mod overloads;
 mod regex;
 mod subst;
+mod tuple_field;
 mod ufcs;
+mod unify;
 mod variants;
 mod visibility;
 

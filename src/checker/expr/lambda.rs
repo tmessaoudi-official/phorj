@@ -134,14 +134,15 @@ impl Checker {
 
     /// Resolve one lambda parameter's type. A `Type::Infer` param (only a pipe lambda / multi-`%`
     /// IIFE can produce one — DEC-239) takes the contextual type when the call site supplied it,
-    /// recording the resolution (keyed by the param's `span.start`) so `materialize_pipe_params`
+    /// recording the resolution (keyed by the param's `span.start`) so `materialize_inferred_types`
     /// can write it into the AST for the backends. Without a contextual type the lambda escaped
     /// pipe application (e.g. `x |> (v => v) + 1` binds the `+` to the lambda, per the uniform RHS
     /// grammar) — error loudly with the pipe-specific message, never silent.
     fn resolve_lambda_param_ty(&mut self, p: &crate::ast::Param, ctx: Option<&Ty>) -> Ty {
         if matches!(p.ty, crate::ast::Type::Infer(_)) {
             if let Some(t) = ctx {
-                self.pipe_param_resolutions.insert(p.span.start, t.clone());
+                self.inferred_type_resolutions
+                    .insert(p.span.start, t.clone());
                 return t.clone();
             }
             return self.err_coded(

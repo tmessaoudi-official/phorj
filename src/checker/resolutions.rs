@@ -24,6 +24,8 @@ pub type ResolutionsOut = Result<
         HashMap<usize, String>,
         // DEC-331 D9: (invoke call targets, tostring string-context targets) for `resolve_invoke_tostring`.
         (HashMap<usize, String>, HashMap<usize, String>),
+        // DEC-504: named-tuple field reads — `t.bp` Member span → the field's position.
+        HashMap<usize, usize>,
     ),
     Vec<Diagnostic>,
 >;
@@ -69,8 +71,8 @@ pub fn check_resolutions_mode(program: &Program, test_mode: bool) -> Resolutions
             c.overload_def_renames,
             c.reified_operands,
             // DEC-239: contextual pipe-lambda param resolutions, materialized into the AST by
-            // `materialize_pipe_params` (LAST in the pipeline's rewrite chain).
-            c.pipe_param_resolutions,
+            // `materialize_inferred_types` (LAST in the pipeline's rewrite chain).
+            c.inferred_type_resolutions,
             c.default_fills,
             // DEC-257: foreach-over-Iterator spans, lowered to while-pulls by `lower_foreach_iter`.
             c.for_iter_lowerings,
@@ -81,6 +83,9 @@ pub fn check_resolutions_mode(program: &Program, test_mode: bool) -> Resolutions
             c.variant_resolutions, // DEC-329.3 (see field doc)
             // DEC-331 D9: the two live-node rewrite decision maps, applied by `resolve_invoke_tostring`.
             (c.invoke_call_targets, c.to_string_targets),
+            // DEC-504: `t.bp` → position, rewritten to an `Index` by `rewrite_tuple_fields`
+            // BEFORE `erase_tuples`, so no backend sees a named field.
+            c.tuple_field_indices,
         ))
     } else {
         Err(c.errors)

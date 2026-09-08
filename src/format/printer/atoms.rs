@@ -49,7 +49,7 @@ pub(super) fn ty(t: &Type) -> Result<String, String> {
         Type::Infer(_) => Ok("var".to_string()),
         // A tuple type `(A, B)` (DEC-288) — parens, comma-separated (formatted on the raw AST, before
         // the tuple-erasure pass, so the surface syntax round-trips).
-        Type::Tuple(members, _) => {
+        Type::Tuple(members, _, _) => {
             let m: Result<Vec<_>, _> = members.iter().map(ty).collect();
             Ok(format!("({})", m?.join(", ")))
         }

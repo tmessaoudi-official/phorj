@@ -95,6 +95,16 @@ impl Checker {
             Ty::Optional(inner) => (**inner).clone(),
             other => other.clone(),
         };
+        // DEC-504: a named tuple's `t.bp` resolves to a POSITION, not to a class member, so it is
+        // tried before every class/enum path below — a tuple is not a class and would otherwise
+        // fall through to "unknown type" rather than to a field diagnostic.
+        if let Some(t) = self.check_tuple_field(&base, name, span) {
+            return if safe && matches!(obj, Ty::Optional(_)) {
+                Ty::Optional(Box::new(t))
+            } else {
+                t
+            };
+        }
         let field_ty = match base {
             // DEC-302 backed enum: `s.value` reads the variant's scalar backing (→ the backing Ty).
             // A `.value` on a plain (non-backed) enum is `E-ENUM-NOT-BACKED`; any other field on an

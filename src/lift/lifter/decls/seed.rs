@@ -22,9 +22,9 @@ pub(super) fn seed_returned_tuple_literals(body: &mut [Stmt], ret: &Option<Type>
     // A nullable tuple return (`?array` + `@return array{…}|null`) seeds the same way: `return
     // [1, "one"];` is the tuple, and the `null` arm is unaffected.
     let elems = match ret {
-        Type::Tuple(e, _) => e,
+        Type::Tuple(e, _, _) => e,
         Type::Optional { inner, .. } => match inner.as_ref() {
-            Type::Tuple(e, _) => e,
+            Type::Tuple(e, _, _) => e,
             _ => return,
         },
         _ => return,
@@ -49,7 +49,7 @@ fn seed_tuple_returns_in(body: &mut [Stmt], arity: usize) {
                 if let Expr::List(items, _) = v {
                     if items.len() == arity {
                         *s = Stmt::Return {
-                            value: Some(Expr::Tuple(std::mem::take(items), SP)),
+                            value: Some(Expr::Tuple(std::mem::take(items), None, SP)),
                             span: *span,
                         };
                     }

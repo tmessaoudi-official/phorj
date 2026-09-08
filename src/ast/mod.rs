@@ -31,10 +31,12 @@ pub use walk::*;
 mod decls;
 mod exprs;
 mod stmts;
+mod tuple_labels;
 mod types_core;
 pub use decls::*;
 pub use exprs::*;
 pub use stmts::*;
+pub use tuple_labels::*;
 pub use types_core::*;
 
 #[cfg(test)]

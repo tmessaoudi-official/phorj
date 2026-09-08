@@ -61,6 +61,27 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              Bind exactly one name per tuple position — add or remove binders so the count matches the\n\
              tuple type `(A, B, …)` on the right (DEC-288).\n"
         }
+        "E-TUPLE-UNKNOWN-FIELD" => {
+            "E-TUPLE-UNKNOWN-FIELD — a named tuple has no field by that name.\n\n\
+             A named tuple's fields are fixed by its type: `(bp: int, source: string)` has exactly\n\
+             `bp` and `source`. Unlike a map, there is no lookup that can fail at runtime — the field\n\
+             set is part of the type, so a typo is caught here. Check the spelling against the tuple's\n\
+             declared type, which the diagnostic lists (DEC-504).\n"
+        }
+        "E-TUPLE-POSITIONAL-FIELD" => {
+            "E-TUPLE-POSITIONAL-FIELD — field access on a POSITIONAL tuple.\n\n\
+             `t.bp` needs a tuple whose fields are NAMED: `(bp: int, source: string)`. A positional\n\
+             tuple `(int, string)` has positions, not names, and naming is part of the type rather\n\
+             than a property of the value — so a positional tuple cannot grow field names later.\n\
+             Either name the fields in the type, or destructure it: `var (a, b) = t;` (DEC-504).\n"
+        }
+        "E-TUPLE-DUP-FIELD" => {
+            "E-TUPLE-DUP-FIELD — the same field name appears twice in one tuple.\n\n\
+             `(a: 1, a: 2)` is refused rather than letting the first or last win. Tuple fields are\n\
+             ORDER-SIGNIFICANT (the name is a label on a position, and erasure is positional), so a\n\
+             duplicate makes `t.a` ambiguous and picking a winner would be a silent semantic choice.\n\
+             Rename one of the fields (DEC-504).\n"
+        }
         "E-DESTRUCTURE-NOT-TUPLE" => {
             "E-DESTRUCTURE-NOT-TUPLE — a tuple destructuring's value is not a tuple.\n\n\
              `var (a, b) = …` requires the right-hand side to be a tuple `(A, B)`. Destructure a list\n\

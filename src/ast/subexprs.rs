@@ -49,7 +49,7 @@ pub fn push_subexprs<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
             out.push(object);
             out.push(index);
         }
-        Expr::List(xs, _) | Expr::Tuple(xs, _) => out.extend(xs.iter()),
+        Expr::List(xs, _) | Expr::Tuple(xs, _, _) => out.extend(xs.iter()),
         Expr::NamedArg { value, .. } => out.push(value),
         Expr::Map(ps, _) => {
             for (k, v) in ps {

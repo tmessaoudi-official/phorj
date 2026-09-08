@@ -19,7 +19,7 @@ use crate::ast::{Expr, Program};
 /// program with no tuple literals, so tuple-free code stays byte-identical.
 pub fn erase_tuples(mut program: Program) -> Program {
     super::rewrite_pipe::walk::visit_exprs_mut(&mut program, &mut |e| {
-        if let Expr::Tuple(elems, sp) = e {
+        if let Expr::Tuple(elems, _, sp) = e {
             let sp = *sp;
             let elems = std::mem::take(elems);
             *e = Expr::List(elems, sp);

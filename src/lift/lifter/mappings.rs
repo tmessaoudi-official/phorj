@@ -46,6 +46,7 @@ pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
         // KEYED form by name, so anything reaching here is genuinely positional.
         php::PhpType::Tuple(elems) => Ok(Type::Tuple(
             elems.iter().map(lift_type).collect::<Result<_, _>>()?,
+            None,
             crate::token::Span {
                 start: 0,
                 len: 0,

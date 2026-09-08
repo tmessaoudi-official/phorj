@@ -7,3 +7,4 @@ mod lambda;
 mod literals;
 mod operators;
 mod ordering;
+mod tuple_literal;

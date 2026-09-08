@@ -149,7 +149,7 @@ impl Checker {
                 None => self.err(*span, "`this` is only valid inside a method"),
             },
             Expr::List(elems, span) => self.check_list(elems, *span), // Task 5
-            Expr::Tuple(elems, span) => self.check_tuple(elems, *span), // DEC-288
+            Expr::Tuple(elems, labels, span) => self.check_tuple(elems, labels, *span), // DEC-288
             // DEC-297: a named argument is only legal inside a call/`new`/method-call arg list, where
             // `normalize_named_args` consumes it before this point. Reaching `check_expr` means it's
             // misplaced (outside a call). Check the value to surface its errors, then flag it.

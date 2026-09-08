@@ -69,8 +69,9 @@ pub(super) fn resolve_type(ty: &Type, ctx: &ResolveCtx) -> Type {
             *span,
         ),
         // A tuple resolves each member type likewise (DEC-288).
-        Type::Tuple(members, span) => Type::Tuple(
+        Type::Tuple(members, labels, span) => Type::Tuple(
             members.iter().map(|m| resolve_type(m, ctx)).collect(),
+            labels.clone(),
             *span,
         ),
         // `[T; N]`: resolve the element's type name (a cross-package `[Point; 2]` mangles its element).
@@ -463,8 +464,9 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
         // were LIVE defects in a library file — a same-package call inside a tuple literal, a
         // named-argument value or a pipe, and a type argument of `new List<T>()`, all reported as
         // `unknown function` / `unknown type` on the merged unit (`tests/project.rs`).
-        Expr::Tuple(items, span) => Expr::Tuple(
+        Expr::Tuple(items, labels, span) => Expr::Tuple(
             items.into_iter().map(|e| resolve_expr(e, ctx)).collect(),
+            labels,
             span,
         ),
         Expr::NamedArg { name, value, span } => Expr::NamedArg {

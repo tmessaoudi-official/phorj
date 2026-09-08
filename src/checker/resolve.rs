@@ -9,14 +9,17 @@ impl Checker {
         use crate::ast::Type;
         match ty {
             Type::Optional { inner, .. } => Ty::Optional(Box::new(self.resolve_type(inner))),
-            Type::Tuple(members, _) => {
+            Type::Tuple(members, labels, _) => {
                 // DEC-288: a tuple resolves each member type (heterogeneous — no shared-type rule).
                 // Erased to a `List` view before any backend by the tuple-erasure pass.
+                // DEC-504: the field labels are carried ONTO the `Ty` — dropping them here made a
+                // written `(bp: int, source: string)` annotation resolve to the positional
+                // `(int, string)`, so the named literal no longer matched its own declared type.
                 let mut tys = Vec::with_capacity(members.len());
                 for m in members {
                     tys.push(self.resolve_type(m));
                 }
-                Ty::Tuple(tys)
+                Ty::Tuple(tys, crate::ast::to_ty_labels(labels))
             }
             Type::Union(members, span) => {
                 // DEC-253: `A | B | null` — the PHP-familiar nullable-union spelling. Strip the

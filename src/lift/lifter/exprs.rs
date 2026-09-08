@@ -172,8 +172,8 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
                     // list, which is why it is kept rather than deleted.
                     let positional = |es: &[php::PhpArrayElem]| es.iter().all(|e| e.key.is_none());
                     if !li.is_empty() && li.len() == ri.len() && positional(le) && positional(re) {
-                        lhs = Expr::Tuple(li.clone(), SP);
-                        rhs = Expr::Tuple(ri.clone(), SP);
+                        lhs = Expr::Tuple(li.clone(), None, SP);
+                        rhs = Expr::Tuple(ri.clone(), None, SP);
                     }
                 }
             }

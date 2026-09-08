@@ -69,6 +69,16 @@ enum CTy {
     /// operand collapses to `Other` and `num_ty` errors on the VM only — an interp↔VM break
     /// (M-RT S3, the same reason `List` carries its element type).
     Map(Box<CTy>, Box<CTy>),
+    /// A TUPLE, carrying **each position's own type** (DEC-504). A tuple erases to a list before
+    /// any backend, but a list's `CTy` carries ONE homogeneous element type — so resolving a tuple
+    /// as `CTy::List` gives every position the same type and a field read past position 0 gets the
+    /// wrong operand. That is the CTy-operand trap (Invariant 7) and it went live the moment named
+    /// tuples made `t.bp` — and so `t[1]` — writable: the interpreter reads an `int` and the VM
+    /// refuses to infer a numeric type, or worse, infers the first position's.
+    ///
+    /// Positional tuples were immune only because nothing could index one. They are covered here
+    /// too, so a future `t.0` inherits the fix rather than re-opening the trap.
+    Tuple(Vec<CTy>),
     /// A function type `(params) -> ret` — not a numeric operand; carried for future lambda support.
     Fn {
         params: Vec<CTy>,
@@ -390,7 +400,8 @@ fn resolve_cty(ty: &Type) -> CTy {
         Type::FixedList { elem, .. } => CTy::List(Box::new(resolve_cty(elem))),
         // A tuple (DEC-288) is erased to a `List` view before the compiler runs, so this is defensive:
         // it is a list at runtime with heterogeneous (unknown) elements — never a specialized operand.
-        Type::Tuple(..) => CTy::List(Box::new(CTy::Other)),
+        // DEC-504 / Invariant 7: per-position types, NOT a homogeneous list element. See `CTy::Tuple`.
+        Type::Tuple(members, ..) => CTy::Tuple(members.iter().map(resolve_cty).collect()),
         // A union value is not a specialized arithmetic operand (M-RT S4); after `instanceof`/type-
         // pattern narrowing the *narrowed local* carries the concrete `CTy`, not the union local.
         Type::Union(..) => CTy::Other,
@@ -436,6 +447,10 @@ fn ty_to_cty(ty: &crate::types::Ty) -> CTy {
         // — same discipline as `resolve_cty(Optional)`; the checker forbids a bare `T?` as an operand.
         Ty::Optional(inner) => ty_to_cty(inner),
         Ty::Named(n, _) => CTy::Class(n.clone()),
+        // DEC-504: per-position types (mirrors `resolve_cty(Type::Tuple)`), so an indexed read of a
+        // tuple-returning native resolves as an operand. No native returns a tuple today; the arm
+        // exists so adding one cannot silently re-open the Invariant-7 trap.
+        Ty::Tuple(ts, _) => CTy::Tuple(ts.iter().map(ty_to_cty).collect()),
         _ => CTy::Other,
     }
 }

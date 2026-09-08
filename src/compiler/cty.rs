@@ -104,11 +104,36 @@ impl Compiler<'_> {
             ))),
             // `xs[i]` resolves to the list's element type (so `xs[0] + 1` specializes); a non-list
             // receiver collapses to `Other` (checker-unreachable as an arithmetic operand).
-            Expr::Index { object, .. } => match self.ctype(object)? {
-                CTy::List(elem) => Ok(*elem),
-                CTy::Map(_, val) => Ok(*val), // `m[k]` resolves to the value type (M-RT S3)
-                _ => Ok(CTy::Other),
-            },
+            Expr::Index { object, index, .. } => {
+                // A CONSTANT index into a list LITERAL reads that element's type directly, rather
+                // than through the first-element approximation in the `Expr::List` arm above. Exact
+                // for a real list (`[1, 2, 3][0]`), and it is the whole answer for a tuple literal
+                // field read: an erased `(source: "x", bp: 3).bp` arrives here as
+                // `List(["x", 3])[1]`, where the first-element rule resolves `Str` and `num_ty`
+                // then rejects on the VM what the interpreter accepts.
+                if let (Expr::List(elems, _), Expr::Int(i, _)) = (object.as_ref(), index.as_ref()) {
+                    if let Some(el) = usize::try_from(*i).ok().and_then(|i| elems.get(i)) {
+                        return self.ctype(el);
+                    }
+                }
+                match self.ctype(object)? {
+                    CTy::List(elem) => Ok(*elem),
+                    CTy::Map(_, val) => Ok(*val), // `m[k]` resolves to the value type (M-RT S3)
+                    // DEC-504 / Invariant 7: a tuple's positions have DIFFERENT types, so the index
+                    // selects one rather than there being a single element type. The index is always a
+                    // literal here — a named field read (`t.bp`) is rewritten to `t[<position>]` by
+                    // `rewrite_tuple_fields`, and a computed index into a tuple is refused by the
+                    // checker — so a non-literal falls through to `Other` and stays checker-unreachable.
+                    CTy::Tuple(elems) => Ok(match index.as_ref() {
+                        Expr::Int(i, _) => usize::try_from(*i)
+                            .ok()
+                            .and_then(|i| elems.get(i).cloned())
+                            .unwrap_or(CTy::Other),
+                        _ => CTy::Other,
+                    }),
+                    _ => Ok(CTy::Other),
+                }
+            }
             // A map literal's key/value types come from its first pair (≥1, parser-guaranteed), so a
             // `var m = ["a" => 1]; m["a"] + 1` specializes the arithmetic (M-RT S3).
             Expr::Map(pairs, _) => {
@@ -375,10 +400,16 @@ impl Compiler<'_> {
             CTy::Int => Some(NumTy::Int),
             CTy::Float => Some(NumTy::Float),
             CTy::Decimal => Some(NumTy::Decimal),
+            // A tuple is no more a numeric operand than a list is (DEC-504). It is listed
+            // explicitly rather than swept into a `_`: this match is what turns "the operand's
+            // type" into "which specialized arithmetic op", so a new `CTy` absorbed silently here
+            // is precisely the Invariant-7 trap. Arithmetic reaches a tuple only through a
+            // POSITION (`t.bp + 1` -> `t[1] + 1`), which resolves to that position's own `CTy`.
             CTy::Str
             | CTy::Class(_)
             | CTy::Other
             | CTy::List(_)
+            | CTy::Tuple(_)
             | CTy::Map(..)
             | CTy::Fn { .. } => None,
         }

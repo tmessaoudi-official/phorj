@@ -151,7 +151,9 @@ impl Ctx {
                     self.walk_type(t, errs);
                 }
             }
-            Type::Union(members, _) | Type::Intersection(members, _) | Type::Tuple(members, _) => {
+            Type::Union(members, _)
+            | Type::Intersection(members, _)
+            | Type::Tuple(members, _, _) => {
                 for m in members {
                     self.walk_type(m, errs);
                 }
@@ -381,7 +383,7 @@ impl Ctx {
                     self.walk_expr(a, errs);
                 }
             }
-            Expr::List(items, _) | Expr::Tuple(items, _) => {
+            Expr::List(items, _) | Expr::Tuple(items, _, _) => {
                 for i in items {
                     self.walk_expr(i, errs);
                 }

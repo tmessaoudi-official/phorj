@@ -138,9 +138,10 @@ impl Checker {
             // `Ty::Tuple`; each binder's type is the tuple's position type (inferred `var (a,b)`) or a
             // declared type checked assignable-from it (explicit `(T a, …)`).
             DestructurePat::Tuple { binders, .. } => {
-                let arity_ok = matches!(&init_ty, Ty::Tuple(elems) if elems.len() == binders.len());
+                let arity_ok =
+                    matches!(&init_ty, Ty::Tuple(elems, _) if elems.len() == binders.len());
                 match &init_ty {
-                    Ty::Tuple(elems) if arity_ok => {
+                    Ty::Tuple(elems, _) if arity_ok => {
                         let mut resolved = Vec::with_capacity(binders.len());
                         for ((ty_opt, name, bsp), et) in binders.iter().zip(elems.iter()) {
                             let bind_ty = match ty_opt {
@@ -169,7 +170,7 @@ impl Checker {
                         self.tuple_bind_resolutions
                             .insert(pat.span().start, resolved);
                     }
-                    Ty::Tuple(elems) => {
+                    Ty::Tuple(elems, _) => {
                         self.err_coded(
                             span,
                             format!(
@@ -290,109 +291,6 @@ impl Checker {
     /// query (installation is the caller's job). Sources: `x instanceof T` (true ⇒ `T`; false ⇒ the
     /// remaining union members), `x == null` / `x != null` over a `T?` (both polarities), `!c` (flips
     /// polarity), and `a && b` (true side) / `a || b` (false side, De Morgan).
-    pub(in crate::checker) fn narrow_from_condition(
-        &self,
-        cond: &crate::ast::Expr,
-        polarity: bool,
-    ) -> Vec<(String, Ty)> {
-        use crate::ast::{BinaryOp, Expr, UnaryOp};
-        let mut out = Vec::new();
-        match cond {
-            Expr::InstanceOf {
-                value, type_name, ..
-            } => {
-                if let Expr::Ident(name, _) = &**value {
-                    // Slice 3 (DEC-184): a primitive type-test narrows the variable to the tested
-                    // primitive in the then-branch (`if (x is int)` ⇒ `x: int`). The VM compiler
-                    // replicates this exact then-branch narrowing (`compile_if`), so arithmetic on the
-                    // narrowed value (`x + 1`) is lockstep.
-                    if let Some(prim) = prim_pat_ty(type_name) {
-                        if polarity {
-                            out.push((name.clone(), prim));
-                        } else if let Some((Ty::Optional(inner), _)) = self.lookup_binding(name) {
-                            // `is null` over an optional: the complement is the non-null inner.
-                            // Lockstep-safe — an optional local already carries its inner `CTy` on the
-                            // VM (`resolve_cty`), so no compiler narrowing is needed to specialize it.
-                            if matches!(prim, Ty::Null) {
-                                out.push((name.clone(), *inner));
-                            }
-                        }
-                        // Deliberately NO union-minus-primitive complement (`(int | string)` else-branch
-                        // ⇒ `string`): the VM compiler can't derive it — a union local is `CTy::Other`
-                        // and the member set is lost — so narrowing it here would be a
-                        // checker-accepts/VM-rejects divergence. Reach the complement with a nested
-                        // `is`/`match`. General fix tracked as W2-12 (erased-operand dynamic fallback).
-                        return out;
-                    }
-                    let known = self.classes.contains_key(type_name)
-                        || self.interfaces.contains_key(type_name);
-                    if !known {
-                        return out;
-                    }
-                    if polarity {
-                        // then-branch: narrow to the tested type. `instanceof` carries no type
-                        // arguments at runtime (`instanceof Box<int>` ≡ `instanceof Box`), so a
-                        // generic class narrows with erased (poison) args — its generic members read
-                        // as `mixed` (M-RT generics-all).
-                        let arity = self
-                            .classes
-                            .get(type_name)
-                            .map_or(0, |c| c.type_params.len());
-                        out.push((
-                            name.clone(),
-                            Ty::Named(type_name.clone(), vec![Ty::Error; arity]),
-                        ));
-                    } else if let Some((Ty::Union(members), _)) = self.lookup_binding(name) {
-                        // else-branch: drop the tested member (and any subtype of it) from the union.
-                        let orig = members.len();
-                        let rest: Vec<Ty> = members
-                            .into_iter()
-                            .filter(|m| {
-                                !matches!(m, Ty::Named(n, _)
-                                    if n == type_name || self.is_subtype(n, type_name))
-                            })
-                            .collect();
-                        if !rest.is_empty() && rest.len() < orig {
-                            out.push((name.clone(), Ty::union_of(rest)));
-                        }
-                    }
-                }
-            }
-            // (Phorj has no `x == null` / `x != null` comparison — the checker rejects comparing a
-            // `T?` to the null literal; optionals are tested via if-let / `??` / match-over-optional,
-            // so there is no null-equality narrowing source here.)
-            // `a && b` narrows the conjunction on its true side; `a || b` narrows on its false side
-            // (De Morgan: `!(a || b)` ≡ `!a && !b`). The other polarity yields a disjunction — no
-            // single narrowing — so it contributes nothing.
-            Expr::Binary {
-                op: BinaryOp::And,
-                lhs,
-                rhs,
-                ..
-            } if polarity => {
-                out.extend(self.narrow_from_condition(lhs, true));
-                out.extend(self.narrow_from_condition(rhs, true));
-            }
-            Expr::Binary {
-                op: BinaryOp::Or,
-                lhs,
-                rhs,
-                ..
-            } if !polarity => {
-                out.extend(self.narrow_from_condition(lhs, false));
-                out.extend(self.narrow_from_condition(rhs, false));
-            }
-            // `!c` flips the polarity.
-            Expr::Unary {
-                op: UnaryOp::Not,
-                expr,
-                ..
-            } => out.extend(self.narrow_from_condition(expr, !polarity)),
-            _ => {}
-        }
-        out
-    }
-
     pub(in crate::checker) fn check_for(&mut self, stmt: &crate::ast::Stmt) {
         if let crate::ast::Stmt::For {
             ty,

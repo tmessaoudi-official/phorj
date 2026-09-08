@@ -128,12 +128,35 @@ impl Transpiler {
             },
             Expr::InstanceOf { .. } => OpKind::Bool,
             Expr::Force { inner, .. } => self.expr_kind(inner),
-            // T6d: `xs[i]` → element kind; `m[k]` → value kind.
-            Expr::Index { object, .. } => match self.expr_kind(object) {
-                OpKind::List(elem) => *elem,
-                OpKind::Map(_, val) => *val,
-                _ => OpKind::Other,
-            },
+            // T6d: `xs[i]` → element kind; `m[k]` → value kind; `t[k]` → position `k`'s own kind.
+            Expr::Index { object, index, .. } => {
+                // A CONSTANT index into a list LITERAL reads that element's kind directly, rather
+                // than through the first-element approximation below. Exact for a real list
+                // (`[1,2,3][0]`), and it is the whole answer for a tuple literal field read: an
+                // erased `(source: "x", bp: 3).bp` arrives here as `List(["x", 3])[1]`, where the
+                // first-element rule would say `Str` and mis-emit the enclosing `+` as `.`.
+                if let (Expr::List(elems, _), Expr::Int(i, _)) = (object.as_ref(), index.as_ref()) {
+                    if let Some(el) = usize::try_from(*i).ok().and_then(|i| elems.get(i)) {
+                        return self.expr_kind(el);
+                    }
+                }
+                match self.expr_kind(object) {
+                    OpKind::List(elem) => *elem,
+                    OpKind::Map(_, val) => *val,
+                    // DEC-504: a tuple's positions have DIFFERENT kinds, so the index selects one.
+                    // The index is always a literal here — a named field read (`t.bp`) is rewritten
+                    // to `t[<position>]` by `rewrite_tuple_fields` and a computed index into a tuple
+                    // is refused by the checker — so a non-literal stays checker-unreachable.
+                    OpKind::Tuple(ks) => match index.as_ref() {
+                        Expr::Int(i, _) => usize::try_from(*i)
+                            .ok()
+                            .and_then(|i| ks.get(i).cloned())
+                            .unwrap_or(OpKind::Other),
+                        _ => OpKind::Other,
+                    },
+                    _ => OpKind::Other,
+                }
+            }
             // A list/map literal carries its element kind from the first item, so `[1,2,3][0]`
             // resolves (M3 S1.1 analog).
             Expr::List(items, _) => OpKind::List(Box::new(
@@ -232,6 +255,10 @@ pub(super) fn opkind_of_ty(ty: &crate::types::Ty) -> OpKind {
         Ty::List(e) => OpKind::List(Box::new(opkind_of_ty(e))),
         Ty::Map(k, v) => OpKind::Map(Box::new(opkind_of_ty(k)), Box::new(opkind_of_ty(v))),
         Ty::Named(name, _) => OpKind::Class(name.clone()),
+        // DEC-504: per-position kinds, so an indexed read of a tuple-returning native resolves as
+        // an operand. No native returns a tuple today; the arm exists so adding one cannot silently
+        // re-open the Invariant-7 trap by collapsing to `Other`.
+        Ty::Tuple(ts, _) => OpKind::Tuple(ts.iter().map(opkind_of_ty).collect()),
         _ => OpKind::Other,
     }
 }
@@ -259,6 +286,10 @@ pub(super) fn kind_of_type(ty: &Type) -> OpKind {
             // type resolve through `class_field_kinds` (T6b).
             other => OpKind::Class(other.to_string()),
         },
+        // DEC-504 / Invariant 7: a tuple annotation carries each position's own kind. This is the
+        // arm that makes an ANNOTATED (or materialized) tuple local resolve `t.bp + 1` as int
+        // arithmetic instead of falling through to the erased list literal's first element.
+        Type::Tuple(members, ..) => OpKind::Tuple(members.iter().map(kind_of_type).collect()),
         _ => OpKind::Other,
     }
 }

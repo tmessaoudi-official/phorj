@@ -349,7 +349,7 @@ fn type_key(t: &Type) -> String {
         Type::Optional { inner, .. } => format!("{}?", type_key(inner)),
         Type::Union(ts, _) => format!("({})", list(ts, "|")),
         Type::Intersection(ts, _) => format!("({})", list(ts, "&")),
-        Type::Tuple(ts, _) => format!("({},)", list(ts, ",")),
+        Type::Tuple(ts, _, _) => format!("({},)", list(ts, ",")),
         Type::FixedList { elem, len, .. } => format!("[{};{len}]", type_key(elem)),
         Type::Function {
             params,

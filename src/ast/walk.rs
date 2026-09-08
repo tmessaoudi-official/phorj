@@ -58,7 +58,7 @@ fn collect_free_expr(
             }
         }
         Expr::NamedArg { value, .. } => collect_free_expr(value, bound, found),
-        Expr::List(items, _) | Expr::Tuple(items, _) => {
+        Expr::List(items, _) | Expr::Tuple(items, _, _) => {
             for it in items {
                 collect_free_expr(it, bound, found);
             }
@@ -314,7 +314,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
                     StrPart::Literal(_) => false, // named, not `_` — DEC-356
                 })
             }
-            Expr::List(items, _) | Expr::Tuple(items, _) => items.iter().any(in_expr),
+            Expr::List(items, _) | Expr::Tuple(items, _, _) => items.iter().any(in_expr),
             Expr::NamedArg { value, .. } => in_expr(value),
             Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
             Expr::Unary { expr, .. } => in_expr(expr),
@@ -459,7 +459,9 @@ pub fn any_expr(program: &Program, pred: &dyn Fn(&Expr) -> bool) -> bool {
                     StrPart::Literal(_) => false, // named, not `_` — DEC-356
                 })
             }
-            Expr::List(items, _) | Expr::Tuple(items, _) => items.iter().any(|x| in_expr(x, pred)),
+            Expr::List(items, _) | Expr::Tuple(items, _, _) => {
+                items.iter().any(|x| in_expr(x, pred))
+            }
             Expr::NamedArg { value, .. } => in_expr(value, pred),
             Expr::Map(pairs, _) => pairs
                 .iter()

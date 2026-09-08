@@ -18,7 +18,7 @@
 //! - A **contextually-typed pipe lambda** `x |> (v => v * 2)` is already an ordinary
 //!   [`Expr::Lambda`] RHS (with a [`Type::Infer`] param) by the time it reaches here — it lowers by
 //!   the plain rule into an IIFE the checker's contextual call path types. After checking,
-//!   [`materialize_pipe_params`] (LAST in the rewrite chain) writes the checker-inferred type into
+//!   [`materialize_inferred_types`] (LAST in the rewrite chain) writes the checker-inferred type into
 //!   the param, so the VM compiler and transpiler see a concretely-typed lambda (Invariant 7).
 //!
 //! Placeholder SHAPE validation (`E-PIPE-PLACEHOLDER`) happens at parse time, so this pass only
@@ -33,7 +33,7 @@ use crate::token::Span;
 pub(in crate::checker) mod materialize;
 pub(in crate::checker) mod walk;
 
-pub use materialize::materialize_pipe_params;
+pub use materialize::materialize_inferred_types;
 
 /// Expand every `Expr::Pipe` / `Expr::PipePlaceholder` throughout the program (in place).
 pub fn lower_pipes(mut program: Program) -> Program {

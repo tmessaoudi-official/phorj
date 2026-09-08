@@ -53,7 +53,7 @@ pub enum Type {
     /// sugar: the checker resolves it to [`crate::types::Ty::Tuple`], then the tuple-erasure pass
     /// rewrites it OUT (to a plain `List` view) before any backend — the same "expanded out before
     /// backends" discipline as generics / `FixedList`. Members are in source order.
-    Tuple(Vec<Type>, Span),
+    Tuple(Vec<Type>, crate::ast::TupleLabels, Span),
     /// An **erased** generic type parameter (M-RT S7). Produced *only* by `checker::erase_generics`,
     /// which rewrites every `Type::Named` that refers to an in-scope type parameter (`T`) into this
     /// after type-checking. No parser ever emits it and no checker pass before erasure sees it; the

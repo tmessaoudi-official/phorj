@@ -114,7 +114,10 @@ pub fn materialize_tuple_binds(mut program: Program, binds: &HashMap<usize, Vec<
     program
 }
 
-fn walk_member_stmts(members: &mut [ClassMember], f: &mut impl FnMut(&mut Stmt)) {
+pub(in crate::checker) fn walk_member_stmts(
+    members: &mut [ClassMember],
+    f: &mut impl FnMut(&mut Stmt),
+) {
     for m in members {
         match m {
             ClassMember::Method(func) => walk_stmts(&mut func.body, f),
@@ -129,7 +132,7 @@ fn walk_member_stmts(members: &mut [ClassMember], f: &mut impl FnMut(&mut Stmt))
 }
 
 /// Apply `f` to every statement (pre-order), recursing into all nested statement lists.
-fn walk_stmts(stmts: &mut [Stmt], f: &mut impl FnMut(&mut Stmt)) {
+pub(in crate::checker) fn walk_stmts(stmts: &mut [Stmt], f: &mut impl FnMut(&mut Stmt)) {
     for s in stmts.iter_mut() {
         f(s);
         match s {

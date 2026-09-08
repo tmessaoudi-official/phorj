@@ -71,7 +71,7 @@ pub enum Ty {
     /// any backend (like generics/`FixedList` — the "expand out before backends" discipline). The
     /// runtime rep is a plain list, so a tuple prints/behaves as a list; the backends never see
     /// `Ty::Tuple`. Assignable only to a same-arity tuple with element-wise assignable positions.
-    Tuple(Vec<Ty>),
+    Tuple(Vec<Ty>, crate::ast::TyLabels),
     /// `T?` — an optional: holds a `T` or `null`. The non-null guarantee lives in
     /// `assignable` (a non-optional `T` can never hold `null`).
     Optional(Box<Ty>),
@@ -318,15 +318,10 @@ impl fmt::Display for Ty {
             Ty::FixedList(e, n) => write!(f, "[{e}; {n}]"),
             Ty::Map(k, v) => write!(f, "Map<{k}, {v}>"),
             Ty::Set(e) => write!(f, "Set<{e}>"),
-            Ty::Tuple(ts) => {
-                write!(f, "(")?;
-                for (i, t) in ts.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{t}")?;
-                }
-                write!(f, ")")
+            Ty::Tuple(ts, ls) => {
+                // DEC-504: named and positional tuples render through ONE helper so the two
+                // spellings cannot drift between diagnostics, LSP hover and `phg explain`.
+                crate::ast::render_members(f, ts, ls.as_deref())
             }
             // A union inner needs parens — `(A | B)?` — or the rendered form re-reads as
             // `A | (B?)` (`?` binds to its immediate member in the grammar). DEC-253.

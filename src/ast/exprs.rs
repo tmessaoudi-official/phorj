@@ -67,7 +67,7 @@ pub enum Expr {
     /// elements (a single `(e)` is grouping). A compile-time sugar: the checker types it as a
     /// `Ty::Tuple`, then the desugar rewrites it to a `List` literal before any backend, so no backend
     /// ever sees `Expr::Tuple` (the "expand out before backends" discipline).
-    Tuple(Vec<Expr>, Span),
+    Tuple(Vec<Expr>, crate::ast::TupleLabels, Span),
     /// `name: value` — a NAMED CALL ARGUMENT (DEC-297). Appears ONLY inside a call/`new`/method-call
     /// argument list; the checker's front-normalization reorders named args into their positional slots
     /// (filling omitted defaults) BEFORE any backend, so no backend ever sees `Expr::NamedArg` (the

@@ -182,8 +182,10 @@ fn parses_parenthesized_return_position_function_type() {
     assert!(matches!(ty("(A | B)"), Type::Union { .. }));
     // DEC-288: `(A, B[, …])` without a `=>` is a TUPLE type (2+ members). A unit-paren `()` without
     // a `=>` is still an error (an empty paren list is only a function-type parameter list).
-    assert!(matches!(ty("(int, string)"), Type::Tuple(members, _) if members.len() == 2));
-    assert!(matches!(ty("(int, string, bool)"), Type::Tuple(members, _) if members.len() == 3));
+    assert!(matches!(ty("(int, string)"), Type::Tuple(members, None, _) if members.len() == 2));
+    assert!(
+        matches!(ty("(int, string, bool)"), Type::Tuple(members, None, _) if members.len() == 3)
+    );
     assert!(parser("()").parse_type().is_err());
 }
 

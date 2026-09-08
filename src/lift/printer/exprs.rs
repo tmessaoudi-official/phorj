@@ -46,7 +46,7 @@ impl Printer {
             }
             // A tuple literal `(a, b)` (DEC-288). The lifter never synthesizes this today, but print
             // it faithfully for completeness.
-            Expr::Tuple(items, _) => {
+            Expr::Tuple(items, _, _) => {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr(x)).collect();
                 Ok(format!("({})", xs?.join(", ")))
             }
@@ -322,7 +322,7 @@ pub(super) fn ty(t: &Type) -> Result<String, String> {
             Ok(m?.join(" | "))
         }
         // A POSITIONAL `array{…}` shape lifts to a tuple (lane L1c) — `(int, string)`.
-        Type::Tuple(elems, _) => {
+        Type::Tuple(elems, _, _) => {
             let e: Result<Vec<_>, _> = elems.iter().map(ty).collect();
             Ok(format!("({})", e?.join(", ")))
         }

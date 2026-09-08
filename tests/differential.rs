@@ -4807,6 +4807,93 @@ class Signal {
     );
 }
 
+/// DEC-504 L4 — **the Invariant-7 case, and the reason it is written first.** Named-field tuples
+/// erase to positional lists like every tuple (Invariant 5), and the compiler's `CTy::List` carries
+/// ONE homogeneous element type taken from `elems.first()` (`src/compiler/cty.rs`). So a field that
+/// is not in position 0 inherits position 0's operand type: with `(source: string, bp: int)`, the VM
+/// would type `t.bp + 1` as a `String` operand while the interpreter reads an `int` and is right.
+///
+/// Positional tuples never had element access at all, so this trap was unreachable until this slice
+/// made `t.bp` legal. The int field is deliberately placed SECOND — put first, the bug hides.
+#[test]
+fn named_tuple_field_arithmetic_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    (source: string, bp: int) t = (source: \"x\", bp: 3);
+    Output.printLine(\"{t.bp + 1} {t.source}\");
+}",
+        "4 x\n",
+        "named_tuple_field_arith",
+    );
+}
+
+/// The same trap reached through the two receiver shapes that do NOT carry a written annotation, so
+/// the operand type has to come from the checker's inference rather than from a `Type::Tuple` the
+/// compiler can read directly: a local inferred from the literal, and one inferred from a call's
+/// declared return. A fix that only handles the annotated form passes the case above and fails here.
+#[test]
+fn named_tuple_field_arithmetic_inferred_receivers_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+function probe() -> (source: string, bp: int) { return (source: \"y\", bp: 10); }
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    var lit = (source: \"z\", bp: 7);
+    var ret = probe();
+    Output.printLine(\"{lit.bp + 1} {ret.bp + 1}\");
+}",
+        "8 11\n",
+        "named_tuple_field_inferred",
+    );
+}
+
+/// Float variant of the same trap — a non-first `float` field used as a multiplicative operand. The
+/// int case can pass by accident wherever a fallback happens to specialize to `Int`; this one cannot.
+#[test]
+fn named_tuple_float_field_arithmetic_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    var t = (label: \"r\", rate: 1.5);
+    Output.printLine(\"{t.rate * 2.0}\");
+}",
+        "3\n",
+        "named_tuple_float_field",
+    );
+}
+
+/// The FOURTH receiver shape: a `foreach` binder over a `List<(source: string, bp: int)>`, whose
+/// type reaches the backends through `ty_to_ast_type` (`materialize_for_binds`) rather than through
+/// a declaration.
+///
+/// **This case is COVERAGE, not a mutation-guarded regression test, and the difference is worth
+/// stating.** Reverting `ty_to_ast_type`'s tuple arm to `Type::Erased` leaves this case GREEN
+/// (measured, not assumed — it was run). Without the fix the binder does not resolve to the WRONG
+/// type here, it resolves to none: an unspecialized operand that takes the runtime-helper path and
+/// is slower but still correct, and the PHP leg still emits `+`. Only a confidently-wrong type
+/// breaks byte-identity, which is why the three cases above red under mutation and this one does
+/// not. It is kept because it pins a distinct receiver shape that a future change could break in a
+/// way the others would not catch.
+///
+/// The int field is SECOND, as in every case above. Written with `bp` first the case is doubly
+/// vacuous — the binder's fallback element type would then have the int in position 0 and agree by
+/// accident. It was first written that way; the mutation run is what exposed it.
+#[test]
+fn named_tuple_field_arithmetic_foreach_binder_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    var rows = [(source: \"a\", bp: 3), (source: \"b\", bp: 4)];
+    mutable int total = 0;
+    mutable string tags = \"\";
+    foreach (rows as r) { total = total + r.bp + 1; tags = tags + r.source; }
+    Output.printLine(\"{total} {tags}\");
+}",
+        "9 ab\n",
+        "named_tuple_field_foreach",
+    );
+}
+
 /// `<=>` is NON-associative in PHP — `1 <=> 2 <=> 3` is a parse error there — while phorj's
 /// `parse_binary_from` is uniformly left-associative and accepts it. That is a deliberate superset,
 /// so the transpiler must parenthesize or it emits PHP that will not parse. Pins that `(1 <=> 2) <=> 3`

@@ -23,7 +23,7 @@ use super::*;
 pub(in crate::checker) fn unorderable_leaf(t: &Ty) -> Option<Ty> {
     match t {
         Ty::Int | Ty::Float => None,
-        Ty::Tuple(elems) => elems.iter().find_map(unorderable_leaf),
+        Ty::Tuple(elems, _) => elems.iter().find_map(unorderable_leaf),
         other => Some(other.clone()),
     }
 }
@@ -86,7 +86,7 @@ impl Checker {
         // Tuple ordering (DEC-512): identical shape on both sides, orderable leaves. Requiring
         // `l == r` rather than element-wise assignability keeps `(int, int) < (int, float)` an
         // error — the same no-coercion stance the scalar rule takes for `1 < 2.0`.
-        if matches!(l, Ty::Tuple(_)) || matches!(r, Ty::Tuple(_)) {
+        if matches!(l, Ty::Tuple(..)) || matches!(r, Ty::Tuple(..)) {
             if l != r {
                 return self.err_coded(
                     span,

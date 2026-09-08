@@ -1,5 +1,5 @@
 //! The shared bottom-up expression visitor for the DEC-239 pipe passes (`lower_pipes` /
-//! `materialize_pipe_params`): every expression in the program is visited children-first, then
+//! `materialize_inferred_types`): every expression in the program is visited children-first, then
 //! handed to the closure, which may rewrite it in place. Bottom-up order is what lets a nested
 //! pipe (anywhere in an outer pipe's operands) lower — placeholders substituted — before the
 //! outer pipe's own lowering inspects its RHS.
@@ -244,7 +244,7 @@ pub(super) fn vexpr(e: &mut Expr, pre: bool, f: &mut impl FnMut(&mut Expr)) {
         // `NamedArg` holds its value. Both are expanded out before any backend, which is why no
         // currently-constructible program was found that mis-lowers because of the old catch-all —
         // this closes a latent hazard, it does not fix an observed bug.
-        Expr::Tuple(items, _) => {
+        Expr::Tuple(items, _, _) => {
             for it in items {
                 vexpr(it, pre, f);
             }

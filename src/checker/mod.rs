@@ -24,6 +24,7 @@ mod erase_tuples;
 mod function_imports;
 mod inline_parent_ctor;
 mod intrinsic_imports;
+mod member_vis;
 mod overloads;
 mod overloads_rename;
 mod qualify_variants;
@@ -37,6 +38,7 @@ mod rewrite_invoke_tostring;
 mod rewrite_invoke_tostring_walk;
 mod rewrite_new;
 mod rewrite_pipe;
+mod rewrite_tuple_fields;
 mod rewrite_ufcs;
 pub use self::{desugar_config::desugar_config, desugar_db::desugar_db, desugar_di::desugar_di};
 pub use collapse_injected::collapse_injected_type_qualifiers;
@@ -46,6 +48,7 @@ pub use enforce_injected::enforce_injected_discipline;
 pub use erase_tuples::erase_tuples;
 pub use inline_parent_ctor::inline_parent_ctors;
 pub use intrinsic_imports::resolve_intrinsic_imports;
+pub(in crate::checker) use member_vis::MemberVis;
 pub use overloads_rename::rename_overload_defs;
 pub use qualify_variants::qualify_variants;
 pub use resolve_variant_imports::resolve_variant_imports;
@@ -56,7 +59,8 @@ pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
 pub use rewrite_invoke_tostring::resolve_invoke_tostring;
 pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
-pub use rewrite_pipe::{lower_pipes, materialize_pipe_params};
+pub use rewrite_pipe::{lower_pipes, materialize_inferred_types};
+pub use rewrite_tuple_fields::rewrite_tuple_fields;
 pub use rewrite_ufcs::rewrite_ufcs;
 
 // impl-cluster cohesion split (M-Decomp W2): one `impl Checker` block per cluster
@@ -281,51 +285,6 @@ struct HookInfo {
     ty: Ty,
     has_get: bool,
     has_set: bool,
-}
-
-/// Member-level visibility (Feature A — `const` class constants). Distinct from `ast::Visibility`
-/// (declaration/file scope): a *member* is `public` (default), `protected`, or `private`, derived from
-/// the `Modifier::{Public,Private,Protected}` set. Const access is the one site Phorj enforces member
-/// visibility — required because the transpiler emits a PHP `private const`, which PHP would reject if
-/// read from outside the class (a `run`↔PHP byte-identity break otherwise).
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum MemberVis {
-    Public,
-    /// Q-B DV-3: package-subtree-visible — reachable from the declaring class's package and its
-    /// descendant packages (the same subtree meaning as top-level `internal`). Enforced via the
-    /// package derived from mangled names; erases to PHP `public` (PHP has no package concept).
-    Internal,
-    Protected,
-    Private,
-}
-
-impl MemberVis {
-    /// The member visibility carried by a modifier set: `private` > `protected` > `public` (default).
-    /// DEC-241: the SET visibility carried by a modifier set — `Some(Private)` for
-    /// `private(set)`, `Some(Protected)` for `protected(set)`, `None` when symmetric.
-    pub(super) fn set_of(mods: &[crate::ast::Modifier]) -> Option<MemberVis> {
-        use crate::ast::Modifier as M;
-        if mods.contains(&M::PrivateSet) {
-            Some(MemberVis::Private)
-        } else if mods.contains(&M::ProtectedSet) {
-            Some(MemberVis::Protected)
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn of(mods: &[crate::ast::Modifier]) -> MemberVis {
-        use crate::ast::Modifier;
-        if mods.contains(&Modifier::Private) {
-            MemberVis::Private
-        } else if mods.contains(&Modifier::Protected) {
-            MemberVis::Protected
-        } else if mods.contains(&Modifier::Internal) {
-            MemberVis::Internal
-        } else {
-            MemberVis::Public
-        }
-    }
 }
 
 /// A class constant (Feature A): its declared type, member visibility, and the class that *declares*
@@ -681,10 +640,16 @@ pub struct Checker {
     /// DEC-239: contextual pipe-lambda parameter resolutions — the checker-inferred `Ty` of each
     /// lambda parameter written as `Type::Infer` (the pipe lambda `x |> (v => …)` and the multi-`%`
     /// IIFE), keyed by the parameter's `span.start`. `cli::check_and_expand_reified` materializes
-    /// each into the AST param (`checker::materialize_pipe_params`, LAST in the rewrite chain) so
+    /// each into the AST param (`checker::materialize_inferred_types`, LAST in the rewrite chain) so
     /// the VM compiler's `resolve_cty` and the transpiler's kind analysis see a concrete type —
     /// leaving `Infer` in a backend-bound param is exactly the interp ≠ VM CTy-operand trap.
-    pipe_param_resolutions: HashMap<usize, Ty>,
+    inferred_type_resolutions: HashMap<usize, Ty>,
+    /// DEC-504: named-tuple field resolutions — a `t.bp` `Member` span → the field's POSITION in
+    /// the tuple. `cli::check_and_expand_reified` rewrites each into an `Index` before the tuple
+    /// erasure runs (`checker::rewrite_tuple_fields`), so no backend ever learns that a tuple's
+    /// fields had names. Recorded rather than rewritten in place because the checker must not
+    /// mutate the tree it is walking, and a clone spliced later goes stale.
+    tuple_field_indices: HashMap<usize, usize>,
     /// DEC-331 D9: resolved rewrite decisions for `resolve_invoke_tostring` (keyed by `span.start`).
     /// `invoke_call_targets`: a `x(args)` `Call` span → the chosen `#[Invoke]` method name (→ rewritten
     /// `x.<name>(args)`). `to_string_targets`: a string-context expression span (interpolation hole or

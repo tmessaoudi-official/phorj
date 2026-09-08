@@ -1,33 +1,75 @@
-//! DEC-239 — write the checker-inferred type of each contextual pipe-lambda parameter into the
-//! AST, so every backend sees a concretely-typed lambda.
+//! DEC-239 / DEC-504 — write a checker-inferred type back into the AST wherever the source wrote
+//! none, so every backend sees a concretely-typed node instead of `Type::Infer`.
 //!
-//! A pipe lambda `x |> (v => v * 2)` (and the multi-`%` IIFE) parses with `Type::Infer` on its one
-//! param; the checker resolves it from the piped value's type and records the resolution keyed by
-//! the param's `span.start` (`Checker::pipe_param_resolutions`). This pass runs **LAST** in
-//! `cli::check_and_expand_reified`'s rewrite chain — after `rewrite_ufcs` has spliced any recorded
-//! replacements back into the tree — and mutates only `Param.ty`, so there is no cloned-subtree
-//! staleness to manage. Leaving `Infer` in a backend-bound param would de-specialize the VM
-//! compiler's `resolve_cty` (CTy `Other`) and the transpiler's kind analysis — the interp ≠ VM
-//! CTy-operand trap (Invariant 7) — which the differential `pipe-lambda-result + 1` case guards.
+//! TWO node kinds are materialized, both keyed by `span.start` in one table
+//! (`Checker::inferred_type_resolutions`) because they are the same fact — *"the user wrote no
+//! annotation here and the checker worked one out"*:
+//!
+//! - **Contextual pipe-lambda params** (DEC-239). `x |> (v => v * 2)` (and the multi-`%` IIFE)
+//!   parses with `Type::Infer` on its one param; the checker resolves it from the piped value.
+//! - **`var` declarations whose inferred type is a TUPLE** (DEC-504). Scoped to tuples on purpose:
+//!   every other `var` is already served by the consumers' initializer fallback, and annotating all
+//!   of them would be a large, untested change in what the backends see.
+//!
+//! Why the tuple case is not optional. Both consumers prefer the annotation and fall back to the
+//! INITIALIZER when there is none — `compiler::stmt` (`Type::Infer(_) => self.ctype(init)`) and
+//! `transpile::stmt` (`OpKind::Other => self.expr_kind(init)`). By the time either runs, a tuple
+//! literal has been erased to a plain list, whose element type is position 0's. So `var t = (source:
+//! "z", bp: 7); t.bp + 1` resolves `bp` as a STRING: the VM refuses to infer a numeric type where
+//! the interpreter reads an int, and the PHP leg emits `.` instead of `+` and prints `71` for `8`.
+//! That is the Invariant-7 CTy-operand trap, and an annotation is what closes it — the same fix, at
+//! the same place, as the `pipe-lambda-result + 1` case this pass already guarded.
+//!
+//! This pass runs **LAST** in `cli::check_and_expand_reified`'s rewrite chain — after `rewrite_ufcs`
+//! has spliced any recorded replacements back into the tree — and mutates only a `Param.ty` /
+//! `VarDecl.ty`, never a subtree, so there is no cloned-subtree staleness to manage. It runs BEFORE
+//! `rewrite_tuple_fields` + `erase_tuples`, which is what lets it write a `Type::Tuple` at all: the
+//! value form is erased after it, the type form deliberately survives.
 
 use super::*;
-use crate::ast::{Expr, Type};
+use crate::ast::{Expr, Item, LambdaBody, Stmt, Type};
 use crate::token::Span;
 
-/// Materialize every recorded pipe-lambda param resolution into the program (in place). A no-op
-/// when no contextual pipe lambda was checked.
-pub fn materialize_pipe_params(mut program: Program, pipes: &HashMap<usize, Ty>) -> Program {
-    if pipes.is_empty() {
+/// Materialize every recorded inferred type into the program (in place). A no-op when the checker
+/// recorded none.
+pub fn materialize_inferred_types(mut program: Program, inferred: &HashMap<usize, Ty>) -> Program {
+    if inferred.is_empty() {
         return program;
     }
+    // `var` declarations (DEC-504). Statement positions the expression walk below cannot reach, so
+    // this uses the same total statement walk as `materialize_tuple_binds`.
+    let write_decl = &mut |s: &mut Stmt| {
+        if let Stmt::VarDecl { ty, span, .. } = s {
+            if matches!(ty, Type::Infer(_)) {
+                if let Some(t) = inferred.get(&span.start) {
+                    *ty = ty_to_ast_type(t, *span);
+                }
+            }
+        }
+    };
+    use crate::checker::rewrite_foreach::{walk_member_stmts, walk_stmts};
+    for item in &mut program.items {
+        match item {
+            Item::Function(f) => walk_stmts(&mut f.body, write_decl),
+            Item::Class(c) => walk_member_stmts(&mut c.members, write_decl),
+            Item::Trait(t) => walk_member_stmts(&mut t.members, write_decl),
+            Item::Test { body, .. } => walk_stmts(body, write_decl),
+            _ => {}
+        }
+    }
     super::walk::visit_exprs_mut(&mut program, &mut |e| {
-        if let Expr::Lambda { params, .. } = e {
+        if let Expr::Lambda { params, body, .. } = e {
+            // Contextual pipe-lambda params (DEC-239).
             for p in params {
                 if matches!(p.ty, Type::Infer(_)) {
-                    if let Some(t) = pipes.get(&p.span.start) {
+                    if let Some(t) = inferred.get(&p.span.start) {
                         p.ty = ty_to_ast_type(t, p.span);
                     }
                 }
+            }
+            // A `var` inside a block-bodied lambda is not reached by the item walk above.
+            if let LambdaBody::Block(stmts) = body {
+                walk_stmts(stmts, write_decl);
             }
         }
     });
@@ -74,8 +116,21 @@ pub(in crate::checker) fn ty_to_ast_type(t: &Ty, sp: Span) -> Type {
             throws: throws.iter().map(|e| ty_to_ast_type(e, sp)).collect(),
             span: sp,
         },
-        // A tuple erases to a List before any backend (DEC-288b); it never reaches a specialized pipe
-        // operand, so materializing it as `Erased` is safe (same as a generic param).
-        Ty::Tuple(_) | Ty::Param(_) | Ty::Null | Ty::Error => Type::Erased(sp),
+        // DEC-504 / Invariant 7: a tuple materializes to its REAL type, labels and all. The value
+        // form is erased to a list before any backend, but the type form survives, and it is the
+        // only thing that tells `resolve_cty` / `kind_of_type` that position 1 is an `int` while
+        // position 0 is a `string`. `Erased` here (what this arm did until named fields made `t.bp`
+        // — and so `t[1]` — writable) collapses to `CTy::Other`/`OpKind::Other`, and the consumers
+        // then fall back to the ERASED list literal, whose element type is position 0's. That is
+        // the CTy-operand trap: the VM refuses to infer a numeric type where the interpreter reads
+        // an int, and the PHP leg emits `.` for a `+`. Labels are carried because a materialized
+        // binder must still answer `.bp` — dropping them un-names the tuple and `t.bp` would be
+        // refused with `E-TUPLE-POSITIONAL-FIELD` on a tuple the user did name.
+        Ty::Tuple(ts, ls) => Type::Tuple(
+            ts.iter().map(|t| ty_to_ast_type(t, sp)).collect(),
+            crate::ast::to_ast_labels(ls.as_deref(), sp),
+            sp,
+        ),
+        Ty::Param(_) | Ty::Null | Ty::Error => Type::Erased(sp),
     }
 }

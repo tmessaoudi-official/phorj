@@ -100,6 +100,14 @@ enum OpKind {
     List(Box<OpKind>),
     /// `Map<K, V>` carrying key+value kinds, so `m[k]` resolves to `V` (T6d).
     Map(Box<OpKind>, Box<OpKind>),
+    /// A TUPLE, carrying **each position's own kind** (DEC-504) — the transpiler's mirror of
+    /// [`crate::compiler::CTy::Tuple`], and load-bearing for exactly the same reason. A tuple erases
+    /// to a list, but a list carries ONE element kind, so resolving a tuple as `List` gives every
+    /// position the kind of position 0. Here that does not merely de-specialize: it picks the wrong
+    /// PHP OPERATOR. `(source: string, bp: int) t = …; t.bp + 1` becomes `$t[1] . 1` — string
+    /// concatenation — and the PHP leg prints `31` where both native legs print `4`, breaking the
+    /// byte-identity spine (Invariant 1) rather than just running slower.
+    Tuple(Vec<OpKind>),
     Other,
 }
 

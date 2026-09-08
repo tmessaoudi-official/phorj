@@ -68,6 +68,7 @@ mod guards;
 mod items;
 mod patterns;
 mod stmts;
+mod tuple_labels;
 mod types;
 
 impl Parser {

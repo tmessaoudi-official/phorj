@@ -570,7 +570,14 @@ impl Transpiler {
                 self.gates.uses_float = true;
                 format!("{bs}__phorj_float({code})")
             }
-            OpKind::Class(_) | OpKind::List(_) | OpKind::Map(..) | OpKind::Other => {
+            // A tuple is a LIST at runtime (erased before any backend), so an interpolated tuple
+            // renders through the same `__phorj_str` dispatch as a list — and must, to stay
+            // byte-identical with `as_display` of the `Value::List` both native legs hold.
+            OpKind::Class(_)
+            | OpKind::List(_)
+            | OpKind::Tuple(_)
+            | OpKind::Map(..)
+            | OpKind::Other => {
                 self.gates.uses_str = true;
                 format!("{bs}__phorj_str({code})")
             }

@@ -90,6 +90,13 @@ impl Parser {
             TokenKind::If => self.parse_if_expr(sp),
             TokenKind::LParen => {
                 self.advance();
+                // DEC-504: `(name: e, …)` is a NAMED tuple. Checked before the grouped-expression
+                // path because `(bp: 3)` must not be read as the grouping `(bp)` — and unlike the
+                // positional form there IS a 1-field named tuple: the label removes the ambiguity
+                // that made `(e,)` necessary, so `(bp: 3)` is a tuple, not a parenthesized `bp`.
+                if self.at_tuple_label() {
+                    return self.parse_named_tuple(sp);
+                }
                 let first = self.parse_expr()?;
                 if !self.eat(&TokenKind::Comma) {
                     // `(e)` — grouping.
@@ -114,7 +121,7 @@ impl Parser {
                     }
                 }
                 self.expect(&TokenKind::RParen, "')' to close a tuple")?;
-                Ok(Expr::Tuple(elems, sp))
+                Ok(Expr::Tuple(elems, None, sp))
             }
             TokenKind::LBracket => {
                 self.advance();

@@ -47,9 +47,11 @@ pub(super) fn rty(ty: &Type, params: &Params) -> Type {
         Type::Union(members, span) => {
             Type::Union(members.iter().map(|m| rty(m, params)).collect(), *span)
         }
-        Type::Tuple(members, span) => {
-            Type::Tuple(members.iter().map(|m| rty(m, params)).collect(), *span)
-        }
+        Type::Tuple(members, labels, span) => Type::Tuple(
+            members.iter().map(|m| rty(m, params)).collect(),
+            labels.clone(),
+            *span,
+        ),
         // An intersection erases each member (a type-param member becomes `Type::Erased`); the
         // intersection itself is structural and survives to the backend (M-RT S5).
         Type::Intersection(members, span) => {
@@ -277,9 +279,11 @@ pub(super) fn rexpr(e: &Expr, params: &Params) -> Expr {
         // leaves carry no type and no nested expression: Int / Float / Bool / Null / Bytes /
         // Ident / This — clone unchanged.
         // DEC-356: these five bear expressions and were silently passed through by `leaf => leaf`.
-        Expr::Tuple(items, span) => {
-            Expr::Tuple(items.iter().map(|e| rexpr(e, params)).collect(), *span)
-        }
+        Expr::Tuple(items, labels, span) => Expr::Tuple(
+            items.iter().map(|e| rexpr(e, params)).collect(),
+            labels.clone(),
+            *span,
+        ),
         Expr::NamedArg { name, value, span } => Expr::NamedArg {
             name: name.clone(),
             value: Box::new(rexpr(value, params)),

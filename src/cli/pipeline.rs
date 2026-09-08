@@ -185,6 +185,8 @@ fn check_and_expand_reified_mode(
             variant_enums,
             // DEC-331 D9: (invoke-call targets, tostring string-context targets) for the outermost pass.
             invoke_tostring,
+            // DEC-504: `t.bp` Member span → field position, consumed by `rewrite_tuple_fields`.
+            tuple_fields,
         )) => {
             for w in &warnings {
                 eprintln!("{}", w.render_as(diag_src, "warning")); // DEC-417: was "warning: type error at …"
@@ -206,7 +208,7 @@ fn check_and_expand_reified_mode(
             // B1b: inline `parent.constructor(…)` LAST, so the cloned parent body is already fully
             // de-sugared (aliases/html/generics/new/UFCS/overload-renames all applied). A no-op unless
             // a constructor forwards to its parent — programs without it stay byte-identical.
-            // DEC-239: `materialize_pipe_params` runs LAST — after `rewrite_ufcs` has spliced any
+            // DEC-239: `materialize_inferred_types` runs LAST — after `rewrite_ufcs` has spliced any
             // recorded replacement subtrees back in — writing each checker-inferred contextual
             // pipe-lambda param type into the AST (`Type::Infer` → concrete), so the VM compiler's
             // `resolve_cty` and the transpiler's kind analysis specialize exactly as the checker
@@ -229,12 +231,16 @@ fn check_and_expand_reified_mode(
                 // DEC-288: write inferred tuple-destructure binder types into the AST (Invariant 7),
                 // then erase tuple literals to list literals LAST (both independent rewrites), so no
                 // backend sees `Expr::Tuple` and every tuple binder carries its concrete type.
-                crate::checker::erase_tuples(crate::checker::materialize_tuple_binds(
+                // DEC-504: resolve named-tuple field reads (`t.bp` -> `t[1]`) IMMEDIATELY inside the
+                // erasure — the rewrite must see `Expr::Tuple` receivers still intact, and every
+                // backend must see only the index read that survives it.
+                crate::checker::erase_tuples(crate::checker::rewrite_tuple_fields(
+                    crate::checker::materialize_tuple_binds(
                     crate::checker::lower_foreach_iter(
                     // DEC-280 / Invariant 7: inferred foreach-binding types written into the AST
                     // (after erasure, before the Iterator lowering consumes the For's `ty`).
                     crate::checker::materialize_for_binds(
-                        crate::checker::materialize_pipe_params(
+                        crate::checker::materialize_inferred_types(
                             crate::checker::inline_parent_ctors(
                                 crate::checker::rename_overload_defs(
                                     crate::checker::rewrite_ufcs(
@@ -268,6 +274,8 @@ fn check_and_expand_reified_mode(
                         &for_iters,
                     ),
                     &tuple_binds,
+                    ),
+                    &tuple_fields,
                 )),
                 &variant_enums,
                 ),

@@ -79,9 +79,11 @@ pub(super) fn rexpr(e: Expr, inv: &Names, ts: &Names) -> Expr {
         Expr::List(items, span) => {
             Expr::List(items.into_iter().map(|e| rexpr(e, inv, ts)).collect(), span)
         }
-        Expr::Tuple(items, span) => {
-            Expr::Tuple(items.into_iter().map(|e| rexpr(e, inv, ts)).collect(), span)
-        }
+        Expr::Tuple(items, labels, span) => Expr::Tuple(
+            items.into_iter().map(|e| rexpr(e, inv, ts)).collect(),
+            labels,
+            span,
+        ),
         Expr::Map(pairs, span) => Expr::Map(
             pairs
                 .into_iter()
