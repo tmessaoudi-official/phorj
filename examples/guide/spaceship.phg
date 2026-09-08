@@ -1,0 +1,68 @@
+// Three-way comparison `<=>` and TUPLE ordering (DEC-505, as amended by DEC-512).
+//
+// `a <=> b` answers `-1`, `0` or `1` — an `int`, not a `bool`, so it is an ordinary arithmetic
+// operand and slots straight into a `sortWith` comparator. It sits at the EQUALITY precedence tier,
+// as in PHP, so `1 < 2 <=> 0` groups as `(1 < 2) <=> 0`.
+//
+// One difference from PHP worth knowing: PHP makes `<=>` NON-associative and rejects `a <=> b <=> c`
+// outright, while phorj's operator fold is uniformly left-associative and accepts it as
+// `(a <=> b) <=> c`. The transpiler writes those parentheses back out, so the PHP leg stays valid
+// and the answer is the same on every leg — phorj just accepts a form PHP does not.
+//
+// The reason ordering is a TUPLE capability and not a list one is worth stating, because it is the
+// whole of DEC-512. Both operators transpile to PHP's own `<=>` — no `__phorj_*` helper is spent —
+// and that is only sound while the two sides have the same arity: PHP's array `<=>` compares COUNT
+// FIRST, so `[2] <=> [1, 1]` is `-1` in PHP where element-by-element order says `+1`. A tuple's
+// arity is fixed at compile time, so the two rules provably agree; a `List<T>`'s is not, so
+// `xs < ys` is refused by name (`E-ORDER-LIST`) rather than quietly picking one of the two answers.
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Math;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// The idiom this exists for: sort by one key, then break ties with another. In PHP this is
+// `[$a->tier, $a->position] <=> [$b->tier, $b->position]`, and `phg lift` turns that positional
+// array literal into the tuple below — a literal's arity is written in the source, so nothing is
+// guessed (DEC-166 holds).
+class Signal {
+    constructor(public int tier, public int position, public string tag) {}
+}
+
+function byTierThenPosition(Signal a, Signal b): int {
+    return (a.tier, a.position) <=> (b.tier, b.position);
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Scalars: the three answers, and the `int`-ness of the result.
+    Output.printLine("3<=>5 {3 <=> 5}  4<=>4 {4 <=> 4}  9<=>2 {9 <=> 2}");
+    Output.printLine("as an operand: {(9 <=> 2) + 10}");
+    // Tuples compare LEXICOGRAPHICALLY: the first position decides, and later positions only break
+    // a tie. So (1, 9) is less than (2, 0) even though 9 > 0.
+    Output.printLine("(1,9)<=>(2,0) {(1, 9) <=> (2, 0)}  (2,0)<=>(2,7) {(2, 0) <=> (2, 7)}");
+    Output.printLine("(1,2)<(1,3) is {(1, 2) < (1, 3)}, (1,2)>=(1,2) is {(1, 2) >= (1, 2)}");
+    // A chain folds LEFT — `3 <=> 2 <=> 0` is `(3 <=> 2) <=> 0`, one comparison of a comparison.
+    // PHP would refuse to parse this line; the transpiled PHP carries the parentheses.
+    Output.printLine("((3<=>2)<=>0) {3 <=> 2 <=> 0}");
+    // The comparator, on the shape scout writes. `sortWith` is STABLE, which is what makes a tie on
+    // the leading element safe: `b` and `d` share tier 1 / position 4 and keep their input order.
+    List<Signal> signals = [
+        new Signal(2, 1, "a"),
+        new Signal(1, 4, "b"),
+        new Signal(1, 2, "c"),
+        new Signal(1, 4, "d")
+    ];
+    var sorted = List.sortWith(signals, byTierThenPosition);
+    foreach (sorted as s) {
+        Output.printLine("{s.tag}: tier={s.tier} position={s.position}");
+    }
+    // Floats order too — including NaN, which follows PHP rather than IEEE: PHP's `<=>` expands to
+    // `(a == b) ? 0 : (a < b ? -1 : 1)`, every NaN comparison is false, so EVERY NaN comparison
+    // answers `1` — even `NAN <=> NAN`. Phorj projects its `Ok(None)` to `1` once, in
+    // `value::three_way`, so all three legs agree instead of drifting one at a time.
+    float nan = Math.nan();
+    Output.printLine("nan<=>1.0 {nan <=> 1.0}  1.0<=>nan {1.0 <=> nan}  nan<=>nan {nan <=> nan}");
+}

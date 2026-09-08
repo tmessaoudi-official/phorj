@@ -1,5 +1,37 @@
 # Known Issues & Limitations
 
+## DECIMAL-ORDER — `<` on two large `decimal`s disagrees with the PHP leg (pre-existing; NOT an Invariant-1 exception)
+
+**This is a BUG with a known fix, not a disclosed byte-identity exception.** Invariant 1 still has
+exactly TWO disclosed exceptions — concurrency, and `Time.sleep` under a signal — and this must not
+be counted as a third: those two have no PHP analog at all (Invariant 14 case 2), whereas this one
+has a straightforward fix that has simply not been ruled yet.
+
+Found by measurement while building `<=>` (scout-forcing-function L2, 2026-09-08), not by review:
+
+```
+phorj:  9007199254740992.00 < 9007199254740993.00   →  true
+PHP:    same program, transpiled                    →  false
+```
+
+**Root cause** [Verified on `php-8.5.9`, the gate oracle]. `decimal` is an i128 fixed-point value
+natively, and `compare_ord` compares it exactly. Its PHP carrier is a numeric **string**, and PHP
+compares numeric strings **as floats** — so above 2⁵³ the comparison loses the low bits:
+`9007199254740993.00 <=> 9007199254740992.00` is `0` in PHP and `1` natively. Only `< > <= >=` on
+`decimal` are affected; `Decimal.*` arithmetic, equality and rounding are not.
+
+**Scope.** Bare `d1 < d2` carries it. The surfaces added by DEC-512 do NOT: `<=>` and tuple ordering
+refuse `decimal` by name (`E-ORDER-DECIMAL`) rather than widening the hole — deliberately narrow, so
+the divergence does not spread to two more operators while it is open.
+
+**The fix, and why it is not applied yet.** A `__phorj_dec_cmp` helper on the PHP leg (`bccomp` over
+the string carriers, which `bcmath` is already a gate requirement for) closes it for `<` and would
+let `decimal` join the new surfaces. Emitting a helper to preserve byte-identity is **Invariant 16's
+trade**, which is explicitly the developer's to rule and never self-decided — so it is banked as
+question **Q-0908-3** in `docs/plans/2026-09-07-scout-forcing-function.plan.md` § *Needs input*.
+scout does not order decimals, so nothing is blocked on it.
+
+
 ## SERVE-TLS — inbound TLS v1 is TERMINATING ONLY; four features are ruled-and-deferred (S3.5, 2026-08-29, DEC-331 D7)
 
 `phg serve` terminates TLS (`--features http-server-tls`): both `cert` and `key` set on the

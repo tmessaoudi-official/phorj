@@ -1148,14 +1148,29 @@ entirely to `List<T>` of unequal length.
 
 **RULED (developer, 2026-09-08): tuples order, lists do not.**
 
-- `(1, 2) <=> (1, 3)` → `-1`. Ordering and `<=>` are available on tuples of equal arity and
-  comparable element types, and transpile to PHP's own `<=>` with **no divergence on any input**.
+- `(1, 2) <=> (1, 3)` → `-1`. Ordering and `<=>` are available on tuples of equal arity whose
+  **element leaves are `int` or `float`, recursively** — a tuple of tuples of those orders, and
+  nothing else does. On that set the operators transpile to PHP's own `<=>` with **no divergence on
+  any input**.
+- **`decimal` is EXCLUDED from the new surfaces**, by name, pending question **Q-0908-3**. It is not
+  an oversight and not a widening left for later: a decimal's PHP carrier is a numeric *string*,
+  which PHP compares as a float, so the exact i128 `compare_ord` and the PHP leg part company past
+  2⁵³ — `9007199254740993.00 <=> 9007199254740992.00` is `0` in PHP and `1` natively [Verified
+  2026-09-08 on `php-8.5.9`]. **Bare `d1 < d2` already carries that hole** and keeps it (a
+  pre-existing bug, recorded in `KNOWN_ISSUES.md`, NOT an Invariant-14 exception); the new surfaces
+  refuse rather than inherit it. Closing it means a `__phorj_dec_cmp` helper on the PHP leg — an
+  Invariant-16 byte-identity trade, and therefore the developer's to rule.
 - `xs <=> ys` and `xs < ys` on `List<T>` are a **checker error naming this ruling**. A list has no
   static arity, so no ordering can be both lexicographic and byte-identical to PHP's operator.
+- Five diagnostic codes carry the refusals, each with a `phg explain` entry: `E-ORDER-LIST`,
+  `E-ORDER-DECIMAL`, `E-ORDER-OPERANDS`, `E-ORDER-TUPLE-SHAPE`, `E-SPACESHIP-OPERANDS`. One leaf
+  predicate (`checker::expr::ordering::unorderable_leaf`) serves both `<=>` and tuple `< > <= >=`, so
+  the two admit exactly the same operands and cannot drift apart.
 - `phg lift` maps a positional array literal in an ordering-operand position to a **tuple**
   (`[a, b] <=> [c, d]` → `(a, b) <=> (c, d)`). A literal's arity is syntactically present, so this
-  reads no intent and does not violate DEC-166. This is what makes scout's
-  `Rent/Core/Classification.php:48` liftable.
+  reads no intent and does not violate DEC-166. This is what makes **the comparator on scout's
+  `Rent/Core/Classification.php:48`** liftable — the operator on that line, not the file: `usort`
+  itself has no lift mapping at all, so the enclosing call still refuses.
 
 REJECTED: **count-first everywhere** (byte-identical and nothing refused, but phorj would inherit
 PHP's rule that a shorter list is smaller regardless of contents — `[9] < [1,1,1]` — and DEC-505's
@@ -1174,6 +1189,10 @@ all three call sites (`interpreter/kernels.rs`, `vm/mod.rs`, `jit/boxed.rs`) or 
 **The obligation the build must discharge:** `List.sort` must be **stable**. PHP 8's `usort` is
 stable, and a tie on the leading tuple element is exactly where a differential against PHP would
 break silently rather than loudly.
+
+**BUILT `eba09d4e`** (2026-09-08, scout-forcing-function L2). `List.sortWith` stability is pinned by
+`spaceship_tuple_comparator_sort_byte_identical` in `tests/differential.rs`, which sorts a tied
+leading element and compares the full ordering across all three legs — nothing pinned it before.
 
 ### DEC-504 — named-field tuples, structural
 

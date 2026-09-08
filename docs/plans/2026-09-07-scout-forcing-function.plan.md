@@ -102,7 +102,9 @@
   order and transpile to PHP's own operator with no divergence; `List<T>` ordering is a checker error
   naming the ruling; and `phg lift` maps a positional array literal in an ordering-operand position
   to a tuple, which is DEC-166-safe because a literal's arity is syntactically present — that is what
-  makes `Classification.php:48` liftable. NaN pinned alongside: PHP gives `1` for every NaN
+  makes the COMPARATOR on `Classification.php:48` liftable, i.e. the operator on that line and not the
+  file: `usort` has no lift mapping at all [Verified 09-08: zero hits in `src/lift/`], so the
+  enclosing call still refuses. NaN pinned alongside: PHP gives `1` for every NaN
   comparison, so `compare_ord`'s `Ok(None)` projects to `1` at all three call sites. Full row +
   rejected alternatives: register DEC-512; spec § `DEC-512` under `Ordering, <=>, and named-field
   tuples`.
@@ -171,6 +173,32 @@ retained for row stability; the `Blocked` section carries the truth.
 **Whole-tree headline unchanged at 57/123** — the cluster's walls moved without moving the count,
 which is exactly what first-error-per-file does and why §4 forbids quoting the histogram as a
 worklist.
+
+### Re-census after L2 (`eba09d4e`, 2026-09-08) — headline STILL 57/123, and that is the result
+
+Run read-only over the same 123 files with the L2 binary. **The count did not move**, and the
+histogram says exactly why:
+
+| Wall class | after L1c | after L2 | what moved |
+|---|---|---|---|
+| keyed `array{…}` (DEC-504 → **L4**) | 15 | **16** | `Rent/Core/Classification.php` joined it |
+| bare `array` needs a docblock | 14 | 14 | — |
+| `mixed` | ~12 | 12 | — |
+| `expected an expression` | 5 | **3** | the three `<=>` members are GONE; all 3 survivors are `found Dot`, i.e. PHP spread (Q-0908-2) |
+| by-ref capture (DEC-506) | 3 | 3 | named refusals, hand-port |
+
+**The single most useful number here is `Classification.php`'s wall: line 48 → line 68.** L2 cleared
+the `<=>` on line 48 — the operator this lane existed for — and the file's first error is now the
+KEYED `array{…}` shape on line 68, which is L4's. So L2 delivered exactly what it claimed and moved
+zero files, because every file blocked on `<=>` was also blocked on something later. That is
+first-error-per-file behaving as §4 describes, and it independently re-confirms the `Blocked`
+section: the depth path is **L2 + L4 → L3**.
+
+`usort` did NOT become the next wall, which is worth stating because it was the expected answer: the
+docblock shape is reached first. The `usort` gap is real all the same — `phg lift` has no mapping for
+it at all [Verified 09-08: zero hits for `usort` under `src/lift/`] — and it is an L7 row rather than
+a question, since the honest lowering (`x = List.sortWith(x, f)` for an in-place by-ref sort) needs a
+statement rewrite and a mutable binding, not a ruling.
 
 **Answered from the tree, not from the developer** — `/stack/projects/scout/docs/PHORJ-REQUIREMENTS.md`
 is stale and its four open questions now resolve as: ③ `sleep` **SHIPPED** (`d0005b65`); Q1 request
@@ -261,7 +289,7 @@ DEC-507 applies to every one.
 | 2 | L1a — enums (DEC-509): a case CONSTRUCTS its variant, `self` inside an enum body is the enum, a method LOWERS to a free function reached by UFCS, static call sites lower with it; 54 → **57/123** — `feat(lift): PHP enums` | M | done | 9bd0a43e | src/lift/lifter/enums.rs src/lift/parser/enums.rs src/lift/lifter_tests_enums.rs examples/lift/enums.php examples/lift/enums.phg |
 | 2b | L1b — block-bodied closures lift; `use (&$x)` refused BY NAME (DEC-506); `static` and by-value `use` dropped. Headline stays 57/123 and that is the finding: the histogram is FIRST-ERROR-per-file, so the closure files fell through to their next wall (`array` 12 → 14, a new `Closure`-type row) | M | done | f9e26192 | src/lift/parser/closures.rs src/lift/printer/lambda.rs src/lift/lifter_tests_closures.rs examples/lift/closures.php examples/lift/closures.phg |
 | 2c | L1c — positional `array{…}` → tuples (type AND the returned literal, at any depth), array destructuring (DEC-510), `.` → one interpolation (DEC-511), `echo $var` → interpolation, strict `=== null` → `is null`. Headline holds at **57/123** (denominator corrected 09-08; "125" was a typo) — first-error-per-file again: the keyed-shape row rises 14 → 15, and the `expected an expression` row stays at 5 but only **3** of those are `<=>` — the other 2 are PHP spread `...`, found 09-08 | M | done | 78317867 | src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/exprs.rs src/lift/parser/docblock.rs src/lift/parser/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/shapes.php examples/lift/shapes.phg |
-| 3 | L2 — DEC-505 `<=>` operator + lexicographic tuple/list ordering, all legs + LSP + editors + example + bench | L | todo | - | src/lexer/* src/parser/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lsp/* editors/* examples/guide/* |
+| 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + editors + example + bench | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | todo | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
@@ -303,6 +331,32 @@ L1/L2/L4 will expose better-shaped versions of each):
   unpacking). These are two DIFFERENT features — a literal-spread and a call-site unpack — and the
   second interacts with arity checking, so they may be ruled apart. Build it, or refuse it by name
   with a DEC row; do not leave it as today's generic `expected an expression`.
+- **Q-0908-3 — `decimal` ordering: keep the divergence, or spend a helper?** Found while building
+  L2, by measuring rather than by reading: PHP compares a decimal's numeric-string carrier **as a
+  float**, so `9007199254740993.00 <=> 9007199254740992.00` is `0` in PHP and `1` under the exact
+  i128 `compare_ord`, and `9007199254740992.00 < 9007199254740993.00` is `true` natively and `false`
+  in PHP [Verified 09-08 on `php-8.5.9`]. **Bare `d1 < d2` has always carried this** — it is a
+  pre-existing Invariant-1 bug with a known fix, NOT an Invariant-14 no-analog case, so it does not
+  join the two disclosed exceptions; it is recorded in `KNOWN_ISSUES.md`. L2 shipped NARROW rather
+  than inheriting it: `<=>` and tuple ordering refuse `decimal` by name (`E-ORDER-DECIMAL`). Three
+  dispositions: **(a)** emit a `__phorj_dec_cmp` helper on the PHP leg and admit `decimal`
+  everywhere, closing the bare-`<` hole too — an Invariant-16 byte-identity trade, which is exactly
+  why it is banked and not self-decided; **(b)** keep the refusal and fix bare `<` alone; **(c)**
+  disclose and leave. scout does not exercise decimal ordering, so nothing is blocked on it.
+- **Q-0908-4 — `<=>` associativity diverges from PHP, and was built that way without a ruling.**
+  PHP makes `<=>` **non-associative**: `1 <=> 2 <=> 3` is a parse error [Verified 09-08 on
+  `php-8.5.9`]. Phorj's operator fold is uniformly left-associative, so it ACCEPTS that form as
+  `(1 <=> 2) <=> 3`, and the transpiler's `paren_if_compound` writes the parentheses back out, so the
+  PHP leg stays valid and every leg agrees. Nothing is broken and nothing is blocked — phorj simply
+  accepts strictly more than PHP here — but *what the language accepts* is a user-visible decision
+  and Invariant 15 makes it the developer's, so it is banked rather than left implied by an
+  implementation detail. Found while writing the L2 example, when `phg format` removed the
+  parentheses the example had written by hand and the result still ran. **(a)** keep left-associative
+  (nothing to build; disclose in FEATURES, done); **(b)** make it non-associative to match PHP
+  exactly — a parser change plus a diagnostic, and the `paren_if_compound` path stops being
+  load-bearing for this operator. Pinned either way by
+  `spaceship_left_assoc_parenthesized_on_php_leg` in `tests/differential.rs`, which would go red on a
+  silent flip.
 - **Q-L1c-1 — `phg format` normalizes `is null` to `instanceof null`.** Found while lifting
   `shapes.php`: `x is null` and `x instanceof null` are ONE AST node (DEC-184 makes `is` a full
   synonym), and the canonical formatter picks `instanceof`. So a lifted null test renders
@@ -313,7 +367,61 @@ L1/L2/L4 will expose better-shaped versions of each):
   NOT worked around in the lift printer — that would make `lift_source` and `cmd_lift` disagree about
   the same draft, the two-gates-one-artifact trap.
 
+### DEC-507 bench for L2 — a CONFIRMED LOSS, recorded OWED (2026-09-08)
+
+`bench/micro/spaceshipsort.{phg,php}` is the comparator-heavy sort DEC-507 asks for: 1200 rows,
+7 tiers so the SECONDARY key decides most comparisons, sorted 40 times by
+`(a.tier, a.position) <=> (b.tier, b.position)` — scout's own shape. Both legs check-summed the same
+`180744`, so the pair is output-identical and the micro is honest.
+
+**Measured** with `scripts/microbench.sh` (docker `php:8.5-cli`, JIT on, `--cpuset-cpus=7` against
+`taskset -c 7`, interleaved, best-of-K), on a box at ~89% per-core idle:
+
+| run | K | phorj VM | php 8.5 + JIT | ratio |
+|---|---|---|---|---|
+| 1 | 5 | 125.7 ms | 46.3 ms | **0.37×** |
+| 2 | 9 | 127.0 ms | 46.3 ms | **0.36×** |
+| 3 | 7 | 135.5 ms | 49.9 ms | **0.37×** |
+
+Three independent runs; the per-sample SPREAD markers were wide (up to 1095%/1611%), so the tails are
+untrustworthy, but the best-of-K minima agree to within 8% and all three verdicts are LOSS. **phorj is
+~2.7× SLOWER than dockerised PHP with JIT on this scenario.** Per DEC-365 this is recorded OWED and
+reported, never re-baselined away; `microbench-gate.sh` notes it as a new feature and does not block
+(`identical: true`), so the push is not wedged.
+
+**Where the time goes — attributed, not guessed.** Same micro, same pinned core, only the comparator
+body changed:
+
+| comparator | phorj VM |
+|---|---|
+| `(a.tier, a.position) <=> (b.tier, b.position)` | 169 ms |
+| `a.tier <=> b.tier` (scalar `<=>`) | 60 ms |
+| `a.tier - b.tier` (plain arithmetic) | 56 ms |
+
+So **`Op::Cmp` is not the problem** — a scalar `<=>` costs what an integer subtraction costs (60 vs
+56 ms). Roughly **65% of the total is building two tuples per comparison**: each comparison
+materializes two `Rc<Vec<Value>>` and throws them away. PHP allocates two arrays per comparison for
+the very same reason and is still 2.7× faster, so this is phorj's list-construction path, not an
+inherent cost of the idiom. It is also exactly the Op the JIT's boxed tier declines on
+(`src/jit/tests/tuple_ordering.rs`), which is why the loop takes the VM.
+
+**This is the developer's call and is being asked, not decided** (DEC-507 says stop and escalate). The
+three dispositions: **(a)** fuse the comparison in the compiler so `(a, b) <=> (c, d)` lowers to
+element-wise compares with NO tuple materialized — the real fix, reusing `compare_ord` so Invariant 4
+holds; **(b)** whitelist `Op::Cmp` plus a list-construction Op in `jit/boxed.rs` so the loop reaches
+the JIT — a bigger change than it sounds, since eligibility is computed over the whole reachable call
+graph; **(c)** carry the OWED loss and proceed to L4, revisiting under L8 (perf twins), which is the
+lane that exists for exactly this.
+
 ### Known issues
+- **`<` on two large `decimal`s diverges from the PHP leg** (pre-existing, found by measurement while
+  building L2, 2026-09-08). `compare_ord` compares the exact i128 carrier; the transpiled PHP compares
+  the numeric-string carrier, which PHP treats as a float. So
+  `9007199254740992.00 < 9007199254740993.00` is `true` natively and `false` in PHP. **This is a bug
+  with a known fix (`__phorj_dec_cmp`, `bccomp`-shaped), not an Invariant-14 no-analog case — it must
+  NOT be counted as a third disclosed byte-identity exception.** Recorded in `KNOWN_ISSUES.md`; the
+  fix is gated on Q-0908-3 because emitting a helper is an Invariant-16 trade. L2's new surfaces
+  refuse `decimal` (`E-ORDER-DECIMAL`) rather than widening the hole.
 - **`Stmt::Destructure` carries no `mutable`**, so `[$a, $b] = f(); $a = …;` lifts to
   `var (a, b) = f(); a = …;` and fails `phg check` with `E-ASSIGN-IMMUTABLE` — the same
   two-halves-disagree class L1c fixed elsewhere, and NOT visible in the census (a refusal count is

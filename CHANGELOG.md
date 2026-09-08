@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added
+
+- **DEC-505 as amended by DEC-512 — `<=>`, and ordering on tuples.** `a <=> b` yields `int`
+  (`-1`/`0`/`1`) at the EQUALITY precedence tier, matching PHP (`1 < 2 <=> 0` is `(1 < 2) <=> 0`); `< > <= >=`
+  additionally accept tuples of equal arity and compare them lexicographically. Both transpile to
+  PHP's own `<=>` — no `__phorj_*` helper is spent — and that is sound *only* because a tuple's arity
+  is static: PHP's array `<=>` is **count-first**, so `[2] <=> [1, 1]` is `-1` in PHP where
+  lexicographic order gives `+1` [Verified on `php-8.5.9`]. `List<T>` is therefore **not orderable**
+  and says so by name (`E-ORDER-LIST`) instead of quietly picking one of the two rules. `phg lift`
+  maps a positional array literal in an ordering-operand position to a tuple, which reads no intent
+  because a literal's arity is syntactically present (DEC-166 holds) — that is what makes the
+  comparator on scout's `Rent/Core/Classification.php:48` liftable; `usort` itself still has no lift
+  mapping. NaN is pinned in the same change: PHP answers `1` for `NAN <=> 1.0`, `1.0 <=> NAN` and
+  `NAN <=> NAN` alike, so `compare_ord`'s `Ok(None)` projects to `1` through the single-sourced
+  `value::three_way` rather than through three per-backend copies. **`decimal` is excluded by name**
+  (`E-ORDER-DECIMAL`, pending Q-0908-3): its PHP carrier is a numeric string compared as a float, so
+  the legs part company past 2⁵³ — a pre-existing hole in bare `d1 < d2`, now recorded in
+  `KNOWN_ISSUES.md § DECIMAL-ORDER`, which the new surfaces refuse to inherit. `List.sortWith`
+  stability, which DEC-505 required and nothing pinned, is now pinned by a four-leg comparator sort.
+  One divergence, disclosed rather than discovered later: PHP makes `<=>` NON-associative and rejects
+  `1 <=> 2 <=> 3`, while phorj's fold is uniformly left-associative and accepts it. The transpiler's
+  `paren_if_compound` emits `(1 <=> 2) <=> 3`, so the PHP leg stays valid and byte-identical — phorj
+  simply accepts more than PHP here. Banked as **Q-0908-4**; nothing depends on the answer.
+
 ### Fixed
 
 - **DEC-475 — every `Http.ServeConfig` field is nullable, and its numbers are validated**

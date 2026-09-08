@@ -163,6 +163,13 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
                     Expr::List(ri, _),
                 ) = (&**left, &**right, &lhs, &rhs)
                 {
+                    // Defence in depth, and deliberately redundant TODAY: `lift_array` yields an
+                    // `Expr::List` only when no element carries a key (all-keyed becomes a `Map`,
+                    // mixed refuses as Tier-2), so the destructure above already implies this.
+                    // Mutating this predicate away therefore does NOT turn the suite red — stated
+                    // here so a reader does not mistake it for a tested guard. It stops being
+                    // redundant the moment `lift_array` admits an ascending `[0 => a, 1 => b]` as a
+                    // list, which is why it is kept rather than deleted.
                     let positional = |es: &[php::PhpArrayElem]| es.iter().all(|e| e.key.is_none());
                     if !li.is_empty() && li.len() == ri.len() && positional(le) && positional(re) {
                         lhs = Expr::Tuple(li.clone(), SP);

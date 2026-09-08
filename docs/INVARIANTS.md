@@ -59,6 +59,11 @@ kernels (`float_*`), and `compare_ord` live **once**, in `src/value/` (the check
 `src/value/arith.rs`). Both backends call them.
 - **Never** re-inline `checked_*` / `partial_cmp` / a fault string in `src/interpreter/` or `src/vm/` —
   that re-opens the dual-implementation drift that caused the `Op::Neg` P0.
+- `value::three_way` sits **alongside** `compare_ord` and is single-sourced for the same reason. It is
+  the `<=>` projection — `Less/Equal/Greater → -1/0/1`, and NaN's `Ok(None) → 1` to match PHP, whose
+  `(a==b) ? 0 : (a<b ? -1 : 1)` shape makes every NaN comparison false. Writing that `None → 1` arm
+  per-backend would have been three chances to drift on a case no ordinary program exercises; there
+  is one copy, and the three legs call it (DEC-512).
 - The three canonical fault bodies (`FAULT_DIV_ZERO`, `FAULT_MOD_ZERO`, `FAULT_INT_OVERFLOW`) are
   `pub const` in `src/value/arith.rs`; the `agree_err` oracle classifies on these exact bodies, so changing a
   body string is a parity-affecting change.

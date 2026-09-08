@@ -1,0 +1,54 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: a COMPARATOR-HEAVY sort — the DEC-507 bar for `<=>` and tuple ordering (DEC-512).
+//
+// This is scout's own shape (`Rent/Core/Classification.php:48`): sort by a primary key, break ties
+// with a secondary one, written as a single tuple comparison. It is the case where phorj's cost is
+// genuinely open rather than obviously favourable — each comparison allocates two tuples, and PHP's
+// `[$a->tier, $a->position] <=> [...]` allocates two arrays for exactly the same reason, so neither
+// side gets the allocation for free.
+//
+// The input list is built ONCE and never mutated: `sortWith` returns a NEW list, so re-sorting the
+// same unsorted input K times measures sort + comparator, not list construction, and does not
+// degenerate into sorting an already-sorted list. The PHP twin copies before `usort` for the same
+// reason (`usort` sorts in place, by reference).
+class Row {
+    constructor(public int tier, public int position) {}
+}
+
+function byTierThenPosition(Row a, Row b): int {
+    return (a.tier, a.position) <=> (b.tier, b.position);
+}
+
+function bench(List<Row> rows, int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        var sorted = List.sortWith(rows, byTierThenPosition);
+        foreach (sorted as s) {
+            acc = (acc + s.tier * 7 + s.position * 13) % 1000003;
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    // Deterministic scramble: 7 tiers over 1200 rows means ~171 ties per tier, so the SECONDARY key
+    // decides most comparisons — which is the point. Nothing here is random; both legs build the
+    // identical list.
+    var rows = List.map(0..1200, function(int i): Row => new Row(i % 7, (i * 37) % 101));
+    int iters = 40;
+    int warm = bench(rows, 2);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(rows, iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("spaceshipsort\t{d + guard}\t{acc}");
+}
