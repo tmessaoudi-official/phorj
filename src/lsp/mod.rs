@@ -21,6 +21,7 @@
 
 mod catalog;
 mod completion;
+mod hover_member;
 mod keywords;
 mod prelude_catalog;
 mod references;
@@ -32,6 +33,8 @@ mod symbols;
 mod tests;
 #[cfg(test)]
 mod tests_deprecated;
+#[cfg(test)]
+mod tests_hover_tuples;
 #[cfg(test)]
 mod tests_signature;
 #[cfg(test)]
@@ -216,6 +219,11 @@ impl Server {
         let Some((text, offset, Some(name), program)) = self.symbol_at(msg) else {
             return "null".to_string();
         };
+        // A named tuple's FIELD is not a declaration; resolve it against the RECEIVER's type
+        // before the declaration lookup, which would otherwise answer with a same-named local.
+        if let Some(sig) = hover_member::tuple_field_signature(&text, offset, &name, &program) {
+            return Self::hover_markdown(&sig, None);
+        }
         match Self::resolve_decl(offset, &name, &program) {
             Some((span, is_local)) => {
                 let sig = if is_local {
@@ -270,6 +278,11 @@ impl Server {
         let Some((text, offset, Some(name), program)) = self.symbol_at(msg) else {
             return "null".to_string();
         };
+        // A tuple field has no declaration site of its own. Falling through would jump to an
+        // unrelated local that happens to share the name — a confidently WRONG jump.
+        if hover_member::tuple_field_signature(&text, offset, &name, &program).is_some() {
+            return "null".to_string();
+        }
         match Self::resolve_decl(offset, &name, &program) {
             Some((span, _)) => {
                 let (sl, sc) = scope::position_at(&text, span.start);

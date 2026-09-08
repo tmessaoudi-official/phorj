@@ -317,11 +317,22 @@ fn json_escape(s: &str) -> String {
 pub fn local_signature_text(text: &str, span: Span) -> String {
     let start = span.start.min(text.len());
     let rest = &text[start..];
+    // The cut is DEPTH-AWARE: a `,` or `)` ends the signature only at nesting depth zero. Cutting
+    // on the first one unconditionally truncated every type that CONTAINS a comma — a named tuple
+    // showed as `(source: string`, the positional `(int, string)` of DEC-288 as `(int`, and
+    // `Map<string, int>` as `Map<string` — an unbalanced type, shown to the reader as their own.
+    // `;`, `{` and a newline still end it at any depth, so an unclosed bracket cannot run away.
     let mut cut = rest.len();
+    let mut depth = 0i32;
     for (i, c) in rest.char_indices() {
-        if matches!(c, ';' | ',' | ')' | '{' | '\n') || i > 200 {
+        if i > 200 || matches!(c, ';' | '{' | '\n') || (depth == 0 && matches!(c, ',' | ')')) {
             cut = i;
             break;
+        }
+        match c {
+            '(' | '[' | '<' => depth += 1,
+            ')' | ']' | '>' if depth > 0 => depth -= 1,
+            _ => {}
         }
     }
     rest[..cut].split_whitespace().collect::<Vec<_>>().join(" ")
