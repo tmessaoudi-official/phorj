@@ -125,15 +125,20 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > No tuple is materialized any more (the A/B disassembly is the proof, from freshly built binaries).
 > But 0.46x means phorj still takes ~2.2x php's time on this shape.
 >
-> **The DEC-513 ruling's own prediction did NOT hold, and that matters more than the number.** It
-> expected "the ~65% construction cost leaves every literal-tuple comparison, landing near the scalar
-> `<=>` number". Removing the materialization ENTIRELY bought 19.5%, not ~65%. So the original
-> attribution was wrong: swapping the comparator body (tuple 169 ms / scalar 60 / subtraction 56)
-> changed more than materialization — it also removed the list-operand compare dispatch and the
-> `compare_ord` recursion — and the residue is dominated by the re-entrant `List.sortWith` -> VM
-> callback per comparison, which no compiler-side fusion can touch. Any further attempt on this bench
-> must attack the callback, not the comparison. **Do not re-derive the 65% figure from the register;
-> it is superseded by this measurement.**
+> **The DEC-513 ruling's own prediction did NOT hold, and WHERE the residue actually sits matters
+> more than the number.** It expected "the ~65% construction cost leaves every literal-tuple
+> comparison, landing near the scalar `<=>` number". Fusion removed materialization ENTIRELY and
+> bought 24.3 ms (124.6 -> 100.3), against the ~109 ms tuple-vs-scalar gap that same attribution
+> reported (169 ms / 60 ms) — so construction was roughly a FIFTH of the gap, not ~65%.
+>
+> **The residue is NOT the `List.sortWith` -> VM callback.** The scalar comparator is re-entered
+> through the same callback on every comparison and is fast, so the callback cancels out of a
+> tuple-vs-scalar comparison and cannot explain the difference between them. What is left is what
+> `Op::CmpSeq` still does that scalar `Op::Cmp` does not: per-element `compare_ord` dispatch through
+> the `match (a, b)` ladder, the `Option<Ordering>` threaded per element, and the `SeqOrd`
+> re-projection. That is COMPILER/VM-reachable — a `CmpSeq` specialized for checker-known scalar
+> element types, or an unrolled arity-2 exec — and is NOT L8 runtime territory. **Do not re-derive
+> the 65% figure from the register, and do not aim the next attempt at the callback.**
 >
 > **THEN L4** (DEC-504 named-field tuples), which unblocks L3.
 
