@@ -24,7 +24,7 @@
 >   the rule reopens every time a slice lands a code without a fixture. Fixture the four, re-emit the
 >   floor, and correct both this claim and L4's `done` row, which stands while this file's own LSP
 >   paragraph says references / document symbols / signature help on `t.bp` were never probed.
-> - **DEC-518 — the rule-drift pass**, one docs-only commit: purge MASTER-PLAN's retired DEC-387
+> - **DEC-518 — the rule-drift pass** — ✅ **BUILT `36fa37d4`**, all four items, one docs-only commit: purge MASTER-PLAN's retired DEC-387
 >   *plain-text questions only* protocol (`:1113`) (an Invariant 19 breach in the file
 >   Invariant 19 names first; the review also flagged two `never push` lines, but both were ALREADY
 >   annotated as superseded in place — that half of the finding is WITHDRAWN);

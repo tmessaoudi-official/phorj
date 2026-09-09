@@ -32,8 +32,9 @@
   `E-ORDER-TUPLE-SHAPE`, `E-SPACESHIP-OPERANDS` — while SLICE-STATE still says the rule is CLOSED and
   L4's row reads `done` with its LSP references / document symbols / signature help unprobed.
 - [2026-09-09 11:43] AGREED: **DEC-518 — the rule-drift pass, all four items, one docs-only commit**,
-  ordered by operational bite: purge the retired DEC-387 plain-text protocol and the two `never push`
-  lines from MASTER-PLAN; ratify the certification tier; PREFIX `docs/INVARIANTS.md` as `T-1`…`T-14`
+  ordered by operational bite: purge the retired DEC-387 plain-text protocol from MASTER-PLAN (the
+  `never push` half of this item was found ALREADY annotated as superseded and is WITHDRAWN — row 12);
+  ratify the certification tier; PREFIX `docs/INVARIANTS.md` as `T-1`…`T-14`
   (amended from renumbering, so nothing existing is renamed); restate Invariant 13 as the ratchet the
   size gate actually enforces (56 grandfathered over the hard cap).
 - [2026-09-09 11:43] AGREED: **DEC-519 — L4c's root-cause phase is WIDENED to the carried micro
