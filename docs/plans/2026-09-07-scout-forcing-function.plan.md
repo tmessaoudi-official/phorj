@@ -20,9 +20,30 @@
 
 ## Decisions Log
 
+- [2026-09-09 14:05] AGREED: **DEC-514 — the nested-read cliff is FIXED BEFORE L3, root-cause first.**
+  The DEC-507 escalation was posed with the re-measured pair (`namedtuplefield` 0.25×, erased-form
+  control `nestedlist` 0.03×, VM legs 0.4% apart) and the developer ruled a new lane **L4c** on
+  phorj's two-level list element read — 370 ns/iter against 4.3 one level, unexplained, not a deep
+  copy, JIT-resistant. **L3 does not start until it closes.** This DEPARTS from the DEC-513 precedent
+  deliberately: that residue was understood and attributed, this cliff is not, and L3's own oracle
+  benches the exact `list<array{…}>` shape it appears on.
+- [2026-09-09 14:05] AGREED: **DEC-515 — the lift seed is extended NOW, before L3.** The wall fell and
+  the ceiling did not move: the rewrite is param-seeded and covers 0 of the 140 rewritable reads.
+  Lane **L4b** extends it to `@var` locals and `foreach` binders over a keyed collection (reads) and
+  to a keyed array literal in a named-tuple return position (writes), so `Classification.phg` — whose
+  `toArray()` IS L3's four-leg contract — checks. No new language ruling; DEC-166 untouched, because a
+  declared element type is not an invented one.
 - [2026-09-08 L4-BUILT] L4 (DEC-504 named-field tuples) is BUILT — three commits: the core language
-  slice, the lift leg + refusals, and format/LSP/editors. **NEXT: L3** (the depth oracle), which L4
-  unblocks. Three things a reader must carry forward. (1) **The Invariant-7 trap had THREE consumers,
+  slice, the lift leg + refusals, and format/LSP/editors. **NEXT: L4c then L4b, and L3 is BLOCKED
+  behind both** (DEC-514 + DEC-515, ruled 2026-09-09 — see the two entries above). **The wall FELL,
+  measured**
+  [Verified 2026-09-08, `target/release/phg lift /stack/projects/scout/src/php`]: **57/123 → 64/125**,
+  **zero `array{…}`-shape refusals left** (was 16 files), and `Rent/Core/Classification.php` — the
+  four-leg contract file L3 is blocked on — lifts, with
+  `toArray(): (tenure: string, confidence_bp: int, outcome: string, reasons: List<string>)`. It does
+  not yet CHECK: the body still returns the keyed array literal, so the lifter's keyed rewrite is
+  short on the WRITE side exactly as the census found it short on the 140 READ sites.
+  Three more things a reader must carry forward. (1) **The Invariant-7 trap had THREE consumers,
   not the one the register predicted**: the VM compiler, the TRANSPILER — where it picked the wrong PHP
   *operator*, emitting `$t[1] . 1` and printing `31` where both native legs print `4` — and INFERRED
   locals, which needed `ty_to_ast_type`'s tuple arm fixed (it mapped EVERY `Ty::Tuple` to
@@ -353,8 +374,10 @@ DEC-507 applies to every one.
 | 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + 5 `phg explain` entries. Closed by row 3b | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
 | 3b | L2 closes — `docs(lang): L2 closes` — SSOT quartet amended (the decimal narrowing never reached the SPEC/register/MASTER-PLAN in C1), the missing lift-rule tests with two mutations verified red and a third proving `positional` redundant, the Invariant-9 example, VS Code grammar, KNOWN_ISSUES § DECIMAL-ORDER, the re-census, and the DEC-507 bench — **a CONFIRMED LOSS, escalation OWED** | M | done | ab959542 | docs/specs/UNIFIED-SPEC.md docs/plans/SLICE-STATE.md docs/research/full-audit/raw/C-decisions.md src/lift/lifter_tests_ordering.rs examples/guide/spaceship.phg bench/micro/spaceshipsort.phg bench/micro/spaceshipsort.php editors/vscode/syntaxes/phorj.tmLanguage.json KNOWN_ISSUES.md |
 | 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged. MEASURED A/B on one quiet box (K=15, core-pinned, interleaved, both legs proven by disassembly): 0.38x -> 0.46x, VM time -19.5%, STILL A LOSS at ~2.2x php -> OWED per DEC-365. The ruling's ~65% prediction did not hold: construction was ~a fifth of the tuple-vs-scalar gap, and the residue is per-element `compare_ord` dispatch inside the fused Op (compiler-reachable), NOT the `sortWith` callback | L | done | d4365564 | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
-| 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench | L | todo | - | examples/lift/scout/* tests/* bench/* |
-| 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench | L | doing | - | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
+| 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5b and 5c** (DEC-514 + DEC-515, 2026-09-09) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
+| 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench. Wall-fall MEASURED on scout: 57/123 → 64/125, zero keyed-shape refusals, `Classification.php` lifts | L | done | 9b3e528c | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
+| 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy, JIT-resistant. Blocks L3 | L | todo | - | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg |
+| 5c | L4b — DEC-515: extend the lift tuple-field seed past PARAMS to `@var` locals and `foreach` binders over a keyed collection (140 reads / 16 files), and lift a keyed array literal in a named-tuple return position to a tuple literal (the write half), so `Classification.phg` CHECKS. Blocks L3 | M | todo | - | src/lift/lifter/decls/declarations.rs src/lift/lifter/decls/seed.rs src/lift/lifter/exprs.rs src/lift/lifter_tests_shapes.rs |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
 | 7 | L6 — `Core.Net` + `Core.Mime` + read-only `Core.Imap` with the file-backed `.eml` transport (readiness 14, DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
 | 8 | L7 — breadth census loop to the stop condition: every file lifts or carries a named refusal with a DEC row | L | todo | - | src/lift/* examples/lift/scout/* |

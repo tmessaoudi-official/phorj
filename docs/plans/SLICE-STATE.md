@@ -87,7 +87,32 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 >
 > **L4 BUILT (2026-09-08)** — DEC-504 named-field tuples, the 73-site lift wall, and the other half of
 > what L3 (the depth oracle) is blocked on. Three commits: the core language slice, the lift leg +
-> refusals, and format/LSP/editors. **NEXT: L3** (the depth oracle), which L4 unblocks.
+> refusals, and format/LSP/editors. **NEXT: L4c, then L4b — and L3 is BLOCKED behind both** (ruled
+> 2026-09-09, DEC-514 + DEC-515). **L4c** root-causes phorj's two-level list element read before any
+> fix is written (Rule 14): 370 ns/iter against `listindex` 4.3, unexplained, not a deep copy,
+> JIT-resistant, and it is the exact `list<array{…}>` shape L3's own oracle would bench. **L4b**
+> extends the lift tuple-field seed past PARAMS to `@var` locals and `foreach` binders over a keyed
+> collection (the 140 reads), and lifts a keyed array literal in a named-tuple return position to a
+> tuple literal, so `Classification.phg` — whose `toArray()` IS L3's four-leg contract — checks.
+> DEC-514 deliberately DEPARTS from the DEC-513 "carry the OWED and proceed" precedent: that residue
+> was understood and attributed; this cliff is not.
+>
+> **The wall FELL, measured on scout, not inferred** [Verified 2026-09-08: `target/release/phg lift
+> /stack/projects/scout/src/php` at scout `f7a4345` + the developer's working-tree edits]. Headline
+> **57/123 → 64/125** (the denominator moved because scout's tree gained two files since the L2
+> census — re-run, never quote). **Zero `array{…}`-shape refusals remain**, down from 16 files, and
+> `Rent/Core/Classification.php` — the file whose `toArray()` IS the four-leg contract L3 diffs
+> against, and the reason L3 was blocked on L4 — now lifts, its signature reading
+> `toArray(): (tenure: string, confidence_bp: int, outcome: string, reasons: List<string>)`.
+> The cluster's two survivors are both named, expected refusals: `TenureClassifier.php` on the
+> DEC-506 by-ref capture (hand-port, §3) and `Core/Text.php` on `?? throw` (banked Q-0908-1).
+>
+> **What the fall does NOT include, stated because the draft says so out loud.** That
+> `Classification.phg` draft does not yet CHECK: its body still returns the PHP keyed array literal
+> the shape came from, so the checker reports `expected (tenure: string, …), found Map<string,
+> <error>>`. The lifter rewrites keyed READS on a keyed-shape PARAMETER only — the census below
+> counts 140 rewritable reads it does not reach, and this is the same seed gap on the WRITE side.
+> L4 removed the refusal and exposed the next wall; it did not finish the file.
 >
 > **What L4 shipped.** `(bp: int, source: string)` as a type and `(bp: 3, source: "x")` as a literal,
 > with `t.bp` resolving to a POSITION at check time and rewritten to `t[<i>]` before erasure — so no
@@ -165,6 +190,11 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > resolves against its RECEIVER. Go-to-definition on a tuple field now answers nothing rather than
 > jumping somewhere wrong; jumping to the label inside the written type needs spans
 > `receiver_tuple_fields` does not carry, and is named here as an uncertified follow-up.
+> A third defect was caught by the 6C gate reading a COMMENT against its own code: the module claimed
+> `t?.bp` hovers because it "still reads as a field access", and the receiver walk stopped ON the `?`,
+> returned nothing, and fell straight back into the same-named-local decoy the module exists to close.
+> The `?` is now stepped over, with the test and a landed mutation. LSP references / document symbols
+> / signature help on `t.bp` were NOT probed and are not claimed.
 >
 > A first version of that bench read one loop-INVARIANT tuple and reported 0.24× too — but for the
 > wrong reason: PHP's tracing JIT constant-folded the body to `acc + 11`. Kept here because the number
