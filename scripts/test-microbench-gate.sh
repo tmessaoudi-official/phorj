@@ -145,6 +145,106 @@ else
   echo "  ok   8 a JSON without spread fields is unannotated and clean"
 fi
 
+# ── php-SOURCE cases (10-15): the one path the JSON seam CANNOT reach ────────────────────────────
+# Every case above drives the gate through `MICROBENCH_GATE_JSON`, which the gate's own comment says
+# "bypasses docker/binary/harness entirely" — so none of them executes a single line of php
+# resolution. A refusal written there would be untested by all nine, and would look tested.
+#
+# These run an ISOLATED COPY of the gate from a tmpdir (the CLAUDE.md SCRIPT_DIR pattern). That is not
+# tidiness: the real gate `source`s `scripts/toolchain.env`, which capability-checks an inherited
+# `PHORJ_PHP` and REPLACES a stale one with the box's own php — which today IS a `ZTS DEBUG GCOV`
+# build. A stub would be silently swapped for it, the case would pass for the wrong reason, and it
+# would go red the day the box's php is rebuilt NTS. The copy's ROOT is the tmpdir, where no
+# `toolchain.env` exists, so a stub is taken as given.
+ISO="$TMP/iso"
+mkdir -p "$ISO/scripts" "$ISO/bench" "$ISO/bin"
+cp "$GATE" "$ISO/scripts/microbench-gate.sh"
+ISO_GATE="$ISO/scripts/microbench-gate.sh"
+
+# A stub php that answers the gate's three probes by inspecting its own arguments. Probing the
+# CONSTANTS (`PHP_DEBUG`, `PHP_ZTS`) rather than string-matching `php -v` is what makes a stub this
+# small possible — and is why the gate must probe them too.
+mkphp() { # mkphp <path> <debug-exit> <zts-exit>
+  {
+    echo '#!/usr/bin/env bash'
+    echo 'case "$*" in'
+    echo "  *PHP_DEBUG*) exit $2 ;;"
+    echo "  *PHP_ZTS*)   exit $3 ;;"
+    echo '  *opcache_get_status*) exit 0 ;;'
+    echo 'esac'
+    echo 'exit 0'
+  } >"$1"
+  chmod +x "$1"
+}
+mkphp "$ISO/php-debug" 1 0   # Debug Build => yes, NTS
+mkphp "$ISO/php-release" 0 0 # Debug Build => no,  NTS  — a valid baseline
+mkphp "$ISO/php-zts" 0 1     # Debug Build => no,  ZTS  — warn, do not refuse
+printf '#!/usr/bin/env bash\nexit 1\n' >"$ISO/bin/docker" # a docker whose daemon never answers
+chmod +x "$ISO/bin/docker"
+
+# `iso_check <want_exit> <want_pattern> <label> [ENV=val | -u VAR ...]` — the env under test is
+# passed to `env`, not exported into a subshell: a subshell would have to smuggle its own `fails`
+# count back out through an exit code, which is both fragile and what shellcheck SC2030/SC2031 warn
+# about. This way every case runs in the parent and increments `fails` directly.
+iso_check() {
+  local want_exit="$1" want_pat="$2" label="$3" out rc
+  shift 3
+  out="$(env "$@" bash "$ISO_GATE" 2>&1)"
+  rc=$?
+  if [[ "$rc" != "$want_exit" ]]; then
+    echo "  FAIL $label: exit $rc, want $want_exit"
+    echo "$out" | sed 's/^/        /' | tail -5
+    fails=$((fails + 1))
+    return
+  fi
+  if ! grep -qE "$want_pat" <<<"$out"; then
+    echo "  FAIL $label: no match for /$want_pat/"
+    echo "$out" | sed 's/^/        /' | tail -5
+    fails=$((fails + 1))
+    return
+  fi
+  echo "  ok   $label"
+}
+
+# 10. An EXPLICIT MICROBENCH_PHP_BIN at a DEBUG build is REFUSED (exit 2), not quietly measured on.
+# DEC-507 disqualifies a debug build for any perf claim, and the refusal guards the emit SOURCE
+# however that source was chosen — an operator naming one deliberately is exactly when a silent
+# accept does the most damage. Contrast case 12: a DEBUG php discovered by the FALLBACK skips.
+iso_check 2 'DEBUG build' '10 an explicit MICROBENCH_PHP_BIN at a DEBUG build is refused' \
+  MICROBENCH_PHP_BIN="$ISO/php-debug"
+
+# 11. …and a release build at the same seam is NOT refused: it proceeds, and stops at the next real
+# obstacle. Asserting on THAT message is what makes case 10 meaningful — without this twin, a gate
+# that refused every php would pass case 10 for the wrong reason.
+iso_check 0 'release binary .* absent' '11 a non-DEBUG php at the same seam is accepted' \
+  MICROBENCH_PHP_BIN="$ISO/php-release"
+
+# 12. The FALLBACK discovering a DEBUG php SKIPs with an OWED verdict (exit 0) — it never wedges a
+# push. The gate's stated contract is that missing infra skips, and docker being down is infra; the
+# operator did not choose this php, the fallback did. The verdict is still recorded, never silent.
+iso_check 0 'DEBUG build or has no JIT — SKIP' '12 a DEBUG php found by the fallback SKIPs, OWED' \
+  -u MICROBENCH_PHP_BIN PATH="$ISO/bin:$PATH" PHORJ_PHP="$ISO/php-debug"
+
+# 13. ZTS is a WARNING, not a refusal — a stated choice, not an oversight. DEC-507's comparator is
+# NTS, but thread-safety changes php's performance profile without invalidating the build the way a
+# debug build does; refusing it would be a wider rule than DEC-516 ruled. Recorded in the DEC row.
+iso_check 0 'ZTS' '13 a ZTS non-debug php warns and is still accepted' \
+  MICROBENCH_PHP_BIN="$ISO/php-zts"
+
+# 14. SOURCE CONSISTENCY — the defect that was actually live. The baseline records the php it was
+# measured on; comparing a docker-measured run against a phpbrew-recorded baseline is the exact
+# cross-source mix DEC-423.1 declared non-interchangeable, and it went unnoticed because nothing
+# checked. A mismatch is UNMEASURABLE, not a regression: SKIP with an OWED verdict (DEC-365).
+printf '{"_baseline_php":"docker php:8.5-cli","_owed":{},"features":{}}\n' >"$ISO/bench/micro-baseline.json"
+iso_check 0 'baseline was recorded on' '14 a local run against a docker baseline SKIPs, OWED' \
+  MICROBENCH_PHP_BIN="$ISO/php-release" MICROBENCH_BASELINE="$ISO/bench/micro-baseline.json"
+
+# 15. …and the matching pair proceeds. Same twin discipline as case 11: a check that fired on every
+# run would satisfy case 14 while breaking every push.
+jq --arg p "$ISO/php-release" '._baseline_php = $p' "$ISO/bench/micro-baseline.json" >"$ISO/bench/matched.json"
+iso_check 0 'release binary .* absent' '15 a run whose source matches the baseline proceeds' \
+  MICROBENCH_PHP_BIN="$ISO/php-release" MICROBENCH_BASELINE="$ISO/bench/matched.json"
+
 if [[ "$fails" -gt 0 ]]; then
   echo "test-microbench-gate: FAIL — $fails case(s)" >&2
   exit 1

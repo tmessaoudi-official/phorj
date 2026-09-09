@@ -16,6 +16,30 @@
 >   invalid for a perf claim. Re-emit on dockerised `php:8.5-cli`+JIT, core-pinned, on a quiet box, and
 >   add a `PHP_DEBUG` REFUSAL to the resolution chain. Supersedes DEC-423.1's local-php baseline.
 >   `scripts/microbench.sh:13` also still says docker is absent — docker 29.8.0 is installed.
+>   **BUILT 2026-09-09, and the finding SHARPENED in the building.** The debug-fallback half is
+>   LATENT — its banner appears 0 times in the push logs, so no recorded run used that oracle. The half
+>   that was LIVE on every push: docker-measured runs compared against a phpbrew-recorded baseline,
+>   the cross-source mix DEC-423.1 itself called non-interchangeable. The gate now REFUSES that
+>   comparison (a disclosed scope extension — the re-emit fixes the instance, the check fixes the
+>   class), DEBUG refuses while ZTS warns, and the baseline records the build banner + image digest.
+>   **EMIT RESULT** (quiet box, load 0.63, core 7 at 96.99% idle, K=3): 56 features, 10 OWED,
+>   `_baseline_php = docker php:8.5-cli` @ `PHP 8.5.10 (NTS)` / `sha256:9ebdf4c2…`. 0 WIN→loss.
+>   4 loss→WIN — `mapget` 0.953→1.165, `mapinsert` 0.851→1.139, `floatloop` 0.776→1.013,
+>   `dbwork` 0.832→1.004 — **none of which is a phorj fix**: they moved because the comparator was
+>   corrected, and must not be cited as wins. 3 rows entered `_owed`: `namedtuplefield` 0.027,
+>   `nestedlist` 0.030, `spaceshipsort` 0.487.
+>
+> - **⏸ PENDING (needs a ruling, nobody has made one) — two items out of DEC-516's emit.**
+>   1. **`spaceshipsort` 0.487** is a carried loss with **no DEC row of its own**. It is now tracked as
+>      OWED so it cannot deepen silently, but it has never been scoped. It is a comparator-heavy SORT,
+>      not an element-access loop, so it does NOT obviously belong to L4c's cliff (DEC-519) — folding
+>      it in would be a roadmap change made by a session rather than by the developer.
+>   2. **The four near-parity recoveries may make the ratchet flaky.** An independent quiet-box run
+>      (K=9, load 0.69, core 7 94.24% idle) read `mapget` at **0.938** where the emitted baseline says
+>      1.165 — below the 0.95 flip limit, i.e. a blocking flip. If a push blocks on `mapget`,
+>      `floatloop` or `dbwork`, **the answer is NOT to re-emit** (DEC-365, and DEC-431.1 is the
+>      cautionary case): it is a near-parity wobble, and the options are to widen the band for those
+>      rows or to rule them back into `_owed`. Recorded, not decided.
 > - **DEC-517 — Invariant 17's 100% diagnostics rule REOPENED, and this file said otherwise.**
 >   `scripts/surface-ratchet.sh` prints **317/321 asserted (98%) — the 100% RULE is NOT met yet**
 >   [Verified 2026-09-09, ran it]. The four unasserted codes are **all four of L2's**:

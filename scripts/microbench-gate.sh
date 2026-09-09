@@ -59,6 +59,21 @@ NOISE_PCT="${MICROBENCH_NOISE_PCT:-15}"
 # Flags for the one-shot "does this php actually JIT?" probe (the local-baseline gate below).
 JIT_PROBE="-dopcache.enable_cli=1 -dopcache.jit_buffer_size=8M -dopcache.jit=tracing"
 
+# BUILD-TYPE PROBES (DEC-516). Both read the CONSTANT, never `php -v` text — this box's oracle
+# reports `jit=tracing` quite happily while being `ZTS DEBUG GCOV`, so the JIT probe above cannot
+# disqualify it and a `-v` grep would depend on the banner's wording.
+#
+# Both FAIL CLOSED: a php that cannot answer the probe (broken, wrong arch, not php at all) is
+# treated as unusable rather than assumed fine. A baseline source is exactly where an optimistic
+# default is expensive — it is compared against for months.
+_php_not_debug() { "$1" -r 'exit(PHP_DEBUG ? 1 : 0);' >/dev/null 2>&1; } # 0 = release build
+_php_is_zts() { ! "$1" -r 'exit(PHP_ZTS ? 1 : 0);' >/dev/null 2>&1; }    # 0 = thread-safe build
+
+# The php this run WOULD measure against, in the same spelling the baseline records. Single-sourced
+# here so the emit's provenance field and the source-consistency check below cannot drift apart —
+# they used to be two independent copies of the same default string.
+RUN_PHP_SOURCE="${MICROBENCH_PHP_BIN:-docker ${MICROBENCH_PHP_IMAGE:-php:8.5-cli}}"
+
 command -v jq >/dev/null 2>&1 || {
   echo "microbench-gate: jq is required" >&2
   exit 2
@@ -77,6 +92,25 @@ else
   # never ran — and in this container it is always unusable, so the gate was dark on every push for
   # weeks (DEC-423).
   #
+  # An EXPLICIT MICROBENCH_PHP_BIN is REFUSED when it names a debug build, and the refusal is HARD
+  # (exit 2) precisely because the operator chose it: nobody stumbles into this variable. A debug php
+  # runs several times slower than a release one, so every phorj ratio measured against it is
+  # INFLATED — the DEC-507 disqualifier, and the one that flatters us. ZTS only warns (DEC-516): the
+  # comparator of record is NTS, but thread-safety shifts php's profile without invalidating the
+  # build the way `PHP_DEBUG` does, and refusing it would be a wider rule than was ruled.
+  if [[ -n "${MICROBENCH_PHP_BIN:-}" ]]; then
+    if ! _php_not_debug "$MICROBENCH_PHP_BIN"; then
+      echo "microbench-gate: REFUSING — MICROBENCH_PHP_BIN=$MICROBENCH_PHP_BIN is a DEBUG build (or" >&2
+      echo "  did not answer the PHP_DEBUG probe). DEC-507 disqualifies a debug php for any perf" >&2
+      echo "  claim: it runs several times slower, so every ratio measured against it is INFLATED in" >&2
+      echo "  phorj's favour. Point it at a release build, or unset it to use dockerised php." >&2
+      exit 2
+    fi
+    if _php_is_zts "$MICROBENCH_PHP_BIN"; then
+      echo "microbench-gate: warning — $MICROBENCH_PHP_BIN is a ZTS build; the DEC-507 comparator is" >&2
+      echo "  NTS. Measuring anyway: DEC-516 ruled DEBUG a refusal and ZTS a warning." >&2
+    fi
+  fi
   # ⚠ "Docker is usable" means the DAEMON answers, not that the client is installed. The dev container
   # ships the binary with no daemon behind it, so a `command -v docker` test passes and the run then
   # dies on connect. The first arming attempt got this wrong in exactly that way — the fallback was
@@ -87,14 +121,59 @@ else
     [[ -f "$ROOT/scripts/toolchain.env" ]] && source "$ROOT/scripts/toolchain.env"
     # PROBE the JIT, never assume it: a php without opcache, or with JIT off, is not a valid G-8
     # baseline and silently using one would understate every loss (the mb_strlen lesson, DEC-423).
+    # A local php qualifies only if it JITs AND is not a debug build. The second half is DEC-516:
+    # until it existed, this branch accepted the box's `ZTS DEBUG GCOV` oracle — it passes the JIT
+    # probe — so a day docker went down would have silently inflated every ratio, with the fallback
+    # banner as the only trace. That was latent, never live (the banner appears in no push log).
     if [[ -n "${PHORJ_PHP:-}" && -x "${PHORJ_PHP:-}" ]] && "$PHORJ_PHP" $JIT_PROBE -r \
-        'exit((opcache_get_status(false)["jit"]["on"] ?? false) ? 0 : 1);' >/dev/null 2>&1; then
+      'exit((opcache_get_status(false)["jit"]["on"] ?? false) ? 0 : 1);' >/dev/null 2>&1 \
+      && _php_not_debug "$PHORJ_PHP"; then
       export MICROBENCH_PHP_BIN="$PHORJ_PHP"
       echo "microbench-gate: docker unusable — using the local release php+JIT ($PHORJ_PHP)" >&2
+      if _php_is_zts "$PHORJ_PHP"; then
+        echo "microbench-gate: warning — that php is a ZTS build; the DEC-507 comparator is NTS." >&2
+      fi
     else
-      echo "microbench-gate: docker unusable and no local php+JIT — SKIP the G-8 gate (infra, not a" >&2
-      echo "  regression). The verdict is OWED: re-run where a real release php+JIT is reachable" >&2
-      echo "  before making any perf claim (DEC-365 no-hidden-loss)." >&2
+      # SKIP, do not refuse. Docker being down is infra, and the operator did not choose this php —
+      # the fallback did. A push is never wedged by missing infra (contrast the explicit-bin refusal
+      # above, which IS a deliberate choice). The verdict is still recorded, never silent.
+      echo "microbench-gate: docker unusable and the local php is a DEBUG build or has no JIT — SKIP" >&2
+      echo "  the G-8 gate (infra, not a regression). This box's oracle reports jit=tracing while" >&2
+      echo "  being ZTS DEBUG GCOV, so JIT alone is not the test (DEC-507/DEC-516). The verdict is" >&2
+      echo "  OWED: re-run where docker or a release php+JIT is reachable before making any perf" >&2
+      echo "  claim (DEC-365 no-hidden-loss)." >&2
+      if [[ "$EMIT" == 1 ]]; then
+        echo "microbench-gate: REFUSING to emit with no valid php source — exit 2, not 0, because an" >&2
+        echo "  emit that exits 0 having written nothing reads as success and silently leaves the" >&2
+        echo "  old baseline standing (the same reasoning as the load-guard emit refusal below)." >&2
+        exit 2
+      fi
+      exit 0
+    fi
+  fi
+  # Re-read: the fallback above may have just set MICROBENCH_PHP_BIN.
+  RUN_PHP_SOURCE="${MICROBENCH_PHP_BIN:-docker ${MICROBENCH_PHP_IMAGE:-php:8.5-cli}}"
+
+  # SOURCE CONSISTENCY (DEC-516) — the defect that was actually LIVE, not latent. The baseline
+  # records the php it was measured on; comparing a run against a baseline recorded on a DIFFERENT
+  # source is the cross-source mix DEC-423.1 itself called non-interchangeable when it chose that
+  # baseline. It ran on every push for weeks: `_baseline_php` named a phpbrew `php-8.5.8` that no
+  # longer exists on this box, while every run since measured on dockerised php. Nothing compared
+  # the two, so nothing said anything — and the recoveries it reported were recoveries ACROSS the
+  # mismatch. Rule 14: this check is the fix for the class, the re-emit only fixes the instance.
+  #
+  # UNMEASURABLE, not a regression: SKIP with an OWED verdict (DEC-365), never block, never a silent
+  # pass. `--emit` is exempt — rewriting `_baseline_php` is precisely what resolves a mismatch.
+  if [[ "$EMIT" == 0 && -f "$BASELINE" ]]; then
+    _base_php="$(jq -r '._baseline_php // empty' "$BASELINE")"
+    if [[ -n "$_base_php" && "$_base_php" != "$RUN_PHP_SOURCE" ]]; then
+      echo "microbench-gate: SKIP the G-8 ratchet — php SOURCE MISMATCH (DEC-516)." >&2
+      echo "  the baseline was recorded on: $_base_php" >&2
+      echo "  this run would measure on:    $RUN_PHP_SOURCE" >&2
+      echo "  Ratios from two different php builds are not comparable (DEC-423.1), so every verdict" >&2
+      echo "  here — flip, recovery, owed-deepening — would be an artefact of the comparator rather" >&2
+      echo "  than of phorj. The verdict is OWED. Re-emit on the intended source to resolve it:" >&2
+      echo "    bash scripts/microbench-gate.sh --emit" >&2
       exit 0
     fi
   fi
@@ -162,15 +241,35 @@ else
 fi
 
 if [[ "$EMIT" == 1 ]]; then
+  # PROVENANCE (DEC-516). `_baseline_php` alone could not be re-derived months later: "php:8.5-cli"
+  # is a MOVING tag, and a phpbrew path can name a build that has since been deleted — which is
+  # exactly what happened (`php-8.5.8` is gone from this box, so the baseline it recorded is now
+  # unreproducible). Record the build banner and, for docker, the image digest: those pin it.
+  _baseline_build=""
+  _baseline_digest=""
+  if [[ -n "${MICROBENCH_PHP_BIN:-}" ]]; then
+    _baseline_build="$("$MICROBENCH_PHP_BIN" -v 2>/dev/null | head -1)"
+  else
+    _img="${MICROBENCH_PHP_IMAGE:-php:8.5-cli}"
+    _baseline_build="$(docker run --rm "$_img" php -v 2>/dev/null | head -1)"
+    # A locally-built image has no RepoDigests at all, so the field is legitimately empty there —
+    # this is "not applicable", not a swallowed failure.
+    if _d="$(docker image inspect "$_img" --format '{{index .RepoDigests 0}}' 2>/dev/null)"; then
+      _baseline_digest="$_d"
+    fi
+  fi
   # `_owed` is DERIVED, never hand-maintained: every feature losing at emit time is recorded here with
   # the ratio it lost by. That is what stops `--emit` from laundering a loss (DEC-365 no-hidden-loss,
   # and the developer ruling of 2026-08-01 that the 9 known losses be frozen as OWED rather than
   # written in as the new normal). The gate then reports every owed feature on EVERY run and BLOCKS if
   # one deepens — so a loss can be carried, but never quietly, and never further.
-  jq '{
+  jq --arg php "$RUN_PHP_SOURCE" --arg build "$_baseline_build" --arg digest "$_baseline_digest" '{
     "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT. The gate BLOCKS on identity breaks, WIN->LOSS flips (ratio crossing 1.0 downward), and any _owed loss DEEPENING past MICROBENCH_OWED_EPSILON. It does NOT block on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after a fix lands a WIN so the flip check protects it.",
     "_owed_comment": "DERIVED at --emit from every feature with ratio < 1.0: the losses we are CARRYING, each with the ratio it lost by. Reported loudly every run and blocked from deepening. A feature leaves this list by being FIXED and re-emitted, never by being edited out.",
-    "_baseline_php": "'"${MICROBENCH_PHP_BIN:-docker php:8.5-cli}"'",
+    "_baseline_php_comment": "The php these ratios were measured against. The gate REFUSES to compare a run measured on a different source (DEC-516): ratios from two php builds are not interchangeable (DEC-423.1). `_baseline_php_build` and `_baseline_php_digest` are what make it re-derivable — the tag moves and a local path can be deleted.",
+    "_baseline_php": $php,
+    "_baseline_php_build": $build,
+    "_baseline_php_digest": $digest,
     _owed: (map(select(.ratio < 1.0) | { (.feature): { ratio: .ratio } }) | add // {}),
     features: (map({ (.feature): { ratio: .ratio, identical: .identical } }) | add)
   }' <<<"$json" >"$BASELINE"

@@ -20,6 +20,23 @@
 # Docker stays the CROSS-BOX reference (bench/micro-baseline.json was recorded against php:8.5-cli, so
 # ratios from the two sources are not interchangeable); the local path is what makes the suite
 # runnable at all on a box without a daemon.
+#
+# ⚠ AMENDED 2026-09-09 (DEC-516) — THE PARAGRAPH ABOVE IS HISTORY, NOT CURRENT STATE. Every receipt
+# in it was true of `php-8.5.8`. **That build no longer exists**: `/stack/tools/phpbrew/php/` holds
+# `php-8.4.24`, `php-8.5.9` and `php-master` [Verified 2026-09-09], and `toolchain.env` globs
+# `php-8.5.*` newest-first, so `$PHORJ_PHP` resolves to **8.5.9 — `Debug Build => yes`, ZTS, GCOV**.
+# The invitation above therefore now points at a build DEC-507 disqualifies, and following it would
+# INFLATE every phorj ratio. Two further corrections, both to sentences above:
+#   - "docker is absent in the dev container" is FALSE on this box: docker 29.8.0 runs, `php:8.5-cli`
+#     is present, and `php -dopcache.enable_cli=1 -dopcache.jit=tracing` inside it answers
+#     `jit.on === true` [Verified 2026-09-09] — the image ships opcache loaded, no enable step.
+#   - the baseline was NOT recorded against `php:8.5-cli` when this was written: `_baseline_php` named
+#     the vanished phpbrew 8.5.8 while every run since measured on docker. DEC-516 re-emitted it on
+#     docker and `microbench-gate.sh` now REFUSES to compare across the two sources.
+# The one-line check before trusting ANY local path as a baseline — never `php -v` text, and never the
+# JIT probe alone, because 8.5.9 passes that while being a debug build:
+#
+#     "$PHORJ_PHP" -r 'exit(PHP_DEBUG ? 1 : 0);' && echo "release build" || echo "DEBUG — not a baseline"
 # Each micro self-times (warmup call + timed call) and prints `name<TAB>total_ns<TAB>checksum` — TOTAL
 # self-timed nanoseconds, NOT ns/op: the old integer per-op (`d / iters`) floored sub-2ns/op workloads
 # to `1`, collapsing distinct timings to a meaningless 1.00× tie (it masked intadd's true verdict). The

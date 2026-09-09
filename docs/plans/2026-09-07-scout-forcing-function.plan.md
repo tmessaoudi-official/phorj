@@ -26,6 +26,16 @@
   box, `--emit` rewrites all 53 rows in one run, and the gate's fallback accepts the surviving
   `ZTS DEBUG GCOV` oracle because it JITs — the exact build DEC-507 calls invalid for a perf claim.
   Supersedes DEC-423.1's local-php baseline. Needs a quiet box with docker.
+- [2026-09-09 14:45] BUILT: **DEC-516 — the baseline is re-emitted on dockerised `php:8.5-cli`, and the gate
+  now refuses both a DEBUG php and a cross-source comparison.** Measured on a quiet box (load 0.63,
+  core 7 at 96.99% idle, 0.00% nice), K=3 — the estimator every future gate run uses. `_baseline_php`
+  = `docker php:8.5-cli`, plus `_baseline_php_build` (`PHP 8.5.10 (cli) … (NTS)`) and
+  `_baseline_php_digest` (`sha256:9ebdf4c2…`) so a moving tag can never again leave a baseline
+  unreproducible. 56 features, 10 OWED. **The finding sharpened while building it:** the DEBUG-fallback
+  hole is LATENT (its banner appears 0 times in the push logs — no recorded run ever used that oracle);
+  what was LIVE on every push is docker-measured runs compared against the phpbrew-recorded baseline.
+  A source-consistency check was added for that (disclosed scope extension — Rule 14: the re-emit fixes
+  the instance, the check fixes the class). ZTS warns rather than refuses, stated as a choice.
 - [2026-09-09 11:43] AGREED: **DEC-517 — Invariant 17's 100% diagnostics rule is REOPENED; fixture the
   four codes and correct the ledger.** The surface ratchet reports 317/321 (98%) and says so out loud;
   the four unasserted codes are all of L2's — `E-ORDER-DECIMAL`, `E-ORDER-OPERANDS`,
@@ -413,7 +423,7 @@ DEC-507 applies to every one.
 | 7 | L6 — `Core.Net` + `Core.Mime` + read-only `Core.Imap` with the file-backed `.eml` transport (readiness 14, DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
 | 8 | L7 — breadth census loop to the stop condition: every file lifts or carries a named refusal with a DEC row | L | todo | - | src/lift/* examples/lift/scout/* |
 | 9 | L8 — perf twins: a fixture-driven benched scenario per lifted module, DEC-507 bar on every one | L | todo | - | bench/* |
-| 10 | DEC-516 — re-emit all 53 microbench rows on dockerised `php:8.5-cli`+JIT, core-pinned and interleaved on a quiet box (supersedes DEC-423.1's local-php baseline, whose binary no longer exists), and add a `PHP_DEBUG` refusal to the gate's resolution chain so a debug build can never become the baseline | M | todo | - | bench/micro-baseline.json scripts/microbench-gate.sh scripts/microbench.sh |
+| 10 | DEC-516 — re-emit all 53 microbench rows on dockerised `php:8.5-cli`+JIT, core-pinned and interleaved on a quiet box (supersedes DEC-423.1's local-php baseline, whose binary no longer exists), and add a `PHP_DEBUG` refusal to the gate's resolution chain so a debug build can never become the baseline; ALSO a source-consistency refusal + `_baseline_php_build`/`_baseline_php_digest` provenance (disclosed scope extension) | M | done | - | bench/micro-baseline.json scripts/microbench-gate.sh scripts/microbench.sh |
 | 11 | DEC-517 — fixture the four unasserted L2 ordering codes (`E-ORDER-DECIMAL` `E-ORDER-OPERANDS` `E-ORDER-TUPLE-SHAPE` `E-SPACESHIP-OPERANDS`), re-emit the surface-ratchet floor, correct SLICE-STATE's `311/311 CLOSED` claim to the live number, and restate L4's status row so it names the unprobed LSP surfaces | M | todo | - | conformance/* scripts/surface-baseline.txt docs/plans/SLICE-STATE.md |
 | 12 | DEC-518 — the rule-drift pass, one docs-only commit — `docs(rules): DEC-516…519 — a full rule-compliance review, and the drift pass lands`. All four landed: MASTER-PLAN's retired DEC-387 protocol replaced by the live rule with the retirement recorded (the two `never push` lines were ALREADY annotated as superseded — that half of the finding was overstated); the certification tier ratified IN the repo; `docs/INVARIANTS.md` prefixed `T-1`..`T-14`; Invariant 13 restated as the ratchet (`grandfathered=56 fails=0 warns=168`) | M | done | 36fa37d4 | docs/plans/MASTER-PLAN.md docs/INVARIANTS.md CLAUDE.md |
 <!-- /progress-block -->
