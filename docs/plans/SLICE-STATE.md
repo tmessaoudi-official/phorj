@@ -25,8 +25,9 @@
 >   floor, and correct both this claim and L4's `done` row, which stands while this file's own LSP
 >   paragraph says references / document symbols / signature help on `t.bp` were never probed.
 > - **DEC-518 — the rule-drift pass**, one docs-only commit: purge MASTER-PLAN's retired DEC-387
->   *plain-text questions only* protocol (`:1113`) and its two `never push` lines (both superseded, both
->   still live text in the roadmap SSOT — an Invariant 19 breach in the file Invariant 19 names first);
+>   *plain-text questions only* protocol (`:1113`) (an Invariant 19 breach in the file
+>   Invariant 19 names first; the review also flagged two `never push` lines, but both were ALREADY
+>   annotated as superseded in place — that half of the finding is WITHDRAWN);
 >   ratify the certification tier the `autonomous-3c-bypass` sentinel has been deciding for three weeks;
 >   **prefix `docs/INVARIANTS.md` as `T-1`…`T-14`** because its numbering COLLIDES with CLAUDE.md's
 >   (CLAUDE.md 7 = the CTy-operand trap, INVARIANTS.md 7 = the one-`Diagnostic` rule; 13 collides too;

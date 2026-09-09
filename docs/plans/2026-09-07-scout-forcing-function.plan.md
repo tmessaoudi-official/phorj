@@ -20,31 +20,35 @@
 
 ## Decisions Log
 
-- [2026-09-09 11:52] AGREED: **DEC-516 — the microbench baseline is RE-EMITTED on dockerised
+- [2026-09-09 11:43] AGREED: **DEC-516 — the microbench baseline is RE-EMITTED on dockerised
   `php:8.5-cli`+JIT, and the gate REFUSES a debug PHP.** Found by a full rule-compliance review:
   `bench/micro-baseline.json._baseline_php` names a phpbrew `php-8.5.8` that no longer exists on this
   box, `--emit` rewrites all 53 rows in one run, and the gate's fallback accepts the surviving
   `ZTS DEBUG GCOV` oracle because it JITs — the exact build DEC-507 calls invalid for a perf claim.
   Supersedes DEC-423.1's local-php baseline. Needs a quiet box with docker.
-- [2026-09-09 11:52] AGREED: **DEC-517 — Invariant 17's 100% diagnostics rule is REOPENED; fixture the
+- [2026-09-09 11:43] AGREED: **DEC-517 — Invariant 17's 100% diagnostics rule is REOPENED; fixture the
   four codes and correct the ledger.** The surface ratchet reports 317/321 (98%) and says so out loud;
   the four unasserted codes are all of L2's — `E-ORDER-DECIMAL`, `E-ORDER-OPERANDS`,
   `E-ORDER-TUPLE-SHAPE`, `E-SPACESHIP-OPERANDS` — while SLICE-STATE still says the rule is CLOSED and
   L4's row reads `done` with its LSP references / document symbols / signature help unprobed.
-- [2026-09-09 11:52] AGREED: **DEC-518 — the rule-drift pass, all four items, one docs-only commit**,
+- [2026-09-09 11:43] AGREED: **DEC-518 — the rule-drift pass, all four items, one docs-only commit**,
   ordered by operational bite: purge the retired DEC-387 plain-text protocol and the two `never push`
   lines from MASTER-PLAN; ratify the certification tier; PREFIX `docs/INVARIANTS.md` as `T-1`…`T-14`
   (amended from renumbering, so nothing existing is renamed); restate Invariant 13 as the ratchet the
   size gate actually enforces (56 grandfathered over the hard cap).
-- [2026-09-09 11:52] AGREED: **DEC-519 — L4c's root-cause phase is WIDENED to the carried micro
+- [2026-09-09 11:43] AGREED: **DEC-519 — L4c's root-cause phase is WIDENED to the carried micro
   losses.** Rule 14 unchanged; the reproduce step now measures `fslines` / `fsforeachline` /
   `queryparse` / `strappend` alongside the `nestedlist` pair BEFORE the hypothesis is formed, because
   they are element-access-heavy loops over the same shape. Lane order unchanged: L4c → L4b → L3.
-- ⚠ **Provenance correction (2026-09-09 11:52).** The two entries below were stamped `[2026-09-09
+- ⚠ **Provenance correction (2026-09-09 11:55, read from `date` — see the second half).** The two entries below were stamped `[2026-09-09
   14:05]`, a time that had not yet occurred when they were written: the commit that recorded them,
   `3d496a0e`, landed at **07:18** [Verified: `git log -1 --date=format 3d496a0e`]. The rulings
   themselves are genuine — the developer answered them interactively — but the timestamp was not, and
   Rule 17's resume check exists for exactly this. Both are re-stamped `07:18`.
+  **And the four entries above initially repeated the defect** — stamped `11:52` in the very commit
+  that fixed it, when the last measured `date` was **11:43** and the status-block collector run that
+  FOLLOWED the edit reported `11:45`. Re-stamped `11:43`. The lesson is narrow and now written down:
+  a Decisions Log stamp is READ from `date` at write time, never estimated from context.
 
 - [2026-09-09 07:18] AGREED: **DEC-514 — the nested-read cliff is FIXED BEFORE L3, root-cause first.**
   The DEC-507 escalation was posed with the re-measured pair (`namedtuplefield` 0.25×, erased-form
