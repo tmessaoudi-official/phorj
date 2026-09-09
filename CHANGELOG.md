@@ -50,7 +50,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   phorj fixes**: the comparator changed, a third case DEC-365's wording does not cover, and the
   `_owed_comment` in the emitted JSON now says so beside the data. Three rows entered `_owed`
   (`namedtuplefield` 0.027, `nestedlist` 0.030 — DEC-514's cliff, now ratchet-tracked —
-  `spaceshipsort` 0.487); net 11 OWED → 10. `scripts/test-microbench-gate.sh` grew 6 cases (10–16),
+  `spaceshipsort` 0.487); net 11 OWED → 10. `scripts/test-microbench-gate.sh` grew **7** cases (10–16, 18 in the suite — it prints no tally of its own, so the count is `grep -c '^  ok '` on a full run),
   driven through a tmpdir-isolated copy of the gate with stub `php` binaries answering the two
   probes and a `docker` that fails. **Recorded as an open risk, deliberately not resolved:** an
   independent quiet-box run reads `mapget` at 0.938 where the new baseline says 1.165, which would

@@ -30,7 +30,9 @@
 >   `nestedlist` 0.030, `spaceshipsort` 0.487.
 >   **6C found the `--emit` refusal had shipped UNEXECUTED** — cases 10-15 never pass `--emit`
 >   and the real emit used the `MICROBENCH_GATE_JSON` seam, which bypasses php resolution; case 16
->   now drives it and asserts the baseline is byte-identical afterwards (16/16, sabotage-verified).
+>   now drives it and asserts the baseline is byte-identical afterwards (7 new cases, 18 green,
+>   sabotage-verified). The committed `bench/micro-baseline.json` had kept the OLD `_owed_comment` —
+>   only the emit TEMPLATE was edited — so it was `jq`-synced in place, one line, nothing else touched.
 >
 > - **⏸ PENDING (needs a ruling, nobody has made one) — two items out of DEC-516's emit.**
 >   1. **`spaceshipsort` 0.487** is a carried loss with **no DEC row of its own**. It is now tracked as
