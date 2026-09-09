@@ -57,6 +57,15 @@
   ratify the certification tier; PREFIX `docs/INVARIANTS.md` as `T-1`…`T-14`
   (amended from renumbering, so nothing existing is renamed); restate Invariant 13 as the ratchet the
   size gate actually enforces (56 grandfathered over the hard cap).
+- [2026-09-09 21:25] AGREED: **DEC-520 — L4c's FIX SHAPE is INT-ONLY INNER LISTS.** A dedicated
+  list-of-lists `Kind` whose inner element kind is fixed to `int`, with the inner read reusing
+  `IntList`'s flat encoding rather than a second representation. Narrowest change covering every
+  shape that matters — `nestedlist`, `namedtuplefield` and scout's lifted `list<array{int,int}>` are
+  all `List<List<int>>`; the general case can grow from it. Threads through the 10 non-test
+  `Kind::MapList` code sites plus the entry-return/param ABI decode gate in `compile/mod.rs`; size
+  Medium-Large. REJECTED: a general element kind / widening `DynList` now (variable inner kind at
+  every dispatch site, flat fast path no longer automatic); L4b first (re-sequences DEC-519's
+  UNCHANGED lane order for no earlier unblock). Build QUEUED, NOT started — L3 stays blocked.
 - [2026-09-09 20:39] L4c ROOT CAUSE (Rule 14 satisfied; NO fix written, as ruled): the two-level list
   element read is 0.03x because the unboxed JIT's `Kind` lattice has **no list-of-lists** — it carries
   `MapList` and `SetList` but not the sibling — so `admit_make_list` (`src/jit/analyze/kinds.rs:353-382`)
@@ -439,7 +448,7 @@ DEC-507 applies to every one.
 | 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged. MEASURED A/B on one quiet box (K=15, core-pinned, interleaved, both legs proven by disassembly): 0.38x -> 0.46x, VM time -19.5%, STILL A LOSS at ~2.2x php -> OWED per DEC-365. The ruling's ~65% prediction did not hold: construction was ~a fifth of the tuple-vs-scalar gap, and the residue is per-element `compare_ord` dispatch inside the fused Op (compiler-reachable), NOT the `sortWith` callback | L | done | d4365564 | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5b and 5c** (DEC-514 + DEC-515, 2026-09-09) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench. Wall-fall MEASURED on scout: 57/123 → 64/125, zero keyed-shape refusals, `Classification.php` lifts | L | done | 9b3e528c | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
-| 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy. **ROOT-CAUSED 2026-09-09, no fix written**: the unboxed JIT `Kind` lattice has a `MapList` and a `SetList` but no list-of-lists, so `admit_make_list` refuses the row literal at `Op::MakeList` before any index runs and the function falls to the VM; "JIT-resistant" is retracted, it does not engage. **DEC-519's premise is also retracted** — none of the four widened rows has a two-level read; the census found four distinct causes and `strappend` COMPILES (so its loss is NOT JIT coverage; its actual cause is unexamined, out of scope). The FIX is a separate, unstarted decision awaiting a developer ruling on shape. Blocks L3 | L | doing | c8bc6c43 | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
+| 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy. **ROOT-CAUSED 2026-09-09, no fix written**: the unboxed JIT `Kind` lattice has a `MapList` and a `SetList` but no list-of-lists, so `admit_make_list` refuses the row literal at `Op::MakeList` before any index runs and the function falls to the VM; "JIT-resistant" is retracted, it does not engage. **DEC-519's premise is also retracted** — none of the four widened rows has a two-level read; the census found four distinct causes and `strappend` COMPILES (so its loss is NOT JIT coverage; its actual cause is unexamined, out of scope). The FIX SHAPE is RULED (DEC-520, 2026-09-09: INT-ONLY inner lists, a dedicated list-of-lists `Kind` reusing `IntList`'s flat encoding, 10 code sites + the ABI decode gate) and is QUEUED, NOT started. Blocks L3 | L | doing | c8bc6c43 | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
 | 5c | L4b — DEC-515: extend the lift tuple-field seed past PARAMS to `@var` locals and `foreach` binders over a keyed collection (140 reads / 16 files), and lift a keyed array literal in a named-tuple return position to a tuple literal (the write half), so `Classification.phg` CHECKS. Blocks L3 | M | todo | - | src/lift/lifter/decls/declarations.rs src/lift/lifter/decls/seed.rs src/lift/lifter/exprs.rs src/lift/lifter_tests_shapes.rs |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
 | 7 | L6 — `Core.Net` + `Core.Mime` + read-only `Core.Imap` with the file-backed `.eml` transport (readiness 14, DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
@@ -458,16 +467,6 @@ DEC-507 applies to every one.
 - L6 depends on L5 for alert-email parsing (an alert body IS an HTML document).
 
 ### Needs input
-- **L4c's FIX SHAPE — the one thing blocking L3 (root cause landed 2026-09-09; awaiting a ruling, fix unstarted).**
-  The cliff is a missing list-of-lists variant in the unboxed JIT `Kind` lattice. Sabotage proved a
-  one-line admission in `admit_make_list` does NOT work — it only moves the bail to `Op::Index` — so the
-  fix threads a new variant through every site that dispatches on `Kind::MapList` (10 non-test code sites
-  plus 5 doc-comment mentions: `analyze/kinds.rs`, `analyze/mod.rs`, `emit_unboxed/mod.rs`, `emit_unboxed/verticals*.rs`),
-  plus the entry-return/param ABI decode gate in `compile/mod.rs`. Open choices, none of them Claude's:
-  (a) INT-ONLY inner lists (narrowest, covers `nestedlist`/`namedtuplefield` and the lifted
-  `list<array{int,int}>`) vs a general element kind; (b) whether it is a new `Kind::ListList` or a
-  widening of the existing `DynList`; (c) whether the inner read reuses the `IntList` flat encoding.
-  Size is Medium-Large. Until this is ruled, L4c stays `doing` and **L3 remains blocked** per DEC-514.
 - **Quiet-box re-measure is OWED** before any ns/iter magnitude from 2026-09-09 is cited (DEC-507): the
   box sat at load 17-22 under an unrelated 2h53m `php tools/phpunit.phar`. The QUALITATIVE result — the
   jit/no-jit distributions overlap for `nestedlist` and do not overlap for `listindex` — is unaffected,

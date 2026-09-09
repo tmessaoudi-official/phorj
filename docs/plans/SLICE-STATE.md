@@ -190,7 +190,7 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > `Op::Index`. Two evidence clauses are RETRACTED — "JIT-resistant"/"the JIT engages without closing
 > it (7x)" (it does not engage) and DEC-519's "element-access-heavy loops over the same shape" (none
 > of the four has a two-level read; the census found FOUR distinct causes, and `strappend` COMPILES,
-> so its loss is NOT JIT coverage — what it IS was not examined here). Pinned by 4 tests in `src/jit/tests/decline_reasons.rs`. **L4b**
+> so its loss is NOT JIT coverage — what it IS was not examined here). Pinned by 4 tests in `src/jit/tests/decline_reasons.rs`. **The FIX SHAPE is now RULED (DEC-520, 2026-09-09): INT-ONLY inner lists** — a dedicated list-of-lists `Kind` fixed to `int` elements whose inner read reuses `IntList`'s flat encoding, threaded through the 10 `Kind::MapList` code sites plus the ABI decode gate in `compile/mod.rs`. Build QUEUED, NOT started; L4c stays `doing` and L3 stays blocked until it lands. **L4b**
 > extends the lift tuple-field seed past PARAMS to `@var` locals and `foreach` binders over a keyed
 > collection (the 140 reads), and lifts a keyed array literal in a named-tuple return position to a
 > tuple literal, so `Classification.phg` — whose `toArray()` IS L3's four-leg contract — checks.
