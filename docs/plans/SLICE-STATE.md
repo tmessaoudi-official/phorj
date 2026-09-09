@@ -47,6 +47,25 @@
 >      `floatloop` or `dbwork`, **the answer is NOT to re-emit** (DEC-365, and DEC-431.1 is the
 >      cautionary case): it is a near-parity wobble, and the options are to widen the band for those
 >      rows or to rule them back into `_owed`. Recorded, not decided.
+>   3. **The G-8 ratchet cannot run in pre-push, and the cause is the gate's own test run.**
+>      Measured, not inferred: the `694ddbf8` push was started on a deliberately quiet box —
+>      `load at push: 0.84 after 1184s`, core 7 at 90.30% idle — and by the time the gate reached
+>      the microbench step (last in pre-push, straight after a 96.6s 46-binary nextest run) the
+>      1-min load read **11.56**, decaying only to **7.11** after the 90s settle. The `7e835bff`
+>      push read 11.59 → 4.23 on the same window. So waiting for quiet BEFORE pushing does not
+>      help: the gate creates the load it then refuses to measure through, and 90s is not enough
+>      for a 1-min average built by ~95s of parallel testing to fall below 2.5. The new baseline
+>      has therefore still never been gated against, and the `mapget` flip risk in item 2 is
+>      untested live.
+>      **Not decided here** — the fix is a policy change to a guard DEC-431.1 exists to protect,
+>      and there are at least three shapes: lengthen the settle window (measure the decay first —
+>      Rule 14 forbids a bare timeout bump); gate on **core-7 idle via `mpstat`** instead of the
+>      1-min load average, which is this project's own recorded finding (load-avg 3-9 can be 95%+
+>      per-core idle, and core 7 is what the harness pins to); or move the microbench step ahead of
+>      the heavy nextest run. The measurement-quality question — whether a box whose OTHER cores are
+>      busy can produce a citable absolute ratio on a pinned core — is exactly the one DEC-507 rules
+>      on, so it is the developer's.
+>
 > - **DEC-517 — Invariant 17's 100% diagnostics rule REOPENED, and this file said otherwise.**
 >   `scripts/surface-ratchet.sh` prints **317/321 asserted (98%) — the 100% RULE is NOT met yet**
 >   [Verified 2026-09-09, ran it]. The four unasserted codes are **all four of L2's**:
