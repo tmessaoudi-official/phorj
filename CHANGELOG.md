@@ -32,6 +32,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed
 
+- **DEC-516 — the G-8 baseline is docker-measured and re-derivable, and the gate refuses a DEBUG
+  php.** `bench/micro-baseline.json` recorded no provenance, so nothing said which php it had been
+  compared against — and the answer was the wrong one: it was emitted on a local phpbrew
+  `php-8.5.8` that no longer exists on this box, while every gate run since has measured against
+  dockerised `php:8.5-cli`. That is precisely the cross-source mix **DEC-423.1 itself called
+  non-interchangeable**, and it was live on every push rather than latent. The baseline is now
+  re-emitted from docker (`PHP 8.5.10 (cli) … (NTS)`, image digest recorded) and carries
+  `_baseline_php`, `_baseline_php_build` and `_baseline_php_digest`; a run whose php SOURCE differs
+  from the baseline's SKIPs the ratchet by name instead of silently comparing across comparators.
+  Two refusals join it, both failing CLOSED: an explicit `MICROBENCH_PHP_BIN` pointing at a DEBUG
+  build exits 2, and the off-docker fallback now requires `PHP_DEBUG == 0` — this box's oracle is
+  `ZTS DEBUG GCOV` and reports `jit=tracing` quite happily, so the pre-existing JIT probe could
+  never disqualify it. The probes read the `PHP_DEBUG`/`PHP_ZTS` **constants**, never `php -v`
+  banner text. `--emit` with no valid php source refuses rather than writing.
+  Re-emitting moved four rows out of `_owed` (`mapget`, `mapinsert`, `floatloop`, `dbwork`) — **not
+  phorj fixes**: the comparator changed, a third case DEC-365's wording does not cover, and the
+  `_owed_comment` in the emitted JSON now says so beside the data. Three rows entered `_owed`
+  (`namedtuplefield` 0.027, `nestedlist` 0.030 — DEC-514's cliff, now ratchet-tracked —
+  `spaceshipsort` 0.487); net 11 OWED → 10. `scripts/test-microbench-gate.sh` grew 6 cases (10–16),
+  driven through a tmpdir-isolated copy of the gate with stub `php` binaries answering the two
+  probes and a `docker` that fails. **Recorded as an open risk, deliberately not resolved:** an
+  independent quiet-box run reads `mapget` at 0.938 where the new baseline says 1.165, which would
+  block a future push — and per DEC-365 the answer must not be a re-emit (DEC-431.1 is the
+  cautionary case).
+
 - **DEC-475 — every `Http.ServeConfig` field is nullable, and its numbers are validated**
   (KNOWN_ISSUES §SERVE-CONFIG-PROVENANCE, now FIXED). `null` means UNSET and the effective defaults
   are applied where each value is consumed, which replaces an approximation that could not be made

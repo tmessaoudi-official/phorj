@@ -28,6 +28,9 @@
 >   `dbwork` 0.832→1.004 — **none of which is a phorj fix**: they moved because the comparator was
 >   corrected, and must not be cited as wins. 3 rows entered `_owed`: `namedtuplefield` 0.027,
 >   `nestedlist` 0.030, `spaceshipsort` 0.487.
+>   **6C found the `--emit` refusal had shipped UNEXECUTED** — cases 10-15 never pass `--emit`
+>   and the real emit used the `MICROBENCH_GATE_JSON` seam, which bypasses php resolution; case 16
+>   now drives it and asserts the baseline is byte-identical afterwards (16/16, sabotage-verified).
 >
 > - **⏸ PENDING (needs a ruling, nobody has made one) — two items out of DEC-516's emit.**
 >   1. **`spaceshipsort` 0.487** is a carried loss with **no DEC row of its own**. It is now tracked as
@@ -36,7 +39,9 @@
 >      it in would be a roadmap change made by a session rather than by the developer.
 >   2. **The four near-parity recoveries may make the ratchet flaky.** An independent quiet-box run
 >      (K=9, load 0.69, core 7 94.24% idle) read `mapget` at **0.938** where the emitted baseline says
->      1.165 — below the 0.95 flip limit, i.e. a blocking flip. If a push blocks on `mapget`,
+>      1.165 — below the 0.95 flip limit, i.e. a blocking flip. The pre-emit check that should have
+>      caught this was posed BACKWARDS (`k9>=1.0 and k3<0.95`, when K=3 was the side being emitted
+>      AS the baseline); the right predicate `k3>=1.0 and k9<0.95` flags `mapget`. If a push blocks on `mapget`,
 >      `floatloop` or `dbwork`, **the answer is NOT to re-emit** (DEC-365, and DEC-431.1 is the
 >      cautionary case): it is a near-parity wobble, and the options are to widen the band for those
 >      rows or to rule them back into `_owed`. Recorded, not decided.

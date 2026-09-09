@@ -245,6 +245,30 @@ jq --arg p "$ISO/php-release" '._baseline_php = $p' "$ISO/bench/micro-baseline.j
 iso_check 0 'release binary .* absent' '15 a run whose source matches the baseline proceeds' \
   MICROBENCH_PHP_BIN="$ISO/php-release" MICROBENCH_BASELINE="$ISO/bench/matched.json"
 
+# 16. `--emit` with no valid php source REFUSES (exit 2) and writes NOTHING. Cases 10-15 never pass
+# `--emit`, and the real DEC-516 emit went through the JSON seam, so without this the branch would
+# ship unexecuted. The refusal exists because an emit that exits 0 having written nothing reads as
+# success and silently leaves the previous baseline standing — so assert BOTH halves: the exit code
+# and that the baseline file is byte-identical afterwards.
+before16="$(md5sum <"$ISO/bench/micro-baseline.json")"
+out16="$(env -u MICROBENCH_PHP_BIN PATH="$ISO/bin:$PATH" PHORJ_PHP="$ISO/php-debug" \
+  MICROBENCH_BASELINE="$ISO/bench/micro-baseline.json" bash "$ISO_GATE" --emit 2>&1)"
+rc16=$?
+after16="$(md5sum <"$ISO/bench/micro-baseline.json")"
+if [[ "$rc16" != 2 ]]; then
+  echo "  FAIL 16 --emit with no valid php must exit 2, got $rc16"
+  echo "$out16" | sed 's/^/        /' | tail -3
+  fails=$((fails + 1))
+elif ! grep -q 'REFUSING to emit' <<<"$out16"; then
+  echo "  FAIL 16 --emit refusal did not say why"
+  fails=$((fails + 1))
+elif [[ "$before16" != "$after16" ]]; then
+  echo "  FAIL 16 --emit refused but still rewrote the baseline"
+  fails=$((fails + 1))
+else
+  echo "  ok   16 --emit with no valid php refuses and leaves the baseline untouched"
+fi
+
 if [[ "$fails" -gt 0 ]]; then
   echo "test-microbench-gate: FAIL — $fails case(s)" >&2
   exit 1

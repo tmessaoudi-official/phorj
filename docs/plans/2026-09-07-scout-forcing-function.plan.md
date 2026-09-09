@@ -26,6 +26,16 @@
   box, `--emit` rewrites all 53 rows in one run, and the gate's fallback accepts the surviving
   `ZTS DEBUG GCOV` oracle because it JITs — the exact build DEC-507 calls invalid for a perf claim.
   Supersedes DEC-423.1's local-php baseline. Needs a quiet box with docker.
+- [2026-09-09 15:03] 6C: **DEC-516's own gate found four gaps, all closed in a follow-up commit.**
+  The `--emit` refusal branch had shipped with no test executing it (cases 10-15 never pass `--emit`,
+  and the real emit went through the `MICROBENCH_GATE_JSON` seam) — case 16 now drives it and asserts
+  the baseline stays byte-identical, sabotage-verified by turning the refusal into a no-op. The
+  pre-emit false-flip check was posed BACKWARDS and its "zero candidates" answered a question nobody
+  needed; the right direction flags `mapget`, which is the OPEN RISK already recorded. `_owed_comment`
+  in the emitted JSON contradicted its own data (four rows had just left `_owed` without a fix) and
+  now carries the comparator-change case beside the numbers. `CHANGELOG.md` gained the entry every
+  prior gate-behaviour change has.
+
 - [2026-09-09 14:45] BUILT: **DEC-516 — the baseline is re-emitted on dockerised `php:8.5-cli`, and the gate
   now refuses both a DEBUG php and a cross-source comparison.** Measured on a quiet box (load 0.63,
   core 7 at 96.99% idle, 0.00% nice), K=3 — the estimator every future gate run uses. `_baseline_php`
