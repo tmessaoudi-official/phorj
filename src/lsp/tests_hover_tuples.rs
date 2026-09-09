@@ -98,3 +98,25 @@ fn go_to_definition_on_a_tuple_field_does_not_jump_to_a_same_named_local() {
         "definition jumped somewhere for a tuple field: {body}"
     );
 }
+
+/// `t?.bp` is refused on a tuple (`E-TUPLE-SAFE-FIELD`), but it still READS as a field access, so
+/// hover answers with the field's type while the diagnostic explains the refusal.
+///
+/// Pinned because the receiver walk stopped on the `?`: it found no receiver, returned `None`, and
+/// fell through to the declaration lookup — the decoy path this module exists to close, reopened by
+/// one character.
+#[test]
+fn hover_on_a_safe_navigated_tuple_field_still_resolves_against_its_receiver() {
+    let src = "package Main;\nfunction main() -> void {\n\
+               string bp = \"decoy\";\n\
+               (source: string, bp: int) t = (source: \"cli\", bp: 3);\n\
+               var a = t?.bp;\n}";
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", src));
+    let body = &s.handle(&req_at("hover", 4, 11))[0];
+    assert!(
+        !body.contains("decoy"),
+        "the decoy local answered for a `?.` tuple field: {body}"
+    );
+    assert!(body.contains("int"), "field hover lost the type: {body}");
+}

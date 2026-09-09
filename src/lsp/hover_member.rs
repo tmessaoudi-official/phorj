@@ -33,18 +33,23 @@ fn receiver_before_field(text: &str, offset: usize) -> Option<String> {
     while i > 0 && is_ident(b[i - 1]) {
         i -= 1;
     }
-    // `?.` is refused on a tuple (E-TUPLE-SAFE-FIELD), but it still READS as a field access, so
-    // hovering one shows the type rather than nothing while the diagnostic explains the refusal.
-    let mut j = i;
-    while j > 0 && b[j - 1].is_ascii_whitespace() {
-        j -= 1;
-    }
+    let skip_ws = |b: &[u8], mut n: usize| {
+        while n > 0 && b[n - 1].is_ascii_whitespace() {
+            n -= 1;
+        }
+        n
+    };
+    let j = skip_ws(b, i);
     if j == 0 || b[j - 1] != b'.' {
         return None;
     }
-    let mut k = j - 1;
-    while k > 0 && b[k - 1].is_ascii_whitespace() {
-        k -= 1;
+    // `?.` is refused on a tuple (E-TUPLE-SAFE-FIELD), but it still READS as a field access, so the
+    // optional `?` is stepped over and hovering one shows the type while the diagnostic explains the
+    // refusal. Without this step the walk stops ON the `?`, finds no receiver, and falls through to
+    // the declaration lookup — the same-named-local decoy this module exists to rule out.
+    let mut k = skip_ws(b, j - 1);
+    if k > 0 && b[k - 1] == b'?' {
+        k = skip_ws(b, k - 1);
     }
     let end = k;
     while k > 0 && is_ident(b[k - 1]) {
