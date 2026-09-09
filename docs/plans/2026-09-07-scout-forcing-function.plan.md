@@ -57,6 +57,18 @@
   ratify the certification tier; PREFIX `docs/INVARIANTS.md` as `T-1`…`T-14`
   (amended from renumbering, so nothing existing is renamed); restate Invariant 13 as the ratchet the
   size gate actually enforces (56 grandfathered over the hard cap).
+- [2026-09-09 20:39] L4c ROOT CAUSE (Rule 14 satisfied; NO fix written, as ruled): the two-level list
+  element read is 0.03x because the unboxed JIT's `Kind` lattice has **no list-of-lists** — it carries
+  `MapList` and `SetList` but not the sibling — so `admit_make_list` (`src/jit/analyze/kinds.rs:353-382`)
+  refuses the row literal at `Op::MakeList`, BEFORE any index executes, and with `run_unboxed` the only
+  production JIT path there is no boxed fallback: the whole function runs on the VM. Captured on the
+  production path: `PHORJ_JIT_EXPLAIN=1 phg run bench/micro/nestedlist.phg` ->
+  `Unsupported("unboxed MakeList element kinds [IntList(Owned) x8] [in \`bench\`]")`. `listindex` emits
+  NO decline; `namedtuplefield` emits a byte-identical one (DEC-504's sugar confirmed free).
+  RETRACTED: DEC-514's "the JIT engages without closing it (7x from `--no-jit`)" — it does not engage;
+  and DEC-519's "same shape" premise — the census found FOUR distinct causes and `strappend` COMPILES.
+  Sabotage-proved the fix is not one function (admitting at MakeList moves the bail to `Op::Index`).
+  OWED: quiet-box re-measure — today's box sat at load 17-22 under a foreign phpunit run.
 - [2026-09-09 11:43] AGREED: **DEC-519 — L4c's root-cause phase is WIDENED to the carried micro
   losses.** Rule 14 unchanged; the reproduce step now measures `fslines` / `fsforeachline` /
   `queryparse` / `strappend` alongside the `nestedlist` pair BEFORE the hypothesis is formed, because
@@ -75,7 +87,7 @@
   The DEC-507 escalation was posed with the re-measured pair (`namedtuplefield` 0.25×, erased-form
   control `nestedlist` 0.03×, VM legs 0.4% apart) and the developer ruled a new lane **L4c** on
   phorj's two-level list element read — 370 ns/iter against 4.3 one level, unexplained, not a deep
-  copy, JIT-resistant. **L3 does not start until it closes.** This DEPARTS from the DEC-513 precedent
+  copy. **ROOT-CAUSED 2026-09-09**: the origin is a HOLE in the unboxed JIT `Kind` lattice — it has a `MapList` and a `SetList` but no list-of-lists — so `admit_make_list` refuses the row literal at `Op::MakeList`, before any index runs, and the function falls to the VM (there is no boxed fallback). `listindex` compiles and emits no decline at all. The prior clause "JIT-resistant" / "the JIT engages without closing it" is RETRACTED — it does not engage. **L3 does not start until it closes.** This DEPARTS from the DEC-513 precedent
   deliberately: that residue was understood and attributed, this cliff is not, and L3's own oracle
   benches the exact `list<array{…}>` shape it appears on.
 - [2026-09-09 07:18] AGREED: **DEC-515 — the lift seed is extended NOW, before L3.** The wall fell and
@@ -427,7 +439,7 @@ DEC-507 applies to every one.
 | 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged. MEASURED A/B on one quiet box (K=15, core-pinned, interleaved, both legs proven by disassembly): 0.38x -> 0.46x, VM time -19.5%, STILL A LOSS at ~2.2x php -> OWED per DEC-365. The ruling's ~65% prediction did not hold: construction was ~a fifth of the tuple-vs-scalar gap, and the residue is per-element `compare_ord` dispatch inside the fused Op (compiler-reachable), NOT the `sortWith` callback | L | done | d4365564 | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5b and 5c** (DEC-514 + DEC-515, 2026-09-09) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench. Wall-fall MEASURED on scout: 57/123 → 64/125, zero keyed-shape refusals, `Classification.php` lifts | L | done | 9b3e528c | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
-| 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy, JIT-resistant. **WIDENED by DEC-519**: the reproduce step also measures the carried OWED losses `fslines` 0.118 / `queryparse` 0.225 / `fsforeachline` 0.318 / `strappend` 0.436 as corroborating evidence BEFORE the hypothesis, since they are element-access-heavy loops over the same shape. Blocks L3 | L | todo | - | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
+| 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy. **ROOT-CAUSED 2026-09-09, no fix written**: the unboxed JIT `Kind` lattice has a `MapList` and a `SetList` but no list-of-lists, so `admit_make_list` refuses the row literal at `Op::MakeList` before any index runs and the function falls to the VM; "JIT-resistant" is retracted, it does not engage. **DEC-519's premise is also retracted** — none of the four widened rows has a two-level read; the census found four distinct causes and `strappend` COMPILES (so its loss is NOT JIT coverage; its actual cause is unexamined, out of scope). The FIX is a separate, unstarted decision awaiting a developer ruling on shape. Blocks L3 | L | doing | - | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
 | 5c | L4b — DEC-515: extend the lift tuple-field seed past PARAMS to `@var` locals and `foreach` binders over a keyed collection (140 reads / 16 files), and lift a keyed array literal in a named-tuple return position to a tuple literal (the write half), so `Classification.phg` CHECKS. Blocks L3 | M | todo | - | src/lift/lifter/decls/declarations.rs src/lift/lifter/decls/seed.rs src/lift/lifter/exprs.rs src/lift/lifter_tests_shapes.rs |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
 | 7 | L6 — `Core.Net` + `Core.Mime` + read-only `Core.Imap` with the file-backed `.eml` transport (readiness 14, DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
@@ -446,6 +458,21 @@ DEC-507 applies to every one.
 - L6 depends on L5 for alert-email parsing (an alert body IS an HTML document).
 
 ### Needs input
+- **L4c's FIX SHAPE — the one thing blocking L3 (root cause landed 2026-09-09; awaiting a ruling, fix unstarted).**
+  The cliff is a missing list-of-lists variant in the unboxed JIT `Kind` lattice. Sabotage proved a
+  one-line admission in `admit_make_list` does NOT work — it only moves the bail to `Op::Index` — so the
+  fix threads a new variant through every site that dispatches on `Kind::MapList` (10 non-test code sites
+  plus 5 doc-comment mentions: `analyze/kinds.rs`, `analyze/mod.rs`, `emit_unboxed/mod.rs`, `emit_unboxed/verticals*.rs`),
+  plus the entry-return/param ABI decode gate in `compile/mod.rs`. Open choices, none of them Claude's:
+  (a) INT-ONLY inner lists (narrowest, covers `nestedlist`/`namedtuplefield` and the lifted
+  `list<array{int,int}>`) vs a general element kind; (b) whether it is a new `Kind::ListList` or a
+  widening of the existing `DynList`; (c) whether the inner read reuses the `IntList` flat encoding.
+  Size is Medium-Large. Until this is ruled, L4c stays `doing` and **L3 remains blocked** per DEC-514.
+- **Quiet-box re-measure is OWED** before any ns/iter magnitude from 2026-09-09 is cited (DEC-507): the
+  box sat at load 17-22 under an unrelated 2h53m `php tools/phpunit.phar`. The QUALITATIVE result — the
+  jit/no-jit distributions overlap for `nestedlist` and do not overlap for `listindex` — is unaffected,
+  and the decline reasons are deterministic and need no re-measure at all.
+
 Banked Invariant-15 questions, to be asked when L7 reaches them (not before — the mechanical fixes in
 L1/L2/L4 will expose better-shaped versions of each):
 - **bare `array` with no docblock** (12 files) — scout is read-only, so the annotation route is closed.

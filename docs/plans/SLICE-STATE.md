@@ -86,7 +86,9 @@
 > - **DEC-519 — L4c's root-cause phase is WIDENED.** Rule 14 is untouched (no fix before the
 >   explanation), but the reproduce step now measures the carried OWED losses `fslines` 0.118,
 >   `queryparse` 0.225, `fsforeachline` 0.318 and `strappend` 0.436 alongside the `nestedlist` pair,
->   because they are element-access-heavy loops over the same shape. Shared cause ⇒ one fix moves
+>   because they are element-access-heavy loops over the same shape — ⚠ **RETRACTED 2026-09-09: that
+>   premise is FALSE for all four; the census found four distinct causes and `strappend` COMPILES.**
+>   Shared cause ⇒ one fix moves
 >   several OWED rows; no shared cause ⇒ a narrower hypothesis. Pairs with DEC-516 — same quiet box.
 
 Developer directive, 2026-09-07: explore `/stack/projects/scout` and *"use it to
@@ -176,8 +178,19 @@ oracle** → L5 HTML5 → L6 Net/Mime/Imap → L7 breadth census loop → L8 per
 > what L3 (the depth oracle) is blocked on. Three commits: the core language slice, the lift leg +
 > refusals, and format/LSP/editors. **NEXT: L4c, then L4b — and L3 is BLOCKED behind both** (ruled
 > 2026-09-09, DEC-514 + DEC-515). **L4c** root-causes phorj's two-level list element read before any
-> fix is written (Rule 14): 370 ns/iter against `listindex` 4.3, unexplained, not a deep copy,
-> JIT-resistant, and it is the exact `list<array{…}>` shape L3's own oracle would bench. **L4b**
+> fix is written (Rule 14): 370 ns/iter against `listindex` 4.3, not a deep copy, and it is the
+> exact `list<array{…}>` shape L3's own oracle would bench. **The root-cause phase is DONE (2026-09-09), no
+> fix written.** The origin is a hole in the unboxed JIT `Kind` lattice: it carries a `MapList`
+> (list-of-maps) and a `SetList` (list-of-sets) but NO list-of-lists, so `admit_make_list`
+> (`src/jit/analyze/kinds.rs:353-382`) refuses the row literal at `Op::MakeList` — before any index
+> executes — and with `run_unboxed` the only production JIT path there is no boxed fallback, so the
+> whole function runs on the VM. `listindex` compiles and emits no decline at all; `namedtuplefield`
+> declines with a BYTE-IDENTICAL message, so DEC-504's sugar is confirmed free. Sabotage-proved that
+> the fix is NOT one function: admitting the list at `admit_make_list` alone just moves the bail to
+> `Op::Index`. Two evidence clauses are RETRACTED — "JIT-resistant"/"the JIT engages without closing
+> it (7x)" (it does not engage) and DEC-519's "element-access-heavy loops over the same shape" (none
+> of the four has a two-level read; the census found FOUR distinct causes, and `strappend` COMPILES,
+> so its loss is NOT JIT coverage — what it IS was not examined here). Pinned by 4 tests in `src/jit/tests/decline_reasons.rs`. **L4b**
 > extends the lift tuple-field seed past PARAMS to `@var` locals and `foreach` binders over a keyed
 > collection (the 140 reads), and lifts a keyed array literal in a named-tuple return position to a
 > tuple literal, so `Classification.phg` — whose `toArray()` IS L3's four-leg contract — checks.

@@ -8,6 +8,33 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **DEC-514 / DEC-519 (lane L4c) — the two-level list element read is ROOT-CAUSED, and no fix is
+  written.** `nestedlist` 0.030x and `namedtuplefield` 0.027x vs docker php:8.5+JIT are one fact with
+  one cause: the unboxed JIT's `Kind` lattice has a `MapList` (list-of-maps) and a `SetList`
+  (list-of-sets) but **no list-of-lists**, so `admit_make_list` (`src/jit/analyze/kinds.rs:353-382`)
+  refuses the row literal at `Op::MakeList` — *before any index executes* — and because `run_unboxed`
+  is the only production JIT path (there is no boxed fallback), the whole function runs on the VM.
+  `listindex`, one index level, compiles and emits no decline at all. Captured on the production path
+  with `PHORJ_JIT_EXPLAIN=1`, so the reason is the shipped binary's, not a test harness's.
+  `namedtuplefield` declines with a **byte-identical** message, which is independent proof that
+  DEC-504's named-tuple sugar erases to exactly the ineligible shape and costs nothing at runtime.
+  Four tests in `src/jit/tests/decline_reasons.rs` pin the mechanism, the flat-list control, and the
+  list-of-maps asymmetry; sabotage showed they discriminate rather than merely asserting `is_err()` —
+  admitting the list at `admit_make_list` alone only MOVES the bail to `Op::Index`, which is why the
+  eventual fix is a lattice variant threaded through every `Kind::MapList` site (10 non-test code
+  sites, plus 5 doc-comment mentions), not a one-line admission. **Two prior evidence clauses are retracted** (the developer's
+  rulings stand; only Claude-written evidence was wrong): DEC-514's "the JIT engages without closing
+  it (7x from `--no-jit`)" — it does not engage, the jit and no-jit distributions overlap almost
+  entirely where `listindex`'s do not overlap at all — and DEC-519's "element-access-heavy loops over
+  the same shape", which is false for all four widened rows. The widening still paid off as ruled: a
+  decline census found **four distinct causes** — the `MakeList` hole; DEC-431's already-documented
+  `Const(Unit)` `throws` cliff for `fslines`/`fsforeachline`; an unsupported `Const(Bytes)` plus an
+  un-whitelisted `CallNative` for `queryparse`; and `strappend`, which **compiles**, so its 0.527 is
+  NOT a JIT-coverage loss and must not be folded into L4c — *why* it still loses was not
+  examined here and is out of L4c's scope. Absolute ns/iter magnitudes are
+  OWED a quiet-box re-measure: this box sat at load 17-22 under an unrelated 2h53m `phpunit` run, so
+  only the qualitative overlap/non-overlap is citable under DEC-507.
+
 - **DEC-505 as amended by DEC-512 — `<=>`, and ordering on tuples.** `a <=> b` yields `int`
   (`-1`/`0`/`1`) at the EQUALITY precedence tier, matching PHP (`1 < 2 <=> 0` is `(1 < 2) <=> 0`); `< > <= >=`
   additionally accept tuples of equal arity and compare them lexicographically. Both transpile to
