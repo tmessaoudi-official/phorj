@@ -20,14 +20,40 @@
 
 ## Decisions Log
 
-- [2026-09-09 14:05] AGREED: **DEC-514 — the nested-read cliff is FIXED BEFORE L3, root-cause first.**
+- [2026-09-09 11:52] AGREED: **DEC-516 — the microbench baseline is RE-EMITTED on dockerised
+  `php:8.5-cli`+JIT, and the gate REFUSES a debug PHP.** Found by a full rule-compliance review:
+  `bench/micro-baseline.json._baseline_php` names a phpbrew `php-8.5.8` that no longer exists on this
+  box, `--emit` rewrites all 53 rows in one run, and the gate's fallback accepts the surviving
+  `ZTS DEBUG GCOV` oracle because it JITs — the exact build DEC-507 calls invalid for a perf claim.
+  Supersedes DEC-423.1's local-php baseline. Needs a quiet box with docker.
+- [2026-09-09 11:52] AGREED: **DEC-517 — Invariant 17's 100% diagnostics rule is REOPENED; fixture the
+  four codes and correct the ledger.** The surface ratchet reports 317/321 (98%) and says so out loud;
+  the four unasserted codes are all of L2's — `E-ORDER-DECIMAL`, `E-ORDER-OPERANDS`,
+  `E-ORDER-TUPLE-SHAPE`, `E-SPACESHIP-OPERANDS` — while SLICE-STATE still says the rule is CLOSED and
+  L4's row reads `done` with its LSP references / document symbols / signature help unprobed.
+- [2026-09-09 11:52] AGREED: **DEC-518 — the rule-drift pass, all four items, one docs-only commit**,
+  ordered by operational bite: purge the retired DEC-387 plain-text protocol and the two `never push`
+  lines from MASTER-PLAN; ratify the certification tier; PREFIX `docs/INVARIANTS.md` as `T-1`…`T-14`
+  (amended from renumbering, so nothing existing is renamed); restate Invariant 13 as the ratchet the
+  size gate actually enforces (56 grandfathered over the hard cap).
+- [2026-09-09 11:52] AGREED: **DEC-519 — L4c's root-cause phase is WIDENED to the carried micro
+  losses.** Rule 14 unchanged; the reproduce step now measures `fslines` / `fsforeachline` /
+  `queryparse` / `strappend` alongside the `nestedlist` pair BEFORE the hypothesis is formed, because
+  they are element-access-heavy loops over the same shape. Lane order unchanged: L4c → L4b → L3.
+- ⚠ **Provenance correction (2026-09-09 11:52).** The two entries below were stamped `[2026-09-09
+  14:05]`, a time that had not yet occurred when they were written: the commit that recorded them,
+  `3d496a0e`, landed at **07:18** [Verified: `git log -1 --date=format 3d496a0e`]. The rulings
+  themselves are genuine — the developer answered them interactively — but the timestamp was not, and
+  Rule 17's resume check exists for exactly this. Both are re-stamped `07:18`.
+
+- [2026-09-09 07:18] AGREED: **DEC-514 — the nested-read cliff is FIXED BEFORE L3, root-cause first.**
   The DEC-507 escalation was posed with the re-measured pair (`namedtuplefield` 0.25×, erased-form
   control `nestedlist` 0.03×, VM legs 0.4% apart) and the developer ruled a new lane **L4c** on
   phorj's two-level list element read — 370 ns/iter against 4.3 one level, unexplained, not a deep
   copy, JIT-resistant. **L3 does not start until it closes.** This DEPARTS from the DEC-513 precedent
   deliberately: that residue was understood and attributed, this cliff is not, and L3's own oracle
   benches the exact `list<array{…}>` shape it appears on.
-- [2026-09-09 14:05] AGREED: **DEC-515 — the lift seed is extended NOW, before L3.** The wall fell and
+- [2026-09-09 07:18] AGREED: **DEC-515 — the lift seed is extended NOW, before L3.** The wall fell and
   the ceiling did not move: the rewrite is param-seeded and covers 0 of the 140 rewritable reads.
   Lane **L4b** extends it to `@var` locals and `foreach` binders over a keyed collection (reads) and
   to a keyed array literal in a named-tuple return position (writes), so `Classification.phg` — whose
@@ -376,12 +402,15 @@ DEC-507 applies to every one.
 | 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged. MEASURED A/B on one quiet box (K=15, core-pinned, interleaved, both legs proven by disassembly): 0.38x -> 0.46x, VM time -19.5%, STILL A LOSS at ~2.2x php -> OWED per DEC-365. The ruling's ~65% prediction did not hold: construction was ~a fifth of the tuple-vs-scalar gap, and the residue is per-element `compare_ord` dispatch inside the fused Op (compiler-reachable), NOT the `sortWith` callback | L | done | d4365564 | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
 | 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5b and 5c** (DEC-514 + DEC-515, 2026-09-09) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench. Wall-fall MEASURED on scout: 57/123 → 64/125, zero keyed-shape refusals, `Classification.php` lifts | L | done | 9b3e528c | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
-| 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy, JIT-resistant. Blocks L3 | L | todo | - | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg |
+| 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy, JIT-resistant. **WIDENED by DEC-519**: the reproduce step also measures the carried OWED losses `fslines` 0.118 / `queryparse` 0.225 / `fsforeachline` 0.318 / `strappend` 0.436 as corroborating evidence BEFORE the hypothesis, since they are element-access-heavy loops over the same shape. Blocks L3 | L | todo | - | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
 | 5c | L4b — DEC-515: extend the lift tuple-field seed past PARAMS to `@var` locals and `foreach` binders over a keyed collection (140 reads / 16 files), and lift a keyed array literal in a named-tuple return position to a tuple literal (the write half), so `Classification.phg` CHECKS. Blocks L3 | M | todo | - | src/lift/lifter/decls/declarations.rs src/lift/lifter/decls/seed.rs src/lift/lifter/exprs.rs src/lift/lifter_tests_shapes.rs |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
 | 7 | L6 — `Core.Net` + `Core.Mime` + read-only `Core.Imap` with the file-backed `.eml` transport (readiness 14, DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
 | 8 | L7 — breadth census loop to the stop condition: every file lifts or carries a named refusal with a DEC row | L | todo | - | src/lift/* examples/lift/scout/* |
 | 9 | L8 — perf twins: a fixture-driven benched scenario per lifted module, DEC-507 bar on every one | L | todo | - | bench/* |
+| 10 | DEC-516 — re-emit all 53 microbench rows on dockerised `php:8.5-cli`+JIT, core-pinned and interleaved on a quiet box (supersedes DEC-423.1's local-php baseline, whose binary no longer exists), and add a `PHP_DEBUG` refusal to the gate's resolution chain so a debug build can never become the baseline | M | todo | - | bench/micro-baseline.json scripts/microbench-gate.sh scripts/microbench.sh |
+| 11 | DEC-517 — fixture the four unasserted L2 ordering codes (`E-ORDER-DECIMAL` `E-ORDER-OPERANDS` `E-ORDER-TUPLE-SHAPE` `E-SPACESHIP-OPERANDS`), re-emit the surface-ratchet floor, correct SLICE-STATE's `311/311 CLOSED` claim to the live number, and restate L4's status row so it names the unprobed LSP surfaces | M | todo | - | conformance/* scripts/surface-baseline.txt docs/plans/SLICE-STATE.md |
+| 12 | DEC-518 — the rule-drift pass, one docs-only commit — `docs(rules): DEC-516…519 — a full rule-compliance review, and the drift pass lands`. All four landed: MASTER-PLAN's retired DEC-387 protocol replaced by the live rule with the retirement recorded (the two `never push` lines were ALREADY annotated as superseded — that half of the finding was overstated); the certification tier ratified IN the repo; `docs/INVARIANTS.md` prefixed `T-1`..`T-14`; Invariant 13 restated as the ratchet (`grandfathered=56 fails=0 warns=168`) | M | done | c39c74bd | docs/plans/MASTER-PLAN.md docs/INVARIANTS.md CLAUDE.md |
 <!-- /progress-block -->
 
 ### Blocked

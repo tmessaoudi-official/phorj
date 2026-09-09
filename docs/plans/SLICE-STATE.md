@@ -2,6 +2,42 @@
 
 ## ▶ CURRENT CURSOR (2026-09-07) — **scout is the forcing function. Plan: `docs/plans/2026-09-07-scout-forcing-function.plan.md`**
 
+
+> **▶ 2026-09-09 RULE-COMPLIANCE REVIEW — four rulings, DEC-516…519. Read these before picking up L4c.**
+> A full read of every rule surface (global framework, the 19 delivery invariants, `docs/INVARIANTS.md`,
+> the memory standing rules) against the live repo produced four developer rulings. None changes the
+> lane order; two add work ahead of it.
+>
+> - **DEC-516 — the G-8 baseline is RE-EMITTED on docker.** `bench/micro-baseline.json._baseline_php`
+>   names `/stack/tools/phpbrew/php/php-8.5.8/bin/php`, which **does not exist on this box**
+>   [Verified 2026-09-09], and `--emit` rewrites all 53 rows in one run — so the entire scorecard rests
+>   on one missing binary. Worse, the gate's fallback chain accepts the surviving oracle
+>   `PHP 8.5.9 (cli) (ZTS DEBUG GCOV)` because it JITs, and that is the exact build DEC-507 calls
+>   invalid for a perf claim. Re-emit on dockerised `php:8.5-cli`+JIT, core-pinned, on a quiet box, and
+>   add a `PHP_DEBUG` REFUSAL to the resolution chain. Supersedes DEC-423.1's local-php baseline.
+>   `scripts/microbench.sh:13` also still says docker is absent — docker 29.8.0 is installed.
+> - **DEC-517 — Invariant 17's 100% diagnostics rule REOPENED, and this file said otherwise.**
+>   `scripts/surface-ratchet.sh` prints **317/321 asserted (98%) — the 100% RULE is NOT met yet**
+>   [Verified 2026-09-09, ran it]. The four unasserted codes are **all four of L2's**:
+>   `E-ORDER-DECIMAL`, `E-ORDER-OPERANDS`, `E-ORDER-TUPLE-SHAPE`, `E-SPACESHIP-OPERANDS`. The Lane B-2
+>   note below still reads *311/311 … CLOSED* — that was true when written and is not true now, because
+>   the rule reopens every time a slice lands a code without a fixture. Fixture the four, re-emit the
+>   floor, and correct both this claim and L4's `done` row, which stands while this file's own LSP
+>   paragraph says references / document symbols / signature help on `t.bp` were never probed.
+> - **DEC-518 — the rule-drift pass**, one docs-only commit: purge MASTER-PLAN's retired DEC-387
+>   *plain-text questions only* protocol (`:1113`) and its two `never push` lines (both superseded, both
+>   still live text in the roadmap SSOT — an Invariant 19 breach in the file Invariant 19 names first);
+>   ratify the certification tier the `autonomous-3c-bypass` sentinel has been deciding for three weeks;
+>   **prefix `docs/INVARIANTS.md` as `T-1`…`T-14`** because its numbering COLLIDES with CLAUDE.md's
+>   (CLAUDE.md 7 = the CTy-operand trap, INVARIANTS.md 7 = the one-`Diagnostic` rule; 13 collides too;
+>   only 1, 2 and 11 align, and every citation in these plans uses CLAUDE.md's scheme); and restate
+>   Invariant 13 as the ratchet the size gate really enforces — `grandfathered=56 fails=0 warns=168`.
+> - **DEC-519 — L4c's root-cause phase is WIDENED.** Rule 14 is untouched (no fix before the
+>   explanation), but the reproduce step now measures the carried OWED losses `fslines` 0.118,
+>   `queryparse` 0.225, `fsforeachline` 0.318 and `strappend` 0.436 alongside the `nestedlist` pair,
+>   because they are element-access-heavy loops over the same shape. Shared cause ⇒ one fix moves
+>   several OWED rows; no shared cause ⇒ a narrower hypothesis. Pairs with DEC-516 — same quiet box.
+
 Developer directive, 2026-09-07: explore `/stack/projects/scout` and *"use it to
 test/validate/certify/review/audit/modify/enrich/improve phorj in a way that i will be able to do a
 phorj version of it"*, then — *"include everything! the phorj version must beat php in everything

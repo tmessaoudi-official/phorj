@@ -1,11 +1,20 @@
 # Phorj Invariants
 
+> **Numbering: `T-n` (technical), prefixed 2026-09-09 by DEC-518 — and it is NOT the same scale as
+> `CLAUDE.md`'s delivery invariants.** The two lists were both numbered 1..n and the numbers COLLIDED:
+> `CLAUDE.md` 7 is the **CTy-operand trap**, this file's 7 is **one `Diagnostic`**; 13 collides too
+> (file-size caps vs the JIT sticky-flag rule). Only 1, 2 and 11 ever aligned. Every citation in
+> `SLICE-STATE.md`, the plans and the register uses **`CLAUDE.md`'s** scale — so "the Invariant-7 trap"
+> means the CTy trap, never `T-7`. The prefix was chosen over a renumbering so that nothing already
+> written is renamed and the JIT rule keeps its identity as `T-13`.
+
+
 The load-bearing rules that keep Phorj correct. Each is non-obvious, easy to break with a
 plausible-looking change, and enforced somewhere concrete. Read this before touching the backends,
 the value kernels, or the `Op` set. (Companion to `docs/ARCHITECTURE.md` for the layout, and the
 frozen design records in `docs/specs/`.)
 
-## 1. Backend parity is the spine — `run --tree-walker` ≡ `run` (the VM), byte-identical
+## T-1. Backend parity is the spine — `run --tree-walker` ≡ `run` (the VM), byte-identical
 The tree-walking interpreter (`phg run --tree-walker`) and the bytecode VM (`phg run`, the
 default engine) must produce
 **identical stdout *and* identical failure behaviour** for every program. This is the project's
@@ -29,12 +38,12 @@ central correctness contract.
     round-trip). The object-file section readers (ELF/PE/Mach-O/fat) honor **EV-7**: every offset uses
     checked arithmetic, and malformed/adversarial images return `None`, never a panic or OOB read.
 
-## 2. The interpreter is the reference oracle
+## T-2. The interpreter is the reference oracle
 When the VM and the interpreter disagree, the **interpreter is right by definition** — it is the
 older, simpler implementation and the semantics of record. New VM behaviour is validated *against*
 the interpreter, never the reverse.
 
-## 2b. Mechanical exhaustiveness covers `Expr` / `Stmt` / `Pattern`, not just `Op` (DEC-356)
+## T-2b. Mechanical exhaustiveness covers `Expr` / `Stmt` / `Pattern`, not just `Op` (DEC-356)
 A new `Op` variant must extend three exhaustive, wildcard-free matches (Invariant 3 below / rule 3 in
 `CLAUDE.md`). **The identical rule now applies to `Expr` (37 variants), `Stmt` (15) and `Pattern` (11) — and,
 since CD-31 (2026-09-02), to `Item` (8): the item-level walks that dispatch on `Item` carry explicit arms,
@@ -53,7 +62,7 @@ since CD-31 (2026-09-02), to `Item` (8): the item-level walks that dispatch on `
   domain is checker-CONSTRUCTED replacement shapes, not user AST. Full rule:
   `docs/specs/UNIFIED-SPEC.md#mechanical-exhaustiveness-for-exprstmtpattern`.
 
-## 3. Arithmetic & comparison are single-sourced in `src/value/`
+## T-3. Arithmetic & comparison are single-sourced in `src/value/`
 The checked integer kernels (`int_add/sub/mul/div/rem/neg → Result<i64, String>`), the float
 kernels (`float_*`), and `compare_ord` live **once**, in `src/value/` (the checked kernels + canonical fault consts in
 `src/value/arith.rs`). Both backends call them.
@@ -91,12 +100,12 @@ fault** (`FAULT_INT_OVERFLOW`, EV-7 — never a silent wrap, unlike PHP which au
 value (M-NUM S1). Conversions between these are **explicit** natives (`Core.Conversion`) — there is no
 implicit coercion.
 
-## 4. Float display parity — `12.0` renders as `"12"`
+## T-4. Float display parity — `12.0` renders as `"12"`
 `printLine`/interpolation render via `Value::as_display`, which formats floats with Rust `{}`
 (`12.0 → "12"`, design rule EV-6). Both backends use the same method, so the transpiled PHP and
 both runtimes agree. Don't introduce a second formatting path.
 
-## 5. Adding an `Op` variant requires its match arm in the same commit
+## T-5. Adding an `Op` variant requires its match arm in the same commit
 A new `Op` touches **three** match surfaces, and as of M9 **all three are exhaustive (no `_`
 wildcard)** — so a missing arm is a *compile error*, never a silent hole:
 - `vm::Vm::exec_op` (`src/vm/exec.rs:9`) — the per-op execution semantics (irreducibly per-`Op`).
@@ -111,7 +120,7 @@ A new `Op` that carries a *pool* index (`Const`, `Call`, jumps, `MakeInstance`/`
 `MakeClosure`, …) must add its bounds arm to `validate`; one that carries only a count or local slot
 goes in the no-index arm. Either way the compiler now refuses to build until you choose.
 
-## 6. No crash on input (EV-7)
+## T-6. No crash on input (EV-7)
 Malformed or adversarial `.phg` must exit 1 with a clean `Diagnostic`, **never** SIGABRT/panic.
 - The whole pipeline runs on a 256 MB worker thread (`cli::on_deep_stack`) so the *explicit* depth
   limits — not Rust's ambient stack — bound recursion.
@@ -121,7 +130,7 @@ Malformed or adversarial `.phg` must exit 1 with a clean `Diagnostic`, **never**
 - `BytecodeProgram::validate` turns would-be out-of-range panics into clean errors before the VM
   runs a single op.
 
-## 7. Errors are one `Diagnostic`; backend position-asymmetry is deliberate
+## T-7. Errors are one `Diagnostic`; backend position-asymmetry is deliberate
 All stages produce `diagnostic::Diagnostic { stage, message, line, col }`. `Display` has three
 forms (`line==0` → no position; `col==0` → `at <line>` (VM runtime); else `at <line>:<col>`
 (front-end)). Both backends now attach a source line to runtime faults (the VM via
@@ -134,18 +143,18 @@ because the interpolation sub-tokenizer restarts at 1:1 and the parser re-based 
 green. (The earlier diagnosis — "needs VM debug symbols, W5-13" — was wrong; W5-13 stays queued for
 named locals / DAP, not for this.)
 
-## 8. Determinism — sort `HashMap`-derived lists before rendering
+## T-8. Determinism — sort `HashMap`-derived lists before rendering
 Any user-facing list built from `HashMap`/`HashSet` iteration must be sorted before `join`, or the
 output varies with the hash seed. Live example: the non-exhaustive-`match` error in `src/checker/`
 sorts the missing-variant list. New diagnostics that enumerate map keys must do the same.
 
-## 9. The AST is untyped; backends re-derive types
+## T-9. The AST is untyped; backends re-derive types
 The checker validates **without annotating** the AST. Backends that need a type re-derive it
 structurally from the declared `Type` annotations — the compiler via `compiler::CTy` + `ctype`/
 `num_ty` (M2 Wave 4 made this class-aware: `CTy::Class(name)` carries an instance's class so
 `obj.field`/`obj.m()`/class-typed payloads resolve). Don't assume a node carries a resolved type.
 
-## 10. The quality gate is a compile-time + pre-commit invariant
+## T-10. The quality gate is a compile-time + pre-commit invariant
 `#![deny(unsafe_code)]` on both crate roots (relaxed from `forbid` for the JIT: its
 finalize→transmute→fn-ptr `unsafe` is the sole first-party island, confined to `src/jit/` behind the
 CI `unsafe-island` gate); `[lints] warnings = "deny"` + `clippy.all = "deny"` in `Cargo.toml` (so a
@@ -158,12 +167,12 @@ Green means: `cargo test` + `cargo clippy --all-targets` + `cargo fmt --check` +
 native codegen; additionally verify the jit-off path with `cargo check --no-default-features` (with
 `jit` off the only way to build, that path can otherwise bit-rot).
 
-## 11. No perf change without a measured before/after
+## T-11. No perf change without a measured before/after
 `phg benchmark <file>` (median-of-N, output-identity gated) is the baseline tool. Any
 perf-motivated change (Copy-on-`Op`, deep-copy elimination, dispatch tweaks) must ship with a
 before/after number from it — perf claims are **Verified**, not asserted.
 
-## 12. Keyword-vs-import 3-way rule — "nothing in the wind" is about *symbols*, not *grammar*
+## T-12. Keyword-vs-import 3-way rule — "nothing in the wind" is about *symbols*, not *grammar*
 Phorj's namespace decision ("everything namespaced, nothing in the wind") governs **symbols**
 (functions and user/library types), never the **type grammar**. There are exactly three tiers, and
 the boundary is not negotiable per-file:
@@ -190,7 +199,7 @@ Corollary (rejected designs, M-DOGFOOD): **no forced import of primitives** and 
 primitives-in-generics already work (`List<int>`), and `decimal` is already a primitive. A wrapper
 tier would be Java autoboxing: redundant capability plus surprise.
 
-## 13. JIT unboxed speculation — every faulting op sets sticky OR branches to code 5 (MUST-CHECK)
+## T-13. JIT unboxed speculation — every faulting op sets sticky OR branches to code 5 (MUST-CHECK)
 The unboxed JIT codegen (`build_body_unboxed`, `--features jit`) is **speculative**: int arithmetic
 uses WRAPPING ops and records overflow in a sticky-flag Cranelift `Variable` instead of branching
 per-op (the "ovf-spec" slice). Correctness rests on a coupling invariant, the same class as the
@@ -228,7 +237,7 @@ byte-identity bug). Both limits lift once param types are threaded into the byte
 `Float` and records `Compiled.ret_kind` (asserted consistent across all reachable entry Returns) — the
 sole signal telling `run_unboxed` to decode the i64 return as `Value::Float(from_bits)` vs `Value::Int`.
 
-## 14. Standing rules from the 2026-07-16 full-reopen audit (delivery invariants 13/16/17/18 in CLAUDE.md)
+## T-14. Standing rules from the 2026-07-16 full-reopen audit (delivery invariants 13/16/17/18 in CLAUDE.md)
 
 Recorded here so this file stays the one-stop invariant read; the normative text lives in
 `CLAUDE.md` (invariants 13, 16–18) and the rulings in `C-decisions.md` §2026-07-16.

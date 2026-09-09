@@ -106,7 +106,21 @@ stay in `.claude/agents/`.
 
 ## Certification ladder (DEC-268, 2026-07-16 — governs every 3C/6C gate in this project)
 
-**MAXIMAL tier, all task sizes.** Every 3C pre-work and every 6C pre-completion gate = a
+> ⚖️ **RATIFIED 2026-09-09 (DEC-518) — what actually runs, and why it is not what this section says.**
+> The MAXIMAL tier below has NOT been the live practice since 2026-08-19. Two things override it, and
+> both were previously recorded only outside the repo, which is why a reader of this file could not
+> tell: (1) the **economize ruling** — one `advisor()` call per ordinary 3C/6C gate, and the full
+> 3-lens panel ONCE at a milestone boundary against a FROZEN commit, with docs-only batches carving
+> out entirely (path-based `git diff --name-only`, no executable surface ⇒ no panel); (2) a
+> project-scope **`autonomous-3c-bypass`** sentinel, which suppresses the per-gate tier question
+> altogether and runs `advisor()` only. Between gates the refuting is done by EXECUTABLE evidence —
+> failing test first, confirmed red for the stated reason, then a sabotage/mutation check proving the
+> suite would notice the guarantee breaking — which is the part that is genuinely non-negotiable here.
+> The MAXIMAL text below stands as the tier to RECOMMEND at a milestone boundary and as the ceiling
+> the developer can call for at any gate; it is no longer read as the per-task default.
+
+**MAXIMAL tier, all task sizes** (see the ratification note directly above — this is the milestone
+ceiling, not the per-task default)**.** Every 3C pre-work and every 6C pre-completion gate = a
 **3-lens fresh-context reviewer PANEL** (correctness+regression / security+safety-promises /
 completeness+blast-radius), each lens adversarial and **evidence-based** (the reviewer reads the
 actual diff/tests/specs itself — never certify from the author's narrative). **TWO consecutive
@@ -257,6 +271,14 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
     pattern, `pub(super)` for moved methods) — never by line count alone; genuinely-cohesive
     exhaustive-match units comply via index/dispatcher patterns. Applies to new code immediately,
     to existing files as M-Decomp reaches them.
+    **What `scripts/size-gate.sh` ACTUALLY enforces is a RATCHET, not a cap** (stated here by
+    DEC-518, 2026-09-09, because the wording above had been read as a live 500-line ceiling):
+    it fails only on a NEW or GROWING hard-cap breach, and today reports
+    `grandfathered=56 fails=0 warns=168` [Verified 2026-09-09] — i.e. **56 files are permanently
+    over the 500 hard cap and 168 over the 300 soft cap**, and the gate is green. So the caps bind
+    every file you TOUCH and every file you ADD; they do not describe the tree as it stands. Do not
+    cite "hard cap 500" as a property of this repo, and do not add a grandfathered entry — the
+    ratchet only ever tightens.
 14. **THE LADDER RULE** (ratified 2026-07-02 — governs every feature with no PHP analog).
     When a feature has no faithful idiomatic PHP mapping, SURFACE it to the developer with a
     ladder analysis — never decide alone. Ladder: (1) faithful idiomatic PHP exists → transpile;
@@ -329,7 +351,9 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
 - **THE ROADMAP (single source of truth):** `docs/plans/MASTER-PLAN.md` — waves 0–6, stdlib
   charter, percentage ledger, rejected-with-reasons appendix. Read it before starting any work.
 - **Correctness invariants (detail):** `docs/INVARIANTS.md` — read before touching backends,
-  value kernels, or the `Op` set.
+  value kernels, or the `Op` set. Its entries are numbered **`T-1`…`T-14`** (DEC-518, 2026-09-09):
+  a DIFFERENT scale from the delivery invariants above, which used to collide with it number-for-number.
+  "Invariant N" anywhere in this repo means the delivery invariant; `T-N` means the technical one.
 - **Architecture / module map:** `docs/ARCHITECTURE.md`.
 - **Language surface:** `FEATURES.md` + `examples/README.md` (living showcase);
   frozen designs in `docs/specs/`.
