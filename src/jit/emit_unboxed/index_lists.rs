@@ -167,3 +167,31 @@ pub(super) fn arm_index_str_list(
     let res = b.block_params(merge)[0];
     ub_push(b, vars, fvars, kinds, res, Kind::Str(Own::Owned))
 }
+
+/// `Op::Index` over every COLLECTION receiver — the single dispatch point (M-Decomp, Invariant 13:
+/// five near-identical guarded match arms in `mod.rs`, collapsed). The order is load-bearing and
+/// matches the arms it replaces: a `Str` on TOP is a map key, otherwise the receiver kind two down
+/// selects the read and `StrList` is the fallback. The lever-3 `IterPtr` pointer walk is NOT here —
+/// it is inline IR for a different vertical and stays in `mod.rs`, matched before this arm.
+#[allow(clippy::too_many_arguments)] // emit plumbing
+pub(super) fn arm_index_dispatch(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    proven: bool,
+) -> Result<(), JitError> {
+    // P-2b: string-keyed map lookup (`m[k]` → Int) — the inline bucket probe.
+    if matches!(kinds.last(), Some(Kind::Str(_))) {
+        return arm_index_map(b, ec, h, vars, fvars, kinds);
+    }
+    match kinds.get(kinds.len().wrapping_sub(2)) {
+        // P-2c: int-list element read (`xs[i]` → Int, raw i64 at slot bytes 0..8).
+        Some(Kind::IntList(_)) => arm_index_int_list(b, ec, h, vars, fvars, kinds, proven),
+        Some(Kind::MapList(_)) => arm_index_map_list(b, ec, vars, fvars, kinds, proven),
+        Some(Kind::SetList(_)) => arm_index_set_list(b, ec, vars, fvars, kinds, proven),
+        _ => arm_index_str_list(b, ec, h, vars, fvars, kinds, proven),
+    }
+}

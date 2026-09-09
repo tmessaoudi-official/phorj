@@ -15,6 +15,7 @@ mod ec;
 mod enums;
 mod index_lists;
 mod list_contains;
+mod make_seq;
 mod objects;
 mod refs;
 mod scalar;
@@ -29,6 +30,7 @@ use concat::*;
 use ec::*;
 use enums::*;
 use index_lists::*;
+use make_seq::*;
 use objects::*;
 use refs::*;
 use scalar::*;
@@ -503,40 +505,12 @@ pub(super) fn build_body_unboxed(
                 let x = b.ins().load(types::I64, MemFlagsData::new(), pv, 0);
                 ub_push(&mut b, &vars, &fvars, &mut kinds, x, Kind::Int)?;
             }
-            Op::Index if matches!(kinds.last(), Some(Kind::Str(_))) => {
-                // P-2b: string-keyed map lookup (`m[k]` → Int) — the inline bucket probe.
-                let h = ub_ref(ub_refs.as_ref(), "Index(map)")?;
-                arm_index_map(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
-            }
-            // P-2c: int-list element read (`xs[i]` → Int, raw i64 at slot bytes 0..8).
-            Op::Index
-                if matches!(
-                    kinds.get(kinds.len().wrapping_sub(2)),
-                    Some(Kind::IntList(_))
-                ) =>
-            {
-                let h = ub_ref(ub_refs.as_ref(), "Index(int)")?;
-                arm_index_int_list(&mut b, &ec, h, &vars, &fvars, &mut kinds, proven_ops[ip])?;
-            }
-            Op::Index
-                if matches!(
-                    kinds.get(kinds.len().wrapping_sub(2)),
-                    Some(Kind::MapList(_))
-                ) =>
-            {
-                arm_index_map_list(&mut b, &ec, &vars, &fvars, &mut kinds, proven_ops[ip])?;
-            }
-            Op::Index
-                if matches!(
-                    kinds.get(kinds.len().wrapping_sub(2)),
-                    Some(Kind::SetList(_))
-                ) =>
-            {
-                arm_index_set_list(&mut b, &ec, &vars, &fvars, &mut kinds, proven_ops[ip])?;
-            }
+            // Every other `Op::Index` dispatches on the RECEIVER kind — map probe, int-list,
+            // map-list, set-list, str-list fallback — in `index_lists::arm_index_dispatch`, which
+            // preserves this arm order verbatim (M-Decomp, Invariant 13).
             Op::Index => {
                 let h = ub_ref(ub_refs.as_ref(), "Index")?;
-                arm_index_str_list(&mut b, &ec, h, &vars, &fvars, &mut kinds, proven_ops[ip])?;
+                arm_index_dispatch(&mut b, &ec, h, &vars, &fvars, &mut kinds, proven_ops[ip])?;
             }
             Op::IterElems
                 if matches!(kinds.last(), Some(Kind::IntList(Own::Borrowed)))
