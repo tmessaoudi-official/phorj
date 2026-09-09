@@ -8,6 +8,49 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Added
 
+- **DEC-520 (lane L4c) — `List<List<int>>` now compiles and runs NATIVELY in the unboxed JIT.**
+  The cliff root-caused in the entry below was a hole in the `Kind` lattice: it carried a `MapList`
+  (list-of-maps) and a `SetList` (list-of-sets) but no list-of-lists, so `admit_make_list` refused
+  the row literal at `Op::MakeList` and the whole function fell to the VM. `Kind::IntListList(Own)`
+  fills it, INT-ONLY and one level deep as ruled, and the inner read costs nothing new: the outer
+  `Index` loads the inner handle word behind a runtime guard (`UB_TAG_FLAT` set with `UB_TAG_SLOT`
+  CLEAR — a flat map or set sets BOTH, so the encodings discriminate) and pushes it as an OWNED
+  `Kind::IntList`, which sends `rows[i][j]` straight into the existing flat int-list read. The
+  OWNED push is aliasing-safe because a sealed flat list is immutable and bump-pinned: its release
+  no-ops, `Set.of` seals to a fresh base, and both list-append paths COPY out of a flat word rather
+  than writing into it — all six consumers were grep-verified rather than inherited from the
+  `MapList` precedent.
+  Threads 12 non-test code sites across 4 files. The entry-return ABI gate in `compile/mod.rs`
+  needed no edit — it is an allow-list — and the analyze `Return` arm now rejects the kind
+  explicitly as well, mirroring `MapList`. The kind stays OUT of `is_list_kind` and out of
+  `GetLocal`'s `movable` set, so it is narrow by construction: never a param, a call argument or a
+  return.
+  The four decline pins in `src/jit/tests/decline_reasons.rs` FLIPPED exactly as their own
+  doc-comment instructed — they now assert that the function compiles, that it runs natively
+  (`hits > 0` against the same `JitCache` the `phg run` hook uses) and that its output equals the
+  interpreter oracle — and a fifth pins the KEPT boundary: a third nesting level and
+  `List<List<string>>` still decline at `MakeList`, with the message naming the refused kind. Two
+  sabotages: dropping the `all_intlist` admission reds four tests; INVERTING the inner-word FLAT
+  guard reds exactly the two `hits > 0` assertions while `compile_unboxed` still succeeds and
+  byte-identity still holds through the VM redo — which is what proves `hits > 0` is the
+  load-bearing half rather than decoration.
+  **No perf number is claimed.** The before/after is OWED under DEC-507 / Invariant 11: the box
+  read a 1-minute load of 20.07 during this build, and `bench/micro-baseline.json` is untouched
+  (DEC-365 — never re-emit to "check" something). `nestedlist` and `namedtuplefield` stay at their
+  recorded 0.030 / 0.027 OWED rows until a quiet box re-measures them; unlike DEC-516's case, a
+  loss→WIN there would be legitimate, because this IS a phorj fix rather than a corrected baseline.
+  Engine-internal with no language surface, so Invariant 9 (example) and Invariant 17 (LSP/editors)
+  do not apply — the two microbenches are the artifact. **L4c CLOSES; L3 is still blocked behind
+  L4b** (DEC-519's lane order is untouched).
+
+- **`refactor(jit)` prerequisite, landed as its own commit so a regression is attributable.**
+  `emit_unboxed/mod.rs` (1658) and `emit_unboxed/verticals.rs` (944) both sat at their size-gate
+  baselines with ZERO headroom, which DEC-520's ruling did not account for. `arm_make_list` +
+  `arm_make_map` moved verbatim into a new `emit_unboxed/make_seq.rs` (944 → 812), and the five
+  collection `Op::Index` arms collapsed into `index_lists::arm_index_dispatch` preserving their
+  order verbatim (1658 → 1632). The lever-3 `IterPtr` pointer walk stayed inline in `mod.rs` — it
+  is IR for a different vertical, not a collection read.
+
 - **DEC-514 / DEC-519 (lane L4c) — the two-level list element read is ROOT-CAUSED, and no fix is
   written.** `nestedlist` 0.030x and `namedtuplefield` 0.027x vs docker php:8.5+JIT are one fact with
   one cause: the unboxed JIT's `Kind` lattice has a `MapList` (list-of-maps) and a `SetList`

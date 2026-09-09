@@ -1064,6 +1064,12 @@ pub(super) fn unboxed_analyze(
                             // aliasing-safe.
                             Some(Kind::MapList(_)) => kinds.push(Kind::StrIntMap(Own::Owned)),
                             Some(Kind::SetList(_)) => kinds.push(Kind::IntSet(Own::Owned)),
+                            // DEC-520: the loaded word is runtime-guarded a FLAT INT list
+                            // (`UB_TAG_FLAT` set, `UB_TAG_SLOT` clear), which is immutable and
+                            // bump-pinned, so an OWNED push is aliasing-safe for the same reason
+                            // MapList/SetList's is — release no-ops on FLAT and every append path
+                            // copies out of it rather than into it.
+                            Some(Kind::IntListList(_)) => kinds.push(Kind::IntList(Own::Owned)),
                             other => {
                                 return Err(JitError::Unsupported(format!(
                                     "unboxed Index receiver kind {other:?}"
@@ -1679,6 +1685,7 @@ pub(super) fn unboxed_analyze(
                             | Kind::StrList(Own::Borrowed)
                             | Kind::StrIntMap(Own::Borrowed)
                             | Kind::IntList(Own::Borrowed)
+                            | Kind::IntListList(Own::Borrowed)
                             | Kind::DynList(Own::Borrowed)
                             | Kind::Inst(_, Own::Borrowed)
                     ) {
@@ -2284,6 +2291,14 @@ pub(super) fn unboxed_analyze(
                         Kind::MapList(_) => {
                             return Err(JitError::Unsupported(
                                 "unboxed: List<Map> (MapList) return (deferred)".to_string(),
+                            ));
+                        }
+                        // DEC-520: same argument again — a list of int-list WORDS has no
+                        // VM-hook decode, so it never escapes the compiled function.
+                        Kind::IntListList(_) => {
+                            return Err(JitError::Unsupported(
+                                "unboxed: List<List<int>> (IntListList) return (deferred)"
+                                    .to_string(),
                             ));
                         }
                         // W7: a Dyn return has no single-kind decode on the caller side —

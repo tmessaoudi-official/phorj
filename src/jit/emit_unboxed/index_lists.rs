@@ -192,6 +192,56 @@ pub(super) fn arm_index_dispatch(
         Some(Kind::IntList(_)) => arm_index_int_list(b, ec, h, vars, fvars, kinds, proven),
         Some(Kind::MapList(_)) => arm_index_map_list(b, ec, vars, fvars, kinds, proven),
         Some(Kind::SetList(_)) => arm_index_set_list(b, ec, vars, fvars, kinds, proven),
+        Some(Kind::IntListList(_)) => arm_index_int_list_list(b, ec, vars, fvars, kinds, proven),
         _ => arm_index_str_list(b, ec, h, vars, fvars, kinds, proven),
     }
+}
+
+/// `Op::Index` over a [`Kind::IntListList`] — the OUTER read of a `List<List<int>>` (DEC-520,
+/// lane L4c). Structurally the [`arm_index_map_list`] shape: bounds check + one load of the inner
+/// INT-LIST handle word out of the outer flat list, then a tag guard on that word.
+///
+/// The guard is `word & (UB_TAG_SLOT | UB_TAG_FLAT) == UB_TAG_FLAT` — `FLAT` set with `SLOT`
+/// CLEAR, the runtime's own flat-int-list discriminator (`handles/mod.rs::list_values`). A flat
+/// MAP or SET word sets BOTH bits, and an ACL builder record sets neither, so all three fail it →
+/// code 5 → the byte-identical VM redo, exactly as a boxed map element does under `MapList`. That
+/// is what keeps the OWNED push aliasing-safe: a sealed flat list is immutable and bump-pinned, so
+/// its release no-ops and every append path copies out of it.
+///
+/// There is no companion inner arm: the pushed [`Kind::IntList`] sends `rows[i][j]` straight to
+/// [`arm_index_int_list`], which already reads a flat int list inline.
+pub(super) fn arm_index_int_list_list(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    proven: bool,
+) -> Result<(), JitError> {
+    let (iv, ik) = ub_pop(b, vars, fvars, kinds)?;
+    let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
+    if ik != Kind::Int || !matches!(lk, Kind::IntListList(_)) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Index operand kinds ({lk:?}[{ik:?}])"
+        )));
+    }
+    let flat_bit = b.ins().band_imm_s(lv, UB_TAG_FLAT);
+    let not_flat = b.ins().icmp_imm_s(IntCC::Equal, flat_bit, 0);
+    ec.fault_if(b, not_flat, 5); // boxed outer scratch (arena exhaustion) → VM redo
+    if !proven {
+        let cnt_raw = b.ins().ushr_imm_s(lv, 40);
+        let cnt = b.ins().band_imm_s(cnt_raw, 0xFFFFF);
+        let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
+        ec.fault_if(b, oob, 5);
+    }
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let base = b.ins().band_imm_s(lv, UB_IDX_MASK);
+    let slot = b.ins().iadd(base, iv);
+    let soff = b.ins().ishl_imm_s(slot, 6);
+    let addr = b.ins().iadd(buf, soff);
+    let word = b.ins().load(types::I64, MemFlagsData::new(), addr, 0);
+    let wtag = b.ins().band_imm_s(word, UB_TAG_SLOT | UB_TAG_FLAT);
+    let wbad = b.ins().icmp_imm_s(IntCC::NotEqual, wtag, UB_TAG_FLAT);
+    ec.fault_if(b, wbad, 5);
+    ub_push(b, vars, fvars, kinds, word, Kind::IntList(Own::Owned))
 }

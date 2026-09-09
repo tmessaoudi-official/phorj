@@ -74,6 +74,22 @@ pub(in crate::jit) enum Kind {
     /// tag guard on the loaded word; a sealed flat set is immutable + bump-pinned, so an OWNED
     /// aliased copy is sound). Never a param / call-arg / return.
     SetList(Own),
+    /// A `List<List<int>>` handle (DEC-520, lane L4c — the `nestedlist` / `namedtuplefield`
+    /// two-level element read `rows[idx][1]`): the exact [`Kind::MapList`] discipline over INT-LIST
+    /// handle words. Produced ONLY by `MakeList` over `IntList` operands, consumed ONLY by `Index`,
+    /// which runtime-guards the loaded word as a flat INT list (`UB_TAG_FLAT` set with
+    /// `UB_TAG_SLOT` CLEAR — a flat map/set sets BOTH, so the encodings discriminate) and pushes it
+    /// as an OWNED [`Kind::IntList`]: a sealed flat list is immutable + bump-pinned, so every
+    /// consumer of that aliased "owned" copy is sound (release no-ops on FLAT, `Set.of` seals to a
+    /// FRESH base, and both list-append paths COPY out of a flat word rather than writing into it).
+    ///
+    /// INT-ONLY and ONE level deep, deliberately: an inner list-of-lists word carries the SAME
+    /// `FLAT`-with-`SLOT`-clear encoding as a flat int list, so a third level could not be told
+    /// apart at the load; and a `List<List<string>>` element read would have to mint an owned `Str`
+    /// out of a bump-pinned slot. Both still decline at `MakeList` — pinned by
+    /// `jit::tests::decline_reasons::a_third_level_and_a_string_inner_list_still_decline_at_make_list`.
+    /// Never a param / call-arg / return (rejected like [`Kind::MapList`]).
+    IntListList(Own),
     /// An enum value with AT MOST ONE `Int` payload (the enum vertical), realized as TWO i64
     /// register words: the payload in the I64 space (`vars[d]`, filler 0 for a zero-payload
     /// variant) and the VARIANT TAG (its `enum_descs` index) in the tag space (`evars[d]`).
@@ -237,6 +253,7 @@ impl Kind {
                 | Kind::IntSet(_)
                 | Kind::MapList(_)
                 | Kind::SetList(_)
+                | Kind::IntListList(_)
                 | Kind::DynList(_)
                 | Kind::Inst(..)
                 | Kind::JMap(_)
@@ -256,6 +273,7 @@ impl Kind {
                 | Kind::IntSet(Own::Owned)
                 | Kind::MapList(Own::Owned)
                 | Kind::SetList(Own::Owned)
+                | Kind::IntListList(Own::Owned)
                 | Kind::DynList(Own::Owned)
                 | Kind::Inst(_, Own::Owned)
                 | Kind::JMap(Own::Owned)
@@ -275,6 +293,7 @@ pub(in crate::jit) fn borrowed_copy(k: Kind) -> Kind {
         Kind::IntSet(o) => Kind::IntSet(o.borrow_of()),
         Kind::MapList(o) => Kind::MapList(o.borrow_of()),
         Kind::SetList(o) => Kind::SetList(o.borrow_of()),
+        Kind::IntListList(o) => Kind::IntListList(o.borrow_of()),
         Kind::StrIntMap(o) => Kind::StrIntMap(o.borrow_of()),
         Kind::Inst(c, o) => Kind::Inst(c, o.borrow_of()),
         Kind::DynList(o) => Kind::DynList(o.borrow_of()),
@@ -322,6 +341,7 @@ pub(in crate::jit) fn join_kind(a: Kind, b: Kind) -> Option<Kind> {
         (Kind::IntSet(x), Kind::IntSet(y)) => join_own(x, y).map(Kind::IntSet),
         (Kind::MapList(x), Kind::MapList(y)) => join_own(x, y).map(Kind::MapList),
         (Kind::SetList(x), Kind::SetList(y)) => join_own(x, y).map(Kind::SetList),
+        (Kind::IntListList(x), Kind::IntListList(y)) => join_own(x, y).map(Kind::IntListList),
         (Kind::Inst(c1, x), Kind::Inst(c2, y)) if c1 == c2 => {
             join_own(x, y).map(|o| Kind::Inst(c1, o))
         }
@@ -348,8 +368,9 @@ fn join_jref(a: JRef, b: JRef) -> JRef {
 
 /// Admit `MakeList(n)` into the unboxed subset: element kinds select the list flavor —
 /// all-`Str` → `StrList`, all-`Int` → `IntList` (P-2c), all-`StrIntMap` → [`Kind::MapList`],
-/// all-`IntSet` → [`Kind::SetList`]; anything else (mixed, floats, nested) is default-denied.
-/// Mirrors `emit_unboxed/verticals.rs::arm_make_list`'s stack effects exactly.
+/// all-`IntSet` → [`Kind::SetList`], all-`IntList` → [`Kind::IntListList`] (DEC-520); anything else
+/// (mixed, floats, a THIRD nesting level, a list of STRING lists) is default-denied.
+/// Mirrors `emit_unboxed/make_seq.rs::arm_make_list`'s stack effects exactly.
 pub(in crate::jit) fn admit_make_list(kinds: &mut Vec<Kind>, n: usize) -> Result<(), JitError> {
     let d = kinds.len();
     if n > d {
@@ -362,7 +383,10 @@ pub(in crate::jit) fn admit_make_list(kinds: &mut Vec<Kind>, n: usize) -> Result
             .iter()
             .all(|k| matches!(k, Kind::StrIntMap(_)));
     let all_set = n > 0 && kinds[d - n..].iter().all(|k| matches!(k, Kind::IntSet(_)));
-    if !(all_str || all_int || all_map || all_set) {
+    // DEC-520: all-`IntList` → the list-of-lists flavor. Note this is NOT recursive — an
+    // `IntListList` element is not admitted here, which is what keeps the widening one level deep.
+    let all_intlist = n > 0 && kinds[d - n..].iter().all(|k| matches!(k, Kind::IntList(_)));
+    if !(all_str || all_int || all_map || all_set || all_intlist) {
         return Err(JitError::Unsupported(format!(
             "unboxed MakeList element kinds {:?}",
             &kinds[d - n..]
@@ -375,6 +399,8 @@ pub(in crate::jit) fn admit_make_list(kinds: &mut Vec<Kind>, n: usize) -> Result
         Kind::MapList(Own::Owned)
     } else if all_set {
         Kind::SetList(Own::Owned)
+    } else if all_intlist {
+        Kind::IntListList(Own::Owned)
     } else {
         Kind::StrList(Own::Owned)
     });

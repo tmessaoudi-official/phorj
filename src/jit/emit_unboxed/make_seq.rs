@@ -5,8 +5,9 @@
 use super::*;
 
 /// `Op::MakeList(n)` — element kinds select the flavor (all-`Str` → `StrList` handle pushes,
-/// all-`Int` → `IntList` raw i64 pushes, P-2c); the seal flattens eligible lists into
-/// consecutive arena slots (a FLAT handle) so `Index` runs fully inline.
+/// all-`Int` → `IntList` raw i64 pushes, P-2c; all-`StrIntMap`/`IntSet`/`IntList` → the
+/// handle-word flavors, DEC-520); the seal flattens eligible lists into consecutive arena
+/// slots (a FLAT handle) so `Index` runs fully inline.
 pub(super) fn arm_make_list(
     b: &mut FunctionBuilder,
     ec: &Ec,
@@ -31,7 +32,11 @@ pub(super) fn arm_make_list(
             .iter()
             .all(|k| matches!(k, Kind::StrIntMap(_)));
     let all_set = n > 0 && kinds[d - n..].iter().all(|k| matches!(k, Kind::IntSet(_)));
-    if !(all_str || all_int || all_map || all_set) {
+    // DEC-520: all-`IntList` → `IntListList`. Same raw-i64 path as the map/set flavors — the
+    // element words are int-list HANDLES, never freed here (a flat one is bump-pinned, a boxed
+    // one safe-leaks until run end). NOT recursive: an `IntListList` element is not admitted.
+    let all_intlist = n > 0 && kinds[d - n..].iter().all(|k| matches!(k, Kind::IntList(_)));
+    if !(all_str || all_int || all_map || all_set || all_intlist) {
         return Err(JitError::Unsupported(format!(
             "unboxed MakeList element kinds {:?}",
             &kinds[d - n..]
@@ -45,7 +50,7 @@ pub(super) fn arm_make_list(
     for j in 0..n {
         let depth_j = d - n + j;
         let ev = b.use_var(vars[depth_j]);
-        let pc = if all_int || all_map || all_set {
+        let pc = if all_int || all_map || all_set || all_intlist {
             b.ins().call(h.list_push_int, &[ec.ctx, list_h, ev])
         } else {
             let freev = b
@@ -76,6 +81,8 @@ pub(super) fn arm_make_list(
             Kind::MapList(Own::Owned)
         } else if all_set {
             Kind::SetList(Own::Owned)
+        } else if all_intlist {
+            Kind::IntListList(Own::Owned)
         } else {
             Kind::StrList(Own::Owned)
         },
