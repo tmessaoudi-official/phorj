@@ -16,8 +16,9 @@
 > half is row 5d. **L3 is now blocked on rows 5e–5j** (re-scoped 2026-09-13 23:15): the "no same-package import"
 > cause is REFUTED (same-package types resolve through the entry flat-merge). Remaining: `usort`/`array_map`
 > (5f, building next), PHP `/` (5g, DEC-523 RULED: float division), UFCS on a free function outside `package Main`
-> (5h, a bug — root-cause next), and three pending rulings — a library file cannot be checked alone (5e),
-> DEC-509's lowered enum methods vs `E-FILE-MIXED-PUBLIC` (5i), a readonly property assigned in the ctor (5j).
+> (5h, root cause verified by reading: `try_ufcs` looks up the bare name against mangled `funcs` keys), a checked file loading its whole package (5e, DEC-525 RULED), the ctor-once
+> rule for immutable fields (5j, DEC-524 RULED, size L), and ONE pending ruling — DEC-509's lowered enum
+> methods vs `E-FILE-MIXED-PUBLIC` (5i), asked after 5h's root cause, since cross-package UFCS shapes its options.
 
 
 > **▶ 2026-09-09 RULE-COMPLIANCE REVIEW — four rulings, DEC-516…519. Read these before picking up L4c.**
