@@ -291,6 +291,25 @@
   (`2026-09-13-dependency-upgrade.plan.md`). Rejected: building the `@var` half before committing;
   landing it and chasing the three blockers immediately.
 
+- [2026-09-13 23:15] AGREED: **DEC-523 — PHP `/` lifts as FLOAT division, always.** An int/int
+  PHP `/` lifts to `(a as float) / (b as float)` (an int literal operand becomes a float literal,
+  `100` → `100.0`), so `return $this->confidenceBp / 100;` lifts to a body that checks against its
+  `: float` return and prints what PHP prints (`7 / 2` → 3.5, not phorj's integer 3). Its one miss —
+  an exact int division landing in an `int` slot (PHP `6 / 3` → int 2) — surfaces as `phg check:
+  expected int, found float`, loud at check time, never a wrong number; under `strict_types` (all of
+  scout) a non-exact `/` into an `int` slot is already a PHP TypeError. Rejected: type-directed
+  (`int x = 7 / 2` would lift to 3 where PHP throws — Invariant 14 case 3); refuse by name (scout is
+  read-only, so `Classification.phg` would stay refused for good).
+- [2026-09-13 23:15] AGREED: **Rows 5e–5g re-scoped; row 5e's premise is REFUTED.** Same-package
+  types resolve through the entry's flat-merge with no import, so "emit same-package imports" is not
+  a fix. Row 5e becomes NEW-D (a library-package file cannot be checked on its own, and
+  `src/lift/project/report.rs:286` says it can — ruling pending); new rows 5h (NEW-A, UFCS on a free
+  function fails outside `package Main` — a bug, root-caused without a ruling), 5i (NEW-B, DEC-509's
+  lowered enum methods hit `E-FILE-MIXED-PUBLIC` outside Main — ruling pending) and 5j (NEW-C, a PHP
+  `readonly` property assigned in the ctor body hits `E-ASSIGN-IMMUTABLE` — ruling pending). Build
+  order: 5f test-first, NEW-A root cause; NEW-B/C/D asked next. Rejected: banking the census and
+  building 5f only; folding everything into L7 and leaving L3 blocked.
+
 ## 1. Measured starting state (2026-09-07, on `target/release/phg` at `6c49816d`)
 
 `phg lift /stack/projects/scout/src/php -o <out>` — a whole-tree pass that writes `LIFT-REPORT.md`
@@ -466,14 +485,17 @@ DEC-507 applies to every one.
 | 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + 5 `phg explain` entries. Closed by row 3b | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
 | 3b | L2 closes — `docs(lang): L2 closes` — SSOT quartet amended (the decimal narrowing never reached the SPEC/register/MASTER-PLAN in C1), the missing lift-rule tests with two mutations verified red and a third proving `positional` redundant, the Invariant-9 example, VS Code grammar, KNOWN_ISSUES § DECIMAL-ORDER, the re-census, and the DEC-507 bench — **a CONFIRMED LOSS, escalation OWED** | M | done | ab959542 | docs/specs/UNIFIED-SPEC.md docs/plans/SLICE-STATE.md docs/research/full-audit/raw/C-decisions.md src/lift/lifter_tests_ordering.rs examples/guide/spaceship.phg bench/micro/spaceshipsort.phg bench/micro/spaceshipsort.php editors/vscode/syntaxes/phorj.tmLanguage.json KNOWN_ISSUES.md |
 | 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged. MEASURED A/B on one quiet box (K=15, core-pinned, interleaved, both legs proven by disassembly): 0.38x -> 0.46x, VM time -19.5%, STILL A LOSS at ~2.2x php -> OWED per DEC-365. The ruling's ~65% prediction did not hold: construction was ~a fifth of the tuple-vs-scalar gap, and the residue is per-element `compare_ord` dispatch inside the fused Op (compiler-reachable), NOT the `sortWith` callback | L | done | d4365564 | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
-| 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5e, 5f and 5g** — the three `Classification.phg` blockers outside DEC-515 (split 2026-09-13; rows 5b and 5c are closed) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
+| 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5e–5j** — the `Classification.phg` blockers outside DEC-515 (split 2026-09-13, re-scoped the same day when 5e's premise was refuted; rows 5b and 5c are closed) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench. Wall-fall MEASURED on scout: 57/123 → 64/125, zero keyed-shape refusals, `Classification.php` lifts | L | done | 9b3e528c | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy. **ROOT-CAUSED 2026-09-09, no fix written**: the unboxed JIT `Kind` lattice has a `MapList` and a `SetList` but no list-of-lists, so `admit_make_list` refuses the row literal at `Op::MakeList` before any index runs and the function falls to the VM; "JIT-resistant" is retracted, it does not engage. **DEC-519's premise is also retracted** — none of the four widened rows has a two-level read; the census found four distinct causes and `strappend` COMPILES (so its loss is NOT JIT coverage; its actual cause is unexamined, out of scope). The FIX SHAPE is RULED (DEC-520, 2026-09-09: INT-ONLY inner lists, a dedicated list-of-lists `Kind` reusing `IntList`'s flat encoding, 10 code sites + the ABI decode gate) and is **BUILT 2026-09-09** (`8e814277` M-Decomp + the follow-up carrying the kind): `Kind::IntListList(Own)` across 12 code sites in 4 files, an M-Decomp split FIRST because two emit files had zero size-gate headroom, the 4 decline pins flipped to compile + `hits > 0` + oracle identity and a 5th pinning the kept boundary. Perf before/after OWED (box load 20.07). L4c CLOSES; L3 still blocked behind L4b | L | done | 8e814277 | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
 | 5c | L4b — DEC-515, the BUILT half (split 2026-09-13; `feat(lift): DEC-515 half`): a `foreach` binder over a declared keyed collection reads fields (`$row['bp']` → `row.bp`), scoped so a nested rebinding restores the outer shape; a keyed literal in named-tuple RETURN position becomes a tuple literal when its keys are the declared fields in declared order; named tuple values print with labels. 10 tests, 2 sabotages, Invariant-9 example. Census re-count: ~71 reachable reads, not 140 | L | done | df227f0a | src/lift/lifter/shapes.rs src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/mod.rs src/lift/printer/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/* |
 | 5d | L4b-2 — DEC-515, the UNBUILT half: `@var`-declared locals (census R2 `$x = []`, R3 `$x = <call>` — the parser must carry the type, R4 nullable shape), ~28 of ~71 reads, plus the ASSIGNMENT-position write half (`Rent/Cli/Pipeline.php:1161`) | L | todo | - | src/lift/* |
-| 5e | `Classification.phg` blocker 1 — the lifter emits no same-package import, so a single-file check cannot see `Tenure`/`TenureSignal`/`Outcome` (each checks clean alone). Gates L3 | M | todo | - | src/lift/* |
-| 5f | `Classification.phg` blocker 2 — `usort` and `array_map` have no lift mapping (zero hits under `src/lift/`); `List.sort` must be verified STABLE first, as PHP 8's `usort` is. Gates L3 | M | todo | - | src/lift/* |
-| 5g | `Classification.phg` blocker 3 — PHP `/` lifts to phorj integer division, but PHP `/` on two ints yields a float unless it divides exactly. Needs its lift rule decided before it is built. Gates L3 | M | todo | - | src/lift/* |
+| 5e | NEW-D (re-scoped 2026-09-13; the original "no same-package import" premise is REFUTED — same-package types resolve through the entry flat-merge with no import): a library-package file cannot be checked on its own, since a direct `phg check` loads no siblings, and `src/lift/project/report.rs:286` tells the user it can. Ruling pending (Invariant 15). Gates L3 | M | todo | - | src/lift/project/* src/loader/* |
+| 5f | `Classification.phg` blocker — `usort` and `array_map` have no lift mapping (zero hits under `src/lift/`). Stability VERIFIED by reading 2026-09-13 (`src/native/list.rs` sorts with the stable `sort_by`; PHP 8 `usort` is stable); a pinning test lands with the mapping. Gates L3 | M | todo | - | src/lift/* |
+| 5g | `Classification.phg` blocker — DEC-523 RULED 2026-09-13: an int/int PHP `/` lifts to float division `(a as float) / (b as float)`, int literal operands as float literals; an exact division into an `int` slot fails `phg check` loudly. Gates L3 | M | todo | - | src/lift/* |
+| 5h | NEW-A — UFCS on a free function fails in a non-Main package (`type Acme\X\Color has no method isWarm`) while the same program works in `package Main` on VM and tree-walker; DEC-509's lowered enum methods depend on it. A checker/loader bug: root-cause first (Rule 14). Gates L3 | M | todo | - | src/checker/* src/loader/* |
+| 5i | NEW-B — DEC-509 lowers enum methods to public free functions beside the public enum, which is `E-FILE-MIXED-PUBLIC` in any non-Main package (`Tenure.phg`); `internal` would hide them from cross-package callers. Ruling pending. Gates L3 | M | todo | - | src/lift/* |
+| 5j | NEW-C — a PHP `readonly` non-promoted property assigned once in the ctor body (`TenureSignal::$length`) lifts to `E-ASSIGN-IMMUTABLE`; lifting it `mutable` would drop the guarantee. Language surface, ruling pending. Gates L3 | M | todo | - | src/checker/* src/lift/* |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
 | 7 | L6 — `Core.Net` + `Core.Mime` + read-only `Core.Imap` with the file-backed `.eml` transport (readiness 14, DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
 | 8 | L7 — breadth census loop to the stop condition: every file lifts or carries a named refusal with a DEC row | L | todo | - | src/lift/* examples/lift/scout/* |
@@ -484,13 +506,29 @@ DEC-507 applies to every one.
 <!-- /progress-block -->
 
 ### Blocked
-- **L3 depends on L4** (found by the 09-08 re-census, §1). `Classification::toArray()` is the
-  four-leg contract itself and refuses on its keyed `array{…}` shape, so the depth oracle cannot be
-  built before named-field tuples exist. L2 is still required by the same file (`:48`) and is still
-  the right next build — smaller, ruled, unblocked — but it does not on its own unblock L3.
+- **L3 depends on rows 5e–5j** (updated 2026-09-13). `Classification::toArray()` is the four-leg
+  contract itself, so `Classification.phg` and its siblings must CHECK before the depth oracle can
+  diff against it. The L4 dependency this bullet used to name is closed (L4 `9b3e528c`, L4b half
+  `df227f0a`); what remains is `usort`/`array_map` (5f), PHP `/` (5g), UFCS outside Main (5h),
+  lowered enum methods vs the public-surface rule (5i), readonly ctor assignment (5j) and checking a
+  library file at all (5e).
 - L6 depends on L5 for alert-email parsing (an alert body IS an HTML document).
 
 ### Needs input
+- **2026-09-13 — row 5e's premise is FALSE; re-scope pending the developer.** Same-package types
+  resolve through the entry's flat-merge with ZERO imports (`examples/project/shapes/Rect.phg` uses
+  `Shape` bare; a scratch lift checked via an entry resolved `Tenure`/`TenureSignal`/`Outcome`). The
+  `E-UNKNOWN-TYPE` behind 5e came from checking a non-Main file DIRECTLY, which loads no siblings —
+  so `src/lift/project/report.rs:286`'s "check with `phg check <out>/src/<file>.phg`" is wrong for
+  every library file, and scout lifts as a library with no entry. The real `Classification.phg` list:
+  (5g) `this.confidenceBp / 100` → `expected float, found int`; (5f) `usort`/`array_map` unknown —
+  stability VERIFIED by reading (`src/native/list.rs` `sort_by` is stable; PHP 8 `usort` is stable);
+  (NEW-A) UFCS on a free function fails in a non-Main package (`type … has no method isExcluded`)
+  while it works in `package Main` on VM and tree-walker — a checker/loader bug, root-cause first;
+  (NEW-B) DEC-509 lowers enum methods to public free functions beside a public enum →
+  `E-FILE-MIXED-PUBLIC` in any non-Main package; (NEW-C) PHP `readonly` non-promoted property
+  assigned once in the ctor body (`TenureSignal::$length`) → `E-ASSIGN-IMMUTABLE`; (NEW-D) no way
+  to check a library package file. Tenure/TenureSignal/Outcome do NOT all "check clean alone".
 - **Quiet-box re-measure is OWED** before any ns/iter magnitude from 2026-09-09 is cited (DEC-507): the
   box sat at load 17-22 under an unrelated 2h53m `php tools/phpunit.phar`. The QUALITATIVE result — the
   jit/no-jit distributions overlap for `nestedlist` and do not overlap for `listindex` — is unaffected,

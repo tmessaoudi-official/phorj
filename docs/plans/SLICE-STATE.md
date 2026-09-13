@@ -13,8 +13,11 @@
 > both constructors on every leg (row 12 of the upgrade plan); `{,}` stays literal.
 >
 > **L4b lands HALF-BUILT (DEC-515, scout row 5c):** binder reads + return-position keyed literals. The `@var`-local
-> half is row 5d. **L3 is now blocked on rows 5e–5g**, three `Classification.phg` causes outside DEC-515: no
-> same-package import emitted, `usort`/`array_map` unmapped, PHP `/` lifting to integer division.
+> half is row 5d. **L3 is now blocked on rows 5e–5j** (re-scoped 2026-09-13 23:15): the "no same-package import"
+> cause is REFUTED (same-package types resolve through the entry flat-merge). Remaining: `usort`/`array_map`
+> (5f, building next), PHP `/` (5g, DEC-523 RULED: float division), UFCS on a free function outside `package Main`
+> (5h, a bug — root-cause next), and three pending rulings — a library file cannot be checked alone (5e),
+> DEC-509's lowered enum methods vs `E-FILE-MIXED-PUBLIC` (5i), a readonly property assigned in the ctor (5j).
 
 
 > **▶ 2026-09-09 RULE-COMPLIANCE REVIEW — four rulings, DEC-516…519. Read these before picking up L4c.**
