@@ -203,9 +203,9 @@ mysql = { version = "28.0.2", default-features = false, features = ["minimal-rus
 # VM). Feature-gated (`jit`) and non-wasm (wasm32 has no native JIT target). Its
 # finalize→transmute→fn-ptr call is phorj's first first-party `unsafe`, confined to `src/jit/` behind
 # the CI `unsafe-island` gate. See docs/specs/UNIFIED-SPEC.md#external-dependency-policy.
-cranelift = { version = "0.134", optional = true }
-cranelift-jit = { version = "0.134", optional = true }
-cranelift-module = { version = "0.134", optional = true }
+cranelift = { version = "0.135", optional = true }
+cranelift-jit = { version = "0.135", optional = true }
+cranelift-module = { version = "0.135", optional = true }
 
 # SECOND external dependency (Rust project / BurntSushi, exhaustively fuzzed). Powers `Core.Regex` —
 # a RE2-style finite-automaton engine with guaranteed linear-time matching (ReDoS-immune by

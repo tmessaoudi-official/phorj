@@ -27,6 +27,9 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   That widens an already-disclosed PHP-leg limitation rather than adding a silent divergence; it is
   pinned by a new test and disclosed in `KNOWN_ISSUES.md` §Core.Regex, and the step-budget test moved
   to `^((?=a)a|a)+$`, which still faults on every leg.
+- **`cranelift`, `cranelift-jit`, `cranelift-module` 0.134 → 0.135.2** (separate commit, as ruled). No
+  source change was needed; gated by the JIT suite and the three-leg differential. **No perf claim** —
+  a before/after needs a quiet-box `phg benchmark` run (Invariant 11), which is OWED.
 - **`mysql` 28.0.0 (yanked) → 28.0.2.** `cargo audit` now reports three advisories, none with a
   reachable fix; they are disclosed in `KNOWN_ISSUES.md` DEP-ADVISORIES.
 - **CI:** wasm-pack is a pinned, sha256-verified 0.15.0 release asset instead of the retired
