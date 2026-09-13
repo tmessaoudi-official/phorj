@@ -47,6 +47,10 @@ function __phorj_regex_pcre_divergent($p) {
             if ($x === 'O') { return 'the `\\O` escape (any character to `fancy-regex`, an unknown escape under PCRE)'; }
             if (!$inClass && ($x === '<' || $x === '>')) { return 'the `\\<`/`\\>` word boundaries (literal `<`/`>` under PCRE)'; }
             if (!$inClass && $x === 'b' && $i + 2 < $n && $b[$i + 2] === '{') { return 'a `\\b{…}` boundary assertion (crate-only)'; }
+            if (strpos('xopPgk', $x) !== false && $i + 2 < $n && $b[$i + 2] === '{') {
+                $close = strpos($b, '}', $i + 2);
+                if ($close !== false) { $i = $close + 1; continue; }
+            }
             $i += 2; continue;
         }
         if ($inClass) {
@@ -76,6 +80,11 @@ function __phorj_regex_pcre_divergent($p) {
                 if ($b[$j] === 'R') { return 'the inline `R` flag (CRLF mode to the native engines, recursion under PCRE)'; }
                 $j++;
             }
+        }
+        if ($c === '{' && preg_match('/\A([ \t]*)(\d*)([ \t]*)(?:(,)([ \t]*)(\d*)([ \t]*))?\}/', substr($b, $i + 1), $m) === 1
+            && ($m[2] !== '' || ($m[6] ?? '') !== '')
+            && ($m[1] . $m[3] . ($m[5] ?? '') . ($m[7] ?? '') !== '' || (($m[4] ?? '') === ',' && $m[2] === ''))) {
+            return 'a `{,n}` quantifier or spaces inside a `{n,m}` quantifier (PCRE2 reads them as a quantifier only from 10.43 and as literal text before, so the PHP leg depends on the host\'s PCRE2 build; write `{0,n}` and drop the spaces)';
         }
         $i++;
     }

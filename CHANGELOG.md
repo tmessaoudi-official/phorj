@@ -42,6 +42,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   That widens an already-disclosed PHP-leg limitation rather than adding a silent divergence; it is
   pinned by a new test and disclosed in `KNOWN_ISSUES.md` §Core.Regex, and the step-budget test moved
   to `^((?=a)a|a)+$`, which still faults on every leg.
+- **Brace quantifiers whose PHP meaning depends on the PCRE2 build are now refused (DEC-522).** CI went
+  red on the push: the `x{,2}y` pin passed locally (PCRE2 10.44) and failed on CI's ubuntu-24.04
+  runner (PCRE2 10.42), because PCRE2 10.43 turned `{,n}` and spaces inside `{n,m}` from literal text
+  into quantifiers. Neither native engine can match both readings — `fancy-regex` reads `{,n}` as a
+  quantifier and spaced braces as text, the `regex` crate reads both as quantifiers — so `{,n}`,
+  `{ 2}`, `{2 }` and `{1 , 2}` now raise `E-REGEX-UNSUPPORTED` on both constructors for a literal
+  pattern and fault on every leg for a dynamic one, with a hint to write `{0,n}` without spaces.
+  `{,}` and `{ }` stay literal on the backtracking engine. The pin is gone; the forms joined the
+  cross-leg rejection test, and turning off either the Rust scan or its PHP twin turns that test red.
 - **`cranelift`, `cranelift-jit`, `cranelift-module` 0.134 → 0.135.2** (separate commit, as ruled). No
   source change was needed; gated by the JIT suite and the three-leg differential. **No perf claim** —
   a before/after needs a quiet-box `phg benchmark` run (Invariant 11), which is OWED.

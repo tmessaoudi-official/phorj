@@ -6014,6 +6014,11 @@ fn pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg() {
         // Accepted by fancy-regex since 0.15 / 0.18 (the 2026-09-13 upgrade surfaced them); PCRE refuses.
         r"a\Ob",
         r"(?~abc)",
+        // A quantifier from PCRE2 10.43, literal text before — CI's ubuntu-24.04 ships 10.42 (DEC-522).
+        r"x{,2}y",
+        r"x{ 2}y",
+        r"x{2 }y",
+        r"x{1 , 2}y",
     ];
     for ctor in ["compile", "compileBacktracking"] {
         for pat in constructs {
@@ -6041,6 +6046,7 @@ fn pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg() {
         (r"\bword\b", "a word", "true"),
         (r"[a-]", "-", "true"),
         (r"a{2}", "a", "false"),
+        (r"x{2,}", "xxx", "true"),
     ] {
         for ctor in ["compile", "compileBacktracking"] {
             agree_out_php(
@@ -6052,13 +6058,26 @@ fn pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg() {
             );
         }
     }
+    // Braces with no digit are literal text under every PCRE2 and on the backtracking engine, so they
+    // stay accepted there (the linear engine keeps refusing `{,}` as before).
+    for pat in [r"x{,}y", r"x{ }y"] {
+        agree_out_php(
+            &regex_prog(&format!(
+                "string s = r\"{pat}\";\n    var re = Regex.compileBacktracking(r\"{pat}\");\n    Output.printLine(\"{{Regex.matches(re, s)}}\");"
+            )),
+            "true\n",
+            &format!("literal braces `{pat}`"),
+        );
+    }
 }
 
 /// The fancy-regex 0.11 → 0.19.2 upgrade (2026-09-13) changed or added backtracking-engine behaviour:
 /// case-insensitive back-references (0.15; strict Unicode fold since 0.19), `(*FAIL)` and `\g<n>`
 /// subroutine calls (0.18), Oniguruma quantifier parsing that makes `++`/`?+`/`{n,m}+` possessive
-/// (0.19), and `{,n}`. Each pin was checked against PHP 8.5 `preg_*` before it was written; a pin that
-/// stops agreeing is a regression on one leg, never a baseline to update.
+/// (0.19). Each pin was checked against PHP 8.5 `preg_*` before it was written; a pin that stops
+/// agreeing is a regression on one leg, never a baseline to update. `{,n}` was pinned here too, until
+/// CI's PCRE2 10.42 read it as literal text: its PHP meaning depends on the host's PCRE2 build, so it
+/// is now refused on every leg (DEC-522, `pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg`).
 #[test]
 fn backtracking_behaviours_changed_by_the_fancy_regex_upgrade_agree_with_php() {
     for (pat, subject, expected) in [
@@ -6072,7 +6091,6 @@ fn backtracking_behaviours_changed_by_the_fancy_regex_upgrade_agree_with_php() {
         (r"a{1,2}+a", "aa", "false"),
         (r"(?>a+)a", "aaa", "false"),
         (r"(?<=a|bc)x", "bcx", "true"),
-        (r"x{,2}y", "xxy", "true"),
     ] {
         agree_out_php(
             &regex_prog(&format!(

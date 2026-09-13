@@ -14,6 +14,7 @@
 - [2026-09-13 14:18] AGREED: install `cargo-audit` locally (not a phorj dependency, not in CI), run it on the upgraded lockfile, report every advisory; an unfixed one goes to KNOWN_ISSUES.
 - [2026-09-13 14:18] AGREED: CI runners (`*-latest`) and the 9 actions stay on floating major tags — already the latest majors; only the wasm-pack install changes.
 - [2026-09-13 14:49] AGREED: Rust edition 2021 → **2024, formatting included** (`style_edition` follows the edition), as its own slice AFTER the upgrade and L4b commits. The 5 `set_var`/`remove_var` sites under `#![deny(unsafe_code)]` (`src/bundle/cross.rs`, `src/bundle/manifest.rs` test fns) are refactored to take the value, never `#[allow(unsafe_code)]` — `src/jit/` stays the sole unsafe island; the 8 in `tests/registry.rs` get `unsafe {}`; files the reformat would push past the size-gate ratchet are split first. Evidence behind the ruling: `-W rust-2024-compatibility` on rustc 1.97.1 flagged 55 phorj sites — 13 env writes, 36 drop-order (35 trait-object `Value` temporaries, 0 lock/`RefCell` guards, 1 real destructor at `src/serve/transport.rs:343` on the shutdown path), 5 macro `expr` fragments, 1 test pattern.
+- [2026-09-13 17:50] AGREED: brace quantifiers whose PHP meaning depends on the host's PCRE2 version — `{,n}` and spaces/tabs inside quantifier braces (`{ 2}`, `{2 }`, `{1 , 2}`), a quantifier from PCRE2 10.43 and literal text before (CI's ubuntu-24.04 ships 10.42 and redded master) — are REJECTED on both constructors on every leg (the `pcre_divergent` scan + its PHP twin); `{,}` stays literal. Chosen over normalising in the PHP helper and over disclose-only.
 
 ## Inventory (verified 2026-09-13)
 | Surface | Before | Latest | Source |
@@ -79,6 +80,7 @@ individually certified; the full gate runs once, on the final tree, before the p
 | 8 | Playground CodeMirror 6.0.2 + php-wasm@0.1.0 — editor mounts identically before/after (1 editor, 13 lines, 255 chars; screenshots in session scratch) — `chore(deps): DEC-521` | M | done | 40d17417 | playground/web/* |
 | 9 | cargo-audit: 1 vuln + 2 warnings left, all unfixable upstream, disclosed as KNOWN_ISSUES DEP-ADVISORIES — `chore(deps): DEC-521` | S | done | 40d17417 | KNOWN_ISSUES.md |
 | 10 | Full gate + commits + push — commits `40d17417` `424feff0` `df227f0a` landed; the pre-push hook is the full gate | M | doing | - | - |
+| 12 | DEC-522 — CI's PCRE2 10.42 redded master on the `x{,2}y` pin: `{,n}` and spaced `{n,m}` refused on both constructors on every leg (`reject.rs` + PHP twin, sabotage-checked), pin removed | S | doing | - | src/ext/regex/reject.rs src/transpile/runtime_php_regex.rs tests/differential.rs |
 | 11 | Edition 2024 slice (language + formatting), after the push | L | todo | - | Cargo.toml playground/Cargo.toml src/bundle/cross.rs src/bundle/manifest.rs tests/registry.rs CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked

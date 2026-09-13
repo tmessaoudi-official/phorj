@@ -176,14 +176,16 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              Two classes, named in the message. (1) LINEAR-ONLY: `Regex.compile` is the ReDoS-immune\n\
              engine (RE2-style, guaranteed linear time) and omits exactly PCRE's backtracking-only\n\
              syntax — look-ahead/look-behind `(?=…)` `(?<=…)`, back-references `\\1` `\\k<n>`, atomic\n\
-             groups `(?>…)`, possessive quantifiers `a++`, conditionals, recursion, `(*VERB)`s, `{,n}`\n\
+             groups `(?>…)`, possessive quantifiers `a++`, conditionals, recursion, `(*VERB)`s\n\
              and the escapes `\\h` `\\R` `\\Z` `\\G` `\\K`. Use `Regex.compileBacktracking(...)`\n\
              (DEC-461): the same API on a backtracking engine with a step budget. (2) NOT PORTABLE on\n\
              either engine: syntax the native engines and PHP's PCRE read DIFFERENTLY, or that only one\n\
              side accepts — class-set operators and nested classes (`[a-z&&[^aeiou]]`, `[[ab]]`), POSIX\n\
              classes (`[[:alpha:]]`), `\\v`/`\\V`, `\\<` `\\>` `\\b{…}`, the inline `u`/`R` flags, and\n\
-             `\\Q…\\E` `(?#…)` `(?|…)` `(?'n'…)` `(?P=n)` `\\X` `\\N` `\\0` `\\e` `\\c`. Rewrite these\n\
-             portably (an explicit class, `\\p{…}`, `(?<n>…)`/`\\k<n>`). Both constructors compile to\n\
+             `\\Q…\\E` `(?#…)` `(?|…)` `(?'n'…)` `(?P=n)` `\\X` `\\N` `\\0` `\\e` `\\c` `\\O` `(?~…)`, and\n\
+             `{,n}` or spaces inside `{n,m}` (a quantifier only from PCRE2 10.43, literal text before,\n\
+             so PHP's reading depends on its PCRE2 build). Rewrite these portably (an explicit class,\n\
+             `\\p{…}`, `(?<n>…)`/`\\k<n>`, `{0,n}` without spaces). Both constructors compile to\n\
              the same `preg_*` under PHP.\n"
         }
         "E-REGEX-INVALID" => {

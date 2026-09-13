@@ -8,6 +8,10 @@
 > (row 5c of the scout plan, built and uncommitted since 2026-09-10); one full gate, one push. The
 > edition-2024 migration is QUEUED behind that as its own slice (row 11 of the upgrade plan).
 >
+> **CI went red on the push → DEC-522 (ruled 17:50):** PCRE2 10.43 made `{,n}` and spaced `{n,m}` quantifiers,
+> CI's ubuntu-24.04 ships 10.42, so the `x{,2}y` pin could not hold on both hosts. Those forms are now refused on
+> both constructors on every leg (row 12 of the upgrade plan); `{,}` stays literal.
+>
 > **L4b lands HALF-BUILT (DEC-515, scout row 5c):** binder reads + return-position keyed literals. The `@var`-local
 > half is row 5d. **L3 is now blocked on rows 5e–5g**, three `Classification.phg` causes outside DEC-515: no
 > same-package import emitted, `usort`/`array_map` unmapped, PHP `/` lifting to integer division.

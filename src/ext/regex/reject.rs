@@ -11,7 +11,9 @@
 //!   (a vertical-tab LITERAL to the crate, a whitespace CLASS under PCRE), the crate-only `\<` `\>`
 //!   `\b{…}` boundaries, the inline `u`/`R` flags, and the PCRE-only constructs neither crate implements
 //!   (`\Q…\E`, `(?#…)`, `(?|…)`, `(?'n'…)`, `(?P=n)`, `(?P>n)`, `(?C…)`, `\X`, `\N`, `\0`, `\e`, `\c`),
-//!   plus the two Oniguruma-isms `fancy-regex` added and PCRE refuses (`\O` since 0.15, `(?~…)` since 0.18).
+//!   plus the two Oniguruma-isms `fancy-regex` added and PCRE refuses (`\O` since 0.15, `(?~…)` since 0.18),
+//!   and the brace quantifiers PCRE2 10.43 re-read (`{,n}` and spaces inside `{n,m}` — literal text on
+//!   10.42, so the PHP leg's meaning depends on the host's PCRE2 build; DEC-522).
 //!   Every one of these was accepted by both legs with a DIFFERENT meaning, or faulted natively while
 //!   PHP ran it, with every leg exiting 0 — the Invariant-14 case-3 shape.
 //! * [`linear_unsupported`] — applies to the LINEAR engine only: PCRE's backtracking-only syntax that
@@ -65,6 +67,13 @@ pub fn pcre_divergent(pattern: &str) -> Option<&'static str> {
                     return Some("a `\\b{…}` boundary assertion (crate-only)")
                 }
                 _ => {}
+            }
+            // The braces after `\x` `\o` `\p` `\P` `\g` `\k` are the escape's argument, not a quantifier.
+            if matches!(n, b'x' | b'o' | b'p' | b'P' | b'g' | b'k') && b.get(i + 2) == Some(&b'{') {
+                if let Some(close) = b[i + 2..].iter().position(|&x| x == b'}') {
+                    i += 2 + close + 1;
+                    continue;
+                }
             }
             i += 2;
             continue;
@@ -136,11 +145,52 @@ pub fn pcre_divergent(pattern: &str) -> Option<&'static str> {
                     j += 1;
                 }
             }
+            b'{' if brace_quantifier_is_version_dependent(&b[i + 1..]) => {
+                return Some(
+                    "a `{,n}` quantifier or spaces inside a `{n,m}` quantifier (PCRE2 reads them as \
+                     a quantifier only from 10.43 and as literal text before, so the PHP leg depends \
+                     on the host's PCRE2 build; write `{0,n}` and drop the spaces)",
+                )
+            }
             _ => {}
         }
         i += 1;
     }
     None
+}
+
+/// Whether the text after a top-level `{` is a counted repetition only from PCRE2 10.43 on (DEC-522):
+/// `{,n}`, or a space/tab inside `{n}` `{n,}` `{n,m}`. PCRE2 10.42 reads both as literal text,
+/// `fancy-regex` reads the first as a quantifier and the second as text, and the `regex` crate reads
+/// both as quantifiers. Braces holding no digit (`{,}`, `{ }`) are literal everywhere and pass.
+fn brace_quantifier_is_version_dependent(rest: &[u8]) -> bool {
+    fn blanks(rest: &[u8], j: &mut usize) -> bool {
+        let start = *j;
+        while matches!(rest.get(*j), Some(b' ' | b'\t')) {
+            *j += 1;
+        }
+        *j > start
+    }
+    fn digits(rest: &[u8], j: &mut usize) -> bool {
+        let start = *j;
+        while rest.get(*j).is_some_and(u8::is_ascii_digit) {
+            *j += 1;
+        }
+        *j > start
+    }
+    let mut j = 0;
+    let mut spaced = blanks(rest, &mut j);
+    let min = digits(rest, &mut j);
+    spaced |= blanks(rest, &mut j);
+    let comma = rest.get(j) == Some(&b',');
+    let mut max = false;
+    if comma {
+        j += 1;
+        spaced |= blanks(rest, &mut j);
+        max = digits(rest, &mut j);
+        spaced |= blanks(rest, &mut j);
+    }
+    rest.get(j) == Some(&b'}') && (min || max) && (spaced || (comma && !min))
 }
 
 /// Why the LINEAR engine refuses `pattern`, if it does. Escape- and character-class-aware, so `\+`
@@ -298,11 +348,30 @@ mod tests {
             // fancy-regex 0.15 (`\O`) and 0.18 (`(?~…)`) began accepting these; PCRE still refuses them.
             r"a\Ob",
             r"(?~abc)",
+            // PCRE2 10.43 made these quantifiers; 10.42 (CI's ubuntu-24.04) reads them as literal text.
+            r"x{,2}y",
+            r"x{ 2}y",
+            r"x{2 }y",
+            r"x{1 , 2}y",
+            "x{\t2}y",
+            r"x{ ,2}y",
+            r"\d{ 2}",
+            r"a\\{ 2}",
         ] {
             assert!(
                 pcre_divergent(p).is_some(),
                 "{p} must be rejected on both engines"
             );
+        }
+    }
+
+    #[test]
+    fn brace_forms_every_pcre2_reads_alike_are_not_divergent() {
+        for p in [
+            r"x{2}", r"x{2,}", r"x{2,3}", r"x{,}y", r"x{ }y", r"x{ , }y", r"x{2 3}y", r"[{ 2}]",
+            r"a\{ 2}", r"\p{L}", r"\x{41}", r"\x{ 41}", r"\p{ L}",
+        ] {
+            assert_eq!(pcre_divergent(p), None, "{p}");
         }
     }
 
