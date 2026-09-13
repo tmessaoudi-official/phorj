@@ -1,5 +1,31 @@
 # Known Issues & Limitations
 
+## DEP-ADVISORIES — three RustSec advisories remain after the 2026-09-13 dependency upgrade, none with a reachable fix
+
+`cargo audit` (cargo-audit 0.22.2, advisory DB fetched 2026-09-13) on the upgraded `Cargo.lock` reports
+one vulnerability and two warnings. The upgrade cleared the two yanked-crate warnings it started with
+(`chacha20` 0.10.1 → 0.10.2 under `postgres`; `mysql` 28.0.0 → 28.0.2). What is left, each gated behind
+a NON-default feature:
+
+- **RUSTSEC-2023-0071 — `rsa` 0.9.10, Marvin Attack (timing side channel on the private key).** Pulled
+  in only by `lettre`'s `dkim` feature (`mail`), which `Core.Mail` uses for DKIM signing
+  (`src/ext/mail/natives.rs`, `MailSys.dkim`). There is no patched release: `rsa` 0.10 is still a
+  release candidate, and dropping `dkim` would remove a shipped feature. The exposure is to an attacker
+  who can time many signatures made with the same key [Inferred from the advisory; not measured here].
+  Revisit when `rsa` 0.10 ships and `lettre` adopts it.
+- **RUSTSEC-2026-0253 — `lru` 0.16.4, unsound (`LruCache::pop` is not panic-safe).** Pulled in by
+  `mysql` 28.0.2 (`database-mysql`), whose prepared-statement cache calls `pop`
+  (the `mysql` crate's `stmt_cache.rs`, line 106 in 28.0.2), so the path is reachable. The fix is `lru` ≥ 0.18.2, but
+  `mysql` 28.0.2 requires `^0.16.3`, which Cargo cannot override across that boundary. The unsound
+  window needs a panic inside `pop`; with a `u32` key that looks remote [Inferred, not tested]. Revisit
+  on the next `mysql` release.
+- **RUSTSEC-2025-0052 — `async-std` 1.13.2, unmaintained.** Listed in `Cargo.lock` as an optional
+  `lettre` dependency that phorj does not enable; it is never compiled
+  (`cargo tree --workspace --all-features --target all -i async-std` finds no path). Nothing to do
+  unless a `lettre` feature that needs it is switched on.
+
+Re-run `cargo audit` after any `cargo update`; it is not in CI (developer ruling 2026-09-13).
+
 ## DECIMAL-ORDER — `<` on two large `decimal`s disagrees with the PHP leg (pre-existing; NOT an Invariant-1 exception)
 
 **This is a BUG with a known fix, not a disclosed byte-identity exception.** Invariant 1 still has
@@ -2664,7 +2690,8 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   or that only one side accepts, all of which used to pass every leg silently: class-set operators and
   nested classes (`[a-z&&[^aeiou]]`, `[[ab]]`), POSIX classes (`[[:alpha:]]` — ASCII natively, Unicode
   under PCRE's UCP; write `\p{…}`), `\v`/`\V`, `\<` `\>` `\b{…}`, the inline `u`/`R` flags, and
-  `\Q…\E` `(?#…)` `(?|…)` `(?'n'…)` `(?P=n)` `(?P>n)` `(?C…)` `\X` `\N` `\0` `\e` `\c`. A value built
+  `\Q…\E` `(?#…)` `(?|…)` `(?'n'…)` `(?P=n)` `(?P>n)` `(?C…)` `\X` `\N` `\0` `\e` `\c`, plus `\O` and
+  `(?~…)` (accepted by `fancy-regex` since 0.15/0.18, refused by PCRE; added 2026-09-13 with the 0.19 upgrade). A value built
   directly (`new Regex(p, e)`) is validated at first USE on every leg. **Disclosure (Invariant 14):** the
   scans are NOT the `regex` crate's grammar. A LITERAL pattern is gated exactly on every leg (the crate
   itself validates it at check time); a DYNAMIC pattern is gated by the ported reject lists, which cover
@@ -2678,6 +2705,16 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   limit exceeded on a pattern the native engines match in linear time …`) instead of the silent `false`
   it returned before 2026-09-02 — "ReDoS-immune by construction" is a NATIVE-leg property; the PHP leg
   inherits PCRE. This is the remaining engine-level edge beside empty-match placement (below).
+  **Widened 2026-09-13 by the `fancy-regex` 0.19.2 upgrade (DEC-521):** the "only PCRE-class patterns
+  reach the budget" rule above no longer holds exactly. The newer crate resolves some PCRE-class
+  catastrophic patterns WITHOUT backtracking — measured: `^(?=a)(a|a)+$`, `^(a+)+\1$` and
+  `^(?:(?=a)(a|a))+$` on `"aaa…ab"` print the correct `false` natively, while PCRE exhausts its limit
+  and the PHP helper faults with `regex step budget exceeded`. Before the upgrade all three legs
+  faulted. The PHP leg is loud, never silent; pinned by
+  `pcre_class_patterns_the_crate_resolves_without_backtracking_are_a_loud_php_leg_limitation`. No
+  builder option restores the old behaviour (0.19.2 exposes no switch for the passes involved), and
+  patterns with a look-ahead inside the repeated group (`^((?=a)a|a)+$`) or a back-reference inside
+  it (`^(a|a)+(\1)$`) still fault on every leg.
 - ~~`\d` / `\w` / `\s` are Unicode-aware natively, ASCII-only in transpiled PCRE~~ — **that edge did
   not exist** (panel C11): the helper's `u` modifier turns on PCRE's UCP for `\d\w\s`, so all three
   legs agree on Unicode subjects. The real edges were C1–C3, all fixed with DEC-461.

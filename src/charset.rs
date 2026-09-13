@@ -144,7 +144,9 @@ fn utf16_decode(bytes: &[u8], little: bool) -> Option<String> {
         return None;
     }
     let units: Vec<u16> = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|p| {
             if little {
                 u16::from_le_bytes([p[0], p[1]])

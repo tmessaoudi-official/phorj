@@ -10,7 +10,8 @@
 //!   characters), POSIX classes (`[[:alpha:]]` — ASCII to the crate, Unicode under PCRE's UCP), `\v`/`\V`
 //!   (a vertical-tab LITERAL to the crate, a whitespace CLASS under PCRE), the crate-only `\<` `\>`
 //!   `\b{…}` boundaries, the inline `u`/`R` flags, and the PCRE-only constructs neither crate implements
-//!   (`\Q…\E`, `(?#…)`, `(?|…)`, `(?'n'…)`, `(?P=n)`, `(?P>n)`, `(?C…)`, `\X`, `\N`, `\0`, `\e`, `\c`).
+//!   (`\Q…\E`, `(?#…)`, `(?|…)`, `(?'n'…)`, `(?P=n)`, `(?P>n)`, `(?C…)`, `\X`, `\N`, `\0`, `\e`, `\c`),
+//!   plus the two Oniguruma-isms `fancy-regex` added and PCRE refuses (`\O` since 0.15, `(?~…)` since 0.18).
 //!   Every one of these was accepted by both legs with a DIFFERENT meaning, or faulted natively while
 //!   PHP ran it, with every leg exiting 0 — the Invariant-14 case-3 shape.
 //! * [`linear_unsupported`] — applies to the LINEAR engine only: PCRE's backtracking-only syntax that
@@ -51,6 +52,11 @@ pub fn pcre_divergent(pattern: &str) -> Option<&'static str> {
                 b'Q' | b'E' => return Some("`\\Q…\\E` quoting (PCRE-only)"),
                 b'X' | b'N' | b'e' | b'c' | b'0' => {
                     return Some("a PCRE-only escape (`\\X`, `\\N`, `\\e`, `\\c`, `\\0`)")
+                }
+                b'O' => {
+                    return Some(
+                        "the `\\O` escape (any character to `fancy-regex`, an unknown escape under PCRE)",
+                    )
                 }
                 b'<' | b'>' if !in_class => {
                     return Some("the `\\<`/`\\>` word boundaries (literal `<`/`>` under PCRE)")
@@ -106,6 +112,10 @@ pub fn pcre_divergent(pattern: &str) -> Option<&'static str> {
                     }
                     (Some(b'P'), Some(b'>')) => return Some("a `(?P>name)` recursion (PCRE-only)"),
                     (Some(b'C'), _) => return Some("a `(?C…)` callout (PCRE-only)"),
+                    (Some(b'~'), _) => return Some(
+                        "a `(?~…)` absent operator (Oniguruma syntax `fancy-regex` accepts; PCRE \
+                             refuses it)",
+                    ),
                     _ => {}
                 }
                 // An inline flag group: letters (and `-`) up to `)` or `:`.
@@ -285,6 +295,9 @@ mod tests {
             r"\0",
             r"\e",
             r"\cA",
+            // fancy-regex 0.15 (`\O`) and 0.18 (`(?~…)`) began accepting these; PCRE still refuses them.
+            r"a\Ob",
+            r"(?~abc)",
         ] {
             assert!(
                 pcre_divergent(p).is_some(),

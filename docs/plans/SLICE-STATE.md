@@ -2,6 +2,12 @@
 
 ## ▶ CURRENT CURSOR (2026-09-07) — **scout is the forcing function. Plan: `docs/plans/2026-09-07-scout-forcing-function.plan.md`**
 
+> **▶ 2026-09-13 — DEPENDENCY UPGRADE runs AHEAD of L4b (DEC-521). Plan: `docs/plans/2026-09-13-dependency-upgrade.plan.md`.**
+> Rust 1.98.1 + lockfile + `argon2` 0.6 + `fancy-regex` 0.19.2 + CI wasm-pack + VS Code client +
+> playground CodeMirror land first; then `cranelift` 0.135 in its own commit; then the L4b commit
+> (row 5c of the scout plan, built and uncommitted since 2026-09-10); one full gate, one push. The
+> edition-2024 migration is QUEUED behind that as its own slice (row 11 of the upgrade plan).
+
 
 > **▶ 2026-09-09 RULE-COMPLIANCE REVIEW — four rulings, DEC-516…519. Read these before picking up L4c.**
 > A full read of every rule surface (global framework, the 19 delivery invariants, `docs/INVARIANTS.md`,

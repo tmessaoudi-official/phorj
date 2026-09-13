@@ -6,6 +6,37 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — dependencies: Rust 1.98.1 and every compatible crate, with two regex divergences closed (DEC-521, 2026-09-13)
+
+- **Toolchain 1.97.1 → 1.98.1** (`rust-toolchain.toml`, both `rust-version` fields — the playground's
+  still said 1.74), and `cargo update` across ~80 lockfile entries. Clippy 1.98 raised four new lints
+  (three `chunks_exact` → `as_chunks`, one `unwrap_or`), fixed without behaviour change.
+- **`argon2` 0.5.3 → 0.6.0.** `PasswordHash` moved to `password_hash::phc`, and `hash_password` now
+  draws the salt itself. A hash produced by the 0.5.3 build was pinned in a test BEFORE the bump and
+  still verifies; a second test pins the default cost (`m=19456,t=2,p=1`) so a future upgrade cannot
+  change the work factor of new hashes silently.
+- **`fancy-regex` 0.11 → 0.19.2.** A 23-pattern probe ran each behaviour change natively and through
+  the transpiled PHP on PHP 8.5.10 / PCRE2 10.44: 19 agree, and 11 of those are now pinned in
+  `tests/differential.rs`. The other two were NEW divergences introduced by the upgrade — `\O` and the
+  absent operator `(?~…)`, which `fancy-regex` accepts and PCRE refuses — and both are now refused on
+  every leg (`E-REGEX-UNSUPPORTED`), in the Rust scan and its PHP twin alike. Removing either rejection
+  turns the cross-leg test red.
+  The pre-commit tier caught one more change the probe had not covered: the crate now resolves some
+  PCRE-class catastrophic patterns (`^(?=a)(a|a)+$`, `^(a+)+\1$`) without backtracking, so the
+  native legs print the correct `false` where PCRE still hits its limit and the PHP leg faults loudly.
+  That widens an already-disclosed PHP-leg limitation rather than adding a silent divergence; it is
+  pinned by a new test and disclosed in `KNOWN_ISSUES.md` §Core.Regex, and the step-budget test moved
+  to `^((?=a)a|a)+$`, which still faults on every leg.
+- **`mysql` 28.0.0 (yanked) → 28.0.2.** `cargo audit` now reports three advisories, none with a
+  reachable fix; they are disclosed in `KNOWN_ISSUES.md` DEP-ADVISORIES.
+- **CI:** wasm-pack is a pinned, sha256-verified 0.15.0 release asset instead of the retired
+  rustwasm installer script, which hardcoded 0.13.1.
+- **VS Code extension:** `vscode-languageclient` ^10.1.1 with `engines.vscode` ^1.91.0 — 10.1.x
+  requires 1.91, so the previous ^1.75 range promised editors the client could not run on.
+- **Playground:** CodeMirror 6.0.2 rebuilt (resolved versions recorded in `vendor/README.md`; the
+  editor mounts identically before and after), and `php-wasm` pinned to 0.1.0 instead of following
+  `latest`.
+
 ### Added
 
 - **DEC-520 (lane L4c) — `List<List<int>>` now compiles and runs NATIVELY in the unboxed JIT.**

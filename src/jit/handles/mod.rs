@@ -1162,10 +1162,10 @@ pub(super) extern "C" fn rt_u_map_push_pair(
 pub(super) extern "C" fn rt_u_map_seal(ctx: *mut UbCtx, map: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
     let pairs: Vec<(Value, Value)> = match ctx.handles.get(map as usize) {
-        Some(Value::List(xs)) if xs.len() % 2 == 0 => xs
-            .chunks_exact(2)
-            .map(|kv| (kv[0].clone(), kv[1].clone()))
-            .collect(),
+        Some(Value::List(xs)) if xs.len() % 2 == 0 => {
+            let (pairs, _) = xs.as_chunks::<2>();
+            pairs.iter().map(|[k, v]| (k.clone(), v.clone())).collect()
+        }
         _ => return -1,
     };
     let deduped = match crate::value::build_map(pairs) {

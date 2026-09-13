@@ -5899,15 +5899,34 @@ fn backtracking_engine_matches_pcre_class_syntax_on_every_leg() {
 
 /// REGEX-B — the step budget: a catastrophic pattern on the backtracking engine raises a typed fault
 /// on every leg (PHP's `preg_*` reports `PREG_BACKTRACK_LIMIT_ERROR` and the helper throws) instead of
-/// hanging. The look-ahead forces the backtracking VM (the regular subset would be delegated).
+/// hanging. The look-ahead INSIDE the repeated group forces the backtracking VM. (Until fancy-regex
+/// 0.19 this used `^(?=a)(a|a)+$`, which the newer crate resolves without backtracking — see the next
+/// test.)
 #[test]
 fn backtracking_engine_step_budget_faults_instead_of_hanging() {
     let src = regex_prog(
-        "var re = Regex.compileBacktracking(r\"^(?=a)(a|a)+$\");\n    Output.printLine(\"{Regex.matches(re, \\\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab\\\")}\");",
+        "var re = Regex.compileBacktracking(r\"^((?=a)a|a)+$\");\n    Output.printLine(\"{Regex.matches(re, \\\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab\\\")}\");",
     );
     let err = cmd_treewalk(&with_pkg(&src)).expect_err("must fault, not hang");
     assert!(err.contains("step budget"), "{err}");
     agree_err_php(&src);
+}
+
+/// Disclosed PHP-leg limitation, widened by the fancy-regex 0.11 → 0.19.2 upgrade (DEC-521): the newer
+/// crate answers some PCRE-class catastrophic patterns WITHOUT backtracking, so the native legs print
+/// the correct `false` while PCRE still exhausts its limit and the PHP helper faults loudly. Before the
+/// upgrade all three legs faulted. Not an `agree_err_php` case: the native legs succeed.
+#[test]
+fn pcre_class_patterns_the_crate_resolves_without_backtracking_are_a_loud_php_leg_limitation() {
+    for pat in [r"^(?=a)(a|a)+$", r"^(a+)+\1$"] {
+        let src = regex_prog(&format!(
+            "var re = Regex.compileBacktracking(r\"{pat}\");\n    Output.printLine(\"{{Regex.matches(re, \\\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab\\\")}}\");"
+        ));
+        let out = cmd_treewalk(&with_pkg(&src)).expect("resolved natively");
+        assert_eq!(out, "false\n", "{pat}");
+        assert_eq!(cmd_run(&with_pkg(&src)).expect("vm"), out, "{pat} VM");
+        php_leg_fails_with(&src, "step budget", &format!("{pat} PCRE limit"));
+    }
 }
 
 /// The gate's OTHER code: a literal pattern that does not parse is `E-REGEX-INVALID` at check time on
@@ -5992,6 +6011,9 @@ fn pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg() {
         r"a\e",
         r"a\cA",
         r"(?C)a",
+        // Accepted by fancy-regex since 0.15 / 0.18 (the 2026-09-13 upgrade surfaced them); PCRE refuses.
+        r"a\Ob",
+        r"(?~abc)",
     ];
     for ctor in ["compile", "compileBacktracking"] {
         for pat in constructs {
@@ -6029,6 +6051,36 @@ fn pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg() {
                 &format!("portable control {ctor} `{pat}`"),
             );
         }
+    }
+}
+
+/// The fancy-regex 0.11 → 0.19.2 upgrade (2026-09-13) changed or added backtracking-engine behaviour:
+/// case-insensitive back-references (0.15; strict Unicode fold since 0.19), `(*FAIL)` and `\g<n>`
+/// subroutine calls (0.18), Oniguruma quantifier parsing that makes `++`/`?+`/`{n,m}+` possessive
+/// (0.19), and `{,n}`. Each pin was checked against PHP 8.5 `preg_*` before it was written; a pin that
+/// stops agreeing is a regression on one leg, never a baseline to update.
+#[test]
+fn backtracking_behaviours_changed_by_the_fancy_regex_upgrade_agree_with_php() {
+    for (pat, subject, expected) in [
+        (r"(?i)(a)\1", "aA", "true"),
+        (r"(?i)(é)\1", "éÉ", "true"),
+        (r"a(*FAIL)|b", "a", "false"),
+        (r"a(*FAIL)|b", "ab", "true"),
+        (r"(a|b)\g<1>", "ab", "true"),
+        (r"a++a", "aaa", "false"),
+        (r"a?+a", "a", "false"),
+        (r"a{1,2}+a", "aa", "false"),
+        (r"(?>a+)a", "aaa", "false"),
+        (r"(?<=a|bc)x", "bcx", "true"),
+        (r"x{,2}y", "xxy", "true"),
+    ] {
+        agree_out_php(
+            &regex_prog(&format!(
+                "var re = Regex.compileBacktracking(r\"{pat}\");\n    Output.printLine(\"{{Regex.matches(re, \\\"{subject}\\\")}}\");"
+            )),
+            &format!("{expected}\n"),
+            &format!("fancy-regex 0.19 pin `{pat}` on `{subject}`"),
+        );
     }
 }
 

@@ -44,6 +44,7 @@ function __phorj_regex_pcre_divergent($p) {
             if ($x === 'v' || $x === 'V') { return 'the `\\v`/`\\V` escape (a vertical-tab literal to the native engines, a whitespace class under PCRE)'; }
             if ($x === 'Q' || $x === 'E') { return '`\\Q…\\E` quoting (PCRE-only)'; }
             if (strpos('XNec0', $x) !== false) { return 'a PCRE-only escape (`\\X`, `\\N`, `\\e`, `\\c`, `\\0`)'; }
+            if ($x === 'O') { return 'the `\\O` escape (any character to `fancy-regex`, an unknown escape under PCRE)'; }
             if (!$inClass && ($x === '<' || $x === '>')) { return 'the `\\<`/`\\>` word boundaries (literal `<`/`>` under PCRE)'; }
             if (!$inClass && $x === 'b' && $i + 2 < $n && $b[$i + 2] === '{') { return 'a `\\b{…}` boundary assertion (crate-only)'; }
             $i += 2; continue;
@@ -68,6 +69,7 @@ function __phorj_regex_pcre_divergent($p) {
             if ($y === 'P' && $z === '=') { return 'a `(?P=name)` back-reference (PCRE-only spelling)'; }
             if ($y === 'P' && $z === '>') { return 'a `(?P>name)` recursion (PCRE-only)'; }
             if ($y === 'C') { return 'a `(?C…)` callout (PCRE-only)'; }
+            if ($y === '~') { return 'a `(?~…)` absent operator (Oniguruma syntax `fancy-regex` accepts; PCRE refuses it)'; }
             $j = $i + 2;
             while ($j < $n && (($b[$j] >= 'a' && $b[$j] <= 'z') || ($b[$j] >= 'A' && $b[$j] <= 'Z') || $b[$j] === '-')) {
                 if ($b[$j] === 'u') { return 'the inline `u` flag (the native engines are always Unicode; PCRE refuses `(?u)`/`(?-u)`)'; }

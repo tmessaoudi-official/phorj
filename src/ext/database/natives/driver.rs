@@ -128,7 +128,7 @@ pub(super) fn redact_dsn_password(dsn: &str) -> String {
         let authority_end = after.find(['/', '?']).map_or(after.len(), |i| {
             i.min(after.find('@').map_or(after.len(), |a| a + 1))
         });
-        let authority = &after[..after.find('@').map_or(authority_end, |a| a)];
+        let authority = &after[..after.find('@').unwrap_or(authority_end)];
         if let Some(colon) = authority.find(':') {
             let mut out = String::with_capacity(dsn.len());
             out.push_str(&dsn[..scheme_end + 3]);

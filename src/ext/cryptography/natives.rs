@@ -14,9 +14,7 @@
 use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
-use argon2::password_hash::{
-    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
-};
+use argon2::password_hash::{phc::PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::Argon2;
 
 /// `Crypto.hashPassword(string) -> string` — Argon2id over a fresh random salt; returns the standard
@@ -24,9 +22,9 @@ use argon2::Argon2;
 pub(super) fn crypto_hash_password(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(pw)] => {
-            let salt = SaltString::generate(&mut OsRng);
+            // argon2 0.6 draws the salt itself, from the OS RNG (`getrandom`, a default feature).
             let hash = Argon2::default()
-                .hash_password(pw.as_bytes(), &salt)
+                .hash_password(pw.as_bytes())
                 .map_err(|e| format!("password hashing failed: {e}"))?
                 .to_string();
             Ok(Value::Str(hash.into()))

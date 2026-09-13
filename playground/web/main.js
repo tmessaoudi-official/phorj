@@ -86,7 +86,9 @@ const callJson = (op, arg) =>
 // php-wasm (seanmorris) defaults to PHP 8.4 — matching Phorj's transpile floor. Loaded only when
 // the user first runs with "Run PHP" enabled. NOTE: this CDN import is the one integration point
 // not exercised by the Rust test suite; pin a specific version once validated on first deploy.
-const PHP_WASM_URL = "https://cdn.jsdelivr.net/npm/php-wasm/PhpWeb.mjs";
+// Pinned: an unversioned jsdelivr URL follows `latest`, so a new php-wasm release would change the
+// oracle under a page nobody redeployed.
+const PHP_WASM_URL = "https://cdn.jsdelivr.net/npm/php-wasm@0.1.0/PhpWeb.mjs";
 let PhpWebClass = null; // the imported class is cached; the PHP *instance* is not — see runPhp
 
 async function loadPhpWeb() {

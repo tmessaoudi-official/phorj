@@ -41,8 +41,20 @@ jobs:
       - name: Add wasm target
         run: rustup target add wasm32-unknown-unknown
 
+      # Pinned release asset, checksum-verified. The rustwasm.github.io installer script hardcodes
+      # 0.13.1, and the project moved to github.com/wasm-bindgen/wasm-pack.
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        env:
+          WASM_PACK_VERSION: v0.15.0
+          WASM_PACK_SHA256: c09f971ecaed9a2efc80fdcea7a00ef6b53c7fadc8c57d1f61b53a6aa66b668a
+        run: |
+          name="wasm-pack-${WASM_PACK_VERSION}-x86_64-unknown-linux-musl"
+          curl -fsSL -o wasm-pack.tar.gz \
+            "https://github.com/wasm-bindgen/wasm-pack/releases/download/${WASM_PACK_VERSION}/${name}.tar.gz"
+          echo "${WASM_PACK_SHA256}  wasm-pack.tar.gz" | sha256sum -c -
+          tar -xzf wasm-pack.tar.gz
+          install -m 0755 "${name}/wasm-pack" "$HOME/.cargo/bin/wasm-pack"
+          wasm-pack --version
 
       # MAX_CALL_DEPTH is 4096 (src/limits.rs); the default 1 MiB wasm stack would overflow on deep
       # recursion, so bump the shadow stack. (The native path uses a 256 MiB thread for the same reason.)

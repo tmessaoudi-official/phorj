@@ -78,6 +78,46 @@ fn verify_a_committed_php_argon2id_hash() {
 }
 
 #[test]
+fn verify_a_hash_made_by_the_previous_argon2_major() {
+    // Produced by phorj's own build on `argon2` 0.5.3, pinned BEFORE the 0.6 upgrade: a hash a user
+    // stored under the old crate must still verify under the new one.
+    let mut o = String::new();
+    let old_hash = "$argon2id$v=19$m=19456,t=2,p=1$tAfVKjams7qM5GxAH1NGyg$xYYxV97Y1tmbS7BA7x0AbO5AZWjB0mIekcIIr93li80";
+    assert!(matches!(
+        crypto_verify_password(
+            &[
+                Value::Str("phorj-argon2-0.5.3-fixture".into()),
+                Value::Str(old_hash.into())
+            ],
+            &mut o
+        ),
+        Ok(Value::Bool(true))
+    ));
+    assert!(matches!(
+        crypto_verify_password(
+            &[Value::Str("nope".into()), Value::Str(old_hash.into())],
+            &mut o
+        ),
+        Ok(Value::Bool(false))
+    ));
+}
+
+#[test]
+fn new_hashes_carry_the_default_argon2id_cost() {
+    // The cost of a NEW hash is the crate's default params; an upgrade that moved them would change
+    // every stored hash's work factor with no code change here.
+    let mut o = String::new();
+    let hash = match crypto_hash_password(&[Value::Str("pw".into())], &mut o).unwrap() {
+        Value::Str(s) => s,
+        other => panic!("expected a hash string, got {other:?}"),
+    };
+    assert!(
+        hash.starts_with("$argon2id$v=19$m=19456,t=2,p=1$"),
+        "got {hash}"
+    );
+}
+
+#[test]
 fn cryptography_natives_registered_and_emit() {
     assert!(crate::native::index_of("Core.Cryptography", "hashPassword").is_some());
     assert!(crate::native::index_of("Core.Cryptography", "verifyPassword").is_some());
