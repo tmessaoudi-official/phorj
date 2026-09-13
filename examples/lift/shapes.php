@@ -3,9 +3,10 @@
 /**
  * PHP array SHAPES — `array{…}` — and why they split in two.
  *
- * A POSITIONAL shape is a tuple, which phorj has. A KEYED shape needs a named-field tuple, which
- * phorj does not have yet (DEC-504), so `phg lift` refuses it BY NAME rather than as a generic
- * Tier-2 wall. Lifted with `phg lift shapes.php`.
+ * A POSITIONAL shape is a tuple (DEC-288). A KEYED shape is a named-field tuple (DEC-504), and its
+ * reads and writes lift with it (DEC-515): `$row['bp']` on a `foreach` binder over a declared
+ * `list<array{…}>` becomes `row.bp`, and a keyed literal returned under a keyed `@return` becomes a
+ * tuple literal. Lifted with `phg lift shapes.php`.
  */
 
 /** @return array{int, string} */
@@ -31,6 +32,24 @@ function maybePair(bool $yes): ?array
     return null;
 }
 
+/** A KEYED literal in declared field order IS the named tuple its `@return` describes. */
+/** @return array{tenure: string, bp: int} */
+function verdict(string $tenure, int $bp): array
+{
+    return ['tenure' => $tenure, 'bp' => $bp];
+}
+
+/** The binder inherits the ELEMENT shape of the declared collection, so `$row['bp']` is a field read. */
+/** @param list<array{tenure: string, bp: int}> $rows */
+function totalBp(array $rows): int
+{
+    $n = 0;
+    foreach ($rows as $row) {
+        $n = $n + $row['bp'];
+    }
+    return $n;
+}
+
 function main(): void
 {
     // A positional shape is READ by destructuring — a phorj tuple has no index access.
@@ -44,4 +63,6 @@ function main(): void
     } else {
         echo "some\n";
     }
+    $total = totalBp([verdict('rent', 3), verdict('own', 4)]);
+    echo $total, "\n";
 }

@@ -44,11 +44,25 @@ impl Printer {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr(x)).collect();
                 Ok(format!("[{}]", xs?.join(", ")))
             }
-            // A tuple literal `(a, b)` (DEC-288). The lifter never synthesizes this today, but print
-            // it faithfully for completeness.
-            Expr::Tuple(items, _, _) => {
+            // A tuple literal: positional `(a, b)` (DEC-288), or named-field `(bp: 1, source: "x")`
+            // once a keyed literal is seeded into one (DEC-515). Dropping the labels here prints a
+            // value that no longer satisfies the named-tuple TYPE printed beside it — the draft
+            // parses and then fails to CHECK with `expected (bp: int, …), found (int, …)`, which is
+            // exactly the split the write half exists to close.
+            Expr::Tuple(items, labels, _) => {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr(x)).collect();
-                Ok(format!("({})", xs?.join(", ")))
+                let xs = xs?;
+                Ok(match labels {
+                    Some(ls) => format!(
+                        "({})",
+                        ls.iter()
+                            .zip(xs.iter())
+                            .map(|(l, v)| format!("{}: {v}", l.name))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                    None => format!("({})", xs.join(", ")),
+                })
             }
             // DEC-297: a named call argument `name: value` (the lifter may emit these when a future
             // slice lifts PHP named args; harmless otherwise — it prints the phorj surface form).

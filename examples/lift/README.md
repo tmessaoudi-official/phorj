@@ -349,16 +349,31 @@ Two more rules fall out of the shape:
 - **No `: T` is a refusal.** phorj requires a return type on a statement-bodied lambda, and the
   lifter does not infer one (DEC-166 — it never guesses).
 
-## Array shapes, destructuring and `.` — `shapes.php` / `shapes.phg` (DEC-504/510/511, 2026-09-07)
+## Array shapes, destructuring and `.` — `shapes.php` / `shapes.phg` (DEC-504/510/511/515, 2026-09-07, keyed half 2026-09-13)
 
-PHP's `array{…}` docblock shape splits in two, and the two halves get very different answers.
+PHP's `array{…}` docblock shape splits in two, and both halves now lift.
 
 A **POSITIONAL** shape is a tuple, which phorj shipped as DEC-288 — so `@return array{int, string}`
 lifts to `: (int, string)`, and the same shape written with explicit ascending indices from zero
 (`array{0: float, 1: float}`, what PHPStan and Psalm emit) is the same tuple. A **KEYED** shape
-(`array{tenure: Tenure, source: string}`) needs a named-field tuple, which phorj does not have yet:
-it is ruled as **DEC-504** and keeps a refusal that names the ruling, rather than falling into a
-generic Tier-2 wall.
+(`array{tenure: string, bp: int}`) is a named-field tuple (**DEC-504**), `(tenure: string, bp: int)`.
+
+**DEC-515 — the keyed shape's reads and writes.** A type alone lifts a draft that does not check, so
+both value sides follow it:
+
+- **Reads through a `foreach` binder.** Real code rarely indexes a keyed-shape *parameter*; it
+  iterates a declared `list<array{…}>` (or `array<K, array{…}>`) and indexes the binder. The binder
+  inherits the collection's ELEMENT shape, so `$row['bp']` lifts to `row.bp`. The binding lasts for
+  the loop body only and a nested loop rebinding the same name restores the outer shape when it
+  closes. A collection with no declared shape (bare `array`, a call's result) binds nothing — the
+  lifter reads what the program declared and does not infer it (DEC-166).
+- **Writes in return position.** `return ['tenure' => $t, 'bp' => $bp];` under a keyed `@return`
+  lifts to `return (tenure: t, bp: bp);` — but only when the keys are exactly the declared fields **in
+  the declared order**. Field order is part of the type and erasure is positional, so reordering the
+  literal would silently change the evaluation order of its values; a reordered or short literal
+  stays a map and `phg check` reports it.
+- **Not yet:** `@var`-declared locals (their reads, and a keyed literal *assigned* to one) — tracked
+  in the scout plan, row 5d.
 
 A tuple TYPE is only half of it. The literal that satisfies it must lift to a tuple VALUE too, or
 the draft lifts and then fails `phg check` with `expected (int, string), found List<int>` — one

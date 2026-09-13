@@ -4,8 +4,9 @@
 //! phorj. A POSITIONAL shape (`array{int, string}`, or the same thing written with explicit
 //! indices, `array{0: float, 1: float}`) is a TUPLE, which phorj shipped as DEC-288 — 12 sites
 //! across a 120-file real codebase, and the shape `Core/Text.php` stops on. A KEYED shape
-//! (`array{tenure: Tenure, source: string}`) needs a named-field tuple, which phorj does not have
-//! yet: 73 sites, ruled as DEC-504, and it keeps its refusal here until that lands.
+//! (`array{tenure: Tenure, source: string}`) is a named-field tuple (DEC-504, 73 sites), and its
+//! reads and writes lift with it (DEC-515): a `foreach` binder over a declared collection reads
+//! fields, and a keyed literal returned in declared field order becomes a tuple literal.
 
 use super::lifter_tests::{assert_reparses, lift};
 
@@ -280,4 +281,173 @@ fn a_string_index_that_is_not_a_declared_field_is_left_alone() {
         "<?php\n/**\n * @param array{bp: int} $row\n */\nfunction f(array $row): int { return $row['nope']; }",
     );
     assert!(out.contains("row[\"nope\"]"), "{out}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// L4b / DEC-515 — the seed past PARAMS: a `foreach` binder over a DECLARED keyed collection.
+//
+// The census (2026-09-10, plan §L4b) puts 43 of the corpus's rewritable reads behind this one
+// shape: the collection is a `@param list<array{…}>`, and every read happens on the loop binder,
+// which carries no declaration of its own. The element labels are the collection's; nothing here
+// is inferred from a call's return type (DEC-166).
+// ---------------------------------------------------------------------------------------------
+
+/// The spine of L4b. `$rows` is declared `list<array{bp: int}>`, so the binder `$row` IS a
+/// `(bp: int)` and `$row['bp']` must lift to `row.bp` — left as a string index it is a Map read
+/// against a tuple and the draft does not CHECK.
+#[test]
+fn a_foreach_binder_over_a_keyed_list_param_becomes_a_field_read() {
+    let out = lift(
+        "<?php\n/**\n * @param list<array{bp: int, source: string}> $rows\n */\nfunction total(array $rows): int { $n = 0; foreach ($rows as $row) { $n = $n + $row['bp']; } return $n; }",
+    );
+    assert!(out.contains("row.bp"), "expected a field read, got: {out}");
+    assert!(!out.contains("row[\"bp\"]"), "still a string index: {out}");
+    assert_reparses(&out);
+}
+
+/// `array<K, V>` is a Map, and it is the VALUE that binds — `foreach ($m as $k => $v)` gives `$v`
+/// the element's labels, never `$k`. Scout writes both this and the `list<…>` form.
+#[test]
+fn a_foreach_binder_over_a_keyed_map_param_binds_the_value_not_the_key() {
+    let out = lift(
+        "<?php\n/**\n * @param array<string, array{bp: int}> $rows\n */\nfunction total(array $rows): int { $n = 0; foreach ($rows as $k => $row) { $n = $n + $row['bp']; } return $n; }",
+    );
+    assert!(out.contains("row.bp"), "expected a field read, got: {out}");
+    assert_reparses(&out);
+}
+
+/// A bare `array $rows` declares no shape, so the binder gets no labels and the read stays an
+/// index. The lifter reads what the program declared; it does not guess (DEC-166).
+#[test]
+fn a_foreach_binder_over_an_undeclared_collection_is_left_alone() {
+    let out = lift(
+        "<?php\n/**\n * @param list<int> $rows\n */\nfunction f(array $rows): int { $n = 0; foreach ($rows as $row) { $n = $row['bp']; } return $n; }",
+    );
+    assert!(
+        out.contains("row[\"bp\"]"),
+        "expected an index read, got: {out}"
+    );
+}
+
+/// THE SCOPE-DISCIPLINE TEST — the one a flat name-keyed registry fails.
+///
+/// `Rent/Store/Store.php` has five distinct `$row` scopes with five different shapes, so a binder
+/// registration that is never removed rewrites a LATER `$row` against an EARLIER shape and produces
+/// a draft that is silently wrong rather than loudly broken. Here the inner loop rebinds `$row`
+/// over a different element shape, and the read after the inner loop closes must resolve against
+/// the OUTER shape again. Drop the save/restore and `outer.bp` becomes `outer[…]` or, worse,
+/// `row.tag` survives into the outer scope.
+#[test]
+fn a_nested_binder_rebinding_one_name_restores_the_outer_shape() {
+    let out = lift(
+        "<?php\n/**\n * @param list<array{bp: int}> $outer\n * @param list<array{tag: string}> $inner\n */\nfunction f(array $outer, array $inner): int { $n = 0; foreach ($outer as $row) { foreach ($inner as $row) { $n = $n + 1; } $n = $n + $row['bp']; } return $n; }",
+    );
+    assert!(
+        out.contains("row.bp"),
+        "the outer shape did not survive the inner rebind: {out}"
+    );
+    assert_reparses(&out);
+}
+
+/// A binder does not leak past its own loop. After the `foreach` closes, `$row` is whatever it was
+/// before — here nothing — so the read stays an index rather than resolving against the element
+/// shape of a collection that is no longer being iterated.
+#[test]
+fn a_binder_shape_does_not_leak_past_the_loop() {
+    let out = lift(
+        "<?php\n/**\n * @param list<array{bp: int}> $rows\n * @param array $row\n */\nfunction f(array $rows, array $row): int { $n = 0; foreach ($rows as $row) { $n = $row['bp']; } return $row['bp']; }",
+    );
+    assert!(
+        out.contains("row[\"bp\"]"),
+        "the binder's shape leaked past the loop: {out}"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// L4b / DEC-515 — the WRITE half: a keyed literal in a named-tuple position becomes a tuple.
+//
+// The read half alone lifts a draft that still does not CHECK: the reads become `c.tenure` while
+// the value that feeds them stays a Map literal. `Rent/Core/Classification.php::toArray()` is the
+// corpus shape and the mandate's acceptance criterion.
+// ---------------------------------------------------------------------------------------------
+
+/// The mandate's target shape. A keyed literal returned under a keyed `@return` shape IS the tuple
+/// that shape declares — left a Map, the draft lifts and then `phg check` reports
+/// `expected (tenure: string, …), found Map<string, …>`.
+#[test]
+fn a_keyed_literal_returned_as_a_named_shape_becomes_a_tuple_literal() {
+    let out = lift(
+        "<?php\n/**\n * @return array{tenure: string, bp: int}\n */\nfunction row(): array { return ['tenure' => 'x', 'bp' => 1]; }",
+    );
+    // The VALUE prints positionally — a named tuple is the same construct wearing names, so the
+    // literal that satisfies `(tenure: string, bp: int)` is `("x", 1)`. What matters is that it is a
+    // TUPLE and not a Map, and the assertion that proves it is the checker, not a string.
+    assert!(out.contains(r#"return (tenure: "x", bp: 1)"#), "{out}");
+    assert!(!out.contains(r#"=> "x""#), "still a map literal: {out}");
+    let prog = crate::cli::parse_program(&out).expect("parses");
+    crate::cli::check_and_expand(&prog, &out).expect("the lifted draft type-checks");
+}
+
+/// The mandate's acceptance criterion, end to end: `Rent/Core/Classification.php::toArray()` is a
+/// keyed literal returned under a keyed `@return` shape, and the whole point of L4b is that the
+/// draft it lifts to CHECKS rather than merely parsing.
+#[test]
+fn the_classification_to_array_shape_lifts_to_a_draft_that_checks() {
+    let out = lift(
+        "<?php
+class C {
+    /**
+     * @return array{tenure: string, confidence_bp: int, outcome: string}
+     */
+    public function toArray(): array { return ['tenure' => 'rent', 'confidence_bp' => 900, 'outcome' => 'ok']; }
+}",
+    );
+    assert!(
+        out.contains(r#"(tenure: "rent", confidence_bp: 900, outcome: "ok")"#),
+        "{out}"
+    );
+    let prog = crate::cli::parse_program(&out).expect("parses");
+    crate::cli::check_and_expand(&prog, &out).expect("the lifted draft type-checks");
+}
+
+/// Field order is part of a named tuple's type (`ast::tuple_labels`), and erasure is positional —
+/// so reordering the literal to match the declaration would move the evaluation order of the value
+/// expressions relative to the order they are stored in. That is a byte-identity surface, and a
+/// silent semantic change wherever a value has a side effect. A differently-ordered literal is
+/// therefore left a Map and the checker reports it, exactly as a wrong ARITY already is.
+#[test]
+fn a_keyed_literal_written_out_of_declared_order_is_left_a_map() {
+    let out = lift(
+        "<?php\n/**\n * @return array{tenure: string, bp: int}\n */\nfunction row(): array { return ['bp' => 1, 'tenure' => 'x']; }",
+    );
+    assert!(
+        out.contains(r#"return ["bp" => 1, "tenure" => "x"]"#),
+        "a reordered literal was silently rewritten: {out}"
+    );
+}
+
+/// A literal that does not carry every declared field is left alone rather than padded — the same
+/// must-MATCH discipline the positional arity check already applies (DEC-166).
+#[test]
+fn a_keyed_literal_missing_a_declared_field_is_left_a_map() {
+    let out = lift(
+        "<?php\n/**\n * @return array{tenure: string, bp: int}\n */\nfunction row(): array { return ['tenure' => 'x']; }",
+    );
+    assert!(out.contains(r#"return ["tenure" => "x"]"#), "{out}");
+}
+
+/// A POSITIONAL shape keeps answering by arity, and gains no labels it was not declared with —
+/// the pre-existing Lane L1c behaviour, pinned here because the write half now routes through the
+/// same `TupleShape`.
+#[test]
+fn a_positional_shape_still_seeds_without_labels() {
+    let out = lift(
+        "<?php\n/**\n * @return array{int, string}\n */\nfunction pair(): array { return [1, 'a']; }",
+    );
+    assert!(out.contains("(1, \"a\")"), "{out}");
+    assert!(
+        !out.contains(": 1"),
+        "labels appeared on a positional tuple: {out}"
+    );
+    assert_reparses(&out);
 }

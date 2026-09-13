@@ -21,15 +21,79 @@ pub(super) fn seed_returned_tuple_literals(body: &mut [Stmt], ret: &Option<Type>
     };
     // A nullable tuple return (`?array` + `@return array{…}|null`) seeds the same way: `return
     // [1, "one"];` is the tuple, and the `null` arm is unaffected.
-    let elems = match ret {
-        Type::Tuple(e, _, _) => e,
-        Type::Optional { inner, .. } => match inner.as_ref() {
-            Type::Tuple(e, _, _) => e,
-            _ => return,
-        },
-        _ => return,
+    let ty = match ret {
+        Type::Optional { inner, .. } => inner.as_ref(),
+        other => other,
     };
-    seed_tuple_returns_in(body, elems.len());
+    let Type::Tuple(elems, labels, _) = ty else {
+        return;
+    };
+    let shape = TupleShape {
+        arity: elems.len(),
+        labels: labels
+            .as_ref()
+            .map(|ls| ls.iter().map(|l| l.name.clone()).collect()),
+    };
+    seed_tuple_returns_in(body, &shape);
+}
+
+/// The declared tuple a `return` must satisfy: how many positions, and — for a NAMED-field tuple
+/// (DEC-504) — what they are called.
+struct TupleShape {
+    arity: usize,
+    labels: Option<Vec<String>>,
+}
+
+impl TupleShape {
+    /// The tuple literal this expression should become, or `None` to leave it exactly as it is.
+    ///
+    /// Two literal forms answer a declared tuple, and both must MATCH rather than be coerced into
+    /// it — a literal of the wrong arity or the wrong keys is left alone so that the checker reports
+    /// the disagreement, which is the honest outcome (DEC-166 — the lifter does not guess).
+    fn tuple_from(&self, e: &mut Expr) -> Option<Expr> {
+        // A POSITIONAL literal answers by arity, as it has since Lane L1c. When the declared shape
+        // is named, its own labels name the positions — nothing is invented.
+        if let Expr::List(items, _) = e {
+            if items.len() != self.arity {
+                return None;
+            }
+            return Some(Expr::Tuple(
+                std::mem::take(items),
+                crate::ast::to_ast_labels(self.labels.as_ref(), SP),
+                SP,
+            ));
+        }
+        // DEC-515, the WRITE half: a KEYED literal answers a NAMED shape when its keys are exactly
+        // the declared fields, in the declared ORDER.
+        //
+        // The order requirement is not pedantry. Field order is part of a named tuple's type
+        // (`ast::tuple_labels`) because erasure is positional, so reordering the literal here would
+        // move the evaluation order of the value expressions relative to the order they are stored
+        // in — a byte-identity surface, and a silent semantic change in any literal whose values
+        // have side effects. A differently-ordered literal is therefore left a Map for the checker
+        // to report. Every keyed literal in the scout corpus is already written in declared order.
+        if let Expr::Map(pairs, _) = e {
+            let labels = self.labels.as_ref()?;
+            if pairs.len() != labels.len() {
+                return None;
+            }
+            for ((key, _), want) in pairs.iter().zip(labels) {
+                let Expr::Str(parts, _) = key else {
+                    return None;
+                };
+                if super::super::str_literal_text(parts).as_deref() != Some(want.as_str()) {
+                    return None;
+                }
+            }
+            let values: Vec<Expr> = pairs.drain(..).map(|(_, v)| v).collect();
+            return Some(Expr::Tuple(
+                values,
+                crate::ast::to_ast_labels(Some(labels), SP),
+                SP,
+            ));
+        }
+        None
+    }
 }
 
 /// The recursive half: EVERY `return` in the body answers to the declared return type, not only the
@@ -39,20 +103,18 @@ pub(super) fn seed_returned_tuple_literals(body: &mut [Stmt], ret: &Option<Type>
 ///
 /// The match is exhaustive by design (Invariant 3): a new block-bearing `Stmt` must decide whether
 /// its returns are this function's, and a `_` arm would silently answer "no".
-fn seed_tuple_returns_in(body: &mut [Stmt], arity: usize) {
+fn seed_tuple_returns_in(body: &mut [Stmt], shape: &TupleShape) {
     for s in body.iter_mut() {
         match s {
             Stmt::Return {
                 value: Some(v),
                 span,
             } => {
-                if let Expr::List(items, _) = v {
-                    if items.len() == arity {
-                        *s = Stmt::Return {
-                            value: Some(Expr::Tuple(std::mem::take(items), None, SP)),
-                            span: *span,
-                        };
-                    }
+                if let Some(tuple) = shape.tuple_from(v) {
+                    *s = Stmt::Return {
+                        value: Some(tuple),
+                        span: *span,
+                    };
                 }
             }
             Stmt::If {
@@ -60,33 +122,33 @@ fn seed_tuple_returns_in(body: &mut [Stmt], arity: usize) {
                 else_block,
                 ..
             } => {
-                seed_tuple_returns_in(then_block, arity);
+                seed_tuple_returns_in(then_block, shape);
                 if let Some(e) = else_block {
-                    seed_tuple_returns_in(e, arity);
+                    seed_tuple_returns_in(e, shape);
                 }
             }
             Stmt::For { body, .. }
             | Stmt::While { body, .. }
             | Stmt::CFor { body, .. }
             | Stmt::Block(body, _)
-            | Stmt::Using { body, .. } => seed_tuple_returns_in(body, arity),
+            | Stmt::Using { body, .. } => seed_tuple_returns_in(body, shape),
             Stmt::Try {
                 body,
                 catches,
                 finally_block,
                 ..
             } => {
-                seed_tuple_returns_in(body, arity);
+                seed_tuple_returns_in(body, shape);
                 for c in catches.iter_mut() {
-                    seed_tuple_returns_in(&mut c.body, arity);
+                    seed_tuple_returns_in(&mut c.body, shape);
                 }
                 if let Some(f) = finally_block {
-                    seed_tuple_returns_in(f, arity);
+                    seed_tuple_returns_in(f, shape);
                 }
             }
             Stmt::Destructure { else_block, .. } => {
                 if let Some(e) = else_block {
-                    seed_tuple_returns_in(e, arity);
+                    seed_tuple_returns_in(e, shape);
                 }
             }
             // No block of this function's statements inside: nothing to descend into.

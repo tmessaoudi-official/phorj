@@ -280,6 +280,17 @@
   BEFORE L4.** Rejected: JIT-whitelisting (speeds the allocation rather than removing it) and carrying
   it OWED to L8 (nothing stops the loss deepening, and the fix is already located).
 
+- [2026-09-13 14:18] AGREED: **L4b lands HALF-BUILT and splits.** Row 5c becomes what is built and
+  green — `foreach`-binder reads over a declared keyed collection + keyed literals in RETURN
+  position — and closes. The unbuilt `@var`-local half of DEC-515 (census R2/R3/R4, ~28 of ~71
+  reads, plus the ASSIGNMENT-position write half, e.g. `Rent/Cli/Pipeline.php:1161`) moves to a new
+  row. `Classification.phg` still does not CHECK after the built half, for three reasons outside
+  DEC-515 that become rows gating L3: no same-package import emitted (`Tenure`/`TenureSignal`/`Outcome`
+  each check clean alone), `usort`/`array_map` unmapped, and PHP `/` lifting to integer division.
+  Ruled in this session before 14:18, the first `date` read; it lands AFTER the dependency upgrade
+  (`2026-09-13-dependency-upgrade.plan.md`). Rejected: building the `@var` half before committing;
+  landing it and chasing the three blockers immediately.
+
 ## 1. Measured starting state (2026-09-07, on `target/release/phg` at `6c49816d`)
 
 `phg lift /stack/projects/scout/src/php -o <out>` — a whole-tree pass that writes `LIFT-REPORT.md`
@@ -455,10 +466,14 @@ DEC-507 applies to every one.
 | 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + 5 `phg explain` entries. Closed by row 3b | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
 | 3b | L2 closes — `docs(lang): L2 closes` — SSOT quartet amended (the decimal narrowing never reached the SPEC/register/MASTER-PLAN in C1), the missing lift-rule tests with two mutations verified red and a third proving `positional` redundant, the Invariant-9 example, VS Code grammar, KNOWN_ISSUES § DECIMAL-ORDER, the re-census, and the DEC-507 bench — **a CONFIRMED LOSS, escalation OWED** | M | done | ab959542 | docs/specs/UNIFIED-SPEC.md docs/plans/SLICE-STATE.md docs/research/full-audit/raw/C-decisions.md src/lift/lifter_tests_ordering.rs examples/guide/spaceship.phg bench/micro/spaceshipsort.phg bench/micro/spaceshipsort.php editors/vscode/syntaxes/phorj.tmLanguage.json KNOWN_ISSUES.md |
 | 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged. MEASURED A/B on one quiet box (K=15, core-pinned, interleaved, both legs proven by disassembly): 0.38x -> 0.46x, VM time -19.5%, STILL A LOSS at ~2.2x php -> OWED per DEC-365. The ruling's ~65% prediction did not hold: construction was ~a fifth of the tuple-vs-scalar gap, and the residue is per-element `compare_ord` dispatch inside the fused Op (compiler-reachable), NOT the `sortWith` callback | L | done | d4365564 | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
-| 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5b and 5c** (DEC-514 + DEC-515, 2026-09-09) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
+| 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5e, 5f and 5g** — the three `Classification.phg` blockers outside DEC-515 (split 2026-09-13; rows 5b and 5c are closed) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench. Wall-fall MEASURED on scout: 57/123 → 64/125, zero keyed-shape refusals, `Classification.php` lifts | L | done | 9b3e528c | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy. **ROOT-CAUSED 2026-09-09, no fix written**: the unboxed JIT `Kind` lattice has a `MapList` and a `SetList` but no list-of-lists, so `admit_make_list` refuses the row literal at `Op::MakeList` before any index runs and the function falls to the VM; "JIT-resistant" is retracted, it does not engage. **DEC-519's premise is also retracted** — none of the four widened rows has a two-level read; the census found four distinct causes and `strappend` COMPILES (so its loss is NOT JIT coverage; its actual cause is unexamined, out of scope). The FIX SHAPE is RULED (DEC-520, 2026-09-09: INT-ONLY inner lists, a dedicated list-of-lists `Kind` reusing `IntList`'s flat encoding, 10 code sites + the ABI decode gate) and is **BUILT 2026-09-09** (`8e814277` M-Decomp + the follow-up carrying the kind): `Kind::IntListList(Own)` across 12 code sites in 4 files, an M-Decomp split FIRST because two emit files had zero size-gate headroom, the 4 decline pins flipped to compile + `hits > 0` + oracle identity and a 5th pinning the kept boundary. Perf before/after OWED (box load 20.07). L4c CLOSES; L3 still blocked behind L4b | L | done | 8e814277 | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
-| 5c | L4b — DEC-515: extend the lift tuple-field seed past PARAMS to `@var` locals and `foreach` binders over a keyed collection (140 reads / 16 files), and lift a keyed array literal in a named-tuple return position to a tuple literal (the write half), so `Classification.phg` CHECKS. Blocks L3 | M | todo | - | src/lift/lifter/decls/declarations.rs src/lift/lifter/decls/seed.rs src/lift/lifter/exprs.rs src/lift/lifter_tests_shapes.rs |
+| 5c | L4b — DEC-515, the BUILT half (split 2026-09-13): a `foreach` binder over a declared keyed collection reads fields (`$row['bp']` → `row.bp`), scoped so a nested rebinding restores the outer shape; a keyed literal in named-tuple RETURN position becomes a tuple literal when its keys are the declared fields in declared order; named tuple values print with labels. 10 tests, 2 sabotages, Invariant-9 example. Census re-count: ~71 reachable reads, not 140 | L | done | - | src/lift/lifter/shapes.rs src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/mod.rs src/lift/printer/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/* |
+| 5d | L4b-2 — DEC-515, the UNBUILT half: `@var`-declared locals (census R2 `$x = []`, R3 `$x = <call>` — the parser must carry the type, R4 nullable shape), ~28 of ~71 reads, plus the ASSIGNMENT-position write half (`Rent/Cli/Pipeline.php:1161`) | L | todo | - | src/lift/* |
+| 5e | `Classification.phg` blocker 1 — the lifter emits no same-package import, so a single-file check cannot see `Tenure`/`TenureSignal`/`Outcome` (each checks clean alone). Gates L3 | M | todo | - | src/lift/* |
+| 5f | `Classification.phg` blocker 2 — `usort` and `array_map` have no lift mapping (zero hits under `src/lift/`); `List.sort` must be verified STABLE first, as PHP 8's `usort` is. Gates L3 | M | todo | - | src/lift/* |
+| 5g | `Classification.phg` blocker 3 — PHP `/` lifts to phorj integer division, but PHP `/` on two ints yields a float unless it divides exactly. Needs its lift rule decided before it is built. Gates L3 | M | todo | - | src/lift/* |
 | 6 | L5 — HTML5 parse + CSS selectors + entity decode (readiness 13, DEC-469) | L | todo | - | src/ext/html/* |
 | 7 | L6 — `Core.Net` + `Core.Mime` + read-only `Core.Imap` with the file-backed `.eml` transport (readiness 14, DEC-467) | L | todo | - | src/ext/net/* src/ext/mime/* src/ext/imap/* |
 | 8 | L7 — breadth census loop to the stop condition: every file lifts or carries a named refusal with a DEC row | L | todo | - | src/lift/* examples/lift/scout/* |
@@ -625,3 +640,87 @@ KNOWN regression rather than an unknown one.
   a NAMED refusal, not a silent `var` — the lifter cannot see whether a binder is later reassigned
   without a pass that says so.
 - `§LIFT-DISCARD` — a call written for effect lifts fine, then fails `phg check` (carried from Lane R).
+
+## L4b (DEC-515) — MEASURED census, 2026-09-10 (read-only; supersedes the row's "140 reads")
+
+Row 5c carries *"140 rewritable reads / 16 files (55 direct + 85 via binder)"*. That estimate is
+**not reproducible**. Re-counted scope-accurately against the read-only scout corpus, the reachable
+figure is **~71**, and the gap is a counting-method artefact, not a corpus change: the original
+method pooled every `$row[...]` in a FILE against every `@var` in that file. `Rent/Store/Store.php`
+alone has five distinct `$row`/`$rows` scopes with five different shapes, and pooling them yields
+exactly 55 — the register's "55 direct". Scope-accurate, that file's direct count is 2.
+
+| # | Declaration shape | sites | reads | what it needs |
+|---|---|---|---|---|
+| P  | `@param …array{…}` param, read through a `foreach` binder | 11 | 43 | **binder registration only** — `array{a: int}` already lifts to a named-field tuple (`parser/docblock.rs:371`), and `@param` is already applied (`:203`) |
+| R2 | `@var` on `$x = []`, read through a binder | 10 | 4 | binder registration; the type already reaches the lifter as `PhpExpr::EmptyColl` |
+| R3 | `@var` on `$x = <call>` | 8 | 8 | parser must CARRY the type — `apply_doc_local` fires only when `items.is_empty()`, so these are dropped today |
+| R4 | `@var array{…}\|null $x = null` | 2 | 16 | parser carry **+ assignment-position write half** (see below) |
+| R1 | `@var` written ON the `foreach` | 1 | 1 | **DEFERRED** — a third AST-carry site for one read |
+| — | `$this->prop` binders | 4 | 10 | **OUT** — `Expr::Member`, not `Expr::Ident`; the consumer at `lifter/exprs.rs:326` cannot fire |
+| — | binder over a CALL-returned collection | 12 | 31 | **OUT of scope, by DEC-166** — resolving it means inferring a method's return type; the lifter does not guess |
+
+Three findings that change the build, each verified by reading the source:
+
+- **The write half cannot be return-position only.** `Rent/Cli/Pipeline.php:1161` assigns a keyed
+  literal into a declared-shape local (`$seen = ['tenure' => …, 'source' => …, 'bp' => …]`). Register
+  R4's labels without the assignment position and the reads rewrite to `seen.tenure` while the
+  assignment stays a map literal — the draft then fails `phg check` on a different line, not fewer.
+- **The acceptance criterion is reachable.** `Rent/Core/Classification.php:57` does declare
+  `@return array{tenure: string, confidence_bp: int, outcome: string, reasons: list<string>}`, so the
+  write half has real labels to key on rather than guessing.
+- **`TUPLE_FIELDS` has no scope discipline** and a flat name-keyed map is unsafe here: `Store.php`'s
+  five `$row` scopes would cross-contaminate. Registration must save the prior binding and restore it
+  when the binder's block closes; the sabotage that proves it is a nested `foreach` rebinding one name
+  over a different shape, plus a read of that name after the outer loop closes.
+
+Also measured: `@param`-shaped binder subjects are **12 of 57** — the other 45 are a bare `array` and
+correctly register nothing. Size: this is **L**, not the row's M (parser AST carry + two registries +
+a new file + a second write position + this correction across the SSOT quartet).
+
+### L4b — where the build stands, 2026-09-10 (paused mid-slice; COMMITTED 2026-09-13 as the half row 5c describes)
+
+Built and green, but **not committed and not finished**. Six files modified + one added; the full
+`--all-features` gate with the real PHP 8.5 oracle passed **3221/3221** on the toolchain as it stood
+BEFORE the /stack dependency update.
+
+| Piece | File | State |
+|---|---|---|
+| Two shape registries + scoped binder | `src/lift/lifter/shapes.rs` (new, 176) | done, staged |
+| `foreach` binder hook | `src/lift/lifter/decls/statements.rs` | done — restore runs before the `?`, so a failed body lift still unwinds |
+| Write half, return position | `src/lift/lifter/decls/seed.rs` (139 -> 201) | done — `TupleShape` parameterizes the existing exhaustive walk rather than copying it |
+| Named-tuple VALUE printing | `src/lift/printer/exprs.rs` | done — `Expr::Tuple` was discarding its labels |
+| Tests | `src/lift/lifter_tests_shapes.rs` (283 -> 419) | 10 added, 33/33 green |
+
+**The printer was the hidden half.** A positional literal does NOT satisfy a named tuple: the
+checker reports `expected (tenure: string, …), found (string, …)`. So the write half alone lifted a
+draft that parsed and did not CHECK. This was only caught because the acceptance assertion is
+`cli::check_and_expand` on the lifted draft rather than a string match — a string match had been
+written, and passed, against output that did not check.
+
+**Order discipline, ruled here.** A keyed literal converts only when its keys are the declared
+fields IN the declared order. Field order is part of a named tuple's type and erasure is positional,
+so reordering the literal would move the evaluation order of its value expressions relative to
+storage order — a byte-identity surface. A reordered or short literal stays a Map for the checker.
+
+#### OWED before this can be committed — status 2026-09-13
+1. ✅ **Both sabotage checks passed (2026-09-13)**: each went red for its stated reason, the restores were byte-identical, and the unmutated suite was green again. Original text: **Both sabotage checks — neither has passed yet.** (a) `leave_binder` stops restoring: the two
+   scope guards must go RED. First attempt did not compile (unused binding), which tests nothing.
+   (b) the write half's order check relaxed to set membership: the out-of-order test must go RED.
+2. ✅ **Shipped 2026-09-13** (`examples/lift/shapes.php` + regenerated `.phg`, identical on all three legs). Original text: **Invariant 9 — no example shipped.** `examples/lift/shapes.php` is the place; it also carries a
+   STALE claim ("a KEYED shape needs a named-field tuple, which phorj does not have yet"), untrue
+   since DEC-504. Its `.phg` twin is pinned by two gates (lift-pair identity + format idempotence),
+   so it must be regenerated with `phg lift`, not hand-edited.
+3. ✅ `clippy --all-features` and `--no-default-features`, `fmt --check`, size-gate, doc-guards — all green on the working tree that carries this slice, 2026-09-13.
+4. ✅ Landed in the L4b commit. SSOT quartet: the 140 -> ~71 estimate correction with its counting-method explanation, row 5c
+   `todo -> done`, and the size correction M -> L.
+5. ⏳ Covered by the one full all-features gate before the push (dependency-upgrade plan, row 10); the pre-commit fast tier already ran 3149/3149 on this tree under Rust 1.98.1. **Re-run the full gate after the /stack dependency update.** The 3221/3221 above was measured
+   against `php-8.5.9` and rust 1.97.1. `scripts/toolchain.env` RESOLVES the oracle by globbing
+   `php-8.5.*`, so a PHP bump changes what the differential runs against; that result does not carry
+   across the update.
+6. ~~The 3221 total is not reconciled.~~ **Reconciled 2026-09-13, by name, not by count.** 3225
+   `#[test]` functions in tracked `.rs` files = the 3221 `nextest list --workspace --all-features`
+   reports + 2 `#[ignore]` timing benches + 2 `cfg(not(feature))` tests that all-features compiles
+   out; a multiset compare of names leaves zero unexplained. The 3198 figure is not a
+   comparable baseline: it was carried from `7e835bff`, nine commits and the 10 L4b tests ago, and
+   how it was counted is not recorded. Cite counts from `nextest list` only.

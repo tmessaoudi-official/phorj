@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — lift: keyed array shapes are READ through `foreach` binders and WRITTEN in return position (DEC-515, half; 2026-09-13)
+
+- A `foreach` binder over a collection declared as `list<array{…}>` (or a map of shapes) inherits the
+  element shape, so `$row['bp']` lifts to `row.bp`. The registration is SCOPED: a nested loop that
+  rebinds the same name over a different shape restores the outer shape when it closes, and nothing
+  leaks past the loop — both proved by sabotage.
+- A keyed literal returned under a keyed `@return array{…}` lifts to a named tuple literal, but only
+  when its keys are the declared fields in declared order. Field order is part of a named tuple's
+  type, so a reordered or incomplete literal stays a map and `phg check` reports it.
+- Named tuple VALUES now print with their labels. Without that the write half produced drafts that
+  parsed and did not check (`expected (tenure: string, …), found (string, …)`).
+- Not yet: `@var`-declared locals and assignment-position literals (scout plan row 5d). The census
+  behind this slice was re-counted scope-accurately: ~71 reachable reads, not the 140 first estimated.
+  `examples/lift/shapes.php` now exercises both halves on every leg.
+
 ### Changed — dependencies: Rust 1.98.1 and every compatible crate, with two regex divergences closed (DEC-521, 2026-09-13)
 
 - **Toolchain 1.97.1 → 1.98.1** (`rust-toolchain.toml`, both `rust-version` fields — the playground's

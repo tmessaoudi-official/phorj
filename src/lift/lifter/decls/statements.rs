@@ -104,12 +104,22 @@ impl Lifter {
                 // `Type::Infer` for-in). DEC-248 gave Phorj the two-binding key form, so
                 // `foreach ($m as $k => $v)` now lifts Tier-1 too (`foreach (m as k => v)`) —
                 // the old Tier-2 rejection is retired.
+                // DEC-515: the binder inherits the ELEMENT shape of the collection being
+                // iterated — `foreach ($rows as $row)` over a `list<array{bp: int}>` makes `$row`
+                // a `(bp: int)`, which is what turns `$row['bp']` into `row.bp`. The binding lasts
+                // for the body and not one statement longer: `leave_binder` runs before the `?` so
+                // a body that fails to lift still unwinds it, and a later `$row` in the same
+                // function answers to its own shape again (`lifter::shapes`).
+                let iter = lift_expr(array)?;
+                let scope = super::super::enter_binder(&iter, value);
+                let lifted = self.lift_block(body, declared);
+                super::super::leave_binder(scope);
                 vec![Stmt::For {
                     ty: Type::Infer(SP),
                     name: key.clone().unwrap_or_else(|| value.clone()),
                     val: key.as_ref().map(|_| (Type::Infer(SP), value.clone())),
-                    iter: lift_expr(array)?,
-                    body: self.lift_block(body, declared)?,
+                    iter,
+                    body: lifted?,
                     span: SP,
                 }]
             }

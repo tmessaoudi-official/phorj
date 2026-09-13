@@ -29,6 +29,24 @@ function maybePair(bool yes): (int, string)? {
     return null;
 }
 
+/**
+ * @return array{tenure: string, bp: int}
+ */
+function verdict(string tenure, int bp): (tenure: string, bp: int) {
+    return (tenure: tenure, bp: bp);
+}
+
+/**
+ * @param list<array{tenure: string, bp: int}> $rows
+ */
+function totalBp(List<(tenure: string, bp: int)> rows): int {
+    mutable var n = 0;
+    foreach (rows as row) {
+        n = n + row.bp;
+    }
+    return n;
+}
+
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var (n, label) = pair(7);
@@ -46,4 +64,7 @@ function main(): void {
     } else {
         Output.print("some\n");
     }
+    mutable var total = totalBp([verdict("rent", 3), verdict("own", 4)]);
+    Output.print("{total}");
+    Output.print("\n");
 }
