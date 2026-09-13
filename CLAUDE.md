@@ -93,7 +93,7 @@ stay in `.claude/agents/`.
   workflows set only `PHORJ_REQUIRE_PHP=1` and rely on the test-side `PHORJ_PHP`-or-`php` fallback
   present in 9 test files, with `setup-php` supplying an 8.5+bcmath build; that is correct today but
   is a SECOND resolution path, so a change here is not automatically a change there. The two paths also
-  resolve DIFFERENT PCRE2 builds — PHP 8.5's bundled 10.44 here, ubuntu-24.04's system 10.42 on CI — so a
+  resolve DIFFERENT PCRE2 builds — PHP 8.5's bundled 10.44 here, ubuntu-24.04's system 10.42 on CI (inferred from CI's behaviour; `php:8.3-cli` in Docker reproduces it) — so a
   `preg_*` behaviour PCRE2 changed between them passes locally and reds CI (DEC-522: `{,n}`); a pin on
   such a behaviour must hold on both, or the construct is refused on every leg. No script may pin
   a patch version — `scripts/validate-infra.sh` enforces that over every tracked shell script and

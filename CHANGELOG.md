@@ -31,7 +31,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   still verifies; a second test pins the default cost (`m=19456,t=2,p=1`) so a future upgrade cannot
   change the work factor of new hashes silently.
 - **`fancy-regex` 0.11 → 0.19.2.** A 23-pattern probe ran each behaviour change natively and through
-  the transpiled PHP on PHP 8.5.10 / PCRE2 10.44: 19 agree, and 11 of those are now pinned in
+  the transpiled PHP on PHP 8.5.10 / PCRE2 10.44: 19 agree, and 10 of those are pinned (an eleventh, `x{,2}y`, was dropped by DEC-522) in
   `tests/differential.rs`. The other two were NEW divergences introduced by the upgrade — `\O` and the
   absent operator `(?~…)`, which `fancy-regex` accepts and PCRE refuses — and both are now refused on
   every leg (`E-REGEX-UNSUPPORTED`), in the Rust scan and its PHP twin alike. Removing either rejection
