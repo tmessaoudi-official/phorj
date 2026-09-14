@@ -69,6 +69,7 @@ impl Checker {
             // DEC-417: harvest `#[Deprecated]` once, here, so every use site can warn without
             // re-walking the declaration's attributes.
             deprecated: Checker::harvest_deprecation(&f.attrs),
+            private_window: f.private_window,
         };
         let existing = self.funcs.get(&f.name).cloned().unwrap_or_default();
         // DEC-298: a variadic free function must be the SOLE signature of its name — an overloaded

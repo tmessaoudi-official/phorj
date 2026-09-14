@@ -1,5 +1,36 @@
 # Known Issues & Limitations
 
+## UFCS-CROSS-PACKAGE — a method-style call reaches only the CURRENT package's free functions (deferred by DEC-527 to scout L7) {#ufcs-cross-package}
+
+Since scout row 5h (2026-09-14), `s.shout()` inside `package Acme.Text` resolves `Acme.Text`'s own
+`shout` from any file of that package, and a `private` function is file-scoped for method-style
+calls too. A free function of ANOTHER package is not reachable method-style, imported or not:
+
+```
+package Main;                         // Acme.Util declares `public function shout(string s): string`
+import Acme.Util.shout;               // binds the bare call form `shout(s)` only
+…
+Output.printLine(s.shout());          // type error at 9:29: type `string` has no method `shout`
+```
+
+The message is the same with and without the import; no `E-UNUSED-IMPORT` fires for it [Verified
+2026-09-14: `phg check` on both shapes]. Call it module-qualified (`Util.shout(s)`) or bare after the
+import (`shout(s)`). Pinned by `ufcs_on_a_function_of_another_package_stays_loud`. Deferred by DEC-527:
+whether an imported function should become UFCS-eligible is decided with scout's `Rent.Cli` /
+`Rent.Store` / `Rent.Config` callers in L7.
+
+**Surface difference, disclosed.** A `private`-function violation reaches the developer by two routes
+carrying the same code:
+
+| Call form | Reported by | Shape |
+|---|---|---|
+| `wrap(s)` from another file | the loader, before checking | `<file path>: function `wrap` is not visible here — it is `private` in package `Acme.Text`; widen its visibility to call it [E-VIS-PRIVATE]` |
+| `s.wrap()` from another file | the checker | `type error at 3:18: function `wrap` is not visible here — …` + `[E-VIS-PRIVATE]` + a hint |
+
+The checker path only is visible in the LSP's diagnostics as a positioned error. Go-to-definition and
+hover on a method-style call to a package function are UNCERTIFIED: the LSP has no UFCS-specific code
+and they were not probed on a running server.
+
 ## DEP-ADVISORIES — three RustSec advisories remain after the 2026-09-13 dependency upgrade, none with a reachable fix
 
 `cargo audit` (cargo-audit 0.22.2, advisory DB fetched 2026-09-13) on the upgraded `Cargo.lock` reports

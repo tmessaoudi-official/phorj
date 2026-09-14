@@ -17,7 +17,7 @@
 
 use crate::ast::{
     free_vars, BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, LambdaBody,
-    MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp, Visibility,
+    MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
 use crate::chunk::{BytecodeProgram, Chunk, ClassDesc, EnumDesc, FaultMsg, Function, Op, SeqOrd};
 use crate::diagnostic::Diagnostic;

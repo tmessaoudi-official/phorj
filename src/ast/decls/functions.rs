@@ -48,7 +48,44 @@ pub struct FunctionDecl {
     /// gap for this common shape). Front-end-only and inert to the byte-identity spine (`None` for
     /// every non-generic function and every generic function whose return is not a bare own parameter).
     pub generic_ret_from_param: Option<usize>,
+    /// DEC-527: the declaring file's `Span.start` window, HALF-OPEN `[lo, hi)`, for a `private` free function
+    /// in a multi-file project. Set only by the loader (`loader/assemble.rs`) from the file's `SpanWindows`
+    /// reservation; the checker's UFCS resolution rejects a method-position call whose span starts outside
+    /// it (`E-VIS-PRIVATE` — a bare call is rejected by the loader itself). `None` for every non-private
+    /// function and for a single-file program, which has no other file to call it from — never a hole.
+    pub private_window: Option<(usize, usize)>,
     pub span: Span,
+}
+
+impl FunctionDecl {
+    /// A synthesized PUBLIC function or method: no modifiers, attributes, type parameters or `throws`,
+    /// not foreign, no visibility window. The compiler's property-hook accessors are built this way;
+    /// keeping the literal here means a new `FunctionDecl` field is one edit, not one per synthesis site.
+    #[must_use]
+    pub fn synthetic(
+        name: String,
+        params: Vec<Param>,
+        ret: Option<Type>,
+        body: Vec<Stmt>,
+        span: Span,
+    ) -> Self {
+        FunctionDecl {
+            modifiers: Vec::new(),
+            attrs: Vec::new(),
+            vis: Visibility::Public,
+            name,
+            type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
+            params,
+            ret,
+            throws: Vec::new(),
+            body,
+            foreign: false,
+            generic_ret_from_param: None,
+            private_window: None,
+            span,
+        }
+    }
 }
 
 /// A synthetic, inert `function main(): void {}` item. The bytecode compiler requires an entry
@@ -80,6 +117,7 @@ pub fn synth_empty_main() -> Item {
         body: Vec::new(),
         foreign: false,
         generic_ret_from_param: None,
+        private_window: None,
         span: Span {
             start: 0,
             len: 0,

@@ -77,6 +77,7 @@ pub fn erase_generics(program: Program) -> Program {
                         // from the pre-erasure signature (`generic_ret_echo_param` keys on the
                         // method's own `type_params`, so it never fires for a class-`T` return).
                         generic_ret_from_param: generic_ret_echo_param(&f),
+                        private_window: f.private_window,
                         span: f.span,
                     })
                 }
@@ -163,6 +164,7 @@ pub fn erase_generics(program: Program) -> Program {
                     body: f.body.iter().map(|s| rstmt(s, &params)).collect(),
                     foreign: f.foreign,
                     generic_ret_from_param,
+                    private_window: f.private_window,
                     span: f.span,
                 })
             }

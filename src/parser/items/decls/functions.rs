@@ -56,6 +56,7 @@ impl Parser {
             body,
             foreign: false,
             generic_ret_from_param: None,
+            private_window: None,
             span: sp,
         })
     }

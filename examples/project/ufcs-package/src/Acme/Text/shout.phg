@@ -1,0 +1,6 @@
+package Acme.Text;
+
+// `internal`: visible to every file of `Acme.Text`, so `greet.phg` may call it method-style.
+internal function shout(string s): string {
+    return s + "!";
+}

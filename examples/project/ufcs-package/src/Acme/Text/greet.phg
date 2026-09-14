@@ -1,0 +1,16 @@
+package Acme.Text;
+
+// `private`: visible only in this file — and that holds for a method-style call too.
+private function wrap(string s): string {
+    return "<" + s + ">";
+}
+
+function greet(string name): string {
+    // UFCS on `shout`, a function of this package declared in ANOTHER file.
+    return "hello, " + name.shout();
+}
+
+function cheer(string name): string {
+    // UFCS on this file's private helper, inside an interpolation.
+    return "{name.wrap()} {name.shout()}";
+}

@@ -130,6 +130,10 @@ struct FnSig {
     /// checker warns `W-DEPRECATED` at every USE site and the LSP tags declaration + usages; no
     /// backend ever sees it. `None` is the overwhelmingly common case.
     deprecated: Option<DeprecationNote>,
+    /// DEC-527: a `private` free function's declaring-file span window, half-open `[lo, hi)`, copied
+    /// from `FunctionDecl::private_window`. UFCS resolution rejects a call starting outside it
+    /// (`E-VIS-PRIVATE`). `None` for methods, natives and every non-private function.
+    private_window: Option<(usize, usize)>,
 }
 
 /// One lexical binding: a parameter or a local. Carries the SPAN of its declaration so DEC-339's

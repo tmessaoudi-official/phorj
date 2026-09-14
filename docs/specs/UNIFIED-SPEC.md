@@ -485,6 +485,13 @@ does NOT resolve a free `stringify(MyClass x)` — a class is not a free-functio
 modules are. Use `x.stringify()` (UFCS) or a `static function`. `Module.fn(x)` works only because
 `Module` is a module.
 
+**UFCS reaches the CURRENT package's free functions** (DEC-527, 2026-09-14). `x.f()` resolves a user
+free function `f` declared in the calling code's own package, from any of its files, under the
+declaration-visibility lattice: a `private` `f` is callable method-style only from its own file
+(`E-VIS-PRIVATE`). A free function of another package is not UFCS-eligible, imported or not — call it
+module-qualified. Whether a member function import should make it eligible is deferred (scout L7;
+KNOWN_ISSUES §ufcs-cross-package).
+
 ### Acceptance (all met at HEAD)
 
 `import type` no longer parses (repo grep = 0 in code); bare injected member types without a

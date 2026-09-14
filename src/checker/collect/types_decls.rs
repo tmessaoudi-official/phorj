@@ -470,6 +470,7 @@ impl Checker {
                         variadic: false, // DEC-298: methods don't support variadics in v1 (rejected in check_function)
                         param_names: f.params.iter().map(|p| p.name.clone()).collect(), // DEC-297
                         deprecated: Checker::harvest_deprecation(&f.attrs), // DEC-417
+                        private_window: None, // DEC-527: free functions only
                     };
                     let existing = methods.get(&f.name).cloned().unwrap_or_default();
                     // M-RT S2.2: INSTANCE methods may return-overload (identical params, distinct

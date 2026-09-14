@@ -41,6 +41,7 @@ impl Parser {
             body: Vec::new(),
             foreign: true,
             generic_ret_from_param: None,
+            private_window: None,
             span: sp,
         }))
     }
@@ -128,6 +129,7 @@ impl Parser {
                         // formatter prints it via the `declare class` path.
                         foreign: false,
                         generic_ret_from_param: None,
+                        private_window: None,
                         span: msp,
                     }));
                 }

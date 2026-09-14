@@ -20,6 +20,7 @@ pub(super) fn lift_interface(i: &php::PhpInterface) -> Result<InterfaceDecl, Str
             body: Vec::new(),
             foreign: false,
             generic_ret_from_param: None,
+            private_window: None,
             span: SP,
         });
     }

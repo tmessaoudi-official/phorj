@@ -21,10 +21,11 @@
 > `E-FILE-MIXED-PUBLIC` (5i, DEC-526 RULED 2026-09-14: a sibling `<Enum>Functions.phg`). No ruling is pending.
 > **DONE (2026-09-14): row 5h0** (`5388b645`) — the interpolation span collision found at 5h's 3C
 > (KNOWN_ISSUES §interpolation-spans), fixed first because DEC-527's file-window check is unsound without it.
-> **NEXT:** build 5h per DEC-527, same-package half first — `try_ufcs` step (1) looks up
-> the bare name at `src/checker/calls/ufcs.rs:40` while `self.funcs` is keyed by the mangled name
-> (`src/checker/collect/functions.rs:91`); failing differential test first, and keep `check_fn_visibility` on the
-> new path so the fix opens no private hole. Then 5i (DEC-526), 5g, 5e, 5j, 5d. Open probe before claiming 5f
+> **NOW (2026-09-14): row 5h — BUILT, gate pending.** `try_ufcs` looks up the current package's mangled
+> key and emits the mangled callee; a `private` function carries its file's span window (`private_window`,
+> stamped by the loader) and a method-position call outside it is `E-VIS-PRIVATE`; the cross-package half
+> stays loud (L7). Red first also exposed a silent half — a library's `s.shout()` ran `Main`'s `shout`.
+> **THEN:** 5i (DEC-526), 5g, 5e, 5j, 5d. Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

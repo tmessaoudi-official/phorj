@@ -57,7 +57,17 @@ pub(super) fn assemble(
         } else {
             windows.reserve(file, src.len())?
         };
-        let prog = parse_at_rebased(file, &src, base)?;
+        let mut prog = parse_at_rebased(file, &src, base)?;
+        // DEC-527: `private` is file-scoped for a method-position (UFCS) call too, and only the checker
+        // resolves those — so hand it this file's span window, half-open like `SpanWindows::reserve`.
+        let window = (base, base + src.len() + 1);
+        for item in &mut prog.items {
+            if let Item::Function(f) = item {
+                if f.vis == crate::ast::Visibility::Private {
+                    f.private_window = Some(window);
+                }
+            }
+        }
         validate_folder_path(&prog, file, &src_entry.root)?;
         validate_package_decl(&prog, file)?;
         validate_public_surface(&prog, file)?;

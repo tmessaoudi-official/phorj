@@ -1,0 +1,12 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Acme.Text;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine(Text.greet("phorj"));
+    Output.printLine(Text.cheer("world"));
+}

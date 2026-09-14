@@ -35,21 +35,38 @@ impl Checker {
         nav: UfcsNav,
     ) -> Option<Ty> {
         // (1) A user free function wins over any stdlib native of the same name. Single-overload only
-        // this slice (overload-set + multi-package UFCS deferred — F-004); a non-fitting arity/first
-        // param falls through to the native search rather than committing to an error.
-        if let Some(sigs) = self.funcs.get(name).cloned() {
+        // (overload sets stay deferred); a non-fitting arity/first param falls through to the native
+        // search rather than committing to an error.
+        //
+        // DEC-527: the function table is keyed by the loader-MANGLED name (`Pkg\name` outside `Main`),
+        // so the lookup key is the CURRENT package's spelling — a bare lookup never found a library
+        // package's own function, and from a library it found `Main`'s instead. Only the same package
+        // resolves here; a function of another package stays unresolved (the cross-package half is
+        // deferred to scout L7).
+        let key = if self.cur_package.is_empty() {
+            name.to_string()
+        } else {
+            format!("{}\\{name}", self.cur_package)
+        };
+        if let Some(sigs) = self.funcs.get(&key).cloned() {
             if sigs.len() == 1
                 && sigs[0].params.len() == args.len() + 1
                 && self.ufcs_first_accepts(&sigs[0].params[0], recv_ty)
             {
                 let sig = &sigs[0];
+                // `private` is file-scoped for a method-position call too (DEC-527).
+                if self.ufcs_private_violation(name, sig.private_window, call_span) {
+                    return Some(Ty::Error);
+                }
                 let ret =
                     self.check_ufcs_call(name, &sig.params, &sig.ret, recv_ty, args, call_span);
                 return Some(self.finish_ufcs(
                     UfcsSite {
                         span: call_span,
                         leaf: None,
-                        name,
+                        // The rewrite names the function by its mangled key — the same `Ident` the
+                        // loader gives a resolved bare call, so every backend reaches it unchanged.
+                        name: &key,
                         object,
                         args,
                         nav,

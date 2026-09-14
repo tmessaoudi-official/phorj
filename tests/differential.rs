@@ -5695,6 +5695,157 @@ import Core.Html;
     );
 }
 
+// ── DEC-527 (scout row 5h): UFCS on a free function outside `package Main` ──
+//
+// `try_ufcs` looked the call-site name up BARE in the checker's function table, whose keys are the
+// loader-mangled `Pkg\name` for every non-`Main` package — so `s.shout()` inside `Acme.Util` never
+// found `Acme.Util`'s own `shout`. The same-package half resolves through the mangled key; `private`
+// is file-scoped exactly like a bare call; the cross-package half stays loud (deferred to L7).
+
+/// A project of plain files under `src/`, no offset alignment. Returns the entry (the first file).
+fn write_plain_project(tag: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!("phorj_proj_{tag}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for (rel, text) in files {
+        let path = root.join("src").join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, text).unwrap();
+    }
+    root.join("src").join(files[0].0)
+}
+
+/// Load `entry` and require the interpreter, the VM and transpiled PHP to print `expected`.
+fn project_agrees_php(entry: &std::path::Path, expected: &str, label: &str) {
+    let unit = loader::load(entry).unwrap_or_else(|e| panic!("{label}: load: {e}"));
+    let tree = cli::treewalk_program(&unit);
+    let vm = cli::run_program(&unit);
+    assert_eq!(tree.as_deref(), Ok(expected), "interpreter for {label}");
+    assert_eq!(vm.as_deref(), Ok(expected), "VM for {label}");
+    if let Some(php) = php_or_gate(label) {
+        let php_src = cli::transpile_program(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("{label}: transpile: {e}"));
+        assert_eq!(run_php(&php, &php_src, label), expected, "PHP for {label}");
+    }
+}
+
+const UFCS_PKG_MAIN: &str = r#"package Main;
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Acme.Util;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine(Util.greet("hi"));
+}
+"#;
+
+const UFCS_PKG_GREET: &str = r#"package Acme.Util;
+function greet(string s): string {
+    return s.shout();
+}
+"#;
+
+#[test]
+fn ufcs_on_a_same_package_function_in_another_file_resolves_on_every_leg() {
+    let entry = write_plain_project(
+        "ufcs_pkg",
+        &[
+            ("main.phg", UFCS_PKG_MAIN),
+            ("Acme/Util/Greet.phg", UFCS_PKG_GREET),
+            (
+                "Acme/Util/Shout.phg",
+                "package Acme.Util;\nfunction shout(string s): string {\n    return s + \"!\";\n}\n",
+            ),
+        ],
+    );
+    project_agrees_php(&entry, "hi!\n", "ufcs_same_package_other_file");
+}
+
+#[test]
+fn ufcs_on_a_private_function_from_another_file_is_e_vis_private() {
+    let entry = write_plain_project(
+        "ufcs_priv",
+        &[
+            ("main.phg", UFCS_PKG_MAIN),
+            ("Acme/Util/Greet.phg", UFCS_PKG_GREET),
+            (
+                "Acme/Util/Shout.phg",
+                "package Acme.Util;\nprivate function shout(string s): string {\n    return s + \"!\";\n}\n",
+            ),
+        ],
+    );
+    let unit = loader::load(&entry).expect("the project loads (UFCS visibility is the checker's)");
+    let err = cli::check_program(&unit.program, &unit.diag_src)
+        .expect_err("a private function is file-scoped for UFCS exactly as for a bare call");
+    assert!(err.contains("E-VIS-PRIVATE"), "got:\n{err}");
+}
+
+/// The private function and its interpolated UFCS call sit in a NON-ENTRY file, at the same byte
+/// offset as the entry's own `.shout()` — which resolves to a DIFFERENT `shout`, `Main`'s. A bare-name
+/// lookup would silently pick `Main`'s and print `hi?`; the call span only lands inside the private
+/// function's file window because interpolation offsets are rebased (row 5h0).
+#[test]
+fn ufcs_on_a_private_function_in_its_own_non_entry_file_resolves_inside_interpolation() {
+    let main_src = r#"package Main;
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Acme.Util;
+function shout(string s): string {
+    return s + "?";
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    string b = "yo";
+    Output.printLine("{b.shout()}" + Util.greet("hi"));
+}
+"#;
+    let lib_src = r#"package Acme.Util;
+private function shout(string s): string {
+    return s + "!";
+}
+function greet(string s): string {
+    return "{s.shout()}";
+}
+"#;
+    let entry = write_aligned_project(
+        "ufcs_priv_interp",
+        &[("main.phg", main_src), ("Acme/Util/Greet.phg", lib_src)],
+        ".shout()",
+    );
+    project_agrees_php(&entry, "yo?hi!\n", "ufcs_private_same_file_interpolated");
+}
+
+/// The cross-package half is deferred (DEC-527, L7): `Main` calling `Acme.Util`'s public `shout` in
+/// method position stays a loud error — with no import, and with a member function import, which
+/// binds the bare-call form only.
+#[test]
+fn ufcs_on_a_function_of_another_package_stays_loud() {
+    let lib = (
+        "Acme/Util/Shout.phg",
+        "package Acme.Util;\npublic function shout(string s): string {\n    return s + \"!\";\n}\n",
+    );
+    for (tag, import) in [
+        ("ufcs_xpkg_bare", ""),
+        ("ufcs_xpkg_import", "import Acme.Util.shout;\n"),
+    ] {
+        let main_src = format!(
+            "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n{import}\
+             #[Entry(kind: EntryKind.Cli)]\nfunction main(): void {{\n    string s = \"hi\";\n    Output.printLine(s.shout());\n}}\n"
+        );
+        let entry = write_plain_project(tag, &[("main.phg", &main_src), lib]);
+        let err = match loader::load(&entry) {
+            Err(e) => e,
+            Ok(unit) => cli::check_program(&unit.program, &unit.diag_src)
+                .expect_err("cross-package UFCS must not resolve silently"),
+        };
+        assert!(
+            err.contains("shout"),
+            "{tag}: the error must name the call, got:\n{err}"
+        );
+    }
+}
+
 /// KNOWN_ISSUES §default_fills (P0): the checker's span-keyed rewrite maps are keyed by
 /// `Span.start`, a byte offset into EACH file, so two files of one project can collide and one
 /// file's default-filled call gets spliced over the other's — on the interpreter, the VM AND the

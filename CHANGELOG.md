@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — UFCS on a free function works outside `package Main`, and never picks another package's function (scout row 5h; DEC-527; 2026-09-14)
+
+- **Loud half.** Inside a library package, `s.shout()` failed with ``type `string` has no method
+  `shout` `` even when `shout` was that package's own function. The checker looked the call up by its
+  bare name, but the function table is keyed by the loader-mangled `Pkg\name`. The lookup now uses the
+  current package's spelling, so the call resolves from any file of the package.
+- **Silent half.** When `package Main` also declared a `shout`, the library's `s.shout()` resolved
+  MAIN's function and ran it, on every leg (a test printed `yo?hi?` where `yo?hi!` was right). The
+  same lookup fix closes it: UFCS never reaches outside the current package.
+- **`private` stays file-scoped for method-style calls.** A `private` function called with UFCS from
+  another file is `E-VIS-PRIVATE`. The checker reports it, where the loader reports the bare-call
+  form. The loader stamps each private function with its file's span window, so the check stays
+  correct inside interpolations (row 5h0).
+- **Not changed:** calling ANOTHER package's function method-style is still an error, imported or
+  not (deferred to scout L7 by DEC-527; KNOWN_ISSUES §ufcs-cross-package).
+- Tests: four in `tests/differential.rs` (`ufcs_on_a_*`), red first. Example:
+  `examples/project/ufcs-package/`.
+
 ### Fixed — interpolated sub-expressions could take another call's UFCS rewrite, silently (P0; 2026-09-14)
 
 - Before this fix, `html"{a.upperCase()}"` followed by `html"{b.lowerCase()}"` printed `yoyo` on the

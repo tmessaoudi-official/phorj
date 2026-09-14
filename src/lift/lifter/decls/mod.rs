@@ -177,6 +177,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             body: top_stmts,
             foreign: false,
             generic_ret_from_param: None,
+            private_window: None,
             span: SP,
         }));
     }

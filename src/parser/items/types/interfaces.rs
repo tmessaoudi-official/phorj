@@ -71,6 +71,7 @@ impl Parser {
                 body: Vec::new(),
                 foreign: false,
                 generic_ret_from_param: None,
+                private_window: None,
                 span: msp,
             });
         }

@@ -226,6 +226,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
             body: f.body.iter().map(rstmt).collect(),
             foreign: f.foreign,
             generic_ret_from_param: f.generic_ret_from_param,
+            private_window: f.private_window,
             span: f.span,
         }
     }

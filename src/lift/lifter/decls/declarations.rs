@@ -54,6 +54,7 @@ impl Lifter {
             body,
             foreign: false,
             generic_ret_from_param: None,
+            private_window: None,
             span: SP,
         })
     }
@@ -241,6 +242,7 @@ impl Lifter {
             body,
             foreign: false,
             generic_ret_from_param: None,
+            private_window: None,
             span: SP,
         }))
     }

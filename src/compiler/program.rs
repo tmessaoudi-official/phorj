@@ -375,47 +375,28 @@ pub(super) fn compile_program_with(
             } = m
             {
                 if let Some(g) = get {
-                    hook_methods.push((
-                        ci,
-                        FunctionDecl {
-                            modifiers: Vec::new(),
-                            attrs: Vec::new(),
-                            vis: Visibility::Public,
-                            name: format!("{name}$get"),
-                            type_params: Vec::new(),
-                            type_param_bounds: Vec::new(),
-                            params: Vec::new(),
-                            ret: Some(ty.clone()),
-                            throws: Vec::new(),
-                            body: vec![Stmt::Return {
-                                value: Some(g.clone()),
-                                span: *span,
-                            }],
-                            foreign: false,
-                            generic_ret_from_param: None,
-                            span: *span,
-                        },
-                    ));
+                    let body = vec![Stmt::Return {
+                        value: Some(g.clone()),
+                        span: *span,
+                    }];
+                    let getter = FunctionDecl::synthetic(
+                        format!("{name}$get"),
+                        Vec::new(),
+                        Some(ty.clone()),
+                        body,
+                        *span,
+                    );
+                    hook_methods.push((ci, getter));
                 }
                 if let Some((p, body)) = set {
-                    hook_methods.push((
-                        ci,
-                        FunctionDecl {
-                            modifiers: Vec::new(),
-                            attrs: Vec::new(),
-                            vis: Visibility::Public,
-                            name: format!("{name}$set"),
-                            type_params: Vec::new(),
-                            type_param_bounds: Vec::new(),
-                            params: vec![p.clone()],
-                            ret: None,
-                            throws: Vec::new(),
-                            body: body.clone(),
-                            foreign: false,
-                            generic_ret_from_param: None,
-                            span: *span,
-                        },
-                    ));
+                    let setter = FunctionDecl::synthetic(
+                        format!("{name}$set"),
+                        vec![p.clone()],
+                        None,
+                        body.clone(),
+                        *span,
+                    );
+                    hook_methods.push((ci, setter));
                 }
             }
         }

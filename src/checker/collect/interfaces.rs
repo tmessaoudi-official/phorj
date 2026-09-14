@@ -119,6 +119,7 @@ impl Checker {
                     // Interface method SIGNATURES carry no attributes (the parser builds them without), so a
                     // deprecation can only live on the implementing method. DEC-417.
                     deprecated: None,
+                    private_window: None, // DEC-527: free functions only
                 },
             );
         }

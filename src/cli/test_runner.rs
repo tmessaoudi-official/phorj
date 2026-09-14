@@ -198,6 +198,7 @@ fn synthesize_main(program: &Program, body: &[Stmt], span: Span) -> Program {
         body: body.to_vec(),
         foreign: false,
         generic_ret_from_param: None,
+        private_window: None,
         span,
     }));
     Program {

@@ -157,4 +157,40 @@ impl Checker {
             )),
         );
     }
+
+    /// DEC-527: a `private` free function is file-scoped for a method-position (UFCS) call exactly as
+    /// for a bare one — the loader rejects the bare form, the checker this one. `window` is the
+    /// declaring file's half-open span window (`FunctionDecl::private_window`); a call starting outside
+    /// it reports `E-VIS-PRIVATE` and returns `true`.
+    pub(in crate::checker) fn ufcs_private_violation(
+        &mut self,
+        name: &str,
+        window: Option<(usize, usize)>,
+        call_span: Span,
+    ) -> bool {
+        let Some((lo, hi)) = window else {
+            return false;
+        };
+        if (lo..hi).contains(&call_span.start) {
+            return false;
+        }
+        let pkg = if self.cur_package.is_empty() {
+            "main".to_string()
+        } else {
+            self.cur_package.replace('\\', ".")
+        };
+        self.err_coded(
+            call_span,
+            format!(
+                "function `{name}` is not visible here — it is `private` in package `{pkg}`; widen \
+                 its visibility to call it"
+            ),
+            "E-VIS-PRIVATE",
+            Some(
+                "a `private` function is visible only in its own file — mark it `internal` (package-wide) or `public`"
+                    .into(),
+            ),
+        );
+        true
+    }
 }
