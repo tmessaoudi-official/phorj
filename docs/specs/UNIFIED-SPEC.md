@@ -37,7 +37,9 @@
 >   keyword is `default` (not `_`); `_` is an ignore-placeholder only.
 > - **DEC-211** — generic type bounds `T: Interface`/trait (def-site + instantiation, erased).
 > - **DEC-212** — `html"…"` generalizes to a tagged-template primitive; `html` becomes a first-party
->   library keeping the same escaping kernel. No hardcoded domain literals.
+>   library keeping the same escaping kernel. No hardcoded domain literals. A tag NAME resolves like a
+>   bare identifier in its own package (scout row 5h1): same-package or imported type, same-package
+>   function (visibility enforced), member-imported function (DEC-197), else as written.
 > - **DEC-208** — the SQL query builder leaves the language (not a first-party lib either); Core gains
 >   an enhanced-PDO DB primitive. Supersedes the Core.Sql DBAL sections. Strict imports; nothing inferred.
 > - **DEC-210** — `++`/`--` ratified statement-only (already the impl). **DEC-213** — PHP-name collision:

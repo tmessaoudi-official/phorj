@@ -1,0 +1,17 @@
+package Acme.Text;
+
+import Core.String;
+import Core.List;
+
+// Protocol-mode tag: `Loud"…"` desugars to `Loud.concat([Loud.raw(…), Loud.text(…), …])`.
+internal class Loud {
+    static function raw(string s): string {
+        return s;
+    }
+    static function text(string s): string {
+        return "*" + s + "*";
+    }
+    static function concat(List<string> parts): string {
+        return String.join(parts, "");
+    }
+}

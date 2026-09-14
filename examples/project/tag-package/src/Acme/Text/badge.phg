@@ -1,0 +1,11 @@
+package Acme.Text;
+
+function badge(string name): string {
+    // The package's own function-mode tag, declared in another file.
+    return mark"badge {name}!";
+}
+
+function shout(string name): string {
+    // The package's own protocol-mode tag, a type declared in another file.
+    return Loud"hey {name}";
+}

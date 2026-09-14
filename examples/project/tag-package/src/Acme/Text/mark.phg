@@ -1,0 +1,8 @@
+package Acme.Text;
+
+import Core.List;
+
+// Function-mode tag: `mark"…"` in any file of `Acme.Text` calls this, not `Main`'s `mark`.
+internal function mark(List<string> lits, List<string> holes): string {
+    return lits[0] + "[" + holes[0] + "]" + lits[1];
+}

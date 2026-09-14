@@ -1,0 +1,20 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Acme.Text;
+
+// `Main`'s own `mark` tag. The library's templates never reach it: a tag resolves in its own package.
+function mark(List<string> lits, List<string> holes): string {
+    return lits[0] + "(" + holes[0] + ")" + lits[1];
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    string who = "phorj";
+    Output.printLine(Text.badge(who));
+    Output.printLine(Text.shout(who));
+    Output.printLine(mark"main {who}!");
+}

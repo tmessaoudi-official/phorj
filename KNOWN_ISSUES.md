@@ -1,24 +1,5 @@
 # Known Issues & Limitations
 
-## TAG-PACKAGE — a template tag inside a library package resolves by its BARE name: loud without a `Main` decoy, a byte-identity break with one (scout row 5h1, found at 5h's 6C, 2026-09-14) {#tag-package}
-
-The same class DEC-527 fixed for UFCS (scout row 5h), in the tagged-template checker
-(`src/checker/expr/literals.rs`: `self.funcs.get(tag)` for function mode,
-`self.classes.contains_key(tag)` for protocol mode). The loader never mangles a `TaggedTemplate` tag
-(`src/loader/resolve.rs`), while both tables are keyed by the mangled `Pkg\Name` outside `package Main`.
-Probed on the release binary, 2026-09-14:
-
-| shape (tag declared in `Acme.Text`, used in `Acme.Text`) | VM | tree-walker | transpiled PHP |
-|---|---|---|---|
-| function-mode tag `mark"<{a}>"`, no `Main` decoy | `E-UNKNOWN-TAG` | `E-UNKNOWN-TAG` | `E-UNKNOWN-TAG` |
-| same, and `Main` also declares `function mark` | `MAIN:<x>` | `MAIN:<x>` | `lib:<x>` |
-| protocol-mode tag `Mark"<{a}>"`, `Main` also declares `class Mark` | `<MAIN[x]>` | `<MAIN[x]>` | `<lib[x]>` |
-
-The decoy rows are an Invariant-1 break. The native legs run `Main`'s tag. PHP runs the library's,
-because the transpiled call sits inside `namespace Acme\Text` and PHP resolves the bare name there. PHP
-is the correct one here. Not caused by row 5h, which touched only `try_ufcs`, and present before it.
-Queued as row 5h1, ahead of 5i.
-
 ## UFCS-CROSS-PACKAGE — a method-style call reaches only the CURRENT package's free functions (deferred by DEC-527 to scout L7) {#ufcs-cross-package}
 
 Since scout row 5h (2026-09-14), `s.shout()` inside `package Acme.Text` resolves `Acme.Text`'s own

@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a template tag inside a library package resolves to that package's own tag (P0; scout row 5h1; 2026-09-14)
+
+- **Loud half.** Inside a library package, `mark"<{a}>"` failed with `E-UNKNOWN-TAG` even when `mark`
+  was that package's own function (or `Mark` its own type). The loader never resolved a tag name, and
+  the checker looked it up bare in tables keyed by the mangled `Pkg\name`.
+- **Silent half.** When `package Main` also declared a same-named tag, the VM and the tree-walker ran
+  MAIN's tag while the transpiled PHP ran the library's (`MAIN:<x>` against `lib:<x>`), in both
+  function mode and protocol mode. An Invariant-1 break; PHP was the correct leg.
+- **Fix.** The loader resolves a tag through the same chain as a bare identifier in value position:
+  a same-package or imported type, a same-package function, a member-imported function (DEC-197),
+  else the name as written. A `private` tag function is file-scoped like any call to it
+  (`E-VIS-PRIVATE`), and a member-imported public function of another package now works as a tag,
+  exactly as it does as a bare call. No checker change; `package Main` programs are unchanged.
+- **Unchanged:** a library that uses a tag only `Main` declares still reaches it, like a bare call does;
+  the three legs agree on it.
+- Tests: six in `tests/differential.rs` (`a_*tag*`), five red first. Example:
+  `examples/project/tag-package/`.
+
 ### Fixed — UFCS on a free function works outside `package Main`, and never picks another package's function (scout row 5h; DEC-527; 2026-09-14)
 
 - **Loud half.** Inside a library package, `s.shout()` failed with ``type `string` has no method

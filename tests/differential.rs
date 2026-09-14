@@ -5846,6 +5846,139 @@ fn ufcs_on_a_function_of_another_package_stays_loud() {
     }
 }
 
+// ── scout row 5h1: a template tag inside a library package resolves to the library's own tag ──
+// The loader never resolved a `TaggedTemplate` tag, while the checker's `funcs`/`classes` are keyed by
+// the mangled `Pkg\name` outside `Main` — so `mark"…"` inside `Acme.Text` was `E-UNKNOWN-TAG`, or, with
+// a same-named `Main` tag, ran `Main`'s on the native legs while PHP ran the library's.
+
+const TAG_LIB_RENDER_FN: (&str, &str) = (
+    "Acme/Text/render.phg",
+    "package Acme.Text;\npublic function render(string a): string {\n    return mark\"<{a}>\";\n}\n",
+);
+
+fn tag_lib_mark_fn(vis: &str) -> String {
+    format!(
+        "package Acme.Text;\nimport Core.List;\n{vis} function mark(List<string> lits, List<string> holes): string {{\n    return \"lib:\" + lits[0] + holes[0] + lits[1];\n}}\n"
+    )
+}
+
+/// A `Main` entry that imports `render`, optionally declares its own `mark` decoy, and prints `tail`.
+fn tag_main(decoy: bool, tail: &str) -> String {
+    let decoy = if decoy {
+        "import Core.List;\nfunction mark(List<string> lits, List<string> holes): string {\n    return \"MAIN:\" + lits[0] + holes[0] + lits[1];\n}\n"
+    } else {
+        ""
+    };
+    format!(
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\nimport Acme.Text.render;\n{decoy}\
+         #[Entry(kind: EntryKind.Cli)]\nfunction main(): void {{\n    string m = \"m\";\n    Output.printLine(render(\"x\"){tail});\n}}\n"
+    )
+}
+
+#[test]
+fn a_function_mode_tag_in_a_library_resolves_to_its_own_package() {
+    let mark = tag_lib_mark_fn("internal");
+    let main = tag_main(false, "");
+    let entry = write_plain_project(
+        "tag_fn_nodecoy",
+        &[
+            ("main.phg", &main),
+            TAG_LIB_RENDER_FN,
+            ("Acme/Text/mark.phg", &mark),
+        ],
+    );
+    project_agrees_php(&entry, "lib:<x>\n", "tag_fn_same_package");
+}
+
+/// `Main` declares its own `mark` and uses it too: each package's tag runs in its own package.
+#[test]
+fn a_function_mode_tag_in_a_library_ignores_a_same_named_main_tag() {
+    let mark = tag_lib_mark_fn("internal");
+    let main = tag_main(true, " + mark\"-{m}-\"");
+    let entry = write_plain_project(
+        "tag_fn_decoy",
+        &[
+            ("main.phg", &main),
+            TAG_LIB_RENDER_FN,
+            ("Acme/Text/mark.phg", &mark),
+        ],
+    );
+    project_agrees_php(&entry, "lib:<x>MAIN:-m-\n", "tag_fn_main_decoy");
+}
+
+#[test]
+fn a_protocol_mode_tag_in_a_library_ignores_a_same_named_main_type() {
+    let proto = |vis: &str, text: &str| {
+        format!(
+            "import Core.String;\nimport Core.List;\n{vis}class Mark {{\n    static function raw(string s): string {{ return s; }}\n    \
+             static function text(string s): string {{ return \"{text}[{{s}}]\"; }}\n    \
+             static function concat(List<string> parts): string {{ return String.join(parts, \"\"); }}\n}}\n"
+        )
+    };
+    let main = format!(
+        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\nimport Acme.Text.render;\n{}\
+         #[Entry(kind: EntryKind.Cli)]\nfunction main(): void {{\n    string m = \"m\";\n    Output.printLine(render(\"x\") + Mark\"-{{m}}\");\n}}\n",
+        proto("", "MAIN")
+    );
+    let lib_mark = format!("package Acme.Text;\n{}", proto("internal ", "lib"));
+    let entry = write_plain_project(
+        "tag_proto_decoy",
+        &[
+            ("main.phg", &main),
+            (
+                "Acme/Text/render.phg",
+                "package Acme.Text;\npublic function render(string a): string {\n    return Mark\"<{a}>\";\n}\n",
+            ),
+            ("Acme/Text/Mark.phg", &lib_mark),
+        ],
+    );
+    project_agrees_php(&entry, "<lib[x]>-MAIN[m]\n", "tag_proto_main_decoy");
+}
+
+/// A `private` tag function is file-scoped exactly like a bare call to it.
+#[test]
+fn a_private_tag_function_used_from_another_file_is_e_vis_private() {
+    let mark = tag_lib_mark_fn("private");
+    let main = tag_main(false, "");
+    let entry = write_plain_project(
+        "tag_fn_private",
+        &[
+            ("main.phg", &main),
+            TAG_LIB_RENDER_FN,
+            ("Acme/Text/mark.phg", &mark),
+        ],
+    );
+    let err = match loader::load(&entry) {
+        Err(e) => e,
+        Ok(unit) => cli::check_program(&unit.program, &unit.diag_src)
+            .expect_err("a private tag function must not be reachable from another file"),
+    };
+    assert!(err.contains("E-VIS-PRIVATE"), "got:\n{err}");
+}
+
+/// DEC-197 applied to a tag: a member-imported public function of another package works as a tag,
+/// exactly as it does as a bare call.
+#[test]
+fn a_member_imported_tag_function_of_another_package_resolves() {
+    let mark = tag_lib_mark_fn("public");
+    let main = "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\nimport Acme.Text.mark;\n\
+                #[Entry(kind: EntryKind.Cli)]\nfunction main(): void {\n    string x = \"x\";\n    Output.printLine(mark\"<{x}>\");\n}\n";
+    let entry = write_plain_project(
+        "tag_fn_imported",
+        &[("main.phg", main), ("Acme/Text/mark.phg", &mark)],
+    );
+    project_agrees_php(&entry, "lib:<x>\n", "tag_fn_member_imported");
+}
+
+/// The reverse direction: the library declares no `mark`, only `Main` does. The legs agreed before
+/// 5h1 and must still agree; a tag here behaves exactly like a bare `mark(…)` call from the library.
+#[test]
+fn a_library_tag_declared_only_in_main_agrees_on_every_leg() {
+    let main = tag_main(true, "");
+    let entry = write_plain_project("tag_fn_reverse", &[("main.phg", &main), TAG_LIB_RENDER_FN]);
+    project_agrees_php(&entry, "MAIN:<x>\n", "tag_fn_declared_only_in_main");
+}
+
 /// KNOWN_ISSUES §default_fills (P0): the checker's span-keyed rewrite maps are keyed by
 /// `Span.start`, a byte offset into EACH file, so two files of one project can collide and one
 /// file's default-filled call gets spliced over the other's — on the interpreter, the VM AND the

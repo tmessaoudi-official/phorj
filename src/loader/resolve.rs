@@ -371,33 +371,7 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
         // A bare identifier that names a cross-package type (e.g. the head of an enum access
         // `Color.Red`) resolves to the mangled FQN; the shadow guard guarantees an imported type
         // name is never also a local/variable, so rewriting every occurrence is safe.
-        Expr::Ident(n, sp) => {
-            if let Some(m) = resolve_type_ref(&n, ctx) {
-                Expr::Ident(m, sp)
-            } else if let Some(f) = ctx
-                .defined
-                .get(&(ctx.package.join("."), n.clone()))
-                .cloned()
-            {
-                // A bare reference to a same-package function used as a *value* (a first-class
-                // function reference, e.g. `var f = dbl;` or passing `dbl` to a higher-order call):
-                // mangle it to its FQN so the backends resolve the (mangled) function, mirroring the
-                // call-site path in `resolve_call`. For `package Main` the mangle is a no-op (bare
-                // name preserved), so single-package programs are byte-identical. Visibility is
-                // enforced exactly as for a same-package call.
-                check_fn_visibility(ctx, &ctx.package.join("."), &n);
-                Expr::Ident(f, sp)
-            } else if let Some(mangled) = ctx.function_imports.get(&n).cloned() {
-                // DEC-197: a bare member-imported cross-package function used as a VALUE
-                // (`import App.Text.banner; var f = banner;`) — the value-position mirror of the
-                // call-position arm in `resolve_call`, so "scope = all functions" holds for first-class
-                // references too. Resolves AFTER the same-package table (`local > user fn > imported`);
-                // visibility was enforced when the import map was built (`build_function_imports`).
-                Expr::Ident(mangled, sp)
-            } else {
-                Expr::Ident(n, sp)
-            }
-        }
+        Expr::Ident(n, sp) => Expr::Ident(resolve_value_name(n, ctx), sp),
         Expr::InstanceOf {
             value,
             type_name,
@@ -488,8 +462,10 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             call: Box::new(resolve_expr(*call, ctx)),
             span,
         },
+        // A template tag names a function (function mode) or a type (protocol mode) exactly as a
+        // bare identifier does, so it resolves through the same chain (scout row 5h1).
         Expr::TaggedTemplate { tag, parts, span } => Expr::TaggedTemplate {
-            tag,
+            tag: resolve_value_name(tag, ctx),
             parts: parts
                 .into_iter()
                 .map(|p| match p {
@@ -516,6 +492,37 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
         // is in that set but is rewritten above (function/type references), hence the allow.
         #[allow(unreachable_patterns)]
         leaf @ (crate::expr_leaves!()) => leaf,
+    }
+}
+
+/// Resolve a bare identifier in value position — also a template tag's name: a same-package or
+/// imported type, then a same-package function (visibility enforced), then a member-imported
+/// function (DEC-197), else the name as written.
+fn resolve_value_name(n: String, ctx: &ResolveCtx) -> String {
+    if let Some(m) = resolve_type_ref(&n, ctx) {
+        m
+    } else if let Some(f) = ctx
+        .defined
+        .get(&(ctx.package.join("."), n.clone()))
+        .cloned()
+    {
+        // A bare reference to a same-package function used as a *value* (a first-class
+        // function reference, e.g. `var f = dbl;` or passing `dbl` to a higher-order call):
+        // mangle it to its FQN so the backends resolve the (mangled) function, mirroring the
+        // call-site path in `resolve_call`. For `package Main` the mangle is a no-op (bare
+        // name preserved), so single-package programs are byte-identical. Visibility is
+        // enforced exactly as for a same-package call.
+        check_fn_visibility(ctx, &ctx.package.join("."), &n);
+        f
+    } else if let Some(mangled) = ctx.function_imports.get(&n).cloned() {
+        // DEC-197: a bare member-imported cross-package function used as a VALUE
+        // (`import App.Text.banner; var f = banner;`) — the value-position mirror of the
+        // call-position arm in `resolve_call`, so "scope = all functions" holds for first-class
+        // references too. Resolves AFTER the same-package table (`local > user fn > imported`);
+        // visibility was enforced when the import map was built (`build_function_imports`).
+        mangled
+    } else {
+        n
     }
 }
 
