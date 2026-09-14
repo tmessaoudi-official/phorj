@@ -25,9 +25,11 @@
 > key and emits the mangled callee; a `private` function carries its file's span window (`private_window`,
 > stamped by the loader) and a method-position call outside it is `E-VIS-PRIVATE`; the cross-package half
 > stays loud (L7). Red first also exposed a silent half — a library's `s.shout()` ran `Main`'s `shout`.
-> **FOUND at 5h's 6C: row 5h1 (P0)** — a library package's template tag resolves by its bare name, so with a
-> same-named `Main` tag the native legs run `Main`'s and PHP runs the library's (KNOWN_ISSUES §tag-package).
-> **THEN:** 5h1, 5i (DEC-526), 5g, 5e, 5j, 5d. Open probe before claiming 5f
+> **DONE (2026-09-14): row 5h1** (`b8628e73`; full all-features gate green, 3245 run) — the loader resolves a template
+> tag like a bare identifier (`resolve_value_name`), so a library's tag reaches its own package's function or type,
+> never `Main`'s same-named one. Found at its 6C, pre-existing and open: a library's bare call or tag still reaches
+> `Main`'s function when the library has none (KNOWN_ISSUES §library-reaches-main).
+> **THEN:** 5i (DEC-526), 5g, 5e, 5j, 5d. Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 
