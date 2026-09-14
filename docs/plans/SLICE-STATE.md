@@ -21,7 +21,7 @@
 > `E-FILE-MIXED-PUBLIC` (5i, DEC-526 RULED 2026-09-14: a sibling `<Enum>Functions.phg`). No ruling is pending.
 > **DONE (2026-09-14): row 5h0** (`5388b645`) — the interpolation span collision found at 5h's 3C
 > (KNOWN_ISSUES §interpolation-spans), fixed first because DEC-527's file-window check is unsound without it.
-> **NOW (2026-09-14): row 5h — BUILT, gate pending.** `try_ufcs` looks up the current package's mangled
+> **DONE (2026-09-14): row 5h** (`440c43b1`; full all-features gate green, 3239 passed) — `try_ufcs` looks up the current package's mangled
 > key and emits the mangled callee; a `private` function carries its file's span window (`private_window`,
 > stamped by the loader) and a method-position call outside it is `E-VIS-PRIVATE`; the cross-package half
 > stays loud (L7). Red first also exposed a silent half — a library's `s.shout()` ran `Main`'s `shout`.
