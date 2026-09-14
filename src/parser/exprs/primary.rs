@@ -72,7 +72,8 @@ impl Parser {
                 self.advance();
                 // Reuse the exact `{expr}` splitter as plain strings; the type-directed desugar
                 // into `html.concat([…])` kernel calls happens in the checker (which has types).
-                let parts = self.split_interpolation(&body, sp)?;
+                // The body's first byte follows the tag and its opening quote.
+                let parts = self.split_interpolation(&body, sp, sp.start + tag.len() + 1)?;
                 // `html"…"` keeps its dedicated node (unchanged path through every backend); any other
                 // tag becomes the general `TaggedTemplate` node, which the checker rejects with
                 // `E-UNKNOWN-TAG` (the scaffold hook for the human's two-mode desugar).
@@ -238,7 +239,7 @@ impl Parser {
                     // INTERP-LINE-RESET / W0-5). A sub-token on the interpolation's first line shifts by
                     // its column; later lines already carry their own column.
                     for t in &mut sub_tokens {
-                        t.span.start += base;
+                        t.shift_start(base);
                         if t.span.line == 1 {
                             t.span.col += col.saturating_sub(1);
                         }
@@ -259,16 +260,21 @@ impl Parser {
 
     /// Split a string body into literal runs and `{expr}` interpolations.
     /// Each interpolation is re-lexed + re-parsed as a standalone expression.
-    /// Used by `html"…"` (whose body is still a flat string).
+    /// Used by `html"…"` (whose body is still a flat string). `body_start` is the source offset of the
+    /// body's first byte: each hole's re-lexed tokens are based at `body_start + its index + 1`. The
+    /// body is escape-expanded, so that is approximate — but escapes only shrink it, so the offset stays
+    /// inside the literal's own source bytes and differs per hole, which is what span-keyed rewrites
+    /// need (KNOWN_ISSUES §interpolation-spans: holes used to all start at offset 0).
     pub(in crate::parser) fn split_interpolation(
         &self,
         body: &str,
         sp: Span,
+        body_start: usize,
     ) -> Result<Vec<StrPart>, Diagnostic> {
         let mut parts = Vec::new();
         let mut literal = String::new();
-        let mut chars = body.chars();
-        while let Some(c) = chars.next() {
+        let mut chars = body.char_indices();
+        while let Some((at, c)) = chars.next() {
             match c {
                 '{' => {
                     if !literal.is_empty() {
@@ -277,7 +283,7 @@ impl Parser {
                     // collect until the matching '}'
                     let mut inner = String::new();
                     let mut closed = false;
-                    for ic in chars.by_ref() {
+                    for (_, ic) in chars.by_ref() {
                         if ic == '}' {
                             closed = true;
                             break;
@@ -292,7 +298,7 @@ impl Parser {
                             sp.col,
                         ));
                     }
-                    let sub_tokens = crate::tokenizer::lex(&inner).map_err(|e| {
+                    let mut sub_tokens = crate::tokenizer::lex(&inner).map_err(|e| {
                         Diagnostic::new(
                             Stage::Parse,
                             format!("in interpolation: {}", e.message),
@@ -300,6 +306,9 @@ impl Parser {
                             sp.col,
                         )
                     })?;
+                    for t in &mut sub_tokens {
+                        t.shift_start(body_start + at + 1);
+                    }
                     let mut sub = Parser::new(sub_tokens);
                     let e = sub.parse_expr()?;
                     sub.expect(&TokenKind::Eof, "end of interpolation expression")?;

@@ -57,7 +57,7 @@ pub(super) fn parse_at_rebased(path: &Path, src: &str, base: usize) -> Result<Pr
     }
     let mut tokens = lex(src).map_err(|e| format!("{}: {}", path.display(), e.render(src)))?;
     for t in &mut tokens {
-        t.span.start += base;
+        t.shift_start(base);
     }
     Parser::new(tokens)
         .parse_program()

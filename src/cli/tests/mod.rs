@@ -8,6 +8,7 @@ mod explain_coverage;
 mod explain_ratchet;
 mod foreach;
 mod imports_sugar;
+mod prelude_spans;
 mod role_mismatch;
 mod source_resolution;
 mod transpile_lift;

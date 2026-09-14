@@ -5612,6 +5612,89 @@ fn write_aligned_project(tag: &str, files: &[(&str, &str)], needle: &str) -> std
     src.join(files[0].0)
 }
 
+/// KNOWN_ISSUES §interpolation-spans (P0, 2026-09-14): an interpolated sub-expression's `Span.start`
+/// must be as unique as any other token's. A `"{…}"` in a NON-ENTRY project file used to keep its
+/// file-relative offset (the loader rebased the string TOKEN but not the offset its interpolation
+/// segment carries), so an interpolated UFCS call there shared a key with the entry file's — the
+/// rewrite for `a.upperCase()` was spliced into `b.lowerCase()`'s file. The expected output is
+/// stated, not derived from a leg.
+#[test]
+fn interpolated_ufcs_calls_in_two_project_files_at_one_offset_keep_their_own_receivers() {
+    let main_src = r#"package Main;
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Acme.Util;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    string a = "Hi";
+    Output.printLine("{a.upperCase()}" + Util.show("Yo"));
+}
+"#;
+    let lib_src = r#"package Acme.Util;
+import Core.String;
+function show(string b): string {
+    return "{b.lowerCase()}";
+}
+"#;
+    let entry = write_aligned_project(
+        "interp",
+        &[("main.phg", main_src), ("Acme/Util/Show.phg", lib_src)],
+        "Case()",
+    );
+    let label = "interpolated_ufcs_calls_in_two_project_files_at_one_offset";
+    let expected = "HIyo\n";
+    let unit = loader::load(&entry).unwrap_or_else(|e| panic!("{label}: load: {e}"));
+    let tree = cli::treewalk_program(&unit);
+    let vm = cli::run_program(&unit);
+    assert_eq!(tree.as_deref(), Ok(expected), "interpreter for {label}");
+    assert_eq!(vm.as_deref(), Ok(expected), "VM for {label}");
+    if let Some(php) = php_or_gate(label) {
+        let php_src = cli::transpile_program(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("{label}: transpile: {e}"));
+        assert_eq!(run_php(&php, &php_src, label), expected, "PHP for {label}");
+    }
+}
+
+/// KNOWN_ISSUES §interpolation-spans: a string NESTED inside an interpolation is re-lexed from offset
+/// 0, and its own interpolation offsets used to stay relative to that sub-source — so the inner
+/// `a.upperCase()` and `b.lowerCase()` below, one per literal, shared a span key inside ONE file and
+/// every leg printed `yoyo`.
+#[test]
+fn nested_interpolations_in_one_file_keep_their_own_ufcs_receivers() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.String;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    string a = "Hi";
+    string b = "Yo";
+    Output.printLine("{ "{a.upperCase()}" }" + "{ "{b.lowerCase()}" }");
+}"#,
+        "HIyo\n",
+        "nested_interpolation_ufcs",
+    );
+}
+
+/// KNOWN_ISSUES §interpolation-spans: a tagged-template hole (`html"…{x}…"`) was re-lexed from offset
+/// 0 with no rebasing at all, so every hole in the program started at `Span.start` 0 — two holes of
+/// the same shape always collided, whatever their position, and every leg printed `yoyo`.
+#[test]
+fn html_template_holes_in_one_file_keep_their_own_ufcs_receivers() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.String;
+import Core.Html;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    string a = "Hi";
+    string b = "Yo";
+    Output.printLine(Html.render(html"{a.upperCase()}") + Html.render(html"{b.lowerCase()}"));
+}"#,
+        "HIyo\n",
+        "html_hole_ufcs",
+    );
+}
+
 /// KNOWN_ISSUES §default_fills (P0): the checker's span-keyed rewrite maps are keyed by
 /// `Span.start`, a byte offset into EACH file, so two files of one project can collide and one
 /// file's default-filled call gets spliced over the other's — on the interpreter, the VM AND the

@@ -316,6 +316,25 @@ impl TokenKind {
     }
 }
 
+impl Token {
+    /// Shift this token's `Span.start` by `by` — and, for a string literal, the absolute offset each
+    /// interpolation segment carries, so the sub-expressions the parser re-lexes from it move WITH the
+    /// token. Every path that rebases a token stream (per-file span windows, injected preludes, the
+    /// parser's interpolation re-lex) MUST go through this: shifting `span.start` alone leaves the
+    /// segment offsets behind, and an interpolated call then shares a span key with an unrelated site
+    /// (KNOWN_ISSUES §interpolation-spans — checker rewrite maps key on `Span.start` alone).
+    pub fn shift_start(&mut self, by: usize) {
+        self.span.start += by;
+        if let TokenKind::Str(segs) = &mut self.kind {
+            for seg in segs {
+                if let StrSeg::Interp(_, off, _, _) = seg {
+                    *off += by;
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

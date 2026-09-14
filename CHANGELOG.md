@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — interpolated sub-expressions could take another call's UFCS rewrite, silently (P0; 2026-09-14)
+
+- Before this fix, `html"{a.upperCase()}"` followed by `html"{b.lowerCase()}"` printed `yoyo` on the
+  VM, the tree-walker **and** PHP. The correct output is `HIyo`.
+- The same collision hit strings nested inside an interpolation (`"{ "{…}" }"`), and `"{…}"` in any
+  non-entry project file against the entry file.
+- Cause: the checker's rewrite maps key on `Span.start`, and an interpolation's re-lexed tokens were
+  based on an offset that no rebasing path shifted.
+- Fix: one `Token::shift_start` now rebases the token and its segment offsets together, at all four
+  re-lex and rebase sites. The injected-prelude path had the same gap, though no prelude used it.
+- Detail and the table of shapes: KNOWN_ISSUES §interpolation-spans.
+
 ### Added — lift: `usort` and `array_map` lift to receiver-form `Core.List` calls (scout row 5f; 2026-09-13)
 
 - The statement `usort($xs, $cmp);` lifts to `xs = xs.sortWith(cmp);`. PHP sorts its argument BY

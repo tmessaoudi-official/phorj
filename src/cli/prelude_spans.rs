@@ -115,7 +115,7 @@ pub(super) fn lex_parse_injected(src: &str, module_index: usize) -> Result<Progr
     let base = INJECTED_SPAN_BASE + module_index * INJECTED_SPAN_STRIDE;
     let isolated = prelude_native_aliases();
     for t in &mut tokens {
-        t.span.start += base;
+        t.shift_start(base);
         // DEC-459: a prelude's raw-native qualifier (`NativeHttp`, `NativeInput`, …) is rebound under
         // a spelling no user identifier can take, so a user alias can neither collide with it (the
         // injection used to drop the prelude's import on a same-module user import) nor capture it,

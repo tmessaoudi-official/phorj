@@ -3259,6 +3259,65 @@ Pinned by `tests/differential.rs::qualified_class_construction_fills_defaults_an
 cases: omitted defaults, out-of-order named args, and both together on `Http.ServeConfig`). Verified on
 the shipped binary across `run` ≡ `--tree-walker` ≡ `--no-jit` ≡ php-8.5.8.
 
+## FIXED — interpolation sub-expression spans were not unique: an interpolated call could take ANOTHER call's UFCS rewrite, silently, on every leg (P0, found and fixed 2026-09-14) {#interpolation-spans}
+
+The span-window fix below (2026-09-02) made every *token* unique, but not the offset that a string
+token's interpolation segment carries (`StrSeg::Interp`'s second field). The parser re-lexes each
+`{…}` body from offset 0 and adds that stored offset to the sub-tokens. So an interpolated
+sub-expression was only as unique as the stored offset, and four paths failed to rebase it:
+
+| Shape | Why it collided | Reach |
+|---|---|---|
+| `"{…}"` in a NON-ENTRY project file | `parse_at_rebased` shifted each token but not its segment offsets | the entry file's site at the same file-relative offset |
+| a string nested inside an interpolation, `"{ "{…}" }"` | the nested token's segment offsets stayed relative to the sub-source | any nested interpolation of the same shape, in ONE file |
+| a tagged-template hole, `html"…{…}…"` | `split_interpolation` re-lexed the hole with no rebase at all | every hole of the same shape, anywhere — position-independent |
+| an injected `Core.*` prelude string | `lex_parse_injected` had the first row's gap | latent: no prelude interpolates a call today |
+
+**Reproducer** (one file; every leg agreed on the wrong answer, so Invariant 1's harness was blind):
+
+```
+string a = "Hi"; string b = "Yo";
+Output.printLine(Html.render(html"{a.upperCase()}") + Html.render(html"{b.lowerCase()}"));
+// VM, --tree-walker and php-8.5.10 all printed `yoyo`; correct is `HIyo`
+```
+
+The cross-file shape failed loudly rather than silently, but only by accident of the receiver name:
+`undefined variable \`a\`` inside `return "{b.lowerCase()}";`. A same-named receiver would have run the
+wrong method with no error.
+
+**Fix.** A single `Token::shift_start` shifts `Span.start` *and* every interpolation-segment offset. It
+is used at all four sites (`loader::span_windows::parse_at_rebased`, `cli::prelude_spans::lex_parse_injected`,
+and both parser re-lex paths). A tagged-template hole is now based at its approximate source position,
+`tag start + tag + quote + body index + 1`: escapes only shrink the body, so the offset stays inside
+the literal's own bytes and is distinct per hole. This is the same "approximate but unique" rule the
+text-block path already follows.
+
+**Tests.** Pinned by `tests/differential.rs`:
+- `interpolated_ufcs_calls_in_two_project_files_at_one_offset_keep_their_own_receivers`
+- `nested_interpolations_in_one_file_keep_their_own_ufcs_receivers`
+- `html_template_holes_in_one_file_keep_their_own_ufcs_receivers`
+
+Each runs all three legs against a stated expected output, and all three were confirmed red first for
+the stated reason. `cli::tests::prelude_spans` asserts every span of an injected probe sits at or above
+`INJECTED_SPAN_BASE`.
+
+**Sabotage** (each mutation reverts one site, and the restore was checked byte-for-byte):
+
+| Mutation | Red | Green |
+|---|---|---|
+| loader window back to `span.start += base` | cross-file only | the other three |
+| nested re-lex back to `span.start += base` | nested, prelude unit | cross-file, html |
+| prelude rebaser back to `span.start += base` | prelude unit only | the three differential tests |
+| `shift_start` stops shifting segment offsets | cross-file, nested, prelude unit | html (holes carry no segment offset) |
+| template hole rebased by `(… ) * 0` | html only | the other three |
+
+So each test pins its own site. A first draft of the template-hole mutation (`shift_start(0)`) did
+not compile under `deny(warnings)`, because it left `body_start` and `at` unused, so it tested
+nothing. The `* 0` form keeps both used.
+
+**Not changed:** a tagged-template hole's diagnostics still report the literal's own `line`/`col` rather
+than the hole's.
+
 ## FIXED — `default_fills` was keyed by a per-file byte offset: two files could COLLIDE and silently swap call arguments (P0, 2026-08-06 → fixed 2026-09-02)
 
 **FIXED 2026-09-02 (harness-trust step 1, panel round-3 C6).** The loader now gives every project
