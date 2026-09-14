@@ -14,11 +14,11 @@
 >
 > **L4b lands HALF-BUILT (DEC-515, scout row 5c):** binder reads + return-position keyed literals. The `@var`-local
 > half is row 5d. **L3 is now blocked on rows 5e–5j** (re-scoped 2026-09-13 23:15): the "no same-package import"
-> cause is REFUTED (same-package types resolve through the entry flat-merge). Remaining: `usort`/`array_map`
-> (5f, building next), PHP `/` (5g, DEC-523 RULED: float division), UFCS on a free function outside `package Main`
+> cause is REFUTED (same-package types resolve through the entry flat-merge). `usort`/`array_map` (5f) is BUILT
+> (statement-only `usort`, one-array `array_map`). Remaining: PHP `/` (5g, DEC-523 RULED: float division), UFCS on a free function outside `package Main`
 > (5h, root cause verified by reading: `try_ufcs` looks up the bare name against mangled `funcs` keys), a checked file loading its whole package (5e, DEC-525 RULED), the ctor-once
-> rule for immutable fields (5j, DEC-524 RULED, size L), and ONE pending ruling — DEC-509's lowered enum
-> methods vs `E-FILE-MIXED-PUBLIC` (5i), asked after 5h's root cause, since cross-package UFCS shapes its options.
+> rule for immutable fields (5j, DEC-524 RULED, size L), and DEC-509's lowered enum methods vs
+> `E-FILE-MIXED-PUBLIC` (5i, DEC-526 RULED 2026-09-14: a sibling `<Enum>Functions.phg`). No ruling is pending.
 
 
 > **▶ 2026-09-09 RULE-COMPLIANCE REVIEW — four rulings, DEC-516…519. Read these before picking up L4c.**

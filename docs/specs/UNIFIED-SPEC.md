@@ -1170,7 +1170,8 @@ entirely to `List<T>` of unequal length.
   (`[a, b] <=> [c, d]` → `(a, b) <=> (c, d)`). A literal's arity is syntactically present, so this
   reads no intent and does not violate DEC-166. This is what makes **the comparator on scout's
   `Rent/Core/Classification.php:48`** liftable — the operator on that line, not the file: `usort`
-  itself has no lift mapping at all, so the enclosing call still refuses.
+  itself had no lift mapping, so the enclosing call still refused. That closed with scout row 5f
+  (2026-09-13): the statement `usort($xs, $cmp);` lifts to `xs = xs.sortWith(cmp);`.
 
 REJECTED: **count-first everywhere** (byte-identical and nothing refused, but phorj would inherit
 PHP's rule that a shorter list is smaller regardless of contents — `[9] < [1,1,1]` — and DEC-505's

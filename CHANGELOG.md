@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — lift: `usort` and `array_map` lift to receiver-form `Core.List` calls (scout row 5f; 2026-09-13)
+
+- The statement `usort($xs, $cmp);` lifts to `xs = xs.sortWith(cmp);`. PHP sorts its argument BY
+  REFERENCE and returns `bool`, so only the statement form maps. `usort` in value position, or on a
+  field or element target, stays an unresolved call that `phg check` reports. No guessed write.
+- `array_map($f, $xs)` lifts to `xs.map(f)`. PHP takes the callable first. A call with more than one
+  array (PHP zips them) stays unmapped, so no second list is silently dropped.
+- Neither is a `lift_from` registry row: that table lifts in expression position with the arguments
+  in order, and neither function fits it (`src/lift/lifter/array_fns.rs`).
+- Stability needed no work. `sortWith` and PHP 8 `usort` are both stable, already pinned by the
+  DEC-505 differential test.
+- Known edge: `usort($param, …)` on a PARAMETER lifts to a reassignment, which `phg check` rejects
+  (`E-ASSIGN-IMMUTABLE`), like any lifted `$param = …`. Copy it into a local first, as scout's
+  `Classification.php` already does.
+- `import Core.List` is recorded for both; the lifter does not know the receiver's type. An
+  `array_map` over a declared `array<string, int>` lifts to `m.map(f)` on a `Map`, and `phg check`
+  rejects it loudly with `type Map<string, int> has no method map`. Swapping the draft's import to
+  `import Core.Map` makes it check and run (`Map.map` also keeps the keys, as PHP does)
+  [Verified 2026-09-13 on the release binary].
+- Example: `examples/lift/sorting.php` / `sorting.phg`.
+
 ### Added — lift: keyed array shapes are READ through `foreach` binders and WRITTEN in return position (DEC-515, half; 2026-09-13)
 
 - A `foreach` binder over a collection declared as `list<array{…}>` (or a map of shapes) inherits the
@@ -145,8 +166,8 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   and says so by name (`E-ORDER-LIST`) instead of quietly picking one of the two rules. `phg lift`
   maps a positional array literal in an ordering-operand position to a tuple, which reads no intent
   because a literal's arity is syntactically present (DEC-166 holds) — that is what makes the
-  comparator on scout's `Rent/Core/Classification.php:48` liftable; `usort` itself still has no lift
-  mapping. NaN is pinned in the same change: PHP answers `1` for `NAN <=> 1.0`, `1.0 <=> NAN` and
+  comparator on scout's `Rent/Core/Classification.php:48` liftable; `usort` itself had no lift
+  mapping until scout row 5f (see the 2026-09-13 entry above). NaN is pinned in the same change: PHP answers `1` for `NAN <=> 1.0`, `1.0 <=> NAN` and
   `NAN <=> NAN` alike, so `compare_ord`'s `Ok(None)` projects to `1` through the single-sourced
   `value::three_way` rather than through three per-backend copies. **`decimal` is excluded by name**
   (`E-ORDER-DECIMAL`, pending Q-0908-3): its PHP carrier is a numeric string compared as a float, so

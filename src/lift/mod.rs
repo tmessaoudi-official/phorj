@@ -56,6 +56,8 @@ mod lifter_tests_enums;
 #[cfg(test)]
 mod lifter_tests_hoist;
 #[cfg(test)]
+mod lifter_tests_list;
+#[cfg(test)]
 mod lifter_tests_ns;
 #[cfg(test)]
 mod lifter_tests_ordering;

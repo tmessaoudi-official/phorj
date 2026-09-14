@@ -577,6 +577,21 @@ wrapping on the lifted expression's SHAPE, not on the PHP argument's — an expr
 yields a string, or one containing a brace, is emitted as a bare argument rather than interpolated.
 Until then a ternary inside `echo` needs a hand edit in the draft.
 
+## LIFT-ARRAY-CALLBACKS — two loud edges of the `usort` / `array_map` lift (noted 2026-09-13, scout row 5f)
+
+`usort($xs, $cmp);` lifts to `xs = xs.sortWith(cmp);` and `array_map($f, $xs)` to `xs.map(f)`
+(`src/lift/lifter/array_fns.rs`). Both edges below fail `phg check` loudly. Neither is a silent
+divergence.
+
+- **A PARAMETER target.** `usort($words, …)` on a parameter lifts to a reassignment, and a phorj
+  parameter is immutable, so the draft reports `E-ASSIGN-IMMUTABLE`. A lifted `$param = …` gets the
+  same result. Fix the draft by copying the parameter into a local first.
+- **An associative array.** The lifter records `import Core.List` without knowing the receiver's
+  type. An `array_map` over a declared `array<string, int>` lifts to `m.map(f)` on a `Map`, and
+  `phg check` reports `type Map<string, int> has no method map`. Swapping the draft's import to
+  `import Core.Map` makes it check and run, and `Map.map` keeps the keys, as PHP does
+  [Verified 2026-09-13 on the release binary].
+
 ## LIFT-DISCARD — a call written for its side effect lifts fine, then fails `phg check` (noted 2026-09-05)
 
 PHP discards a statement's value silently, so `$logger->info('x');` and `$t->add(3);` are ordinary

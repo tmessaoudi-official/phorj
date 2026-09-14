@@ -1,0 +1,36 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.List;
+import Core.String;
+
+/**
+ * @param list<string> $words
+ * @return list<string>
+ */
+function byLength(List<string> words): List<string> {
+    mutable var out = words;
+    out = out.sortWith(function(string a, string b): int => a.length() <=> b.length());
+    return out;
+}
+
+/**
+ * @param list<string> $words
+ * @return list<int>
+ */
+function lengths(List<string> words): List<int> {
+    return words.map(function(string w): int => w.length());
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    foreach (byLength(["pear", "fig", "plum", "kiwi", "yam"]) as w) {
+        Output.print("{w}\n");
+    }
+    foreach (lengths(["pear", "fig"]) as n) {
+        Output.print("{n}\n");
+    }
+}

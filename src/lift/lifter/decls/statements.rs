@@ -263,7 +263,11 @@ impl Lifter {
                     span: SP,
                 })
             }
-            other => Ok(Stmt::Expr(lift_expr(other)?, SP)),
+            // Row 5f: `usort($xs, $cmp);` has a meaning only as a statement.
+            other => match crate::lift::lifter::array_fns::lift_usort_stmt(other) {
+                Some(lifted) => lifted,
+                None => Ok(Stmt::Expr(lift_expr(other)?, SP)),
+            },
         }
     }
 

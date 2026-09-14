@@ -499,6 +499,24 @@ be acceptable is failing it *silently*, or worse, passing it with the wrong answ
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.
 
+## Sorting and mapping — `sorting.php` / `sorting.phg` (scout row 5f, 2026-09-13)
+
+PHP's two most common array callbacks lift to phorj's receiver-form `Core.List` calls:
+
+- **`usort($xs, $cmp);` → `xs = xs.sortWith(cmp);`.** PHP sorts its argument BY REFERENCE and returns
+  `bool`, so the lift maps only the statement form. `usort` used as a value, or on a field or element
+  target (`usort($this->items, …)`, `usort($xss[0], …)`), stays an unresolved call that `phg check`
+  reports. The lift does not guess a write.
+- **`array_map($f, $xs)` → `xs.map(f)`.** PHP takes the callable first. A call over several arrays
+  (PHP zips them) stays unmapped, so no second list is dropped.
+
+Both sorts are **stable**. That is why `fig`/`yam` and `pear`/`plum`/`kiwi` keep their input order
+in the output, and the DEC-505 differential test pins it on all three legs.
+
+The sort copies its parameter into a local first. A phorj parameter is immutable, so
+`usort($words, …)` on the parameter itself lifts to a reassignment that `phg check` rejects
+(`E-ASSIGN-IMMUTABLE`). That is the same result any lifted `$param = …` gets.
+
 ## Real-code shapes in one file — `real-shapes.php` / `real-shapes.phg` (Lane R, 2026-09-05)
 
 The wave-2 lift slices were measured on a real application (`scout`, 120 files of strict PHP 8.5),

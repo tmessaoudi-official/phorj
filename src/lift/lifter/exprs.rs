@@ -216,6 +216,10 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             }
         }
         php::PhpExpr::Call { callee, args } => {
+            // Row 5f: `array_map` swaps its arguments, so it has no `lift_from` row.
+            if let Some(lifted) = super::array_fns::lift_array_map(callee, args) {
+                return lifted;
+            }
             // DEC-312: a bare PHP builtin with a registered inverse lifts to its Core form
             // (`strlen($s)` → `String.length(s)`, one registry row for both directions). Arity must
             // match the native's signature — a mismatched call falls through to the plain unresolved

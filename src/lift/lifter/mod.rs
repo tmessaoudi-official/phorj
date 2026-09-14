@@ -27,6 +27,7 @@ const SP: Span = Span {
 
 /// End-to-end convenience: PHP source → Phorj `.phg` source. Lexes (L1), parses (L2), lifts (L4),
 /// and prints (L3). Any stage's error propagates as a `lift …` / `printer: …` string.
+mod array_fns;
 mod attrs;
 mod decls;
 mod enums;
