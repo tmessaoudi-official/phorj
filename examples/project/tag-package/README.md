@@ -29,7 +29,10 @@ main (phorj)!
 | Tag use | Where | Result |
 |---|---|---|
 | `mark"…"` with `mark` declared `private` in `mark.phg` | `badge.phg` (another file of `Acme.Text`) | `E-VIS-PRIVATE` — a private tag function is file-scoped like any call to it |
-| `mark"…"` with no `mark` in scope | anywhere | `E-UNKNOWN-TAG` |
+| `mark"…"` with no `mark` in the package, its imports, or `Main` | any package | `E-UNKNOWN-TAG` |
+
+A library tag with no `mark` of its own and no import still reaches `Main`'s `mark` if one exists —
+pre-existing and pending a ruling (KNOWN_ISSUES §library-reaches-main).
 
 A member-imported public function of another package works as a tag exactly as it does as a bare
 call (`import Acme.Text.mark;` then `mark"…"`). The transpiled PHP carries no trace of the template:

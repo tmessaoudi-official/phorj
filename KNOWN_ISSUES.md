@@ -1,5 +1,26 @@
 # Known Issues & Limitations
 
+## LIBRARY-REACHES-MAIN — a library's bare call or template tag falls back to `Main`'s same-named function with no import (pending a ruling) {#library-reaches-main}
+
+Found at scout row 5h1's 6C (2026-09-14); it predates that row. Inside a library package, a bare
+call `mark(…)` or a tag `mark"…"` that names no function of the library's own package and no import
+resolves to `package Main`'s `mark` when one exists — the name is left as written by the loader, and
+`Main`'s functions are keyed bare. All three legs agree (the transpiled PHP falls back to `\Main\mark`
+through its `use`), so it is not a byte-identity break; it is a symbol used with no import, which the
+"nothing in the wind" rule forbids.
+
+```
+// examples/project/tag-package/ with src/Acme/Text/mark.phg deleted
+package Acme.Text;
+function badge(string name): string { return mark"badge {name}!"; }   // no import of anything
+```
+
+`phg run` prints `badge (phorj)!` — `Main`'s tag — instead of failing [Verified 2026-09-14 on the
+release binary]. With `mark` removed from `Main` as well, the same file is `E-UNKNOWN-TAG`.
+`a_library_tag_declared_only_in_main_agrees_on_every_leg` (`tests/differential.rs`) pins leg agreement
+only, not that this is intended. Whether a library may reach `Main` at all is a design question for the
+developer; until ruled, no fix is attempted.
+
 ## UFCS-CROSS-PACKAGE — a method-style call reaches only the CURRENT package's free functions (deferred by DEC-527 to scout L7) {#ufcs-cross-package}
 
 Since scout row 5h (2026-09-14), `s.shout()` inside `package Acme.Text` resolves `Acme.Text`'s own
