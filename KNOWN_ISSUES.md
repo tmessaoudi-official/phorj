@@ -3318,6 +3318,17 @@ nothing. The `* 0` form keeps both used.
 **Not changed:** a tagged-template hole's diagnostics still report the literal's own `line`/`col` rather
 than the hole's.
 
+**Covered by construction, not by a pinned test:**
+- An `html"…"` hole in a NON-ENTRY file: the literal's `sp.start` is already rebased before
+  `split_interpolation` computes the hole base.
+- A text-block `"""…"""` interpolation in a non-entry file: the lexer adds the block's `start`, and
+  `shift_start` then adds the window base.
+
+**Uncertified:** LSP features that map a cursor to a token inside an `html"…"` hole. Those tokens
+moved from offset 0 to an approximate in-literal offset, and their `line`/`col` are unchanged.
+Before the fix the offsets were already wrong, so this is not a regression. It has not been probed
+on a running server.
+
 ## FIXED — `default_fills` was keyed by a per-file byte offset: two files could COLLIDE and silently swap call arguments (P0, 2026-08-06 → fixed 2026-09-02)
 
 **FIXED 2026-09-02 (harness-trust step 1, panel round-3 C6).** The loader now gives every project
