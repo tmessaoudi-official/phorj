@@ -19,6 +19,12 @@
 > (5h, root cause verified by reading: `try_ufcs` looks up the bare name against mangled `funcs` keys), a checked file loading its whole package (5e, DEC-525 RULED), the ctor-once
 > rule for immutable fields (5j, DEC-524 RULED, size L), and DEC-509's lowered enum methods vs
 > `E-FILE-MIXED-PUBLIC` (5i, DEC-526 RULED 2026-09-14: a sibling `<Enum>Functions.phg`). No ruling is pending.
+> **NEXT (paused 2026-09-14 after `1191f6c2`):** build 5h, same-package half first — `try_ufcs` step (1) looks up
+> the bare name at `src/checker/calls/ufcs.rs:40` while `self.funcs` is keyed by the mangled name
+> (`src/checker/collect/functions.rs:91`); failing differential test first, and keep `check_fn_visibility` on the
+> new path so the fix opens no private hole. Then 5i (DEC-526), 5g, 5e, 5j, 5d. Open probe before claiming 5f
+> covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
+> and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 
 
 > **▶ 2026-09-09 RULE-COMPLIANCE REVIEW — four rulings, DEC-516…519. Read these before picking up L4c.**
