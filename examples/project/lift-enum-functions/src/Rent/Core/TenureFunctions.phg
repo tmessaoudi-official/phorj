@@ -1,0 +1,18 @@
+// lifted (verify) from `src/Core/Tenure.php` — a best-effort PHP->Phorj draft; review before trusting it.
+package Rent.Core;
+
+import Core.Output;
+import Rent.Support.Label;
+
+function isExcluded(Tenure tenure): bool {
+    return match (tenure) { PLAI() => true, default => false };
+}
+
+function fallback(): Tenure {
+    Output.print("no tenure given, falling back\n");
+    return new PLAI();
+}
+
+function describe(Label l): string {
+    return l.text();
+}

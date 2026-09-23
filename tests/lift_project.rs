@@ -441,3 +441,158 @@ fn a_tree_with_no_php_is_refused() {
         .expect_err("no PHP must be refused");
     assert!(err.contains("no `.php` files found"), "{err}");
 }
+
+/// A namespaced tree whose enum has methods — scout's `Rent/Core/Tenure.php` shape (row 5i).
+fn enum_methods_tree(label: &str) -> Tmp {
+    let t = Tmp::new(label);
+    t.write(
+        "composer.json",
+        r#"{ "name": "acme/rent", "autoload": { "psr-4": { "Rent\\": "src/" } } }"#,
+    );
+    t.write(
+        "src/Support/Label.php",
+        "<?php\nnamespace Rent\\Support;\nclass Label { public function text(): string { return \"label\"; } }\n",
+    );
+    // `isExcluded` is an INSTANCE method (UFCS at the call site), `fallback` a STATIC one whose body
+    // echoes (so it needs `Core.Output`), and `describe` is the only user of `Label` — so its `use`
+    // import must follow it into the companion and must NOT stay behind in `Tenure.phg`, where it
+    // would be `E-UNUSED-IMPORT`.
+    t.write(
+        "src/Core/Tenure.php",
+        "<?php\nnamespace Rent\\Core;\nuse Rent\\Support\\Label;\nenum Tenure: string {\n    case LLI = 'LLI';\n    case PLAI = 'PLAI';\n    public function isExcluded(): bool {\n        return match ($this) {\n            self::PLAI => true,\n            default => false,\n        };\n    }\n    public static function fallback(): self {\n        echo \"fallback\\n\";\n        return self::PLAI;\n    }\n    public static function describe(Label $l): string { return $l->text(); }\n}\n",
+    );
+    t.write(
+        "src/Core/Policy.php",
+        "<?php\nnamespace Rent\\Core;\nuse Rent\\Support\\Label;\nclass Policy {\n    public function verdict(): string {\n        $t = Tenure::fallback();\n        if ($t->isExcluded()) {\n            return Tenure::describe(new Label());\n        }\n        return \"ok\";\n    }\n}\n",
+    );
+    t.write(
+        "src/index.php",
+        "<?php\nnamespace Rent;\nuse Rent\\Core\\Policy;\n$p = new Policy();\necho $p->verdict() . \"\\n\";\n",
+    );
+    t
+}
+
+/// Scout row 5i (DEC-526). DEC-509 lowers an enum method to a public free function, and beside the
+/// public enum that is `E-FILE-MIXED-PUBLIC` in every package but `Main`: the lifted project failed
+/// to check the moment an enum with methods sat in a namespace — which is every real PHP enum. The
+/// lowered functions now land in a sibling `<Enum>Functions.phg` in the same package, each file with
+/// exactly the imports it uses, and a same-package caller reaches them by UFCS or a plain call.
+#[test]
+fn lowered_enum_methods_land_in_a_sibling_functions_file() {
+    let t = enum_methods_tree("enumfns");
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("the directory lifts");
+
+    let enum_file = read(&out.join("src/Rent/Core/Tenure.phg"));
+    let fns_file = read(&out.join("src/Rent/Core/TenureFunctions.phg"));
+    assert!(enum_file.contains("enum Tenure"), "{enum_file}");
+    assert!(
+        !enum_file.contains("function "),
+        "the lowered functions stayed beside the enum:\n{enum_file}"
+    );
+    assert!(
+        !enum_file.contains("import "),
+        "an import used only by a lowered method stayed behind:\n{enum_file}"
+    );
+    assert!(fns_file.contains("package Rent.Core;"), "{fns_file}");
+    assert!(
+        fns_file.contains("function isExcluded(Tenure tenure)"),
+        "{fns_file}"
+    );
+    assert!(fns_file.contains("function fallback()"), "{fns_file}");
+    assert!(fns_file.contains("import Core.Output;"), "{fns_file}");
+    assert!(
+        fns_file.contains("import Rent.Support.Label;"),
+        "{fns_file}"
+    );
+    assert!(
+        fns_file.contains("from `src/Core/Tenure.php`"),
+        "the companion must name the PHP it answers to:\n{fns_file}"
+    );
+
+    let unit = phorj::loader::load(&out.join("src/main.phg")).expect("the lifted project loads");
+    phorj::cli::check_and_expand(&unit.program, &unit.diag_src)
+        .expect("the lifted project type-checks");
+}
+
+/// `package Main` may mix a public type with public functions, and an un-namespaced PHP file lifts
+/// there — so the split is not applied and the draft keeps its single-file shape.
+#[test]
+fn an_enum_in_package_main_keeps_its_functions_beside_it() {
+    let t = Tmp::new("enummain");
+    t.write(
+        "src/Tenure.php",
+        "<?php\nenum Tenure: string {\n    case LLI = 'LLI';\n    public function isLli(): bool { return $this === self::LLI; }\n}\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("the directory lifts");
+    let merged = read(&out.join("src/Tenure.phg"));
+    assert!(merged.contains("enum Tenure"), "{merged}");
+    assert!(merged.contains("function isLli(Tenure tenure)"), "{merged}");
+    assert!(!out.join("src/TenureFunctions.phg").exists());
+}
+
+/// A PHP file already named `TenureFunctions.php` must not be overwritten by `Tenure.php`'s companion:
+/// the companion goes through the same collision guard as every draft, and the rename is reported.
+#[test]
+fn a_companion_colliding_with_a_real_file_is_renamed_not_overwritten() {
+    let t = enum_methods_tree("enumcoll");
+    t.write(
+        "src/Core/TenureFunctions.php",
+        "<?php\nnamespace Rent\\Core;\nclass Keep { public function k(): string { return \"kept\"; } }\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("the directory lifts");
+    let mut bodies = String::new();
+    for e in std::fs::read_dir(out.join("src/Rent/Core")).expect("read_dir") {
+        bodies.push_str(&read(&e.expect("entry").path()));
+    }
+    assert!(
+        bodies.contains("class Keep"),
+        "the real file was lost:\n{bodies}"
+    );
+    assert!(
+        bodies.contains("function isExcluded"),
+        "the companion was lost:\n{bodies}"
+    );
+    let report = read(&out.join("LIFT-REPORT.md"));
+    assert!(report.contains("renamed to avoid a collision"), "{report}");
+}
+
+/// An ENTRY file is re-packaged as `Main`, so an enum with methods inside it keeps its functions
+/// beside it — a companion left in the original package would belong to no enum at all.
+#[test]
+fn an_enum_in_the_entry_file_is_not_split() {
+    let t = Tmp::new("enumentry");
+    t.write(
+        "src/index.php",
+        "<?php\nnamespace Rent;\nenum Tenure: string {\n    case LLI = 'LLI';\n    public function isLli(): bool { return $this === self::LLI; }\n}\necho \"ok\\n\";\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("the directory lifts");
+    let main = read(&out.join("src/main.phg"));
+    assert!(main.contains("package Main;"), "{main}");
+    assert!(main.contains("function isLli(Tenure tenure)"), "{main}");
+    assert!(!out.join("src/Rent/TenureFunctions.phg").exists());
+    let unit = phorj::loader::load(&out.join("src/main.phg")).expect("loads");
+    phorj::cli::check_and_expand(&unit.program, &unit.diag_src).expect("type-checks");
+}
+
+/// A `catch` inside a lowered enum method needs `Core.ErrorModule` — in the COMPANION, where the
+/// method went. Left in the enum's own file it would be `E-UNUSED-IMPORT`, a hard error.
+#[test]
+fn an_error_import_follows_the_lowered_method_into_its_companion() {
+    let (primary, companions) = phorj::lift::lifter::lift_source_files(
+        "<?php\nnamespace Rent\\Core;\nenum Tenure: string {\n    case LLI = 'LLI';\n    public static function safe(): string {\n        try { return \"s\"; } catch (\\RuntimeException $e) { return \"e\"; }\n    }\n}\n",
+    )
+    .expect("lifts");
+    assert!(!primary.contains("ErrorModule"), "{primary}");
+    let [(stem, fns)] = companions.as_slice() else {
+        panic!("expected one companion, got {companions:?}");
+    };
+    assert_eq!(stem, "TenureFunctions");
+    assert!(
+        fns.contains("import Core.ErrorModule.RuntimeError;"),
+        "{fns}"
+    );
+}

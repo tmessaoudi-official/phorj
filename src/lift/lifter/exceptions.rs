@@ -80,7 +80,18 @@ fn visit_exception_sites(prog: &php::PhpProgram, f: &mut impl FnMut(&str)) {
                 }
             }
             php::PhpItem::Stmt(s) => visit_body(std::slice::from_ref(s), f),
-            php::PhpItem::Enum(_) | php::PhpItem::Interface(_) => {}
+            // DEC-509 lowers every enum method to a free function, so its `catch`/`throw` types are
+            // printed like any other — and need their import like any other. Skipped until scout row
+            // 5i found it: a `catch (\RuntimeException $e)` in an enum method lifted to a bare
+            // `RuntimeError` with no import (`E-INJECTED-TYPE-BARE`).
+            php::PhpItem::Enum(e) => {
+                for m in &e.methods {
+                    if let Some(b) = &m.body {
+                        visit_body(b, f);
+                    }
+                }
+            }
+            php::PhpItem::Interface(_) => {}
         }
     }
 }

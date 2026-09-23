@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — a directory lift puts an enum's lowered methods in a sibling `<Enum>Functions.phg` (scout row 5i; DEC-526; 2026-09-23)
+
+- **Why.** DEC-509 lowers a PHP enum method to a public free function. Outside `package Main`, a
+  public enum and public functions cannot share a file (`E-FILE-MIXED-PUBLIC`), so a lifted project
+  failed to check as soon as a namespaced enum had a method. Every real PHP enum is namespaced.
+- **Now.** `phg lift <dir> -o <out>` writes each enum's lowered methods to `<Enum>Functions.phg` in
+  the same package, with the same source header. Each file carries only the imports its own items
+  use; the lifter's import recorders are drained per file, because a receiver-form native call
+  (`xs.map(f)`) needs `import Core.List;` with no `List` in the text. The companion goes through the
+  collision guard, so an existing `TenureFunctions.php` is renamed, never overwritten.
+- **Unchanged.** An enum in `package Main`, an enum in the entry file (re-packaged as `Main`), and
+  single-file `phg lift foo.php` keep the one-file shape. Every shipped lift example is byte-identical.
+- **Fixed alongside.** A `catch`/`throw` inside an enum method now gets its `Core.ErrorModule`
+  import, and a refused hoist inside one gets its `// CANNOT LIFT:` note. Both whole-file scans had
+  skipped enum methods since DEC-509.
+- **Still open.** A caller in another package (KNOWN_ISSUES § LIFT-ENUM-CROSS-PACKAGE, with L7).
+- Tests: five in `tests/lift_project.rs`, one in `src/lift/lifter_tests_enums.rs`; five sabotage
+  mutations each red at least one. Example: `examples/project/lift-enum-functions/`.
+
 ### Fixed — a template tag inside a library package resolves to that package's own tag (P0; scout row 5h1; 2026-09-14)
 
 - **Loud half.** Inside a library package, `mark"<{a}>"` failed with `E-UNKNOWN-TAG` even when `mark`

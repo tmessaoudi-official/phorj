@@ -1,0 +1,14 @@
+// lifted (verify) from `src/Core/Policy.php` — a best-effort PHP->Phorj draft; review before trusting it.
+package Rent.Core;
+
+import Rent.Support.Label;
+
+open class Policy {
+    public open function verdict(): string {
+        mutable var t = fallback();
+        if (t.isExcluded()) {
+            return describe(new Label());
+        }
+        return "ok";
+    }
+}

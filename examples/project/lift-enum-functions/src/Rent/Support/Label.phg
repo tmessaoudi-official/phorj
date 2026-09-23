@@ -1,0 +1,8 @@
+// lifted (verify) from `src/Support/Label.php` — a best-effort PHP->Phorj draft; review before trusting it.
+package Rent.Support;
+
+open class Label {
+    public open function text(): string {
+        return "excluded tenure";
+    }
+}

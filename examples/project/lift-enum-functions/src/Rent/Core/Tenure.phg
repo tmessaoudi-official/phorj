@@ -1,0 +1,4 @@
+// lifted (verify) from `src/Core/Tenure.php` — a best-effort PHP->Phorj draft; review before trusting it.
+package Rent.Core;
+
+enum Tenure: string { LLI = "LLI", PLAI = "PLAI" }

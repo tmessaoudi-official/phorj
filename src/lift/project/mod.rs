@@ -263,8 +263,8 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
         // the lift. [Verified on a fixture: `use Doctrine\ORM\EntityManager;` in a file containing a
         // `switch` was missing from the report until the fallback existed.]
         scan_vendor(&src, &composer, &mut vendor_refs, &mut declared);
-        match crate::lift::lifter::lift_source(&src) {
-            Ok(phg) => {
+        match crate::lift::lifter::lift_source_files(&src) {
+            Ok((phg, companions)) => {
                 // A draft the lifter gave an `#[Entry]` to came from PHP with top-level code (or a
                 // `main()`), i.e. a SCRIPT. phorj's entry convention is `package Main;` at the source
                 // root, and that is not cosmetic: a dotted package must sit in a matching subdirectory
@@ -294,6 +294,20 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
                         &mut renames,
                     );
                     write_file(&dest, &layout::draft_header(&rel, &phg))?;
+                }
+                // DEC-526 (scout row 5i): an enum's lowered methods, in a sibling `<Enum>Functions.phg`
+                // of the same package. Routed through the same collision guard as every other draft,
+                // so a PHP `TenureFunctions.php` beside `Tenure.php` is renamed, never overwritten.
+                for (stem, text) in companions {
+                    let as_source = path.with_file_name(format!("{stem}.php"));
+                    let dest = layout::unique_destination(
+                        layout::destination(out, &text, &as_source),
+                        &as_source,
+                        &mut written,
+                        &rel,
+                        &mut renames,
+                    );
+                    write_file(&dest, &layout::draft_header(&rel, &text))?;
                 }
                 lifted += 1;
             }

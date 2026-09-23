@@ -1,0 +1,13 @@
+// lifted (verify) from `src/index.php` — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Rent.Core.Policy;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var p = new Policy();
+    Output.print("{p.verdict()}\n");
+}

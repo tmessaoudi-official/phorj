@@ -163,3 +163,19 @@ fn a_static_class_method_call_still_uses_static_access() {
     assert!(out.contains("Limits::cap()"), "{out}");
     assert_reparses(&out);
 }
+
+/// Scout row 5i found the whole-file scans had never learned about DEC-509: a `catch` in an enum
+/// method lifted to a bare `RuntimeError` with no `Core.ErrorModule` import (`E-INJECTED-TYPE-BARE`),
+/// and a refused hoist inside one carried no `// CANNOT LIFT:` note. Both scans now visit enum
+/// methods, and the note names the lowered FREE function, which is what the draft shows.
+#[test]
+fn whole_file_scans_see_lowered_enum_methods() {
+    let out = lift(
+        "<?php\nenum Tenure: string {\n    case LLI = 'LLI';\n    public static function safe(): string {\n        try { return \"s\"; } catch (\\RuntimeException $e) { return \"e\"; }\n    }\n    public static function h(bool $c): int {\n        if ($c) { $b = 5; }\n        return $b + 0;\n    }\n}",
+    );
+    assert!(
+        out.contains("import Core.ErrorModule.RuntimeError;"),
+        "{out}"
+    );
+    assert!(out.contains("// CANNOT LIFT: `$b` in `h()`"), "{out}");
+}

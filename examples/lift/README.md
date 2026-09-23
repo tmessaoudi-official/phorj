@@ -320,6 +320,28 @@ Two refusals guard the lowering, because the lifter never invents a name:
 - a method that already has a parameter called `tenure` (the receiver name for `enum Tenure`) —
   refused, naming the parameter.
 
+**Outside `package Main`, the functions get their own file (DEC-526, scout row 5i).** A public enum
+and public free functions cannot share a file in any package but `Main` (`E-FILE-MIXED-PUBLIC`), so
+the lowered draft above checked only while the enum lived in `Main`, and every real PHP enum lives in
+a namespace. A directory lift (`phg lift <dir> -o <out>`) therefore writes each enum's lowered methods
+to a sibling `<Enum>Functions.phg` in the same package. Both files carry the source header of the PHP
+file they came from, and each gets exactly the imports its own items use: an import only a method
+needs moves with the method, because `E-UNUSED-IMPORT` is a hard error. A same-package caller reaches
+the functions exactly as before, `t.isExcluded()` through UFCS or `fallback()` as a direct call.
+`project/lift-enum-functions/` is the lifted output of such a tree, run on all three legs.
+
+Three cases keep the single-file shape:
+- an enum in `package Main`, where mixing is legal;
+- an enum in the directory lift's ENTRY file, because the entry is re-packaged as `Main`, which
+  would strand a companion in a package its enum no longer has;
+- the single-file `phg lift foo.php`, which prints one draft to stdout and has nowhere to put a
+  second file.
+
+A PHP file already named `TenureFunctions.php` is not overwritten: the companion goes through the
+same collision guard as every draft and is renamed, and `LIFT-REPORT.md` says so. A caller in
+ANOTHER package still fails to check. UFCS through a function import is deferred to L7 (DEC-527), and
+the lifter does not yet emit function imports for a lowered static method.
+
 ## Block-bodied closures, and the capture phorj rules out (DEC-506, 2026-09-07)
 
 `closures.php` / `closures.phg`. 23 of a 120-file real codebase write a `function (…) { … }`

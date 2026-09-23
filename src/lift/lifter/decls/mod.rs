@@ -4,17 +4,39 @@ use super::*;
 
 mod declarations;
 pub(in crate::lift) mod hoist;
+mod imports;
 mod interfaces;
 mod seed;
 pub(in crate::lift) mod statements;
 
 pub fn lift_source(php_src: &str) -> Result<String, String> {
+    Ok(lift_source_split(php_src, false)?.0)
+}
+
+/// [`lift_source`] for the directory lift: the primary draft, plus one `(file stem, draft)` per
+/// `<Enum>Functions` companion DEC-526 split out (scout row 5i). The `// CANNOT LIFT:` notes stay on
+/// the primary — they describe the PHP file, which is the primary's source.
+pub fn lift_source_files(php_src: &str) -> Result<(String, Vec<(String, String)>), String> {
+    lift_source_split(php_src, true)
+}
+
+fn lift_source_split(
+    php_src: &str,
+    split: bool,
+) -> Result<(String, Vec<(String, String)>), String> {
     // DEC-419: lex WITH the PHPDoc side channel and print WITH the recovered docs, so documentation
     // survives PHP → phorj instead of being dropped on the floor.
     let (toks, docs) = crate::lift::lexer::lex_php_with_docs(php_src)?;
     let prog = crate::lift::parser::parse_php_with_docs(toks, docs)?;
-    let phorj = lift(&prog)?;
-    let out = crate::lift::printer::print_program_with_docs(&phorj, &prog.docs)?;
+    let files = lift_files(&prog, split)?;
+    let out = crate::lift::printer::print_program_with_docs(&files.primary, &prog.docs)?;
+    let mut companions = Vec::new();
+    for (stem, p) in &files.companions {
+        companions.push((
+            stem.clone(),
+            crate::lift::printer::print_program_with_docs(p, &prog.docs)?,
+        ));
+    }
     // DEC-421: an exception class with no mapping into phorj's standard taxonomy keeps its own name,
     // which will NOT type-check. Saying so beats leaving the reader to discover it from `phg check`:
     // the lifter's contract is that anything it cannot do is refused LOUDLY, never guessed.
@@ -38,10 +60,7 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
     // LIFT-ATTR: an attribute whose class is not in this file (every framework attribute) is emitted with
     // its identity intact and named here, so the draft says why `phg check` will flag it.
     notes.push_str(&super::attrs::unresolved_attribute_notes(&prog));
-    if notes.is_empty() {
-        return Ok(out);
-    }
-    Ok(format!("{notes}{out}"))
+    Ok((format!("{notes}{out}"), companions))
 }
 
 /// The `// CANNOT LIFT:` notes for every function-scoped variable the DEC-397 hoist had to refuse,
@@ -68,7 +87,17 @@ fn hoist_notes(prog: &php::PhpProgram) -> String {
                     }
                 }
             }
-            _ => {}
+            // A lowered enum method (DEC-509) is a FREE function in the draft, so it is named bare —
+            // the name the reader will find. Skipped until scout row 5i: its refused hoists went
+            // unreported, leaving an `E-UNKNOWN-IDENT` with no note saying why.
+            php::PhpItem::Enum(e) => {
+                for m in &e.methods {
+                    if let Some(body) = &m.body {
+                        push(&m.name, &m.params, body);
+                    }
+                }
+            }
+            php::PhpItem::Interface(_) | php::PhpItem::Stmt(_) => {}
         }
     }
     seen.iter()
@@ -89,8 +118,23 @@ fn entry_cli_attr() -> crate::ast::Attribute {
     crate::ast::entry_attr("Cli", SP)
 }
 
-/// Lift a parsed PHP program into a Phorj program (`package Main; import Core.Runtime.Entry;`).
+/// One PHP file lifted to phorj FILES: the primary program, plus one `<Enum>Functions` companion per
+/// enum whose methods DEC-509 lowered, when DEC-526 splits them out (scout row 5i).
+pub struct LiftedFiles {
+    pub primary: Program,
+    /// `(file stem, program)`, in declaration order.
+    pub companions: Vec<(String, Program)>,
+}
+
+/// Lift a parsed PHP program into ONE Phorj program (`package Main; import Core.Runtime.Entry;`) —
+/// lowered enum methods stay beside their enum. The single-file surface (`phg lift foo.php`).
 pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
+    Ok(lift_files(prog, false)?.primary)
+}
+
+/// Lift a parsed PHP program; with `split`, lowered enum methods outside `package Main` go to
+/// companion files (DEC-526) — the directory lift's surface, since only it writes more than one file.
+pub fn lift_files(prog: &php::PhpProgram, split: bool) -> Result<LiftedFiles, String> {
     // DEC-312: reset the per-lift native-module recorder (never leak across runs on this thread).
     let _ = super::drain_native_modules();
     super::reset_console();
@@ -113,9 +157,15 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     // single-file lift knows only this file's enums; `lift_directory` has already seeded every enum
     // in the tree, so the union is what a cross-file `Tenure::PLAI` needs.
     super::enums::begin_file(super::enums::enum_names_of(prog));
-    // DEC-509: free functions lowered from enum methods, and the names already taken by them.
-    let mut lowered_enum_fns: Vec<FunctionDecl> = Vec::new();
+    // DEC-509: free functions lowered from enum methods, and the names already taken by them. The
+    // name set spans the whole PHP file even when the functions are split across companions: the
+    // companions share ONE package, where two functions of one name still collide.
+    let mut lowered: Vec<(String, Vec<FunctionDecl>, imports::Recorded)> = Vec::new();
     let mut lowered_names: HashSet<String> = HashSet::new();
+    // Scout row 5i: what the recorders saw for the PRIMARY file's items. Drained at every item
+    // boundary around a lowering, so an `echo` only inside an enum method imports `Core.Output` into
+    // the companion and not here.
+    let mut recorded = imports::Recorded::default();
 
     for item in &prog.items {
         match item {
@@ -137,11 +187,13 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             }
             php::PhpItem::Enum(e) => {
                 items.push(Item::Enum(lift_enum(e)?));
-                lowered_enum_fns.extend(super::enums::lower_methods(
-                    &mut l,
-                    e,
-                    &mut lowered_names,
-                )?);
+                recorded.take();
+                let fns = super::enums::lower_methods(&mut l, e, &mut lowered_names)?;
+                let mut rec = imports::Recorded::default();
+                rec.take();
+                if !fns.is_empty() {
+                    lowered.push((e.name.clone(), fns, rec));
+                }
             }
             php::PhpItem::Interface(i) => {
                 items.push(Item::Interface(interfaces::lift_interface(i)?));
@@ -152,9 +204,32 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         }
     }
 
-    // The lowered enum methods land AFTER every enum declaration, so a reader sees the type before
-    // the functions over it, and `main` (synthesized below) stays last.
-    items.extend(lowered_enum_fns.into_iter().map(Item::Function));
+    recorded.take();
+
+    // DEC-526 (scout row 5i): outside `package Main` a public enum and public functions cannot share
+    // a file (`E-FILE-MIXED-PUBLIC`), so each enum's lowered methods become a sibling
+    // `<Enum>Functions` file in the same package. `Main` may mix, and so keeps the single-file shape.
+    // An ENTRY file keeps it too: the directory lift re-packages the entry as `Main` (a dotted
+    // package would have to sit in a matching directory), which would leave a companion stranded in
+    // a package its enum no longer belongs to.
+    let is_entry = has_main || !top_stmts.is_empty();
+    let split = split && !prog.namespace.is_empty() && !is_entry;
+    let mut companions = Vec::new();
+    for (enum_name, fns, rec) in lowered {
+        if split {
+            let fns = fns.into_iter().map(Item::Function).collect();
+            let package = lift_package(&prog.namespace)?;
+            companions.push((
+                format!("{enum_name}Functions"),
+                imports::assemble(prog, package, fns, &rec)?,
+            ));
+        } else {
+            // The lowered enum methods land AFTER every enum declaration, so a reader sees the type
+            // before the functions over it, and `main` (synthesized below) stays last.
+            items.extend(fns.into_iter().map(Item::Function));
+            recorded.absorb(rec);
+        }
+    }
 
     // Top-level PHP code becomes the runnable entry `function main()` (M5 model).
     if !top_stmts.is_empty() {
@@ -182,167 +257,10 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         }));
     }
 
-    // Prepend `import Core.Output;` if any `echo` was lifted.
-    let mut final_items = Vec::new();
-    // DEC-191 addendum: the lifted draft's #[Entry] needs its import (wind rule). DEC-337: the
-    // `kind: EntryKind.Cli` variant is import-gated too — emit its import alongside `Entry`.
-    let emitted_entry = items
-        .iter()
-        .any(|i| matches!(i, Item::Function(f) if f.attrs.iter().any(crate::ast::is_entry_attr)));
-    if emitted_entry {
-        final_items.push(Item::Import {
-            path: vec!["Core".into(), "Runtime".into(), "Entry".into()],
-            alias: None,
-            wildcard: false,
-            except: Vec::new(),
-            span: SP,
-        });
-        final_items.push(Item::Import {
-            path: vec![
-                "Core".into(),
-                "Runtime".into(),
-                crate::ast::ENTRY_KIND_ENUM.into(),
-            ],
-            alias: None,
-            wildcard: false,
-            except: Vec::new(),
-            span: SP,
-        });
-    }
-    if super::took_console() {
-        final_items.push(Item::Import {
-            path: vec!["Core".into(), "Output".into()],
-            alias: None,
-            wildcard: false,
-            except: Vec::new(),
-            span: SP,
-        });
-    }
-    // DEC-421: a catch clause that mapped onto phorj's standard taxonomy needs `Core.ErrorModule`
-    // imported, plus a MEMBER import per type used — an injected type referenced bare without its
-    // import is `E-INJECTED-TYPE-BARE`, so emitting the mapping without these would produce a draft
-    // that still does not check, defeating the point of mapping at all.
-    let used = super::exceptions::mapped_error_types(prog);
-    if !used.is_empty() {
-        final_items.push(Item::Import {
-            path: vec!["Core".into(), "ErrorModule".into()],
-            alias: None,
-            wildcard: false,
-            except: Vec::new(),
-            span: SP,
-        });
-        for t in used {
-            final_items.push(Item::Import {
-                path: vec!["Core".into(), "ErrorModule".into(), t],
-                alias: None,
-                wildcard: false,
-                except: Vec::new(),
-                span: SP,
-            });
-        }
-    }
-    // LIFT-NS: one phorj `import` per PHP `use`, in source order. These land AFTER the imports the lifter
-    // synthesized above (`Core.Runtime.Entry`, `Core.Output`, the `Core.ErrorModule` members), which is
-    // simply the order they are pushed in — nothing depends on it and no test pins it. Phorj supports import aliases natively, so `use X as Y;`
-    // lifts to `import X as Y;` rather than being expanded away — which keeps the alias the developer
-    // wrote instead of inlining a fully-qualified name at every use site.
-    //
-    // Path segments are PascalCase-ized for the same reason `lift_package` does it: a namespace segment
-    // is a package segment on the phorj side. The LAST segment is a TYPE name and is left alone — it is
-    // already the class's own name, and PHP class names are PascalCase by universal convention.
-    //
-    // An import is emitted ONLY when the lifted output actually references its local name.
-    // `E-UNUSED-IMPORT` is a HARD error in phorj while an unused `use` is legal and extremely common
-    // in PHP, so emitting every `use` verbatim produces "a lift that fails the very check it should
-    // pass" — the exact rule `exceptions.rs` already follows for error-type imports. Dropping an
-    // unreferenced one is semantically LOSSLESS: a PHP `use` only creates a local alias, so an unused
-    // one carries no behaviour to lose.
-    //
-    // Usage is judged against the LIFTED text, not the PHP source, and LIFT-ATTR is why that matters
-    // most: an attribute name is RESOLVED during the lift, so a Doctrine-style `use … as ORM;` whose
-    // only referent was `#[ORM\Column]` has no referent left once the attribute is emitted as the
-    // expanded `#[Doctrine.ORM.Mapping.Column]`. A PHP-source scan would keep that import; scanning the
-    // lifted text drops it, which is what phorj's hard `E-UNUSED-IMPORT` requires.
-    // The probe MUST propagate a printer error rather than defaulting to `""`: an empty probe makes
-    // `references_ident` false for every name, silently dropping EVERY import. Swallowing it with
-    // `unwrap_or_default()` was a bandaid with no evidenced failure mode (CLAUDE.md's anti-bandaid gate
-    // rates that P0), and the two prints are not interchangeable — this one passes `items` with a
-    // placeholder package and no docs, the final one passes `final_items` with the real package.
-    let lifted_decls = crate::lift::printer::print_program(&Program {
-        package: vec!["Main".into()],
-        items: items.clone(),
-        span: SP,
-    })?;
-    // Local names already bound by the imports the LIFTER synthesized above (`Core.Output`,
-    // `Core.Runtime.Entry`, `Core.Runtime.EntryKind`, the `Core.ErrorModule` members …). A phorj import
-    // binds its LAST segment, so a PHP `use App\Output;` would bind `Output` a second time and shadow
-    // `Core.Output` — and the lifter's own `Output.print(…)` call would then resolve to the user's
-    // class. That produced SILENT WRONG OUTPUT: `phg check` clean, all three legs agreeing with each
-    // other and disagreeing with the PHP the file was lifted from, so the differential harness could
-    // never see it. Refused loudly instead (DEC-166) — and PHP itself errors on the same shape
-    // (`use A\Helper; use B\Helper;` → "Cannot use B\Helper as Helper"), so refusing is also faithful.
-    let mut bound: Vec<String> = final_items
-        .iter()
-        .filter_map(|i| match i {
-            Item::Import { path, alias, .. } => {
-                Some(alias.clone().or_else(|| path.last().cloned())?)
-            }
-            _ => None,
-        })
-        .collect();
-    for u in &prog.uses {
-        let Some(local) = u.alias.clone().or_else(|| u.path.last().cloned()) else {
-            continue;
-        };
-        if bound.contains(&local) {
-            return Err(format!(
-                "lift: `use {}` binds the name `{local}`, which this file already imports — phorj has \
-                 no way to express two imports under one name, and silently letting one win would make \
-                 the lifted program disagree with the PHP it came from. Alias it (`use … as Other;`) \
-                 and re-run.",
-                u.path.join("\\")
-            ));
-        }
-        if !references_ident(&lifted_decls, &local) {
-            continue;
-        }
-        let mut path: Vec<String> = Vec::with_capacity(u.path.len());
-        for (i, seg) in u.path.iter().enumerate() {
-            if i + 1 == u.path.len() {
-                // The last segment is the class's own NAME — never re-cased (that would stop it
-                // matching the class), but still checked for the two ways a legal PHP class name is not
-                // a legal phorj identifier. `use App\Café;` used to emit an import the draft could not
-                // even LEX, and a lex error suppresses every other diagnostic in the file.
-                path.push(type_segment(seg)?);
-            } else {
-                path.push(package_segment(seg)?);
-            }
-        }
-        bound.push(local);
-        final_items.push(Item::Import {
-            path,
-            alias: u.alias.clone(),
-            wildcard: false,
-            except: Vec::new(),
-            span: SP,
-        });
-    }
-    // DEC-312: one `import <module>;` per Core module a builtin→native resolution referenced.
-    for module in super::drain_native_modules() {
-        final_items.push(Item::Import {
-            path: module.split('.').map(str::to_string).collect(),
-            alias: None,
-            wildcard: false,
-            except: Vec::new(),
-            span: SP,
-        });
-    }
-    final_items.extend(items);
-
-    Ok(Program {
-        package: lift_package(&prog.namespace)?,
-        items: final_items,
-        span: SP,
+    let primary = imports::assemble(prog, lift_package(&prog.namespace)?, items, &recorded)?;
+    Ok(LiftedFiles {
+        primary,
+        companions,
     })
 }
 

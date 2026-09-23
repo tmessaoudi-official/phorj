@@ -54,6 +54,35 @@ changing one without the other makes the two routes drift. The checker path only
 hover on a method-style call to a package function are UNCERTIFIED: the LSP has no UFCS-specific code
 and they were not probed on a running server.
 
+## LIFT-ENUM-CROSS-PACKAGE — a lowered enum method called from ANOTHER package does not check (scout row 5i, 2026-09-23; waits on L7) {#lift-enum-cross-package}
+
+Since row 5i (DEC-526), a directory lift writes a namespaced enum's lowered methods to a sibling
+`<Enum>Functions.phg`, and every caller in the enum's own package checks and runs
+(`examples/project/lift-enum-functions/`). A caller in another package still fails, loudly:
+
+```
+// Rent\Cli\Show.php:  return $t->isExcluded();   return Tenure::fallback();
+// lifted:              return t.isExcluded();     return fallback();
+type error at 8:28: type `Rent\Core\Tenure` has no method `isExcluded`
+type error at 11:24: unknown function `fallback`
+```
+
+[Verified 2026-09-23 on the release binary, with the entry importing `Show` so the file is loaded at
+all — without that, `phg check` never reaches it (row 5e, DEC-525) and reports clean.] The instance
+form needs UFCS through a function import (§ UFCS-CROSS-PACKAGE, deferred to L7 by DEC-527). The static
+form needs the lifter to emit a member import `import Rent.Core.fallback;` for a lowered method it
+calls from outside the package, which it does not yet do. scout's `Rent.Cli`, `Rent.Store` and
+`Rent.Config` are exactly these callers, so both halves land with L7.
+
+Two more notes on the same row:
+- **Single-file lift keeps one file.** `phg lift Tenure.php` prints one draft, with the functions
+  beside the enum. Outside `Main` that draft is `E-FILE-MIXED-PUBLIC`: stdout has nowhere to put a
+  second file. The directory lift is the surface that writes the split.
+- **Fixed with the row.** Two whole-file scans never saw enum methods: the exception-site scan (a
+  `catch (\RuntimeException $e)` in an enum method lifted to a bare `RuntimeError` with no import,
+  `E-INJECTED-TYPE-BARE`) and the DEC-397 hoist notes (a refused hoist got no `// CANNOT LIFT:`
+  line). Both date from DEC-509 and are pinned by `whole_file_scans_see_lowered_enum_methods`.
+
 ## DEP-ADVISORIES — three RustSec advisories remain after the 2026-09-13 dependency upgrade, none with a reachable fix
 
 `cargo audit` (cargo-audit 0.22.2, advisory DB fetched 2026-09-13) on the upgraded `Cargo.lock` reports
