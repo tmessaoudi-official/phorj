@@ -82,6 +82,13 @@ Two more notes on the same row:
   `catch (\RuntimeException $e)` in an enum method lifted to a bare `RuntimeError` with no import,
   `E-INJECTED-TYPE-BARE`) and the DEC-397 hoist notes (a refused hoist got no `// CANNOT LIFT:`
   line). Both date from DEC-509 and are pinned by `whole_file_scans_see_lowered_enum_methods`.
+- **Method-name collisions are refused per PHP FILE, not per package.** Two enums in one file that
+  declare the same method name are refused by the lifter. Two enums in DIFFERENT files of one
+  namespace now emit two same-named free functions into one package; `phg check` reports them, the
+  lifter does not [Inferred: not probed].
+- **A hoist note lands on the enum's file.** A `// CANNOT LIFT:` note for a hoist refused inside a
+  lowered method is written at the top of `Tenure.phg`, while the function it names lives in
+  `TenureFunctions.phg`. The note names the function, so it can be found.
 
 ## DEP-ADVISORIES — three RustSec advisories remain after the 2026-09-13 dependency upgrade, none with a reachable fix
 

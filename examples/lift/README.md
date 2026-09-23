@@ -337,8 +337,10 @@ Three cases keep the single-file shape:
 - the single-file `phg lift foo.php`, which prints one draft to stdout and has nowhere to put a
   second file.
 
-A PHP file already named `TenureFunctions.php` is not overwritten: the companion goes through the
-same collision guard as every draft and is renamed, and `LIFT-REPORT.md` says so. A caller in
+A PHP file already named `TenureFunctions.php` is not overwritten. The companion goes through the same
+collision guard as every draft, so whichever of the two is written second is renamed (files are
+lifted in path order, so that is usually the real file's draft, as `Core_TenureFunctions.phg`), and
+`LIFT-REPORT.md` says so. A caller in
 ANOTHER package still fails to check. UFCS through a function import is deferred to L7 (DEC-527), and
 the lifter does not yet emit function imports for a lowered static method.
 

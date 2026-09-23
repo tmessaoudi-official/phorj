@@ -29,7 +29,11 @@
 > tag like a bare identifier (`resolve_value_name`), so a library's tag reaches its own package's function or type,
 > never `Main`'s same-named one. Found at its 6C, pre-existing and open: a library's bare call or tag still reaches
 > `Main`'s function when the library has none (KNOWN_ISSUES §library-reaches-main).
-> **THEN:** 5i (DEC-526), 5g, 5e, 5j, 5d. Open probe before claiming 5f
+> **DONE (2026-09-23): row 5i** (`f1a47d09`; full all-features gate green, 3251 run) — a directory lift writes an
+> enum's lowered methods to a sibling `<Enum>Functions.phg` in the same package (DEC-526), each file with only the
+> imports its own items use. `package Main`, the entry file and single-file `phg lift` keep one file. A caller in
+> another package still fails loudly (KNOWN_ISSUES §lift-enum-cross-package, with L7).
+> **THEN:** 5g (DEC-523), 5e, 5j, 5d. Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 
