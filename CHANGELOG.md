@@ -6,6 +6,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — an identity cast as an arithmetic operand compiles on the VM (P0; scout row 5g0; DEC-528; 2026-09-24)
+
+- `(x as float) / 2.0` with `x` already a `float` passed `phg check` with a `W-REDUNDANT-CAST` lint,
+  ran on the tree-walker, and was `compile error: cannot infer numeric type of Cast` on the VM. The
+  VM's operand-type resolver had no arm for a cast; an identity cast now has its operand's type.
+- Test: `identity_cast_is_an_arithmetic_operand` in `tests/differential.rs`, red first.
+
 ### Changed — a directory lift puts an enum's lowered methods in a sibling `<Enum>Functions.phg` (scout row 5i; DEC-526; 2026-09-23)
 
 - **Why.** DEC-509 lowers a PHP enum method to a public free function. Outside `package Main`, a

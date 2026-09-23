@@ -348,6 +348,17 @@ impl Compiler<'_> {
             // `value instanceof C` is a `bool` — never an arithmetic operand, but a `var b = …`
             // initializer reads `ctype`, so resolve it to `Other` rather than erroring.
             Expr::InstanceOf { .. } => Ok(CTy::Other),
+            // A primitive `as` CONVERSION is rewritten to a native call before this backend, so the
+            // only primitive `Cast` reaching here is the IDENTITY (`T as T`, `core.rs` compiles the
+            // value unchanged) — its type is its operand's. Without this arm `(x as float) / 2.0`
+            // with `x` already a float was a VM compile error the checker had passed (Invariant 7).
+            // A class `as` is the checked DOWNCAST, whose result is `T?` — never a numeric operand.
+            Expr::Cast {
+                value, type_name, ..
+            } => match type_name.as_str() {
+                "int" | "float" | "string" | "bool" | "decimal" => self.ctype(value),
+                _ => Ok(CTy::Other),
+            },
             // `inner!` unwraps `T?` to `T`; its operand type is the inner's (so `o! + 1` specializes
             // — `resolve_cty(Optional)` already yields the inner `CTy`). M3 S2.5.
             Expr::Force { inner, .. } => self.ctype(inner),

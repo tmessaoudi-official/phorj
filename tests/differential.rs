@@ -6709,3 +6709,27 @@ fn a_lambda_whose_body_is_a_statement_emits_the_block_closure_form() {
         "value-bodied lambdas must still use the arrow form:\n{arrow_php}"
     );
 }
+
+/// Invariant 7 (CTy-operand trap), found while building scout row 5g: an IDENTITY cast (`T as T`)
+/// reaches the backend unchanged, and the VM's `ctype` had no `Cast` arm, so `(x as float) / 2.0`
+/// with `x` already a `float` was `compile error: cannot infer numeric type of Cast` — while
+/// `phg check` passed it with only a `W-REDUNDANT-CAST` lint and the tree-walker printed `2.5`. A
+/// converting cast (`int as float`) is rewritten to a native call before the backend, so it never
+/// showed. DEC-523's lift of PHP `/` emits exactly this shape when an operand is already a float.
+#[test]
+fn identity_cast_is_an_arithmetic_operand() {
+    agree_out_php(
+        "import Core.Output;
+function f(float x, int n) -> float {
+    float a = (x as float) / 2.0;
+    float b = (x as float) + 1.0 - (x as float);
+    int c = (n as int) * 3 + 1;
+    return a + b + (c as float);
+}
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    Output.printLine(\"{f(5.0, 2)}\");
+}",
+        "10.5\n",
+        "identity_cast_operand",
+    );
+}
