@@ -441,7 +441,8 @@ function main(): void {
 }
 ```
 
-This holds on the VM, the tree-walker, `--no-jit`, `-e`/stdin and a `phg build` binary, and output a
+This holds on the VM, the tree-walker, `--no-jit`, `-e`/stdin and a `phg build` binary (not yet under
+`phg debug`), and output a
 `Runtime.onShutdown` handler writes after the fault is included. Before 2026-09-24 stdout was empty in this
 case. The runnable fixture is `tests/fixtures/fault_after_print.phg`; the gates are `tests/cli.rs`,
 `tests/build.rs` and the fault-parity helpers in `tests/differential.rs`, which now compare pre-fault

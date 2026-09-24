@@ -29,12 +29,17 @@ non-zero, which is what the gate asserts). Build: scout plan row 5f0.
 
 **Fixed 2026-09-24 (row 5f0).** The backends' `*_keeping_output` entry points and the concurrency `run_loop`
 hand the partial output back with the error; `cli::RunFailure` carries it to `main.rs`, which prints it
-before the error on every entry path. `agree_err` / `agree_err_php` now compare pre-fault stdout (PHP run with
+before the error on `run`, `-e`/stdin and a built binary. `agree_err` / `agree_err_php` now compare pre-fault stdout (PHP run with
 `display_errors=stderr`); all 19 PHP-leg fault cases agreed. **Found while building it, and fixed with it:**
 the VM ran `Runtime.onShutdown` handlers on top of the ENDED program's frames, so after a fault — or a
 `Runtime.exit` inside a nested call, which was live on the shipped binary (`body cleanup 1 after`, exit 3,
 where the interpreter printed `body cleanup`) — the handler's return resumed `main` past the fault or exit
 point. `run_shutdown_handlers` now unwinds frames, stack and `try` handlers first.
+
+**Not covered:** `phg debug` still drops pre-fault stdout (`interpret_debug` keeps only the diagnostic; its UI
+is stderr-first). The `phg serve` → `run` role-mismatch switch prints the partial output too, but only behind an
+interactive-terminal prompt, so no test reaches it. A fault inside `spawn` goes through `run_loop`'s error arm,
+which carries the output, but no test prints and then faults in a task.
 
 ## LIBRARY-REACHES-MAIN — a library's bare call or template tag falls back to `Main`'s same-named function with no import (pending a ruling) {#library-reaches-main}
 
