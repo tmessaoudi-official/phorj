@@ -33,7 +33,11 @@
 > enum's lowered methods to a sibling `<Enum>Functions.phg` in the same package (DEC-526), each file with only the
 > imports its own items use. `package Main`, the entry file and single-file `phg lift` keep one file. A caller in
 > another package still fails loudly (KNOWN_ISSUES §lift-enum-cross-package, with L7).
-> **THEN:** 5g (DEC-523), 5e, 5j, 5d. Open probe before claiming 5f
+> **DONE (2026-09-24): row 5g0** (`83a3bbe1`, DEC-528) — an identity cast as an arithmetic operand compiles on the VM.
+> **DONE (2026-09-24): row 5g** (DEC-523 built as DEC-529) — PHP `/` and `/=` lift to float division; every operand is
+> made float, and a float variable's redundant cast is a `W-REDUNDANT-CAST` warning. Microbench G-8 verdict for
+> `83a3bbe1` is still OWED (the pre-push ratchet skipped on box load).
+> **THEN:** 5e, 5j, 5d. Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

@@ -146,7 +146,7 @@ fn an_unmapped_class_produces_a_cannot_lift_note_naming_it() {
 #[test]
 fn try_catch_finally_lifts_and_the_draft_type_checks() {
     let phg = lift_source(
-        "<?php\nfunction risky(int $n): int {\n  try {\n    return 100 / $n;\n  } \
+        "<?php\nfunction risky(int $n): int {\n  try {\n    return intdiv(100, $n);\n  } \
          catch (\\DivisionByZeroError $e) {\n    return 0;\n  } finally {\n    echo \"cleanup\\n\";\n  }\n}\n\
          function main(): void { echo \"ok\\n\"; }\n",
     )
@@ -170,7 +170,7 @@ fn try_catch_finally_lifts_and_the_draft_type_checks() {
 #[test]
 fn a_union_catch_survives_the_lift_with_both_members_mapped() {
     let phg = lift_source(
-        "<?php\nfunction f(int $n): int {\n  try {\n    return 10 / $n;\n  } \
+        "<?php\nfunction f(int $n): int {\n  try {\n    return intdiv(10, $n);\n  } \
          catch (\\DivisionByZeroError | \\RuntimeException $e) {\n    return -1;\n  }\n}\n\
          function main(): void { echo \"ok\\n\"; }\n",
     )
@@ -194,7 +194,7 @@ fn a_union_catch_survives_the_lift_with_both_members_mapped() {
 #[test]
 fn a_variableless_catch_gets_a_synthesised_binding() {
     let phg = lift_source(
-        "<?php\nfunction g(int $n): int {\n  try {\n    return 10 / $n;\n  } \
+        "<?php\nfunction g(int $n): int {\n  try {\n    return intdiv(10, $n);\n  } \
          catch (\\DivisionByZeroError) {\n    return -2;\n  }\n}\n\
          function main(): void { echo \"ok\\n\"; }\n",
     )
@@ -248,7 +248,7 @@ fn throw_lifts_and_the_root_namespace_marker_is_stripped() {
 #[test]
 fn a_rethrow_inside_a_catch_lifts_with_both_types_mapped() {
     let phg = lift_source(
-        "<?php\nfunction f(int $n): int {\n  try {\n    return 10 / $n;\n  } \
+        "<?php\nfunction f(int $n): int {\n  try {\n    return intdiv(10, $n);\n  } \
          catch (\\DivisionByZeroError $e) {\n    throw new \\LogicException(\"wrapped\");\n  }\n}\n\
          function main(): void { echo \"ok\\n\"; }\n",
     )

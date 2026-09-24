@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — PHP `/` lifts to float division (scout row 5g; DEC-523, DEC-529; 2026-09-24)
+
+- `phg lift` mapped PHP `/` straight to phorj `/`, which is integer division on two ints, so
+  `return $this->confidenceBp / 100;` lifted to a draft that checked clean and printed `87` where PHP
+  prints `87.5`. Every operand of a lifted `/` or `/=` is now float: `100` → `100.0`, `-2` → `-2.0`,
+  and a variable or call gets `as float`. A float variable gets a redundant cast (`W-REDUNDANT-CAST`,
+  a warning). An exact division into an `int` slot fails `phg check` loudly.
+- Tests: `src/lift/lifter_tests_division.rs`, the `float_division` case in `tests/lift_roundtrip.rs`
+  (compared against the original PHP), and the example pair `examples/lift/division.{php,phg}`. Four
+  exception-lift fixtures now use `intdiv` where they meant int division.
+
 ### Fixed — an identity cast as an arithmetic operand compiles on the VM (P0; scout row 5g0; DEC-528; 2026-09-24)
 
 - `(x as float) / 2.0` with `x` already a `float` passed `phg check` with a `W-REDUNDANT-CAST` lint,

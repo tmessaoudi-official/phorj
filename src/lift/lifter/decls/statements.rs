@@ -236,16 +236,21 @@ impl Lifter {
                 })
             }
             php::PhpExpr::CompoundAssign { target, op, value } => {
-                // `x op= e` → `x = x op e`.
+                // `x op= e` → `x = x op e`; `x /= e` is float division (row 5g, DEC-523/529).
                 let t = lift_expr(target)?;
-                Ok(Stmt::Assign {
-                    target: lift_expr(target)?,
-                    value: Expr::Binary {
+                let value = if *op == php::PhpBinOp::Div {
+                    float_division(target, t, value, lift_expr(value)?)
+                } else {
+                    Expr::Binary {
                         op: lift_binop(*op)?,
                         lhs: Box::new(t),
                         rhs: Box::new(lift_expr(value)?),
                         span: SP,
-                    },
+                    }
+                };
+                Ok(Stmt::Assign {
+                    target: lift_expr(target)?,
+                    value,
                     span: SP,
                 })
             }

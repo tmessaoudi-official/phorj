@@ -133,6 +133,12 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             expr: Box::new(lift_expr(expr)?),
             span: SP,
         },
+        // Row 5g (DEC-523/529): PHP `/` is float division.
+        php::PhpExpr::Binary {
+            op: php::PhpBinOp::Div,
+            left,
+            right,
+        } => float_division(left, lift_expr(left)?, right, lift_expr(right)?),
         php::PhpExpr::Binary { op, left, right } => {
             let phorj_op = lift_binop(*op)?;
             // DEC-512, third clause. PHP orders arrays; Phorj orders TUPLES and refuses `List<T>`

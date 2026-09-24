@@ -30,6 +30,7 @@ const SP: Span = Span {
 mod array_fns;
 mod attrs;
 mod decls;
+mod division;
 mod enums;
 mod exceptions;
 mod exprs;
@@ -40,6 +41,7 @@ mod matches;
 mod shapes;
 use attrs::AttrCtx;
 pub use decls::*;
+use division::float_division;
 pub(super) use enums::{enum_names_of, set_project_enum_names, EnumSymbols};
 use exprs::*;
 use leaves::*;

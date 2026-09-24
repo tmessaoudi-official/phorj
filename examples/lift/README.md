@@ -523,6 +523,21 @@ be acceptable is failing it *silently*, or worse, passing it with the wrong answ
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.
 
+## Division — `division.php` / `division.phg` (scout row 5g, 2026-09-24)
+
+PHP `/` is float division (`7 / 2` is `3.5`). Phorj's `/` on two ints is integer division, so the
+lift makes every operand float (DEC-523, built as DEC-529):
+
+- an int literal becomes a float literal: `100` → `100.0`, `-2` → `-2.0`;
+- an operand that is already float stays as written: a float literal, a `(float)` cast, another `/`;
+- anything else gets `as float`: `$a / $b` → `(a as float) / (b as float)`.
+
+`$x /= 2` lifts to `x = (x as float) / 2.0`. The lifter does not know variable types, so a float
+variable gets a redundant cast, and `phg check` warns `W-REDUNDANT-CAST` but still passes. PHP's
+exact `6 / 3` is int `2`; the lift gives float `2.0`, which prints `2` too. The one difference is an
+`int` slot: `function f(int $a): int { return $a / 3; }` lifts to a draft that fails `phg check`
+(`expected int, found float`). Use `intdiv($a, 3)` in the PHP when int division is what you mean.
+
 ## Sorting and mapping — `sorting.php` / `sorting.phg` (scout row 5f, 2026-09-13)
 
 PHP's two most common array callbacks lift to phorj's receiver-form `Core.List` calls:

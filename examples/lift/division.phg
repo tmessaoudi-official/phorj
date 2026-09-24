@@ -1,0 +1,40 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+open class Classification {
+    constructor(private mutable int confidenceBp) {}
+    public open function confidence(): float {
+        return (this.confidenceBp as float) / 100.0;
+    }
+}
+
+function ratio(int a, int b): float {
+    return (a as float) / (b as float);
+}
+
+function halvedTwice(int n): float {
+    mutable var x = n as float;
+    x = (x as float) / 2.0;
+    return (x as float) / -2.0;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var c = new Classification(8750);
+    Output.print("{c.confidence()}");
+    Output.print("\n");
+    Output.print("{ratio(7, 2)}");
+    Output.print(" ");
+    Output.print("{ratio(-7, 2)}");
+    Output.print(" ");
+    Output.print("{ratio(6, 3)}");
+    Output.print(" ");
+    Output.print("{ratio(1, 4)}");
+    Output.print("\n");
+    Output.print("{halvedTwice(10)}");
+    Output.print("\n");
+}

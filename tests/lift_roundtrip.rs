@@ -192,6 +192,17 @@ use App\Support\Helper as H;
 function shout(string $s): string { return $s . "!"; }
 echo shout("ns");"#,
         ),
+        // Row 5g (DEC-523/529): PHP `/` is FLOAT division, phorj's `/` on two ints is not. The values
+        // are chosen so PHP's precision-14 echo and phorj's float rendering agree (`1/3` would not):
+        // a non-exact quotient, a negative one, an EXACT one (PHP's int 2 and the lift's float 2.0
+        // both print `2`), and `/=` so the compound-assign path is compared against real PHP too.
+        (
+            "float_division",
+            r#"<?php
+function ratio(int $a, int $b): float { return $a / $b; }
+function halvedTwice(int $n): float { $x = (float) $n; $x /= 2; return $x / -2; }
+echo ratio(7, 2), "|", ratio(-7, 2), "|", ratio(6, 3), "|", ratio(1, 4), "|", halvedTwice(10);"#,
+        ),
         (
             "if_elseif_else",
             r#"<?php
