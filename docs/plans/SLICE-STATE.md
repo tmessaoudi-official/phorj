@@ -45,7 +45,9 @@
 > **DONE (2026-09-24): row 5k** (DEC-531) — a reserved word names a MEMBER (method, field, promoted param, after
 > `.`/`?.`/`::`, `with` field, named argument); the lifter renames reserved-word locals to `<word>Value` (amended
 > from `_`: `E-NAME-CASE`). On scout `Rent/Core` now stops only at `Scout.Core.Text` (Q-0908-1).
-> **THEN:** rule Q-0908-1 (gates L3), then 5j, 5d. Found: KNOWN_ISSUES §LIFT-TERNARY-IN-CONCAT (3 scout drafts). Open probe before claiming 5f
+> **RULED (2026-09-24 18:29): Q-0908-1 = DEC-532** — `throw e` as a `never`-typed expression in four positions
+> (right of `??`, ternary branch, `match` arm, lambda body); 3 scout sites, not 1. Build queued as row 5l.
+> **THEN:** build 5l (gates L3), then 5j, 5d. Found: KNOWN_ISSUES §LIFT-TERNARY-IN-CONCAT (3 scout drafts). Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

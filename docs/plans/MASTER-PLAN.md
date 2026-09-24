@@ -118,10 +118,9 @@ deepening. **The disposition is RULED: DEC-513 — fuse the comparison in the co
 helper, an Invariant-16 trade) and **Q-0908-4** (phorj accepts `3 <=> 2 <=> 0` left-associatively
 where PHP makes `<=>` non-associative and refuses to parse it).
 
-Two earlier banked Invariant-15 questions, neither ruled: **Q-0908-1 `?? throw`** — PHP 8
-throw-as-expression, 1 scout site, and phorj's `throw` is `Stmt`-only, so it is either a new
-expression form or a lifter lowering; **Q-0908-2 spread `...`** — phorj has none at all, 2 scout
-sites, and literal-spread vs call-site-unpack may be ruled apart. Both in the plan's *Needs input*.
+Two earlier banked Invariant-15 questions: **Q-0908-1 `?? throw`** — RULED 2026-09-24 as DEC-532
+(throw-expression in four positions; 3 scout sites; build = scout row 5l); **Q-0908-2 spread `...`** — phorj has none at all, 2 scout
+sites, and literal-spread vs call-site-unpack may be ruled apart — still unruled, in the plan's *Needs input*.
 
 ## 0.07 THE 2026-09-02 RULINGS — mirror rows (DEC-457 … DEC-489)
 
