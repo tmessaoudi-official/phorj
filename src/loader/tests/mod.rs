@@ -34,6 +34,7 @@ mod decl_files;
 mod imports;
 mod loose;
 mod member_function_imports;
+mod own_package;
 mod project_structure;
 mod public_surface;
 mod visibility;

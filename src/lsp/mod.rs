@@ -519,25 +519,25 @@ const INITIALIZE_RESULT: &str =
 /// Compute the diagnostics for a document buffer — the **same** pipeline `phg check` runs (lex →
 /// parse → `check`), so editor diagnostics equal the CLI's. A lex or parse error is a single
 /// diagnostic at its span; otherwise the checker's errors (or, when clean, its non-fatal warnings).
-/// DEC-282/DEC-252 — the URI-aware wrapper: when the document is a real on-disk file WITH user
-/// imports, diagnostics run the SAME unified loader `phg check` uses (buffer text for this file,
-/// sibling packages from disk) — so cross-file imports never squiggle in the editor. A buffer with
-/// only `Core.*` imports (the common case) keeps the fast text-only path, byte-identical to before.
+/// DEC-282/252/525 — an on-disk file with user imports OR in a non-`Main` package runs the SAME loader
+/// `phg check` does (this buffer, siblings from disk), so neither an import nor a package-mate
+/// squiggles. A `Main` file with only `Core.*` imports keeps the fast text-only path.
 fn diagnostics_for_uri(uri: &str, text: &str) -> Vec<Diagnostic> {
-    let has_user_imports = {
+    let needs_loader = {
         let Ok(tokens) = lex(text) else {
             return diagnostics_for(text); // lex error → the plain path reports it
         };
         let Ok(program) = Parser::new(tokens).parse_program() else {
             return diagnostics_for(text);
         };
-        program.items.iter().any(|it| {
-            matches!(it, crate::ast::Item::Import { path, .. }
+        (!program.package.is_empty() && program.package != ["Main"])
+            || program.items.iter().any(|it| {
+                matches!(it, crate::ast::Item::Import { path, .. }
                 if path.first().map(String::as_str) != Some("Core"))
-        })
+            })
     };
     let path = uri.strip_prefix("file://").unwrap_or(uri);
-    if !has_user_imports || !std::path::Path::new(path).is_file() {
+    if !needs_loader || !std::path::Path::new(path).is_file() {
         return diagnostics_for(text);
     }
     match crate::loader::load_with_buffer(std::path::Path::new(path), text) {

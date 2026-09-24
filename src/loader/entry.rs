@@ -49,12 +49,14 @@ fn load_unified_src(entry: &Path, entry_src: String) -> Result<Unit, String> {
     let entry_prog = parse_at(entry, &entry_src)?;
     check_unused_imports(&entry_prog, &entry_src, entry)?;
     let roots = discover_roots(entry);
+    // DEC-525: a file inside a package folder loads its whole package, as an entry reaching it would.
+    let own_root = own_package_root(entry, &entry_prog.package, &roots);
 
-    // Fast path: no user imports AND no ambient `*.d.phg` declaration files under the roots →
-    // a self-contained script; skip all disk scanning. (An entry using only foreign `declare`s
-    // has no user imports but still needs its decl files ambient-merged — the assemble path.)
+    // Fast path: no user imports, no own package to load, AND no ambient `*.d.phg` declaration files
+    // under the roots → a self-contained script; skip all disk scanning. (An entry using only foreign
+    // `declare`s has no user imports but still needs its decl files ambient-merged — the assemble path.)
     let mut queue: Vec<Vec<String>> = user_imports(&entry_prog, entry)?;
-    if queue.is_empty() && collect_unified_decls(&roots)?.is_empty() {
+    if queue.is_empty() && own_root.is_none() && collect_unified_decls(&roots)?.is_empty() {
         return Ok(Unit {
             program: entry_prog,
             diag_src: entry_src,
@@ -88,8 +90,12 @@ fn load_unified_src(entry: &Path, entry_src: String) -> Result<Unit, String> {
         indexed.push(("vendor/", v.clone(), index_packages(v, &[])));
     }
 
-    let mut sources: Vec<Source> =
-        vec![Source::first_party(entry.to_path_buf(), &roots.entry_local)];
+    // The entry is rooted where its package was found, so the folder rule checks it like any sibling.
+    let entry_root = own_root.as_deref().unwrap_or(&roots.entry_local);
+    let mut sources: Vec<Source> = vec![Source::first_party(entry.to_path_buf(), entry_root)];
+    if own_root.is_some() {
+        queue.push(entry_prog.package.clone());
+    }
     let mut loaded: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut parsed_cache: HashMap<PathBuf, Program> = HashMap::new();
     while let Some(path) = queue.pop() {
@@ -162,6 +168,25 @@ fn load_unified_src(entry: &Path, entry_src: String) -> Result<Unit, String> {
     sources.dedup_by(|a, b| a.file == b.file);
     let decl_files = collect_unified_decls(&roots)?;
     assemble(entry, sources, &decl_files, Some((entry, &entry_src)))
+}
+
+/// DEC-525 — the source root of the entry's OWN package, when the entry sits in a package folder
+/// under `src/`: the folder path must end in the package path (`src/Acme/Core/X.phg` declaring
+/// `Acme.Core`), and stripping it must land exactly on the `src/` root. `None` for `package Main`
+/// (never seeded — a folder of standalone scripts must not merge), for a folder that does not match
+/// its package, and for a layout with no `src/` (the folder rule has no root to check it against).
+fn own_package_root(entry: &Path, package: &[String], roots: &SearchRoots) -> Option<PathBuf> {
+    if package.is_empty() || package == ["Main"] {
+        return None;
+    }
+    let mut dir = entry.parent()?;
+    for seg in package.iter().rev() {
+        if dir.file_name()?.to_str()? != seg {
+            return None;
+        }
+        dir = dir.parent()?;
+    }
+    (roots.src_root.as_deref() == Some(dir)).then(|| dir.to_path_buf())
 }
 
 /// The unified decl sweep: `*.d.phg` DIRECTLY in the entry's directory (non-recursive — a folder

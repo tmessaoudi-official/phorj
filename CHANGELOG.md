@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `phg check <file>` loads the file's whole package (scout row 5e; DEC-525; 2026-09-24)
+
+- A file in a package folder under `src/` (`src/Acme/Core/Classification.phg` declaring `Acme.Core`) is now
+  loaded with every file of its package and what they import, as an entry reaching the package would. Before,
+  checking a library file reported its package-mates unknown. Applies to every verb that loads a file and to
+  editor diagnostics (the LSP now takes the loader for a non-`Main` file even with no user imports).
+  `package Main` is never merged this way; a layout with no `src/` loads as before.
+- `phg lift <dir>`'s closing hint now says a file checks its package + imports.
+
 ### Fixed — a program that faults keeps what it printed first (scout row 5f0; DEC-530; 2026-09-24)
 
 - `Output.printLine("before")` followed by a runtime fault printed NOTHING on stdout — on the VM, the

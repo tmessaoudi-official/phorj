@@ -90,3 +90,27 @@ fn folding_ranges_cover_each_multi_line_declaration_and_its_members() {
     );
     assert!(out[0].contains("\"result\":[]"), "{}", out[0]);
 }
+
+/// DEC-525 (scout row 5e) — a library file with NO user imports, in a non-`Main` package, sees its
+/// package-mates in the editor exactly as `phg check` does. Before, the LSP took the loader only for a
+/// file with user imports, so `Tenure` squiggled as unknown in a file `phg check` accepted.
+#[test]
+fn a_library_file_sees_its_package_mates_in_the_editor() {
+    let root = std::env::temp_dir().join(format!("phorj-lsp-pkg-{}", std::process::id()));
+    let dir = root.join("src/Acme/Core");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("Tenure.phg"),
+        "package Acme.Core;\n\npublic enum Tenure {\n    Short,\n    Long,\n}\n",
+    )
+    .unwrap();
+    let text = "package Acme.Core;\n\npublic class Classification {\n    \
+                constructor(public Tenure tenure) {}\n}\n";
+    let file = dir.join("Classification.phg");
+    std::fs::write(&file, text).unwrap();
+    let uri = format!("file://{}", file.display());
+    let out = Server::default().handle(&did_open(&uri, text));
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert!(out[0].contains("\"diagnostics\":[]"), "{}", out[0]);
+}

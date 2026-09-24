@@ -283,12 +283,12 @@ pub(super) fn summary(out_dir: &Path, c: &Counts) -> String {
         "  {vendor} vendor symbol(s) referenced — ranked in `VENDOR-REPORT.md` (nothing was stubbed)\n"
     ));
     s.push_str(&format!(
-        "\nThe drafts are `// lifted (verify)`. Check the WHOLE project with `phg check {}` — an \
-         unresolved vendor symbol is expected until you port or stub it.\n",
+        "\nThe drafts are `// lifted (verify)`. Check them with `phg check {}` (a file checks its \
+         whole package + imports); an unresolved vendor symbol is expected until you port or stub it.\n",
         if entry.is_some() {
             "<out>/src/main.phg"
         } else {
-            "<out>/src/<any-file>.phg"
+            "<out>/src/<a-file-in-each-package>.phg"
         }
     ));
     s

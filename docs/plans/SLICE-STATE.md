@@ -39,7 +39,10 @@
 > `83a3bbe1` is still OWED (the pre-push ratchet skipped on box load).
 > **DONE (2026-09-24): row 5f0** (DEC-530) — a faulting program keeps its earlier stdout on both backends and on
 > `run`, `-e`/stdin and built binaries (not `phg debug`); the fault-parity gate compares it. Also fixed: the VM's shutdown handlers resumed an ended program.
-> **THEN:** 5e, 5j, 5d. Open probe before claiming 5f
+> **DONE (2026-09-24): row 5e** (DEC-525) — `phg check <file>` (and the editor) loads the file's whole package
+> under `src/`. On scout it now reaches the real walls: a method named `match` (unparseable draft, NEW) and
+> `Scout.Core.Text` missing (Q-0908-1).
+> **THEN:** 5j, 5d; the `match` wall and Q-0908-1 both gate L3. Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 
