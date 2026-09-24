@@ -13,6 +13,7 @@
 //! correctly. A single [`visit_exception_sites`] makes that class of mistake unrepresentable: a new
 //! statement form is handled once, for every question at once.
 
+use super::exceptions_exprs::visit_expr;
 use super::mappings::strip_root_ns;
 use crate::lift::ast as php;
 
@@ -99,7 +100,7 @@ fn visit_exception_sites(prog: &php::PhpProgram, f: &mut impl FnMut(&str)) {
 /// Recurse through every nested body — an unmapped catch inside a loop inside an `if` is exactly the
 /// one a shallow scan would miss. Exhaustive over `PhpStmt` (Invariant 3): a new statement form that
 /// can hold a body extends this arm list in the same change, never a `_`.
-fn visit_body(body: &[php::PhpStmt], f: &mut impl FnMut(&str)) {
+pub(super) fn visit_body(body: &[php::PhpStmt], f: &mut impl FnMut(&str)) {
     for s in body {
         match s {
             php::PhpStmt::Try {
@@ -119,10 +120,15 @@ fn visit_body(body: &[php::PhpStmt], f: &mut impl FnMut(&str)) {
                 }
             }
             php::PhpStmt::If {
-                then, elifs, els, ..
+                cond,
+                then,
+                elifs,
+                els,
             } => {
+                visit_expr(cond, f);
                 visit_body(then, f);
-                for (_, b) in elifs {
+                for (c, b) in elifs {
+                    visit_expr(c, f);
                     visit_body(b, f);
                 }
                 if let Some(e) = els {
@@ -131,17 +137,46 @@ fn visit_body(body: &[php::PhpStmt], f: &mut impl FnMut(&str)) {
             }
             // `throw new X(…)` names a type the draft will print. A rethrow (`throw $e`) names none —
             // its type comes from the enclosing catch, which this walk has already seen.
-            php::PhpStmt::Throw(php::PhpExpr::New { class, .. }) => f(class),
-            php::PhpStmt::While { body, .. }
-            | php::PhpStmt::For { body, .. }
-            | php::PhpStmt::Foreach { body, .. }
-            | php::PhpStmt::Block(body) => visit_body(body, f),
-            php::PhpStmt::Return(_)
-            | php::PhpStmt::Expr(_)
-            | php::PhpStmt::Echo(_)
-            | php::PhpStmt::Throw(_)
-            | php::PhpStmt::Break
-            | php::PhpStmt::Continue => {}
+            php::PhpStmt::Throw(e) => {
+                if let php::PhpExpr::New { class, .. } = e {
+                    f(class);
+                }
+                visit_expr(e, f);
+            }
+            // Every expression a statement holds is walked too: a PHP 8 throw-EXPRESSION (DEC-532)
+            // names its class inside one (`return $v ?? throw new \RuntimeException(…)`).
+            php::PhpStmt::While { cond, body } => {
+                visit_expr(cond, f);
+                visit_body(body, f);
+            }
+            php::PhpStmt::For {
+                init,
+                cond,
+                step,
+                body,
+            } => {
+                for e in [init, cond, step].into_iter().flatten() {
+                    visit_expr(e, f);
+                }
+                visit_body(body, f);
+            }
+            php::PhpStmt::Foreach { array, body, .. } => {
+                visit_expr(array, f);
+                visit_body(body, f);
+            }
+            php::PhpStmt::Block(body) => visit_body(body, f),
+            php::PhpStmt::Return(e) => {
+                if let Some(e) = e {
+                    visit_expr(e, f);
+                }
+            }
+            php::PhpStmt::Expr(e) => visit_expr(e, f),
+            php::PhpStmt::Echo(es) => {
+                for e in es {
+                    visit_expr(e, f);
+                }
+            }
+            php::PhpStmt::Break | php::PhpStmt::Continue => {}
         }
     }
 }

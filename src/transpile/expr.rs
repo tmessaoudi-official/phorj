@@ -449,6 +449,9 @@ impl Transpiler {
                 let e = self.emit_expr(else_expr)?;
                 Ok(format!("({c} ? {t} : {e})"))
             }
+            // `throw e` in expression position (DEC-532) → PHP 8's native throw-expression,
+            // parenthesized like the ternary above (PHP accepts `(throw $e)` in all four positions).
+            Expr::Throw { value, .. } => Ok(format!("(throw {})", self.emit_expr(value)?)),
             // Expression-body lambda → PHP arrow function (auto by-value capture — no explicit
             // `use` clause needed).
             // Statement-body lambda → PHP `function($x) use ($cap, ...) { … }` (by-value capture

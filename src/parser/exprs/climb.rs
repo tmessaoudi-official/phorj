@@ -220,6 +220,8 @@ impl Parser {
             // placeholder shape before returning.
             let rhs = if matches!(op, BinaryOp::Pipe) {
                 self.parse_pipe_rhs(right_bp)?
+            } else if matches!(op, BinaryOp::Coalesce) && self.check(&TokenKind::Throw) {
+                self.parse_throwable_expr()? // DEC-532: `a ?? throw e`
             } else {
                 self.parse_binary(right_bp)?
             };

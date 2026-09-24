@@ -118,7 +118,7 @@ impl Checker {
             }
 
             match &result {
-                None => result = Some(body_ty),
+                None | Some(Ty::Never) => result = Some(body_ty), // `never` (DEC-532) is the bottom
                 Some(first) => {
                     if !self.ty_assignable(&body_ty, first) && !self.ty_assignable(first, &body_ty)
                     {

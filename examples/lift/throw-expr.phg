@@ -1,0 +1,55 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.ErrorModule;
+import Core.ErrorModule.InvalidValueError;
+import Core.ErrorModule.LogicError;
+import Core.ErrorModule.RuntimeError;
+import Core.Math;
+
+function setting(string? value): string {
+    try {
+        return value ?? throw new RuntimeError("missing");
+    } catch (RuntimeError e) {
+        return "default";
+    }
+}
+
+function half(int n): int {
+    try {
+        return if (n % 2 == 0) { n.integerDivide(2) } else { throw new InvalidValueError("odd") };
+    } catch (InvalidValueError e) {
+        return -1;
+    }
+}
+
+function weekday(int day): string {
+    try {
+        return match (day) {
+            1 => "Monday",
+            2 => "Tuesday",
+            default => throw new LogicError("none")
+        };
+    } catch (LogicError e) {
+        return "?";
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.print("{setting(\"dark\")}");
+    Output.print("|");
+    Output.print("{setting(null)}");
+    Output.print("|");
+    Output.print("{half(10)}");
+    Output.print("|");
+    Output.print("{half(7)}");
+    Output.print("|");
+    Output.print("{weekday(2)}");
+    Output.print("|");
+    Output.print("{weekday(9)}");
+    Output.print("\n");
+}

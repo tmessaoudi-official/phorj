@@ -13,13 +13,13 @@ pub(super) fn lift_match(
             None => out.push(MatchArm {
                 pattern: Pattern::Wildcard(SP),
                 guard: None,
-                body: lift_expr(&arm.body)?,
+                body: super::throw_expr::lift_throwable(&arm.body)?,
                 span: SP,
             }),
             Some(conds) => {
                 // PHP shares one body across comma-separated conditions; Phorj has one pattern per
                 // arm, so duplicate the (cloned) body per literal condition.
-                let body = lift_expr(&arm.body)?;
+                let body = super::throw_expr::lift_throwable(&arm.body)?;
                 for c in conds {
                     out.push(MatchArm {
                         pattern: literal_pattern(c)?,

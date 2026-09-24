@@ -211,6 +211,7 @@ pub(super) fn vexpr(e: &mut Expr, pre: bool, f: &mut impl FnMut(&mut Expr)) {
             vexpr(start, pre, f);
             vexpr(end, pre, f);
         }
+        Expr::Throw { value, .. } => vexpr(value, pre, f),
         Expr::If {
             cond,
             then_expr,

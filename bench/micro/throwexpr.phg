@@ -1,0 +1,45 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: throw-expression right of `??` (DEC-532), never taken — the scout shape (`preg_replace(…) ?? throw …`); pairs with `coalesceor`, its `?? 0` control.
+class MissError implements Error {
+    constructor(public string message) {}
+}
+
+function orThrow(int? n): int throws MissError {
+    return n ?? throw new MissError("none");
+}
+
+function bench(int iters): int throws MissError {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        acc = acc + orThrow(i % 100)?;
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int iters = 3000000;
+    mutable int warm = 0;
+    try {
+        warm = bench(iters);
+    } catch (MissError e) {
+        Output.printLine(e.message);
+    }
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    mutable int acc = 0;
+    try {
+        acc = bench(iters);
+    } catch (MissError e) {
+        Output.printLine(e.message);
+    }
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("throwexpr\t{d + guard}\t{acc}");
+}

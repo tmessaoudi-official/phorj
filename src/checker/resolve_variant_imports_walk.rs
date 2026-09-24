@@ -231,6 +231,10 @@ pub(super) fn rexpr(e: Expr, m: &VarMap) -> Expr {
             inclusive,
             span,
         },
+        Expr::Throw { value, span } => Expr::Throw {
+            value: Box::new(rexpr(*value, m)),
+            span,
+        },
         Expr::If {
             cond,
             then_expr,

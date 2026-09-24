@@ -43,6 +43,8 @@ mod tests_signature;
 #[cfg(test)]
 mod tests_test_mode;
 #[cfg(test)]
+mod tests_throw_expr;
+#[cfg(test)]
 mod tests_workspace;
 mod workspace;
 

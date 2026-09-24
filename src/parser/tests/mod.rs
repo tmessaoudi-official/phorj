@@ -6,6 +6,7 @@ mod keyword_members;
 mod patterns;
 mod stmts;
 mod support;
+mod throw_expr;
 mod turbofish;
 mod types;
 mod using;

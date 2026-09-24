@@ -337,6 +337,15 @@ impl Compiler<'_> {
                 self.expr(end)?;
                 self.emit(Op::MakeRange(*inclusive), span.line);
             }
+            // `throw e` in expression position (DEC-532): `Op::Throw` pops the value and never falls
+            // through, but every expression must leave ONE value for the enclosing `??`/`if`/`match`
+            // merge. The `if` merge keeps whatever height its ELSE arm left, so without this dead push
+            // a throwing else arm would shift the next scratch slot (`self.height - 1`) one too low.
+            Expr::Throw { value, span } => {
+                self.expr(value)?;
+                self.emit(Op::Throw, span.line);
+                self.emit_const(Value::Null, span.line);
+            }
             Expr::If {
                 cond,
                 then_expr,

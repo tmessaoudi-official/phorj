@@ -163,6 +163,10 @@ impl Di<'_> {
                 inclusive,
                 span,
             },
+            Expr::Throw { value, span } => Expr::Throw {
+                value: Box::new(self.rexpr(*value)),
+                span,
+            },
             Expr::If {
                 cond,
                 then_expr,

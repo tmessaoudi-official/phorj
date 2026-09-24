@@ -356,6 +356,7 @@ fn walk_expr(
             walk_expr(right, ctx, sightings, order);
         }
         E::InstanceOf { value, .. } => walk_expr(value, ctx, sightings, order),
+        E::Throw(value) => walk_expr(value, ctx, sightings, order),
         E::Ternary { cond, then, els } => {
             walk_expr(cond, ctx, sightings, order);
             if let Some(t) = then {

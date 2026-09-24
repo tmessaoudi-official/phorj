@@ -101,6 +101,7 @@ fn explain_covers_error_model_2b_codes() {
     for code in [
         "E-THROW-TYPE",
         "E-THROW-UNDECLARED",
+        "E-THROW-POSITION",
         "E-CALL-UNHANDLED",
         "E-UNCAUGHT-THROW",
         "E-THROWS-TOO-BROAD",

@@ -1,0 +1,66 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Throw-expressions (DEC-532). `throw e` is usually a statement, but in four places it may stand
+// where a VALUE is expected — exactly the places where giving up on the value is the point:
+//
+//   * the right operand of `??`          — "use this, or fail";
+//   * a branch of an `if` expression     — one branch has no answer;
+//   * a `match` arm                      — typically the `default` that should never happen;
+//   * a lambda's `=>` body               — a callback that only ever fails.
+//
+// A throw-expression has type `never`, so the branch that does NOT throw decides the type. The usual
+// checked-exception rules apply: the thrown type is caught by an enclosing `try` or declared in the
+// enclosing `throws`. On the PHP leg each one becomes PHP 8's own throw-expression.
+class LookupError implements Error {
+    constructor(public string message) {}
+}
+
+function setting(string? value, string name): string throws LookupError {
+    return value ?? throw new LookupError("missing setting `{name}`");
+}
+
+function half(int n): int throws LookupError {
+    return if (n % 2 == 0) { n / 2 } else { throw new LookupError("{n} is odd") };
+}
+
+function weekday(int day): string throws LookupError {
+    return match (day) {
+        1 => "Monday",
+        2 => "Tuesday",
+        default => throw new LookupError("no weekday {day}")
+    };
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        Output.printLine(setting("dark", "theme"));
+        Output.printLine(setting(null, "locale"));
+    } catch (LookupError e) {
+        Output.printLine("error: {e.message}");
+    }
+    try {
+        Output.printLine("{half(10)}");
+        Output.printLine("{half(7)}");
+    } catch (LookupError e) {
+        Output.printLine("error: {e.message}");
+    }
+    try {
+        Output.printLine(weekday(2));
+        Output.printLine(weekday(9));
+    } catch (LookupError e) {
+        Output.printLine("error: {e.message}");
+    }
+    var refuse = function(string what): string throws LookupError => throw new LookupError(
+        "refused {what}"
+    );
+    try {
+        Output.printLine(refuse("everything"));
+    } catch (LookupError e) {
+        Output.printLine("error: {e.message}");
+    }
+}

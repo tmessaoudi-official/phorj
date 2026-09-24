@@ -357,6 +357,7 @@ impl Checker {
                 self.check_expr_casing(start);
                 self.check_expr_casing(end);
             }
+            Expr::Throw { value, .. } => self.check_expr_casing(value),
             Expr::If {
                 cond,
                 then_expr,

@@ -6,3 +6,4 @@ mod climb;
 mod pipe;
 mod postfix;
 mod primary;
+mod throw_expr;

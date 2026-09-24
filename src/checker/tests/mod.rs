@@ -46,6 +46,7 @@ mod shadowing;
 mod static_methods;
 mod string_format;
 mod support;
+mod throw_expr;
 mod throws;
 mod totality;
 mod traits;

@@ -89,6 +89,7 @@ impl Parser {
             }
             TokenKind::Match => self.parse_match(sp),
             TokenKind::If => self.parse_if_expr(sp),
+            TokenKind::Throw => Err(self.throw_position_error()),
             TokenKind::LParen => {
                 self.advance();
                 // DEC-504: `(name: e, …)` is a NAMED tuple. Checked before the grouped-expression
@@ -190,7 +191,7 @@ impl Parser {
                     Vec::new()
                 };
                 let body = if self.eat(&TokenKind::FatArrow) {
-                    LambdaBody::Expr(Box::new(self.parse_expr()?))
+                    LambdaBody::Expr(Box::new(self.parse_throwable_expr()?))
                 } else if self.check(&TokenKind::LBrace) {
                     LambdaBody::Block(self.parse_block()?)
                 } else {
@@ -359,7 +360,7 @@ impl Parser {
                 None
             };
             self.expect(&TokenKind::FatArrow, "'=>' after match pattern")?;
-            let body = self.parse_expr()?;
+            let body = self.parse_throwable_expr()?;
             if alts.len() == 1 {
                 arms.push(MatchArm {
                     pattern: alts.pop().expect("one alternative"),
@@ -417,14 +418,14 @@ impl Parser {
         let cond = self.parse_expr()?;
         self.expect(&TokenKind::RParen, "')' after if condition")?;
         self.expect(&TokenKind::LBrace, "'{' to open the then-branch")?;
-        let then_expr = self.parse_expr()?;
+        let then_expr = self.parse_throwable_expr()?;
         self.expect(&TokenKind::RBrace, "'}' to close the then-branch")?;
         self.expect(
             &TokenKind::Else,
             "'else' (an expression `if` must have an else branch)",
         )?;
         self.expect(&TokenKind::LBrace, "'{' to open the else-branch")?;
-        let else_expr = self.parse_expr()?;
+        let else_expr = self.parse_throwable_expr()?;
         self.expect(&TokenKind::RBrace, "'}' to close the else-branch")?;
         Ok(Expr::If {
             cond: Box::new(cond),

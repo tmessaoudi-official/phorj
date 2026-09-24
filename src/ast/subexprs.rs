@@ -72,6 +72,7 @@ pub fn push_subexprs<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
             out.push(start);
             out.push(end);
         }
+        Expr::Throw { value, .. } => out.push(value),
         Expr::If {
             cond,
             then_expr,

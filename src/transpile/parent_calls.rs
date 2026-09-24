@@ -190,6 +190,7 @@ fn pc_expr(e: &Expr, out: &mut Vec<(Option<String>, String)>) {
             pc_expr(then_expr, out);
             pc_expr(else_expr, out);
         }
+        Expr::Throw { value, .. } => pc_expr(value, out),
         Expr::Lambda { body, .. } => match body {
             LambdaBody::Expr(x) => pc_expr(x, out),
             LambdaBody::Block(b) => pc_block(b, out),

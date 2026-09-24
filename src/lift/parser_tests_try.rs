@@ -3,7 +3,7 @@
 //! A sibling of `parser_tests.rs` rather than an addition to it: that file is a grandfathered
 //! Invariant-13 breach, so the size gate fails when it grows.
 
-use super::ast::PhpItem;
+use super::ast::{PhpBinOp, PhpExpr, PhpItem, PhpStmt};
 use super::parser::parse_php;
 
 /// Parse a PHP fixture, panicking with the lift error if it does not.
@@ -90,13 +90,34 @@ fn parses_throw_with_a_qualified_class() {
     assert_eq!(args.len(), 1);
 }
 
-/// PHP 8's throw-as-an-EXPRESSION is not in the subset and must be REFUSED, not misread — lifting it
-/// wrongly would move where the throw happens.
+/// PHP 8's throw-as-an-EXPRESSION must not be MISREAD — lifting it wrongly would move where the throw
+/// happens. It was refused outright until DEC-532 (scout row 5l); it now parses, and the throw sits
+/// exactly where PHP puts it: the right operand of `??`, with the whole `$e ?? $f` as its operand.
 #[test]
-fn refuses_throw_as_an_expression() {
-    let e = perr("<?php $x = $y ?? throw new E();");
+fn parses_throw_as_an_expression_where_php_puts_it() {
+    let p = parse("<?php $x = $y ?? throw $e ?? $f;");
+    let PhpItem::Stmt(PhpStmt::Expr(PhpExpr::Assign { value, .. })) = &p.items[0] else {
+        panic!("expected an assignment: {p:?}")
+    };
+    let PhpExpr::Binary {
+        op: PhpBinOp::Coalesce,
+        right,
+        ..
+    } = &**value
+    else {
+        panic!("expected `??`: {value:?}")
+    };
+    let PhpExpr::Throw(thrown) = &**right else {
+        panic!("expected a throw-expression: {right:?}")
+    };
     assert!(
-        !e.is_empty(),
-        "a throw-expression must be refused, got no error"
+        matches!(
+            &**thrown,
+            PhpExpr::Binary {
+                op: PhpBinOp::Coalesce,
+                ..
+            }
+        ),
+        "{thrown:?}"
     );
 }

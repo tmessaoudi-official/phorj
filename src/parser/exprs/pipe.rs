@@ -47,7 +47,7 @@ impl Parser {
         let psp = self.peek_span();
         let name = self.expect_ident("a parameter name in a pipe lambda `(v => …)`")?;
         self.expect(&TokenKind::FatArrow, "'=>' in a pipe lambda `(v => …)`")?;
-        let body = self.parse_expr()?;
+        let body = self.parse_throwable_expr()?;
         self.expect(&TokenKind::RParen, "')' to close a pipe lambda `(v => …)`")?;
         Ok(Expr::Lambda {
             params: vec![crate::ast::Param {

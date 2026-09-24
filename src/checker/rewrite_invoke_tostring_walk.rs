@@ -199,6 +199,10 @@ pub(super) fn rexpr(e: Expr, inv: &Names, ts: &Names) -> Expr {
             inclusive,
             span,
         },
+        Expr::Throw { value, span } => Expr::Throw {
+            value: Box::new(rexpr(*value, inv, ts)),
+            span,
+        },
         Expr::If {
             cond,
             then_expr,

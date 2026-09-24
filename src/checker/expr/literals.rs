@@ -241,6 +241,7 @@ impl Checker {
             | Expr::Match { span, .. }
             | Expr::Range { span, .. }
             | Expr::If { span, .. }
+            | Expr::Throw { span, .. }
             | Expr::Lambda { span, .. }
             | Expr::CloneWith { span, .. }
             | Expr::OverloadSelect { span, .. }
@@ -467,7 +468,9 @@ impl Checker {
                 format!("`if` branches must share one type; found `{t}` and `{e}`"),
             );
         }
-        if t == Ty::Error {
+        // `Error` poisons and `never` (a throw-expression arm, DEC-532) is the bottom: either way the
+        // OTHER branch decides the type, so `if (c) { throw e } else { 1 }` is an `int`.
+        if matches!(t, Ty::Error | Ty::Never) {
             e
         } else {
             t

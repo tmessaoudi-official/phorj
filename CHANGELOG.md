@@ -6,6 +6,36 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — throw-expressions (scout row 5l; DEC-532; 2026-09-24)
+
+- `throw e` is an EXPRESSION of type `never` in four positions: the right operand of `??`
+  (`s ?? throw new MissingError("key")`), an `if`-expression arm, a `match`-arm body
+  (`default => throw …`) and a lambda's `=>` body. Anywhere else it is `E-THROW-POSITION`; the
+  `throw e;` statement is unchanged. Its operand is a full expression, as in PHP.
+- `never` is now the bottom in the `if`-expression and `match` joins, so the arm that does NOT throw
+  decides the type whichever order the arms come in (the `match` join used to keep the first arm's
+  type, the `if` join the then-branch's).
+- The checked-exception rules are shared with the statement (`E-THROW-TYPE`, `E-THROW-UNDECLARED`,
+  `E-UNCAUGHT-THROW`, a lambda's own `throws`) — one `check_thrown` for both forms.
+- Backends: no new `Op`. The VM emits the value, `Op::Throw`, then a dead push, because an `if`
+  expression keeps the height its ELSE arm leaves and a throwing else arm would otherwise shift the
+  next `??` scratch slot. The PHP leg is PHP 8's native `(throw $e)`.
+- The lifter maps PHP's throw-expression 1:1 in those positions and refuses it by name elsewhere
+  (`f(throw $e)`, `$a || throw $e`, `$x = throw $e`). Its exception-site walk now descends into
+  expressions, so a class thrown inside one (`return $v ?? throw new \RuntimeException(…)`) is mapped
+  and imported like a statement's.
+- LSP (diagnostics, definition inside the thrown operand) and the TextMate grammar (pinned by
+  `tests/editor_grammar.rs`) cover it. Examples: `examples/guide/throw-expressions.phg`,
+  `examples/lift/throw-expr.{php,phg}`.
+- Perf: two unprotected micro-benches, `throwexpr` and its `?? 0` control `coalesceor`, both lose to
+  PHP by ~40× — the cost of `??` on an optional, which the JIT declines (`unboxed Const Some(Null)`),
+  not of the throw-expression. Recorded, not re-baselined (DEC-365).
+
+### Changed — the transpiler's parent-call scan moved to `src/transpile/parent_calls.rs` and made total
+
+- `classes_synth.rs` sat exactly at its size-gate ceiling; its baseline row is dropped (686 → 485
+  lines). `pc_expr`'s `_ => {}` arm is gone — every `Expr` variant is now placed by rustc.
+
 ### Added — reserved words as member names; the lifter renames reserved-word locals (scout row 5k; DEC-531; 2026-09-24)
 
 - A reserved word may name a MEMBER where nothing else can stand: a method (`public static function

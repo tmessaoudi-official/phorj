@@ -413,6 +413,7 @@ impl Ctx {
                 self.walk_expr(start, errs);
                 self.walk_expr(end, errs);
             }
+            Expr::Throw { value, .. } => self.walk_expr(value, errs),
             Expr::If {
                 cond,
                 then_expr,

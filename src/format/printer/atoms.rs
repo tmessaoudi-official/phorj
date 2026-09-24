@@ -198,6 +198,9 @@ pub(super) fn prec_of(e: &Expr) -> u8 {
         // call) or a binary operand they MUST be parenthesized. Treat them at the loosest precedence so
         // `operand`/`postfix_operand` wrap them.
         Expr::Lambda { .. } | Expr::If { .. } | Expr::Match { .. } => PREC_RANGE,
+        // `throw e` (DEC-532) stands only where the parser allows it and is never wrapped: parens
+        // would move it out of an allowed position (`s ?? (throw e)` is `E-THROW-POSITION`).
+        Expr::Throw { .. } => PREC_ATOM,
         _ => PREC_ATOM,
     }
 }

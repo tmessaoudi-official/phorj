@@ -244,6 +244,7 @@ impl Walker<'_> {
                 self.expr(start);
                 self.expr(end);
             }
+            Expr::Throw { value, .. } => self.expr(value),
             Expr::If {
                 cond,
                 then_expr,

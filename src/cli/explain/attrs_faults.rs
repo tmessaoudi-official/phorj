@@ -260,6 +260,13 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              `try { … } catch (T e) { … }`, or add `throws T` to the enclosing function so callers\n\
              handle it. Phorj enforces this at compile time — nothing leaks silently.\n"
         }
+        "E-THROW-POSITION" => {
+            "E-THROW-POSITION — `throw` used as an expression where it is not allowed.\n\n\
+             `throw e` is an expression (of type `never`) in exactly four places (DEC-532): the right\n\
+             operand of `??` (`s ?? throw new MissingError(\"key\")`), an `if`-expression branch, a\n\
+             `match` arm (`default => throw …`) and a lambda's `=>` body. Anywhere else — `1 + throw e`,\n\
+             `f(throw e)`, `var x = throw e;`, `return throw e;` — write it as a statement: `throw e;`.\n"
+        }
         "E-CALL-UNHANDLED" => {
             "E-CALL-UNHANDLED — a call can throw a checked exception that isn't handled.\n\n\
              Calling a `throws T` function obliges the caller to handle `T`: catch it in an enclosing\n\

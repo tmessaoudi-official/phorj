@@ -204,6 +204,26 @@ function ratio(int $a, int $b): float { return $a / $b; }
 function halvedTwice(int $n): float { $x = (float) $n; $x /= 2; return $x / -2; }
 echo ratio(7, 2), "|", ratio(-7, 2), "|", ratio(6, 3), "|", ratio(1, 4), "|", halvedTwice(10);"#,
         ),
+        // DEC-532 (row 5l): PHP 8 throw-expressions in the four positions phorj allows — `??`, a ternary
+        // branch, a `match` arm — each thrown AND not thrown. Every throw is caught in its own function
+        // (the lifter derives no `throws` clause, KNOWN_ISSUES §LIFT-THROWS), so the draft checks.
+        (
+            "throw_expressions",
+            r#"<?php
+function setting(?string $value): string {
+    try { return $value ?? throw new \RuntimeException("missing"); }
+    catch (\RuntimeException $e) { return "default"; }
+}
+function half(int $n): int {
+    try { return $n % 2 === 0 ? intdiv($n, 2) : throw new \InvalidArgumentException("odd"); }
+    catch (\InvalidArgumentException $e) { return -1; }
+}
+function weekday(int $day): string {
+    try { return match ($day) { 1 => "Monday", 2 => "Tuesday", default => throw new \LogicException("none") }; }
+    catch (\LogicException $e) { return "?"; }
+}
+echo setting("dark"), "|", setting(null), "|", half(10), "|", half(7), "|", weekday(2), "|", weekday(9);"#,
+        ),
         // DEC-531 (row 5k): reserved-word MEMBERS keep their names (`match`, a promoted `type`, the
         // named argument `type:` on `new`), reserved-word LOCALS become `<word>Value` — and the lifted
         // program prints what the original PHP prints, on all three legs.

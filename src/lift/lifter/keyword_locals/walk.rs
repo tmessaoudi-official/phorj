@@ -181,6 +181,7 @@ fn walk_expr(e: &mut php::PhpExpr, f: &mut Sites) {
             walk_expr(value, f);
         }
         E::IncDec { target, .. } => walk_expr(target, f),
+        E::Throw(value) => walk_expr(value, f),
         E::Ternary { cond, then, els } => {
             walk_expr(cond, f);
             if let Some(t) = then {

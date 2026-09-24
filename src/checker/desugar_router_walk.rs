@@ -134,6 +134,10 @@ pub(super) fn rexpr(e: Expr, r: &[Route]) -> Expr {
             inclusive,
             span,
         },
+        Expr::Throw { value, span } => Expr::Throw {
+            value: Box::new(rexpr(*value, r)),
+            span,
+        },
         Expr::If {
             cond,
             then_expr,

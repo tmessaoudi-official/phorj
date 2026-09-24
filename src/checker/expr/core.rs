@@ -248,6 +248,7 @@ impl Checker {
                 else_expr,
                 span,
             } => self.check_if_expr(cond, then_expr, else_expr, *span),
+            Expr::Throw { value, span } => self.check_throw_expr(value, *span),
             Expr::Lambda {
                 params,
                 ret,

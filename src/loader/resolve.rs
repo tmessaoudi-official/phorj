@@ -357,6 +357,10 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             inclusive,
             span,
         },
+        Expr::Throw { value, span } => Expr::Throw {
+            value: Box::new(resolve_expr(*value, ctx)),
+            span,
+        },
         Expr::If {
             cond,
             then_expr,

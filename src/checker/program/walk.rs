@@ -65,6 +65,7 @@ pub(in crate::checker) fn field_init_forbidden_ref(
                 walk(start, f, out);
                 walk(end, f, out);
             }
+            Expr::Throw { value, .. } => walk(value, f, out),
             Expr::If {
                 cond,
                 then_expr,

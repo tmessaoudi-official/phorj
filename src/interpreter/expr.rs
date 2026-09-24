@@ -309,6 +309,11 @@ impl<'c> Interp<'c> {
                     self.eval(else_expr)
                 }
             }
+            // `throw e` in expression position (DEC-532) unwinds exactly like the statement.
+            Expr::Throw { value, .. } => {
+                let v = self.eval(value)?;
+                Err(Signal::Throw(v))
+            }
             // Capture the free variables from the current scope and package them with the lambda
             // syntax tree into a `Value::Closure(Tree)`.  Names that resolve to a global function,
             // class, or variant are NOT captured (they are available globally at call time).

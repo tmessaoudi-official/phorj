@@ -121,6 +121,7 @@ fn collect_free_expr(
             collect_free_expr(start, bound, found);
             collect_free_expr(end, bound, found);
         }
+        Expr::Throw { value, .. } => collect_free_expr(value, bound, found),
         Expr::If {
             cond,
             then_expr,
@@ -340,6 +341,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
                         .any(|a| a.guard.as_ref().is_some_and(in_expr) || in_expr(&a.body))
             }
             Expr::Range { start, end, .. } => in_expr(start) || in_expr(end),
+            Expr::Throw { value, .. } => in_expr(value),
             Expr::If {
                 cond,
                 then_expr,
@@ -491,6 +493,7 @@ pub fn any_expr(program: &Program, pred: &dyn Fn(&Expr) -> bool) -> bool {
                     })
             }
             Expr::Range { start, end, .. } => in_expr(start, pred) || in_expr(end, pred),
+            Expr::Throw { value, .. } => in_expr(value, pred),
             Expr::If {
                 cond,
                 then_expr,

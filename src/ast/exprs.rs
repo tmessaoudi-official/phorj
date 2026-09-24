@@ -218,6 +218,13 @@ pub enum Expr {
         else_expr: Box<Expr>,
         span: Span,
     },
+    /// `throw e` in EXPRESSION position (DEC-532): typed `never`, and produced by the parser only as
+    /// the right operand of `??`, an `If` arm, a `match`-arm body or a lambda's `=>` body
+    /// (`E-THROW-POSITION` elsewhere). The same checked-exception rules as `Stmt::Throw` apply.
+    Throw {
+        value: Box<Expr>,
+        span: Span,
+    },
     /// `function(Type param, …) [: RetType] [throws E] => expr` — an expression-body lambda (M3 S3,
     /// Task 3). Block-body lambdas (`function(…) { … }`) are Task 6. `throws` (DEC-222) is the lambda's
     /// declared checked-exception set (empty when absent); its body is checked with these throws in

@@ -323,7 +323,13 @@ impl PParser {
                 self.parse_block_closure()
             }
             "function" => self.parse_block_closure(),
-            "clone" | "print" | "yield" | "throw" | "include" | "require" | "include_once"
+            // PHP 8 throw-expression (DEC-532): `throw` binds loosest, so its operand is a full
+            // expression — `$a ?? throw $e ?? $f` throws `$e ?? $f`, exactly as PHP parses it.
+            "throw" => {
+                self.advance();
+                Ok(PhpExpr::Throw(Box::new(self.parse_expr()?)))
+            }
+            "clone" | "print" | "yield" | "include" | "require" | "include_once"
             | "require_once" => Err(self.err(&format!("`{word}` is Tier-2/Tier-3"))),
             _ => {
                 self.advance();

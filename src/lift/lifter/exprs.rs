@@ -13,7 +13,7 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             params: lift_params(params)?,
             ret: ret.as_ref().map(lift_type).transpose()?,
             throws: Vec::new(),
-            body: LambdaBody::Expr(Box::new(lift_expr(body)?)),
+            body: LambdaBody::Expr(Box::new(super::throw_expr::lift_throwable(body)?)),
             span: SP,
         },
         // DEC-511: PHP's `.` COERCES its operands to string; phorj's `+` refuses to ("no
@@ -160,7 +160,12 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
                 phorj_op,
                 BinaryOp::Spaceship | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge
             );
-            let (mut lhs, mut rhs) = (lift_expr(left)?, lift_expr(right)?);
+            let mut lhs = lift_expr(left)?;
+            let mut rhs = if matches!(phorj_op, BinaryOp::Coalesce) {
+                super::throw_expr::lift_throwable(right)? // DEC-532: `$a ?? throw $e`
+            } else {
+                lift_expr(right)?
+            };
             if ordering {
                 if let (
                     php::PhpExpr::Array(le),
@@ -210,14 +215,15 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         | php::PhpExpr::IncDec { .. } => {
             return Err("lift: assignment / `++` / `--` as a sub-expression is Tier-2".into());
         }
+        php::PhpExpr::Throw(_) => return Err(super::throw_expr::POSITION_REFUSAL.into()),
         php::PhpExpr::Ternary { cond, then, els } => {
             let then = then
                 .as_ref()
                 .ok_or("lift: elvis `?:` is Tier-2 (use a full ternary)")?;
             Expr::If {
                 cond: Box::new(lift_expr(cond)?),
-                then_expr: Box::new(lift_expr(then)?),
-                else_expr: Box::new(lift_expr(els)?),
+                then_expr: Box::new(super::throw_expr::lift_throwable(then)?),
+                else_expr: Box::new(super::throw_expr::lift_throwable(els)?),
                 span: SP,
             }
         }

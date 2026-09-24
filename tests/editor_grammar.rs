@@ -172,6 +172,19 @@ fn a_keyword_in_keyword_position_keeps_its_colour() {
         scope_of("function main(): void {}", "function", 0),
         "keyword.declaration.phorj"
     );
+    // DEC-532: a throw-expression keeps `throw`'s keyword colour in each position.
+    for line in [
+        "  return s ?? throw new Bad(\"x\");",
+        "  return match (a) { \"x\" => 1, default => throw e };",
+        "  return if (c) { throw e } else { 1 };",
+        "  var f = function(int x): int throws Bad => throw e;",
+    ] {
+        assert_eq!(
+            scope_of(line, "throw ", 0),
+            "keyword.control.phorj",
+            "{line}"
+        );
+    }
 }
 
 #[test]

@@ -220,40 +220,9 @@ impl Checker {
                 self.check_expr(e);
                 self.parent_ctor_ok = false;
             }
-            // M-faults 2b.3: `throw e` — the value must implement `Error` (`E-THROW-TYPE`), and the
-            // exception must be *discharged* in context: caught by an enclosing `try` or declared in
-            // the enclosing `throws` (`E-THROW-UNDECLARED`, or `E-UNCAUGHT-THROW` inside `main`).
-            Stmt::Throw { value, span } => {
-                let e = self.check_expr(value);
-                if matches!(e, Ty::Error) {
-                    // poison — an earlier error already reported
-                } else if !self.is_error_type(&e) {
-                    self.err_coded(
-                        *span,
-                        format!(
-                            "can only `throw` a value whose type implements `Error`, found `{e}`"
-                        ),
-                        "E-THROW-TYPE",
-                        Some("define the thrown type as `class Foo implements Error { … }`".into()),
-                    );
-                } else if !self.covered_by_try(&e) && !self.throws_declared(&e) {
-                    if self.cur_is_main {
-                        self.err_coded(
-                            *span,
-                            format!("`{e}` thrown in `main` escapes the program entry point"),
-                            "E-UNCAUGHT-THROW",
-                            Some("wrap it in `try { … } catch (… e) { … }` — `main` may not let an exception escape".into()),
-                        );
-                    } else {
-                        self.err_coded(
-                            *span,
-                            format!("`{e}` is thrown here but neither caught nor declared"),
-                            "E-THROW-UNDECLARED",
-                            Some(format!("add `throws {e}` to the enclosing function, or wrap this in `try`/`catch`")),
-                        );
-                    }
-                }
-            }
+            // M-faults 2b.3: `throw e;` — the rules live in `check_thrown`, shared with the DEC-532
+            // throw-EXPRESSION so the two forms cannot drift.
+            Stmt::Throw { value, span } => self.check_thrown(value, *span),
             // M-faults 2b.3: a `try` — validate each catch type (`<: Error`, flag a shadowed clause
             // `W-CATCH-UNREACHABLE`), check the body with the catch set active so a throw inside is
             // discharged, then each catch body with its binding in scope, then `finally`.

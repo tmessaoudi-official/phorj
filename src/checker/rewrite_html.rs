@@ -160,6 +160,10 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 inclusive,
                 span,
             },
+            Expr::Throw { value, span } => Expr::Throw {
+                value: Box::new(rexpr(*value, h)),
+                span,
+            },
             Expr::If {
                 cond,
                 then_expr,

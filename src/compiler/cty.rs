@@ -369,16 +369,29 @@ impl Compiler<'_> {
             Expr::CloneWith { object, .. } => self.ctype(object),
             // A `match` value's type is its arms' shared type (checker-guaranteed); infer it from
             // the first arm's body so `var x = match … { … }` specializes like an explicit local.
-            Expr::Match { arms, .. } => match arms.first() {
-                Some(arm) => self.ctype(&arm.body),
-                None => Ok(CTy::Other),
-            },
+            // A throwing arm (DEC-532) contributes no type, so the first arm that does NOT throw decides.
+            Expr::Match { arms, .. } => {
+                match arms.iter().find(|a| !matches!(a.body, Expr::Throw { .. })) {
+                    Some(arm) => self.ctype(&arm.body),
+                    None => Ok(CTy::Other),
+                }
+            }
             // A range materializes to `List<int>`, so its compile-type is `List(Int)` — carrying the
             // element type lets `(0..n)[i] + 1` (or a range bound to a `var`, then indexed) specialize.
             Expr::Range { .. } => Ok(CTy::List(Box::new(CTy::Int))),
             // Both `if` branches share a type (checker-guaranteed); infer it from the then-branch so
             // `var x = if (c) { 1 } else { 2 }` specializes arithmetic on `x` (like `Match`).
-            Expr::If { then_expr, .. } => self.ctype(then_expr),
+            // A throwing then-branch (DEC-532) defers to the else-branch.
+            Expr::If {
+                then_expr,
+                else_expr,
+                ..
+            } => match **then_expr {
+                Expr::Throw { .. } => self.ctype(else_expr),
+                _ => self.ctype(then_expr),
+            },
+            // `throw e` never produces a value; only reached when every arm throws.
+            Expr::Throw { .. } => Ok(CTy::Other),
             // A lambda's compile-time type reflects its declared params and return type so that
             // a `var f = function(int x) => x + 1` local later resolves calls on `f` to `CallValue`.
             Expr::Lambda { params, ret, .. } => Ok(CTy::Fn {

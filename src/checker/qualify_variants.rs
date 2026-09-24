@@ -280,6 +280,7 @@ fn qe(e: &mut Expr, ctx: &Ctx) {
             qe(start, ctx);
             qe(end, ctx);
         }
+        Expr::Throw { value, .. } => qe(value, ctx),
         Expr::If {
             cond,
             then_expr,

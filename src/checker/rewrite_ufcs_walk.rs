@@ -220,6 +220,10 @@ pub(super) fn rexpr(e: Expr, u: &Map) -> Expr {
             inclusive,
             span,
         },
+        Expr::Throw { value, span } => Expr::Throw {
+            value: Box::new(rexpr(*value, u)),
+            span,
+        },
         Expr::If {
             cond,
             then_expr,

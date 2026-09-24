@@ -413,6 +413,7 @@ fn walk_children(e: &mut Expr, en: &Enabled, errs: &mut Vec<Diagnostic>) {
             walk_expr(start, en, errs);
             walk_expr(end, en, errs);
         }
+        Expr::Throw { value, .. } => walk_expr(value, en, errs),
         Expr::If {
             cond,
             then_expr,

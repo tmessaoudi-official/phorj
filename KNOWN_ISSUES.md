@@ -12,6 +12,26 @@ drafts hit it (`Car/VehicleFormatter`, `Core/Notify/NtfyChannel`, `Adapters/Http
 DEC-531 (same result with no reserved word involved). Workaround: assign the ternary to a local first. Not yet
 ruled or queued.
 
+## PERF-COALESCE-OPTIONAL-JIT — any `??` on an optional keeps its function off the JIT (found 2026-09-24 by scout row 5l)
+
+The unboxed JIT declines a function that applies `??` to an optional, because `??` compiles to a
+comparison against a `null` constant it has no unboxed form for:
+
+```
+phg: jit declined `orZero` — Unsupported("unboxed Const Some(Null)")
+```
+
+[Verified 2026-09-24 with `PHORJ_JIT_EXPLAIN=1` on `function orZero(int? n): int { return n ?? 0; }`
+and its `?? throw` twin — both decline with the same message.] The whole function then runs on the VM.
+Measured through `scripts/microbench.sh` at K=7, pinned and interleaved against docker `php:8.5-cli`,
+under load (core 7 ~38% idle, spreads 233–358%): `throwexpr` **0.02× LOSS** (VM 1027 ms vs php 24 ms)
+and its control `coalesceor` **0.03× LOSS** (VM 781 ms vs php 20 ms). The two phorj legs sit in the
+same ratio to each other as the two PHP legs, so the throw-expression adds nothing of its own; the loss
+is `??` on an optional. An `if`-expression that throws JITs normally (`PHORJ_JIT_DISASM` shows it
+compiled; 0.2 s against 12–24 s under `--no-jit`). Per DEC-365 both benches ship UNPROTECTED (not in
+`bench/micro-baseline.json`), `--emit` was not run, and closing the loss — an unboxed form for a
+nullable scalar — is the developer's call (DEC-507).
+
 ## RESERVED-WORD NAMES — what DEC-531 (scout row 5k) does NOT cover
 
 A reserved word is a member name only in member position. Still reserved, by design or not yet reached:

@@ -1784,6 +1784,21 @@ Both checked tiers are typed + checker-enforced + `?`-composable; `throws` erase
 backends (front-end-only ⇒ byte-identity-safe, no new `Op`). `try/catch` handles the `throws`
 surface and the imported-PHP interop bridge.
 
+**Throw-expressions (DEC-532, 2026-09-24; scout row 5l).** `throw e` is also an EXPRESSION, of type
+`never`, in exactly four positions — where abandoning the value is the point: the right operand of
+`??` (`s ?? throw new MissingError("key")`), an arm of an `if` expression (phorj has no `?:`; this is
+PHP's ternary branch), a `match`-arm body (`default => throw …`) and a lambda's `=>` body. Anywhere
+else it is `E-THROW-POSITION` (`1 + throw e`, `f(throw e)`, `var x = throw e;`, `return throw e;`,
+`c || throw e`); the `throw e;` statement is unchanged. The operand is a full expression, as in PHP:
+`s ?? throw f(1) + 2` throws `f(1) + 2`, and `a ?? throw e ?? f` throws `e ?? f`. `never` is the
+bottom, so the non-throwing side decides the type in either order (`if (c) { throw e } else { 1 }` is
+an `int`). The checked-exception rules are the statement's, shared code (`E-THROW-TYPE`,
+`E-THROW-UNDECLARED`, `E-UNCAUGHT-THROW`; a lambda body discharges against the lambda's `throws`).
+Backends: the interpreter and VM unwind exactly as for the statement (no new `Op`); the PHP leg is
+PHP 8's native throw-expression, emitted parenthesized — `(throw $e)` — which PHP accepts in all four
+positions. The lifter maps PHP's throw-expression 1:1 in those positions and refuses it by name
+elsewhere. Rejected: throw-expression in ANY position (admits `f(throw e)`); a lifter-only lowering.
+
 ### The rejection catalogue (with reasons — the enduring negative space)
 
 **Dynamic-PHP footguns (defeat static checking — the exact surprise Phorj removes):**

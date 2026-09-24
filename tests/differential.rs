@@ -6879,3 +6879,104 @@ function main(): void {
         "keyword_named_members",
     );
 }
+
+/// DEC-532 (scout row 5l): a throw-expression in each of its four positions — `??`, both `if`-expression
+/// arms, a `match` arm (first and last), a lambda body — thrown and not thrown, agrees on every leg.
+#[test]
+fn throw_expressions_in_all_four_positions_are_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+class BadError implements Error { constructor(public string message) {} }
+function key(string? s): string throws BadError {
+    return s ?? throw new BadError(\"no key\");
+}
+function thenArm(bool c, int n): int throws BadError {
+    return if (c) { throw new BadError(\"then\") } else { n };
+}
+function elseArm(bool c, int n): int throws BadError {
+    return if (c) { n } else { throw new BadError(\"else\") };
+}
+function rank(string a): int throws BadError {
+    return match (a) { \"t\" => throw new BadError(\"first arm\"), \"x\" => 1, default => throw new BadError(\"rank {a}\") };
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try { Output.printLine(key(\"k\")); Output.printLine(key(null)); } catch (BadError e) { Output.printLine(e.message); }
+    try { Output.printLine(\"{thenArm(false, 2)}\"); Output.printLine(\"{thenArm(true, 2)}\"); } catch (BadError e) { Output.printLine(e.message); }
+    try { Output.printLine(\"{elseArm(true, 3)}\"); Output.printLine(\"{elseArm(false, 3)}\"); } catch (BadError e) { Output.printLine(e.message); }
+    try { Output.printLine(\"{rank(\"x\")}\"); Output.printLine(\"{rank(\"q\")}\"); } catch (BadError e) { Output.printLine(e.message); }
+    try { Output.printLine(\"{rank(\"t\")}\"); } catch (BadError e) { Output.printLine(e.message); }
+    var f = function(int y): int throws BadError => throw new BadError(\"lambda {y}\");
+    try { Output.printLine(\"{f(7)}\"); } catch (BadError e) { Output.printLine(e.message); }
+}",
+        "k\nno key\n2\nthen\n3\nelse\n1\nrank q\nfirst arm\nlambda 7\n",
+        "throw_expr_positions",
+    );
+}
+
+/// DEC-532: the two VM traps a throw-expression walks into. Invariant 7 — the operand's compile type
+/// must come from the arm that does NOT throw, in either order (`(… ?? throw e) + 1`, a throwing FIRST
+/// `if`/`match` arm); `+ \"!\"` must stay string concatenation on the PHP leg. Invariant 8 — two `??`
+/// scratch slots in one interpolation, and the `if`-else merge after a throwing ELSE arm, whose height
+/// only the dead push after `Throw` keeps right: `join`'s first argument `x` sits below it on the stack,
+/// so a stash one slot too low reads `9`, not `null`.
+#[test]
+fn throw_expressions_keep_operand_types_and_scratch_slots() {
+    agree_out_php(
+        "import Core.Output;
+class BadError implements Error { constructor(public string message) {} }
+function inc(int? n): int throws BadError { return (n ?? throw new BadError(\"n\")) + 1; }
+function thenInc(bool c): int throws BadError { return (if (c) { throw new BadError(\"c\") } else { 1 }) + 1; }
+function armInc(string a): int throws BadError { return (match (a) { \"t\" => throw new BadError(\"t\"), default => 2 }) + 1; }
+function bang(string? s): string throws BadError { return (s ?? throw new BadError(\"s\")) + \"!\"; }
+function two(string? a, string? b): string throws BadError { return \"{a ?? throw new BadError(\"a\")} {b ?? throw new BadError(\"b\")}\"; }
+function join(int x, string s): string { return \"{x} {s}\"; }
+function mid(bool c, string? s, int x): string throws BadError { return join(x, (if (c) { s } else { throw new BadError(\"e\") }) ?? \"d\"); }
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        Output.printLine(\"{inc(4)} {thenInc(false)} {armInc(\"q\")} {bang(\"hi\")}\");
+        Output.printLine(two(\"p\", \"q\"));
+        Output.printLine(mid(true, null, 9));
+        Output.printLine(mid(true, \"s\", 9));
+        Output.printLine(two(\"p\", null));
+    } catch (BadError e) { Output.printLine(\"caught {e.message}\"); }
+}",
+        "5 2 3 hi!\np q\n9 d\n9 s\ncaught b\n",
+        "throw_expr_traps",
+    );
+}
+
+/// DEC-532: the thrown operand must pass through every front-end rewrite — scout's three operand shapes
+/// (a static factory, `new` with a call argument, `new` with a named argument) plus a pipe, an
+/// interpolation and a `parent.m()` call inside it. A rewriter that treated the throw as a leaf would
+/// leave one of these unlowered.
+#[test]
+fn throw_expression_operands_are_rewritten_like_any_expression() {
+    agree_out_php(
+        "import Core.Output;
+class BadError implements Error {
+    constructor(public string message) {}
+    public static function of(string what): BadError { return new BadError(\"bad {what}\"); }
+}
+function twice(int x): int { return x * 2; }
+function fmt(string a, int n): string { return \"{a}#{n}\"; }
+open class Base { open function tag(): string { return \"base\"; } }
+class Child extends Base {
+    function tag(): string { return \"child\"; }
+    function check(string? s): string throws BadError { return s ?? throw new BadError(parent.tag()); }
+}
+function viaFactory(string? s): string throws BadError { return s ?? throw BadError.of(\"factory\"); }
+function viaCall(int? n, int x): int throws BadError { return n ?? throw new BadError(fmt(\"call\", x |> twice(%))); }
+function viaNamed(string? s): string throws BadError { return s ?? throw new BadError(message: \"named\"); }
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try { Output.printLine(viaFactory(null)); } catch (BadError e) { Output.printLine(e.message); }
+    try { Output.printLine(\"{viaCall(null, 3)}\"); } catch (BadError e) { Output.printLine(e.message); }
+    try { Output.printLine(viaNamed(null)); } catch (BadError e) { Output.printLine(e.message); }
+    try { Output.printLine(new Child().check(null)); } catch (BadError e) { Output.printLine(e.message); }
+}",
+        "bad factory\ncall#6\nnamed\nbase\n",
+        "throw_expr_rewrites",
+    );
+}

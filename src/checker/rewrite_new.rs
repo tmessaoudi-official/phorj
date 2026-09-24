@@ -225,6 +225,7 @@ fn ue_expr(e: &mut Expr) {
             ue_expr(start);
             ue_expr(end);
         }
+        Expr::Throw { value, .. } => ue_expr(value),
         Expr::If {
             cond,
             then_expr,

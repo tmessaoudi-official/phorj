@@ -231,6 +231,13 @@ impl Printer<'_> {
                 self.expr(else_expr)?
             ))),
             Expr::New(inner, _) => Ok(doc::concat(vec![doc::text("new "), self.expr_doc(inner)?])),
+            // `throw e` (DEC-532): its operand is a full expression, and it only ever stands where the
+            // parser allows it, so it prints bare — never parenthesized, which would move it out of
+            // an allowed position (`s ?? (throw e)` is `E-THROW-POSITION`).
+            Expr::Throw { value, .. } => Ok(doc::concat(vec![
+                doc::text("throw "),
+                self.expr_doc(value)?,
+            ])),
             // `spawn <call>` (M6 W4) — contextual keyword, printed as a prefix on the call.
             Expr::Spawn { call, .. } => {
                 Ok(doc::concat(vec![doc::text("spawn "), self.expr_doc(call)?]))

@@ -106,6 +106,9 @@ pub enum PhpExpr {
         inc: bool,
         prefix: bool,
     },
+    /// PHP 8's `throw e` in EXPRESSION position (a `throw e;` statement is `PhpStmt::Throw`). Parsed
+    /// wherever PHP allows it; the lifter maps only the four positions phorj allows (DEC-532).
+    Throw(Box<PhpExpr>),
     /// `cond ? then : els`. `then == None` encodes the elvis form `cond ?: els`.
     Ternary {
         cond: Box<PhpExpr>,

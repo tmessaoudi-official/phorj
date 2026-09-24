@@ -199,6 +199,8 @@ impl Checker {
                     _ => false,
                 }
             }
+            // A throw-expression (DEC-532) never completes.
+            Expr::Throw { .. } => true,
             Expr::If {
                 then_expr,
                 else_expr,
