@@ -2,7 +2,7 @@
 573	src/checker/assign.rs
 684	src/checker/calls/core.rs
 676	src/checker/calls/overloads.rs
-772	src/checker/collect/types_decls.rs
+564	src/checker/collect/types_decls.rs
 3144	src/checker/desugar_db.rs
 514	src/checker/expr/operators.rs
 619	src/checker/matches.rs

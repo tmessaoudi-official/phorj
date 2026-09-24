@@ -6,6 +6,7 @@ use super::*;
 mod abstract_traits;
 mod class_graph;
 mod conformance;
+mod consts;
 mod entry;
 mod enums;
 mod functions;

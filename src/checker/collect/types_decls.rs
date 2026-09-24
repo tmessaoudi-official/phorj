@@ -207,51 +207,7 @@ impl Checker {
                     let fty = self.resolve_type(ty);
                     self.active_type_params.clear();
                     if modifiers.contains(&Modifier::Const) {
-                        // A `const` class constant (Feature A): compile-time, immutable, class-level,
-                        // accessed only `ClassName.NAME`. It needs a literal-const initializer and must
-                        // not be `mutable`. Disjoint from instance fields and statics.
-                        if modifiers.contains(&Modifier::Mutable) {
-                            self.err_coded(
-                                *span,
-                                format!("`const {name}` cannot be `mutable` — a constant is immutable"),
-                                "E-CONST-MUTABLE",
-                                Some("drop `mutable`, or use a `static mutable` field for class-level state".into()),
-                            );
-                        }
-                        match init {
-                            None => {
-                                self.err_coded(
-                                    *span,
-                                    format!("`const {name}` needs an initializer"),
-                                    "E-CONST-NO-INIT",
-                                    Some("e.g. `const int MAX = 100;`".into()),
-                                );
-                            }
-                            Some(e) => {
-                                if crate::value::const_literal(e).is_none() {
-                                    self.err_coded(
-                                        Self::expr_span(e),
-                                        format!(
-                                            "`const {name}` initializer must be a literal constant"
-                                        ),
-                                        "E-CONST-NOT-LITERAL",
-                                        Some("use an int/float/bool/string/null literal".into()),
-                                    );
-                                } else {
-                                    let ity = self.check_expr(e);
-                                    if !self.ty_assignable(&ity, &fty) {
-                                        self.err_coded(
-                                            Self::expr_span(e),
-                                            format!(
-                                                "`const {name}: {fty}` initialized with `{ity}`"
-                                            ),
-                                            "E-CONST-INIT-TYPE",
-                                            None,
-                                        );
-                                    }
-                                }
-                            }
-                        }
+                        self.check_const_member(name, modifiers, init.as_ref(), *span, &fty);
                         consts.insert(
                             name.clone(),
                             ConstEntry {
