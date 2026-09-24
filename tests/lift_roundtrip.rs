@@ -154,8 +154,9 @@ fn lift_roundtrip_preserves_behavior() {
 
     // LIFT-ECHO-INT (2026-09-05): `echo <non-string>` now lifts to an interpolation, so an int echo and
     // a `.`-concat with an int operand round-trip too — the `int_echo` case below is the proof, and
-    // the old "raw int echo is avoided on purpose" workaround is gone. Floats stay out: they have a
-    // known interpreter-vs-PHP formatting divergence (KNOWN_ISSUES), unrelated to the lift.
+    // the old "raw int echo is avoided on purpose" workaround is gone. Floats appear only where
+    // phorj's rendering and PHP's precision-14 echo agree (`float_division` below: 3.5, 0.25, an exact
+    // 2); a value like `1/3` would hit the known formatting divergence (KNOWN_ISSUES), unrelated to the lift.
     let cases: &[(&str, &str)] = &[
         (
             "int_echo",
