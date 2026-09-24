@@ -114,6 +114,6 @@ mod tests {
         let mut tasks: std::collections::HashMap<TaskId, Box<dyn Task>> =
             std::collections::HashMap::new();
         tasks.insert(t0, Box::new(CoroutineTask::new(coro)));
-        assert_eq!(run_loop(&coop, &mut tasks).unwrap_err(), "boom");
+        assert_eq!(run_loop(&coop, &mut tasks).unwrap_err().0, "boom");
     }
 }

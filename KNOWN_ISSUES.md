@@ -1,6 +1,6 @@
 # Known Issues & Limitations
 
-## FAULT-DROPS-STDOUT — a program that faults loses everything it printed first (2026-09-24, DEC-530 RULED, build QUEUED)
+## FIXED — FAULT-DROPS-STDOUT — a program that faults loses everything it printed first (2026-09-24, DEC-530, scout row 5f0)
 
 ```phorj
 function main(): void {
@@ -26,6 +26,15 @@ the partial output internally (see the `Output.capture` entry below); the loss i
 **Ruled (DEC-530):** on a fault, write the buffered stdout, then the error on stderr, on every leg and entry
 path; the fault-parity gate starts comparing pre-fault stdout. The exit code stays 1 (PHP's is 255 — both
 non-zero, which is what the gate asserts). Build: scout plan row 5f0.
+
+**Fixed 2026-09-24 (row 5f0).** The backends' `*_keeping_output` entry points and the concurrency `run_loop`
+hand the partial output back with the error; `cli::RunFailure` carries it to `main.rs`, which prints it
+before the error on every entry path. `agree_err` / `agree_err_php` now compare pre-fault stdout (PHP run with
+`display_errors=stderr`); all 19 PHP-leg fault cases agreed. **Found while building it, and fixed with it:**
+the VM ran `Runtime.onShutdown` handlers on top of the ENDED program's frames, so after a fault — or a
+`Runtime.exit` inside a nested call, which was live on the shipped binary (`body cleanup 1 after`, exit 3,
+where the interpreter printed `body cleanup`) — the handler's return resumed `main` past the fault or exit
+point. `run_shutdown_handlers` now unwinds frames, stack and `try` handlers first.
 
 ## LIBRARY-REACHES-MAIN — a library's bare call or template tag falls back to `Main`'s same-named function with no import (pending a ruling) {#library-reaches-main}
 

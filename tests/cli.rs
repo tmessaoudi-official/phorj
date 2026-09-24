@@ -596,3 +596,30 @@ fn bare_nonexistent_first_arg_still_prints_usage() {
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("usage:"));
 }
+
+/// DEC-530 (row 5f0): a program that prints and then faults keeps its earlier stdout on every
+/// backend and entry form — the output first, then the runtime error on stderr, exit 1. Before the
+/// fix stdout was empty: the backends returned their buffer only on success. This is the one gate
+/// that reaches `main.rs`, which the in-process differential never does.
+#[test]
+fn a_faulting_program_keeps_its_earlier_stdout() {
+    let fixture = "tests/fixtures/fault_after_print.phg";
+    let src = std::fs::read_to_string(fixture).expect("fixture");
+    let forms: [(&str, Vec<&str>); 4] = [
+        ("vm", vec!["run", fixture]),
+        ("tree-walker", vec!["run", "--tree-walker", fixture]),
+        ("no-jit", vec!["run", "--no-jit", fixture]),
+        ("-e", vec!["run", "-e", src.as_str()]),
+    ];
+    for (label, args) in forms {
+        let out = Command::new(BIN).args(&args).output().expect("spawn phorj");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(
+            stdout, "before\n",
+            "{label}: pre-fault stdout lost; stderr: {stderr}"
+        );
+        assert!(stderr.contains("division by zero"), "{label}: {stderr}");
+        assert_eq!(out.status.code(), Some(1), "{label}");
+    }
+}

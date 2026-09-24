@@ -437,3 +437,31 @@ fn built_artifact_carries_profile_and_output_is_profile_invariant() {
         "profile must not change program output (M-DX keystone)"
     );
 }
+
+/// DEC-530: a BUILT binary runs its embedded program through its own entry path (`main.rs`'s
+/// payload branch, not `phg run`), so it gets its own check that a fault keeps the stdout written
+/// before it — output first, then the error on stderr, exit 1.
+#[test]
+fn built_binary_keeps_stdout_written_before_a_fault() {
+    assert!(
+        objcopy_available(),
+        "objcopy is required here; this test must not pass by skipping"
+    );
+    let prog = "tests/fixtures/fault_after_print.phg";
+    let out_bin = std::env::temp_dir().join(format!("phorj_built_fault_{}", std::process::id()));
+    let _ = std::fs::remove_file(&out_bin);
+    let build = Command::new(BIN)
+        .args(["build", prog, "-o", out_bin.to_str().unwrap()])
+        .output()
+        .expect("spawn build");
+    assert!(
+        build.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let ran = Command::new(&out_bin).output().expect("run built binary");
+    let _ = std::fs::remove_file(&out_bin);
+    assert_eq!(String::from_utf8_lossy(&ran.stdout), "before\n");
+    assert!(String::from_utf8_lossy(&ran.stderr).contains("division by zero"));
+    assert_eq!(ran.status.code(), Some(1));
+}

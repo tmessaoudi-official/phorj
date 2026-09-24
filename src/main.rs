@@ -42,6 +42,7 @@ fn main() {
                 exit(i32::try_from(code).unwrap_or(1));
             }
             Err(err) => {
+                print!("{}", err.stdout); // DEC-530: the output written before the fault, first
                 eprintln!("{err}");
                 exit(1);
             }
@@ -405,11 +406,12 @@ fn main() {
                     exit(i32::try_from(code).unwrap_or(1));
                 }
                 Err(err) => {
+                    print!("{}", err.stdout); // DEC-530: the output written before the fault, first
                     eprintln!("{err}");
                     // S3.4/D6, the run->serve half; silent unless a role mismatch on a nameable file
                     // was offered on an interactive terminal and accepted.
                     match cli::role_mismatch::switch_run_to_serve(
-                        &err,
+                        &err.message,
                         switch_target.as_deref(),
                         &unit,
                         tree_walker,

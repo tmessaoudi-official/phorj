@@ -86,8 +86,12 @@ impl<'a> Vm<'a> {
 /// task 0 = `main` as a coroutine, then drives [`run_loop`]. Returns merged output + `main`'s exit code,
 /// or a runtime `Diagnostic` (task fault / deadlock). The synchronous [`run_main`](Vm::run_main) still
 /// serves every non-concurrent program, byte-identical.
-pub fn run_cooperative_vm(program: &BytecodeProgram) -> Result<(String, i64), Diagnostic> {
-    program.validate().map_err(Diagnostic::runtime)?;
+pub fn run_cooperative_vm(
+    program: &BytecodeProgram,
+) -> Result<(String, i64), crate::diagnostic::Faulted> {
+    program
+        .validate()
+        .map_err(|e| Box::new((Diagnostic::runtime(e), String::new())))?;
     let prog = Rc::new(program.clone());
     let coop = Rc::new(RefCell::new(Coop::new()));
     let t0 = coop.borrow_mut().sched.spawn(); // TaskId(0) — the entry/main task
@@ -109,7 +113,7 @@ pub fn run_cooperative_vm(program: &BytecodeProgram) -> Result<(String, i64), Di
             let exit = coop.borrow().results.get(&t0).map_or(0, exit_code_of);
             Ok((out, exit))
         }
-        Err(msg) => Err(Diagnostic::runtime(msg)),
+        Err((msg, out)) => Err(Box::new((Diagnostic::runtime(msg), out))),
     }
 }
 
@@ -124,7 +128,7 @@ mod tests {
         let program = crate::compiler::compile(&prog).map_err(|d| d.to_string())?;
         run_cooperative_vm(&program)
             .map(|(out, _exit)| out)
-            .map_err(|d| d.message)
+            .map_err(|f| f.0.message)
     }
 
     /// THE LITMUS on the VM — must match `interpreter::coop`'s identical test byte-for-byte: a spawned

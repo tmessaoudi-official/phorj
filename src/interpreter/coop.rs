@@ -148,7 +148,9 @@ fn run_task_call(
 /// interleaving. Seeds task 0 = `main` as a coroutine, then drives [`run_loop`]. Returns the merged
 /// output + `main`'s exit code, or a runtime `Diagnostic` (a task fault / deadlock). The synchronous
 /// [`interpret_main`](super::interpret_main) still serves every non-concurrent program, byte-identical.
-pub fn run_cooperative_interp(program: &Program) -> Result<(String, i64), Diagnostic> {
+pub fn run_cooperative_interp(
+    program: &Program,
+) -> Result<(String, i64), crate::diagnostic::Faulted> {
     let prog = Rc::new(program.clone());
     let coop = Rc::new(RefCell::new(Coop::new()));
     let t0 = coop.borrow_mut().sched.spawn(); // TaskId(0) — the entry/main task
@@ -156,9 +158,9 @@ pub fn run_cooperative_interp(program: &Program) -> Result<(String, i64), Diagno
     // Resolve `main` (top-level or class-static) exactly like the synchronous entry.
     let (entry_class, main) = match crate::ast::entry_for(program, crate::ast::EntryRole::Cli) {
         Some(e) => e,
-        None => return Err(Diagnostic::runtime(
+        None => return Err(Box::new((Diagnostic::runtime(
             "no entry point: running needs an `#[Entry(kind: EntryKind.Cli)]` function (DEC-331)",
-        )),
+        ), String::new()))),
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
     let args = if names.is_empty() {
@@ -197,7 +199,7 @@ pub fn run_cooperative_interp(program: &Program) -> Result<(String, i64), Diagno
             let exit = coop.borrow().results.get(&t0).map_or(0, exit_code_of);
             Ok((out, exit))
         }
-        Err(msg) => Err(Diagnostic::runtime(msg)),
+        Err((msg, out)) => Err(Box::new((Diagnostic::runtime(msg), out))),
     }
 }
 
@@ -211,7 +213,7 @@ mod tests {
         let program = crate::cli::parse_checked_program(src)?;
         run_cooperative_interp(&program)
             .map(|(out, _exit)| out)
-            .map_err(|d| d.message)
+            .map_err(|f| f.0.message)
     }
 
     /// THE LITMUS (S4.3 acceptance): a `recv`-ing consumer is **spawned**, so under the eager model it

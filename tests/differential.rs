@@ -313,6 +313,44 @@ fn agree_err(src: &str) {
         tree_kind.is_some(),
         "expected a fault but both backends succeeded for:\n{src}\n  run={tree:?}"
     );
+    // DEC-530: the stdout written before the fault is part of the failure behaviour, so both
+    // backends must hand back the same bytes.
+    assert_eq!(
+        pre_fault_stdout(cmd_treewalk_exit(&src)),
+        pre_fault_stdout(cmd_run_exit(&src)),
+        "pre-fault stdout mismatch (interpreter vs VM) for:\n{src}"
+    );
+}
+
+/// The stdout a faulting run wrote before its fault (DEC-530). Panics if the run succeeded — every
+/// caller has already established that it fails.
+fn pre_fault_stdout(r: Result<(String, i64), cli::RunFailure>) -> String {
+    r.expect_err("a faulting program").stdout
+}
+
+/// Run faulting transpiled PHP with its error display sent to STDERR (the CLI SAPI prints a fatal
+/// error on stdout by default, which would make every stdout comparison differ for the wrong
+/// reason). Scoped to the fault oracle: success runs keep `php_n_args` as it is. Returns
+/// `(stdout, exited_zero, stderr)`.
+fn run_php_fault(php: &str, php_src: &str) -> (String, bool, String) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, Ordering::Relaxed);
+    let path =
+        std::env::temp_dir().join(format!("phorj_faultoracle_{}_{n}.php", std::process::id()));
+    std::fs::write(&path, php_src).expect("write temp php");
+    let out = Command::new(php)
+        .args(php_n_args(php))
+        .args(["-d", "display_errors=stderr"])
+        .arg(&path)
+        .output()
+        .expect("spawn php");
+    let _ = std::fs::remove_file(&path);
+    (
+        String::from_utf8(out.stdout).expect("utf-8 php stdout"),
+        out.status.success(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
 }
 
 /// `php_bin`, resolved once per process (the raw fn probes `php --version` on every call; the
@@ -349,23 +387,17 @@ fn agree_err_php(src: &str) {
     let Ok(php_src) = cli::cmd_transpile(&src) else {
         return; // compile-time fault or native-only ladder module → no runnable PHP leg
     };
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-    let n = SEQ.fetch_add(1, Ordering::Relaxed);
-    let path =
-        std::env::temp_dir().join(format!("phorj_faultoracle_{}_{n}.php", std::process::id()));
-    std::fs::write(&path, &php_src).expect("write temp php");
-    let out = Command::new(php)
-        .args(php_n_args(php))
-        .arg(&path)
-        .output()
-        .expect("spawn php");
-    let _ = std::fs::remove_file(&path);
+    let (stdout, ok, stderr) = run_php_fault(php, &php_src);
     assert!(
-        !out.status.success(),
+        !ok,
         "fault-parity break: phorj faults but PHP exited 0 (silent success) for:\n{src}\n\
-         --- transpiled php ---\n{php_src}\n--- php stderr ---\n{}",
-        String::from_utf8_lossy(&out.stderr)
+         --- transpiled php ---\n{php_src}\n--- php stderr ---\n{stderr}"
+    );
+    // DEC-530: and it printed the same thing before faulting.
+    assert_eq!(
+        stdout,
+        pre_fault_stdout(cmd_run_exit(&src)),
+        "pre-fault stdout mismatch (PHP vs VM) for:\n{src}\n--- transpiled php ---\n{php_src}"
     );
 }
 
@@ -6593,6 +6625,92 @@ fn shutdown_handlers_run_after_main_in_registration_order_on_every_leg() {
             "php\n{php_src}"
         );
     }
+}
+
+/// DEC-530 (row 5f0) — a program that prints and then faults keeps its earlier stdout, on BOTH native
+/// backends and on the PHP leg. Before the fix the backends handed their buffer back only on success,
+/// so `phg run` printed nothing where PHP printed `before`; no gate compared stdout on a fault path.
+#[test]
+fn a_faulting_program_keeps_its_earlier_stdout_on_every_leg() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+                   Output.printLine(\"before\");\n\
+                   var z = 0;\n\
+                   Output.printLine(\"{10 / z}\");\n\
+               }";
+    let tw = cmd_treewalk_exit(src).expect_err("interpreter faults");
+    let vm = cmd_run_exit(src).expect_err("vm faults");
+    assert_eq!(tw.stdout, "before\n", "interpreter");
+    assert_eq!(vm.stdout, "before\n", "vm");
+    assert!(vm.message.contains("division by zero"), "{}", vm.message);
+    if let Some(php) = php_or_gate("fault_keeps_stdout") {
+        let php_src = cli::cmd_transpile(src).expect("transpile ok");
+        let (stdout, ok, stderr) = run_php_fault(&php, &php_src);
+        assert!(!ok, "php must fault too\n{stderr}");
+        assert_eq!(stdout, "before\n", "php\n{php_src}");
+    }
+}
+
+/// DEC-530 with a shutdown handler: the handlers run after a faulting `main` too (cleanup is not
+/// skipped by the fault that triggered it), and their output is part of what the fault hands back —
+/// the same bytes on both native backends.
+#[test]
+fn a_faulting_program_keeps_its_shutdown_handler_output() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Runtime;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+                   Runtime.onShutdown(function() => Output.printLine(\"cleanup\"));\n\
+                   Output.printLine(\"body\");\n\
+                   var xs = [1];\n\
+                   Output.printLine(\"{xs[5]}\");\n\
+               }";
+    let want = "body\ncleanup\n";
+    assert_eq!(
+        cmd_treewalk_exit(src).expect_err("interp faults").stdout,
+        want,
+        "interpreter"
+    );
+    assert_eq!(cmd_run_exit(src).expect_err("vm faults").stdout, want, "vm");
+}
+
+/// A `Runtime.exit` inside a NESTED call ends the program there; a shutdown handler must not resume
+/// it. On the VM the ended program's frames were still stacked under the handler's "root" frame, so
+/// the handler's return resumed `main` after the exit point — `body cleanup 1 after`, exit 3, where
+/// the interpreter printed `body cleanup` [measured 2026-09-24 on the shipped binary]. Found while
+/// building DEC-530, whose fault-path test hit the same stale frames.
+#[test]
+fn a_shutdown_handler_does_not_resume_a_program_that_exited_in_a_nested_call() {
+    let src = "package Main;\n\
+               import Core.Output;\n\
+               import Core.Runtime;\n\
+               import Core.Runtime.Entry;\n\
+               import Core.Runtime.EntryKind;\n\
+               \n\
+               function stop(): int {\n\
+                   Runtime.exit(3);\n\
+                   return 1;\n\
+               }\n\
+               #[Entry(kind: EntryKind.Cli)] function main(): void {\n\
+                   Runtime.onShutdown(function() => Output.printLine(\"cleanup\"));\n\
+                   Output.printLine(\"body\");\n\
+                   Output.printLine(\"{stop()}\");\n\
+                   Output.printLine(\"after\");\n\
+               }";
+    let want = ("body\ncleanup\n".to_string(), 3);
+    assert_eq!(
+        cmd_treewalk_exit(src).expect("interp ok"),
+        want,
+        "interpreter"
+    );
+    assert_eq!(cmd_run_exit(src).expect("vm ok"), want, "vm");
 }
 
 /// A handler runs on `Runtime.exit` too — the exit sentinel is a termination, and cleanup that only

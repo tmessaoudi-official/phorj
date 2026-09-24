@@ -232,6 +232,14 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
 /// process exit status; the stdout-only [`interpret`] wrapper preserves every existing caller and the
 /// differential harness (which gates stdout identity).
 pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
+    run_program_main(program, None).map_err(|f| f.0)
+}
+
+/// Like [`interpret_main`], but a fault also hands back the stdout written before it (DEC-530) — the
+/// twin of `Vm::run_main_keeping_output`. Kept off [`Diagnostic`], which rides the hot `Signal` type.
+pub fn interpret_main_keeping_output(
+    program: &Program,
+) -> Result<(String, i64), crate::diagnostic::Faulted> {
     run_program_main(program, None)
 }
 
@@ -241,7 +249,7 @@ pub fn interpret_debug(
     program: &Program,
     session: crate::debug::DebugSession,
 ) -> Result<(String, i64), Diagnostic> {
-    run_program_main(program, Some(session))
+    run_program_main(program, Some(session)).map_err(|f| f.0)
 }
 
 /// Run and clear this thread's `Runtime.onShutdown` handlers (DEC-204, shape DEC-497).
@@ -272,7 +280,7 @@ fn run_shutdown_handlers(interp: &mut Interp) {
 fn run_program_main(
     program: &Program,
     debug: Option<crate::debug::DebugSession>,
-) -> Result<(String, i64), Diagnostic> {
+) -> Result<(String, i64), crate::diagnostic::Faulted> {
     let mut interp = Interp {
         funcs: HashMap::new(),
         classes: HashMap::new(),
@@ -306,23 +314,25 @@ fn run_program_main(
     // Feature B-static: runtime static initializers run once, before `main`. A fault here surfaces
     // like any runtime fault (with the frames captured so far).
     if let Err(sig) = interp.eval_static_inits(program) {
-        return Err(match sig {
+        let diag = match sig {
             Signal::Runtime(e) => e.with_frames(interp.snapshot_frames()),
             Signal::Throw(v) => {
                 Diagnostic::runtime(format!("uncaught exception `{}`", throw_what(&v)))
                     .with_frames(interp.snapshot_frames())
             }
             _ => Diagnostic::runtime("internal error: control escaped a static initializer"),
-        });
+        };
+        // DEC-530: a static initializer may have printed before it faulted.
+        return Err(Box::new((diag, interp.out)));
     }
     // Batch-1 D: the entry is a top-level `function main` OR a class-static `main` method — the shared
     // `ast::entry_for` picks the one for this ROLE (`E-DUPLICATE-ENTRY-KIND`: ≤1 entry per kind).
     let (entry_class, main) = match crate::ast::entry_for(program, crate::ast::EntryRole::Cli) {
         Some(e) => e,
-        None => return Err(Diagnostic::runtime(
+        None => return Err(Box::new((Diagnostic::runtime(
             "no entry point: running needs an `#[Entry(kind: EntryKind.Cli)]` function (DEC-331). A library or web file \
                  still type-checks and transpiles — use `phg check` / `phg transpile`",
-        )),
+        ), String::new()))),
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
     // Batch-1 B: a one-parameter `main` receives the program argv (the same `List<string>` value
@@ -354,17 +364,17 @@ fn run_program_main(
     // `Vm::run_main`) is the only place they legally can run. Their `Output.*` therefore appends to
     // the same stdout `main` was writing, which is what a cleanup message has to do to be seen.
     run_shutdown_handlers(&mut interp);
-    match outcome {
+    let result = match outcome {
         // `run_call` converts `main`'s `return n` into `Ok(Value::Int(n))` (and a fall-off-the-end
         // `void` `main` into `Ok(Value::Unit)`); `exit_code_of` maps both to the exit status.
-        Ok(v) => Ok((interp.out, exit_code_of(&v))),
+        Ok(v) => Ok(exit_code_of(&v)),
         // Defensive: a `Return` that escapes `run_call` uncaught carries the same exit value.
-        Err(Signal::Return(v)) => Ok((interp.out, exit_code_of(&v))),
+        Err(Signal::Return(v)) => Ok(exit_code_of(&v)),
         // `Runtime.exit(code)` (DEC-238): the clean-exit sentinel is a NORMAL completion carrying
         // the chosen code on the Batch-1-B channel — output flushed, no trace.
         Err(Signal::Runtime(e)) if crate::chunk::exit_sentinel_code(&e.message).is_some() => {
             let code = crate::chunk::exit_sentinel_code(&e.message).expect("guarded");
-            Ok((interp.out, code))
+            Ok(code)
         }
         Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
         // An exception that escapes `main` uncaught (defensive — the checker's `E-UNCAUGHT-THROW`
@@ -379,6 +389,12 @@ fn run_program_main(
         Err(Signal::Break | Signal::Continue) => {
             Err(Diagnostic::runtime("internal error: loop control escaped"))
         }
+    };
+    // DEC-530: on a fault the stdout written so far (the shutdown handlers' included) goes back
+    // with the error, so the CLI can print it first, as PHP does.
+    match result {
+        Ok(code) => Ok((interp.out, code)),
+        Err(e) => Err(Box::new((e, interp.out))),
     }
 }
 

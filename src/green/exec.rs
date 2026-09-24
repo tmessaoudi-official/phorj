@@ -102,11 +102,12 @@ impl Coop {
 ///
 /// # Errors
 /// Returns the fault string if any task finishes with `Err`, or `"deadlock: all tasks are blocked"`
-/// if no task can make progress.
+/// if no task can make progress — paired with the output merged so far (DEC-530: a faulting program
+/// keeps what it printed first).
 pub fn run_loop(
     coop: &std::cell::RefCell<Coop>,
     tasks: &mut std::collections::HashMap<TaskId, Box<dyn Task>>,
-) -> Result<String, String> {
+) -> Result<String, (String, String)> {
     let mut out = String::new();
     loop {
         // Register any tasks spawned during the previous resume, in spawn order (the scheduler already
@@ -119,7 +120,7 @@ pub fn run_loop(
         let Some(task_id) = coop.borrow_mut().sched.next_ready() else {
             // Nothing ready: either everything finished (clean) or everyone is blocked (deadlock).
             if coop.borrow().sched.is_deadlocked() {
-                return Err("deadlock: all tasks are blocked".to_string());
+                return Err(("deadlock: all tasks are blocked".to_string(), out));
             }
             return Ok(out);
         };
@@ -139,7 +140,11 @@ pub fn run_loop(
             }
             Step::Finished(result, frag) => {
                 out.push_str(&frag);
-                let value = result?; // a fault aborts the whole program (task already removed)
+                // A fault aborts the whole program (task already removed).
+                let value = match result {
+                    Ok(v) => v,
+                    Err(msg) => return Err((msg, out)),
+                };
                 coop.borrow_mut().results.insert(task_id, value);
                 coop.borrow_mut().sched.on_trap(task_id, Trap::Done);
             }
@@ -267,6 +272,7 @@ mod tests {
         );
         assert!(run_loop(&coop, &mut tasks)
             .unwrap_err()
+            .0
             .contains("deadlock"));
     }
 
@@ -283,6 +289,6 @@ mod tests {
                 "partial".into(),
             )])),
         );
-        assert_eq!(run_loop(&coop, &mut tasks).unwrap_err(), "boom");
+        assert_eq!(run_loop(&coop, &mut tasks).unwrap_err().0, "boom");
     }
 }

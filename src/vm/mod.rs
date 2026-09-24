@@ -326,13 +326,26 @@ impl<'a> Vm<'a> {
         self.run_main_counting().map(|(out, exit, _)| (out, exit))
     }
 
+    /// Like [`run_main`](Vm::run_main), but a fault also hands back the stdout written before it
+    /// (DEC-530): the CLI prints that first, then the error, as PHP does. Kept off [`Diagnostic`]
+    /// because a `Diagnostic` rides the interpreter's hot `Signal` type and must stay small.
+    pub fn run_main_keeping_output(self) -> Result<(String, i64), crate::diagnostic::Faulted> {
+        self.run_main_inner().map(|(out, exit, _)| (out, exit))
+    }
+
     /// [`run_main`](Vm::run_main) plus the count of in-place accumulator appends (DEC-431 B) —
     /// for the test that proves the fast path FIRES, not merely that the answer is right.
-    pub(crate) fn run_main_counting(mut self) -> Result<(String, i64, u64), Diagnostic> {
+    pub(crate) fn run_main_counting(self) -> Result<(String, i64, u64), Diagnostic> {
+        self.run_main_inner().map_err(|f| f.0)
+    }
+
+    fn run_main_inner(mut self) -> Result<(String, i64, u64), crate::diagnostic::Faulted> {
         // Fail fast on malformed bytecode (a compiler bug) with a clean error instead of a panic
         // mid-execution — keeps the no-crash contract (EV-7). See `BytecodeProgram::validate`.
         // Bytecode-validation faults have no source line, so they surface position-less.
-        self.program.validate().map_err(Diagnostic::runtime)?;
+        if let Err(e) = self.program.validate() {
+            return Err(Box::new((Diagnostic::runtime(e), String::new())));
+        }
         // Batch-1 B/D: lay out the entry frame's slots. A class-static entry's compiled `Function`
         // reserves slot 0 for `$this` (a dummy receiver — a static method never reads it), so push a
         // placeholder first. Then a one-parameter `main` receives the program argv as the next slot;
@@ -361,7 +374,8 @@ impl<'a> Vm<'a> {
                 // A faulting `main` is still a termination, so cleanup still runs — the same reason a
                 // `finally` block is not skipped by the exception that triggered it.
                 self.run_shutdown_handlers();
-                return Err(e);
+                // DEC-530: the output written before the fault (and by the handlers) goes back too.
+                return Err(Box::new((e, self.out)));
             }
         }
         // `main`'s return value was stashed into `exit_value` by its `Op::Return` (or left `Unit` for a

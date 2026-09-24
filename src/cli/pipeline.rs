@@ -420,12 +420,12 @@ pub fn check_and_expand_for_debug(prog: &Program, diag_src: &str) -> Result<Prog
 /// The guard runs BEFORE the check (plan §3, ruled 2026-08-28): a program that is both role-mismatched
 /// and type-broken reports the mismatch, because the verb is wrong regardless of the type errors and
 /// the user was not trying to run this program at all.
-fn run_guard(prog: &Program) -> Result<(), String> {
+pub(super) fn run_guard(prog: &Program) -> Result<(), String> {
     crate::cli::role_mismatch::guard(prog, crate::ast::EntryRole::Cli)
 }
 
 /// [`parse_checked`] for the run verbs: parse, apply [`run_guard`], then check.
-fn parse_checked_for_run(src: &str) -> Result<Program, String> {
+pub(super) fn parse_checked_for_run(src: &str) -> Result<Program, String> {
     let prog = lex_parse(src)?;
     run_guard(&prog)?;
     check_and_expand(&prog, src)
@@ -444,7 +444,7 @@ pub fn cmd_treewalk(src: &str) -> Result<String, String> {
         if crate::ast::uses_concurrency(&prog) {
             return crate::interpreter::run_cooperative_interp(&prog)
                 .map(|(out, _exit)| out)
-                .map_err(|e| e.to_string());
+                .map_err(|f| f.0.to_string());
         }
         interpret(&prog).map_err(|e| e.to_string())
     })
@@ -487,39 +487,9 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
         if crate::ast::uses_concurrency(&prog) {
             return crate::vm::run_cooperative_vm(&program)
                 .map(|(out, _exit)| out)
-                .map_err(|e| e.to_string());
+                .map_err(|f| f.0.to_string());
         }
         vm_for(&program).run().map_err(|e| e.to_string())
-    })
-}
-
-/// Like [`cmd_treewalk`], but also returns `main`'s exit code (Batch-1 B). The string source path
-/// (`-e`/stdin and standalone built binaries); the project-loader path is [`treewalk_program_exit`].
-pub fn cmd_treewalk_exit(src: &str) -> Result<(String, i64), String> {
-    on_deep_stack(|| {
-        let prog = parse_checked_for_run(src)?;
-        foreign_runtime_gate(&prog)?;
-        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
-        if crate::ast::uses_concurrency(&prog) {
-            return crate::interpreter::run_cooperative_interp(&prog).map_err(|e| e.to_string());
-        }
-        interpret_main(&prog).map_err(|e| e.to_string())
-    })
-}
-
-/// Like [`cmd_run`], but also returns `main`'s exit code (Batch-1 B).
-pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
-    on_deep_stack(|| {
-        let parsed = lex_parse(src)?;
-        run_guard(&parsed)?;
-        let (prog, reified) = check_and_expand_reified(&parsed, src)?;
-        foreign_runtime_gate(&prog)?;
-        let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
-        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
-        if crate::ast::uses_concurrency(&prog) {
-            return crate::vm::run_cooperative_vm(&program).map_err(|e| e.to_string());
-        }
-        vm_for(&program).run_main().map_err(|e| e.to_string())
     })
 }
 
@@ -549,7 +519,8 @@ pub fn treewalk_program(unit: &crate::loader::Unit) -> Result<String, String> {
         if crate::ast::uses_concurrency(&checked) {
             return crate::interpreter::run_cooperative_interp(&checked)
                 .map(|(out, _exit)| out)
-                .map_err(|mut e| {
+                .map_err(|f| {
+                    let mut e = f.0;
                     let src = unit.attribute_frames(&mut e);
                     e.render(&src)
                 });
@@ -572,54 +543,13 @@ pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
         if crate::ast::uses_concurrency(&checked) {
             return crate::vm::run_cooperative_vm(&program)
                 .map(|(out, _exit)| out)
-                .map_err(|mut e| {
+                .map_err(|f| {
+                    let mut e = f.0;
                     let src = unit.attribute_frames(&mut e);
                     e.render(&src)
                 });
         }
         vm_for(&program).run().map_err(|mut e| {
-            let src = unit.attribute_frames(&mut e);
-            e.render(&src)
-        })
-    })
-}
-
-/// Like [`treewalk_program`], but also returns `main`'s exit code (Batch-1 B). `phg run <file>` uses this
-/// to set the process exit status; the stdout-only [`treewalk_program`] stays for the differential.
-pub fn treewalk_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
-    on_deep_stack(|| {
-        run_guard(&unit.program)?;
-        let checked = check_and_expand(&unit.program, &unit.diag_src)?;
-        foreign_runtime_gate(&checked)?;
-        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
-        if crate::ast::uses_concurrency(&checked) {
-            return crate::interpreter::run_cooperative_interp(&checked).map_err(|mut e| {
-                let src = unit.attribute_frames(&mut e);
-                e.render(&src)
-            });
-        }
-        interpret_main(&checked).map_err(|mut e| {
-            let src = unit.attribute_frames(&mut e);
-            e.render(&src)
-        })
-    })
-}
-
-/// Like [`run_program`], but also returns `main`'s exit code (Batch-1 B).
-pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
-    on_deep_stack(|| {
-        run_guard(&unit.program)?;
-        let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
-        foreign_runtime_gate(&checked)?;
-        let program = compile_with(&checked, &reified).map_err(|e| e.to_string())?;
-        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
-        if crate::ast::uses_concurrency(&checked) {
-            return crate::vm::run_cooperative_vm(&program).map_err(|mut e| {
-                let src = unit.attribute_frames(&mut e);
-                e.render(&src)
-            });
-        }
-        vm_for(&program).run_main().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
         })

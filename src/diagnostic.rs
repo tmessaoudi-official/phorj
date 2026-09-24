@@ -53,6 +53,10 @@ pub struct Frame {
     pub col: u32,
 }
 
+/// A run that faulted: the diagnostic plus the stdout written before the fault (DEC-530). Boxed —
+/// the fault path is cold, and an unboxed pair would make every `Result` carrying it large.
+pub type Faulted = Box<(Diagnostic, String)>;
+
 /// A single error, anywhere in the pipeline. `line == 0` means no position is known (the
 /// compiler and the tree-walking interpreter don't track one); `col == 0` with `line > 0`
 /// means a line is known but not a column (VM runtime errors, located via `Chunk.lines`).

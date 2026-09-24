@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a program that faults keeps what it printed first (scout row 5f0; DEC-530; 2026-09-24)
+
+- `Output.printLine("before")` followed by a runtime fault printed NOTHING on stdout — on the VM, the
+  tree-walker, `-e`/stdin and a built binary — where PHP prints `before`. The output is now written first,
+  then the error on stderr (exit 1). No gate compared stdout on a fault path; the fault-parity helpers in
+  `tests/differential.rs` now do, on all three legs.
+- Also fixed: after a fault, or a `Runtime.exit` inside a nested call, the VM ran `Runtime.onShutdown`
+  handlers on top of the ended program and then RESUMED it — `body cleanup 1 after` where the interpreter
+  printed `body cleanup`.
+- API: `cmd_run_exit`, `cmd_treewalk_exit`, `run_program_exit` and `treewalk_program_exit` now return
+  `cli::RunFailure { stdout, message }` (its `Display` is the message). They moved to `src/cli/run_exit.rs`.
+
 ### Fixed — PHP `/` lifts to float division (scout row 5g; DEC-523, DEC-529; 2026-09-24)
 
 - `phg lift` mapped PHP `/` straight to phorj `/`, which is integer division on two ints, so

@@ -20,6 +20,16 @@ impl Vm<'_> {
     /// handler runs even if an earlier faulted. Must stay byte-identical with the interpreter's
     /// `run_shutdown_handlers` — the parity spine covers this path like any other.
     pub(super) fn run_shutdown_handlers(&mut self) {
+        // The program is over, however it ended. After a fault or a `Runtime.exit` inside a nested
+        // call, the frames, operand stack and `try` handlers of the ended program are still here, so
+        // a handler pushed as a "root" frame sat on top of `main`'s and its return RESUMED `main`
+        // after the fault or exit point — printing the handler's `Unit` and then running code the
+        // program never reached (DEC-530's differential found it; the interpreter unwinds and never
+        // did this). A stale `try` handler could likewise catch a handler's fault and jump into
+        // `main`. Unwind all three, which is also what the root-frame contract below assumes.
+        self.frames.clear();
+        self.stack.clear();
+        self.handlers.clear();
         for h in crate::shutdown::take_handlers() {
             if let Err(msg) = self.run_shutdown_handler(&h) {
                 eprintln!("phg: a Runtime.onShutdown handler faulted ({msg}); continuing shutdown");

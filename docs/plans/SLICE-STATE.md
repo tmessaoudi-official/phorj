@@ -37,9 +37,9 @@
 > **DONE (2026-09-24): row 5g** (DEC-523 built as DEC-529) — PHP `/` and `/=` lift to float division; every operand is
 > made float, and a float variable's redundant cast is a `W-REDUNDANT-CAST` warning. Microbench G-8 verdict for
 > `83a3bbe1` is still OWED (the pre-push ratchet skipped on box load).
-> **RULED (2026-09-24): DEC-530** — a faulting program lost its earlier stdout (KNOWN_ISSUES §FAULT-DROPS-STDOUT);
-> build QUEUED as row 5f0.
-> **THEN:** 5f0 (DEC-530), 5e, 5j, 5d. Open probe before claiming 5f
+> **DONE (2026-09-24): row 5f0** (DEC-530) — a faulting program keeps its earlier stdout on every leg and entry
+> path; the fault-parity gate compares it. Also fixed: the VM's shutdown handlers resumed an ended program.
+> **THEN:** 5e, 5j, 5d. Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

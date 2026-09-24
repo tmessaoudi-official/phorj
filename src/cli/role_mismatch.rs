@@ -220,7 +220,7 @@ pub fn switch_serve_to_run(
     arg: &str,
     arg_was_dir: bool,
     unit: &crate::loader::Unit,
-) -> Option<Result<(String, i64), String>> {
+) -> Option<Result<(String, i64), crate::cli::RunFailure>> {
     let target = serve_prompt_target(arg, arg_was_dir);
     accepted_switch(err, target.as_deref(), "phg run").then(|| {
         // The mirror of `serve_preamble`: a real `phg run` selects the Dev profile (`main.rs`, the

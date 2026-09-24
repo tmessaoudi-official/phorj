@@ -426,6 +426,27 @@ All fourteen are pinned by `src/checker/tests/shadowing.rs`, alongside the nine 
 `guide/shadowing.phg` demonstrates. Run `phg explain E-SHADOW-LOCAL` for the fix, or read the canonical
 matrix in `docs/specs/UNIFIED-SPEC.md#block-scope-shadowing--the-redeclaration-rule`.
 
+## A program that faults keeps what it printed first (DEC-530)
+
+A runtime fault cannot be a runnable example (the differential glob would red on it), so the contract is
+recorded here. A program that prints and then faults writes that output first, then the error on stderr,
+and exits 1 — the same stdout PHP produces:
+
+```phorj
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine("before");
+    var z = 0;
+    Output.printLine("{10 / z}");   // stdout: `before`, then `runtime error … division by zero` on stderr
+}
+```
+
+This holds on the VM, the tree-walker, `--no-jit`, `-e`/stdin and a `phg build` binary, and output a
+`Runtime.onShutdown` handler writes after the fault is included. Before 2026-09-24 stdout was empty in this
+case. The runnable fixture is `tests/fixtures/fault_after_print.phg`; the gates are `tests/cli.rs`,
+`tests/build.rs` and the fault-parity helpers in `tests/differential.rs`, which now compare pre-fault
+stdout on all three legs.
+
 ## Not yet supported (intentionally absent here)
 
 These are designed but not implemented; they will arrive in later milestones, and examples will be

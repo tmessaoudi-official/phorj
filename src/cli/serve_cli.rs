@@ -142,6 +142,7 @@ pub fn serve_main(args: &[String], usage_exit: fn() -> !) -> ! {
                 exit(i32::try_from(code).unwrap_or(1));
             }
             Some(Err(e)) => {
+                print!("{}", e.stdout); // DEC-530: what the run printed before it faulted
                 eprintln!("{e}");
                 exit(1);
             }

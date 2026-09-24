@@ -6,7 +6,7 @@
 use crate::ast::Program;
 use crate::chunk::{BytecodeProgram, Chunk, Op};
 use crate::compiler::compile_with;
-use crate::interpreter::{interpret, interpret_main};
+use crate::interpreter::interpret;
 use crate::parser::Parser;
 use crate::tokenizer::lex;
 use crate::vm::Vm;
@@ -44,6 +44,7 @@ pub(crate) mod module_catalog;
 mod pipeline;
 mod prelude_spans;
 pub mod role_mismatch;
+mod run_exit;
 mod serve_cli;
 mod serve_pipeline;
 pub(crate) use prelude_spans::INJECTED_SPAN_BASE;
@@ -53,6 +54,9 @@ pub use self::help::*;
 pub use self::pipeline::*;
 pub(crate) use self::preludes::*;
 pub use self::role_mismatch::E_NO_ENTRY_FOR_ROLE;
+pub use self::run_exit::{
+    cmd_run_exit, cmd_treewalk_exit, run_program_exit, treewalk_program_exit, RunFailure,
+};
 pub use self::serve_cli::serve_main;
 pub use self::serve_pipeline::{serve_preamble, serve_program, serve_with_defaults};
 // Public seam for the test harnesses: which feature-gated Core modules are absent in this build

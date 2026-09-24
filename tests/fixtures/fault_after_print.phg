@@ -1,0 +1,13 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// DEC-530: a program that prints and then faults keeps what it printed.
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine("before");
+    var z = 0;
+    Output.printLine("{10 / z}");
+}
