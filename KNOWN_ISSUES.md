@@ -1,5 +1,32 @@
 # Known Issues & Limitations
 
+## FAULT-DROPS-STDOUT — a program that faults loses everything it printed first (2026-09-24, DEC-530 RULED, build QUEUED)
+
+```phorj
+function main(): void {
+    Output.printLine("before");
+    var z = 0;
+    Output.printLine("{10 / z}");
+}
+```
+
+`phg run`, `phg run --tree-walker` and `--no-jit` print **nothing** on stdout, then the runtime error on
+stderr, exit 1. The transpiled PHP prints `before`, then its fatal error, exit 255 [Verified 2026-09-24].
+That breaks Invariant 1's "identical stdout AND identical failure behaviour", and it is not one of the two
+disclosed exceptions.
+
+**Cause.** stdout is buffered for the whole run and handed back only on success: `Vm::run(self) ->
+Result<String, Diagnostic>` (`src/vm/mod.rs:319`) and the tree-walker's equivalents carry the buffer inside
+`Ok`, so the `Err` arm has no output to give, and `src/main.rs` prints only the error. The backends do keep
+the partial output internally (see the `Output.capture` entry below); the loss is at the return type.
+
+**Why no gate caught it.** `tests/differential.rs` `agree_err` compares only the fault KIND, and
+`agree_err_php` only requires the PHP leg to exit non-zero. Neither compares stdout written before a fault.
+
+**Ruled (DEC-530):** on a fault, write the buffered stdout, then the error on stderr, on every leg and entry
+path; the fault-parity gate starts comparing pre-fault stdout. The exit code stays 1 (PHP's is 255 — both
+non-zero, which is what the gate asserts). Build: scout plan row 5f0.
+
 ## LIBRARY-REACHES-MAIN — a library's bare call or template tag falls back to `Main`'s same-named function with no import (pending a ruling) {#library-reaches-main}
 
 Found at scout row 5h1's 6C (2026-09-14); it predates that row. Inside a library package, a bare
