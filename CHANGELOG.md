@@ -14,6 +14,8 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   editor diagnostics (the LSP now takes the loader for a non-`Main` file even with no user imports).
   `package Main` is never merged this way; a layout with no `src/` loads as before.
 - `phg lift <dir>`'s closing hint now says a file checks its package + imports.
+- `phg test` runs each file's own `test` blocks only; with the whole package loaded, two test files of one
+  package would otherwise each run the other's tests and report them under the wrong file.
 
 ### Fixed — a program that faults keeps what it printed first (scout row 5f0; DEC-530; 2026-09-24)
 

@@ -232,3 +232,30 @@ fn a_test_item_in_an_imported_file_checks_but_does_not_run() {
     let err = cli::treewalk_program(&unit).expect_err("the run path still rejects the test item");
     assert!(err.contains("E-TEST-OUTSIDE-TESTS"), "{err}");
 }
+
+/// DEC-525 (scout row 5e) made a file load its whole package. `phg test` loads each discovered file,
+/// so two test files of ONE package each saw the other's `test` blocks too: every test ran twice and
+/// half the results were reported under the wrong file. Each file now runs only its own tests.
+#[test]
+fn each_file_of_a_package_runs_only_its_own_tests() {
+    let d = TempDir::new("pkg");
+    d.write(
+        "src/Acme/Core/a_test.phg",
+        "package Acme.Core;\nimport Core.Test;\ntest \"from a\" { Test.assertTrue(true); }\n",
+    );
+    d.write(
+        "src/Acme/Core/b_test.phg",
+        "package Acme.Core;\nimport Core.Test;\ntest \"from b\" { Test.assertTrue(true); }\n",
+    );
+    let (report, code) = cli::cmd_test(&[d.path().join("src").display().to_string()]);
+    assert_eq!(code, 0, "{report}");
+    assert!(
+        report.contains("2 passed, 0 failed"),
+        "each test runs once:\n{report}"
+    );
+    for line in report.lines().filter(|l| l.contains(" :: ")) {
+        let own = (line.contains("a_test.phg") && line.contains("from a"))
+            || (line.contains("b_test.phg") && line.contains("from b"));
+        assert!(own, "a test reported under another file: {line}\n{report}");
+    }
+}

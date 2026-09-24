@@ -115,12 +115,31 @@ fn run_file(file: &Path, out: &mut String, outcomes: &mut Vec<Outcome>) {
         return;
     }
 
+    // DEC-525: a file loads its whole package, so the unit also holds its package-mates' `test` blocks.
+    // Run only THIS file's — the loaded file owns span window `[0, len]` (`loader::SpanWindows`).
+    let own_len = match file.canonicalize().ok().and_then(|c| unit.sources.get(&c)) {
+        Some(text) => text.len(),
+        // A single-file unit carries no `sources`, and `diag_src` is then the whole file.
+        None if unit.sources.is_empty() => unit.diag_src.len(),
+        // Never silently run nothing: a merged unit that lacks this file's text is a loader bug.
+        None => {
+            out.push_str(&format!("{fname} :: <load> ... FAILED\n"));
+            outcomes.push(Outcome {
+                file: fname,
+                name: "<load>".into(),
+                error: Some("internal error: the loaded unit has no source for this file".into()),
+            });
+            return;
+        }
+    };
     let tests: Vec<(String, Vec<Stmt>, Span)> = unit
         .program
         .items
         .iter()
         .filter_map(|i| match i {
-            Item::Test { name, body, span } => Some((name.clone(), body.clone(), *span)),
+            Item::Test { name, body, span } if span.start <= own_len => {
+                Some((name.clone(), body.clone(), *span))
+            }
             _ => None,
         })
         .collect();
