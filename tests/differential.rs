@@ -6851,3 +6851,31 @@ function f(float x, int n) -> float {
         "identity_cast_operand",
     );
 }
+
+/// DEC-531 (scout row 5k): a reserved word names a MEMBER — a method, a field, a promoted parameter,
+/// the name after `.`/`?.`/`::`, a `with` field and a named argument — and all three legs agree. PHP 8
+/// accepts the same names (`C::match`, `->type`), so the transpiled members keep them.
+#[test]
+fn keyword_named_members_are_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+class Rule {
+    public int class = 7;
+    constructor(public string type, public mutable int match) {}
+    public static function match(int x): int { return x * 2; }
+    public function open(): string { return \"{this.type}:{this.match}\"; }
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    var r = new Rule(match: 3, type: \"lease\");
+    var s = r with { type = \"sale\" };
+    r.match = r.match + Rule.match(5);
+    Rule? n = r;
+    Output.printLine(r.open());
+    Output.printLine(s.open());
+    Output.printLine(\"{r.class} {n?.type ?? \"-\"}\");
+}",
+        "lease:13\nsale:3\n7 lease\n",
+        "keyword_named_members",
+    );
+}

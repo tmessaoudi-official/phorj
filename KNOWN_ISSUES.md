@@ -1,5 +1,27 @@
 # Known Issues & Limitations
 
+## LIFT-TERNARY-IN-CONCAT — a PHP ternary inside a `.` concatenation lifts to a draft that does not lex (found 2026-09-24 by scout row 5k)
+
+```php
+function f(bool $b): string { return "a:" . ($b ? "yes" : "no"); }
+```
+
+lifts to `return "a:{if (b) { "yes" } else { "no" }}";` — the `if` expression lands inside a string
+interpolation, whose `}` then closes the hole early: `lex error … unexpected '}' in string`. Three scout
+drafts hit it (`Car/VehicleFormatter`, `Core/Notify/NtfyChannel`, `Adapters/Http/RobotsResolver`). It predates
+DEC-531 (same result with no reserved word involved). Workaround: assign the ternary to a local first. Not yet
+ruled or queued.
+
+## RESERVED-WORD NAMES — what DEC-531 (scout row 5k) does NOT cover
+
+A reserved word is a member name only in member position. Still reserved, by design or not yet reached:
+top-level function/type names; locals and plain parameters in HAND-WRITTEN phorj (the lifter renames them to
+`<word>Value`); struct-pattern field names (`Rule { type }` — a shorthand would bind a reserved local); the
+method in a trait resolution clause (`use P.match`); named-tuple labels; enum variant names; and
+`constructor` as a member name. The lifter refuses (by name) a promoted reserved-word parameter READ inside
+its own constructor body, and a local whose `<word>Value` spelling is already taken. The LSP answers hover /
+go-to-definition on `.match` exactly as on any other member (members are not resolved in v1).
+
 ## FIXED — FAULT-DROPS-STDOUT — a program that faults loses everything it printed first (2026-09-24, DEC-530, scout row 5f0)
 
 ```phorj

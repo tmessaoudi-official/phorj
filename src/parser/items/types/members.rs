@@ -46,12 +46,12 @@ impl Parser {
                 })
             }
             TokenKind::Function => Ok(ClassMember::Method(
-                self.parse_function(modifiers, attrs, sp)?,
+                self.parse_function(modifiers, attrs, sp, true)?,
             )),
             _ => {
                 // field or property hook: [modifiers] Type name …
                 let ty = self.parse_type()?;
-                let name = self.expect_ident("a field name")?;
+                let name = self.expect_member_name("a field name")?;
                 // A `{` after the name opens a **property hook** body (M-mut.7b):
                 // `Type name { get => expr; set(Type v) { stmts } }`. Anything else is a field. A
                 // hook is virtual behavior, not storage, so it carries no modifiers (`mutable`/
@@ -206,7 +206,13 @@ impl Parser {
             let sp = self.peek_span();
             let modifiers = self.parse_modifiers();
             let ty = self.parse_type()?;
-            let name = self.expect_ident("a parameter name")?;
+            // DEC-531: a PROMOTED parameter is a field, so it may carry a reserved-word name; an
+            // unpromoted one is a local and may not.
+            let name = if modifiers.iter().any(Modifier::is_member_visibility) {
+                self.expect_member_name("a parameter name")?
+            } else {
+                self.expect_ident("a parameter name")?
+            };
             // Optional default value (DEC-236 ctor default params): `public string user = ""` —
             // the checker enforces literal-only + trailing-only, and fills call sites (M4 fill).
             let default = if self.eat(&TokenKind::Eq) {

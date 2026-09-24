@@ -10,9 +10,15 @@ impl Parser {
         modifiers: Vec<Modifier>,
         attrs: Vec<Attribute>,
         sp: Span,
+        member: bool,
     ) -> Result<FunctionDecl, Diagnostic> {
         self.expect(&TokenKind::Function, "'function'")?;
-        let name = self.expect_ident("a function name")?;
+        // DEC-531: a METHOD may be named with a reserved word; a top-level function may not.
+        let name = if member {
+            self.expect_member_name("a function name")?
+        } else {
+            self.expect_ident("a function name")?
+        };
         let (type_params, type_param_bounds) = self.parse_type_params()?;
         self.expect(&TokenKind::LParen, "'(' after function name")?;
         let params = self.parse_params()?;

@@ -35,11 +35,10 @@ pub fn offset_at(text: &str, line: u32, character: u32) -> Option<usize> {
 /// symbol — the diagnostics path already reports it).
 pub fn ident_at(text: &str, offset: usize) -> Option<String> {
     let tokens = lex(text).ok()?;
-    for t in &tokens {
-        if let TokenKind::Ident(name) = &t.kind {
-            if offset >= t.span.start && offset < t.span.start + t.span.len {
-                return Some(name.clone());
-            }
+    for (i, t) in tokens.iter().enumerate() {
+        if offset >= t.span.start && offset < t.span.start + t.span.len {
+            // DEC-531: a reserved word in member position is a name too (`r.match`).
+            return super::names::name_at(&tokens, i).map(str::to_string);
         }
     }
     None
@@ -68,9 +67,10 @@ pub fn token_span_at(text: &str, offset: usize) -> Option<Span> {
 /// `selectionRange`. `None` if not found (the caller falls back to the keyword span).
 pub fn name_token_span(text: &str, from: usize, name: &str) -> Option<Span> {
     let tokens = lex(text).ok()?;
-    tokens.into_iter().find_map(|t| match t.kind {
-        TokenKind::Ident(ref n) if n == name && t.span.start >= from => Some(t.span),
-        _ => None,
+    // DEC-531: a member may be NAMED with a reserved word (`function match`, `int type;`).
+    (0..tokens.len()).find_map(|i| {
+        let t = &tokens[i];
+        (t.span.start >= from && super::names::name_at(&tokens, i) == Some(name)).then_some(t.span)
     })
 }
 

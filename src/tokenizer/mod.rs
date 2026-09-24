@@ -14,6 +14,9 @@ pub struct Lexer<'a> {
 
 mod escapes;
 mod ident;
+mod keywords;
+use keywords::keyword;
+pub use keywords::{is_reserved_word, reserved_word, RESERVED_WORDS};
 mod scan;
 mod strings;
 
@@ -33,60 +36,6 @@ fn parse_decimal_literal(text: &str) -> Option<(i128, u8)> {
     let combined = format!("{int_part}{frac_part}");
     let unscaled: i128 = combined.parse().ok()?;
     Some((unscaled, scale))
-}
-
-fn keyword(s: &str) -> Option<TokenKind> {
-    use TokenKind::*;
-    Some(match s {
-        "function" => Function,
-        "class" => Class,
-        "enum" => Enum,
-        "constructor" => Constructor,
-        "trait" => Trait,
-        "const" => Const,
-        "open" => Open,
-        "abstract" => Abstract,
-        "sealed" => Sealed,
-        "public" => Public,
-        "private" => Private,
-        "protected" => Protected,
-        "internal" => Internal,
-        "return" => Return,
-        "if" => If,
-        "else" => Else,
-        "for" => For,
-        "while" => While,
-        "do" => Do,
-        "break" => Break,
-        "continue" => Continue,
-        "in" => In,
-        "match" => Match,
-        "import" => Import,
-        "package" => Package,
-        "this" => This,
-        "true" => True,
-        "false" => False,
-        "null" => Null,
-        "new" => New,
-        "instanceof" => Instanceof,
-        "interface" => Interface,
-        "implements" => Implements,
-        "extends" => Extends,
-        // `var` is a CONTEXTUAL keyword (like `foreach`/`as`/`when`): it stays an ordinary identifier
-        // in the token stream and is recognized as the inference-binding keyword only at a
-        // declaration/binding start by the parser (`Parser::at_var_decl`). This frees `var` to be a
-        // value / parameter / field name (it maps to a legal PHP `$var` / `->var`).
-        "mutable" => Mutable,
-        "static" => Static,
-        "with" => With,
-        "type" => TypeKw,
-        "throw" => Throw,
-        "try" => Try,
-        "catch" => Catch,
-        "finally" => Finally,
-        "throws" => Throws,
-        _ => return None,
-    })
 }
 
 /// A-62: strip incidental indentation from a text-block body (raw lines joined by `\n`, no trailing

@@ -39,7 +39,7 @@ impl Parser {
                 &TokenKind::Function,
                 "'function' for an interface method signature",
             )?;
-            let mname = self.expect_ident("a method name")?;
+            let mname = self.expect_member_name("a method name")?;
             self.expect(&TokenKind::LParen, "'(' after method name")?;
             let params = self.parse_params()?;
             self.expect(&TokenKind::RParen, "')' to close parameters")?;

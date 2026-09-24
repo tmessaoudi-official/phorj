@@ -1,0 +1,39 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+class Rule {
+    constructor(public mutable string type, public mutable int floor) {}
+    public static function match(int rent, int floor): bool {
+        return rent >= floor;
+    }
+    public open function open(int newValue): string {
+        mutable var verdict = "no";
+        if (Rule::match(newValue, this.floor)) {
+            verdict = "yes";
+        }
+        return "{this.type}:{verdict}";
+    }
+}
+
+function describe(string typeValue, int classValue): string {
+    mutable var newValue = "{typeValue}/{classValue}";
+    foreach ([1, 2] as matchValue) {
+        newValue = "{newValue}+{matchValue}";
+    }
+    return newValue;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var r = new Rule(type: "lease", floor: 800);
+    Output.print("{r.open(900)}");
+    Output.print("\n");
+    Output.print("{r.open(700)}");
+    Output.print("\n");
+    Output.print("{describe(classValue: 3, typeValue: \"T\")}");
+    Output.print("\n");
+}

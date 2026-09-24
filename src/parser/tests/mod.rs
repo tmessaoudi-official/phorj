@@ -2,6 +2,7 @@
 
 mod exprs;
 mod items;
+mod keyword_members;
 mod patterns;
 mod stmts;
 mod support;

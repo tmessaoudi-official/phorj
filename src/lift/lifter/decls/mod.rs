@@ -135,6 +135,9 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
 /// Lift a parsed PHP program; with `split`, lowered enum methods outside `package Main` go to
 /// companion files (DEC-526) — the directory lift's surface, since only it writes more than one file.
 pub fn lift_files(prog: &php::PhpProgram, split: bool) -> Result<LiftedFiles, String> {
+    // DEC-531: rename reserved-word locals and parameters first, so no stage below sees one.
+    let renamed = super::keyword_locals::rename(prog)?;
+    let prog = &renamed;
     // DEC-312: reset the per-lift native-module recorder (never leak across runs on this thread).
     let _ = super::drain_native_modules();
     super::reset_console();

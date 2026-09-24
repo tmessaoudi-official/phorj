@@ -315,6 +315,17 @@ Channel Task`; `Some`/`None`.
 **Keywords.** Lambda **`fn` → `function`** (the `fn` token retired; named functions already used
 `function`).
 
+**Reserved words as member names (DEC-531, 2026-09-24).** A reserved word (the 43 in
+`src/tokenizer/keywords.rs`) is a legal MEMBER name where nothing else can stand: right after
+`function` in a class, interface or `declare` body; as a field or property-hook name; as a PROMOTED
+constructor parameter (`constructor(public string type)`); after `.`, `?.`, `::` and `parent.`; as a
+`with { f = … }` field; and as a named argument (`new C(type: 1)`). PHP 8 allows the same, so
+`C.match(5)` transpiles to `C::match(5)`. Everywhere else a reserved word stays reserved: top-level
+function and type names, locals, plain parameters, pattern binders and struct-pattern field names.
+`constructor` itself stays reserved as a member name (`parent.constructor(…)` is the parent-constructor
+call). The lifter renames a PHP local or plain parameter named with a reserved word to `<word>Value`
+(`$type` → `typeValue`; `E-NAME-CASE` forbids `_`), and refuses by name when that is already taken.
+
 **Concurrency.** `recv` → `receive`. Kept `spawn send join Channel Task` — deliberately `Task` not
 `Thread` (cooperative green tasks, not OS threads) and `Channel` not `Observable` (CSP queue, not
 reactive streams).

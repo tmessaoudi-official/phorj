@@ -204,6 +204,20 @@ function ratio(int $a, int $b): float { return $a / $b; }
 function halvedTwice(int $n): float { $x = (float) $n; $x /= 2; return $x / -2; }
 echo ratio(7, 2), "|", ratio(-7, 2), "|", ratio(6, 3), "|", ratio(1, 4), "|", halvedTwice(10);"#,
         ),
+        // DEC-531 (row 5k): reserved-word MEMBERS keep their names (`match`, a promoted `type`, the
+        // named argument `type:` on `new`), reserved-word LOCALS become `<word>Value` — and the lifted
+        // program prints what the original PHP prints, on all three legs.
+        (
+            "keyword_names",
+            r#"<?php
+final class Rule {
+    public function __construct(public string $type) {}
+    public static function match(int $x): int { return $x * 2; }
+}
+function describe(string $type, int $class): string { $new = "$type/$class"; return $new; }
+$r = new Rule(type: "lease");
+echo $r->type, "|", Rule::match(4), "|", describe(class: 3, type: "T");"#,
+        ),
         (
             "if_elseif_else",
             r#"<?php

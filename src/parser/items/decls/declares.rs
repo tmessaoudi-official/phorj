@@ -99,7 +99,7 @@ impl Parser {
                 }
                 TokenKind::Function => {
                     self.advance();
-                    let mname = self.expect_ident("a method name")?;
+                    let mname = self.expect_member_name("a method name")?;
                     self.expect(&TokenKind::LParen, "'(' after method name")?;
                     let params = self.parse_params()?;
                     self.expect(&TokenKind::RParen, "')' to close parameters")?;

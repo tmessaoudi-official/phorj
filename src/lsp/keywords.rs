@@ -4,7 +4,7 @@
 //! step with the reserved table in `crate::tokenizer` — a keyword highlighted by the grammar but absent
 //! here is drift (Invariant 17).
 
-pub(super) const KEYWORDS: &[&str] = &[
+pub(crate) const KEYWORDS: &[&str] = &[
     "package",
     "import",
     "function",

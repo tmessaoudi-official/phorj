@@ -66,6 +66,7 @@ pub struct Parser {
 mod exprs;
 mod guards;
 mod items;
+mod member_names;
 mod patterns;
 mod stmts;
 mod tuple_labels;

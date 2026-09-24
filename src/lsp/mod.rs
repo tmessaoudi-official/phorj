@@ -22,7 +22,8 @@
 mod catalog;
 mod completion;
 mod hover_member;
-mod keywords;
+pub(crate) mod keywords;
+mod names;
 mod prelude_catalog;
 mod references;
 mod rpc;
@@ -35,6 +36,8 @@ mod tests;
 mod tests_deprecated;
 #[cfg(test)]
 mod tests_hover_tuples;
+#[cfg(test)]
+mod tests_keyword_members;
 #[cfg(test)]
 mod tests_signature;
 #[cfg(test)]

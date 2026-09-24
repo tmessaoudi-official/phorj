@@ -96,7 +96,9 @@ impl Parser {
                 }
                 return self.parse_type_alias(sp);
             }
-            TokenKind::Function => Item::Function(self.parse_function(Vec::new(), attrs, sp)?),
+            TokenKind::Function => {
+                Item::Function(self.parse_function(Vec::new(), attrs, sp, false)?)
+            }
             TokenKind::Enum => Item::Enum(self.parse_enum(sp)?),
             TokenKind::Class => Item::Class(self.parse_class(
                 sp,

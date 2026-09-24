@@ -7,6 +7,7 @@
     { "include": "#comments" },
     { "include": "#strings" },
     { "include": "#attributes" },
+    { "include": "#keyword-members" },
     { "include": "#declarations" },
     { "include": "#keywords" },
     { "include": "#constants" },
@@ -62,6 +63,16 @@
       "patterns": [
         { "name": "entity.name.tag.attribute.phorj", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" },
         { "include": "#strings" }
+      ]
+    },
+    "keyword-members": {
+      "comment": "DEC-531: a reserved word is a MEMBER name where nothing else can stand — after `.`/`?.`/`::`, after `function`, and in a field / promoted-parameter / `with`-field slot — so it is coloured as a name there, not as a keyword. Included BEFORE #declarations and #keywords so it wins at the same position. The word lists are RESERVED_WORDS (src/tokenizer/keywords.rs) minus `constructor`; the two declaration-slot rules also drop the words that legitimately precede `;`/`=`/`{` (`return`, `break`, `continue`, `this`, `true`, `false`, `null`, and `with` of `x with { … }`); tests/editor_grammar.rs pins both lists and the positions.",
+      "patterns": [
+        { "match": "(\\.|::)\\s*\\b(function|class|enum|trait|const|open|abstract|sealed|public|private|protected|internal|return|if|else|for|while|do|break|continue|in|match|import|package|this|true|false|null|new|instanceof|interface|implements|extends|mutable|static|with|type|throw|try|catch|finally|throws)\\b(?=\\s*\\()", "captures": { "2": { "name": "entity.name.function.phorj" } } },
+        { "match": "(\\.|::)\\s*\\b(function|class|enum|trait|const|open|abstract|sealed|public|private|protected|internal|return|if|else|for|while|do|break|continue|in|match|import|package|this|true|false|null|new|instanceof|interface|implements|extends|mutable|static|with|type|throw|try|catch|finally|throws)\\b", "captures": { "2": { "name": "variable.other.property.phorj" } } },
+        { "match": "\\b(function)\\s+(function|class|enum|trait|const|open|abstract|sealed|public|private|protected|internal|return|if|else|for|while|do|break|continue|in|match|import|package|this|true|false|null|new|instanceof|interface|implements|extends|mutable|static|with|type|throw|try|catch|finally|throws)\\b", "captures": { "1": { "name": "keyword.declaration.phorj" }, "2": { "name": "entity.name.function.phorj" } } },
+        { "match": "(?<=[A-Za-z0-9_>?\\]])\\s+(function|class|enum|trait|const|open|abstract|sealed|public|private|protected|internal|if|else|for|while|do|in|match|import|package|new|instanceof|interface|implements|extends|mutable|static|type|throw|try|catch|finally|throws)\\b(?=\\s*(;|,|\\)|\\{|=(?![=>])))", "captures": { "1": { "name": "variable.other.property.phorj" } } },
+        { "match": "(?<=[{,])\\s*(function|class|enum|trait|const|open|abstract|sealed|public|private|protected|internal|if|else|for|while|do|in|match|import|package|new|instanceof|interface|implements|extends|mutable|static|type|throw|try|catch|finally|throws)\\b(?=\\s*=(?![=>]))", "captures": { "1": { "name": "variable.other.property.phorj" } } }
       ]
     },
     "declarations": {

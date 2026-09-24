@@ -171,15 +171,9 @@ impl Parser {
                         crate::ast::MemberSep::Dot
                     };
                     self.advance();
-                    let name = match self.peek().clone() {
-                        TokenKind::Ident(n) => {
-                            self.advance();
-                            n
-                        }
-                        _ => {
-                            return Err(self.error("a field or method name after '.', '?.' or '::'"))
-                        }
-                    };
+                    // DEC-531: a reserved word after a separator is a member name, as in PHP.
+                    let name =
+                        self.expect_member_name("a field or method name after '.', '?.' or '::'")?;
                     // DI composition root, qualified turbofish surface `DependencyInjection.inject<T>()` (§7). Recognized
                     // only in this exact shape (`DependencyInjection` head, `.inject`, `<`); any other `.inject` stays an
                     // ordinary member access, and `DependencyInjection.inject()` (no turbofish) is converted by
@@ -251,7 +245,7 @@ impl Parser {
                     self.expect(&TokenKind::LBrace, "'{' after 'with'")?;
                     let mut fields = Vec::new();
                     while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
-                        let name = self.expect_ident("a field name in `with { … }`")?;
+                        let name = self.expect_member_name("a field name in `with { … }`")?;
                         self.expect(&TokenKind::Eq, "'=' after a `with` field name")?;
                         let value = self.parse_expr()?;
                         fields.push((name, value));
@@ -294,7 +288,7 @@ impl Parser {
             self.advance();
             "constructor".to_string()
         } else {
-            self.expect_ident("a method name after `parent.`")?
+            self.expect_member_name("a method name after `parent.`")?
         };
         self.expect(&TokenKind::LParen, "'(' to open the super-call arguments")?;
         let args = self.parse_arg_list()?;
@@ -319,11 +313,13 @@ impl Parser {
             // unambiguous at arg-start (`:` is not a binary operator there; map literals use `=>`, and
             // a ternary's `:` never follows the bare arg-head ident directly). The checker normalizes
             // named args into positional slots before any backend.
-            if matches!(self.peek(), TokenKind::Ident(_))
-                && matches!(self.peek2(), TokenKind::Colon)
-            {
+            // DEC-531: a reserved word followed by `:` is a named argument too — it names a promoted
+            // field (`new C(type: 1)`); no expression starts with a keyword immediately followed by `:`.
+            let named_head = matches!(self.peek(), TokenKind::Ident(_))
+                || crate::tokenizer::reserved_word(self.peek()).is_some();
+            if named_head && matches!(self.peek2(), TokenKind::Colon) {
                 let span = self.peek_span();
-                let name = self.expect_ident("a named-argument name")?;
+                let name = self.expect_member_name("a named-argument name")?;
                 self.expect(&TokenKind::Colon, "':' after the named-argument name")?;
                 let value = Box::new(self.parse_expr()?);
                 args.push(Expr::NamedArg { name, value, span });

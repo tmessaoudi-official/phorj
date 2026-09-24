@@ -34,6 +34,7 @@ mod division;
 mod enums;
 mod exceptions;
 mod exprs;
+mod keyword_locals;
 mod leaves;
 mod magic;
 mod mappings;

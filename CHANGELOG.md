@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — reserved words as member names; the lifter renames reserved-word locals (scout row 5k; DEC-531; 2026-09-24)
+
+- A reserved word may name a MEMBER where nothing else can stand: a method (`public static function
+  match(…)`), a field (`public int type = 0;`), a promoted constructor parameter (`constructor(public
+  string type)`), the name after `.`/`?.`/`::`/`parent.`, a `with { type = … }` field and a named
+  argument (`new Rule(type: "lease")`). PHP 8 accepts the same names, so the transpiled class keeps them.
+  Locals, plain parameters and top-level names stay reserved, and so does `constructor` as a member name.
+- `phg lift` keeps PHP's member names and renames a local or plain parameter named with a reserved word to
+  `<word>Value` (`$type` → `typeValue`, closures included; a named argument follows its parameter). It
+  refuses by name when `typeValue` is already taken, and when a promoted reserved-word parameter is read in
+  its own constructor body. Before, every such draft failed to parse.
+- LSP: document symbols select a reserved-word member's name, and completion after `.` offers it. The
+  TextMate grammar (VS Code and JetBrains) colours one in member position as a name, not a keyword.
+- Example pair: `examples/lift/keyword-names.{php,phg}`.
+
 ### Changed — `phg check <file>` loads the file's whole package (scout row 5e; DEC-525; 2026-09-24)
 
 - A file in a package folder under `src/` (`src/Acme/Core/Classification.phg` declaring `Acme.Core`) is now
