@@ -42,7 +42,9 @@
 > **DONE (2026-09-24): row 5e** (DEC-525) — `phg check <file>` (and the editor) loads the file's whole package
 > under `src/`. On scout it now reaches the real walls: a method named `match` (unparseable draft, NEW) and
 > `Scout.Core.Text` missing (Q-0908-1).
-> **THEN:** 5j, 5d; the `match` wall and Q-0908-1 both gate L3. Open probe before claiming 5f
+> **RULED (2026-09-24): DEC-531** — keyword-named PHP names: contextual MEMBER names (after `function` in a class,
+> field names, after `.`/`?.`), lifter-renamed locals/params (`type_`). Build queued as row 5k (L).
+> **THEN:** 5k, 5j, 5d; 5k and Q-0908-1 both gate L3. Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 
