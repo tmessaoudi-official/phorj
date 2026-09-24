@@ -50,7 +50,7 @@
 > Measured on scout: 73/151 unchanged, no refusal names `throw`; `Core/Text.php` now stops at PHP 8.3 typed class
 > constants (`private const array X = [...]`, unannotated) and `Job/JobStore.php` at `mixed` — L3 still blocked, on
 > Text.php's new wall. Found: KNOWN_ISSUES §PERF-COALESCE-OPTIONAL-JIT (`??` on an optional never JITs, ~40× LOSS).
-> **THEN:** rule Text.php's typed-`const array` wall (gates L3), then 5j, 5d. Found: KNOWN_ISSUES §LIFT-TERNARY-IN-CONCAT (3 scout drafts). Open probe before claiming 5f
+> **THEN:** row 5m — DEC-533 collection constants, RULED 2026-09-24 22:28 (Text.php's typed-`const array` wall; gates L3; Text.php:137 map union `+` is the wall after it, unruled), then 5j, 5d. Found: KNOWN_ISSUES §LIFT-TERNARY-IN-CONCAT (3 scout drafts). Open probe before claiming 5f
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

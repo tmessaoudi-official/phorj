@@ -121,6 +121,8 @@ where PHP makes `<=>` non-associative and refuses to parse it).
 Two earlier banked Invariant-15 questions: **Q-0908-1 `?? throw`** — RULED 2026-09-24 as DEC-532
 (throw-expression in four positions; 3 scout sites; BUILT as scout row 5l, `a423d612`); **Q-0908-2 spread `...`** — phorj has none at all, 2 scout
 sites, and literal-spread vs call-site-unpack may be ruled apart — still unruled, in the plan's *Needs input*.
+Text.php's next wall after DEC-532, PHP 8.3 typed `const array` constants (54 scout sites), is RULED 2026-09-24 as
+**DEC-533** (collection constants — explicit type, literal elements, PHP `const array`); build queued as scout row 5m.
 
 ## 0.07 THE 2026-09-02 RULINGS — mirror rows (DEC-457 … DEC-489)
 
