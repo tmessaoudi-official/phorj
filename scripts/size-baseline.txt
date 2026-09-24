@@ -45,7 +45,6 @@
 656	src/parser/tests/items.rs
 622	src/parser/tests/stmts.rs
 699	src/tokenizer/tests.rs
-686	src/transpile/classes_synth.rs
 757	src/transpile/expr.rs
 1374	src/transpile/runtime_php.rs
 596	src/types.rs
