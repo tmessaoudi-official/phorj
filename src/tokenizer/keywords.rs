@@ -135,6 +135,25 @@ mod tests {
     }
 
     #[test]
+    fn every_keyword_arm_is_listed() {
+        // The third direction: a word added to `keyword` alone — in neither list — would be
+        // silently un-nameable as a member. Read the arms from this file's own source.
+        let src = include_str!("keywords.rs");
+        let body = &src[src.find("pub(super) fn keyword").unwrap()..];
+        let body = &body[..body.find("_ => return None").unwrap()];
+        let mut arms: Vec<&str> = body
+            .split('"')
+            .collect::<Vec<_>>()
+            .chunks(2)
+            .filter_map(|c| c.get(1).copied())
+            .collect();
+        let mut listed = RESERVED_WORDS.to_vec();
+        arms.sort_unstable();
+        listed.sort_unstable();
+        assert_eq!(arms, listed);
+    }
+
+    #[test]
     fn every_reserved_word_the_editor_knows_is_listed() {
         // Drift guard: a word added to `keyword` (and, per Invariant 17, to the LSP keyword list)
         // but not to `RESERVED_WORDS` could never be a member name. Every LSP keyword that lexes

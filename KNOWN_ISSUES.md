@@ -20,7 +20,14 @@ top-level function/type names; locals and plain parameters in HAND-WRITTEN phorj
 method in a trait resolution clause (`use P.match`); named-tuple labels; enum variant names; and
 `constructor` as a member name. The lifter refuses (by name) a promoted reserved-word parameter READ inside
 its own constructor body, and a local whose `<word>Value` spelling is already taken. The LSP answers hover /
-go-to-definition on `.match` exactly as on any other member (members are not resolved in v1).
+go-to-definition on `.match` exactly as on any other member (members are not resolved in v1); signature help
+on the `::` form (`Rule::match(`) is absent — as it is for `Rule::score(`, because `signature::callee_before`
+does not walk `::` (pre-existing).
+
+The editor grammar is certified by `tests/editor_grammar.rs`, a small TextMate emulator over `fancy-regex` —
+NOT by an Oniguruma engine or a rendered editor capture. One known heuristic hole: the declaration-slot rule
+reads the raw character before a reserved word, so `do {` or `try {` colours as a property when the previous
+TEXT on the line ends in a letter or digit (e.g. after a trailing comment word). Cosmetic only.
 
 ## FIXED — FAULT-DROPS-STDOUT — a program that faults loses everything it printed first (2026-09-24, DEC-530, scout row 5f0)
 
