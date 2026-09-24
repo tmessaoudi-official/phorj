@@ -6980,3 +6980,79 @@ function main(): void {
         "throw_expr_rewrites",
     );
 }
+
+/// DEC-533 (scout row 5m): a collection constant reads, indexes and iterates identically on every
+/// leg; a duplicate key keeps its FIRST position and LAST value (PHP's rule, `build_map`); a map
+/// value is an arithmetic operand (Invariant 7); a negative literal is a constant.
+#[test]
+fn collection_constants_are_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+class Text {
+    private const Map<string, string> FOLD = [\"à\" => \"a\", \"é\" => \"e\"];
+    public const Map<int, int> TIER = [1 => 97, 2 => 90, 1 => 99];
+    public const Map<string, List<int>> BANDS = [\"A\" => [1, 2], \"B\" => [3]];
+    public const Map<string, string?> NAMES = [\"x\" => \"y\", \"z\" => null];
+    public const int NEG = -5;
+    public const float HALF = -0.5;
+    public const decimal FEE = -1.50d;
+    public static function fold(string c): string { return Text.FOLD[c]; }
+}
+enum Level: int { Low = -1, High = 1 }
+class Counter { static mutable int floor = -3; }
+function shifted(int by = -2): int { return by * 3; }
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine(Text.fold(\"é\"));
+    var next = Text.TIER[1] + 1;
+    Output.printLine(\"{next}\");
+    for (int k, int v in Text.TIER) { Output.printLine(\"{k}={v}\"); }
+    var bands = Text.BANDS;
+    var a = bands[\"A\"];
+    Output.printLine(\"{a[1]}\");
+    var z = Text.NAMES[\"z\"];
+    Output.printLine(z ?? \"none\");
+    int low = Level.from(-1).value;
+    Output.printLine(\"{Text.NEG * 2} {Text.HALF} {low} {Counter.floor} {shifted()} {Text.FEE}\");
+}",
+        "e\n100\n1=99\n2=90\n2\nnone\n-10 -0.5 -1 -3 -6 -1.50\n",
+        "collection_constants",
+    );
+}
+
+/// DEC-533: a constant is shared, never aliased — mutating a copy (in a loop, so the in-place
+/// append/assign fast paths see a warm slot) leaves the constant untouched on every leg, and a hot
+/// loop reading a map constant agrees whether or not the JIT takes it.
+#[test]
+fn a_collection_constant_survives_mutation_of_its_copies() {
+    agree_out_php(
+        "import Core.Output;
+class T {
+    public const List<string> WORDS = [\"a\", \"b\"];
+    public const Map<string, int> SCORE = [\"a\" => 1, \"b\" => 2];
+}
+function total(int n): int {
+    mutable int s = 0;
+    mutable int i = 0;
+    while (i < n) { s = s + T.SCORE[\"b\"] + i % 2; i = i + 1; }
+    return s;
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable int i = 0;
+    while (i < 3) {
+        mutable List<string> w = T.WORDS;
+        w[0] = \"z{i}\";
+        mutable Map<string, int> m = T.SCORE;
+        m[\"a\"] = m[\"a\"] + 10;
+        var mine = m[\"a\"];
+        var theirs = T.SCORE[\"a\"];
+        Output.printLine(w[0] + T.WORDS[0] + \" {mine} {theirs}\");
+        i = i + 1;
+    }
+    Output.printLine(\"{total(5000)}\");
+}",
+        "z0a 11 1\nz1a 11 1\nz2a 11 1\n12500\n",
+        "collection_const_copies",
+    );
+}

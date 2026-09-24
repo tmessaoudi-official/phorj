@@ -5,6 +5,7 @@ mod basics;
 mod calls;
 mod casing;
 mod casting;
+mod collection_consts;
 mod collections;
 mod concurrency;
 mod constants;

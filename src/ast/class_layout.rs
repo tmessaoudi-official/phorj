@@ -246,7 +246,7 @@ pub fn class_consts(
                 if modifiers.contains(&Modifier::Const) {
                     let v = init
                         .as_ref()
-                        .and_then(crate::value::const_literal)
+                        .and_then(crate::value::const_value)
                         .unwrap_or(crate::value::Value::Unit);
                     m.insert(name.clone(), (v, ty.clone()));
                 }

@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — collection constants (scout row 5m; DEC-533; 2026-09-24)
+
+- A class `const` may hold a List/Map literal built only from literal constants, nested to any depth,
+  under an explicit type (`const Map<string, List<int>> BANDS = ["A" => [1, 2]];`). The literal is
+  checked against the declared type as a typed local's is, so `Map<string, string?>` may hold `null`.
+  Folded once by `value::const_value` (Maps through the shared `build_map`: first position, last
+  value) and shared; mutating a copy never reaches the constant. Transpiles to PHP `const array`.
+- A negative number (`-5`, `-0.5`, `-1.5d`) is now a literal constant wherever one is required: a
+  class constant, a backed-enum value, a static default, a default parameter. The transpiler emits a
+  negated numeric literal as a bare negative literal instead of `__phorj_checked_neg(…)` /
+  `__phorj_dec_sub("0", …)`, which PHP rejects in a constant expression.
+- The lifter lifts PHP 8.3 `const array` constants keeping their names; the type comes from an `@var`
+  docblock (now read on constants) or is inferred from the literal — one type per level to any depth,
+  one scalar plus `null` as `T?`. A mixed, empty or constant-referencing literal is refused by naming
+  its shape, replacing a hint that promised a docblock would help. Constant references are Q-0924-1.
+- LSP: diagnostics and the outline cover it; examples `examples/guide/collection-constants.phg`,
+  `examples/lift/collection-constants.{php,phg}`; micro-bench `constmap` (verdict OWED — box loaded).
+
+### Changed — collection constants (DEC-533)
+
+- `phg explain E-CONST-NOT-LITERAL`, `E-DEFAULT-PARAM-EXPR` and `E-ENUM-VALUE-NOT-LITERAL` describe the
+  widened literal rules; `src/checker/collect/types_decls.rs`'s const arm moved to `consts.rs`.
+
 ### Added — throw-expressions (scout row 5l; DEC-532; 2026-09-24)
 
 - `throw e` is an EXPRESSION of type `never` in four positions: the right operand of `??`

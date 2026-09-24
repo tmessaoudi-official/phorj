@@ -1799,6 +1799,25 @@ PHP 8's native throw-expression, emitted parenthesized — `(throw $e)` — whic
 positions. The lifter maps PHP's throw-expression 1:1 in those positions and refuses it by name
 elsewhere. Rejected: throw-expression in ANY position (admits `f(throw e)`); a lifter-only lowering.
 
+**Collection constants (DEC-533, 2026-09-24; scout row 5m).** A class `const` holds a literal
+constant — `int`/`float`/`decimal`/`bool`/`string`/`bytes`/`null`, a negative number included
+(`const int FLOOR = -5;`) — or a List/Map literal built only from such constants, nested to any depth,
+under an explicit type: `const Map<string, List<int>> BANDS = ["A" => [44344, 66276]];`. Not a call, an
+interpolated string, an empty `[]` (`E-EMPTY-LITERAL`) or a reference to another constant (Q-0924-1,
+unruled). The literal is checked against the DECLARED type exactly as a typed local's initializer is,
+so `const Map<string, string?> M = ["a" => "x", "b" => null];` checks and a stray element is reported
+at the element. The value is folded once (`value::const_value`, which builds a Map through the shared
+`build_map`: a duplicate key keeps its first position and last value, PHP's rule) and shared; a copy is
+a value, so mutating it never reaches the constant. Transpiles to PHP's own `const array` (PHP 8.3
+typed constants; floor is 8.5). A negative number is a literal constant everywhere one is required —
+a backed-enum value (`Low = -1`), a static default, a default parameter — and transpiles to a bare
+negative literal, never a helper call, so it stays a PHP constant expression. The lifter lifts a PHP
+`const array` keeping its name, with the type from an `@var` docblock or inferred from the literal:
+one type per level to any depth, one scalar type plus `null` as `T?`; a mixed, empty or
+constant-referencing literal is refused by naming its shape. No Set literal exists (`Set.of` is a
+call), so List and Map are the kinds. Rejected: lowering to a `static` field (renames members,
+changes a public PHP API); keeping the refusal.
+
 ### The rejection catalogue (with reasons — the enduring negative space)
 
 **Dynamic-PHP footguns (defeat static checking — the exact surprise Phorj removes):**

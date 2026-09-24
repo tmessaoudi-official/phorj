@@ -50,6 +50,8 @@ mod lifter_tests_attrs;
 #[cfg(test)]
 mod lifter_tests_closures;
 #[cfg(test)]
+mod lifter_tests_const_arrays;
+#[cfg(test)]
 mod lifter_tests_division;
 #[cfg(test)]
 mod lifter_tests_echo_registry;

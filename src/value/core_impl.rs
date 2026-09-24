@@ -202,8 +202,8 @@ pub fn enum_from_miss(enum_name: &str, value: &Value) -> String {
 /// field storage once at program load (M-mut.7). Both backends call this (F3), so the interpreter's
 /// `statics` map and the VM's `static_inits` table hold identical values. Returns `None` for anything
 /// that is not a literal; the checker rejects a non-literal static initializer (`E-STATIC-INIT-CONST`),
-/// so a `None` is checker-unreachable at load. Scalars + `null` + `bytes` only this slice — richer
-/// constant expressions (arithmetic, collection literals) are deferred.
+/// so a `None` is checker-unreachable at load. Scalars (a negative number included) + `null` + `bytes`;
+/// a class `const` also takes collection literals, via [`const_value`] (DEC-533).
 pub fn const_literal(e: &crate::ast::Expr) -> Option<Value> {
     use crate::ast::{Expr, StrPart};
     match e {
@@ -224,6 +224,19 @@ pub fn const_literal(e: &crate::ast::Expr) -> Option<Value> {
             _ => None,
         },
         Expr::Bytes(b, _) => Some(Value::Bytes(Rc::new(b.clone()))),
+        // A negative number (DEC-533): `-` on a numeric literal is itself a literal — the parser
+        // leaves `-5` as `Unary(Neg, 5)`. Negated through the checked kernels, so `-i64::MIN`-style
+        // overflow is not a constant (the checker then reports it) rather than a wrapped value.
+        Expr::Unary {
+            op: crate::ast::UnaryOp::Neg,
+            expr,
+            ..
+        } => match const_literal(expr)? {
+            Value::Int(n) => super::int_neg(n).ok().map(Value::Int),
+            Value::Float(x) => Some(Value::Float(-x)),
+            Value::Decimal { unscaled, scale } => super::decimal_neg(unscaled, scale).ok(),
+            _ => None,
+        },
         _ => None,
     }
 }

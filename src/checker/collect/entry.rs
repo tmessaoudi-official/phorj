@@ -347,6 +347,12 @@ pub(in crate::checker) fn literal_ty(e: &crate::ast::Expr) -> Option<Ty> {
         Expr::Str(parts, _) if parts.iter().all(|p| matches!(p, StrPart::Literal(_))) => {
             Some(Ty::String)
         }
+        // A negative number (DEC-533) — `-5` parses as `Unary(Neg, 5)` and is a literal constant.
+        Expr::Unary {
+            op: crate::ast::UnaryOp::Neg,
+            expr,
+            ..
+        } => literal_ty(expr).filter(|t| matches!(t, Ty::Int | Ty::Float | Ty::Decimal)),
         _ => None,
     }
 }

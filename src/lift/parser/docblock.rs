@@ -125,7 +125,7 @@ impl PParser {
     }
 
     /// A member's docblock: `@param`/`@return` on a method (promoted constructor parameters
-    /// included), `@var` on a property.
+    /// included), `@var` on a property or a constant (DEC-533).
     pub(super) fn apply_doc_member(
         &mut self,
         doc: Option<&str>,
@@ -133,8 +133,7 @@ impl PParser {
     ) -> Result<(), String> {
         match m {
             PhpMember::Method(me) => self.apply_doc_signature(doc, &mut me.params, &mut me.ret),
-            PhpMember::Prop { ty, .. } => self.apply_doc_var(doc, ty),
-            _ => Ok(()),
+            PhpMember::Prop { ty, .. } | PhpMember::Const { ty, .. } => self.apply_doc_var(doc, ty),
         }
     }
 

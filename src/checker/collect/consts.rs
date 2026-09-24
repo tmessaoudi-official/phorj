@@ -4,7 +4,7 @@ use super::*;
 
 impl Checker {
     /// A `const` class constant: compile-time, immutable, class-level, accessed only `ClassName.NAME`.
-    /// It needs a literal-const initializer and must not be `mutable`. Disjoint from instance fields
+    /// It needs a constant initializer — a literal, or a List/Map literal of them (DEC-533) — and must not be `mutable`. Disjoint from instance fields
     /// and statics. The caller records the `ConstEntry`.
     pub(super) fn check_const_member(
         &mut self,
@@ -34,16 +34,21 @@ impl Checker {
             );
             return;
         };
-        if crate::value::const_literal(e).is_none() {
+        if crate::value::const_value(e).is_none() {
             self.err_coded(
                 Self::expr_span(e),
                 format!("`const {name}` initializer must be a literal constant"),
                 "E-CONST-NOT-LITERAL",
-                Some("use an int/float/bool/string/null literal".into()),
+                Some("use a literal (int, float, decimal, bool, string, bytes, null, a negative number) or a List/Map literal of them".into()),
             );
             return;
         }
-        let ity = self.check_expr(e);
+        // A collection literal is checked against the DECLARED type, exactly as a typed local's
+        // initializer is (`thread_literal_expected`): a `Map<string, string?>` literal may mix
+        // `string` and `null`, and a mismatched element is reported at the element.
+        let ity = self
+            .thread_literal_expected(e, fty)
+            .unwrap_or_else(|| self.check_expr(e));
         if !self.ty_assignable(&ity, fty) {
             self.err_coded(
                 Self::expr_span(e),

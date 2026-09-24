@@ -33,6 +33,8 @@ mod symbols;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_collection_consts;
+#[cfg(test)]
 mod tests_deprecated;
 #[cfg(test)]
 mod tests_hover_tuples;

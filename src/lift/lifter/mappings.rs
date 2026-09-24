@@ -233,6 +233,11 @@ pub(super) fn lit_type(e: &php::PhpExpr) -> Option<&'static str> {
         php::PhpExpr::Float(_) => Some("float"),
         php::PhpExpr::Str(_) => Some("string"),
         php::PhpExpr::Bool(_) => Some("bool"),
+        // A negative number is a literal (DEC-533): PHP parses `-5` as `Neg(5)`.
+        php::PhpExpr::Unary {
+            op: php::PhpUnOp::Neg,
+            expr,
+        } => lit_type(expr).filter(|t| matches!(*t, "int" | "float")),
         _ => None,
     }
 }

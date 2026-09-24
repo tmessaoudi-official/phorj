@@ -10,10 +10,12 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              A constant is fixed at declaration, so it must be assigned a value: `const int MAX = 100;`.\n"
         }
         "E-CONST-NOT-LITERAL" => {
-            "E-CONST-NOT-LITERAL — a `const` initializer is not a compile-time literal.\n\n\
-             A class constant must be a literal (int/float/bool/string/null) this slice — not a call,\n\
-             method, or another expression. For a computed class-level value, use a `static` field (or,\n\
-             once available, an expression field initializer).\n"
+            "E-CONST-NOT-LITERAL — a `const` initializer is not a compile-time constant.\n\n\
+             A class constant is a literal — int/float/decimal/bool/string/bytes/null, a negative number\n\
+             included — or a List/Map literal built only from such literals, to any depth, under an\n\
+             explicit type (DEC-533: `const Map<string, string> FOLD = [\"à\" => \"a\"];`). Not a call,\n\
+             an interpolated string, or a reference to another constant. For a computed class-level\n\
+             value, use a `static` field.\n"
         }
         "E-CONST-MUTABLE" => {
             "E-CONST-MUTABLE — a `const` was also declared `mutable`.\n\n\

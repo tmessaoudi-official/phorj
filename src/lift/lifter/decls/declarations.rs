@@ -147,13 +147,12 @@ impl Lifter {
                 name,
                 value,
             } => {
-                // A typed constant (PHP 8.3) carries its own type; an untyped one infers from the
-                // literal, as before.
+                // A typed constant (PHP 8.3) carries its own type — except `array`, which says nothing
+                // about its elements; that and an untyped constant infer from the literal (DEC-533).
                 let ty = match ty {
+                    Some(php::PhpType::Named(n)) if n == "array" => infer_const_type(name, value)?,
                     Some(t) => lift_type(t)?,
-                    None => named(lit_type(value).ok_or_else(|| {
-                        format!("lift: const `{name}` has a non-literal value (Tier-2)")
-                    })?),
+                    None => infer_const_type(name, value)?,
                 };
                 Ok(ClassMember::Field {
                     modifiers: vec![vis_modifier(*vis), Modifier::Const],

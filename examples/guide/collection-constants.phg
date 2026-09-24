@@ -1,0 +1,38 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Collection constants (DEC-533): a class `const` may hold a List or Map literal built only from
+// literal constants — nested to any depth, under an explicit type — evaluated once and shared. A copy
+// is a value: changing it never changes the constant. A negative number is a literal constant too.
+// Transpiles to PHP's own `const array`.
+class Accents {
+    private const Map<string, string> FOLD = ["à" => "a", "é" => "e", "ç" => "c"];
+    public const List<string> STOP_WORDS = ["le", "la", "les"];
+    public const Map<string, List<int>> BANDS = ["A" => [44344, 66276], "B1" => [36144, 48268]];
+    public const Map<string, string?> ALIASES = ["inli" => "in'li", "unknown" => null];
+    public const int OFFSET = -5;
+    public static function fold(string c): string {
+        return Accents.FOLD[c];
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine(Accents.fold("é") + Accents.fold("ç"));
+    for (string w in Accents.STOP_WORDS) {
+        Output.printLine("stop: {w}");
+    }
+    var a = Accents.BANDS["A"];
+    var ceiling = a[1] + Accents.OFFSET;
+    Output.printLine("ceiling {ceiling}");
+    var alias = Accents.ALIASES["unknown"];
+    Output.printLine(alias ?? "no alias");
+    // A copy is a value: mutating it leaves the constant alone.
+    mutable List<string> mine = Accents.STOP_WORDS;
+    mine[0] = "du";
+    var first = Accents.STOP_WORDS[0];
+    Output.printLine("{mine[0]} / {first}");
+}

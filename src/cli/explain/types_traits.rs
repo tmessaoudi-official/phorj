@@ -149,12 +149,12 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
         }
         "E-DEFAULT-PARAM-EXPR" => {
             "E-DEFAULT-PARAM-EXPR — a default value is not a literal constant.\n\n\
-             A default parameter value must be a literal — a number, string, bool, bytes, `null` — or\n\
-             a ZERO-payload enum variant construction (`new Mode.Fast()`, DEC-258): both are\n\
-             compile-time-known. Arbitrary or side-effecting expressions (a function call, a field\n\
-             read, a payload-carrying variant) are not allowed: the default is inlined at each call\n\
-             site, so a constant keeps it predictable and byte-identical across the backends. Use a\n\
-             literal/variant, or compute the value inside the body.\n"
+             A default parameter value must be a literal — a number (a negative one too), string,\n\
+             bool, bytes, `null` — or a ZERO-payload enum variant construction (`new Mode.Fast()`,\n\
+             DEC-258): both are compile-time-known. Arbitrary or side-effecting expressions (a\n\
+             function call, a field read, a payload-carrying variant) are not allowed: the default is\n\
+             inlined at each call site, so a constant keeps it predictable and byte-identical across\n\
+             the backends. Use a literal/variant, or compute the value inside the body.\n"
         }
         "E-DEFAULT-PARAM-TYPE" => {
             "E-DEFAULT-PARAM-TYPE — a default value's type does not match the parameter.\n\n\

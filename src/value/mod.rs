@@ -15,17 +15,15 @@ use std::rc::Rc;
 
 mod arith;
 mod collections;
+mod const_fold;
 mod core_impl;
 mod db;
 mod decimal;
 pub mod faults;
 mod types;
-pub use self::arith::*;
-pub use self::collections::*;
-pub use self::core_impl::*;
-pub use self::db::*;
-pub use self::decimal::*;
-pub use self::types::*;
+pub use self::{
+    arith::*, collections::*, const_fold::*, core_impl::*, db::*, decimal::*, types::*,
+};
 
 #[cfg(test)]
 mod tests {

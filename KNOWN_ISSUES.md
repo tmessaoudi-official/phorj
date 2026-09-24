@@ -1,5 +1,45 @@
 # Known Issues & Limitations
 
+## PERF-COLLECTION-CONST-JIT — a function that reads a List/Map constant stays off the JIT (found 2026-09-24 by scout row 5m)
+
+A collection constant compiles to `Op::Const` holding a `Value::Map`/`Value::List`, which the unboxed
+JIT has no form for, so the whole function declines and runs on the VM:
+
+```
+phg: jit declined `total` — Unsupported("unboxed Const Some(Map([(Str("a"), Int(1)), (Str("b"), Int(2))]))")
+```
+
+[Verified 2026-09-24 with `PHORJ_JIT_EXPLAIN=1`; the VM, `--no-jit` and `--tree-walker` all print the
+same result.] Correct, not fast: the scout shape (`self::FOLD[$c]` per character) is exactly a hot loop
+over a map constant. `bench/micro/constmap.{phg,php}` measures it; its verdict is OWED (DEC-365) — the
+box sat at load 17–22 when it landed. Same class as §PERF-COALESCE-OPTIONAL-JIT (a non-scalar
+`Op::Const`); a fix would teach the JIT to keep a constant collection as an opaque boxed operand.
+
+## LSP-CLASS-QUALIFIED-MEMBERS — hover, go-to-definition and completion on `Class.member` answer nothing (found 2026-09-24 by scout row 5m)
+
+For EVERY member kind — a scalar `const`, a collection constant, a static method — the LSP answers
+`null` for hover and go-to-definition on `K.MAX` / `K.twice(1)`, and an empty list for completion
+after `K.` [Verified 2026-09-24 with probe tests against `Server::handle`; `definition_of` resolves only
+top-level items and locals, and member completion resolves an instance receiver's type, not a class
+name]. Pre-existing — not introduced by DEC-533 — and it is an Invariant-17 gap, so the fix is the
+developer's call to schedule. What does work: diagnostics, and the outline lists every member.
+
+## LIFT-UNICODE-ESCAPE — a PHP `"\u{…}"` escape lifts as literal text, changing the string (found 2026-09-24 by scout row 5m)
+
+In a DOUBLE-quoted PHP string, `\u{2019}` is one character (`’`). The lifter copies it as the eight
+characters `\u{2019}`, escaped so phorj keeps them literal:
+
+```
+PHP   : function q(): string { return "a\u{2019}b"; }   →  a’b
+lifted: return "a\\u\{2019\}b";                          →  a\u{2019}b
+```
+
+[Verified 2026-09-24: `phg lift` on that file, then `phg run` vs `php`, compared with `od -c`.] A
+SILENT meaning change — the draft checks and runs, and prints something else. Pre-existing (string
+literals are not touched by DEC-533); found because scout's `Core/Text.php` `APOSTROPHES` constant is
+four such escapes, so its lifted apostrophe folding would never match a real `’`. Other double-quoted
+escapes (`\x`, octal, `\$`) are unaudited on the same path.
+
 ## LIFT-TERNARY-IN-CONCAT — a PHP ternary inside a `.` concatenation lifts to a draft that does not lex (found 2026-09-24 by scout row 5k)
 
 ```php

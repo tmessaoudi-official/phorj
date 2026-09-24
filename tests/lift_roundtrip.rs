@@ -227,6 +227,24 @@ echo setting("dark"), "|", setting(null), "|", half(10), "|", half(7), "|", week
         // DEC-531 (row 5k): reserved-word MEMBERS keep their names (`match`, a promoted `type`, the
         // named argument `type:` on `new`), reserved-word LOCALS become `<word>Value` — and the lifted
         // program prints what the original PHP prints, on all three legs.
+        // DEC-533 (row 5m): PHP 8.3 `const array` constants lift to phorj collection constants that
+        // keep their names — a string map read through `strtr`-style lookups, nested bands, a
+        // `string|null` map, a negative scalar — and print what the original PHP prints.
+        (
+            "collection_constants",
+            r#"<?php
+final class Text {
+    private const array FOLD = ['à' => 'a', 'é' => 'e'];
+    public const array BANDS = ['A' => [10, 20], 'B' => [30]];
+    private const array NAMES = ['inli' => 'inli', 'x' => null];
+    private const int FLOOR = -5;
+    public static function fold(string $c): string { return self::FOLD[$c]; }
+    public static function band(string $k, int $i): int { return self::BANDS[$k][$i]; }
+    public static function name(string $k): string { return self::NAMES[$k] ?? 'none'; }
+    public static function floor(): int { return self::FLOOR * 2; }
+}
+echo Text::fold('é'), "|", Text::band('A', 1), "|", Text::name('x'), "|", Text::name('inli'), "|", Text::floor();"#,
+        ),
         (
             "keyword_names",
             r#"<?php

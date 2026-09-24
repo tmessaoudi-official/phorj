@@ -29,6 +29,7 @@ const SP: Span = Span {
 /// and prints (L3). Any stage's error propagates as a `lift …` / `printer: …` string.
 mod array_fns;
 mod attrs;
+mod const_infer;
 mod decls;
 mod division;
 mod enums;
@@ -43,6 +44,7 @@ mod matches;
 mod shapes;
 mod throw_expr;
 use attrs::AttrCtx;
+use const_infer::infer_const_type;
 pub use decls::*;
 use division::float_division;
 pub(super) use enums::{enum_names_of, set_project_enum_names, EnumSymbols};

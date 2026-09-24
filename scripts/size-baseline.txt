@@ -49,7 +49,7 @@
 1374	src/transpile/runtime_php.rs
 596	src/types.rs
 526	src/value/decimal.rs
-668	src/value/mod.rs
+666	src/value/mod.rs
 1053	src/vm/exec.rs
 624	src/vm/mod.rs
 576	src/vm/tests.rs

@@ -270,6 +270,26 @@ impl Transpiler {
     ///   reproduces the Rust kernel including `-0.00d` staying `0.00` rather than becoming `-0.00`.
     ///   [Verified against the tree-walker oracle: `-2.345|0.00|1.5|2.345`.]
     fn neg_via_helper(&mut self, operand: &Expr, inner: &str) -> Option<String> {
+        // A negated numeric LITERAL folds to a bare negative literal (DEC-533): it cannot overflow
+        // (the largest int literal is `i64::MAX`; `decimal_neg` is the same checked kernel both Rust
+        // legs fold with), and a helper call is not a PHP constant expression — `const int N = -5`,
+        // a static default and a backed-enum value all need the bare form.
+        match operand {
+            Expr::Int(n, _) => return Some(format!("-{n}")),
+            Expr::Decimal {
+                unscaled, scale, ..
+            } => {
+                if let Ok(crate::value::Value::Decimal { unscaled, scale }) =
+                    crate::value::decimal_neg(*unscaled, *scale)
+                {
+                    return Some(format!(
+                        "\"{}\"",
+                        crate::value::fmt_decimal(unscaled, scale)
+                    ));
+                }
+            }
+            _ => {}
+        }
         let bs = if self.namespaced { "\\" } else { "" };
         match self.expr_kind(operand) {
             OpKind::Int => {

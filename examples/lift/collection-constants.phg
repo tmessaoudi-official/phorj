@@ -1,0 +1,39 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+class Text {
+    private const Map<string, string> FOLD = ["à" => "a", "é" => "e"];
+    public const Map<string, List<int>> BANDS = ["A" => [10, 20], "B" => [30]];
+    private const Map<string, string?> NAMES = ["inli" => "inli", "x" => null];
+    private const int FLOOR = -5;
+    public static function fold(string c): string {
+        return Text::FOLD[c];
+    }
+    public static function band(string k, int i): int {
+        return Text::BANDS[k][i];
+    }
+    public static function name(string k): string {
+        return Text::NAMES[k] ?? "none";
+    }
+    public static function floor(): int {
+        return Text::FLOOR * 2;
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.print("{Text::fold(\"é\")}");
+    Output.print("|");
+    Output.print("{Text::band(\"A\", 1)}");
+    Output.print("|");
+    Output.print("{Text::name(\"x\")}");
+    Output.print("|");
+    Output.print("{Text::name(\"inli\")}");
+    Output.print("|");
+    Output.print("{Text::floor()}");
+    Output.print("\n");
+}

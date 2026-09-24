@@ -141,8 +141,9 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
         }
         "E-ENUM-VALUE-NOT-LITERAL" => {
             "E-ENUM-VALUE-NOT-LITERAL — a backed-enum value is not a literal constant (DEC-302).\n\n\
-             A variant's backing value must be a plain `int`/`string` literal (no interpolation, no\n\
-             expression) — it is baked in at compile time. Use a literal, e.g. `High = 9`.\n"
+             A variant's backing value must be a plain `int`/`string` literal (a negative number is\n\
+             one; no interpolation, no expression) — it is baked in at compile time. Use a literal,\n\
+             e.g. `High = 9`.\n"
         }
         "E-ENUM-VALUE-TYPE" => {
             "E-ENUM-VALUE-TYPE — a backed-enum value's type does not match the backing type (DEC-302).\n\n\

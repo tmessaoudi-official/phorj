@@ -1,0 +1,33 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: reading a collection constant in a hot loop (DEC-533) — the scout shape (`self::FOLD[$c]`
+// per character). The JIT declines a function holding a Map/List `Op::Const` (KNOWN_ISSUES
+// §PERF-COLLECTION-CONST-JIT), so this measures the VM path.
+class Fold {
+    public const Map<int, int> TABLE = [0 => 3, 1 => 5, 2 => 7, 3 => 11];
+}
+
+function bench(int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        acc = acc + Fold.TABLE[i % 4];
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("constmap\t{d + guard}\t{acc}");
+}
