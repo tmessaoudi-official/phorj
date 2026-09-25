@@ -160,6 +160,8 @@ pub fn lift_files(prog: &php::PhpProgram, split: bool) -> Result<LiftedFiles, St
     // single-file lift knows only this file's enums; `lift_directory` has already seeded every enum
     // in the tree, so the union is what a cross-file `Tenure::PLAI` needs.
     super::enums::begin_file(super::enums::enum_names_of(prog));
+    // DEC-534: this file's Map-typed class constants, for PHP `+` as a map union.
+    super::map_consts::begin_file(prog);
     // DEC-509: free functions lowered from enum methods, and the names already taken by them. The
     // name set spans the whole PHP file even when the functions are split across companions: the
     // companions share ONE package, where two functions of one name still collide.

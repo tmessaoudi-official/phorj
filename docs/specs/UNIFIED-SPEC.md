@@ -1818,6 +1818,14 @@ constant-referencing literal is refused by naming its shape. No Set literal exis
 call), so List and Map are the kinds. Rejected: lowering to a `static` field (renames members,
 changes a public PHP API); keeping the refusal.
 
+**Map union (DEC-534, 2026-09-25; scout row 5q).** `Map.union(a, b): Map<K, V>` is PHP's array `+`:
+`a`'s entries in their order, then the entries of `b` whose key `a` lacks — on a shared key the LEFT
+value wins. It is the mirror of `Map.merge(a, b)`, where the right value wins. PHP leg: `($a + $b)`
+(Invariant-14 ladder case 1); int keys are kept on every leg. `+` stays arithmetic-only — map union is
+a named function, not an operator overload. The lifter rewrites PHP `$a + $b` to `Map.union` only where
+it knows both operands are maps (a keyed array literal, or a class constant of the same file whose type
+lifts to a `Map`); a PHP `array` parameter or property may be a list, so it stays `+`.
+
 ### The rejection catalogue (with reasons — the enduring negative space)
 
 **Dynamic-PHP footguns (defeat static checking — the exact surprise Phorj removes):**

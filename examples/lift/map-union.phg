@@ -1,0 +1,26 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.Map;
+
+class Accents {
+    private const Map<string, string> LOWER = ["à" => "a", "é" => "e"];
+    private const Map<string, string> UPPER = ["À" => "A", "é" => "E"];
+    public static function show(): string {
+        mutable var out = "";
+        foreach (Map.union(Accents::LOWER, Accents::UPPER) as k => v) {
+            // lift: key/value types inferred — spell them out for an explicit header
+            out = out + "{k}->{v} ";
+        }
+        return out;
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.print("{Accents::show()}");
+    Output.print("\n");
+}

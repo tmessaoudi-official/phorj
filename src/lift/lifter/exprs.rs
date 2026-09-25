@@ -139,6 +139,16 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             left,
             right,
         } => float_division(left, lift_expr(left)?, right, lift_expr(right)?),
+        // DEC-534 (row 5q): PHP array union is `Map.union` — but only where both operands are KNOWN
+        // maps (`map_consts`); an int `+`, or one whose operands the lifter cannot type, stays `+`.
+        php::PhpExpr::Binary {
+            op: php::PhpBinOp::Add,
+            left,
+            right,
+        } if super::map_consts::is_known_map(left) && super::map_consts::is_known_map(right) => {
+            let (l, r) = (lift_expr(left)?, lift_expr(right)?);
+            super::map_consts::map_union(l, r)
+        }
         php::PhpExpr::Binary { op, left, right } => {
             let phorj_op = lift_binop(*op)?;
             // DEC-512, third clause. PHP orders arrays; Phorj orders TUPLES and refuses `List<T>`

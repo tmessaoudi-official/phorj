@@ -191,6 +191,24 @@ fn member_context_lists_module_natives_on_incomplete_buffer() {
     assert!(!got.is_empty());
 }
 
+/// DEC-534 (row 5q): `Map.union` reaches the editor from the native registry with no LSP edit — and
+/// beside `merge`, its mirror, so the two stay discoverable together.
+#[test]
+fn map_member_completion_lists_union_beside_merge() {
+    let src = "package Main;\nimport Core.Map;\nfunction main(): void {\n  Map.\n}\n";
+    let offset = src.find("Map.").unwrap() + "Map.".len();
+    let got = labels(&complete(
+        src,
+        offset,
+        None,
+        None,
+        &std::collections::HashMap::new(),
+    ));
+    for want in ["union", "merge"] {
+        assert!(got.iter().any(|l| l == want), "want {want} in {got:?}");
+    }
+}
+
 /// Invariant 17's 100% rule, as a ratchet: a prelude STATIC must surface in completion the moment it
 /// exists, with no LSP-side edit. `FileSystem.tryWithLock` (DEC-348) is the live case — both lock
 /// entry points must appear, so a future prelude addition that the LSP silently fails to enumerate

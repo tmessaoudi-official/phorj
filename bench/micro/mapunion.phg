@@ -1,0 +1,39 @@
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Map;
+import Core.Runtime;
+import Core.Runtime.Entry;
+
+// Microbench: `Map.union` (DEC-534, PHP's array `+`; the LEFT operand wins on a shared key). One operand
+// is constant, the second rotates through three precomputed maps (`others[i % 3]`) so php cannot hoist
+// the union. The checksum folds the union's CARDINALITY plus `u["a"]` — the left value `1` under a
+// union, `10` under a merge on every third pass — so a right-biased regression changes the output.
+function bench(int iters): int {
+    Map<string, int> a = ["a" => 1, "b" => 2, "c" => 3];
+    List<Map<string, int>> others = [
+        ["b" => 20, "d" => 4],
+        ["c" => 30, "e" => 5, "f" => 6],
+        ["a" => 10, "g" => 7]
+    ];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Map<string, int> u = Map.union(a, others[i % 3]);
+        acc = acc + Map.size(u) + u["a"];
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int iters = 1000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("mapunion\t{d + guard}\t{acc}");
+}

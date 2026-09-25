@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Map.union`, PHP's array `+` (scout row 5q; DEC-534; 2026-09-25)
+
+`examples/guide/map-union.phg`, `examples/lift/map-union.{php,phg}`, `bench/micro/mapunion.{phg,php}`.
+
+- **`Map.union(a, b)`** — `a`'s entries in order, then `b`'s entries whose key `a` lacks; on a shared key
+  the LEFT value wins. The mirror of `Map.merge` (right wins). PHP leg `($a + $b)` (ladder case 1); int
+  keys kept on every leg. The kernel scans keys linearly, like `build_map` and `merge`. `+` stays
+  arithmetic-only.
+- **Lift:** PHP `$a + $b` lifts to `Map.union(a, b)` only where both operands are KNOWN maps — a keyed
+  array literal, or a class constant of the same file whose type lifts to a `Map` (`self::`/`static::`
+  resolved). A PHP `array` parameter or property may be a list and stays `+` (the ruled narrowing), a
+  positional union (`[1, 2] + [3]`, by index) stays `+`, and so does a constant of another file. The
+  lifted call uses the ruling's module form `Map.union(l, r)`, not the DEC-326 receiver form.
+- The constant-typing rule is now one function (`const_type`) shared by the declaration and the new
+  map-constant registry, so the two cannot disagree.
+- LSP: completion on `Map.` lists `union` beside `merge` straight from the native registry (pinned).
+- Tests: `map_union_is_left_biased_on_every_leg` (int keys, nesting, the receiver form beside
+  `Set.union`), 5 lifter tests, the `map_union_of_constants` round-trip; red first; four sabotages.
+
 ### Fixed — `Map.merge` keeps int keys when transpiled (scout row 5p; 2026-09-25)
 
 - **`Map.merge` transpiles to `array_replace`, not `array_merge`.** `array_merge` RENUMBERS int keys, so an

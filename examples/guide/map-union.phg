@@ -1,0 +1,33 @@
+package Main;
+
+import Core.Map;
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Map union (DEC-534): `Map.union(a, b)` keeps every entry of `a` in order, then adds the entries of
+// `b` whose key `a` lacks — on a shared key the LEFT value wins. It is PHP's array `+`, and it
+// transpiles to exactly that. Its mirror is `Map.merge(a, b)`, where the RIGHT value wins.
+class Accents {
+    private const Map<string, string> LOWER = ["à" => "a", "é" => "e"];
+    private const Map<string, string> UPPER = ["À" => "A", "é" => "E"];
+    public static function all(): Map<string, string> {
+        return Map.union(Accents.LOWER, Accents.UPPER);
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    for (string k, string v in Accents.all()) {
+        Output.printLine("{k} -> {v}");
+    }
+    Map<int, string> defaults = [1 => "one", 2 => "two"];
+    Map<int, string> given = [2 => "TWO", 3 => "three"];
+    var left = Map.union(given, defaults);
+    var right = Map.merge(given, defaults);
+    var l2 = left[2];
+    var r2 = right[2];
+    Output.printLine(
+        "union keeps {l2}, merge takes {r2}, sizes {Map.size(left)} {Map.size(right)}"
+    );
+}

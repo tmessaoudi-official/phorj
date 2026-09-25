@@ -28,6 +28,7 @@ pub(super) fn extend_module_natives(registry: &mut Vec<NativeFn>) {
     registry.extend(super::html::html_natives());
     registry.extend(super::list_registry::list_natives());
     registry.extend(super::map::map_natives());
+    registry.extend(super::map_union::map_union_natives());
     registry.extend(super::set::set_natives());
     registry.extend(super::convert::convert_natives());
     #[cfg(feature = "decimal")]

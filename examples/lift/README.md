@@ -523,6 +523,15 @@ be acceptable is failing it *silently*, or worse, passing it with the wrong answ
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.
 
+## Map union — `map-union.php` / `map-union.phg` (scout row 5q, DEC-534, 2026-09-25)
+
+PHP spells array union and addition with one operator. The lifter has no types, so it rewrites `$a + $b`
+to `Map.union(a, b)` only where it KNOWS both operands are maps: a keyed array literal, or a class
+constant of the same file whose type lifts to a `Map` — `self::LOWER + self::UPPER` here. On the shared
+key `é` the LEFT value wins, as PHP `+` does. A PHP `array` parameter or property may be a list, so
+`$a + $b` on parameters stays `+` and `phg check` names it; a positional union (`[1, 2] + [3]`, by
+index) has no phorj form and stays `+` too. Byte-identical on all three legs and against the PHP.
+
 ## String escapes — `escapes.php` / `escapes.phg` (scout row 5n, 2026-09-25)
 
 PHP decodes escapes by quote style, and the lift now decodes them exactly as PHP does, so the draft

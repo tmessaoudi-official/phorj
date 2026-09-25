@@ -67,6 +67,8 @@ mod lifter_tests_keyword_names;
 #[cfg(test)]
 mod lifter_tests_list;
 #[cfg(test)]
+mod lifter_tests_map_union;
+#[cfg(test)]
 mod lifter_tests_ns;
 #[cfg(test)]
 mod lifter_tests_ordering;

@@ -37,6 +37,7 @@ mod list;
 mod list_registry;
 pub(crate) mod log;
 mod map;
+mod map_union;
 mod math;
 mod option;
 mod process;

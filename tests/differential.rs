@@ -7082,3 +7082,33 @@ function main(): void {
         "map_merge_int_keys",
     );
 }
+
+/// DEC-534 (scout row 5q): `Map.union(a, b)` is PHP's `$a + $b` — `a`'s entries in order, then `b`'s
+/// NEW keys; a shared key keeps the LEFT value (the mirror of `Map.merge`). Int keys are kept, as
+/// PHP `+` keeps them; nesting and the receiver form (`s.union(…)`, beside `Set.union`) agree too.
+#[test]
+fn map_union_is_left_biased_on_every_leg() {
+    agree_out_php(
+        "import Core.Map;
+import Core.Output;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Map<int, string> a = [5 => \"a\", 9 => \"x\"];
+    Map<int, string> b = [7 => \"b\", 9 => \"y\"];
+    for (int k, string v in Map.union(a, b)) {
+        Output.printLine(\"{k}={v}\");
+    }
+    Map<string, int> s = [\"p\" => 1];
+    var t = Map.union(Map.union(s, [\"q\" => 2, \"p\" => 9]), [\"r\" => 3]);
+    for (string k, int v in t) {
+        Output.printLine(\"{k}={v}\");
+    }
+    var u = s.union([\"z\" => 0, \"p\" => 7]);
+    var p = u[\"p\"];
+    Output.printLine(\"{Map.size(u)} {p}\");
+}
+",
+        "5=a\n9=x\n7=b\np=1\nq=2\nr=3\n2 1\n",
+        "map_union",
+    );
+}

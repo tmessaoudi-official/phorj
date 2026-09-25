@@ -170,6 +170,22 @@ fn lift_roundtrip_preserves_behavior() {
         // divergence names its escape. The hard bytes (NUL, ESC, VT, FF, a three-escape UTF-8 sequence)
         // also cross the transpile-back leg, which nothing had run before. `\{` keeps its backslash in
         // PHP and `$x` still interpolates after it — PHP has no escaped hole.
+        // DEC-534 (row 5q): a union of two Map-typed class constants — scout Text.php's shape — lifts to
+        // `Map.union`, and the LEFT value wins on the shared key `é` on every leg, as PHP `+` does.
+        (
+            "map_union_of_constants",
+            r#"<?php
+final class Fold {
+    private const array LOWER = ['à' => 'a', 'é' => 'e'];
+    private const array UPPER = ['À' => 'A', 'é' => 'X'];
+    public static function show(): string {
+        $out = "";
+        foreach (self::LOWER + self::UPPER as $k => $v) { $out .= $k . "=" . $v . ";"; }
+        return $out;
+    }
+}
+echo Fold::show();"#,
+        ),
         (
             "string_escapes",
             r#"<?php

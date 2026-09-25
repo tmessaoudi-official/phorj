@@ -6,6 +6,21 @@
 
 use super::*;
 
+/// The phorj type a PHP class constant lifts to: its declared PHP 8.3 type, except `array`, which says
+/// nothing about its elements, so it — like an untyped constant — is inferred from the literal. ONE
+/// rule for the declaration and for the DEC-534 map-constant registry, so the two cannot disagree.
+pub(super) fn const_type(
+    name: &str,
+    ty: &Option<php::PhpType>,
+    value: &php::PhpExpr,
+) -> Result<Type, String> {
+    match ty {
+        Some(php::PhpType::Named(n)) if n == "array" => infer_const_type(name, value),
+        Some(t) => lift_type(t),
+        None => infer_const_type(name, value),
+    }
+}
+
 /// The phorj type of `value`, the initializer of the PHP constant `name`.
 pub(super) fn infer_const_type(name: &str, value: &php::PhpExpr) -> Result<Type, String> {
     match infer(value, 0) {
