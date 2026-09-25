@@ -40,7 +40,8 @@ pub(in crate::lift) fn begin_file(prog: &php::PhpProgram) {
 }
 
 /// Is `e` known to lift to a phorj `Map`? A non-empty array literal whose every element is keyed, or
-/// a registered constant (`self::`/`static::` arrive already resolved to the class name).
+/// a registered constant (`self::` arrives already resolved to the class name; `static::` is
+/// refused by the parser as Tier-2 late static binding, so it never reaches here).
 pub(super) fn is_known_map(e: &php::PhpExpr) -> bool {
     match e {
         php::PhpExpr::Array(elems) => !elems.is_empty() && elems.iter().all(|x| x.key.is_some()),
