@@ -138,7 +138,7 @@
 | SYN-112 | CB | **multiple** inheritance with explicit conflict errors (`E-MI-*`) + final-by-default `open` opt-in + `abstract` |
 | SYN-113 | P | overrides checked but invariant (`E-OVERRIDE-SIG`); no co/contravariance |
 | SYN-114 | CE | interfaces: multi-`extends`, nominal subtyping, `instanceof` RHS (PJ-OOP-003) |
-| SYN-115 | P | traits with methods/state/ctors/abstract-reqs/hooks + `use/rename/exclude`; conflicts are errors (arguably better than `insteadof`). **DOWNGRADED CE→P 2026-07-22 (DEC-324 verify): trait `const` (PHP 8.2) is a PARSE ERROR** (`expected a field name, found Eq`) — slice queued W4 with the const-expressiveness work |
+| SYN-115 | CE | traits with methods/state/ctors/abstract-reqs/hooks + `use/rename/exclude`; conflicts are errors (arguably better than `insteadof`). **RESTORED 2026-09-25 (§4.22): trait `const` now parses and runs identically on all three legs [Verified]; the row is CE again, scored ±0 because the downgrade below was never subtracted from the tally — do not re-credit it.** **DOWNGRADED CE→P 2026-07-22 (DEC-324 verify): trait `const` (PHP 8.2) is a PARSE ERROR** (`expected a field name, found Eq`) — slice queued W4 with the const-expressiveness work |
 | SYN-116 | CB | payload variants + generic enums (`Option<T>`/`Result<T,E>`) — PHP enums carry no payload; backed-enum sugar (`->value`/`cases()`) GAP-planned (A-backed-enums, §3) |
 | SYN-117 | GU | no anonymous classes |
 | SYN-118 | P | `#[Route]` only; no user-defined attributes (`E-UNKNOWN-ATTRIBUTE`) — **→ [HEAD `af3aad3`: improved but STILL PARTIAL — user-defined attributes are now declarable + applyable with compile-time-type-checked args (DEC-194, git `bf05648`/`451fb89`), which is better than PHP on the targets it supports. But narrower than PHP's feature: attributes attach only to classes + free functions (2 of PHP's 7 targets — no method/property/param/const/enum; AST `attrs` on `ClassDecl`/`FunctionDecl` only), and are "inert metadata until a later slice reads them via reflection" — attribute-**reflection**, the primary purpose, does not exist yet. Verdict unchanged (P). NOT counted as a mover in §4.6.]** |
@@ -1493,7 +1493,7 @@ refactor, and the `Ty::Tuple` arity change from named-field tuples (DEC-504) in 
 | SYN-078 throw-as-expression | P | **CE** | **+0.5** | DEC-532 (`a423d612`): `throw e` is a `never`-typed expression in `??`, an `if`-expression arm (phorj's ternary), a `match` arm and a lambda `=>` body, on all three legs. The residue — PHP's `$x \|\| throw …` / `$x && throw …` — is refused by ruling (`E-THROW-POSITION`) |
 | SYN-053 `<=>` | CB | CB | ±0 | `<=>` + tuple ordering shipped (DEC-505/512/513), but the row was already CB via `List.sortWith` |
 | SYN-110 class consts | CE | CE | ±0 | DEC-533 (`00b6db96`) adds List/Map constants and negative literals. The row was credited CE at baseline without PHP's `const array`; it is now earned rather than over-credited |
-| SYN-115 traits | P (07-22) | P | ±0 | trait `const` now parses and runs identically on all three legs [Verified 2026-09-25: `trait T { public const int X = 7; }` used via `C.X` prints `7` on VM, tree-walker and transpiled PHP 8.5]. **But the 2026-07-22 CE→P downgrade was never subtracted from the tally** (§4.12's +2.5 is `#[Invoke]`/`#[ToString]` +2 and `#[Deprecated]` +0.5 only), so the numerator already counted the row as covered — re-crediting would double-count. The row text says P; the score says CE; both are now true of the language |
+| SYN-115 traits | P (07-22) | **CE** (restored) | ±0 | trait `const` now parses and runs identically on all three legs [Verified 2026-09-25: `trait T { public const int X = 7; }` used via `C.X` prints `7` on VM, tree-walker and transpiled PHP 8.5]. **But the 2026-07-22 CE→P downgrade was never subtracted from the tally** (§4.12's +2.5 is `#[Invoke]`/`#[ToString]` +2 and `#[Deprecated]` +0.5 only), so the numerator already counted the row as covered — re-crediting would double-count. The row is restored to CE in §1.1, matching what the score always said |
 | SYN-147 contextual keywords | CE | CE | ±0 | DEC-531 lets a reserved word be a member name, as PHP's semi-reserved words are; already CE |
 
 **RT — ±0.** DEC-530 (a faulting program keeps its earlier stdout) fixes behaviour *within* RT's rows;
@@ -1518,12 +1518,15 @@ kind (KNOWN_ISSUES §LSP-CLASS-QUALIFIED-MEMBERS, pre-existing, found at row 5m)
 **75.4**. **Vision = 0.70×71.4 + 0.30×75.4 = 50.0 + 22.6 = 72.6 ≈ 73%** (was ≈72).
 
 **Grade, per Rule 18:** the FN verdict **[Verified]** (diff stat above, each file read); the SYN-078
-flip **[Verified]** as shipped surface, **[Inferred]** as CE rather than P (the call on the `||`/`&&`
-residue); the SYN-115 double-count finding **[Verified]** (the §4.12 arithmetic lists its SYN movers);
+flip **[Verified]** as shipped surface, and CE rather than P **[Verified]** against DEC-532's register
+row, which allows the four positions ONLY and lists "throw-expression in ANY position (PHP/Kotlin shape)"
+as the REJECTED alternative — the `||`/`&&` residue is excluded by ruling, not deferred (contrast SYN-118,
+which stays P because its narrower surface is not ruled final); the SYN-115 double-count finding **[Verified]** (the §4.12 arithmetic lists its SYN movers);
 headline parity/floor **[Inferred]** (additive delta on the ratified 35/40/25 model); the Vision bumps
 **[Speculative]**, kept to half-points as in every prior recompute. **Sensitivity, stated because the
 Vision move is inside rounding:** without the programme bumps Vision is 0.70×71.4 + 0.30×73.9 = 72.1,
-so the whole +1pp is judgement; parity's exact value moved only +0.2. The full 631-row §1.2 re-tally
+and with SYN-078 left at P it is 0.70×71.2 + 0.30×75.4 = 72.5 — **≈73 requires BOTH the SYN-078 CE
+call and the programme bumps; either alone gives ≈72.** Parity's exact value moved only +0.2. The full 631-row §1.2 re-tally
 remains OWED (8 of ~20 groups mapped, §4.21).
 
 **The number:** **PHP-parity ≈ 71% · floor ≈ 59% · Vision ≈ 73%** (from §4.21's 71/59/72).

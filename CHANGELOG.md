@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — parity recomputed at scout row 5m (M-gap-matrix §4.22; 2026-09-25)
+
+- **PHP-parity ≈71% · floor ≈59% · Vision ≈73%** (from §4.21's 71/59/72). One SYN row moves:
+  SYN-078 P→CE (throw-expressions, DEC-532; `||`/`&&` excluded by that ruling), SYN 85.3% → 85.7%.
+  FN ±0 (no native added since `13e913a0`). Trait `const` now works on all three legs, but SYN-115's
+  2026-07-22 downgrade had never been subtracted from the tally, so it scores ±0. Vision's +1pp is
+  programme judgement: ≈73 needs both the SYN-078 call and those bumps; either alone gives ≈72.
+
 ### Added — collection constants (scout row 5m; DEC-533; 2026-09-24)
 
 - A class `const` may hold a List/Map literal built only from literal constants, nested to any depth,
