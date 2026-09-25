@@ -6,6 +6,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — PHP string escapes lift as PHP decodes them (scout row 5n; 2026-09-25)
+
+`examples/lift/escapes.php` / `escapes.phg`. KNOWN_ISSUES §LIFT-UNICODE-ESCAPE is FIXED.
+
+- **One escape decoder for both lexer paths** (`src/lift/escapes.rs`). The plain-string path and the
+  interpolation path each had their own table and were wrong in different places, so a string's
+  meaning depended on whether it contained a `$`. Every case below was a SILENT meaning change, and
+  every expected value is measured against the PHP 8.5 oracle:
+  - double-quoted `"\u{2019}"` lifted as the eight characters `\u{2019}`; it is now `’`;
+  - `\x41`, octal `\101`, `\v`, `\e`, `\f` and `\$` stayed literal on the plain path; `"\xE2\x80\x99"`
+    (three byte escapes) is now the one character they spell;
+  - a SINGLE-quoted `'a\nb'` lifted as a newline — PHP single quotes decode only `\\` and `\'`;
+  - a double-quoted `"\'"` lost its backslash; PHP keeps it;
+  - the interpolation path turned `\{` into `{`; PHP has no escaped hole (`"a\{$x}b"` is `a\{X}b`).
+- **Refused by name, never guessed:** bytes that are not UTF-8 (`"\x80"`, a surrogate `\u{D800}` —
+  PHP strings hold them, phorj strings do not), an octal escape past `\377` (PHP warns and wraps it),
+  and the `\u{…}` forms PHP itself rejects (`\u{}`, `\u{zz}`, unterminated, past U+10FFFF).
+- **The printer writes other control characters as `\u{HEX}`**, where it used to put a raw NUL/ESC
+  byte into the draft.
+- Tests: `src/lift/lifter_tests_escapes.rs` (6, red first) and the `string_escapes` case of
+  `tests/lift_roundtrip.rs` (original PHP ≡ interpreter ≡ VM ≡ transpiled-back PHP). Not covered:
+  heredoc/nowdoc, which the lifter does not lex.
+- Scout: 82 of 155 files lift. `Core/Whitespace.php` is now refused (its `trim` mask spells three
+  Windows-1252 bytes); before this fix it lifted, and trimmed the wrong characters.
+
 ### Changed — parity recomputed at scout row 5m (M-gap-matrix §4.22; 2026-09-25)
 
 - **PHP-parity ≈71% · floor ≈59% · Vision ≈73%** (from §4.21's 71/59/72). One SYN row moves:

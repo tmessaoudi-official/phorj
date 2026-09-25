@@ -17,6 +17,7 @@ pub const LIFT_BANNER: &str =
 
 pub mod ast;
 mod ast_exprs;
+mod escapes;
 pub mod lexer;
 pub mod lifter;
 pub mod parser;
@@ -57,6 +58,8 @@ mod lifter_tests_division;
 mod lifter_tests_echo_registry;
 #[cfg(test)]
 mod lifter_tests_enums;
+#[cfg(test)]
+mod lifter_tests_escapes;
 #[cfg(test)]
 mod lifter_tests_hoist;
 #[cfg(test)]

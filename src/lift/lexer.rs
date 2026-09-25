@@ -5,6 +5,8 @@
 //! Output is a flat `Vec<PTokenSpanned>` ending in [`PTok::Eof`]; the L2 parser distinguishes
 //! keywords from identifiers (both arrive as [`PTok::Ident`]) and consumes the stream.
 
+use super::escapes::{decode_escape, finish, push_char};
+
 /// A PHP token (Tier-1 subset). Keywords are not pre-classified — they arrive as [`PTok::Ident`]
 /// and the parser matches the string, mirroring how Phorj's own lexer hands `match`/`if`/… to its
 /// parser. Variables carry their name **without** the leading `$`.
@@ -269,39 +271,25 @@ pub fn lex_php_with_docs(
             }
             continue;
         }
-        // String literal — single or double quote. Tier-1 decodes basic escapes; a `$` inside a
+        // String literal — single or double quote, escapes decoded as PHP decodes them for that
+        // quote style (`super::escapes`, shared with the interpolation path). A `$` inside a
         // double-quoted string (interpolation) is kept literal here and the *parser* decides whether
         // the construct is liftable (interpolation is Tier-2).
         if c == '"' || c == '\'' {
             let quote = c;
             i += 1;
             let raw_start = i;
-            let mut s = String::new();
+            let mut s: Vec<u8> = Vec::new();
             // Interpolation flag: only a double-quoted string interpolates, and only when a `$` is
             // followed by a variable-name start (`[A-Za-z_]`) or a complex form (`{$…}`/`${…}`). A
             // lone `$5`/`$ ` is literal in PHP, so it does NOT flag (avoids false-positive rejection).
             let mut interpolated = false;
             while i < chars.len() && chars[i] != quote {
                 if chars[i] == '\\' && i + 1 < chars.len() {
-                    let e = chars[i + 1];
-                    let decoded = match e {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        '\\' => '\\',
-                        '"' => '"',
-                        '\'' => '\'',
-                        '0' => '\0',
-                        // Unknown escape: keep the backslash literally (PHP single-quote semantics).
-                        _ => {
-                            s.push('\\');
-                            s.push(e);
-                            i += 2;
-                            continue;
-                        }
-                    };
-                    s.push(decoded);
-                    i += 2;
+                    let n = decode_escape(&chars, i, quote == '"', &mut s)
+                        .map_err(|e| format!("lift lex error: {e} (line {line})"))?;
+                    line += chars[i..i + n].iter().filter(|&&c| c == '\n').count();
+                    i += n;
                     continue;
                 }
                 if quote == '"' {
@@ -316,7 +304,7 @@ pub fn lex_php_with_docs(
                 if chars[i] == '\n' {
                     line += 1;
                 }
-                s.push(chars[i]);
+                push_char(&mut s, chars[i]);
                 i += 1;
             }
             if i >= chars.len() {
@@ -327,6 +315,7 @@ pub fn lex_php_with_docs(
             if interpolated {
                 push(&mut out, PTok::InterpStr(raw), line);
             } else {
+                let s = finish(s).map_err(|e| format!("lift lex error: {e} (line {line})"))?;
                 push(&mut out, PTok::Str(s), line);
             }
             continue;

@@ -24,7 +24,7 @@ top-level items and locals, and member completion resolves an instance receiver'
 name]. Pre-existing — not introduced by DEC-533 — and it is an Invariant-17 gap, so the fix is the
 developer's call to schedule. What does work: diagnostics, and the outline lists every member.
 
-## LIFT-UNICODE-ESCAPE — a PHP `"\u{…}"` escape lifts as literal text, changing the string (found 2026-09-24 by scout row 5m)
+## FIXED — LIFT-UNICODE-ESCAPE — a PHP `"\u{…}"` escape lifts as literal text, changing the string (found 2026-09-24 by scout row 5m; fixed 2026-09-25, scout row 5n)
 
 In a DOUBLE-quoted PHP string, `\u{2019}` is one character (`’`). The lifter copies it as the eight
 characters `\u{2019}`, escaped so phorj keeps them literal:
@@ -39,6 +39,27 @@ SILENT meaning change — the draft checks and runs, and prints something else. 
 literals are not touched by DEC-533); found because scout's `Core/Text.php` `APOSTROPHES` constant is
 four such escapes, so its lifted apostrophe folding would never match a real `’`. Other double-quoted
 escapes (`\x`, octal, `\$`) are unaudited on the same path.
+
+**Fixed (row 5n).** The audit found the class was wider than `\u{…}`, and every member was silent
+[Verified 2026-09-25 against the PHP 8.5 oracle with `bin2hex`]: a SINGLE-quoted `'a\nb'` decoded to a
+newline (PHP keeps `\n`; single quotes decode only `\\` and `\'`); a double-quoted `"\'"` lost its
+backslash; `\x`, octal, `\v`, `\e`, `\f` and `\$` stayed literal on the plain path; and the
+INTERPOLATION path had its own table that turned `\{` into `{` (PHP has no escaped hole —
+`"a\{$x}b"` is `a\{X}b`). Two tables, disjoint bugs, so a string's meaning depended on whether it held
+a `$`. Now one decoder (`src/lift/escapes.rs`) serves both paths, decoding to bytes so
+`"\xE2\x80\x99"` is one character, then checking UTF-8. Refused by name, never guessed: bytes that
+are not UTF-8 (`"\x80"`, a surrogate `\u{D800}`), an octal escape past `\377` (PHP warns and wraps
+it), and the `\u{…}` forms PHP itself rejects at parse time. The printer now writes any other control
+character as `\u{HEX}` rather than a raw byte. Pinned by `src/lift/lifter_tests_escapes.rs` and the
+`string_escapes` case of `tests/lift_roundtrip.rs` (original PHP ≡ interpreter ≡ VM ≡ transpiled-back
+PHP). Not covered: heredoc/nowdoc, which the lifter does not lex at all.
+
+Scout after the fix [Verified 2026-09-25, `phg lift /stack/projects/scout/src/php`]: 82 of 155 lift.
+`Core/Whitespace.php` is now refused by name, and that is the fix working: its
+`trim($value, " \t\n\r\0\x0B\x85\xA0\xAD")` names three single Windows-1252 BYTES, which the old
+lexer copied as the literal text `\x85\xA0\xAD` — so the draft trimmed the characters `\`, `x`, `8`,
+`5`, … instead, a wrong answer on exactly the scraped input that line exists for. A byte-mask `trim`
+has no phorj string form; porting it means a `bytes` value or a code-point mask, which is L7's call.
 
 ## LIFT-TERNARY-IN-CONCAT — a PHP ternary inside a `.` concatenation lifts to a draft that does not lex (found 2026-09-24 by scout row 5k)
 

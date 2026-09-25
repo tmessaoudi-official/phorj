@@ -3,33 +3,22 @@
 //! L1c, 2026-09-07).
 
 use super::*;
+use crate::lift::escapes::{decode_escape, finish, push_char};
 
 /// Parse the raw (undecoded) body of an interpolating double-quoted string into literal runs and
 /// embedded access-chain expressions.
 pub(super) fn parse_interp(raw: &str) -> Result<Vec<PhpStrPart>, String> {
     let chars: Vec<char> = raw.chars().collect();
     let mut parts: Vec<PhpStrPart> = Vec::new();
-    let mut lit = String::new();
+    let mut lit: Vec<u8> = Vec::new();
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
-        // Escape: decode like the lexer's plain-`Str` path (`\$`→`$`, `\{`→`{` for an escaped hole).
+        // Escape: the SAME decoder as the lexer's plain-`Str` path (row 5n). `\{` is NOT an escaped
+        // hole — PHP has none: the backslash stays and a following `$x` still interpolates, measured
+        // (`"a\{$x}b"` is `a\{X}b`); this path used to decode it to `{`.
         if c == '\\' && i + 1 < chars.len() {
-            match chars[i + 1] {
-                'n' => lit.push('\n'),
-                't' => lit.push('\t'),
-                'r' => lit.push('\r'),
-                '\\' => lit.push('\\'),
-                '"' => lit.push('"'),
-                '$' => lit.push('$'),
-                '{' => lit.push('{'),
-                '0' => lit.push('\0'),
-                e => {
-                    lit.push('\\');
-                    lit.push(e);
-                }
-            }
-            i += 2;
+            i += decode_escape(&chars, i, true, &mut lit)?;
             continue;
         }
         // `${…}` — variable-variable interpolation, removed in PHP 8.2. Reject loudly.
@@ -40,7 +29,7 @@ pub(super) fn parse_interp(raw: &str) -> Result<Vec<PhpStrPart>, String> {
         }
         // Complex form `{$…}` — a full access chain up to the matching `}`.
         if c == '{' && chars.get(i + 1) == Some(&'$') {
-            flush_lit(&mut lit, &mut parts);
+            flush_lit(&mut lit, &mut parts)?;
             let (inner, consumed) = scan_braced(&chars[i..])?;
             parts.push(PhpStrPart::Expr(Box::new(parse_interp_chain(&inner)?)));
             i += consumed;
@@ -52,26 +41,28 @@ pub(super) fn parse_interp(raw: &str) -> Result<Vec<PhpStrPart>, String> {
                 .get(i + 1)
                 .is_some_and(|n| n.is_alphabetic() || *n == '_')
         {
-            flush_lit(&mut lit, &mut parts);
+            flush_lit(&mut lit, &mut parts)?;
             let (expr, consumed) = parse_simple_interp(&chars[i..])?;
             parts.push(PhpStrPart::Expr(Box::new(expr)));
             i += consumed;
             continue;
         }
-        lit.push(c);
+        push_char(&mut lit, c);
         i += 1;
     }
-    flush_lit(&mut lit, &mut parts);
+    flush_lit(&mut lit, &mut parts)?;
     if parts.is_empty() {
         parts.push(PhpStrPart::Lit(String::new()));
     }
     Ok(parts)
 }
 
-pub(super) fn flush_lit(lit: &mut String, parts: &mut Vec<PhpStrPart>) {
+pub(super) fn flush_lit(lit: &mut Vec<u8>, parts: &mut Vec<PhpStrPart>) -> Result<(), String> {
     if !lit.is_empty() {
-        parts.push(PhpStrPart::Lit(std::mem::take(lit)));
+        let run = finish(std::mem::take(lit)).map_err(|e| format!("lift parse error: {e}"))?;
+        parts.push(PhpStrPart::Lit(run));
     }
+    Ok(())
 }
 
 /// Scan a balanced `{ … }` run (quote-aware) starting at `chars[0] == '{'`. Returns the inner text

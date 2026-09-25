@@ -1,0 +1,26 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+function apostrophes(): string {
+    return "‘’";
+}
+
+function possessive(string first): string {
+    return "{first}’s AA \\\{{first}\}";
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.print("{apostrophes()}");
+    Output.print("\n");
+    Output.print("{possessive(\"Ana\")}");
+    Output.print("\n");
+    Output.print("single: \\n\\t'");
+    Output.print("\n");
+    Output.print("tab:[\t] dollar:$x");
+    Output.print("\n");
+}

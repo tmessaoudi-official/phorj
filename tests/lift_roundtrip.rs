@@ -166,6 +166,18 @@ fn lift_roundtrip_preserves_behavior() {
             "concat",
             r#"<?php function greet(string $n): string { return "Hi, " . $n; } echo greet("Phorj");"#,
         ),
+        // Row 5n (§LIFT-UNICODE-ESCAPE): every PHP escape class on BOTH lexer paths, in one program, so a
+        // divergence names its escape. The hard bytes (NUL, ESC, VT, FF, a three-escape UTF-8 sequence)
+        // also cross the transpile-back leg, which nothing had run before. `\{` keeps its backslash in
+        // PHP and `$x` still interpolates after it — PHP has no escaped hole.
+        (
+            "string_escapes",
+            r#"<?php
+function esc(): string { return "u\u{2019}|x\xE2\x80\x99|o\101|z\08|e\e|v\v|f\f|d\$|q\'|b\{|n\n"; }
+function sq(): string { return 'n\n|t\t|z\0|q\'|s\\|d\"'; }
+function hole(string $x): string { return "h\{$x}\u{2019}\$"; }
+echo esc(); echo "|"; echo sq(); echo "|"; echo hole("X");"#,
+        ),
         // DEC-397 hoist: `$b` is first assigned inside an always-executing `if (true)` and read after
         // it. Before the hoist this lifted to a declaration INSIDE the block, so the outer `$b = …`
         // was `E-ASSIGN-UNKNOWN`. The point of putting it HERE rather than only in a unit test is that

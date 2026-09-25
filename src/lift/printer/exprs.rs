@@ -467,7 +467,8 @@ pub(super) fn unary_op(op: UnaryOp) -> &'static str {
 }
 
 /// Escape a string literal's contents for a Phorj double-quoted string. `{`/`}` become `\{`/`\}`
-/// because a bare `{` opens an interpolation.
+/// because a bare `{` opens an interpolation; any other control character (NUL, ESC, VT…) becomes a
+/// `\u{HEX}` escape, never a raw byte in the draft (row 5n).
 pub(super) fn escape_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -479,6 +480,7 @@ pub(super) fn escape_str(s: &str) -> String {
             '\r' => out.push_str("\\r"),
             '{' => out.push_str("\\{"),
             '}' => out.push_str("\\}"),
+            c if c.is_control() => out.push_str(&format!("\\u{{{:X}}}", c as u32)),
             _ => out.push(c),
         }
     }

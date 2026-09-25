@@ -523,6 +523,17 @@ be acceptable is failing it *silently*, or worse, passing it with the wrong answ
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.
 
+## String escapes — `escapes.php` / `escapes.phg` (scout row 5n, 2026-09-25)
+
+PHP decodes escapes by quote style, and the lift now decodes them exactly as PHP does, so the draft
+prints the same bytes. Double-quoted: `"\u{2019}"` is `’`, `"\x41"` and `"\101"` are `A`, `"\$"` is
+`$`, and `"\{"` is NOT an escape (the backslash stays, and `$first` after it still interpolates).
+Single-quoted: only `\\` and `\'` decode, so `'\n'` stays two characters. The draft re-escapes the
+decoded text the phorj way — `’` appears as itself, a tab as `\t`, a backslash as `\\`. Bytes a phorj
+string cannot hold (`"\x80"`, a surrogate `\u{D800}`) and octal escapes past `\377` are refused by
+name rather than guessed at (KNOWN_ISSUES §LIFT-UNICODE-ESCAPE, FIXED). Byte-identical on all three
+legs and against the original PHP.
+
 ## Division — `division.php` / `division.phg` (scout row 5g, 2026-09-24)
 
 PHP `/` is float division (`7 / 2` is `3.5`). Phorj's `/` on two ints is integer division, so the
