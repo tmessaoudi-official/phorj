@@ -7153,6 +7153,49 @@ function main(): void {
 /// narrowing, used as an arithmetic operand. `flip` puts the narrowed operand in the ELSE arm under a
 /// negated test (row 5r's 6C: that arm had no test until then).
 #[test]
+fn tuple_field_assignment_agrees_on_every_leg() {
+    // DEC-536 (row 5s): `place.f = v` rebuilds the named tuple at a mutable local place. The tuple is a
+    // VALUE: a copy taken before the write keeps the old field (PHP arrays agree). The nested and
+    // list-element writes are read back field by field, so a wrong recorded position cannot hide.
+    agree_out_php(
+        "import Core.Output;
+import Core.List;
+type Inner = (x: int, y: int);
+type Row = (id: int, tags: List<string>, inner: Inner);
+function dedup(List<Row> rows): string {
+    mutable var kept = new List<Row>();
+    for (Row r in rows) {
+        if (List.length(kept) > 0 && kept[0].id == r.id) {
+            kept[0].tags = List.append(kept[0].tags, \"dup\");
+        } else {
+            kept = List.append(kept, r);
+        }
+    }
+    return \"{List.length(kept)} {List.length(kept[0].tags)} {kept[0].tags[1]}\";
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Row a = (id: 1, tags: [\"a\"], inner: (x: 7, y: 8));
+    mutable Row b = a;
+    b.id = 9;
+    b.inner.x = 5;
+    b.tags[0] = \"z\";
+    Output.printLine(\"{a.id} {a.inner.x} {a.tags[0]} {b.id} {b.inner.x} {b.inner.y} {b.tags[0]}\");
+    mutable var kept = [a, a];
+    Row c = kept[0];
+    kept[0].id = 4;
+    kept[1].inner.y = 6;
+    Output.printLine(\"{c.id} {kept[0].id} {kept[1].id} {kept[1].inner.y} {kept[0].inner.y}\");
+    Row d = (id: 1, tags: [\"q\"], inner: (x: 0, y: 0));
+    Output.printLine(dedup([a, d]));
+}
+",
+        "1 7 a 9 5 8 z\n1 4 1 6 8\n1 2 dup\n",
+        "tuple_field_assign",
+    );
+}
+
+#[test]
 fn narrowed_reassignment_agrees_on_every_leg() {
     // DEC-537 (row 5t): a direct assignment in a narrowed block checks against the DECLARED type and
     // the narrowing follows the value. The primitive cases are the VM-visible ones: the compiler keys

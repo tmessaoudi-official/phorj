@@ -1,18 +1,18 @@
 # Known Issues & Limitations
 
-## TUPLE-FIELD-WRITE — phorj has no way to update one field of a named tuple (found 2026-09-25 by scout row 5d)
+## TUPLE-FIELD-WRITE — FIXED 2026-09-25 (DEC-536, row 5s) for local places; a class-field or call base is still refused
 
 ```phorj
-mutable var kept = new List<(id: int, tags: List<string>)>();
-kept = List.append(kept, (id: 1, tags: ["a"]));
-kept[0].tags = List.append(kept[0].tags, "b");   // E-ASSIGN-TARGET: cannot set field `tags` on non-class
+kept[0].tags = List.append(kept[0].tags, "b");   // OK since row 5s — a mutable local place
+this.row.id = 9;                                  // still E-ASSIGN-TARGET — a class-field base
 ```
 
-[Verified 2026-09-25 on the release binary.] A named tuple is an immutable value, so the PHP per-key
-write `$kept[$i]['duplicates'][] = …` — scout `Rent/Core/Dedup.php`, now that row 5d types `$kept` — lifts
-to a draft that `phg check` refuses by name. Before row 5d it was refused too, as a string index on a
-tuple [Verified 2026-09-25: `k[0]["b"] = …` on the same list → `type (a: int, b: List<string>) cannot be indexed`]. Nothing is silently wrong; the gap is a language form for "this tuple with one field replaced"
-(Rust/Kotlin `copy(tags = …)`, C# `with { … }`, OCaml `{ r with … }`). **RULED 2026-09-25 as DEC-536** — field assignment through a `mutable` place; build queued as scout row 5s.
+A named tuple's field is assignable through a `mutable` place: a local, then `[i]` and named-tuple `.f`
+steps. A place that STARTS at a class field or a call result is still refused — the same boundary as
+`this.xs[0] = …`, which predates DEC-536. The compiler's index-chain flatten walks only a local root, so the
+checker refuses such a place first rather than letting it reach an `unreachable!`. Workaround: copy the field
+into a `mutable` local, assign, store it back. Scout `Dedup.php` writes through a LOCAL (`$kept`) and is
+covered; its file-level check verdict is not measured (the scout project stops at unlifted imports).
 
 ## NARROWED-REASSIGN — a NESTED assignment inside a narrowed block keeps the narrowed type (direct case FIXED 2026-09-25, row 5t)
 

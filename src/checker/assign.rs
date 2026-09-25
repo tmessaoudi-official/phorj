@@ -71,15 +71,23 @@ impl Checker {
     /// local `List<T>` or `Map<K, V>` (nested places `a[i][j]`/`this.f[i]` are a later slice →
     /// `E-ASSIGN-TARGET`). For a list the index must be `int` and the value a `T`; for a map the
     /// index must be the key type `K` and the value a `V`.
-    /// The innermost base of an assignment place, walking `[index]` steps down. `g[i][j]` → `g`;
-    /// `g` → `g`. Returns `None` for a non-local base (a field access, a call result) — those are the
-    /// deferred field-base slice. Index-only chains (slice 1a) resolve to their root local.
-    fn place_root(mut e: &crate::ast::Expr) -> Option<&str> {
+    /// The innermost base of an assignment place, walking `[index]` steps — and, since DEC-536, the
+    /// named-tuple `.f` steps [`Self::check_tuple_field`] RECORDED — down to a local. `g[i][j]` → `g`,
+    /// `kept[0].tags` → `kept`. Returns `None` for any other base: a class field (`this.f[i]`,
+    /// `b.row.id` — the compiler's index-chain flatten cannot walk a class field, so letting one through
+    /// would panic there), a call result. Must run AFTER the place was type-checked, which is what
+    /// records its tuple steps.
+    pub(super) fn place_root<'e>(&self, mut e: &'e crate::ast::Expr) -> Option<&'e str> {
         use crate::ast::Expr;
         loop {
             match e {
                 Expr::Ident(n, _) => return Some(n),
                 Expr::Index { object, .. } => e = object,
+                Expr::Member { object, span, .. }
+                    if self.tuple_field_indices.contains_key(&span.start) =>
+                {
+                    e = object
+                }
                 _ => return None,
             }
         }
@@ -94,11 +102,14 @@ impl Checker {
         span: Span,
     ) {
         let ity = self.check_expr(index);
+        // DEC-536: a place with a `.f` step is type-checked FIRST — only that records which steps are
+        // named-tuple fields (`t.tags[0]`); a place without one keeps its original order.
+        let early = Self::place_has_member(object).then(|| self.check_expr(object));
         // The place root is the innermost base of the target. A **nested value-index** chain
         // (`g[i][j]`) is allowed when the root is a mutable local: COW makes `make_mut` root-to-leaf
         // mutate the root's nested container in place (Spec `nested-value-index-assign`, slice 1a). A
         // non-local base (a field `this.f[i]`, a call result) is the deferred slice 1b.
-        let name = match Self::place_root(object) {
+        let name = match self.place_root(object) {
             Some(n) => n.to_string(),
             None => {
                 self.err_coded(
@@ -124,7 +135,10 @@ impl Checker {
         };
         // The container the final index targets is the *type of `object`* — for a flat place this is
         // the root's declared type; for a nested place it is the element type at the outer index.
-        let cty = self.check_expr(object);
+        let cty = match early {
+            Some(t) => t,
+            None => self.check_expr(object),
+        };
         if !mutable {
             self.err_coded(
                 Self::expr_span(object),

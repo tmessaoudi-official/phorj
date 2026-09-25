@@ -11,6 +11,7 @@ impl Checker {
     /// (`E-ASSIGN-UNKNOWN`), be declared `mutable` (`E-ASSIGN-IMMUTABLE`), and the value must be
     /// assignable to its (generics-substituted) type (`E-ASSIGN-TYPE`). A `?.` target is rejected
     /// (`E-ASSIGN-TARGET`); nested index-into-field (`this.f[i] = e`) stays deferred to a later slice.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn check_field_assign(
         &mut self,
         object: &crate::ast::Expr,
@@ -19,6 +20,7 @@ impl Checker {
         vty: &Ty,
         value: &crate::ast::Expr,
         span: Span,
+        target: &crate::ast::Expr,
     ) {
         if safe {
             self.err_coded(
@@ -91,12 +93,16 @@ impl Checker {
         let (class, cargs) = match &obj_ty {
             Ty::Error => return,
             Ty::Named(n, cargs) if self.classes.contains_key(n) => (n.clone(), cargs.clone()),
+            Ty::Tuple(..) => {
+                self.check_tuple_field_assign(object, name, &obj_ty, vty, value, target);
+                return;
+            }
             other => {
                 self.err_coded(
                     Self::expr_span(object),
                     format!("cannot set field `{name}` on non-class `{other}`"),
                     "E-ASSIGN-TARGET",
-                    Some("field assignment requires a class instance".into()),
+                    Some("field assignment requires a class instance or a named tuple".into()),
                 );
                 return;
             }
@@ -171,6 +177,89 @@ impl Checker {
                 "E-ASSIGN-TYPE",
                 None,
             );
+        }
+    }
+
+    /// DEC-536 (scout row 5s): `place.f = v` where `place` holds a NAMED tuple. The tuple is a value, so
+    /// the assignment rebuilds it with `f` replaced — which is only meaningful through a `mutable` local
+    /// place: a local, then `[i]` and named-tuple `.f` steps (Swift struct semantics). The field's
+    /// position is recorded by [`Self::check_tuple_field`] against the target `Member`'s own span, so
+    /// `rewrite_tuple_fields` turns the target into the positional index chain every backend already
+    /// supports (`kept[0].tags = v` → `kept[0][1] = v`).
+    fn check_tuple_field_assign(
+        &mut self,
+        object: &crate::ast::Expr,
+        name: &str,
+        obj_ty: &Ty,
+        vty: &Ty,
+        value: &crate::ast::Expr,
+        target: &crate::ast::Expr,
+    ) {
+        let fty = match self.check_tuple_field(obj_ty, name, false, Self::expr_span(target)) {
+            Some(Ty::Error) | None => return, // refused by name (positional / unknown field)
+            Some(t) => t,
+        };
+        if !self.value_place_ok(object, "a tuple field") {
+            return;
+        }
+        if !self.ty_assignable(vty, &fty) {
+            self.err_coded(
+                Self::expr_span(value),
+                format!("cannot assign `{vty}` to tuple field `{name}: {fty}`"),
+                "E-ASSIGN-TYPE",
+                None,
+            );
+        }
+    }
+
+    /// Whether the place contains a `.f` step at all — such a place is type-checked BEFORE its root is
+    /// resolved, because only the check records which `.f` steps are tuple fields.
+    pub(super) fn place_has_member(mut e: &crate::ast::Expr) -> bool {
+        use crate::ast::Expr;
+        loop {
+            match e {
+                Expr::Member { .. } => return true,
+                Expr::Index { object, .. } => e = object,
+                _ => return false,
+            }
+        }
+    }
+
+    /// DEC-536: `place` (already type-checked) is a mutable VALUE place — a local root, then `[i]` and
+    /// named-tuple `.f` steps. Reports `E-ASSIGN-TARGET` / `E-ASSIGN-UNKNOWN` / `E-ASSIGN-IMMUTABLE`
+    /// and returns `false` on refusal.
+    pub(super) fn value_place_ok(&mut self, place: &crate::ast::Expr, what: &str) -> bool {
+        let Some(name) = self.place_root(place).map(str::to_string) else {
+            self.err_coded(
+                Self::expr_span(place),
+                format!("{what} can be assigned only through a local variable, a nested index of one, or a named-tuple field of one"),
+                "E-ASSIGN-TARGET",
+                Some("a class-field or call base (`this.t.f`, `obj.t.f`, `f().f`) is not an assignable place yet — copy it into a `mutable` local, assign, and store it back".into()),
+            );
+            return false;
+        };
+        match self.lookup_binding(&name) {
+            None => {
+                self.err_coded(
+                    Self::expr_span(place),
+                    format!("cannot assign into unknown variable `{name}`"),
+                    "E-ASSIGN-UNKNOWN",
+                    None,
+                );
+                false
+            }
+            Some((ty, false)) => {
+                self.err_coded(
+                    Self::expr_span(place),
+                    format!("`{name}` is immutable; {what} of it cannot be set"),
+                    "E-ASSIGN-IMMUTABLE",
+                    Some(format!(
+                        "declare it `mutable` (e.g. `mutable {ty} {name} = …;`)"
+                    )),
+                );
+                false
+            }
+            Some((_, true)) => true,
         }
     }
 }

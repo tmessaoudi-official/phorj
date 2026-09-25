@@ -106,14 +106,15 @@ fn named_tuple_field_access_is_refused_by_name() {
 /// Rebind the whole tuple instead. Pinned because the field read landing made the write LOOK
 /// available.
 #[test]
-fn a_named_tuple_field_cannot_be_assigned() {
+fn a_named_tuple_field_of_an_immutable_local_cannot_be_assigned() {
+    // DEC-536 (row 5s) opened `t.bp = 5` on a `mutable` place; a non-`mutable` one is still refused.
     has(
-        "function main() -> void { mutable (bp: int, source: string) t = (bp: 1, source: \"a\"); t.bp = 5; }",
-        "E-ASSIGN-TARGET",
+        "function main() -> void { (bp: int, source: string) t = (bp: 1, source: \"a\"); t.bp = 5; }",
+        "E-ASSIGN-IMMUTABLE",
     );
     has(
-        "function main() -> void { mutable (bp: int, source: string) t = (bp: 1, source: \"a\"); t.bp += 5; }",
-        "E-ASSIGN-TARGET",
+        "function main() -> void { (bp: int, source: string) t = (bp: 1, source: \"a\"); t.bp += 5; }",
+        "E-ASSIGN-IMMUTABLE",
     );
 }
 

@@ -270,6 +270,32 @@ function some(): string {
 }
 echo some() . "|" . noRows();"#,
         ),
+        // DEC-536 row 5s: scout `Rent/Core/Dedup.php`'s per-key write into a list element —
+        // `$kept[$i]['tags'][] = …` lifts to `kept[i].tags = List.append(kept[i].tags, …)`, a named-tuple
+        // field write through a mutable place.
+        (
+            "tuple_field_write_through_a_list_element",
+            r#"<?php
+/** @param list<array{id: int, tags: list<string>}> $rows */
+function dedup(array $rows): string {
+    /** @var list<array{id: int, tags: list<string>}> $kept */
+    $kept = [];
+    foreach ($rows as $r) {
+        if (count($kept) > 0 && $kept[0]['id'] === $r['id']) {
+            $kept[0]['tags'][] = 'dup';
+        } else {
+            $kept[] = $r;
+        }
+    }
+    return count($kept) . " " . count($kept[0]['tags']) . " " . $kept[0]['tags'][1];
+}
+function run(): string {
+    /** @var list<array{id: int, tags: list<string>}> $rows */
+    $rows = [['id' => 1, 'tags' => ['a']], ['id' => 1, 'tags' => ['b']]];
+    return dedup($rows);
+}
+echo run();"#,
+        ),
         (
             "string_escapes",
             r#"<?php

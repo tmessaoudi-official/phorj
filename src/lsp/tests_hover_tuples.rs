@@ -120,3 +120,28 @@ fn hover_on_a_safe_navigated_tuple_field_still_resolves_against_its_receiver() {
     );
     assert!(body.contains("int"), "field hover lost the type: {body}");
 }
+
+/// DEC-536 (row 5s): a named-tuple field in ASSIGNMENT position hovers like a read, and the write
+/// itself publishes no diagnostic — the LSP shares the check pipeline (DEC-252).
+#[test]
+fn a_tuple_field_assignment_target_hovers_and_checks_clean() {
+    let src = "package Main;\nfunction main() -> void {\n\
+               mutable (source: string, bp: int) t = (source: \"cli\", bp: 3);\n\
+               t.bp = 4;\n}";
+    let mut s = Server::default();
+    let published = s.handle(&did_open("file:///x.phg", src));
+    assert!(
+        published[0].contains("\"diagnostics\":[]"),
+        "the tuple field write published a diagnostic: {published:?}"
+    );
+    // line 3 is `t.bp = 4;` — column 3 sits inside `bp`.
+    let body = &s.handle(&req_at("hover", 3, 3))[0];
+    assert!(
+        body.contains("int"),
+        "assignment-target field hover lost the type: {body}"
+    );
+    assert!(
+        !body.contains("string"),
+        "hovered the WRONG position: {body}"
+    );
+}

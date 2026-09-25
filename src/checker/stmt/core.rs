@@ -57,7 +57,7 @@ impl Checker {
                     // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6).
                     Expr::Member {
                         object, name, safe, ..
-                    } => self.check_field_assign(object, name, *safe, &vty, value, *span),
+                    } => self.check_field_assign(object, name, *safe, &vty, value, *span, target),
                     _ => {
                         self.err_coded(
                             *span,

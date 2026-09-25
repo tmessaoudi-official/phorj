@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — named-tuple field assignment through a mutable place (scout row 5s; DEC-536; 2026-09-25)
+
+`kept[0].tags = List.append(kept[0].tags, "b")` on a `mutable var kept: List<(id: int, tags: List<string>)>`
+failed `E-ASSIGN-TARGET` (`cannot set field on non-class`). A named tuple's field is now assignable — and
+`+=`-able — through a `mutable` place: a local, then any chain of `[i]` and named-tuple `.f` steps
+(`t.bp = 4`, `t.inner.x = 5`, `t.tags[0] = "z"`). The tuple is a VALUE (Swift struct semantics): a copy
+taken before the write keeps its old field. The checker records each `.f` step's position as it does for a
+read, so DEC-504's rewrite turns the target into the positional chain every backend already supports —
+`SetPathLocal` on the VM, the shared `set_nested` kernel in the tree-walker, `$kept[0][1] = …` in PHP. A place
+starting at a class field or a call (`this.t.f`, `b.row.id`, `f().f`) is still `E-ASSIGN-TARGET`, and the
+checker refuses it BEFORE the compiler, whose index-chain flatten cannot walk a class field. `phg explain
+E-ASSIGN-TARGET` was rewritten — it still said field and element assignment "land in a later slice". Lifts:
+scout `Dedup.php`'s `$kept[$i]['duplicates'][] = …` now has a checkable phorj form. No new syntax: no grammar
+change; the LSP hovers an assignment-target field like a read. Example: `examples/guide/tuple-field-assign.phg`.
+
 ### Added — assigning inside a narrowed block checks against the declared type (scout row 5t; DEC-537; 2026-09-25)
 
 `mutable Row? seen = null; if (seen instanceof null) { seen = r; }` used to fail `E-ASSIGN-TYPE`

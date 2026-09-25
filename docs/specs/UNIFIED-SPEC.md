@@ -1247,8 +1247,19 @@ and erasure positional, so DEC-512's static-arity argument carries unchanged.
 | `(a: 1, a: 2)` | `E-TUPLE-DUP-FIELD` | a duplicate makes `t.a` ambiguous; picking a winner would be a silent semantic choice |
 | `t.nope` | `E-TUPLE-UNKNOWN-FIELD` | the field set is part of the type, so a typo is a compile error, not a runtime miss |
 | `(int, string)` `.bp` | `E-TUPLE-POSITIONAL-FIELD` | a positional tuple has positions, not names — a different mistake from a typo |
-| `t.bp = v`, `+=` | `E-ASSIGN-TARGET` | a tuple is a VALUE (DEC-288 erases it to a COW list); rebind the whole tuple |
+| `this.t.bp = v`, `f().bp = v` | `E-ASSIGN-TARGET` | since DEC-536 (2026-09-25) `t.bp = v` and `+=` ARE allowed through a `mutable` local place — see below; a class-field or call base is not a place yet |
 | `t?.bp` | `E-TUPLE-SAFE-FIELD` | a field read erases to an `Index`, which carries no null short-circuit — `?.` would type as `int?` while faulting at runtime. Narrow first, then read with `.` |
+
+**Field assignment (DEC-536, 2026-09-25; scout row 5s).** A named tuple's field is assignable through a
+`mutable` place — a local, then any chain of `[i]` and named-tuple `.f` steps: `t.bp = 4`, `t.bp += 1`,
+`kept[0].tags = List.append(kept[0].tags, "x")`, `t.inner.x = 5`, `t.tags[0] = "z"`. It rebinds that
+tuple with the field replaced — Swift struct semantics: the tuple is a value, so a copy taken before the
+write keeps its old field, and nothing aliases. Mechanically it is DEC-504's own rewrite applied to the
+TARGET: the checker records each `.f` step's position, so every backend receives the positional chain
+`kept[0][1] = …` it already supports, and the PHP leg is `$kept[0][1] = …` (positional per DEC-504 — the
+19:02 ruling text said `['tags']`, which was wrong). A place that starts at a class field or a call
+(`this.t.bp`, `b.row.id`, `f().bp`) is still `E-ASSIGN-TARGET` — the same boundary as `this.xs[0] = …`;
+copy into a `mutable` local, assign, store back.
 
 **Lift.** A keyed `array{…}` shape lifts to the named tuple its own keys describe, and a `$row['bp']`
 read against such a parameter lifts to `row.bp` — without that second half a lifted body would not

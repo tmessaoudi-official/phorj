@@ -361,9 +361,13 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              really mean to operate on the function value.\n"
         }
         "E-ASSIGN-TARGET" => {
-            "E-ASSIGN-TARGET — an assignment target is not a simple variable.\n\n\
-             Only `name = expr;` (reassigning a local) is supported in this slice. Field assignment\n\
-             (`obj.field = …`) and element assignment (`xs[i] = …`) land in a later mutation slice.\n"
+            "E-ASSIGN-TARGET — the left side of `=` is not an assignable place.\n\n\
+             Assignable: a `mutable` local (`x = …`); a class field through any object (`o.f = …`,\n\
+             `this.f = …`); and a VALUE place — a local, then any chain of `[i]` and named-tuple `.f`\n\
+             steps (`xs[i] = …`, `g[i][j] = …`, `kept[0].tags = …`, `t.inner.x = …` — DEC-536). A\n\
+             value place cannot start at a class field or a call result (`this.xs[0] = …`,\n\
+             `b.row.id = …`, `f().x = …`), and `?.` is never a target. Copy the value into a\n\
+             `mutable` local, assign, and store it back.\n"
         }
         "E-HOOK-NO-GET" => {
             "E-HOOK-NO-GET — a property hook with no `get` was read.\n\n\

@@ -1,0 +1,51 @@
+package Main;
+
+import Core.List;
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+type Point = (x: int, y: int);
+
+type Group = (name: string, members: List<string>, anchor: Point);
+
+type Pair = (name: string, who: string);
+
+// Assigning one field of a named tuple (DEC-536): `place.f = v` through a `mutable` place — a local,
+// then any chain of `[i]` and `.f` steps — rebuilds that tuple with `f` replaced. A named tuple is a
+// VALUE, like a Swift struct: a copy taken before the write keeps its old field.
+function group(List<Pair> pairs): List<Group> {
+    mutable var groups = new List<Group>();
+    for (Pair p in pairs) {
+        mutable var found = false;
+        for (int i in 0..List.length(groups)) {
+            if (groups[i].name == p.name) {
+                groups[i].members = List.append(groups[i].members, p.who);
+                found = true;
+            }
+        }
+        if (!found) {
+            groups = List.append(groups, (name: p.name, members: [p.who], anchor: (x: 0, y: 0)));
+        }
+    }
+    return groups;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable Point p = (x: 1, y: 2);
+    Point before = p;
+    p.x = 10;
+    p.y = p.y + 3;
+    Output.printLine("{before.x} {p.x} {p.y}");
+    List<Pair> pairs = [
+        (name: "red", who: "ann"),
+        (name: "blue", who: "bo"),
+        (name: "red", who: "cy")
+    ];
+    mutable var gs = group(pairs);
+    gs[1].anchor.y = 7;
+    for (Group g in gs) {
+        Output.printLine("{g.name}: {List.length(g.members)} at {g.anchor.x},{g.anchor.y}");
+    }
+}
