@@ -1857,7 +1857,10 @@ ruled 2026-09-25 20:01: a NESTED assignment (inside an inner block or a loop wit
 keeps the narrowed check and names DEC-537 in its hint, and so does any assignment while a second
 narrowing of the same variable is live — changing the type there would need flow merging (an outer
 narrowing left stale, a loop's earlier reads typed against the old narrowing). The VM compiler retypes
-the slot at the same direct statements (`compiler/narrow.rs` `stmt_narrowed`).
+the slot at if-branch direct statements (`compiler/narrow.rs` `stmt_narrowed`); a guard tail needs none, because
+the checker narrows no union to a primitive there — DEC-184's lockstep bound, since the VM mirrors no
+tail; the general fix is W2-12 (`if (!(x is int)) { return 0; } x + 1` is refused on every leg,
+[Verified 2026-09-25]) — and an optional's or a class's narrowing is VM-invisible.
 
 ### The rejection catalogue (with reasons — the enduring negative space)
 
