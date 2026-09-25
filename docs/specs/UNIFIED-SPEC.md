@@ -1838,6 +1838,16 @@ escaping before the fields are set, reads inside a lambda body. Every leg is unc
 the checker's guarantee and phorj emits no PHP `readonly` — so this is PHP's `readonly` property set in
 `__construct`, and Java's blank `final`; the lifter's non-promoted PHP `readonly` property lands here.
 
+**Narrowing through operators (DEC-535, 2026-09-25; scout row 5r).** A test (`x instanceof null`,
+`x is int`, `x instanceof C`, combined with `!`, `&&`, `||`) narrows a variable in the right operand of
+`&&` by its left side being TRUE, in the right operand of `||` by its left side being FALSE, and in each
+arm of an if-expression by the condition's own side — exactly as it narrows an `if` statement's blocks
+and the code after a guard `if (…) return;`. The expression's type is the WIDER arm, so
+`if (x is int) { x } else { x }` is still `int | string`. Nothing narrows past its operator, and no union
+complement is derived (`x is int || x + 1` stays an error). Checker and VM compiler narrow at the same
+places (`checker/stmt/narrow.rs` ↔ `compiler/narrow.rs`), so nothing the checker accepts is refused by
+the VM; the transpiled PHP needs no narrowing.
+
 ### The rejection catalogue (with reasons — the enduring negative space)
 
 **Dynamic-PHP footguns (defeat static checking — the exact surprise Phorj removes):**

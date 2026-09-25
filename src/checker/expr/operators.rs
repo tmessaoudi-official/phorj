@@ -36,7 +36,11 @@ impl Checker {
     ) -> Ty {
         use crate::ast::BinaryOp;
         let l = self.check_expr(lhs);
-        let r = self.check_expr(rhs);
+        let r = match op {
+            BinaryOp::And => self.check_expr_narrowed(rhs, lhs, true, span), // DEC-535
+            BinaryOp::Or => self.check_expr_narrowed(rhs, lhs, false, span),
+            _ => self.check_expr(rhs),
+        };
         if l == Ty::Error || r == Ty::Error {
             return match op {
                 BinaryOp::Eq

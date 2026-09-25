@@ -56,7 +56,8 @@
 > **DONE (2026-09-25): row 5p** (`4c92693b`) — `Map.merge` transpiles to `array_replace` (int keys kept). **Row 5q** (`b8aa33e7`) — DEC-534 `Map.union`; Text.php's draft is past the map `+`, next walls = unmapped builtins.
 > **DONE (2026-09-25): row 5o** (`11818dbd`) — LSP hover/definition/completion on `Class.member` (constants, statics, static methods, inherited too); `src/lsp/class_member.rs`. Not covered: `K::` completion, cross-file classes.
 > **DONE (2026-09-25): row 5j** (`97b381a3`) — DEC-524 constructor-once fields + E-FIELD-READ-BEFORE-INIT; scout TenureSignal shape checks.
-> **THEN:** row 5d (DEC-515 `@var` locals), then L3.
+> **DONE (2026-09-25): row 5r** — DEC-535 narrowing through `&&`/`||`/if-expressions (checker + VM compiler in lockstep); fixed a pre-existing VM-only else-block compile error.
+> **THEN:** row 5d (DEC-515 `@var` locals: R2 `$x = []` binder/index reads, R3 `$x = <call>` typed decl, R4 `$x = null` optional + keyed-literal writes), then L3.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

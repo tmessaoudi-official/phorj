@@ -456,8 +456,9 @@ impl Checker {
         if !self.ty_assignable(&c, &Ty::Bool) {
             self.err(span, format!("`if` condition must be `bool`, found `{c}`"));
         }
-        let t = self.check_expr(then_e);
-        let e = self.check_expr(else_e);
+        // DEC-535: each arm sees the condition's narrowings for its own side.
+        let t = self.check_expr_narrowed(then_e, cond, true, span);
+        let e = self.check_expr_narrowed(else_e, cond, false, span);
         if t != Ty::Error
             && e != Ty::Error
             && !self.ty_assignable(&e, &t)
@@ -469,11 +470,15 @@ impl Checker {
             );
         }
         // `Error` poisons and `never` (a throw-expression arm, DEC-532) is the bottom: either way the
-        // OTHER branch decides the type, so `if (c) { throw e } else { 1 }` is an `int`.
+        // OTHER branch decides the type, so `if (c) { throw e } else { 1 }` is an `int`. Otherwise the
+        // WIDER arm is the type: with narrowed arms (DEC-535) `if (x is int) { x } else { x }` has an
+        // `int` then-arm and an `int | string` else-arm, and is an `int | string`.
         if matches!(t, Ty::Error | Ty::Never) {
             e
-        } else {
+        } else if matches!(e, Ty::Error | Ty::Never) || self.ty_assignable(&e, &t) {
             t
+        } else {
+            e
         }
     }
 }

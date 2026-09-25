@@ -34,6 +34,10 @@ struct Walk<'a> {
     once: &'a Fields,
     reads: &'a Fields,
     found: Vec<(Span, &'static str, String)>,
+    /// Every field assigned anywhere in the walk so far, on ANY path — including paths that then
+    /// diverge. A `catch` or the code after a loop can be reached from the middle of a body whose
+    /// own completing state never leaves it (a throw, a `break`), so its entry uses this set.
+    touched: Fields,
 }
 
 impl Walk<'_> {
@@ -137,22 +141,20 @@ impl Walk<'_> {
                 ..
             } => {
                 let before = p.clone();
-                let b = self.block(body, p, in_loop);
+                let (b, body_touched) = self.touching(|w| w.block(body, p, in_loop));
                 let mut entry = before.clone();
-                if let Some(bp) = &b {
-                    entry.maybe.extend(bp.maybe.iter().cloned());
-                }
+                entry.maybe.extend(body_touched);
                 let mut out = b;
+                let mut fin = before;
                 for c in catches {
-                    let cp = self.block(&c.body, entry.clone(), in_loop);
+                    let (cp, catch_touched) =
+                        self.touching(|w| w.block(&c.body, entry.clone(), in_loop));
+                    fin.maybe.extend(catch_touched);
                     out = merge(out, cp);
                 }
+                fin.maybe.extend(entry.maybe);
                 match finally_block {
                     Some(f) => {
-                        let mut fin = before;
-                        if let Some(o) = &out {
-                            fin.maybe.extend(o.maybe.iter().cloned());
-                        }
                         let fp = self.block(f, fin, in_loop)?;
                         out.map(|mut o| {
                             o.assigned.extend(fp.assigned);
@@ -168,12 +170,20 @@ impl Walk<'_> {
 
     /// A loop body walked with repetition in mind; the state after the loop adds only possibilities.
     fn lp(&mut self, body: &[Stmt], p: Path) -> Path {
-        let after = self.block(body, p.clone(), true);
+        let (_, body_touched) = self.touching(|w| w.block(body, p.clone(), true));
         let mut out = p;
-        if let Some(a) = after {
-            out.maybe.extend(a.maybe);
-        }
+        out.maybe.extend(body_touched);
         out
+    }
+
+    /// Run `f` and also return what it assigned on any path (diverging ones included), keeping the
+    /// walk-wide [`Walk::touched`] set cumulative.
+    fn touching<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> (T, Fields) {
+        let outer = std::mem::take(&mut self.touched);
+        let r = f(self);
+        let inner = std::mem::replace(&mut self.touched, outer);
+        self.touched.extend(inner.iter().cloned());
+        (r, inner)
     }
 
     fn assign(&mut self, target: &Expr, mut p: Path, in_loop: bool) -> Option<Path> {
@@ -199,6 +209,7 @@ impl Walk<'_> {
             ));
         }
         p.assigned.insert(field.clone());
+        self.touched.insert(field.clone());
         p.maybe.insert(field);
         Some(p)
     }
@@ -305,6 +316,7 @@ impl Checker {
             once: &once,
             reads: &reads,
             found: Vec::new(),
+            touched: Fields::new(),
         };
         w.block(body, Path::default(), false);
         for (span, code, msg) in w.found {

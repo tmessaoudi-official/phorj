@@ -1,0 +1,36 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Narrowing through operators (DEC-535): a test narrows a variable not only in the `if` block it
+// guards, but in the right operand of `&&` (where the left side is true) and `||` (where it is
+// false), and in each arm of an if-expression. Kotlin, TypeScript, Swift and C# read these the same.
+function describe((tenure: string, bp: int)? seen): string {
+    // `seen instanceof null ||` — the right operand only runs when `seen` is NOT null.
+    if (seen instanceof null || seen.bp < 0) {
+        return "nothing";
+    }
+    // After the guard returns, `seen` is non-null here too.
+    return if (seen.bp > 50) { "strong {seen.tenure}" } else { "weak {seen.tenure}" };
+}
+
+function bump(int | string x): int {
+    // `x is int &&` — the right operand sees an `int`; the arms of the if-expression each see their
+    // own side of the test.
+    var big = x instanceof int && x > 10;
+    return (if (x instanceof int) { x + 1 } else { 0 }) + (if (big) { 100 } else { 0 });
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    (tenure: string, bp: int)? none = null;
+    Output.printLine(describe(none));
+    Output.printLine(describe((tenure: "lease", bp: 80)));
+    Output.printLine(describe((tenure: "bail", bp: 20)));
+    int | string small = 3;
+    int | string large = 20;
+    int | string word = "x";
+    Output.printLine("{bump(small)} {bump(large)} {bump(word)}");
+}

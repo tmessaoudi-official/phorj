@@ -36,6 +36,7 @@ mod mtest;
 mod must_use;
 mod mutation;
 mod named_args;
+mod narrow_operators;
 mod optionals;
 mod output_capture;
 mod overloading;

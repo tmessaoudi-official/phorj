@@ -147,7 +147,14 @@ impl Compiler<'_> {
                 if let Some(b) = self.match_bindings.iter().rev().find(|b| b.name == *name) {
                     Ok(b.ty.clone())
                 } else if let Some(s) = self.resolve_local(name) {
-                    Ok(self.locals[s].ty.clone())
+                    let narrowed = self
+                        .narrow_overlay
+                        .borrow()
+                        .iter()
+                        .rev()
+                        .find(|(slot, _)| *slot == s)
+                        .map(|(_, c)| c.clone());
+                    Ok(narrowed.unwrap_or_else(|| self.locals[s].ty.clone()))
                 } else if let Some(t) = self.field_tags.get(name) {
                     Ok(t.clone())
                 } else if let Some(meta) = self.fns.get(name) {
@@ -382,14 +389,34 @@ impl Compiler<'_> {
             // Both `if` branches share a type (checker-guaranteed); infer it from the then-branch so
             // `var x = if (c) { 1 } else { 2 }` specializes arithmetic on `x` (like `Match`).
             // A throwing then-branch (DEC-532) defers to the else-branch.
+            // DEC-535: when the condition narrows a local, each arm is typed under ITS narrowing, and
+            // the arms must AGREE — the checker types the expression as the wider arm, so a
+            // disagreement is `Other`, never one arm's guess.
             Expr::If {
+                cond,
                 then_expr,
                 else_expr,
                 ..
-            } => match **then_expr {
-                Expr::Throw { .. } => self.ctype(else_expr),
-                _ => self.ctype(then_expr),
-            },
+            } => {
+                if self.prim_narrowings(cond, true).is_empty()
+                    && self.prim_narrowings(cond, false).is_empty()
+                {
+                    return match **then_expr {
+                        Expr::Throw { .. } => self.ctype(else_expr),
+                        _ => self.ctype(then_expr),
+                    };
+                }
+                let e = self.ctype_narrowed(else_expr, cond, false);
+                if let Expr::Throw { .. } = **then_expr {
+                    return e;
+                }
+                let t = self.ctype_narrowed(then_expr, cond, true);
+                match (t, e) {
+                    (Ok(t), _) if matches!(**else_expr, Expr::Throw { .. }) => Ok(t),
+                    (Ok(t), Ok(e)) if t == e => Ok(t),
+                    _ => Ok(CTy::Other),
+                }
+            }
             // `throw e` never produces a value; only reached when every arm throws.
             Expr::Throw { .. } => Ok(CTy::Other),
             // A lambda's compile-time type reflects its declared params and return type so that

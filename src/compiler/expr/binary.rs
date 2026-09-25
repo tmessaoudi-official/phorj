@@ -17,7 +17,7 @@ impl Compiler<'_> {
                 self.expr(lhs)?;
                 let l_false = self.emit_jump(Op::JumpIfFalse(0), line); // pops lhs
                 let h_merge = self.height; // both branches converge to one bool above this
-                self.expr(rhs)?;
+                self.expr_narrowed(rhs, lhs, true)?; // DEC-535: `rhs` runs only when `lhs` is true
                 let l_end = self.emit_jump(Op::Jump(0), line);
                 self.patch_jump(l_false);
                 self.height = h_merge; // false-path: reset before pushing the literal `false`
@@ -33,7 +33,7 @@ impl Compiler<'_> {
                 let l_end = self.emit_jump(Op::Jump(0), line);
                 self.patch_jump(l_rhs);
                 self.height = h_merge; // rhs-path: reset before evaluating rhs
-                self.expr(rhs)?;
+                self.expr_narrowed(rhs, lhs, false)?; // DEC-535: `rhs` runs only when `lhs` is false
                 self.patch_jump(l_end);
                 return Ok(());
             }

@@ -109,4 +109,28 @@ impl Checker {
         }
         out
     }
+
+    /// DEC-535 — check `e` with `cond`'s `polarity` narrowings installed as shadows in a child scope:
+    /// the right operand of `&&` (polarity true) and `||` (false), and each if-expression arm. The
+    /// expression-level twin of [`Self::check_block_narrowed`], with the same mutability rule.
+    pub(in crate::checker) fn check_expr_narrowed(
+        &mut self,
+        e: &crate::ast::Expr,
+        cond: &crate::ast::Expr,
+        polarity: bool,
+        span: Span,
+    ) -> Ty {
+        let narrowings = self.narrow_from_condition(cond, polarity);
+        if narrowings.is_empty() {
+            return self.check_expr(e);
+        }
+        self.push_scope();
+        for (name, ty) in narrowings {
+            let m = self.lookup_binding(&name).map(|(_, m)| m).unwrap_or(false);
+            self.declare_narrowed(&name, ty, m, span);
+        }
+        let t = self.check_expr(e);
+        self.pop_scope();
+        t
+    }
 }

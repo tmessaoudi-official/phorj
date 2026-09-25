@@ -223,6 +223,9 @@ struct Compiler<'a> {
     /// Active `match`-arm bindings (a stack; innermost shadows). Populated while compiling an arm
     /// body, truncated after.
     match_bindings: Vec<MatchBinding>,
+    /// DEC-535: narrowed local `CTy`s visible to `ctype` (`&self`) while it types an if-expression arm
+    /// — `(slot, CTy)`, innermost last. See `narrow.rs`.
+    narrow_overlay: std::cell::RefCell<Vec<(usize, CTy)>>,
     /// When compiling a synthetic constructor body, holds the code indices of the body's `return`
     /// statements (redirected to the ctor epilogue instead of an `Op::Return`). `None` outside a
     /// ctor body. The interpreter discards a ctor body's return and always yields the promoted
@@ -476,6 +479,7 @@ mod ctors;
 mod cty;
 mod cty_members;
 mod emit;
+mod narrow;
 
 #[cfg(test)]
 mod tests;

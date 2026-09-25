@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — narrowing through `&&`, `||` and if-expressions (scout row 5r; DEC-535; 2026-09-25)
+
+A null or type test now narrows the right operand of `&&` (by its left side being true), the right
+operand of `||` (by its left side being false), and each arm of an if-expression — the places Kotlin,
+TypeScript, Swift and C# narrow. Before, only statement blocks narrowed, so
+`seen instanceof null || seen.bp < 0` and `if (!(seen instanceof null)) { seen.tenure } else { "" }`
+failed `E-OPT-USE`. An if-expression now has the type of its WIDER arm (it used to take the then-arm's).
+Checker (`check_expr_narrowed`) and VM compiler (new `compiler/narrow.rs`, polarity-aware) narrow at the
+same places; `ctype` types each if-expression arm under its own narrowing and answers only when the arms
+agree. No editor grammar change (no new syntax); the LSP publishes the checker's diagnostics.
+
+### Fixed — the VM refused a statement `if`'s else-block narrowing the checker accepted
+
+`if (!(x is int)) { return 0; } else { return x + 1; }` type-checked clean and ran on the tree-walker,
+but the VM failed `compile error: x is not numeric` — the checker narrowed the else-block by the negated
+test, the compiler narrowed only then-blocks (Invariant 1). Pre-existing; found planning row 5r.
+
+### Fixed — a diverging `try` body lost its assignment for the constructor-once check (row 5j follow-up)
+
+`try { this.x = 1; throw new E(); } catch (E e) { this.x = 2; }` passed without
+`E-ASSIGN-IMMUTABLE-TWICE`: a body with no completing path contributed nothing to the catch's entry
+state. The walk now tracks every field assigned on any path (`touched`), diverging ones included.
+
+`examples/guide/narrowing-operators.phg`; checker tests `src/checker/tests/narrow_operators.rs`,
+differential `narrowing_through_operators_agrees_on_every_leg`.
+
 ### Added — constructor-once fields (scout row 5j; DEC-524; 2026-09-25)
 
 An immutable field with no initializer may now be assigned in its own class's constructor, exactly once

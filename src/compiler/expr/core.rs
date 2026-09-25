@@ -357,11 +357,11 @@ impl Compiler<'_> {
                 self.expr(cond)?;
                 let else_j = self.emit_jump(Op::JumpIfFalse(0), span.line); // pops cond
                 let h_merge = self.height; // both arms converge to one value above this
-                self.expr(then_expr)?;
+                self.expr_narrowed(then_expr, cond, true)?; // DEC-535
                 let end_j = self.emit_jump(Op::Jump(0), span.line);
                 self.patch_jump(else_j);
                 self.height = h_merge; // else path starts at the merge height
-                self.expr(else_expr)?;
+                self.expr_narrowed(else_expr, cond, false)?;
                 self.patch_jump(end_j);
             }
             Expr::Lambda {

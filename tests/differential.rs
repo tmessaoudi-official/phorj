@@ -7144,3 +7144,56 @@ function main(): void {
         "ctor_once",
     );
 }
+
+/// DEC-535 (scout row 5r): narrowing through `&&` / `||` and if-expression arms runs identically on
+/// every leg. The first function is a PRE-EXISTING break found while planning the row: the checker
+/// narrowed a statement `if`'s ELSE block by the negated test, the VM compiler did not, so this
+/// type-checked clean and then failed `compile error: x is not numeric` on the VM only. The
+/// `(if … ) + 1` line is the Invariant-7 shape: an if-expression whose arm is typed only under its
+/// narrowing, used as an arithmetic operand.
+#[test]
+fn narrowing_through_operators_agrees_on_every_leg() {
+    agree_out_php(
+        "import Core.Output;
+function elseArm(int | string x): int {
+    if (!(x is int)) {
+        return 0;
+    } else {
+        return x + 1;
+    }
+}
+function both(int | string x): bool {
+    return x is int && x + 1 > 2;
+}
+function either(int | string x): bool {
+    return !(x is int) || x + 1 > 2;
+}
+function arm(int | string x): int {
+    return (if (x is int) { x + 1 } else { 0 }) + 1;
+}
+function seen((tenure: string, bp: int)? s): string {
+    if (s instanceof null || s.tenure == \"x\") {
+        return \"none\";
+    }
+    return if (!(s instanceof null) && s.bp > 3) { s.tenure } else { \"low\" };
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int | string str = \"s\";
+    int | string four = 4;
+    int | string one = 1;
+    Output.printLine(\"{elseArm(four)} {elseArm(str)}\");
+    Output.printLine(\"{both(four)} {both(one)} {both(str)}\");
+    Output.printLine(\"{either(four)} {either(one)} {either(str)}\");
+    Output.printLine(\"{arm(four)} {arm(str)}\");
+    (tenure: string, bp: int)? none = null;
+    var x = seen((tenure: \"x\", bp: 9));
+    var a = seen((tenure: \"a\", bp: 9));
+    var b = seen((tenure: \"b\", bp: 1));
+    Output.printLine(\"{seen(none)} {x} {a} {b}\");
+}
+",
+        "5 0\ntrue false false\ntrue false true\n6 1\nnone none a low\n",
+        "narrowing_operators",
+    );
+}

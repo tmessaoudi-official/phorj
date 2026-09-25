@@ -189,3 +189,17 @@ fn an_initialized_promoted_or_inherited_field_gets_no_permission() {
         "E-ASSIGN-IMMUTABLE",
     );
 }
+
+#[test]
+fn a_try_body_that_diverges_then_a_catch_assignment_is_twice() {
+    // 6C finding (row 5j): the body ASSIGNS, then throws directly — no completing path leaves the
+    // body, and PHP `readonly` would still fatal in the catch. The body's assignments must reach the
+    // catch's entry state whether or not the body completes.
+    has(
+        &format!(
+            "class BadError implements Error {{ constructor(public string message) {{}} }} \
+             class C {{ int x; constructor() throws BadError {{ try {{ this.x = 1; throw new BadError(\"x\"); }} catch (BadError e) {{ this.x = 2; }} }} }}{MAIN}"
+        ),
+        "E-ASSIGN-IMMUTABLE-TWICE",
+    );
+}
