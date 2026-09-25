@@ -57,7 +57,7 @@
 > **DONE (2026-09-25): row 5o** (`11818dbd`) — LSP hover/definition/completion on `Class.member` (constants, statics, static methods, inherited too); `src/lsp/class_member.rs`. Not covered: `K::` completion, cross-file classes.
 > **DONE (2026-09-25): row 5j** (`97b381a3`) — DEC-524 constructor-once fields + E-FIELD-READ-BEFORE-INIT; scout TenureSignal shape checks.
 > **DONE (2026-09-25): row 5r** (`1d52af0e`) — DEC-535 narrowing through `&&`/`||`/if-expressions (checker + VM compiler in lockstep); fixed a pre-existing VM-only else-block compile error.
-> **DONE (2026-09-25): row 5d** (`1bb0ec8f`) — DEC-515's `@var`-local half: declared keyed-shape locals keep their type, reads become fields, keyed literals written to them become tuples; fixed `doc_tag`'s prefix name match. Scout: only `Dedup.php` reachable (Q-0925-2 tuple field write).
+> **DONE (2026-09-25): row 5d** (`1bb0ec8f`, 6C follow-up `0bd7b181`) — DEC-515's `@var`-local half: declared keyed-shape locals keep their type, reads become fields, keyed literals written to them become tuples; fixed `doc_tag`'s prefix name match. Scout: only `Dedup.php` reachable (Q-0925-2 tuple field write).
 > **THEN:** row 5t (DEC-537, assignment in a narrowed block checks against the declared type), then row 5s (DEC-536, tuple field assignment through a `mutable` place), then L3.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].

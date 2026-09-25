@@ -165,7 +165,8 @@ fn is_literal_true(cond: &php::PhpExpr) -> bool {
 /// side effects or depends on state that does not exist yet at the hoist point.
 fn literal_rhs(e: &php::PhpExpr) -> Option<php::PhpExpr> {
     // A `@var` above the assignment (row 5d) wraps the literal; a scalar literal carries no shape, so
-    // the hoisted declaration loses nothing by taking the bare value.
+    // the hoisted declaration loses nothing by taking the bare value. The hoist path never calls
+    // `declare_local_type`, so a SHAPED value must never become hoistable here.
     if let php::PhpExpr::Declared { value, .. } = e {
         return literal_rhs(value);
     }

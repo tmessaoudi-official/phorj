@@ -11,7 +11,7 @@ kept[0].tags = List.append(kept[0].tags, "b");   // E-ASSIGN-TARGET: cannot set 
 [Verified 2026-09-25 on the release binary.] A named tuple is an immutable value, so the PHP per-key
 write `$kept[$i]['duplicates'][] = …` — scout `Rent/Core/Dedup.php`, now that row 5d types `$kept` — lifts
 to a draft that `phg check` refuses by name. Before row 5d it was refused too, as a string index on a
-tuple. Nothing is silently wrong; the gap is a language form for "this tuple with one field replaced"
+tuple [Verified 2026-09-25: `k[0]["b"] = …` on the same list → `type (a: int, b: List<string>) cannot be indexed`]. Nothing is silently wrong; the gap is a language form for "this tuple with one field replaced"
 (Rust/Kotlin `copy(tags = …)`, C# `with { … }`, OCaml `{ r with … }`). **RULED 2026-09-25 as DEC-536** — field assignment through a `mutable` place; build queued as scout row 5s.
 
 ## NARROWED-REASSIGN — an assignment inside a narrowed block is checked against the narrowed type (found 2026-09-25 planning scout row 5d)
