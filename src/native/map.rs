@@ -117,7 +117,8 @@ fn map_get_or(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 /// `merge(a, b) -> Map<K,V>` — `a`'s entries with `b`'s merged in: a shared key keeps `a`'s position
-/// but takes `b`'s value, `b`'s new keys append (≡ PHP `array_merge`, ≡ `build_map` over `a ++ b`).
+/// but takes `b`'s value, `b`'s new keys append (≡ PHP `array_replace` — NOT `array_merge`, which
+/// renumbers int keys — ≡ `build_map` over `a ++ b`).
 fn map_merge(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Map(a), Value::Map(b)] => {
@@ -327,6 +328,10 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             },
         },
         // `merge` — a new map; a shared key takes the SECOND map's value at the first's position.
+        // PHP leg is `array_replace`, NOT `array_merge`: `array_merge` RENUMBERS int keys
+        // (`[5 => a] + [7 => b]` → `[0 => a, 1 => b]`), which broke byte-identity on every int-keyed
+        // merge until row 5p (2026-09-25, `map_merge_keeps_int_keys_on_every_leg`). `array_replace`
+        // keeps keys, takes the later value and keeps the first position — `build_map`'s rule exactly.
         NativeFn {
             module: "Core.Map",
             name: "merge",
@@ -335,7 +340,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(map_merge),
             lift_from: &[],
-            php: |a| format!("array_merge({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("array_replace({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `map` / `filter` over VALUES (keys preserved) — higher-order, like the `Core.List` versions.
         NativeFn {

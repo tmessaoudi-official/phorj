@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Map.merge` keeps int keys when transpiled (scout row 5p; 2026-09-25)
+
+- **`Map.merge` transpiles to `array_replace`, not `array_merge`.** `array_merge` RENUMBERS int keys, so an
+  int-keyed merge printed `5=a 9=y 7=b` on the VM and tree-walker but `0=a 1=x 2=b 3=y` under PHP — an
+  Invariant-1 break that every string-keyed use (all shipped examples) hid. `array_replace` keeps keys,
+  takes the later value and keeps the first position, the kernel's `build_map` rule exactly. Found while
+  researching DEC-534. Pinned by `map_merge_keeps_int_keys_on_every_leg` (red first on the PHP leg; a
+  revert of the emit reds it). Out of scope and already disclosed: PHP's coercion of integer-like STRING
+  keys (KNOWN_ISSUES, the `Core.Map` key-coercion caveat).
+
 ### Fixed — PHP string escapes lift as PHP decodes them (scout row 5n; 2026-09-25)
 
 `examples/lift/escapes.php` / `escapes.phg`. KNOWN_ISSUES §LIFT-UNICODE-ESCAPE is FIXED.

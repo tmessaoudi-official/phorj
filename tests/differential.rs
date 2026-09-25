@@ -3610,6 +3610,9 @@ const TIER1_PHP: &[&str] = &[
     "array_pop",
     "array_push",
     "array_reduce",
+    // `Map.merge` (row 5p): keeps int keys where `array_merge` renumbers them. ext/standard,
+    // present under `php -n` [Verified 2026-09-25: `function_exists` + ReflectionFunction → standard].
+    "array_replace",
     "array_reverse",
     "array_search",
     "array_shift",
@@ -7054,5 +7057,28 @@ function main(): void {
 }",
         "z0a 11 1\nz1a 11 1\nz2a 11 1\n12500\n",
         "collection_const_copies",
+    );
+}
+
+/// Row 5p (found at the DEC-534 research, 2026-09-25): `Map.merge` on INT keys. The kernel keeps every
+/// key — a shared key takes the second map's value at the first's position, new keys append — but the
+/// PHP leg was `array_merge`, which RENUMBERS int keys (`0=a 1=x 2=b 3=y`). A string-keyed merge hid
+/// it: every earlier usage was string-keyed. `array_replace` is the kernel's rule exactly.
+#[test]
+fn map_merge_keeps_int_keys_on_every_leg() {
+    agree_out_php(
+        "import Core.Map;
+import Core.Output;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Map<int, string> a = [5 => \"a\", 9 => \"x\"];
+    Map<int, string> b = [7 => \"b\", 9 => \"y\"];
+    for (int k, string v in Map.merge(a, b)) {
+        Output.printLine(\"{k}={v}\");
+    }
+}
+",
+        "5=a\n9=y\n7=b\n",
+        "map_merge_int_keys",
     );
 }
