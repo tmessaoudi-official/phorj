@@ -7196,6 +7196,68 @@ function main(): void {
 }
 
 #[test]
+fn tuple_field_write_through_a_narrowed_optional_agrees_on_every_leg() {
+    // Rows 5r/5t × 5s (6C composition probe): a field write on a `Row?` local AFTER a null guard, in
+    // the `else` arm, and right after a DEC-537 reassignment in the narrowed block. Both features act
+    // on the same VM slot (narrowing retypes it, the write is `SetPathLocal` on it); the caller's `r`
+    // must stay untouched.
+    agree_out_php(
+        "import Core.Output;
+import Core.List;
+type Row = (id: int, tags: List<string>);
+function guarded(Row? r0): string {
+    mutable Row? t = r0;
+    if (t instanceof null) {
+        return \"none\";
+    }
+    t.id = 5;
+    t.tags[0] = \"z\";
+    t.id += 2;
+    return \"{t.id} {t.tags[0]} {t.tags[1]}\";
+}
+function elseArm(Row? r0): string {
+    mutable Row? u = r0;
+    if (u instanceof null) {
+        u = (id: 9, tags: [\"q\"]);
+    } else {
+        u.id = 3;
+        u.tags[0] = \"w\";
+    }
+    if (u instanceof null) {
+        return \"none\";
+    }
+    return \"{u.id} {u.tags[0]}\";
+}
+function fill(Row? r0): string {
+    mutable Row? v = r0;
+    if (v instanceof null) {
+        v = (id: 0, tags: [\"new\"]);
+        v.id = 4;
+        v.tags[0] = \"set\";
+    }
+    if (v instanceof null) {
+        return \"none\";
+    }
+    return \"{v.id} {v.tags[0]}\";
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Row r = (id: 1, tags: [\"a\", \"b\"]);
+    Output.printLine(guarded(r));
+    Output.printLine(guarded(null));
+    Output.printLine(elseArm(r));
+    Output.printLine(elseArm(null));
+    Output.printLine(fill(null));
+    Output.printLine(fill(r));
+    Output.printLine(\"{r.id} {r.tags[0]}\");
+}
+",
+        "7 z b\nnone\n3 w\n9 q\n4 set\n1 a\n1 a\n",
+        "tuple_field_narrowed",
+    );
+}
+
+#[test]
 fn narrowed_reassignment_agrees_on_every_leg() {
     // DEC-537 (row 5t): a direct assignment in a narrowed block checks against the DECLARED type and
     // the narrowing follows the value. The primitive cases are the VM-visible ones: the compiler keys

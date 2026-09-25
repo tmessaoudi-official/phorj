@@ -11,6 +11,8 @@ impl Checker {
     /// (`E-ASSIGN-UNKNOWN`), be declared `mutable` (`E-ASSIGN-IMMUTABLE`), and the value must be
     /// assignable to its (generics-substituted) type (`E-ASSIGN-TYPE`). A `?.` target is rejected
     /// (`E-ASSIGN-TARGET`); nested index-into-field (`this.f[i] = e`) stays deferred to a later slice.
+    /// A named-tuple object dispatches to [`Self::check_tuple_field_assign`] (DEC-536: value semantics,
+    /// so the place must be rooted in a `mutable` local).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn check_field_assign(
         &mut self,
