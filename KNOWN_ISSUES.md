@@ -14,22 +14,25 @@ to a draft that `phg check` refuses by name. Before row 5d it was refused too, a
 tuple [Verified 2026-09-25: `k[0]["b"] = …` on the same list → `type (a: int, b: List<string>) cannot be indexed`]. Nothing is silently wrong; the gap is a language form for "this tuple with one field replaced"
 (Rust/Kotlin `copy(tags = …)`, C# `with { … }`, OCaml `{ r with … }`). **RULED 2026-09-25 as DEC-536** — field assignment through a `mutable` place; build queued as scout row 5s.
 
-## NARROWED-REASSIGN — an assignment inside a narrowed block is checked against the narrowed type (found 2026-09-25 planning scout row 5d)
+## NARROWED-REASSIGN — a NESTED assignment inside a narrowed block keeps the narrowed type (direct case FIXED 2026-09-25, row 5t)
 
 ```phorj
 mutable (id: int, name: string)? seen = null;
 if (seen instanceof null) {
-    seen = r;          // E-ASSIGN-TYPE: cannot assign `(id: int, name: string)` to `seen: null`
+    seen = r;              // OK since DEC-537 (row 5t): checked against the declared `(…)?`
+}
+if (seen instanceof null) {
+    if (ok) { seen = r; }  // still E-ASSIGN-TYPE — nested; the hint names DEC-537
 }
 ```
 
-[Verified 2026-09-25 on the release binary.] A narrowed shadow inherits the variable's mutability, and a
-reassignment through it is checked against the shadow's type (`check_block_narrowed`, deliberate for
-soundness when narrowing is kept). Kotlin, TypeScript, Swift and C# check it against the DECLARED type
-and update or drop the narrowing. It blocks the common PHP first-match idiom
-`if ($x === null) { $x = $row; }` from lifting; scout's two `@var …|null` sites assign under a `||`
-condition, which narrows nothing, and are unaffected. **RULED 2026-09-25 as DEC-537** (check against the declared type; build queued as scout row 5t). The VM compiler's
-primitive narrowing is keyed on the slot, so any change must drop or update it at the assignment too.
+[Verified 2026-09-25, `checker::tests::narrow_reassign`.] DEC-537's scope (ruled 2026-09-25 20:01) is a
+DIRECT statement of the block that narrowed the variable. A nested assignment, or one made while a second
+narrowing of the same variable is live, is still checked against the narrowed type: letting it change the
+type needs flow merging — the narrowing must widen back after the inner block, an outer narrowing of the
+same variable would go stale, and inside a loop the body's earlier reads were already typed against the
+old narrowing. Rewrite with one condition (`if (seen instanceof null && ok) { seen = r; }`) or assign
+outside the narrowed block. Full flow merging is the rejected-for-now option of that ruling.
 
 ## PERF-COLLECTION-CONST-JIT — a function that reads a List/Map constant stays off the JIT (found 2026-09-24 by scout row 5m)
 

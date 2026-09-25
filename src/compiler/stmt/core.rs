@@ -361,10 +361,11 @@ impl Compiler<'_> {
         // Slice 3 (DEC-184) + DEC-535: primitive locals take the tested operand `CTy` in each block the
         // test proves them for — the then-block by the test, the else-block by its negation (see
         // `narrow.rs`) — and the prior `CTy` is restored after, so the fall-through never sees it.
-        let saved = self.narrow(&self.prim_narrowings(cond, true));
+        let narrowed = self.prim_narrowings(cond, true);
+        let saved = self.narrow(&narrowed);
         self.begin_scope();
         for s in then_block {
-            self.stmt(s)?;
+            self.stmt_narrowed(s, &narrowed)?;
         }
         self.end_scope(line);
         self.unnarrow(saved);
@@ -373,10 +374,11 @@ impl Compiler<'_> {
         if let Some(eb) = else_block {
             // DEC-535: the else-block sees the NEGATED test's narrowings, as the checker's does —
             // `if (!(x is int)) { … } else { x + 1 }` was check-clean and VM-refused before this.
-            let saved = self.narrow(&self.prim_narrowings(cond, false));
+            let narrowed = self.prim_narrowings(cond, false);
+            let saved = self.narrow(&narrowed);
             self.begin_scope();
             for s in eb {
-                self.stmt(s)?;
+                self.stmt_narrowed(s, &narrowed)?;
             }
             self.end_scope(line);
             self.unnarrow(saved);

@@ -7153,6 +7153,71 @@ function main(): void {
 /// narrowing, used as an arithmetic operand. `flip` puts the narrowed operand in the ELSE arm under a
 /// negated test (row 5r's 6C: that arm had no test until then).
 #[test]
+fn narrowed_reassignment_agrees_on_every_leg() {
+    // DEC-537 (row 5t): a direct assignment in a narrowed block checks against the DECLARED type and
+    // the narrowing follows the value. The primitive cases are the VM-visible ones: the compiler keys
+    // its operand `CTy` on the slot, so a stale `int` there after `x = 2.5` would compile `x * 2.0` as
+    // an int multiply.
+    agree_out_php(
+        "import Core.Output;
+type Row = (id: int, name: string);
+function scale(int | float x0): float {
+    mutable int | float x = x0;
+    if (x is int) {
+        x = 2.5;
+        return x * 2.0;
+    }
+    return 0.0;
+}
+function label(int | string x0): string {
+    mutable int | string x = x0;
+    if (x is int) {
+        x = \"n\";
+        return \"{x}{x}\";
+    }
+    return \"-\";
+}
+function first(List<(id: int, name: string)> rows): string {
+    mutable (id: int, name: string)? seen = null;
+    for (Row r in rows) {
+        if (seen instanceof null) {
+            seen = r;
+        }
+    }
+    if (seen instanceof null) {
+        return \"none\";
+    }
+    return seen.name;
+}
+function guard((id: int, name: string)? s0): int {
+    mutable (id: int, name: string)? s = s0;
+    if (s instanceof null) {
+        return -1;
+    }
+    var id = s.id;
+    s = null;
+    if (s instanceof null) {
+        return id;
+    }
+    return 0;
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int | float three = 3;
+    int | string seven = 7;
+    Output.printLine(\"{scale(three)} {label(seven)}\");
+    (id: int, name: string)? none = null;
+    var f = first([(id: 1, name: \"a\"), (id: 2, name: \"b\")]);
+    var g = guard((id: 4, name: \"d\"));
+    Output.printLine(\"{f} {g} {guard(none)}\");
+}
+",
+        "5 nn\na 4 -1\n",
+        "narrowed_reassign",
+    );
+}
+
+#[test]
 fn narrowing_through_operators_agrees_on_every_leg() {
     agree_out_php(
         "import Core.Output;

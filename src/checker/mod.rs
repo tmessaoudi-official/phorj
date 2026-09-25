@@ -146,6 +146,10 @@ struct Binding {
     /// `mutable` — immutable by default (M-mut.1); only a `mutable` binding may be an assign target.
     mutable: bool,
     span: Span,
+    /// For a flow-narrowing SHADOW only: the variable's DECLARED type, which an assignment through the
+    /// shadow is checked against (DEC-537). Carried on the shadow because a guard narrowing installs
+    /// into the same scope map as the authored binding and replaces it — there is nothing below to find.
+    declared: Option<Ty>,
 }
 
 /// DEC-417 — a harvested `#[Deprecated(message: "…")]`. Its own type (rather than a bare

@@ -172,7 +172,12 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
             "E-ASSIGN-TYPE — a reassigned value's type does not match the binding's type.\n\n\
              Reassignment keeps the binding's declared type; the new value must be assignable to it\n\
              (the same rule as the original declaration). Convert the value, or change the binding's\n\
-             declared type.\n"
+             declared type.\n\n\
+             Inside a block that NARROWED the variable (`if (seen instanceof null) { … }`), a direct\n\
+             statement of that block is checked against the DECLARED type and the variable then has the\n\
+             assigned value's type (DEC-537). An assignment nested deeper is checked against the\n\
+             narrowed type: write the condition as one test (`if (seen instanceof null && ok)`), or\n\
+             assign outside the narrowed block.\n"
         }
         "E-ASSIGN-UNKNOWN" => {
             "E-ASSIGN-UNKNOWN — a reassignment targeted a name that is not an in-scope local.\n\n\

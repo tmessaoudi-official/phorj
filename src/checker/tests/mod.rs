@@ -37,6 +37,7 @@ mod must_use;
 mod mutation;
 mod named_args;
 mod narrow_operators;
+mod narrow_reassign;
 mod optionals;
 mod output_capture;
 mod overloading;

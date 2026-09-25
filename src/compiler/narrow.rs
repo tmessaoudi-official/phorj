@@ -84,6 +84,34 @@ impl Compiler<'_> {
         }
     }
 
+    /// A DIRECT statement of a block narrowed by `narrowed` (DEC-537, row 5t): an assignment to one of
+    /// those locals retypes its slot to the assigned value's `CTy`, as the checker retypes its shadow —
+    /// otherwise `if (x is int) { x = 2.5; x * 2.0 }` compiles the multiply for an `int` and faults.
+    /// Only a direct statement: the checker keeps a nested assignment to the narrowed type, and
+    /// [`Self::unnarrow`] restores the slot when the block ends.
+    pub(in crate::compiler) fn stmt_narrowed(
+        &mut self,
+        s: &crate::ast::Stmt,
+        narrowed: &[(usize, CTy)],
+    ) -> Result<(), String> {
+        let retype = match s {
+            crate::ast::Stmt::Assign {
+                target: Expr::Ident(name, _),
+                value,
+                ..
+            } => self
+                .resolve_local(name)
+                .filter(|slot| narrowed.iter().any(|(n, _)| n == slot))
+                .map(|slot| (slot, self.ctype(value).unwrap_or(CTy::Other))),
+            _ => None,
+        };
+        self.stmt(s)?;
+        if let Some((slot, cty)) = retype {
+            self.locals[slot].ty = cty;
+        }
+        Ok(())
+    }
+
     /// Compile `e` under `cond`'s `polarity` narrowings (an `&&`/`||` right operand, an if-expression
     /// arm).
     pub(in crate::compiler) fn expr_narrowed(

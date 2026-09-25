@@ -282,7 +282,9 @@ impl Checker {
             let m = self.lookup_binding(name).map(|(_, m)| m).unwrap_or(false);
             self.declare_narrowed(name, ty.clone(), m, span); // DEC-339: synthesized, not authored
         }
-        self.check_block(block);
+        // The block's statements run in the SAME scope as its shadows (`check_block` would push a
+        // second one), so a direct assignment finds its shadow innermost — DEC-537's "direct" test.
+        self.check_body(block);
         self.pop_scope();
     }
 

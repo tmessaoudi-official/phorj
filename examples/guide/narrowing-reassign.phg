@@ -1,0 +1,61 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+type Row = (id: int, name: string);
+
+// Assigning inside a narrowed block (DEC-537): the assignment is checked against the variable's
+// DECLARED type, and the narrowing follows the new value. This is PHP's first-match idiom,
+// `if ($seen === null) { $seen = $row; }`. Only a direct statement of the block that narrowed the
+// variable can change its type; an assignment nested one level deeper keeps the narrowed type.
+function firstLong(List<Row> rows): string {
+    mutable Row? seen = null;
+    for (Row r in rows) {
+        // One condition, so the assignment is a direct statement of the narrowed block. Written as
+        // `if (seen instanceof null) { if (r.id > 1) { seen = r; } }` it would be refused: nested.
+        if (seen instanceof null && r.id > 1) {
+            seen = r;
+        }
+    }
+    if (seen instanceof null) {
+        return "none";
+    }
+    return seen.name;
+}
+
+function firstOf(List<Row> rows): string {
+    mutable Row? seen = null;
+    for (Row r in rows) {
+        if (seen instanceof null) {
+            // `seen` is `null` here; this assignment checks against `Row?`, and `seen` is a `Row`
+            // for the rest of the block.
+            seen = r;
+            Output.printLine("picked {seen.name}");
+        }
+    }
+    if (seen instanceof null) {
+        return "none";
+    }
+    return seen.name;
+}
+
+function half(int | float x0): float {
+    mutable int | float x = x0;
+    if (x instanceof int) {
+        x = 2.5;
+        // was an `int`; now a `float` for the rest of the block
+        return x * 2.0;
+    }
+    return 0.0;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    List<Row> rows = [(id: 1, name: "ann"), (id: 2, name: "bo"), (id: 3, name: "cy")];
+    Output.printLine(firstOf(rows));
+    Output.printLine(firstLong(rows));
+    int | float three = 3;
+    Output.printLine("{half(three)}");
+}

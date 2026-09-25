@@ -32,12 +32,35 @@ impl Checker {
                 );
             }
             Some((bty, true)) => {
+                // DEC-537: a direct statement of the block that narrowed `name` is checked against the
+                // DECLARED type, and the narrowing then follows the value.
+                if let Some(declared) = self.direct_narrowed_declared(name) {
+                    if !self.ty_assignable(vty, &declared) {
+                        self.err_coded(
+                            Self::expr_span(value),
+                            format!("cannot assign `{vty}` to `{name}: {declared}`"),
+                            "E-ASSIGN-TYPE",
+                            None,
+                        );
+                    } else if !matches!(vty, Ty::Error | Ty::Never) {
+                        self.retype_direct(name, vty.clone());
+                    }
+                    return;
+                }
                 if !self.ty_assignable(vty, &bty) {
+                    let hint = self
+                        .narrowed_declared(name)
+                        .filter(|d| self.ty_assignable(vty, d))
+                        .map(|d| {
+                            format!(
+                                "`{name}` is declared `{d}` but narrowed to `{bty}` here; an assignment that changes a narrowed type must be a direct statement of the block that narrowed it (DEC-537)"
+                            )
+                        });
                     self.err_coded(
                         Self::expr_span(value),
                         format!("cannot assign `{vty}` to `{name}: {bty}`"),
                         "E-ASSIGN-TYPE",
-                        None,
+                        hint,
                     );
                 }
             }

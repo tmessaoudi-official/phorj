@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — assigning inside a narrowed block checks against the declared type (scout row 5t; DEC-537; 2026-09-25)
+
+`mutable Row? seen = null; if (seen instanceof null) { seen = r; }` used to fail `E-ASSIGN-TYPE`
+(`cannot assign … to seen: null`): the assignment was checked against the narrowed type. A direct
+statement of the block that narrowed the variable (an `if` branch, or the rest of a block after a guard)
+is now checked against the DECLARED type, and the variable has the assigned value's type from there —
+Kotlin, TypeScript, Swift and C# do the same. Scope ruled 2026-09-25 20:01: a nested assignment, or one
+made while a second narrowing of the variable is live, keeps the narrowed check, and its hint names
+DEC-537. The VM compiler retypes the local's slot at the same statements, so `if (x is int) { x = 2.5;
+x * 2.0 }` does not compile the multiply for an `int` (it faulted `expected int, found float` with only
+the checker half). No new syntax: no editor grammar change; the LSP publishes the checker's diagnostics.
+`phg explain E-ASSIGN-TYPE` describes both cases. Example: `examples/guide/narrowing-reassign.phg`.
+
 ### Added — `@var`-declared locals keep their shape in `phg lift` (scout row 5d; DEC-515; 2026-09-25)
 
 The second half of DEC-515. A local whose `/** @var … $x */` names a keyed shape — the local itself

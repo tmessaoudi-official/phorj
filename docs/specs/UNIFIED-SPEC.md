@@ -1848,6 +1848,17 @@ complement is derived (`x is int || x + 1` stays an error). Checker and VM compi
 places (`checker/stmt/narrow.rs` ↔ `compiler/narrow.rs`), so nothing the checker accepts is refused by
 the VM; the transpiled PHP needs no narrowing.
 
+**Assigning inside a narrowed block (DEC-537, 2026-09-25; scout row 5t).** An assignment that is a
+DIRECT statement of the block that narrowed a variable — an `if` branch, or the rest of a block after a
+guard — is checked against the variable's DECLARED type, and from there the variable has the assigned
+value's type: in `mutable Row? seen = null; if (seen instanceof null) { seen = r; … }` the assignment is
+checked against `Row?` and `seen` is a `Row` for the rest of the block (PHP's first-match idiom). Scope
+ruled 2026-09-25 20:01: a NESTED assignment (inside an inner block or a loop within the narrowed block)
+keeps the narrowed check and names DEC-537 in its hint, and so does any assignment while a second
+narrowing of the same variable is live — changing the type there would need flow merging (an outer
+narrowing left stale, a loop's earlier reads typed against the old narrowing). The VM compiler retypes
+the slot at the same direct statements (`compiler/narrow.rs` `stmt_narrowed`).
+
 ### The rejection catalogue (with reasons — the enduring negative space)
 
 **Dynamic-PHP footguns (defeat static checking — the exact surprise Phorj removes):**

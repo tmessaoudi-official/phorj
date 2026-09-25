@@ -239,7 +239,7 @@ impl Checker {
                 )),
             );
         }
-        self.declare_raw(name, ty, mutable, span);
+        self.declare_raw(name, ty, mutable, span, None);
     }
 
     /// Install a binding WITHOUT any of the shadow checks. The one legitimate bypass: a
@@ -249,12 +249,58 @@ impl Checker {
     ///
     /// Never call this for anything the author actually wrote; that is [`Self::declare_binding`].
     pub(super) fn declare_narrowed(&mut self, name: &str, ty: Ty, mutable: bool, span: Span) {
-        self.declare_raw(name, ty, mutable, span);
+        // DEC-537: the shadow remembers the DECLARED type — an outer shadow's, or the binding's own.
+        let declared = self
+            .innermost_binding(name)
+            .map(|b| b.declared.clone().unwrap_or(b.ty.clone()));
+        self.declare_raw(name, ty, mutable, span, declared);
     }
 
-    fn declare_raw(&mut self, name: &str, ty: Ty, mutable: bool, span: Span) {
+    fn declare_raw(&mut self, name: &str, ty: Ty, mutable: bool, span: Span, declared: Option<Ty>) {
         if let Some(top) = self.scopes.last_mut() {
-            top.insert(name.to_string(), Binding { ty, mutable, span });
+            top.insert(
+                name.to_string(),
+                Binding {
+                    ty,
+                    mutable,
+                    span,
+                    declared,
+                },
+            );
+        }
+    }
+
+    fn innermost_binding(&self, name: &str) -> Option<&Binding> {
+        self.scopes.iter().rev().find_map(|scope| scope.get(name))
+    }
+
+    /// The declared type of `name` when its innermost binding is a narrowing shadow (DEC-537).
+    pub(super) fn narrowed_declared(&self, name: &str) -> Option<Ty> {
+        self.innermost_binding(name)
+            .and_then(|b| b.declared.clone())
+    }
+
+    /// DEC-537 (scope ruled 2026-09-25 20:01): the declared type an assignment to `name` is checked
+    /// against when it is a DIRECT statement of the block that narrowed it — the shadow lives in the
+    /// innermost scope — and no other narrowing of `name` is live in this function. Changing the type
+    /// through an inner shadow would leave an outer one stale, and a nested assignment could be
+    /// followed by reads that the narrowing already typed (a loop's next iteration), so both keep the
+    /// narrowed check.
+    pub(super) fn direct_narrowed_declared(&self, name: &str) -> Option<Ty> {
+        let floor = self.fn_scope_floor.min(self.scopes.len());
+        let live = &self.scopes[floor..];
+        let (last, rest) = live.split_last()?;
+        let declared = last.get(name)?.declared.clone()?;
+        let other = rest
+            .iter()
+            .any(|scope| scope.get(name).is_some_and(|b| b.declared.is_some()));
+        (!other).then_some(declared)
+    }
+
+    /// Retype the innermost-scope binding of `name` — the narrowing following an assignment.
+    pub(super) fn retype_direct(&mut self, name: &str, ty: Ty) {
+        if let Some(b) = self.scopes.last_mut().and_then(|s| s.get_mut(name)) {
+            b.ty = ty;
         }
     }
 

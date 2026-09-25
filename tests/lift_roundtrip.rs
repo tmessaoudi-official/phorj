@@ -239,6 +239,37 @@ function none(): string {
 }
 echo best(load()) . "|" . total() . "|" . none();"#,
         ),
+        // DEC-537 row 5t: PHP's first-match idiom — `$seen` is null-tested and assigned in the block
+        // the test narrowed. Before row 5t the lifted assignment failed `E-ASSIGN-TYPE` (`to seen: null`).
+        (
+            "first_match_under_a_null_test",
+            r#"<?php
+/** @param list<array{id: int, name: string}> $rows */
+function first(array $rows): string {
+    /** @var array{id: int, name: string}|null $seen */
+    $seen = null;
+    foreach ($rows as $r) {
+        if ($seen === null) {
+            $seen = $r;
+        }
+    }
+    if ($seen === null) {
+        return "none";
+    }
+    return $seen['name'];
+}
+function noRows(): string {
+    /** @var list<array{id: int, name: string}> $rows */
+    $rows = [];
+    return first($rows);
+}
+function some(): string {
+    /** @var list<array{id: int, name: string}> $rows */
+    $rows = [['id' => 1, 'name' => 'a'], ['id' => 2, 'name' => 'b']];
+    return first($rows);
+}
+echo some() . "|" . noRows();"#,
+        ),
         (
             "string_escapes",
             r#"<?php
