@@ -21,6 +21,8 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   docblock (now read on constants) or is inferred from the literal — one type per level to any depth,
   one scalar plus `null` as `T?`. A mixed, empty or constant-referencing literal is refused by naming
   its shape, replacing a hint that promised a docblock would help. Constant references are Q-0924-1.
+  A `null` below the top level (`['a' => ['x' => 1, 'y' => null]]`) is refused too: the checker threads
+  a constant's declared type one level into its literal, so such a draft would not type-check.
 - LSP: diagnostics and the outline cover it; examples `examples/guide/collection-constants.phg`,
   `examples/lift/collection-constants.{php,phg}`; micro-bench `constmap` (verdict OWED — box loaded).
 
