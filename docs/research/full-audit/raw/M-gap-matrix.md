@@ -101,7 +101,7 @@
 | SYN-075 | P | single-level only [Verified: `break 2` parse error]; B-labeled-break in §3 M-RT ergonomics → the labelled part is GAP-planned |
 | SYN-076 | GD | no `goto` |
 | SYN-077 | CB | totality-checked (`E-MISSING-RETURN`) |
-| SYN-078 | P | `throw` is a statement (PJ-SYN-002); no throw-in-`??`/ternary expression form |
+| SYN-078 | P | `throw` is a statement (PJ-SYN-002); no throw-in-`??`/ternary expression form. **UPGRADED P→CE 2026-09-25 (§4.22): DEC-532 throw-expressions** in `??`, `if`-expression, `match` arm and lambda body; `\|\|`/`&&` refused by ruling |
 | SYN-079 | CB | compile-time checked `throws` + multi-catch via union type [Verified: `catch (E1 \| E1)` parses, dies on E-UNION-ARITY dup only] + `finally` |
 | SYN-080 | GP | generators/`yield` — marathon A2 (memory: session-naming-and-b1 "NEXT=A2"); `yield` currently only PHP-reserved-guarded |
 | SYN-081 | CB | uncolored green threads: `spawn`/`Channel`/`Task.join`, deterministic identical scheduling on both backends (PJ-SYN-009, PJ-RT-004) |
@@ -1475,3 +1475,55 @@ of the re-pass: 8 of ~20 groups mapped** (FN-FS +12, FN-ARR ±0, FN-MATH ±0 aft
 checked and found correct is information, and without the record the next pass re-does the work.
 
 **The number:** **PHP-parity ≈ 71% · floor ≈ 59% · Vision ≈ 72%** — unchanged from §4.20.
+
+### 4.22 Recompute at scout row 5m (2026-09-25) — **one SYN row moves; parity and floor unchanged, Vision ≈73**
+
+**Span:** `13e913a0` (§4.20/§4.21, 2026-09-05) → `dba149a6` (2026-09-25) — the scout forcing-function
+lane (plan `docs/plans/2026-09-07-scout-forcing-function.plan.md`, rows 1–5m) plus the dependency
+upgrade. Method as §4.16 learned it: the live registry first, then the §4.x credit history, then the row.
+
+**FN — ±0 [Verified: registry unchanged].** `git diff --stat 13e913a0..HEAD -- src/native/ src/ext/`
+touches 7 files, none adding a native: the regex `{,n}` refusal (DEC-522), an HTTP-serve registration
+refactor, and the `Ty::Tuple` arity change from named-field tuples (DEC-504) in `list_registry.rs`/`map.rs`.
+
+**SYN — rows checked, one mover:**
+
+| row | before | after | credit | evidence |
+|---|---|---|---|---|
+| SYN-078 throw-as-expression | P | **CE** | **+0.5** | DEC-532 (`a423d612`): `throw e` is a `never`-typed expression in `??`, an `if`-expression arm (phorj's ternary), a `match` arm and a lambda `=>` body, on all three legs. The residue — PHP's `$x \|\| throw …` / `$x && throw …` — is refused by ruling (`E-THROW-POSITION`) |
+| SYN-053 `<=>` | CB | CB | ±0 | `<=>` + tuple ordering shipped (DEC-505/512/513), but the row was already CB via `List.sortWith` |
+| SYN-110 class consts | CE | CE | ±0 | DEC-533 (`00b6db96`) adds List/Map constants and negative literals. The row was credited CE at baseline without PHP's `const array`; it is now earned rather than over-credited |
+| SYN-115 traits | P (07-22) | P | ±0 | trait `const` now parses and runs identically on all three legs [Verified 2026-09-25: `trait T { public const int X = 7; }` used via `C.X` prints `7` on VM, tree-walker and transpiled PHP 8.5]. **But the 2026-07-22 CE→P downgrade was never subtracted from the tally** (§4.12's +2.5 is `#[Invoke]`/`#[ToString]` +2 and `#[Deprecated]` +0.5 only), so the numerator already counted the row as covered — re-crediting would double-count. The row text says P; the score says CE; both are now true of the language |
+| SYN-147 contextual keywords | CE | CE | ±0 | DEC-531 lets a reserved word be a member name, as PHP's semi-reserved words are; already CE |
+
+**RT — ±0.** DEC-530 (a faulting program keeps its earlier stdout) fixes behaviour *within* RT's rows;
+no RT row names it.
+
+**Deliberately NOT credited:** named-field tuples (DEC-504, beyond PHP), the lifter wall-falls (L1a–5m),
+the four P0s found and fixed along the way (5g0, 5h0, 5h1, and 5f0's VM shutdown handlers resuming an ended program) — programme or
+correctness, so they move Vision's 0.30 leg or nothing.
+
+**Arithmetic (additive on §4.21 — T1 190/303, T2 64/140, T3 18/75; SYN 110/129; RT 13.5/18):**
+- SYN: 110 + 0.5 = **110.5 / 129 = 85.7%** (was 85.3%)
+- FN usage-weighted **56.6%**, RT **75.0%** — unchanged
+- **PHP-parity = 0.35×85.7 + 0.40×56.6 + 0.25×75.0 = 30.0 + 22.6 + 18.75 = 71.4 ≈ 71%** (unchanged)
+- Raw floor: (110.5 + 267.5 + 13.5)/665 = 391.5/665 = 58.9% ≈ **59%** (unchanged)
+
+**Vision %** — programme deltas on §4.20's mean 73.9: the lifter's real-application breadth (scout
+57/123 → **82/153** files lift, 12 lift walls down across rows L1a–5m) **+1.0**; beyond-PHP language
+(named-field tuples DEC-504, tuple ordering) **+0.5**; the enforcement floor (four P0s found by the
+work itself and fixed, each with a red-first differential test) **+0.5**; and a DEBIT against §4.20's
+editor credit — hover, go-to-definition and completion on `Class.member` answer nothing for EVERY member
+kind (KNOWN_ISSUES §LSP-CLASS-QUALIFIED-MEMBERS, pre-existing, found at row 5m) **−0.5**. New mean =
+**75.4**. **Vision = 0.70×71.4 + 0.30×75.4 = 50.0 + 22.6 = 72.6 ≈ 73%** (was ≈72).
+
+**Grade, per Rule 18:** the FN verdict **[Verified]** (diff stat above, each file read); the SYN-078
+flip **[Verified]** as shipped surface, **[Inferred]** as CE rather than P (the call on the `||`/`&&`
+residue); the SYN-115 double-count finding **[Verified]** (the §4.12 arithmetic lists its SYN movers);
+headline parity/floor **[Inferred]** (additive delta on the ratified 35/40/25 model); the Vision bumps
+**[Speculative]**, kept to half-points as in every prior recompute. **Sensitivity, stated because the
+Vision move is inside rounding:** without the programme bumps Vision is 0.70×71.4 + 0.30×73.9 = 72.1,
+so the whole +1pp is judgement; parity's exact value moved only +0.2. The full 631-row §1.2 re-tally
+remains OWED (8 of ~20 groups mapped, §4.21).
+
+**The number:** **PHP-parity ≈ 71% · floor ≈ 59% · Vision ≈ 73%** (from §4.21's 71/59/72).

@@ -50,6 +50,7 @@
 > Measured on scout: 73/151 unchanged, no refusal names `throw`; `Core/Text.php` now stops at PHP 8.3 typed class
 > constants (`private const array X = [...]`, unannotated) and `Job/JobStore.php` at `mixed` — L3 still blocked, on
 > Text.php's new wall. Found: KNOWN_ISSUES §PERF-COALESCE-OPTIONAL-JIT (`??` on an optional never JITs, ~40× LOSS).
+> **DONE (2026-09-25): parity recompute** — M-gap-matrix §4.22: PHP-parity ≈71% · floor ≈59% · Vision ≈73% (SYN-078 P→CE; FN ±0).
 > **DONE:** row 5m — DEC-533 collection constants BUILT (`00b6db96`); scout 82/153 lift; `Core/Text.php` now stops at map union `self::A + self::B` (Text.php:137, unruled). Found: KNOWN_ISSUES §PERF-COLLECTION-CONST-JIT, §LSP-CLASS-QUALIFIED-MEMBERS, §LIFT-UNICODE-ESCAPE.
 > **THEN:** row 5n (§LIFT-UNICODE-ESCAPE, ruled next), then rule the map-union wall (Text.php:137, gates L3), row 5o (§LSP-CLASS-QUALIFIED-MEMBERS, ahead of 5j), 5j, 5d.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
