@@ -8,7 +8,7 @@ use super::*;
 
 /// The phorj type of `value`, the initializer of the PHP constant `name`.
 pub(super) fn infer_const_type(name: &str, value: &php::PhpExpr) -> Result<Type, String> {
-    match infer(value) {
+    match infer(value, 0) {
         Ok(Shape::Ty(t)) => Ok(t),
         Ok(Shape::Null) => Err(format!(
             "lift: const `{name}` is `null` — its type cannot be inferred"
@@ -22,7 +22,8 @@ enum Shape {
     Ty(Type),
 }
 
-fn infer(e: &php::PhpExpr) -> Result<Shape, String> {
+/// `depth` is the nesting level of the array `e` sits in: 0 for the constant itself.
+fn infer(e: &php::PhpExpr, depth: usize) -> Result<Shape, String> {
     if matches!(e, php::PhpExpr::Null) {
         return Ok(Shape::Null);
     }
@@ -39,11 +40,11 @@ fn infer(e: &php::PhpExpr) -> Result<Shape, String> {
             if keyed != 0 && keyed != elems.len() {
                 return Err("mixes keyed and positional elements".into());
             }
-            let value = join(elems.iter().map(|x| &x.value))?;
+            let value = join(elems.iter().map(|x| &x.value), depth)?;
             if keyed == 0 {
                 return Ok(Shape::Ty(generic("List", vec![value])));
             }
-            let key = join(elems.iter().filter_map(|x| x.key.as_ref()))?;
+            let key = join(elems.iter().filter_map(|x| x.key.as_ref()), depth)?;
             if !matches!(&key, Type::Named { name, .. } if name == "int" || name == "string") {
                 return Err("has a key that is not an `int` or a `string`".into());
             }
@@ -56,12 +57,17 @@ fn infer(e: &php::PhpExpr) -> Result<Shape, String> {
     }
 }
 
-/// One type for every element: the shared non-null type, made `T?` when a `null` is present.
-fn join<'a>(elems: impl Iterator<Item = &'a php::PhpExpr>) -> Result<Type, String> {
+/// One type for every element: the shared non-null type, made `T?` when a `null` is present — at the
+/// TOP level only. The checker threads a constant's declared type one level into its literal, so a
+/// `null` deeper down would lift to a type the draft's own check rejects; it is refused instead.
+fn join<'a>(elems: impl Iterator<Item = &'a php::PhpExpr>, depth: usize) -> Result<Type, String> {
     let mut ty: Option<Type> = None;
     let mut nullable = false;
     for e in elems {
-        match infer(e)? {
+        match infer(e, depth + 1)? {
+            Shape::Null if depth > 0 => {
+                return Err("holds a nullable element below the top level — not inferred".into())
+            }
             Shape::Null => nullable = true,
             Shape::Ty(t) => match &ty {
                 None => ty = Some(t),

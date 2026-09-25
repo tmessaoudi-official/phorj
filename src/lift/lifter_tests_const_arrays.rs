@@ -65,6 +65,18 @@ fn a_scalar_plus_null_infers_an_optional() {
 }
 
 #[test]
+fn a_nested_nullable_value_is_refused_or_checks() {
+    // Whatever the lifter emits must type-check: a `null` below the top level either lifts to a
+    // type the checker accepts, or is refused by name — never a draft the checker rejects.
+    match lift_source(&class_with(
+        "private const array N = ['a' => ['x' => 1, 'y' => null]];",
+    )) {
+        Ok(out) => checks_clean(&out),
+        Err(err) => assert!(err.contains("nullable"), "{err}"),
+    }
+}
+
+#[test]
 fn a_negative_number_is_a_literal() {
     let out = lift(&class_with(
         "private const int FLOOR = -5; private const array B = [-1, 2];",
