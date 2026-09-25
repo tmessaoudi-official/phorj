@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — LSP hover, go-to-definition and completion on `Class.member` (scout row 5o; 2026-09-25)
+
+`K.MAX`, `K::MAX` and `K.twice(1)` answered `null` for hover and definition, and `K.` completed
+nothing, for every member kind (KNOWN_ISSUES §LSP-CLASS-QUALIFIED-MEMBERS, found at row 5m). The new
+`src/lsp/class_member.rs` resolves a class-name receiver to its constants, `static` fields and `static`
+methods, own first and then inherited, and all three requests use it; hover's receiver scan
+(`hover_member::receiver_before`) now also reads `::`. `K.twice` no longer risks a same-named top-level
+function. Completion's repaired parse is now computed once for both the class and the instance
+paths. Not covered: `K::` completion, cross-file classes. Six tests in
+`src/lsp/tests_class_members.rs`, red first; six sabotages red (two first forms did not apply, re-run).
+Both editor READMEs updated.
+
 ### Added — `Map.union`, PHP's array `+` (scout row 5q; DEC-534; 2026-09-25)
 
 `examples/guide/map-union.phg`, `examples/lift/map-union.{php,phg}`, `bench/micro/mapunion.{phg,php}`.

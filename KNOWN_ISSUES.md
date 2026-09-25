@@ -15,7 +15,7 @@ over a map constant. `bench/micro/constmap.{phg,php}` measures it; its verdict i
 box sat at load 17–22 when it landed. Same class as §PERF-COALESCE-OPTIONAL-JIT (a non-scalar
 `Op::Const`); a fix would teach the JIT to keep a constant collection as an opaque boxed operand.
 
-## LSP-CLASS-QUALIFIED-MEMBERS — hover, go-to-definition and completion on `Class.member` answer nothing (found 2026-09-24 by scout row 5m)
+## FIXED — LSP-CLASS-QUALIFIED-MEMBERS — hover, go-to-definition and completion on `Class.member` answer nothing (found 2026-09-24 by scout row 5m)
 
 For EVERY member kind — a scalar `const`, a collection constant, a static method — the LSP answers
 `null` for hover and go-to-definition on `K.MAX` / `K.twice(1)`, and an empty list for completion
@@ -23,6 +23,21 @@ after `K.` [Verified 2026-09-24 with probe tests against `Server::handle`; `defi
 top-level items and locals, and member completion resolves an instance receiver's type, not a class
 name]. Pre-existing — not introduced by DEC-533 — and it is an Invariant-17 gap, so the fix is the
 developer's call to schedule. What does work: diagnostics, and the outline lists every member.
+
+**Fixed (row 5o, 2026-09-25).** `src/lsp/class_member.rs` keys the lookup on the RECEIVER: when the
+identifier before `.` (or `::`) names a user class — and no local of that name is in scope — the
+member is searched among the class's constants, `static` fields and `static` methods, then up its
+supertype chain (`class_supertypes`, the backends' hierarchy). Hover shows the member's declaration and
+doc; definition jumps to its name; completion after `K.` lists those members. An instance member is
+not class-qualified and still answers nothing. Keying on the receiver also removes a decoy: `K.twice`
+now reaches `K`'s static method, not a top-level `function twice` that hover would have matched by
+name. Completion joins the class's statics with a Core module of the same name, because the checker
+accepts both on one qualifier [Verified: a user `class Output { static function hello() }` beside
+`import Core.Output;` runs `Output.hello()` and `Output.printLine` in one file]. Not covered:
+completion after `K::` (the server's trigger characters are `.` and `[`, and `.` is phorj's spelling),
+a class declared in ANOTHER file (the lookup reads the current document's program), and user enum
+variants, which are written bare (`Defend()`) and so have no `Enum.Variant` form to resolve.
+`src/lsp/tests_class_members.rs` pins it — six tests, six sabotages.
 
 ## FIXED — LIFT-UNICODE-ESCAPE — a PHP `"\u{…}"` escape lifts as literal text, changing the string (found 2026-09-24 by scout row 5m; fixed 2026-09-25, scout row 5n)
 

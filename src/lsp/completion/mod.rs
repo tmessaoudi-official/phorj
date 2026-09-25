@@ -172,23 +172,31 @@ pub(super) fn complete(
             items
         }
         Ctx::Member(recv) => {
-            // Core-module qualifier first (`List.`/`Output.` → native members).
+            // A user CLASS named by the receiver offers its constants, statics and static methods
+            // (row 5o), then any Core module of the same name offers its natives: the checker accepts
+            // both on one qualifier (`Output.hello()` of a user `class Output` beside
+            // `Output.printLine`), so the two lists are joined, the class's first.
+            let repaired_for_class = program.is_none().then(|| parse_repaired(text, offset));
+            let class_prog = program.or(repaired_for_class.as_ref().and_then(Option::as_ref));
+            let statics = class_prog.map_or_else(Vec::new, |p| {
+                super::class_member::static_members(p, offset, &recv)
+            });
             let mods = catalog::module_members(&recv);
-            if !mods.is_empty() {
-                mods.into_iter()
-                    .map(|m| completion_item(&m, 3 /* Function */, "member"))
-                    .collect()
+            if !statics.is_empty() || !mods.is_empty() {
+                let statics = statics
+                    .into_iter()
+                    .map(|(m, kind, _)| completion_item(&m, kind, "static member"));
+                let mods = mods
+                    .into_iter()
+                    .map(|m| completion_item(&m, 3 /* Function */, "member"));
+                statics.chain(mods).collect()
             } else {
                 // Instance receiver (`this.`/`myVar.`): resolve its declared type → the class's members
                 // (+ inherited). The LIVE buffer usually does NOT parse (the trailing `receiver.` is a
                 // syntax error), so fall back to a repaired parse that blanks the cursor's line — the
                 // receiver's declaration lives on other lines and survives. Emits nothing for
                 // untyped/inferred receivers (the conservative gate).
-                let repaired = match program {
-                    Some(_) => None,
-                    None => parse_repaired(text, offset),
-                };
-                let prog = program.or(repaired.as_ref());
+                let prog = class_prog;
                 // DEC-504: a NAMED-TUPLE receiver completes its FIELDS. Tried before the class path
                 // because a tuple has no nominal head for `receiver_type_name` to return, so `t.`
                 // would otherwise offer nothing at all. A positional tuple has names to offer and is

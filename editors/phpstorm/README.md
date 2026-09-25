@@ -79,7 +79,9 @@ tokenizer skips the shebang; `phg run ./bin/console` works). To light these up i
   buffers). **Rename is still single-document**: it returns edits for the current file only, so a
   cross-file rename must be finished by hand.
 - Completion covers Core modules/members, import paths (Core **and** user packages), attribute names,
-  declared-type instance members (`this.` / `myVar.`), and local symbols/keywords. An **inferred**
+  declared-type instance members (`this.` / `myVar.`), a class's static members (`K.` — constants,
+  static fields, static methods, inherited ones too; hover and go-to-definition answer on `K.MAX` and
+  `K::MAX` alike), and local symbols/keywords. An **inferred**
   receiver (`var x = …`) or a method chain still resolves to nothing — the deliberate conservative
   gate, since a wrong member list is worse than none.
 - The server is **off the byte-identity spine** — it never runs the three execution backends, so it

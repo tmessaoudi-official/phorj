@@ -1516,6 +1516,7 @@ work itself and fixed, each with a red-first differential test) **+0.5**; and a 
 editor credit — hover, go-to-definition and completion on `Class.member` answer nothing for EVERY member
 kind (KNOWN_ISSUES §LSP-CLASS-QUALIFIED-MEMBERS, pre-existing, found at row 5m) **−0.5**. New mean =
 **75.4**. **Vision = 0.70×71.4 + 0.30×75.4 = 50.0 + 22.6 = 72.6 ≈ 73%** (was ≈72).
+*(Row 5o, 2026-09-25, fixed the cause of the −0.5 editor debit above — the NEXT §4.x recompute may restore it, once; this note is not itself a credit.)*
 
 **Grade, per Rule 18:** the FN verdict **[Verified]** (diff stat above, each file read); the SYN-078
 flip **[Verified]** as shipped surface, and CE rather than P **[Verified]** against DEC-532's register

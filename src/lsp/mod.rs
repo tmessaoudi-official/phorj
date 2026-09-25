@@ -20,6 +20,7 @@
 //! open — see KNOWN_ISSUES §LSP-PRELUDE-DEFINITION).
 
 mod catalog;
+mod class_member;
 mod completion;
 mod hover_member;
 pub(crate) mod keywords;
@@ -32,6 +33,8 @@ mod signature;
 mod symbols;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_class_members;
 #[cfg(test)]
 mod tests_collection_consts;
 #[cfg(test)]
@@ -231,6 +234,11 @@ impl Server {
         if let Some(sig) = hover_member::tuple_field_signature(&text, offset, &name, &program) {
             return Self::hover_markdown(&sig, None);
         }
+        // `K.MAX` / `K::twice`: the member of the named class, never a same-named top-level decoy.
+        if let Some(span) = class_member::member_span(&text, offset, &name, &program) {
+            let doc = crate::doc_comment::doc_markdown_before(&text, span.start);
+            return Self::hover_markdown(&symbols::signature_text(&text, span), doc.as_deref());
+        }
         match Self::resolve_decl(offset, &name, &program) {
             Some((span, is_local)) => {
                 let sig = if is_local {
@@ -290,7 +298,12 @@ impl Server {
         if hover_member::tuple_field_signature(&text, offset, &name, &program).is_some() {
             return "null".to_string();
         }
-        match Self::resolve_decl(offset, &name, &program) {
+        let member = class_member::member_span(&text, offset, &name, &program)
+            .and_then(|sp| symbols::name_token_span(&text, sp.start, &name));
+        match member
+            .map(|sp| (sp, false))
+            .or_else(|| Self::resolve_decl(offset, &name, &program))
+        {
             Some((span, _)) => {
                 let (sl, sc) = scope::position_at(&text, span.start);
                 let (el, ec) = scope::position_at(&text, span.start + span.len);

@@ -1,7 +1,6 @@
 //! DEC-533 (scout row 5m): a collection constant is an ordinary constant to the editor — no
 //! diagnostic, listed in the outline. Hover, go-to-definition and completion on a CLASS-QUALIFIED
-//! member (`K.MAX`, `K.twice`) answer nothing for every member kind today — pre-existing, not
-//! specific to collections (KNOWN_ISSUES §LSP-CLASS-QUALIFIED-MEMBERS).
+//! member (`K.MAX`, `K.twice`) are row 5o's, pinned in `tests_class_members.rs`.
 
 use super::tests::{did_open, req_at};
 use super::*;

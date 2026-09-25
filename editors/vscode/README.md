@@ -17,15 +17,19 @@ server power the JetBrains/PhpStorm setup — see `../phpstorm/README.md`.)
 - **Syntax highlighting** — keywords, types, strings with `{…}` interpolation, numbers, comments, and
   `#[…]` attributes (TextMate grammar, no server needed).
 - **Diagnostics** — type/parse errors and lints, live as you type (identical to `phg check`).
-- **Hover** — the declaration signature of the symbol under the cursor.
+- **Hover** — the declaration signature of the symbol under the cursor, including a class-qualified
+  member: `K.MAX` / `K::MAX` / `K.twice(1)` show the constant, static field or static method of `K` (or
+  the class it extends), never a same-named top-level function.
 - **Signature help** — inside a call's parentheses, the callee's signature with the argument being
   typed highlighted; fires on `(` and `,`. Covers your own functions (same file, or a sibling file in
   the package), and every `Core.*` native straight from the registry (`String.repeat("a", |` →
   `function String.repeat(string, int): string`). Works while the buffer does not parse — which,
   inside an unclosed `(`, is always — and carries the declaration's `/** … */` doc like hover does.
-- **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration.
+- **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration, or
+  to the member behind `K.MAX` / `K::twice`.
 - **Completion** — top-level symbols, in-scope locals/params, and keywords; `import Core.` → importable
-  module paths (Core + your own packages); `List.` / `this.` / `myVar.` → that receiver's members —
+  module paths (Core + your own packages); `List.` / `this.` / `myVar.` → that receiver's members, `K.` → class `K`'s constants, static fields and
+  static methods (inherited ones too) —
   including the members of a **stdlib** type, so `ServeConfig cfg` → `cfg.port` and `Request req` →
   `req.headers` complete (internal `private` fields and `static` methods are filtered out, and your own
   class of the same name shadows the stdlib one); and
