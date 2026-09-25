@@ -7,7 +7,7 @@ type error at 5:33: field `x` of `Widget` is immutable and cannot be assigned
     function construct(int x) { this.x = x; }
                                 ^
   [E-ASSIGN-IMMUTABLE]
-  hint: declare it `mutable` (e.g. `mutable int x;`)
+  hint: declare it `mutable` (e.g. `mutable int x;`) — or, if it has no initializer, assign it once in its own class's constructor
 type error at 4:5: field `x` is never initialized — it must be set on every path of the constructor, or given an initializer
     int x;
     ^

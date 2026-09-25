@@ -55,7 +55,8 @@
 > **DONE (2026-09-25): row 5n** (`bce545ba`) — PHP string escapes decode exactly as PHP decodes them, one decoder for both lexer paths; the audit found the class wider than `\u{…}` (single-quoted `'\n'`, `"\'"`, `\x`/octal, the interpolation path's `\{`). Scout 82/155; `Core/Whitespace.php` now refused by name (a Windows-1252 byte `trim` mask it would have mistranslated); `Core/Text.php` lifts with real `APOSTROPHES` and its draft fails `phg check` at the map `+` (42:53).
 > **DONE (2026-09-25): row 5p** (`4c92693b`) — `Map.merge` transpiles to `array_replace` (int keys kept). **Row 5q** (`b8aa33e7`) — DEC-534 `Map.union`; Text.php's draft is past the map `+`, next walls = unmapped builtins.
 > **DONE (2026-09-25): row 5o** (`11818dbd`) — LSP hover/definition/completion on `Class.member` (constants, statics, static methods, inherited too); `src/lsp/class_member.rs`. Not covered: `K::` completion, cross-file classes.
-> **THEN:** row 5j (DEC-524 ctor-once), 5d.
+> **DONE (2026-09-25): row 5j** — DEC-524 constructor-once fields + E-FIELD-READ-BEFORE-INIT; scout TenureSignal shape checks.
+> **THEN:** row 5d (DEC-515 `@var` locals), then L3.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

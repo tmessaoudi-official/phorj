@@ -9,6 +9,7 @@ mod collection_consts;
 mod collections;
 mod concurrency;
 mod constants;
+mod ctor_once;
 mod ctor_visibility;
 mod db_hydration;
 mod db_lint;

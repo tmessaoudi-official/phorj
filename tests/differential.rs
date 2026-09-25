@@ -7112,3 +7112,35 @@ function main(): void {
         "map_union",
     );
 }
+
+/// DEC-524 (scout row 5j): an immutable field with no initializer, assigned exactly once on every path
+/// of its own class's constructor — both arms of an `if`, then read after — prints identically on the
+/// VM, the tree-walker and transpiled PHP (phorj emits no PHP `readonly`, so the PHP leg is a plain
+/// property write; immutability is the checker's guarantee).
+#[test]
+fn ctor_once_assignment_agrees_on_every_leg() {
+    agree_out_php(
+        "import Core.Output;
+class Signal {
+    public int length;
+    public string label;
+    constructor(string evidence, bool known, int length) {
+        if (known) {
+            this.length = length;
+        } else {
+            this.length = 7;
+        }
+        this.label = \"{evidence}:{this.length}\";
+    }
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    var a = new Signal(\"lease\", false, 0);
+    var b = new Signal(\"x\", true, 9);
+    Output.printLine(\"{a.label} {b.label} {a.length + b.length}\");
+}
+",
+        "lease:7 x:9 16\n",
+        "ctor_once",
+    );
+}

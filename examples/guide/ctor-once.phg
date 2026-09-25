@@ -1,0 +1,36 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.String;
+
+// Constructor-once fields (DEC-524): an IMMUTABLE field with no initializer may be computed in its own
+// class's constructor — assigned exactly once on every path. Both arms of an `if` is fine; a second
+// assignment, one inside a loop, or reading `this.length` before it is set is a check error
+// (E-ASSIGN-IMMUTABLE-TWICE / E-FIELD-READ-BEFORE-INIT). Outside the constructor the field is as
+// immutable as any other. This is PHP's `readonly` property set in `__construct`, and Java's blank
+// `final`.
+class TenureSignal {
+    public int length;
+    public string summary;
+    constructor(public string evidence, int? length = null) {
+        if (evidence.isEmpty()) {
+            this.length = 0;
+        } else {
+            this.length = length ?? evidence.length();
+        }
+        // Read AFTER the assignment on every path — allowed.
+        this.summary = "{evidence} ({this.length})";
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    var measured = new TenureSignal("lease");
+    var given = new TenureSignal("bail", 12);
+    var empty = new TenureSignal("");
+    Output.printLine(measured.summary);
+    Output.printLine(given.summary);
+    Output.printLine("empty: {empty.length}");
+}

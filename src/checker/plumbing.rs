@@ -44,6 +44,7 @@ impl Checker {
             test_mode: false,
             in_static_method: false,
             in_constructor: false,
+            ctor_once_fields: Default::default(),
             parent_ctor_ok: false,
             cur_class: None,
             cur_package: String::new(),

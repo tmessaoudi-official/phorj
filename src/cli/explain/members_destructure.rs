@@ -249,6 +249,23 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              give the field an initializer (`int x = 0;`), make it a promoted ctor param\n\
              (`constructor(public int x)`), or make it optional (`int? x;` — defaults to `null`).\n"
         }
+        "E-FIELD-READ-BEFORE-INIT" => {
+            "E-FIELD-READ-BEFORE-INIT — a constructor reads `this.x` before `x` is assigned.\n\n\
+             A field with no initializer holds nothing until the constructor assigns it, so a read on a\n\
+             path where that has not happened yet would fault at runtime (`no field x`; PHP: \"must not\n\
+             be accessed before initialization\"). Applies to `mutable` and immutable fields alike; an\n\
+             optional field is exempt (it starts as `null`). Move the assignment before the read, or\n\
+             give the field an initializer. Reads made through a method call or inside a lambda are\n\
+             not tracked (DEC-524).\n"
+        }
+        "E-ASSIGN-IMMUTABLE-TWICE" => {
+            "E-ASSIGN-IMMUTABLE-TWICE — an immutable field may be assigned a second time.\n\n\
+             An immutable field with no initializer may be assigned in its own class's constructor —\n\
+             exactly once on every path (DEC-524: both arms of an `if` is fine). A second assignment\n\
+             on any path, or one inside a loop (which can run again), is refused: PHP `readonly` would\n\
+             throw there, and Java `final` rejects it the same way. Assign it once, or declare the field\n\
+             `mutable`.\n"
+        }
         "E-FIELD-INIT-TYPE" => {
             "E-FIELD-INIT-TYPE — a field initializer's type does not match the field's declared type.\n\n\
              The initializer expression must be assignable to the field's type — e.g. `int weight =\n\

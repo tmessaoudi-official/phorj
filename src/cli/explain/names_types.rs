@@ -163,7 +163,10 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
             "E-ASSIGN-IMMUTABLE — a reassignment targeted an immutable binding.\n\n\
              Bindings are immutable by default. Only a binding declared `mutable` may be reassigned\n\
              with `x = …;`. Declare it `mutable int x = …;` (or `mutable var x = …;`) — or, if it\n\
-             never changes, keep it immutable and introduce a new binding instead.\n"
+             never changes, keep it immutable and introduce a new binding instead.\n\n\
+             An immutable FIELD with no initializer (and not ctor-promoted) is the one exception: its\n\
+             own class's constructor may assign it through `this`, exactly once on every path\n\
+             (DEC-524; see E-ASSIGN-IMMUTABLE-TWICE).\n"
         }
         "E-ASSIGN-TYPE" => {
             "E-ASSIGN-TYPE — a reassigned value's type does not match the binding's type.\n\n\

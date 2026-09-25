@@ -6,6 +6,7 @@ use super::*;
 mod attributes;
 mod attributes_deprecated;
 mod attributes_invoke;
+mod ctor_once;
 mod entry_points;
 mod imports;
 mod static_inits;

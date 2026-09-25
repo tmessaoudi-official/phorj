@@ -89,10 +89,15 @@ impl Checker {
                     // against the declared set (`DatabaseError.fail(e)?` in `constructor(...) throws DatabaseError`).
                     self.validate_throw_types(&ctor_throws, *span);
                     let was_ctor = std::mem::replace(&mut self.in_constructor, true);
+                    let prev_once = std::mem::replace(
+                        &mut self.ctor_once_fields,
+                        Self::ctor_once_candidates(members),
+                    );
                     let prev_throws = std::mem::replace(&mut self.cur_throws, ctor_throws);
                     self.check_body(body);
                     self.cur_throws = prev_throws;
                     self.in_constructor = was_ctor;
+                    self.ctor_once_fields = prev_once;
                     self.pop_scope();
                     self.active_type_params.clear();
                     self.active_type_param_bounds.clear();
@@ -197,6 +202,7 @@ impl Checker {
             }
         }
         self.check_definite_assignment(type_name, members);
+        self.check_ctor_once(type_name, members);
         self.cur_class_type_params = prev_tp;
         self.cur_class_type_param_bounds = prev_tpb;
         self.cur_class = prev;

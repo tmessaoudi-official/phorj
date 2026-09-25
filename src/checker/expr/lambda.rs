@@ -80,6 +80,8 @@ impl Checker {
         let saved_throws = std::mem::replace(&mut self.cur_throws, lambda_throws.clone());
         let saved_try = std::mem::take(&mut self.try_catch_stack);
         let saved_main = std::mem::replace(&mut self.cur_is_main, false);
+        // DEC-524: a lambda written in a constructor gets no constructor-once permission.
+        let saved_once = std::mem::take(&mut self.ctor_once_fields);
         // DEC-339: "a lambda starts a new function" — raising the floor here is what keeps accepted
         // cases 19-21 legal (a lambda param MAY shadow an enclosing local; PHP arrow-fn params shadow
         // correctly and the block-body capture list is `free_vars` minus params, so both legs agree).
@@ -128,6 +130,7 @@ impl Checker {
         self.cur_throws = saved_throws;
         self.try_catch_stack = saved_try;
         self.cur_is_main = saved_main;
+        self.ctor_once_fields = saved_once;
         self.fn_scope_floor = saved_floor;
         Ty::Function(param_tys, Box::new(ret_ty), lambda_throws)
     }

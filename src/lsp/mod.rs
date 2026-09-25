@@ -38,6 +38,8 @@ mod tests_class_members;
 #[cfg(test)]
 mod tests_collection_consts;
 #[cfg(test)]
+mod tests_ctor_once;
+#[cfg(test)]
 mod tests_deprecated;
 #[cfg(test)]
 mod tests_hover_tuples;

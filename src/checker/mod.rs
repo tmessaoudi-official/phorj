@@ -66,6 +66,7 @@ pub use rewrite_ufcs::rewrite_ufcs;
 // impl-cluster cohesion split (M-Decomp W2): one `impl Checker` block per cluster
 // file; all share the private struct via `use super::*`.
 mod assign;
+mod assign_field;
 mod calls;
 mod casing;
 mod collect;
@@ -473,6 +474,9 @@ pub struct Checker {
     /// Set while checking a **constructor** body (B1b). `parent.constructor(…)` forwarding is valid
     /// only inside a constructor body (`E-PARENT-CTOR-OUTSIDE` otherwise).
     in_constructor: bool,
+    /// DEC-524: the own immutable, uninitialized, unpromoted fields the constructor body being
+    /// checked may assign (`program/ctor_once.rs`). Empty everywhere else — a lambda clears it.
+    ctor_once_fields: std::collections::BTreeSet<String>,
     /// Set true by [`check_stmt`] just before checking a bare `Stmt::Expr`/`Stmt::Discard` whose
     /// expression is exactly a `parent.constructor(…)` call, then consumed (taken) by
     /// [`check_parent_ctor_call`] (B1b). Guarantees `parent.constructor(…)` is statement-only

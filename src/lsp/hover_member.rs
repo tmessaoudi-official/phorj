@@ -1,5 +1,6 @@
-//! Hover for a NAMED-TUPLE FIELD (DEC-504) — the one member access whose type the editor can
-//! resolve without a nominal declaration to jump to.
+//! Hover for a NAMED-TUPLE FIELD (DEC-504) — a member access whose type the editor resolves without a
+//! nominal declaration to jump to — and the shared receiver scan (`receiver_before`) that
+//! `class_member.rs` also uses for `K.MAX` / `K::MAX` (row 5o).
 //!
 //! Hover otherwise resolves the identifier under the cursor to a DECLARATION, and a tuple field is
 //! not one: `t.bp` answered `null`, and where an unrelated local happened to share the field's

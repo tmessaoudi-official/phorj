@@ -6,6 +6,40 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — constructor-once fields (scout row 5j; DEC-524; 2026-09-25)
+
+An immutable field with no initializer may now be assigned in its own class's constructor, exactly once
+on every path — PHP's `readonly` property set in `__construct`, Java's blank `final`:
+
+```phorj
+class TenureSignal {
+    public int length;
+    constructor(public string evidence, int? length = null) {
+        this.length = length ?? evidence.length();   // was E-ASSIGN-IMMUTABLE
+    }
+}
+```
+
+Shape ruled 2026-09-25 ("exactly once + read check"): both arms of an `if` is once; a second
+assignment on any path, or one inside a loop, is the new `E-ASSIGN-IMMUTABLE-TWICE`; not assigning on
+every path stays `E-FIELD-UNINITIALIZED`. A helper method, a lambda, a subclass constructor, or a field
+with an initializer or promotion gets no permission. Checker-only (`src/checker/program/ctor_once.rs`,
+a statement-order flow walk over the constructor body); every leg is unchanged because phorj emits no
+PHP `readonly`. The lifter's non-promoted PHP `readonly` property (scout `TenureSignal.php`) now checks.
+
+### Fixed — reading a field before the constructor assigns it is refused at check time (scout row 5j)
+
+`mutable int n; constructor(int v) { int y = this.n; this.n = v; }` type-checked clean and then
+faulted at runtime — `no field n on T` on the VM and tree-walker, "must not be accessed before
+initialization" under PHP. It is now `E-FIELD-READ-BEFORE-INIT`, for immutable and `mutable` fields
+(an optional field starts as `null` and is exempt). Not tracked: reads through a method call, `this`
+escaping before the fields are set, and reads inside a lambda body.
+
+`examples/guide/ctor-once.phg`; checker tests `src/checker/tests/ctor_once.rs` (15), LSP
+`src/lsp/tests_ctor_once.rs`, differential `ctor_once_assignment_agrees_on_every_leg`, lift round-trip
+`readonly_assigned_in_ctor`. `check_field_assign` moved to `src/checker/assign_field.rs` unchanged, to
+keep `assign.rs` inside its size ratchet.
+
 ### Fixed — LSP hover, go-to-definition and completion on `Class.member` (scout row 5o; 2026-09-25)
 
 `K.MAX`, `K::MAX` and `K.twice(1)` answered `null` for hover and definition, and `K.` completed

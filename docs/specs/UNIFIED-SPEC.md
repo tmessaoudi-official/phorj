@@ -1826,6 +1826,18 @@ a named function, not an operator overload. The lifter rewrites PHP `$a + $b` to
 it knows both operands are maps (a keyed array literal, or a class constant of the same file whose type
 lifts to a `Map`); a PHP `array` parameter or property may be a list, so it stays `+`.
 
+**Constructor-once fields (DEC-524, ruled 2026-09-13, shape 2026-09-25; scout row 5j).** An immutable
+instance field with no initializer that is not ctor-promoted may be assigned through `this` in its OWN
+class's constructor body — exactly once on every path. Both arms of an `if` is once; a second assignment
+on any path, or one inside a loop body, is `E-ASSIGN-IMMUTABLE-TWICE`; not assigning it on every path
+stays `E-FIELD-UNINITIALIZED`. Reading `this.x` before `x` is assigned on every path is
+`E-FIELD-READ-BEFORE-INIT`, for immutable and `mutable` fields alike (an optional field starts as `null`
+and is exempt). A helper method, a lambda, a subclass constructor, or a field that has an initializer or
+is promoted gets no permission (`E-ASSIGN-IMMUTABLE`). Not tracked: reads through a method call, `this`
+escaping before the fields are set, reads inside a lambda body. Every leg is unchanged — immutability is
+the checker's guarantee and phorj emits no PHP `readonly` — so this is PHP's `readonly` property set in
+`__construct`, and Java's blank `final`; the lifter's non-promoted PHP `readonly` property lands here.
+
 ### The rejection catalogue (with reasons — the enduring negative space)
 
 **Dynamic-PHP footguns (defeat static checking — the exact surprise Phorj removes):**

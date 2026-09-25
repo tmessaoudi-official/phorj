@@ -186,6 +186,22 @@ final class Fold {
 }
 echo Fold::show();"#,
         ),
+        // DEC-524 (row 5j): scout TenureSignal.php's shape — a `readonly` property that is NOT promoted,
+        // computed once in the constructor body. It lifts to an immutable field assigned in the
+        // constructor, which the ctor-once rule accepts, on every leg.
+        (
+            "readonly_assigned_in_ctor",
+            r#"<?php
+final readonly class TenureSignal {
+    public int $length;
+    public function __construct(public string $evidence, ?int $length = null) {
+        $this->length = $length ?? strlen($evidence);
+    }
+}
+$a = new TenureSignal("lease");
+$b = new TenureSignal("x", 9);
+echo $a->length . "|" . $b->length . "|" . $a->evidence;"#,
+        ),
         (
             "string_escapes",
             r#"<?php
