@@ -52,7 +52,7 @@
 > Text.php's new wall. Found: KNOWN_ISSUES §PERF-COALESCE-OPTIONAL-JIT (`??` on an optional never JITs, ~40× LOSS).
 > **DONE (2026-09-25): parity recompute** — M-gap-matrix §4.22: PHP-parity ≈71% · floor ≈59% · Vision ≈73% (SYN-078 P→CE; FN ±0).
 > **DONE:** row 5m — DEC-533 collection constants BUILT (`00b6db96`); scout 82/153 lift; `Core/Text.php` now stops at map union `self::A + self::B` (Text.php:137, unruled). Found: KNOWN_ISSUES §PERF-COLLECTION-CONST-JIT, §LSP-CLASS-QUALIFIED-MEMBERS, §LIFT-UNICODE-ESCAPE.
-> **DONE (2026-09-25): row 5n** (`bce545ba`) — PHP string escapes decode exactly as PHP decodes them, one decoder for both lexer paths; the audit found the class wider than `\u{…}` (single-quoted `'\n'`, `"\'"`, `\x`/octal, the interpolation path's `\{`). Scout 82/155; `Core/Whitespace.php` now refused by name (a Windows-1252 byte `trim` mask it used to mistranslate).
+> **DONE (2026-09-25): row 5n** (`bce545ba`) — PHP string escapes decode exactly as PHP decodes them, one decoder for both lexer paths; the audit found the class wider than `\u{…}` (single-quoted `'\n'`, `"\'"`, `\x`/octal, the interpolation path's `\{`). Scout 82/155; `Core/Whitespace.php` now refused by name (a Windows-1252 byte `trim` mask it would have mistranslated); `Core/Text.php` lifts with real `APOSTROPHES` and its draft fails `phg check` at the map `+` (42:53).
 > **THEN:** rule the map-union wall (Text.php:137, gates L3), row 5o (§LSP-CLASS-QUALIFIED-MEMBERS, ahead of 5j), 5j, 5d.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].

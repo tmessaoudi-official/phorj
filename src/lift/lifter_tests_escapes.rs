@@ -117,3 +117,12 @@ fn a_control_character_prints_as_a_unicode_escape() {
     let out = lift_source(r#"<?php function q(): string { return "a\0\e\v"; }"#).unwrap();
     assert!(out.contains(r#""a\u{0}\u{1B}\u{B}""#), "{out}");
 }
+
+#[test]
+fn a_malformed_unicode_escape_is_reported_from_its_own_text() {
+    // The lexer sees the whole file, so an unbounded scan for `}` would quote source past the end
+    // of the string (`41b"; }`) in the refusal.
+    let err = lift_source(r#"<?php function q(): string { return "a\u{41b"; }"#).unwrap_err();
+    assert!(err.contains(r"\u{41b"), "{err}");
+    assert!(!err.contains('"') && !err.contains(';'), "{err}");
+}

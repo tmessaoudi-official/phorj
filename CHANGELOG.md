@@ -29,7 +29,11 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `tests/lift_roundtrip.rs` (original PHP ≡ interpreter ≡ VM ≡ transpiled-back PHP). Not covered:
   heredoc/nowdoc, which the lifter does not lex.
 - Scout: 82 of 155 files lift. `Core/Whitespace.php` is now refused (its `trim` mask spells three
-  Windows-1252 bytes); before this fix it lifted, and trimmed the wrong characters.
+  Windows-1252 bytes); before this fix it lifted and would have trimmed the wrong characters
+  [Inferred from the old lexer's keep-the-backslash arm; the old draft was not run].
+  `Core/Text.php` lifts and its `APOSTROPHES` are now the real characters; its draft still fails
+  `phg check` at `Text::FOLD_LOWER + Text::FOLD_UPPER` (map `+`, unruled) and unmapped builtins.
+- A malformed `\u{…}` is reported from its own text; the scan no longer runs past the string.
 
 ### Changed — parity recomputed at scout row 5m (M-gap-matrix §4.22; 2026-09-25)
 

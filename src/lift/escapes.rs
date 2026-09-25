@@ -68,15 +68,12 @@ pub(super) fn decode_escape(
 /// empty, non-hex or unterminated escape at parse time; a surrogate it encodes as bytes that are not
 /// UTF-8, so it is refused here too.
 fn unicode(chars: &[char], i: usize, out: &mut Vec<u8>) -> Result<usize, String> {
-    let start = i + 3;
-    let close = chars[start..].iter().position(|&c| c == '}');
-    let body: String = match close {
-        Some(n) => chars[start..start + n].iter().collect(),
-        None => return Err("an unterminated `\\u{…}` escape (PHP refuses it too)".into()),
-    };
-    if body.is_empty() || !body.chars().all(|c| c.is_ascii_hexdigit()) {
+    // The body is a run of hex digits closed by `}` — read no further, so a malformed escape is
+    // reported from its own text, never from source past the end of the string.
+    let body = run(chars, i + 3, usize::MAX, |c| c.is_ascii_hexdigit());
+    if body.is_empty() || chars.get(i + 3 + body.len()) != Some(&'}') {
         return Err(format!(
-            "`\\u{{{body}}}` is not a codepoint escape (PHP refuses it too)"
+            "`\\u{{{body}` is not a closed codepoint escape `\\u{{HEX}}` (PHP refuses it too)"
         ));
     }
     let digits = body.trim_start_matches('0');

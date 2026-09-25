@@ -57,8 +57,9 @@ PHP). Not covered: heredoc/nowdoc, which the lifter does not lex at all.
 Scout after the fix [Verified 2026-09-25, `phg lift /stack/projects/scout/src/php`]: 82 of 155 lift.
 `Core/Whitespace.php` is now refused by name, and that is the fix working: its
 `trim($value, " \t\n\r\0\x0B\x85\xA0\xAD")` names three single Windows-1252 BYTES, which the old
-lexer copied as the literal text `\x85\xA0\xAD` — so the draft trimmed the characters `\`, `x`, `8`,
-`5`, … instead, a wrong answer on exactly the scraped input that line exists for. A byte-mask `trim`
+lexer copied as the literal text `\x85\xA0\xAD` — so the draft would have trimmed the characters `\`,
+`x`, `8`, `5`, … instead, a wrong answer on exactly the scraped input that line exists for [Inferred
+from the old lexer's keep-the-backslash arm; the old draft was not run]. A byte-mask `trim`
 has no phorj string form; porting it means a `bytes` value or a code-point mask, which is L7's call.
 
 ## LIFT-TERNARY-IN-CONCAT — a PHP ternary inside a `.` concatenation lifts to a draft that does not lex (found 2026-09-24 by scout row 5k)
