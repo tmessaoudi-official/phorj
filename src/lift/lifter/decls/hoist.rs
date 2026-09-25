@@ -164,6 +164,11 @@ fn is_literal_true(cond: &php::PhpExpr) -> bool {
 /// difference: a plain literal. Anything else (a call, `new`, a concat, another variable) either has
 /// side effects or depends on state that does not exist yet at the hoist point.
 fn literal_rhs(e: &php::PhpExpr) -> Option<php::PhpExpr> {
+    // A `@var` above the assignment (row 5d) wraps the literal; a scalar literal carries no shape, so
+    // the hoisted declaration loses nothing by taking the bare value.
+    if let php::PhpExpr::Declared { value, .. } = e {
+        return literal_rhs(value);
+    }
     matches!(
         e,
         php::PhpExpr::Int(_)

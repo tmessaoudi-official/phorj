@@ -125,6 +125,9 @@ Text.php's next wall after DEC-532, PHP 8.3 typed `const array` constants (54 sc
 **DEC-533** (collection constants — explicit type, literal elements, PHP `const array`); BUILT as scout row 5m, `00b6db96`.
 **DEC-534** (`Map.union` — left-biased map union, PHP `+` on arrays); RULED 2026-09-25, BUILT as scout row 5q `b8aa33e7`, after row 5p `4c92693b` (the `Map.merge` → `array_merge` int-key renumbering break).
 **DEC-524** (constructor-once fields, scout TenureSignal.php); shape RULED 2026-09-25 ("exactly once + read check"), BUILT as scout row 5j `97b381a3`.
+**DEC-535** (optional narrowing through `&&`, `||` and if-expression arms); RULED 2026-09-25, BUILT as scout row 5r `1d52af0e`.
+**DEC-536** (a named tuple's field is assignable through a `mutable` place — Swift struct semantics; scout `Dedup.php`) and
+**DEC-537** (an assignment inside a narrowed block checks against the DECLARED type) — both RULED 2026-09-25 19:02, QUEUED as scout rows 5s and 5t.
 
 ## 0.07 THE 2026-09-02 RULINGS — mirror rows (DEC-457 … DEC-489)
 

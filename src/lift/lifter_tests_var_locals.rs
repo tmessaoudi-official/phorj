@@ -150,3 +150,62 @@ function f(): int {
     assert!(out.contains("xs[0].id"), "{out}");
     checks_clean(&out);
 }
+
+#[test]
+fn a_var_typed_literal_still_hoists_out_of_an_always_executing_block() {
+    // 6C finding (row 5d): the `Declared` wrapper hid the literal from DEC-397's hoist, so a `@var int`
+    // above the first assignment turned a working hoist into a declaration trapped inside the block.
+    let out = lift(
+        "<?php function pick(): int {
+            if (true) {
+                /** @var int $b */
+                $b = 5;
+            }
+            $b = 7;
+            return $b;
+        }",
+    );
+    assert!(out.contains("mutable var b = 5;\n    if (true) {"), "{out}");
+    checks_clean(&out);
+}
+
+#[test]
+fn a_shape_declared_inside_a_closure_does_not_leak_into_the_enclosing_function() {
+    // 6C finding (row 5d): a closure body is its own PHP scope, so a `@var` registered there must not
+    // rewrite the enclosing function's same-named variable — here a genuine map.
+    let out = lift_source(
+        "<?php function f(): int {
+            $g = function (): int {
+                /** @var array{a: int} $row */
+                $row = ['a' => 1];
+                return $row['a'];
+            };
+            $row = ['a' => 2, 'b' => 3];
+            return $g() + $row['a'];
+        }",
+    )
+    .unwrap();
+    assert!(
+        out.contains("return row.a;"),
+        "the closure's own read: {out}"
+    );
+    assert!(
+        out.contains("g() + row[\"a\"]"),
+        "leaked out of the closure: {out}"
+    );
+}
+
+#[test]
+fn a_captured_shape_is_still_visible_inside_a_closure() {
+    // The closure snapshot must not CLEAR the maps: a by-value `use` capture is the same shape inside.
+    let out = lift(
+        "<?php
+/** @param list<array{id: int}> $rows */
+function f(array $rows): int {
+    $g = function () use ($rows): int { return $rows[0]['id']; };
+    return $g();
+}",
+    );
+    assert!(out.contains("rows[0].id"), "{out}");
+    checks_clean(&out);
+}

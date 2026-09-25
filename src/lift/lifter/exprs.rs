@@ -75,11 +75,16 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             for p in &lifted_params {
                 declared.insert(p.name.clone());
             }
+            // A closure body is its own PHP scope: a `@var` shape registered inside it (row 5d) must
+            // not answer for the enclosing function's same-named variable after it.
+            let saved = super::shapes::enter_closure();
+            let body = Lifter {}.lift_block(body, &mut declared);
+            super::shapes::leave_closure(saved);
             Expr::Lambda {
                 params: lifted_params,
                 ret: ret.as_ref().map(lift_type).transpose()?,
                 throws: Vec::new(),
-                body: LambdaBody::Block(Lifter {}.lift_block(body, &mut declared)?),
+                body: LambdaBody::Block(body?),
                 span: SP,
             }
         }

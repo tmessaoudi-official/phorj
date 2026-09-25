@@ -22,6 +22,9 @@
 //! else. `Rent/Store/Store.php` alone has five distinct `$row` scopes with five different shapes.
 //! [`enter_binder`] therefore returns the displaced bindings and [`leave_binder`] puts them back,
 //! and the pair is exercised by `a_nested_binder_rebinding_one_name_restores_the_outer_shape`.
+//!
+//! A closure body is the same kind of scope (row 5d): [`enter_closure`] snapshots both maps and
+//! [`leave_closure`] restores them, so a `@var` registered inside a closure never answers outside it.
 
 use super::*;
 
@@ -215,4 +218,26 @@ pub(super) fn fields_of(var: &str) -> (Option<Vec<String>>, Option<Vec<String>>)
         TUPLE_FIELDS.with(|m| m.borrow().get(var).cloned()),
         ELEM_FIELDS.with(|m| m.borrow().get(var).cloned()),
     )
+}
+
+/// Both maps as they stood before a closure body — restored by [`leave_closure`] (row 5d, 6C).
+pub(super) struct ClosureScope {
+    tuple: std::collections::HashMap<String, Vec<String>>,
+    elem: std::collections::HashMap<String, Vec<String>>,
+}
+
+/// Snapshot both maps before lifting a closure body. A SNAPSHOT, not a clear: a by-value `use`
+/// capture is the same variable with the same shape inside the closure.
+pub(super) fn enter_closure() -> ClosureScope {
+    ClosureScope {
+        tuple: TUPLE_FIELDS.with(|m| m.borrow().clone()),
+        elem: ELEM_FIELDS.with(|m| m.borrow().clone()),
+    }
+}
+
+/// Put the enclosing function's maps back, dropping whatever the closure body registered. Called on
+/// both exits, like [`leave_binder`].
+pub(super) fn leave_closure(scope: ClosureScope) {
+    TUPLE_FIELDS.with(|m| *m.borrow_mut() = scope.tuple);
+    ELEM_FIELDS.with(|m| *m.borrow_mut() = scope.elem);
 }

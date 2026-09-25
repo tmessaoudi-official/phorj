@@ -11,19 +11,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 The second half of DEC-515. A local whose `/** @var … $x */` names a keyed shape — the local itself
 (`array{id: int, name: string}|null`) or its elements (`list<array{…}>`) — now lifts with that type on
 its declaration (`mutable List<(id: int, name: string)> rows = load();`), its reads become field reads
-(`$rows[0]['name']` → `rows[0].name`, `$seen['id']` → `seen.id`, and a `foreach` binder over an empty
-`$kept = []` inherits the element shape), and a keyed literal WRITTEN to it — assigned, appended with
+(`$rows[0]['name']` → `rows[0].name` — for a declared parameter too — `$seen['id']` → `seen.id`, and a
+`foreach` binder over an empty `$kept = []` inherits the element shape), and a keyed literal WRITTEN to it — assigned, appended with
 `$xs[] = […]`, or listed in a returned `list<array{…}>` literal — becomes a tuple literal when its keys
 are the declared fields in declared order. A local with no `@var`, a `@var` for another variable, or a
 type without a keyed shape (`@var int $n`) lifts exactly as before (DEC-166: nothing is inferred).
 Example: `examples/lift/var-locals.php`.
+A shape registered inside a closure body stays there (a closure is its own PHP scope; a `use`-captured
+variable keeps its shape inside), and a `@var` above a hoisted literal (DEC-397) still hoists — both found
+at the row's 6C gate, after `1bb0ec8f`, and fixed in the follow-up.
 
 ### Fixed — a `@param`/`@var` for `$rows` also typed `$row`
 
 The docblock reader matched the variable name as a PREFIX, so `@param list<…> $rows` answered for a
 `$row` declared after it. It now needs the name to end there. A `@var` also has to name the assigned
 variable, or be the only (unnamed) tag in a docblock that names no variable — before, the first `@var`
-in the docblock typed whichever empty `[]` was assigned below it.
+in the docblock typed whichever empty `[]` was assigned below it. An unnamed `@var` in a docblock
+whose prose mentions any `$` (`$this`, a price) is now ignored rather than guessed at.
 
 ### Added — narrowing through `&&`, `||` and if-expressions (scout row 5r; DEC-535; 2026-09-25)
 
