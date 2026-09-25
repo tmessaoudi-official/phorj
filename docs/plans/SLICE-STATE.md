@@ -53,7 +53,8 @@
 > **DONE (2026-09-25): parity recompute** — M-gap-matrix §4.22: PHP-parity ≈71% · floor ≈59% · Vision ≈73% (SYN-078 P→CE; FN ±0).
 > **DONE:** row 5m — DEC-533 collection constants BUILT (`00b6db96`); scout 82/153 lift; `Core/Text.php` now stops at map union `self::A + self::B` (Text.php:137, unruled). Found: KNOWN_ISSUES §PERF-COLLECTION-CONST-JIT, §LSP-CLASS-QUALIFIED-MEMBERS, §LIFT-UNICODE-ESCAPE.
 > **DONE (2026-09-25): row 5n** (`bce545ba`) — PHP string escapes decode exactly as PHP decodes them, one decoder for both lexer paths; the audit found the class wider than `\u{…}` (single-quoted `'\n'`, `"\'"`, `\x`/octal, the interpolation path's `\{`). Scout 82/155; `Core/Whitespace.php` now refused by name (a Windows-1252 byte `trim` mask it would have mistranslated); `Core/Text.php` lifts with real `APOSTROPHES` and its draft fails `phg check` at the map `+` (42:53).
-> **THEN:** row 5p (P0: `Map.merge` transpiles to `array_merge`, which renumbers int keys → `array_replace`), row 5q (DEC-534 `Map.union`, RULED 2026-09-25, unblocks Text.php:137), row 5o (§LSP-CLASS-QUALIFIED-MEMBERS, ahead of 5j), 5j, 5d.
+> **DONE (2026-09-25): row 5p** (`4c92693b`) — `Map.merge` transpiles to `array_replace` (int keys kept). **Row 5q** (`b8aa33e7`) — DEC-534 `Map.union`; Text.php's draft is past the map `+`, next walls = unmapped builtins.
+> **THEN:** row 5o (§LSP-CLASS-QUALIFIED-MEMBERS, ahead of 5j), 5j, 5d.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

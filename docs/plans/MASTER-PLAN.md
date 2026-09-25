@@ -123,7 +123,7 @@ Two earlier banked Invariant-15 questions: **Q-0908-1 `?? throw`** — RULED 202
 sites, and literal-spread vs call-site-unpack may be ruled apart — still unruled, in the plan's *Needs input*.
 Text.php's next wall after DEC-532, PHP 8.3 typed `const array` constants (54 scout sites), is RULED 2026-09-24 as
 **DEC-533** (collection constants — explicit type, literal elements, PHP `const array`); BUILT as scout row 5m, `00b6db96`.
-**DEC-534** (`Map.union` — left-biased map union, PHP `+` on arrays); RULED 2026-09-25, QUEUED as scout row 5q after row 5p (the `Map.merge` → `array_merge` int-key renumbering break).
+**DEC-534** (`Map.union` — left-biased map union, PHP `+` on arrays); RULED 2026-09-25, BUILT as scout row 5q `b8aa33e7`, after row 5p `4c92693b` (the `Map.merge` → `array_merge` int-key renumbering break).
 
 ## 0.07 THE 2026-09-02 RULINGS — mirror rows (DEC-457 … DEC-489)
 
