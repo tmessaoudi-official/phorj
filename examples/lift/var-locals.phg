@@ -1,0 +1,59 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.List;
+
+/**
+ * @return list<array{id: int, name: string}>
+ */
+function load(): List<(id: int, name: string)> {
+    return [(id: 3, name: "c"), (id: 7, name: "g"), (id: 5, name: "e")];
+}
+
+/**
+ * @param list<array{id: int, name: string}> $rows
+ */
+function best(List<(id: int, name: string)> rows): string {
+    mutable (id: int, name: string)? seen = null;
+    foreach (rows as r) {
+        if (seen instanceof null || r.id > seen.id) {
+            seen = (id: r.id, name: r.name);
+        }
+    }
+    if (!(seen instanceof null)) {
+        return seen.name;
+    }
+    return "-";
+}
+
+/**
+ * A call-initialized list read by element field, and an empty list filled from a binder.
+ */
+function total(): int {
+    mutable List<(id: int, name: string)> rows = load();
+    mutable var kept = new List<(id: int, name: string)>();
+    foreach (rows as r) {
+        if (r.id > 4) {
+            kept = List.append(kept, r);
+        }
+    }
+    mutable var sum = 0;
+    foreach (kept as k) {
+        sum = sum + k.id;
+    }
+    return sum + rows[0].id;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var none = new List<(id: int, name: string)>();
+    Output.print("{best(load())}");
+    Output.print(" ");
+    Output.print("{total()}");
+    Output.print(" ");
+    Output.print("{best(none)}");
+    Output.print("\n");
+}

@@ -523,6 +523,24 @@ be acceptable is failing it *silently*, or worse, passing it with the wrong answ
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.
 
+## `@var`-declared locals — `var-locals.php` / `var-locals.phg` (scout row 5d, DEC-515, 2026-09-25)
+
+A local's `/** @var … $x */` is read the way a parameter's `@param` is, when it names a keyed shape:
+
+- **The type stays on the declaration.** `$rows = load();` under `@var list<array{id: int, name: string}>`
+  lifts to `mutable List<(id: int, name: string)> rows = load();`, and `$seen = null;` under
+  `@var array{…}|null` to `mutable (id: int, name: string)? seen = null;`. An empty `$kept = []` keeps
+  printing `var kept = new List<(id: int, name: string)>()` — the initializer already spells the type.
+- **Reads become field reads**: `$rows[0]['id']` → `rows[0].id`, `$seen['id']` → `seen.id`, and a
+  `foreach` binder over the local inherits the element shape (`$k['id']` → `k.id`).
+- **Writes become tuples**: a keyed literal assigned to the local (`$seen = ['id' => …, 'name' => …]`),
+  appended to it (`$xs[] = […]`), or listed in a returned `list<array{…}>` literal becomes a tuple
+  literal — only when its keys are the declared fields in declared order.
+
+`$seen === null || $r['id'] > $seen['id']` reads `seen.id` behind a `||` — that checks because of
+DEC-535 (row 5r). A local with no `@var`, a `@var` naming another variable, or a type with no keyed
+shape (`@var int $n`) lifts exactly as before. Byte-identical on all three legs and against the PHP.
+
 ## Map union — `map-union.php` / `map-union.phg` (scout row 5q, DEC-534, 2026-09-25)
 
 PHP spells array union and addition with one operator. The lifter has no types, so it rewrites `$a + $b`

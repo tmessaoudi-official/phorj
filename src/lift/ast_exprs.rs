@@ -76,6 +76,13 @@ pub enum PhpExpr {
     /// `$xs = [];` under a `/** @var list<T> $xs */` docblock (Lane R-6): the empty literal with
     /// the collection type the program itself declared for it.
     EmptyColl(PhpType),
+    /// `/** @var T $x */ $x = value;` with a NON-empty value (DEC-515, scout row 5d): the value with
+    /// the type the program declared for the local it initializes. Only ever the right-hand side of
+    /// an assignment to that local; the lifter reads `ty` there and lifts `value` everywhere else.
+    Declared {
+        ty: PhpType,
+        value: Box<PhpExpr>,
+    },
     /// `(int) e` / `(float) e` / `(string) e` / `(bool) e` — a primitive cast (Lane R-3). `ty` is the
     /// canonical phorj primitive (`integer`/`double`/`boolean` are folded by the parser).
     Cast {

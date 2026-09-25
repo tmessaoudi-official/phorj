@@ -355,7 +355,10 @@ fn a_nested_binder_rebinding_one_name_restores_the_outer_shape() {
 #[test]
 fn a_binder_shape_does_not_leak_past_the_loop() {
     let out = lift(
-        "<?php\n/**\n * @param list<array{bp: int}> $rows\n * @param array $row\n */\nfunction f(array $rows, array $row): int { $n = 0; foreach ($rows as $row) { $n = $row['bp']; } return $row['bp']; }",
+        // `$row` declares a shape WITHOUT `bp`, so after the loop `$row['bp']` must stay an index read.
+        // (Until row 5d this said `@param array $row`, which lifted only because `$rows`'s line also
+        // answered for `$row` — `doc_tag` matched the name as a prefix.)
+        "<?php\n/**\n * @param list<array{bp: int}> $rows\n * @param array{x: int} $row\n */\nfunction f(array $rows, array $row): int { $n = 0; foreach ($rows as $row) { $n = $row['bp']; } return $row['bp']; }",
     );
     assert!(
         out.contains("row[\"bp\"]"),

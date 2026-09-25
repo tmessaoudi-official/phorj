@@ -1,5 +1,36 @@
 # Known Issues & Limitations
 
+## TUPLE-FIELD-WRITE — phorj has no way to update one field of a named tuple (found 2026-09-25 by scout row 5d)
+
+```phorj
+mutable var kept = new List<(id: int, tags: List<string>)>();
+kept = List.append(kept, (id: 1, tags: ["a"]));
+kept[0].tags = List.append(kept[0].tags, "b");   // E-ASSIGN-TARGET: cannot set field `tags` on non-class
+```
+
+[Verified 2026-09-25 on the release binary.] A named tuple is an immutable value, so the PHP per-key
+write `$kept[$i]['duplicates'][] = …` — scout `Rent/Core/Dedup.php`, now that row 5d types `$kept` — lifts
+to a draft that `phg check` refuses by name. Before row 5d it was refused too, as a string index on a
+tuple. Nothing is silently wrong; the gap is a language form for "this tuple with one field replaced"
+(Rust/Kotlin `copy(tags = …)`, C# `with { … }`, OCaml `{ r with … }`). Unruled (scout plan Q-0925-2).
+
+## NARROWED-REASSIGN — an assignment inside a narrowed block is checked against the narrowed type (found 2026-09-25 planning scout row 5d)
+
+```phorj
+mutable (id: int, name: string)? seen = null;
+if (seen instanceof null) {
+    seen = r;          // E-ASSIGN-TYPE: cannot assign `(id: int, name: string)` to `seen: null`
+}
+```
+
+[Verified 2026-09-25 on the release binary.] A narrowed shadow inherits the variable's mutability, and a
+reassignment through it is checked against the shadow's type (`check_block_narrowed`, deliberate for
+soundness when narrowing is kept). Kotlin, TypeScript, Swift and C# check it against the DECLARED type
+and update or drop the narrowing. It blocks the common PHP first-match idiom
+`if ($x === null) { $x = $row; }` from lifting; scout's two `@var …|null` sites assign under a `||`
+condition, which narrows nothing, and are unaffected. Unruled (scout plan Q-0925-1): the VM compiler's
+primitive narrowing is keyed on the slot, so any change must drop or update it at the assignment too.
+
 ## PERF-COLLECTION-CONST-JIT — a function that reads a List/Map constant stays off the JIT (found 2026-09-24 by scout row 5m)
 
 A collection constant compiles to `Op::Const` holding a `Value::Map`/`Value::List`, which the unboxed

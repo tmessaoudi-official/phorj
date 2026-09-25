@@ -387,7 +387,7 @@ fn walk_expr(
             }
         }
         E::EmptyColl(_) => {}
-        E::AppendSlot(inner) | E::Cast { value: inner, .. } => {
+        E::AppendSlot(inner) | E::Cast { value: inner, .. } | E::Declared { value: inner, .. } => {
             walk_expr(inner, ctx, sightings, order);
         }
         E::Index { base, index } => {

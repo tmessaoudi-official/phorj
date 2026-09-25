@@ -25,6 +25,12 @@ pub(super) fn seed_returned_tuple_literals(body: &mut [Stmt], ret: &Option<Type>
         Type::Optional { inner, .. } => inner.as_ref(),
         other => other,
     };
+    // DEC-515 (row 5d): `@return list<array{…}>` — a returned list LITERAL's keyed elements are the
+    // declared tuples, element by element.
+    if let Some(labels) = super::super::shapes::element_labels(ty) {
+        seed_tuple_returns_in(body, &Seed::Elements(labels));
+        return;
+    }
     let Type::Tuple(elems, labels, _) = ty else {
         return;
     };
@@ -34,7 +40,65 @@ pub(super) fn seed_returned_tuple_literals(body: &mut [Stmt], ret: &Option<Type>
             .as_ref()
             .map(|ls| ls.iter().map(|l| l.name.clone()).collect()),
     };
-    seed_tuple_returns_in(body, &shape);
+    seed_tuple_returns_in(body, &Seed::Whole(shape));
+}
+
+/// What a returned value must answer: the declared tuple itself, or — for a declared list of named
+/// tuples — each element of a list literal.
+enum Seed {
+    Whole(TupleShape),
+    Elements(Vec<String>),
+}
+
+impl Seed {
+    fn apply(&self, e: &mut Expr) -> Option<Expr> {
+        match self {
+            Seed::Whole(shape) => shape.tuple_from(e),
+            Seed::Elements(labels) => {
+                shape_elements(labels, e);
+                None
+            }
+        }
+    }
+}
+
+/// Each KEYED element of a list literal that matches `labels` becomes the named tuple; any other
+/// element is left for the checker (DEC-166). Only a keyed literal — a positional `[1, 'a']` has keys
+/// `0` and `1` in PHP, not the declared names.
+fn shape_elements(labels: &[String], e: &mut Expr) {
+    if let Expr::List(items, _) = e {
+        for item in items.iter_mut() {
+            shape_keyed(labels, item);
+        }
+    }
+}
+
+/// A KEYED literal matching `labels` exactly, in order, becomes the named tuple in place.
+fn shape_keyed(labels: &[String], e: &mut Expr) {
+    if !matches!(e, Expr::Map(..)) {
+        return;
+    }
+    let shape = TupleShape {
+        arity: labels.len(),
+        labels: Some(labels.to_vec()),
+    };
+    if let Some(tuple) = shape.tuple_from(e) {
+        *e = tuple;
+    }
+}
+
+/// DEC-515 (row 5d) — a value WRITTEN to local `name`, shaped by what the local declared: a keyed
+/// literal written to a named-tuple local becomes the tuple, and a list literal written to a list of
+/// named tuples has its keyed elements converted. `append` is the `$xs[] = v` form, whose value is
+/// ONE element. Nothing happens for an undeclared local.
+pub(in crate::lift::lifter) fn shape_local_write(name: &str, e: &mut Expr, append: bool) {
+    let (own, elem) = super::super::shapes::fields_of(name);
+    match (append, own, elem) {
+        (true, _, Some(labels)) => shape_keyed(&labels, e),
+        (false, Some(labels), _) => shape_keyed(&labels, e),
+        (false, None, Some(labels)) => shape_elements(&labels, e),
+        _ => {}
+    }
 }
 
 /// The declared tuple a `return` must satisfy: how many positions, and — for a NAMED-field tuple
@@ -103,14 +167,14 @@ impl TupleShape {
 ///
 /// The match is exhaustive by design (Invariant 3): a new block-bearing `Stmt` must decide whether
 /// its returns are this function's, and a `_` arm would silently answer "no".
-fn seed_tuple_returns_in(body: &mut [Stmt], shape: &TupleShape) {
+fn seed_tuple_returns_in(body: &mut [Stmt], shape: &Seed) {
     for s in body.iter_mut() {
         match s {
             Stmt::Return {
                 value: Some(v),
                 span,
             } => {
-                if let Some(tuple) = shape.tuple_from(v) {
+                if let Some(tuple) = shape.apply(v) {
                     *s = Stmt::Return {
                         value: Some(tuple),
                         span: *span,

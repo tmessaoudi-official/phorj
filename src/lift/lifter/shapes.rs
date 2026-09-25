@@ -174,3 +174,45 @@ pub(super) fn leave_binder(scope: BinderScope) {
         });
     });
 }
+
+/// Whether `var`'s ELEMENTS are named tuples with a field called `field` — the test that turns
+/// `$rows[0]['name']` into `rows[0].name` (DEC-515, row 5d). Same "declared field only" rule as
+/// [`is_tuple_field`].
+pub(super) fn is_elem_field(var: &str, field: &str) -> bool {
+    ELEM_FIELDS.with(|m| {
+        m.borrow()
+            .get(var)
+            .is_some_and(|fs| fs.iter().any(|f| f == field))
+    })
+}
+
+/// Record a LOCAL's declared type (`/** @var T $x */ $x = …;`, DEC-515 row 5d) the way
+/// [`set_tuple_fields`] records a parameter's. Returns whether the type carries a shape at all — the
+/// caller keeps the explicit type on the declaration only then, so a `@var int $n` changes nothing.
+///
+/// Function-scoped like everything here: PHP locals ARE function-scoped, so a registration made
+/// inside a block answers for the same name after it, as the PHP variable does.
+pub(super) fn declare_local_shape(name: &str, ty: &Type) -> bool {
+    let (tuple, elem) = (tuple_labels(ty), element_labels(ty));
+    let shaped = tuple.is_some() || elem.is_some();
+    TUPLE_FIELDS.with(|t| {
+        ELEM_FIELDS.with(|e| {
+            let (mut t, mut e) = (t.borrow_mut(), e.borrow_mut());
+            if let Some(labels) = tuple {
+                t.insert(name.to_string(), labels);
+            }
+            if let Some(labels) = elem {
+                e.insert(name.to_string(), labels);
+            }
+        });
+    });
+    shaped
+}
+
+/// The fields `var` itself declares, and the fields of its elements.
+pub(super) fn fields_of(var: &str) -> (Option<Vec<String>>, Option<Vec<String>>) {
+    (
+        TUPLE_FIELDS.with(|m| m.borrow().get(var).cloned()),
+        ELEM_FIELDS.with(|m| m.borrow().get(var).cloned()),
+    )
+}

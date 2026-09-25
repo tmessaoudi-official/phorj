@@ -217,6 +217,8 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             span: SP,
         },
         php::PhpExpr::EmptyColl(ty) => new_coll(&lift_type(ty)?)?,
+        // Read by the assignment that owns it (`statements.rs`); anywhere else only the value lifts.
+        php::PhpExpr::Declared { value, .. } => lift_expr(value)?,
         php::PhpExpr::AppendSlot(_) => {
             return Err("lift: `$xs[]` is only meaningful as the target of `=`".into());
         }
@@ -356,6 +358,23 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             if let (Expr::Ident(var, _), Expr::Str(parts, _)) = (&object, &index) {
                 if let Some(field) = super::str_literal_text(parts) {
                     if super::is_tuple_field(var, &field) {
+                        return Ok(Expr::Member {
+                            object: Box::new(object),
+                            name: field,
+                            safe: false,
+                            sep: crate::ast::MemberSep::Dot,
+                            span: SP,
+                        });
+                    }
+                }
+            }
+            // DEC-515 (row 5d): `$rows[$i]['name']` where `$rows` is a declared collection of named
+            // tuples reads the ELEMENT's field.
+            if let (Expr::Index { object: inner, .. }, Expr::Str(parts, _)) = (&object, &index) {
+                if let (Expr::Ident(var, _), Some(field)) =
+                    (inner.as_ref(), super::str_literal_text(parts))
+                {
+                    if super::shapes::is_elem_field(var, &field) {
                         return Ok(Expr::Member {
                             object: Box::new(object),
                             name: field,

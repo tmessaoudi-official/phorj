@@ -175,7 +175,9 @@ fn walk_expr(e: &mut php::PhpExpr, f: &mut Sites) {
             walk_stmts(body, f);
         }
         E::AppendSlot(e) => walk_expr(e, f),
-        E::Cast { value, .. } | E::InstanceOf { value, .. } => walk_expr(value, f),
+        E::Cast { value, .. } | E::InstanceOf { value, .. } | E::Declared { value, .. } => {
+            walk_expr(value, f)
+        }
         E::Assign { target, value } | E::CompoundAssign { target, value, .. } => {
             walk_expr(target, f);
             walk_expr(value, f);

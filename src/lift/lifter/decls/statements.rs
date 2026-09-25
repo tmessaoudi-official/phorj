@@ -210,24 +210,38 @@ impl Lifter {
                     // `$xs[] = v` → `xs = List.append(xs, v)`: a phorj list is a COW value, so the
                     // append is a reassignment of the whole collection (O(n) per append — the
                     // wave-2 plan's Known findings name it as the twin's expected first loss).
+                    let mut elem = lift_expr(value)?;
+                    if let php::PhpExpr::Var(name) = base.as_ref() {
+                        super::seed::shape_local_write(name, &mut elem, true);
+                    }
                     let base = lift_expr(base)?;
                     return Ok(Stmt::Assign {
                         target: base.clone(),
-                        value: list_append(base, lift_expr(value)?),
+                        value: list_append(base, elem),
                         span: SP,
                     });
                 }
                 if let php::PhpExpr::Var(name) = target.as_ref() {
                     if !declared.contains(name) {
                         declared.insert(name.clone());
+                        let ty = declare_local_type(name, value)?;
+                        let mut init = lift_expr(value)?;
+                        super::seed::shape_local_write(name, &mut init, false);
                         return Ok(Stmt::VarDecl {
-                            ty: Type::Infer(SP),
+                            ty,
                             name: name.clone(),
-                            init: lift_expr(value)?,
+                            init,
                             mutable: true, // PHP locals are freely reassignable
                             span: SP,
                         });
                     }
+                    let mut v = lift_expr(value)?;
+                    super::seed::shape_local_write(name, &mut v, false);
+                    return Ok(Stmt::Assign {
+                        target: lift_expr(target)?,
+                        value: v,
+                        span: SP,
+                    });
                 }
                 Ok(Stmt::Assign {
                     target: lift_expr(target)?,
@@ -360,4 +374,22 @@ fn echo_arg(e: &php::PhpExpr) -> Result<Expr, String> {
     let mut out = Vec::new();
     parts(e, &mut out)?;
     Ok(Expr::Str(out, SP))
+}
+
+/// The type a local's FIRST assignment declares it with (DEC-515, row 5d). A `@var` that names a
+/// keyed shape — the local itself, or its elements — is registered for the reads and writes that
+/// follow, and kept on the declaration unless the initializer already spells it (`new List<T>()`
+/// for an empty literal). Every other local stays `var` (DEC-166: nothing is inferred).
+fn declare_local_type(name: &str, value: &php::PhpExpr) -> Result<Type, String> {
+    match value {
+        php::PhpExpr::EmptyColl(ty) => {
+            super::super::shapes::declare_local_shape(name, &lift_type(ty)?);
+            Ok(Type::Infer(SP))
+        }
+        php::PhpExpr::Declared { ty, .. } => match lift_type(ty) {
+            Ok(t) if super::super::shapes::declare_local_shape(name, &t) => Ok(t),
+            _ => Ok(Type::Infer(SP)),
+        },
+        _ => Ok(Type::Infer(SP)),
+    }
 }

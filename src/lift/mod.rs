@@ -78,3 +78,5 @@ mod lifter_tests_php83;
 mod lifter_tests_shapes;
 #[cfg(test)]
 mod lifter_tests_throw_expr;
+#[cfg(test)]
+mod lifter_tests_var_locals;

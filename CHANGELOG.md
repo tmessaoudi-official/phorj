@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `@var`-declared locals keep their shape in `phg lift` (scout row 5d; DEC-515; 2026-09-25)
+
+The second half of DEC-515. A local whose `/** @var … $x */` names a keyed shape — the local itself
+(`array{id: int, name: string}|null`) or its elements (`list<array{…}>`) — now lifts with that type on
+its declaration (`mutable List<(id: int, name: string)> rows = load();`), its reads become field reads
+(`$rows[0]['name']` → `rows[0].name`, `$seen['id']` → `seen.id`, and a `foreach` binder over an empty
+`$kept = []` inherits the element shape), and a keyed literal WRITTEN to it — assigned, appended with
+`$xs[] = […]`, or listed in a returned `list<array{…}>` literal — becomes a tuple literal when its keys
+are the declared fields in declared order. A local with no `@var`, a `@var` for another variable, or a
+type without a keyed shape (`@var int $n`) lifts exactly as before (DEC-166: nothing is inferred).
+Example: `examples/lift/var-locals.php`.
+
+### Fixed — a `@param`/`@var` for `$rows` also typed `$row`
+
+The docblock reader matched the variable name as a PREFIX, so `@param list<…> $rows` answered for a
+`$row` declared after it. It now needs the name to end there. A `@var` also has to name the assigned
+variable, or be the only (unnamed) tag in a docblock that names no variable — before, the first `@var`
+in the docblock typed whichever empty `[]` was assigned below it.
+
 ### Added — narrowing through `&&`, `||` and if-expressions (scout row 5r; DEC-535; 2026-09-25)
 
 A null or type test now narrows the right operand of `&&` (by its left side being true), the right

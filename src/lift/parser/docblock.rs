@@ -108,7 +108,12 @@ fn doc_tag(doc: &str, tag: &str, name: Option<&str>) -> Option<String> {
         match name {
             Some(n) => {
                 let var = format!("${n}");
-                if rest[end..].trim_start().starts_with(&var) {
+                // `$row` must not answer for `$rows`: the name ends at a non-identifier character.
+                let after = rest[end..].trim_start();
+                let named = after.strip_prefix(&var).is_some_and(|tail| {
+                    !tail.starts_with(|c: char| c.is_alphanumeric() || c == '_')
+                });
+                if named {
                     return Some(ty.to_string());
                 }
             }
@@ -165,26 +170,46 @@ impl PParser {
 
     /// `/** @var list<T> $xs */ $xs = [];` (Lane R-6, 54 such docblocks in scout): the empty literal
     /// becomes [`PhpExpr::EmptyColl`] carrying the declared type — phorj needs an empty collection's
-    /// type, and the program wrote it down. Any other statement, or a non-empty literal, is untouched.
+    /// type, and the program wrote it down. Any other value assigned under a `@var` for the same
+    /// variable becomes [`PhpExpr::Declared`] (DEC-515, row 5d), so the lifter can keep the type on the
+    /// local's declaration. Any other statement is untouched.
+    ///
+    /// The `@var` must be FOR this variable: named `$x`, or unnamed in a docblock that names no
+    /// variable at all. A docblock naming `$other` says nothing about `$x`.
     fn apply_doc_local(&mut self, doc: Option<&str>, st: &mut PhpStmt) -> Result<(), String> {
         let Some(doc) = doc else {
             return Ok(());
         };
-        if let PhpStmt::Expr(PhpExpr::Assign { target, value }) = st {
-            if let (PhpExpr::Var(name), PhpExpr::Array(items)) = (target.as_ref(), value.as_ref()) {
-                if items.is_empty() {
-                    let ty = match doc_tag(doc, "@var", Some(name))
-                        .or_else(|| doc_tag(doc, "@var", None))
-                    {
-                        Some(t) => t,
-                        None => return Ok(()),
-                    };
-                    let ty = self.parse_doc_type(&ty)?;
-                    if matches!(ty, PhpType::Generic { .. }) {
-                        **value = PhpExpr::EmptyColl(ty);
-                    }
-                }
+        let PhpStmt::Expr(PhpExpr::Assign { target, value }) = st else {
+            return Ok(());
+        };
+        let PhpExpr::Var(name) = target.as_ref() else {
+            return Ok(());
+        };
+        let Some(ty) = doc_tag(doc, "@var", Some(name)).or_else(|| {
+            if doc.contains('$') {
+                None
+            } else {
+                doc_tag(doc, "@var", None)
             }
+        }) else {
+            return Ok(());
+        };
+        if matches!(value.as_ref(), PhpExpr::Array(items) if items.is_empty()) {
+            let ty = self.parse_doc_type(&ty)?;
+            if matches!(ty, PhpType::Generic { .. }) {
+                **value = PhpExpr::EmptyColl(ty);
+            }
+            return Ok(());
+        }
+        // A type the docblock parser cannot read leaves the local exactly as it was: the declaration
+        // is an aid here, not a requirement, so it never fails the lift.
+        if let Ok(ty) = self.parse_doc_type(&ty) {
+            let inner = std::mem::replace(value.as_mut(), PhpExpr::Null);
+            **value = PhpExpr::Declared {
+                ty,
+                value: Box::new(inner),
+            };
         }
         Ok(())
     }

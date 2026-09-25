@@ -7150,7 +7150,8 @@ function main(): void {
 /// narrowed a statement `if`'s ELSE block by the negated test, the VM compiler did not, so this
 /// type-checked clean and then failed `compile error: x is not numeric` on the VM only. The
 /// `(if … ) + 1` line is the Invariant-7 shape: an if-expression whose arm is typed only under its
-/// narrowing, used as an arithmetic operand.
+/// narrowing, used as an arithmetic operand. `flip` puts the narrowed operand in the ELSE arm under a
+/// negated test (row 5r's 6C: that arm had no test until then).
 #[test]
 fn narrowing_through_operators_agrees_on_every_leg() {
     agree_out_php(
@@ -7171,6 +7172,9 @@ function either(int | string x): bool {
 function arm(int | string x): int {
     return (if (x is int) { x + 1 } else { 0 }) + 1;
 }
+function flip(int | string x): int {
+    return if (!(x is int)) { 0 } else { x + 1 };
+}
 function seen((tenure: string, bp: int)? s): string {
     if (s instanceof null || s.tenure == \"x\") {
         return \"none\";
@@ -7186,6 +7190,7 @@ function main(): void {
     Output.printLine(\"{both(four)} {both(one)} {both(str)}\");
     Output.printLine(\"{either(four)} {either(one)} {either(str)}\");
     Output.printLine(\"{arm(four)} {arm(str)}\");
+    Output.printLine(\"{flip(four)} {flip(str)}\");
     (tenure: string, bp: int)? none = null;
     var x = seen((tenure: \"x\", bp: 9));
     var a = seen((tenure: \"a\", bp: 9));
@@ -7193,7 +7198,7 @@ function main(): void {
     Output.printLine(\"{seen(none)} {x} {a} {b}\");
 }
 ",
-        "5 0\ntrue false false\ntrue false true\n6 1\nnone none a low\n",
+        "5 0\ntrue false false\ntrue false true\n6 1\n5 0\nnone none a low\n",
         "narrowing_operators",
     );
 }

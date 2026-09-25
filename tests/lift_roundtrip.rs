@@ -202,6 +202,43 @@ $a = new TenureSignal("lease");
 $b = new TenureSignal("x", 9);
 echo $a->length . "|" . $b->length . "|" . $a->evidence;"#,
         ),
+        // DEC-515 row 5d: `@var`-declared locals keep their shape — a call-initialized list read by
+        // element field, an empty list filled from a binder, and a nullable tuple replaced under a
+        // `=== null ||` guard. Compared against the ORIGINAL PHP's stdout on every leg.
+        (
+            "var_declared_shaped_locals",
+            r#"<?php
+/** @return list<array{id: int, name: string}> */
+function load(): array { return [['id' => 3, 'name' => 'c'], ['id' => 7, 'name' => 'g'], ['id' => 5, 'name' => 'e']]; }
+/** @param list<array{id: int, name: string}> $rows */
+function best(array $rows): string {
+    /** @var array{id: int, name: string}|null $seen */
+    $seen = null;
+    foreach ($rows as $r) {
+        if ($seen === null || $r['id'] > $seen['id']) {
+            $seen = ['id' => $r['id'], 'name' => $r['name']];
+        }
+    }
+    if ($seen !== null) { return $seen['name']; }
+    return "-";
+}
+function total(): int {
+    /** @var list<array{id: int, name: string}> $rows */
+    $rows = load();
+    /** @var list<array{id: int, name: string}> $kept */
+    $kept = [];
+    foreach ($rows as $r) { if ($r['id'] > 4) { $kept[] = $r; } }
+    $sum = 0;
+    foreach ($kept as $k) { $sum += $k['id']; }
+    return $sum + $rows[0]['id'];
+}
+function none(): string {
+    /** @var list<array{id: int, name: string}> $empty */
+    $empty = [];
+    return best($empty);
+}
+echo best(load()) . "|" . total() . "|" . none();"#,
+        ),
         (
             "string_escapes",
             r#"<?php

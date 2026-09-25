@@ -35,6 +35,7 @@ pub(super) fn visit_expr(e: &php::PhpExpr, f: &mut impl FnMut(&str)) {
         E::Destructure { value, .. }
         | E::NamedArg { value, .. }
         | E::Cast { value, .. }
+        | E::Declared { value, .. }
         | E::InstanceOf { value, .. } => visit_expr(value, f),
         E::Unary { expr, .. } => visit_expr(expr, f),
         E::AppendSlot(x) => visit_expr(x, f),
