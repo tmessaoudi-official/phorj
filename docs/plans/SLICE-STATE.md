@@ -59,7 +59,7 @@
 > **DONE (2026-09-25): row 5r** (`1d52af0e`) — DEC-535 narrowing through `&&`/`||`/if-expressions (checker + VM compiler in lockstep); fixed a pre-existing VM-only else-block compile error.
 > **DONE (2026-09-25): row 5d** (`1bb0ec8f`, 6C follow-up `0bd7b181`) — DEC-515's `@var`-local half: declared keyed-shape locals keep their type, reads become fields, keyed literals written to them become tuples; fixed `doc_tag`'s prefix name match. Scout: only `Dedup.php` reachable (Q-0925-2 tuple field write).
 > **DONE (2026-09-25): row 5t** (`fb6cd7c2`) — DEC-537: a direct assignment in a narrowed block checks against the declared type and the narrowing follows the value (checker + VM `stmt_narrowed`); nested assignments keep the narrowed check (scope ruling 20:01).
-> **DONE (2026-09-25): row 5s** (`TBD`) — DEC-536: `kept[0].tags = …` / `t.bp += 1` through a `mutable` local place; lowers to the positional index chain every backend has. Class-field/call bases stay refused.
+> **DONE (2026-09-25): row 5s** (`c0d36852`) — DEC-536: `kept[0].tags = …` / `t.bp += 1` through a `mutable` local place; lowers to the positional index chain every backend has. Class-field/call bases stay refused.
 > **THEN:** L3 (the scout files' remaining walls), and the OWED G-8 verdicts.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
