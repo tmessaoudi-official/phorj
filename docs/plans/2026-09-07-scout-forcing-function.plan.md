@@ -451,6 +451,11 @@
   between) keeps today's rule — checked against the narrowed type — with a hint; recorded in KNOWN_ISSUES.
   REJECTED for now: full flow merging with a narrowing-frame stack in checker and VM compiler.
   Rejected: `&&`/`||` only; keeping statement-level narrowing (Pipeline.php a hand-port).
+- [2026-09-26 00:21] AGREED: **DEC-536 stays scoped to LOCAL places; class-field-rooted places stay deferred** (row 5s
+  6C question). `b.row.id = 5`, `this.row.id = 5` and `this.xs[0] = 5` keep `E-ASSIGN-TARGET` with the
+  copy-assign-store hint (KNOWN_ISSUES §TUPLE-FIELD-WRITE). Why: a class field is a shared slot, so writing into a
+  value nested in it needs a read-field → set-path → write-field lowering on all three legs, and scout has no instance.
+  REJECTED for now: opening every field-rooted place (new row); opening `this.`-rooted only.
 
 ## 1. Measured starting state (2026-09-07, on `target/release/phg` at `6c49816d`)
 
