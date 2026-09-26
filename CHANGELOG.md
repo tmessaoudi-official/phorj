@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `phg format` changed the meaning of an optional function or intersection type (scout row 5y; 2026-09-26)
+
+`?` binds to the nearest type, so `((string) => int)? f` and `(string) => int? f` are different types. The formatter kept the parentheses only around a union, so it rewrote the first as the second, and `(A & B)? x` as `A & B? x`. Both now keep their parentheses, and a diagnostic prints such a type as `((string) -> int)?` instead of naming a function that returns an optional.
+
 ### Fixed — the VM panicked on `??`, `!` or `match` over a function value's result (scout row 5x, P0; 2026-09-26)
 
 `() => int? g = …; int r = g() ?? -1;` panicked the VM (`index out of bounds`) while `--tree-walker` and the transpiled PHP ran it. The compiler counted a call through a function value as leaving one more value on the stack than it does (it forgot the closure is popped too), so the scratch slot that `??`, `!` and `match` stash their subject in pointed past the stack. Calls to named functions and methods were never affected.
