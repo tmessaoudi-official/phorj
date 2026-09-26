@@ -474,6 +474,12 @@
   copy is hand-bypassed wall by wall until the cluster lifts; each wall is classed mechanical / ruled / needs-ruling,
   then built as its own row or asked. REJECTED for now: hand-porting the three files wholesale (widens DEC-539's
   one-hand-port ruling without a DEC row); building the three first walls before the full list is known.
+- [2026-09-26 17:01] AGREED: **DEC-540 — PCRE (`preg_*`) lifts onto `Core.Regex`; untranslatable patterns refused by name (Q-0926-4)**
+- [2026-09-26 17:01] AGREED: **DEC-541 — PHP `mixed` is hand-ported to a sum type in the L3 port; the lifter keeps refusing it by name (Q-0926-1)**
+- [2026-09-26 17:01] AGREED: **DEC-542 — a constant may reference scalar constants and enum cases, folded at check time (Q-0924-1)**
+- [2026-09-26 17:01] AGREED: **DEC-543 — a by-ref parameter is refused by name; `matchOffset` is L3's third hand-port (Q-0926-3)**
+- [2026-09-26 17:01] AGREED: **DEC-544 — `T|false|null` is refused by name; `LandlordRegistry::match` is hand-ported to an enum (Q-0926-2)**
+- [2026-09-26 17:01] AGREED: **DEC-545 — `trim` lifts to a new PHP-faithful native, name ruled at build (Q-0926-5)**
 
 ## 1. Measured starting state (2026-09-07, on `target/release/phg` at `6c49816d`)
 
@@ -666,6 +672,10 @@ DEC-507 applies to every one.
 | 4i | L3a check — absent builtin mappings where a Core native may exist: `in_array`, `str_replace`, `implode`, `explode`, `is_string`, `isset`, `uksort`, `get_debug_type`, `mb_check_encoding`/`mb_convert_encoding`, `html_entity_decode` (+`ENT_*`), `PHP_INT_MAX`, and `sprintf` (17 sites — format-string semantics may need a ruling). Per function: native exists → mechanical row; none → banked | L | todo | - | src/lift/* src/native/* |
 | 4j | L3a check — exceptions: `MalformedText extends \RuntimeException` → `E-EXTEND-UNKNOWN`, and 12 × `can only throw … Error` + 3 × `must implement Error` downstream. Class NOT yet determined (lifter/exceptions.rs maps some bases) | M | todo | - | src/lift/lifter/exceptions*.rs |
 | 4k | L3a — SECOND check census after 4b–4j and the rulings: the ~60 residual errors (indexing, map value types, 5 × param reassignment, Map iteration needs two bindings, tuple destructure) are expected to be partly cascades — re-classify, never quote this count as a worklist | M | todo | - | docs/plans/2026-09-07-scout-forcing-function.plan.md |
+| 4l | DEC-540 — `preg_*` lifts onto `Core.Regex`: literal pattern + flags → `Regex.compileBacktracking`, out-param captures → the value-returning natives, `PREG_*` flags and `preg_last_error_msg` mapped or refused; a non-literal pattern, PCRE-only syntax or a differing `$` anchor refused BY NAME (contract properties 3 and 5) | L | todo | - | src/lift/* src/native/* |
+| 4m | DEC-542 — a constant may reference scalar constants and zero-payload enum cases (checker fold in declaration order, cycle error; transpile; lift of `self::X` / `Tenure::LLI` in a const initializer; LSP + editors) | M | todo | - | src/checker/* src/lift/* |
+| 4n | DEC-545 — a PHP-faithful `trim` native (PHP's default set exactly; PHP leg plain `trim()`), the lift target of `trim($s)`; name ruled at build | M | todo | - | src/native/* src/lift/* |
+| 4o | DEC-543 + DEC-544 — named refusals: a by-ref `&$param` (DEC-506 words) and `false` in a union type, instead of `found Amp` / `found Bar` | S | todo | - | src/lift/parser/* |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench. Wall-fall MEASURED on scout: 57/123 → 64/125, zero keyed-shape refusals, `Classification.php` lifts | L | done | 9b3e528c | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy. **ROOT-CAUSED 2026-09-09, no fix written**: the unboxed JIT `Kind` lattice has a `MapList` and a `SetList` but no list-of-lists, so `admit_make_list` refuses the row literal at `Op::MakeList` before any index runs and the function falls to the VM; "JIT-resistant" is retracted, it does not engage. **DEC-519's premise is also retracted** — none of the four widened rows has a two-level read; the census found four distinct causes and `strappend` COMPILES (so its loss is NOT JIT coverage; its actual cause is unexamined, out of scope). The FIX SHAPE is RULED (DEC-520, 2026-09-09: INT-ONLY inner lists, a dedicated list-of-lists `Kind` reusing `IntList`'s flat encoding, 10 code sites + the ABI decode gate) and is **BUILT 2026-09-09** (`8e814277` M-Decomp + the follow-up carrying the kind): `Kind::IntListList(Own)` across 12 code sites in 4 files, an M-Decomp split FIRST because two emit files had zero size-gate headroom, the 4 decline pins flipped to compile + `hits > 0` + oracle identity and a 5th pinning the kept boundary. Perf before/after OWED (box load 20.07). L4c CLOSES; L3 still blocked behind L4b | L | done | 8e814277 | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
 | 5c | L4b — DEC-515, the BUILT half (split 2026-09-13; `feat(lift): DEC-515 half`): a `foreach` binder over a declared keyed collection reads fields (`$row['bp']` → `row.bp`), scoped so a nested rebinding restores the outer shape; a keyed literal in named-tuple RETURN position becomes a tuple literal when its keys are the declared fields in declared order; named tuple values print with labels. 10 tests, 2 sabotages, Invariant-9 example. Census re-count: ~71 reachable reads, not 140 | L | done | df227f0a | src/lift/lifter/shapes.rs src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/mod.rs src/lift/printer/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/* |
@@ -709,28 +719,28 @@ DEC-507 applies to every one.
 - L6 depends on L5 for alert-email parsing (an alert body IS an HTML document).
 
 ### Needs input
-- **Q-0926-1 (banked 2026-09-26, L3a/B2+B12) — W-MIXED: how does a lifted PHP `mixed` value look?** On `classify()`'s
+- **Q-0926-1 — RULED 2026-09-26 17:01 → DEC-541.** (banked 2026-09-26, L3a/B2+B12) — W-MIXED: how does a lifted PHP `mixed` value look?** On `classify()`'s
   path: `RawListing::$fields` is `array<string, mixed>` ON PURPOSE (a bespoke adapter can forward `"gamme": ["PLUS","PLAI"]`
   as a list, and the classifier has a deliberate tier-1 doubt for exactly that), and `excludedVocabularyIn(mixed $value)`
   guards with `is_scalar`/`Stringable`. phorj has no `mixed`. The census narrowed both to `string` (census-only).
-- **Q-0926-2 (banked, L3a/B3) — `string|false|null`: a three-outcome return.** `LandlordRegistry::match()` returns a
+- **Q-0926-2 — RULED 2026-09-26 17:01 → DEC-544.** (banked, L3a/B3) — `string|false|null`: a three-outcome return.** `LandlordRegistry::match()` returns a
   source key, `null` (a known landlord with no source block) or `false` (not a landlord) — the docblock says collapsing the
   middle one "would silently drop every bailleur". On-path, corpus-dead (corpus rows carry no advertiser).
-- **Q-0926-3 (banked, L3a/B10) — a by-reference PARAMETER.** `TenureClassifier::matchOffset(…, ?array &$m)` wraps
+- **Q-0926-3 — RULED 2026-09-26 17:01 → DEC-543.** (banked, L3a/B10) — a by-reference PARAMETER.** `TenureClassifier::matchOffset(…, ?array &$m)` wraps
   `preg_match(…, PREG_OFFSET_CAPTURE)`; only `$m[0][1]` is read. DEC-506 rules references out, and only the by-ref CLOSURE
   and the static local were ruled as hand-ports — is this a third hand-port (`: ?int` returning the offset), or a lifter
   rewrite?
-- **Q-0926-4 (banked, L3a check) — the PCRE family.** 40 `preg_*` CALL SITES in the cluster source (6 `preg_match`, 3
+- **Q-0926-4 — RULED 2026-09-26 17:01 → DEC-540.** (banked, L3a check) — the PCRE family.** 40 `preg_*` CALL SITES in the cluster source (6 `preg_match`, 3
   `preg_match_all`, 11 `preg_replace`, 9 `preg_quote`, 1 `preg_split`, 10 `preg_last_error_msg`; `phg check` reports 37 of
   them), 7 + 7 out-param captures (`$m`, `$matches`) and `PREG_OFFSET_CAPTURE` ×6 / `PREG_SET_ORDER` / `PREG_SPLIT_NO_EMPTY`. The lifter maps NONE of
   them. This is the classifier's core, and contract properties 3 and 5 (byte offsets; `$` vs `\z` across a newline) live
   here — the mapping onto `Core.Regex` (DEC-295, `regex`+`fancy-regex`) is a design question, not a table row.
-- **Q-0926-5 (banked, L3a check) — `trim`.** Deliberately unmapped (`src/native/tests.rs:167` asserts
+- **Q-0926-5 — RULED 2026-09-26 17:01 → DEC-545.** (banked, L3a check) — `trim`.** Deliberately unmapped (`src/native/tests.rs:167` asserts
   `lift_of("trim").is_none()`); 6 cluster sites. The ruling on how to lift it (PHP's default charset `" \t\n\r\0\x0B"`)
   is owed before 4i can close.
 - **Q-0925-2 — RULED 2026-09-25 19:02 → DEC-536, row 5s.** ~~updating one field of a named tuple~~ (found 2026-09-25 by row 5d): `kept[0].tags = …` on a `List<(id: int, tags: List<string>)>` fails `E-ASSIGN-TARGET` — named tuples are immutable values, and phorj has no copy-and-update form. Scout `Dedup.php`'s `$kept[$i]['duplicates'][] = …` needs one. Built for local places; field-rooted places deferred (2026-09-26 00:21) — KNOWN_ISSUES §TUPLE-FIELD-WRITE.
 - **Q-0925-1 — RULED 2026-09-25 19:02 → DEC-537, row 5t.** ~~assignment inside a narrowed block~~ (found 2026-09-25 planning row 5d): `mutable (…)? seen = null; if (seen instanceof null) { seen = r; }` fails `E-ASSIGN-TYPE` (`cannot assign … to seen: null`) — the assignment is checked against the NARROWED type, not the declared one. Kotlin/TS/Swift/C# check it against the declared type. Scout's two R4 sites assign under a `\|\|` condition (no narrowing) and are not affected; the common PHP first-match idiom `if ($x === null) { $x = $r; }` is. Built (row 5t) — KNOWN_ISSUES §NARROWED-REASSIGN.
-- **Q-0924-1 (banked 2026-09-24 23:29, row 5m gate) — may a constant reference other constants?** Scout: 3 sites
+- **Q-0924-1 — RULED 2026-09-26 17:01 → DEC-542 (scalars AND enum cases; row 4m).** (banked 2026-09-24 23:29, row 5m gate) — may a constant reference other constants?** Scout: 3 sites
   reference scalar class constants (`JobClassifier` LEVELS via `JobFacts::LEAD`, `Heating` ENERGIES via `self::ELECTRIC`,
   `JobPay` BAND via `PayLine::YEAR`), 3 use enum-case values (`TenureClassifier` LABELS/AMBIGUOUS_LABELS/PROCEDURAL via
   `Tenure::LLI`). Options surfaced: fold scalar consts (declaration order + cycle error), or also enum cases.

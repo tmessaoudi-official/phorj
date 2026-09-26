@@ -123,6 +123,11 @@ Two earlier banked Invariant-15 questions: **Q-0908-1 `?? throw`** — RULED 202
 the lifter maps spread over lists to `List.concat`/`List.flatten`, no new syntax, the checker judging list-ness — BUILT as
 scout row 5u (2026-09-26); row 5v then lifted `foreach (… as [$a, $b])` (scout 88/155), and L3's next wall is a PHP
 static local (`static $keys = null;`).
+**L3a** (2026-09-26, `fb9f76b0`): the classifier cluster's wall census (11 files, 13 bypasses to a full lift, 224 check
+errors) banked six questions, all RULED 2026-09-26 17:01 — **DEC-540** (`preg_*` lifts onto `Core.Regex`), **DEC-541**
+(`mixed` hand-ported to a sum type), **DEC-542** (constants may reference scalar consts and enum cases), **DEC-543** (by-ref
+param: named refusal + third hand-port), **DEC-544** (`T|false|null`: named refusal + enum hand-port), **DEC-545** (a
+PHP-faithful `trim` native). Scout plan rows 4b–4o carry the builds.
 Text.php's next wall after DEC-532, PHP 8.3 typed `const array` constants (54 scout sites), is RULED 2026-09-24 as
 **DEC-533** (collection constants — explicit type, literal elements, PHP `const array`); BUILT as scout row 5m, `00b6db96`.
 **DEC-534** (`Map.union` — left-biased map union, PHP `+` on arrays); RULED 2026-09-25, BUILT as scout row 5q `b8aa33e7`, after row 5p `4c92693b` (the `Map.merge` → `array_merge` int-key renumbering break).
