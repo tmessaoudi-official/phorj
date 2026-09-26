@@ -43,6 +43,7 @@ mod map_consts;
 mod mappings;
 mod matches;
 mod shapes;
+mod spread;
 mod throw_expr;
 use attrs::AttrCtx;
 use const_infer::const_type;

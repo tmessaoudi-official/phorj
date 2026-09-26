@@ -64,6 +64,8 @@ pub enum PTok {
     Slash,
     Percent,
     Dot,
+    /// `...` — spread / unpacking / variadic / first-class callable (DEC-538).
+    Ellipsis,
     /// `++` increment.
     Inc,
     /// `--` decrement.
@@ -345,6 +347,13 @@ pub fn lex_php_with_docs(
         }
         if three == "<=>" {
             push(&mut out, PTok::Spaceship, line);
+            i += 3;
+            continue;
+        }
+        // DEC-538: PHP's `...` (T_ELLIPSIS), lexed greedily as PHP does — spread, argument unpacking,
+        // a variadic parameter and a first-class callable all start with it.
+        if three == "..." {
+            push(&mut out, PTok::Ellipsis, line);
             i += 3;
             continue;
         }

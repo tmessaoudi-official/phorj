@@ -1,0 +1,60 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.List;
+import Core.Map;
+
+/**
+ * @param list<int> $low
+ * @param list<int> $high
+ * @return list<int>
+ */
+function around(List<int> low, List<int> high, int mid): List<int> {
+    return List.flatten([low, [mid], high]);
+}
+
+/**
+ * @return list<string>
+ */
+function tiers(): List<string> {
+    mutable var byTier = [2 => ["label"], 1 => ["field", "form"], 3 => ["source"]];
+    byTier[1] = ["field"];
+    return List.flatten(Map.values(byTier));
+}
+
+/**
+ * @param list<string> $extra
+ * @return list<string>
+ */
+function reasons(List<string> extra): List<string> {
+    mutable var out = ["checked"];
+    out = List.concat(extra, out);
+    return out;
+}
+
+/**
+ * @param list<string> $xs
+ */
+function joined(List<string> xs): string {
+    mutable var s = "";
+    foreach (xs as x) {
+        s = "{s}{x} ";
+    }
+    return s;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var nums = around([1, 2], [8, 9], 5);
+    Output.print("{nums.length()}");
+    Output.print(" ");
+    Output.print("{nums[2]}");
+    Output.print("\n");
+    Output.print("{joined(tiers())}");
+    Output.print("\n");
+    Output.print("{joined(reasons([\"doubt\", \"conflict\"]))}");
+    Output.print("\n");
+}

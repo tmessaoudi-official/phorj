@@ -550,6 +550,19 @@ key `é` the LEFT value wins, as PHP `+` does. A PHP `array` parameter or proper
 `$a + $b` on parameters stays `+` and `phg check` names it; a positional union (`[1, 2] + [3]`, by
 index) has no phorj form and stays `+` too. Byte-identical on all three legs and against the PHP.
 
+## Spread over lists — `spread.php` / `spread.phg` (scout row 5u, DEC-538, 2026-09-26)
+
+phorj has no spread syntax; PHP's `...` over lists lifts to the `Core.List` calls that already mean
+the same thing. `[...$low, $mid, ...$high]` becomes `List.flatten([low, [mid], high])` (two segments
+would be `List.concat(a, b)`), `array_merge(...array_values($byTier))` becomes
+`List.flatten(Map.values(byTier))` — the map keeps PHP's insertion order, including the key `1`
+overwritten in place — and the statement `array_unshift($out, ...$extra)` becomes
+`out = List.concat(extra, out)`. The checker is the judge of list-ness: `concat`/`flatten`/`values`
+type-check only on the right collection, and a phorj List is sequential, so PHP's renumbering spread
+agrees whenever the draft checks. A spread of a keyed literal, a map constant or a Map-declared
+variable, a spread inside a keyed literal, and unpacking into any other call (`f(...$xs)`, DEC-299)
+are refused by name. Byte-identical on all three legs and against the PHP.
+
 ## String escapes — `escapes.php` / `escapes.phg` (scout row 5n, 2026-09-25)
 
 PHP decodes escapes by quote style, and the lift now decodes them exactly as PHP does, so the draft

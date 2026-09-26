@@ -1,5 +1,25 @@
 # Known Issues & Limitations
 
+## LIFT-SPREAD — spread lifts over LISTS only (DEC-538, row 5u, 2026-09-26); the rest is refused by name
+
+```php
+$all = [...$a, $x, ...$b];                    // lifts: List.flatten([a, [x], b])
+$flat = array_merge(...array_values($m));     // lifts: List.flatten(Map.values(m))
+array_unshift($reasons, ...$more);            // lifts (as a statement): reasons = List.concat(more, reasons)
+$n = max(...$xs);                             // refused: call-site unpacking (DEC-299, ruled, not built)
+$m2 = [...$map];                              // refused when $map is provably a map (keyed literal, map const, Map-declared)
+$names = array_map(strlen(...), $xs);         // refused: first-class callable (Tier-2)
+function f(int ...$xs) {}                     // refused: variadic parameter
+```
+
+The checker, not the lifter, judges that a spread operand is a list: an operand the lifter cannot prove is
+a map lifts, and a non-list fails `phg check` on `List.concat`/`List.flatten`/`Map.values` — loud, never a
+silent renumbering difference, because a phorj List is sequential. Two consequences worth knowing: a lone
+`[...$a]` lifts to `List.flatten([a])` (a bare `a` would let a map through unchecked), and a keyed literal
+INSIDE a spread segment of a `@var list<array{…}>` local stays a `Map` rather than becoming a tuple, so
+the draft fails `phg check` on it. A parameter as `array_unshift`'s target fails check the way `usort` on
+one does (§ "A PARAMETER target" below).
+
 ## TUPLE-FIELD-WRITE — FIXED 2026-09-25 (DEC-536, row 5s) for local places; a class-field or call base is still refused
 
 ```phorj

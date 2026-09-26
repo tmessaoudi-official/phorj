@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: PHP spread over lists (scout row 5u; DEC-538; 2026-09-26)
+
+PHP's `...` was refused as `expected an expression, found Dot` and was the first wall in the classifier
+(`TenureClassifier.php`) once its by-reference closure is hand-ported. phorj gains NO spread syntax: the
+lifter maps a spread in a list literal to `List.concat(a, b)` (two segments) or `List.flatten([…])`,
+`array_merge(...$xss)` to `List.flatten(xss)`, an `array_values($m)` operand to `Map.values(m)`, and the
+statement `array_unshift($v, ...$xs)` to `v = List.concat(xs, v)`. The checker judges list-ness; a
+provably-map operand, a spread inside a keyed literal and unpacking into any other call are refused by
+name (KNOWN_ISSUES §LIFT-SPREAD). The same token now also gives a first-class callable `f(...)` and a
+variadic parameter their own refusals instead of `found Dot`. Scout: 82 → 83 of 155 (`CriteriaEngine.php`
+lifts); `HtmlSource.php` moves past its spread to line 607. New example `examples/lift/spread`.
+
 ### Added — named-tuple field assignment through a mutable place (scout row 5s; DEC-536; 2026-09-25)
 
 `kept[0].tags = List.append(kept[0].tags, "b")` on a `mutable var kept: List<(id: int, tags: List<string>)>`

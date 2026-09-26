@@ -42,6 +42,25 @@ thread_local! {
     /// that variable inherits. Same lifetime and same clearing point as [`TUPLE_FIELDS`].
     static ELEM_FIELDS: std::cell::RefCell<std::collections::HashMap<String, Vec<String>>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    /// DEC-538 — the variables DECLARED as a `Map` (parameter type, `@param`, `@var`): a spread of
+    /// one is refused by name, since PHP's string-key spread has map semantics. Same lifetime,
+    /// clearing point and closure snapshot as the two shape maps.
+    static MAP_VARS: std::cell::RefCell<std::collections::HashSet<String>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// Whether `ty` is a declared `Map` (seeing through one `Optional`, as the shape tests do).
+fn is_map_type(ty: &Type) -> bool {
+    let ty = match ty {
+        Type::Optional { inner, .. } => inner.as_ref(),
+        other => other,
+    };
+    matches!(ty, Type::Named { name, .. } if name == "Map")
+}
+
+/// Whether `var` was declared a `Map` in the function being lifted (DEC-538).
+pub(super) fn is_map_var(var: &str) -> bool {
+    MAP_VARS.with(|m| m.borrow().contains(var))
 }
 
 /// The field labels of a named-tuple type, seeing through one `Optional`.
@@ -90,6 +109,16 @@ pub(super) fn set_tuple_fields(params: &[Param]) {
             let (mut t, mut e) = (t.borrow_mut(), e.borrow_mut());
             t.clear();
             e.clear();
+            MAP_VARS.with(|m| {
+                let mut m = m.borrow_mut();
+                m.clear();
+                m.extend(
+                    params
+                        .iter()
+                        .filter(|p| is_map_type(&p.ty))
+                        .map(|p| p.name.clone()),
+                );
+            });
             for p in params {
                 if let Some(labels) = tuple_labels(&p.ty) {
                     t.insert(p.name.clone(), labels);
@@ -198,6 +227,11 @@ pub(super) fn is_elem_field(var: &str, field: &str) -> bool {
 pub(super) fn declare_local_shape(name: &str, ty: &Type) -> bool {
     let (tuple, elem) = (tuple_labels(ty), element_labels(ty));
     let shaped = tuple.is_some() || elem.is_some();
+    // Recorded beside the shapes, but it never changes the answer: the return value decides whether
+    // the declared type is KEPT on the declaration (`statements.rs`), which is a shape question.
+    if is_map_type(ty) {
+        MAP_VARS.with(|m| m.borrow_mut().insert(name.to_string()));
+    }
     TUPLE_FIELDS.with(|t| {
         ELEM_FIELDS.with(|e| {
             let (mut t, mut e) = (t.borrow_mut(), e.borrow_mut());
@@ -224,6 +258,7 @@ pub(super) fn fields_of(var: &str) -> (Option<Vec<String>>, Option<Vec<String>>)
 pub(super) struct ClosureScope {
     tuple: std::collections::HashMap<String, Vec<String>>,
     elem: std::collections::HashMap<String, Vec<String>>,
+    maps: std::collections::HashSet<String>,
 }
 
 /// Snapshot both maps before lifting a closure body. A SNAPSHOT, not a clear: a by-value `use`
@@ -232,6 +267,7 @@ pub(super) fn enter_closure() -> ClosureScope {
     ClosureScope {
         tuple: TUPLE_FIELDS.with(|m| m.borrow().clone()),
         elem: ELEM_FIELDS.with(|m| m.borrow().clone()),
+        maps: MAP_VARS.with(|m| m.borrow().clone()),
     }
 }
 
@@ -240,4 +276,5 @@ pub(super) fn enter_closure() -> ClosureScope {
 pub(super) fn leave_closure(scope: ClosureScope) {
     TUPLE_FIELDS.with(|m| *m.borrow_mut() = scope.tuple);
     ELEM_FIELDS.with(|m| *m.borrow_mut() = scope.elem);
+    MAP_VARS.with(|m| *m.borrow_mut() = scope.maps);
 }

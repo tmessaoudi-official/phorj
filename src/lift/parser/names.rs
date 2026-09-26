@@ -96,6 +96,16 @@ impl PParser {
     /// accepts them in the same positions, DEC-297 / DEC-435, so they lift 1:1) or an expression.
     /// The `name :` lookahead cannot collide with a static access — `::` is its own token.
     pub(super) fn parse_arg(&mut self) -> Result<PhpExpr, String> {
+        if self.eat(&PTok::Ellipsis) {
+            // PHP 8.1 `f(...)` builds a first-class callable — a different construct on the same
+            // token, refused by name rather than as a baffling "found RParen".
+            if self.at(&PTok::RParen) {
+                return Err(self.err(
+                    "a first-class callable `f(...)` is Tier-2 — write a closure `fn ($x) => f($x)`",
+                ));
+            }
+            return Ok(PhpExpr::Spread(Box::new(self.parse_expr()?)));
+        }
         if let PTok::Ident(n) = self.peek().clone() {
             if matches!(self.peek_at(1), PTok::Colon) {
                 self.advance(); // name

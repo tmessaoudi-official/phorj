@@ -296,6 +296,64 @@ function run(): string {
 }
 echo run();"#,
         ),
+        // DEC-538 (row 5u): PHP spread over lists lifts to `List.concat`/`List.flatten`. The map case
+        // overwrites keys 1 and 3 AFTER insertion, so the lifted `Map.values` must keep PHP's
+        // insertion order (an overwrite stays in place) — measured before the build, pinned here.
+        (
+            "spread_over_lists",
+            r#"<?php
+/**
+ * @param list<int> $a
+ * @param list<int> $b
+ * @return list<int>
+ */
+function mix(array $a, array $b, int $x): array { return [...$a, $x, ...$b]; }
+/**
+ * @param list<int> $a
+ * @param list<int> $b
+ * @return list<int>
+ */
+function two(array $a, array $b): array { return [...$b, ...$a]; }
+/**
+ * @param list<string> $xs
+ * @return list<string>
+ */
+function front(array $xs): array {
+    /** @var list<string> $r */
+    $r = ["c"];
+    array_unshift($r, ...$xs);
+    return $r;
+}
+/** @return list<int> */
+function merged(): array {
+    $m = [3 => [30], 1 => [10, 11], 2 => [20]];
+    $m[1] = [99];
+    $m[5] = [50];
+    $m[3] = [31, 32];
+    return array_merge(...array_values($m));
+}
+/** @param list<int> $xs */
+function show(array $xs): string {
+    $s = "";
+    foreach ($xs as $x) { $s = $s . $x . ","; }
+    return $s;
+}
+/** @param list<string> $xs */
+function words(array $xs): string {
+    $s = "";
+    foreach ($xs as $x) { $s = $s . $x . ","; }
+    return $s;
+}
+function run(): string {
+    /** @var list<int> $a */
+    $a = [1, 2];
+    /** @var list<int> $b */
+    $b = [8, 9];
+    return show(mix($a, $b, 5)) . "|" . show(two($a, $b)) . "|" . words(front(["a", "b"])) . "|"
+        . show(merged());
+}
+echo run();"#,
+        ),
         (
             "string_escapes",
             r#"<?php

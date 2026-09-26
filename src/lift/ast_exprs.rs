@@ -41,6 +41,10 @@ pub enum PhpExpr {
         name: String,
         value: Box<PhpExpr>,
     },
+    /// `...expr` — a spread (DEC-538). The parser produces it ONLY as an unkeyed array-literal
+    /// element or as a call argument; the lifter consumes it in `lifter::spread`, and any spread
+    /// left unconsumed is refused by name in `lift_expr`.
+    Spread(Box<PhpExpr>),
     Unary {
         op: PhpUnOp,
         expr: Box<PhpExpr>,

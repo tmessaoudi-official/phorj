@@ -320,7 +320,7 @@ fn walk_expr(
         // (`f(limit: $n)`), so the walk must descend. Named args only reach a function BODY once the
         // expression parser admits them (attribute arg lists are outside every body) — recursing now
         // means that slice cannot silently skip a sighting and mis-hoist.
-        E::NamedArg { value, .. } => walk_expr(value, ctx, sightings, order),
+        E::NamedArg { value, .. } | E::Spread(value) => walk_expr(value, ctx, sightings, order),
         // An arrow closure captures by value: its body READS enclosing locals (walk them) and its
         // parameters are its own (never a hoist candidate for the enclosing function).
         E::Closure { body, .. } => walk_expr(body, ctx, sightings, order),

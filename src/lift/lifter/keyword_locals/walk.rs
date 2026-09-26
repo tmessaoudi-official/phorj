@@ -160,7 +160,7 @@ fn walk_expr(e: &mut php::PhpExpr, f: &mut Sites) {
             walk_expr(value, f);
         }
         // Outside an argument list (the parser only builds one inside), the value is still walked.
-        E::NamedArg { value, .. } => walk_expr(value, f),
+        E::NamedArg { value, .. } | E::Spread(value) => walk_expr(value, f),
         E::Unary { expr, .. } => walk_expr(expr, f),
         E::Binary { left, right, .. } => {
             walk_expr(left, f);

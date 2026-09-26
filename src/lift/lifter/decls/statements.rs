@@ -283,7 +283,10 @@ impl Lifter {
                 })
             }
             // Row 5f: `usort($xs, $cmp);` has a meaning only as a statement.
-            other => match crate::lift::lifter::array_fns::lift_usort_stmt(other) {
+            // DEC-538: `array_unshift($v, ...$xs);` likewise.
+            other => match crate::lift::lifter::array_fns::lift_usort_stmt(other)
+                .or_else(|| crate::lift::lifter::spread::lift_unshift_stmt(other))
+            {
                 Some(lifted) => lifted,
                 None => Ok(Stmt::Expr(lift_expr(other)?, SP)),
             },

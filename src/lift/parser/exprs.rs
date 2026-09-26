@@ -297,6 +297,9 @@ impl PParser {
             PTok::LBracket => self.parse_array(),
             PTok::Backslash => self.parse_root_qualified(),
             PTok::Ident(word) => self.parse_ident_primary(&word),
+            PTok::Ellipsis => Err(self.err(
+                "a spread `...` lifts only as an array-literal element or a call argument (DEC-538)",
+            )),
             _ => Err(self.err("expected an expression")),
         }
     }
@@ -342,6 +345,19 @@ impl PParser {
         self.advance(); // `[`
         let mut elems = Vec::new();
         while !self.at(&PTok::RBracket) {
+            if self.eat(&PTok::Ellipsis) {
+                elems.push(PhpArrayElem {
+                    key: None,
+                    value: PhpExpr::Spread(Box::new(self.parse_expr()?)),
+                });
+                if self.at(&PTok::FatArrow) {
+                    return Err(self.err("a spread element `...x` takes no key"));
+                }
+                if !self.eat(&PTok::Comma) {
+                    break;
+                }
+                continue;
+            }
             let first = self.parse_expr()?;
             let elem = if self.eat(&PTok::FatArrow) {
                 PhpArrayElem {

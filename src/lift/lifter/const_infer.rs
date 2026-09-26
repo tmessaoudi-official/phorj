@@ -68,6 +68,9 @@ fn infer(e: &php::PhpExpr, depth: usize) -> Result<Shape, String> {
         php::PhpExpr::ClassConst { .. } => Err(
             "references another constant — not yet a constant in phorj (Q-0924-1, unruled)".into(),
         ),
+        php::PhpExpr::Spread(_) => {
+            Err("spreads another array — a constant array lifts from literal elements only".into())
+        }
         _ => Err("has a value that is not a literal".into()),
     }
 }

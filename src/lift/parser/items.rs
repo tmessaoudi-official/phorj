@@ -388,6 +388,11 @@ impl PParser {
             } else {
                 None
             };
+            if self.at(&PTok::Ellipsis) {
+                return Err(self.err(
+                    "a variadic parameter `...$x` has no lift yet — take a `list<T>` parameter",
+                ));
+            }
             let name = self.expect_var("parameter name")?;
             let default = if self.eat(&PTok::Assign) {
                 Some(self.parse_expr()?)

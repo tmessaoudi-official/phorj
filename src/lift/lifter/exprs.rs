@@ -124,6 +124,8 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         // (DEC-297), so nothing is reordered here. The checker normalizes named args into their
         // positional slots later, and rejects the positions phorj does not support yet, which keeps
         // that judgement in ONE place instead of duplicating it in the lifter.
+        // DEC-538: a spread `lift_array` / `array_merge` / `array_unshift` did not consume.
+        php::PhpExpr::Spread(_) => return Err(super::spread::UNCONSUMED.into()),
         php::PhpExpr::NamedArg { name, value } => Expr::NamedArg {
             name: name.clone(),
             value: Box::new(lift_expr(value)?),
@@ -248,6 +250,9 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             // Row 5f: `array_map` swaps its arguments, so it has no `lift_from` row.
             if let Some(lifted) = super::array_fns::lift_array_map(callee, args) {
                 return lifted;
+            }
+            if let Some(lifted) = super::spread::lift_spread_merge(callee, args) {
+                return lifted; // DEC-538: `array_merge(...$xss)`
             }
             // DEC-312: a bare PHP builtin with a registered inverse lifts to its Core form
             // (`strlen($s)` → `String.length(s)`, one registry row for both directions). Arity must
@@ -422,6 +427,9 @@ pub(super) fn lift_exprs(es: &[php::PhpExpr]) -> Result<Vec<Expr>, String> {
 }
 
 pub(super) fn lift_array(elems: &[php::PhpArrayElem]) -> Result<Expr, String> {
+    if let Some(lifted) = super::spread::lift_spread_array(elems) {
+        return lifted; // DEC-538
+    }
     if elems.is_empty() {
         return Ok(Expr::List(Vec::new(), SP));
     }
