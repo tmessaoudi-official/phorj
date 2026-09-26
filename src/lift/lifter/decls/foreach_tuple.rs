@@ -38,6 +38,18 @@ impl Lifter {
         body: &[php::PhpStmt],
         declared: &mut HashSet<String>,
     ) -> Result<Vec<Stmt>, String> {
+        // A list the shape registry knows holds NAMED tuples (DEC-515): PHP's `[$a, $b]` reads keys
+        // 0 and 1, which a keyed element does not have (null + a warning), while phorj's positional
+        // erasure would hand back the field values — same source, different output, no error.
+        if let php::PhpExpr::Var(v) = array {
+            if super::super::shapes::fields_of(v).1.is_some() {
+                return Err(format!(
+                    "lift: a positional `foreach` destructure over `${v}`, a list of NAMED tuples, \
+                     reads indexes 0, 1, … that its elements do not have (PHP yields null) — read \
+                     the fields by name instead"
+                ));
+            }
+        }
         let iter = lift_expr(array)?;
         let tmp = next_binder();
         let scope = super::super::enter_binder(&iter, &tmp);

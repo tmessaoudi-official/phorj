@@ -144,3 +144,21 @@ function f(array $ps): string {{
     // Sighted, the body write would be `w`'s first assignment and the planner would BLOCK it.
     assert!(!out.contains("CANNOT LIFT"), "{out}");
 }
+
+#[test]
+fn a_positional_pattern_over_named_tuples_is_refused_by_name() {
+    // 6C (row 5v): PHP reads `$row[0]` on a keyed element as null; phorj's positional erasure would
+    // read the first FIELD — a silent divergence, so it is refused where the lifter can see it.
+    let e = refused(
+        "<?php
+/**
+ * @param list<array{id: int, name: string}> $rows
+ */
+function f(array $rows): int {
+    $sum = 0;
+    foreach ($rows as [$id, $name]) { $sum += $id; }
+    return $sum;
+}",
+    );
+    assert!(e.contains("NAMED tuples"), "{e}");
+}

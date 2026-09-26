@@ -10,9 +10,15 @@ foreach ($xs as [[$a, $b], $c]) {}    // refused: nested
 foreach ($m as $k => [$a, $b]) {}     // refused: a key AND a destructured value
 ```
 
-Two consequences worth knowing. A binder that reuses a name the function already declared BEFORE the loop
-fails `phg check` on the shadow (PHP overwrites the outer variable; phorj forbids the shadow) — loud, never
-silent. And a positional LITERAL list (`[['a', 1], ['b', 2]]`, or `$out[] = [$a, $p]`) is not seeded into
+Three consequences worth knowing. A binder that reuses a name the function already declared BEFORE the loop
+fails `phg check` with `E-SHADOW-LOCAL` (PHP overwrites the outer variable; phorj forbids the shadow) —
+loud, never silent [Verified 2026-09-26 on the release binary: outer `$w = "before"`, then
+`foreach ($ps as [$w, $n])` → "`w` is already declared in this function"]. A positional pattern over a
+variable the lifter KNOWS holds named tuples (`@param list<array{id: int, name: string}> $rows`, then
+`foreach ($rows as [$id, $name])`) is refused by name: PHP reads keys 0 and 1, which a keyed element does
+not have, while phorj's erasure would read the fields. The same pattern over a CALL whose elements are
+named tuples is not seen by the lifter and lifts — phorj accepts a positional destructure of a named
+tuple — so it diverges only on PHP that is already reading undefined keys (null plus a warning). And a positional LITERAL list (`[['a', 1], ['b', 2]]`, or `$out[] = [$a, $p]`) is not seeded into
 tuples the way a keyed one is under DEC-515, so iterating one fails check on the element type; elements
 built by a function whose `@return` is `array{…}` do become tuples.
 
