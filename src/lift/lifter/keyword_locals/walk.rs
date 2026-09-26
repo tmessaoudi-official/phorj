@@ -80,7 +80,10 @@ fn walk_stmt(s: &mut php::PhpStmt, f: &mut Sites) {
             if let Some(k) = key {
                 f(k, Site::Var);
             }
-            f(value, Site::Var);
+            match value {
+                php::PhpForeachValue::Var(v) => f(v, Site::Var),
+                php::PhpForeachValue::Tuple(bs) => bs.iter_mut().for_each(|b| f(b, Site::Var)),
+            }
             walk_stmts(body, f);
         }
         S::Echo(es) => {

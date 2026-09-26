@@ -197,11 +197,34 @@ impl PParser {
             return Err(self.err("expected `as` in foreach"));
         }
         self.advance(); // `as`
+        if self.at_foreach_pattern() {
+            let value = self.parse_foreach_pattern()?;
+            if self.at(&PTok::FatArrow) {
+                return Err(self.err("a destructure cannot be a foreach KEY"));
+            }
+            self.expect(&PTok::RParen, "`)`")?;
+            let body = self.parse_body()?;
+            return Ok(PhpStmt::Foreach {
+                array,
+                key: None,
+                value,
+                body,
+            });
+        }
         let first = self.expect_var("foreach variable")?;
         let (key, value) = if self.eat(&PTok::FatArrow) {
-            (Some(first), self.expect_var("foreach value variable")?)
+            if self.at_foreach_pattern() {
+                return Err(self.err(
+                    "a foreach with a key AND a destructured value (`$k => [$a, $b]`) has no lift \
+                     yet — iterate the entries and destructure in the body",
+                ));
+            }
+            (
+                Some(first),
+                PhpForeachValue::Var(self.expect_var("foreach value variable")?),
+            )
         } else {
-            (None, first)
+            (None, PhpForeachValue::Var(first))
         };
         self.expect(&PTok::RParen, "`)`")?;
         let body = self.parse_body()?;

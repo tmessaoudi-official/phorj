@@ -95,8 +95,14 @@ impl Lifter {
             }
             php::PhpStmt::Foreach {
                 array,
+                value: php::PhpForeachValue::Tuple(binders),
+                body,
+                ..
+            } => self.lift_tuple_foreach(array, binders, body, declared)?, // row 5v
+            php::PhpStmt::Foreach {
+                array,
                 key,
-                value,
+                value: php::PhpForeachValue::Var(value),
                 body,
             } => {
                 // A-6 gave Phorj's for-in element-type inference, so a keyless PHP `foreach

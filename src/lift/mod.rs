@@ -61,6 +61,8 @@ mod lifter_tests_enums;
 #[cfg(test)]
 mod lifter_tests_escapes;
 #[cfg(test)]
+mod lifter_tests_foreach_destructure;
+#[cfg(test)]
 mod lifter_tests_hoist;
 #[cfg(test)]
 mod lifter_tests_keyword_names;

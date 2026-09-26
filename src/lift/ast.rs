@@ -260,7 +260,7 @@ pub enum PhpStmt {
     Foreach {
         array: PhpExpr,
         key: Option<String>,
-        value: String,
+        value: PhpForeachValue,
         body: Vec<PhpStmt>,
     },
     /// `echo a, b, c;`.
@@ -303,4 +303,14 @@ pub struct PhpInterface {
     pub extends: Vec<String>,
     pub methods: Vec<PhpMethod>,
     pub line: usize,
+}
+
+/// What a `foreach` binds per element: one variable, or (row 5v) a POSITIONAL destructure
+/// `[$a, $b]` / `list($a, $b)` — DEC-510's form, two or more plain variables. An enum rather than a
+/// side field so every consumer of the binder names (hoist, the keyword-rename walk, the lift) is
+/// forced by the compiler to handle both shapes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PhpForeachValue {
+    Var(String),
+    Tuple(Vec<String>),
 }

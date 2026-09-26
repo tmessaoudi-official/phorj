@@ -1,5 +1,21 @@
 # Known Issues & Limitations
 
+## LIFT-FOREACH-DESTRUCTURE — positional patterns lift (row 5v, 2026-09-26); these are refused by name
+
+```php
+foreach ($xs as [$a, $b]) {}          // lifts: for ((a, b) in xs)
+foreach ($xs as [, $b]) {}            // refused: a skipped slot — phorj has no wildcard binder (`_` is not a legal name)
+foreach ($xs as ['k' => $v]) {}       // refused: a KEYED destructure reads a map by key (DEC-510)
+foreach ($xs as [[$a, $b], $c]) {}    // refused: nested
+foreach ($m as $k => [$a, $b]) {}     // refused: a key AND a destructured value
+```
+
+Two consequences worth knowing. A binder that reuses a name the function already declared BEFORE the loop
+fails `phg check` on the shadow (PHP overwrites the outer variable; phorj forbids the shadow) — loud, never
+silent. And a positional LITERAL list (`[['a', 1], ['b', 2]]`, or `$out[] = [$a, $p]`) is not seeded into
+tuples the way a keyed one is under DEC-515, so iterating one fails check on the element type; elements
+built by a function whose `@return` is `array{…}` do become tuples.
+
 ## LIFT-SPREAD — spread lifts over LISTS only (DEC-538, row 5u, 2026-09-26); the rest is refused by name
 
 ```php

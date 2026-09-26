@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: `foreach ($xs as [$a, $b])` (scout row 5v; DEC-510's form; 2026-09-26)
+
+A `foreach` whose value is a positional destructure — `[$a, $b]` or `list($a, $b)` — was refused as
+`expected foreach variable, found LBracket`, the wall behind seven scout files. It lifts to phorj's own
+lowering of the tuple loop, and `cmd_lift`'s format pass re-collapses that to `for ((a, b) in xs)`.
+Binders belong to the loop, so a name reused after it lifts as a fresh declaration (PHP's leak out).
+A keyed or nested pattern, a skipped slot (`[, $x]` — phorj has no wildcard binder), a single binder
+and a key with a destructured value are refused by name. Scout: 83 → 88 of 155. New example
+`examples/lift/foreach-destructure`.
+
 ### Added — `phg lift`: PHP spread over lists (scout row 5u; DEC-538; 2026-09-26)
 
 PHP's `...` was refused as `expected an expression, found Dot` and was the first wall in the classifier

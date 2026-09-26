@@ -249,7 +249,10 @@ fn walk_stmt(
             walk_expr(array, ctx, sightings, order);
             // The loop bindings are declared BY the `foreach`, so they must never be hoisted.
             let restore = ctx.bound.clone();
-            ctx.bound.push(value.clone());
+            match value {
+                php::PhpForeachValue::Var(v) => ctx.bound.push(v.clone()),
+                php::PhpForeachValue::Tuple(bs) => ctx.bound.extend(bs.iter().cloned()),
+            }
             if let Some(k) = key {
                 ctx.bound.push(k.clone());
             }

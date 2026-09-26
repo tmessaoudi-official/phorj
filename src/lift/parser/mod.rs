@@ -11,8 +11,8 @@
 
 use super::ast::{
     PhpArrayElem, PhpAttribute, PhpBinOp, PhpCatch, PhpClass, PhpEnum, PhpEnumCase, PhpExpr,
-    PhpFunction, PhpInterface, PhpItem, PhpMatchArm, PhpMember, PhpMethod, PhpParam, PhpProgram,
-    PhpStmt, PhpStrPart, PhpType, PhpUnOp, PhpUse, PhpVisibility,
+    PhpForeachValue, PhpFunction, PhpInterface, PhpItem, PhpMatchArm, PhpMember, PhpMethod,
+    PhpParam, PhpProgram, PhpStmt, PhpStrPart, PhpType, PhpUnOp, PhpUse, PhpVisibility,
 };
 use super::lexer::{lex_php, PTok, PTokenSpanned};
 use crate::limits::MAX_NEST_DEPTH;

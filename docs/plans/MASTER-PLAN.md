@@ -121,7 +121,8 @@ where PHP makes `<=>` non-associative and refuses to parse it).
 Two earlier banked Invariant-15 questions: **Q-0908-1 `?? throw`** — RULED 2026-09-24 as DEC-532
 (throw-expression in four positions; 3 scout sites; BUILT as scout row 5l, `a423d612`); **Q-0908-2 spread `...`** — RULED 2026-09-26 as DEC-538:
 the lifter maps spread over lists to `List.concat`/`List.flatten`, no new syntax, the checker judging list-ness — BUILT as
-scout row 5u (2026-09-26); L3's next wall is `foreach (… as [$a, $b])` (row 5v).
+scout row 5u (2026-09-26); row 5v then lifted `foreach (… as [$a, $b])` (scout 88/155), and L3's next wall is a PHP
+static local (`static $keys = null;`).
 Text.php's next wall after DEC-532, PHP 8.3 typed `const array` constants (54 scout sites), is RULED 2026-09-24 as
 **DEC-533** (collection constants — explicit type, literal elements, PHP `const array`); BUILT as scout row 5m, `00b6db96`.
 **DEC-534** (`Map.union` — left-biased map union, PHP `+` on arrays); RULED 2026-09-25, BUILT as scout row 5q `b8aa33e7`, after row 5p `4c92693b` (the `Map.merge` → `array_merge` int-key renumbering break).

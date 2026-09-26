@@ -1,0 +1,49 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+/**
+ * @return array{string, int}
+ */
+function hit(string word, int at): (string, int) {
+    return (word, at);
+}
+
+/**
+ * @return list<array{string, int}>
+ */
+function hits(): List<(string, int)> {
+    return [hit("loyer", 4), hit("social", 19), hit("pls", 31)];
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var last = 0;
+    for ((word, at) in hits()) {
+        Output.print("{word}");
+        Output.print("@");
+        Output.print("{at}");
+        Output.print(" ");
+        last = at;
+    }
+    Output.print("\n");
+    for ((word, at) in hits()) {
+        for ((other, pos) in hits()) {
+            if (pos > at) {
+                Output.print("{word}");
+                Output.print("<");
+                Output.print("{other}");
+                Output.print(" ");
+            }
+        }
+    }
+    Output.print("\n");
+    mutable var word = "last";
+    Output.print("{word}");
+    Output.print("=");
+    Output.print("{last}");
+    Output.print("\n");
+}

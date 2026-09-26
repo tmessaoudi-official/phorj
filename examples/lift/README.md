@@ -550,6 +550,15 @@ key `é` the LEFT value wins, as PHP `+` does. A PHP `array` parameter or proper
 `$a + $b` on parameters stays `+` and `phg check` names it; a positional union (`[1, 2] + [3]`, by
 index) has no phorj form and stays `+` too. Byte-identical on all three legs and against the PHP.
 
+## Destructuring `foreach` — `foreach-destructure.php` / `foreach-destructure.phg` (scout row 5v, 2026-09-26)
+
+`foreach (hits() as [$word, $at])` and `foreach (… as list($word, $at))` lift to phorj's tuple loop
+`for ((word, at) in hits())` — DEC-510's positional destructure, in a loop header. The lifter emits the
+same lowering the phorj parser builds and the formatter shows it sugared, so the nested pair reads as two
+ordinary tuple loops. The binders belong to the loop: the `$word = "last"` after it is a fresh
+declaration, where PHP would be overwriting the loop's last value. Byte-identical on all three legs and
+against the PHP.
+
 ## Spread over lists — `spread.php` / `spread.phg` (scout row 5u, DEC-538, 2026-09-26)
 
 phorj has no spread syntax; PHP's `...` over lists lifts to the `Core.List` calls that already mean

@@ -333,13 +333,13 @@ fn foreach_value_and_keyvalue() {
         panic!()
     };
     assert_eq!(key, None);
-    assert_eq!(value, "v");
+    assert_eq!(value, PhpForeachValue::Var("v".into()));
 
     let PhpStmt::Foreach { key, value, .. } = stmt_of("<?php foreach ($m as $k => $v) {}") else {
         panic!()
     };
     assert_eq!(key, Some("k".into()));
-    assert_eq!(value, "v");
+    assert_eq!(value, PhpForeachValue::Var("v".into()));
 }
 
 #[test]

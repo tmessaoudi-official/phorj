@@ -354,6 +354,29 @@ function run(): string {
 }
 echo run();"#,
         ),
+        // Row 5v: `foreach ($xs as [$a, $b])` / `list($a, $b)` lift to phorj's tuple loop, a nested
+        // pair included (distinct synthetic binders), and a binder name reused AFTER the loop is a
+        // fresh declaration — PHP's binders leak out of the loop, phorj's are loop-scoped.
+        (
+            "foreach_destructure",
+            r#"<?php
+/** @return array{string, int} */
+function pair(string $w, int $n): array { return [$w, $n]; }
+/** @return list<array{string, int}> */
+function pairs(): array { return [pair('a', 1), pair('b', 2), pair('c', 3)]; }
+function run(): string {
+    $s = "";
+    foreach (pairs() as [$w, $n]) { $s = $s . $w . $n . ","; }
+    foreach (pairs() as list($w, $n)) {
+        foreach (pairs() as [$v, $m]) {
+            if ($m === $n) { $s = $s . $v; }
+        }
+    }
+    $w = "|end";
+    return $s . $w;
+}
+echo run();"#,
+        ),
         (
             "string_escapes",
             r#"<?php
