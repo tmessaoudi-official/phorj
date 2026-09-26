@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: builtins called at an arity the registry cannot place (L3 row 4g; 2026-09-27)
+
+`min($xs)` / `max($xs)` over an array lift to `xs.min()!` / `xs.max()!`; three or more values fold to `a.min(b).min(c)`; `substr($s, $i)` lifts to `s.substring(i, 9223372036854775807)`, PHP's "to the end". `array_filter($xs)` without a callback and the two-argument `strtr($s, $pairs)` are refused by name instead of lifting to an unresolved call. See `examples/lift/arity.php`.
+
 ### Fixed — `String.substring` and `List.slice` panicked on a very large length (scout row 5z, P0; 2026-09-26)
 
 `"abc".substring(1, 9223372036854775807)` and `xs.slice(1, 9223372036854775807)` overflowed an internal add and panicked on both backends, where PHP's `substr` / `array_slice` return the tail — a length near `PHP_INT_MAX` is PHP's idiom for "to the end". Both now clamp exactly as PHP does.

@@ -252,6 +252,9 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             if let Some(lifted) = super::array_fns::lift_array_map(callee, args) {
                 return lifted;
             }
+            if let Some(lifted) = super::arity_fns::lift_by_arity(callee, args) {
+                return lifted; // row 4g: an arity the registry cannot place
+            }
             if let Some(lifted) = super::spread::lift_spread_merge(callee, args) {
                 return lifted; // DEC-538: `array_merge(...$xss)`
             }

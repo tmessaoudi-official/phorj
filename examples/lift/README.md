@@ -593,6 +593,26 @@ row's. `$f(...)`, `$o->m(...)` and `C::m(...)` are refused too, and every one of
 rewrite that lifts: a closure with a TYPED parameter, or a `foreach` where the parameter is an `array`.
 Byte-identical on all three legs and against the PHP.
 
+## Builtins by arity — `arity.php` / `arity.phg` (scout row 4g, 2026-09-27)
+
+The registry maps one phorj native to each PHP builtin, for ONE arity: `min($a, $b)` is `a.min(b)`,
+`substr($s, $i, $n)` is `s.substring(i, n)`. The arities it cannot place used to lift to an unresolved call:
+
+- **`min($xs)` / `max($xs)`** — the one-argument form takes an array, and lifts to `xs.min()!`. Three
+  costs, disclosed: every site carries a `W-FORCE-UNWRAP` warning (the accepted cost, as `division.phg`'s
+  redundant casts are); an empty list is a phorj unwrap fault where PHP throws `ValueError` — both
+  fatal, a different class; and a list of strings orders byte-wise, not by PHP's numeric-string rules.
+- **`min($a, $b, $c)`** — three or more values fold left, `a.min(b).min(c)`; the arguments are still
+  evaluated in source order.
+- **`substr($s, $i)`** — to the end, `s.substring(i, 9223372036854775807)`: PHP's own idiom for "no
+  length", and `substring` clamps it exactly as PHP does (row 5z made that safe). Not `s.length()`,
+  which would evaluate `$s` twice.
+
+Refused by name: `array_filter($xs)` with no callback (it keeps the PHP-*truthy* values, and truthiness
+depends on the element type — write the callback), and the two-argument `strtr($s, $pairs)` (replace
+pairs longest-first; no phorj native does that yet). A spread or named argument is never read as one of
+these shapes. Byte-identical on all three legs and against the PHP.
+
 ## Spread over lists — `spread.php` / `spread.phg` (scout row 5u, DEC-538, 2026-09-26)
 
 phorj has no spread syntax; PHP's `...` over lists lifts to the `Core.List` calls that already mean

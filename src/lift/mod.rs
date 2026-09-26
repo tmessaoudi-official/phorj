@@ -49,6 +49,8 @@ mod tests_examples;
 #[cfg(test)]
 mod lifter_tests;
 #[cfg(test)]
+mod lifter_tests_arity;
+#[cfg(test)]
 mod lifter_tests_attrs;
 #[cfg(test)]
 mod lifter_tests_callable;

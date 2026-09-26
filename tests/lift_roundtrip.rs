@@ -442,6 +442,20 @@ $f = len(...);
 $ns = lens(['a', 'bcd']);
 echo $ns[0]; echo "|"; echo $ns[1]; echo "|"; echo $f('xy');"#,
         ),
+        // Row 4g: arities the registry cannot place — one-array `min`/`max`, a three-value fold, and
+        // `substr` to the end with a positive, a negative and an out-of-range start.
+        (
+            "builtins_by_arity",
+            r#"<?php
+/** @param list<int> $xs */
+function lo(array $xs): int { return min($xs); }
+/** @param list<int> $xs */
+function hi(array $xs): int { return max($xs); }
+function m3(int $a, int $b, int $c): int { return min($a, $b, $c) * 100 + max($a, $b, $c); }
+function tail(string $s, int $i): string { return substr($s, $i); }
+echo lo([4, 1, 7]); echo "|"; echo hi([4, 1, 7]); echo "|"; echo m3(5, 2, 9);
+echo "|"; echo tail('hello', 1); echo "|"; echo tail('hello', -2); echo "|["; echo tail('hi', 5); echo "]";"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php
