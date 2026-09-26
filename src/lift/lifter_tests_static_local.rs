@@ -41,3 +41,12 @@ fn a_static_property_and_a_static_closure_are_not_static_locals() {
         }
     }
 }
+
+#[test]
+fn a_late_static_call_statement_is_not_a_static_local() {
+    // `static::reset();` reaches `parse_stmt` with `static` first; only a VARIABLE next makes it a
+    // static local. It keeps its pre-existing generic refusal — this row does not change that.
+    let src = "<?php class K { public static function f(): int { static::reset(); return 1; } }";
+    let e = refused(src);
+    assert!(!e.contains("DEC-539"), "{src}\n{e}");
+}
