@@ -15,7 +15,8 @@
 use super::*;
 
 /// The type written after `tag` in `doc` — for `@param`, the one followed by `$name`. Bracket-aware,
-/// so `array<string, int>` (with its space) is one type.
+/// so `array<string, int>` and `(callable(A): R)|null` (with their spaces) are one type, and so is
+/// `callable(A): R`.
 fn doc_tag(doc: &str, tag: &str, name: Option<&str>) -> Option<String> {
     for line in doc.lines() {
         let l = line.trim_start_matches([' ', '*']).trim_start();
@@ -29,8 +30,11 @@ fn doc_tag(doc: &str, tag: &str, name: Option<&str>) -> Option<String> {
         let (mut depth, mut end) = (0usize, rest.len());
         for (i, c) in rest.char_indices() {
             match c {
-                '<' | '{' => depth += 1,
-                '>' | '}' => depth = depth.saturating_sub(1),
+                '<' | '{' | '(' => depth += 1,
+                '>' | '}' | ')' => depth = depth.saturating_sub(1),
+                // Row 4e: a callable signature's return type follows `): ` — the space after the
+                // colon is inside the type. Anchored on `):`, which only a signature can produce.
+                ' ' if depth == 0 && rest[..i].ends_with("):") => {}
                 ' ' if depth == 0 => {
                     end = i;
                     break;
@@ -181,17 +185,44 @@ impl PParser {
         Ok(())
     }
 
-    /// Only a bare `array` / `?array` is substituted. A `@param non-empty-string $s` on a `string`
-    /// is a refinement phorj cannot express and is left exactly as declared.
+    /// Only a bare `array` / `?array` is substituted — or, since row 4e, a `callable` / `Closure`
+    /// (either nullable) whose docblock spells a signature. A `@param non-empty-string $s` on a
+    /// `string` is a refinement phorj cannot express and is left exactly as declared; a `callable`
+    /// docblock with no `(` is left too, so the native's own refusal names the fix. The parsed type
+    /// must match the slot: a function never replaces an `array`, nor anything else a `callable`.
     fn substitute(&mut self, ty: &mut PhpType, doc_ty: &str) -> Result<(), String> {
-        let is_array = |t: &PhpType| matches!(t, PhpType::Named(n) if n == "array");
-        match ty {
-            t if is_array(t) => *t = self.parse_doc_type(doc_ty)?,
-            PhpType::Nullable(inner) if is_array(inner) => {
-                **inner = self.parse_doc_type(doc_ty)?;
+        let named =
+            |t: &PhpType, ns: &[&str]| matches!(t, PhpType::Named(n) if ns.contains(&n.as_str()));
+        let slot = match ty {
+            PhpType::Nullable(inner) => &mut **inner,
+            t => t,
+        };
+        if named(slot, &["array"]) {
+            let t = self.parse_doc_type(doc_ty)?;
+            if is_function(&t) {
+                return Err(self.err(&format!(
+                    "the docblock type `{doc_ty}` does not describe the declared `array`"
+                )));
             }
-            _ => {}
+            *slot = t;
+        } else if named(slot, &["callable", "Closure"]) && doc_ty.contains('(') {
+            let t = self.parse_doc_type(doc_ty)?;
+            if !is_function(&t) {
+                return Err(self.err(&format!(
+                    "the docblock type `{doc_ty}` does not describe the declared `callable`"
+                )));
+            }
+            *slot = t;
         }
         Ok(())
+    }
+}
+
+/// A function type, or a nullable one — what may replace a `callable` slot, and never an `array` one.
+fn is_function(t: &PhpType) -> bool {
+    match t {
+        PhpType::Function { .. } => true,
+        PhpType::Nullable(inner) => matches!(**inner, PhpType::Function { .. }),
+        _ => false,
     }
 }

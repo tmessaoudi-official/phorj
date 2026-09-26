@@ -226,6 +226,12 @@ pub enum PhpType {
     /// * keyed (`array{bp: int, source: string}`) carries `Some(names)`, one per element, in
     ///   source order — the names come from the DOCBLOCK and are never invented (DEC-166).
     Tuple(Vec<PhpType>, Option<Vec<String>>),
+    /// A docblock callable SIGNATURE substituted for a native `callable` / `\Closure` (row 4e):
+    /// `callable(A, B): R`, `\Closure(A): R`. The lifter maps it to the function type `(A, B) => R`.
+    Function {
+        params: Vec<PhpType>,
+        ret: Box<PhpType>,
+    },
 }
 
 /// A PHP statement.

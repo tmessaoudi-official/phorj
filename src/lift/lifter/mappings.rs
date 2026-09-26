@@ -75,15 +75,15 @@ pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
                             (`@param list<T> $x`, `@return array<K, V>`, `@var T[]`) and the lifter \
                             reads the docblock"
                 .into()),
-            "mixed" | "iterable" | "object" | "callable" | "self" | "static" | "parent" => {
+            "mixed" | "iterable" | "object" | "self" | "static" | "parent" => {
                 Err(format!("lift: the `{name}` type is Tier-2/Tier-3"))
             }
-            // A bare `Closure` carries no signature; phorj's function types do.
-            "Closure" => Err(
-                "lift: a `Closure` type needs a signature — write the phorj function \
-                             type by hand (Tier-2)"
-                    .into(),
-            ),
+            // A bare `callable` / `Closure` carries no signature; phorj's function types always do,
+            // and the lifter never invents one. The docblock signature is read when it is there.
+            "callable" | "Closure" => Err(format!(
+                "lift: a `{name}` type needs a signature — annotate it (`@param callable(A): R $f`, \
+                 `@var \\Closure(A): R`) and the lifter reads the docblock"
+            )),
             // A class/enum/interface name.
             _ => Ok(named(name)),
         },
@@ -101,6 +101,13 @@ pub(super) fn lift_type(t: &php::PhpType) -> Result<Type, String> {
                 span: SP,
             })
         }
+        // Row 4e: a docblock callable signature the parser substituted for a `callable` / `Closure`.
+        php::PhpType::Function { params, ret } => Ok(Type::Function {
+            params: params.iter().map(lift_type).collect::<Result<_, _>>()?,
+            ret: Box::new(lift_type(ret)?),
+            throws: Vec::new(),
+            span: SP,
+        }),
         // Lane R-4: a docblock generic the parser substituted for a bare `array`.
         php::PhpType::Generic { name, args } => {
             let args: Vec<Type> = args.iter().map(lift_type).collect::<Result<_, _>>()?;

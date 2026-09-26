@@ -29,6 +29,7 @@ const SP: Span = Span {
 /// and prints (L3). Any stage's error propagates as a `lift …` / `printer: …` string.
 mod array_fns;
 mod attrs;
+mod callables;
 mod const_infer;
 mod decls;
 mod division;

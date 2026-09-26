@@ -38,5 +38,11 @@ fn resolve(t: &mut PhpType, class: &str) {
                 resolve(a, class);
             }
         }
+        PhpType::Function { params, ret } => {
+            for a in params {
+                resolve(a, class);
+            }
+            resolve(ret, class);
+        }
     }
 }

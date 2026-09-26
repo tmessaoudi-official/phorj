@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: docblock callable signatures type `callable` and `\Closure` (L3 row 4e; 2026-09-26)
+
+`callable` and `\Closure` were refused outright. A PHPStan/Psalm signature in the docblock — `@param callable(string): ?Profile $f`, `@var \Closure(int): string`, `@return \Closure(): void` — now lifts to the phorj function type `(string) => Profile?`; a grouped `(callable(A): R)|null` on a `?callable` lifts to `((A) => R)?`, and `\Closure::fromCallable($f)` lifts to `f`. A signature-less `callable` is still refused, now naming the docblock fix, and so are signature parameters phorj cannot express (optional, variadic, by-reference) and a signature with no return type. The lift printer now prints types through the formatter. See `examples/lift/callables.php`.
+
 ### Fixed — `phg format` changed the meaning of an optional function or intersection type (scout row 5y; 2026-09-26)
 
 `?` binds to the nearest type, so `((string) => int)? f` and `(string) => int? f` are different types. The formatter kept the parentheses only around a union, so it rewrote the first as the second, and `(A & B)? x` as `A & B? x`. Both now keep their parentheses, and a diagnostic prints such a type as `((string) -> int)?` instead of naming a function that returns an optional.

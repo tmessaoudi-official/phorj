@@ -564,6 +564,27 @@ ordinary tuple loops. The binders belong to the loop: the `$word = "last"` after
 declaration, where PHP would be overwriting the loop's last value. Byte-identical on all three legs and
 against the PHP.
 
+## Callable signatures — `callables.php` / `callables.phg` (scout row 4e, 2026-09-26)
+
+A bare `callable` or `\Closure` says nothing about what it takes or returns, and a phorj function type
+always does — so the lifter refuses one rather than invent a signature. PHPStan and Psalm spell the
+signature in the docblock, `callable(A, B): R` or `\Closure(A): R`, and that is read exactly like a
+docblock `list<T>` types an `array`: `@param callable(string): ?Profile $f` lifts `callable $f` to
+`(string) => Profile? f`, and `@var \Closure(string): ?Profile` types a property the same way. A
+parameter may be named in the signature (`callable(string $key): R`); the name is dropped.
+
+A nullable callable is written grouped, `(callable(string): ?Profile)|null` on a `?callable`, and
+lifts to `((string) => Profile?)?` — the parentheses matter: `?` binds to the nearest type, so without
+them the outer `?` would attach to the return type instead of the function (`phg format` keeps them
+since row 5y). `\Closure::fromCallable($f)`
+lifts to `f`: once the parameter is typed from its signature it is already a function value.
+
+Refused by name: a signature-less `callable`/`\Closure`, an optional (`int=`), variadic (`int...`) or
+by-reference (`int &$x`) signature parameter, a signature with no `: R` (PHP reads that as `mixed`), and
+a docblock whose type does not match the declared slot. A function-typed FIELD is passed on as a value
+here, never called directly: `($this->f)($x)` has no phorj spelling yet (see the scout plan's Known
+issues). Byte-identical on all three legs and against the PHP.
+
 ## Spread over lists — `spread.php` / `spread.phg` (scout row 5u, DEC-538, 2026-09-26)
 
 phorj has no spread syntax; PHP's `...` over lists lifts to the `Core.List` calls that already mean

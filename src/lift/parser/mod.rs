@@ -118,6 +118,8 @@ pub fn parse_php_with_docs(
 mod attrs;
 mod closures;
 mod construct;
+mod doc_callable;
+mod doc_shape;
 mod doc_types;
 mod docblock;
 mod enums;

@@ -325,6 +325,11 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             sep: crate::ast::MemberSep::Dot,
             span: SP,
         },
+        php::PhpExpr::StaticCall { class, name, args }
+            if super::callables::from_callable_arg(class, name, args).is_some() =>
+        {
+            lift_expr(super::callables::from_callable_arg(class, name, args).expect("guarded"))?
+        }
         php::PhpExpr::StaticCall { class, name, args } => Expr::Call {
             // DEC-509: a STATIC method the enum declares was lowered to a free function, so the call
             // site is a plain call. `Tenure::from(…)`/`cases()`/`tryFrom(…)` are the backed-enum

@@ -6,23 +6,25 @@
 //! Grammar read here: `?T`, `T|null`, `list<T>`, `non-empty-list<T>`, `array<T>`, `array<K, V>`,
 //! `non-empty-array<…>`, `T[]`, scalars and class names (a `\`-rooted one becomes an implicit
 //! `use`, exactly like an inline name in `names.rs`). Array SHAPES `array{…}` lift to
-//! tuples ([`PParser::doc_shape`]). Refused by name: `mixed`, `callable`, `iterable`, `object`, other
-//! generics, unions other than `|null`.
+//! tuples ([`super::doc_shape`]). A callable SIGNATURE (`callable(A): R`,
+//! `\Closure(A): R`) is a function type ([`super::doc_callable`]), and `( … )` groups (`(callable(A): R)|null`). Refused by
+//! name: `mixed`, a signature-less `callable`, `iterable`, `object`, other generics, unions other
+//! than `|null`.
 
 use super::*;
 
-struct Cursor<'a> {
-    s: &'a str,
-    i: usize,
+pub(super) struct Cursor<'a> {
+    pub(super) s: &'a str,
+    pub(super) i: usize,
 }
 
 impl Cursor<'_> {
-    fn skip_ws(&mut self) {
+    pub(super) fn skip_ws(&mut self) {
         while self.s[self.i..].starts_with(' ') {
             self.i += 1;
         }
     }
-    fn eat(&mut self, c: char) -> bool {
+    pub(super) fn eat(&mut self, c: char) -> bool {
         self.skip_ws();
         if self.s[self.i..].starts_with(c) {
             self.i += c.len_utf8();
@@ -31,7 +33,7 @@ impl Cursor<'_> {
             false
         }
     }
-    fn eat_str(&mut self, t: &str) -> bool {
+    pub(super) fn eat_str(&mut self, t: &str) -> bool {
         if self.s[self.i..].starts_with(t) {
             self.i += t.len();
             true
@@ -39,13 +41,13 @@ impl Cursor<'_> {
             false
         }
     }
-    fn peek(&self) -> Option<char> {
+    pub(super) fn peek(&self) -> Option<char> {
         self.s[self.i..].chars().next()
     }
     /// A quoted array-shape key (`'total-cost'`, `"2fa"`), returned WITHOUT its quotes. PHPStan and
     /// Psalm both emit this form for a key that is not a bare identifier — which is exactly the key
     /// phorj cannot name a field after, so reading it here is what lets the refusal say so.
-    fn quoted(&mut self, q: char) -> String {
+    pub(super) fn quoted(&mut self, q: char) -> String {
         self.i += q.len_utf8();
         let start = self.i;
         while let Some(c) = self.peek() {
@@ -61,7 +63,7 @@ impl Cursor<'_> {
         out
     }
     /// A type head: letters, digits, `_`, `\` (paths) and `-` (`non-empty-list`).
-    fn ident(&mut self) -> String {
+    pub(super) fn ident(&mut self) -> String {
         self.skip_ws();
         let start = self.i;
         while let Some(c) = self.s[self.i..].chars().next() {
@@ -89,9 +91,18 @@ impl PParser {
         Ok(t)
     }
 
-    fn doc_type(&mut self, c: &mut Cursor) -> Result<PhpType, String> {
+    pub(super) fn doc_type(&mut self, c: &mut Cursor) -> Result<PhpType, String> {
         let mut nullable = c.eat('?');
-        let mut t = self.doc_atom(c)?;
+        // `(T)` groups — how a docblock makes a callable nullable: `(callable(A): R)|null` (row 4e).
+        let mut t = if c.eat('(') {
+            let inner = self.doc_type(c)?;
+            if !c.eat(')') {
+                return Err(self.err(&format!("`)` in the docblock type `{}`", c.s)));
+            }
+            inner
+        } else {
+            self.doc_atom(c)?
+        };
         while c.eat_str("[]") {
             t = PhpType::Generic {
                 name: "list".into(),
@@ -115,109 +126,14 @@ impl PParser {
         })
     }
 
-    /// An array SHAPE, `{` already eaten. Two very different things wear one syntax:
-    ///
-    /// * **positional** — `array{int, string}`, or explicit ascending indices from zero,
-    ///   `array{0: float, 1: float}` (the form PHPStan and Psalm emit). That is a phorj TUPLE.
-    /// * **keyed** — `array{tenure: Tenure, source: string}`. That is a NAMED-FIELD tuple (DEC-504),
-    ///   and the docblock's own keys become the field names. The lifter never invents a name
-    ///   (DEC-166): a shape that is partly keyed, or whose key is not a legal phorj field name, is
-    ///   refused rather than half-named or mangled.
-    ///
-    /// Indices that are not a dense ascending run from zero (`array{1: int, 0: string}`) are NOT
-    /// silently reordered into a tuple — reordering would be the lifter guessing at intent, which
-    /// DEC-166 forbids.
-    fn doc_shape(&mut self, c: &mut Cursor, name: &str) -> Result<PhpType, String> {
-        let mut elems: Vec<PhpType> = Vec::new();
-        let mut indices: Vec<Option<String>> = Vec::new();
-        loop {
-            c.skip_ws();
-            if c.eat('}') {
-                break;
-            }
-            // A leading `<ident>:`, `<digits>:` or `'quoted':` is a key; without one the element is
-            // positional. The quoted form is read HERE rather than left to fail as a malformed type,
-            // so `array{'total-cost': int}` is refused as an illegal FIELD NAME — which is the real
-            // problem — instead of as a broken docblock.
-            let save = c.i;
-            c.skip_ws();
-            let key = match c.peek() {
-                Some(q @ ('\'' | '"')) => c.quoted(q),
-                _ => c.ident(),
-            };
-            c.skip_ws();
-            let key = if !key.is_empty() && c.eat(':') {
-                Some(key)
-            } else {
-                c.i = save;
-                None
-            };
-            indices.push(key);
-            elems.push(self.doc_type(c)?);
-            c.skip_ws();
-            if !c.eat(',') {
-                if !c.eat('}') {
-                    return Err(self.err(&format!("`}}` to close the array shape `{name}{{…}}`")));
-                }
-                break;
-            }
-        }
-        if elems.is_empty() {
-            return Err(self.err(&format!("a non-empty array shape `{name}{{…}}`")));
-        }
-        let positional = indices.iter().enumerate().all(|(i, k)| match k {
-            None => true,
-            Some(k) => k.parse::<usize>() == Ok(i),
-        });
-        if positional {
-            return Ok(PhpType::Tuple(elems, None));
-        }
-        // NUMERIC indices that are not a dense ascending run from zero (`array{1: int, 0: string}`)
-        // are a POSITIONAL shape written wrong, not a named one. Refused as the reordering hazard it
-        // is — a digit is never a field name, so falling through to the keyed path below would
-        // report it as an illegal identifier and hide the real mistake.
-        if indices
-            .iter()
-            .any(|k| k.as_deref().is_some_and(|k| k.parse::<usize>().is_ok()))
-        {
-            return Err(self.err(&format!(
-                "the array shape `{name}{{…}}` to index its fields in ascending order from zero — \
-                 out-of-order or sparse numeric indices are not silently reordered into a positional \
-                 tuple, because reordering would be the lifter guessing at intent (DEC-166)"
-            )));
-        }
-        // KEYED (DEC-504). Every element must carry a key — a half-keyed shape would leave the rest
-        // to be named by position, which is the lifter inventing names (DEC-166).
-        let mut names = Vec::with_capacity(indices.len());
-        for k in &indices {
-            let Some(k) = k else {
-                return Err(self.err(&format!(
-                    "every field of the KEYED array shape `{name}{{…}}` to have a key — a shape that \
-                     names only some of its fields would leave the lifter to name the rest, which it \
-                     never does (DEC-166); key every field, or make the shape positional"
-                )));
-            };
-            if !is_field_name(k) {
-                return Err(self.err(&format!(
-                    "the array-shape key `{k}` to be a legal phorj field name (a letter or `_`, then \
-                     letters, digits or `_`) — it is not, and the lifter renames nothing (DEC-166)"
-                )));
-            }
-            names.push(k.clone());
-        }
-        if let Some(d) = first_duplicate(&names) {
-            return Err(self.err(&format!(
-                "the array shape `{name}{{…}}` not to repeat the key `{d}` — a tuple's field names \
-                 are unique (E-TUPLE-DUP-FIELD)"
-            )));
-        }
-        Ok(PhpType::Tuple(elems, Some(names)))
-    }
-
     fn doc_atom(&mut self, c: &mut Cursor) -> Result<PhpType, String> {
         let name = c.ident();
         if name.is_empty() {
             return Err(self.err(&format!("a type name in the docblock type `{}`", c.s)));
+        }
+        // Peeled off BEFORE the class-name path: `\Closure` must not register an implicit `use`.
+        if matches!(name.as_str(), "callable" | "Closure" | "\\Closure") && c.eat('(') {
+            return self.doc_callable(c);
         }
         if c.eat('{') {
             return self.doc_shape(c, &name);
@@ -268,24 +184,4 @@ impl PParser {
         }
         local
     }
-}
-
-/// Whether `s` is a legal phorj field name: a letter or `_`, then letters, digits or `_`.
-///
-/// PHP array keys are arbitrary strings (`'total-cost'`, `'2fa'`, `''`), phorj field names are not.
-/// A key that does not fit is REFUSED rather than mangled into one — renaming it would make the
-/// lifted code disagree with the PHP it came from at every read site (DEC-166).
-fn is_field_name(s: &str) -> bool {
-    let mut cs = s.chars();
-    matches!(cs.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
-        && cs.all(|c| c.is_ascii_alphanumeric() || c == '_')
-}
-
-/// The first name that appears more than once, if any.
-fn first_duplicate(names: &[String]) -> Option<&String> {
-    names
-        .iter()
-        .enumerate()
-        .find(|(i, n)| names[..*i].contains(n))
-        .map(|(_, n)| n)
 }

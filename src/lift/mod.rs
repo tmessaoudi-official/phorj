@@ -51,6 +51,8 @@ mod lifter_tests;
 #[cfg(test)]
 mod lifter_tests_attrs;
 #[cfg(test)]
+mod lifter_tests_callable;
+#[cfg(test)]
 mod lifter_tests_closures;
 #[cfg(test)]
 mod lifter_tests_const_arrays;

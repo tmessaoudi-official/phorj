@@ -1,0 +1,41 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+
+class Profile {
+    constructor(public mutable int bp) {}
+}
+
+class Registry {
+    public static function effective(string key, (string) => Profile? profileFor): int {
+        mutable var p = profileFor(key) ?? new Profile(-1);
+        return p.bp;
+    }
+}
+
+class Classifier {
+    private mutable (string) => Profile? profileFor;
+    constructor(((string) => Profile?)? profileFor = null) {
+        this.profileFor = if (profileFor instanceof null) { function(string key): Profile? => null } else { profileFor };
+    }
+    public open function classify(string key): int {
+        return Registry::effective(key, this.profileFor);
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var none = new Classifier();
+    mutable var some = new Classifier(
+        function(string k): Profile? { if (k == "a") { return new Profile(7); } return null; }
+    );
+    Output.print("{none.classify(\"a\")}");
+    Output.print("|");
+    Output.print("{some.classify(\"a\")}");
+    Output.print("|");
+    Output.print("{some.classify(\"b\")}");
+    Output.print("\n");
+}

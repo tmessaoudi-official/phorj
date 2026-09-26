@@ -399,6 +399,36 @@ function d(int $n): string { return match (true) { default => 'd', $n === 1 => '
 echo k(-1); echo "|"; echo k(12); echo "|"; echo k(5); echo "|"; echo k(3);
 echo "|"; echo d(2); echo "|"; echo d(1); echo "|"; echo d(9);"#,
         ),
+        // Row 4e: scout's TenureClassifier shape. A `?callable` ctor param typed by a PARENTHESIZED
+        // docblock signature defaults through a ternary to a `static fn` or `\Closure::fromCallable`,
+        // lands in a `\Closure` property typed by `@var`, is passed on as an argument, and is called
+        // as a PARAMETER whose result feeds `??` — the call-value stash row 5x fixed in the VM.
+        (
+            "callable_signature_field_and_param",
+            r#"<?php
+final class Src { public function __construct(public int $bp) {} }
+final class Reg {
+    /** @param callable(string): ?Src $profileFor resolves a key */
+    public static function effective(string $key, callable $profileFor): int {
+        $p = $profileFor($key) ?? new Src(-1);
+        return $p->bp;
+    }
+}
+final class Classifier {
+    /** @var \Closure(string): ?Src */
+    private \Closure $profileFor;
+    /** @param (callable(string): ?Src)|null $profileFor */
+    public function __construct(?callable $profileFor = null) {
+        $this->profileFor = $profileFor === null
+            ? static fn (string $key): ?Src => null
+            : \Closure::fromCallable($profileFor);
+    }
+    public function classify(string $key): int { return Reg::effective($key, $this->profileFor); }
+}
+$none = new Classifier();
+$some = new Classifier(function (string $k): ?Src { if ($k === 'a') { return new Src(7); } return null; });
+echo $none->classify('a'); echo "|"; echo $some->classify('a'); echo "|"; echo $some->classify('b');"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php
