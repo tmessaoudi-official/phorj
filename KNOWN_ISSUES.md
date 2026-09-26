@@ -20,6 +20,13 @@ INSIDE a spread segment of a `@var list<array{…}>` local stays a `Map` rather 
 the draft fails `phg check` on it. A parameter as `array_unshift`'s target fails check the way `usort` on
 one does (§ "A PARAMETER target" below).
 
+Two neighbouring gaps, both pre-existing and both loud: the long form `array(…)` is not lifted at all
+(`array(1, 2)` passes through as an unknown call), so `array(...$a)` gets the call-site-unpacking refusal
+rather than the list-literal lift; and a plain `array_values($list)` lifts through its `lift_from` row to
+`List.enumerate`, which returns `Map<int, T>` and fails `phg check` against a `list<T>` return. That is why
+`lifter/spread.rs` maps an `array_values($m)` SPREAD operand to `Map.values(m)` itself instead of inheriting
+the registry row.
+
 ## TUPLE-FIELD-WRITE — FIXED 2026-09-25 (DEC-536, row 5s) for local places; a class-field or call base is still refused
 
 ```phorj

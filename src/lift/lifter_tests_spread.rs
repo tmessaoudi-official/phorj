@@ -232,3 +232,49 @@ function f(array $a): array { return [...$a => 1]; }",
     );
     assert!(e.contains("takes no key"), "{e}");
 }
+
+/// The checker's verdict on a draft that lifted: `Err` text, or `None` when it checks clean.
+fn check_error(out: &str) -> Option<String> {
+    let prog =
+        crate::cli::parse_program(out).unwrap_or_else(|e| panic!("draft parses: {e:?}\n{out}"));
+    crate::cli::check_and_expand(&prog, out)
+        .err()
+        .map(|e| format!("{e:?}"))
+}
+
+#[test]
+fn a_map_the_lifter_cannot_see_lifts_and_is_caught_by_the_checker() {
+    // The refinement's load-bearing claim (DEC-538, 08:05): an operand the lifter cannot PROVE is a
+    // map lifts, and the List/Map call's own signature refuses a wrong collection at `phg check`.
+    // A call result is invisible to the lifter, so each case below must lift AND fail check.
+    let out = lift(
+        "<?php
+/** @return array<string, int> */
+function mk(): array { return ['a' => 1]; }
+/** @return list<list<int>> */
+function rows(): array { return [[1]]; }
+/** @return list<int> */
+function lone(): array { return [...mk()]; }
+/** @return list<int> */
+function pair(): array { return [...mk(), 1]; }
+/** @return list<int> */
+function vals(): array { return array_merge(...array_values(rows())); }",
+    );
+    assert!(out.contains("return List.flatten([mk()]);"), "{out}");
+    assert!(out.contains("return List.concat(mk(), [1]);"), "{out}");
+    assert!(
+        out.contains("return List.flatten(Map.values(rows()));"),
+        "{out}"
+    );
+    let e = check_error(&out).expect("a map spread must not check clean");
+    for (sig, what) in [
+        ("`List.flatten` argument 1 expects `List<List<T>>`", "lone"),
+        ("`List.concat` argument 1 expects `List<T>`", "pair"),
+        ("`Map.values` argument 1 expects `Map<K, V>`", "vals"),
+    ] {
+        assert!(
+            e.contains(sig),
+            "the {what} case was not refused by the signature:\n{e}"
+        );
+    }
+}
