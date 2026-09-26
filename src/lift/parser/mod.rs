@@ -58,6 +58,16 @@ struct PParser {
     /// this same namespace must not become an import of the file's own symbols — see
     /// [`PParser::note_implicit_use`].
     namespace: Vec<String>,
+    /// While a docblock is being APPLIED (after its declaration was parsed), the line of the
+    /// declaration it documents — so a refusal names that declaration, not the parser's current
+    /// token, which by then is the NEXT member (row 4c). Set only by [`PParser::with_doc`].
+    doc_line: Option<usize>,
+}
+
+/// A docblock and the line of the declaration it documents (row 4c).
+pub(super) struct Doc {
+    pub(super) text: String,
+    pub(super) line: usize,
 }
 
 impl PParser {
@@ -71,7 +81,21 @@ impl PParser {
             implicit_uses: Vec::new(),
             current_class: None,
             namespace: Vec::new(),
+            doc_line: None,
         }
+    }
+
+    /// Run `f` with `doc`'s text and with [`PParser::doc_line`] pointing at its declaration,
+    /// restoring the previous value after (a docblock is applied after nested ones were).
+    fn with_doc<T>(
+        &mut self,
+        doc: Option<&Doc>,
+        f: impl FnOnce(&mut Self, Option<&str>) -> T,
+    ) -> T {
+        let prev = std::mem::replace(&mut self.doc_line, doc.map(|d| d.line));
+        let r = f(self, doc.map(|d| d.text.as_str()));
+        self.doc_line = prev;
+        r
     }
 }
 

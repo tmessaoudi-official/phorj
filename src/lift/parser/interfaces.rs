@@ -24,7 +24,7 @@ impl PParser {
             // exactly here (scout's `HttpClient`, `Mailbox`).
             let doc = self.doc_here();
             let mut m = self.parse_member()?;
-            self.apply_doc_member(doc.as_deref(), &mut m)?;
+            self.apply_doc_member(doc.as_ref(), &mut m)?;
             match m {
                 PhpMember::Method(me) if me.body.is_none() => methods.push(me),
                 PhpMember::Method(me) => {

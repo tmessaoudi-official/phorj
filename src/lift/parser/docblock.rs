@@ -125,33 +125,37 @@ fn doc_tag(doc: &str, tag: &str, name: Option<&str>) -> Option<String> {
 
 impl PParser {
     /// The docblock immediately before the current token, if any.
-    pub(super) fn doc_here(&self) -> Option<String> {
-        self.docs.get(&self.pos).cloned()
+    pub(super) fn doc_here(&self) -> Option<super::Doc> {
+        let line = self.line();
+        self.docs.get(&self.pos).map(|text| super::Doc {
+            text: text.clone(),
+            line,
+        })
     }
 
     /// A member's docblock: `@param`/`@return` on a method (promoted constructor parameters
     /// included), `@var` on a property or a constant (DEC-533).
     pub(super) fn apply_doc_member(
         &mut self,
-        doc: Option<&str>,
+        doc: Option<&super::Doc>,
         m: &mut PhpMember,
     ) -> Result<(), String> {
-        match m {
-            PhpMember::Method(me) => self.apply_doc_signature(doc, &mut me.params, &mut me.ret),
-            PhpMember::Prop { ty, .. } | PhpMember::Const { ty, .. } => self.apply_doc_var(doc, ty),
-        }
+        self.with_doc(doc, |p, doc| match m {
+            PhpMember::Method(me) => p.apply_doc_signature(doc, &mut me.params, &mut me.ret),
+            PhpMember::Prop { ty, .. } | PhpMember::Const { ty, .. } => p.apply_doc_var(doc, ty),
+        })
     }
 
     pub(super) fn apply_doc_item(
         &mut self,
-        doc: Option<&str>,
+        doc: Option<&super::Doc>,
         it: &mut PhpItem,
     ) -> Result<(), String> {
-        match it {
-            PhpItem::Function(f) => self.apply_doc_signature(doc, &mut f.params, &mut f.ret),
-            PhpItem::Stmt(st) => self.apply_doc_local(doc, st),
+        self.with_doc(doc, |p, doc| match it {
+            PhpItem::Function(f) => p.apply_doc_signature(doc, &mut f.params, &mut f.ret),
+            PhpItem::Stmt(st) => p.apply_doc_local(doc, st),
             _ => Ok(()),
-        }
+        })
     }
 
     /// `{ stmt* }` — lives here (not in `items.rs`) so every statement passes the `@var` hook.
@@ -161,7 +165,7 @@ impl PParser {
         while !self.at(&PTok::RBrace) && !self.at(&PTok::Eof) {
             let doc = self.doc_here();
             let mut st = self.parse_stmt()?;
-            self.apply_doc_local(doc.as_deref(), &mut st)?;
+            self.with_doc(doc.as_ref(), |p, doc| p.apply_doc_local(doc, &mut st))?;
             stmts.push(st);
         }
         self.expect(&PTok::RBrace, "`}`")?;

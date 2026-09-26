@@ -41,7 +41,7 @@ impl PParser {
             } else {
                 let doc = self.doc_here();
                 let mut mem = self.parse_member()?;
-                self.apply_doc_member(doc.as_deref(), &mut mem)?;
+                self.apply_doc_member(doc.as_ref(), &mut mem)?;
                 match mem {
                     PhpMember::Method(m) => methods.push(m),
                     _ => {

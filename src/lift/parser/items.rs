@@ -77,10 +77,18 @@ impl PParser {
     /// phorj analog, so it must NOT get `err`'s trailing `", found {tok}"` (which is phrased for
     /// "expected X" and reads as broken English after a full sentence). Line only.
     pub(super) fn err_reason(&self, msg: &str) -> String {
+        if let Some(l) = self.doc_line {
+            return format!(
+                "lift parse error: {msg} (in the docblock of the declaration at line {l})"
+            );
+        }
         format!("lift parse error: {msg} (line {})", self.line())
     }
 
     pub(super) fn err(&self, msg: &str) -> String {
+        if self.doc_line.is_some() {
+            return self.err_reason(msg); // the current token is not what a docblock got wrong
+        }
         format!(
             "lift parse error: {msg}, found {:?} (line {})",
             self.peek(),
@@ -199,7 +207,7 @@ impl PParser {
         while !self.at(&PTok::RBrace) && !self.at(&PTok::Eof) {
             let doc = self.doc_here();
             let mut m = self.parse_member()?;
-            self.apply_doc_member(doc.as_deref(), &mut m)?;
+            self.apply_doc_member(doc.as_ref(), &mut m)?;
             members.push(m);
         }
         self.current_class = outer;

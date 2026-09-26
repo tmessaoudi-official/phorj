@@ -6,6 +6,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `phg lift`: a docblock refusal names the declaration it documents (L3 row 4c; 2026-09-26)
+
+A docblock is applied after its declaration has been parsed, so a refusal while reading one (`mixed`
+in a `@param`, say) named the parser's current token, i.e. the NEXT member, often a whole method further down
+(scout `RawListing.php`: `found Ident("public") (line 171)` for a constructor at line 54). It now reads
+`(in the docblock of the declaration at line 54)`.
+
 ### Fixed — `phg lift`: a ternary inside a concatenation lifted to a draft that did not lex (L3 row 4b; 2026-09-26)
 
 `$t . ($b ? 'x' : 'y')` lifts to an if-expression inside an interpolation hole, and the lift printer
