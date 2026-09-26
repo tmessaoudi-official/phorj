@@ -138,8 +138,11 @@ impl<'a> Compiler<'a> {
                 };
                 1 - n as isize
             }
-            // CallValue(argc): pops `argc` args + 1 closure, pushes 1 result → 1 - argc.
-            Op::CallValue(argc) => 1 - *argc as isize,
+            // CallValue(argc): pops `argc` args + 1 closure, pushes 1 result → 1 - (argc + 1) = -argc.
+            // Row 5x: this read `1 - argc` (the closure's pop was never counted), so the tracked height
+            // ran one high after every call through a function VALUE and a `??`/`!`/`match` stash on
+            // its result read past the live stack — a VM panic on valid code.
+            Op::CallValue(argc) => -(*argc as isize),
             // M-faults 2b: `Throw` pops the exception value; the handler ops are pure bookkeeping.
             // The catch landing pad's pushed value (+1) is modeled by setting `self.height` directly
             // at the landing pad (like a `match` scrutinee), not via a stack effect here.

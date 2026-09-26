@@ -7372,3 +7372,42 @@ function main(): void {
         "narrowing_operators",
     );
 }
+
+/// Row 5x (P0): `compiler::stack_effect` counted `CallValue(argc)` as `1 - argc`, but the VM pops the
+/// `argc` args AND the closure below them — net `-argc`. The tracked height was therefore one too
+/// high after every call through a function VALUE, and any construct that picks a slot from the
+/// height read past the live stack: a `??` / `!` stash on the call's result (VM panic, `index out of
+/// bounds`), a `match` scrutinee (the arm reads the wrong slot). The tree-walker and PHP were right.
+/// Two of each in one expression (Invariant 8), plus the general-callee path `adder(1)(k)`.
+#[test]
+fn a_call_through_a_function_value_keeps_the_stack_height_exact() {
+    agree_out_php(
+        "import Core.Output;
+function adder(int n): (int) => int? {
+    return function(int k): int? {
+        if (k > 0) {
+            return k + n;
+        }
+        return null;
+    };
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    () => int? four = function(): int? { return 4; };
+    () => int? none = function(): int? { return null; };
+    (int) => int? twice = function(int k): int? { return k * 2; };
+    (int) => int sq = function(int k): int { return k * k; };
+    int a = four() ?? -1;
+    int b = (none() ?? -1) + (twice(5) ?? -2);
+    int c = four()! + twice(3)!;
+    int d = adder(1)(2) ?? 0;
+    int e = adder(1)(-2) ?? 0;
+    string m = match (sq(2)) { 4 => \"four\", default => \"other\" };
+    string n = match (four() ?? 0) { 4 => \"hit\", default => \"miss\" };
+    Output.printLine(\"{a} {b} {c} {d} {e} {m} {n}\");
+}
+",
+        "4 9 10 3 0 four hit\n",
+        "call_value_stack_height",
+    );
+}
