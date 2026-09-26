@@ -65,6 +65,8 @@ mod lifter_tests_foreach_destructure;
 #[cfg(test)]
 mod lifter_tests_hoist;
 #[cfg(test)]
+mod lifter_tests_interp_holes;
+#[cfg(test)]
 mod lifter_tests_keyword_names;
 #[cfg(test)]
 mod lifter_tests_list;

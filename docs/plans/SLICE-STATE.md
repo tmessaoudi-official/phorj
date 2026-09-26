@@ -64,7 +64,8 @@
 > **DONE (2026-09-26): row 5v** (`1c703dd6`) — `foreach ($xs as [$a, $b])` lifts to `for ((a, b) in xs)`; skipped slot / keyed / nested refused by name. Scout 88/155.
 > **DONE (2026-09-26): row 5w** (`982d0c67`) — DEC-539: a PHP static local is refused by name with its two rewrites; static properties and `static fn` untouched.
 > **DONE (2026-09-26): L3a** — wall census of the 11-file classifier cluster: 13 bypasses to a full lift (0 refused), then 224 distinct check errors classified; plan rows 4a–4k + Q-0926-1…5.
-> **NEXT:** L3 row 4b (lifter P0 — a ternary in a concat lifts to an unlexable draft), then the mechanical rows 4c–4o (Q-0926-1…5 + Q-0924-1 RULED 17:01 as DEC-540…545); the four-leg harness is row 4's last step. The OWED G-8 verdicts stand.
+> **DONE (2026-09-26): row 4b** — a ternary/`match` in a `.` chain lifted into an unescaped interpolation hole; the lift printer now shares `phg format`'s `escape_interp`. Scout lex-failing drafts 6 → 0 of 91.
+> **NEXT:** the mechanical rows 4c–4o (Q-0926-1…5 + Q-0924-1 RULED 17:01 as DEC-540…545); the four-leg harness is row 4's last step. The OWED G-8 verdicts stand.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

@@ -349,7 +349,8 @@ fn lifts_registered_builtins_to_receiver_form_with_imports() {
     // DEC-326: the RECEIVER form is the canonical style — `strlen(strtoupper($s))` lifts to
     // `"hi".upperCase().length()`, visibly more modern than the PHP original.
     let out = lift(r#"<?php echo strlen(strtoupper("hi"));"#);
-    assert!(out.contains("\"hi\".upperCase().length()"), "{out}");
+    // Inside an interpolation hole, so its quotes are escaped as `phg format` prints them (row 4b).
+    assert!(out.contains(r#"\"hi\".upperCase().length()"#), "{out}");
     assert!(out.contains("import Core.String;"), "{out}");
     assert_reparses(&out);
 }
@@ -359,10 +360,10 @@ fn unregistered_or_wrong_arity_builtins_stay_unresolved() {
     // `trim` is deliberately unregistered (its transpile twin is a Unicode-whitespace shim);
     // a wrong-arity `strlen` must not resolve either — the draft stays loud, never a wrong guess.
     let out = lift(r#"<?php echo trim(" x ");"#);
-    assert!(out.contains("trim(\" x \")"), "{out}");
+    assert!(out.contains(r#"trim(\" x \")"#), "{out}");
     assert!(!out.contains("import Core.String;"), "{out}");
     let out2 = lift(r#"<?php echo strlen("a", "b");"#);
-    assert!(out2.contains("strlen(\"a\", \"b\")"), "{out2}");
+    assert!(out2.contains(r#"strlen(\"a\", \"b\")"#), "{out2}");
 }
 
 /// DEC-419 — PHPDoc survives PHP → phorj → PHP, with the SAME body text at both ends.

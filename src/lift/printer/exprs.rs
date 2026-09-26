@@ -248,7 +248,13 @@ impl Printer {
         for part in parts {
             match part {
                 StrPart::Literal(lit) => s.push_str(&escape_str(lit)),
-                StrPart::Expr(e) => s.push_str(&format!("{{{}}}", self.expr(e)?)),
+                // Row 4b: a hole's printed form is escaped exactly as `phg format` escapes it — an
+                // if-/match-expression lifted from a ternary carries block braces, and the lexer
+                // closes a hole at the first unescaped `}`.
+                StrPart::Expr(e) => s.push_str(&format!(
+                    "{{{}}}",
+                    crate::format::printer::atoms::escape_interp(&self.expr(e)?)
+                )),
             }
         }
         s.push('"');

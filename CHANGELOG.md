@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `phg lift`: a ternary inside a concatenation lifted to a draft that did not lex (L3 row 4b; 2026-09-26)
+
+`$t . ($b ? 'x' : 'y')` lifts to an if-expression inside an interpolation hole, and the lift printer
+did not escape the hole, so the if-expression's closing `}` ended the hole early and the draft failed
+with `unexpected '}' in string` (6 of 91 scout drafts). The lift printer now escapes a hole exactly as
+`phg format` does, so the draft lexes, and holes that contain a nested string (`"{\"hi\".length()}"`)
+print in the formatter's canonical form too.
+
 ### Changed — `phg lift`: a PHP static local is refused by name (scout row 5w; DEC-539; 2026-09-26)
 
 `static $keys = null;` inside a function or method was refused as the generic `` `static` is not

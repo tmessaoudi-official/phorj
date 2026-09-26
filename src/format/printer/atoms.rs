@@ -279,7 +279,9 @@ pub(super) fn stmt_start(s: &Stmt) -> usize {
 /// Escape the printed text of an interpolation hole's expression so the tokenizer re-captures it intact:
 /// `\` → `\\`, `"` → `\"` (else it closes the surrounding string), `}` → `\}` (else it closes the
 /// hole early). A `{` needs no escape — inside an open interpolation it does not start a nested hole.
-pub(super) fn escape_interp(s: &str) -> String {
+/// Shared with the lift printer (row 4b): one escaping for every printed hole, so a lifted draft's
+/// holes are exactly what `phg format` prints.
+pub(crate) fn escape_interp(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {

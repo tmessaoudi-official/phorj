@@ -385,6 +385,20 @@ function sq(): string { return 'n\n|t\t|z\0|q\'|s\\|d\"'; }
 function hole(string $x): string { return "h\{$x}\u{2019}\$"; }
 echo esc(); echo "|"; echo sq(); echo "|"; echo hole("X");"#,
         ),
+        // Row 4b: a ternary / `match` in a `.` chain lifts into an interpolation hole, whose block
+        // braces must be escaped or the draft does not lex. Covers a non-string arm (the hole must
+        // stringify `1` exactly as PHP's `.` does) and scout `NtfyChannel.php`'s nested shape — the
+        // conditional inside an inner concat that is a call argument inside the outer hole.
+        (
+            "concat_conditional_holes",
+            r#"<?php
+function h(string $s): string { return '[' . $s . ']'; }
+function tags(string $t): string { return 'Tags: ' . h(($t === '' ? '' : $t . ',') . 'k'); }
+function n(bool $b): string { return 'n=' . ($b ? 1 : 2); }
+function v(int $x): string { return 'v=' . match ($x) { 1 => 'one', default => 'many' } . '!'; }
+echo tags('hot'); echo "|"; echo tags(''); echo "|"; echo n(true); echo "|"; echo n(false);
+echo "|"; echo v(1); echo "|"; echo v(7);"#,
+        ),
         // DEC-397 hoist: `$b` is first assigned inside an always-executing `if (true)` and read after
         // it. Before the hoist this lifted to a declaration INSIDE the block, so the outer `$b = …`
         // was `E-ASSIGN-UNKNOWN`. The point of putting it HERE rather than only in a unit test is that
