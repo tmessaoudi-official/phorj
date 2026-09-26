@@ -322,46 +322,11 @@ impl Printer {
     }
 }
 
-/// Render a `Type`. `Type::Infer` prints as `var` (the local-inference keyword). `Err` for nodes the
-/// lift subset never produces (function types, fixed lists, unions/intersections, erased).
+/// Render a `Type` — the FORMATTER's printer, so a lifted draft spells every type exactly as
+/// `phg format` would (one type printer, not two; row 4e). This used to be a second copy with no
+/// function-type arm and no parentheses around an optional's inner type (row 5y's bug, a third time).
 pub(super) fn ty(t: &Type) -> Result<String, String> {
-    match t {
-        Type::Named { name, args, .. } => {
-            if args.is_empty() {
-                Ok(name.clone())
-            } else {
-                let a: Result<Vec<_>, _> = args.iter().map(ty).collect();
-                Ok(format!("{name}<{}>", a?.join(", ")))
-            }
-        }
-        Type::Optional { inner, .. } => Ok(format!("{}?", ty(inner)?)),
-        Type::Infer(_) => Ok("var".to_string()),
-        // LIFT-TRY: a union is now printable, because PHP's `catch (A | B $e)` lifts to one and
-        // narrowing it to the first member would silently change which exceptions the clause catches.
-        Type::Union(members, _) => {
-            let m: Result<Vec<_>, _> = members.iter().map(ty).collect();
-            Ok(m?.join(" | "))
-        }
-        // An `array{…}` shape lifts to a tuple: positional `(int, string)` (lane L1c), or
-        // named-field `(bp: int, source: string)` when the docblock keyed it (DEC-504). Dropping the
-        // labels here would print a type that no longer matches the field reads lifted alongside it.
-        Type::Tuple(elems, labels, _) => {
-            let e: Result<Vec<_>, _> = elems.iter().map(ty).collect();
-            let e = e?;
-            Ok(match labels {
-                Some(ls) => format!(
-                    "({})",
-                    ls.iter()
-                        .zip(e.iter())
-                        .map(|(l, t)| format!("{}: {t}", l.name))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-                None => format!("({})", e.join(", ")),
-            })
-        }
-        _ => Err("printer: this type is outside the lift subset".into()),
-    }
+    crate::format::printer::atoms::ty(t)
 }
 
 pub(super) fn modifiers_str(mods: &[Modifier]) -> String {
