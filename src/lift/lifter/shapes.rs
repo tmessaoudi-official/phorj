@@ -42,25 +42,41 @@ thread_local! {
     /// that variable inherits. Same lifetime and same clearing point as [`TUPLE_FIELDS`].
     static ELEM_FIELDS: std::cell::RefCell<std::collections::HashMap<String, Vec<String>>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
-    /// DEC-538 — the variables DECLARED as a `Map` (parameter type, `@param`, `@var`): a spread of
-    /// one is refused by name, since PHP's string-key spread has map semantics. Same lifetime,
-    /// clearing point and closure snapshot as the two shape maps.
-    static MAP_VARS: std::cell::RefCell<std::collections::HashSet<String>> =
-        std::cell::RefCell::new(std::collections::HashSet::new());
+    /// DEC-538 / row 4h — the variables DECLARED as a collection (parameter type, `@param`,
+    /// `@var`): the leaf of the type (`List` / `Map`) and whether the declaration was nullable. A
+    /// spread of a map is refused by name (PHP's string-key spread has map semantics); a strict
+    /// `=== []` on a non-null one lifts to `List.isEmpty` / `Map.isEmpty` (`identity.rs`). Same
+    /// lifetime, clearing point and closure snapshot as the two shape maps.
+    static COLL_VARS: std::cell::RefCell<std::collections::HashMap<String, (&'static str, bool)>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
-/// Whether `ty` is a declared `Map` (seeing through one `Optional`, as the shape tests do).
-fn is_map_type(ty: &Type) -> bool {
-    let ty = match ty {
-        Type::Optional { inner, .. } => inner.as_ref(),
-        other => other,
+/// The collection leaf of a declared type and whether it is nullable (seeing through one
+/// `Optional`, as the shape tests do). Only the two a PHP `array` lifts to (`mappings.rs`).
+fn coll_type(ty: &Type) -> Option<(&'static str, bool)> {
+    let (ty, nullable) = match ty {
+        Type::Optional { inner, .. } => (inner.as_ref(), true),
+        other => (other, false),
     };
-    matches!(ty, Type::Named { name, .. } if name == "Map")
+    match ty {
+        Type::Named { name, .. } if name == "List" => Some(("List", nullable)),
+        Type::Named { name, .. } if name == "Map" => Some(("Map", nullable)),
+        _ => None,
+    }
 }
 
-/// Whether `var` was declared a `Map` in the function being lifted (DEC-538).
+/// Whether `var` was declared a `Map`, nullable or not, in the function being lifted (DEC-538).
 pub(super) fn is_map_var(var: &str) -> bool {
-    MAP_VARS.with(|m| m.borrow().contains(var))
+    COLL_VARS.with(|m| matches!(m.borrow().get(var), Some(("Map", _))))
+}
+
+/// The leaf of `var`'s declared collection type, when it was declared a NON-null `List` or `Map`
+/// in the function being lifted (row 4h).
+pub(super) fn coll_leaf(var: &str) -> Option<&'static str> {
+    COLL_VARS.with(|m| match m.borrow().get(var) {
+        Some((leaf, false)) => Some(*leaf),
+        _ => None,
+    })
 }
 
 /// The field labels of a named-tuple type, seeing through one `Optional`.
@@ -109,14 +125,13 @@ pub(super) fn set_tuple_fields(params: &[Param]) {
             let (mut t, mut e) = (t.borrow_mut(), e.borrow_mut());
             t.clear();
             e.clear();
-            MAP_VARS.with(|m| {
+            COLL_VARS.with(|m| {
                 let mut m = m.borrow_mut();
                 m.clear();
                 m.extend(
                     params
                         .iter()
-                        .filter(|p| is_map_type(&p.ty))
-                        .map(|p| p.name.clone()),
+                        .filter_map(|p| coll_type(&p.ty).map(|c| (p.name.clone(), c))),
                 );
             });
             for p in params {
@@ -229,9 +244,11 @@ pub(super) fn declare_local_shape(name: &str, ty: &Type) -> bool {
     let shaped = tuple.is_some() || elem.is_some();
     // Recorded beside the shapes, but it never changes the answer: the return value decides whether
     // the declared type is KEPT on the declaration (`statements.rs`), which is a shape question.
-    if is_map_type(ty) {
-        MAP_VARS.with(|m| m.borrow_mut().insert(name.to_string()));
-    }
+    // A redeclaration replaces the old answer: `@var string $x` must stop `$x` being a list.
+    COLL_VARS.with(|m| match coll_type(ty) {
+        Some(c) => m.borrow_mut().insert(name.to_string(), c),
+        None => m.borrow_mut().remove(name),
+    });
     TUPLE_FIELDS.with(|t| {
         ELEM_FIELDS.with(|e| {
             let (mut t, mut e) = (t.borrow_mut(), e.borrow_mut());
@@ -258,7 +275,7 @@ pub(super) fn fields_of(var: &str) -> (Option<Vec<String>>, Option<Vec<String>>)
 pub(super) struct ClosureScope {
     tuple: std::collections::HashMap<String, Vec<String>>,
     elem: std::collections::HashMap<String, Vec<String>>,
-    maps: std::collections::HashSet<String>,
+    colls: std::collections::HashMap<String, (&'static str, bool)>,
 }
 
 /// Snapshot both maps before lifting a closure body. A SNAPSHOT, not a clear: a by-value `use`
@@ -267,7 +284,7 @@ pub(super) fn enter_closure() -> ClosureScope {
     ClosureScope {
         tuple: TUPLE_FIELDS.with(|m| m.borrow().clone()),
         elem: ELEM_FIELDS.with(|m| m.borrow().clone()),
-        maps: MAP_VARS.with(|m| m.borrow().clone()),
+        colls: COLL_VARS.with(|m| m.borrow().clone()),
     }
 }
 
@@ -276,5 +293,5 @@ pub(super) fn enter_closure() -> ClosureScope {
 pub(super) fn leave_closure(scope: ClosureScope) {
     TUPLE_FIELDS.with(|m| *m.borrow_mut() = scope.tuple);
     ELEM_FIELDS.with(|m| *m.borrow_mut() = scope.elem);
-    MAP_VARS.with(|m| *m.borrow_mut() = scope.maps);
+    COLL_VARS.with(|m| *m.borrow_mut() = scope.colls);
 }

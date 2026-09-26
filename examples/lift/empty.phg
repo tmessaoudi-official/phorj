@@ -1,0 +1,52 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.List;
+import Core.Map;
+
+/**
+ * A strict `=== []` on a variable declared as a list or map is `List.isEmpty` / `Map.isEmpty` — the
+ * QUALIFIED native, so a name the draft rebinds to anything else fails `phg check` instead of changing
+ * meaning. A loose `== []` is left alone: it is also true for `null`, `false`, `0` and `""`.
+ *
+ * @param list<string> $tags
+ * @param array<string, int> $counts
+ */
+function describe(List<string> tags, Map<string, int> counts): string {
+    mutable var t = if (List.isEmpty(tags)) { "untagged" } else { "tagged" };
+    mutable var c = if (!Map.isEmpty(counts)) { "counted" } else { "uncounted" };
+    return "{t}/{c}";
+}
+
+/**
+ * A `return [];` at any depth IS the declared return type, so it is constructed as one.
+ *
+ * @return list<int>
+ */
+function evens(int n): List<int> {
+    if (n < 1) {
+        return new List<int>();
+    }
+    mutable var out = new List<int>();
+    for (mutable var i = 2; i <= n; i = i + 2) {
+        out = List.append(out, i);
+    }
+    return out;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var none = new List<string>();
+    mutable var zero = new Map<string, int>();
+    Output.print("{describe(none, zero)}");
+    Output.print("|");
+    Output.print("{describe([\"a\"], [\"k\" => 1])}");
+    Output.print("|");
+    Output.print("{evens(0).length()}");
+    Output.print("|");
+    Output.print("{evens(7).length()}");
+    Output.print("\n");
+}

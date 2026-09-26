@@ -23,7 +23,7 @@ pub(super) const UNCONSUMED: &str = "lift: argument unpacking `...` has no phorj
 
 /// `Module.name(args)`, recording `Core.<Module>` for the import pass. Called only after every
 /// operand lifted, so a failed lift leaves no import behind.
-fn module_call(module: &'static str, name: &str, args: Vec<Expr>) -> Expr {
+pub(super) fn module_call(module: &'static str, name: &str, args: Vec<Expr>) -> Expr {
     record_native_module(if module == "Map" {
         "Core.Map"
     } else {

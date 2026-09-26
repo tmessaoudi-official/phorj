@@ -38,6 +38,7 @@ mod enums;
 mod exceptions;
 mod exceptions_exprs;
 mod exprs;
+mod identity;
 mod keyword_locals;
 mod leaves;
 mod magic;

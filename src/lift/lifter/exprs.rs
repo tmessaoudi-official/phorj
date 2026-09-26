@@ -1,5 +1,6 @@
-//! PHP lifter — expression lifting. The declaration leaf conversions live in `leaves.rs` and the
-//! `match` cluster in `matches.rs` (split out under Invariant 13, lane L1c).
+//! PHP lifter — expression lifting. The declaration leaf conversions live in `leaves.rs`, the
+//! `match` cluster in `matches.rs` (split out under Invariant 13, lane L1c) and the strict
+//! `=== null` / `=== []` tests in `identity.rs` (row 4h).
 
 use super::*;
 use crate::ast::LambdaBody;
@@ -16,47 +17,20 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             body: LambdaBody::Expr(Box::new(super::throw_expr::lift_throwable(body)?)),
             span: SP,
         },
+        // A STRICT `=== null` / `=== []` is a TEST in phorj (`is null`, `List.isEmpty`), not an
+        // equality — `identity.rs`, which also says why only the strict forms qualify.
+        php::PhpExpr::Binary {
+            op: op @ (php::PhpBinOp::Identical | php::PhpBinOp::NotIdentical),
+            left,
+            right,
+        } if super::identity::handles(left, right) => {
+            super::identity::lift_identity(op, left, right)?
+        }
         // DEC-511: PHP's `.` COERCES its operands to string; phorj's `+` refuses to ("no
         // coercion"), so lifting `.` to `+` produced a draft that lifted and then failed
         // `phg check` — ~207 sites in one real 120-file codebase. phorj already has the faithful
         // form: an interpolation stringifies each part exactly as PHP's `.` does. A CHAIN flattens
         // into ONE interpolation rather than a nest, which is what PHP's own evaluation produces.
-        // A STRICT comparison against `null` is phorj's `is null` narrowing test, not an equality:
-        // `$x === null` asks exactly "is this the null case of an optional", which `==` cannot
-        // express here — the checker rejects `T? == null` as a cross-type comparison, so lifting it
-        // as an equality produced a draft that lifted and then failed `phg check`. Both orderings
-        // are handled, because Yoda style (`null === $x`) is common in real PHP.
-        //
-        // STRICT ONLY. PHP's LOOSE `$x == null` is also true for `0`, `""`, `[]` and `false`, so it
-        // is NOT this test; it is left as a plain `==` and the checker then reports it, which is the
-        // honest DEC-166 outcome — the lifter does not guess which of the five the author meant.
-        php::PhpExpr::Binary {
-            op: op @ (php::PhpBinOp::Identical | php::PhpBinOp::NotIdentical),
-            left,
-            right,
-        } if matches!(left.as_ref(), php::PhpExpr::Null)
-            || matches!(right.as_ref(), php::PhpExpr::Null) =>
-        {
-            let subject = if matches!(left.as_ref(), php::PhpExpr::Null) {
-                right
-            } else {
-                left
-            };
-            let test = Expr::InstanceOf {
-                value: Box::new(lift_expr(subject)?),
-                type_name: "null".to_string(),
-                span: SP,
-            };
-            match op {
-                php::PhpBinOp::Identical => test,
-                // phorj has no `is not null`: the negation is spelled `!(x is null)`.
-                _ => Expr::Unary {
-                    op: UnaryOp::Not,
-                    expr: Box::new(test),
-                    span: SP,
-                },
-            }
-        }
         php::PhpExpr::Binary {
             op: php::PhpBinOp::Concat,
             ..

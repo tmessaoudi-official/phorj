@@ -593,6 +593,31 @@ row's. `$f(...)`, `$o->m(...)` and `C::m(...)` are refused too, and every one of
 rewrite that lifts: a closure with a TYPED parameter, or a `foreach` where the parameter is an `array`.
 Byte-identical on all three legs and against the PHP.
 
+## Empty collections — `empty.php` / `empty.phg` (scout row 4h, 2026-09-27)
+
+phorj has no untyped empty literal: a bare `[]` is `E-EMPTY-LITERAL` until it is constructed as
+`new List<T>()` / `new Map<K, V>()` (DEC-214 part-2). PHP writes `[]` everywhere, so the lifter types
+it wherever the PROGRAM declared the type — never by inference:
+
+- **`$xs === []` / `$xs !== []`** on a variable declared a non-null list or map (parameter type or
+  `@param`, `@var` local) → `List.isEmpty(xs)` / `!Map.isEmpty(m)`, either operand order. The call is
+  QUALIFIED, not `xs.isEmpty()`: the declaration is a hint the lifter cannot follow through a `foreach`
+  binder, a closure parameter or a `catch` that rebinds the name, and `isEmpty` also exists on
+  `string`, where PHP's `"" === []` is false. `List.isEmpty` type-checks only on a list, so a stale
+  hint makes the draft fail `phg check` — it never changes the answer. A LOOSE `== []` is left alone
+  (it is also true for `null`, `false`, `0` and `""`), and so is a nullable collection, for which
+  `null === []` is false.
+- **`return [];`** at any depth of a function or method whose return type is declared (`@return
+  list<int>`, `array<string, int>`, either nullable) → `return new List<int>();`. A closure's own
+  `return` answers to the closure's signature, not the enclosing function's.
+- **`/** @var list<T> $x */ $x = [];`** was already typed (Lane R-6).
+
+Left loud, by design — each still reads `an empty collection needs its type` and the fix is an
+annotation: an unannotated `$x = [];` local, `$this->prop === []` (property types are not tracked
+yet), a `[]` branch of a ternary, and a bare `[]` passed as an argument. Byte-identical on all three
+legs and against the PHP — the round-trip that pinned this also found scout row 4h0, where
+`!xs.isEmpty()` transpiled to an always-false PHP expression.
+
 ## Builtins by arity — `arity.php` / `arity.phg` (scout row 4g, 2026-09-27)
 
 The registry maps one phorj native to each PHP builtin, for ONE arity: `min($a, $b)` is `a.min(b)`,

@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: PHP's empty `[]` typed where the program declared the collection (L3 row 4h; 2026-09-27)
+
+phorj's `[]` has no type (DEC-214 part-2), so every empty PHP array the lifter could not type was an `E-EMPTY-LITERAL` in the draft. A strict `$xs === []` / `!== []` on a variable declared a non-null list or map now lifts to `List.isEmpty(xs)` / `!Map.isEmpty(m)` — qualified, so a name the lifter's function-scoped registry cannot follow (a `foreach` binder, a closure parameter) fails `phg check` rather than becoming a string's `isEmpty`, where PHP's `"" === []` is false. A `return [];` at any depth becomes `new List<T>()` / `new Map<K, V>()` from the declared return type. Loose `== []`, nullable collections, unannotated locals, `$this->prop === []`, ternary branches and `[]` arguments stay loud, each fixed by an annotation. The scout census drafts went from 15 to 11 empty-literal errors. Example: `examples/lift/empty.{php,phg}`.
+
 ### Fixed — `!xs.isEmpty()` and other negated collection/string tests were always false on the PHP leg (scout row 4h0, P0; 2026-09-27)
 
 A native whose PHP form is an operator expression — `isEmpty` is `count($xs) === 0` for a list, map or set and `($s) === ''` for a string, `Math.isEven` is `($n) % 2 === 0` — was emitted unparenthesized, and the transpiler treats a call as one operand. So `!xs.isEmpty()` became `!count($xs) === 0`, which PHP reads as `(!count($xs)) === 0`: always `false`, while `phg run` printed `true`. Comparing one (`xs.isEmpty() == done`) produced a chained `===`/`==`, a PHP parse error. Such an erasure is now wrapped in parentheses at the one site every native call goes through (`transpile/call.rs`), unless it is already a single call, variable or parenthesized group, or the native returns `void` (`echo …` is a statement). Found by lift row 4h's round-trip; pinned by `tests/differential.rs::a_native_whose_php_is_an_operator_expression_stays_one_operand` on all three legs.

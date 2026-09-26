@@ -28,7 +28,7 @@ pub(super) fn seed_returned_tuple_literals(body: &mut [Stmt], ret: &Option<Type>
     // DEC-515 (row 5d): `@return list<array{…}>` — a returned list LITERAL's keyed elements are the
     // declared tuples, element by element.
     if let Some(labels) = super::super::shapes::element_labels(ty) {
-        seed_tuple_returns_in(body, &Seed::Elements(labels));
+        seed_tuple_returns(body, &Seed::Elements(labels));
         return;
     }
     let Type::Tuple(elems, labels, _) = ty else {
@@ -40,7 +40,15 @@ pub(super) fn seed_returned_tuple_literals(body: &mut [Stmt], ret: &Option<Type>
             .as_ref()
             .map(|ls| ls.iter().map(|l| l.name.clone()).collect()),
     };
-    seed_tuple_returns_in(body, &Seed::Whole(shape));
+    seed_tuple_returns(body, &Seed::Whole(shape));
+}
+
+fn seed_tuple_returns(body: &mut [Stmt], shape: &Seed) {
+    for_each_return(body, &mut |v| {
+        if let Some(tuple) = shape.apply(v) {
+            *v = tuple;
+        }
+    });
 }
 
 /// What a returned value must answer: the declared tuple itself, or — for a declared list of named
@@ -160,59 +168,50 @@ impl TupleShape {
     }
 }
 
-/// The recursive half: EVERY `return` in the body answers to the declared return type, not only the
-/// ones at the top level — `if ($yes) { return [1, "one"]; }` is the shape the idiom actually takes.
+/// The recursive half of both seeds: EVERY `return` in the body answers to the declared return type,
+/// not only the ones at the top level — `if ($yes) { return [1, "one"]; }` and `if ($none) { return
+/// []; }` are the shapes the idioms actually take.
 /// The walk descends into statement blocks ONLY and never into an expression, because a `return`
 /// inside a lambda body belongs to that lambda's own signature, not to this function's.
 ///
 /// The match is exhaustive by design (Invariant 3): a new block-bearing `Stmt` must decide whether
 /// its returns are this function's, and a `_` arm would silently answer "no".
-fn seed_tuple_returns_in(body: &mut [Stmt], shape: &Seed) {
+fn for_each_return(body: &mut [Stmt], visit: &mut dyn FnMut(&mut Expr)) {
     for s in body.iter_mut() {
         match s {
-            Stmt::Return {
-                value: Some(v),
-                span,
-            } => {
-                if let Some(tuple) = shape.apply(v) {
-                    *s = Stmt::Return {
-                        value: Some(tuple),
-                        span: *span,
-                    };
-                }
-            }
+            Stmt::Return { value: Some(v), .. } => visit(v),
             Stmt::If {
                 then_block,
                 else_block,
                 ..
             } => {
-                seed_tuple_returns_in(then_block, shape);
+                for_each_return(then_block, visit);
                 if let Some(e) = else_block {
-                    seed_tuple_returns_in(e, shape);
+                    for_each_return(e, visit);
                 }
             }
             Stmt::For { body, .. }
             | Stmt::While { body, .. }
             | Stmt::CFor { body, .. }
             | Stmt::Block(body, _)
-            | Stmt::Using { body, .. } => seed_tuple_returns_in(body, shape),
+            | Stmt::Using { body, .. } => for_each_return(body, visit),
             Stmt::Try {
                 body,
                 catches,
                 finally_block,
                 ..
             } => {
-                seed_tuple_returns_in(body, shape);
+                for_each_return(body, visit);
                 for c in catches.iter_mut() {
-                    seed_tuple_returns_in(&mut c.body, shape);
+                    for_each_return(&mut c.body, visit);
                 }
                 if let Some(f) = finally_block {
-                    seed_tuple_returns_in(f, shape);
+                    for_each_return(f, visit);
                 }
             }
             Stmt::Destructure { else_block, .. } => {
                 if let Some(e) = else_block {
-                    seed_tuple_returns_in(e, shape);
+                    for_each_return(e, visit);
                 }
             }
             // No block of this function's statements inside: nothing to descend into.
@@ -241,6 +240,15 @@ pub(super) fn seed_returned_empty_literals(body: &mut [Stmt], ret: &Option<Type>
     if !matches!(ret, Type::Named { name, .. } if name == "List" || name == "Map") {
         return;
     }
+    // Row 4h: a `return [];` anywhere in the body IS the declared collection, so it is constructed
+    // as one (DEC-214 part-2 gives a bare empty literal no type). A lambda's `return` is its own.
+    for_each_return(body, &mut |v| {
+        if matches!(v, Expr::List(items, _) if items.is_empty()) {
+            if let Ok(coll) = super::super::mappings::new_coll(ret) {
+                *v = coll;
+            }
+        }
+    });
     let returned: Vec<String> = body
         .iter()
         .filter_map(|s| match s {

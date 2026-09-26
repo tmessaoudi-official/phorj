@@ -456,6 +456,30 @@ function tail(string $s, int $i): string { return substr($s, $i); }
 echo lo([4, 1, 7]); echo "|"; echo hi([4, 1, 7]); echo "|"; echo m3(5, 2, 9);
 echo "|"; echo tail('hello', 1); echo "|"; echo tail('hello', -2); echo "|["; echo tail('hi', 5); echo "]";"#,
         ),
+        // Row 4h: PHP's untyped `[]` where the program declared the collection — a strict `=== []` /
+        // `!== []` on a declared list and map (both operand orders), and a nested `return [];` that
+        // must construct the declared return type.
+        (
+            "empty_array_tests_and_returns",
+            r#"<?php
+/** @param list<int> $xs */
+function none(array $xs): string { return $xs === [] ? 'empty' : 'some'; }
+/** @param array<string, int> $m */
+function keyed(array $m): string { return [] !== $m ? 'keyed' : 'bare'; }
+/** @return list<int> */
+function evens(int $n): array {
+    if ($n < 1) { return []; }
+    $out = [];
+    for ($i = 2; $i <= $n; $i += 2) { $out[] = $i; }
+    return $out;
+}
+/** @var list<int> $noInts */
+$noInts = [];
+/** @var array<string, int> $noKeys */
+$noKeys = [];
+echo none($noInts); echo "|"; echo none([3]); echo "|"; echo keyed(['a' => 1]); echo "|"; echo keyed($noKeys);
+echo "|"; echo count(evens(0)); echo "|"; echo count(evens(6));"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php

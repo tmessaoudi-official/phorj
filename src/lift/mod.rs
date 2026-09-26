@@ -63,6 +63,8 @@ mod lifter_tests_division;
 #[cfg(test)]
 mod lifter_tests_echo_registry;
 #[cfg(test)]
+mod lifter_tests_empty;
+#[cfg(test)]
 mod lifter_tests_enums;
 #[cfg(test)]
 mod lifter_tests_escapes;
