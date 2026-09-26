@@ -429,6 +429,19 @@ $none = new Classifier();
 $some = new Classifier(function (string $k): ?Src { if ($k === 'a') { return new Src(7); } return null; });
 echo $none->classify('a'); echo "|"; echo $some->classify('a'); echo "|"; echo $some->classify('b');"#,
         ),
+        // Row 4f: a named function's first-class callable is a phorj function reference — mapped
+        // over a list (`xs.map(len)`) and bound to a local that is then called.
+        (
+            "first_class_callable_of_a_named_function",
+            r#"<?php
+function len(string $s): int { return strlen($s); }
+/** @param list<string> $xs
+ * @return list<int> */
+function lens(array $xs): array { return array_map(len(...), $xs); }
+$f = len(...);
+$ns = lens(['a', 'bcd']);
+echo $ns[0]; echo "|"; echo $ns[1]; echo "|"; echo $f('xy');"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php

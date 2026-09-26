@@ -208,7 +208,12 @@ fn call_site_unpacking_is_refused_by_name_everywhere() {
 
 #[test]
 fn a_first_class_callable_and_a_variadic_parameter_are_refused_by_name() {
-    let fcc = refused("<?php function f(array $xs): array { return array_map(strlen(...), $xs); }");
+    // Row 4f: a builtin's first-class callable is still refused (its arity/overload set is row 4g's
+    // data); the `array` param is annotated so the refusal under test is the one that fires.
+    let fcc = refused(
+        "<?php\n/** @param list<string> $xs\n * @return list<int> */\n\
+         function f(array $xs): array { return array_map(strlen(...), $xs); }",
+    );
     assert!(fcc.contains("first-class callable"), "{fcc}");
     let variadic = refused("<?php function f(int ...$xs): int { return 0; }");
     assert!(variadic.contains("variadic"), "{variadic}");

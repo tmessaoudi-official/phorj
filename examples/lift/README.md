@@ -583,7 +583,15 @@ Refused by name: a signature-less `callable`/`\Closure`, an optional (`int=`), v
 by-reference (`int &$x`) signature parameter, a signature with no `: R` (PHP reads that as `mixed`), and
 a docblock whose type does not match the declared slot. A function-typed FIELD is passed on as a value
 here, never called directly: `($this->f)($x)` has no phorj spelling yet (see the scout plan's Known
-issues). Byte-identical on all three legs and against the PHP.
+issues).
+
+**First-class callables (row 4f).** `len(...)` of a NAMED function lifts to the phorj function reference
+`len` — `array_map(len(...), $xs)` becomes `xs.map(len)`, and it transpiles back to `len(...)`. A
+builtin's `strlen(...)` is still refused: which phorj native it means can depend on the arity it is
+called with (`min($xs)` is a list minimum, `min($a, $b)` the lesser value), and that data is the next
+row's. `$f(...)`, `$o->m(...)` and `C::m(...)` are refused too, and every one of these refusals names a
+rewrite that lifts: a closure with a TYPED parameter, or a `foreach` where the parameter is an `array`.
+Byte-identical on all three legs and against the PHP.
 
 ## Spread over lists — `spread.php` / `spread.phg` (scout row 5u, DEC-538, 2026-09-26)
 

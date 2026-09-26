@@ -153,6 +153,19 @@ impl PParser {
         let mut e = self.parse_primary()?;
         loop {
             if self.at(&PTok::LParen) {
+                // Row 4f: `name(...)` is a first-class callable of a named function. Any other
+                // callee reaches `parse_arg`, which refuses it by name.
+                if let PhpExpr::Name(n) = &e {
+                    if matches!(self.peek_at(1), PTok::Ellipsis)
+                        && matches!(self.peek_at(2), PTok::RParen)
+                    {
+                        e = PhpExpr::CallableRef(n.clone());
+                        for _ in 0..3 {
+                            self.advance();
+                        }
+                        continue;
+                    }
+                }
                 let args = self.parse_args()?;
                 e = PhpExpr::Call {
                     callee: Box::new(e),

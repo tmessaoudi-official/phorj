@@ -98,10 +98,14 @@ impl PParser {
     pub(super) fn parse_arg(&mut self) -> Result<PhpExpr, String> {
         if self.eat(&PTok::Ellipsis) {
             // PHP 8.1 `f(...)` builds a first-class callable — a different construct on the same
-            // token, refused by name rather than as a baffling "found RParen".
+            // token, refused by name rather than as a baffling "found RParen". A NAMED function's
+            // never gets here (`parse_postfix` lifts it, row 4f); what does is a method or a value.
             if self.at(&PTok::RParen) {
                 return Err(self.err(
-                    "a first-class callable `f(...)` is Tier-2 — write a closure `fn ($x) => f($x)`",
+                    "a first-class callable of a method or a closure value (`$o->m(...)`, `C::m(...)`, \
+                     `$f(...)`) is Tier-2 — write a closure with a typed parameter, \
+                     `fn (int $x): int => $o->m($x)`; an `array` parameter needs a docblock type a \
+                     closure cannot carry, so write a `foreach` there",
                 ));
             }
             return Ok(PhpExpr::Spread(Box::new(self.parse_expr()?)));

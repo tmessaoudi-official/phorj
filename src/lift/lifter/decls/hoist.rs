@@ -343,7 +343,13 @@ fn walk_expr(
                 walk_stmt(st, ctx, sightings, order);
             }
         }
-        E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => {}
+        E::Int(_)
+        | E::Float(_)
+        | E::Str(_)
+        | E::Bool(_)
+        | E::Null
+        | E::Name(_)
+        | E::CallableRef(_) => {}
         E::Interp(parts) => {
             for p in parts {
                 if let php::PhpStrPart::Expr(inner) = p {

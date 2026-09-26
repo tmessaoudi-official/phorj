@@ -4,6 +4,8 @@ package Main;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 import Core.Output;
+import Core.List;
+import Core.String;
 
 class Profile {
     constructor(public mutable int bp) {}
@@ -26,6 +28,18 @@ class Classifier {
     }
 }
 
+function len(string s): int {
+    return s.length();
+}
+
+/**
+ * @param list<string> $xs
+ * @return list<int>
+ */
+function lens(List<string> xs): List<int> {
+    return xs.map(len);
+}
+
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     mutable var none = new Classifier();
@@ -37,5 +51,10 @@ function main(): void {
     Output.print("{some.classify(\"a\")}");
     Output.print("|");
     Output.print("{some.classify(\"b\")}");
+    Output.print("\n");
+    mutable var ns = lens(["a", "bcd"]);
+    Output.print("{ns[0]}");
+    Output.print("|");
+    Output.print("{ns[1]}");
     Output.print("\n");
 }

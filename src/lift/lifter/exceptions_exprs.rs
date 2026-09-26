@@ -85,6 +85,7 @@ pub(super) fn visit_expr(e: &php::PhpExpr, f: &mut impl FnMut(&str)) {
         | E::Null
         | E::Var(_)
         | E::Name(_)
+        | E::CallableRef(_)
         | E::EmptyColl(_)
         | E::ClassConst { .. }
         | E::StaticProp { .. } => {}

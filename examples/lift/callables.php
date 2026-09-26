@@ -28,6 +28,16 @@ final class Classifier {
     }
 }
 
+// A first-class callable of a NAMED function (row 4f) is a phorj function reference: `lens` lifts to
+// `xs.map(len)`. A builtin's `strlen(...)` is still refused (row 4g).
+function len(string $s): int { return strlen($s); }
+
+/**
+ * @param list<string> $xs
+ * @return list<int>
+ */
+function lens(array $xs): array { return array_map(len(...), $xs); }
+
 $none = new Classifier();
 $some = new Classifier(function (string $k): ?Profile {
     if ($k === 'a') {
@@ -36,3 +46,5 @@ $some = new Classifier(function (string $k): ?Profile {
     return null;
 });
 echo $none->classify('a'); echo "|"; echo $some->classify('a'); echo "|"; echo $some->classify('b'); echo "\n";
+$ns = lens(['a', 'bcd']);
+echo $ns[0]; echo "|"; echo $ns[1]; echo "\n";

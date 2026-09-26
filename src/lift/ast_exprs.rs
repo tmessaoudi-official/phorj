@@ -126,6 +126,11 @@ pub enum PhpExpr {
         then: Option<Box<PhpExpr>>,
         els: Box<PhpExpr>,
     },
+    /// `name(...)` — a PHP 8.1 first-class callable of a NAMED function (row 4f). Only a bare name:
+    /// `$f(...)`, `$o->m(...)` and `C::m(...)` are refused in the parser. A LEAF — it carries no
+    /// sub-expression, so a walker skips it exactly like `Name`; widening it to any other callee
+    /// would need every walker (keyword renames, hoist, exceptions) to visit that callee.
+    CallableRef(String),
     /// `callee(args)` — `callee` is typically a `Name` (free function) but may be any expression.
     Call {
         callee: Box<PhpExpr>,

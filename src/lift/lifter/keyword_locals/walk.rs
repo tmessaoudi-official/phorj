@@ -136,6 +136,7 @@ fn walk_expr(e: &mut php::PhpExpr, f: &mut Sites) {
         | E::Bool(_)
         | E::Null
         | E::Name(_)
+        | E::CallableRef(_)
         | E::EmptyColl(_)
         | E::ClassConst { .. }
         | E::StaticProp { .. } => {}

@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: a named function's first-class callable is a function reference (L3 row 4f; 2026-09-26)
+
+`len(...)` was refused with a hint (`fn ($x) => f($x)`) that itself did not lift. It now lifts to the phorj function reference `len`, so `array_map(len(...), $xs)` becomes `xs.map(len)`. A builtin's `strlen(...)`, and `$f(...)`, `$o->m(...)`, `C::m(...)`, are still refused, now with a hint that lifts: a closure with a typed parameter, or a `foreach` for an `array` parameter.
+
 ### Added — `phg lift`: docblock callable signatures type `callable` and `\Closure` (L3 row 4e; 2026-09-26)
 
 `callable` and `\Closure` were refused outright. A PHPStan/Psalm signature in the docblock — `@param callable(string): ?Profile $f`, `@var \Closure(int): string`, `@return \Closure(): void` — now lifts to the phorj function type `(string) => Profile?`; a grouped `(callable(A): R)|null` on a `?callable` lifts to `((A) => R)?`, and `\Closure::fromCallable($f)` lifts to `f`. A signature-less `callable` is still refused, now naming the docblock fix, and so are signature parameters phorj cannot express (optional, variadic, by-reference) and a signature with no return type. The lift printer now prints types through the formatter. See `examples/lift/callables.php`.
