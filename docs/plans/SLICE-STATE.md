@@ -61,8 +61,8 @@
 > **DONE (2026-09-25): row 5t** (`fb6cd7c2`) — DEC-537: a direct assignment in a narrowed block checks against the declared type and the narrowing follows the value (checker + VM `stmt_narrowed`); nested assignments keep the narrowed check (scope ruling 20:01).
 > **DONE (2026-09-25): row 5s** (`c0d36852`) — DEC-536: `kept[0].tags = …` / `t.bp += 1` through a `mutable` local place; lowers to the positional index chain every backend has. Class-field/call bases stay refused.
 > **DONE (2026-09-26): row 5u** (`d57b413e`) — DEC-538: PHP spread over lists lifts to `List.concat`/`List.flatten` (`array_values` → `Map.values`, `array_unshift` → concat); map spreads and call-site unpacking refused by name. Scout 83/155.
-> **DONE (2026-09-26): row 5v** (`TBD`) — `foreach ($xs as [$a, $b])` lifts to `for ((a, b) in xs)`; skipped slot / keyed / nested refused by name. Scout 88/155.
-> **NEXT:** L3's classifier wall is a PHP static local (`static $keys = null;`) — a design question, then L3 (depth oracle), and the OWED G-8 verdicts.
+> **DONE (2026-09-26): row 5v** (`1c703dd6`) — `foreach ($xs as [$a, $b])` lifts to `for ((a, b) in xs)`; skipped slot / keyed / nested refused by name. Scout 88/155.
+> **NEXT:** row 5w — DEC-539 named refusal for a PHP static local (ruled 12:54; L3 hand-ports scout's one site), then L3 (depth oracle), and the OWED G-8 verdicts.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 
