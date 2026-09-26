@@ -6,6 +6,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: `match (true)` lifts to an if-chain (L3 row 4d; 2026-09-26)
+
+PHP's guard-chain idiom `match (true) { $a === null => 1, $b, $c => 2, default => 0 }` was refused as
+"a `match` arm with a non-literal condition". It now lifts to an if-/else-if chain: comma conditions
+become `||`, and `default` is the final `else` wherever it was written. A `match (true)` with no
+`default` is refused by name (PHP would throw `UnhandledMatchError`).
+
 ### Fixed — `phg lift`: a docblock refusal names the declaration it documents (L3 row 4c; 2026-09-26)
 
 A docblock is applied after its declaration has been parsed, so a refusal while reading one (`mixed`

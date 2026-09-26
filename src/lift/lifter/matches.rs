@@ -7,6 +7,9 @@ pub(super) fn lift_match(
     subject: &php::PhpExpr,
     arms: &[php::PhpMatchArm],
 ) -> Result<Expr, String> {
+    if matches!(subject, php::PhpExpr::Bool(true)) {
+        return lift_match_true(arms);
+    }
     let mut out = Vec::new();
     for arm in arms {
         match &arm.conds {
@@ -36,6 +39,52 @@ pub(super) fn lift_match(
         arms: out,
         span: SP,
     })
+}
+
+/// Row 4d — `match (true) { c1, c2 => v, … default => d }` is PHP's guard chain: the first condition
+/// that is `=== true`, in source order, selects its arm. phorj's form is an if-/else-if chain, and a
+/// comma list is `c1 || c2`, which short-circuits exactly as PHP stops at the first match. `default`
+/// may be written anywhere and is always the fallback, so it becomes the final `else`. With no
+/// `default` PHP throws `UnhandledMatchError` and an if-expression has no `else`: refused by name.
+fn lift_match_true(arms: &[php::PhpMatchArm]) -> Result<Expr, String> {
+    let mut fallback = None;
+    let mut guarded = Vec::new();
+    for arm in arms {
+        let body = super::throw_expr::lift_throwable(&arm.body)?;
+        match &arm.conds {
+            None => fallback = Some(body),
+            Some(conds) => {
+                let mut cond: Option<Expr> = None;
+                for c in conds {
+                    let e = lift_expr(c)?;
+                    cond = Some(match cond {
+                        None => e,
+                        Some(l) => Expr::Binary {
+                            op: BinaryOp::Or,
+                            lhs: Box::new(l),
+                            rhs: Box::new(e),
+                            span: SP,
+                        },
+                    });
+                }
+                guarded.push((cond.ok_or("lift: a `match` arm with no condition")?, body));
+            }
+        }
+    }
+    let mut chain = fallback.ok_or(
+        "lift: a `match (true)` with no `default` arm has no phorj form — PHP throws \
+         `UnhandledMatchError` when no condition holds, and an if-chain needs an `else`; add a \
+         `default` arm",
+    )?;
+    for (cond, body) in guarded.into_iter().rev() {
+        chain = Expr::If {
+            cond: Box::new(cond),
+            then_expr: Box::new(body),
+            else_expr: Box::new(chain),
+            span: SP,
+        };
+    }
+    Ok(chain)
 }
 
 /// A PHP `match` condition must be a literal to become a Phorj pattern (a non-literal arm compares

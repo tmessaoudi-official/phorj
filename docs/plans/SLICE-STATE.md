@@ -66,7 +66,8 @@
 > **DONE (2026-09-26): L3a** — wall census of the 11-file classifier cluster: 13 bypasses to a full lift (0 refused), then 224 distinct check errors classified; plan rows 4a–4k + Q-0926-1…5.
 > **DONE (2026-09-26): row 4b** — a ternary/`match` in a `.` chain lifted into an unescaped interpolation hole; the lift printer now shares `phg format`'s `escape_interp`. Scout lex-failing drafts 6 → 0 of 91.
 > **DONE (2026-09-26): row 4c** — a docblock refusal names the declaration it documents (was: the next member's token and line).
-> **NEXT:** the mechanical rows 4d–4o (Q-0926-1…5 + Q-0924-1 RULED 17:01 as DEC-540…545); the four-leg harness is row 4's last step. The OWED G-8 verdicts stand.
+> **DONE (2026-09-26): row 4d** — `match (true)` lifts to an if-chain (`default` anywhere is the fallback; none → named refusal).
+> **NEXT:** the mechanical rows 4e–4o (Q-0926-1…5 + Q-0924-1 RULED 17:01 as DEC-540…545); the four-leg harness is row 4's last step. The OWED G-8 verdicts stand.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

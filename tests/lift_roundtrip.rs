@@ -389,6 +389,16 @@ echo esc(); echo "|"; echo sq(); echo "|"; echo hole("X");"#,
         // braces must be escaped or the draft does not lex. Covers a non-string arm (the hole must
         // stringify `1` exactly as PHP's `.` does) and scout `NtfyChannel.php`'s nested shape — the
         // conditional inside an inner concat that is a call argument inside the outer hole.
+        // Row 4d: `match (true)` lifts to an if-chain. `||` must short-circuit exactly as PHP stops at
+        // the first `=== true` condition, and a `default` written FIRST is still the fallback.
+        (
+            "match_true_chain",
+            r#"<?php
+function k(int $n): string { return match (true) { $n < 0, $n > 9 => 'out', $n === 5 => 'five', default => 'in' }; }
+function d(int $n): string { return match (true) { default => 'd', $n === 1 => 'one', $n === 2 => 'two' }; }
+echo k(-1); echo "|"; echo k(12); echo "|"; echo k(5); echo "|"; echo k(3);
+echo "|"; echo d(2); echo "|"; echo d(1); echo "|"; echo d(9);"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php
