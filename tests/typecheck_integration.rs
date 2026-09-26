@@ -742,3 +742,18 @@ fn attribute_on_a_non_function_non_class_item_is_still_a_parse_error() {
         .expect_err("attribute on an enum must fail to parse");
     assert_eq!(err.code, Some("E-ATTR-TARGET"), "{err:?}");
 }
+
+/// Row 5y: a diagnostic names an optional function / intersection type unambiguously. `Ty`'s
+/// `Display` parenthesized an optional only around a union, so `((int) => int)?` rendered as
+/// `(int) -> int?` — the spelling of a function RETURNING `int?`, i.e. the message named the wrong
+/// type.
+#[test]
+fn a_diagnostic_parenthesizes_an_optional_function_type() {
+    let src = "package Main;\nfunction f(((int) => int)? g): int { int n = g; return n; }\n";
+    let errs = check_src(src).expect_err("an optional function is not an int");
+    let msgs: Vec<String> = errs.iter().map(|d| d.message.clone()).collect();
+    assert!(
+        msgs.iter().any(|m| m.contains("((int) -> int)?")),
+        "{msgs:?}"
+    );
+}

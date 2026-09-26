@@ -42,7 +42,14 @@ pub(crate) fn ty(t: &Type) -> Result<String, String> {
         }
         // DEC-253: a union inner is parenthesized — `(A | B)?` — so the printed form re-parses to
         // the same type (`?` binds to its immediate member in the grammar).
-        Type::Optional { inner, .. } if matches!(**inner, Type::Union(..)) => {
+        // Row 5y: `?` binds to the nearest type — `(string) => int?` is a function RETURNING `int?`
+        // and `A & B?` has an optional member — so a function or intersection keeps its parens too.
+        Type::Optional { inner, .. }
+            if matches!(
+                **inner,
+                Type::Union(..) | Type::Intersection(..) | Type::Function { .. }
+            ) =>
+        {
             Ok(format!("({})?", ty(inner)?))
         }
         Type::Optional { inner, .. } => Ok(format!("{}?", ty(inner)?)),

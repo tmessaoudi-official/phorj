@@ -325,7 +325,12 @@ impl fmt::Display for Ty {
             }
             // A union inner needs parens — `(A | B)?` — or the rendered form re-reads as
             // `A | (B?)` (`?` binds to its immediate member in the grammar). DEC-253.
-            Ty::Optional(e) if matches!(**e, Ty::Union(_)) => write!(f, "({e})?"),
+            // Row 5y: `?` binds tightest — `(int) -> int?` is a function RETURNING `int?`.
+            Ty::Optional(e)
+                if matches!(**e, Ty::Union(_) | Ty::Intersection(_) | Ty::Function(..)) =>
+            {
+                write!(f, "({e})?")
+            }
             Ty::Optional(e) => write!(f, "{e}?"),
             Ty::Null => write!(f, "null"),
             Ty::Param(n) => write!(f, "{n}"),

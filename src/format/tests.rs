@@ -7,7 +7,7 @@
 use super::format;
 use crate::cli::cmd_treewalk;
 
-fn fmt(src: &str) -> String {
+pub(super) fn fmt(src: &str) -> String {
     format(src).unwrap_or_else(|e| panic!("fmt failed: {e:?}\n--- src ---\n{src}"))
 }
 
@@ -22,7 +22,7 @@ fn invoke_and_tostring_attributes_round_trip() {
 }
 
 /// `fmt` is idempotent: a second pass changes nothing.
-fn assert_idempotent(src: &str) {
+pub(super) fn assert_idempotent(src: &str) {
     let once = fmt(src);
     let twice = fmt(&once);
     assert_eq!(
@@ -32,7 +32,7 @@ fn assert_idempotent(src: &str) {
 }
 
 /// Formatting preserves runtime behavior: the program runs identically before and after.
-fn assert_meaning_preserved(src: &str) {
+pub(super) fn assert_meaning_preserved(src: &str) {
     let before = cmd_treewalk(src);
     let after = cmd_treewalk(&fmt(src));
     assert_eq!(
