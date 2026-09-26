@@ -63,7 +63,8 @@
 > **DONE (2026-09-26): row 5u** (`d57b413e`) — DEC-538: PHP spread over lists lifts to `List.concat`/`List.flatten` (`array_values` → `Map.values`, `array_unshift` → concat); map spreads and call-site unpacking refused by name. Scout 83/155.
 > **DONE (2026-09-26): row 5v** (`1c703dd6`) — `foreach ($xs as [$a, $b])` lifts to `for ((a, b) in xs)`; skipped slot / keyed / nested refused by name. Scout 88/155.
 > **DONE (2026-09-26): row 5w** (`982d0c67`) — DEC-539: a PHP static local is refused by name with its two rewrites; static properties and `static fn` untouched.
-> **NEXT:** L3 (depth oracle — hand-ports the by-ref closure and scout's one static local, `TenureClassifier.php`), and the OWED G-8 verdicts.
+> **DONE (2026-09-26): L3a** — wall census of the 11-file classifier cluster: 13 bypasses to a full lift (0 refused), then 270 check errors classified; plan rows 4a–4k + Q-0926-1…5.
+> **NEXT:** L3 row 4b (lifter P0 — a ternary in a concat lifts to an unlexable draft), then the mechanical rows 4c–4j while Q-0926-1…5 + Q-0924-1 await rulings; the four-leg harness is row 4's last step. The OWED G-8 verdicts stand.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 

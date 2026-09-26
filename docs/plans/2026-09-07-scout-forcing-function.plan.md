@@ -468,6 +468,12 @@
 - [2026-09-26 12:54] AGREED: **A PHP static local is refused by name; L3 hand-ports scout's one site (DEC-539).**
   `TenureClassifier::vocabularyKeys()`'s `static $keys = null;` memoises a pure value, so the hand-port drops the memo
   (identical output). REJECTED: lifting to a private static field (needs an `@var`); static locals in phorj.
+- [2026-09-26 16:09] AGREED: **L3 starts with a full WALL CENSUS of the classifier cluster (L3a), not a build.**
+  `classify(RawListing, SourceProfile)` pulls in `RawListing`, `PlafondBands` and `LandlordRegistry`, none of which
+  lift (first walls: `mixed` docblock, `min(...)`, `string|false|null`), and the census is first-error-only. A scratch
+  copy is hand-bypassed wall by wall until the cluster lifts; each wall is classed mechanical / ruled / needs-ruling,
+  then built as its own row or asked. REJECTED for now: hand-porting the three files wholesale (widens DEC-539's
+  one-hand-port ruling without a DEC row); building the three first walls before the full list is known.
 
 ## 1. Measured starting state (2026-09-07, on `target/release/phg` at `6c49816d`)
 
@@ -648,7 +654,18 @@ DEC-507 applies to every one.
 | 3 | L2 — DEC-505 as amended by DEC-512 — ``feat(lang): `<=>` and tuple ordering`` — `Op::Cmp` + tuple `< > <= >=` on all three legs, `List<T>` refused, `decimal` excluded pending Q-0908-3; lift + LSP + 5 `phg explain` entries. Closed by row 3b | L | done | eba09d4e | src/tokenizer/mod.rs src/parser/exprs/climb.rs src/checker/expr/ordering.rs src/value/collections.rs src/vm/exec.rs src/compiler/cty.rs src/transpile/expr.rs src/lift/lifter/exprs.rs tests/differential.rs |
 | 3b | L2 closes — `docs(lang): L2 closes` — SSOT quartet amended (the decimal narrowing never reached the SPEC/register/MASTER-PLAN in C1), the missing lift-rule tests with two mutations verified red and a third proving `positional` redundant, the Invariant-9 example, VS Code grammar, KNOWN_ISSUES § DECIMAL-ORDER, the re-census, and the DEC-507 bench — **a CONFIRMED LOSS, escalation OWED** | M | done | ab959542 | docs/specs/UNIFIED-SPEC.md docs/plans/SLICE-STATE.md docs/research/full-audit/raw/C-decisions.md src/lift/lifter_tests_ordering.rs examples/guide/spaceship.phg bench/micro/spaceshipsort.phg bench/micro/spaceshipsort.php editors/vscode/syntaxes/phorj.tmLanguage.json KNOWN_ISSUES.md |
 | 3c | L2b — DEC-513: FUSE the tuple comparison in the compiler. `Op::CmpSeq(n, SeqOrd)` pops the `2n` elements and compares them IN PLACE on the operand stack, so a both-sides-literal `(a,b) <=> (c,d)` materializes no tuple; `value::compare_seq` + `project_three_way` extracted so the generic and fused paths share one lexicographic loop and one NaN projection (Invariant 4); interpreter, transpile and lift legs unchanged. MEASURED A/B on one quiet box (K=15, core-pinned, interleaved, both legs proven by disassembly): 0.38x -> 0.46x, VM time -19.5%, STILL A LOSS at ~2.2x php -> OWED per DEC-365. The ruling's ~65% prediction did not hold: construction was ~a fifth of the tuple-vs-scalar gap, and the residue is per-element `compare_ord` dispatch inside the fused Op (compiler-reachable), NOT the `sortWith` callback | L | done | d4365564 | src/chunk/op.rs src/chunk/mod.rs src/chunk/validate.rs src/compiler/emit.rs src/compiler/mod.rs src/compiler/expr/binary.rs src/value/collections.rs src/vm/cmp_seq.rs src/vm/mod.rs src/vm/exec.rs src/jit/tests/tuple_ordering.rs examples/guide/spaceship.phg examples/README.md |
-| 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. **BLOCKED on rows 5e–5j** — the `Classification.phg` blockers outside DEC-515 (split 2026-09-13, re-scoped the same day when 5e's premise was refuted; rows 5b and 5c are closed) | L | blocked | - | examples/lift/scout/* tests/* bench/* |
+| 4 | L3 — depth oracle: classifier cluster lifted, four-leg harness over the 130-case corpus, byte-identity, docker-PHP bench. UNBLOCKED 2026-09-26 (5e–5w all done); split by the L3a census (§ "L3a — wall census") into rows 4a–4k, the harness and bench last | L | todo | - | examples/lift/scout/* tests/* bench/* |
+| 4a | L3a — WALL CENSUS of the 11-file classifier cluster (ruling 16:09): scratch copy, one bypass per commit until the cluster lifts (13 bypasses, 0 refused), then `phg check` of both packages (270 errors, classified). Docs only — § "L3a — wall census" | M | done | - | docs/plans/2026-09-07-scout-forcing-function.plan.md |
+| 4b | L3a/B13 — LIFTER P0: a PHP ternary inside a concatenation lifts to an if-expression INSIDE an interpolation whose nested braces/strings the phorj lexer rejects (`RawListing::text()`: `unexpected '}' in string`) — a draft that does not lex | S | todo | - | src/lift/* |
+| 4c | L3a/B2 — a docblock refusal is reported at the NEXT member's line (`RawListing.php`'s ctor `@param array<string, mixed>` at line 29 reported as 171, then 159) | S | todo | - | src/lift/parser/* |
+| 4d | L3a/B5 — `match (true) { cond => v, … default => d }` lifts to an if-expression chain instead of the non-literal-arm refusal | S | todo | - | src/lift/* |
+| 4e | L3a/B4 — `callable(A): R` / `\Closure(A): R` docblock signatures lift to phorj function types (today `callable` is refused outright, `docblock.rs:429`, `mappings.rs:78`) | M | todo | - | src/lift/* |
+| 4f | L3a/B7 — a first-class callable of a registered builtin (`min(...)`) lifts to a closure; and the refusal's own hint (`fn ($x) => f($x)`) leads into the unannotated-`array` refusal when `$x` is an array | S | todo | - | src/lift/* |
+| 4g | L3a check — `lift_of` is arity-EXACT, so registered builtins called with a default/variadic arity fall through unmapped: `min($a, $b)`, 2-arg `substr`, 1-arg `array_filter`, 2-arg `strtr` | M | todo | - | src/lift/* src/native/* |
+| 4h | L3a check — 17 × `an empty collection needs its type` + 3 × `cannot infer a type from null` on `$x = []` / `$x = null` locals the lifter did not type (cause NOT root-caused; likely the DEC-515 seed ceiling) | M | todo | - | src/lift/* |
+| 4i | L3a check — absent builtin mappings where a Core native may exist: `in_array`, `str_replace`, `implode`, `explode`, `is_string`, `isset`, `uksort`, `get_debug_type`, `mb_check_encoding`/`mb_convert_encoding`, `html_entity_decode` (+`ENT_*`), `PHP_INT_MAX`, and `sprintf` (19 sites — format-string semantics may need a ruling). Per function: native exists → mechanical row; none → banked | L | todo | - | src/lift/* src/native/* |
+| 4j | L3a check — exceptions: `MalformedText extends \RuntimeException` → `E-EXTEND-UNKNOWN`, and 19 × `can only throw … Error` + 5 × `must implement Error` downstream. Class NOT yet determined (lifter/exceptions.rs maps some bases) | M | todo | - | src/lift/lifter/exceptions*.rs |
+| 4k | L3a — SECOND check census after 4b–4j and the rulings: the ~60 residual errors (indexing, map value types, 5 × param reassignment, Map iteration needs two bindings, tuple destructure) are expected to be partly cascades — re-classify, never quote this count as a worklist | M | todo | - | docs/plans/2026-09-07-scout-forcing-function.plan.md |
 | 5 | L4 — DEC-504 named-field tuples (73 sites), all legs + LSP + editors + example + bench. Wall-fall MEASURED on scout: 57/123 → 64/125, zero keyed-shape refusals, `Classification.php` lifts | L | done | 9b3e528c | src/ast/* src/checker/* src/interpreter/* src/vm/* src/transpile/* src/lift/* src/lsp/* editors/* |
 | 5b | L4c — DEC-514: phorj's TWO-LEVEL list element read, `nestedlist` 0.03× vs docker php:8.5+JIT and 370 ns/iter against `listindex` 4.3. ROOT-CAUSE FIRST (Rule 14) — no fix until the cliff is explained with measured evidence; not a deep copy. **ROOT-CAUSED 2026-09-09, no fix written**: the unboxed JIT `Kind` lattice has a `MapList` and a `SetList` but no list-of-lists, so `admit_make_list` refuses the row literal at `Op::MakeList` before any index runs and the function falls to the VM; "JIT-resistant" is retracted, it does not engage. **DEC-519's premise is also retracted** — none of the four widened rows has a two-level read; the census found four distinct causes and `strappend` COMPILES (so its loss is NOT JIT coverage; its actual cause is unexamined, out of scope). The FIX SHAPE is RULED (DEC-520, 2026-09-09: INT-ONLY inner lists, a dedicated list-of-lists `Kind` reusing `IntList`'s flat encoding, 10 code sites + the ABI decode gate) and is **BUILT 2026-09-09** (`8e814277` M-Decomp + the follow-up carrying the kind): `Kind::IntListList(Own)` across 12 code sites in 4 files, an M-Decomp split FIRST because two emit files had zero size-gate headroom, the 4 decline pins flipped to compile + `hits > 0` + oracle identity and a 5th pinning the kept boundary. Perf before/after OWED (box load 20.07). L4c CLOSES; L3 still blocked behind L4b | L | done | 8e814277 | src/vm/* src/jit/* src/value/* bench/micro/nestedlist.phg bench/micro/fslines.phg bench/micro/queryparse.phg |
 | 5c | L4b — DEC-515, the BUILT half (split 2026-09-13; `feat(lift): DEC-515 half`): a `foreach` binder over a declared keyed collection reads fields (`$row['bp']` → `row.bp`), scoped so a nested rebinding restores the outer shape; a keyed literal in named-tuple RETURN position becomes a tuple literal when its keys are the declared fields in declared order; named tuple values print with labels. 10 tests, 2 sabotages, Invariant-9 example. Census re-count: ~71 reachable reads, not 140 | L | done | df227f0a | src/lift/lifter/shapes.rs src/lift/lifter/decls/seed.rs src/lift/lifter/decls/statements.rs src/lift/lifter/mod.rs src/lift/printer/exprs.rs src/lift/lifter_tests_shapes.rs examples/lift/* |
@@ -686,15 +703,31 @@ DEC-507 applies to every one.
 <!-- /progress-block -->
 
 ### Blocked
-- **L3 depends on rows 5e–5j** (updated 2026-09-13). `Classification::toArray()` is the four-leg
-  contract itself, so `Classification.phg` and its siblings must CHECK before the depth oracle can
-  diff against it. The L4 dependency this bullet used to name is closed (L4 `9b3e528c`, L4b half
-  `df227f0a`); what remains is `usort`/`array_map` (5f), PHP `/` (5g), UFCS outside Main (5h),
-  lowered enum methods vs the public-surface rule (5i), readonly ctor assignment (5j) and checking a
-  library file at all (5e).
+- **L3 is UNBLOCKED as of 2026-09-26** (rows 5e–5w done); what stands between it and the four-leg harness is
+  the L3a census worklist — mechanical rows 4b–4k and the five rulings below (Q-0926-1…5) plus Q-0924-1.
+  Superseded bullet (2026-09-13): *"L3 depends on rows 5e–5j"*.
 - L6 depends on L5 for alert-email parsing (an alert body IS an HTML document).
 
 ### Needs input
+- **Q-0926-1 (banked 2026-09-26, L3a/B2+B12) — W-MIXED: how does a lifted PHP `mixed` value look?** On `classify()`'s
+  path: `RawListing::$fields` is `array<string, mixed>` ON PURPOSE (a bespoke adapter can forward `"gamme": ["PLUS","PLAI"]`
+  as a list, and the classifier has a deliberate tier-1 doubt for exactly that), and `excludedVocabularyIn(mixed $value)`
+  guards with `is_scalar`/`Stringable`. phorj has no `mixed`. The census narrowed both to `string` (census-only).
+- **Q-0926-2 (banked, L3a/B3) — `string|false|null`: a three-outcome return.** `LandlordRegistry::match()` returns a
+  source key, `null` (a known landlord with no source block) or `false` (not a landlord) — the docblock says collapsing the
+  middle one "would silently drop every bailleur". On-path, corpus-dead (corpus rows carry no advertiser).
+- **Q-0926-3 (banked, L3a/B10) — a by-reference PARAMETER.** `TenureClassifier::matchOffset(…, ?array &$m)` wraps
+  `preg_match(…, PREG_OFFSET_CAPTURE)`; only `$m[0][1]` is read. DEC-506 rules references out, and only the by-ref CLOSURE
+  and the static local were ruled as hand-ports — is this a third hand-port (`: ?int` returning the offset), or a lifter
+  rewrite?
+- **Q-0926-4 (banked, L3a check) — the PCRE family.** 42 `preg_*` sites across the cluster (8 `preg_match`, 3
+  `preg_match_all`, 13 `preg_replace`, 14 `preg_quote`, 1 `preg_split`, 15 `preg_last_error_msg`), 12+7 out-param
+  captures (`$m`, `$matches`) and `PREG_OFFSET_CAPTURE`/`PREG_SET_ORDER`/`PREG_SPLIT_NO_EMPTY`. The lifter maps NONE of
+  them. This is the classifier's core, and contract properties 3 and 5 (byte offsets; `$` vs `\z` across a newline) live
+  here — the mapping onto `Core.Regex` (DEC-295, `regex`+`fancy-regex`) is a design question, not a table row.
+- **Q-0926-5 (banked, L3a check) — `trim`.** Deliberately unmapped (`src/native/tests.rs:167` asserts
+  `lift_of("trim").is_none()`); 6 cluster sites. The ruling on how to lift it (PHP's default charset `" \t\n\r\0\x0B"`)
+  is owed before 4i can close.
 - **Q-0925-2 — RULED 2026-09-25 19:02 → DEC-536, row 5s.** ~~updating one field of a named tuple~~ (found 2026-09-25 by row 5d): `kept[0].tags = …` on a `List<(id: int, tags: List<string>)>` fails `E-ASSIGN-TARGET` — named tuples are immutable values, and phorj has no copy-and-update form. Scout `Dedup.php`'s `$kept[$i]['duplicates'][] = …` needs one. Built for local places; field-rooted places deferred (2026-09-26 00:21) — KNOWN_ISSUES §TUPLE-FIELD-WRITE.
 - **Q-0925-1 — RULED 2026-09-25 19:02 → DEC-537, row 5t.** ~~assignment inside a narrowed block~~ (found 2026-09-25 planning row 5d): `mutable (…)? seen = null; if (seen instanceof null) { seen = r; }` fails `E-ASSIGN-TYPE` (`cannot assign … to seen: null`) — the assignment is checked against the NARROWED type, not the declared one. Kotlin/TS/Swift/C# check it against the declared type. Scout's two R4 sites assign under a `\|\|` condition (no narrowing) and are not affected; the common PHP first-match idiom `if ($x === null) { $x = $r; }` is. Built (row 5t) — KNOWN_ISSUES §NARROWED-REASSIGN.
 - **Q-0924-1 (banked 2026-09-24 23:29, row 5m gate) — may a constant reference other constants?** Scout: 3 sites
@@ -960,3 +993,50 @@ storage order — a byte-identity surface. A reordered or short literal stays a 
    out; a multiset compare of names leaves zero unexplained. The 3198 figure is not a
    comparable baseline: it was carried from `7e835bff`, nine commits and the 10 L4b tests ago, and
    how it was counted is not recorded. Cite counts from `nextest list` only.
+
+## L3a — wall census of the classifier cluster (2026-09-26, scout `8c69bec`, phg at `09ab1b17`)
+
+**Cluster = 11 files, 3 436 lines, closed** [Verified: transitive closure over code references — `new X`, `X::`, type
+positions, `instanceof` — from `Rent/Core/TenureClassifier.php`, cross-checked against every file's `use` list]:
+`Rent/Core/{TenureClassifier, Tenure, TenureSignal, Outcome, Classification, SourceProfile, RawListing, PlafondBands,
+LandlordRegistry}` + `Core/{Text, MalformedText}`. A bare-name closure over-approximates to ~150 files; do not use one.
+`classify(RawListing, SourceProfile)` reaches on `RawListing`: `text()`, `withoutUrlParameters()`, `fields`,
+`detailRead`, `advertiser`, `commune`, `postcode`, `externalId`, `url`; on `PlafondBands`: `ileDeFrance2026()`,
+`isEmpty()`, `classifyCeiling()`, `IDF`; on `LandlordRegistry`: `effectiveProfile()` → `match()`, `stricterOf()`,
+`unknownLandlordProfile()`. The corpus harness (`TenureCorpusTest`) builds `new TenureClassifier()`, so the
+`profileFor` resolver is the default (always `null`) on every corpus case.
+
+**Method.** A scratch copy under git; each lift wall bypassed by ONE commit (off-path member → deleted; on-path →
+the smallest behaviour-preserving rewrite, never into a construct the lifter refuses elsewhere); re-lift; repeat.
+End state asserted: 13 bypass commits, `LIFT-REPORT.md` lists **0** refused cluster files, 4 of 11 files touched.
+The patch series and both check logs are in `var/claude/l3a-census/` (gitignored — reproducible from the table).
+
+| # | file | wall (stage: lift) | on-path | class | bypass |
+|---|---|---|---|---|---|
+| B1 | RawListing | `withCommute`/`mergedWith` (`mixed`, clone-with), `effectiveRentCc`, `hasLocationEvidence` | no | — | deleted |
+| B2 | RawListing | ctor `@param array<string, mixed> $fields` (reported at the wrong line → row 4c) | yes | needs-ruling Q-0926-1 | narrowed to `string` |
+| B3 | LandlordRegistry | `match(): string\|false\|null` | yes (corpus-dead) | needs-ruling Q-0926-2 | `''` for `false` |
+| B4 | LandlordRegistry, TenureClassifier | `callable $profileFor` / `\Closure` property | yes (corpus: default resolver) | mechanical → 4e | resolver removed, `null` inlined |
+| B5 | LandlordRegistry | `match (true)` guard chain | yes (corpus-dead) | mechanical → 4d | nested ternary |
+| B6 | LandlordRegistry | `names()`/`sourceKeys()`, unannotated `array` return | no (test-only) | — | deleted |
+| B7 | PlafondBands | `min(...)` first-class callable | yes | mechanical → 4f | `foreach` min (B7's first form, the refusal's own hint, hit another refusal) |
+| B8 | TenureClassifier | `use (&$doubts)` by-ref closure | yes | RULED hand-port (DEC-506) | partition loop, order kept |
+| B9 | TenureClassifier | `static $keys` memo | yes | RULED hand-port (DEC-539) | memo dropped |
+| B10 | TenureClassifier | `matchOffset(…, ?array &$m)` by-ref param | yes | needs-ruling Q-0926-3 | returns `?int` offset |
+| B11 | TenureClassifier | `LABELS`/`AMBIGUOUS_LABELS`/`PROCEDURAL` reference `Tenure::*` | yes | needs-ruling Q-0924-1 (banked) | static functions |
+| B12 | TenureClassifier | `excludedVocabularyIn(mixed $value)` | yes | needs-ruling Q-0926-1 (same) | `string` |
+| B13 | RawListing | lift emits an unlexable draft for `text()` | yes | mechanical, lifter P0 → 4b | ternary hoisted |
+
+**Check stage** (`phg check` of `Scout/Core/Text.phg` and `Scout/Rent/Core/TenureClassifier.phg`, both packages, ALL
+errors reported — 270, including cascades). By class: 117 unknown function, 44 unknown identifier, 19 + 5 exception
+`Error` shape, 17 empty collection, 9 not indexable, 5 map value types, 5 param reassignment, and ~50 across 25 smaller
+classes. Unknown functions: `sprintf` 19, `preg_last_error_msg` 15, `preg_quote` 14, `preg_replace` 13, `preg_match` 8,
+`trim` 6, `in_array` 6, `str_replace` 5, `preg_match_all` 3, `min` 3, `implode` 3, `substr` 2, `strtr` 2, `mb_*` 4,
+`is_string` 2, `is_scalar` 2, `html_entity_decode` 2, `explode` 2, `array_filter` 2, `uksort`, `preg_split`, `isset`,
+`get_debug_type`. Unknown identifiers: `m` 12, `PREG_OFFSET_CAPTURE` 8, `matches` 7, `signals` 6, `entity` 4, `ENT_*` 4,
+`PREG_*` 2, `PHP_INT_MAX` 1. Routed to rows 4g–4k and Q-0926-4/5.
+
+**Not certified here:** the check-stage counts include cascades (row 4k re-classifies after the fixes); the causes of the
+empty-collection (4h) and exception (4j) classes were NOT root-caused; `signals` / `entity` unknown identifiers were not
+traced. Scout's 130 corpus cases have not been run against any lifted code — the harness is row 4's last step.
+
