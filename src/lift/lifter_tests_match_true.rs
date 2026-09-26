@@ -57,3 +57,13 @@ fn a_match_true_without_default_is_refused_by_name() {
     let e = refused("<?php function f(int $n): int { return match (true) { $n > 0 => 1 }; }");
     assert!(e.contains("match (true)") && e.contains("default"), "{e}");
 }
+
+#[test]
+fn a_match_false_subject_keeps_the_non_literal_refusal() {
+    // Only a literal `true` subject is PHP's guard chain. Lifting `match (false)` the same way would
+    // invert every arm silently (`$n > 0 => 1` would fire exactly when PHP's does not).
+    let e = refused(
+        "<?php function f(int $n): int { return match (false) { $n > 0 => 1, default => 0 }; }",
+    );
+    assert!(e.contains("non-literal condition"), "{e}");
+}
