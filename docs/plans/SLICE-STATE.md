@@ -60,7 +60,7 @@
 > **DONE (2026-09-25): row 5d** (`1bb0ec8f`, 6C follow-up `0bd7b181`) — DEC-515's `@var`-local half: declared keyed-shape locals keep their type, reads become fields, keyed literals written to them become tuples; fixed `doc_tag`'s prefix name match. Scout: only `Dedup.php` reachable (Q-0925-2 tuple field write).
 > **DONE (2026-09-25): row 5t** (`fb6cd7c2`) — DEC-537: a direct assignment in a narrowed block checks against the declared type and the narrowing follows the value (checker + VM `stmt_narrowed`); nested assignments keep the narrowed check (scope ruling 20:01).
 > **DONE (2026-09-25): row 5s** (`c0d36852`) — DEC-536: `kept[0].tags = …` / `t.bp += 1` through a `mutable` local place; lowers to the positional index chain every backend has. Class-field/call bases stay refused.
-> **THEN:** L3 (the scout files' remaining walls), and the OWED G-8 verdicts.
+> **NOW:** row 5u — DEC-538 spread lifts to `List.concat`/`List.flatten` (ruled 2026-09-26; L3's first wall after the by-ref hand-port). **THEN:** L3 (depth oracle — `TenureClassifier.php` lifted with its by-ref closure hand-ported), and the OWED G-8 verdicts.
 > covers scout's 21 `array_map` sites: a string callable (`array_map('strval', $xs)`) matches the one-array arm
 > and lifts to `xs.map("strval")` — expected loud at `phg check`, not yet run [Inferred].
 
