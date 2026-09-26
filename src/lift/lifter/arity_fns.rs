@@ -80,7 +80,8 @@ pub(super) fn lift_by_arity(
         ("array_filter", [_]) => Some(Err(
             "lift: `array_filter($xs)` without a callback keeps the PHP-TRUTHY values, and truthiness \
              depends on the element type (`0`, `\"\"`, `\"0\"`, `null`, `[]`, `false`) — write the callback, \
-             e.g. `array_filter($xs, fn (?Item $x): bool => $x !== null)`"
+             e.g. `array_filter($xs, fn (?Item $x): bool => $x !== null)`; for a list of ARRAYS, whose \
+             callback would need an untyped `array` parameter, write a `foreach` instead"
                 .into(),
         )),
         ("strtr", [_, _]) => Some(Err(

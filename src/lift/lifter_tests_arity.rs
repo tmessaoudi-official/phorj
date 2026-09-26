@@ -69,6 +69,11 @@ fn a_callback_less_filter_and_a_pairs_strtr_are_refused_by_name() {
         e.contains("PHP-TRUTHY") && e.contains("write the callback"),
         "{e}"
     );
+    // scout's `$signals` is a map of LISTS: the callback would need an untyped `array` param.
+    assert!(
+        e.contains("list of ARRAYS") && e.contains("`foreach`"),
+        "{e}"
+    );
     let e = refused("<?php\n/** @param array<string, string> $m */\nfunction f(string $s, array $m): string { return strtr($s, $m); }");
     assert!(
         e.contains("longest-first") && e.contains("String.translate"),
