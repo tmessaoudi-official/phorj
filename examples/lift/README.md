@@ -260,6 +260,11 @@ sub-expression, and a non-literal `match` arm. (Backed enums, enum methods and d
 values were on this list and are not any more — see § "Enums" below and Lane R.)
 Each is a clear `lift …` message naming what to do by hand.
 
+A PHP **static local** (`static $keys = null;` inside a function or method) is refused by name
+(DEC-539): phorj has no static locals, so the message names the two rewrites — move the value to a
+private static field, or drop the memo when the value it caches is pure. A static *property* and a
+`static fn` closure are different constructs and are unaffected.
+
 Interpolation is lifted only within PHP's *actual* grammar — a `$`-rooted access chain (`$x`,
 `$o->p`, `$a[$k]`, `$o->m()`). The forms PHP itself rejects or that coerce silently are refused
 loudly: a top-level operator inside `{$…}` (a PHP parse error too), the removed `${…}`

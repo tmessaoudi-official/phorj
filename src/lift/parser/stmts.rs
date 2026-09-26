@@ -4,6 +4,16 @@ use super::*;
 
 impl PParser {
     pub(super) fn parse_stmt(&mut self) -> Result<PhpStmt, String> {
+        // DEC-539: a static LOCAL (`static $n = 0;`) persists across calls, and phorj has none —
+        // named, with its two rewrites. `static::m()` and `static fn` are not matched: their next
+        // token is `::` or an identifier, not a variable. A static PROPERTY is a class member and
+        // never reaches `parse_stmt`.
+        if self.is_kw("static") && matches!(self.peek_at(1), PTok::Var(_)) {
+            return Err(self.err(
+                "a static local `static $x` has no phorj form (DEC-539) — move it to a private static \
+                 field, or drop the memo when the value it caches is pure",
+            ));
+        }
         // Reject Tier-1-unsupported leading keywords loudly (never misread as an expression).
         if let PTok::Ident(w) = self.peek() {
             if UNSUPPORTED_KW.contains(&w.as_str()) {

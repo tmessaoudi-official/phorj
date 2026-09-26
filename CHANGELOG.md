@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `phg lift`: a PHP static local is refused by name (scout row 5w; DEC-539; 2026-09-26)
+
+`static $keys = null;` inside a function or method was refused as the generic `` `static` is not
+supported in Tier-1``. phorj has no static locals, so the refusal now names the construct and its two
+rewrites: move the value to a private static field, or drop the memo when the value it caches is
+pure. A static property and a `static fn` closure are untouched. Scout's one site
+(`TenureClassifier.php`) is hand-ported in L3.
+
 ### Added — `phg lift`: `foreach ($xs as [$a, $b])` (scout row 5v; DEC-510's form; 2026-09-26)
 
 A `foreach` whose value is a positional destructure — `[$a, $b]` or `list($a, $b)` — was refused as
