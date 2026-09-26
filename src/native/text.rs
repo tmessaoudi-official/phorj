@@ -558,7 +558,7 @@ pub(super) fn text_substring(args: &[Value], _: &mut String) -> Result<Value, St
             let end = if *length < 0 {
                 (n + *length).max(begin)
             } else {
-                (begin + *length).min(n)
+                begin.saturating_add(*length).min(n) // row 5z: PHP_INT_MAX means "to the end"
             };
             String::from_utf8(bytes[begin as usize..end as usize].to_vec())
                 .map(|s| Value::Str(s.into()))

@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `String.substring` and `List.slice` panicked on a very large length (scout row 5z, P0; 2026-09-26)
+
+`"abc".substring(1, 9223372036854775807)` and `xs.slice(1, 9223372036854775807)` overflowed an internal add and panicked on both backends, where PHP's `substr` / `array_slice` return the tail — a length near `PHP_INT_MAX` is PHP's idiom for "to the end". Both now clamp exactly as PHP does.
+
 ### Added — `phg lift`: a named function's first-class callable is a function reference (L3 row 4f; 2026-09-26)
 
 `len(...)` was refused with a hint (`fn ($x) => f($x)`) that itself did not lift. It now lifts to the phorj function reference `len`, so `array_map(len(...), $xs)` becomes `xs.map(len)`. A builtin's `strlen(...)`, and `$f(...)`, `$o->m(...)`, `C::m(...)`, are still refused, now with a hint that lifts: a closure with a typed parameter, or a `foreach` for an `array` parameter.

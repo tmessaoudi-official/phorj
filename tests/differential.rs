@@ -7411,3 +7411,27 @@ function main(): void {
         "call_value_stack_height",
     );
 }
+
+/// Row 5z (P0): `String.substring` and `List.slice` mirror PHP's `substr` / `array_slice` clamping,
+/// but computed the end as `start + length` in plain `i64` — a length near `PHP_INT_MAX` (PHP's own
+/// idiom for "to the end") overflowed: a panic in debug, a wrapped negative end and a slice-index
+/// panic in release, on BOTH backends, where PHP prints the tail. The add now saturates.
+#[test]
+fn substring_and_slice_clamp_a_huge_length_like_php() {
+    agree_out_php(
+        "import Core.Output;
+import Core.String;
+import Core.List;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int big = 9223372036854775807;
+    List<int> xs = [1, 2, 3];
+    List<int> tail = xs.slice(1, big);
+    List<int> all = xs.slice(-9223372036854775807 - 1, big);
+    Output.printLine(\"[{\\\"abc\\\".substring(1, big)}] [{\\\"abc\\\".substring(-3, big)}] {tail.length()} {tail[0]} {all.length()}\");
+}
+",
+        "[bc] [abc] 2 2 3\n",
+        "substring_slice_huge_length",
+    );
+}

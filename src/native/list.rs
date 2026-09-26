@@ -194,7 +194,7 @@ pub(super) fn list_slice(args: &[Value], _: &mut String) -> Result<Value, String
             let end = if *length < 0 {
                 (n + *length).max(start)
             } else {
-                (start + *length).min(n)
+                start.saturating_add(*length).min(n) // row 5z: PHP_INT_MAX means "to the end"
             };
             let out: Vec<Value> = xs[start as usize..end as usize].to_vec();
             Ok(Value::List(std::rc::Rc::new(out)))
