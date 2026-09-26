@@ -137,3 +137,85 @@ pub(super) fn looks_like_global_call(s: &str) -> bool {
     }
     false
 }
+
+/// A native's PHP erasure made safe as an operand: parenthesized unless [`is_atomic_php`] already sees
+/// one operand. A `void` native (`echo …`) is a statement, never an operand, and `(echo …)` would
+/// not parse, so it is returned as is.
+pub(super) fn one_operand(php: String, void: bool) -> String {
+    if void || is_atomic_php(&php) {
+        php
+    } else {
+        format!("({php})")
+    }
+}
+
+/// Whether a native's PHP erasure is ONE operand already — a (namespaced) call `f(…)` whose closing
+/// paren ends the text, a `$var`, or an expression wrapped whole in one pair of parens. Anything else
+/// (`count($xs) === 0`, `($n) % 2 === 0`) is an operator expression, which the call site parenthesizes:
+/// the transpiler treats a call as primary, so an unwrapped `!` or `==` would bind INTO it — `!xs.isEmpty()`
+/// emitted `!count($xs) === 0`, i.e. `(!count($xs)) === 0`, always false. Quotes are skipped, so a
+/// paren inside a string literal (`implode(')', $x)`) does not end the group.
+pub(super) fn is_atomic_php(s: &str) -> bool {
+    let s = s.strip_prefix('\\').unwrap_or(s);
+    let head = s
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '\\' || c == '$'))
+        .unwrap_or(s.len());
+    if head == s.len() {
+        return s.starts_with('$') && s.len() > 1;
+    }
+    if !s[head..].starts_with('(') {
+        return false;
+    }
+    // The paren opened at `head` must close at the very last character.
+    let (mut depth, mut quote, mut escaped) = (0usize, None::<char>, false);
+    for (i, c) in s[head..].char_indices() {
+        if let Some(q) = quote {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                _ if c == q => quote = None,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '\'' | '"' => quote = Some(c),
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return head + i + 1 == s.len();
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_atomic_php;
+
+    #[test]
+    fn one_operand_is_atomic_and_an_operator_expression_is_not() {
+        for atom in [
+            "count($xs)",
+            "\\strlen($s)",
+            "$x",
+            "(count($m) === 0)",
+            "implode(')', $x)",
+        ] {
+            assert!(is_atomic_php(atom), "{atom}");
+        }
+        for op in [
+            "count($xs) === 0",
+            "($s) === ''",
+            "($n) % 2 === 0",
+            "f($a) . g($b)",
+            "@unlink($p)",
+        ] {
+            assert!(!is_atomic_php(op), "{op}");
+        }
+    }
+}

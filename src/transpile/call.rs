@@ -430,6 +430,8 @@ impl Transpiler {
                         } else {
                             php
                         };
+                        // An operator-shaped erasure is ONE operand to whatever encloses it (row 4h0).
+                        let php = one_operand(php, matches!(nat.ret, crate::types::Ty::Void));
                         // DEC-255: three natives return an int the underlying PHP builtin SILENTLY
                         // promotes to float on overflow (`Math.abs` at `i64::MIN`, `Math.integerPower`
                         // on overflow/negative-exponent, `List.sum` on overflow) — exactly where phorj

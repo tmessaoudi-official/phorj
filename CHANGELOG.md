@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `!xs.isEmpty()` and other negated collection/string tests were always false on the PHP leg (scout row 4h0, P0; 2026-09-27)
+
+A native whose PHP form is an operator expression — `isEmpty` is `count($xs) === 0` for a list, map or set and `($s) === ''` for a string, `Math.isEven` is `($n) % 2 === 0` — was emitted unparenthesized, and the transpiler treats a call as one operand. So `!xs.isEmpty()` became `!count($xs) === 0`, which PHP reads as `(!count($xs)) === 0`: always `false`, while `phg run` printed `true`. Comparing one (`xs.isEmpty() == done`) produced a chained `===`/`==`, a PHP parse error. Such an erasure is now wrapped in parentheses at the one site every native call goes through (`transpile/call.rs`), unless it is already a single call, variable or parenthesized group, or the native returns `void` (`echo …` is a statement). Found by lift row 4h's round-trip; pinned by `tests/differential.rs::a_native_whose_php_is_an_operator_expression_stays_one_operand` on all three legs.
+
 ### Added — `phg lift`: builtins called at an arity the registry cannot place (L3 row 4g; 2026-09-27)
 
 `min($xs)` / `max($xs)` over an array lift to `xs.min()!` / `xs.max()!`; three or more values fold to `a.min(b).min(c)`; `substr($s, $i)` lifts to `s.substring(i, 9223372036854775807)`, PHP's "to the end". `array_filter($xs)` without a callback and the two-argument `strtr($s, $pairs)` are refused by name instead of lifting to an unresolved call. See `examples/lift/arity.php`.

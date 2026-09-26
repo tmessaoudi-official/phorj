@@ -7435,3 +7435,30 @@ function main(): void {
         "substring_slice_huge_length",
     );
 }
+
+/// A native whose PHP template is an OPERATOR expression (`count($xs) === 0`, `($s) === ''`,
+/// `($n) % 2 === 0`) must stay one operand on the PHP leg. The transpiler treats a call as primary,
+/// so `!xs.isEmpty()` used to emit `!count($xs) === 0` — `(!count($xs)) === 0`, always false — and
+/// `xs.isEmpty() == b` a chained non-associative `===`/`==`. Found by lift row 4h's round-trip.
+#[test]
+fn a_native_whose_php_is_an_operator_expression_stays_one_operand() {
+    agree_out_php(
+        "import Core.Output;
+import Core.String;
+import Core.List;
+import Core.Map;
+import Core.Math;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    List<int> xs = [1];
+    Map<string, int> m = [\"a\" => 1];
+    string s = \"x\";
+    bool no = false;
+    Output.printLine(\"{!xs.isEmpty()} {!List.isEmpty(xs)} {!m.isEmpty()} {!s.isEmpty()} {!Math.isEven(3)}\");
+    Output.printLine(\"{xs.isEmpty() == no}\");
+}
+",
+        "true true true true true\ntrue\n",
+        "negated_operator_template",
+    );
+}
