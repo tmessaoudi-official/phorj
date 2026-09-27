@@ -689,3 +689,76 @@ fn a_throws_propagated_from_another_namespace_is_declared_and_imported() {
     phorj::cli::check_and_expand(&unit.program, &unit.diag_src)
         .expect("the lifted project type-checks");
 }
+
+/// Row 4j2 (6C): the facts are keyed by LEAF name, so two `NotFoundException` classes in different
+/// namespaces are indistinguishable to them. Rather than merge them — and import whichever file was
+/// scanned last — an ambiguous leaf is dropped from the analysis and its sites stay loud.
+#[test]
+fn a_class_name_declared_in_two_namespaces_is_not_guessed() {
+    let t = Tmp::new("xthrows_amb");
+    t.write(
+        "composer.json",
+        r#"{ "name": "acme/blog", "autoload": { "psr-4": { "Acme\\Blog\\": "src/" } } }"#,
+    );
+    t.write(
+        "src/A/NotFoundException.php",
+        "<?php\nnamespace Acme\\Blog\\A;\nfinal class NotFoundException extends \\RuntimeException {}\n",
+    );
+    t.write(
+        "src/B/NotFoundException.php",
+        "<?php\nnamespace Acme\\Blog\\B;\nfinal class NotFoundException extends \\RuntimeException {}\n",
+    );
+    t.write(
+        "src/A/Repo.php",
+        "<?php\nnamespace Acme\\Blog\\A;\nfinal class Repo { public static function find(string $k): string { if ($k === '') { throw new NotFoundException('none'); } return $k; } }\n",
+    );
+    t.write(
+        "src/C/Use.php",
+        "<?php\nnamespace Acme\\Blog\\C;\nuse Acme\\Blog\\A\\Repo;\nfinal class Consumer { public function get(string $k): string { return Repo::find($k); } }\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("the directory lifts");
+    let repo = read(&out.join("src/Acme/Blog/A/Repo.phg"));
+    let consumer = read(&out.join("src/Acme/Blog/C/Use.phg"));
+    assert!(!repo.contains("throws NotFoundException"), "{repo}");
+    assert!(!consumer.contains("NotFoundException"), "{consumer}");
+    assert!(!consumer.contains("find(k)?"), "{consumer}");
+}
+
+/// Row 4j2 (6C): a mapped `Core.ErrorModule` type can reach a file ONLY through propagation — no
+/// `throw` or `catch` there names it — and the clause still needs its import.
+#[test]
+fn a_mapped_error_reaching_a_file_only_by_propagation_is_imported() {
+    let t = Tmp::new("xthrows_mapped");
+    t.write(
+        "composer.json",
+        r#"{ "name": "acme/blog", "autoload": { "psr-4": { "Acme\\Blog\\": "src/" } } }"#,
+    );
+    t.write(
+        "src/Core/Guard.php",
+        "<?php\nnamespace Acme\\Blog\\Core;\nfinal class Guard { public static function check(string $s): string { if ($s === '') { throw new \\InvalidArgumentException('empty'); } return $s; } }\n",
+    );
+    t.write(
+        "src/Text/User.php",
+        "<?php\nnamespace Acme\\Blog\\Text;\nuse Acme\\Blog\\Core\\Guard;\nfinal class User { public function run(string $s): string { return Guard::check($s); } }\n",
+    );
+    t.write(
+        "src/index.php",
+        "<?php\nnamespace Acme\\Blog;\nuse Acme\\Blog\\Text\\User;\n$u = new User();\ntry { echo $u->run('x'); } catch (\\InvalidArgumentException $e) { echo 'caught'; }\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("the directory lifts");
+    let user = read(&out.join("src/Acme/Blog/Text/User.phg"));
+    assert!(
+        user.contains("run(string s): string throws InvalidValueError"),
+        "{user}"
+    );
+    assert!(
+        user.contains("import Core.ErrorModule.InvalidValueError;"),
+        "{user}"
+    );
+    let main = out.join("src/main.phg");
+    let unit = phorj::loader::load(&main).expect("the lifted project loads");
+    phorj::cli::check_and_expand(&unit.program, &unit.diag_src)
+        .expect("the lifted project type-checks");
+}

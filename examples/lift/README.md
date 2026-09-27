@@ -625,9 +625,10 @@ alone, what each function and method throws, and says so (DEC-547):
   covers a class extending it, because both lift onto `RuntimeError`.
 
 What cannot declare `throws` stays LOUD rather than guessed: `main` (so a throwing call at the top
-level must sit in a `try` — `E-CALL-UNHANDLED` otherwise), a lambda, a constructor, and a magic
-method; so does a call through a value or an untyped receiver, and a `throw` whose type the source
-does not say. `?` is a checker-only marker, erased before every backend: the run, the transpiled PHP
+level must sit in a `try` — `E-CALL-UNHANDLED` otherwise), a lambda, a constructor, a magic method
+and a lowered enum method; so does a call through a value or an untyped receiver, a `throw` whose
+type the source does not say, and a class or function whose name is declared in two namespaces (the
+analysis cannot tell the two apart, so it does not pick one). `?` is a checker-only marker, erased before every backend: the run, the transpiled PHP
 and the original PHP are byte-identical.
 
 ## Reordered builtins — `reordered.php` / `reordered.phg` (scout row 4i, 2026-09-27)

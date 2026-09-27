@@ -38,14 +38,50 @@ pub(in crate::lift) struct Facts {
     pub(super) decls: HashMap<Key, Summary>,
     /// Class leaf → the namespace of the file declaring it (a cross-file `throws` needs its import).
     pub(super) homes: HashMap<String, Vec<String>>,
+    /// Leaves declared more than once across the tree (two `NotFoundException`s in two namespaces):
+    /// the facts cannot tell them apart, so [`Facts::pruned`] drops them and their sites stay loud.
+    pub(super) ambiguous: std::collections::BTreeSet<String>,
 }
 
 impl Facts {
     pub(in crate::lift) fn extend(&mut self, other: Facts) {
+        for (class, home) in &other.homes {
+            if self.homes.get(class).is_some_and(|h| h != home) {
+                self.ambiguous.insert(class.clone());
+            }
+        }
+        for key in other.decls.keys() {
+            if let (Key::Function(name), true) = (key, self.decls.contains_key(key)) {
+                self.ambiguous.insert(name.clone());
+            }
+        }
+        self.ambiguous.extend(other.ambiguous);
         self.parents.extend(other.parents);
         self.factories.extend(other.factories);
         self.decls.extend(other.decls);
         self.homes.extend(other.homes);
+    }
+}
+
+impl Facts {
+    /// These facts without any ambiguous leaf — as a declaration, a parent, a factory, a home, or a
+    /// thrown type — so nothing can be declared, propagated or imported on a guess.
+    pub(super) fn pruned(&self) -> Facts {
+        let bad = |n: &str| self.ambiguous.contains(n);
+        let key_bad = |k: &Key| match k {
+            Key::Function(n) => bad(n),
+            Key::Method(c, _) => bad(c),
+        };
+        let mut f = self.clone();
+        f.decls.retain(|k, _| !key_bad(k));
+        f.factories.retain(|k, c| !key_bad(k) && !bad(c));
+        f.parents.retain(|c, p| !bad(c) && !bad(p));
+        f.homes.retain(|c, _| !bad(c));
+        for s in f.decls.values_mut() {
+            s.throws
+                .retain(|(t, _)| !matches!(t, Thrown::Named(n) if bad(n)));
+        }
+        f
     }
 }
 

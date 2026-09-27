@@ -7511,3 +7511,25 @@ function main(): void {
         "throws_propagate_ufcs_receiver",
     );
 }
+
+/// Row 4j1 (6C) — the same relocation hole for an `html"…"` literal: as a UFCS receiver
+/// (`html"…".render()`) the replacement is a check-time clone, so the literal must be resolved inside
+/// it too — every backend panics or refuses on a surviving `Expr::Html`.
+#[test]
+fn an_html_literal_as_a_ufcs_receiver_is_resolved_on_every_leg() {
+    agree_out_php(
+        "import Core.Output;
+import Core.Html;
+import Core.List;
+import Core.String;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    string who = \"<Ann>\";
+    Output.printLine(html\"<b>{who}</b>\".render());
+    Output.printLine([1, 2].map(function(int n): string => html\"<i>{n}</i>\".render()).join(\",\"));
+}
+",
+        "<b>&lt;Ann&gt;</b>\n<i>1</i>,<i>2</i>\n",
+        "html_literal_ufcs_receiver",
+    );
+}

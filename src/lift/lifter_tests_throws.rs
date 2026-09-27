@@ -142,3 +142,20 @@ fn a_propagated_receiver_is_parenthesized() {
     assert!(out.contains("(fold(s)?)."), "{out}");
     checks_clean(&out);
 }
+
+/// A method inherited from the parent — reached through `$this->` or `parent::` — is resolved up the
+/// parent chain, and a thrown PHP base maps (`\RuntimeException` → `RuntimeError`).
+#[test]
+fn an_inherited_method_is_resolved_through_this_and_parent() {
+    let out = lifted(
+        "<?php\nclass Base { protected function boom(): void { throw new \\RuntimeException('x'); } }\n\
+         final class Child extends Base {\n\
+             public function go(): void { $this->boom(); }\n\
+             public function up(): void { parent::boom(); }\n\
+         }",
+    );
+    assert!(out.contains("boom(): void throws RuntimeError"), "{out}");
+    assert!(out.contains("go(): void throws RuntimeError"), "{out}");
+    assert!(out.contains("up(): void throws RuntimeError"), "{out}");
+    assert!(out.contains("this.boom()?"), "{out}");
+}

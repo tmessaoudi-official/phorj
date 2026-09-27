@@ -50,6 +50,7 @@ pub(in crate::lift) struct Analysis {
 
 impl Analysis {
     pub(in crate::lift) fn of(f: &Facts) -> Analysis {
+        let f = &f.pruned();
         let decl = |k: &Key| resolve_in(f, k, |k| f.decls.contains_key(k));
         let factory = |k: &Key| resolve_in(f, k, |k| f.factories.contains_key(k));
         let mut throws: HashMap<Key, BTreeSet<String>> = HashMap::new();
