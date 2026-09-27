@@ -14,7 +14,13 @@ impl Lifter {
         let params = lift_params(&f.params)?;
         // DEC-504: the signature is what tells the BODY that `$row['bp']` is a field read. Set
         // before the body is lifted, and function-scoped — `$row` here is not `$row` next door.
-        super::super::set_tuple_fields(&params);
+        super::super::set_tuple_fields(params.iter().map(|p| (p.name.as_str(), &p.ty)));
+        // Row 4p: a returned builder local's writes are the declared element shape. A return type
+        // that does not lift registers nothing here; `lift_ret` below reports it, after the body, so
+        // a named refusal inside the body keeps its precedence.
+        if let Ok(ret) = lift_ret(&f.ret, Some(&f.body)) {
+            super::super::declare_returned_builders(&f.body, &ret);
+        }
         for p in &params {
             declared.insert(p.name.clone());
         }
@@ -65,6 +71,7 @@ impl Lifter {
         c: &php::PhpClass,
     ) -> Result<ClassDecl, String> {
         let _class = super::super::throws::enter_class(&c.name); // row 4j2(b)
+        let _props = super::super::enter_class_props(c); // row 4p
         let mut members = Vec::new();
         for m in &c.members {
             members.push(self.lift_member(m, c.is_readonly)?);
@@ -187,6 +194,9 @@ impl Lifter {
         // `__construct` → a Phorj `constructor` (with promotion), not an ordinary method.
         if m.name == "__construct" {
             let params = lift_ctor_params(&m.params, readonly_class)?;
+            // Row 4p: the constructor resets the shape maps like any function — before, the
+            // previous method's shapes answered here.
+            super::super::set_tuple_fields(params.iter().map(|p| (p.name.as_str(), &p.ty)));
             for p in &params {
                 declared.insert(p.name.clone());
             }
@@ -216,7 +226,10 @@ impl Lifter {
         }
         let _decl = super::super::throws::enter_decl(Some(&m.name));
         let params = lift_params(&m.params)?;
-        super::super::set_tuple_fields(&params); // DEC-504, as in `lift_function`
+        super::super::set_tuple_fields(params.iter().map(|p| (p.name.as_str(), &p.ty))); // DEC-504
+        if let (Some(b), Ok(ret)) = (&m.body, lift_ret(&m.ret, m.body.as_deref())) {
+            super::super::declare_returned_builders(b, &ret); // row 4p, as in `lift_function`
+        }
         for p in &params {
             declared.insert(p.name.clone());
         }

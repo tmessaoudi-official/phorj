@@ -28,6 +28,13 @@
 
 use super::*;
 
+#[path = "shapes_closure.rs"]
+mod closure;
+#[path = "shapes_props.rs"]
+mod props;
+pub(super) use closure::{enter_closure, leave_closure};
+pub(super) use props::{declare_returned_builders, enter_class_props};
+
 thread_local! {
     /// DEC-504 — the NAMED-TUPLE fields of each variable in the function being lifted, keyed by
     /// variable name. Read by the `Index` arm so `$row['bp']` lifts to `row.bp` rather than to a
@@ -119,7 +126,9 @@ pub(super) fn element_labels(ty: &Type) -> Option<Vec<String>> {
 ///
 /// Both maps are cleared together: they have the same function scope, and clearing only one would
 /// let a previous function's element shape answer for a name this one never declared.
-pub(super) fn set_tuple_fields(params: &[Param]) {
+/// Takes `(name, type)` pairs so a constructor's parameters reset the maps too (row 4p).
+pub(super) fn set_tuple_fields<'a>(params: impl IntoIterator<Item = (&'a str, &'a Type)>) {
+    let params: Vec<(&str, &Type)> = params.into_iter().collect();
     TUPLE_FIELDS.with(|t| {
         ELEM_FIELDS.with(|e| {
             let (mut t, mut e) = (t.borrow_mut(), e.borrow_mut());
@@ -131,15 +140,15 @@ pub(super) fn set_tuple_fields(params: &[Param]) {
                 m.extend(
                     params
                         .iter()
-                        .filter_map(|p| coll_type(&p.ty).map(|c| (p.name.clone(), c))),
+                        .filter_map(|(n, ty)| coll_type(ty).map(|c| (n.to_string(), c))),
                 );
             });
-            for p in params {
-                if let Some(labels) = tuple_labels(&p.ty) {
-                    t.insert(p.name.clone(), labels);
+            for (n, ty) in &params {
+                if let Some(labels) = tuple_labels(ty) {
+                    t.insert(n.to_string(), labels);
                 }
-                if let Some(labels) = element_labels(&p.ty) {
-                    e.insert(p.name.clone(), labels);
+                if let Some(labels) = element_labels(ty) {
+                    e.insert(n.to_string(), labels);
                 }
             }
         });
@@ -181,6 +190,10 @@ pub(super) struct BinderScope {
 pub(super) fn enter_binder(iter: &Expr, binder: &str) -> BinderScope {
     let labels = match iter {
         Expr::Ident(name, _) => ELEM_FIELDS.with(|m| m.borrow().get(name).cloned()),
+        // Row 4p: `$this->prop`, a property whose declared type is a collection of shapes.
+        Expr::Member { object, name, .. } if matches!(**object, Expr::This(_)) => {
+            props::prop_elem_labels(name)
+        }
         _ => None,
     };
     TUPLE_FIELDS.with(|t| {
@@ -269,29 +282,4 @@ pub(super) fn fields_of(var: &str) -> (Option<Vec<String>>, Option<Vec<String>>)
         TUPLE_FIELDS.with(|m| m.borrow().get(var).cloned()),
         ELEM_FIELDS.with(|m| m.borrow().get(var).cloned()),
     )
-}
-
-/// Both maps as they stood before a closure body — restored by [`leave_closure`] (row 5d, 6C).
-pub(super) struct ClosureScope {
-    tuple: std::collections::HashMap<String, Vec<String>>,
-    elem: std::collections::HashMap<String, Vec<String>>,
-    colls: std::collections::HashMap<String, (&'static str, bool)>,
-}
-
-/// Snapshot both maps before lifting a closure body. A SNAPSHOT, not a clear: a by-value `use`
-/// capture is the same variable with the same shape inside the closure.
-pub(super) fn enter_closure() -> ClosureScope {
-    ClosureScope {
-        tuple: TUPLE_FIELDS.with(|m| m.borrow().clone()),
-        elem: ELEM_FIELDS.with(|m| m.borrow().clone()),
-        colls: COLL_VARS.with(|m| m.borrow().clone()),
-    }
-}
-
-/// Put the enclosing function's maps back, dropping whatever the closure body registered. Called on
-/// both exits, like [`leave_binder`].
-pub(super) fn leave_closure(scope: ClosureScope) {
-    TUPLE_FIELDS.with(|m| *m.borrow_mut() = scope.tuple);
-    ELEM_FIELDS.with(|m| *m.borrow_mut() = scope.elem);
-    COLL_VARS.with(|m| *m.borrow_mut() = scope.colls);
 }

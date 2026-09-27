@@ -260,9 +260,16 @@ impl Lifter {
                         span: SP,
                     });
                 }
+                let mut v = lift_expr(value)?;
+                // Row 4p: `$xs[$k] = v` writes ONE element of `$xs`, shaped like an append.
+                if let php::PhpExpr::Index { base, .. } = target.as_ref() {
+                    if let php::PhpExpr::Var(name) = base.as_ref() {
+                        super::seed::shape_local_write(name, &mut v, true);
+                    }
+                }
                 Ok(Stmt::Assign {
                     target: lift_expr(target)?,
-                    value: lift_expr(value)?,
+                    value: v,
                     span: SP,
                 })
             }

@@ -529,6 +529,42 @@ $g = new Guard();
 try { echo classify('a'); echo '|'; echo $g->run('b'); echo '|'; echo $g->safe(''); echo '|'; echo $g->run(''); }
 catch (BadInputException $e) { echo '|caught:' . $e->getMessage(); }"#,
         ),
+        // Row 4p: a binder over a DECLARED property reads its shape's fields, and a keyed literal
+        // written into a returned builder local becomes the declared tuple. The run proves the
+        // tuple writes and field reads print what PHP's arrays printed.
+        (
+            "shapes_from_properties_and_builders",
+            r#"<?php
+final class Bands {
+    /** @param array<string, array{max: int, zone: string}> $bands */
+    public function __construct(public array $bands) {}
+    public function total(): int {
+        $n = 0;
+        foreach ($this->bands as $code => $band) { $n += $band['max']; echo $code . ':' . $band['zone'] . ','; }
+        return $n;
+    }
+}
+/** @return array<int, array{tag: string, text: string}> */
+function collect(string $s): array {
+    $hits = [];
+    $hits[3] = ['tag' => 'a', 'text' => $s];
+    if ($s !== '') { $hits[7] = ['tag' => 'b', 'text' => $s . '!']; }
+    $hits[9] = $s === 'x' ? ['tag' => 'c', 'text' => 'yes'] : ['tag' => 'c', 'text' => 'no'];
+    return $hits;
+}
+/** @return array<string, array{max: int, zone: string}> */
+function table(): array {
+    $t = [];
+    $t['A'] = ['max' => 4, 'zone' => 'north'];
+    $t['B'] = ['max' => 6, 'zone' => 'south'];
+    return $t;
+}
+$b = new Bands(table());
+echo $b->total();
+/** @var array<int, array{tag: string, text: string}> $hs */
+$hs = collect('x');
+foreach ($hs as $k => $h) { echo '|' . $k . '=' . $h['tag'] . $h['text']; }"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php

@@ -61,7 +61,10 @@ use exprs::*;
 use leaves::*;
 use mappings::*;
 use matches::*;
-use shapes::{enter_binder, is_tuple_field, leave_binder, set_tuple_fields};
+use shapes::{
+    declare_returned_builders, enter_binder, enter_class_props, is_tuple_field, leave_binder,
+    set_tuple_fields,
+};
 pub(super) use throws::{
     facts_of as throws_facts_of, set_project as set_project_throws, Facts as ThrowsFacts,
 };

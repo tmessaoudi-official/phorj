@@ -50,6 +50,36 @@ function totalBp(array $rows): int
     return $n;
 }
 
+/** A binder over a declared PROPERTY reads the same fields (row 4p). */
+final class Ledger
+{
+    /** @param list<array{tenure: string, bp: int}> $rows */
+    public function __construct(public array $rows) {}
+
+    public function total(): int
+    {
+        $n = 0;
+        foreach ($this->rows as $row) {
+            $n = $n + $row['bp'];
+        }
+        return $n;
+    }
+}
+
+/**
+ * The builder local of a declared return takes its keyed writes as the declared tuples — each arm
+ * of a conditional write too (row 4p).
+ *
+ * @return array<string, array{tenure: string, bp: int}>
+ */
+function byTenure(bool $owned): array
+{
+    $out = [];
+    $out['rent'] = ['tenure' => 'rent', 'bp' => 3];
+    $out['own'] = $owned ? ['tenure' => 'own', 'bp' => 4] : ['tenure' => 'own', 'bp' => 0];
+    return $out;
+}
+
 function main(): void
 {
     // A positional shape is READ by destructuring — a phorj tuple has no index access.
@@ -65,4 +95,11 @@ function main(): void
     }
     $total = totalBp([verdict('rent', 3), verdict('own', 4)]);
     echo $total, "\n";
+    $ledger = new Ledger([verdict('rent', 3), verdict('own', 4)]);
+    echo $ledger->total(), "\n";
+    /** @var array<string, array{tenure: string, bp: int}> $split */
+    $split = byTenure(true);
+    foreach ($split as $tenure => $row) {
+        echo $tenure, "=", $row['bp'], "\n";
+    }
 }

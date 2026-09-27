@@ -81,8 +81,19 @@ fn shape_elements(labels: &[String], e: &mut Expr) {
     }
 }
 
-/// A KEYED literal matching `labels` exactly, in order, becomes the named tuple in place.
+/// A KEYED literal matching `labels` exactly, in order, becomes the named tuple in place — and so
+/// does each arm of a conditional choosing between two of them (row 4p).
 fn shape_keyed(labels: &[String], e: &mut Expr) {
+    if let Expr::If {
+        then_expr,
+        else_expr,
+        ..
+    } = e
+    {
+        shape_keyed(labels, then_expr);
+        shape_keyed(labels, else_expr);
+        return;
+    }
     if !matches!(e, Expr::Map(..)) {
         return;
     }

@@ -97,6 +97,8 @@ mod lifter_tests_reordered;
 #[cfg(test)]
 mod lifter_tests_shapes;
 #[cfg(test)]
+mod lifter_tests_shapes_props;
+#[cfg(test)]
 mod lifter_tests_spread;
 #[cfg(test)]
 mod lifter_tests_static_local;

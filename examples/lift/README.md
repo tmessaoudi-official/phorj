@@ -419,6 +419,13 @@ both value sides follow it:
   stays a map and `phg check` reports it.
 - **Not yet:** `@var`-declared locals (their reads, and a keyed literal *assigned* to one) — tracked
   in the scout plan, row 5d.
+- **Row 4p — two more declarations.** A binder over a declared PROPERTY (`foreach ($this->rows as
+  $row)`, a typed property or a promoted constructor parameter with its `@param`) reads the element
+  shape the same way, and the BUILDER local of a declared return — a top-level `$out = []` that the
+  function returns, already constructed as the return type — takes a keyed literal written into it
+  (`$out['rent'] = ['tenure' => …]`, each arm of `$c ? [...] : [...]` too) as the declared tuple.
+  `Ledger` and `byTenure` in the pair. A keyed literal passed as an ARGUMENT, and a binder over a
+  CALL's result, still bind nothing.
 
 A tuple TYPE is only half of it. The literal that satisfies it must lift to a tuple VALUE too, or
 the draft lifts and then fails `phg check` with `expected (int, string), found List<int>` — one

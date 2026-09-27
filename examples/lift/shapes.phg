@@ -47,6 +47,33 @@ function totalBp(List<(tenure: string, bp: int)> rows): int {
     return n;
 }
 
+/**
+ * A binder over a declared PROPERTY reads the same fields (row 4p).
+ */
+class Ledger {
+    constructor(public mutable List<(tenure: string, bp: int)> rows) {}
+    public open function total(): int {
+        mutable var n = 0;
+        foreach (this.rows as row) {
+            n = n + row.bp;
+        }
+        return n;
+    }
+}
+
+/**
+ * The builder local of a declared return takes its keyed writes as the declared tuples — each arm
+ * of a conditional write too (row 4p).
+ *
+ * @return array<string, array{tenure: string, bp: int}>
+ */
+function byTenure(bool owned): Map<string, (tenure: string, bp: int)> {
+    mutable var out = new Map<string, (tenure: string, bp: int)>();
+    out["rent"] = (tenure: "rent", bp: 3);
+    out["own"] = if (owned) { (tenure: "own", bp: 4) } else { (tenure: "own", bp: 0) };
+    return out;
+}
+
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     var (n, label) = pair(7);
@@ -67,4 +94,15 @@ function main(): void {
     mutable var total = totalBp([verdict("rent", 3), verdict("own", 4)]);
     Output.print("{total}");
     Output.print("\n");
+    mutable var ledger = new Ledger([verdict("rent", 3), verdict("own", 4)]);
+    Output.print("{ledger.total()}");
+    Output.print("\n");
+    mutable Map<string, (tenure: string, bp: int)> split = byTenure(true);
+    foreach (split as tenure => row) {
+        // lift: key/value types inferred — spell them out for an explicit header
+        Output.print("{tenure}");
+        Output.print("=");
+        Output.print("{row.bp}");
+        Output.print("\n");
+    }
 }
