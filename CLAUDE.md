@@ -115,8 +115,10 @@ stay in `.claude/agents/`.
 > tell: (1) the **economize ruling** — one `advisor()` call per ordinary 3C/6C gate, and the full
 > 3-lens panel ONCE at a milestone boundary against a FROZEN commit, with docs-only batches carving
 > out entirely (path-based `git diff --name-only`, no executable surface ⇒ no panel); (2) a
-> project-scope **`autonomous-3c-bypass`** sentinel, which suppresses the per-gate tier question
-> altogether and runs `advisor()` only. Between gates the refuting is done by EXECUTABLE evidence —
+> **autonomous mode** — the ask-human gate family bypassed for this tree (global CLAUDE.md § Mode,
+> 2026-09-27; an `autonomous-3c-bypass` file alone no longer switches it) — which replaces the
+> per-gate tier question with the project's certification schedule
+> (`~/.claude/projects/-stack-projects-phorj/certification-schedule`, asked once). Between gates the refuting is done by EXECUTABLE evidence —
 > failing test first, confirmed red for the stated reason, then a sabotage/mutation check proving the
 > suite would notice the guarantee breaking — which is the part that is genuinely non-negotiable here.
 > The MAXIMAL text below stands as the tier to RECOMMEND at a milestone boundary and as the ceiling
@@ -161,9 +163,11 @@ is green. Limits:
   `git push -u origin <branch>`; that is wrong here. Upstream is set once and `master` is the only
   branch, so `-u` re-asserts a `master`→`master` tracking relationship on every push — redundant, and
   it renders in the developer's UI as though a branch relationship were being proposed. (Ruled in
-  rent-watch, adopted by stack 2026-08-06; this file mandated the `-u` form until then.)
+  rent-watch — now scout — adopted by stack 2026-08-06; this file mandated the `-u` form until then.)
 - **STILL NOT authorized:** force-push in any form (`--force`, `--force-with-lease`, refspec
-  overwrites) — denied globally, no exceptions; and pushing any branch other than `master`.
+  overwrites) — not authorized here, no exceptions; and pushing any branch other than `master`.
+  Locally `~/.claude/hooks/ask-bash-firewall.sh` denies `--force`/`-f`/`--mirror`/`+refspec` at every
+  level (2026-09-27) but allows `--force-with-lease`, so for the lease this line is the control.
 - **Author identity stays the developer's** — `Takieddine Messaoudi
   <takieddine.messaoudi.official@gmail.com>`, author *and* committer. Every commit in this repo's
   history carries that address and is unsigned; re-signing happens on his machine. NEVER rewrite the
@@ -200,7 +204,7 @@ independently on 2026-08-06.
 
 Two consequences worth stating, because both were live proposals in the 2026-08-06 cross-repo audit:
 
-- rent-watch's four `Read`/`Edit` denies on `./.env` and `./.env.*` are **deliberately NOT adopted**.
+- scout's (then rent-watch's) four `Read`/`Edit` denies on `./.env` and `./.env.*` are **deliberately NOT adopted**.
   (They would also be inert here — this repo has no `.env` — but "harmless" was the wrong test.)
 - `PostToolUse` lint hooks are **warn-only and always exit 0**. A write-time hook that *blocks* a
   write is a `deny` by another name and falls under the same ruling.
