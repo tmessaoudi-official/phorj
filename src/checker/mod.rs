@@ -56,7 +56,7 @@ pub use rewrite_alias::expand_aliases;
 pub use rewrite_fills::apply_default_fills;
 pub use rewrite_foreach::{lower_foreach_iter, materialize_for_binds, materialize_tuple_binds};
 pub use rewrite_generics::erase_generics;
-pub use rewrite_html::resolve_html;
+pub use rewrite_html::{resolve_html, resolve_html_expr};
 pub use rewrite_invoke_tostring::resolve_invoke_tostring;
 pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
 pub use rewrite_pipe::{lower_pipes, materialize_inferred_types};

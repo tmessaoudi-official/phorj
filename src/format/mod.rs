@@ -14,6 +14,8 @@ pub(crate) mod printer;
 mod tests;
 #[cfg(test)]
 mod tests_optional_types;
+#[cfg(test)]
+mod tests_propagate_receiver;
 
 use crate::diagnostic::Diagnostic;
 use crate::parser::Parser;

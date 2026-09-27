@@ -191,6 +191,13 @@ fn check_and_expand_reified_mode(
             for w in &warnings {
                 eprintln!("{}", w.render_as(diag_src, "warning")); // DEC-417: was "warning: type error at …"
             }
+            // Row 4j1: a UFCS replacement is a CHECK-TIME clone spliced after `resolve_html` has run
+            // over the main tree, so it gets the same resolution first — a throws-mode `?` in a
+            // relocated receiver (`(f()?).length()`) otherwise reached every backend unerased.
+            let ufcs_resolved: std::collections::HashMap<usize, crate::ast::Expr> = ufcs
+                .into_iter()
+                .map(|(k, v)| (k, crate::checker::resolve_html_expr(v, &html)))
+                .collect();
             // De-alias types, erase `html"…"` literals into their `Html.concat([…])` kernel calls
             // (built by the checker, keyed by span), then erase generic type parameters — all three
             // are front-end sugar removed before any backend runs (M-RT S7 adds the last).
@@ -262,7 +269,7 @@ fn check_and_expand_reified_mode(
                                                 &html,
                                             ),
                                         )),
-                                        &ufcs,
+                                        &ufcs_resolved,
                                     ),
                                     &overload_renames,
                                 ),

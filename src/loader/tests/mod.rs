@@ -37,4 +37,5 @@ mod member_function_imports;
 mod own_package;
 mod project_structure;
 mod public_surface;
+mod throws_types;
 mod visibility;

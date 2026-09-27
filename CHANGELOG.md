@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a propagated call used as a receiver keeps its meaning in `phg format` and on every backend (row 4j1; 2026-09-27)
+
+Two defects in one shape, `(f()?).m()`, found while building row 4j2. **`phg format` changed the program**: it printed `f()?.m()`, which the lexer reads as safe navigation `?.` — no propagation at all (`E-CALL-UNHANDLED`), and a fixed point, so idempotence could not see it. Both the per-node `Member` arm and the call-chain layout now keep the parentheses. **A UFCS receiver faulted at run time**: `(fold(s)?).length()` checked clean, then the VM refused to compile it, the tree-walker faulted (`` `?` requires a Result value ``) and the transpiler hit an internal error — because `rewrite_ufcs` splices a replacement captured at CHECK time, and the throws-mode `?` inside its receiver never met the erasure pass that had already run over the main tree (the rewrite clone-staleness class; a method receiver, which is not relocated, was never affected). The UFCS replacements now go through the same `resolve_html` resolution before they are spliced, which also closes the `html"…"`-inside-a-UFCS-argument hole of the same class. Tests: `tests/differential.rs::a_throws_propagate_as_a_ufcs_receiver_is_erased_on_every_leg`, `src/format/tests_propagate_receiver.rs`.
+
+### Fixed — a declaration's `throws` type resolves across files and packages (row 4j0; 2026-09-27)
+
+The loader resolves every type a declaration names except, until now, its `throws`: a library package's class is mangled to its FQN, so `public static function fold(string s): string throws BadInputError` — in the package that declares `BadInputError` — was `E-UNKNOWN-TYPE`, and so was the same type imported from another package. Lambdas were already covered (DEC-222); functions, methods and constructors now are too. Found by the directory lift of row 4j2, reproduced with hand-written phorj. Tests: `src/loader/tests/throws_types.rs` (own package; imported, with the import used only by the `throws` clause).
+
 ### Added — `phg lift`: a user exception's PHP base class maps onto its phorj counterpart (L3 row 4j; 2026-09-27)
 
 `final class MalformedText extends \RuntimeException` lifted with its PHP base unchanged, so the class was not an `Error` and every `throw`/`catch` of it failed. It now extends the DEC-421 counterpart (`RuntimeError`, `LogicError`, …) and the draft imports it; the subclass inherits the `message` constructor. Fixed with it: a class the program declares was reported `// CANNOT LIFT: … declare it` whenever it was thrown or caught. Scout census: type errors 181 (from 186); the class's remaining errors are the two pending rulings (`E-ERROR-NAME`; `throws` for PHP's unchecked exceptions). Example: `examples/lift/exception-base.{php,phg}`.

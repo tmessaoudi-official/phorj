@@ -102,6 +102,10 @@ pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
                 p.ty = resolve_type(&p.ty, ctx);
             }
             f.ret = f.ret.as_ref().map(|r| resolve_type(r, ctx));
+            // Row 4j0: a thrown type mangles like every other type the declaration names — lambdas
+            // did since DEC-222, declarations did not, so `throws` of a package's own error was
+            // `E-UNKNOWN-TYPE`.
+            f.throws = f.throws.iter().map(|t| resolve_type(t, ctx)).collect();
             f.body = resolve_block(f.body, ctx);
             Item::Function(f)
         }
@@ -192,13 +196,20 @@ pub(super) fn resolve_members(members: &mut [ClassMember], ctx: &ResolveCtx) {
                     p.ty = resolve_type(&p.ty, ctx);
                 }
                 f.ret = f.ret.as_ref().map(|r| resolve_type(r, ctx));
+                f.throws = f.throws.iter().map(|t| resolve_type(t, ctx)).collect(); // row 4j0
                 let body = std::mem::take(&mut f.body);
                 f.body = resolve_block(body, ctx);
             }
-            ClassMember::Constructor { params, body, .. } => {
+            ClassMember::Constructor {
+                params,
+                throws,
+                body,
+                ..
+            } => {
                 for p in params.iter_mut() {
                     p.ty = resolve_type(&p.ty, ctx);
                 }
+                *throws = throws.iter().map(|t| resolve_type(t, ctx)).collect(); // row 4j0
                 let b = std::mem::take(body);
                 *body = resolve_block(b, ctx);
             }

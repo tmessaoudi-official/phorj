@@ -178,10 +178,13 @@ impl Printer<'_> {
                     _ if *safe => "?.",
                     _ => ".",
                 };
-                Ok(doc::concat(vec![
-                    self.postfix_doc(object)?,
-                    doc::text(format!("{dot}{name}")),
-                ]))
+                // Row 4j1: a propagated receiver keeps its parentheses — `f()?.m` lexes `?.` as safe
+                // navigation, which is a different program (and a fixed point, so idempotence misses it).
+                let object = match &**object {
+                    Expr::Propagate { .. } => parens(self.expr_doc(object)?),
+                    _ => self.postfix_doc(object)?,
+                };
+                Ok(doc::concat(vec![object, doc::text(format!("{dot}{name}"))]))
             }
             Expr::Index { object, index, .. } => Ok(doc::concat(vec![
                 self.postfix_doc(object)?,
@@ -506,6 +509,14 @@ impl Printer<'_> {
             }
         }
         if segs.iter().filter(|s| matches!(s, Seg::Dot(..))).count() < 2 {
+            return Ok(None);
+        }
+        // Row 4j1: a `?` directly under a `.` needs parentheses the flat chain cannot place — the
+        // per-node `Member` arm prints it, so the chain layout steps aside.
+        if segs
+            .windows(2)
+            .any(|w| matches!(w, [Seg::Dot(..), Seg::Propagate]))
+        {
             return Ok(None);
         }
         segs.reverse();

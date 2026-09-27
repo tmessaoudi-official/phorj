@@ -8,427 +8,23 @@ use super::*;
 /// too). A replacement can itself embed an `html"…"` (an Html-typed hole), so the rewrite recurses
 /// into each substituted subtree. When no literal was found the program is returned untouched, so
 /// programs with no `html"…"` are byte-for-byte identical to the pre-Wave-3 AST.
+use crate::ast::{ClassMember, Expr, Item, LambdaBody, MatchArm, Stmt, StrPart};
+type Map = HashMap<usize, Expr>;
+
+/// Row 4j1: the same resolution over ONE expression — for `rewrite_ufcs`' replacement values. Those
+/// are check-time clones spliced after this pass has run over the main tree, so a throws-mode `?` (or
+/// an `html"…"`) inside a relocated UFCS receiver would otherwise reach the backends unresolved.
+pub fn resolve_html_expr(e: Expr, html: &Map) -> Expr {
+    if html.is_empty() {
+        return e;
+    }
+    rexpr(e, html)
+}
+
 pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -> Program {
-    use crate::ast::{ClassMember, Expr, Item, LambdaBody, MatchArm, Stmt, StrPart};
     if html.is_empty() {
         return program;
     }
-    type Map = HashMap<usize, Expr>;
-
-    fn rexpr(e: Expr, h: &Map) -> Expr {
-        match e {
-            Expr::Html(parts, span) => match h.get(&span.start) {
-                // Re-walk the substituted tree: an Html-typed hole embeds another `html"…"`.
-                Some(r) => rexpr(r.clone(), h),
-                None => Expr::Html(parts, span), // defensive; check populated every literal
-            },
-            // DEC-212: a general tagged template `tag"…"` desugars to its checker-built replacement
-            // (protocol `tag.concat([…])` or function `tag([lits],[holes])`), erased before backends
-            // exactly like `html"…"`; re-walk in case the replacement embeds another tagged template.
-            Expr::TaggedTemplate { parts, tag, span } => match h.get(&span.start) {
-                Some(r) => rexpr(r.clone(), h),
-                None => Expr::TaggedTemplate { parts, tag, span },
-            },
-            Expr::Str(parts, span) => Expr::Str(
-                parts
-                    .into_iter()
-                    .map(|p| match p {
-                        StrPart::Expr(e) => StrPart::Expr(Box::new(rexpr(*e, h))),
-                        lit => lit,
-                    })
-                    .collect(),
-                span,
-            ),
-            Expr::List(items, span) => {
-                Expr::List(items.into_iter().map(|e| rexpr(e, h)).collect(), span)
-            }
-            Expr::Map(pairs, span) => Expr::Map(
-                pairs
-                    .into_iter()
-                    .map(|(k, v)| (rexpr(k, h), rexpr(v, h)))
-                    .collect(),
-                span,
-            ),
-            Expr::Unary { op, expr, span } => Expr::Unary {
-                op,
-                expr: Box::new(rexpr(*expr, h)),
-                span,
-            },
-            Expr::Binary { op, lhs, rhs, span } => Expr::Binary {
-                op,
-                lhs: Box::new(rexpr(*lhs, h)),
-                rhs: Box::new(rexpr(*rhs, h)),
-                span,
-            },
-            Expr::Call {
-                callee,
-                args,
-                type_args,
-                span,
-            } => Expr::Call {
-                callee: Box::new(rexpr(*callee, h)),
-                args: args.into_iter().map(|a| rexpr(a, h)).collect(),
-                type_args,
-                span,
-            },
-            // A return-overload selector (Slice C1) / a `parent` call (super/parent): recurse the
-            // sub-expressions so an `html"…"` literal nested in them is resolved too.
-            Expr::OverloadSelect { ty, call, span } => Expr::OverloadSelect {
-                ty,
-                call: Box::new(rexpr(*call, h)),
-                span,
-            },
-            Expr::ParentCall {
-                ancestor,
-                method,
-                args,
-                span,
-            } => Expr::ParentCall {
-                ancestor,
-                method,
-                args: args.into_iter().map(|a| rexpr(a, h)).collect(),
-                span,
-            },
-            Expr::Member {
-                object,
-                name,
-                safe,
-                sep: _,
-                span,
-            } => Expr::Member {
-                object: Box::new(rexpr(*object, h)),
-                name,
-                safe,
-                sep: crate::ast::MemberSep::Dot,
-                span,
-            },
-            Expr::Index {
-                object,
-                index,
-                span,
-            } => Expr::Index {
-                object: Box::new(rexpr(*object, h)),
-                index: Box::new(rexpr(*index, h)),
-                span,
-            },
-            Expr::Force { inner, span } => Expr::Force {
-                inner: Box::new(rexpr(*inner, h)),
-                span,
-            },
-            // A throws-mode `?` was recorded for erasure (its `Span.start` is in `h`): unwrap it to
-            // its LIVE inner call — the call's own throw unwinds, so no backend ever sees a
-            // throws-mode `Propagate`. The recorded map entry is used as a MARKER only, never
-            // spliced: it is a check-time clone, and an earlier pass may already have transformed
-            // the live inner (the DEC-249 default fill splices full-arity args before this pass —
-            // restoring the stale unfilled clone under-fed the VM frame). A Result-mode `?` is
-            // absent from `h` and kept.
-            Expr::Propagate { inner, span } => {
-                if h.contains_key(&span.start) {
-                    rexpr(*inner, h)
-                } else {
-                    Expr::Propagate {
-                        inner: Box::new(rexpr(*inner, h)),
-                        span,
-                    }
-                }
-            }
-            Expr::Match {
-                scrutinee,
-                arms,
-                span,
-            } => Expr::Match {
-                scrutinee: Box::new(rexpr(*scrutinee, h)),
-                arms: arms
-                    .into_iter()
-                    .map(|a| MatchArm {
-                        pattern: a.pattern,
-                        guard: a.guard.map(|g| rexpr(g, h)),
-                        body: rexpr(a.body, h),
-                        span: a.span,
-                    })
-                    .collect(),
-                span,
-            },
-            Expr::Range {
-                start,
-                end,
-                inclusive,
-                span,
-            } => Expr::Range {
-                start: Box::new(rexpr(*start, h)),
-                end: Box::new(rexpr(*end, h)),
-                inclusive,
-                span,
-            },
-            Expr::Throw { value, span } => Expr::Throw {
-                value: Box::new(rexpr(*value, h)),
-                span,
-            },
-            Expr::If {
-                cond,
-                then_expr,
-                else_expr,
-                span,
-            } => Expr::If {
-                cond: Box::new(rexpr(*cond, h)),
-                then_expr: Box::new(rexpr(*then_expr, h)),
-                else_expr: Box::new(rexpr(*else_expr, h)),
-                span,
-            },
-            Expr::Lambda {
-                params,
-                ret,
-                throws,
-                body,
-                span,
-            } => Expr::Lambda {
-                params,
-                ret,
-                throws,
-                body: match body {
-                    LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(rexpr(*e, h))),
-                    LambdaBody::Block(stmts) => LambdaBody::Block(rblock(stmts, h)),
-                },
-                span,
-            },
-            Expr::CloneWith {
-                object,
-                fields,
-                span,
-            } => Expr::CloneWith {
-                object: Box::new(rexpr(*object, h)),
-                fields: fields.into_iter().map(|(n, e)| (n, rexpr(e, h))).collect(),
-                span,
-            },
-            // `spawn <call>` (M6 W4) carries a nested call that may contain an `html"…"` literal — walk
-            // it (not erased before backends, so it reaches every rewrite pass).
-            Expr::Spawn { call, span } => Expr::Spawn {
-                call: Box::new(rexpr(*call, h)),
-                span,
-            },
-            // `new C(args)` wraps its construction call — the ARGS may carry anything this pass
-            // rewrites (first live trigger: a lambda whose body has a throws-mode `?`, DEC-208 item H's
-            // hydration closure — an un-walked `New` left the `?` as a Result-mode `Propagate` the VM
-            // rejects and the interpreter faults on). Walker-totality: `New` is NOT a leaf.
-            Expr::New(inner, span) => Expr::New(Box::new(rexpr(*inner, h)), span),
-            // DEC-356: the five forms below were silently passed through by a `leaf => leaf` arm.
-            // They all bear expressions, so an `html"…"` hole (or any later pass's target) inside one
-            // was never rewritten.
-            Expr::Tuple(items, labels, span) => Expr::Tuple(
-                items.into_iter().map(|e| rexpr(e, h)).collect(),
-                labels,
-                span,
-            ),
-            Expr::NamedArg { name, value, span } => Expr::NamedArg {
-                name,
-                value: Box::new(rexpr(*value, h)),
-                span,
-            },
-            Expr::InstanceOf {
-                value,
-                type_name,
-                span,
-            } => Expr::InstanceOf {
-                value: Box::new(rexpr(*value, h)),
-                type_name,
-                span,
-            },
-            Expr::Cast {
-                value,
-                type_name,
-                span,
-            } => Expr::Cast {
-                value: Box::new(rexpr(*value, h)),
-                type_name,
-                span,
-            },
-            Expr::Pipe { lhs, rhs, span } => Expr::Pipe {
-                lhs: Box::new(rexpr(*lhs, h)),
-                rhs: Box::new(rexpr(*rhs, h)),
-                span,
-            },
-            // Carries no nested expression — single-sourced in `ast::leaves` so adding an `Expr` variant
-            // breaks the build here until someone rules whether it is a leaf (DEC-356).
-            e @ (crate::expr_leaves!() | Expr::NewColl { .. } | Expr::Inject { .. }) => e,
-        }
-    }
-
-    fn rstmt(s: Stmt, h: &Map) -> Stmt {
-        match s {
-            Stmt::VarDecl {
-                ty,
-                name,
-                init,
-                mutable,
-                span,
-            } => Stmt::VarDecl {
-                ty,
-                name,
-                init: rexpr(init, h),
-                mutable,
-                span,
-            },
-            Stmt::Assign {
-                target,
-                value,
-                span,
-            } => Stmt::Assign {
-                target: rexpr(target, h),
-                value: rexpr(value, h),
-                span,
-            },
-            Stmt::Return { value, span } => Stmt::Return {
-                value: value.map(|e| rexpr(e, h)),
-                span,
-            },
-            Stmt::If {
-                cond,
-                bind,
-                then_block,
-                else_block,
-                span,
-            } => Stmt::If {
-                cond: rexpr(cond, h),
-                bind,
-                then_block: rblock(then_block, h),
-                else_block: else_block.map(|b| rblock(b, h)),
-                span,
-            },
-            Stmt::For {
-                ty,
-                name,
-                val,
-                iter,
-                body,
-                span,
-            } => Stmt::For {
-                ty,
-                name,
-                val,
-                iter: rexpr(iter, h),
-                body: rblock(body, h),
-                span,
-            },
-            Stmt::Using {
-                ty,
-                name,
-                init,
-                body,
-                span,
-            } => Stmt::Using {
-                ty,
-                name,
-                init: rexpr(init, h),
-                body: rblock(body, h),
-                span,
-            },
-            Stmt::While {
-                cond,
-                body,
-                post_cond,
-                span,
-            } => Stmt::While {
-                cond: rexpr(cond, h),
-                body: rblock(body, h),
-                post_cond,
-                span,
-            },
-            Stmt::CFor {
-                init,
-                cond,
-                step,
-                body,
-                span,
-            } => Stmt::CFor {
-                init: init.map(|s| Box::new(rstmt(*s, h))),
-                cond: cond.map(|e| rexpr(e, h)),
-                step: step.map(|s| Box::new(rstmt(*s, h))),
-                body: rblock(body, h),
-                span,
-            },
-            Stmt::Break(span) => Stmt::Break(span),
-            Stmt::Continue(span) => Stmt::Continue(span),
-            Stmt::Block(stmts, span) => Stmt::Block(rblock(stmts, h), span),
-            Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, h), span),
-            Stmt::Discard(e, span) => Stmt::Discard(rexpr(e, h), span),
-            Stmt::Throw { value, span } => Stmt::Throw {
-                value: rexpr(value, h),
-                span,
-            },
-            Stmt::Try {
-                body,
-                catches,
-                finally_block,
-                span,
-            } => Stmt::Try {
-                body: rblock(body, h),
-                catches: catches
-                    .into_iter()
-                    .map(|c| crate::ast::CatchClause {
-                        ty: c.ty,
-                        name: c.name,
-                        body: rblock(c.body, h),
-                        span: c.span,
-                    })
-                    .collect(),
-                finally_block: finally_block.map(|b| rblock(b, h)),
-                span,
-            },
-            // Slice 5: expand `html"…"` holes in the init expr and the `else` block.
-            Stmt::Destructure {
-                pat,
-                init,
-                else_block,
-                span,
-            } => Stmt::Destructure {
-                pat,
-                init: rexpr(init, h),
-                else_block: else_block.map(|b| rblock(b, h)),
-                span,
-            },
-        }
-    }
-
-    fn rblock(stmts: Vec<Stmt>, h: &Map) -> Vec<Stmt> {
-        stmts.into_iter().map(|s| rstmt(s, h)).collect()
-    }
-
-    /// Rewrite every `html"…"` inside a member list — the body of a class AND of a trait, which
-    /// carry the identical `Vec<ClassMember>`. Shared so the two arms cannot drift (Invariant 13:
-    /// spelling the class arm out twice would push this file past its cap for no benefit).
-    fn rmembers(members: &mut [ClassMember], h: &Map) {
-        for m in members {
-            match m {
-                ClassMember::Method(f) => {
-                    let body = std::mem::take(&mut f.body);
-                    f.body = rblock(body, h);
-                }
-                ClassMember::Constructor { body, .. } => {
-                    let b = std::mem::take(body);
-                    *body = rblock(b, h);
-                }
-                // A property hook's get expression + set block may contain `html"…"`
-                // interpolation — rewrite both (M-mut.7b).
-                ClassMember::Hook { get, set, .. } => {
-                    if let Some(e) = get.take() {
-                        *get = Some(rexpr(e, h));
-                    }
-                    if let Some((p, body)) = set.take() {
-                        *set = Some((p, rblock(body, h)));
-                    }
-                }
-                // CD-31: a field initializer is executable code — `Html banner = html"…";` reached
-                // the backends unresolved and panicked them. `rewrite_ufcs` always walked this
-                // position and its comment even named the asymmetry; this arm closes it.
-                ClassMember::Field { init, .. } => {
-                    if let Some(e) = init.take() {
-                        *init = Some(rexpr(e, h));
-                    }
-                }
-            }
-        }
-    }
-
     let items = program
         .items
         .into_iter()
@@ -476,5 +72,419 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
         package: program.package,
         items,
         span: program.span,
+    }
+}
+
+fn rexpr(e: Expr, h: &Map) -> Expr {
+    match e {
+        Expr::Html(parts, span) => match h.get(&span.start) {
+            // Re-walk the substituted tree: an Html-typed hole embeds another `html"…"`.
+            Some(r) => rexpr(r.clone(), h),
+            None => Expr::Html(parts, span), // defensive; check populated every literal
+        },
+        // DEC-212: a general tagged template `tag"…"` desugars to its checker-built replacement
+        // (protocol `tag.concat([…])` or function `tag([lits],[holes])`), erased before backends
+        // exactly like `html"…"`; re-walk in case the replacement embeds another tagged template.
+        Expr::TaggedTemplate { parts, tag, span } => match h.get(&span.start) {
+            Some(r) => rexpr(r.clone(), h),
+            None => Expr::TaggedTemplate { parts, tag, span },
+        },
+        Expr::Str(parts, span) => Expr::Str(
+            parts
+                .into_iter()
+                .map(|p| match p {
+                    StrPart::Expr(e) => StrPart::Expr(Box::new(rexpr(*e, h))),
+                    lit => lit,
+                })
+                .collect(),
+            span,
+        ),
+        Expr::List(items, span) => {
+            Expr::List(items.into_iter().map(|e| rexpr(e, h)).collect(), span)
+        }
+        Expr::Map(pairs, span) => Expr::Map(
+            pairs
+                .into_iter()
+                .map(|(k, v)| (rexpr(k, h), rexpr(v, h)))
+                .collect(),
+            span,
+        ),
+        Expr::Unary { op, expr, span } => Expr::Unary {
+            op,
+            expr: Box::new(rexpr(*expr, h)),
+            span,
+        },
+        Expr::Binary { op, lhs, rhs, span } => Expr::Binary {
+            op,
+            lhs: Box::new(rexpr(*lhs, h)),
+            rhs: Box::new(rexpr(*rhs, h)),
+            span,
+        },
+        Expr::Call {
+            callee,
+            args,
+            type_args,
+            span,
+        } => Expr::Call {
+            callee: Box::new(rexpr(*callee, h)),
+            args: args.into_iter().map(|a| rexpr(a, h)).collect(),
+            type_args,
+            span,
+        },
+        // A return-overload selector (Slice C1) / a `parent` call (super/parent): recurse the
+        // sub-expressions so an `html"…"` literal nested in them is resolved too.
+        Expr::OverloadSelect { ty, call, span } => Expr::OverloadSelect {
+            ty,
+            call: Box::new(rexpr(*call, h)),
+            span,
+        },
+        Expr::ParentCall {
+            ancestor,
+            method,
+            args,
+            span,
+        } => Expr::ParentCall {
+            ancestor,
+            method,
+            args: args.into_iter().map(|a| rexpr(a, h)).collect(),
+            span,
+        },
+        Expr::Member {
+            object,
+            name,
+            safe,
+            sep: _,
+            span,
+        } => Expr::Member {
+            object: Box::new(rexpr(*object, h)),
+            name,
+            safe,
+            sep: crate::ast::MemberSep::Dot,
+            span,
+        },
+        Expr::Index {
+            object,
+            index,
+            span,
+        } => Expr::Index {
+            object: Box::new(rexpr(*object, h)),
+            index: Box::new(rexpr(*index, h)),
+            span,
+        },
+        Expr::Force { inner, span } => Expr::Force {
+            inner: Box::new(rexpr(*inner, h)),
+            span,
+        },
+        // A throws-mode `?` was recorded for erasure (its `Span.start` is in `h`): unwrap it to
+        // its LIVE inner call — the call's own throw unwinds, so no backend ever sees a
+        // throws-mode `Propagate`. The recorded map entry is used as a MARKER only, never
+        // spliced: it is a check-time clone, and an earlier pass may already have transformed
+        // the live inner (the DEC-249 default fill splices full-arity args before this pass —
+        // restoring the stale unfilled clone under-fed the VM frame). A Result-mode `?` is
+        // absent from `h` and kept.
+        Expr::Propagate { inner, span } => {
+            if h.contains_key(&span.start) {
+                rexpr(*inner, h)
+            } else {
+                Expr::Propagate {
+                    inner: Box::new(rexpr(*inner, h)),
+                    span,
+                }
+            }
+        }
+        Expr::Match {
+            scrutinee,
+            arms,
+            span,
+        } => Expr::Match {
+            scrutinee: Box::new(rexpr(*scrutinee, h)),
+            arms: arms
+                .into_iter()
+                .map(|a| MatchArm {
+                    pattern: a.pattern,
+                    guard: a.guard.map(|g| rexpr(g, h)),
+                    body: rexpr(a.body, h),
+                    span: a.span,
+                })
+                .collect(),
+            span,
+        },
+        Expr::Range {
+            start,
+            end,
+            inclusive,
+            span,
+        } => Expr::Range {
+            start: Box::new(rexpr(*start, h)),
+            end: Box::new(rexpr(*end, h)),
+            inclusive,
+            span,
+        },
+        Expr::Throw { value, span } => Expr::Throw {
+            value: Box::new(rexpr(*value, h)),
+            span,
+        },
+        Expr::If {
+            cond,
+            then_expr,
+            else_expr,
+            span,
+        } => Expr::If {
+            cond: Box::new(rexpr(*cond, h)),
+            then_expr: Box::new(rexpr(*then_expr, h)),
+            else_expr: Box::new(rexpr(*else_expr, h)),
+            span,
+        },
+        Expr::Lambda {
+            params,
+            ret,
+            throws,
+            body,
+            span,
+        } => Expr::Lambda {
+            params,
+            ret,
+            throws,
+            body: match body {
+                LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(rexpr(*e, h))),
+                LambdaBody::Block(stmts) => LambdaBody::Block(rblock(stmts, h)),
+            },
+            span,
+        },
+        Expr::CloneWith {
+            object,
+            fields,
+            span,
+        } => Expr::CloneWith {
+            object: Box::new(rexpr(*object, h)),
+            fields: fields.into_iter().map(|(n, e)| (n, rexpr(e, h))).collect(),
+            span,
+        },
+        // `spawn <call>` (M6 W4) carries a nested call that may contain an `html"…"` literal — walk
+        // it (not erased before backends, so it reaches every rewrite pass).
+        Expr::Spawn { call, span } => Expr::Spawn {
+            call: Box::new(rexpr(*call, h)),
+            span,
+        },
+        // `new C(args)` wraps its construction call — the ARGS may carry anything this pass
+        // rewrites (first live trigger: a lambda whose body has a throws-mode `?`, DEC-208 item H's
+        // hydration closure — an un-walked `New` left the `?` as a Result-mode `Propagate` the VM
+        // rejects and the interpreter faults on). Walker-totality: `New` is NOT a leaf.
+        Expr::New(inner, span) => Expr::New(Box::new(rexpr(*inner, h)), span),
+        // DEC-356: the five forms below were silently passed through by a `leaf => leaf` arm.
+        // They all bear expressions, so an `html"…"` hole (or any later pass's target) inside one
+        // was never rewritten.
+        Expr::Tuple(items, labels, span) => Expr::Tuple(
+            items.into_iter().map(|e| rexpr(e, h)).collect(),
+            labels,
+            span,
+        ),
+        Expr::NamedArg { name, value, span } => Expr::NamedArg {
+            name,
+            value: Box::new(rexpr(*value, h)),
+            span,
+        },
+        Expr::InstanceOf {
+            value,
+            type_name,
+            span,
+        } => Expr::InstanceOf {
+            value: Box::new(rexpr(*value, h)),
+            type_name,
+            span,
+        },
+        Expr::Cast {
+            value,
+            type_name,
+            span,
+        } => Expr::Cast {
+            value: Box::new(rexpr(*value, h)),
+            type_name,
+            span,
+        },
+        Expr::Pipe { lhs, rhs, span } => Expr::Pipe {
+            lhs: Box::new(rexpr(*lhs, h)),
+            rhs: Box::new(rexpr(*rhs, h)),
+            span,
+        },
+        // Carries no nested expression — single-sourced in `ast::leaves` so adding an `Expr` variant
+        // breaks the build here until someone rules whether it is a leaf (DEC-356).
+        e @ (crate::expr_leaves!() | Expr::NewColl { .. } | Expr::Inject { .. }) => e,
+    }
+}
+
+fn rstmt(s: Stmt, h: &Map) -> Stmt {
+    match s {
+        Stmt::VarDecl {
+            ty,
+            name,
+            init,
+            mutable,
+            span,
+        } => Stmt::VarDecl {
+            ty,
+            name,
+            init: rexpr(init, h),
+            mutable,
+            span,
+        },
+        Stmt::Assign {
+            target,
+            value,
+            span,
+        } => Stmt::Assign {
+            target: rexpr(target, h),
+            value: rexpr(value, h),
+            span,
+        },
+        Stmt::Return { value, span } => Stmt::Return {
+            value: value.map(|e| rexpr(e, h)),
+            span,
+        },
+        Stmt::If {
+            cond,
+            bind,
+            then_block,
+            else_block,
+            span,
+        } => Stmt::If {
+            cond: rexpr(cond, h),
+            bind,
+            then_block: rblock(then_block, h),
+            else_block: else_block.map(|b| rblock(b, h)),
+            span,
+        },
+        Stmt::For {
+            ty,
+            name,
+            val,
+            iter,
+            body,
+            span,
+        } => Stmt::For {
+            ty,
+            name,
+            val,
+            iter: rexpr(iter, h),
+            body: rblock(body, h),
+            span,
+        },
+        Stmt::Using {
+            ty,
+            name,
+            init,
+            body,
+            span,
+        } => Stmt::Using {
+            ty,
+            name,
+            init: rexpr(init, h),
+            body: rblock(body, h),
+            span,
+        },
+        Stmt::While {
+            cond,
+            body,
+            post_cond,
+            span,
+        } => Stmt::While {
+            cond: rexpr(cond, h),
+            body: rblock(body, h),
+            post_cond,
+            span,
+        },
+        Stmt::CFor {
+            init,
+            cond,
+            step,
+            body,
+            span,
+        } => Stmt::CFor {
+            init: init.map(|s| Box::new(rstmt(*s, h))),
+            cond: cond.map(|e| rexpr(e, h)),
+            step: step.map(|s| Box::new(rstmt(*s, h))),
+            body: rblock(body, h),
+            span,
+        },
+        Stmt::Break(span) => Stmt::Break(span),
+        Stmt::Continue(span) => Stmt::Continue(span),
+        Stmt::Block(stmts, span) => Stmt::Block(rblock(stmts, h), span),
+        Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, h), span),
+        Stmt::Discard(e, span) => Stmt::Discard(rexpr(e, h), span),
+        Stmt::Throw { value, span } => Stmt::Throw {
+            value: rexpr(value, h),
+            span,
+        },
+        Stmt::Try {
+            body,
+            catches,
+            finally_block,
+            span,
+        } => Stmt::Try {
+            body: rblock(body, h),
+            catches: catches
+                .into_iter()
+                .map(|c| crate::ast::CatchClause {
+                    ty: c.ty,
+                    name: c.name,
+                    body: rblock(c.body, h),
+                    span: c.span,
+                })
+                .collect(),
+            finally_block: finally_block.map(|b| rblock(b, h)),
+            span,
+        },
+        // Slice 5: expand `html"…"` holes in the init expr and the `else` block.
+        Stmt::Destructure {
+            pat,
+            init,
+            else_block,
+            span,
+        } => Stmt::Destructure {
+            pat,
+            init: rexpr(init, h),
+            else_block: else_block.map(|b| rblock(b, h)),
+            span,
+        },
+    }
+}
+
+fn rblock(stmts: Vec<Stmt>, h: &Map) -> Vec<Stmt> {
+    stmts.into_iter().map(|s| rstmt(s, h)).collect()
+}
+
+/// Rewrite every `html"…"` inside a member list — the body of a class AND of a trait, which
+/// carry the identical `Vec<ClassMember>`. Shared so the two arms cannot drift (Invariant 13:
+/// spelling the class arm out twice would push this file past its cap for no benefit).
+fn rmembers(members: &mut [ClassMember], h: &Map) {
+    for m in members {
+        match m {
+            ClassMember::Method(f) => {
+                let body = std::mem::take(&mut f.body);
+                f.body = rblock(body, h);
+            }
+            ClassMember::Constructor { body, .. } => {
+                let b = std::mem::take(body);
+                *body = rblock(b, h);
+            }
+            // A property hook's get expression + set block may contain `html"…"`
+            // interpolation — rewrite both (M-mut.7b).
+            ClassMember::Hook { get, set, .. } => {
+                if let Some(e) = get.take() {
+                    *get = Some(rexpr(e, h));
+                }
+                if let Some((p, body)) = set.take() {
+                    *set = Some((p, rblock(body, h)));
+                }
+            }
+            // CD-31: a field initializer is executable code — `Html banner = html"…";` reached
+            // the backends unresolved and panicked them. `rewrite_ufcs` always walked this
+            // position and its comment even named the asymmetry; this arm closes it.
+            ClassMember::Field { init, .. } => {
+                if let Some(e) = init.take() {
+                    *init = Some(rexpr(e, h));
+                }
+            }
+        }
     }
 }

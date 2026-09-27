@@ -7462,3 +7462,52 @@ function main(): void {
         "negated_operator_template",
     );
 }
+
+/// Row 4j1 — a throws-mode `?` used as a UFCS RECEIVER is erased like any other. `rewrite_ufcs`
+/// splices a replacement captured at CHECK time, so the `?` inside its receiver never met the erasure
+/// pass that had already run over the main tree: `check` clean, then the VM refused to compile
+/// (`Failure` variant), the tree-walker faulted ("`?` requires a Result value") and the transpiler hit
+/// an internal error. A method receiver (`(mk(s)?).size()`) was never affected — it is not relocated.
+#[test]
+fn a_throws_propagate_as_a_ufcs_receiver_is_erased_on_every_leg() {
+    agree_out_php(
+        "import Core.Output;
+import Core.String;
+import Core.ErrorModule.RuntimeError;
+class BadError extends RuntimeError {
+}
+class Box {
+    constructor(public string v) {}
+    public function size(): int {
+        return 7;
+    }
+}
+function fold(string s): string throws BadError {
+    if (s == \"\") {
+        throw new BadError(\"empty\");
+    }
+    return s;
+}
+function mk(string s): Box throws BadError {
+    return new Box(fold(s)?);
+}
+function ufcs(string s): int throws BadError {
+    return (fold(s)?).length() + (fold(s)?).trim().length();
+}
+function method(string s): int throws BadError {
+    return (mk(s)?).size();
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        Output.printLine(\"{method(\\\"ab\\\")} {ufcs(\\\"ab\\\")}\");
+        Output.printLine(\"{ufcs(\\\"\\\")}\");
+    } catch (BadError e) {
+        Output.printLine(\"caught\");
+    }
+}
+",
+        "7 4\ncaught\n",
+        "throws_propagate_ufcs_receiver",
+    );
+}
