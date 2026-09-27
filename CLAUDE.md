@@ -43,11 +43,12 @@ and never route work here (or in `/stack`) to it. Work is done directly in this 
 read-only reviewer agents in `.claude/agents/` are unaffected. The parent
 `/stack/CLAUDE.md` is excluded via `/stack/projects/.claude/settings.json` `claudeMdExcludes`.
 
-The repo carries exactly THREE skills, all repo-specific by name and content (global-is-reference
+The repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
 ruling, 2026-08-18 — a repo may not duplicate anything that exists in `~/.claude/`):
 `/phg-ask-human` (the question protocol with this repo's extra rules), `/phg-lenses` (the mandatory
-review dimensions + sleuth lens K), and `/phg-qa-sweep` (end-to-end QA on the shipped `phg`
-binary). Every other skill — `/sweep`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`,
+review dimensions + sleuth lens K), `/phg-qa-sweep` (end-to-end QA on the shipped `phg`
+binary), and `/phg-ship-slice` (the per-slice definition-of-done checklist run before a row is marked
+done — it cites the delivery invariants below and never restates them). Every other skill — `/sweep`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`,
 `/converge`, `/pre-commit`, `/aggregate-findings`, `/handoff`, `/retrospective`,
 `/expanding-context` — comes from the developer's global install. **Before running ANY of those
 global review skills here, load `/phg-lenses` first**: it carries the phorj invariants-as-dimensions,
