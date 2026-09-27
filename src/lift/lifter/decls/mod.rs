@@ -139,7 +139,8 @@ pub fn lift_files(prog: &php::PhpProgram, split: bool) -> Result<LiftedFiles, St
     // DEC-531: rename reserved-word locals and parameters first, so no stage below sees one.
     let renamed = super::keyword_locals::rename(prog)?;
     let prog = &renamed;
-    // DEC-312: reset the per-lift native-module recorder (never leak across runs on this thread).
+    super::throws::begin_file(prog); // row 4j2(b)
+                                     // DEC-312: reset the per-lift native-module recorder (never leak across runs on this thread).
     let _ = super::drain_native_modules();
     super::reset_console();
     let mut l = Lifter {};

@@ -85,10 +85,16 @@ impl Printer {
             format!("<{}>", f.type_params.join(", "))
         };
         let params = self.params(&f.params)?;
-        let ret = match &f.ret {
+        let mut ret = match &f.ret {
             Some(t) => format!(": {}", ty(t)?),
             None => String::new(),
         };
+        // Row 4j2(b): a lifted declaration now carries the `throws` its body needs — spelled as the
+        // canonical formatter spells it, so `phg format` leaves a draft's signature alone.
+        if !f.throws.is_empty() {
+            let ts: Result<Vec<_>, _> = f.throws.iter().map(ty).collect();
+            ret.push_str(&format!(" throws {}", ts?.join(" | ")));
+        }
         let is_abstract = f.modifiers.contains(&Modifier::Abstract);
         if is_abstract {
             // A bodyless abstract method signature.

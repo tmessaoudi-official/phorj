@@ -215,6 +215,9 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
     // parser rejects declares no enums we can see, which is the same answer as before this existed.
     let mut project_enums: crate::lift::lifter::EnumSymbols = Default::default();
     let mut project_classes = std::collections::BTreeSet::new(); // row 4j (6C), same scan
+                                                                 // Row 4j2(b): what each function and method throws is decided over the WHOLE tree — a call's
+                                                                 // callee is usually in a sibling file.
+    let mut project_throws = crate::lift::lifter::ThrowsFacts::default();
     for path in &files {
         let Ok(src) = std::fs::read_to_string(path) else {
             continue;
@@ -225,10 +228,21 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
         if let Ok(prog) = crate::lift::parser::parse_php_with_docs(toks, docs) {
             project_enums.extend(crate::lift::lifter::enum_names_of(&prog));
             project_classes.extend(crate::lift::lifter::class_names_of(&prog));
+            project_throws.extend(crate::lift::lifter::throws_facts_of(&prog));
         }
     }
     crate::lift::lifter::set_project_enum_names(project_enums);
     crate::lift::lifter::set_project_class_names(project_classes);
+    crate::lift::lifter::set_project_throws(Some(project_throws));
+    // Cleared however this function returns, so a later single-file lift on this thread analyses its
+    // own file rather than this tree.
+    struct ClearThrows;
+    impl Drop for ClearThrows {
+        fn drop(&mut self) {
+            crate::lift::lifter::set_project_throws(None);
+        }
+    }
+    let _clear_throws = ClearThrows;
 
     let mut lifted = 0usize;
     let mut failures: Vec<Failure> = Vec::new();

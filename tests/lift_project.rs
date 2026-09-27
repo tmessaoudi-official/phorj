@@ -644,3 +644,48 @@ fn an_exception_class_declared_in_a_sibling_file_is_not_reported_unliftable() {
         "{all:?}"
     );
 }
+
+/// Row 4j2(b), DEC-547: `throws` is decided over the WHOLE tree. `Classifier.classify` calls
+/// `Parser::fold`, declared in another namespace, which throws a class `Classifier.php` never names —
+/// so the lift must declare it on `classify`, spell the call `fold(…)?`, AND import the type the file
+/// never `use`d. The project then loads and type-checks as one unit.
+#[test]
+fn a_throws_propagated_from_another_namespace_is_declared_and_imported() {
+    let t = Tmp::new("xthrows");
+    t.write(
+        "composer.json",
+        r#"{ "name": "acme/blog", "autoload": { "psr-4": { "Acme\\Blog\\": "src/" } } }"#,
+    );
+    t.write(
+        "src/Errors/BadInputException.php",
+        "<?php\nnamespace Acme\\Blog\\Errors;\nfinal class BadInputException extends \\RuntimeException {}\n",
+    );
+    t.write(
+        "src/Errors/Parser.php",
+        "<?php\nnamespace Acme\\Blog\\Errors;\nfinal class Parser { public static function fold(string $s): string { if ($s === '') { throw new BadInputException('empty'); } return $s; } }\n",
+    );
+    t.write(
+        "src/Text/Classifier.php",
+        "<?php\nnamespace Acme\\Blog\\Text;\nuse Acme\\Blog\\Errors\\Parser;\nfinal class Classifier { public function classify(string $s): string { return Parser::fold($s) . '!'; } }\n",
+    );
+    t.write(
+        "src/index.php",
+        "<?php\nnamespace Acme\\Blog;\nuse Acme\\Blog\\Text\\Classifier;\nuse Acme\\Blog\\Errors\\BadInputException;\n$c = new Classifier();\ntry { echo $c->classify('x'); } catch (BadInputException $e) { echo 'caught'; }\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("the directory lifts");
+    let classifier = read(&out.join("src/Acme/Blog/Text/Classifier.phg"));
+    assert!(
+        classifier.contains("classify(string s): string throws BadInputException"),
+        "{classifier}"
+    );
+    assert!(classifier.contains("fold(s)?"), "{classifier}");
+    assert!(
+        classifier.contains("import Acme.Blog.Errors.BadInputException;"),
+        "{classifier}"
+    );
+    let main = out.join("src/main.phg");
+    let unit = phorj::loader::load(&main).expect("the lifted project loads");
+    phorj::cli::check_and_expand(&unit.program, &unit.diag_src)
+        .expect("the lifted project type-checks");
+}

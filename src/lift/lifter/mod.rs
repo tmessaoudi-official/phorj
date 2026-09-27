@@ -50,6 +50,7 @@ mod shapes;
 mod spread;
 mod sprintf;
 mod throw_expr;
+mod throws;
 use attrs::AttrCtx;
 use const_infer::const_type;
 pub use decls::*;
@@ -61,6 +62,9 @@ use leaves::*;
 use mappings::*;
 use matches::*;
 use shapes::{enter_binder, is_tuple_field, leave_binder, set_tuple_fields};
+pub(super) use throws::{
+    facts_of as throws_facts_of, set_project as set_project_throws, Facts as ThrowsFacts,
+};
 
 // DEC-312: the Core modules referenced by builtin→native resolutions during one lift, drained into
 // `import` items at assembly. Thread-local (the lifter is stateless free functions; a lift runs on

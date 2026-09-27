@@ -9,6 +9,7 @@ impl Lifter {
         &mut self,
         f: &php::PhpFunction,
     ) -> Result<FunctionDecl, String> {
+        let _decl = super::super::throws::enter_decl(Some(&f.name)); // row 4j2(b)
         let mut declared = HashSet::new();
         let params = lift_params(&f.params)?;
         // DEC-504: the signature is what tells the BODY that `$row['bp']` is a field read. Set
@@ -50,7 +51,7 @@ impl Lifter {
             type_param_bounds: Vec::new(),
             params,
             ret,
-            throws: Vec::new(),
+            throws: super::super::throws::clause(),
             body,
             foreign: false,
             generic_ret_from_param: None,
@@ -63,6 +64,7 @@ impl Lifter {
         &mut self,
         c: &php::PhpClass,
     ) -> Result<ClassDecl, String> {
+        let _class = super::super::throws::enter_class(&c.name); // row 4j2(b)
         let mut members = Vec::new();
         for m in &c.members {
             members.push(self.lift_member(m, c.is_readonly)?);
@@ -178,6 +180,9 @@ impl Lifter {
         m: &php::PhpMethod,
         readonly_class: bool,
     ) -> Result<ClassMember, String> {
+        // Row 4j2(b): a constructor or magic method cannot declare `throws`; an ordinary method opens
+        // its own declaration below.
+        let _no_decl = super::super::throws::enter_decl(None);
         let mut declared = HashSet::new();
         // `__construct` → a Phorj `constructor` (with promotion), not an ordinary method.
         if m.name == "__construct" {
@@ -209,6 +214,7 @@ impl Lifter {
         if let Some(res) = self.lift_magic_method(m) {
             return res;
         }
+        let _decl = super::super::throws::enter_decl(Some(&m.name));
         let params = lift_params(&m.params)?;
         super::super::set_tuple_fields(&params); // DEC-504, as in `lift_function`
         for p in &params {
@@ -244,7 +250,7 @@ impl Lifter {
             type_param_bounds: Vec::new(),
             params,
             ret,
-            throws: Vec::new(),
+            throws: super::super::throws::clause(),
             body,
             foreign: false,
             generic_ret_from_param: None,

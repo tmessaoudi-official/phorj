@@ -1,0 +1,57 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.ErrorModule;
+import Core.ErrorModule.RuntimeError;
+import Core.String;
+
+class BadInputException extends RuntimeError {
+    public static function at(string where): BadInputException {
+        return new BadInputException("bad input at {where}");
+    }
+}
+
+function fold(string s): string throws BadInputException {
+    if (s == "") {
+        throw BadInputException::at("fold");
+    }
+    return s.lowerCase();
+}
+
+function measure(string s): int throws BadInputException {
+    return (fold(s)?).length();
+}
+
+class Report {
+    public open function line(string s): string throws BadInputException {
+        return "{this.label(s)?}={measure(s)?}";
+    }
+    private function label(string s): string throws BadInputException {
+        return fold(s)?;
+    }
+    public open function safe(string s): string {
+        try {
+            return this.line(s);
+        } catch (RuntimeError e) {
+            return "skipped";
+        }
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    mutable var r = new Report();
+    try {
+        Output.print("{r.line(\"ABC\")}");
+        Output.print(" | ");
+        Output.print("{r.safe(\"\")}");
+        Output.print("\n");
+        Output.print("{r.line(\"\")}");
+    } catch (BadInputException e) {
+        Output.print("caught at the top");
+        Output.print("\n");
+    }
+}

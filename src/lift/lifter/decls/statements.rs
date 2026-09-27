@@ -164,8 +164,18 @@ impl Lifter {
                     Some(f) => Some(self.lift_block(f, &mut declared.clone())?),
                     None => None,
                 };
+                // Row 4j2(b): the catches cover the BODY's calls, and only the body's.
+                let body = {
+                    let _try = super::super::throws::enter_try(
+                        &catches
+                            .iter()
+                            .flat_map(|c| c.types.clone())
+                            .collect::<Vec<_>>(),
+                    );
+                    self.lift_block(body, &mut declared.clone())?
+                };
                 vec![Stmt::Try {
-                    body: self.lift_block(body, &mut declared.clone())?,
+                    body,
                     catches: lifted_catches,
                     finally_block: fin,
                     span: SP,

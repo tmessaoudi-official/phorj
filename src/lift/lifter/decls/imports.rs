@@ -91,7 +91,11 @@ pub(super) fn assemble(
     // Filtered by THIS file's text since scout row 5i: a `catch` inside a lowered enum method lands in the
     // `<Enum>Functions` companion, and the enum's own file importing its error type would be
     // `E-UNUSED-IMPORT`.
+    // Row 4j2(b): a `throws` clause can name a type only a CALLEE's file throws.
     let used: Vec<String> = super::super::exceptions::mapped_error_types(prog)
+        .into_iter()
+        .chain(super::super::throws::named_error_types())
+        .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .filter(|t| references_ident(&lifted_decls, t))
         .collect();
@@ -189,6 +193,29 @@ pub(super) fn assemble(
         final_items.push(Item::Import {
             path,
             alias: u.alias.clone(),
+            wildcard: false,
+            except: Vec::new(),
+            span: SP,
+        });
+    }
+    // Row 4j2(b): a `throws` clause propagated from another file names that file's exception class,
+    // which this file may never have `use`d.
+    for (name, home) in super::super::throws::named_homes() {
+        if home.is_empty() || home == prog.namespace || bound.contains(&name) {
+            continue;
+        }
+        if !references_ident(&lifted_decls, &name) {
+            continue;
+        }
+        let mut path = home
+            .iter()
+            .map(|s| package_segment(s))
+            .collect::<Result<Vec<_>, _>>()?;
+        path.push(type_segment(&name)?);
+        bound.push(name);
+        final_items.push(Item::Import {
+            path,
+            alias: None,
             wildcard: false,
             except: Vec::new(),
             span: SP,

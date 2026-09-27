@@ -508,6 +508,27 @@ final class ParseFailureException extends \RuntimeException {
 try { throw ParseFailureException::at('x'); } catch (ParseFailureException $e) { echo 'caught'; }
 try { throw new ParseFailureException('y'); } catch (\RuntimeException $e) { echo '|base'; }"#,
         ),
+        // Row 4j2(b), DEC-547: `fold` throws through a static factory, `classify` and the method
+        // `Guard.run` reach it through calls, and only the top level catches — so the lift declares
+        // `throws` on each and spells every intermediate call `f(…)?`. The run proves `?` changes
+        // nothing at run time: both the thrown and the normal path print what PHP printed.
+        (
+            "throws_synthesized_and_propagated",
+            r#"<?php
+final class BadInputException extends \RuntimeException {
+    public static function at(string $w): self { return new self('bad ' . $w); }
+}
+function fold(string $s): string { if ($s === '') { throw BadInputException::at('fold'); } return $s; }
+function classify(string $s): string { return fold($s) . '!'; }
+final class Guard {
+    public function run(string $s): string { return $this->check($s) . '?'; }
+    private function check(string $s): string { return classify($s); }
+    public function safe(string $s): string { try { return fold($s); } catch (\RuntimeException $e) { return 'safe'; } }
+}
+$g = new Guard();
+try { echo classify('a'); echo '|'; echo $g->run('b'); echo '|'; echo $g->safe(''); echo '|'; echo $g->run(''); }
+catch (BadInputException $e) { echo '|caught'; }"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php

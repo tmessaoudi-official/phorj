@@ -7,7 +7,13 @@ use crate::ast::LambdaBody;
 
 // ── expressions (no scope state) ──
 
+/// Row 4j2(b): every expression is lifted through `throws::lift_site`, which spells a propagating
+/// call `call?` and lifts a lambda body with no declaration open.
 pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
+    super::throws::lift_site(e, lift_expr_raw)
+}
+
+fn lift_expr_raw(e: &php::PhpExpr) -> Result<Expr, String> {
     Ok(match e {
         php::PhpExpr::Int(n) => Expr::Int(*n, SP),
         php::PhpExpr::Closure { params, ret, body } => Expr::Lambda {

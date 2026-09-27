@@ -161,7 +161,13 @@ impl Printer {
                     _ if *safe => "?.",
                     _ => ".",
                 };
-                Ok(format!("{}{dot}{name}", self.postfix_operand(object)?))
+                // Row 4j1: a propagated receiver keeps its parentheses — `f()?.m` lexes `?.` as safe
+                // navigation, a different program.
+                let object = match &**object {
+                    Expr::Propagate { .. } => format!("({})", self.expr(object)?),
+                    _ => self.postfix_operand(object)?,
+                };
+                Ok(format!("{object}{dot}{name}"))
             }
             Expr::Index { object, index, .. } => Ok(format!(
                 "{}[{}]",

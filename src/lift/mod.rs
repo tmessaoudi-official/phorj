@@ -101,4 +101,6 @@ mod lifter_tests_static_local;
 #[cfg(test)]
 mod lifter_tests_throw_expr;
 #[cfg(test)]
+mod lifter_tests_throws;
+#[cfg(test)]
 mod lifter_tests_var_locals;
