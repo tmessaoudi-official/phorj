@@ -593,6 +593,32 @@ row's. `$f(...)`, `$o->m(...)` and `C::m(...)` are refused too, and every one of
 rewrite that lifts: a closure with a TYPED parameter, or a `foreach` where the parameter is an `array`.
 Byte-identical on all three legs and against the PHP.
 
+## Reordered builtins — `reordered.php` / `reordered.phg` (scout row 4i, 2026-09-27)
+
+These PHP builtins have a phorj native whose PHP form IS the builtin, but with the arguments in
+another order, so the registry could not invert them:
+
+- **`in_array($x, $xs, true)`** → `List.contains(xs, x)`. Qualified, because `contains` also exists
+  on `string`, where `in_array($x, $s, true)` is a PHP `TypeError`. A LOOSE (two-argument or
+  non-`true`) `in_array` is refused by name: `in_array("1", ["01"])` is true in PHP.
+- **`implode($sep, $xs)`** → `xs.join(sep)`; **`explode($sep, $s)`** → `s.split(sep)` (a limit is
+  refused).
+- **`str_replace`** → `replace`, and over a literal search ARRAY a chain of one `replace` per needle:
+  PHP re-replaces left to right (`str_replace(['a', 'b'], ['b', 'c'], 'ab')` is `cc`), which is
+  exactly what the chain does. The replacement arrays must be the same length, and a reused scalar
+  replacement must be inert (the chain evaluates it once per needle); a count argument is refused.
+- **`sprintf`** with a literal format (or a `.` chain of literals) of `%s` and `%%` only → the
+  interpolation its `.` chain would lift to (DEC-511 — so a `%s` of a bool inherits `.`'s existing
+  exposure, it is not new). `%d` is refused: it equals `%s` only for an int. So are width, flag and
+  positional directives, a computed format, and a directive/value count mismatch.
+- **`PHP_INT_MAX`** → `9223372036854775807`.
+
+**Evaluation order.** The receiver form evaluates the receiver first; PHP evaluates arguments left to
+right. A swap is only taken when at most one argument can do anything — literals, variables,
+constants, closures and reads of those are inert — and otherwise the call is left as the plain
+unresolved (loud) call. The same guard now covers `array_map`'s swap (row 5f). Byte-identical on all
+three legs and against the PHP.
+
 ## Empty collections — `empty.php` / `empty.phg` (scout row 4h, 2026-09-27)
 
 phorj has no untyped empty literal: a bare `[]` is `E-EMPTY-LITERAL` until it is constructed as
@@ -602,7 +628,8 @@ it wherever the PROGRAM declared the type — never by inference:
 - **`$xs === []` / `$xs !== []`** on a variable declared a non-null list or map (parameter type or
   `@param`, `@var` local) → `List.isEmpty(xs)` / `!Map.isEmpty(m)`, either operand order. The call is
   QUALIFIED, not `xs.isEmpty()`: the declaration is a hint the lifter cannot follow through a `foreach`
-  binder, a closure parameter or a `catch` that rebinds the name, and `isEmpty` also exists on
+  binder, a closure parameter, a `catch` or the top-level script (which sees the last function's
+  declarations) that rebinds the name, and `isEmpty` also exists on
   `string`, where PHP's `"" === []` is false. `List.isEmpty` type-checks only on a list, so a stale
   hint makes the draft fail `phg check` — it never changes the answer. A LOOSE `== []` is left alone
   (it is also true for `null`, `false`, `0` and `""`), and so is a nullable collection, for which

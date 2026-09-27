@@ -480,6 +480,23 @@ $noKeys = [];
 echo none($noInts); echo "|"; echo none([3]); echo "|"; echo keyed(['a' => 1]); echo "|"; echo keyed($noKeys);
 echo "|"; echo count(evens(0)); echo "|"; echo count(evens(6));"#,
         ),
+        // Row 4i: builtins whose native takes another argument order. `str_replace` over arrays
+        // re-replaces left to right (`ab` → `bb` → `cc`), which is exactly a chain of `replace`.
+        (
+            "reordered_builtins",
+            r#"<?php
+/** @param list<string> $xs */
+function has(array $xs, string $x): string { return in_array($x, $xs, true) ? 'yes' : 'no'; }
+/** @param list<string> $xs */
+function joined(array $xs): string { return implode('+', $xs); }
+function words(string $s): int { return count(explode(' ', $s)); }
+function swap(string $s): string { return str_replace(['a', 'b'], ['b', 'c'], $s); }
+function strip(string $s): string { return str_replace(['-', '_'], '', str_replace('x', 'y', $s)); }
+function say(string $who, string $what): string { return sprintf('%s said « %s » at 100%%', $who, $what); }
+echo has(['a', 'b'], 'b'); echo "|"; echo has(['a'], 'z'); echo "|"; echo joined(['p', 'q', 'r']);
+echo "|"; echo words('one two three'); echo "|"; echo swap('ab'); echo "|"; echo strip('a-x_b');
+echo "|"; echo say('Ann', 'hi'); echo "|"; echo PHP_INT_MAX;"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php

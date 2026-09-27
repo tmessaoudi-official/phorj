@@ -91,6 +91,8 @@ mod lifter_tests_ordering;
 #[cfg(test)]
 mod lifter_tests_php83;
 #[cfg(test)]
+mod lifter_tests_reordered;
+#[cfg(test)]
 mod lifter_tests_shapes;
 #[cfg(test)]
 mod lifter_tests_spread;

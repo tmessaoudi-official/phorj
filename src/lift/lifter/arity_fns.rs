@@ -26,7 +26,7 @@ pub(super) fn handles(name: &str) -> bool {
     matches!(name, "min" | "max" | "substr" | "array_filter" | "strtr")
 }
 
-fn member_call(object: Expr, name: &str, args: Vec<Expr>) -> Expr {
+pub(super) fn member_call(object: Expr, name: &str, args: Vec<Expr>) -> Expr {
     Expr::Call {
         callee: Box::new(Expr::Member {
             object: Box::new(object),

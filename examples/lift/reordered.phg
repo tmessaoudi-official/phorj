@@ -1,0 +1,39 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.List;
+import Core.String;
+
+/**
+ * Strict `in_array` is `List.contains` (qualified: `contains` also exists on strings); `implode` and
+ * `explode` are `join` and `split` on the receiver.
+ *
+ * @param list<string> $tags
+ */
+function summary(List<string> tags, string line): string {
+    mutable var mark = if (List.contains(tags, "urgent")) { "!" } else { "-" };
+    return "{mark} {line.split(\" \").join(\", \")}";
+}
+
+function slug(string s): string {
+    return s.replace("à", "a").replace("é", "e").replace(" ", "-").replace("_", "-");
+}
+
+function report(string who, string what): string {
+    return "{who}: {what} (100% done)";
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.print("{summary([\"urgent\", \"home\"], \"fix the roof\")}");
+    Output.print("|");
+    Output.print("{slug(\"café à_emporter\")}");
+    Output.print("|");
+    Output.print("{report(\"Ann\", \"roof\")}");
+    Output.print("|");
+    Output.print("{9223372036854775807}");
+    Output.print("\n");
+}

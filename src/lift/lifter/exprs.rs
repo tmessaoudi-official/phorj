@@ -92,7 +92,9 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             Some(recv) => Expr::Ident(recv, SP),
             None => Expr::This(SP),
         },
-        php::PhpExpr::Var(name) | php::PhpExpr::Name(name) => Expr::Ident(name.clone(), SP),
+        php::PhpExpr::Name(name) => super::reordered::lift_php_constant(name)
+            .unwrap_or_else(|| Expr::Ident(name.clone(), SP)),
+        php::PhpExpr::Var(name) => Expr::Ident(name.clone(), SP),
         php::PhpExpr::CallableRef(name) => super::callables::lift_callable_ref(name)?,
         php::PhpExpr::Array(elems) => lift_array(elems)?,
         // LIFT-ATTR: `name: value` lifts 1:1 — phorj spells a named argument exactly the same way
@@ -228,6 +230,11 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             }
             if let Some(lifted) = super::arity_fns::lift_by_arity(callee, args) {
                 return lifted; // row 4g: an arity the registry cannot place
+            }
+            if let Some(lifted) = super::reordered::lift_reordered(callee, args)
+                .or_else(|| super::sprintf::lift_sprintf(callee, args))
+            {
+                return lifted; // row 4i: an argument order or shape the registry cannot invert
             }
             if let Some(lifted) = super::spread::lift_spread_merge(callee, args) {
                 return lifted; // DEC-538: `array_merge(...$xss)`

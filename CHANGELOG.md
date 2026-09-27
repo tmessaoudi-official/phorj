@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: builtins whose native takes another argument order (L3 row 4i; 2026-09-27)
+
+`in_array($x, $xs, true)` lifts to `List.contains(xs, x)`, `implode`/`explode` to `join`/`split`, `str_replace` to `replace` (over a literal search array, one `replace` per needle — PHP's own left-to-right re-replacement), a `sprintf` whose literal format has only `%s`/`%%` to an interpolation, and `PHP_INT_MAX` to the int bound. Refused by name: a loose `in_array`, `explode` with a limit, `str_replace` with a count or mismatched arrays, and `sprintf` `%d` / padded / positional / computed formats. A swapped call is lifted only when at most one argument has an effect, since the receiver form evaluates the receiver first; `array_map`'s existing swap now honours the same guard. Scout census: 11/11 files still lift (with a faithful `%d` → `%s` bypass on three int values); type errors 213 → 186. Example: `examples/lift/reordered.{php,phg}`.
+
 ### Added — `phg lift`: PHP's empty `[]` typed where the program declared the collection (L3 row 4h; 2026-09-27)
 
 phorj's `[]` has no type (DEC-214 part-2), so every empty PHP array the lifter could not type was an `E-EMPTY-LITERAL` in the draft. A strict `$xs === []` / `!== []` on a variable declared a non-null list or map now lifts to `List.isEmpty(xs)` / `!Map.isEmpty(m)` — qualified, so a name the lifter's function-scoped registry cannot follow (a `foreach` binder, a closure parameter) fails `phg check` rather than becoming a string's `isEmpty`, where PHP's `"" === []` is false. A `return [];` at any depth becomes `new List<T>()` / `new Map<K, V>()` from the declared return type. Loose `== []`, nullable collections, unannotated locals, `$this->prop === []`, ternary branches and `[]` arguments stay loud, each fixed by an annotation. The scout census drafts went from 15 to 11 empty-literal errors. Example: `examples/lift/empty.{php,phg}`.

@@ -34,7 +34,8 @@ pub(super) fn lift_array_map(
     let (php::PhpExpr::Name(n), [f, xs]) = (callee, args) else {
         return None;
     };
-    if n != "array_map" {
+    // Row 4i: the receiver form evaluates `$xs` before `$f`, so the swap needs one inert side.
+    if n != "array_map" || !super::reordered::reorderable(&[f, xs]) {
         return None;
     }
     Some((|| {
