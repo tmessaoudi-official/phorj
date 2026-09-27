@@ -45,3 +45,17 @@ fn a_ternary_in_value_position_stays_an_expression() {
     checks_clean(&out);
     assert!(out.contains("= if (c) { 1 } else { 2 };"), "{out}");
 }
+
+/// The ELVIS form in statement position (`$a ?: g();`) is not rewritten — it has no `if` spelling
+/// without evaluating `$a` twice — and stays refused by name rather than emitting a draft that does
+/// not parse.
+#[test]
+fn a_statement_elvis_is_still_refused_by_name() {
+    let err = super::lifter::lift_source(
+        "<?php
+function g(): int { return 1; }
+function f(int $a): void { $a ?: g(); }",
+    )
+    .expect_err("an elvis statement is refused");
+    assert!(err.contains("?:"), "{err}");
+}
