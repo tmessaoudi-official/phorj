@@ -16,7 +16,17 @@ fn workspace(tag: &str) -> PathBuf {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let mut cmd = Command::new("git");
+    // Scrub every inherited `GIT_*` first, as `src/pm/fetch.rs::harden` does. Under a git hook the
+    // test inherits the CALLER's repository: a pathspec `git commit` hands its hooks an ABSOLUTE
+    // `GIT_INDEX_FILE`, so `git add -A` here wrote this scratch repo's `greet.phg` into the phorj
+    // commit's index and the commit died with `invalid object … for 'greet.phg'` (2026-09-27).
+    for (k, _) in std::env::vars_os() {
+        if k.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(&k);
+        }
+    }
+    let out = cmd
         .args(args)
         // Deterministic identity + no dependence on the host's global git config.
         .env("GIT_AUTHOR_NAME", "t")
