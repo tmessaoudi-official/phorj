@@ -614,9 +614,11 @@ another order, so the registry could not invert them:
 - **`PHP_INT_MAX`** → `9223372036854775807`.
 
 **Evaluation order.** The receiver form evaluates the receiver first; PHP evaluates arguments left to
-right. A swap is only taken when at most one argument can do anything — literals, variables,
-constants, closures and reads of those are inert — and otherwise the call is left as the plain
-unresolved (loud) call. The same guard now covers `array_map`'s swap (row 5f). Byte-identical on all
+right. A swap is only taken when there is at most one EFFECT (a call, `new`) among the arguments and
+no other argument READS state it could change: `implode($this->sep, $this->build())` keeps its PHP
+order because `build()` may set `$this->sep`, while `implode(', ', $this->build())` and
+`str_replace($this->a, $this->b, $s)` are swapped (a literal, a local variable or a constant cannot
+be changed by a call). Otherwise the call is left as the plain unresolved (loud) call. The same guard now covers `array_map`'s swap (row 5f). Byte-identical on all
 three legs and against the PHP.
 
 ## Empty collections — `empty.php` / `empty.phg` (scout row 4h, 2026-09-27)

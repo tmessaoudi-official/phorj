@@ -5,45 +5,71 @@
 //!
 //! **Evaluation order.** PHP evaluates arguments left to right; the receiver form evaluates the
 //! receiver first. `implode($sep, $xs)` → `xs.join(sep)` therefore reorders `$sep` and `$xs` — which
-//! is only unobservable when at most one argument can DO anything. [`reorderable`] is that test: every
-//! argument but one must be [`is_inert`] (a literal, a variable, a constant, a read of those). A call
-//! whose arguments fail it falls through to the plain unresolved call — loud, never a reordered effect.
-//! "Inert" does not consider a FAULT (a division by zero, a missing key's warning) inside an argument:
-//! two faulting arguments would report the other one first — a `// lifted (verify)` draft's limit.
+//! is only unobservable when there is one EFFECT at most and nothing else READS state it could change
+//! ([`reorderable`]). A call whose arguments fail it falls through to the plain unresolved call —
+//! loud, never a reordered effect. The classification does not see a FAULT (a division by zero, a
+//! missing key's warning) nor a magic `__get` / `__toString` inside an argument: those would run in the
+//! other order — a `// lifted (verify)` draft's limit.
 
 use super::*;
 
-/// Whether evaluating `e` can have no effect a reordering could expose: literals, variables,
-/// constants, closure literals and first-class callables (creating one runs nothing), and reads,
-/// casts, operators, interpolations and array literals built only from such.
-pub(super) fn is_inert(e: &php::PhpExpr) -> bool {
+/// What evaluating an argument can do, ordered: a FIXED value no call can change (a literal, a
+/// local variable — PHP locals cannot be reached by a callee here: no by-reference capture, DEC-506,
+/// no `static` locals, row 5w — a constant, a closure or first-class callable), a READ of state a
+/// call could change (a property, a static property, an element of one), or an EFFECT (a call,
+/// `new`, an assignment). A compound takes the strongest of its parts.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Kind {
+    Fixed,
+    Read,
+    Effect,
+}
+
+fn kind(e: &php::PhpExpr) -> Kind {
     use php::PhpExpr as P;
+    let all =
+        |es: &mut dyn Iterator<Item = &php::PhpExpr>| es.map(kind).max().unwrap_or(Kind::Fixed);
     match e {
-        P::Int(_) | P::Float(_) | P::Str(_) | P::Bool(_) | P::Null | P::Var(_) | P::Name(_) => true,
-        P::ClassConst { .. } | P::StaticProp { .. } | P::CallableRef(_) => true,
-        P::Closure { .. } | P::BlockClosure { .. } => true,
-        P::Member { recv, .. } => is_inert(recv),
-        P::Index { base, index } => is_inert(base) && is_inert(index),
-        P::Cast { value, .. } | P::InstanceOf { value, .. } => is_inert(value),
-        P::Unary { expr, .. } => is_inert(expr),
-        P::Binary { left, right, .. } => is_inert(left) && is_inert(right),
-        P::Ternary { cond, then, els } => {
-            is_inert(cond) && then.as_deref().is_none_or(is_inert) && is_inert(els)
+        P::Int(_) | P::Float(_) | P::Str(_) | P::Bool(_) | P::Null | P::Var(_) | P::Name(_) => {
+            Kind::Fixed
         }
-        P::Interp(parts) => parts.iter().all(|p| match p {
-            php::PhpStrPart::Lit(_) => true,
-            php::PhpStrPart::Expr(e) => is_inert(e),
-        }),
-        P::Array(items) => items
+        P::ClassConst { .. } | P::CallableRef(_) | P::Closure { .. } | P::BlockClosure { .. } => {
+            Kind::Fixed
+        }
+        P::StaticProp { .. } => Kind::Read,
+        P::Member { recv, .. } => kind(recv).max(Kind::Read),
+        P::Index { base, index } => kind(base).max(kind(index)),
+        P::Cast { value, .. } | P::InstanceOf { value, .. } => kind(value),
+        P::Unary { expr, .. } => kind(expr),
+        P::Binary { left, right, .. } => kind(left).max(kind(right)),
+        P::Ternary { cond, then, els } => all(&mut [Some(&**cond), then.as_deref(), Some(&**els)]
+            .into_iter()
+            .flatten()),
+        P::Interp(parts) => all(&mut parts.iter().filter_map(|p| match p {
+            php::PhpStrPart::Lit(_) => None,
+            php::PhpStrPart::Expr(e) => Some(&**e),
+        })),
+        P::Array(items) => all(&mut items
             .iter()
-            .all(|i| i.key.as_ref().is_none_or(is_inert) && is_inert(&i.value)),
-        _ => false,
+            .flat_map(|i| i.key.iter().chain(std::iter::once(&i.value)))),
+        _ => Kind::Effect,
     }
 }
 
-/// At most one argument does anything, so the receiver form's order cannot be observed.
+/// Whether evaluating `e` DOES nothing — it may still read state, so it can be evaluated again or
+/// out of order next to anything that is not an effect.
+pub(super) fn is_inert(e: &php::PhpExpr) -> bool {
+    kind(e) != Kind::Effect
+}
+
+/// The receiver form's order cannot be observed: no argument has an effect, or exactly one does and
+/// no other argument reads state it could change (`implode($this->sep, $this->build())` must keep
+/// reading `$this->sep` BEFORE `build()` runs, so it is not reordered).
 pub(super) fn reorderable(args: &[&php::PhpExpr]) -> bool {
-    args.iter().filter(|a| !is_inert(a)).count() <= 1
+    let kinds: Vec<Kind> = args.iter().map(|a| kind(a)).collect();
+    let effects = kinds.iter().filter(|k| **k == Kind::Effect).count();
+    let reads = kinds.iter().filter(|k| **k == Kind::Read).count();
+    effects == 0 || (effects == 1 && reads == 0)
 }
 
 fn string_call(recv: Expr, name: &str, args: Vec<Expr>) -> Expr {

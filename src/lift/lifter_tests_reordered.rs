@@ -137,3 +137,16 @@ fn only_a_literal_true_strict_flag_and_an_inert_replacement_qualify() {
     );
     assert!(e.contains("inert"), "{e}");
 }
+
+#[test]
+fn a_property_read_next_to_an_effect_is_not_reordered_but_two_reads_are() {
+    // `build()` may set `$this->sep`: PHP reads the separator BEFORE the call, the receiver form after.
+    let out = lifted(
+        "<?php\nclass B {\n  public string $sep = ',';\n  public string $a = 'a';\n  public string $b = 'b';\n\
+           /** @return list<string> */\n  public function build(): array { $this->sep = ';'; return ['x']; }\n\
+           public function f(): string { return implode($this->sep, $this->build()); }\n\
+           public function g(string $s): string { return str_replace($this->a, $this->b, $s); }\n}",
+    );
+    assert!(out.contains("implode(this.sep, this.build())"), "{out}");
+    assert!(out.contains("s.replace(this.a, this.b)"), "{out}");
+}
