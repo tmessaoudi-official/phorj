@@ -150,3 +150,13 @@ fn a_property_read_next_to_an_effect_is_not_reordered_but_two_reads_are() {
     assert!(out.contains("implode(this.sep, this.build())"), "{out}");
     assert!(out.contains("s.replace(this.a, this.b)"), "{out}");
 }
+
+/// DEC-545/549 (row 4n): `trim($s)` lifts to `s.trimAscii()`, PHP's own default set. The
+/// character-list form has another arity and stays the unresolved `trim(…)` (DEC-312's arity rule —
+/// loud at `phg check`, never mapped onto the default-set native).
+#[test]
+fn trim_lifts_to_trim_ascii_and_its_mask_form_stays_unmapped() {
+    let out = lifted("<?php\nfunction f(string $s): string { return trim($s); }\nfunction g(string $s): string { return trim($s, 'x'); }");
+    assert!(out.contains("return s.trimAscii();"), "{out}");
+    assert!(out.contains("return trim(s, \"x\");"), "{out}");
+}

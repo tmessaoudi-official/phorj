@@ -7113,6 +7113,30 @@ function main(): void {
     );
 }
 
+/// DEC-545/549 (scout row 4n): `String.trimAscii` is PHP's `trim()` with its default list exactly —
+/// `" \t\n\r\0\x0B"` stripped, form feed and U+00A0 kept (where `String.trim` strips both) — and it
+/// transpiles to `trim($s)`, so the PHP leg is PHP's own function.
+#[test]
+fn trim_ascii_is_php_trim_on_every_leg() {
+    agree_out_php(
+        "import Core.Output;
+import Core.String;
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    string s = \" \\t\\n\\r\\u{0}\\u{B}x y \\t\\u{0}\";
+    Output.printLine(\"[{s.trimAscii()}]\");
+    string ff = \"\\u{C}x\\u{C}\";
+    Output.printLine(\"{String.length(String.trimAscii(ff))} {String.length(ff.trim())}\");
+    string nb = \"\\u{A0}x\\u{A0}\";
+    Output.printLine(\"[{nb.trimAscii()}] [{nb.trim()}]\");
+    Output.printLine(\"[{String.trimAscii(\\\"\\\")}]\");
+}
+",
+        "[x y]\n3 1\n[\u{a0}x\u{a0}] [x]\n[]\n",
+        "trim_ascii",
+    );
+}
+
 /// DEC-524 (scout row 5j): an immutable field with no initializer, assigned exactly once on every path
 /// of its own class's constructor — both arms of an `if`, then read after — prints identically on the
 /// VM, the tree-walker and transpiled PHP (phorj emits no PHP `readonly`, so the PHP leg is a plain

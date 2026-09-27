@@ -357,10 +357,11 @@ fn lifts_registered_builtins_to_receiver_form_with_imports() {
 
 #[test]
 fn unregistered_or_wrong_arity_builtins_stay_unresolved() {
-    // `trim` is deliberately unregistered (its transpile twin is a Unicode-whitespace shim);
-    // a wrong-arity `strlen` must not resolve either — the draft stays loud, never a wrong guess.
-    let out = lift(r#"<?php echo trim(" x ");"#);
-    assert!(out.contains(r#"trim(\" x \")"#), "{out}");
+    // `metaphone` has no registered native; a wrong-arity `strlen` must not resolve either — the
+    // draft stays loud, never a wrong guess. (`trim` was the unregistered example until DEC-549 gave
+    // it `String.trimAscii`, row 4n.)
+    let out = lift(r#"<?php echo metaphone(" x ");"#);
+    assert!(out.contains(r#"metaphone(\" x \")"#), "{out}");
     assert!(!out.contains("import Core.String;"), "{out}");
     let out2 = lift(r#"<?php echo strlen("a", "b");"#);
     assert!(out2.contains(r#"strlen(\"a\", \"b\")"#), "{out2}");

@@ -126,3 +126,22 @@ function s(array $xs, array $ys): array {
     );
     checks_clean(&out);
 }
+
+/// A PROMOTED constructor parameter the body reassigns is copied like any other: the field keeps the
+/// value PHP stored, the copy takes the reassignment.
+#[test]
+fn a_promoted_constructor_parameter_is_copied_too() {
+    let out = lift(
+        "<?php
+final class Tally {
+    public function __construct(public int $n) {
+        $n = $n + 1;
+        echo $n;
+    }
+}",
+    );
+    assert!(out.contains("constructor(public mutable int n)"), "{out}");
+    assert!(out.contains("mutable var nLocal = n;"), "{out}");
+    assert!(out.contains("nLocal = nLocal + 1;"), "{out}");
+    checks_clean(&out);
+}

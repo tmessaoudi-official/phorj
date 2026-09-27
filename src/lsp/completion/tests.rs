@@ -191,6 +191,23 @@ fn member_context_lists_module_natives_on_incomplete_buffer() {
     assert!(!got.is_empty());
 }
 
+/// DEC-549 (row 4n): `String.trimAscii` reaches the editor from the native registry, beside `trim`.
+#[test]
+fn string_member_completion_lists_trim_ascii_beside_trim() {
+    let src = "package Main;\nimport Core.String;\nfunction main(): void {\n  String.\n}\n";
+    let offset = src.find("String.").unwrap() + "String.".len();
+    let got = labels(&complete(
+        src,
+        offset,
+        None,
+        None,
+        &std::collections::HashMap::new(),
+    ));
+    for want in ["trimAscii", "trim"] {
+        assert!(got.iter().any(|l| l == want), "want {want} in {got:?}");
+    }
+}
+
 /// DEC-534 (row 5q): `Map.union` reaches the editor from the native registry with no LSP edit — and
 /// beside `merge`, its mirror, so the two stay discoverable together.
 #[test]

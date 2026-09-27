@@ -5,6 +5,7 @@ mod fold;
 mod process_run;
 mod soundex;
 mod strspan;
+mod trim_ascii;
 mod wordwrap;
 
 use super::NativeFn;
@@ -15,6 +16,8 @@ pub(super) fn extend_module_natives(registry: &mut Vec<NativeFn>) {
     // `Core.String.foldAccents` (DEC-468) — see `registry_modules/fold.rs` for why it is not in
     // `text_registry.rs` with its siblings.
     registry.extend(fold::fold_natives());
+    // `String.trimAscii` (DEC-545/549) — PHP's `trim()` default set; see `registry_modules/trim_ascii.rs`.
+    registry.extend(trim_ascii::trim_ascii_natives());
     // `String.wordWrap` (FN-STR) — codepoint-based, see `registry_modules/wordwrap.rs`.
     registry.extend(wordwrap::wordwrap_natives());
     // `String.soundex` (FN-STR) — PHP's phonetic key, byte-for-byte.

@@ -162,7 +162,11 @@ fn lift_of_resolves_the_seeded_builtins() {
     let n = lift_of("sqrt").expect("sqrt registered");
     assert_eq!((n.module, n.name), ("Core.Math", "sqrt"));
     assert!(lift_of("definitely_not_a_builtin").is_none());
-    // `trim` must stay UNREGISTERED: its emitter is a `__phorj_trim` shim (Rust Unicode whitespace
-    // vs PHP's ASCII set) — inverting it would change semantics.
-    assert!(lift_of("trim").is_none());
+    // DEC-545/549 (row 4n): `trim` inverts to `String.trimAscii`, PHP's own default set — NOT to
+    // `String.trim`, whose Unicode White_Space set would change the meaning; that one keeps no
+    // `lift_from` and erases to its `__phorj_text_trim` helper.
+    let n = lift_of("trim").expect("trim registered");
+    assert_eq!((n.module, n.name), ("Core.String", "trimAscii"));
+    let unicode = &registry()[index_of("Core.String", "trim").expect("String.trim")];
+    assert!(unicode.lift_from.is_empty());
 }

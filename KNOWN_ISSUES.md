@@ -2976,7 +2976,9 @@ gives the Pythonic `for (int i, T x in enumerate(xs))` (index→element `Map<int
 `reverse` reverses by Unicode code point, and `trim*` strip Rust's full Unicode White_Space set. Both
 stay byte-identical on the PHP leg via emitted helpers (`__phorj_text_reverse` /
 `__phorj_text_trim*`) that use PCRE `/u`, so no mbstring is needed under `php -n` — a byte reversal
-(`strrev`) or PHP's ASCII-ish `trim()` would diverge on multibyte input.
+(`strrev`) or PHP's ASCII-ish `trim()` would diverge on multibyte input. PHP's own set is the separate
+native `String.trimAscii` (DEC-545/549, 2026-09-27), which `phg lift` maps `trim($s)` onto; its
+character-list form `trim($s, $chars)` and `ltrim`/`rtrim` have no mapping yet.
 
 Still ASCII-scoped: `equalsIgnoreCase`/`containsIgnoreCase` fold only ASCII letters
 (→ `strcasecmp`/`stripos`); Unicode case-folding is deferred to W4-4 (a known landmine —

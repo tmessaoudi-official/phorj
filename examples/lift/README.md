@@ -684,6 +684,15 @@ DECLARATION, not an assignment, and copying would not change that. The copy is `
 `var` parameters (SE-0003) — the copy is the idiom both leave. All three phorj legs print what PHP
 prints.
 
+## `trim` — PHP's own set (scout row 4n, DEC-545/549, 2026-09-27)
+
+`trim($s)` lifts to `s.trimAscii()`, a native stripping exactly PHP's default list
+`" \t\n\r\0\x0B"` and transpiling back to `trim($s)`. It deliberately does NOT lift to
+`String.trim`, which strips the Unicode White_Space set (form feed, U+00A0, U+3000, …) — in a
+byte-identity harness that would be a meaning change. The character-list form `trim($s, $chars)` has
+another arity and stays the unresolved `trim(…)`, loud at `phg check` (DEC-312's arity rule), and
+`trim(...)` as a first-class callable is refused like any registered builtin's (row 4f).
+
 ## Reordered builtins — `reordered.php` / `reordered.phg` (scout row 4i, 2026-09-27)
 
 These PHP builtins have a phorj native whose PHP form IS the builtin, but with the arguments in
