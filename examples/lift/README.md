@@ -430,8 +430,8 @@ both value sides follow it:
   enclosing class, and `f()` for a function this FILE declares — through a propagated `?` too.
   `Ledger::rentBp()` (over `$this->rents()`) and `main`'s loop over `byTenure(true)` in the pair.
   Never the callee's body (DEC-166). Unresolved, so still binding nothing: an inherited or
-  `parent::` method, another object's method (`$box->hits()`), a nullsafe `$this?->m()`, and a
-  function declared in another file.
+  `parent::` method, another object's method (`$box->hits()`), a nullsafe `$this?->m()`, a static
+  call on ANOTHER class of the same file (`Other::m()`), and a function declared in another file.
 
 A tuple TYPE is only half of it. The literal that satisfies it must lift to a tuple VALUE too, or
 the draft lifts and then fails `phg check` with `expected (int, string), found List<int>` — one

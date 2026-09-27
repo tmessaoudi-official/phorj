@@ -665,6 +665,18 @@ its weights and denominator.
 
 ---
 
+## 0.09 THE TWES-IN FORCING-FUNCTION RULINGS — mirror rows (DEC-551 … DEC-553)
+
+> Invariant 19 mirror: the register row is the ruling, `docs/plans/2026-09-27-twes-in-forcing-function.plan.md`
+> is the plan, `SLICE-STATE.md` is the live cursor. `/stack/projects/twes-in` (Symfony + API Platform + Doctrine)
+> is a READ-ONLY yardstick like scout. The register wins on any difference.
+
+| DEC | subject | status (register) |
+|---|---|---|
+| DEC-551 | Framework apps: STUBS BRIDGE, LIFTS REPLACE — phorj never hand-writes Symfony/API Platform/Doctrine; vendor packages are lifted from their own source and published as phorj packages leaf-first, DEC-439 stubs bridge until then | RULED 2026-09-27 — QUEUED (twes T3, T9) |
+| DEC-552 | Attributes on properties, methods, class constants and parameters | RULED 2026-09-27 — QUEUED (twes T6) |
+| DEC-553 | `mixed` → build DEC-335's `Any` + `Object` top types as specified | RULED 2026-09-27 — QUEUED (twes T7) |
+
 ## 0.1 LANGUAGE-RECONSIDERATION BATCH (2026-07-13, Opus run — developer via AskUserQuestion)
 
 > Developer-initiated sweep: "rethink anything opinionated that should not be in the language."
