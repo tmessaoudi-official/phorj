@@ -470,7 +470,7 @@ teaching it is wrong); the four `E-TYPE-IMPORT-*` codes re-homed as `E-IMPORT-BU
 | Module | Injected | Leaf | Discipline |
 |---|---|---|---|
 | `Core.Json` | `Json` enum | `Json` | leaf==type ⇒ compliant as-is; variants stay `Json.Object` |
-| `Core.Regex` | `Regex` class | `Regex` | compliant as-is; `compile` (linear) / `compileBacktracking` (DEC-461) |
+| `Core.Regex` | `Regex` class | `Regex` | compliant as-is; `compile` (linear) / `compileBacktracking` (DEC-461); QUEUED (DEC-554): `first(re, s): RegexMatch?`, `all(re, s): List<RegexMatch>`, and `RegexMatch.at(int): string?` / `start(): int` / `startOf(int): int?` — byte offsets, the unit of `String.substring` |
 | `Core.Secret` | `Secret<T>` class | `Secret` | compliant as-is |
 | `Core.Decimal` | `RoundingMode` enum | `Decimal` | member ⇒ `Decimal.RoundingMode` (or member-import) |
 | `Core.Http` | `Request`,`Response`,`Route`,`Router`,`ParamBag`,`HeaderBag`,`AttrBag`,`FileBag`,`RequestBody`,`UploadedFile`,`MultipartPart`,`Cookie`,`SameSite` (+ `#[Route]`) | `Http` | members ⇒ `Http.X` / `#[Http.Route]` (bags: DEC-331 s2) |

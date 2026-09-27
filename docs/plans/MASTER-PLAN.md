@@ -127,7 +127,10 @@ static local (`static $keys = null;`).
 errors) banked six questions, all RULED 2026-09-26 17:01 — **DEC-540** (`preg_*` lifts onto `Core.Regex`), **DEC-541**
 (`mixed` hand-ported to a sum type), **DEC-542** (constants may reference scalar consts and enum cases), **DEC-543** (by-ref
 param: named refusal + third hand-port), **DEC-544** (`T|false|null`: named refusal + enum hand-port), **DEC-545** (a
-PHP-faithful `trim` native). Scout plan rows 4b–4o carry the builds.
+PHP-faithful `trim` native). Scout plan rows 4b–4o carry the builds. Row 4l (DEC-540) was split 2026-09-27 by the preg
+census: 4l-a BUILT (`2bb88ca2`); **DEC-554** (typed `Regex.first` / `Regex.all` + `RegexMatch.at` / `start` / `startOf`,
+byte offsets) and **DEC-555** (the `=== false` error idiom drops its dead branch for a linear pattern only) RULED
+2026-09-27 19:30 and QUEUED as rows 4l-b and 4l-c.
 Text.php's next wall after DEC-532, PHP 8.3 typed `const array` constants (54 scout sites), is RULED 2026-09-24 as
 **DEC-533** (collection constants — explicit type, literal elements, PHP `const array`); BUILT as scout row 5m, `00b6db96`.
 **DEC-534** (`Map.union` — left-biased map union, PHP `+` on arrays); RULED 2026-09-25, BUILT as scout row 5q `b8aa33e7`, after row 5p `4c92693b` (the `Map.merge` → `array_merge` int-key renumbering break).
