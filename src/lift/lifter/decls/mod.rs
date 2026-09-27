@@ -166,6 +166,7 @@ pub fn lift_files(prog: &php::PhpProgram, split: bool) -> Result<LiftedFiles, St
     super::enums::begin_file(super::enums::enum_names_of(prog));
     // DEC-534: this file's Map-typed class constants, for PHP `+` as a map union.
     super::map_consts::begin_file(prog);
+    #[cfg(feature = "regex")]
     super::preg::begin_file(prog); // row 4l-a: string constants a `self::X` pattern can name
     super::begin_file_fns(prog); // row 4p4: this file's functions' declared returns
     foreach_tuple::begin_file();

@@ -39,6 +39,7 @@ thread_local! {
 }
 
 /// The name of the class being lifted, or `""` outside one (row 4l-a reads `self::X` with it).
+#[cfg(feature = "regex")]
 pub(in crate::lift::lifter) fn current_class() -> String {
     CLASS.with(|m| m.borrow().name.clone())
 }

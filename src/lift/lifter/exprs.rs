@@ -24,6 +24,7 @@ fn lift_expr_raw(e: &php::PhpExpr) -> Result<Expr, String> {
             span: SP,
         },
         // Row 4l-a (DEC-540): `1 === preg_match('/…/', $s)` is `Regex.matches(…)` — `preg/`.
+        #[cfg(feature = "regex")]
         php::PhpExpr::Binary { op, left, right }
             if super::preg::is_match_test(*op, left, right) =>
         {

@@ -92,7 +92,7 @@ mod lifter_tests_ns;
 mod lifter_tests_ordering;
 #[cfg(test)]
 mod lifter_tests_php83;
-#[cfg(test)]
+#[cfg(all(test, feature = "regex"))]
 mod lifter_tests_preg;
 #[cfg(test)]
 mod lifter_tests_reassigned_params;

@@ -45,6 +45,9 @@ mod magic;
 mod map_consts;
 mod mappings;
 mod matches;
+// Row 4l-a lifts onto `Core.Regex`, which only a `regex` build has; without it `preg_match` stays
+// the unresolved call it always was, and `phg check` names it.
+#[cfg(feature = "regex")]
 mod preg;
 mod reordered;
 mod shapes;
@@ -62,9 +65,11 @@ use exprs::*;
 use leaves::*;
 use mappings::*;
 use matches::*;
+#[cfg(feature = "regex")]
+use shapes::current_class;
 use shapes::{
-    begin_file_fns, current_class, declare_returned_builders, enter_binder, enter_class_props,
-    is_tuple_field, leave_binder, set_tuple_fields,
+    begin_file_fns, declare_returned_builders, enter_binder, enter_class_props, is_tuple_field,
+    leave_binder, set_tuple_fields,
 };
 pub(super) use throws::{
     facts_of as throws_facts_of, set_project as set_project_throws, Facts as ThrowsFacts,

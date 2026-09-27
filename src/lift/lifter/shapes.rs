@@ -33,9 +33,9 @@ mod closure;
 #[path = "shapes_props.rs"]
 mod props;
 pub(super) use closure::{enter_closure, leave_closure, swap_scope, ClosureScope};
-pub(super) use props::{
-    begin_file_fns, current_class, declare_returned_builders, enter_class_props,
-};
+#[cfg(feature = "regex")]
+pub(super) use props::current_class;
+pub(super) use props::{begin_file_fns, declare_returned_builders, enter_class_props};
 
 thread_local! {
     /// DEC-504 — the NAMED-TUPLE fields of each variable in the function being lifted, keyed by
