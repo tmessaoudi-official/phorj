@@ -1,10 +1,13 @@
 //! Row 5d (6C) — a closure body is a shape scope: the three function-scoped maps of `shapes.rs` are
 //! snapshotted before it and restored after, so a `@var` registered inside a closure never answers
-//! outside it. Split out of `shapes.rs` (Invariant 13, row 4p).
+//! outside it. Split out of `shapes.rs` (Invariant 13, row 4p). FILE scope is the same kind of scope
+//! (row 4p, 6C): [`swap_scope`] installs the file's own maps around each top-level statement.
 
 use super::*;
 
 /// Both maps as they stood before a closure body — restored by [`leave_closure`] (row 5d, 6C).
+/// `Default` is the empty scope a file starts with.
+#[derive(Default)]
 pub(in crate::lift::lifter) struct ClosureScope {
     tuple: std::collections::HashMap<String, Vec<String>>,
     elem: std::collections::HashMap<String, Vec<String>>,
@@ -27,4 +30,13 @@ pub(in crate::lift::lifter) fn leave_closure(scope: ClosureScope) {
     TUPLE_FIELDS.with(|m| *m.borrow_mut() = scope.tuple);
     ELEM_FIELDS.with(|m| *m.borrow_mut() = scope.elem);
     COLL_VARS.with(|m| *m.borrow_mut() = scope.colls);
+}
+
+/// Install `scope` and hand back what it replaced — the file-scope maps swapped in around one
+/// top-level statement, so a function lifted between two statements neither leaks its shapes into
+/// file scope nor clears a file-scope `@var` (row 4p, 6C).
+pub(in crate::lift::lifter) fn swap_scope(scope: ClosureScope) -> ClosureScope {
+    let old = enter_closure();
+    leave_closure(scope);
+    old
 }

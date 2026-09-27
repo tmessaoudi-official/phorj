@@ -22,6 +22,8 @@ impl Lifter {
             Ok(p) => p,
             Err(e) => return Some(Err(e)),
         };
+        // Row 4p (6C): reset the shape maps like every other function lift.
+        super::set_tuple_fields(params.iter().map(|p| (p.name.as_str(), &p.ty)));
         for p in &params {
             declared.insert(p.name.clone());
         }

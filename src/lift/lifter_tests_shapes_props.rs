@@ -161,3 +161,55 @@ final class B
     assert!(out.contains("return row.bp;"), "{out}");
     assert!(out.contains("var row = [\"bp\" => 1];"), "{out}");
 }
+
+/// The `__toString` twin: the magic-method path skipped the same reset (found at 6C).
+#[test]
+fn a_to_string_does_not_inherit_the_previous_methods_shapes() {
+    let out = lift(
+        "<?php
+final class A
+{
+    /** @param array{bp: int} $row */
+    public function m(array $row): int { return $row['bp']; }
+}
+final class B
+{
+    public function __toString(): string
+    {
+        $row = ['bp' => 'x'];
+        return $row['bp'];
+    }
+}",
+    );
+    assert!(out.contains("return row.bp;"), "{out}");
+    assert!(out.contains("var row = [\"bp\" => \"x\"];"), "{out}");
+}
+
+/// File scope is one more shape scope. Top-level statements lift into ONE `main`, interleaved with
+/// the declarations around them, so a function's shapes must not answer at file scope…
+#[test]
+fn a_file_scope_statement_does_not_inherit_a_functions_shapes() {
+    let out = lift(
+        "<?php
+/** @param array{bp: int} $row */
+function m(array $row): int { return $row['bp']; }
+$row = ['bp' => 1];
+echo $row['bp'];",
+    );
+    assert!(out.contains("return row.bp;"), "{out}");
+    assert!(out.contains("var row = [\"bp\" => 1];"), "{out}");
+}
+
+/// …and a file-scope `@var` must survive a declaration lifted between it and its use.
+#[test]
+fn a_file_scope_var_survives_a_declaration_between_it_and_its_use() {
+    let out = lift(
+        "<?php
+/** @var list<array{x: int}> $rows */
+$rows = [['x' => 1]];
+function g(): int { return 1; }
+foreach ($rows as $r) { echo $r['x']; }",
+    );
+    assert!(out.contains("{r.x}"), "{out}");
+    checks_clean(&out);
+}

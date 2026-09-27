@@ -153,6 +153,7 @@ pub fn lift_files(prog: &php::PhpProgram, split: bool) -> Result<LiftedFiles, St
     // which is why the bug was invisible anywhere but at file scope — where PHP scripts do most of
     // their assigning.
     let mut top_declared = HashSet::new();
+    let mut top_shapes = super::shapes::ClosureScope::default();
     let mut has_main = false;
     // LIFT-ATTR: attribute names resolve against the file's `namespace` + `use` map, so the context is
     // built once here rather than threaded through the Lifter walker — attribute lifting needs no
@@ -207,7 +208,12 @@ pub fn lift_files(prog: &php::PhpProgram, split: bool) -> Result<LiftedFiles, St
                 items.push(Item::Interface(interfaces::lift_interface(i)?));
             }
             php::PhpItem::Stmt(s) => {
-                top_stmts.extend(l.lift_stmt(s, &mut top_declared)?);
+                // Row 4p (6C): file scope keeps its own shape maps across the declarations
+                // between its statements.
+                let outer = super::shapes::swap_scope(std::mem::take(&mut top_shapes));
+                let lifted = l.lift_stmt(s, &mut top_declared);
+                top_shapes = super::shapes::swap_scope(outer);
+                top_stmts.extend(lifted?);
             }
         }
     }
