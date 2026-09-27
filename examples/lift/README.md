@@ -410,8 +410,8 @@ both value sides follow it:
   iterates a declared `list<array{…}>` (or `array<K, array{…}>`) and indexes the binder. The binder
   inherits the collection's ELEMENT shape, so `$row['bp']` lifts to `row.bp`. The binding lasts for
   the loop body only and a nested loop rebinding the same name restores the outer shape when it
-  closes. A collection with no declared shape (bare `array`, a call's result) binds nothing — the
-  lifter reads what the program declared and does not infer it (DEC-166).
+  closes. A collection with no declared shape (bare `array`, an unresolved call's result) binds
+  nothing — the lifter reads what the program declared and does not infer it (DEC-166).
 - **Writes in return position.** `return ['tenure' => $t, 'bp' => $bp];` under a keyed `@return`
   lifts to `return (tenure: t, bp: bp);` — but only when the keys are exactly the declared fields **in
   the declared order**. Field order is part of the type and erasure is positional, so reordering the
@@ -424,8 +424,14 @@ both value sides follow it:
   shape the same way, and the BUILDER local of a declared return — a top-level `$out = []` that the
   function returns, already constructed as the return type — takes a keyed literal written into it
   (`$out['rent'] = ['tenure' => …]`, each arm of `$c ? [...] : [...]` too) as the declared tuple.
-  `Ledger` and `byTenure` in the pair. A keyed literal passed as an ARGUMENT, and a binder over a
-  CALL's result, still bind nothing.
+  `Ledger` and `byTenure` in the pair. A keyed literal passed as an ARGUMENT still binds nothing.
+- **Row 4p4 (DEC-550) — a call's DECLARED return.** A binder over a STATICALLY resolved call reads
+  the callee's `@return` element shape: `$this->m()`, `self::m()` / `static::m()` / `Own::m()` on the
+  enclosing class, and `f()` for a function this FILE declares — through a propagated `?` too.
+  `Ledger::rentBp()` (over `$this->rents()`) and `main`'s loop over `byTenure(true)` in the pair.
+  Never the callee's body (DEC-166). Unresolved, so still binding nothing: an inherited or
+  `parent::` method, another object's method (`$box->hits()`), a nullsafe `$this?->m()`, and a
+  function declared in another file.
 
 A tuple TYPE is only half of it. The literal that satisfies it must lift to a tuple VALUE too, or
 the draft lifts and then fails `phg check` with `expected (int, string), found List<int>` — one

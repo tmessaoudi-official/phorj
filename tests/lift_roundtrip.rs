@@ -565,6 +565,39 @@ echo $b->total();
 $hs = collect('x');
 foreach ($hs as $k => $h) { echo '|' . $k . '=' . $h['tag'] . $h['text']; }"#,
         ),
+        // Row 4p4, DEC-550: a binder over a statically resolved call — `$this->m()`, `self::m()`, a
+        // same-file function, one propagating a checked exception (`?`) — reads the callee's
+        // DECLARED `@return` shape, so `$h['tag']` is a field read on every leg.
+        (
+            "shapes_from_declared_call_returns",
+            r#"<?php
+final class NoInputException extends \RuntimeException {}
+final class Scan {
+    /** @return list<array{tag: string, at: int}> */
+    private function hits(string $s): array {
+        if ($s === '') { throw new NoInputException('empty'); }
+        return [['tag' => $s, 'at' => 1], ['tag' => $s . '!', 'at' => 4]];
+    }
+    /** @return array<string, array{tag: string, at: int}> */
+    private static function fixed(): array {
+        $out = [];
+        $out['k'] = ['tag' => 'fixed', 'at' => 9];
+        return $out;
+    }
+    public function report(string $s): string {
+        $r = '';
+        foreach ($this->hits($s) as $h) { $r .= $h['tag'] . '@' . $h['at'] . ','; }
+        foreach (self::fixed() as $k => $h) { $r .= $k . '=' . $h['tag']; }
+        return $r;
+    }
+}
+/** @return list<array{x: int}> */
+function rows(): array { return [['x' => 2], ['x' => 5]]; }
+$n = 0;
+foreach (rows() as $r) { $n += $r['x']; }
+echo $n, ' ';
+try { echo (new Scan())->report('ab'); } catch (NoInputException $e) { echo 'none'; }"#,
+        ),
         // Row 4q, DEC-548: a reassigned parameter lifts to a mutable local copy — through `=`, `*=`,
         // `++` and an append — with the signature (and the named argument `bp:`) untouched, and a
         // closure capturing the parameter seeing the copy.

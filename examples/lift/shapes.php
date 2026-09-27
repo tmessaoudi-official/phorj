@@ -64,6 +64,28 @@ final class Ledger
         }
         return $n;
     }
+
+    /** @return list<array{tenure: string, bp: int}> */
+    public function rents(): array
+    {
+        $out = [];
+        foreach ($this->rows as $row) {
+            if ($row['tenure'] === 'rent') {
+                $out[] = $row;
+            }
+        }
+        return $out;
+    }
+
+    /** A binder over this class's own method reads its declared `@return` (row 4p4). */
+    public function rentBp(): int
+    {
+        $n = 0;
+        foreach ($this->rents() as $row) {
+            $n = $n + $row['bp'];
+        }
+        return $n;
+    }
 }
 
 /**
@@ -96,10 +118,9 @@ function main(): void
     $total = totalBp([verdict('rent', 3), verdict('own', 4)]);
     echo $total, "\n";
     $ledger = new Ledger([verdict('rent', 3), verdict('own', 4)]);
-    echo $ledger->total(), "\n";
-    /** @var array<string, array{tenure: string, bp: int}> $split */
-    $split = byTenure(true);
-    foreach ($split as $tenure => $row) {
+    echo $ledger->total(), " ", $ledger->rentBp(), "\n";
+    // A binder over a same-file function reads its declared `@return` (row 4p4) — no `@var` needed.
+    foreach (byTenure(true) as $tenure => $row) {
         echo $tenure, "=", $row['bp'], "\n";
     }
 }

@@ -33,7 +33,7 @@ mod closure;
 #[path = "shapes_props.rs"]
 mod props;
 pub(super) use closure::{enter_closure, leave_closure, swap_scope, ClosureScope};
-pub(super) use props::{declare_returned_builders, enter_class_props};
+pub(super) use props::{begin_file_fns, declare_returned_builders, enter_class_props};
 
 thread_local! {
     /// DEC-504 — the NAMED-TUPLE fields of each variable in the function being lifted, keyed by
@@ -179,22 +179,23 @@ pub(super) struct BinderScope {
 /// Bind `binder` to the element shape of the collection being iterated, for the duration of the
 /// loop body. Returns what was displaced — pass it to [`leave_binder`], always.
 ///
-/// The shape is looked up only when the iterated expression is a plain variable. Anything else —
-/// `foreach ($this->rows as $r)`, `foreach (f() as $r)` — is left unbound: `$this->rows` is an
-/// `Expr::Member` the read site cannot key on, and a call's return type is precisely what the
-/// lifter refuses to infer (DEC-166).
+/// The shape comes from a DECLARATION only (DEC-166): a variable's (a parameter, a `@var`, a builder
+/// local), a `$this->prop` property's (row 4p), or a statically resolved callee's declared return
+/// (row 4p4, DEC-550 — `php_iter` is the PHP-side iterable, where `rows()` and `$rows()` still
+/// differ). Anything else — another object's property or method, an inherited method — is unbound.
 ///
 /// An iterated variable with NO element shape still displaces: the binder must stop answering with
 /// whatever it meant outside the loop, or `foreach ($ints as $row)` would keep an outer `$row`'s
 /// fields alive over an element that has none.
-pub(super) fn enter_binder(iter: &Expr, binder: &str) -> BinderScope {
+pub(super) fn enter_binder(iter: &Expr, php_iter: &php::PhpExpr, binder: &str) -> BinderScope {
     let labels = match iter {
         Expr::Ident(name, _) => ELEM_FIELDS.with(|m| m.borrow().get(name).cloned()),
         // Row 4p: `$this->prop`, a property whose declared type is a collection of shapes.
         Expr::Member { object, name, .. } if matches!(**object, Expr::This(_)) => {
             props::prop_elem_labels(name)
         }
-        _ => None,
+        // Row 4p4: a statically resolved call's declared return.
+        _ => props::call_elem_labels(php_iter),
     };
     TUPLE_FIELDS.with(|t| {
         ELEM_FIELDS.with(|e| {

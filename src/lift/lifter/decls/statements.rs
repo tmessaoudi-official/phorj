@@ -117,7 +117,7 @@ impl Lifter {
                 // a body that fails to lift still unwinds it, and a later `$row` in the same
                 // function answers to its own shape again (`lifter::shapes`).
                 let iter = lift_expr(array)?;
-                let scope = super::super::enter_binder(&iter, value);
+                let scope = super::super::enter_binder(&iter, array, value);
                 let lifted = self.lift_block(body, declared);
                 super::super::leave_binder(scope);
                 vec![Stmt::For {

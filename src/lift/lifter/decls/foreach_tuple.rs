@@ -52,7 +52,7 @@ impl Lifter {
         }
         let iter = lift_expr(array)?;
         let tmp = next_binder();
-        let scope = super::super::enter_binder(&iter, &tmp);
+        let scope = super::super::enter_binder(&iter, array, &tmp);
         let added: Vec<String> = binders
             .iter()
             .filter(|b| declared.insert((*b).clone()))

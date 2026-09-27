@@ -4,6 +4,7 @@ package Main;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 import Core.Output;
+import Core.List;
 
 /**
  * @return array{int, string}
@@ -59,6 +60,22 @@ class Ledger {
         }
         return n;
     }
+    public open function rents(): List<(tenure: string, bp: int)> {
+        mutable var out = new List<(tenure: string, bp: int)>();
+        foreach (this.rows as row) {
+            if (row.tenure == "rent") {
+                out = List.append(out, row);
+            }
+        }
+        return out;
+    }
+    public open function rentBp(): int {
+        mutable var n = 0;
+        foreach (this.rents() as row) {
+            n = n + row.bp;
+        }
+        return n;
+    }
 }
 
 /**
@@ -96,9 +113,10 @@ function main(): void {
     Output.print("\n");
     mutable var ledger = new Ledger([verdict("rent", 3), verdict("own", 4)]);
     Output.print("{ledger.total()}");
+    Output.print(" ");
+    Output.print("{ledger.rentBp()}");
     Output.print("\n");
-    mutable Map<string, (tenure: string, bp: int)> split = byTenure(true);
-    foreach (split as tenure => row) {
+    foreach (byTenure(true) as tenure => row) {
         // lift: key/value types inferred — spell them out for an explicit header
         Output.print("{tenure}");
         Output.print("=");

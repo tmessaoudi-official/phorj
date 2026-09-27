@@ -165,6 +165,7 @@ pub fn lift_files(prog: &php::PhpProgram, split: bool) -> Result<LiftedFiles, St
     super::enums::begin_file(super::enums::enum_names_of(prog));
     // DEC-534: this file's Map-typed class constants, for PHP `+` as a map union.
     super::map_consts::begin_file(prog);
+    super::begin_file_fns(prog); // row 4p4: this file's functions' declared returns
     foreach_tuple::begin_file();
     // DEC-509: free functions lowered from enum methods, and the names already taken by them. The
     // name set spans the whole PHP file even when the functions are split across companions: the
