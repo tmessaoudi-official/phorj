@@ -1,0 +1,58 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.List;
+
+/**
+ * Clamp: the classic reassigned parameter.
+ */
+function cap(int bp): int {
+    mutable var bpLocal = bp;
+    if (bpLocal > 9) {
+        bpLocal = 9;
+    }
+    return bpLocal;
+}
+
+/**
+ * Every assignment form counts — `[]=`, `++`, `*=` — and a read-only parameter keeps its name.
+ *
+ * @param list<int> $xs
+ */
+function grow(List<int> xs, int n, int scale): int {
+    mutable var xsLocal = xs;
+    mutable var nLocal = n;
+    xsLocal = List.append(xsLocal, nLocal);
+    nLocal = nLocal + 1;
+    nLocal = nLocal * scale;
+    mutable var total = 0;
+    foreach (xsLocal as x) {
+        total = total + x;
+    }
+    return total + nLocal;
+}
+
+/**
+ * A closure capturing a reassigned parameter captures the copy.
+ */
+function shifted(int k): int {
+    mutable var kLocal = k;
+    kLocal = kLocal * 3;
+    mutable var add = function(int m): int => m + kLocal;
+    return add(1);
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.print("{cap(bp: 12)}");
+    Output.print(" ");
+    Output.print("{cap(4)}");
+    Output.print("\n");
+    Output.print("{grow([1, 2], 3, 2)}");
+    Output.print("\n");
+    Output.print("{shifted(2)}");
+    Output.print("\n");
+}

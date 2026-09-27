@@ -21,12 +21,16 @@
 //!
 //! The walks are total over the PHP AST (Invariant 3's rule applied here: no `_` arm), so a new
 //! variant cannot be skipped without a compile error.
+//!
+//! The same pass then copies every parameter the body REASSIGNS into a mutable local (row 4q,
+//! DEC-548 — see `copies`), after the rename, so a reserved-word parameter copies as `typeValueLocal`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::lift::ast as php;
 use crate::tokenizer::is_reserved_word;
 
+mod copies;
 mod walk;
 use walk::{walk_params, walk_stmts};
 
@@ -35,7 +39,12 @@ use walk::{walk_params, walk_stmts};
 #[derive(Clone, Copy, PartialEq)]
 enum Site {
     Var,
+    /// A variable being assigned — a reassigned PARAMETER is copied (row 4q, DEC-548).
+    Write,
     NamedArg,
+    /// A closure body starts / ends (the name is a placeholder): its writes are its own locals'.
+    ClosureIn,
+    ClosureOut,
 }
 
 type Sites<'a> = dyn FnMut(&mut String, Site) + 'a;
@@ -96,7 +105,7 @@ fn method(class: &str, m: &mut php::PhpMethod) -> Result<(), String> {
 fn scope(
     fname: &str,
     params: &mut [php::PhpParam],
-    body: &mut [php::PhpStmt],
+    body: &mut Vec<php::PhpStmt>,
     ctor: bool,
 ) -> Result<(), String> {
     // Promoted constructor parameters are FIELDS: they keep their name.
@@ -110,7 +119,7 @@ fn scope(
         seen.insert(p.name.clone());
     }
     let mut collect = |n: &mut String, site: Site| {
-        if site == Site::Var {
+        if matches!(site, Site::Var | Site::Write) {
             seen.insert(n.clone());
         }
     };
@@ -138,7 +147,7 @@ fn scope(
         map.insert(n.clone(), to);
     }
     let mut apply = |n: &mut String, site: Site| match site {
-        Site::Var => {
+        Site::Var | Site::Write => {
             if let Some(to) = map.get(n.as_str()) {
                 *n = to.clone();
             }
@@ -148,11 +157,48 @@ fn scope(
                 n.push_str(SUFFIX);
             }
         }
+        Site::ClosureIn | Site::ClosureOut => {}
     };
     for p in params.iter_mut().filter(|p| !promoted.contains(&p.name)) {
         apply(&mut p.name, Site::Var);
     }
     walk_params(params, &mut apply);
     walk_stmts(body, &mut apply);
+    copy_reassigned(params, body);
     Ok(())
+}
+
+/// Row 4q, DEC-548: copy every parameter the (already keyword-renamed) body writes — see `copies`.
+fn copy_reassigned(params: &[php::PhpParam], body: &mut Vec<php::PhpStmt>) {
+    let (mut seen, mut written) = (BTreeSet::new(), BTreeSet::new());
+    for p in params {
+        seen.insert(p.name.clone());
+    }
+    // A write inside a closure is to the closure's own local — PHP captures by value.
+    let mut depth = 0usize;
+    walk_stmts(body, &mut |n: &mut String, site: Site| match site {
+        Site::ClosureIn => depth += 1,
+        Site::ClosureOut => depth -= 1,
+        Site::Write if depth == 0 => {
+            written.insert(n.clone());
+            seen.insert(n.clone());
+        }
+        Site::Var | Site::Write => {
+            seen.insert(n.clone());
+        }
+        Site::NamedArg => {}
+    });
+    let copies = copies::plan(params, &written, &seen);
+    if copies.is_empty() {
+        return;
+    }
+    let map: BTreeMap<String, String> = copies.iter().cloned().collect();
+    walk_stmts(body, &mut |n: &mut String, site: Site| {
+        if matches!(site, Site::Var | Site::Write) {
+            if let Some(to) = map.get(n.as_str()) {
+                *n = to.clone();
+            }
+        }
+    });
+    copies::prepend(body, params, &copies);
 }

@@ -565,6 +565,24 @@ echo $b->total();
 $hs = collect('x');
 foreach ($hs as $k => $h) { echo '|' . $k . '=' . $h['tag'] . $h['text']; }"#,
         ),
+        // Row 4q, DEC-548: a reassigned parameter lifts to a mutable local copy — through `=`, `*=`,
+        // `++` and an append — with the signature (and the named argument `bp:`) untouched, and a
+        // closure capturing the parameter seeing the copy.
+        (
+            "reassigned_parameters_copy",
+            r#"<?php
+function cap(int $bp): int { if ($bp > 9) { $bp = 9; } return $bp; }
+/** @param list<int> $xs */
+function grow(array $xs, int $n): int { $xs[] = $n; $n++; $total = 0; foreach ($xs as $x) { $total += $x; } return $total + $n; }
+function scale(int $k): int { $k *= 3; $f = fn (int $m): int => $m + $k; return $f(1); }
+/**
+ * @param list<int> $xs
+ * @return list<int>
+ */
+function sorted(array $xs): array { usort($xs, fn (int $a, int $b): int => $b <=> $a); return $xs; }
+echo cap(bp: 12); echo '|'; echo cap(4); echo '|'; echo grow([1, 2], 3); echo '|'; echo scale(2);
+echo '|'; echo sorted([3, 1, 2])[0];"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php

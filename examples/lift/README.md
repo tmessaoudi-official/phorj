@@ -656,6 +656,34 @@ type the source does not say, and a class or function whose name is declared in 
 analysis cannot tell the two apart, so it does not pick one). `?` is a checker-only marker, erased before every backend: the run, the transpiled PHP
 and the original PHP are byte-identical.
 
+## Reassigned parameters — `reassigned-params.php` / `reassigned-params.phg` (scout row 4q, DEC-548, 2026-09-27)
+
+A PHP parameter is an ordinary local and the body may reassign it; a phorj parameter is immutable,
+there is no `mutable` parameter form, and a local may not shadow one. So a parameter the body WRITES
+is copied into a mutable local on the first line, and the body uses the copy:
+
+```phorj
+function cap(int bp): int {
+    mutable var bpLocal = bp;
+    if (bpLocal > 9) {
+        bpLocal = 9;
+    }
+    return bpLocal;
+}
+```
+
+The signature is untouched, so the named argument `cap(bp: 12)` still binds. Every assignment form
+counts — `=`, `+=`/`*=`, `++`, `$xs[] = …`, `$xs[$k] = …`, and the by-reference builtins the lift
+lowers to a reassignment (`usort`, `array_unshift`); a read-only parameter keeps its name. A closure
+capturing the parameter captures the copy, and the copy carries the parameter's declared type, so a
+shaped or collection parameter's fields still read as fields. Not a write: `$box->x = …` (that writes
+through the object) and an assignment inside a closure body (PHP captures by value — it is the
+closure's own local). A `foreach`/`catch`/destructure binder over a parameter's name is a phorj
+DECLARATION, not an assignment, and copying would not change that. The copy is `<name>Local`, or
+`<name>Local2`… when the body already uses that name. Kotlin parameters are `val` and Swift removed
+`var` parameters (SE-0003) — the copy is the idiom both leave. All three phorj legs print what PHP
+prints.
+
 ## Reordered builtins — `reordered.php` / `reordered.phg` (scout row 4i, 2026-09-27)
 
 These PHP builtins have a phorj native whose PHP form IS the builtin, but with the arguments in

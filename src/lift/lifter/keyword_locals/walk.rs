@@ -1,7 +1,9 @@
 //! The total walks over the PHP AST behind [`super::rename`] (split out under Invariant 13). Every
 //! variable-name site — `Var`, parameters, `foreach` key/value, `catch` variables, destructure
 //! binders, closure parameters — reaches the visitor; no `_` arm, so a new AST variant cannot be
-//! skipped silently.
+//! skipped silently. An ASSIGNMENT's root variable reports `Site::Write`, and a closure body is bracketed by
+//! `ClosureIn`/`ClosureOut` (row 4q). A `foreach`/`catch`/destructure binder is a DECLARATION in
+//! phorj, not an assignment, so it stays `Site::Var`.
 
 use super::{Site, Sites};
 use crate::lift::ast as php;
@@ -171,22 +173,28 @@ fn walk_expr(e: &mut php::PhpExpr, f: &mut Sites) {
             walk_expr(right, f);
         }
         E::Closure { params, body, .. } => {
+            let mut mark = String::new();
+            f(&mut mark, Site::ClosureIn);
             walk_closure_params(params, f);
             walk_expr(body, f);
+            f(&mut mark, Site::ClosureOut);
         }
         E::BlockClosure { params, body, .. } => {
+            let mut mark = String::new();
+            f(&mut mark, Site::ClosureIn);
             walk_closure_params(params, f);
             walk_stmts(body, f);
+            f(&mut mark, Site::ClosureOut);
         }
         E::AppendSlot(e) => walk_expr(e, f),
         E::Cast { value, .. } | E::InstanceOf { value, .. } | E::Declared { value, .. } => {
             walk_expr(value, f)
         }
         E::Assign { target, value } | E::CompoundAssign { target, value, .. } => {
-            walk_expr(target, f);
+            walk_target(target, f);
             walk_expr(value, f);
         }
-        E::IncDec { target, .. } => walk_expr(target, f),
+        E::IncDec { target, .. } => walk_target(target, f),
         E::Throw(value) => walk_expr(value, f),
         E::Ternary { cond, then, els } => {
             walk_expr(cond, f);
@@ -197,7 +205,16 @@ fn walk_expr(e: &mut php::PhpExpr, f: &mut Sites) {
         }
         E::Call { callee, args } => {
             walk_expr(callee, f);
-            walk_args(args, false, f);
+            // Row 4q: a by-reference builtin lowered to a reassignment WRITES its first argument.
+            let writes_first = matches!(callee.as_ref(),
+                E::Name(n) if crate::lift::lifter::array_fns::REASSIGNING_BUILTINS.contains(&n.as_str()));
+            match args.split_first_mut() {
+                Some((first, rest)) if writes_first && matches!(first, E::Var(_)) => {
+                    walk_target(first, f);
+                    walk_args(rest, false, f);
+                }
+                _ => walk_args(args, false, f),
+            }
         }
         E::MethodCall { recv, args, .. } => {
             walk_expr(recv, f);
@@ -221,5 +238,19 @@ fn walk_expr(e: &mut php::PhpExpr, f: &mut Sites) {
                 walk_expr(&mut a.body, f);
             }
         }
+    }
+}
+
+/// An assignment target: the variable at its ROOT is written (`$x`, `$x[…]`, `$x[]`, nested), row 4q.
+/// A property target writes THROUGH its object (`$box->x = …`), so the object is only read.
+fn walk_target(e: &mut php::PhpExpr, f: &mut Sites) {
+    match e {
+        php::PhpExpr::Var(n) => f(n, Site::Write),
+        php::PhpExpr::Index { base, index } => {
+            walk_target(base, f);
+            walk_expr(index, f);
+        }
+        php::PhpExpr::AppendSlot(base) => walk_target(base, f),
+        other => walk_expr(other, f),
     }
 }

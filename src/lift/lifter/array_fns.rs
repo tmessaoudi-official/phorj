@@ -45,6 +45,11 @@ pub(super) fn lift_array_map(
     })())
 }
 
+/// The by-reference builtins this lift lowers to a REASSIGNMENT of their first argument —
+/// `usort` here (row 5f), `array_unshift` in `spread.rs` (DEC-538). A parameter passed there is
+/// written, so it is copied (row 4q, DEC-548); a lowering added to the statement arm joins this list.
+pub(in crate::lift::lifter) const REASSIGNING_BUILTINS: &[&str] = &["usort", "array_unshift"];
+
 /// The statement `usort($xs, $cmp);` → `xs = xs.sortWith(cmp);`. The target must be a plain
 /// variable: a field or element target would need a write this lift does not guess.
 pub(in crate::lift::lifter) fn lift_usort_stmt(e: &php::PhpExpr) -> Option<Result<Stmt, String>> {

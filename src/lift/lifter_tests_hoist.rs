@@ -66,13 +66,15 @@ fn the_unsound_conditional_case_is_refused_not_hoisted() {
 
 #[test]
 fn a_parameter_is_never_hoisted() {
-    // `declared` is already seeded with parameter names, so this lifts correctly TODAY. Hoisting it
-    // would emit a second declaration — `E-SHADOW-LOCAL`, the exact error DEC-397 forbids.
+    // `declared` is already seeded with parameter names, so the hoist never touches one. Hoisting it
+    // would emit a second declaration — `E-SHADOW-LOCAL`, the exact error DEC-397 forbids. The body
+    // REASSIGNS the parameter, so it lifts through DEC-548's copy (row 4q), declared exactly once.
     let out = lift("<?php\nfunction f(int $b): int { if (true) { $b = 5; } return $b; }\n");
     assert!(
-        !out.contains("mutable var b"),
+        !out.contains("mutable var b ") && !out.contains("mutable var b="),
         "a parameter must not gain a declaration:\n{out}"
     );
+    assert_eq!(out.matches("mutable var bLocal = b;").count(), 1, "{out}");
     assert!(
         !out.contains("CANNOT LIFT"),
         "and must not be reported:\n{out}"
