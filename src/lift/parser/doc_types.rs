@@ -160,6 +160,16 @@ impl PParser {
                 ))),
             };
         }
+        // twes row T2: a PHP class name never contains `-`, so a hyphenated atom (`numeric-string`,
+        // `array-key`, `class-string`, …) is a PHPStan/Psalm pseudo-type. Taken as a class name it was
+        // printed verbatim and the draft did not parse. (`non-empty-list<T>` / `non-empty-array<…>`
+        // lift above, as their base generic.)
+        if name.contains('-') {
+            return Err(self.err(&format!(
+                "`{name}` in a docblock type is a PHPStan/Psalm pseudo-type with no phorj form yet — \
+                 declare its base type (`string`, `int`, …) instead"
+            )));
+        }
         Ok(match name.as_str() {
             "mixed" | "callable" | "iterable" | "object" | "resource" | "never" => {
                 return Err(self.err(&format!("`{name}` in a docblock type is Tier-2")))

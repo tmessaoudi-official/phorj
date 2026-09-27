@@ -195,6 +195,15 @@ impl Lifter {
         e: &php::PhpExpr,
         declared: &mut HashSet<String>,
     ) -> Result<Vec<Stmt>, String> {
+        // twes row T1: a ternary whose value is discarded is an `if` statement (`ternary_stmt.rs`).
+        if let php::PhpExpr::Ternary {
+            cond,
+            then: Some(then),
+            els,
+        } = e
+        {
+            return self.lift_ternary_stmt(cond, then, els, declared);
+        }
         Ok(vec![self.lift_assign_like(e, declared)?])
     }
 

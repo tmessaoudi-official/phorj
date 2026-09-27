@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `phg lift`: a PHPStan/Psalm pseudo-type in a docblock is refused by name instead of printed verbatim (twes row T2; 2026-09-27)
+
+`@param list<array{StockLot, numeric-string}> $taken` lifted to `List<(StockLot, numeric-string)> taken` — the pseudo-type was taken for a class name and printed as-is, and the draft did not parse (twes-in census, `LotPicking.php`). A PHP class name can never contain `-`, so a hyphenated docblock atom (`numeric-string`, `array-key`, `non-empty-string`, `class-string`, `positive-int`, …) is now refused by name: "declare its base type instead". `non-empty-list<T>` and `non-empty-array<…>` keep lifting as their base generic, as before.
+
+### Fixed — `phg lift`: a ternary used as a statement lifts to an `if` statement (twes row T1; 2026-09-27)
+
+`$confirmed ? $d->confirm() : $d->reject();` lifted to `if (confirmed) { d.confirm() } else { d.reject() };` — an `if`-expression with value arms, which phorj parses as an `if` STATEMENT whose arms lack their `;`, so the draft did not parse (found by the twes-in census, `ManagePayments.php`). A ternary whose value is discarded is exactly an `if` statement, and now lifts as one; a nested ternary in an arm nests the `if`. A ternary whose value IS used is unchanged. The two sibling positions where a lifted ternary still does not parse — inside an `echo` and inside a `.` concatenation — stay open in `KNOWN_ISSUES.md`.
+
 ### Added — `phg lift`: a `foreach` binder over a resolved call reads its declared `@return` shape (row 4p4, DEC-550; 2026-09-27)
 
 `foreach ($this->matchLabels($f) as $hit)` under `@return array<int, array{tenure: Tenure, literal: string}>` bound nothing, so `$hit['literal']` stayed a string index on a tuple and the draft failed `phg check` (`cannot be indexed`). DEC-515 excluded a call's return as inference; DEC-550 narrows that to calls that cannot be resolved statically. A binder over `$this->m()`, `self::m()`/`static::m()`/`Own::m()` on the enclosing class, or a function this file declares — through a propagated `?` as well — now reads the callee's DECLARED return, never its body. The call is resolved on the PHP side, where `rows()` and `$rows()` are still different things. An inherited or `parent::` method, another object's method, a static call on another class of the same file, and a function from another file still bind nothing. Example: `examples/lift/shapes.{php,phg}`. Scout census: 151 → 147.

@@ -107,6 +107,8 @@ mod lifter_tests_spread;
 #[cfg(test)]
 mod lifter_tests_static_local;
 #[cfg(test)]
+mod lifter_tests_ternary_stmt;
+#[cfg(test)]
 mod lifter_tests_throw_expr;
 #[cfg(test)]
 mod lifter_tests_throws;

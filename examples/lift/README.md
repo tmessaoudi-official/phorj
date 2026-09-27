@@ -260,6 +260,12 @@ sub-expression, and a non-literal `match` arm. (Backed enums, enum methods and d
 values were on this list and are not any more — see § "Enums" below and Lane R.)
 Each is a clear `lift …` message naming what to do by hand.
 
+A PHPStan/Psalm **pseudo-type** in a docblock — `numeric-string`, `array-key`, `non-empty-string`,
+`class-string`, `positive-int` — is refused by name (twes row T2): it has no phorj form yet, so the
+message says to declare its base type. `non-empty-list<T>` and `non-empty-array<…>` do lift, as their
+base `List`/`Map`. A ternary used as a STATEMENT (`$c ? $a->m() : $b->m();`) lifts to an `if`
+statement (twes row T1).
+
 A PHP **static local** (`static $keys = null;` inside a function or method) is refused by name
 (DEC-539): phorj has no static locals, so the message names the two rewrites — move the value to a
 private static field, or drop the memo when the value it caches is pure. A static *property* and a

@@ -565,6 +565,14 @@ echo $b->total();
 $hs = collect('x');
 foreach ($hs as $k => $h) { echo '|' . $k . '=' . $h['tag'] . $h['text']; }"#,
         ),
+        // twes row T1: a ternary in STATEMENT position is an `if` statement — nested arms too.
+        (
+            "ternary_as_statement",
+            r#"<?php
+function g(int $n): void { echo $n, ','; }
+function f(bool $a, bool $b): void { $a ? g(1) : ($b ? g(2) : g(3)); }
+f(true, false); f(false, true); f(false, false);"#,
+        ),
         // Row 4p4, DEC-550: a binder over a statically resolved call — `$this->m()`, `self::m()`, a
         // same-file function, one propagating a checked exception (`?`) — reads the callee's
         // DECLARED `@return` shape, so `$h['tag']` is a field read on every leg.

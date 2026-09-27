@@ -37,11 +37,13 @@
   (`docs/specs/2026-07-23-any-object-top-types.md`, ruled 2026-07-23, BUILD-READY). DEC-335 already defined the
   same semantics; the spelling `unknown` is withdrawn and nothing is superseded. Lesson: search the specs index
   (`MASTER-PLAN.md` §0.07) BEFORE asking a design question.
-- [2026-09-27 17:12] ASSUMED (review): **T2 refuses PHPStan pseudo-types BY NAME** (`numeric-string`,
-  `array-key`, `non-empty-list`, `non-empty-string`, `int<a, b>`) instead of emitting them verbatim — because
-  the lifter's contract is never to emit a draft that does not parse, and a refusal needs no ruling. Mapping
-  them (`numeric-string` → `string`, `non-empty-list<T>` → `List<T>`) is a docblock-type decision like
-  DEC-543/544 and goes to the developer in a later ask. Alternatives: map now; keep emitting them.
+- [2026-09-27 17:12] ASSUMED (review): **T2 refuses a HYPHENATED docblock atom by name** (`numeric-string`,
+  `array-key`, `non-empty-string`, `class-string`, …) instead of emitting it verbatim — because the lifter's contract is
+  never to emit a draft that does not parse, a PHP class name can never contain `-`, and a refusal needs no ruling.
+  Correction at build (2026-09-27): `non-empty-list<T>` / `non-empty-array<…>` ALREADY lifted as their base generic and
+  keep doing so, and `int<0, max>` was already refused as a Tier-2 generic. MAPPING the remaining pseudo-types
+  (`numeric-string` → `string`, …) is a docblock-type decision like DEC-543/544 and goes to the developer in a later
+  ask. Alternatives: map now; keep emitting them.
 - [2026-09-27 17:12] ASSUMED (review): **T5 lifts `sprintf('%d', $x)` to interpolation ONLY when `$x`'s
   DECLARED type is `int`** (a parameter, a `@var` local, an int literal) — because `%d` equals `%s` exactly for
   an int, and DEC-166/DEC-515 already make declarations the lifter's only source of types. Anything else keeps
@@ -84,8 +86,8 @@ Vendor lift rates (DEC-551's measured challenge, `src/` minus tests): `psr/clock
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | T0 | Census baseline (above): 484/1037 lift, 10/114 packages check, classes ranked | S | done | - | docs/plans/2026-09-27-twes-in-forcing-function.plan.md |
-| T1 | P0 — a PHP ternary used as a STATEMENT (`$c ? $a->m() : $b->m();`, `Licensing/Application/ManagePayments.php`) lifts to `if (c) { a.m() } else { b.m() };`, which phorj parses as an `if` STATEMENT whose arms lack `;` — a draft that does not parse. Lift a statement-position ternary to an `if` statement (the value is discarded, so it is exact). Third instance of the class `KNOWN_ISSUES.md` records as LIFT-ECHO-TERNARY and LIFT-TERNARY-IN-CONCAT (a lifted ternary in a position where an `if`-expression does not parse); those two stay open unless the fix covers them | S | todo | - | src/lift/lifter/* |
-| T2 | P0 — PHPStan pseudo-types in a docblock (`list<(StockLot, numeric-string)>`, `Module/Inventory/Domain/LotPicking.php`) are emitted VERBATIM into the draft, which does not parse. Refuse each by name (ASSUMED above); the mapping is a later ask. Measured in `src/`: `numeric-string` 27, `array-key` 10, `non-empty-list` 5, `non-empty-string` 3, `int<0, max>` 1 | S | todo | - | src/lift/* |
+| T1 | P0 — BUILT 2026-09-27 (`decls/ternary_stmt.rs`: a statement-position ternary is rewritten to PHP's own `if` statement before lifting; 3 lifter tests red first, sabotage `if false` reds both positives; round-trip `ternary_as_statement` under the PHP oracle; census: all 489 twes drafts and all 12 scout drafts parse). A PHP ternary used as a STATEMENT (`$c ? $a->m() : $b->m();`, `Licensing/Application/ManagePayments.php`) lifts to `if (c) { a.m() } else { b.m() };`, which phorj parses as an `if` STATEMENT whose arms lack `;` — a draft that does not parse. Lift a statement-position ternary to an `if` statement (the value is discarded, so it is exact). Third instance of the class `KNOWN_ISSUES.md` records as LIFT-ECHO-TERNARY and LIFT-TERNARY-IN-CONCAT (a lifted ternary in a position where an `if`-expression does not parse); those two stay open unless the fix covers them | S | done | - | src/lift/lifter/* |
+| T2 | P0 — BUILT 2026-09-27 (`parser/doc_types.rs`: a hyphenated docblock atom is refused by name; test red first, sabotage reds it; twes 484 → 483 lifted, `LotPicking.php` now refused with the reason). PHPStan pseudo-types in a docblock (`list<(StockLot, numeric-string)>`, `Module/Inventory/Domain/LotPicking.php`) are emitted VERBATIM into the draft, which does not parse. Refuse each by name (ASSUMED above); the mapping is a later ask. Measured in `src/`: `numeric-string` 27, `array-key` 10, `non-empty-list` 5, `non-empty-string` 3, `int<0, max>` 1 | S | done | - | src/lift/* |
 | T3 | DEC-439 `--vendor=stub` (DEC-551's bridge): `declare class` / `declare function` foreign stubs generated from `vendor/`'s own type hints; a signature that cannot be stubbed falls back to the report. Transpile-only, disclosed (Invariant 14). Then re-census | L | todo | - | src/lift/* |
 | T4 | `self::X` / `static::X` inside a class's own class-level attribute → the class name (PHP resolves them to the class being declared). Behind T3: the attribute class itself is vendor | S | todo | - | src/lift/* |
 | T5 | `sprintf` `%d` → interpolation when the argument's declared type is `int` (ASSUMED above); `%0Nd` padding after it | S | todo | - | src/lift/lifter/sprintf.rs |

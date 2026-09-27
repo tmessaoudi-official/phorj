@@ -9,6 +9,7 @@ mod imports;
 mod interfaces;
 mod seed;
 pub(in crate::lift) mod statements;
+mod ternary_stmt;
 
 pub fn lift_source(php_src: &str) -> Result<String, String> {
     Ok(lift_source_split(php_src, false)?.0)
