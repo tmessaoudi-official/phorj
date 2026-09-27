@@ -22,6 +22,14 @@ impl Lifter {
         s: &php::PhpStmt,
         declared: &mut HashSet<String>,
     ) -> Result<Vec<Stmt>, String> {
+        // Row 4l-b2 (DEC-554): a captures `preg_match` hoists its `RegexMatch?` in front.
+        #[cfg(feature = "regex")]
+        if let Some(hoisted) = super::super::preg::hoist(s, declared) {
+            let (decl, rest) = hoisted?;
+            let mut out = vec![decl];
+            out.extend(self.lift_stmt(&rest, declared)?);
+            return Ok(out);
+        }
         Ok(match s {
             php::PhpStmt::Return(e) => {
                 vec![Stmt::Return {

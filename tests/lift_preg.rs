@@ -75,6 +75,7 @@ const PATTERNS: &[&str] = &[
     r"'/abc/iu'",
     r"'/k/iu'",
     r"'/(?<![a-z])rdc/u'",
+    r"'/^(?<kind>[a-z]+)=(?<mix>[0-9])$/'",
     r"'#^x/y$#'",
     r"'~a\~b~'",
 ];

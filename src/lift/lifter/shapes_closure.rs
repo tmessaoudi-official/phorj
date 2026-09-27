@@ -12,6 +12,9 @@ pub(in crate::lift::lifter) struct ClosureScope {
     tuple: std::collections::HashMap<String, Vec<String>>,
     elem: std::collections::HashMap<String, Vec<String>>,
     colls: std::collections::HashMap<String, (&'static str, bool)>,
+    /// Row 4l-b2: the variables holding `preg_match` captures.
+    #[cfg(feature = "regex")]
+    captures: super::preg::CapturesScope,
 }
 
 /// Snapshot both maps before lifting a closure body. A SNAPSHOT, not a clear: a by-value `use`
@@ -21,6 +24,8 @@ pub(in crate::lift::lifter) fn enter_closure() -> ClosureScope {
         tuple: TUPLE_FIELDS.with(|m| m.borrow().clone()),
         elem: ELEM_FIELDS.with(|m| m.borrow().clone()),
         colls: COLL_VARS.with(|m| m.borrow().clone()),
+        #[cfg(feature = "regex")]
+        captures: super::preg::snapshot_captures(),
     }
 }
 
@@ -30,6 +35,8 @@ pub(in crate::lift::lifter) fn leave_closure(scope: ClosureScope) {
     TUPLE_FIELDS.with(|m| *m.borrow_mut() = scope.tuple);
     ELEM_FIELDS.with(|m| *m.borrow_mut() = scope.elem);
     COLL_VARS.with(|m| *m.borrow_mut() = scope.colls);
+    #[cfg(feature = "regex")]
+    super::preg::restore_captures(scope.captures);
 }
 
 /// Install `scope` and hand back what it replaced — the file-scope maps swapped in around one

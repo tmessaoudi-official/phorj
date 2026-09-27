@@ -122,3 +122,11 @@ fn malformed_and_pcre_only_patterns_are_refused() {
     refused(r"/\Qa\E/u", "PCRE-only");
     refused(r"/a{,3}/u", "{,n}");
 }
+
+/// A group NAME is not a flag run: `(?<kind>` must not read as the `i` flag, nor `(?<mix>` as `m`/`x`.
+#[test]
+fn a_group_name_is_not_read_as_flags() {
+    ok(r"/(?<kind>a)(?<mix>b)/", r"(?<kind>a)(?<mix>b)", false);
+    ok(r"/(?P<index>a)/", r"(?P<index>a)", false);
+    ok(r"/(?<![a-z])x/u", r"(?<![a-z])x", true);
+}

@@ -166,6 +166,27 @@ impl Scan<'_> {
         }
         self.out.push('?');
         self.i += 1;
+        // A group NAME is not a flag run: `(?<kind>` names a group, it does not set `i`.
+        let named = match (self.peek(0), self.peek(1)) {
+            (Some('<'), Some(c)) if c != '=' && c != '!' => Some(('>', 1)),
+            (Some('\''), _) => Some(('\'', 1)),
+            (Some('P'), Some('<')) => Some(('>', 2)),
+            _ => None,
+        };
+        if let Some((close, open_len)) = named {
+            for _ in 0..open_len {
+                self.out.push(self.c[self.i]);
+                self.i += 1;
+            }
+            while let Some(c) = self.peek(0) {
+                self.out.push(c);
+                self.i += 1;
+                if c == close {
+                    break;
+                }
+            }
+            return Ok(());
+        }
         let mut enabling = true;
         while let Some(f) = self.peek(0) {
             match f {

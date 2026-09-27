@@ -8,11 +8,22 @@ import Core.Regex;
 
 class Sku {
     private const string CODE = "/^[A-Z]\{3\}-\\d\{4\}$/";
+    private const string CODE_PARTS = "/^(?<prefix>[A-Z]\{3\})-(\\d\{4\})$/";
     public static function valid(string s): bool {
         return Regex.matches(Regex.compile("^[A-Z]\{3\}-[0-9]\{4\}\\n?\\z"), s);
     }
     public static function mentionsRdc(string s): bool {
         return Regex.matches(Regex.compileBacktracking("(?<![a-z])rdc(?![a-z])"), s);
+    }
+    public static function number(string s): string {
+        mutable RegexMatch? m = Regex.first(
+            Regex.compile("^(?<prefix>[A-Z]\{3\})-([0-9]\{4\})\\n?\\z"),
+            s
+        );
+        if (m instanceof null) {
+            return "none";
+        }
+        return "{m.group(\"prefix\") ?? \"\"}/{m.at(2) ?? \"\"}";
     }
 }
 
@@ -25,5 +36,9 @@ function main(): void {
     Output.print("{if (Sku::mentionsRdc(\"au rdc\")) { \"rdc\" \} else { \"no\" \}}");
     Output.print(" ");
     Output.print("{if (Sku::mentionsRdc(\"ardcx\")) { \"rdc\" \} else { \"no\" \}}");
+    Output.print("\n");
+    Output.print("{Sku::number(\"ABC-1234\")}");
+    Output.print(" ");
+    Output.print("{Sku::number(\"abc\")}");
     Output.print("\n");
 }

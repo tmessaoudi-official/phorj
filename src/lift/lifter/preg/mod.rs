@@ -7,17 +7,40 @@
 //!
 //! PHP returns `false` on a PCRE error, which `=== 1` reads as "no match"; phorj faults instead. phorj
 //! strings are valid UTF-8, so only the backtracking step budget can raise it — a louder failure, not
-//! a silent one. Every other `preg_*` shape (captures, `preg_replace`, …) is rows 4l-b and 4l-c.
+//! a silent one. A captures array (`preg_match($p, $s, $m)`) is row 4l-b2, in [`captures`]; every
+//! other `preg_*` shape (`preg_match_all`, `preg_replace`, …) is rows 4l-b3 and 4l-c.
 
 use super::*;
 use std::collections::HashMap;
 
+mod captures;
 mod scan;
 #[cfg(test)]
 mod tests;
 mod translate;
 
+pub(in crate::lift) use captures::{hoist, reset as reset_captures, restore as restore_captures};
+pub(in crate::lift) use captures::{snapshot as snapshot_captures, Snapshot as CapturesScope};
 pub(in crate::lift) use translate::translate;
+
+/// Does this expression belong to the `preg_*` lift — an existence test (row 4l-a) or a captures
+/// read (row 4l-b2)?
+pub(super) fn owns(e: &php::PhpExpr) -> bool {
+    match e {
+        php::PhpExpr::Binary { op, left, right } if is_match_test(*op, left, right) => true,
+        _ => captures::owns(e),
+    }
+}
+
+/// Lift an expression [`owns`] accepted.
+pub(super) fn lift(e: &php::PhpExpr) -> Result<Expr, String> {
+    match e {
+        php::PhpExpr::Binary { op, left, right } if is_match_test(*op, left, right) => {
+            lift_match_test(*op, left, right)
+        }
+        _ => captures::lift(e),
+    }
+}
 
 thread_local! {
     /// `(class, constant)` → value, for every string or int class constant of the file being lifted.
@@ -83,13 +106,13 @@ fn split_test<'a>(
 }
 
 /// Is `left <op> right` an existence test this row lifts?
-pub(super) fn is_match_test(op: php::PhpBinOp, left: &php::PhpExpr, right: &php::PhpExpr) -> bool {
+fn is_match_test(op: php::PhpBinOp, left: &php::PhpExpr, right: &php::PhpExpr) -> bool {
     use php::PhpBinOp::{Eq, Identical, NotEq, NotIdentical};
     matches!(op, Identical | NotIdentical | Eq | NotEq) && split_test(left, right).is_some()
 }
 
 /// Lift the existence test [`is_match_test`] accepted.
-pub(super) fn lift_match_test(
+fn lift_match_test(
     op: php::PhpBinOp,
     left: &php::PhpExpr,
     right: &php::PhpExpr,
@@ -100,25 +123,7 @@ pub(super) fn lift_match_test(
     let t = translate(&literal)?;
     let subject = lift_expr(subject)?;
     record_native_module("Core.Regex");
-    let call = |name: &str, args: Vec<Expr>| Expr::Call {
-        callee: Box::new(Expr::Member {
-            object: Box::new(Expr::Ident("Regex".to_string(), SP)),
-            name: name.to_string(),
-            safe: false,
-            sep: crate::ast::MemberSep::Dot,
-            span: SP,
-        }),
-        args,
-        type_args: Vec::new(),
-        span: SP,
-    };
-    let ctor = if t.backtracking {
-        "compileBacktracking"
-    } else {
-        "compile"
-    };
-    let re = call(ctor, vec![Expr::Str(vec![StrPart::Literal(t.pattern)], SP)]);
-    let test = call("matches", vec![re, subject]);
+    let test = regex_call("matches", vec![compile_call(t), subject]);
     // `=== 1` and `!== 0` ask "does it match"; `!== 1` and `=== 0` ask the opposite.
     Ok(if equal == (n == 1) {
         test
@@ -129,6 +134,32 @@ pub(super) fn lift_match_test(
             span: SP,
         }
     })
+}
+
+/// `Regex.<name>(args)`.
+fn regex_call(name: &str, args: Vec<Expr>) -> Expr {
+    Expr::Call {
+        callee: Box::new(Expr::Member {
+            object: Box::new(Expr::Ident("Regex".to_string(), SP)),
+            name: name.to_string(),
+            safe: false,
+            sep: crate::ast::MemberSep::Dot,
+            span: SP,
+        }),
+        args,
+        type_args: Vec::new(),
+        span: SP,
+    }
+}
+
+/// `Regex.compile("…")`, or `Regex.compileBacktracking("…")` when the translation needs it.
+fn compile_call(t: translate::Translated) -> Expr {
+    let ctor = if t.backtracking {
+        "compileBacktracking"
+    } else {
+        "compile"
+    };
+    regex_call(ctor, vec![Expr::Str(vec![StrPart::Literal(t.pattern)], SP)])
 }
 
 /// The pattern's text, read at lift time — or why it cannot be. A literal, a constant of this class,

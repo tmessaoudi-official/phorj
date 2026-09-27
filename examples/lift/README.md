@@ -592,6 +592,18 @@ becomes `[0-9]`. The look-around in `mentionsRdc` needs the backtracking engine,
 would change — a `.` counting bytes, `i` or `\b` without `u`, the `m` modifier — is refused by name. On a PCRE error (a backtrack or JIT limit, or invalid UTF-8 under `u`) PHP's `preg_match` returns `false`, which `=== 1` reads as "no match"; the lift answers instead — a pattern on the linear `Regex.compile` cannot fail at match time and phorj strings are always valid UTF-8, so it gives the true answer, and only a `Regex.compileBacktracking` pattern can fail, faulting on its step budget where PHP returned `false`. Byte-identical on all three legs and
 against the PHP.
 
+**Captures (scout row 4l-b2, DEC-554).** A third argument — the captures array — lifts onto a typed
+`Regex.first`, HOISTED in front of the statement: `if (1 !== preg_match(self::CODE_PARTS, $s, $m))`
+becomes `RegexMatch? m = Regex.first(…); if (m is null)`, and phorj's flow narrowing makes `m` a
+`RegexMatch` after the early return. `$m[0]` reads `m.full()`, `$m[k]` reads `m.at(k) ?? ""` and
+`$m['name']` reads `m.group("name") ?? ""` — PHP's `""` for a group that sat out. Hoisting reads the
+subject before the statement, so it fires only where the comparison is the statement's FIRST test (an
+`if` condition, a `return`, an assignment's value); anywhere else (`null === $s || 1 !== preg_match(…)`,
+a loop condition) is refused by name. A `??` fallback other than `''`, and `isset`, lift only on the
+pattern's LAST group — PHP sets a middle group that sat out to `""` but unsets a trailing one, and
+`at(k)` answers null for both. Any other use of `$m` (`count($m)`, `$m[$i]`) is refused.
+`tests/lift_preg_captures.rs` runs the original and the lift under PHP and on both phorj backends.
+
 ## Map union — `map-union.php` / `map-union.phg` (scout row 5q, DEC-534, 2026-09-25)
 
 PHP spells array union and addition with one operator. The lifter has no types, so it rewrites `$a + $b`

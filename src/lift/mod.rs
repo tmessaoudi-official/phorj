@@ -94,6 +94,8 @@ mod lifter_tests_ordering;
 mod lifter_tests_php83;
 #[cfg(all(test, feature = "regex"))]
 mod lifter_tests_preg;
+#[cfg(all(test, feature = "regex"))]
+mod lifter_tests_preg_captures;
 #[cfg(test)]
 mod lifter_tests_reassigned_params;
 #[cfg(test)]

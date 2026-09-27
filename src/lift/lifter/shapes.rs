@@ -131,6 +131,8 @@ pub(super) fn element_labels(ty: &Type) -> Option<Vec<String>> {
 /// Takes `(name, type)` pairs so a constructor's parameters reset the maps too (row 4p).
 pub(super) fn set_tuple_fields<'a>(params: impl IntoIterator<Item = (&'a str, &'a Type)>) {
     let params: Vec<(&str, &Type)> = params.into_iter().collect();
+    #[cfg(feature = "regex")]
+    super::preg::reset_captures(); // row 4l-b2: `$m` holds captures in one function only
     TUPLE_FIELDS.with(|t| {
         ELEM_FIELDS.with(|e| {
             let (mut t, mut e) = (t.borrow_mut(), e.borrow_mut());
