@@ -23,6 +23,12 @@ fn lift_expr_raw(e: &php::PhpExpr) -> Result<Expr, String> {
             body: LambdaBody::Expr(Box::new(super::throw_expr::lift_throwable(body)?)),
             span: SP,
         },
+        // Row 4l-a (DEC-540): `1 === preg_match('/…/', $s)` is `Regex.matches(…)` — `preg/`.
+        php::PhpExpr::Binary { op, left, right }
+            if super::preg::is_match_test(*op, left, right) =>
+        {
+            super::preg::lift_match_test(*op, left, right)?
+        }
         // A STRICT `=== null` / `=== []` is a TEST in phorj (`is null`, `List.isEmpty`), not an
         // equality — `identity.rs`, which also says why only the strict forms qualify.
         php::PhpExpr::Binary {

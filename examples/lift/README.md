@@ -581,6 +581,17 @@ A local's `/** @var … $x */` is read the way a parameter's `@param` is, when i
 DEC-535 (row 5r). A local with no `@var`, a `@var` naming another variable, or a type with no keyed
 shape (`@var int $n`) lifts exactly as before. Byte-identical on all three legs and against the PHP.
 
+## `preg_match` as a test — `preg.php` / `preg.phg` (scout row 4l-a, DEC-540, 2026-09-27)
+
+`1 === preg_match(self::CODE, $s)` asks one question — is there a match — and lifts to
+`Regex.matches(Regex.compile("…"), s)`. The pattern is read at lift time (a literal, a constant of the
+class, or `.` and integer arithmetic over them) and translated: PHP's `$` also matches before a final
+newline, so `…$` becomes `…\n?\z` (`"ABC-1234\n"` is valid in both); without `u`, `\d` is ASCII, so it
+becomes `[0-9]`. The look-around in `mentionsRdc` needs the backtracking engine, so that one lifts to
+`Regex.compileBacktracking`; everything else keeps the linear, ReDoS-immune one. A pattern whose meaning
+would change — a `.` counting bytes, `i` or `\b` without `u`, the `m` modifier — is refused by name. Byte-identical on all three legs and
+against the PHP.
+
 ## Map union — `map-union.php` / `map-union.phg` (scout row 5q, DEC-534, 2026-09-25)
 
 PHP spells array union and addition with one operator. The lifter has no types, so it rewrites `$a + $b`

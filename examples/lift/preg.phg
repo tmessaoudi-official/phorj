@@ -1,0 +1,29 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.Regex;
+
+class Sku {
+    private const string CODE = "/^[A-Z]\{3\}-\\d\{4\}$/";
+    public static function valid(string s): bool {
+        return Regex.matches(Regex.compile("^[A-Z]\{3\}-[0-9]\{4\}\\n?\\z"), s);
+    }
+    public static function mentionsRdc(string s): bool {
+        return Regex.matches(Regex.compileBacktracking("(?<![a-z])rdc(?![a-z])"), s);
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    foreach (["ABC-1234", "ABC-1234\n", "ABC-12345", "abc-1234"] as s) {
+        Output.print("{if (Sku::valid(s)) { \"valid \" \} else { \"invalid \" \}}");
+    }
+    Output.print("\n");
+    Output.print("{if (Sku::mentionsRdc(\"au rdc\")) { \"rdc\" \} else { \"no\" \}}");
+    Output.print(" ");
+    Output.print("{if (Sku::mentionsRdc(\"ardcx\")) { \"rdc\" \} else { \"no\" \}}");
+    Output.print("\n");
+}

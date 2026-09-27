@@ -38,6 +38,11 @@ thread_local! {
         std::cell::RefCell::new(HashMap::new());
 }
 
+/// The name of the class being lifted, or `""` outside one (row 4l-a reads `self::X` with it).
+pub(in crate::lift::lifter) fn current_class() -> String {
+    CLASS.with(|m| m.borrow().name.clone())
+}
+
 /// The enclosing class's declarations, put back when this class's lift ends — on the error path too.
 pub(in crate::lift::lifter) struct PropScope(Option<ClassShapes>);
 

@@ -45,6 +45,7 @@ mod magic;
 mod map_consts;
 mod mappings;
 mod matches;
+mod preg;
 mod reordered;
 mod shapes;
 mod spread;
@@ -62,8 +63,8 @@ use leaves::*;
 use mappings::*;
 use matches::*;
 use shapes::{
-    begin_file_fns, declare_returned_builders, enter_binder, enter_class_props, is_tuple_field,
-    leave_binder, set_tuple_fields,
+    begin_file_fns, current_class, declare_returned_builders, enter_binder, enter_class_props,
+    is_tuple_field, leave_binder, set_tuple_fields,
 };
 pub(super) use throws::{
     facts_of as throws_facts_of, set_project as set_project_throws, Facts as ThrowsFacts,
