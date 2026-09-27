@@ -596,3 +596,51 @@ fn an_error_import_follows_the_lowered_method_into_its_companion() {
         "{fns}"
     );
 }
+
+/// Row 4j (6C): a user exception class DECLARED in one file and thrown or caught in ANOTHER is the
+/// project's own class — the directory lift seeds every file with the whole tree's class names, as it
+/// does for enums — so the second draft carries no `// CANNOT LIFT … declare it` note about it.
+#[test]
+fn an_exception_class_declared_in_a_sibling_file_is_not_reported_unliftable() {
+    let t = Tmp::new("xexc");
+    t.write(
+        "src/OopsException.php",
+        "<?php\nnamespace App;\nfinal class OopsException extends \\RuntimeException {}\n",
+    );
+    t.write(
+        "src/Guard.php",
+        "<?php\nnamespace App;\nfinal class Guard { public function f(): string { try { throw new OopsException('x'); } catch (OopsException $e) { return 'c'; } } }\n",
+    );
+    t.write(
+        "src/Stray.php",
+        "<?php\nnamespace App;\nfinal class Stray { public function f(): string { try { return 'a'; } catch (NowhereException $e) { return 'c'; } } }\n",
+    );
+    let out = t.path("out");
+    lift_directory(&t.0, &out, VendorMode::Report).expect("the directory lifts");
+    fn drafts(dir: &Path, acc: &mut Vec<(PathBuf, String)>) {
+        for e in std::fs::read_dir(dir).expect("dir").flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                drafts(&p, acc);
+            } else if p.extension().is_some_and(|x| x == "phg") {
+                acc.push((p.clone(), std::fs::read_to_string(&p).expect("draft")));
+            }
+        }
+    }
+    let mut all = Vec::new();
+    drafts(&out.join("src"), &mut all);
+    assert_eq!(all.len(), 3, "{all:?}");
+    for (p, text) in &all {
+        assert!(
+            !text.contains("`OopsException` has no phorj counterpart"),
+            "{}:\n{text}",
+            p.display()
+        );
+    }
+    // A class NOBODY declares is still reported — the seed widens `declared`, it does not mute the note.
+    assert!(
+        all.iter()
+            .any(|(_, t)| t.contains("`NowhereException` has no phorj counterpart")),
+        "{all:?}"
+    );
+}

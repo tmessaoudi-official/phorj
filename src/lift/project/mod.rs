@@ -214,6 +214,7 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
     // BEFORE lifting anything. The scan is a lex+parse per file and tolerates failure: a file the
     // parser rejects declares no enums we can see, which is the same answer as before this existed.
     let mut project_enums: crate::lift::lifter::EnumSymbols = Default::default();
+    let mut project_classes = std::collections::BTreeSet::new(); // row 4j (6C), same scan
     for path in &files {
         let Ok(src) = std::fs::read_to_string(path) else {
             continue;
@@ -223,9 +224,11 @@ pub fn lift_directory(root: &Path, out: &Path, vendor: VendorMode) -> Result<Str
         };
         if let Ok(prog) = crate::lift::parser::parse_php_with_docs(toks, docs) {
             project_enums.extend(crate::lift::lifter::enum_names_of(&prog));
+            project_classes.extend(crate::lift::lifter::class_names_of(&prog));
         }
     }
     crate::lift::lifter::set_project_enum_names(project_enums);
+    crate::lift::lifter::set_project_class_names(project_classes);
 
     let mut lifted = 0usize;
     let mut failures: Vec<Failure> = Vec::new();

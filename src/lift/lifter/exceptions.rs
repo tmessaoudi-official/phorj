@@ -14,6 +14,31 @@
 //! statement form is handled once, for every question at once.
 
 use super::exceptions_exprs::visit_expr;
+use std::collections::BTreeSet;
+
+thread_local! {
+    /// Row 4j (6C): every class the DIRECTORY lift's tree declares, by leaf name — seeded before any
+    /// file lifts, as the enum names are, because the class a file throws is usually declared in a
+    /// sibling. A single-file lift leaves it empty and sees only its own file.
+    static PROJECT_CLASSES: std::cell::RefCell<BTreeSet<String>> =
+        const { std::cell::RefCell::new(BTreeSet::new()) };
+}
+
+/// The directory lift's whole-tree class seed; an empty set clears it.
+pub(in crate::lift) fn set_project_class_names(names: BTreeSet<String>) {
+    PROJECT_CLASSES.with(|c| *c.borrow_mut() = names);
+}
+
+/// The classes one parsed PHP file declares, by leaf name.
+pub(in crate::lift) fn class_names_of(prog: &php::PhpProgram) -> BTreeSet<String> {
+    prog.items
+        .iter()
+        .filter_map(|it| match it {
+            php::PhpItem::Class(c) => Some(c.name.clone()),
+            _ => None,
+        })
+        .collect()
+}
 use super::mappings::strip_root_ns;
 use crate::lift::ast as php;
 
@@ -31,16 +56,11 @@ pub(in crate::lift) fn phorj_error_name(php: &str) -> String {
 /// One `// CANNOT LIFT:` note is emitted per entry, so the draft SAYS what it could not do rather
 /// than leaving a name that will simply fail `phg check` with no explanation.
 pub(in crate::lift) fn unmapped_exception_classes(prog: &php::PhpProgram) -> Vec<String> {
-    // A class the program DECLARES is its own counterpart (row 4j): the note used to tell the reader
-    // to "declare it" about a class declared a few lines up.
-    let declared: std::collections::HashSet<&str> = prog
-        .items
-        .iter()
-        .filter_map(|it| match it {
-            php::PhpItem::Class(c) => Some(c.name.as_str()),
-            _ => None,
-        })
-        .collect();
+    // A class the program DECLARES — in this file or, for a directory lift, anywhere in the tree — is
+    // its own counterpart (row 4j): the note used to tell the reader to "declare it" about a class
+    // declared a few lines up, or in the sibling file every other file throws it from.
+    let mut declared = class_names_of(prog);
+    PROJECT_CLASSES.with(|c| declared.extend(c.borrow().iter().cloned()));
     collect(prog, |class| {
         let name = strip_root_ns(class);
         (crate::native::error_prelude::phorj_error_for_php_exception(class).is_none()

@@ -55,6 +55,7 @@ use const_infer::const_type;
 pub use decls::*;
 use division::float_division;
 pub(super) use enums::{enum_names_of, set_project_enum_names, EnumSymbols};
+pub(super) use exceptions::{class_names_of, set_project_class_names};
 use exprs::*;
 use leaves::*;
 use mappings::*;
