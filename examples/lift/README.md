@@ -621,6 +621,8 @@ alone, what each function and method throws, and says so (DEC-547):
   depth is covered. In a directory lift the graph spans the whole tree, and a type thrown from
   another namespace is imported. A propagated call used as a receiver is parenthesized:
   `(fold(s)?).length()`, since `f()?.m()` would read as safe navigation.
+- **`$e->getMessage()`** on a variable a `catch` bound reads its `message` field: `e.message` (row
+  4j3). Any other receiver keeps the call — a user class may declare its own `getMessage`.
 - **Coverage is judged in phorj names**, as the checker judges it: `catch (\RuntimeException $e)`
   covers a class extending it, because both lift onto `RuntimeError`.
 

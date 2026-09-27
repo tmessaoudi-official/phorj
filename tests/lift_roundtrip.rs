@@ -527,7 +527,7 @@ final class Guard {
 }
 $g = new Guard();
 try { echo classify('a'); echo '|'; echo $g->run('b'); echo '|'; echo $g->safe(''); echo '|'; echo $g->run(''); }
-catch (BadInputException $e) { echo '|caught'; }"#,
+catch (BadInputException $e) { echo '|caught:' . $e->getMessage(); }"#,
         ),
         (
             "concat_conditional_holes",

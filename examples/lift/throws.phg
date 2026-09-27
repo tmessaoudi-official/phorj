@@ -51,7 +51,8 @@ function main(): void {
         Output.print("\n");
         Output.print("{r.line(\"\")}");
     } catch (BadInputException e) {
-        Output.print("caught at the top");
+        Output.print("caught at the top: ");
+        Output.print("{e.message}");
         Output.print("\n");
     }
 }

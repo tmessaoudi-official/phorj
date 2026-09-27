@@ -159,3 +159,19 @@ fn an_inherited_method_is_resolved_through_this_and_parent() {
     assert!(out.contains("up(): void throws RuntimeError"), "{out}");
     assert!(out.contains("this.boom()?"), "{out}");
 }
+
+/// Row 4j3 — `$e->getMessage()` on a CAUGHT exception reads phorj's `message` field. Gated on the
+/// receiver being a catch variable: any other `getMessage()` is a user method and stays a call.
+#[test]
+fn get_message_on_a_caught_exception_reads_its_message() {
+    let out = lifted(&format!(
+        "<?php\n{ERR}\
+         final class Note {{ public function getMessage(): string {{ return 'note'; }} }}\n\
+         function fold(string $s): string {{ throw BadInputException::at($s); }}\n\
+         try {{ echo fold('x'); }} catch (BadInputException $e) {{ echo $e->getMessage(); }}\n\
+         $n = new Note(); echo $n->getMessage();"
+    ));
+    assert!(out.contains("{e.message}"), "{out}");
+    assert!(out.contains("n.getMessage()"), "{out}");
+    checks_clean(&out);
+}

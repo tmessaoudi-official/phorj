@@ -19,6 +19,8 @@ struct Ctx {
     class: Option<String>,
     decl: Option<Key>,
     catches: Catches,
+    /// Row 4j3: the catch variables in scope — `$e->getMessage()` on one reads `e.message`.
+    caught: Vec<String>,
     /// Types named by a `throws` clause this file emitted — each needs a type in scope.
     named: BTreeSet<String>,
 }
@@ -41,16 +43,20 @@ pub(in crate::lift) fn begin_file(prog: &crate::lift::ast::PhpProgram) {
 }
 
 /// Restores the context it replaced when dropped, so an early `?` return cannot leak it.
-pub(in crate::lift) struct Scope(Option<(Option<String>, Option<Key>, Catches)>);
+pub(in crate::lift) struct Scope(Option<Saved>);
+
+/// The scoped half of [`Ctx`] — everything a guard restores.
+type Saved = (Option<String>, Option<Key>, Catches, Vec<String>);
 
 impl Drop for Scope {
     fn drop(&mut self) {
-        if let Some((class, decl, catches)) = self.0.take() {
+        if let Some((class, decl, catches, caught)) = self.0.take() {
             CTX.with(|c| {
                 let mut c = c.borrow_mut();
                 c.class = class;
                 c.decl = decl;
                 c.catches = catches;
+                c.caught = caught;
             });
         }
     }
@@ -59,7 +65,12 @@ impl Drop for Scope {
 fn scope(edit: impl FnOnce(&mut Ctx)) -> Scope {
     CTX.with(|c| {
         let mut c = c.borrow_mut();
-        let saved = (c.class.clone(), c.decl.clone(), c.catches.clone());
+        let saved = (
+            c.class.clone(),
+            c.decl.clone(),
+            c.catches.clone(),
+            c.caught.clone(),
+        );
         edit(&mut c);
         Scope(Some(saved))
     })
@@ -71,6 +82,7 @@ pub(in crate::lift) fn enter_class(name: &str) -> Scope {
         c.class = Some(name.to_string());
         c.decl = None;
         c.catches.clear();
+        c.caught.clear();
     })
 }
 
@@ -91,6 +103,32 @@ pub(in crate::lift) fn enter_decl(name: Option<&str>) -> Scope {
 /// Lifting a `try` body: its catch types cover the calls inside it.
 pub(in crate::lift) fn enter_try(types: &[String]) -> Scope {
     scope(|c| c.catches.push(types.iter().map(|t| type_name(t)).collect()))
+}
+
+/// Lifting a `catch` body that binds `var` (row 4j3).
+pub(in crate::lift) fn enter_catch(var: &str) -> Scope {
+    scope(|c| c.caught.push(var.to_string()))
+}
+
+/// `$var->getMessage()` on a caught exception → `var.message`: phorj's error types carry the
+/// message as a public field, and the transpiler feeds it to `\Exception`'s own store, so both
+/// directions agree. Any other receiver is a user method and stays a call.
+pub(in crate::lift::lifter) fn caught_message(
+    recv: &crate::lift::ast::PhpExpr,
+    name: &str,
+    args: &[crate::lift::ast::PhpExpr],
+) -> Option<crate::ast::Expr> {
+    let crate::lift::ast::PhpExpr::Var(v) = recv else {
+        return None;
+    };
+    let caught = CTX.with(|c| c.borrow().caught.iter().any(|x| x == v));
+    (caught && name == "getMessage" && args.is_empty()).then(|| crate::ast::Expr::Member {
+        object: Box::new(crate::ast::Expr::Ident(v.clone(), super::super::SP)),
+        name: "message".to_string(),
+        safe: false,
+        sep: crate::ast::MemberSep::Dot,
+        span: super::super::SP,
+    })
 }
 
 /// The open declaration's `throws`, sorted (Invariant 10).

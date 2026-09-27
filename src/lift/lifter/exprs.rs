@@ -290,6 +290,14 @@ fn lift_expr_raw(e: &php::PhpExpr) -> Result<Expr, String> {
             recv,
             name,
             args,
+            nullsafe: false,
+        } if super::throws::caught_message(recv, name, args).is_some() => {
+            super::throws::caught_message(recv, name, args).expect("guarded") // row 4j3
+        }
+        php::PhpExpr::MethodCall {
+            recv,
+            name,
+            args,
             nullsafe,
         } => Expr::Call {
             callee: Box::new(Expr::Member {

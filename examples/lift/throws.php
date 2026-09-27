@@ -58,5 +58,6 @@ try {
     echo $r->line('ABC'), ' | ', $r->safe(''), "\n";
     echo $r->line('');
 } catch (BadInputException $e) {
-    echo 'caught at the top', "\n";
+    // `$e->getMessage()` on a caught exception reads its `message` field (row 4j3).
+    echo 'caught at the top: ', $e->getMessage(), "\n";
 }

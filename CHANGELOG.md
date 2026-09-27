@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: `$e->getMessage()` on a caught exception reads its `message` (L3 row 4j3; 2026-09-27)
+
+phorj's error types carry the message as a public `message` field, so `$e->getMessage()` on a variable a `catch` bound lifts to `e.message`; it transpiles back to `$e->getMessage()`'s value. Any other receiver keeps the call — a user class may declare its own `getMessage`. Scout census: 170 → 169. Example: `examples/lift/throws.{php,phg}`.
+
 ### Added — `phg lift`: declared and propagated `throws` for PHP's unchecked exceptions (L3 row 4j2, DEC-547; 2026-09-27)
 
 PHP exceptions are unchecked and phorj's are checked (DEC-068), so every lifted `throw` outside a `try` was `E-THROW-UNDECLARED`. The lifter now reads what each function and method throws off the PHP — a `throw new X`, a `throw X::factory()` whose static method returns its own class, a rethrow of a caught exception — and closes it over the STATIC call graph (a fixpoint): the declaration carries `throws X`, and each resolvable call (`f()`, `self::`/`static::`/`parent::`/`Class::m()`, `$this->m()`) to a throwing declaration that no enclosing `catch` covers is spelled `f(…)?`. Coverage is judged in phorj names, so `catch (\RuntimeException)` covers a subclass of it. The directory lift decides it over the whole tree and imports a type thrown from another namespace. What cannot declare `throws` stays loud rather than guessed: `main`, a lambda, a constructor, a magic method, a call through a value, a `throw` whose type the source does not name. The lift printer now prints `throws`. Scout census: type errors 181 → 170; all 13 `E-THROW-UNDECLARED` gone except one constructor throw, plus one call inside a lambda — both loud by design. Found and fixed first: rows 4j0 and 4j1. Example: `examples/lift/throws.{php,phg}`.

@@ -17,11 +17,11 @@
 mod context;
 mod facts;
 
-pub(in crate::lift::lifter) use context::lift_site;
 pub(in crate::lift) use context::{
-    begin_file, clause, enter_class, enter_decl, enter_try, named_error_types, named_homes,
-    set_project,
+    begin_file, clause, enter_catch, enter_class, enter_decl, enter_try, named_error_types,
+    named_homes, set_project,
 };
+pub(in crate::lift::lifter) use context::{caught_message, lift_site};
 pub(in crate::lift) use facts::{facts_of, Facts};
 use facts::{Catches, Thrown};
 use std::collections::{BTreeSet, HashMap};

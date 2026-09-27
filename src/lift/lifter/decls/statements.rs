@@ -153,6 +153,7 @@ impl Lifter {
                     let name = c.var.clone().unwrap_or_else(|| "ignored".to_string());
                     let mut inner = declared.clone();
                     inner.insert(name.clone());
+                    let _caught = super::super::throws::enter_catch(&name); // row 4j3
                     lifted_catches.push(crate::ast::CatchClause {
                         ty,
                         name,
