@@ -589,7 +589,7 @@ class, or `.` and integer arithmetic over them) and translated: PHP's `$` also m
 newline, so `…$` becomes `…\n?\z` (`"ABC-1234\n"` is valid in both); without `u`, `\d` is ASCII, so it
 becomes `[0-9]`. The look-around in `mentionsRdc` needs the backtracking engine, so that one lifts to
 `Regex.compileBacktracking`; everything else keeps the linear, ReDoS-immune one. A pattern whose meaning
-would change — a `.` counting bytes, `i` or `\b` without `u`, the `m` modifier — is refused by name. Byte-identical on all three legs and
+would change — a `.` counting bytes, `i` or `\b` without `u`, the `m` modifier — is refused by name. On a PCRE error (a backtrack or JIT limit, or invalid UTF-8 under `u`) PHP's `preg_match` returns `false`, which `=== 1` reads as "no match"; the lift answers instead — a pattern on the linear `Regex.compile` cannot fail at match time and phorj strings are always valid UTF-8, so it gives the true answer, and only a `Regex.compileBacktracking` pattern can fail, faulting on its step budget where PHP returned `false`. Byte-identical on all three legs and
 against the PHP.
 
 ## Map union — `map-union.php` / `map-union.phg` (scout row 5q, DEC-534, 2026-09-25)

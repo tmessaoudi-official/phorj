@@ -52,7 +52,7 @@ fn run_php(php: &str, src: &str, label: &str) -> String {
 }
 
 /// Subjects chosen to split byte mode from character mode, `$` from `\z`, and ASCII from Unicode.
-const SUBJECTS: &str = r#"['', 'abc', "abc\n", "abc\n\n", 'ABC', 'é', "é\n", 'aéb', "a\nb", 'K', '12', '١٢', 'x y', 'b', 'ab', 'rdc', 'ardc', 'x/y', 'a~b']"#;
+const SUBJECTS: &str = r#"['', 'abc', "abc\n", "abc\n\n", 'ABC', 'é', "é\n", 'aéb', "a\nb", 'K', '12', '١٢', 'x y', 'b', 'ab', 'rdc', 'ardc', 'x/y', 'a~b', "\x0B", "\u{A0}"]"#;
 
 /// Every accepted shape of `lifter/preg/tests.rs`, as a PHP existence test.
 const PATTERNS: &[&str] = &[
@@ -65,6 +65,9 @@ const PATTERNS: &[&str] = &[
     r"'/^[\d.]+$/'",
     r"'/\w/'",
     r"'/\s/'",
+    r"'/\s/u'",
+    r"'/\S/'",
+    r"'/^\D+$/'",
     r"'/^[^0-9]+$/'",
     r"'/[^a-z]/'",
     r"'/^a.*b$/s'",
