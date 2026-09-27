@@ -1,0 +1,29 @@
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
+package Main;
+
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+import Core.Output;
+import Core.ErrorModule;
+import Core.ErrorModule.RuntimeError;
+
+class QuotaExceededException extends RuntimeError {
+    public static function over(int limit): QuotaExceededException {
+        return new QuotaExceededException("over the quota of {limit}");
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        throw QuotaExceededException::over(3);
+    } catch (QuotaExceededException e) {
+        Output.print("caught by its own type");
+    }
+    try {
+        throw new QuotaExceededException("again");
+    } catch (RuntimeError e) {
+        Output.print(" | caught by its base");
+        Output.print("\n");
+    }
+}

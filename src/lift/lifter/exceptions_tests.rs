@@ -11,7 +11,7 @@
 use super::{mapped_error_types, unmapped_exception_classes};
 use crate::lift::lifter::lift_source;
 
-fn parse(src: &str) -> crate::lift::ast::PhpProgram {
+pub(super) fn parse(src: &str) -> crate::lift::ast::PhpProgram {
     let (toks, docs) = crate::lift::lexer::lex_php_with_docs(src).expect("lex");
     crate::lift::parser::parse_php_with_docs(toks, docs).expect("parse")
 }
@@ -19,7 +19,7 @@ fn parse(src: &str) -> crate::lift::ast::PhpProgram {
 /// `phg check` on a phorj source, through the SAME pipeline the CLI uses — prelude injection
 /// included, which is the whole point here: the six error types only exist once `Core.ErrorModule`
 /// has been injected.
-fn check(phg: &str) -> Result<(), String> {
+pub(super) fn check(phg: &str) -> Result<(), String> {
     let prog = crate::cli::parse_program(phg).map_err(|e| format!("parse: {e}"))?;
     crate::cli::check_and_expand(&prog, phg).map(|_| ())
 }

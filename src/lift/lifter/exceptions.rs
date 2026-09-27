@@ -31,10 +31,21 @@ pub(in crate::lift) fn phorj_error_name(php: &str) -> String {
 /// One `// CANNOT LIFT:` note is emitted per entry, so the draft SAYS what it could not do rather
 /// than leaving a name that will simply fail `phg check` with no explanation.
 pub(in crate::lift) fn unmapped_exception_classes(prog: &php::PhpProgram) -> Vec<String> {
+    // A class the program DECLARES is its own counterpart (row 4j): the note used to tell the reader
+    // to "declare it" about a class declared a few lines up.
+    let declared: std::collections::HashSet<&str> = prog
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            php::PhpItem::Class(c) => Some(c.name.as_str()),
+            _ => None,
+        })
+        .collect();
     collect(prog, |class| {
-        crate::native::error_prelude::phorj_error_for_php_exception(class)
-            .is_none()
-            .then(|| strip_root_ns(class).to_string())
+        let name = strip_root_ns(class);
+        (crate::native::error_prelude::phorj_error_for_php_exception(class).is_none()
+            && !declared.contains(name.rsplit('\\').next().unwrap_or(name)))
+        .then(|| name.to_string())
     })
 }
 
@@ -71,6 +82,14 @@ fn visit_exception_sites(prog: &php::PhpProgram, f: &mut impl FnMut(&str)) {
         match it {
             php::PhpItem::Function(fun) => visit_body(&fun.body, f),
             php::PhpItem::Class(c) => {
+                // Row 4j: a user exception's PHP base (`extends \RuntimeException`) is printed as its
+                // DEC-421 counterpart and needs the import. Only a KNOWN base: a user base class is the
+                // program's own name, not an exception site.
+                if let Some(base) = c.extends.as_deref().filter(|b| {
+                    crate::native::error_prelude::phorj_error_for_php_exception(b).is_some()
+                }) {
+                    f(base);
+                }
                 for m in &c.members {
                     // An ABSTRACT/interface method has no body — nothing to scan, not an error.
                     if let php::PhpMember::Method(me) = m {
@@ -184,3 +203,7 @@ pub(super) fn visit_body(body: &[php::PhpStmt], f: &mut impl FnMut(&str)) {
 #[cfg(test)]
 #[path = "exceptions_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "exceptions_extends_tests.rs"]
+mod extends_tests;

@@ -75,7 +75,18 @@ impl Lifter {
             name: c.name.clone(),
             type_params: Vec::new(),
             type_param_bounds: Vec::new(),
-            extends: c.extends.clone().into_iter().collect(),
+            // Row 4j: a PHP exception base becomes its DEC-421 phorj counterpart; any other base is
+            // the program's own class and keeps its name.
+            extends: c
+                .extends
+                .iter()
+                .map(
+                    |b| match crate::native::error_prelude::phorj_error_for_php_exception(b) {
+                        Some(_) => super::super::exceptions::phorj_error_name(b),
+                        None => b.clone(),
+                    },
+                )
+                .collect(),
             implements_args: vec![Vec::new(); c.implements.len()],
             implements: c.implements.clone(),
             // PHP is extensible-by-default (only `final` seals it); Phorj is final-by-default, so a

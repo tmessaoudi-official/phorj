@@ -593,6 +593,20 @@ row's. `$f(...)`, `$o->m(...)` and `C::m(...)` are refused too, and every one of
 rewrite that lifts: a closure with a TYPED parameter, or a `foreach` where the parameter is an `array`.
 Byte-identical on all three legs and against the PHP.
 
+## Exception base classes — `exception-base.php` / `exception-base.phg` (scout row 4j, 2026-09-27)
+
+A user exception class that extends a PHP builtin (`extends \RuntimeException`) lifts onto its
+DEC-421 counterpart (`extends RuntimeError`): an `open` class whose `message` constructor the subclass
+inherits, so `new self('…')` keeps working, and a `catch (\RuntimeException $e)` still catches it. The
+draft imports the counterpart like any `throw`/`catch` site that names one. A base that is the
+program's own class — or any class that is not a known PHP exception — keeps its name, and a class the
+program declares is no longer reported as `// CANNOT LIFT` when it is thrown or caught.
+
+Two things stay loud, pending rulings (row 4j2): phorj requires a throwable's name to end in `Error`
+or `Exception` (`E-ERROR-NAME` — the lift keeps the PHP name), and a function that throws must declare
+`throws` (PHP has no such clause, so a `throw` outside a `try` reads `thrown here but neither caught
+nor declared`). Byte-identical on all three legs and against the PHP.
+
 ## Reordered builtins — `reordered.php` / `reordered.phg` (scout row 4i, 2026-09-27)
 
 These PHP builtins have a phorj native whose PHP form IS the builtin, but with the arguments in

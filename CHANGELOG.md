@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lift`: a user exception's PHP base class maps onto its phorj counterpart (L3 row 4j; 2026-09-27)
+
+`final class MalformedText extends \RuntimeException` lifted with its PHP base unchanged, so the class was not an `Error` and every `throw`/`catch` of it failed. It now extends the DEC-421 counterpart (`RuntimeError`, `LogicError`, …) and the draft imports it; the subclass inherits the `message` constructor. Fixed with it: a class the program declares was reported `// CANNOT LIFT: … declare it` whenever it was thrown or caught. Scout census: type errors 181 (from 186); the class's remaining errors are the two pending rulings (`E-ERROR-NAME`; `throws` for PHP's unchecked exceptions). Example: `examples/lift/exception-base.{php,phg}`.
+
 ### Added — `phg lift`: builtins whose native takes another argument order (L3 row 4i; 2026-09-27)
 
 `in_array($x, $xs, true)` lifts to `List.contains(xs, x)`, `implode`/`explode` to `join`/`split`, `str_replace` to `replace` (over a literal search array, one `replace` per needle — PHP's own left-to-right re-replacement), a `sprintf` whose literal format has only `%s`/`%%` to an interpolation, and `PHP_INT_MAX` to the int bound. Refused by name: a loose `in_array`, `explode` with a limit, `str_replace` with a count or mismatched arrays, and `sprintf` `%d` / padded / positional / computed formats. A swapped call is lifted only when at most one argument has an effect and no other argument reads state that effect could change (a property, a static property), since the receiver form evaluates the receiver first; `array_map`'s existing swap now honours the same guard. Scout census: 11/11 files still lift (with a faithful `%d` → `%s` bypass on three int values); type errors 213 → 186. Example: `examples/lift/reordered.{php,phg}`.

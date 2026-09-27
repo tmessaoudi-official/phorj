@@ -497,6 +497,17 @@ echo has(['a', 'b'], 'b'); echo "|"; echo has(['a'], 'z'); echo "|"; echo joined
 echo "|"; echo words('one two three'); echo "|"; echo swap('ab'); echo "|"; echo strip('a-x_b');
 echo "|"; echo say('Ann', 'hi'); echo "|"; echo PHP_INT_MAX;"#,
         ),
+        // Row 4j: a user exception class extending a PHP builtin lifts onto its DEC-421 counterpart,
+        // inheriting the message constructor; thrown through a static factory and caught by type.
+        (
+            "user_exception_extends_a_builtin",
+            r#"<?php
+final class ParseFailureException extends \RuntimeException {
+    public static function at(string $w): self { return new self('bad ' . $w); }
+}
+try { throw ParseFailureException::at('x'); } catch (ParseFailureException $e) { echo 'caught'; }
+try { throw new ParseFailureException('y'); } catch (\RuntimeException $e) { echo '|base'; }"#,
+        ),
         (
             "concat_conditional_holes",
             r#"<?php
