@@ -39,7 +39,7 @@ fn regex_value(pattern: &str, engine: Engine) -> Value {
 }
 
 /// The compiled engine behind a `Regex` instance argument (pattern + engine read off the value).
-fn engine_of(v: &Value) -> Result<Rc<Compiled>, String> {
+pub(super) fn engine_of(v: &Value) -> Result<Rc<Compiled>, String> {
     match v {
         Value::Instance(inst) if inst.class.as_ref() == "Regex" => {
             let field = |name: &str| match inst.get_field(name) {
@@ -56,7 +56,7 @@ fn engine_of(v: &Value) -> Result<Rc<Compiled>, String> {
 }
 
 /// The participating NAMED captures of one match as `(name, text)` pairs, in group-index order.
-fn named_pairs(s: &str, names: &[String], caps: &Caps) -> Vec<(Value, Value)> {
+pub(super) fn named_pairs(s: &str, names: &[String], caps: &Caps) -> Vec<(Value, Value)> {
     names
         .iter()
         .zip(&caps.groups)
@@ -226,21 +226,6 @@ pub(super) fn regex_quote_meta(args: &[Value], _: &mut String) -> Result<Value, 
     }
 }
 
-/// Build the injected `RegexMatch` value (DEC-295) — the typed carrier a `replaceCallback` closure
-/// receives. Hand-built like [`regex_value`]: class `RegexMatch`, a two-slot layout (`groups`,
-/// `matched`) matching the prelude's promoted constructor fields. `groups` holds ONLY participating
-/// named captures (like `regex_find_groups`), so `group()` returns `null` for a non-participating one
-/// — the same contract the PHP twin gets via `PREG_UNMATCHED_AS_NULL` + a null-filter.
-fn regex_match_value(matched: &str, groups: Vec<(Value, Value)>) -> Result<Value, String> {
-    let inst = Instance::new(
-        "RegexMatch".into(),
-        crate::value::ClassLayout::from_sorted_names(&["groups", "matched"]),
-    );
-    inst.set_field("matched", Value::Str(matched.into()));
-    inst.set_field("groups", Value::Map(Rc::new(build_map(groups)?)));
-    Ok(Value::Instance(Rc::new(inst)))
-}
-
 /// `Regex.replaceCallback(Regex, string, (RegexMatch) -> string) -> string` — replace every match with
 /// the callback's result (PHP `preg_replace_callback`, DEC-295). Higher-order: the backend invoker
 /// runs the closure per match. Matches are non-overlapping, left-to-right — the gap before each match
@@ -260,8 +245,7 @@ pub(super) fn regex_replace_callback(
             for caps in engine.captures_all(s)? {
                 let (ws, we) = caps.whole;
                 out.push_str(&s[last_end..ws]);
-                let pairs = named_pairs(s, &names, &caps);
-                let m_val = regex_match_value(&s[ws..we], pairs)?;
+                let m_val = super::captures::match_value(s, &names, &caps)?;
                 match call(cb, &[m_val])? {
                     Value::Str(r) => out.push_str(&r),
                     other => {
@@ -290,6 +274,7 @@ pub(super) fn regex_replace_callback(
 /// `$pattern` (the bare pattern), so a global helper can build the `/u`-delimited form.
 pub fn regex_natives() -> Vec<NativeFn> {
     let regex_ty = || Ty::Named("Regex".to_string(), vec![]);
+    let match_ty = || Ty::Named("RegexMatch".to_string(), vec![]);
     let list_str = || Ty::List(Box::new(Ty::String));
     let opt_str = || Ty::Optional(Box::new(Ty::String));
     let opt_map = || {
@@ -417,15 +402,31 @@ pub fn regex_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Regex",
+            name: "first",
+            params: vec![regex_ty(), Ty::String],
+            ret: Ty::Optional(Box::new(match_ty())),
+            pure: true,
+            eval: NativeEval::Pure(super::captures::regex_first),
+            lift_from: &[],
+            php: |a| format!("__phorj_regex_first({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Regex",
+            name: "all",
+            params: vec![regex_ty(), Ty::String],
+            ret: Ty::List(Box::new(match_ty())),
+            pure: true,
+            eval: NativeEval::Pure(super::captures::regex_all),
+            lift_from: &[],
+            php: |a| format!("__phorj_regex_all({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Regex",
             name: "replaceCallback",
             params: vec![
                 regex_ty(),
                 Ty::String,
-                Ty::Function(
-                    vec![Ty::Named("RegexMatch".to_string(), vec![])],
-                    Box::new(Ty::String),
-                    Vec::new(),
-                ),
+                Ty::Function(vec![match_ty()], Box::new(Ty::String), Vec::new()),
             ],
             ret: Ty::String,
             pure: true,

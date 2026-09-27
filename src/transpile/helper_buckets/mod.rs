@@ -36,8 +36,9 @@
 //! ## The count was wrong three times
 //!
 //! DEC-377 said **168**; DEC-412 corrected to **149 real**; the audited figure was **165**, and it is
-//! **187** as of DEC-472 (DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers,
-//! DEC-494/496/487/489/472 the charset, accent-fold, sleep, word-wrap and process rows). The number moves whenever a
+//! **190** as of DEC-554 (DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers,
+//! DEC-494/496/487/489/472 the charset, accent-fold, sleep, word-wrap and process rows, DEC-554 the
+//! three typed-match helpers). The number moves whenever a
 //! helper is added, which is fine; what must never drift again is the number stated here versus the
 //! source, and the ratchet below is what ties them together. Both earlier numbers came from grepping `__phorj_` and subtracting guessed
 //! artifacts; this one enumerates `function &?__phorj_x(` definitions plus the checked-arith codegen
@@ -77,7 +78,7 @@
 //!   `__phorj_text_index_of` `__phorj_text_reverse` `__phorj_text_trim` `__phorj_text_trim_end`
 //!   `__phorj_text_trim_start` `__phorj_trunc` `__phorj_wordwrap`
 //!
-//! ## Bucket 2 — no single-expression equivalent (116)
+//! ## Bucket 2 — no single-expression equivalent (119)
 //!
 //! Reason stated per family, as DEC-377 requires: `fs_*` `http_*` `db_*` `uri_*` need `try`/`catch` to
 //! turn an exception into a value, and `try` is not an expression in PHP · `regex_*` `log_*` need a
@@ -114,6 +115,7 @@
 //!   `__phorj_regex_delim` `__phorj_regex_expand` `__phorj_regex_find` `__phorj_regex_find_all`
 //!   `__phorj_regex_find_all_groups` `__phorj_regex_find_groups` `__phorj_regex_linear_unsupported` `__phorj_regex_matches`
 //!   `__phorj_regex_pcre_divergent` `__phorj_regex_quote_meta` `__phorj_regex_replace` `__phorj_regex_replace_callback`
+//!   `__phorj_regex_first` `__phorj_regex_all` `__phorj_regex_match_value`
 //!   `__phorj_regex_split` `__phorj_regex_validated` `__phorj_rng_int_between` `__phorj_rng_next`
 //!   `__phorj_rng_next_float` `__phorj_rng_seed` `__phorj_rng_state` `__phorj_rng_step`
 //!   `__phorj_sort` `__phorj_sort_with` `__phorj_take_while` `__phorj_unique`
@@ -305,6 +307,12 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_regex_quote_meta", 2),
     ("__phorj_regex_replace", 2),
     ("__phorj_regex_replace_callback", 2),
+    // DEC-554 — `Regex.first` / `Regex.all` and the `RegexMatch` they build. Bucket 2: the match
+    // array is a temporary (`preg_match(…, $m, PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL)`), and
+    // splitting its entries into texts, byte offsets and non-null named groups is a loop.
+    ("__phorj_regex_first", 2),
+    ("__phorj_regex_all", 2),
+    ("__phorj_regex_match_value", 2),
     ("__phorj_regex_split", 2),
     ("__phorj_regex_validated", 2),
     ("__phorj_rem", 1),

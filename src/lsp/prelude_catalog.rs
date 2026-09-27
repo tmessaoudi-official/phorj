@@ -111,12 +111,17 @@ fn is_visible(modifiers: &[Modifier]) -> bool {
         .any(|m| matches!(m, Modifier::Private | Modifier::Protected))
 }
 
-/// Run `visit` on every prelude declaration named `leaf`, across every `CORE_MODULES` row that binds
-/// that bare type. Parsed from the registry's own source on demand, so a new prelude declaration is
+/// Run `visit` on every prelude declaration named `leaf`, across every `CORE_MODULES` row whose
+/// prelude declares it. Parsed from the registry's own source on demand, so a new prelude declaration is
 /// completable the moment it is written — no LSP edit, which is what Invariant 17 requires.
+///
+/// Keyed on what a prelude DECLARES, not on the row's `bare_types`: that list is the import-gating set,
+/// deliberately narrower than the declarations (`Core.Regex` gates none, yet declares `RegexMatch`, the
+/// type `Regex.first` returns), so keying on it left such a receiver completing to nothing. The text
+/// test is only a cheap pre-filter; the exact name match is on the parsed items below.
 fn each_prelude_decl(leaf: &str, mut visit: impl FnMut(&Item)) {
     for vm in crate::cli::preludes::CORE_MODULES {
-        if !vm.bare_types.contains(&leaf) {
+        if !vm.bare_types.contains(&leaf) && !vm.srcs.iter().any(|s| s.contains(leaf)) {
             continue;
         }
         for src in vm.srcs {

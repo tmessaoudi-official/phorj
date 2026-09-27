@@ -9,4 +9,7 @@ pub mod replace;
 #[cfg(test)]
 mod tests;
 
+mod captures;
+#[cfg(test)]
+mod tests_captures;
 pub use natives::regex_natives;

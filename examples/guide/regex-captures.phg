@@ -1,0 +1,34 @@
+// Core.Regex captures (DEC-554) — `Regex.first` returns the first match as a typed `RegexMatch`, or
+// `null`; `Regex.all` returns every match. A match answers by POSITION (`at(n)`, group 0 being the whole
+// match) and by NAME (`group(name)`); a group that did not take part is `null`, never a silent `""`.
+// `start()` / `startOf(n)` are BYTE offsets — the unit `String.substring` and `String.length` use — so
+// a match after `é` (two bytes) starts one further than its character count suggests.
+package Main;
+
+import Core.Output;
+import Core.Regex;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    var range = Regex.compile("(?<lo>\\d+)-(\\d+)(?:/(\\w+))?");
+    string text = "rooms 10-20 and 30-40/b";
+    if (var m = Regex.first(range, text)) {
+        Output.printLine("first = {m.full()} at byte {m.start()}");
+        Output.printLine(
+            "lo = {m.group(\"lo\") ?? \"-\"} = {m.at(1) ?? \"-\"} at {m.startOf(1) ?? -1}"
+        );
+        Output.printLine(
+            "unit = {m.at(3) ?? \"(did not take part)\"}, at(9) = {m.at(9) ?? \"(no group 9)\"}"
+        );
+    }
+    for (RegexMatch x in Regex.all(range, text)) {
+        Output.printLine(
+            "{x.at(1) ?? \"\"}..{x.at(2) ?? \"\"} unit={x.at(3) ?? \"none\"} @{x.start()}"
+        );
+    }
+    var after = Regex.first(Regex.compile("x"), "éx");
+    Output.printLine("byte offset after é = {after?.start() ?? -1}");
+    Output.printLine("no match = {Regex.first(range, \"none\") instanceof null}");
+}

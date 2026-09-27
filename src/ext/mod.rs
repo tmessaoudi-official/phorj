@@ -76,16 +76,29 @@ pub mod uri_prelude;
 /// `import Core.Regex;` long before the prelude could matter). Colocated with the extension in
 /// spirit; unconditional in letter because a const array cannot be feature-spliced.
 pub mod regex_prelude {
-    // `RegexMatch` (DEC-295) is the typed value handed to a `Regex.replaceCallback` callback — beats
-    // PHP's untyped `$matches` array: `full()` is the whole match, `group(name)` is a named capture or
-    // `null` (never a silent `""`). The native builds instances directly (hand-built value, like the
-    // `Regex` carrier); these methods dispatch on both backends and transpile to a PHP `RegexMatch`
-    // class. `import Core.Map;` mirrors HTTP_PRELUDE's cross-Core pattern (needed for `Map.get`).
+    // `RegexMatch` (DEC-295) is the typed value handed to a `Regex.replaceCallback` callback, and
+    // (DEC-554) what `Regex.first` / `Regex.all` return — beats PHP's untyped `$matches` array:
+    // `full()` is the whole match, `group(name)` a named capture, `at(n)` group n by position (0 = the
+    // whole match), each `null` when absent or not taking part (never a silent `""`); `start()` /
+    // `startOf(n)` are BYTE offsets, the unit of `String.substring`. The natives build instances
+    // directly (hand-built value, like the `Regex` carrier); these methods dispatch on both backends
+    // and transpile to a PHP `RegexMatch` class. `import Core.Map;` / `import Core.List;` mirror
+    // HTTP_PRELUDE's cross-Core pattern.
     pub const PRELUDE: &str = r#"import Core.Map;
+import Core.List;
 class Regex { constructor(public string pattern, public string engine) {} }
 class RegexMatch {
-    constructor(public string matched, public Map<string, string> groups) {}
+    constructor(public string matched, public Map<string, string> groups, private List<string?> texts, private List<int?> starts) {}
     function full(): string { return this.matched; }
     function group(string name): string? { return Map.get(this.groups, name); }
+    function at(int n): string? {
+        if (n < 0 || n >= List.length(this.texts)) { return null; }
+        return this.texts[n];
+    }
+    function start(): int { return this.starts[0] ?? 0; }
+    function startOf(int n): int? {
+        if (n < 0 || n >= List.length(this.starts)) { return null; }
+        return this.starts[n];
+    }
 }"#;
 }

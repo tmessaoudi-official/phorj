@@ -197,4 +197,9 @@ fn php_emission_shapes() {
         emit("replaceCallback", &["$re", "$s", "$cb"]),
         "__phorj_regex_replace_callback($re, $s, $cb)"
     );
+    assert_eq!(
+        emit("first", &["$re", "$s"]),
+        "__phorj_regex_first($re, $s)"
+    );
+    assert_eq!(emit("all", &["$re", "$s"]), "__phorj_regex_all($re, $s)");
 }

@@ -237,13 +237,32 @@ function __phorj_regex_split($re, $s) {
 function __phorj_regex_quote_meta($s) {
     return addcslashes($s, '\\.+*?()|[]{}^$#&-~');
 }
+function __phorj_regex_match_value($m) {
+    $g = []; $texts = []; $starts = [];
+    foreach ($m as $k => $v) {
+        if (is_string($k)) { if ($v[0] !== null) { $g[$k] = $v[0]; } continue; }
+        $texts[] = $v[0];
+        $starts[] = $v[0] === null ? null : $v[1];
+    }
+    return new RegexMatch($m[0][0], $g, $texts, $starts);
+}
+function __phorj_regex_first($re, $s) {
+    $re = __phorj_regex_validated($re);
+    $f = PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL;
+    if (__phorj_regex_check(preg_match(__phorj_regex_delim($re->pattern), $s, $m, $f), $re) !== 1) { return null; }
+    return __phorj_regex_match_value($m);
+}
+function __phorj_regex_all($re, $s) {
+    $re = __phorj_regex_validated($re);
+    $f = PREG_SET_ORDER | PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL;
+    __phorj_regex_check(preg_match_all(__phorj_regex_delim($re->pattern), $s, $ms, $f), $re);
+    return array_map('__phorj_regex_match_value', $ms);
+}
 function __phorj_regex_replace_callback($re, $s, $cb) {
     $re = __phorj_regex_validated($re);
     return __phorj_regex_check(preg_replace_callback(__phorj_regex_delim($re->pattern), function ($m) use ($cb) {
-        $g = [];
-        foreach ($m as $k => $v) { if (is_string($k) && $v !== null) { $g[$k] = $v; } }
-        return $cb(new RegexMatch($m[0], $g));
-    }, $s, -1, $count, PREG_UNMATCHED_AS_NULL), $re);
+        return $cb(__phorj_regex_match_value($m));
+    }, $s, -1, $count, PREG_UNMATCHED_AS_NULL | PREG_OFFSET_CAPTURE), $re);
 }"#;
 
 impl Transpiler {

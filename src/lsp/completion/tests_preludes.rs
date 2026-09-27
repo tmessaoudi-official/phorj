@@ -143,3 +143,29 @@ fn a_user_class_still_shadows_a_prelude_class_of_the_same_name() {
         "prelude members must not be merged into a user class of the same name: {got:?}"
     );
 }
+
+/// DEC-554 (row 4l-b1): `Regex.first` / `Regex.all` reach completion from the native registry, and a
+/// `RegexMatch` receiver offers its accessors while hiding the two private columns behind them.
+#[cfg(feature = "regex")]
+#[test]
+fn regex_first_all_and_the_regex_match_accessors_surface() {
+    let module = "package Main;\nimport Core.Regex;\nfunction main(): void {\n  Regex.\n}\n";
+    let got = labels_after(module, "  Regex.");
+    for want in ["first", "all", "matches", "replaceCallback"] {
+        assert!(got.iter().any(|l| l == want), "want {want} in {got:?}");
+    }
+    let receiver =
+        "package Main;\nimport Core.Regex;\nfunction show(RegexMatch m): void {\n  m.\n}\n";
+    let got = labels_after(receiver, "  m.");
+    for want in [
+        "matched", "groups", "full", "group", "at", "start", "startOf",
+    ] {
+        assert!(got.iter().any(|l| l == want), "want {want} in {got:?}");
+    }
+    for hidden in ["texts", "starts"] {
+        assert!(
+            !got.iter().any(|l| l == hidden),
+            "private {hidden} leaked: {got:?}"
+        );
+    }
+}
