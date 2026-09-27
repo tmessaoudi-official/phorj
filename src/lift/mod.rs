@@ -37,6 +37,8 @@ mod parser_tests_closures;
 mod parser_tests_doc_errors;
 #[cfg(test)]
 mod parser_tests_ns;
+#[cfg(test)]
+mod parser_tests_refusals;
 
 #[cfg(test)]
 mod parser_tests_try;

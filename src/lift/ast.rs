@@ -208,8 +208,8 @@ pub struct PhpParam {
     pub is_readonly: bool,
 }
 
-/// A PHP type hint. Tier-1 = a single name or a nullable single name. Union types (`A|B`) can't even
-/// be lexed (the lexer has no bare `|`), so they're excluded at the token level by construction.
+/// A PHP type hint. Tier-1 = a single name or a nullable single name. A union (`A|B`) is refused by
+/// name at the parser (row 4o) — with DEC-544's wording when a member is `false`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PhpType {
     /// `int`, `float`, `string`, `bool`, `void`, `array`, `mixed`, or a class/enum name.

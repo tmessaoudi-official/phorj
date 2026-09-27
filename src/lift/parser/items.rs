@@ -396,6 +396,9 @@ impl PParser {
             } else {
                 None
             };
+            if self.at(&PTok::Amp) {
+                return Err(self.refuse_by_ref_param());
+            }
             if self.at(&PTok::Ellipsis) {
                 return Err(self.err(
                     "a variadic parameter `...$x` has no lift yet — take a `list<T>` parameter",
@@ -429,9 +432,19 @@ impl PParser {
             || matches!(self.peek(), PTok::Ident(_))
     }
 
+    /// A type hint; a union (`A|B`) is refused by name (row 4o, DEC-544).
     pub(super) fn parse_type(&mut self) -> Result<PhpType, String> {
+        let t = self.parse_type_member()?;
+        if self.at(&PTok::Bar) {
+            return Err(self.refuse_union_type(t));
+        }
+        Ok(t)
+    }
+
+    /// One type: a name, a `\`-rooted path, or `?T`.
+    pub(super) fn parse_type_member(&mut self) -> Result<PhpType, String> {
         if self.eat(&PTok::Question) {
-            return Ok(PhpType::Nullable(Box::new(self.parse_type()?)));
+            return Ok(PhpType::Nullable(Box::new(self.parse_type_member()?)));
         }
         if self.at(&PTok::Backslash) {
             return self.parse_root_qualified_type();

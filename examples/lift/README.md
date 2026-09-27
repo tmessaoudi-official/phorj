@@ -369,6 +369,22 @@ references contradict the value/handle split and are RULED OUT (DEC-506), not me
 unimplemented. Rewrite the closure to return its result instead of mutating a captured variable.
 ```
 
+The same ruling covers a by-reference PARAMETER (row 4o, DEC-543), and PHP's sentinel return
+`string|false|null` is refused in DEC-544's words — collapsing `false` into `null` would merge two
+outcomes the caller tells apart, so the port declares an enum. Any other union is refused as a gap
+(phorj has `A | B`; the lifter does not map onto it yet):
+
+```console
+$ phg lift outparam.php
+lift parse error: the parameter `$m` is taken by reference (`&$m`), which has no phorj form —
+references contradict the value/handle split and are RULED OUT (DEC-506, DEC-543), not merely
+unimplemented. Return the value instead of writing through the parameter (line 2)
+$ phg lift sentinel.php
+lift parse error: the union type `string|false|null` has a `false` member — PHP's sentinel return
+has no phorj form (DEC-544): write `?T` when `false` is the only sentinel, or an enum with one
+variant per outcome when `false` and `null` mean different things (line 2)
+```
+
 Two more rules fall out of the shape:
 
 - **`static` is dropped, not refused.** It only stops PHP binding `$this`, and a phorj lambda never

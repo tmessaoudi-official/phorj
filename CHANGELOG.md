@@ -6,6 +6,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `phg lift`: a by-reference parameter and a `false` union are refused by name (row 4o, DEC-543/DEC-544; 2026-09-27)
+
+`function matchOffset(string $p, ?array &$m)` was refused with `expected parameter name, found Amp`, and `function lookup(): string|false|null` with ``expected `{`, found Bar`` — the token the parser stopped on, not the reason. A `&$param` now gets DEC-506's ruling (references are ruled out, not unbuilt), naming the parameter; a union with a `false` member gets DEC-544's (a sentinel return; port it to `?T` or an enum). Any other union is named as a gap: phorj has `A | B`, the lifter does not map onto it yet (row 4o2). Both parse sites — function, method, closure parameter, return and property types — go through the one `parse_type`. Tests `parser_tests_refusals.rs` (3); sabotage of each wiring reds them with the old `found Amp` / `found Bar`.
+
 ### Added — `phg lift`: `$e->getMessage()` on a caught exception reads its `message` (L3 row 4j3; 2026-09-27)
 
 phorj's error types carry the message as a public `message` field, so `$e->getMessage()` on a variable a `catch` bound lifts to `e.message`; it transpiles back to `$e->getMessage()`'s value. Any other receiver keeps the call — a user class may declare its own `getMessage`. Scout census: 170 → 169. Example: `examples/lift/throws.{php,phg}`.
