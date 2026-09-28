@@ -16,9 +16,12 @@ cargo build              # cargo fetches the vetted feature-gated deps (see THIR
 cargo test               # run the full suite
 ```
 
-You need a stable Rust toolchain (edition 2021). Cross-builds for `phg build --target` additionally
-need [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild), `zig`, and `llvm-objcopy`, but
-those are **not** required for normal development.
+You need a stable Rust toolchain (edition 2021) and `llvm-objcopy`: the host `phg build` tests shell out
+to it, and one of them (DEC-530) fails rather than skips without it. Either install LLVM (it is then on
+`PATH`), or run `rustup component add llvm-tools` and point `PHORJ_OBJCOPY` at the `llvm-objcopy` under
+`$(rustc --print sysroot)`. Cross-builds for `phg build --target` additionally need
+[`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild) and `zig`; those are **not** required for
+normal development.
 
 ## The quality gate (must be green before every commit)
 

@@ -245,6 +245,12 @@ the VM ran `Runtime.onShutdown` handlers on top of the ENDED program's frames, s
 where the interpreter printed `body cleanup`) — the handler's return resumed `main` past the fault or exit
 point. `run_shutdown_handlers` now unwinds frames, stack and `try` handlers first.
 
+**CI never certified the `tests/build.rs` gate until 2026-09-28.** CI's `gate` job did not install
+llvm-objcopy, so the DEC-530 test failed there on every push from 64570d14 (2026-09-24, the first push
+carrying f7517841) to 67887630: 52 red runs. Because `cargo test` stops at the first failing test binary,
+the 43 binaries after `build` (the `differential.rs` gate above among them) did not run on CI either.
+Fixed by installing llvm-tools in `gate` and running `cargo test --no-fail-fast`.
+
 **Not covered:** `phg debug` still drops pre-fault stdout (`interpret_debug` keeps only the diagnostic; its UI
 is stderr-first). The `phg serve` → `run` role-mismatch switch prints the partial output too, but only behind an
 interactive-terminal prompt, so no test reaches it. A fault inside `spawn` goes through `run_loop`'s error arm,

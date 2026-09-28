@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Phorj pre-commit gate (M2 P3.5 Wave 0, Task 0.5). Tracked in-repo and wired up with
 #   git config core.hooksPath scripts/git-hooks
-# Zero HARD dependencies — just the cargo toolchain. Blocks a commit unless formatting and the
+# Dependencies: the cargo toolchain, plus llvm-objcopy for tests/build.rs (DEC-530's test asserts it;
+# see CONTRIBUTING.md). Blocks a commit unless formatting and the
 # RUST-ONLY test suite (fast tier) pass. cargo-nextest is used as a FASTER (parallel) test runner
 # when present; the hook falls back to plain `cargo test` when it is absent.
 #

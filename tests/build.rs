@@ -23,9 +23,10 @@ fn cross_toolchain_ready(target: &str) -> bool {
 }
 
 /// Skip-aware: true iff `llvm-objcopy` (or `$PHORJ_OBJCOPY`) can run. Host `phg build` shells out
-/// to it to embed the `.phorj` section, so a host-build test must **skip — not fail** where it is
-/// absent (a lean CI runner, a contributor without LLVM tools). The `cross-build` CI job installs
-/// it, so these tests still run for real there; only the lean `gate` job skips them. Mirrors
+/// to it to embed the `.phorj` section. Most host-build tests **skip** where it is absent; the
+/// exception is `built_binary_keeps_stdout_written_before_a_fault`, which asserts it (DEC-530: it
+/// must not pass by skipping), so `cargo test` needs llvm-objcopy (see CONTRIBUTING.md). Both the
+/// `gate` and `cross-build` CI jobs install it, so no CI job skips these tests. Mirrors
 /// `cross_toolchain_ready`'s philosophy for the zig / cargo-zigbuild toolchain.
 fn objcopy_available() -> bool {
     let obj = std::env::var("PHORJ_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());

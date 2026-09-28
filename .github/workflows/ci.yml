@@ -57,13 +57,29 @@ jobs:
       - name: cargo clippy --workspace --all-targets -- -D warnings
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      # The host `phg build` tests need llvm-objcopy: without it three tests/build.rs tests and
+      # src/bundle/elf.rs's elf_reader_finds_added_section skip silently, and
+      # built_binary_keeps_stdout_written_before_a_fault fails by design (DEC-530: it must not pass by
+      # skipping). Its absence kept this job red from 2026-09-24 to 2026-09-28. Same step as the
+      # cross-build job below: the toolchain's llvm-tools component ships a version-matched copy, and
+      # PHORJ_OBJCOPY points the build at it.
+      - name: Install llvm-objcopy (llvm-tools)
+        run: |
+          rustup component add llvm-tools
+          OBJ="$(find "$(rustc --print sysroot)" -name 'llvm-objcopy' | head -n1)"
+          test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
+          echo "PHORJ_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
+
       # PHORJ_REQUIRE_PHP=1 turns a missing or non-working php into a test FAILURE — this is the
       # enforcement CI adds on top of the local hook (which runs the oracle only when php happens
       # to be on PATH). This line is what "locks in" M7. --workspace also gates the playground crate.
       - name: cargo test (PHP oracle enforced)
         env:
           PHORJ_REQUIRE_PHP: '1'
-        run: cargo test --workspace
+        # --no-fail-fast: cargo test stops at the first failing test BINARY by default, so one red
+        # test in tests/build.rs hid 43 later binaries (differential.rs, the PHP oracle, among them)
+        # on every run from 2026-09-24 to 2026-09-28. The job still fails; every failure is reported.
+        run: cargo test --workspace --no-fail-fast
 
   perf-gate:
     # Lane 2 W1: block a gross VM performance regression. scripts/perf-gate.sh gates on `vm_speedup`
@@ -180,11 +196,11 @@ jobs:
           x86_64-pc-windows-gnu
 
       # llvm-objcopy embeds the `.phorj` section into the cross-built stub (src/bundle/cross.rs).
-      # The toolchain's llvm-tools-preview ships a version-matched copy; PHORJ_OBJCOPY points the
+      # The toolchain's llvm-tools component ships a version-matched copy; PHORJ_OBJCOPY points the
       # build at it (the binary is not on PATH under that name otherwise).
-      - name: Install llvm-objcopy (llvm-tools-preview)
+      - name: Install llvm-objcopy (llvm-tools)
         run: |
-          rustup component add llvm-tools-preview
+          rustup component add llvm-tools
           OBJ="$(find "$(rustc --print sysroot)" -name 'llvm-objcopy' | head -n1)"
           test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
           echo "PHORJ_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
