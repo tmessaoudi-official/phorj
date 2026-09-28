@@ -1153,7 +1153,7 @@ paths; CTy-operand trap (`expr + 1` case); scratch slots `self.height - 1` (two-
 2026-07-02 adjudication ledger is Appendix B; the **2026-07-03 unification-audit rulings are §13**.
 Protocol for future decisions: **`AskUserQuestion`**, with numbered options, the recommended option
 first with the why, a visible "none of these / challenge the premise" escape, and a concrete
-failing-program risk example in every design question (`.claude/skills/phg-ask-human/SKILL.md`;
+failing-program risk example in every design question (the global `/ask-human` skill + this repo's `.claude/skills/phg-ask-human/SKILL.md`;
 Invariant 15's ADJUDICATION RULE governs the shape).
 ⚠ **DEC-387 (2026-07-27) is RETIRED and must not be followed.** It ruled the opposite — *plain-text
 questions only, `AskUserQuestion` FORBIDDEN* — because the tool silently failed in the dead cloud

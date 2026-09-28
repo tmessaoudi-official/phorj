@@ -299,8 +299,8 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
     premise"* escape. Questions are delivered via **`AskUserQuestion`** (re-inverted 2026-08-18 —
     the container-era plain-text ban existed because the tool silently failed in the dead cloud
     container; on this machine it works and the global Stop hook requires it), then STOP and wait;
-    never assume an answer, never proceed on a default. The protocol is
-    `.claude/skills/phg-ask-human/SKILL.md`.
+    never assume an answer, never proceed on a default. The protocol is the global `/ask-human` skill
+    plus this repo's additions in `.claude/skills/phg-ask-human/SKILL.md` (which carries this rule's autonomous-mode carve-out).
 
 16. **CROSS-LANGUAGE SCAN + BYTE-IDENTITY-IS-A-TOOL** (META-7, ratified 2026-07-16). Before
     designing anything meant to beat PHP, survey how other languages (Rust/Kotlin/Swift/TS/Go/C#…)

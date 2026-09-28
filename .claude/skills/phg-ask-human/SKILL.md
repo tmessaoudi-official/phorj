@@ -31,18 +31,30 @@ user-invocable: true
 
 The protocol — the five required parts, the non-negotiable rules, when a question is mandatory and
 when it is not — is the global `/ask-human` skill, § "Question quality". Whether a question stops
-the turn or is shown and answered with the recommended option is the GLOBAL `~/.claude/CLAUDE.md` § "Mode — spec or autonomous". This file adds
-only what is specific to this repo.
+the turn or is shown and answered with the recommended option is the GLOBAL `~/.claude/CLAUDE.md` § "Mode — spec or autonomous" — **except the
+Invariant-15 decisions below, which are never shown-and-answered in any mode**. This file adds only what is specific to this repo.
 
 ## Repo notes
 
-- **Part 2 (the minimal example) here:** A **minimal concrete example** of the problem — for a language question, a runnable current-syntax program and its actual current output/error. Not a description of the program: the program.
+- **Part 2 (the minimal example) here:** A **minimal concrete example** of the problem — for a language question, a runnable current-syntax program and its actual current output/error. Not a description of the program: the program. It goes **IN the `question` text** of the `AskUserQuestion` call (Invariant 15), not in prose above the call —
+  prose outside the option list is missed while options are being compared.
 - **Ruled decisions** (a DEC row) — never re-open one without new evidence.
+- **Never re-ask a different question because the first one went unanswered** (kept from the pre-thinning protocol; the
+  global skill does not carry it).
+- **The escape**: Invariant 15 wants a visible *"none of these / challenge the premise"* escape. Prefer it as an option; when
+  four real options already fill the tool (its cap is 4), a sentence in the `question` text pointing at the auto-appended
+  "Other" is the escape.
+- **RETIRED — do not reinstate:** the container-era plain-text protocol and its `❓ QUESTION` / `⏹ NO QUESTION` end-of-reply
+  markers (DEC-418, developer-ruled 2026-07-30; retired 2026-08-18 with the de-containerization ruling). The register entry
+  in `docs/research/full-audit/raw/C-decisions.md` still reads as live — this line is the record that it is not.
 
 ## When a question is mandatory here
 
 - Any **user-visible language or design decision** (project CLAUDE.md Invariant 15 — the
-  ADJUDICATION RULE: those are the developer's, made interactively, never ruled alone).
+  ADJUDICATION RULE: those are the developer's, made interactively, never ruled alone). **An every-mode ask:**
+  in autonomous mode it is recorded as a PENDING question (never `ASSUMED (review)`), neither option is built,
+  and the session moves on to other work. This overrides the global § Mode "take the recommended option" —
+  same class as the DEC-268 cap below.
 - Any **destructive or hard-to-reverse action** — force-push and history rewrites above all. Note
   that ordinary `git add` / `git commit` / `git push` are **autonomously authorised** here
   (CLAUDE.md § "Git autonomy", DEC-417) and must NOT be asked about.
@@ -52,6 +64,9 @@ only what is specific to this repo.
 The global cases (two readings leading to materially different work, …) apply as well.
 
 ## Worked example
+
+The block shows the CONTENT at full quality — deliver it through `AskUserQuestion` (the question text and the options),
+never as the prose below.
 
 ```
 ## Question — should `10 / 0` be a compile error?
