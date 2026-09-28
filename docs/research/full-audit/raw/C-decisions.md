@@ -4449,6 +4449,13 @@ being waited on or why work stopped. No exceptions, including one-line replies. 
 so it survives session resets. It is the OUTER frame around Invariant 15's question protocol: Invariant 15
 governs a question's shape, DEC-418 governs whether every reply declares itself one.
 
+⚠ **RETIRED 2026-08-18 — do not reinstate.** Retired with the de-containerization ruling, the same one that
+re-inverted DEC-387: commit `c5cded43` deleted the marker section from `CLAUDE.md`. The markers framed a
+plain-text question protocol that existed only because `AskUserQuestion` silently failed in the dead cloud
+container; on this machine questions go through that tool, and the rationale above (a prose question being
+indistinguishable from a pause) dies with the prose protocol. Annotated in place 2026-09-28 (review panel,
+completeness N3 — the entry still read as live, an Invariant 19 gap), not deleted, per DEC-518.
+
 ### CD-26 (2026-07-30) — the `html"…"` literal counts as a use of `import Core.Html`
 
 Not a ruling — a bug with a forced fix, so no adjudication. Reproduced: `var a = html"<p>{n}</p>";` under

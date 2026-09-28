@@ -3,7 +3,8 @@ name: phg-ask-human
 description: >
   phorj's additions to the global /ask-human question protocol — its mandatory cases
   (language/design decisions under Invariant 15, the DEC-268 cap), the DEC-row rule and a worked
-  example. The protocol itself is global ask-human § Question quality.
+  example, and the every-mode Invariant-15 carve-out (autonomous: record PENDING, never ASSUMED).
+  The protocol itself is global ask-human § Question quality.
 user-invocable: true
 ---
 
@@ -45,16 +46,20 @@ Invariant-15 decisions below, which are never shown-and-answered in any mode**. 
   four real options already fill the tool (its cap is 4), a sentence in the `question` text pointing at the auto-appended
   "Other" is the escape.
 - **RETIRED — do not reinstate:** the container-era plain-text protocol and its `❓ QUESTION` / `⏹ NO QUESTION` end-of-reply
-  markers (DEC-418, developer-ruled 2026-07-30; retired 2026-08-18 with the de-containerization ruling). The register entry
-  in `docs/research/full-audit/raw/C-decisions.md` still reads as live — this line is the record that it is not.
+  markers (DEC-418, developer-ruled 2026-07-30; retired 2026-08-18 with the de-containerization ruling, `c5cded43`). The
+  retirement is recorded on the register's DEC-418 entry and in MASTER-PLAN G-4 beside DEC-387.
 
 ## When a question is mandatory here
 
 - Any **user-visible language or design decision** (project CLAUDE.md Invariant 15 — the
-  ADJUDICATION RULE: those are the developer's, made interactively, never ruled alone). **An every-mode ask:**
-  in autonomous mode it is recorded as a PENDING question (never `ASSUMED (review)`), neither option is built,
-  and the session moves on to other work. This overrides the global § Mode "take the recommended option" —
-  same class as the DEC-268 cap below.
+  ADJUDICATION RULE: those are the developer's, made interactively, never ruled alone). This overrides the
+  global § Mode "take the recommended option" in EVERY mode — the same override as the DEC-268 cap below, with
+  a different effect: the cap STOPS the turn; this one, in autonomous mode, **records and moves on**. Neither
+  option is built and it is never `ASSUMED (review)`. The record is a `PENDING (Invariant 15)` entry in the
+  decision register (`docs/research/full-audit/raw/C-decisions.md`, the established form — KNOWN_ISSUES:
+  "Recorded as a PENDING question in the register") plus a line in the `docs/plans/SLICE-STATE.md` cursor,
+  and the closing check-in names it. Not a plan Decisions-Log bullet: the global `/next` and `/progress`
+  surface `ASSUMED` entries only, so a PENDING written there is never brought back. In spec mode: ask, then stop.
 - Any **destructive or hard-to-reverse action** — force-push and history rewrites above all. Note
   that ordinary `git add` / `git commit` / `git push` are **autonomously authorised** here
   (CLAUDE.md § "Git autonomy", DEC-417) and must NOT be asked about.
@@ -66,7 +71,7 @@ The global cases (two readings leading to materially different work, …) apply 
 ## Worked example
 
 The block shows the CONTENT at full quality — deliver it through `AskUserQuestion` (the question text and the options),
-never as the prose below.
+never as the prose below. It is a spec-mode delivery; in autonomous mode the same content is the PENDING record.
 
 ```
 ## Question — should `10 / 0` be a compile error?

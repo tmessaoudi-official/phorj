@@ -1067,6 +1067,9 @@ wrong; Runtime-pillar packs adjust to ENRICH these, review sweep will inventory 
 1. **Adjudication = BOUNDED AUTONOMY**: mid-run design questions → implement recommended option,
    record `AUTO-RULED (REOPENABLE)` + alternatives + risk example in C-decisions.md, add a
    KNOWN_ISSUES morning-triage entry. (Alternatives: hybrid syntax-PENDING; strict Rule-15.)
+   *Run-scoped — it governed that one overnight run only: its AUTO-RULED batch (DEC-227…233) was
+   ratified wholesale by DEC-237, and the register holds no AUTO-RULED entry after it. Every later run
+   follows Invariant 15: record PENDING, never self-rule. (Annotated 2026-09-28, review panel R2-7.)*
 2. **Perf = STRETCH**: META-1 sqlbuild-surface ladder to ≥1.0× stands; hold all 21 micros ≥1.0×;
    ADD 2–3 macro benches (webish request loop, JSON round-trip, DB workload) with beat-php
    targets. Perf-claim protocol unchanged (fresh docker php:8.5-cli+JIT, pinned, interleaved).
@@ -1162,7 +1165,9 @@ container. That container is gone; on this machine the tool works, `askUserQuest
 delivery mechanism Invariant 15 depends on. Re-inverted 2026-08-18 by `CLAUDE.md` § Questions;
 recorded here as superseded rather than deleted, per DEC-518 (2026-09-09), because a reader who has
 seen the old rule needs to find out it was reversed. The skill path in the old text
-(`.claude/skills/ask-human/`) is also stale — this repo's is `phg-ask-human`. **NEW standing instruction (developer,
+(`.claude/skills/ask-human/`) is also stale — this repo's is `phg-ask-human`.
+⚠ **DEC-418 (2026-07-30, the `❓ QUESTION` / `⏹ NO QUESTION` end-of-reply markers) is RETIRED too** — same
+ruling, same date (`c5cded43`); its register entry is annotated in place. **NEW standing instruction (developer,
 2026-07-03): when a "more correct" answer and a "PHP-familiar" answer diverge, present and
 default-recommend the more-correct one — PHP-parity is not a tie-breaking bias.** (Pattern across
 the audit gate: the developer consistently chose the thorough option over the cheap one.)
