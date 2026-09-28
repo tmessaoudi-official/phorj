@@ -993,6 +993,12 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
 
 ## 2026-07-15 fable overnight run — AUTO-RULED batch (bounded autonomy, developer-approved protocol; every entry REOPENABLE, mirrored in KNOWN_ISSUES §"Fable overnight run — morning triage")
 
+> ⚠ **CLOSED (annotated 2026-09-28).** The bounded-autonomy protocol was scoped to this one run
+> (MASTER-PLAN §0.2 "Rulings (developer, 2026-07-15 pre-sleep)"); it is not a standing rule. Every entry
+> below was ratified — DEC-227…233 by DEC-237, DEC-224…226 by DEC-411. A later run (2026-07-19,
+> DEC-300…302 / 304…308) self-ruled under a separate FORK RULE now found only in `docs/archive/`.
+> Invariant 15 governs: an autonomous session records a design question as PENDING, never rules on it.
+
 - **DEC-227 — AUTO-RULED (REOPENABLE): `db` becomes a DEFAULT cargo feature + clean feature-gating
   errors.** Found by the run's first review probe: the stock binary (default features) could not run
   ANY `Core.Db` program — `import Core.Db` produced a ~100-line wall of prelude-internal

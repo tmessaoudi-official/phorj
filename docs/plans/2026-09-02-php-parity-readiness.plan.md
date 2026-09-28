@@ -399,8 +399,8 @@ A14 QR/images · Q4 Intl scope · source-protection payload · generic bounds ·
 ### Known issues
 - `KNOWN_ISSUES.md` carries ~58 live entries — the real debt register.
 - Invariant 13 regrowth landed unremarked: `src/serve/transport.rs` 498 (hard cap 500),
-  `src/serve/framing.rs` 411, `src/ext/regex/reject.rs` 318 at birth. `size-gate.sh:10-11` makes the
-  soft cap WARN-only. 53 files exceed the hard cap while M-Decomp reads COMPLETE.
+  `src/serve/framing.rs` 411, `src/ext/regex/reject.rs` 318 at birth. size-gate.sh's header bullet "over the 300 SOFT
+  cap … -> WARN (advisory)" makes the soft cap WARN-only. 53 files exceed the hard cap while M-Decomp reads COMPLETE.
 - Exactly ONE real source TODO: `src/lift/lifter/exprs.rs:360` (lifter never synthesizes PHP
   promoted-ctor defaults) — recorded in no live register.
 - Stale comment: `tests/differential.rs:390-392` claims the test is `#[ignore]`d, failing and blocked
