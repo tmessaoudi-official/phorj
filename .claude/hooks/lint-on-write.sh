@@ -56,6 +56,9 @@ warn() { printf 'lint-on-write: %s\n' "$1" >&2; _ctx+="lint-on-write: $1"$'\n'; 
 _emit_ctx() {
   [[ -n "$_ctx" ]] && jq -n --arg m "${_ctx%$'\n'}" \
     '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $m}}'
+  # `return 0`: with no warnings the `[[ -n ]] &&` above is false; the trap's status never overrides the
+  # script's own `exit 0` (measured 2026-09-28: `f(){ false; }; trap f EXIT; exit 0` → rc 0), so this only
+  # keeps the function's status honest — it masks no failure (panel 2026-09-28, safety F3).
   return 0
 }
 trap _emit_ctx EXIT
@@ -102,6 +105,15 @@ esac
 rel="${file#"$root"/}"
 lines="$(wc -l < "$file" 2>/dev/null || echo 0)"
 baseline="$(awk -v f="$rel" '$2==f {print $1; exit}' "$root/scripts/size-baseline.txt" 2>/dev/null || true)"
+# The row is DATA from a tracked file: `(( lines > baseline ))` evaluates array subscripts, so a row
+# `PWD[$(cmd)]` ran cmd on the next Edit, and `abc` broke "ALWAYS exit 0" under set -u (panel
+# 2026-09-28, safety O1/O2 — reproduced; test section 4d). Validate before any arithmetic, and do not
+# echo the row's text into the model's context.
+if [[ -n "$baseline" && ! "$baseline" =~ ^[0-9]+$ ]]; then
+  warn "scripts/size-baseline.txt has a malformed row for $rel (its count is not a plain number) — fix the row; the size check is skipped for this file"
+  log_obs INFO lint-on-write "malformed baseline row: $rel"
+  exit 0
+fi
 
 if [[ -n "$baseline" ]]; then
   # Grandfathered: the rule is it must not GROW. Shrinking below 500 means dropping the row.

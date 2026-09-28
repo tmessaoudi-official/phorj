@@ -26,13 +26,22 @@ BASELINE="scripts/size-baseline.txt"
 
 # Load grandfather ceilings: file -> baseline line count.
 declare -A ceiling=()
+# A row is DATA: `(( lines > cap ))` evaluates array subscripts, so an unvalidated count `PWD[$(cmd)]`
+# ran cmd at every push, and `abc` died on set -u (panel 2026-09-28, safety O1; lint test section 4d).
+# A malformed row FAILS the gate — the ratchet's own data being wrong is not something to skip past.
+malformed=0
 if [[ -f "$BASELINE" ]]; then
   while IFS=$'\t' read -r cnt path; do
-    [[ -n "${path:-}" ]] && ceiling["$path"]="$cnt"
+    [[ -n "${path:-}" ]] || continue
+    if [[ ! "$cnt" =~ ^[0-9]+$ ]]; then
+      echo "FAIL (malformed $BASELINE row for $path: the count is not a plain number)"
+      malformed=$((malformed+1)); continue
+    fi
+    ceiling["$path"]="$cnt"
   done < "$BASELINE"
 fi
 
-fails=0
+fails=$malformed
 warns=0
 stale=0
 

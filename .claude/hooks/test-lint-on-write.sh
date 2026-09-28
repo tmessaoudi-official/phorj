@@ -38,6 +38,10 @@ run() {
 rc_of()  { printf '%s' "${1%%|*}"; }
 err_of() { printf '%s' "${1#*|}"; }
 
+# Section 4b calls this; it was never defined (panel 2026-09-28, correctness F2 / completeness F6 —
+# 'command not found' on every run since origin). Clears the grandfather baseline between sections.
+reset_sandbox() { : > "$TMP/scripts/size-baseline.txt"; }
+
 gen() { python3 -c "import sys; n=int(sys.argv[2]); open(sys.argv[1],'w').write(''.join('// line %d\n'%i for i in range(n)))" "$1" "$2"; }
 
 echo "lint-on-write.sh — warn-only advisory contract"
@@ -80,6 +84,25 @@ ctx="$(printf '%s' "$sout" | jq -r '.hookSpecificOutput.additionalContext // emp
                              || bad "no additionalContext for the hard-cap breach; stdout='${sout:0:80}'"
 [[ "$(printf '%s' "$sout" | jq -r '.hookSpecificOutput.hookEventName // empty' 2>/dev/null)" == PostToolUse ]] \
   && ok "hookEventName is PostToolUse" || bad "hookEventName missing from stdout JSON"
+
+# ── 3c. TWO warnings at once → still ONE JSON document carrying both (panel 2026-09-28) ─
+# The harness parses stdout only when it is a single JSON document; the accumulate-then-emit-once
+# trap is what guarantees that. Every other case fires ONE warn(), so a "simplification" printing a
+# JSON line per warn() passed 25/25 (completeness F1, correctness F1) — and with rustfmt present the
+# rustfmt leg had no guard of its own (safety F2). An unformatted file over the hard cap fires both.
+{ printf 'fn   main( ){ }\n'; python3 -c "print(''.join('// line %d\n'%i for i in range(700)),end='')"; } > "$TMP/src/two.rs"
+sout2="$(sout_of "$TMP/src/two.rs")"
+[[ "$(printf '%s' "$sout2" | jq -s 'length' 2>/dev/null)" == 1 ]] && ok "two warnings → exactly ONE JSON document on stdout" \
+                                                                 || bad "stdout is not one JSON document: '${sout2:0:120}'"
+ctx2="$(printf '%s' "$sout2" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+[[ "$ctx2" == *"HARD cap"* ]] && ok "the hard-cap warning is in that one document" || bad "hard-cap line missing: '${ctx2:0:120}'"
+if command -v rustfmt >/dev/null 2>&1; then
+  [[ "$ctx2" == *"rustfmt"* ]] && ok "the rustfmt warning reaches the model too (rustfmt present)" \
+                               || bad "rustfmt warning missing from additionalContext: '${ctx2:0:120}'"
+else
+  ok "rustfmt absent — rustfmt leg not checkable here (skipped, not passed silently)"
+fi
+rm -f "$TMP/src/two.rs"
 
 # ── 4. THE REGRESSION THIS HOOK EXISTS FOR: grandfathered growth ───────────────────
 # scripts/size-gate.sh catches this at push. By then the cheap fix is to shave comments,
@@ -133,6 +156,38 @@ r="$(run "$TMP/src/edge.rs")"
 [[ "$(err_of "$r")" == *"do not grow it"* ]] && bad "called 501 growth against a 600 baseline" \
                                              || ok "501 under a 600 baseline is not reported as growth"
 : > "$TMP/scripts/size-baseline.txt"
+
+# ── 4d. A baseline row is DATA, never code (panel 2026-09-28: safety O1/O2) ───────
+# `(( lines > baseline ))` evaluates array subscripts, so a tracked row `PWD[$(cmd)]` ran cmd on the
+# next Edit — and again at push through size-gate.sh (reproduced by the safety lens). A non-numeric
+# row also broke "ALWAYS exit 0" (set -u → rc 1). Both consumers must treat the field as a number.
+printf 'PWD[$(touch${IFS}%s/pwned)]\tsrc/evil.rs\nabc\tsrc/abc.rs\n' "$TMP" > "$TMP/scripts/size-baseline.txt"
+gen "$TMP/src/evil.rs" 10
+r="$(run "$TMP/src/evil.rs")"
+[[ ! -e "$TMP/pwned" ]] && ok "hook: a baseline row is never executed as code" \
+                        || bad "hook: a baseline row EXECUTED a command"
+rm -f "$TMP/pwned"
+[[ "$(rc_of "$r")" == 0 ]] && ok "hook: exit 0 on a hostile baseline row" || bad "hook: exit $(rc_of "$r") on a hostile baseline row"
+[[ "$(err_of "$r")" == *"malformed"* ]] && ok "hook: the hostile row is reported, not silently used" \
+                                        || bad "hook: hostile row not reported: '$(err_of "$r")'"
+gen "$TMP/src/abc.rs" 10
+r="$(run "$TMP/src/abc.rs")"
+[[ "$(rc_of "$r")" == 0 ]] && ok "hook: exit 0 on a non-numeric baseline row (was rc 1 under set -u)" \
+                           || bad "hook: exit $(rc_of "$r") on a non-numeric baseline row"
+# size-gate.sh reads the same file at push (scripts/git-hooks/pre-push). It must not execute the row
+# either — and it fails CLOSED: a malformed ratchet row is a push-blocking error, not a silent skip.
+# The hostile row ALONE first: with the `abc` row present, size-gate died on `abc` before ever
+# evaluating the hostile row, so the execution check could not fail (caught while writing this).
+printf 'PWD[$(touch${IFS}%s/pwned)]\tsrc/evil.rs\n' "$TMP" > "$TMP/scripts/size-baseline.txt"
+gout="$(cd "$TMP" && bash "$HERE/../../scripts/size-gate.sh" 2>&1)"; grc=$?
+[[ ! -e "$TMP/pwned" ]] && ok "size-gate: a baseline row is never executed as code" \
+                        || bad "size-gate: a baseline row EXECUTED a command"
+rm -f "$TMP/pwned"
+printf 'abc\tsrc/abc.rs\n' > "$TMP/scripts/size-baseline.txt"
+gout="$(cd "$TMP" && bash "$HERE/../../scripts/size-gate.sh" 2>&1)"; grc=$?
+[[ $grc -ne 0 && "$gout" == *"malformed"* ]] && ok "size-gate: fails closed and names the malformed row" \
+                                             || bad "size-gate: rc=$grc on a malformed baseline: '${gout:0:160}'"
+rm -f "$TMP/src/evil.rs" "$TMP/src/abc.rs"; reset_sandbox
 
 # ── 5. Scope: files the size gate does not govern produce no size noise ────────────
 mkdir -p "$TMP/docs"; gen "$TMP/docs/big.md" 900
