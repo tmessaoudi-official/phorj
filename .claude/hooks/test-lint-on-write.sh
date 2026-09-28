@@ -64,6 +64,22 @@ gen "$TMP/src/small.rs" 42
 r="$(run "$TMP/src/small.rs")"
 [[ -z "$(err_of "$r")" ]] && ok "silent on a 42-line file" \
                           || bad "noise on a small file: '$(err_of "$r")'"
+sout_of() { printf '{"tool_input":{"file_path":"%s"}}' "$1" \
+            | CLAUDE_PROJECT_DIR="$TMP" OBS_LOG="$TMP/obs.log" bash "$SCRIPT" 2>/dev/null; }
+[[ -z "$(sout_of "$TMP/src/small.rs")" ]] && ok "silent on stdout too for a 42-line file" \
+                                        || bad "stdout noise on a small file: '$(sout_of "$TMP/src/small.rs")'"
+
+# ── 3b. A warning must reach the MODEL, not just the transcript ─────────────────────
+# With exit 0 a PostToolUse hook's stderr never reaches the model; the only channel that does is
+# stdout JSON hookSpecificOutput.additionalContext (measured 2026-09-28 with random markers, 5 variants
+# x 2 models — ~/.claude review-remediation row 33). A warn-only hook the model cannot see shortens no
+# feedback loop at all, which is the whole argument of the hook's header.
+sout="$(sout_of "$TMP/src/huge.rs")"
+ctx="$(printf '%s' "$sout" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+[[ "$ctx" == *"HARD cap"* ]] && ok "the hard-cap warning reaches the model (additionalContext)" \
+                             || bad "no additionalContext for the hard-cap breach; stdout='${sout:0:80}'"
+[[ "$(printf '%s' "$sout" | jq -r '.hookSpecificOutput.hookEventName // empty' 2>/dev/null)" == PostToolUse ]] \
+  && ok "hookEventName is PostToolUse" || bad "hookEventName missing from stdout JSON"
 
 # ── 4. THE REGRESSION THIS HOOK EXISTS FOR: grandfathered growth ───────────────────
 # scripts/size-gate.sh catches this at push. By then the cheap fix is to shave comments,
@@ -153,8 +169,11 @@ sout="$(printf '{"tool_input":{"file_path":"%s"}}' "$TMP/src/bad.rs" \
        | CLAUDE_PROJECT_DIR="$TMP" OBS_LOG="$TMP/obs.log" bash "$SCRIPT" 2>/dev/null)" || rc=$?
 [[ "$rc" == 0 ]] && ok "exit 0 when rustfmt itself fails on unparseable Rust" \
                  || bad "exit $rc when rustfmt failed — this hook would BLOCK a write"
-[[ -z "$sout" ]] && ok "writes nothing to stdout (advisories belong on stderr)" \
-                 || bad "wrote to stdout: '$sout'"
+# stdout carries nothing but the one additionalContext JSON (plain text there never reaches the model
+# and is not JSON the harness can parse). Empty is fine: rustfmt may be absent on this machine.
+{ [[ -z "$sout" ]] || printf '%s' "$sout" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1; } \
+  && ok "stdout is empty or the additionalContext JSON, never plain text" \
+  || bad "plain text on stdout: '$sout'"
 
 # Same for the .phg leg: a file the formatter rejects must warn, not block.
 printf 'package Main;\nfunction main(  : {{{\n' > "$TMP/src/bad.phg"

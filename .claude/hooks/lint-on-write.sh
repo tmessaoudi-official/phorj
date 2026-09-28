@@ -21,7 +21,7 @@
 # for ("split-as-you-go is the DEFAULT: a feature that would push a file past the soft cap STARTS by
 # splitting it").
 #
-# Guard: `test-lint-on-write.sh` beside this file (18 assertions). Run it after any edit here.
+# Guard: `test-lint-on-write.sh` beside this file (25 assertions). Run it after any edit here.
 #
 # `set -uo pipefail` deliberately omits `-e`, but note that adding `-e` would be behaviour-NEUTRAL
 # today, not a fix and not a break: every fallible command below is already explicitly guarded
@@ -46,7 +46,19 @@ file="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // empty' 2>/dev/n
 # Nothing to say about a non-file tool call, an unreadable payload, or a file already gone.
 [[ -n "$file" && -f "$file" ]] || exit 0
 
-warn() { printf 'lint-on-write: %s\n' "$1" >&2; }
+# A warning must reach the MODEL, not only the transcript. With exit 0 a PostToolUse hook's stderr
+# never reaches it; the only channel that does is stdout JSON hookSpecificOutput.additionalContext
+# (measured 2026-09-28 with random markers, 5 variants x 2 models — ~/.claude review-remediation
+# row 33). So every warn() also collects its line, and ONE JSON object is printed on exit (the harness
+# parses stdout only when it is a single JSON document). Still warn-only: the exit code stays 0.
+_ctx=""
+warn() { printf 'lint-on-write: %s\n' "$1" >&2; _ctx+="lint-on-write: $1"$'\n'; }
+_emit_ctx() {
+  [[ -n "$_ctx" ]] && jq -n --arg m "${_ctx%$'\n'}" \
+    '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $m}}'
+  return 0
+}
+trap _emit_ctx EXIT
 
 case "$file" in
   *.rs)
