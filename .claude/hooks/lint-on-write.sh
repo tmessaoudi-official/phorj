@@ -131,11 +131,12 @@ if [[ -f "$B" && -r "$B" ]]; then
   fi
   IFS=$'\t' read -r rows odd notab baseline < <(F="$rel" awk '
     { i = index($0, "\t"); if (!i) { if ($0 != "") t++; next }; p = substr($0, i + 1)
+      if (p == "") { e++; next }
       if (p == ENVIRON["F"]) { n++; c = substr($0, 1, i - 1) } else if (index(p, ENVIRON["F"] "\t") == 1) b++ }
-    END { printf "%d\t%d\t%d\t%s\n", n, b, t, c }' "$B")
+    END { printf "%d\t%d\t%d\t%s\n", n, b, t + e, c }' "$B")
 fi
 if [[ "$notab" != 0 ]]; then
-  warn "scripts/size-baseline.txt has $notab row(s) with no TAB (malformed) — size-gate FAILs the push until they read <count><TAB><path>"
+  warn "scripts/size-baseline.txt has $notab row(s) with no TAB or an empty path (malformed) — size-gate FAILs the push until they read <count><TAB><path>"
   log_obs INFO lint-on-write "baseline rows without a TAB: $notab"
 fi
 if [[ "$rows" != 0 || "$odd" != 0 ]] && { [[ "$rows" != 1 || "$odd" != 0 ]] || ! is_count "$baseline"; }; then

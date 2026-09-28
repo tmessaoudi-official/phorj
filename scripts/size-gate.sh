@@ -40,6 +40,12 @@ declare -A ceiling=()
 # ≤ 9 digits: a longer count wraps in bash's intmax (2^64+100000 reads as 100000), which failed OPEN.
 is_count() { case "$1" in '' | *[!0123456789]*) return 1 ;; esac; ((${#1} <= 9)); }
 malformed=0
+# Readable first: the NUL probe below reads the file through a redirect, and a failed redirect would
+# otherwise be reported as "contains a NUL byte" — a cause nobody would find (panel round 5).
+if [[ -f "$BASELINE" && ! -r "$BASELINE" ]]; then
+  printf 'FAIL (cannot read %s — check its permissions)\n' "$BASELINE"
+  exit 1
+fi
 if [[ -f "$BASELINE" ]]; then
   # bash `read` DROPS a NUL byte, so `9<NUL>00` would load as 900 — a non-digit byte past is_count — and
   # a NUL turns `git diff` of this file into "Binary files differ", hiding which ceiling moved (panel

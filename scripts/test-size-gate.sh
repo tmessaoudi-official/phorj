@@ -91,6 +91,14 @@ printf '9\000%s\tsrc/g.rs\n' 00 > "$TMP/scripts/size-baseline.txt"
 out="$(gate)"; rc=$?
 [[ $rc -ne 0 && "$out" == *"$MAL"* ]] && ok "a NUL byte in the baseline fails closed" || bad "NUL baseline: rc=$rc ${out:0:160}"
 
+# Round 5: an UNREADABLE baseline is named as such — the NUL probe's failed redirect used to report
+# "contains a NUL byte", a cause the reader would never find.
+row 600 src/g.rs; chmod 000 "$TMP/scripts/size-baseline.txt"
+out="$(gate)"; rc=$?
+chmod 644 "$TMP/scripts/size-baseline.txt"
+[[ $rc -ne 0 && "$out" == *"cannot read"* && "$out" != *"NUL"* ]] && ok "an unreadable baseline fails closed, named unreadable" \
+                                                                  || bad "unreadable baseline: rc=$rc ${out:0:200}"
+
 # ── 5. Output never carries raw control bytes from a row or a committed FILENAME (both free text) ─
 printf 'abc\tsrc/x\033[31m.rs\n' > "$TMP/scripts/size-baseline.txt"
 out="$(gate)"

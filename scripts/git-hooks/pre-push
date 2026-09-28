@@ -162,8 +162,9 @@ cargo build --release
 
 echo "[pre-push] microbench-gate (G-8 mandate ratchet — no WIN->LOSS flip, output-identity holds)"
 # Self-skips (exit 0) if docker or the release binary is absent — a push is never wedged by missing
-# infra. Blocks (exit 1) only on a WIN->LOSS flip (a feature that beat release-php now loses) or a
-# VM-vs-php output-identity break — both load-insensitive. VM-perf regression is gated robustly by
+# infra. Blocks with exit 1 on a WIN->LOSS flip (a feature that beat release-php now loses), a
+# VM-vs-php output-identity break or an OWED loss deepening — all load-insensitive — and with exit 2
+# (setup error) on a malformed bench/micro-baseline.json ratio. VM-perf regression is gated robustly by
 # perf-gate.sh (same-process tree÷VM). Ratchet: after the JIT lands a WIN, run
 # `bash scripts/microbench-gate.sh --emit` so the flip check protects it.
 bash "$_gate_root/scripts/microbench-gate.sh"

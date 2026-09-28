@@ -16,7 +16,7 @@
 # share the CPU so load cancels — load-immune, unlike native-VM-vs-docker-php here). The two gates are
 # complementary: perf-gate = "the VM didn't slow down"; this = "we didn't lose a feature we'd won" + parity.
 #
-# Usage:  microbench-gate.sh           gate the current tree (exit 1 on a flip/identity break)
+# Usage:  microbench-gate.sh           gate the current tree (exit 1 on a regression, 2 on a malformed baseline)
 #         microbench-gate.sh --emit    (re)write bench/micro-baseline.json from a fresh best-of-K run
 # Env:    MICROBENCH_GATE_JSON=<file>  use that microbench-JSON instead of running the harness
 #                                      (docker-free, deterministic — for tests); microbench.sh's own

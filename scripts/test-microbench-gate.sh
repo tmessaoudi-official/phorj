@@ -272,27 +272,35 @@ fi
 # 17-19. A BASELINE ratio is tracked data: a non-number is a SETUP ERROR (exit 2, like perf-gate), never a
 # pass. awk compares a non-number AS A STRING, so `"abc"` as a WIN baseline read as a near-parity wobble
 # and an owed `"abc"` as "carried, not laundered" — both rc 0 (panel 2026-09-28 round 3, safety R3-3).
-# null / false / "" used to read as "not in the baseline" (jq's `// empty`), and digit-prefixed or
-# -suffixed junk pins BOTH regex anchors (round 4). The run is the clean one: only the ratio can fail it.
+# null / false / "" used to read as "not in the baseline" (jq's `// empty`). Strings reach the regex as
+# tojson text (quoted), so they do not pin its anchors — the NEGATIVE numbers do (`-5` passes a regex
+# without `^`, and a WIN baseline below 1.0 disables the flip check). The run is the clean one.
 if [[ -n "$win_feat" ]]; then
-  for v in '"abc"' null false '""' '"2x"' '"v2.071"'; do
+  for v in '"abc"' null false '""' '"2x"' '"v2.071"' -5 -0.5; do
     jq --arg f "$win_feat" --argjson v "$v" '.features[$f].ratio = $v' "$BASELINE" >"$TMP/bad-win.json"
     MICROBENCH_BASELINE="$TMP/bad-win.json" check 2 "FAIL $win_feat: malformed baseline ratio" \
       "17 a WIN baseline ratio of $v is a setup error" "$TMP/clean.json"
   done
 fi
 if [[ -n "$owed_feat" ]]; then
-  for v in '"abc"' null '"0.9x"'; do
+  for v in '"abc"' null '"0.9x"' -0.5; do
     jq --arg f "$owed_feat" --argjson v "$v" '._owed[$f].ratio = $v' "$BASELINE" >"$TMP/bad-owed.json"
     MICROBENCH_BASELINE="$TMP/bad-owed.json" check 2 "FAIL $owed_feat: malformed baseline ratio" \
       "18 an OWED ratio of $v is a setup error" "$TMP/clean.json"
   done
 fi
+# 18b. A non-object ENTRY (`"feat": "abc"` instead of `{ratio: …}`) is malformed too, never "not in baseline".
+if [[ -n "$win_feat" ]]; then
+  jq --arg f "$win_feat" '.features[$f] = "abc"' "$BASELINE" >"$TMP/bad-entry.json"
+  MICROBENCH_BASELINE="$TMP/bad-entry.json" check 2 "FAIL $win_feat: malformed baseline ratio" \
+    "18b a non-object baseline entry is a setup error" "$TMP/clean.json"
+fi
 # 19. The malformed ratio is printed %q-quoted: raw control bytes never reach the terminal / model.
 if [[ -n "$win_feat" ]]; then
-  jq --arg f "$win_feat" '.features[$f].ratio = "\u001b]0;T\u0007"' "$BASELINE" >"$TMP/esc.json"
+  # U+009B (8-bit CSI): tojson escapes C0 controls but NOT C1, so only %q keeps it off the terminal.
+  jq --arg f "$win_feat" '.features[$f].ratio = "\u009b31mX"' "$BASELINE" >"$TMP/esc.json"
   out19="$(MICROBENCH_BASELINE="$TMP/esc.json" MICROBENCH_GATE_JSON="$TMP/clean.json" bash "$GATE" 2>&1)"
-  if [[ "$out19" == *$'\033'* ]]; then echo "  FAIL 19 a malformed ratio's control bytes were printed raw"; fails=$((fails + 1))
+  if [[ "$out19" == *$'\302\233'* ]]; then echo "  FAIL 19 a malformed ratio's control bytes were printed raw"; fails=$((fails + 1))
   else echo "  ok   19 a malformed ratio is printed %q-quoted"; fi
 fi
 

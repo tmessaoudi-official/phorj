@@ -226,6 +226,23 @@ printf '600 src/other.rs\n' > "$TMP/scripts/size-baseline.txt"
 r="$(run "$TMP/src/mid4.rs")"
 [[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" == *"no TAB"* ]] && ok "hook: a tab-less row anywhere is reported (the gate will FAIL)" \
                                                             || bad "hook: tab-less row not reported: '$(err_of "$r")'"
+# Round 5: an EMPTY-PATH row (`600<TAB>`) is owned by no file either, and the gate FAILs it too.
+printf '600\t\n' > "$TMP/scripts/size-baseline.txt"
+r="$(run "$TMP/src/mid4.rs")"
+[[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" == *"empty path"* ]] && ok "hook: an empty-path row anywhere is reported (the gate will FAIL)" \
+                                                               || bad "hook: empty-path row not reported: '$(err_of "$r")'"
+# A blank line is skipped by the gate — it must not draw a false "no TAB" warning here.
+printf '600\tsrc/other.rs\n\n' > "$TMP/scripts/size-baseline.txt"
+r="$(run "$TMP/src/mid4.rs")"
+[[ "$(err_of "$r")" != *"no TAB"* ]] && ok "hook: a blank baseline line is not a tab-less row" || bad "hook: blank line flagged: '$(err_of "$r")'"
+# A NUL baseline really SKIPS the size check (the NUL would otherwise vanish in `read`: 9<NUL>00 → 900
+# and a 950-line file would be judged against a laundered ceiling).
+gen "$TMP/src/big9.rs" 950
+printf '9\00000\tsrc/big9.rs\n' > "$TMP/scripts/size-baseline.txt"
+r="$(run "$TMP/src/big9.rs")"
+[[ "$(err_of "$r")" == *"NUL"* && "$(err_of "$r")" != *"grandfathered at"* ]] && ok "hook: a NUL baseline skips the size check (no laundered ceiling)" \
+                                                                             || bad "hook: NUL baseline still judged: '$(err_of "$r")'"
+rm -f "$TMP/src/big9.rs"
 # No baseline file (all debt paid), and an unreadable one: silence about rows, exit 0 — never a false
 # "malformed" (round 4, correctness N-R4-1).
 rm -f "$TMP/scripts/size-baseline.txt"

@@ -83,7 +83,7 @@ done
 
 # ── 5. A missing or non-numeric floor input must not zero the floor (that PASSES everything) ───────
 echo 0.5 > "$TMP/speedup"   # a catastrophic regression: only a zeroed floor lets it pass
-for pair in 'null|0.6' '"abc"|0.6' '18.0|null' '18.0|"x"' '0|0.6' '18.0|0' '"0x"|0.6' '18.0|"0.6x"'; do
+for pair in 'null|0.6' '"abc"|0.6' '18.0|null' '18.0|"x"' '0|0.6' '18.0|0' '"0x"|0.6' '18.0|"0.6x"' '"x18"|0.6' '18.0|"x0.6"'; do
   base "${pair%%|*}" "${pair#*|}" 3
   out="$(gate)"; rc=$?
   [[ $rc -eq 2 ]] && ok "baseline_vm_speedup/min_ratio = $pair is a setup error" || bad "$pair: rc=$rc ${out:0:160}"
@@ -107,6 +107,13 @@ done
 printf '%s\n' '"\u001b]0;T\u0007"' > "$TMP/speedup"
 out="$(gate)"; rc=$?
 [[ $rc -eq 2 && "$out" != *$'\033'* ]] && ok "a measured value with control bytes is a setup error, printed %q" || bad "measured ESC: rc=$rc ${out:0:160}"
+
+# Round 5: runs and a floor input print through %q too (tracked data; an ESC must never reach output raw).
+echo 20 > "$TMP/speedup"
+base 18.0 0.6 '"1\u001b]0;T"'; out="$(gate)"; rc=$?
+[[ $rc -eq 2 && "$out" != *$'\033'* ]] && ok "runs with control bytes: setup error, printed %q" || bad "runs ESC: rc=$rc ${out:0:160}"
+base '"1\u001b]0;T"' 0.6 3; out="$(gate)"; rc=$?
+[[ $rc -eq 2 && "$out" != *$'\033'* ]] && ok "a floor input with control bytes: setup error, printed %q" || bad "floor ESC: rc=$rc ${out:0:160}"
 
 # ── 7. The workload string is printed %q-quoted: raw control bytes never reach the terminal/model ──
 echo 20 > "$TMP/speedup"; base 18.0 0.6 1 '"examples/w\u001b]0;T\u0007.phg"'
