@@ -24,7 +24,7 @@
 # Same shape as `scripts/size-gate.sh` (grandfathered file sizes) and `scripts/doc-guards.sh`
 # (frozen doc violations): freeze the debt, forbid its growth, pay it down deliberately.
 #
-# Usage:  bash scripts/surface-ratchet.sh          # gate (used by pre-push + CI)
+# Usage:  bash scripts/surface-ratchet.sh          # gate (used by pre-push; CI does not run it)
 #         bash scripts/surface-ratchet.sh --emit   # re-freeze the floor AFTER coverage improves
 set -euo pipefail
 
@@ -206,7 +206,7 @@ else
 fi
 
 if ((fails > 0)); then
-  echo "surface-ratchet: FAILED — $fails floor(s) breached" >&2
+  echo "surface-ratchet: FAILED — $fails failure(s): floor(s) breached and/or malformed $BASELINE rows" >&2
   exit 1
 fi
 echo "surface-ratchet: PASS"

@@ -219,16 +219,19 @@ grep -qE 'lsp_providers 2' <<<"$out" && ok "a provider added to the initialize r
 # ── N. A baseline value is DATA, never code (panel 2026-09-28 round 2: safety R2-3, completeness N1) ─
 # check()'s `((actual < floor))` evaluates array subscripts, so a tracked row `lsp_providers PWD[$(cmd)]`
 # ran cmd at every push — the same hole size-gate.sh had. A malformed floor fails the gate closed.
+# A stub `x` on PATH: the 9-char `1+_[$(x)]` sits under the 9-digit cap, so only the digit-list check
+# keeps it out (round 3: each longer payload was stopped by the length cap alone).
+mkdir -p "$TMP/bin"; printf '#!/bin/sh\ntouch "%s/pwned"\n' "$TMP" > "$TMP/bin/x"; chmod +x "$TMP/bin/x"
 R="$TMP/hostile"
 mkrepo "$R"
 run "$R" --emit >/dev/null
-for payload in 'PWD[$(touch${IFS}%s/pwned)]' '1+PWD[$(touch${IFS}%s/pwned)]' '٣' '08x' 18446744073709551617; do
+for payload in 'PWD[$(touch${IFS}%s/pwned)]' '1+PWD[$(touch${IFS}%s/pwned)]' '1+_[$(x)]' '٣' '08x' 18446744073709551617; do
   # shellcheck disable=SC2059 # the payload IS the format, on purpose
   val="$(printf "$payload" "$TMP")"
   sed -i "s|^lsp_providers .*|lsp_providers $val|" "$R/scripts/surface-baseline.txt"
   commit_all "$R"
   rm -f "$TMP/pwned"
-  out=$(LC_ALL=en_US.UTF-8 run "$R"); rc=$?
+  out=$(LC_ALL=en_US.UTF-8 PATH="$TMP/bin:$PATH" run "$R"); rc=$?
   label="${payload%%\$*}"
   [[ ! -e "$TMP/pwned" ]] && ok "floor '$label…' is never executed" || bad "floor '$label…' EXECUTED a command"
   [[ $rc -ne 0 ]] && grep -qF 'malformed' <<<"$out" && ok "floor '$label…' fails closed, named malformed" \
@@ -238,6 +241,12 @@ done
 sed -i "s|^lsp_providers .*|lsp_providers 01|" "$R/scripts/surface-baseline.txt"; commit_all "$R"
 out=$(run "$R"); rc=$?
 [[ $rc -eq 0 ]] && ok "floor 01 means 1 (base 10)" || bad "floor 01: rc=$rc out=${out:0:160}"
+# …and 09 means 9: above the fixture's actual count, so it must FAIL. Octal would make `((actual < 09))`
+# error inside the `if` = false = the floor PASSES (01 cannot tell base 10 from octal; round 3, R3-5).
+sed -i "s|^lsp_providers .*|lsp_providers 09|" "$R/scripts/surface-baseline.txt"; commit_all "$R"
+out=$(run "$R"); rc=$?
+[[ $rc -ne 0 ]] && grep -qF 'floor is 9' <<<"$out" && ok "floor 09 means 9 (base 10): the ratchet FAILS" \
+                                               || bad "floor 09: rc=$rc out=${out:0:160}"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 ]]

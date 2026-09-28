@@ -21,7 +21,8 @@
 # for ("split-as-you-go is the DEFAULT: a feature that would push a file past the soft cap STARTS by
 # splitting it").
 #
-# Guard: `test-lint-on-write.sh` beside this file (its count is in its last line). Run it after any edit here.
+# Guard: `test-lint-on-write.sh` beside this file (its count is in its last line) — run by
+# scripts/git-hooks/pre-push; run it yourself after any edit here.
 #
 # `set -uo pipefail` deliberately omits `-e`, but note that adding `-e` would be behaviour-NEUTRAL
 # today, not a fix and not a break: every fallible command below is already explicitly guarded
@@ -104,22 +105,31 @@ esac
 
 rel="${file#"$root"/}"
 lines="$(wc -l < "$file" 2>/dev/null || echo 0)"
-# -F'\t': the same row split size-gate.sh uses — a space-separated row must not be honoured here while
-# the gate rejects it (panel 2026-09-28 round 2, safety R2-5).
-baseline="$(awk -F'\t' -v f="$rel" '$2==f {print $1; exit}' "$root/scripts/size-baseline.txt" 2>/dev/null || true)"
 # The row is DATA from a tracked file: `(( lines > baseline ))` evaluates array subscripts, so a row
 # `PWD[$(cmd)]` ran cmd on the next Edit, and `abc` broke "ALWAYS exit 0" under set -u (panel
 # 2026-09-28, safety O1/O2 — reproduced; test section 4d). Validate before any arithmetic, and do not
 # echo the row's text into the model's context.
-# ASCII digits from an explicit LIST (a `[0-9]` range matched ٣ under en_US.UTF-8), then base 10 forced
-# (a leading 0 is octal to bash: 0600 → 384). Same check as size-gate.sh's is_count (round 2, R2-1/R2-2).
-# At most 9 digits: a longer count wraps in bash's intmax (2^64+100000 reads as 100000).
-if [[ -n "$baseline" ]] && { case "$baseline" in *[!0123456789]*) true ;; *) false ;; esac || ((${#baseline} > 9)); }; then
-  warn "scripts/size-baseline.txt has a malformed row for $rel (its count is not a plain number) — fix the row; the size check is skipped for this file"
+# Rows are read EXACTLY as size-gate.sh reads them (count = text before the FIRST tab, path = all
+# after it), so the two consumers never disagree on what a row means (round 3, R3-3/R3-8): a row
+# for this file is malformed when its count is empty or not a plain decimal, when the path appears in
+# more than one row (the gate FAILs a duplicate), or when a 3rd field follows the path.
+# is_count — the same check as size-gate.sh's: ASCII digits from an explicit LIST (a `[0-9]` range
+# matched ٣ under en_US.UTF-8), at most 9 of them (a longer count wraps in bash's intmax: 2^64+100000
+# reads as 100000); the value is then forced to base 10 (a leading 0 is octal: 0600 → 384).
+is_count() { case "$1" in '' | *[!0123456789]*) return 1 ;; esac; ((${#1} <= 9)); }
+rows=0 odd=0 baseline=""
+if [[ -f "$root/scripts/size-baseline.txt" ]]; then
+  IFS=$'\t' read -r rows odd baseline < <(awk -v f="$rel" '
+    { i = index($0, "\t"); if (!i) next; p = substr($0, i + 1)
+      if (p == f) { n++; c = substr($0, 1, i - 1) } else if (index(p, f "\t") == 1) b++ }
+    END { printf "%d\t%d\t%s\n", n, b, c }' "$root/scripts/size-baseline.txt")
+fi
+if [[ "$rows" != 0 || "$odd" != 0 ]] && { [[ "$rows" != 1 || "$odd" != 0 ]] || ! is_count "$baseline"; }; then
+  warn "scripts/size-baseline.txt has a malformed row for $rel (need ONE row <count><TAB><path> with a plain decimal count) — fix the row; the size check is skipped for this file"
   log_obs INFO lint-on-write "malformed baseline row: $rel"
   exit 0
 fi
-[[ -n "$baseline" ]] && baseline=$((10#$baseline))
+if [[ "$rows" == 1 ]]; then baseline=$((10#$baseline)); else baseline=""; fi
 
 if [[ -n "$baseline" ]]; then
   # Grandfathered: the rule is it must not GROW. Shrinking below 500 means dropping the row.

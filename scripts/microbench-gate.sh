@@ -24,6 +24,18 @@
 # warning (a push is never wedged by missing infra). Exit 0 pass/skip, 1 regression, 2 setup error.
 set -eEuo pipefail
 export LC_ALL=C
+# A baseline ratio is DATA from a tracked file and only ever reaches awk, where a non-number compares
+# AS A STRING: `"abc"` as a WIN baseline read as a near-parity wobble and an owed `"abc"` as "carried,
+# not laundered" — both rc 0 (panel 2026-09-28 round 3, safety R3-3). malformed_ratio prints the first
+# non-empty argument that is not a plain decimal (explicit digit list; jq may print an exponent) and
+# succeeds; with none it fails. An empty argument means "not in the baseline" and is not malformed.
+malformed_ratio() {
+  local v
+  for v in "$@"; do
+    [[ -z "$v" || "$v" =~ ^[0123456789]+(\.[0123456789]+)?([eE][-+]?[0123456789]+)?$ ]] || { printf '%s' "$v"; return 0; }
+  done
+  return 1
+}
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE="${MICROBENCH_BASELINE:-$ROOT/bench/micro-baseline.json}"
@@ -316,6 +328,11 @@ while IFS=$'\t' read -r feat ratio identical vm_ns vm_worst; do
   fi
   b_ratio="$(jq -r --arg f "$feat" '.features[$f].ratio // empty' "$BASELINE")"
   owed_ratio="$(jq -r --arg f "$feat" '._owed[$f].ratio // empty' "$BASELINE")"
+  if bad_ratio="$(malformed_ratio "$b_ratio" "$owed_ratio")"; then
+    printf '  FAIL %s: malformed baseline ratio %q in %s (need a plain decimal number)\n' "$feat" "$bad_ratio" "$BASELINE"
+    fails=$((fails + 1))
+    continue
+  fi
   win_now="$(awk -v r="$ratio" 'BEGIN{print (r>=1.0)?"WIN":"loss"}')"
   [[ "$win_now" == "WIN" ]] && wins=$((wins + 1))
   if [[ -z "$b_ratio" ]]; then
@@ -384,6 +401,11 @@ if [[ ${#suspects[@]} -gt 0 && -z "${MICROBENCH_GATE_JSON:-}" ]]; then
       [[ -n "$feat" ]] || continue
       b_ratio="$(jq -r --arg f "$feat" '.features[$f].ratio // empty' "$BASELINE")"
       owed_ratio="$(jq -r --arg f "$feat" '._owed[$f].ratio // empty' "$BASELINE")"
+      if bad_ratio="$(malformed_ratio "$b_ratio" "$owed_ratio")"; then
+        printf '  FAIL %s: malformed baseline ratio %q in %s (need a plain decimal number)\n' "$feat" "$bad_ratio" "$BASELINE"
+        fails=$((fails + 1))
+        continue
+      fi
       if [[ -n "$owed_ratio" ]]; then
         if awk -v o="$owed_ratio" -v r="$ratio" -v eps="$OWED_EPSILON" 'BEGIN{exit (r < o*eps)?0:1}'; then
           echo "  FAIL $feat: an OWED loss DEEPENED — was $owed_ratio, confirmed at $ratio"

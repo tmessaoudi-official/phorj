@@ -57,11 +57,19 @@ for pair in "baseline_vm_speedup=$baseline_speedup" "min_ratio=$min_ratio"; do
 done
 floor="$(awk -v b="$baseline_speedup" -v r="$min_ratio" 'BEGIN{printf "%.4f", b*r}')"
 
-echo "perf-gate: workload=$workload baseline_speedup=$baseline_speedup min_ratio=$min_ratio floor=$floor runs=$runs"
+printf 'perf-gate: workload=%q ' "$workload" # %q: a tracked string — never print control bytes raw
+echo "baseline_speedup=$baseline_speedup min_ratio=$min_ratio floor=$floor runs=$runs"
 
 best="0"
 for ((i = 1; i <= runs; i++)); do
   s="$("$BIN" benchmark --json "$ROOT/$workload" | jq -r '.vm_speedup')"
+  # The MEASURED value is data too: `phg benchmark --json` emits null when a leg measures 0 ns, and awk
+  # compares a non-number to the floor AS A STRING ("null" >= "10.8" is true) — one such run used to
+  # PASS the gate, even beside real regressions in best-of-N. Not a number = setup error, never a sample.
+  if ! [[ "$s" =~ ^[0123456789]+(\.[0123456789]+)?([eE][-+]?[0123456789]+)?$ ]]; then
+    printf 'perf-gate: run %s gave no measurable vm_speedup (%q) — setup error, not a sample\n' "$i" "$s" >&2
+    exit 2
+  fi
   echo "  run $i: vm_speedup=$s"
   best="$(awk -v a="$best" -v b="$s" 'BEGIN{print (b>a)?b:a}')"
 done

@@ -25,7 +25,13 @@ mkdir -p "$TMP/src" "$TMP/scripts"
 cp "$TOOL" "$TMP/scripts/size-gate.sh"
 gen() { python3 -c "import sys; n=int(sys.argv[2]); open(sys.argv[1],'w').write(''.join('// line %d\n'%i for i in range(n)))" "$1" "$2"; }
 # $TMP is not a git repo, so size-gate.sh's `git rev-parse` falls back to cwd.
-gate() { (cd "$TMP" && bash scripts/size-gate.sh 2>&1); }
+# A stub `x` on PATH: a 9-char hostile row `1+_[$(x)]` (under the 9-digit cap, `_` always set) touches
+# $TMP/pwned if it is ever evaluated — the length cap alone must not be what keeps a row out.
+mkdir -p "$TMP/bin"; printf '#!/bin/sh\ntouch "%s/pwned"\n' "$TMP" > "$TMP/bin/x"; chmod +x "$TMP/bin/x"
+gate() { (cd "$TMP" && PATH="$TMP/bin:$PATH" bash scripts/size-gate.sh 2>&1); }
+# The per-row line, not the summary: the FAILED summary names "malformed" on EVERY failure (round 3).
+MAL='FAIL (malformed'
+
 row() { printf '%s\t%s\n' "$1" "$2" > "$TMP/scripts/size-baseline.txt"; }
 
 echo "size-gate.sh — baseline rows are data"
@@ -48,34 +54,44 @@ out="$(gate)"; rc=$?
 
 # ── 3. Hostile rows are never executed, and fail CLOSED ──────────────────────────────────────────
 gen "$TMP/src/g.rs" 10
-for payload in 'PWD[$(touch${IFS}%s/pwned)]' '1+PWD[$(touch${IFS}%s/pwned)]'; do
+for payload in 'PWD[$(touch${IFS}%s/pwned)]' '1+PWD[$(touch${IFS}%s/pwned)]' '1+_[$(x)]'; do
   # shellcheck disable=SC2059 # the payload IS the format, on purpose
   row "$(printf "$payload" "$TMP")" src/g.rs
   rm -f "$TMP/pwned"
   out="$(gate)"; rc=$?
   label="${payload%%\$*}…"
   [[ ! -e "$TMP/pwned" ]] && ok "row '$label' is never executed" || bad "row '$label' EXECUTED a command"
-  [[ $rc -ne 0 && "$out" == *"malformed"* ]] && ok "row '$label' fails closed, named malformed" \
+  [[ $rc -ne 0 && "$out" == *"$MAL"* ]] && ok "row '$label' fails closed, named malformed" \
                                              || bad "row '$label': rc=$rc ${out:0:160}"
 done
 
 # ── 4. Not-a-number rows fail closed (never skipped, never an arithmetic error that reads as false) ─
-gen "$TMP/src/g.rs" 700
-for cnt in abc '٥' '²' '' '6 00' 18446744073709651616; do
+# A 400-line file: over the soft cap (WARN) but under the hard cap, so rc≠0 can ONLY come from the row.
+gen "$TMP/src/g.rs" 400
+for cnt in abc '٥' '²' '' '6 00' '1+1' '08x' 18446744073709651616; do
   row "$cnt" src/g.rs
   out="$(LC_ALL=en_US.UTF-8 gate)"; rc=$?
-  [[ $rc -ne 0 && "$out" == *"malformed"* ]] && ok "count '$cnt' fails closed under en_US.UTF-8" \
-                                             || bad "count '$cnt': rc=$rc ${out:0:160}"
+  [[ $rc -ne 0 && "$out" == *"$MAL"* ]] && ok "count '$cnt' fails closed under en_US.UTF-8" \
+                                       || bad "count '$cnt': rc=$rc ${out:0:160}"
 done
-# A row with no TAB (e.g. space-separated) used to be skipped silently while the lint hook honoured it.
-printf '600 src/g.rs\n' > "$TMP/scripts/size-baseline.txt"
-out="$(gate)"; rc=$?
-[[ $rc -ne 0 && "$out" == *"malformed"* ]] && ok "a row without a TAB fails closed" || bad "tab-less row: rc=$rc ${out:0:160}"
+# Row SHAPES: no TAB, a bare count, an empty path, a path with a TAB (3 fields), and a duplicate path —
+# each used to be skipped, or read differently by the gate (last row wins) and the hook (first row wins).
+# A duplicate is how an appended row could silently raise a reviewed ceiling.
+for shape in '600 src/g.rs' '600' '600\t' '600\tsrc/g.rs\tx' '600\tsrc/g.rs\n900\tsrc/g.rs'; do
+  # shellcheck disable=SC2059 # the shape IS the format, on purpose (\t, \n)
+  printf "$shape\\n" > "$TMP/scripts/size-baseline.txt"
+  out="$(gate)"; rc=$?
+  [[ $rc -ne 0 && "$out" == *"$MAL"* ]] && ok "row shape '$shape' fails closed" || bad "row shape '$shape': rc=$rc ${out:0:160}"
+done
 
-# ── 5. The FAIL line never prints a row's path raw (it is attacker-controlled free text) ─────────
+# ── 5. Output never carries raw control bytes from a row or a committed FILENAME (both free text) ─
 printf 'abc\tsrc/x\033[31m.rs\n' > "$TMP/scripts/size-baseline.txt"
 out="$(gate)"
-[[ "$out" != *$'\033'* ]] && ok "an escape sequence in a path is not echoed raw" || bad "raw ESC echoed in: ${out:0:160}"
+[[ "$out" != *$'\033'* ]] && ok "an escape sequence in a row path is not echoed raw" || bad "raw ESC echoed in: ${out:0:160}"
+: > "$TMP/scripts/size-baseline.txt"; rm -f "$TMP/src/g.rs"
+gen "$TMP/src/x"$'\033'"]0;T"$'\a'".rs" 600
+out="$(gate)"; rc=$?
+[[ $rc -ne 0 && "$out" != *$'\033'* ]] && ok "an escape sequence in a FILENAME is not echoed raw" || bad "filename ESC: rc=$rc ${out:0:160}"
 
 rm -f "$TMP/scripts/size-baseline.txt"
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

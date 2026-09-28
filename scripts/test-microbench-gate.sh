@@ -269,6 +269,21 @@ else
   echo "  ok   16 --emit with no valid php refuses and leaves the baseline untouched"
 fi
 
+# 17-18. A BASELINE ratio is tracked data: a non-number must FAIL the gate, never pass. awk compares a
+# non-number AS A STRING, so `"abc"` as a WIN baseline read as a near-parity wobble (rc 0) and an owed
+# `"abc"` as "carried, not laundered" (rc 0) — the fifth consumer of a tracked baseline number (panel
+# 2026-09-28 round 3, safety R3-3). The run is the clean one: only the malformed ratio can fail it.
+if [[ -n "$win_feat" ]]; then
+  jq --arg f "$win_feat" '.features[$f].ratio = "abc"' "$BASELINE" >"$TMP/bad-win.json"
+  MICROBENCH_BASELINE="$TMP/bad-win.json" check 1 "FAIL $win_feat: malformed baseline ratio" \
+    "17 a non-numeric WIN baseline ratio fails closed" "$TMP/clean.json"
+fi
+if [[ -n "$owed_feat" ]]; then
+  jq --arg f "$owed_feat" '._owed[$f].ratio = "abc"' "$BASELINE" >"$TMP/bad-owed.json"
+  MICROBENCH_BASELINE="$TMP/bad-owed.json" check 1 "FAIL $owed_feat: malformed baseline ratio" \
+    "18 a non-numeric OWED ratio fails closed" "$TMP/clean.json"
+fi
+
 if [[ "$fails" -gt 0 ]]; then
   echo "test-microbench-gate: FAIL — $fails case(s)" >&2
   exit 1

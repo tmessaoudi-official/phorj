@@ -22,10 +22,11 @@ mkdir -p "$TMP/src" "$TMP/scripts" "$TMP/tests" "$TMP/.claude/hooks"
 # The hook sources the GLOBAL ~/.claude/hooks/log-helpers.sh (global-is-reference ruling,
 # 2026-08-18 — the repo copy is gone). This test runs on the developer's machine where the global
 # copy exists, so the observability assertion below exercises the REAL log_obs (honouring the
-# OBS_LOG override). On a machine without ~/.claude the hook's no-op fallback fires and the
-# assertion fails LOUDLY — that is the signal this test needs the global install, not a defect.
-[[ -f "$HOME/.claude/hooks/log-helpers.sh" ]] \
-  || echo "WARN: no global log-helpers.sh — the observability assertion will fail" >&2
+# OBS_LOG override). On a machine without ~/.claude the hook's no-op fallback fires, and that ONE
+# assertion is reported as SKIP (counted apart, never as a pass) — the other 40-odd need nothing global,
+# which is why scripts/git-hooks/pre-push can run this suite (panel 2026-09-28 round 3, R3-2).
+HAVE_LOG_HELPERS=0; [[ -f "$HOME/.claude/hooks/log-helpers.sh" ]] && HAVE_LOG_HELPERS=1
+SKIP=0
 
 # Run the hook with a sandbox project root, feeding a PostToolUse-shaped payload on stdin.
 # Returns "rc|stderr" so a single call can assert both halves of the contract.
@@ -199,6 +200,30 @@ gen "$TMP/src/evil.rs" 700
 r="$(run "$TMP/src/evil.rs")"
 [[ "$(err_of "$r")" == *"malformed"* ]] && ok "hook: a 20-digit count is malformed, not wrapped" \
                                         || bad "hook: 20-digit count accepted (wrapped): '$(err_of "$r")'"
+# Round 3 (panel 2026-09-28): a 9-char hostile row UNDER the length cap, so only the digit-list check keeps
+# it out (a stub `x` on PATH marks execution); and the row SHAPES the gate FAILs must not be read another
+# way here — an empty count, a duplicate path (gate: last row wins, this hook's old awk: first), a 3rd
+# field (a TAB inside the path) — each is reported malformed, never honoured as a grandfather ceiling.
+mkdir -p "$TMP/bin"; printf '#!/bin/sh\ntouch "%s/pwned"\n' "$TMP" > "$TMP/bin/x"; chmod +x "$TMP/bin/x"
+printf '1+_[$(x)]\tsrc/evil.rs\n' > "$TMP/scripts/size-baseline.txt"
+r="$(PATH="$TMP/bin:$PATH" run "$TMP/src/evil.rs")"
+[[ ! -e "$TMP/pwned" ]] && ok "hook: a 9-char hostile row (under the cap) is never executed" \
+                        || bad "hook: the 9-char row EXECUTED a command"
+rm -f "$TMP/pwned"
+[[ "$(err_of "$r")" == *"malformed"* ]] && ok "hook: the 9-char hostile row is reported malformed" \
+                                        || bad "hook: 9-char row not reported: '$(err_of "$r")'"
+for shape in '\tsrc/evil.rs' '600\tsrc/evil.rs\n9999\tsrc/evil.rs' '9999\tsrc/evil.rs\tx'; do
+  # shellcheck disable=SC2059 # the shape IS the format, on purpose (\t, \n)
+  printf "$shape\\n" > "$TMP/scripts/size-baseline.txt"
+  r="$(run "$TMP/src/evil.rs")"
+  [[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" == *"malformed"* ]] && ok "hook: row shape '$shape' is reported malformed (exit 0)" \
+                                                                  || bad "hook: row shape '$shape': rc=$(rc_of "$r") '$(err_of "$r")'"
+done
+# A space-separated row is NOT a grandfather row (the gate FAILs it): a 700-line file still hears the hard cap.
+printf '9999 src/evil.rs\n' > "$TMP/scripts/size-baseline.txt"
+r="$(run "$TMP/src/evil.rs")"
+[[ "$(err_of "$r")" == *"HARD cap"* ]] && ok "hook: a space-separated row is not honoured (hard-cap warning)" \
+                                       || bad "hook: space-separated row honoured: '$(err_of "$r")'"
 rm -f "$TMP/src/evil.rs" "$TMP/src/abc.rs"; reset_sandbox
 
 # ── 5. Scope: files the size gate does not govern produce no size noise ────────────
@@ -251,9 +276,13 @@ printf '{"tool_input":{"file_path":"%s"}}' "$TMP/src/bad.phg" \
                  || bad "exit $rc on an unformattable .phg — this hook would BLOCK a write"
 
 # ── 9. It logs state-worthy events (global Rule 13 observability) ─────────────────
-[[ -s "$TMP/obs.log" ]] && ok "wrote observability lines to \$OBS_LOG" \
-                        || bad "logged nothing despite several reportable events"
+if (( HAVE_LOG_HELPERS )); then
+  [[ -s "$TMP/obs.log" ]] && ok "wrote observability lines to \$OBS_LOG" \
+                          || bad "logged nothing despite several reportable events"
+else
+  printf '  skip — observability: no global ~/.claude/hooks/log-helpers.sh on this machine\n'; SKIP=$((SKIP+1))
+fi
 
 echo
-echo "$PASS passed, $FAIL failed"
+echo "$PASS passed, $FAIL failed, $SKIP skipped"
 [[ "$FAIL" -eq 0 ]]

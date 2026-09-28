@@ -8,7 +8,8 @@
 # scripts/size-baseline.txt at their then-current line count. The gate enforces:
 #   * a NON-grandfathered file may not exceed the 500 HARD cap        -> FAIL (new breach)
 #   * a grandfathered file may not GROW beyond its baseline count     -> FAIL (must only shrink)
-#   * a baseline row whose count is not a plain decimal (≤ 9 digits)  -> FAIL (malformed row)
+#   * a malformed baseline row: no TAB, empty path, a TAB in the path,
+#     a count that is not a plain decimal (≤ 9 digits), a duplicate path  -> FAIL (malformed row)
 #   * a file over the 300 SOFT cap that is not grandfathered          -> WARN (advisory)
 # So existing debt is frozen and can only burn down; no new or growing breach is allowed.
 #
@@ -43,9 +44,13 @@ if [[ -f "$BASELINE" ]]; then
     [[ -n "$row" ]] || continue
     cnt="${row%%$'\t'*}"
     path="${row#*$'\t'}"
-    if [[ "$row" != *$'\t'* || -z "$path" ]] || ! is_count "$cnt"; then
+    # Malformed: no TAB, an empty path, a path holding a TAB (a 3rd field — the hook's split would read
+    # it differently), a count that is not a plain decimal, or a path already seen. A duplicate is how an
+    # appended row could silently raise a reviewed ceiling (this loop is last-row-wins).
+    if [[ "$row" != *$'\t'* || -z "$path" || "$path" == *$'\t'* ]] || ! is_count "$cnt" \
+       || [[ -n "${ceiling[$path]+set}" ]]; then
       # %q: the row is attacker-controlled free text — never echo it raw (escape sequences, newlines).
-      printf 'FAIL (malformed %s row, need <count><TAB><path> with a plain decimal count): %q\n' "$BASELINE" "$row"
+      printf 'FAIL (malformed %s row, need <count><TAB><path>, a plain decimal count, one row per path): %q\n' "$BASELINE" "$row"
       malformed=$((malformed + 1))
       continue
     fi
@@ -63,18 +68,20 @@ while IFS= read -r -d '' f; do
   if [[ -n "${ceiling[$rel]:-}" ]]; then
     cap="${ceiling[$rel]}"
     if (( lines > cap )); then
-      echo "FAIL (grandfathered file grew): $rel = $lines > baseline $cap — split it, do not grow it"
+      # %q on every path: a committed FILENAME is free text too (an escape sequence would reach the
+      # terminal and, when a session pushes, the model's context).
+      printf 'FAIL (grandfathered file grew): %q = %s > baseline %s — split it, do not grow it\n' "$rel" "$lines" "$cap"
       fails=$((fails+1))
     elif (( lines <= HARD )); then
-      echo "note (grandfathered file now under hard cap — drop from $BASELINE): $rel = $lines"
+      printf 'note (grandfathered file now under hard cap — drop from %s): %q = %s\n' "$BASELINE" "$rel" "$lines"
       stale=$((stale+1))
     fi
   else
     if (( lines > HARD )); then
-      echo "FAIL (new hard-cap breach >$HARD): $rel = $lines — split by cohesion (M-Decomp)"
+      printf 'FAIL (new hard-cap breach >%s): %q = %s — split by cohesion (M-Decomp)\n' "$HARD" "$rel" "$lines"
       fails=$((fails+1))
     elif (( lines > SOFT )); then
-      echo "warn (soft cap >$SOFT): $rel = $lines"
+      printf 'warn (soft cap >%s): %q = %s\n' "$SOFT" "$rel" "$lines"
       warns=$((warns+1))
     fi
   fi
