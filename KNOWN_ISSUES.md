@@ -1490,6 +1490,9 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
 
 > The developer ruled (pre-sleep, 2026-07-15) that mid-run design questions are implemented on the
 > recommended option and queued HERE for morning review. Reversing any entry = reopen the DEC row.
+>
+> ⚠ **CLOSED** — that protocol was scoped to the one run and is not a standing rule; Invariant 15 governs.
+> Status of these entries: the register's "2026-07-15 fable overnight run" section note (annotated 2026-09-28).
 
 - **DEC-227 · `db` is now a DEFAULT cargo feature** (+ `E-EXTENSION-DISABLED` on feature-less builds (DEC-273; formerly `E-MODULE-UNAVAILABLE`),
   + `E-TRANSPILE-DB` ladder gate). Was: stock binary couldn't run any `Core.Database` program (unknown-ident

@@ -1067,13 +1067,8 @@ wrong; Runtime-pillar packs adjust to ENRICH these, review sweep will inventory 
 1. **Adjudication = BOUNDED AUTONOMY**: mid-run design questions → implement recommended option,
    record `AUTO-RULED (REOPENABLE)` + alternatives + risk example in C-decisions.md, add a
    KNOWN_ISSUES morning-triage entry. (Alternatives: hybrid syntax-PENDING; strict Rule-15.)
-   *Run-scoped and CLOSED — not a standing rule. That run's AUTO-RULED batch DEC-224…233 was ratified:
-   DEC-237 (227…233) and DEC-411 (224…226 — "the auto-ruled category is now empty"). A later run
-   (2026-07-19: DEC-300…302 and 304…308, status "overnight AUTO") self-ruled under a separate FORK RULE
-   that survives only in `docs/archive/` (no live document carries it — `git grep`, 2026-09-28); DEC-302's
-   representation fork still went to the developer before it was built. Invariant 15 governs today:
-   record PENDING, never self-rule. Canonical note: the register's "2026-07-15 fable overnight run"
-   section header. (Annotated 2026-09-28, review panel R2-7; corrected in round 3.)*
+   *Run-scoped and CLOSED — not a standing rule; Invariant 15 governs. The canonical note (what was
+   ratified, and by which DEC) is on the register's "2026-07-15 fable overnight run" section header.*
 2. **Perf = STRETCH**: META-1 sqlbuild-surface ladder to ≥1.0× stands; hold all 21 micros ≥1.0×;
    ADD 2–3 macro benches (webish request loop, JSON round-trip, DB workload) with beat-php
    targets. Perf-claim protocol unchanged (fresh docker php:8.5-cli+JIT, pinned, interleaved).
