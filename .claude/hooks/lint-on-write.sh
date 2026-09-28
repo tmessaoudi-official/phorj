@@ -21,7 +21,7 @@
 # for ("split-as-you-go is the DEFAULT: a feature that would push a file past the soft cap STARTS by
 # splitting it").
 #
-# Guard: `test-lint-on-write.sh` beside this file (25 assertions). Run it after any edit here.
+# Guard: `test-lint-on-write.sh` beside this file (its count is in its last line). Run it after any edit here.
 #
 # `set -uo pipefail` deliberately omits `-e`, but note that adding `-e` would be behaviour-NEUTRAL
 # today, not a fix and not a break: every fallible command below is already explicitly guarded
@@ -104,16 +104,22 @@ esac
 
 rel="${file#"$root"/}"
 lines="$(wc -l < "$file" 2>/dev/null || echo 0)"
-baseline="$(awk -v f="$rel" '$2==f {print $1; exit}' "$root/scripts/size-baseline.txt" 2>/dev/null || true)"
+# -F'\t': the same row split size-gate.sh uses — a space-separated row must not be honoured here while
+# the gate rejects it (panel 2026-09-28 round 2, safety R2-5).
+baseline="$(awk -F'\t' -v f="$rel" '$2==f {print $1; exit}' "$root/scripts/size-baseline.txt" 2>/dev/null || true)"
 # The row is DATA from a tracked file: `(( lines > baseline ))` evaluates array subscripts, so a row
 # `PWD[$(cmd)]` ran cmd on the next Edit, and `abc` broke "ALWAYS exit 0" under set -u (panel
 # 2026-09-28, safety O1/O2 — reproduced; test section 4d). Validate before any arithmetic, and do not
 # echo the row's text into the model's context.
-if [[ -n "$baseline" && ! "$baseline" =~ ^[0-9]+$ ]]; then
+# ASCII digits from an explicit LIST (a `[0-9]` range matched ٣ under en_US.UTF-8), then base 10 forced
+# (a leading 0 is octal to bash: 0600 → 384). Same check as size-gate.sh's is_count (round 2, R2-1/R2-2).
+# At most 9 digits: a longer count wraps in bash's intmax (2^64+100000 reads as 100000).
+if [[ -n "$baseline" ]] && { case "$baseline" in *[!0123456789]*) true ;; *) false ;; esac || ((${#baseline} > 9)); }; then
   warn "scripts/size-baseline.txt has a malformed row for $rel (its count is not a plain number) — fix the row; the size check is skipped for this file"
   log_obs INFO lint-on-write "malformed baseline row: $rel"
   exit 0
 fi
+[[ -n "$baseline" ]] && baseline=$((10#$baseline))
 
 if [[ -n "$baseline" ]]; then
   # Grandfathered: the rule is it must not GROW. Shrinking below 500 means dropping the row.
@@ -121,7 +127,7 @@ if [[ -n "$baseline" ]]; then
     warn "$rel is grandfathered at $baseline lines and is now $lines — Invariant 13 says split it, do not grow it (and do not shave comments to squeeze back under)"
     log_obs INFO lint-on-write "grandfathered growth: $rel $baseline -> $lines"
   elif (( lines <= HARD )); then
-    # `<=`, not `<`: size-gate.sh:47 uses `lines <= HARD` and raises `stale=1` at EXACTLY 500, asking
+    # `<=`, not `<`: size-gate.sh's `elif (( lines <= HARD ))` branch uses `lines <= HARD` and raises `stale=1` at EXACTLY 500, asking
     # for the row to be dropped. The first draft used `<` and went silent on precisely that boundary —
     # the one line where the push-time gate wants action.
     warn "$rel is now $lines lines, at or under the $HARD hard cap — drop its row from scripts/size-baseline.txt so the ratchet tightens"

@@ -18,7 +18,8 @@
 # regressions, not micro-noise; baseline_vm_speedup sits below the observed best so a slower CI
 # ratio-regime does not false-fail.
 #
-# Config lives in bench/baseline.json. Exit 0 = pass, 1 = regression, 2 = setup error.
+# Config lives in bench/baseline.json. Exit 0 = pass, 1 = regression, 2 = setup error (including a
+# malformed baseline value — behaviour suite: scripts/test-perf-gate.sh).
 # Env: PHG_BIN (default target/release/phg), PERF_GATE_RUNS (default from baseline).
 set -eEuo pipefail
 # Force the C locale so awk's printf uses '.' as the decimal separator (a fr_FR locale emits '10,8000',
@@ -39,6 +40,21 @@ workload="$(jq -r '.workload' "$BASELINE")"
 baseline_speedup="$(jq -r '.baseline_vm_speedup' "$BASELINE")"
 min_ratio="$(jq -r '.min_ratio' "$BASELINE")"
 runs="${PERF_GATE_RUNS:-$(jq -r '.runs' "$BASELINE")}"
+# Every value above is DATA (bench/baseline.json is tracked, PERF_GATE_RUNS is env) and is checked before
+# use: `(( ))` evaluates array subscripts, so runs="PWD[$(cmd)]" would RUN cmd; and awk reads a missing
+# key (jq prints `null`) or text as 0 — floor 0.0000, which passes every run. An explicit digit list, not
+# a [0-9] range (locale-dependent); 10# because a leading 0 is octal to bash. A bad value is a setup error.
+# ≤ 9 digits: a longer count wraps in bash's intmax (2^64+100000 reads as 100000), which failed OPEN.
+is_count() { case "$1" in '' | *[!0123456789]*) return 1 ;; esac; ((${#1} <= 9)); }
+is_positive() { [[ "$1" =~ ^[0123456789]+(\.[0123456789]+)?$ ]] && awk -v x="$1" 'BEGIN{exit (x>0)?0:1}'; }
+if ! is_count "$runs" || ((10#$runs == 0)); then
+  printf 'perf-gate: runs must be a positive decimal count, got %q\n' "$runs" >&2
+  exit 2
+fi
+runs=$((10#$runs))
+for pair in "baseline_vm_speedup=$baseline_speedup" "min_ratio=$min_ratio"; do
+  is_positive "${pair#*=}" || { printf 'perf-gate: %s must be a positive number in %s, got %q\n' "${pair%%=*}" "$BASELINE" "${pair#*=}" >&2; exit 2; }
+done
 floor="$(awk -v b="$baseline_speedup" -v r="$min_ratio" 'BEGIN{printf "%.4f", b*r}')"
 
 echo "perf-gate: workload=$workload baseline_speedup=$baseline_speedup min_ratio=$min_ratio floor=$floor runs=$runs"

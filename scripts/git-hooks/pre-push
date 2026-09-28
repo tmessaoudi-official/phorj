@@ -57,7 +57,7 @@ echo "[pre-push] cargo fmt --check"
 cargo fmt --check
 
 # File-size gate (Invariant 13 — developer-ruled 2026-07-20). Ratchet: new files capped at 500,
-# the pre-existing breaches grandfathered in scripts/size-baseline.txt (72 rows today; may only shrink), soft
+# the pre-existing breaches grandfathered in scripts/size-baseline.txt (may only shrink), soft
 # warn at 300. Cheap (line counts) — runs early. Detail: scripts/size-gate.sh.
 echo "[pre-push] size-gate (Invariant 13 file-size ratchet)"
 bash "$_gate_root/scripts/size-gate.sh"
@@ -114,6 +114,15 @@ bash "$_gate_root/scripts/test-validate-infra.sh"
 # ~2s, no builds, no network.
 echo "[pre-push] test-surface-ratchet (the coverage gate's own behaviour tests)"
 bash "$_gate_root/scripts/test-surface-ratchet.sh"
+
+# Fourth and fifth: size-gate.sh and perf-gate.sh read TRACKED data (size-baseline.txt,
+# bench/baseline.json) into bash arithmetic, where an array subscript RUNS a command and a locale
+# digit, an octal "08" or a missing key made the gate pass (panel 2026-09-28). Their suites prove
+# the data is never executed and fails closed. ~1s each, no builds (perf uses a fake PHG_BIN).
+echo "[pre-push] test-size-gate (the file-size ratchet's own behaviour tests)"
+bash "$_gate_root/scripts/test-size-gate.sh"
+echo "[pre-push] test-perf-gate (the VM-regression gate's own behaviour tests)"
+bash "$_gate_root/scripts/test-perf-gate.sh"
 
 # Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
 # ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, database, database-postgres,

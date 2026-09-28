@@ -216,5 +216,28 @@ commit_all "$R"
 out=$(run "$R" --emit)
 grep -qE 'lsp_providers 2' <<<"$out" && ok "a provider added to the initialize response counts" || bad "a provider added to the initialize response counts (got: $out)"
 
+# ── N. A baseline value is DATA, never code (panel 2026-09-28 round 2: safety R2-3, completeness N1) ─
+# check()'s `((actual < floor))` evaluates array subscripts, so a tracked row `lsp_providers PWD[$(cmd)]`
+# ran cmd at every push — the same hole size-gate.sh had. A malformed floor fails the gate closed.
+R="$TMP/hostile"
+mkrepo "$R"
+run "$R" --emit >/dev/null
+for payload in 'PWD[$(touch${IFS}%s/pwned)]' '1+PWD[$(touch${IFS}%s/pwned)]' '٣' '08x' 18446744073709551617; do
+  # shellcheck disable=SC2059 # the payload IS the format, on purpose
+  val="$(printf "$payload" "$TMP")"
+  sed -i "s|^lsp_providers .*|lsp_providers $val|" "$R/scripts/surface-baseline.txt"
+  commit_all "$R"
+  rm -f "$TMP/pwned"
+  out=$(LC_ALL=en_US.UTF-8 run "$R"); rc=$?
+  label="${payload%%\$*}"
+  [[ ! -e "$TMP/pwned" ]] && ok "floor '$label…' is never executed" || bad "floor '$label…' EXECUTED a command"
+  [[ $rc -ne 0 ]] && grep -qF 'malformed' <<<"$out" && ok "floor '$label…' fails closed, named malformed" \
+                                                    || bad "floor '$label…': rc=$rc out=${out:0:160}"
+done
+# A leading zero is DECIMAL: floor 01 equals 1, not an error and not octal.
+sed -i "s|^lsp_providers .*|lsp_providers 01|" "$R/scripts/surface-baseline.txt"; commit_all "$R"
+out=$(run "$R"); rc=$?
+[[ $rc -eq 0 ]] && ok "floor 01 means 1 (base 10)" || bad "floor 01: rc=$rc out=${out:0:160}"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 ]]

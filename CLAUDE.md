@@ -275,7 +275,7 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
     to existing files as M-Decomp reaches them.
     **What `scripts/size-gate.sh` ACTUALLY enforces is a RATCHET, not a cap** (stated here by
     DEC-518, 2026-09-09, because the wording above had been read as a live 500-line ceiling):
-    it fails only on a NEW or GROWING hard-cap breach, and today reports
+    it fails only on a NEW or GROWING hard-cap breach (or a malformed `size-baseline.txt` row), and today reports
     `grandfathered=56 fails=0 warns=168` [Verified 2026-09-09] — i.e. **56 files are permanently
     over the 500 hard cap and 168 over the 300 soft cap**, and the gate is green. So the caps bind
     every file you TOUCH and every file you ADD; they do not describe the tree as it stands. Do not

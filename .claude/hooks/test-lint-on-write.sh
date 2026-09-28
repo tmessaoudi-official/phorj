@@ -91,18 +91,18 @@ ctx="$(printf '%s' "$sout" | jq -r '.hookSpecificOutput.additionalContext // emp
 # JSON line per warn() passed 25/25 (completeness F1, correctness F1) — and with rustfmt present the
 # rustfmt leg had no guard of its own (safety F2). An unformatted file over the hard cap fires both.
 { printf 'fn   main( ){ }\n'; python3 -c "print(''.join('// line %d\n'%i for i in range(700)),end='')"; } > "$TMP/src/two.rs"
-sout2="$(sout_of "$TMP/src/two.rs")"
+# A stub rustfmt that always reports a diff makes the rustfmt leg fire on EVERY machine: with the
+# real one absent, only one warn() fired and a JSON-per-warn mutant stayed green (round 2, N8/R2-8).
+mkdir -p "$TMP/stubbin"
+printf '#!/bin/sh\necho "Diff in $4"\nexit 1\n' > "$TMP/stubbin/rustfmt"; chmod +x "$TMP/stubbin/rustfmt"
+sout2="$(PATH="$TMP/stubbin:$PATH" sout_of "$TMP/src/two.rs")"
 [[ "$(printf '%s' "$sout2" | jq -s 'length' 2>/dev/null)" == 1 ]] && ok "two warnings → exactly ONE JSON document on stdout" \
                                                                  || bad "stdout is not one JSON document: '${sout2:0:120}'"
 ctx2="$(printf '%s' "$sout2" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
 [[ "$ctx2" == *"HARD cap"* ]] && ok "the hard-cap warning is in that one document" || bad "hard-cap line missing: '${ctx2:0:120}'"
-if command -v rustfmt >/dev/null 2>&1; then
-  [[ "$ctx2" == *"rustfmt"* ]] && ok "the rustfmt warning reaches the model too (rustfmt present)" \
-                               || bad "rustfmt warning missing from additionalContext: '${ctx2:0:120}'"
-else
-  ok "rustfmt absent — rustfmt leg not checkable here (skipped, not passed silently)"
-fi
-rm -f "$TMP/src/two.rs"
+[[ "$ctx2" == *"rustfmt"* ]] && ok "the rustfmt warning is in that one document too" \
+                             || bad "rustfmt warning missing from additionalContext: '${ctx2:0:120}'"
+rm -rf "$TMP/src/two.rs" "$TMP/stubbin"
 
 # ── 4. THE REGRESSION THIS HOOK EXISTS FOR: grandfathered growth ───────────────────
 # scripts/size-gate.sh catches this at push. By then the cheap fix is to shave comments,
@@ -144,7 +144,7 @@ r="$(run "$TMP/playground/src/big.rs")"
                           || bad "warned about playground/src/*.rs: '$(err_of "$r")'"
 
 # ── 4c. The EXACTLY-500 boundary agrees with size-gate.sh ─────────────────────────
-# size-gate.sh:47 is `lines <= HARD`, so at exactly 500 a grandfathered file raises stale=1 and it
+# size-gate.sh's stale check is `lines <= HARD`, so at exactly 500 a grandfathered file raises stale=1 and it
 # asks for the baseline row to be dropped. The first draft used `<` and was silent there.
 printf '600\tsrc/edge.rs\n' > "$TMP/scripts/size-baseline.txt"
 gen "$TMP/src/edge.rs" 500
@@ -174,19 +174,31 @@ gen "$TMP/src/abc.rs" 10
 r="$(run "$TMP/src/abc.rs")"
 [[ "$(rc_of "$r")" == 0 ]] && ok "hook: exit 0 on a non-numeric baseline row (was rc 1 under set -u)" \
                            || bad "hook: exit $(rc_of "$r") on a non-numeric baseline row"
-# size-gate.sh reads the same file at push (scripts/git-hooks/pre-push). It must not execute the row
-# either — and it fails CLOSED: a malformed ratchet row is a push-blocking error, not a silent skip.
-# The hostile row ALONE first: with the `abc` row present, size-gate died on `abc` before ever
-# evaluating the hostile row, so the execution check could not fail (caught while writing this).
-printf 'PWD[$(touch${IFS}%s/pwned)]\tsrc/evil.rs\n' "$TMP" > "$TMP/scripts/size-baseline.txt"
-gout="$(cd "$TMP" && bash "$HERE/../../scripts/size-gate.sh" 2>&1)"; grc=$?
-[[ ! -e "$TMP/pwned" ]] && ok "size-gate: a baseline row is never executed as code" \
-                        || bad "size-gate: a baseline row EXECUTED a command"
+# Round 2 (panel 2026-09-28): a DIGIT-prefixed hostile row (an anchor-less regex let it through), a
+# non-ASCII digit (a `[0-9]` range matches ٥ under en_US.UTF-8), and a leading zero (octal to bash).
+# size-gate.sh's own cases moved to scripts/test-size-gate.sh, which pre-push runs.
+printf '1+PWD[$(touch${IFS}%s/pwned)]\tsrc/evil.rs\n' "$TMP" > "$TMP/scripts/size-baseline.txt"
+r="$(run "$TMP/src/evil.rs")"
+[[ ! -e "$TMP/pwned" ]] && ok "hook: a digit-prefixed hostile row is never executed" \
+                        || bad "hook: a digit-prefixed row EXECUTED a command"
 rm -f "$TMP/pwned"
-printf 'abc\tsrc/abc.rs\n' > "$TMP/scripts/size-baseline.txt"
-gout="$(cd "$TMP" && bash "$HERE/../../scripts/size-gate.sh" 2>&1)"; grc=$?
-[[ $grc -ne 0 && "$gout" == *"malformed"* ]] && ok "size-gate: fails closed and names the malformed row" \
-                                             || bad "size-gate: rc=$grc on a malformed baseline: '${gout:0:160}'"
+[[ "$(err_of "$r")" == *"malformed"* ]] && ok "hook: the digit-prefixed row is reported malformed" \
+                                        || bad "hook: digit-prefixed row not reported: '$(err_of "$r")'"
+printf '٣\tsrc/evil.rs\n' > "$TMP/scripts/size-baseline.txt"
+r="$(LC_ALL=en_US.UTF-8 run "$TMP/src/evil.rs")"
+[[ "$(err_of "$r")" == *"malformed"* ]] && ok "hook: a non-ASCII digit is malformed under en_US.UTF-8" \
+                                        || bad "hook: non-ASCII digit accepted: '$(err_of "$r")'"
+printf '0600\tsrc/evil.rs\n' > "$TMP/scripts/size-baseline.txt"
+gen "$TMP/src/evil.rs" 590
+r="$(run "$TMP/src/evil.rs")"
+[[ "$(err_of "$r")" == *"do not grow it"* ]] && bad "hook: 0600 read as octal (384) — reported growth at 590" \
+                                             || ok "hook: 0600 means 600 (base 10) — no growth at 590"
+# A count past bash's intmax WRAPS: 2^64+100000 read as 100000 hid a 700-line file. Capped at 9 digits.
+printf '18446744073709651616\tsrc/evil.rs\n' > "$TMP/scripts/size-baseline.txt"
+gen "$TMP/src/evil.rs" 700
+r="$(run "$TMP/src/evil.rs")"
+[[ "$(err_of "$r")" == *"malformed"* ]] && ok "hook: a 20-digit count is malformed, not wrapped" \
+                                        || bad "hook: 20-digit count accepted (wrapped): '$(err_of "$r")'"
 rm -f "$TMP/src/evil.rs" "$TMP/src/abc.rs"; reset_sandbox
 
 # ── 5. Scope: files the size gate does not govern produce no size noise ────────────

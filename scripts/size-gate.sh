@@ -8,6 +8,7 @@
 # scripts/size-baseline.txt at their then-current line count. The gate enforces:
 #   * a NON-grandfathered file may not exceed the 500 HARD cap        -> FAIL (new breach)
 #   * a grandfathered file may not GROW beyond its baseline count     -> FAIL (must only shrink)
+#   * a baseline row whose count is not a plain decimal (≤ 9 digits)  -> FAIL (malformed row)
 #   * a file over the 300 SOFT cap that is not grandfathered          -> WARN (advisory)
 # So existing debt is frozen and can only burn down; no new or growing breach is allowed.
 #
@@ -29,15 +30,26 @@ declare -A ceiling=()
 # A row is DATA: `(( lines > cap ))` evaluates array subscripts, so an unvalidated count `PWD[$(cmd)]`
 # ran cmd at every push, and `abc` died on set -u (panel 2026-09-28, safety O1; lint test section 4d).
 # A malformed row FAILS the gate — the ratchet's own data being wrong is not something to skip past.
+# is_count: ASCII decimal digits only, checked against an explicit LIST — a `[0-9]` RANGE is
+# locale-dependent (under en_US.UTF-8 it matched ٥, ² and ~620 other codepoints, which then made
+# `(( ))` error inside an `if` = a false condition = the gate PASSED). The value is then forced to base
+# 10: a leading 0 is octal to bash (0600 → 384; 08 → error → pass). Panel 2026-09-28 round 2
+# (safety R2-1/R2-2, correctness N1, completeness N4); tests: scripts/test-size-gate.sh.
+# ≤ 9 digits: a longer count wraps in bash's intmax (2^64+100000 reads as 100000), which failed OPEN.
+is_count() { case "$1" in '' | *[!0123456789]*) return 1 ;; esac; ((${#1} <= 9)); }
 malformed=0
 if [[ -f "$BASELINE" ]]; then
-  while IFS=$'\t' read -r cnt path; do
-    [[ -n "${path:-}" ]] || continue
-    if [[ ! "$cnt" =~ ^[0-9]+$ ]]; then
-      echo "FAIL (malformed $BASELINE row for $path: the count is not a plain number)"
-      malformed=$((malformed+1)); continue
+  while IFS= read -r row || [[ -n "$row" ]]; do
+    [[ -n "$row" ]] || continue
+    cnt="${row%%$'\t'*}"
+    path="${row#*$'\t'}"
+    if [[ "$row" != *$'\t'* || -z "$path" ]] || ! is_count "$cnt"; then
+      # %q: the row is attacker-controlled free text — never echo it raw (escape sequences, newlines).
+      printf 'FAIL (malformed %s row, need <count><TAB><path> with a plain decimal count): %q\n' "$BASELINE" "$row"
+      malformed=$((malformed + 1))
+      continue
     fi
-    ceiling["$path"]="$cnt"
+    ceiling["$path"]=$((10#$cnt))
   done < "$BASELINE"
 fi
 
@@ -70,7 +82,7 @@ done < <(find src -name '*.rs' -print0)
 
 echo "[size-gate] grandfathered=${#ceiling[@]} fails=$fails warns=$warns stale=$stale"
 if (( fails > 0 )); then
-  echo "[size-gate] FAILED — $fails file(s) breach Invariant 13 (300 soft / 500 hard)."
+  echo "[size-gate] FAILED — $fails failure(s): file-size breaches of Invariant 13 (300 soft / 500 hard) and/or malformed $BASELINE rows."
   exit 1
 fi
 echo "[size-gate] OK (no new or growing hard-cap breach)"

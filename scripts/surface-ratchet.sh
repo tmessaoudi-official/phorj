@@ -167,8 +167,20 @@ fi
 get() { awk -v k="$1" '$1==k{print $2}' "$BASELINE"; }
 
 fails=0
+# A floor is DATA from a tracked file: `((actual < floor))` evaluates array subscripts, so a row
+# `lsp_providers PWD[$(cmd)]` ran cmd at every push, and a non-number made `(( ))` error = false = PASS.
+# Explicit digit LIST (a `[0-9]` range is locale-dependent) + forced base 10 (a leading 0 is octal).
+# Same check as size-gate.sh's is_count (panel 2026-09-28 round 2, safety R2-3 / completeness N1).
+# ≤ 9 digits: a longer count wraps in bash's intmax (2^64+100000 reads as 100000), which failed OPEN.
+is_count() { case "$1" in '' | *[!0123456789]*) return 1 ;; esac; ((${#1} <= 9)); }
 check() { # name actual floor
   local name="$1" actual="$2" floor="$3"
+  if ! is_count "$floor"; then
+    printf 'surface-ratchet: FAIL %s — malformed floor in %s (need a plain decimal number): %q\n' "$name" "$BASELINE" "$floor" >&2
+    fails=$((fails + 1))
+    return 0
+  fi
+  floor=$((10#$floor))
   if ((actual < floor)); then
     echo "surface-ratchet: FAIL $name = $actual, floor is $floor — coverage went DOWN" >&2
     fails=$((fails + 1))
