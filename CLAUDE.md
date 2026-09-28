@@ -23,14 +23,8 @@ PHP→Phorj lifter, LSP, formatter, test runner, and debugger. Single developer,
 Questions to the developer use the **`AskUserQuestion` tool**, per the global framework: options with
 the recommended one FIRST (labelled, with its reason) and a visible *"none of these / challenge the
 premise"* escape. Invariant 15's ADJUDICATION RULE governs a question's *shape* — its five parts,
-after-states-inside-options, and the DEC-row discipline are unchanged. Protocol details:
-`.claude/skills/phg-ask-human/SKILL.md`.
-
-> The container-era plain-text protocol and the `❓`/`⏹` end-of-reply markers (developer-ruled
-> 2026-07-30) are **RETIRED** (2026-08-18). They existed because `AskUserQuestion` silently failed
-> in the dead cloud container; on this machine it works, `askUserQuestionTimeout` is `"never"`
-> globally, and the marker's rationale (a prose question being indistinguishable from a pause) dies
-> with the prose protocol.
+after-states-inside-options, and the DEC-row discipline are unchanged. Protocol: the global
+`/ask-human` skill, § "Question quality"; this repo's additions: `.claude/skills/phg-ask-human/SKILL.md`.
 
 ## Routing
 
@@ -45,7 +39,7 @@ read-only reviewer agents in `.claude/agents/` are unaffected. The parent
 
 The repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
 ruling, 2026-08-18 — a repo may not duplicate anything that exists in `~/.claude/`):
-`/phg-ask-human` (the question protocol with this repo's extra rules), `/phg-lenses` (the mandatory
+`/phg-ask-human` (this repo's additions to the global question protocol), `/phg-lenses` (the mandatory
 review dimensions + sleuth lens K), `/phg-qa-sweep` (end-to-end QA on the shipped `phg`
 binary), and `/phg-ship-slice` (the per-slice definition-of-done checklist run before a row is marked
 done — it cites the delivery invariants below and never restates them). Every other skill — `/sweep`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`,
@@ -131,8 +125,8 @@ ceiling, not the per-task default). Every 3C pre-work and every 6C pre-completio
 completeness+blast-radius), each lens adversarial and **evidence-based** (the reviewer reads the
 actual diff/tests/specs itself — never certify from the author's narrative). **TWO consecutive
 fully-clean rounds** required; any finding → fix → the clean counter resets; cap 5 rounds →
-ask-human, never silently proceed. Availability chain: `advisor()` (**available on this machine**,
-verified 2026-08-18) → read-only reviewer subagents → 3 distinct-lens self-passes + mandatory
+ask-human, never silently proceed. Availability chain: `advisor()` (**available on this machine**)
+→ read-only reviewer subagents → 3 distinct-lens self-passes + mandatory
 disclosure. The quality gate above is always the floor, never the certification.
 
 **THE THREE LENSES NOW EXIST AS AGENTS** (2026-08-06 — until then only the first did, so the mandated

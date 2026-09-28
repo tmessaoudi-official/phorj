@@ -1,110 +1,45 @@
 ---
 name: phg-ask-human
 description: >
-  Question protocol — AskUserQuestion with this repo's extra rules. Context, a minimal
-  concrete example, clear options, the recommended option first with its reason, a visible
-  "none of these / challenge the premise" escape, then STOP and wait.
+  phorj's additions to the global /ask-human question protocol — its mandatory cases
+  (language/design decisions under Invariant 15, the DEC-268 cap), the DEC-row rule and a worked
+  example. The protocol itself is global ask-human § Question quality.
 user-invocable: true
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════════════════════════
-  RE-INVERTED 2026-08-18 (de-containerization ruling, recorded in /stack's
-  docs/plans/decontainerization.plan.md § Decisions Log). The 2026-07-27 ruling banned
-  `AskUserQuestion` because it silently failed in the Claude Code CLOUD CONTAINER ("the user
-  did not answer" 4× on 2026-07-26). That environment is dead. On the developer's own machine
-  the tool WORKS — `askUserQuestionTimeout` is `"never"` globally and the global
-  ask-human-question-guard Stop hook mechanically REQUIRES it. Questions therefore use
-  `AskUserQuestion` again. Everything below that is about question QUALITY (five parts,
-  recommendation first, after-states, escape hatch, when-mandatory list) survives unchanged —
-  only the delivery mechanism inverted back. Renamed ask-human → phg-ask-human the same day
-  (global-is-reference ruling: a repo skill may not share a global skill's name). Invariant 15's
-  ADJUDICATION RULE (question shape, options, after-states) is unchanged by the re-inversion.
-
-  phorj ADAPTATION: the protocol itself is UNCHANGED from the cross-repo port — five parts,
-  the shape template, and every non-negotiable rule are exactly as ported. Only the
-  illustrations are phorj's own (language-design adjudication, DEC rows, the div-by-zero
-  worked example).
-═══════════════════════════════════════════════════════════════════════════════════ -->
+<!-- THINNED 2026-09-28 (review-remediation 7.6): the shared question-quality protocol (five parts,
+  shape, non-negotiable rules, when mandatory / not) moved to the global `ask-human` skill,
+  § "Question quality"; this file keeps only what is specific to phorj. History: AskUserQuestion was
+  banned (the 2026-07-27 cross-repo ruling; developer-ruled here 2026-07-30) in the cloud-container era (it failed silently there) and re-inverted 2026-08-18
+  (de-containerization ruling); renamed ask-human → phg-ask-human the same day (a repo skill may not share
+  a global skill's name). The full pre-thinning text is in git history. -->
 
 ## --help
 
 > If ARGUMENTS contains `--help`: output the text below verbatim, then STOP — do not execute any other steps.
 >
 > ```
-> /phg-ask-human — Question protocol: AskUserQuestion with context + a minimal example,
->              recommended option first with its reason, a visible "none of these /
->              challenge the premise" escape, then stop and wait.
+> /phg-ask-human — phorj's additions to the global /ask-human question protocol:
+>     its mandatory-question cases and a worked example.
 >
 > No flags — invoked automatically by Claude whenever a decision belongs to the developer.
 > ```
 
 ---
 
-# Question protocol
+# Question protocol — phorj additions
 
-Every question to the developer goes through **`AskUserQuestion`** — context in the question text,
-2–4 options with the recommended one FIRST (label it `(Recommended)`), and a visible
-*"none of these / challenge the premise"* option (the built-in "Other" is the free-text escape, but
-the challenge path must be a VISIBLE option, not only "Other"). Then **STOP**: end the turn and
-wait. Never assume an answer, never proceed on a default, never re-ask a different question because
-the first one went unanswered.
+The protocol — the five required parts, the non-negotiable rules, when a question is mandatory and
+when it is not — is the global `/ask-human` skill, § "Question quality". Whether a question stops
+the turn or is shown and answered with the recommended option is the GLOBAL `~/.claude/CLAUDE.md` § "Mode — spec or autonomous". This file adds
+only what is specific to this repo.
 
-## The five required parts
+## Repo notes
 
-| # | Part | Requirement |
-|---|---|---|
-| 1 | **Context** | What is being decided and *why it is being asked now* — one short paragraph. Enough that the developer needs no scrollback. |
-| 2 | **Example** | A **minimal concrete example** of the problem — for a language question, a runnable current-syntax program and its actual current output/error. Not a description of the program: the program. |
-| 3 | **Options** | Numbered, mutually exclusive, each with its own consequence. Ordinarily 2–4. |
-| 4 | **Recommendation** | **Option 1 is the recommended one**, marked `(recommended)`, with the reason it wins stated in the same breath. |
-| 5 | **Escape hatch** | A visible final option — *"none of these / challenge the premise"* — plus an explicit invitation to tweak any option. The developer must be able to answer *and* amend in one reply. |
+- **Part 2 (the minimal example) here:** A **minimal concrete example** of the problem — for a language question, a runnable current-syntax program and its actual current output/error. Not a description of the program: the program.
+- **Ruled decisions** (a DEC row) — never re-open one without new evidence.
 
-## Shape
-
-The five parts map onto the tool call: context → the `question` text (with the minimal example);
-options → `options[]`, recommended first, each `description` carrying its own consequence AND
-after-state; escape hatch → a visible final option. The worked example at the bottom shows the
-CONTENT at full quality — deliver that content through the tool, not as prose. Prose layout for
-reference:
-
-```
-## Question — <one-line subject>
-
-<Context: what is being decided, why now, what is blocked on it.>
-
-Today:
-
-    <minimal example — actual code, actual output/error>
-
-**Option 1 — <name> (recommended).** <What it does.> <Why it wins.>
-   After: <the after-state — the same example under this option>
-
-**Option 2 — <name>.** <What it does.> <Cost or risk that makes it second.>
-   After: <after-state>
-
-**Option 3 — none of these / challenge the premise.** <What you would want to hear.>
-
-I'll wait for your answer before doing anything else.
-```
-
-## Non-negotiable rules
-
-- **Never a free-text prose question.** The global ask-human-question-guard Stop hook blocks a
-  turn that ends on a bare `?` without an `AskUserQuestion` call — and it is right to.
-- **Never a bare `?` with no options.** If a real choice exists, enumerate it. An unstructured
-  question makes the developer do the work of designing the options.
-- **Always a recommendation.** "What do you prefer?" with no lean is an abdication. State the
-  recommendation and why — the developer can then disagree cheaply.
-- **The after-state goes in the option.** Prose written *outside* the option list is easy to miss
-  while comparing options; put each option's consequence *inside* that option.
-- **One STOP per question set.** Batch related questions (3–4 is fine when the developer asked to
-  move faster), but end the turn after the batch — never answer your own question and continue.
-- **Never re-open a ruled decision** (a DEC row) without new evidence, and say what the new
-  evidence is.
-- **Challenge before accepting.** If the developer's proposal has a failure mode, say so in one or
-  two sentences *and still deliver what was asked* under a stated assumption if they reaffirm it.
-
-## When this protocol is mandatory
+## When a question is mandatory here
 
 - Any **user-visible language or design decision** (project CLAUDE.md Invariant 15 — the
   ADJUDICATION RULE: those are the developer's, made interactively, never ruled alone).
@@ -113,13 +48,8 @@ I'll wait for your answer before doing anything else.
   (CLAUDE.md § "Git autonomy", DEC-417) and must NOT be asked about.
 - A **certification loop that hits its cap** (DEC-268: 5 rounds with findings still open → ask, never
   silently proceed).
-- Any point where two readings of the request lead to **materially different work**.
 
-## When it is NOT needed
-
-Routine judgement calls with an obvious default, and pure information questions. Asking about
-everything is its own failure — it converts the developer into a decision queue. Decide what you can
-defend, state the assumption, and keep moving.
+The global cases (two readings leading to materially different work, …) apply as well.
 
 ## Worked example
 

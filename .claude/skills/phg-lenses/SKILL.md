@@ -1,14 +1,12 @@
 ---
 name: phg-lenses
 description: >
-  MANDATORY companion to every global review skill run in phorj. Load this BEFORE running
-  /sweep, /sleuth, /inspect, /gaps, /forge, /cross-check, /converge, /pre-commit or
-  /aggregate-findings here — it carries the phorj review dimensions (the invariants a review
-  must check), sleuth lens K (backend divergence), and the repo conventions those global skills
-  do not know about. Extracted 2026-08-18 from the deleted repo-local copies of those skills
-  (global-is-reference ruling: a repo may not duplicate a global skill; what was repo-specific
-  in them lives here instead).
+  MANDATORY companion to every global review skill run in phorj (/sweep, /sleuth, /inspect, /gaps,
+  /forge, /cross-check, /converge, /pre-commit, /aggregate-findings) — load it first: the phorj review
+  dimensions (the invariants a review must check) and sleuth lens K (backend divergence).
 ---
+
+<!-- Description history (moved out of the description 2026-09-28 to keep it ≤300 chars, review-remediation 5.8): Extracted 2026-08-18 from the deleted repo-local copies of those skills (global-is-reference ruling: a repo may not duplicate a global skill; what was repo-specific in them lives here instead). -->
 
 # /phg-lenses — phorj review dimensions & conventions
 

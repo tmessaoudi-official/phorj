@@ -1,7 +1,10 @@
 ---
 name: phg-qa-sweep
 spotlight: true
-description: Exhaustive end-to-end QA on the SHIPPED phg binary and the surfaces cargo test never touches — the real CLI on real files, the LSP over real stdio JSON-RPC, the package-manager lifecycle in a scratch project, the editor integrations, and the playground's rendered output. Use before a release, after any change to the CLI/LSP/editor/playground surface, or when a defect is reported that the test suites do not reproduce. Not a substitute for the differential suite; it answers "does the product work?" rather than "do the legs agree?".
+description: >
+  Exhaustive end-to-end QA on the SHIPPED phg binary: the real CLI on real files, the LSP over real
+  stdio, the package-manager lifecycle, editor integrations, the playground. Use before a release,
+  after a CLI/LSP/editor/playground change, or for a defect the suites miss.
 user-invocable: true
 args: "[--only <substr>] [--skip-build] [--journey <name>] [--no-playground] [--keep-scratch]"
 ---
