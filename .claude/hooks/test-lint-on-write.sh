@@ -212,13 +212,40 @@ r="$(PATH="$TMP/bin:$PATH" run "$TMP/src/evil.rs")"
 rm -f "$TMP/pwned"
 [[ "$(err_of "$r")" == *"malformed"* ]] && ok "hook: the 9-char hostile row is reported malformed" \
                                         || bad "hook: 9-char row not reported: '$(err_of "$r")'"
-for shape in '\tsrc/evil.rs' '600\tsrc/evil.rs\n9999\tsrc/evil.rs' '9999\tsrc/evil.rs\tx'; do
+for shape in '\tsrc/evil.rs' '600\tsrc/evil.rs\n9999\tsrc/evil.rs' '9999\tsrc/evil.rs\tx' '600\tsrc/evil.rs\n9999\tsrc/evil.rs\tx' ' 600\tsrc/evil.rs' '600 \tsrc/evil.rs' '9\000%s00\tsrc/evil.rs'; do
   # shellcheck disable=SC2059 # the shape IS the format, on purpose (\t, \n)
   printf "$shape\\n" > "$TMP/scripts/size-baseline.txt"
   r="$(run "$TMP/src/evil.rs")"
   [[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" == *"malformed"* ]] && ok "hook: row shape '$shape' is reported malformed (exit 0)" \
                                                                   || bad "hook: row shape '$shape': rc=$(rc_of "$r") '$(err_of "$r")'"
 done
+# Round 4: a row with NO TAB names no file the hook can match, but the gate FAILs the push on ANY such
+# row — so the hook says so, whatever file is being edited (a 400-line file: no size rule fires).
+gen "$TMP/src/mid4.rs" 400
+printf '600 src/other.rs\n' > "$TMP/scripts/size-baseline.txt"
+r="$(run "$TMP/src/mid4.rs")"
+[[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" == *"no TAB"* ]] && ok "hook: a tab-less row anywhere is reported (the gate will FAIL)" \
+                                                            || bad "hook: tab-less row not reported: '$(err_of "$r")'"
+# No baseline file (all debt paid), and an unreadable one: silence about rows, exit 0 — never a false
+# "malformed" (round 4, correctness N-R4-1).
+rm -f "$TMP/scripts/size-baseline.txt"
+r="$(run "$TMP/src/mid4.rs")"
+[[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" != *"malformed"* && "$(err_of "$r")" != *"awk"* ]] && ok "hook: no baseline file → no row complaint" \
+                                                                                              || bad "hook: missing baseline: '$(err_of "$r")'"
+: > "$TMP/scripts/size-baseline.txt"; chmod 000 "$TMP/scripts/size-baseline.txt"
+r="$(run "$TMP/src/mid4.rs")"
+chmod 644 "$TMP/scripts/size-baseline.txt"
+[[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" != *"malformed"* && "$(err_of "$r")" != *"awk"* ]] && ok "hook: an unreadable baseline → no false 'malformed'" \
+                                                                                              || bad "hook: unreadable baseline: '$(err_of "$r")'"
+rm -f "$TMP/src/mid4.rs"
+# A path holding a BACKSLASH is matched byte for byte, as the gate does: `awk -v` would turn `\t` into a
+# TAB and miss the row (round 4, correctness N-R4-4 / safety N2). Grandfathered at 600, 550 lines: silent.
+bs="src/a\\tb.rs"; gen "$TMP/$bs" 550
+printf '600\t%s\n' "$bs" > "$TMP/scripts/size-baseline.txt"
+r="$(jq -nc --arg p "$TMP/$bs" '{tool_input:{file_path:$p}}' | CLAUDE_PROJECT_DIR="$TMP" OBS_LOG="$TMP/obs.log" bash "$SCRIPT" 2>&1 >/dev/null)"
+[[ "$r" != *"HARD cap"* && "$r" != *"malformed"* ]] && ok "hook: a backslash path matches its row (grandfathered, silent)" \
+                                                  || bad "hook: backslash path missed its row: '$r'"
+rm -f "$TMP/$bs"; reset_sandbox
 # A space-separated row is NOT a grandfather row (the gate FAILs it): a 700-line file still hears the hard cap.
 printf '9999 src/evil.rs\n' > "$TMP/scripts/size-baseline.txt"
 r="$(run "$TMP/src/evil.rs")"

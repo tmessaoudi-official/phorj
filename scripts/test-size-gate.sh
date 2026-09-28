@@ -84,14 +84,29 @@ for shape in '600 src/g.rs' '600' '600\t' '600\tsrc/g.rs\tx' '600\tsrc/g.rs\n900
   [[ $rc -ne 0 && "$out" == *"$MAL"* ]] && ok "row shape '$shape' fails closed" || bad "row shape '$shape': rc=$rc ${out:0:160}"
 done
 
+# A NUL byte: bash `read` DROPS it, so `9<NUL>00` used to load as 900 — a non-digit byte past is_count,
+# and it turns `git diff` of the baseline into "Binary files differ" (round 4, safety N2). A baseline
+# holding a NUL anywhere is malformed.
+printf '9\000%s\tsrc/g.rs\n' 00 > "$TMP/scripts/size-baseline.txt"
+out="$(gate)"; rc=$?
+[[ $rc -ne 0 && "$out" == *"$MAL"* ]] && ok "a NUL byte in the baseline fails closed" || bad "NUL baseline: rc=$rc ${out:0:160}"
+
 # ── 5. Output never carries raw control bytes from a row or a committed FILENAME (both free text) ─
 printf 'abc\tsrc/x\033[31m.rs\n' > "$TMP/scripts/size-baseline.txt"
 out="$(gate)"
 [[ "$out" != *$'\033'* ]] && ok "an escape sequence in a row path is not echoed raw" || bad "raw ESC echoed in: ${out:0:160}"
 : > "$TMP/scripts/size-baseline.txt"; rm -f "$TMP/src/g.rs"
-gen "$TMP/src/x"$'\033'"]0;T"$'\a'".rs" 600
-out="$(gate)"; rc=$?
-[[ $rc -ne 0 && "$out" != *$'\033'* ]] && ok "an escape sequence in a FILENAME is not echoed raw" || bad "filename ESC: rc=$rc ${out:0:160}"
+# Every line that prints a path: new breach (600), soft-cap warn (400), grandfathered grew (row 600,
+# 700 lines) and the stale note (row 600, 400 lines) — round 4 found only the first one pinned.
+esc="src/x"$'\033'"]0;T"$'\a'".rs"
+for c in 'breach| |600' 'warn| |400' 'grew|600|700' 'note|600|400'; do
+  IFS='|' read -r what cap n <<<"$c"
+  if [[ "$cap" == " " ]]; then : > "$TMP/scripts/size-baseline.txt"; else printf '%s\t%s\n' "$cap" "$esc" > "$TMP/scripts/size-baseline.txt"; fi
+  gen "$TMP/$esc" "$n"
+  out="$(gate)"
+  [[ "$out" == *"T"*".rs"* && "$out" != *$'\033'* ]] && ok "an escape sequence in a FILENAME is not echoed raw ($what line)" \
+                                                    || bad "filename ESC ($what): ${out:0:160}"
+done
 
 rm -f "$TMP/scripts/size-baseline.txt"
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

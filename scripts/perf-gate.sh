@@ -19,7 +19,8 @@
 # ratio-regime does not false-fail.
 #
 # Config lives in bench/baseline.json. Exit 0 = pass, 1 = regression, 2 = setup error (including a
-# malformed baseline value — behaviour suite: scripts/test-perf-gate.sh).
+# malformed baseline value, and a run with no measurable vm_speedup — behaviour suite:
+# scripts/test-perf-gate.sh).
 # Env: PHG_BIN (default target/release/phg), PERF_GATE_RUNS (default from baseline).
 set -eEuo pipefail
 # Force the C locale so awk's printf uses '.' as the decimal separator (a fr_FR locale emits '10,8000',

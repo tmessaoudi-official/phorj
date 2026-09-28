@@ -2,7 +2,8 @@
 # microbench-gate.sh — the G-8 mandate RATCHET gate (pre-push lane, docker).
 #
 # Consumes `microbench.sh --json` (per-feature phorj-VM vs release-PHP+JIT) and gates against
-# bench/micro-baseline.json. It BLOCKS a push ONLY on the two ROBUST, load-insensitive signals:
+# bench/micro-baseline.json. It BLOCKS a push on these ROBUST, load-insensitive signals (and on an OWED
+# loss DEEPENING, and — exit 2, a setup error — on a malformed baseline ratio):
 #   - OUTPUT-IDENTITY break (identical == false — VM and release-php disagree; a correctness bug, and
 #     bench micros are NOT in the differential, so this is their only parity check).
 #   - WIN->LOSS FLIP: a feature whose baseline ratio (php_ns/vm_ns) was a WIN (>= 1 — the VM beat php)
@@ -21,7 +22,8 @@
 #                                      (docker-free, deterministic — for tests); microbench.sh's own
 #                                      (PHG_BIN, MICROBENCH_RUNS, MICROBENCH_PHP_IMAGE) otherwise.
 # Requires docker + the release binary (unless the JSON seam is set). Either absent => SKIP with a
-# warning (a push is never wedged by missing infra). Exit 0 pass/skip, 1 regression, 2 setup error.
+# warning (a push is never wedged by missing infra). Exit 0 pass/skip, 1 regression, 2 setup error
+# (including a malformed baseline ratio — behaviour suite: scripts/test-microbench-gate.sh).
 set -eEuo pipefail
 export LC_ALL=C
 # A baseline ratio is DATA from a tracked file and only ever reaches awk, where a non-number compares
@@ -29,6 +31,10 @@ export LC_ALL=C
 # not laundered" — both rc 0 (panel 2026-09-28 round 3, safety R3-3). malformed_ratio prints the first
 # non-empty argument that is not a plain decimal (explicit digit list; jq may print an exponent) and
 # succeeds; with none it fails. An empty argument means "not in the baseline" and is not malformed.
+# RATIO_OF: an absent entry prints nothing ("not in the baseline"); a PRESENT entry prints its ratio when
+# that is a number, else the ratio as JSON text — so null / false / "" / a missing key are malformed,
+# not "absent" (round 4: `.ratio // empty` let them through as a new or carried feature, rc 0).
+RATIO_OF='.[$t][$f] // empty | if type == "object" and (.ratio | type) == "number" then .ratio elif type == "object" then (.ratio | tojson) else tojson end'
 malformed_ratio() {
   local v
   for v in "$@"; do
@@ -276,7 +282,7 @@ if [[ "$EMIT" == 1 ]]; then
   # written in as the new normal). The gate then reports every owed feature on EVERY run and BLOCKS if
   # one deepens — so a loss can be carried, but never quietly, and never further.
   jq --arg php "$RUN_PHP_SOURCE" --arg build "$_baseline_build" --arg digest "$_baseline_digest" '{
-    "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT. The gate BLOCKS on identity breaks, WIN->LOSS flips (ratio crossing 1.0 downward), and any _owed loss DEEPENING past MICROBENCH_OWED_EPSILON. It does NOT block on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after a fix lands a WIN so the flip check protects it.",
+    "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT. The gate BLOCKS on identity breaks, WIN->LOSS flips (ratio crossing 1.0 downward), and any _owed loss DEEPENING past MICROBENCH_OWED_EPSILON; a ratio here that is not a plain decimal is a setup error (exit 2). It does NOT block on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after a fix lands a WIN so the flip check protects it.",
     "_owed_comment": "DERIVED at --emit from every feature with ratio < 1.0: the losses we are CARRYING, each with the ratio it lost by. Reported loudly every run and blocked from deepening. A feature leaves this list by being FIXED and re-emitted, never by being edited out — with ONE further case, added by DEC-516 because it happened: a row can also leave because the COMPARATOR changed (the 2026-09-09 re-emit moved the baseline from a phpbrew php-8.5.8 to dockerised php:8.5-cli, and mapget/mapinsert/floatloop/dbwork left `_owed` without anyone fixing anything). That is neither a fix nor a laundering, and it must be disclosed wherever the counts are quoted.",
     "_baseline_php_comment": "The php these ratios were measured against. The gate REFUSES to compare a run measured on a different source (DEC-516): ratios from two php builds are not interchangeable (DEC-423.1). `_baseline_php_build` and `_baseline_php_digest` are what make it re-derivable — the tag moves and a local path can be deleted.",
     "_baseline_php": $php,
@@ -296,6 +302,7 @@ fi
 }
 
 fails=0
+malformed_base=0
 wins=0
 owed=0
 # Timing-based blocks are CONFIRMED before they block. An output-identity break is not timing and
@@ -326,11 +333,11 @@ while IFS=$'\t' read -r feat ratio identical vm_ns vm_worst; do
     fails=$((fails + 1))
     continue
   fi
-  b_ratio="$(jq -r --arg f "$feat" '.features[$f].ratio // empty' "$BASELINE")"
-  owed_ratio="$(jq -r --arg f "$feat" '._owed[$f].ratio // empty' "$BASELINE")"
+  b_ratio="$(jq -r --arg f "$feat" "$RATIO_OF" --arg t features "$BASELINE")"
+  owed_ratio="$(jq -r --arg f "$feat" "$RATIO_OF" --arg t _owed "$BASELINE")"
   if bad_ratio="$(malformed_ratio "$b_ratio" "$owed_ratio")"; then
     printf '  FAIL %s: malformed baseline ratio %q in %s (need a plain decimal number)\n' "$feat" "$bad_ratio" "$BASELINE"
-    fails=$((fails + 1))
+    malformed_base=$((malformed_base + 1))
     continue
   fi
   win_now="$(awk -v r="$ratio" 'BEGIN{print (r>=1.0)?"WIN":"loss"}')"
@@ -399,11 +406,11 @@ if [[ ${#suspects[@]} -gt 0 && -z "${MICROBENCH_GATE_JSON:-}" ]]; then
   if confirm_json="$(bash "$ROOT/scripts/microbench.sh" --json "${suspects[@]}" 2>/dev/null)"; then
     while IFS=$'\t' read -r feat ratio; do
       [[ -n "$feat" ]] || continue
-      b_ratio="$(jq -r --arg f "$feat" '.features[$f].ratio // empty' "$BASELINE")"
-      owed_ratio="$(jq -r --arg f "$feat" '._owed[$f].ratio // empty' "$BASELINE")"
+      b_ratio="$(jq -r --arg f "$feat" "$RATIO_OF" --arg t features "$BASELINE")"
+      owed_ratio="$(jq -r --arg f "$feat" "$RATIO_OF" --arg t _owed "$BASELINE")"
       if bad_ratio="$(malformed_ratio "$b_ratio" "$owed_ratio")"; then
         printf '  FAIL %s: malformed baseline ratio %q in %s (need a plain decimal number)\n' "$feat" "$bad_ratio" "$BASELINE"
-        fails=$((fails + 1))
+        malformed_base=$((malformed_base + 1))
         continue
       fi
       if [[ -n "$owed_ratio" ]]; then
@@ -447,6 +454,11 @@ echo "microbench-gate: $wins WIN / $(($(jq 'length' <<<"$json") - wins)) loss vs
 if [[ "$noisy_n" -gt 0 ]]; then
   echo "microbench-gate: $noisy_n feature(s) measured with >${NOISE_PCT}% VM spread — their ratios are PESSIMISTIC"
   echo "  (best-of-K is an upper bound on the real VM time; raising MICROBENCH_RUNS tightens it. DEC-430)"
+fi
+# A malformed TRACKED baseline is a setup error (exit 2), as in perf-gate.sh — not a regression.
+if [[ "$malformed_base" -gt 0 ]]; then
+  echo "microbench-gate: SETUP ERROR — $malformed_base malformed baseline ratio(s) in $BASELINE (FAIL lines above)" >&2
+  exit 2
 fi
 if [[ "$fails" -gt 0 ]]; then
   echo "microbench-gate: FAIL — $fails regression(s) (WIN->LOSS flip or output-identity break)" >&2

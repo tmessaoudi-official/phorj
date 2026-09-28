@@ -9,7 +9,8 @@
 #   * a NON-grandfathered file may not exceed the 500 HARD cap        -> FAIL (new breach)
 #   * a grandfathered file may not GROW beyond its baseline count     -> FAIL (must only shrink)
 #   * a malformed baseline row: no TAB, empty path, a TAB in the path,
-#     a count that is not a plain decimal (≤ 9 digits), a duplicate path  -> FAIL (malformed row)
+#     a count that is not a plain decimal (≤ 9 digits), a duplicate path,
+#     or a NUL byte anywhere in the file                                 -> FAIL (malformed row)
 #   * a file over the 300 SOFT cap that is not grandfathered          -> WARN (advisory)
 # So existing debt is frozen and can only burn down; no new or growing breach is allowed.
 #
@@ -40,6 +41,13 @@ declare -A ceiling=()
 is_count() { case "$1" in '' | *[!0123456789]*) return 1 ;; esac; ((${#1} <= 9)); }
 malformed=0
 if [[ -f "$BASELINE" ]]; then
+  # bash `read` DROPS a NUL byte, so `9<NUL>00` would load as 900 — a non-digit byte past is_count — and
+  # a NUL turns `git diff` of this file into "Binary files differ", hiding which ceiling moved (panel
+  # 2026-09-28 round 4, safety N2). A baseline holding a NUL anywhere is malformed.
+  if ! tr -d '\000' < "$BASELINE" | cmp -s - "$BASELINE"; then
+    printf 'FAIL (malformed %s: it contains a NUL byte)\n' "$BASELINE"
+    malformed=$((malformed + 1))
+  fi
   while IFS= read -r row || [[ -n "$row" ]]; do
     [[ -n "$row" ]] || continue
     cnt="${row%%$'\t'*}"

@@ -237,6 +237,10 @@ for payload in 'PWD[$(touch${IFS}%s/pwned)]' '1+PWD[$(touch${IFS}%s/pwned)]' '1+
   [[ $rc -ne 0 ]] && grep -qF 'malformed' <<<"$out" && ok "floor '$label…' fails closed, named malformed" \
                                                     || bad "floor '$label…': rc=$rc out=${out:0:160}"
 done
+# A malformed floor is printed %q-quoted: raw control bytes never reach the terminal / model (round 4).
+sed -i "s|^lsp_providers .*|lsp_providers 1"$'\033'"]0;T|" "$R/scripts/surface-baseline.txt"; commit_all "$R"
+out=$(run "$R"); rc=$?
+[[ $rc -ne 0 && "$out" != *$'\033'* ]] && ok "a malformed floor with control bytes fails, printed %q" || bad "floor ESC: rc=$rc out=${out:0:160}"
 # A leading zero is DECIMAL: floor 01 equals 1, not an error and not octal.
 sed -i "s|^lsp_providers .*|lsp_providers 01|" "$R/scripts/surface-baseline.txt"; commit_all "$R"
 out=$(run "$R"); rc=$?

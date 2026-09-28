@@ -123,7 +123,7 @@ echo "[pre-push] test-size-gate (the file-size ratchet's own behaviour tests)"
 bash "$_gate_root/scripts/test-size-gate.sh"
 echo "[pre-push] test-perf-gate (the VM-regression gate's own behaviour tests)"
 bash "$_gate_root/scripts/test-perf-gate.sh"
-# Sixth: lint-on-write.sh is the fourth consumer of size-baseline.txt, with its own copy of the
+# Sixth: lint-on-write.sh is size-baseline.txt's second consumer (after size-gate), with its own copy of the
 # validator, and runs on every Edit/Write — a disabled check there re-opened the row-as-code hole with
 # every suite above still green (panel 2026-09-28 round 3). Its one ~/.claude-dependent assertion SKIPs
 # on a machine without the global install. ~2s, no builds.

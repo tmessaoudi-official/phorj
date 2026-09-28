@@ -269,19 +269,31 @@ else
   echo "  ok   16 --emit with no valid php refuses and leaves the baseline untouched"
 fi
 
-# 17-18. A BASELINE ratio is tracked data: a non-number must FAIL the gate, never pass. awk compares a
-# non-number AS A STRING, so `"abc"` as a WIN baseline read as a near-parity wobble (rc 0) and an owed
-# `"abc"` as "carried, not laundered" (rc 0) — the fifth consumer of a tracked baseline number (panel
-# 2026-09-28 round 3, safety R3-3). The run is the clean one: only the malformed ratio can fail it.
+# 17-19. A BASELINE ratio is tracked data: a non-number is a SETUP ERROR (exit 2, like perf-gate), never a
+# pass. awk compares a non-number AS A STRING, so `"abc"` as a WIN baseline read as a near-parity wobble
+# and an owed `"abc"` as "carried, not laundered" — both rc 0 (panel 2026-09-28 round 3, safety R3-3).
+# null / false / "" used to read as "not in the baseline" (jq's `// empty`), and digit-prefixed or
+# -suffixed junk pins BOTH regex anchors (round 4). The run is the clean one: only the ratio can fail it.
 if [[ -n "$win_feat" ]]; then
-  jq --arg f "$win_feat" '.features[$f].ratio = "abc"' "$BASELINE" >"$TMP/bad-win.json"
-  MICROBENCH_BASELINE="$TMP/bad-win.json" check 1 "FAIL $win_feat: malformed baseline ratio" \
-    "17 a non-numeric WIN baseline ratio fails closed" "$TMP/clean.json"
+  for v in '"abc"' null false '""' '"2x"' '"v2.071"'; do
+    jq --arg f "$win_feat" --argjson v "$v" '.features[$f].ratio = $v' "$BASELINE" >"$TMP/bad-win.json"
+    MICROBENCH_BASELINE="$TMP/bad-win.json" check 2 "FAIL $win_feat: malformed baseline ratio" \
+      "17 a WIN baseline ratio of $v is a setup error" "$TMP/clean.json"
+  done
 fi
 if [[ -n "$owed_feat" ]]; then
-  jq --arg f "$owed_feat" '._owed[$f].ratio = "abc"' "$BASELINE" >"$TMP/bad-owed.json"
-  MICROBENCH_BASELINE="$TMP/bad-owed.json" check 1 "FAIL $owed_feat: malformed baseline ratio" \
-    "18 a non-numeric OWED ratio fails closed" "$TMP/clean.json"
+  for v in '"abc"' null '"0.9x"'; do
+    jq --arg f "$owed_feat" --argjson v "$v" '._owed[$f].ratio = $v' "$BASELINE" >"$TMP/bad-owed.json"
+    MICROBENCH_BASELINE="$TMP/bad-owed.json" check 2 "FAIL $owed_feat: malformed baseline ratio" \
+      "18 an OWED ratio of $v is a setup error" "$TMP/clean.json"
+  done
+fi
+# 19. The malformed ratio is printed %q-quoted: raw control bytes never reach the terminal / model.
+if [[ -n "$win_feat" ]]; then
+  jq --arg f "$win_feat" '.features[$f].ratio = "\u001b]0;T\u0007"' "$BASELINE" >"$TMP/esc.json"
+  out19="$(MICROBENCH_BASELINE="$TMP/esc.json" MICROBENCH_GATE_JSON="$TMP/clean.json" bash "$GATE" 2>&1)"
+  if [[ "$out19" == *$'\033'* ]]; then echo "  FAIL 19 a malformed ratio's control bytes were printed raw"; fails=$((fails + 1))
+  else echo "  ok   19 a malformed ratio is printed %q-quoted"; fi
 fi
 
 if [[ "$fails" -gt 0 ]]; then

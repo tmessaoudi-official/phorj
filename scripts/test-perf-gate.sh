@@ -83,7 +83,7 @@ done
 
 # ── 5. A missing or non-numeric floor input must not zero the floor (that PASSES everything) ───────
 echo 0.5 > "$TMP/speedup"   # a catastrophic regression: only a zeroed floor lets it pass
-for pair in 'null|0.6' '"abc"|0.6' '18.0|null' '18.0|"x"' '0|0.6' '18.0|0'; do
+for pair in 'null|0.6' '"abc"|0.6' '18.0|null' '18.0|"x"' '0|0.6' '18.0|0' '"0x"|0.6' '18.0|"0.6x"'; do
   base "${pair%%|*}" "${pair#*|}" 3
   out="$(gate)"; rc=$?
   [[ $rc -eq 2 ]] && ok "baseline_vm_speedup/min_ratio = $pair is a setup error" || bad "$pair: rc=$rc ${out:0:160}"
@@ -97,11 +97,16 @@ base 18.0 0.6 3
 printf '5\n5\n5\n' > "$TMP/speedup"
 out="$(gate)"; rc=$?
 [[ $rc -eq 1 ]] && ok "control: three 5x runs vs floor 10.8 are a regression" || bad "control 5,5,5: rc=$rc ${out:0:160}"
-for seq in 'null' '"fast"' '{}' '"NaN"' '5|null|5' 'null|5|5'; do
+# "5x" / "x5" / "1e3junk" pin both regex anchors (round 4: an anchor-dropped check PASSED "5x").
+for seq in 'null' '"fast"' '{}' '"NaN"' '5|null|5' 'null|5|5' '"5x"' '"x5"' '"1e3junk"'; do
   tr '|' '\n' <<<"$seq" > "$TMP/speedup"
   out="$(gate)"; rc=$?
   [[ $rc -eq 2 ]] && ok "measured vm_speedup $seq is a setup error, never a PASS" || bad "measured $seq: rc=$rc ${out:0:160}"
 done
+
+printf '%s\n' '"\u001b]0;T\u0007"' > "$TMP/speedup"
+out="$(gate)"; rc=$?
+[[ $rc -eq 2 && "$out" != *$'\033'* ]] && ok "a measured value with control bytes is a setup error, printed %q" || bad "measured ESC: rc=$rc ${out:0:160}"
 
 # ── 7. The workload string is printed %q-quoted: raw control bytes never reach the terminal/model ──
 echo 20 > "$TMP/speedup"; base 18.0 0.6 1 '"examples/w\u001b]0;T\u0007.phg"'

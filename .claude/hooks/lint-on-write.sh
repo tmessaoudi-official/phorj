@@ -117,12 +117,26 @@ lines="$(wc -l < "$file" 2>/dev/null || echo 0)"
 # matched ٣ under en_US.UTF-8), at most 9 of them (a longer count wraps in bash's intmax: 2^64+100000
 # reads as 100000); the value is then forced to base 10 (a leading 0 is octal: 0600 → 384).
 is_count() { case "$1" in '' | *[!0123456789]*) return 1 ;; esac; ((${#1} <= 9)); }
-rows=0 odd=0 baseline=""
-if [[ -f "$root/scripts/size-baseline.txt" ]]; then
-  IFS=$'\t' read -r rows odd baseline < <(awk -v f="$rel" '
-    { i = index($0, "\t"); if (!i) next; p = substr($0, i + 1)
-      if (p == f) { n++; c = substr($0, 1, i - 1) } else if (index(p, f "\t") == 1) b++ }
-    END { printf "%d\t%d\t%s\n", n, b, c }' "$root/scripts/size-baseline.txt")
+# The path goes to awk through ENVIRON, not `-v` (which turns `\t` in a filename into a TAB and misses
+# the row); `-r` as well as `-f`: an unreadable baseline is left alone (no false "malformed", no awk
+# noise), as a missing one is. A NUL byte anywhere, or a row with no TAB, makes size-gate FAIL the
+# push whatever file it names, so both are reported here too (panel 2026-09-28 round 4).
+B="$root/scripts/size-baseline.txt"
+rows=0 odd=0 notab=0 baseline=""
+if [[ -f "$B" && -r "$B" ]]; then
+  if ! tr -d '\000' < "$B" | cmp -s - "$B"; then
+    warn "scripts/size-baseline.txt contains a NUL byte (malformed) — size-gate FAILs the push until it is removed; the size check is skipped"
+    log_obs INFO lint-on-write "baseline holds a NUL byte"
+    exit 0
+  fi
+  IFS=$'\t' read -r rows odd notab baseline < <(F="$rel" awk '
+    { i = index($0, "\t"); if (!i) { if ($0 != "") t++; next }; p = substr($0, i + 1)
+      if (p == ENVIRON["F"]) { n++; c = substr($0, 1, i - 1) } else if (index(p, ENVIRON["F"] "\t") == 1) b++ }
+    END { printf "%d\t%d\t%d\t%s\n", n, b, t, c }' "$B")
+fi
+if [[ "$notab" != 0 ]]; then
+  warn "scripts/size-baseline.txt has $notab row(s) with no TAB (malformed) — size-gate FAILs the push until they read <count><TAB><path>"
+  log_obs INFO lint-on-write "baseline rows without a TAB: $notab"
 fi
 if [[ "$rows" != 0 || "$odd" != 0 ]] && { [[ "$rows" != 1 || "$odd" != 0 ]] || ! is_count "$baseline"; }; then
   warn "scripts/size-baseline.txt has a malformed row for $rel (need ONE row <count><TAB><path> with a plain decimal count) — fix the row; the size check is skipped for this file"
