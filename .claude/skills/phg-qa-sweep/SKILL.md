@@ -152,4 +152,4 @@ Set by the model-assignment audit (decision D5, 2026-09-29; source table `projec
 | the three reviewers by name (backend-parity, safety-promises, completeness) | the reviewer model — `opus` by default (their agent files also pin `opus`) | certification is judgment work |
 | the general-purpose journey agents (up to 5) | sonnet | they exercise flows and report; they do not certify |
 
-Reviewer model: resolve it exactly as `/certify` § 3 step 1b before spawning the reviewers (stored value or `opus`; a follow-up question in spec mode when it differs from the session model) and pass the result as `model:` on each reviewer Agent call.
+Reviewer model: take the pre-selected value exactly as `/certify` § 3 step 1b resolves it (stored value or `opus`) and ask it as this skill's Model ask above — one question, not two — then pass the answer as `model:` on each reviewer Agent call.
