@@ -7,14 +7,17 @@
 //         node playground/tests/php-run.test.mjs
 // Without PHP_WASM_DIR it installs php-wasm@0.1.0 into a temp dir (needs network).
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
 const here = resolve(new URL(".", import.meta.url).pathname);
-const phg = resolve(process.env.PHG || join(here, "../../target/release/phg"));
+// The transpile-backed check needs a built `phg`; without one (CI's playground job builds only the wasm
+// crate) it falls back to the exact shape `phg transpile` emits, so the php-wasm checks always run.
+const phgPath = resolve(process.env.PHG || join(here, "../../target/release/phg"));
+const phg = existsSync(phgPath) ? phgPath : null;
 let wasmDir = process.env.PHP_WASM_DIR;
 if (!wasmDir) {
   wasmDir = mkdtempSync(join(tmpdir(), "php-wasm-"));
@@ -49,10 +52,16 @@ function transpile(src) {
   return execFileSync(phg, ["transpile", f], { encoding: "utf8" });
 }
 
-const hello = transpile(
-  'package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void {\n    Output.printLine("hello");\n}\n',
-);
-check("transpiled output opens with the strict_types declaration", /^<\?php\s*\ndeclare\(strict_types=1\);/.test(hello), JSON.stringify(hello.slice(0, 60)));
+// Exactly what `phg transpile` emits for a one-line `#[Entry]` program (checked against the real binary below).
+const SHAPE = '<?php\ndeclare(strict_types=1);\nfunction main(): void {\n    echo "hello", "\\n";\n}\nmain();';
+const hello = phg
+  ? transpile(
+      'package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void {\n    Output.printLine("hello");\n}\n',
+    )
+  : SHAPE;
+if (phg) check("the hand-written SHAPE equals the real transpiler output", hello.trim() === SHAPE, JSON.stringify(hello));
+else console.log("note: no phg binary — using the hand-written SHAPE (set PHG to also check the real transpiler)");
+check("program opens with the strict_types declaration", /^<\?php\s*\ndeclare\(strict_types=1\);/.test(hello), JSON.stringify(hello.slice(0, 60)));
 
 // 1. The bug, reproduced: php-wasm's own run() rejects it. If this stops failing, php-wasm fixed it
 //    upstream and php-run.js can be deleted — the test says so instead of passing silently.

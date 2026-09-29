@@ -65,6 +65,11 @@ jobs:
         env:
           RUSTFLAGS: "-C link-arg=-zstack-size=33554432 --cap-lints=warn"
 
+      # The PHP pane runs the emitted PHP under php-wasm; nothing else executed it, which let the
+      # strict_types fatal (DEC-401) ship for weeks. Real php-wasm 0.1.0, no phg binary needed.
+      - name: Test the php-wasm run path
+        run: node playground/tests/php-run.test.mjs
+
       - name: Generate examples
         run: python3 playground/web/gen_examples.py
 

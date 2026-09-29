@@ -3812,7 +3812,7 @@ its floor at the READ site, so a plain-HTTP server is never refused over a field
 `php-wasm@0.1.0` reports `PHP_VERSION 8.4.1`, `PHP_INT_SIZE 4`, `PHP_INT_MAX 2147483647` [Verified 2026-09-29, run in
 Node and in Chromium], while the transpile floor is PHP 8.5 and phorj's `int` is 64-bit. Of 192 transpilable playground
 examples, 9 do not match `phg run`: `checked-arithmetic` and `string-format` (32-bit overflow/`ffffffff`), `clone-with`
-and `uri` (8.5-only syntax/extension; the pane shows nothing), and `dates`, `datetimes`, `logging`, `logging-v2`, `time`
-(not individually diagnosed; `time` prints nothing) [Verified: sweep 2026-09-29; the causes of the last five are
+and `uri` (the pane shows NOTHING — no parse error, no fatal — so the 8.5-only cause is Inferred, not observed), and `dates`, `datetimes`, `logging`, `logging-v2`, `time`
+(not individually diagnosed; `time` also prints nothing) [Verified: sweep 2026-09-29; the causes of the last five are
 Unverified]. The agreement badge therefore reports "outputs differ" for them. The fix for the strict_types fatal
 (`playground/web/php-run.js`) does not touch this; a php-wasm build on 8.5 with 64-bit ints would.

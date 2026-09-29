@@ -84,9 +84,9 @@ const callJson = (op, arg) =>
   call(op, arg).then(JSON.parse).catch((e) => ({ ok: false, error: String(e.message || e) }));
 
 // --- php-wasm (lazy; the transpiled PHP executes in-browser, PHP 8.4) --------------------------
-// php-wasm (seanmorris) defaults to PHP 8.4 — matching Phorj's transpile floor. Loaded only when
-// the user first runs with "Run PHP" enabled. NOTE: this CDN import is the one integration point
-// not exercised by the Rust test suite; pin a specific version once validated on first deploy.
+// php-wasm (seanmorris) 0.1.0 is PHP 8.4.1 with 32-bit ints — BELOW Phorj's 8.5 transpile floor, so a
+// few examples differ (KNOWN_ISSUES PLAYGROUND-PHP-WASM). Loaded only when the user first runs with
+// "Run PHP" enabled. The run path is covered by playground/tests/php-run.test.mjs (CI: playground.yml).
 // Pinned: an unversioned jsdelivr URL follows `latest`, so a new php-wasm release would change the
 // oracle under a page nobody redeployed.
 const PHP_WASM_URL = "https://cdn.jsdelivr.net/npm/php-wasm@0.1.0/PhpWeb.mjs";
