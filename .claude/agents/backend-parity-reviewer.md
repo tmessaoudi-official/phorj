@@ -91,7 +91,7 @@ silent downgrade (Invariant 14, the LADDER RULE).
    AND lift in the same change**; `phg check` and the LSP diagnostics must stay the same pipeline
    (DEC-252). A feature that runs but does not transpile — or transpiles but does not lift — is *not
    done*, and saying so is your job.
-9. **The PHP leg specifically.** Floor is **PHP 8.5**; the bare `php` on PATH is 8.6-dev and too
+9. **The PHP leg specifically.** Floor is **PHP 8.5**; the bare `php` on PATH is a dev build (8.7.0-dev on 2026-09-29) and too
    permissive, so a green run against it proves little. Watch for: a `__phorj_*` helper introduced
    where plain idiomatic PHP would do (DEC-377 — helpers exist only where PHP genuinely cannot express
    the semantics); a builtin/final-method collision on the mapped PHP parent; PHP-reserved names.

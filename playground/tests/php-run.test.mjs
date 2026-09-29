@@ -22,7 +22,7 @@ let wasmDir = process.env.PHP_WASM_DIR;
 if (!wasmDir) {
   wasmDir = mkdtempSync(join(tmpdir(), "php-wasm-"));
   execFileSync("npm", ["init", "-y"], { cwd: wasmDir, stdio: "ignore" });
-  execFileSync("npm", ["i", "php-wasm@0.1.0"], { cwd: wasmDir, stdio: "ignore" });
+  execFileSync("npm", ["i", "--ignore-scripts", "php-wasm@0.1.0"], { cwd: wasmDir, stdio: ["ignore", "ignore", "inherit"] });
 }
 const req = createRequire(join(wasmDir, "noop.js"));
 const { PhpNode } = await import(pathToFileURL(req.resolve("php-wasm/PhpNode.mjs")).href);
@@ -85,7 +85,10 @@ check("an uncaught exception is reported", fault.startsWith("a\n") && fault.incl
 check("a second run on a fresh instance works", (await exec(runOnPhpWasm, hello)) === "hello\n");
 
 // 6. stripOpenTag is exact: only a LEADING tag; nothing else is touched, and a non-PHP string is refused.
-check("stripOpenTag drops only the leading tag line", stripOpenTag("<?php\necho '<?php';\n") === "echo '<?php';\n");
+check("stripOpenTag drops only the leading tag line", stripOpenTag("<?php\necho '<?php';\n") === "\necho '<?php';\n");
+const lineProbe = await exec(runOnPhpWasm, "<?php\ndeclare(strict_types=1);\nthrow new Exception(\"x\");\n");
+check("an error on source line 3 is reported on line 3 (the opening tag's newline is kept)", /script:3\b|line 3\b/.test(lineProbe), JSON.stringify(lineProbe));
+check("stripOpenTag does not treat `<?phpecho` as an opening tag", stripOpenTag("<?phpecho 1;") === null);
 check("stripOpenTag refuses code with no leading tag", stripOpenTag("echo 1;") === null);
 
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");

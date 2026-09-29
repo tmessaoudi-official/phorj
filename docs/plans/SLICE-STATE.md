@@ -3,9 +3,10 @@
 ## ▶ CURRENT CURSOR (2026-09-07) — **scout is the forcing function. Plan: `docs/plans/2026-09-07-scout-forcing-function.plan.md`**
 
 > **▶ 2026-09-29 — DEPENDENCY REFRESH runs AHEAD of row 4l-b3 (developer directive, resume chooser). Plan: `docs/plans/2026-09-29-dependency-refresh.plan.md`.**
-> Rust 1.98.1 was already the latest stable; landed as `26dfd3f5` (49-package lock refresh, `mysql` 28.0.3 and
+> Rust 1.98.1 was already the latest stable; landed as `26dfd3f5` (lock refresh: 47 version changes and one removal, `mysql` 28.0.3 and
 > `webpki-roots` 1.0.9 floors, VS Code client ^10.1.2) and `655282f1` (`cranelift` ×3 0.136.1, no source change).
 > Edition 2024 stays its own slice (row 11 of the 2026-09-13 plan). Next after the gated push: row 4l-b3.
+> STATE at 2026-09-29: 8 commits unpushed above `9944993b` (the two above, `49e5f16f`, `4b0333b4`, round-1 fix `2b2cd4ea`, and the playground PHP-pane fix `4bc26130` + `e41d0ea4` — php-wasm's `run()` prefixed `?>`, so every example died on `strict_types`), plus the panel round-2 fix commit; the panel over that range is done, the full pre-push gate and the push are NEXT.
 >
 > **▶ 2026-09-13 — DEPENDENCY UPGRADE runs AHEAD of L4b (DEC-521). Plan: `docs/plans/2026-09-13-dependency-upgrade.plan.md`.**
 > Rust 1.98.1 + lockfile + `argon2` 0.6 + `fancy-regex` 0.19.2 + CI wasm-pack + VS Code client +

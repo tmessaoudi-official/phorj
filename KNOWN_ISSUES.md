@@ -3807,12 +3807,20 @@ rule could never have done.
 `tlsMinVersion` had already left this list in S3.5 (`E-SERVE-TLS-MIN-VERSION`), and still resolves
 its floor at the READ site, so a plain-HTTP server is never refused over a field it does not use.
 
-## PLAYGROUND-PHP-WASM — the in-browser PHP leg is PHP 8.4.1 with 32-bit integers (2026-09-29)
+## PLAYGROUND-PHP-WASM — the in-browser PHP leg is PHP 8.4.1 with 32-bit integers, and CLI-only constants are undefined there (2026-09-29)
 
-`php-wasm@0.1.0` reports `PHP_VERSION 8.4.1`, `PHP_INT_SIZE 4`, `PHP_INT_MAX 2147483647` [Verified 2026-09-29, run in
-Node and in Chromium], while the transpile floor is PHP 8.5 and phorj's `int` is 64-bit. Of 192 transpilable playground
-examples, 9 do not match `phg run`: `checked-arithmetic` and `string-format` (32-bit overflow/`ffffffff`), `clone-with`
-and `uri` (the pane shows NOTHING — no parse error, no fatal — so the 8.5-only cause is Inferred, not observed), and `dates`, `datetimes`, `logging`, `logging-v2`, `time`
-(not individually diagnosed; `time` also prints nothing) [Verified: sweep 2026-09-29; the causes of the last five are
-Unverified]. The agreement badge therefore reports "outputs differ" for them. The fix for the strict_types fatal
-(`playground/web/php-run.js`) does not touch this; a php-wasm build on 8.5 with 64-bit ints would.
+`php-wasm@0.1.0` reports `PHP_VERSION 8.4.1`, `PHP_INT_SIZE 4`, `PHP_INT_MAX 2147483647` [Verified 2026-09-29, in Node and in
+Chromium], while the transpile floor is PHP 8.5 and phorj's `int` is 64-bit. Of 192 transpilable playground examples, 9 do not
+match `phg run` [Verified: sweep 2026-09-29; each cause below read from the pane text]:
+- **32-bit ints:** `checked-arithmetic` (`safeSum(): Argument #1 ($a) must be of type int, float given`), `time`
+  (`Instant::__construct(): Argument #1 ($ms) must be of type int, float given`), `datetimes` (`OverflowException` from
+  `__phorj_checked_mul(19675, 86400000)`), `string-format` (`ffffffff` where phg prints `ffffffffffffffff`).
+- **PHP 8.5-only:** `clone-with` (parse error, `clone … with`) and `uri` (`Class "Uri\Rfc3986\Uri" not found`).
+- **`STDERR` undefined:** `logging` and `logging-v2` die with `Undefined constant "STDERR"` — NOT a version or int-width issue.
+  `src/transpile/log_php.rs:105,124` emit `STDOUT`/`STDERR`, which exist only in the command-line PHP runtime, so the same
+  transpiled programs also fail under php-fpm / mod_php. Not disclosed anywhere before this entry; whether to emit
+  `fopen('php://stderr', 'w')` instead is a transpile-design question (Invariant 14/16), left OPEN.
+- **`dates`:** differs; the cause was not read [Unverified].
+
+The agreement badge therefore reports "outputs differ" for these. The strict_types fix (`playground/web/php-run.js`) does not
+touch any of it; a php-wasm build on PHP 8.5 with 64-bit ints would clear all but the `STDERR` pair.

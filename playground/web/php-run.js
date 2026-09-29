@@ -9,8 +9,10 @@
 // `pib_run` itself is fine with the declaration when nothing precedes it, so call it directly with
 // the opening tag stripped. Dropping the declaration instead would run the oracle in weak mode, which
 // changes coercion behaviour — the strict-mode TypeError still has to fire (php-run.test.mjs pins it).
-// The stripping is exact: only a leading `<?php` plus the rest of that line, never anything deeper.
-const OPEN_TAG = /^<\?php[ \t]*\r?\n?/;
+// The newline after the tag is KEPT so every PHP error line and `__LINE__` still matches the source shown in the
+// pane (dropping it shifted them down by one). The stripping is exact: only a leading `<?php` tag as PHP itself reads one (followed by whitespace or the
+// end of the input — `<?phpecho 1;` is NOT an opening tag and is left alone), never anything deeper.
+const OPEN_TAG = /^<\?php(?:[ \t]+|(?=\r?\n)|$)/;
 
 export function stripOpenTag(code) {
   return OPEN_TAG.test(code) ? code.replace(OPEN_TAG, "") : null;

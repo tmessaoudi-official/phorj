@@ -23,7 +23,8 @@
 #
 # ⚠ AMENDED 2026-09-09 (DEC-516) — THE PARAGRAPH ABOVE IS HISTORY, NOT CURRENT STATE. Every receipt
 # in it was true of `php-8.5.8`. **That build no longer exists**: `/stack/tools/phpbrew/php/` holds
-# `php-8.4.24`, `php-8.5.9` and `php-master` [Verified 2026-09-09], and `toolchain.env` globs
+# `php-8.4.24`, `php-8.5.9` and `php-master` [Verified 2026-09-09; since then `php-8.5.11` is
+# newest and is what it resolves to — still `Debug Build => yes`, so the disqualification stands], and `toolchain.env` globs
 # `php-8.5.*` newest-first, so `$PHORJ_PHP` resolves to **8.5.9 — `Debug Build => yes`, ZTS, GCOV**.
 # The invitation above therefore now points at a build DEC-507 disqualifies, and following it would
 # INFLATE every phorj ratio. Two further corrections, both to sentences above:
