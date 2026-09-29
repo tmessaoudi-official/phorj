@@ -143,7 +143,7 @@ found twice is reported once.
 
 ## Subagent models
 
-**Model ask (policy v2, every run):** before the first Agent call of a run, ask ONE `AskUserQuestion` that shows the whole table below and pre-selects its models (for reviewers, the `reviewer-model` file value; a stored value is only ever the pre-selected option, never a silent answer). Pass `model:` on every Agent call, set to the answer. No mode skips the ask, except that an orchestrator (`/mega-analysis`, `/loop --pipeline`) which already asked for this run and named the models replaces it.
+**Model ask (policy v2, every run):** before the first Agent call of a run, ask ONE `AskUserQuestion` that shows the whole table below in the question text, with each stored value as the recommended choice (for reviewers, the `reviewer-model` file value; a stored value is only ever the recommended option, never a silent answer). Shape: AskUserQuestion takes 2-4 options and cannot pre-select, so the options are keep-the-table (Recommended), one uniform alias for every agent, and a challenge escape. Pass `model:` on every Agent call, set to the answer. No mode skips the ask, except that an orchestrator (`/mega-analysis`, `/loop --pipeline`) which already asked for this run and named the models replaces it.
 
 Set by the model-assignment audit (decision D5, 2026-09-29; source table `projects/-home-developer-.claude/model-audit/classified-all.tsv`). **Pass `model:` on every Agent call** — an omitted model inherits the session, so quality and cost would follow the `/model` choice. `opus` = judgment work, `sonnet` = detection and mapping (rubric ruled 2026-09-29).
 
