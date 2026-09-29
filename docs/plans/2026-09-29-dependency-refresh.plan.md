@@ -40,10 +40,10 @@ Two commits, then ONE full gate on the frozen final tree, then one push.
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Inventory and oracle probe (php-8.5.11 resolves, bcmath present) | S | done | - | docs/plans/2026-09-29-dependency-refresh.plan.md |
-| 2 | Commit A - lock refresh, mysql and webpki-roots floors, VS Code client 10.1.2 | M | todo | - | Cargo.toml Cargo.lock editors/vscode/package.json editors/vscode/package-lock.json |
-| 3 | Commit B - cranelift 0.136.1 x3, JIT suite and three-leg differential | L | todo | - | Cargo.toml Cargo.lock src/jit/** |
-| 4 | Stale-version sweep - CLAUDE.md oracle note, docs, CI PHP canary | S | todo | - | CLAUDE.md docs/** .github/workflows/ci.yml |
-| 5 | cargo-audit on the final lockfile, disclose advisories | S | todo | - | KNOWN_ISSUES.md |
+| 2 | Commit A - lock refresh, mysql and webpki-roots floors, VS Code client 10.1.2 | M | done | 26dfd3f5 | Cargo.toml Cargo.lock editors/vscode/package.json editors/vscode/package-lock.json |
+| 3 | Commit B - cranelift 0.136.1 x3, JIT suite and three-leg differential | L | done | 655282f1 | Cargo.toml Cargo.lock src/jit/** |
+| 4 | Stale-version sweep - CLAUDE.md oracle note, docs, CI PHP canary (still valid: no PHP 8.6 release) | S | done | - | CLAUDE.md docs/** .github/workflows/ci.yml |
+| 5 | cargo-audit on the final lockfile (lru advisory cleared, 2 remain) | S | done | - | KNOWN_ISSUES.md |
 | 6 | Full gate on the frozen tree, panel, push, ci-watch | M | todo | - | - |
 <!-- /progress-block -->
 ### Blocked

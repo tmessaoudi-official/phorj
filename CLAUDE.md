@@ -95,7 +95,7 @@ stay in `.claude/agents/`.
   workflow (a variable-built path is a resolver, not a pin, and is deliberately not flagged), and
   `scripts/test-validate-infra.sh` (run by pre-push) keeps the check itself from going dark.
   With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
-  Transpile floor = **PHP 8.5** (`php-8.5.9` on this box today — resolved, not pinned); the bare `php` on PATH is 8.6-dev and too
+  Transpile floor = **PHP 8.5** (`php-8.5.11` on this box today — resolved, not pinned); the bare `php` on PATH is a dev build (8.7.0-dev on 2026-09-29) and too
   permissive — never gate against it (CI runs it only as a non-gating canary).
 - **Perf:** `phg benchmark <file>` (median-of-N, output-identity gated) for before/after numbers;
   CI regression gate: `scripts/perf-gate.sh`.

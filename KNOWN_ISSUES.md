@@ -346,11 +346,12 @@ Two more notes on the same row:
   lowered method is written at the top of `Tenure.phg`, while the function it names lives in
   `TenureFunctions.phg`. The note names the function, so it can be found.
 
-## DEP-ADVISORIES — three RustSec advisories remain after the 2026-09-13 dependency upgrade, none with a reachable fix
+## DEP-ADVISORIES — two RustSec advisories remain after the 2026-09-29 dependency refresh, none with a reachable fix
 
-`cargo audit` (cargo-audit 0.22.2, advisory DB fetched 2026-09-13) on the upgraded `Cargo.lock` reports
-one vulnerability and two warnings. The upgrade cleared the two yanked-crate warnings it started with
-(`chacha20` 0.10.1 → 0.10.2 under `postgres`; `mysql` 28.0.0 → 28.0.2). What is left, each gated behind
+`cargo audit` (cargo-audit 0.22.2, advisory DB fetched 2026-09-29, run on `Cargo.lock` at `655282f1`) reports
+one vulnerability and one warning [Verified: `cargo audit --json` → `RUSTSEC-2023-0071`, `RUSTSEC-2025-0052`].
+The 2026-09-13 upgrade cleared two yanked-crate warnings (`chacha20` 0.10.1 → 0.10.2 under `postgres`; `mysql`
+28.0.0 → 28.0.2), and the 2026-09-29 refresh cleared the `lru` advisory (below). What is left, each gated behind
 a NON-default feature:
 
 - **RUSTSEC-2023-0071 — `rsa` 0.9.10, Marvin Attack (timing side channel on the private key).** Pulled
@@ -359,12 +360,10 @@ a NON-default feature:
   release candidate, and dropping `dkim` would remove a shipped feature. The exposure is to an attacker
   who can time many signatures made with the same key [Inferred from the advisory; not measured here].
   Revisit when `rsa` 0.10 ships and `lettre` adopts it.
-- **RUSTSEC-2026-0253 — `lru` 0.16.4, unsound (`LruCache::pop` is not panic-safe).** Pulled in by
-  `mysql` 28.0.2 (`database-mysql`), whose prepared-statement cache calls `pop`
-  (the `mysql` crate's `stmt_cache.rs`, line 106 in 28.0.2), so the path is reachable. The fix is `lru` ≥ 0.18.2, but
-  `mysql` 28.0.2 requires `^0.16.3`, which Cargo cannot override across that boundary. The unsound
-  window needs a panic inside `pop`; with a `u32` key that looks remote [Inferred, not tested]. Revisit
-  on the next `mysql` release.
+- **RESOLVED 2026-09-29 — RUSTSEC-2026-0253, `lru` unsound (`LruCache::pop` not panic-safe).** `mysql` 28.0.3
+  moved to `lru` 0.18.x, and the lock now holds `lru` 0.18.5, above the fixed 0.18.2
+  [Verified: `Cargo.lock` `lru` 0.18.5; `cargo tree -i lru` → `mysql` v28.0.3; `cargo audit` no longer lists it].
+  Kept here as a record of why the `mysql` floor is 28.0.3.
 - **RUSTSEC-2025-0052 — `async-std` 1.13.2, unmaintained.** Listed in `Cargo.lock` as an optional
   `lettre` dependency that phorj does not enable; it is never compiled
   (`cargo tree --workspace --all-features --target all -i async-std` finds no path). Nothing to do

@@ -2,6 +2,11 @@
 
 ## ▶ CURRENT CURSOR (2026-09-07) — **scout is the forcing function. Plan: `docs/plans/2026-09-07-scout-forcing-function.plan.md`**
 
+> **▶ 2026-09-29 — DEPENDENCY REFRESH runs AHEAD of row 4l-b3 (developer directive, resume chooser). Plan: `docs/plans/2026-09-29-dependency-refresh.plan.md`.**
+> Rust 1.98.1 was already the latest stable; landed as `26dfd3f5` (49-package lock refresh, `mysql` 28.0.3 and
+> `webpki-roots` 1.0.9 floors, VS Code client ^10.1.2) and `655282f1` (`cranelift` ×3 0.136.1, no source change).
+> Edition 2024 stays its own slice (row 11 of the 2026-09-13 plan). Next after the gated push: row 4l-b3.
+>
 > **▶ 2026-09-13 — DEPENDENCY UPGRADE runs AHEAD of L4b (DEC-521). Plan: `docs/plans/2026-09-13-dependency-upgrade.plan.md`.**
 > Rust 1.98.1 + lockfile + `argon2` 0.6 + `fancy-regex` 0.19.2 + CI wasm-pack + VS Code client +
 > playground CodeMirror land first; then `cranelift` 0.135 in its own commit; then the L4b commit
@@ -177,7 +182,7 @@ absolutely! every lifted or transpiled thing must!"* Twelve rulings taken intera
   **stops the lane and is escalated**, never logged as an OWED and passed. This **supersedes the
   2026-07-10 "MATCHES-not-beats php on 20-yr-tuned string/array/collection" refinement** for this
   campaign. **The baseline is dockerised `php:8.5-cli` with JIT ON**, core-pinned and interleaved —
-  the on-box gate oracle is `PHP 8.5.9 (cli) (ZTS DEBUG GCOV)`, correct for byte-identity and
+  the on-box gate oracle is `PHP 8.5.11 (cli) (ZTS DEBUG GCOV)` [Verified 2026-09-29], correct for byte-identity and
   **invalid for any perf claim**. Two PHPs, two jobs.
 - **Readiness steps 13 and 14 are HOISTED** ahead of 10/11/12: HTML5 parse + selectors, then
   `Core.Net` + `Core.Mime` + read-only `Core.Imap`. They are scout's only two hard blockers.
