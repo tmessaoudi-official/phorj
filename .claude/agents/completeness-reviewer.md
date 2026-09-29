@@ -2,6 +2,7 @@
 name: completeness-reviewer
 description: Read-only adversarial reviewer for whether a phorj change is actually FINISHED — evidence genuinely produced (tests EXECUTED, not merely compiled), the Rule-6 four-dimension gate really met, an example shipped with the feature, transpile AND lift AND the LSP AND both editors updated in the same change, the SSOT quartet consistent, and no caller left stale. Use as the completeness+blast-radius lens of the DEC-268 certification panel at any 3C/6C gate. It reads the diff and the repo itself and tries to prove the change is only mostly done. Never edits anything.
 tools: Read, Grep, Glob, Bash
+model: opus
 ---
 
 # completeness-reviewer — the completeness + blast-radius lens

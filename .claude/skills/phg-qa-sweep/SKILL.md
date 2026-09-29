@@ -140,3 +140,14 @@ Enumerate it. A sweep silent about its blind spots reads as more complete than i
 
 Findings go through `/aggregate-findings` if another review skill ran in the same session, so a defect
 found twice is reported once.
+
+## Subagent models
+
+Set by the model-assignment audit (decision D5, 2026-09-29; source table `projects/-home-developer-.claude/model-audit/classified-all.tsv`). **Pass `model:` on every Agent call** — an omitted model inherits the session, so quality and cost would follow the `/model` choice. `opus` = judgment work, `sonnet` = detection and mapping (rubric ruled 2026-09-29).
+
+| Agent | model | why |
+|---|---|---|
+| the three reviewers by name (backend-parity, safety-promises, completeness) | the reviewer model — `opus` by default (their agent files also pin `opus`) | certification is judgment work |
+| the general-purpose journey agents (up to 5) | sonnet | they exercise flows and report; they do not certify |
+
+Reviewer model: resolve it exactly as `/certify` § 3 step 1b before spawning the reviewers (stored value or `opus`; a follow-up question in spec mode when it differs from the session model) and pass the result as `model:` on each reviewer Agent call.

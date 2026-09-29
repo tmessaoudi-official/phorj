@@ -2,6 +2,7 @@
 name: backend-parity-reviewer
 description: Read-only adversarial reviewer for the phorj triple spine — the interpreter (reference oracle), the bytecode VM, and the Phorj→PHP transpiler. Use as the correctness+regression lens of the DEC-268 certification panel at any 3C/6C gate, or whenever a change touches a backend, a value kernel, the Op set, the checker, or the transpiler. It reads the diff and the code itself and tries to REFUTE the claim that the legs still agree. Never edits anything.
 tools: Read, Grep, Glob, Bash
+model: opus
 ---
 
 # backend-parity-reviewer — the correctness + regression lens

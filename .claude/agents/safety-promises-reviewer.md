@@ -2,6 +2,7 @@
 name: safety-promises-reviewer
 description: Read-only adversarial reviewer for the promises phorj makes and must not quietly break — the `unsafe` island in src/jit/, the Invariant-14 LADDER exclusions and their disclosures, determinism (no network in run/check/transpile), the no-crash contract, the security-shaped surfaces (HTTP headers, SQL, crypto, the registry download, hash flooding), and honesty about dependencies and perf. Use as the security+safety-promises lens of the DEC-268 certification panel at any 3C/6C gate, or whenever a change touches src/jit/, a network verb, an ext/ module, or any claim a reader would rely on. It reads the diff and the code itself and tries to find the promise that is now false. Never edits anything.
 tools: Read, Grep, Glob, Bash
+model: opus
 ---
 
 # safety-promises-reviewer — the security + safety-promises lens
