@@ -14,6 +14,7 @@
 // crashes boot ("Unrecognized extension value"). Vendoring a single deduped bundle removes both
 // failure modes and the runtime network dependency. Rebuild: see vendor/README.md.
 import { EditorView, basicSetup } from "./vendor/codemirror.js";
+import { runOnPhpWasm } from "./php-run.js";
 
 // --- DOM ---------------------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
@@ -111,7 +112,7 @@ async function runPhp(code) {
   php.addEventListener("output", collect);
   php.addEventListener("error", collect);
   try {
-    await php.run(code);
+    await runOnPhpWasm(php, code); // not php.run: it prefixes `?>`, which breaks strict_types (php-run.js)
   } finally {
     php.removeEventListener("output", collect);
     php.removeEventListener("error", collect);

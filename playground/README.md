@@ -77,6 +77,7 @@ cargo test -p phorj-playground          # native unit tests of the wrapper logic
 
 ## Known limitations (v1)
 
+- **php-wasm**: `web/php-run.js` runs the emitted PHP through `pib_run` directly, because php-wasm's own `run()` prefixes `?>` and PHP then rejects the leading `declare(strict_types=1)`. Covered by `node playground/tests/php-run.test.mjs` (needs `PHG=<phg binary>`; installs `php-wasm@0.1.0` into a temp dir unless `PHP_WASM_DIR` is set); not part of the Rust suite or CI.
 - **php-wasm CDN import** is the one path not covered by the Rust test suite — validate it on first
   deploy and pin a specific php-wasm version once confirmed.
 - **Very deep recursion** can hit the wasm engine's call-stack limit before Phorj's `MAX_CALL_DEPTH`

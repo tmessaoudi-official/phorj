@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — playground PHP pane: every example died with "strict_types declaration must be the very first statement" (2026-09-29)
+
+Since `declare(strict_types=1);` joined every emitted file (DEC-401, 2026-08-05) the playground's PHP leg failed on
+all of them: php-wasm 0.1.0's `run()` sends `?>` + the code to `pib_run`, so the declaration is no longer the first
+statement. The gap was that nothing executed the emitted PHP under php-wasm. `playground/web/php-run.js` now calls
+`pib_run` without that prefix (strictness is kept, not dropped), and `playground/tests/php-run.test.mjs` runs the real
+php-wasm on real `phg transpile` output (8 checks; breaking the fix reds 4). Sweep of all 208 playground examples:
+192 transpile, 0 strict_types fatals, 183 byte-identical to `phg run`. The other 9 differ for a separate reason, filed in
+KNOWN_ISSUES (php-wasm is PHP 8.4.1 with 32-bit ints).
+
 ### Changed — dependency refresh: lock, `cranelift` 0.136, `rustls` 0.23.45, vendored CodeMirror tree (DEC-556; 2026-09-29)
 
 Developer directive: update everything before scout row 4l-b3. Rust 1.98.1, all nine CI actions, zig 0.16.0, wasm-pack 0.15.0, nextest and every other direct crate were already the latest.
