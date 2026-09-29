@@ -29,7 +29,7 @@ command -v cargo >/dev/null 2>&1 || export PATH="/stack/tools/cargo/bin:$PATH"
 # incremental). Root cause: stale incremental units; fix: from-scratch codegen (no stale units).
 export CARGO_INCREMENTAL=0
 
-# Gate against the 8.5 transpile floor (NOT the 8.6-dev php on PATH). A missing php FAILS.
+# Gate against the 8.5 transpile floor (NOT the dev-build php on PATH). A missing php FAILS.
 # The oracle path is configured in scripts/toolchain.env (edit there when the stack php version
 # changes); resolve it via the repo root so this works whichever way the hook is invoked.
 _gate_root="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"

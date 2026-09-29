@@ -27,10 +27,13 @@ npx esbuild entry.js --bundle --format=esm --minify --legal-comments=none \
   --outfile=../codemirror.js
 ```
 
-Current bundle (rebuilt 2026-09-13, node 26.8.2, esbuild 0.28.2): `codemirror` 6.0.2 resolving
-`@codemirror/state` 6.7.4, `view` 6.43.11, `language` 6.12.4, `commands` 6.11.0, `autocomplete`
-6.20.3, `search` 6.7.2, `lint` 6.9.7, `@lezer/common` 1.5.2, `@lezer/highlight` 1.2.3, `@lezer/lr`
-1.4.10, `style-mod` 4.1.3, `crelt` 1.0.7, `w3c-keyname` 2.2.8 — `codemirror` only pins `^` ranges, so
+Current bundle (rebuilt 2026-09-29, node 26.10.0, esbuild 0.28.2): `codemirror` 6.0.2 resolving
+`@codemirror/state` 6.7.6, `view` 6.43.13, `language` 6.12.4, `commands` 6.11.1, `autocomplete`
+6.20.3, `search` 6.7.2, `lint` 6.9.7, `@lezer/common` 1.5.3, `@lezer/highlight` 1.2.5, `@lezer/lr`
+1.4.10, `style-mod` 4.1.4, `crelt` 1.0.7, `w3c-keyname` 2.2.8 (the 2026-09-13 build held state 6.7.4,
+view 6.43.11, commands 6.11.0, `@lezer/common` 1.5.2, `@lezer/highlight` 1.2.3, style-mod 4.1.3; the
+`codemirror` meta-package was already the latest 6.0.2, so only the transitive tree moved) —
+`codemirror` only pins `^` ranges, so
 the transitive tree is whatever npm resolves on the day; record it here on every rebuild.
 
 Pin the same `codemirror` version as before unless intentionally upgrading; after a rebuild, verify

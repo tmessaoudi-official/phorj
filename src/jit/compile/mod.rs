@@ -385,7 +385,7 @@ impl Compiled {
 
 impl Drop for Compiled {
     fn drop(&mut self) {
-        // `JITModule` has NO `Drop` impl (verified against cranelift-jit 0.133 `src/backend.rs`) —
+        // `JITModule` has NO `Drop` impl (verified against cranelift-jit 0.133 `src/backend.rs`; re-read and unchanged in 0.136.1, 2026-09-29) —
         // merely dropping it LEAKS the code mmap; memory is reclaimed only by the explicit
         // `free_memory`, which consumes the module by value (hence the `Option::take`).
         if let Some(module) = self.module.take() {

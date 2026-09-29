@@ -351,8 +351,8 @@ Two more notes on the same row:
 `cargo audit` (cargo-audit 0.22.2, advisory DB fetched 2026-09-29, run on `Cargo.lock` at `655282f1`) reports
 one vulnerability and one warning [Verified: `cargo audit --json` → `RUSTSEC-2023-0071`, `RUSTSEC-2025-0052`].
 The 2026-09-13 upgrade cleared two yanked-crate warnings (`chacha20` 0.10.1 → 0.10.2 under `postgres`; `mysql`
-28.0.0 → 28.0.2), and the 2026-09-29 refresh cleared the `lru` advisory (below). What is left, each gated behind
-a NON-default feature:
+28.0.0 → 28.0.2), and the 2026-09-29 refresh cleared the `lru` and `rustls` advisories (below). What is left, each
+gated behind a NON-default feature:
 
 - **RUSTSEC-2023-0071 — `rsa` 0.9.10, Marvin Attack (timing side channel on the private key).** Pulled
   in only by `lettre`'s `dkim` feature (`mail`), which `Core.Mail` uses for DKIM signing
@@ -364,6 +364,11 @@ a NON-default feature:
   moved to `lru` 0.18.x, and the lock now holds `lru` 0.18.5, above the fixed 0.18.2
   [Verified: `Cargo.lock` `lru` 0.18.5; `cargo tree -i lru` → `mysql` v28.0.3; `cargo audit` no longer lists it].
   Kept here as a record of why the `mysql` floor is 28.0.3.
+- **RESOLVED 2026-09-29 — RUSTSEC-2026-0285, `rustls` TLS 1.3 handshake messages accepted across encryption-level
+  boundaries** (advisory dated 2026-09-14; affected 0.23.13 to 0.23.44, patched 0.23.45). The refresh moved the lock
+  from `rustls` 0.23.44 to 0.23.45, and the `Cargo.toml` floor is now `0.23.45` so a fresh resolve cannot go back
+  [Verified by the panel's safety lens: `cargo audit --no-fetch` on the pre-refresh lock lists it, on the refreshed
+  lock does not]. Reached through the non-default `http-client`, `http-server-tls` and `mail` features.
 - **RUSTSEC-2025-0052 — `async-std` 1.13.2, unmaintained.** Listed in `Cargo.lock` as an optional
   `lettre` dependency that phorj does not enable; it is never compiled
   (`cargo tree --workspace --all-features --target all -i async-std` finds no path). Nothing to do

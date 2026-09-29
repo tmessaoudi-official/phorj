@@ -23,7 +23,9 @@
 | every other direct crate | latest | — | crates.io |
 | GitHub Actions (9), zig 0.16.0, wasm-pack 0.15.0, nextest 0.9.146, cargo-zigbuild 0.23.4 | latest | — | git ls-remote, crates.io, ziglang.org |
 | `vscode-languageclient` | 10.1.1 (range ^10.1.1) | 10.1.2, engines still ^1.91.0 | npm |
-| CodeMirror 6.0.2 / php-wasm 0.1.0 / esbuild 0.28.2 | latest | — | npm |
+| CodeMirror meta-package 6.0.2 / php-wasm 0.1.0 / esbuild 0.28.2 | latest | — | npm |
+| vendored CodeMirror bundle's TRANSITIVE tree (`playground/web/vendor/README.md`) | state 6.7.4, view 6.43.11, commands 6.11.0, `@lezer/common` 1.5.2, `@lezer/highlight` 1.2.3, style-mod 4.1.3 | 6.7.6, 6.43.13, 6.11.1, 1.5.3, 1.2.5, 4.1.4 — missed by the first inventory (panel round 1), rebuilt | npm |
+| `rustls` floor | 0.23 (locked 0.23.44 before the refresh) | 0.23.45 fixes RUSTSEC-2026-0285 (panel round 1), floor raised | crates.io, RustSec |
 | PHP oracle | php-8.5.11 (bcmath present), resolved by `scripts/toolchain.env` | — | probe |
 | `cargo-audit` | NOT installed (the stack wipe removed it) | 0.22.2 | crates.io |
 
@@ -40,14 +42,20 @@ Two commits, then ONE full gate on the frozen final tree, then one push.
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Inventory and oracle probe (php-8.5.11 resolves, bcmath present) | S | done | - | docs/plans/2026-09-29-dependency-refresh.plan.md |
-| 2 | Commit A - lock refresh, mysql and webpki-roots floors, VS Code client 10.1.2 | M | done | 26dfd3f5 | Cargo.toml Cargo.lock editors/vscode/package.json editors/vscode/package-lock.json |
-| 3 | Commit B - cranelift 0.136.1 x3, JIT suite and three-leg differential | L | done | 655282f1 | Cargo.toml Cargo.lock src/jit/** |
-| 4 | Stale-version sweep - CLAUDE.md oracle note, docs, CI PHP canary (still valid: no PHP 8.6 release) | S | done | - | CLAUDE.md docs/** .github/workflows/ci.yml |
-| 5 | cargo-audit on the final lockfile (lru advisory cleared, 2 remain) | S | done | - | KNOWN_ISSUES.md |
-| 6 | Full gate on the frozen tree, panel, push, ci-watch | M | todo | - | - |
+| 2 | Commit A — `chore(deps): compatible lock refresh (49 packages)`, mysql and webpki-roots floors, VS Code client floor ^10.1.2 (manifest only; the gitignored lock and node_modules were installed in the round-1 fix) | M | done | 26dfd3f5 | Cargo.toml Cargo.lock editors/vscode/package.json |
+| 3 | Commit B — `chore(deps): cranelift, cranelift-jit, cranelift-module 0.135 to 0.136.1`; the pre-commit tier ran TWO legs (interpreter and VM, `PHORJ_SKIP_PHP=1`), the PHP leg belongs to the pre-push gate | L | done | 655282f1 | Cargo.toml Cargo.lock |
+| 4 | Stale-version sweep — `docs(deps): 2026-09-29 refresh bookkeeping`, CLAUDE.md oracle note, CI PHP canary still valid (no PHP 8.6 release) | S | done | 49e5f16f | CLAUDE.md KNOWN_ISSUES.md docs/plans/SLICE-STATE.md |
+| 5 | cargo-audit on the final lockfile — `docs(deps): 2026-09-29 refresh bookkeeping`, lru advisory cleared, 2 remain | S | done | 49e5f16f | KNOWN_ISSUES.md |
+| 7 | Panel round 1 fixes (3 lenses, 14 findings, frozen at `docs(deps): 2026-09-29 refresh bookkeeping`): rustls floor 0.23.45 + RUSTSEC-2026-0285 recorded, vendored CodeMirror tree rebuilt (before/after screenshots), VS Code client installed, CHANGELOG + DEC-556 + MASTER-PLAN rows, stale php notes, PIC/GOT disclosure, corrected certification claims | M | done | - | Cargo.toml KNOWN_ISSUES.md CHANGELOG.md playground/web/vendor/* docs/plans/* scripts/* src/jit/compile/mod.rs |
+| 6 | Full gate on the frozen tree, panel round 2, push, ci-watch | M | todo | - | - |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
 ### Needs research
 ### Fragile
 ### Known issues
+- **cranelift-jit 0.136 changes the x86_64 JIT codegen model** (panel round 1, correctness F1 and completeness F8). `JITBuilder::new` / `with_flags` (`src/jit/compile/mod.rs:52`, `:212`) now force `is_pic=true`: every `Linkage::Import` helper call loads its address through a per-blob GOT entry instead of an absolute address. Commit B's message said "no Cranelift API change we use"; that sentence was carried from the 2026-09-13 plan and NOT verified — it is wrong. Not a proven miscompile (the helpers compute the same values; the JIT unit tests route every boxed operation through an `rt_*` helper, so they exercise the GOT path), but it is certified only by the pre-push gate's JIT suite and differential, never by a measurement. NO perf claim; a quiet-box before/after stays OWED.
+- **What commit A and B actually ran.** The pre-commit tier is `--features jit` with `PHORJ_SKIP_PHP=1`: 3518 tests, interpreter and VM legs only. The PHP leg, the `--all-features` build and the `PHORJ_REQUIRE_PHP=1` regex corpus (`tests/lift_preg.rs`, the engine tests) ran only in the pre-push gate. No regex crate moved in commit A.
+- **`wasm-bindgen` 0.2.129 / `js-sys` / `web-sys` 0.3.106 are wasm32-only.** A native `cargo check` never compiles them, so `cargo check -p phorj-playground --target wasm32-unknown-unknown` was run in the round-1 fix: it finished clean (1 min 8 s, exit 0) [Verified 2026-09-29]. The wasm-pack build and the live Pages deploy remain CI's.
+- **The playground pane shows "execution crashed" locally** (before and after the CodeMirror rebuild, identical): `playground/web/pkg/` (wasm-pack output) is absent on this box, so only the editor mount was verifiable here.
+- **microbench comparator.** `docker image inspect php:8.5-cli` finds no image on this box; the pre-push microbench gate compares only against `_baseline_php` (recorded on PHP 8.5.10, `sha256:9ebdf4c2…`) and will pull the moved tag. Pre-existing gate behaviour, not a pin to bump.

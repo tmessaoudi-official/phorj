@@ -156,7 +156,7 @@ unicode-segmentation = { version = "1", optional = true }
 # shared and unchanged by the second consumer: rustls 0.23 compiles both roles unconditionally, so
 # the server side needed no additional feature and no additional crate (no PEM crate either — the
 # decoder is 40 lines in `src/serve/tls.rs`).
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
 webpki-roots = { version = "1.0.9", optional = true }
 # FOURTH external dependency (Amanieu d'Antras — author of hashbrown/parking_lot, in the Rust nursery;
 # stackful coroutines with miri-tested context switching). Powers green-thread task suspension (M6 W4):

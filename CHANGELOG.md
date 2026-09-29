@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — dependency refresh: lock, `cranelift` 0.136, `rustls` 0.23.45, vendored CodeMirror tree (DEC-556; 2026-09-29)
+
+Developer directive: update everything before scout row 4l-b3. Rust 1.98.1, all nine CI actions, zig 0.16.0, wasm-pack 0.15.0, nextest and every other direct crate were already the latest.
+
+- **`Cargo.lock`: 49 compatible bumps** — `mysql` 28.0.3 (moves `lru` 0.16.4 to 0.18.5 and **clears RUSTSEC-2026-0253**), `rustls` 0.23.45 (**fixes RUSTSEC-2026-0285**, TLS 1.3 handshake messages accepted across encryption-level boundaries; the `rustls` floor is now 0.23.45), `wasm-bindgen` 0.2.129, `pem` 4, `synstructure` 0.14. Floors raised: `mysql` 28.0.3, `webpki-roots` 1.0.9, `rustls` 0.23.45; VS Code client `^10.1.2`.
+- **`cranelift`, `cranelift-jit`, `cranelift-module` 0.135 to 0.136.1** (own commit, no source change). **The x86_64 JIT's code model changed:** `cranelift-jit` 0.136 forces `is_pic=true` in `JITBuilder::new` / `with_flags`, so helper calls load their address through a per-blob GOT entry. Certified only by the pre-push gate's JIT suite and differential; **no perf claim** (a quiet-box before/after stays OWED).
+- **Playground:** the vendored CodeMirror bundle was rebuilt so its transitive tree is current (`@codemirror/state` 6.7.6, `view` 6.43.13, `commands` 6.11.1, `@lezer/common` 1.5.3, `@lezer/highlight` 1.2.5, style-mod 4.1.4); the editor mounts identically (1 editor, 13 lines, 255 characters; before/after screenshots identical).
+- `cargo audit` on the refreshed lock: RUSTSEC-2023-0071 (`rsa`, no fix) and RUSTSEC-2025-0052 (`async-std`, never compiled) remain — `KNOWN_ISSUES.md` DEP-ADVISORIES. Edition 2024 stays its own slice.
+
 ### Added — `phg lift`: a `preg_match` captures array lifts onto `Regex.first` (scout row 4l-b2, DEC-554; 2026-09-27)
 
 `preg_match($p, $s, $m)` compared with `0` / `1` hoists `RegexMatch? m = Regex.first(…)` in front of its statement and becomes `m is null` in place; flow narrowing then types `m` as a `RegexMatch` wherever PHP reads the array. `$m[0]` → `m.full()`, `$m[k]` → `m.at(k) ?? ""`, `$m['name']` → `m.group("name") ?? ""`. The hoist fires only where the comparison is the statement's first evaluated test (an `if` condition, a `return`, an assignment's value); anywhere else is refused by name, because the subject would be read earlier than PHP reads it. A `??` fallback other than `''` and `isset` lift only on the pattern's last group (PHP sets a middle group that sat out to `""` and unsets a trailing one); any other use of `$m` is refused. A second site on the same array assigns rather than redeclares. `tests/lift_preg_captures.rs` certifies four statement shapes against real PCRE on all three legs and shows the last-group refusal guards a real difference. **Fixed (row 4l-a):** a named group whose name contains `i`, `m` or `x` (`(?<kind>`) was read as inline flags and refused; a group name is now copied verbatim. `preg_match_all` and `PREG_OFFSET_CAPTURE` are row 4l-b3. Example: `examples/lift/preg.{php,phg}`.
