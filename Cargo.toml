@@ -157,7 +157,7 @@ unicode-segmentation = { version = "1", optional = true }
 # the server side needed no additional feature and no additional crate (no PEM crate either — the
 # decoder is 40 lines in `src/serve/tls.rs`).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
-webpki-roots = { version = "1.0.8", optional = true }
+webpki-roots = { version = "1.0.9", optional = true }
 # FOURTH external dependency (Amanieu d'Antras — author of hashbrown/parking_lot, in the Rust nursery;
 # stackful coroutines with miri-tested context switching). Powers green-thread task suspension (M6 W4):
 # each `spawn`ned task runs on its own stack and yields at `recv`/`join`/`yield`. std has no
@@ -194,7 +194,7 @@ postgres = { version = "0.19", optional = true }
 # protocol, no system libmysqlclient, no TLS/compression/chrono extras pulled. Its `unsafe` stays
 # internal to the dependency (the rusqlite/postgres criterion) — phorj's own crate stays unsafe-free.
 # Feature-gated (`database-mysql`), non-default, non-wasm, spine-quarantined like every DB driver.
-mysql = { version = "28.0.2", default-features = false, features = ["minimal-rust"], optional = true }
+mysql = { version = "28.0.3", default-features = false, features = ["minimal-rust"], optional = true }
 
 # SEVENTH external-dependency domain (native codegen, developer-authorized 2026-07-06). Cranelift
 # (Bytecode Alliance — the wasmtime code generator, fuzzed + production-hardened) is the JIT backend
