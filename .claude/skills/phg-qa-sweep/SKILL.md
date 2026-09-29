@@ -143,6 +143,8 @@ found twice is reported once.
 
 ## Subagent models
 
+**Model ask (policy v2, every run):** before the first Agent call of a run, ask ONE `AskUserQuestion` that shows the whole table below and pre-selects its models (for reviewers, the `reviewer-model` file value; a stored value is only ever the pre-selected option, never a silent answer). Pass `model:` on every Agent call, set to the answer. No mode skips the ask.
+
 Set by the model-assignment audit (decision D5, 2026-09-29; source table `projects/-home-developer-.claude/model-audit/classified-all.tsv`). **Pass `model:` on every Agent call** — an omitted model inherits the session, so quality and cost would follow the `/model` choice. `opus` = judgment work, `sonnet` = detection and mapping (rubric ruled 2026-09-29).
 
 | Agent | model | why |
