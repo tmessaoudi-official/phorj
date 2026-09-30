@@ -8,6 +8,21 @@
 //! accepts one only where the existence answer cannot depend on that: an unbounded run whose two ends
 //! must fall on character boundaries, or a lone atom with nothing anchoring it on either side.
 
+/// What the scan learned about the pattern beyond its translation — the facts a caller that reads
+/// MATCHES, not just whether one exists, must check before trusting it.
+pub(super) struct Facts {
+    /// Every top-level alternative contains an element that consumes at least one character, so no
+    /// match can be empty. `false` means only that this scan cannot PROVE it (a group or a look-around
+    /// may be the only thing in an alternative).
+    pub(super) nonempty: bool,
+    /// The pattern has a `.` or a negated class and no `u`: PCRE takes one BYTE there, phorj one
+    /// character. A pattern without one reads the same ASCII either way.
+    pub(super) byte_atom: bool,
+    /// PHP's `$` / `\Z` was rewritten to the consuming `\n?\z` (or its look-ahead form): exact for an
+    /// existence test, but a match's text and the next match's start see the final newline eaten.
+    pub(super) dollar_rewritten: bool,
+}
+
 /// What the scan needs from the modifiers.
 pub(super) struct Opts {
     pub(super) unicode: bool,
@@ -61,10 +76,11 @@ struct Scan<'a> {
     depth: usize,
     alts: Vec<Vec<Elem>>,
     lookahead: bool,
+    dollar_rewritten: bool,
 }
 
-/// Scan `body`; `Ok((pattern, needs_lookahead))`, or the reason (without the pattern prefix).
-pub(super) fn scan(body: &str, o: &Opts) -> Result<(String, bool), String> {
+/// Scan `body`; `Ok((pattern, needs_lookahead, facts))`, or the reason (without the pattern prefix).
+pub(super) fn scan(body: &str, o: &Opts) -> Result<(String, bool, Facts), String> {
     let mut s = Scan {
         c: body.chars().collect(),
         i: 0,
@@ -73,6 +89,7 @@ pub(super) fn scan(body: &str, o: &Opts) -> Result<(String, bool), String> {
         depth: 0,
         alts: vec![Vec::new()],
         lookahead: false,
+        dollar_rewritten: false,
     };
     while s.i < s.c.len() {
         s.step()?;
@@ -82,7 +99,17 @@ pub(super) fn scan(body: &str, o: &Opts) -> Result<(String, bool), String> {
             byte_runs_ok(alt)?;
         }
     }
-    Ok((s.out, s.lookahead))
+    let nonempty = s.alts.iter().all(|alt| {
+        alt.iter()
+            .any(|e| matches!(e.kind, Kind::Ascii | Kind::Byte) && e.min1)
+    });
+    let byte_atom = s.alts.iter().flatten().any(|e| e.kind == Kind::Byte);
+    let facts = Facts {
+        nonempty,
+        byte_atom,
+        dollar_rewritten: s.dollar_rewritten,
+    };
+    Ok((s.out, s.lookahead, facts))
 }
 
 impl Scan<'_> {
@@ -148,6 +175,7 @@ impl Scan<'_> {
         if matches!(self.peek(0), Some('*' | '+' | '?' | '{')) {
             return Err("a quantified `$` has no faithful form".into());
         }
+        self.dollar_rewritten = true;
         if self.depth == 0 && matches!(self.peek(0), None | Some('|')) {
             self.out.push_str(r"\n?\z");
         } else {

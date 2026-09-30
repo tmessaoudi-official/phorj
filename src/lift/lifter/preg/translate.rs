@@ -15,6 +15,12 @@ use crate::ext::regex::reject::linear_unsupported;
 pub(in crate::lift) struct Translated {
     pub(in crate::lift) pattern: String,
     pub(in crate::lift) backtracking: bool,
+    /// See [`super::scan::Facts`]: a `.` or negated class that PCRE reads per byte.
+    pub(in crate::lift) byte_atom: bool,
+    /// See [`super::scan::Facts`]: no match can be empty.
+    pub(in crate::lift) nonempty: bool,
+    /// See [`super::scan::Facts`]: `$` / `\Z` became a consuming `\n?\z`.
+    pub(in crate::lift) dollar_rewritten: bool,
 }
 
 /// Translate a PHP `preg_match` pattern literal (delimiters and modifiers included).
@@ -61,7 +67,7 @@ pub(in crate::lift) fn translate(literal: &str) -> Result<Translated, String> {
         dollar_end,
         delim,
     };
-    let (core, lookahead) = scan(body, &o).map_err(|w| fail(&w))?;
+    let (core, lookahead, facts) = scan(body, &o).map_err(|w| fail(&w))?;
     let pattern = if flags.is_empty() {
         core
     } else {
@@ -77,6 +83,9 @@ pub(in crate::lift) fn translate(literal: &str) -> Result<Translated, String> {
     Ok(Translated {
         pattern,
         backtracking,
+        byte_atom: facts.byte_atom,
+        nonempty: facts.nonempty,
+        dollar_rewritten: facts.dollar_rewritten,
     })
 }
 

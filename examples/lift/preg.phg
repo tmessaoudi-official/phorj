@@ -32,14 +32,14 @@ class Sku {
         if (m.length() < 1) {
             return new List<string>();
         }
-        return m.map(function(RegexMatch r): string => r.at(1) ?? "");
+        return m.map(function(RegexMatch regexMatch): string => regexMatch.at(1) ?? "");
     }
     public static function firstOffset(string s): int {
         mutable List<RegexMatch> m = Regex.all(Regex.compile("rdc"), s);
         if (m.length() < 1) {
             return -1;
         }
-        for ((text, at) in m.map(function(RegexMatch r) => (r.full(), r.start()))) {
+        for ((text, at) in m.map(function(RegexMatch regexMatch) => (regexMatch.full(), regexMatch.start()))) {
             return at;
         }
         return -1;

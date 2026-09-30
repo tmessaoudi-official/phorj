@@ -55,7 +55,7 @@ fn run_php(php: &str, src: &str, label: &str) -> String {
 const PROGRAM: &str = r#"<?php
 function cols(string $s): string
 {
-    if (preg_match_all('/([a-z])(-)?([0-9])?/u', $s, $m) === 0) {
+    if (preg_match_all('/[a-z](-)?([0-9])?/u', $s, $m) === 0) {
         return 'none';
     }
     $out = '';
@@ -63,11 +63,11 @@ function cols(string $s): string
         $out = $out . $x . ';';
     }
     $out = $out . '|';
-    foreach ($m[2] as $x) {
+    foreach ($m[1] as $x) {
         $out = $out . '[' . $x . ']';
     }
     $out = $out . '|';
-    foreach ($m[3] as $x) {
+    foreach ($m[2] as $x) {
         $out = $out . '[' . $x . ']';
     }
     return $out;
@@ -112,4 +112,28 @@ fn lifted_columns_answer_as_pcre_does() {
         expected,
         "transpiled back ≠ PCRE"
     );
+}
+
+/// The three refusals each guard a REAL difference: PHP's answer is shown here, and the lifter refuses
+/// the same program by name instead of lifting an answer that differs (empty matches: PHP counts 6;
+/// no `u`: PHP counts 2 bytes for `é`; a trailing `$`: PHP's match stops before the final newline).
+#[test]
+fn the_refused_shapes_really_differ_from_pcre() {
+    let Some(php) = php_or_gate("the_refused_shapes_really_differ_from_pcre") else {
+        return;
+    };
+    let cases = [
+        ("/\\d*/u", "a1b22c", "6", "may match the empty string"),
+        ("/./", "é", "2", "without the `u` modifier"),
+        ("/[a-z]+$/u", "hello world\n", "1", "`$`"),
+    ];
+    for (i, (pat, subject, count, why)) in cases.iter().enumerate() {
+        let src = format!(
+            "<?php\nfunction f(string $s): int {{\n    return preg_match_all('{pat}', $s, $m);\n}}\necho f(\"{}\");\n",
+            subject.replace('\n', "\\n")
+        );
+        let err = lift::lifter::lift_source(&src).expect_err("must be refused");
+        assert!(err.contains(why), "{pat}: want `{why}` in: {err}");
+        assert_eq!(run_php(&php, &src, &format!("refused{i}")), *count, "{pat}");
+    }
 }

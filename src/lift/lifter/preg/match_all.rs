@@ -24,6 +24,10 @@ use super::*;
 use crate::ext::regex::engine::{compiled, Engine};
 use std::collections::HashMap;
 
+/// The lambda parameter of a column read: a name a PHP function of the same file will not take
+/// (a local that shadows a function is `E-SHADOW-FN`).
+const PARAM: &str = "regexMatch";
+
 /// A variable name no PHP source can spell: the placeholder the rewritten count test reads.
 const MARK: &str = "\u{0}matches:";
 
@@ -57,9 +61,17 @@ pub(in crate::lift) fn reset() {
     VARS.with(|v| v.borrow_mut().clear());
 }
 
-/// Stop treating `var` as a matches variable (a `preg_match` captures site took it over).
-pub(super) fn forget(var: &str) {
-    VARS.with(|v| v.borrow_mut().remove(var));
+/// Does `var` already hold matches?
+pub(super) fn holds(var: &str) -> bool {
+    info_of(var).is_some()
+}
+
+/// Why one variable cannot hold both a `preg_match` captures value and `preg_match_all` matches.
+pub(super) fn shared(var: &str) -> String {
+    format!(
+        "lift: `${var}` receives both a `preg_match` captures array and `preg_match_all` matches — \
+         they lift to different types (`RegexMatch?` and `List<RegexMatch>`); use two variables (DEC-554)"
+    )
 }
 
 fn info_of(name: &str) -> Option<Option<Info>> {
@@ -219,8 +231,45 @@ pub(in crate::lift) fn hoist(
     )
 }
 
+/// `translate` promises the same EXISTENCE answer; `preg_match_all` reads EVERY match, so the pattern
+/// must also agree with PCRE on where each match starts and ends. Three things make it differ, and each
+/// is refused by name rather than lifted (DEC-554; Invariant 14):
+/// an empty match (PCRE retries at the same position, phorj's engine steps past it), a byte atom
+/// in a pattern without `u` (PCRE takes one BYTE, phorj one character), and a rewritten `$` (the consuming
+/// `\n?\z` eats the final newline a match must stop before).
+fn all_matches_faithful(t: &translate::Translated) -> Result<(), String> {
+    if t.byte_atom {
+        return Err(
+            "lift: `preg_match_all` has a `.` or a negated class without the `u` modifier — PCRE matches one BYTE \
+                    per `.` or negated class and phorj one character, so the matches (and their \
+                    offsets) differ; add `u` to the PHP pattern if the subject is text (DEC-554)"
+                .into(),
+        );
+    }
+    if t.dollar_rewritten {
+        return Err(
+            "lift: `preg_match_all` with a `$` or `\\Z` — PHP's `$` is zero-width before a final \
+                    newline, and the lifted `\\n?\\z` consumes it, so a match's text and the next \
+                    match differ; use `\\z` or the `D` modifier where the subject has no final \
+                    newline (DEC-554)"
+                .into(),
+        );
+    }
+    if !t.nonempty {
+        return Err(
+            "lift: `preg_match_all` with a pattern that may match the empty string — PCRE \
+                    reports the empty match and retries at the same position, phorj's engine skips \
+                    it, so the COUNT differs (`/\\d*/` on `a1b22c`: 6 in PHP, 4 lifted); give the \
+                    pattern a part every match must consume, outside any group (DEC-554)"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
 fn declare(site: Site, declared: &mut std::collections::HashSet<String>) -> Result<Stmt, String> {
     let t = translate(&pattern_text(&site.pat)?)?;
+    all_matches_faithful(&t)?;
     let engine = if t.backtracking {
         Engine::Backtracking
     } else {
@@ -233,7 +282,9 @@ fn declare(site: Site, declared: &mut std::collections::HashSet<String>) -> Resu
         names,
         offset: site.offset,
     };
-    super::captures::forget(&site.var);
+    if super::captures::holds(&site.var) {
+        return Err(shared(&site.var));
+    }
     VARS.with(|v| {
         let mut v = v.borrow_mut();
         let entry = v.entry(site.var.clone()).or_insert(Some(info.clone()));
@@ -332,7 +383,7 @@ fn column(var: &str, index: &php::PhpExpr) -> Result<Expr, String> {
             ))
         }
     };
-    let r = || Expr::Ident("r".to_string(), SP);
+    let r = || Expr::Ident(PARAM.to_string(), SP);
     let int = |n: i64| Expr::Int(n, SP);
     let text = if k == 0 {
         method(r(), "full", Vec::new())
@@ -382,7 +433,7 @@ fn column(var: &str, index: &php::PhpExpr) -> Result<Expr, String> {
     let lambda = Expr::Lambda {
         params: vec![crate::ast::Param {
             ty: named("RegexMatch"),
-            name: "r".to_string(),
+            name: PARAM.to_string(),
             default: None,
             variadic: false,
             span: SP,

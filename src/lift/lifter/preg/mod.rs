@@ -7,8 +7,9 @@
 //!
 //! PHP returns `false` on a PCRE error, which `=== 1` reads as "no match"; phorj faults instead. phorj
 //! strings are valid UTF-8, so only the backtracking step budget can raise it — a louder failure, not
-//! a silent one. A captures array (`preg_match($p, $s, $m)`) is row 4l-b2, in [`captures`]; every
-//! other `preg_*` shape (`preg_match_all`, `preg_replace`, …) is rows 4l-b3 and 4l-c.
+//! a silent one. A captures array (`preg_match($p, $s, $m)`) is row 4l-b2, in [`captures`];
+//! `preg_match_all` is row 4l-b3, in [`match_all`]; every other `preg_*` shape (`preg_replace`,
+//! `preg_split`, …) is row 4l-c.
 
 use super::*;
 use std::collections::HashMap;
@@ -231,7 +232,7 @@ fn fold(e: &php::PhpExpr) -> Result<Folded, String> {
     }
 }
 
-const DYNAMIC: &str = "lift: `preg_match` needs a pattern known at lift time — a literal, a constant \
+const DYNAMIC: &str = "lift: a `preg_*` call needs a pattern known at lift time — a literal, a constant \
                        of this class, or `.` / `+` / `-` / `*` over them; a pattern built at run time \
                        is not translated (DEC-540)";
 

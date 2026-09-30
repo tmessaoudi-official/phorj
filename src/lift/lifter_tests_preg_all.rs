@@ -45,7 +45,7 @@ final class H {
     );
     assert!(out.contains("if (m.length() < 1)"), "{out}");
     assert!(
-        out.contains("r.startOf(0)") || out.contains("r.start()"),
+        out.contains("(regexMatch.full(), regexMatch.start())"),
         "{out}"
     );
 }
@@ -92,8 +92,8 @@ function locs(string $xml): array {
     return [$m[1], $m['u']];
 }"#,
     );
-    assert!(out.contains(r#"r.at(1) ?? """#), "{out}");
-    assert!(out.contains(r#"r.group("u") ?? """#), "{out}");
+    assert!(out.contains(r#"regexMatch.at(1) ?? """#), "{out}");
+    assert!(out.contains(r#"regexMatch.group("u") ?? """#), "{out}");
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn any_other_use_of_the_array_is_refused() {
     refused(
         r#"<?php
 function f(string $s): int {
-    preg_match_all('/(a)/u', $s, $m);
+    preg_match_all('/x(a)/u', $s, $m);
     return count($m);
 }"#,
         "holds `preg_match_all` matches",
@@ -162,12 +162,77 @@ function f(string $s): int {
 fn a_group_past_the_last_and_a_computed_index_are_refused() {
     refused(
         r#"<?php
-function f(string $s): array { preg_match_all('/(a)/u', $s, $m); return $m[2]; }"#,
-        "group",
+function f(string $s): array { preg_match_all('/x(a)/u', $s, $m); return $m[2]; }"#,
+        "no such column",
     );
     refused(
         r#"<?php
-function f(string $s, int $i): array { preg_match_all('/(a)/u', $s, $m); return $m[$i]; }"#,
+function f(string $s, int $i): array { preg_match_all('/x(a)/u', $s, $m); return $m[$i]; }"#,
         "literal group number or name",
     );
+}
+
+/// `translate` promises the same EXISTENCE answer; every match needs more (see `match_all.rs`).
+#[test]
+fn a_pattern_whose_matches_could_differ_is_refused_by_name() {
+    let call = |pat: &str| {
+        format!("<?php\nfunction f(string $s): int {{ return preg_match_all('{pat}', $s, $m); }}")
+    };
+    refused(&call("/\\d*/u"), "may match the empty string");
+    refused(&call("/(a)|b*/u"), "may match the empty string");
+    refused(&call("/(?=a)|a/u"), "may match the empty string");
+    refused(&call("/./"), "without the `u` modifier");
+    refused(&call("/[^ ]/"), "without the `u` modifier");
+    refused(&call("/a$/u"), "`$`");
+    refused(&call("/a\\Z/u"), "`$`");
+}
+
+/// A pattern with a guaranteed-consuming part, a `\z` anchor or the `D` modifier still lifts.
+#[test]
+fn consuming_patterns_with_z_or_d_still_lift() {
+    for pat in [
+        "/chauffage/",
+        "/a+/u",
+        "/x(a)?/u",
+        "/[a-z]+\\z/u",
+        "/[a-z]+$/uD",
+        "/(?<![a-z])rdc(?![a-z])/u",
+    ] {
+        lift(&format!(
+            "<?php\nfunction f(string $s): int {{ return preg_match_all('{pat}', $s, $m); }}"
+        ));
+    }
+}
+
+/// One `$m` for both a captures `preg_match` and a `preg_match_all` would be two types in one variable.
+#[test]
+fn one_variable_for_captures_and_matches_is_refused_by_name() {
+    refused(
+        r#"<?php
+function f(string $s): int {
+    preg_match_all('/x(a)/u', $s, $m);
+    if (preg_match('/x(b)/u', $s, $m) === 1) { return 1; }
+    return 0;
+}"#,
+        "receives both",
+    );
+    refused(
+        r#"<?php
+function f(string $s): int {
+    if (preg_match('/x(b)/u', $s, $m) === 1) { return 1; }
+    preg_match_all('/x(a)/u', $s, $m);
+    return 0;
+}"#,
+        "receives both",
+    );
+}
+
+/// A run-time pattern names `preg_*`, not the one function the message used to hard-code.
+#[test]
+fn the_dynamic_pattern_refusal_does_not_name_preg_match() {
+    let err = lift_source(
+        "<?php\nfunction f(string $p, string $s): int { return preg_match_all($p, $s, $m); }",
+    )
+    .expect_err("refused");
+    assert!(err.contains("a `preg_*` call needs a pattern"), "{err}");
 }
