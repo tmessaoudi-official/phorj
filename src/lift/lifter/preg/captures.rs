@@ -48,6 +48,11 @@ pub(in crate::lift) fn reset() {
     VARS.with(|v| v.borrow_mut().clear());
 }
 
+/// Stop treating `var` as a captures variable (a `preg_match_all` site took it over).
+pub(super) fn forget(var: &str) {
+    VARS.with(|v| v.borrow_mut().remove(var));
+}
+
 fn groups_of(name: &str) -> Option<Option<Vec<String>>> {
     VARS.with(|v| v.borrow().get(name).cloned())
 }
@@ -152,6 +157,7 @@ fn declare(site: Site, declared: &mut std::collections::HashSet<String>) -> Resu
     let names = compiled(&t.pattern, engine)
         .map_err(|e| format!("lift: `preg_match` pattern: {e}"))?
         .group_names();
+    super::match_all::forget(&site.var);
     VARS.with(|v| {
         let mut v = v.borrow_mut();
         let entry = v.entry(site.var.clone()).or_insert(Some(names.clone()));
@@ -370,7 +376,7 @@ fn call_at(var: &str, k: usize) -> Expr {
     )
 }
 
-fn method(recv: Expr, name: &str, args: Vec<Expr>) -> Expr {
+pub(super) fn method(recv: Expr, name: &str, args: Vec<Expr>) -> Expr {
     Expr::Call {
         callee: Box::new(Expr::Member {
             object: Box::new(recv),

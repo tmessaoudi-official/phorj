@@ -6,6 +6,8 @@
 // meaning would change (a `.` counting bytes, `i` without `u`, `\b` without `u`, the `m` modifier)
 // is refused by name. A third argument (`$m`, the captures array) lifts onto a typed
 // `Regex.first` hoisted in front of the statement (row 4l-b2, DEC-554): `$m[k]` reads `m.at(k)`.
+// `preg_match_all` lifts onto a hoisted `Regex.all` (row 4l-b3): the count is `m.length()` and `$m[k]` is
+// the COLUMN of group k across every match; with PREG_OFFSET_CAPTURE each cell is (text, BYTE offset).
 // Run `phg lift preg.php` to see the draft (preg.phg).
 
 final class Sku {
@@ -26,6 +28,24 @@ final class Sku {
         }
         return $m['prefix'] . '/' . $m[2];
     }
+
+    /** @return list<string> */
+    public static function digits(string $s): array {
+        if (preg_match_all('/[A-Z]{3}-(\d{4})/u', $s, $m) < 1) {
+            return [];
+        }
+        return $m[1];
+    }
+
+    public static function firstOffset(string $s): int {
+        if (preg_match_all('/rdc/u', $s, $m, PREG_OFFSET_CAPTURE) < 1) {
+            return -1;
+        }
+        foreach ($m[0] as [$text, $at]) {
+            return $at;
+        }
+        return -1;
+    }
 }
 
 foreach (['ABC-1234', "ABC-1234\n", 'ABC-12345', 'abc-1234'] as $s) {
@@ -34,3 +54,5 @@ foreach (['ABC-1234', "ABC-1234\n", 'ABC-12345', 'abc-1234'] as $s) {
 echo "\n";
 echo Sku::mentionsRdc('au rdc') ? 'rdc' : 'no', ' ', Sku::mentionsRdc('ardcx') ? 'rdc' : 'no', "\n";
 echo Sku::number('ABC-1234'), ' ', Sku::number('abc'), "\n";
+echo implode(',', Sku::digits('ABC-1234 x DEF-5678')), ' ', count(Sku::digits('none')), "\n";
+echo Sku::firstOffset('é rdc'), ' ', Sku::firstOffset('none'), "\n";

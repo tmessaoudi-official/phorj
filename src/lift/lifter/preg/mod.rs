@@ -14,21 +14,46 @@ use super::*;
 use std::collections::HashMap;
 
 mod captures;
+mod match_all;
 mod scan;
 #[cfg(test)]
 mod tests;
 mod translate;
 
-pub(in crate::lift) use captures::{hoist, reset as reset_captures, restore as restore_captures};
-pub(in crate::lift) use captures::{snapshot as snapshot_captures, Snapshot as CapturesScope};
 pub(in crate::lift) use translate::translate;
 
+/// Both registries of the `preg_*` lift, saved and restored together around a closure body.
+pub(in crate::lift) type CapturesScope = (captures::Snapshot, match_all::Snapshot);
+
+pub(in crate::lift) fn snapshot_captures() -> CapturesScope {
+    (captures::snapshot(), match_all::snapshot())
+}
+
+pub(in crate::lift) fn restore_captures(s: CapturesScope) {
+    captures::restore(s.0);
+    match_all::restore(s.1);
+}
+
+/// A function body starts with no captures or matches variables.
+pub(in crate::lift) fn reset_captures() {
+    captures::reset();
+    match_all::reset();
+}
+
+/// A statement whose first test is a `preg_match_all` (row 4l-b3) or a captures `preg_match`
+/// (row 4l-b2): the statement with that test replaced, and the declaration to put in front of it.
+pub(in crate::lift) fn hoist(
+    s: &php::PhpStmt,
+    declared: &mut std::collections::HashSet<String>,
+) -> Option<Result<(Stmt, php::PhpStmt), String>> {
+    match_all::hoist(s, declared).or_else(|| captures::hoist(s, declared))
+}
 /// Does this expression belong to the `preg_*` lift — an existence test (row 4l-a) or a captures
 /// read (row 4l-b2)?
 pub(super) fn owns(e: &php::PhpExpr) -> bool {
     match e {
         php::PhpExpr::Binary { op, left, right } if is_match_test(*op, left, right) => true,
-        _ => captures::owns(e),
+        _ => captures::owns(e) || match_all::owns(e),
     }
 }
 
@@ -38,6 +63,7 @@ pub(super) fn lift(e: &php::PhpExpr) -> Result<Expr, String> {
         php::PhpExpr::Binary { op, left, right } if is_match_test(*op, left, right) => {
             lift_match_test(*op, left, right)
         }
+        _ if match_all::owns(e) => match_all::lift(e),
         _ => captures::lift(e),
     }
 }

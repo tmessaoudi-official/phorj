@@ -604,6 +604,15 @@ pattern's LAST group — PHP sets a middle group that sat out to `""` but unsets
 `at(k)` answers null for both. Any other use of `$m` (`count($m)`, `$m[$i]`) is refused.
 `tests/lift_preg_captures.rs` runs the original and the lift under PHP and on both phorj backends.
 
+`preg_match_all` (scout row 4l-b3, DEC-554) lifts the same way onto a hoisted `List<RegexMatch> m = Regex.all(…)`:
+the count (`< 1`, `=== 0`, an assignment's value, or a bare statement) becomes `m.length()`, and `$m[k]` — PHP's
+PATTERN_ORDER COLUMN of group `k` across every match — becomes `m.map(r => r.at(k) ?? "")` (`""` is what PHP
+fills for a group that sat out, in every position). With `PREG_OFFSET_CAPTURE` each cell is `(text, byte
+offset)` — `-1` for a group that sat out — and the offset is in BYTES, so `firstOffset('é rdc')` is 3, not 2.
+`PREG_SET_ORDER` and `PREG_UNMATCHED_AS_NULL` are refused by name, as is a pattern built at run time, a call
+that is not the statement's first test, and any other use of `$m`. `tests/lift_preg_all.rs` runs the original
+and the lift under PHP and on both phorj backends.
+
 ## Map union — `map-union.php` / `map-union.phg` (scout row 5q, DEC-534, 2026-09-25)
 
 PHP spells array union and addition with one operator. The lifter has no types, so it rewrites `$a + $b`

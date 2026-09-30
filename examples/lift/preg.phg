@@ -4,7 +4,9 @@ package Main;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 import Core.Output;
+import Core.List;
 import Core.Regex;
+import Core.String;
 
 class Sku {
     private const string CODE = "/^[A-Z]\{3\}-\\d\{4\}$/";
@@ -25,6 +27,23 @@ class Sku {
         }
         return "{m.group(\"prefix\") ?? \"\"}/{m.at(2) ?? \"\"}";
     }
+    public static function digits(string s): List<string> {
+        mutable List<RegexMatch> m = Regex.all(Regex.compile("[A-Z]\{3\}-(\\d\{4\})"), s);
+        if (m.length() < 1) {
+            return new List<string>();
+        }
+        return m.map(function(RegexMatch r): string => r.at(1) ?? "");
+    }
+    public static function firstOffset(string s): int {
+        mutable List<RegexMatch> m = Regex.all(Regex.compile("rdc"), s);
+        if (m.length() < 1) {
+            return -1;
+        }
+        for ((text, at) in m.map(function(RegexMatch r) => (r.full(), r.start()))) {
+            return at;
+        }
+        return -1;
+    }
 }
 
 #[Entry(kind: EntryKind.Cli)]
@@ -40,5 +59,13 @@ function main(): void {
     Output.print("{Sku::number(\"ABC-1234\")}");
     Output.print(" ");
     Output.print("{Sku::number(\"abc\")}");
+    Output.print("\n");
+    Output.print("{Sku::digits(\"ABC-1234 x DEF-5678\").join(\",\")}");
+    Output.print(" ");
+    Output.print("{Sku::digits(\"none\").length()}");
+    Output.print("\n");
+    Output.print("{Sku::firstOffset(\"é rdc\")}");
+    Output.print(" ");
+    Output.print("{Sku::firstOffset(\"none\")}");
     Output.print("\n");
 }
