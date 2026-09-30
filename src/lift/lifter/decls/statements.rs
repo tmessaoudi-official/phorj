@@ -27,7 +27,10 @@ impl Lifter {
         if let Some(hoisted) = super::super::preg::hoist(s, declared) {
             let (decl, rest) = hoisted?;
             let mut out = vec![decl];
-            out.extend(self.lift_stmt(&rest, declared)?);
+            // A bare `preg_match_all(…);` leaves nothing behind once its matches are hoisted.
+            if !matches!(&rest, php::PhpStmt::Block(b) if b.is_empty()) {
+                out.extend(self.lift_stmt(&rest, declared)?);
+            }
             return Ok(out);
         }
         Ok(match s {

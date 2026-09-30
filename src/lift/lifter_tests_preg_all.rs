@@ -72,6 +72,11 @@ function links(string $body): array {
         "{out}"
     );
     assert!(out.contains("matches.map("), "{out}");
+    // The bare statement leaves nothing behind — no stray empty block.
+    let seen = out.find("mutable var out").expect("the next statement");
+    let before = &out[..seen];
+    let end = before.rfind(';').expect("the hoisted declaration ends");
+    assert!(before[end + 1..].trim().is_empty(), "stray text: {out}");
 }
 
 /// A group column reads `at(k) ?? ""` — PATTERN_ORDER fills a group that sat out with `""`.
