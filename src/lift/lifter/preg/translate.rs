@@ -17,8 +17,6 @@ pub(in crate::lift) struct Translated {
     pub(in crate::lift) backtracking: bool,
     /// See [`super::scan::Facts`]: a `.` or negated class that PCRE reads per byte.
     pub(in crate::lift) byte_atom: bool,
-    /// See [`super::scan::Facts`]: no match can be empty.
-    pub(in crate::lift) nonempty: bool,
     /// See [`super::scan::Facts`]: `$` / `\Z` became a consuming `\n?\z`.
     pub(in crate::lift) dollar_rewritten: bool,
 }
@@ -84,7 +82,6 @@ pub(in crate::lift) fn translate(literal: &str) -> Result<Translated, String> {
         pattern,
         backtracking,
         byte_atom: facts.byte_atom,
-        nonempty: facts.nonempty,
         dollar_rewritten: facts.dollar_rewritten,
     })
 }

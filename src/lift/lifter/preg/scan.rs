@@ -11,10 +11,6 @@
 /// What the scan learned about the pattern beyond its translation — the facts a caller that reads
 /// MATCHES, not just whether one exists, must check before trusting it.
 pub(super) struct Facts {
-    /// Every top-level alternative contains an element that consumes at least one character, so no
-    /// match can be empty. `false` means only that this scan cannot PROVE it (a group or a look-around
-    /// may be the only thing in an alternative).
-    pub(super) nonempty: bool,
     /// The pattern has a `.` or a negated class and no `u`: PCRE takes one BYTE there, phorj one
     /// character. A pattern without one reads the same ASCII either way.
     pub(super) byte_atom: bool,
@@ -99,13 +95,8 @@ pub(super) fn scan(body: &str, o: &Opts) -> Result<(String, bool, Facts), String
             byte_runs_ok(alt)?;
         }
     }
-    let nonempty = s.alts.iter().all(|alt| {
-        alt.iter()
-            .any(|e| matches!(e.kind, Kind::Ascii | Kind::Byte) && e.min1)
-    });
     let byte_atom = s.alts.iter().flatten().any(|e| e.kind == Kind::Byte);
     let facts = Facts {
-        nonempty,
         byte_atom,
         dollar_rewritten: s.dollar_rewritten,
     };

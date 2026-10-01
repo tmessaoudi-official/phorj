@@ -125,7 +125,7 @@ fn the_refused_shapes_really_differ_from_pcre() {
     let cases = [
         ("/\\d*/u", "a1b22c", "6", "may match the empty string"),
         ("/./", "é", "2", "without the `u` modifier"),
-        ("/[a-z]+$/u", "hello world\n", "1", "`$`"),
+        ("/\\n$/u", "a\n\n", "2", "`$`"),
     ];
     for (i, (pat, subject, count, why)) in cases.iter().enumerate() {
         let src = format!(

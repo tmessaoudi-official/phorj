@@ -178,13 +178,18 @@ fn a_pattern_whose_matches_could_differ_is_refused_by_name() {
     let call = |pat: &str| {
         format!("<?php\nfunction f(string $s): int {{ return preg_match_all('{pat}', $s, $m); }}")
     };
-    refused(&call("/\\d*/u"), "may match the empty string");
-    refused(&call("/(a)|b*/u"), "may match the empty string");
-    refused(&call("/(?=a)|a/u"), "may match the empty string");
+    refused(&call("/\\d*/u"), "PROVEN to consume");
+    refused(&call("/(a)|b*/u"), "PROVEN to consume");
+    refused(&call("/(?=a)|a/u"), "PROVEN to consume");
     refused(&call("/./"), "without the `u` modifier");
     refused(&call("/[^ ]/"), "without the `u` modifier");
     refused(&call("/a$/u"), "`$`");
     refused(&call("/a\\Z/u"), "`$`");
+    for hole in ["/\\p{L}*/u", "/a\\K/u", "/(a)\\1/u", "/(?<x>a)\\k<x>/u"] {
+        refused(&call(hole), "PROVEN to consume");
+    }
+    refused(&call("/\\h+/u"), "horizontal-whitespace");
+    refused(&call("/\\R+/u"), "horizontal-whitespace");
 }
 
 /// A pattern with a guaranteed-consuming part, a `\z` anchor or the `D` modifier still lifts.
@@ -192,6 +197,8 @@ fn a_pattern_whose_matches_could_differ_is_refused_by_name() {
 fn consuming_patterns_with_z_or_d_still_lift() {
     for pat in [
         "/chauffage/",
+        "/([a-z])/u",
+        "/\\p{L}+/u",
         "/a+/u",
         "/x(a)?/u",
         "/[a-z]+\\z/u",
@@ -235,4 +242,13 @@ fn the_dynamic_pattern_refusal_does_not_name_preg_match() {
     )
     .expect_err("refused");
     assert!(err.contains("a `preg_*` call needs a pattern"), "{err}");
+}
+
+#[test]
+fn an_empty_group_name_column_is_refused() {
+    refused(
+        r#"<?php
+function f(string $s): array { preg_match_all('/x(a)/u', $s, $m); return $m['']; }"#,
+        "names no group",
+    );
 }

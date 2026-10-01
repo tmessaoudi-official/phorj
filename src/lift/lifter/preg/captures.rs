@@ -171,6 +171,16 @@ fn declare(site: Site, declared: &mut std::collections::HashSet<String>) -> Resu
         Engine::Linear
     };
     if t.dollar_rewritten {
+        // A read of `$m[0]` lifted BEFORE this site (a loop carries the earlier site's array into it)
+        // was judged without knowing about this `$`; only a variable's FIRST site may rewrite it.
+        if groups_of(&site.var).is_some() {
+            return Err(format!(
+                "lift: `${}` is filled again by a pattern with a `$` / `\\Z` — an earlier read of \
+                 `$m[0]` may already be lifted, and the rewritten `$` would put the final newline in \
+                 it; use `\\z` / the `D` modifier, or a second variable (DEC-554)",
+                site.var
+            ));
+        }
         FULL_UNSAFE.with(|v| v.borrow_mut().insert(site.var.clone()));
     }
     let names = compiled(&t.pattern, engine)
@@ -341,6 +351,9 @@ fn group(var: &str, index: &php::PhpExpr) -> Result<usize, String> {
                 )),
                 _ => Ok(k),
             }
+        }
+        php::PhpExpr::Str(name) if name.is_empty() => {
+            Err(format!("lift: `${var}['']` names no group"))
         }
         php::PhpExpr::Str(name) => names
             .and_then(|ns| ns.iter().position(|n| n == name))

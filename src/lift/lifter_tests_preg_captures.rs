@@ -58,7 +58,7 @@ fn a_second_site_assigns_the_same_variable() {
         r#"<?php
 function f(string $s): string {
     if (preg_match('/^a(b)$/', $s, $m) === 1) { return $m[1]; }
-    if (preg_match('/^c(d)$/', $s, $m) === 1) { return $m[1]; }
+    if (preg_match('/^c(d)$/D', $s, $m) === 1) { return $m[1]; }
     return '';
 }"#,
     );
@@ -151,7 +151,7 @@ fn a_fallback_is_refused_when_two_patterns_share_the_array() {
         r#"<?php
 function f(string $s): string {
     if (preg_match('/^(a)$/', $s, $m) === 1) { return 'a'; }
-    if (1 !== preg_match('/^(b)(c)?$/', $s, $m)) { return ''; }
+    if (1 !== preg_match('/^(b)(c)?$/D', $s, $m)) { return ''; }
     return $m[2] ?? 'none';
 }"#,
         "a `??` fallback other than `''`",
@@ -179,4 +179,32 @@ function f(string $s): string {
             "<?php\nfunction f(string $s): string {{\n    {ok}\n    return '';\n}}"
         ));
     }
+}
+
+/// Round 2 (N6): a read of `$m[0]` lifted before a later `$` site was judged without knowing about it,
+/// so only a variable's FIRST site may rewrite `$`.
+#[test]
+fn a_later_site_with_a_rewritten_dollar_on_a_filled_variable_is_refused() {
+    refused(
+        r#"<?php
+function f(string $a, string $b): string {
+    $out = '';
+    if (preg_match('/[a-z]+/u', $a, $m) === 1) { $out = $m[0]; }
+    if (preg_match('/([a-z]+)$/u', $b, $m) === 1) { $out = $out . $m[1]; }
+    return $out;
+}"#,
+        "filled again",
+    );
+}
+
+#[test]
+fn an_empty_group_name_is_refused() {
+    refused(
+        r#"<?php
+function f(string $s): string {
+    if (preg_match('/(a)/u', $s, $m) === 1) { return $m['']; }
+    return '';
+}"#,
+        "names no group",
+    );
 }

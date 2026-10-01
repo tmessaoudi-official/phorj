@@ -261,14 +261,14 @@ fn all_matches_faithful(t: &translate::Translated) -> Result<(), String> {
                 .into(),
         );
     }
-    if !t.nonempty {
-        return Err(
-            "lift: `preg_match_all` with a pattern that may match the empty string — PCRE \
-                    reports the empty match and retries at the same position, phorj's engine skips \
-                    it, so the COUNT differs (`/\\d*/` on `a1b22c`: 6 in PHP, 4 lifted); give the \
-                    pattern a part every match must consume, outside any group (DEC-554)"
-                .into(),
-        );
+    if let Err(why) = super::nonempty::consumes(&t.pattern) {
+        return Err(format!(
+            "lift: `preg_match_all` needs a pattern PROVEN to consume at least one character on every \
+             match ({why}) — PCRE reports an empty match and retries at the same position, phorj's \
+             engine skips it, so the COUNT differs (`/\\d*/` on `a1b22c`: 6 in PHP, 4 lifted); give \
+             the pattern a part every match must consume, using only literals, classes, groups, \
+             alternation and the usual quantifiers (DEC-554)"
+        ));
     }
     Ok(())
 }
@@ -376,6 +376,9 @@ fn column(var: &str, index: &php::PhpExpr) -> Result<Expr, String> {
                 ));
             }
             k
+        }
+        php::PhpExpr::Str(name) if name.is_empty() => {
+            return Err(format!("lift: `${var}['']` names no group"))
         }
         php::PhpExpr::Str(name) => info
             .names

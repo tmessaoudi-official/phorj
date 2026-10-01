@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 mod captures;
 mod match_all;
+mod nonempty;
 mod scan;
 #[cfg(test)]
 mod tests;

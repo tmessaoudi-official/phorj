@@ -72,6 +72,10 @@ impl Scan<'_> {
                 self.out.push(n);
                 self.push(Kind::Other)
             }
+            'h' | 'H' | 'R' => Err(format!(
+                "the `\\{n}` escape — PCRE's horizontal-whitespace / newline-sequence class, which \
+                 `fancy-regex` reads as something else (`\\h` as a hex digit); write the class out"
+            )),
             _ => {
                 // Everything else is copied; what `Core.Regex` cannot read, `engine::validate` refuses.
                 self.out.push('\\');
