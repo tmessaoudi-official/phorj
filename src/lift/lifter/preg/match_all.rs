@@ -261,17 +261,33 @@ fn all_matches_faithful(t: &translate::Translated) -> Result<(), String> {
                 .into(),
         );
     }
-    if let Err(why) = super::nonempty::consumes(&t.pattern) {
-        return Err(format!(
-            "lift: `preg_match_all` needs a pattern PROVEN to consume at least one character on every \
-             match ({why}) — PCRE reports an empty match and retries at the same position, phorj's \
-             engine skips it, so the COUNT differs (`/\\d*/` on `a1b22c`: 6 in PHP, 4 lifted); give \
-             the pattern a part every match must consume, using only literals, classes, groups, \
-             alternation and the usual quantifiers (DEC-554)"
-        ));
+    let facts = super::nonempty::analyse(&t.pattern).map_err(|why| not_proven(&why))?;
+    if !facts.consumes {
+        return Err(not_proven("may match the empty string"));
+    }
+    if facts.repeated_nullable_group {
+        return Err(REPEATED_GROUP.to_string());
     }
     Ok(())
 }
+
+/// The empty-match refusal, with what the whitelist parse could not prove.
+fn not_proven(why: &str) -> String {
+    format!(
+        "lift: `preg_match_all` needs a pattern PROVEN to consume at least one character on every \
+         match ({why}) — PCRE reports an empty match and retries at the same position, phorj's \
+         engine skips it, so the COUNT differs (`/\\d*/` on `a1b22c`: 6 in PHP, 4 lifted); give \
+         the pattern a part every match must consume, using only literals, classes, groups, \
+         alternation and the usual quantifiers (DEC-554)"
+    )
+}
+
+/// Shared with the captures lift (`super::captures`).
+pub(super) const REPEATED_GROUP: &str =
+    "lift: a group that can match the empty string is repeated \
+    (`(a?)+`, `(x|)*`) — PCRE reports the group as the empty string its last iteration matched, \
+    phorj's engines as its last NON-empty iteration, so the captured text differs; make the group \
+    consume (DEC-554)";
 
 fn declare(site: Site, declared: &mut std::collections::HashSet<String>) -> Result<Stmt, String> {
     let t = translate(&pattern_text(&site.pat)?)?;

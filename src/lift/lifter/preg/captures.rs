@@ -170,6 +170,23 @@ fn declare(site: Site, declared: &mut std::collections::HashSet<String>) -> Resu
     } else {
         Engine::Linear
     };
+    if t.byte_atom {
+        return Err("lift: `preg_match` captures from a pattern with a `.` or a negated class and no \
+                    `u` modifier — PCRE takes one BYTE there and phorj one character, so a captured \
+                    text can differ (`/./` on `é`: the single byte `c3` in PHP); add `u` to the PHP \
+                    pattern if the subject is text (DEC-554)"
+            .into());
+    }
+    let facts = super::nonempty::analyse(&t.pattern).map_err(|why| {
+        format!(
+            "lift: `preg_match` captures from a pattern this lift cannot analyse ({why}) — a \
+             construct outside literals, classes, groups, alternation and the usual quantifiers \
+             may capture differently under PCRE (DEC-554)"
+        )
+    })?;
+    if facts.repeated_nullable_group {
+        return Err(super::match_all::REPEATED_GROUP.to_string());
+    }
     if t.dollar_rewritten {
         // A read of `$m[0]` lifted BEFORE this site (a loop carries the earlier site's array into it)
         // was judged without knowing about this `$`; only a variable's FIRST site may rewrite it.

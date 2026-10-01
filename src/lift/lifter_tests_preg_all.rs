@@ -252,3 +252,12 @@ function f(string $s): array { preg_match_all('/x(a)/u', $s, $m); return $m[''];
         "names no group",
     );
 }
+
+#[test]
+fn a_repeated_group_that_can_match_empty_is_refused_in_a_column() {
+    refused(
+        r#"<?php
+function f(string $s): array { preg_match_all('/(a?)+b/u', $s, $m); return $m[1]; }"#,
+        "can match the empty string",
+    );
+}

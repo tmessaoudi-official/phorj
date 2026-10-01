@@ -15,21 +15,32 @@
 //! `(?<name> )`, `(?P<name> )`, `(?> )` and the look-arounds, alternation, and the quantifiers
 //! `* + ? {n} {n,} {n,m}` (each optionally lazy or possessive).
 
-/// `Ok(())` when every match consumes at least one character; otherwise why it is not proven.
-pub(super) fn consumes(pattern: &str) -> Result<(), String> {
+/// What the whitelist parse learned about a pattern it fully understands.
+pub(super) struct Facts {
+    /// Every match consumes at least one character.
+    pub(super) consumes: bool,
+    /// A group that can match empty is repeated more than once (`(a?)+`, `(x|)*`): PCRE reports the
+    /// group as the empty string its last iteration matched, the native engines as its last
+    /// NON-empty iteration, so a captured group's text differs.
+    pub(super) repeated_nullable_group: bool,
+}
+
+/// Parse `pattern`, or say which construct is not on the whitelist.
+pub(super) fn analyse(pattern: &str) -> Result<Facts, String> {
     let body = strip_flag_prefix(pattern);
     let mut p = Parse {
         c: body.chars().collect(),
         i: 0,
+        repeated_nullable_group: false,
     };
     let min = p.alt()?;
     if p.i < p.c.len() {
         return Err("an unbalanced `)`".into());
     }
-    if min == 0 {
-        return Err("may match the empty string".into());
-    }
-    Ok(())
+    Ok(Facts {
+        consumes: min > 0,
+        repeated_nullable_group: p.repeated_nullable_group,
+    })
 }
 
 /// The `(?is)`-style prefix `translate` puts in front of the pattern for the `i` / `s` modifiers.
@@ -47,6 +58,7 @@ fn strip_flag_prefix(p: &str) -> &str {
 struct Parse {
     c: Vec<char>,
     i: usize,
+    repeated_nullable_group: bool,
 }
 
 impl Parse {
@@ -73,37 +85,47 @@ impl Parse {
     }
 
     fn item(&mut self) -> Result<usize, String> {
+        let group = self.peek() == Some('(');
         let atom = self.atom()?;
-        let factor = self.quantifier();
+        let (factor, repeats) = self.quantifier();
+        if group && atom == 0 && repeats {
+            self.repeated_nullable_group = true;
+        }
         Ok(atom.saturating_mul(factor))
     }
 
-    /// The minimum repetition count of a quantifier at the cursor (1 when there is none).
-    fn quantifier(&mut self) -> usize {
-        let factor = match self.peek() {
-            Some('*' | '?') => {
+    /// The minimum repetition count of a quantifier at the cursor (1 when there is none), and
+    /// whether it can repeat its atom more than once.
+    fn quantifier(&mut self) -> (usize, bool) {
+        let (factor, repeats) = match self.peek() {
+            Some('*') => {
                 self.i += 1;
-                0
+                (0, true)
+            }
+            Some('?') => {
+                self.i += 1;
+                (0, false)
             }
             Some('+') => {
                 self.i += 1;
-                1
+                (1, true)
             }
             Some('{') => match self.counted() {
-                Some(n) => n,
-                None => return 1,
+                Some(counted) => counted,
+                None => return (1, false),
             },
-            _ => return 1,
+            _ => return (1, false),
         };
         if matches!(self.peek(), Some('?' | '+')) {
             self.i += 1; // lazy / possessive
         }
-        factor
+        (factor, repeats)
     }
 
-    /// `{n}`, `{n,}` or `{n,m}` at the cursor: advance past it and return `n`. Anything else is a
-    /// literal `{` (as PCRE reads it) and is left for [`Parse::atom`].
-    fn counted(&mut self) -> Option<usize> {
+    /// `{n}`, `{n,}` or `{n,m}` at the cursor: advance past it and return `n` and whether it can
+    /// repeat more than once. Anything else is a literal `{` (as PCRE reads it) and is left for
+    /// [`Parse::atom`].
+    fn counted(&mut self) -> Option<(usize, bool)> {
         let rest: String = self.c[self.i + 1..].iter().collect();
         let close = rest.find('}')?;
         let inner = &rest[..close];
@@ -112,9 +134,14 @@ impl Parse {
         if !digits(lo) || !(hi.is_empty() || digits(hi)) {
             return None;
         }
-        let n = lo.parse().ok()?;
+        let n: usize = lo.parse().ok()?;
+        let more = match inner.split_once(',') {
+            None => n > 1,
+            Some((_, "")) => true,
+            Some((_, hi)) => hi.parse::<usize>().ok()? > 1,
+        };
         self.i += 1 + inner.chars().count() + 1;
-        Some(n)
+        Some((n, more))
     }
 
     fn atom(&mut self) -> Result<usize, String> {
@@ -252,7 +279,16 @@ impl Parse {
 
 #[cfg(test)]
 mod tests {
-    use super::consumes;
+    use super::analyse;
+
+    /// `Ok(())` when every match consumes at least one character; otherwise why it is not proven.
+    fn consumes(pattern: &str) -> Result<(), String> {
+        if analyse(pattern)?.consumes {
+            Ok(())
+        } else {
+            Err("may match the empty string".into())
+        }
+    }
 
     #[test]
     fn a_pattern_with_a_part_every_match_must_consume_is_proven() {
@@ -299,6 +335,30 @@ mod tests {
         ] {
             let e = consumes(p).expect_err(p);
             assert!(e.contains("empty string"), "{p}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_repeated_group_that_can_match_empty_is_flagged() {
+        use super::analyse;
+        for p in [
+            r"(a?)+b",
+            r"(x|)*b",
+            r"(a*){2,}b",
+            r"(a?){1,3}b",
+            r"(?:(a?)b?)+c",
+        ] {
+            assert!(analyse(p).unwrap().repeated_nullable_group, "{p}");
+        }
+        for p in [
+            r"(a)+b",
+            r"(a?)b",
+            r"(a?){0,1}b",
+            r"(a|b)*c",
+            r"(a?)?b",
+            r"[ab]+(c)",
+        ] {
+            assert!(!analyse(p).unwrap().repeated_nullable_group, "{p}");
         }
     }
 

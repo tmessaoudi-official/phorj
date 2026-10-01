@@ -208,3 +208,22 @@ function f(string $s): string {
         "names no group",
     );
 }
+
+/// Round 3 (F4, F5): a byte atom without `u`, and a repeated group that can match empty, capture
+/// different text under PCRE.
+#[test]
+fn a_byte_atom_and_a_repeated_nullable_group_are_refused_by_name() {
+    let site = |pat: &str| {
+        format!(
+            "<?php\nfunction f(string $s): string {{\n    if (preg_match('{pat}', $s, $m) === 1) {{ return $m[0]; }}\n    return '';\n}}"
+        )
+    };
+    refused(&site("/./"), "no `u` modifier");
+    refused(&site("/[^a]/"), "no `u` modifier");
+    for p in ["/(a?)+b/", "/(x|)*b/", "/(a*){2,}b/"] {
+        refused(&site(p), "can match the empty string");
+    }
+    for ok in ["/./u", "/(a?)b/", "/(a)+b/", "/(a|b)*c/"] {
+        lift(&site(ok));
+    }
+}

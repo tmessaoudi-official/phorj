@@ -150,3 +150,31 @@ fn a_whole_match_under_a_rewritten_dollar_really_differs() {
     assert!(err.contains("final newline"), "{err}");
     assert_eq!(run_php(&php, src, "dollar"), "[cd]");
 }
+
+/// Round 3 (F4, F5): PHP's answers for the two shapes the lifter now refuses by name — a `.` without
+/// `u` captures ONE BYTE of `é`, and `(a?)+b` reports the group as the empty string its last iteration
+/// matched where the native engines report the last non-empty iteration.
+#[test]
+fn a_byte_atom_and_a_nullable_repeat_really_differ() {
+    let Some(php) = php_or_gate("a_byte_atom_and_a_nullable_repeat_really_differ") else {
+        return;
+    };
+    let cases = [
+        ("/./", "é", "c3", "no `u` modifier", 0),
+        ("/(a?)+b/", "aab", "", "can match the empty string", 1),
+    ];
+    for (i, (pat, subject, expect, why, group)) in cases.iter().enumerate() {
+        let src = format!(
+            "<?php\nfunction f(string $s): string {{\n    \
+             if (preg_match('{pat}', $s, $m) === 1) {{ return bin2hex($m[{group}]); }}\n    return 'none';\n}}\n\
+             echo f(\"{subject}\");\n"
+        );
+        let err = lift::lifter::lift_source(&src).expect_err("must be refused");
+        assert!(err.contains(why), "{pat}: want `{why}` in: {err}");
+        assert_eq!(
+            run_php(&php, &src, &format!("round3_{i}")),
+            *expect,
+            "{pat}"
+        );
+    }
+}

@@ -763,6 +763,16 @@ DEC-507 applies to every one.
 - L6 depends on L5 for alert-email parsing (an alert body IS an HTML document).
 
 ### Needs input
+- **Q-1001-1 — PENDING (banked 2026-10-01, row 4l-b3 round-3 fuzz).** `preg_*` over Unicode CLASSES: under `u`,
+  PCRE's `\w` `\s` `\b` `\p{…}` and `i`-folded `\p{Ll}`/`\p{Lu}` answer differently from phorj's `regex`
+  crate on a few code points, and the crate's Unicode 16.0 against PHP 8.5's PCRE2 (Unicode 15.0) differ on every
+  character added in 16.0 — so the lifted program and the original PHP can disagree on Unicode edge text
+  (`preg_match('/\W/u', 'xⒶ')`: PHP `Ⓐ`, lifted `none`); the lift's native legs agree with each other and only the
+  transpiled-PHP leg differs. Options: (a) REFUSE by name every `preg_*` lift that uses a Unicode-sensitive
+  class under `u` (`\w \W \s \S \b \B \p \P`, `i` with `\p{L*}`) — sound, but loses most real patterns;
+  (b) lift and DISCLOSE (current behaviour, KNOWN_ISSUES §Core.Regex corrected 2026-10-01) — keeps the yield, accepts
+  edge-text divergence; (c) make `Core.Regex` match PCRE's class tables (an engine change). Recommended: (b) now,
+  (c) as its own slice. Not ruled — design decision (Invariant 15); until ruled the behaviour stays (b).
 - **Q-0926-1 — RULED 2026-09-26 17:01 → DEC-541.** (banked 2026-09-26, L3a/B2+B12) — W-MIXED: how does a lifted PHP `mixed` value look?** On `classify()`'s
   path: `RawListing::$fields` is `array<string, mixed>` ON PURPOSE (a bespoke adapter can forward `"gamme": ["PLUS","PLAI"]`
   as a list, and the classifier has a deliberate tier-1 doubt for exactly that), and `excludedVocabularyIn(mixed $value)`

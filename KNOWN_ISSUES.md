@@ -3088,6 +3088,16 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
 - ~~`\d` / `\w` / `\s` are Unicode-aware natively, ASCII-only in transpiled PCRE~~ — **that edge did
   not exist** (panel C11): the helper's `u` modifier turns on PCRE's UCP for `\d\w\s`, so all three
   legs agree on Unicode subjects. The real edges were C1–C3, all fixed with DEC-461.
+  **CORRECTED 2026-10-01 (row 4l-b3, round-3 differential fuzz): that conclusion was too broad.** The
+  classes agree on the COMMON Unicode text the panel probed, not on every code point. Under `u` PCRE's
+  `\w` / `\s` / `\b` differ from the `regex` crate's on a handful of marks, enclosing characters and
+  separators (U+24B6 Ⓐ and U+20DD are not `\w` in PCRE; U+180E is `\s` in PCRE), `\p{Ll}` / `\p{Lu}` /
+  `\P{Lu}` under `i` are case-folded natively and not by PCRE, and the crate's Unicode 16.0 tables
+  against PHP 8.5's PCRE2 10.44 (Unicode 15.0) disagree on every character added in 16.0 (U+11380:
+  `\p{L}`). The native legs agree with each other; only the transpiled-PHP leg differs [Verified by
+  the fuzz, 2026-10-01: `preg_match('/\W/u', 'xⒶ')` → PHP `Ⓐ`, native none]. `phg lift` inherits
+  this for `preg_*` over Unicode classes — whether to refuse them is a PENDING design question
+  (Q-1001-1 in the scout plan).
 - **`$` means end of subject on every leg** (panel C3): the PHP helper emits `D` (PCRE_DOLLAR_ENDONLY),
   so `a$` no longer matches `"a\n"` under PHP alone.
 - **Named captures only** — `findGroups`/`findAllGroups` return `Map<string,string>` keyed by group
