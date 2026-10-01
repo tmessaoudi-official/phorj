@@ -32,20 +32,36 @@ thread_local! {
         std::cell::RefCell::new(HashMap::new());
 }
 
+thread_local! {
+    /// Captures variables whose pattern had its `$` rewritten to the consuming `\n?\z`: group 0 (the
+    /// whole match) then carries the final newline PHP's zero-width `$` stops before, so `$m[0]` is
+    /// refused ([`read`]). The groups and offsets are unaffected.
+    static FULL_UNSAFE: std::cell::RefCell<std::collections::HashSet<String>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
 /// The registry as it stands — saved around a closure body and a file-scope statement.
-pub(in crate::lift) type Snapshot = HashMap<String, Option<Vec<String>>>;
+pub(in crate::lift) type Snapshot = (
+    HashMap<String, Option<Vec<String>>>,
+    std::collections::HashSet<String>,
+);
 
 pub(in crate::lift) fn snapshot() -> Snapshot {
-    VARS.with(|v| v.borrow().clone())
+    (
+        VARS.with(|v| v.borrow().clone()),
+        FULL_UNSAFE.with(|v| v.borrow().clone()),
+    )
 }
 
 pub(in crate::lift) fn restore(s: Snapshot) {
-    VARS.with(|v| *v.borrow_mut() = s);
+    VARS.with(|v| *v.borrow_mut() = s.0);
+    FULL_UNSAFE.with(|v| *v.borrow_mut() = s.1);
 }
 
 /// A function body starts with no captures variables.
 pub(in crate::lift) fn reset() {
     VARS.with(|v| v.borrow_mut().clear());
+    FULL_UNSAFE.with(|v| v.borrow_mut().clear());
 }
 
 /// Does `var` already hold a captures value?
@@ -154,6 +170,9 @@ fn declare(site: Site, declared: &mut std::collections::HashSet<String>) -> Resu
     } else {
         Engine::Linear
     };
+    if t.dollar_rewritten {
+        FULL_UNSAFE.with(|v| v.borrow_mut().insert(site.var.clone()));
+    }
     let names = compiled(&t.pattern, engine)
         .map_err(|e| format!("lift: `preg_match` pattern: {e}"))?
         .group_names();
@@ -351,6 +370,14 @@ fn read(var: &str, index: &php::PhpExpr) -> Result<Expr, String> {
     let k = group(var, index)?;
     let recv = Expr::Ident(var.to_string(), SP);
     if k == 0 {
+        if FULL_UNSAFE.with(|v| v.borrow().contains(var)) {
+            return Err(format!(
+                "lift: `${var}[0]` — the pattern's `$` / `\\Z` lifts to the consuming `\\n?\\z`, so the \
+                 whole match would carry the final newline PHP's zero-width `$` stops before; read a \
+                 group instead, or use `\\z` / the `D` modifier where the subject has no final \
+                 newline (DEC-554)"
+            ));
+        }
         return Ok(method(recv, "full", Vec::new()));
     }
     let text = match index {

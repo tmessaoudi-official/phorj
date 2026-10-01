@@ -56,7 +56,7 @@ fn run_php(php: &str, src: &str, label: &str) -> String {
 const PROGRAM: &str = r#"<?php
 function guard(string $s): string
 {
-    if (1 !== preg_match('/^(\d+)(?:-(\d+))?(x)?$/', $s, $m)) {
+    if (1 !== preg_match('/^(\d+)(?:-(\d+))?(x)?$/D', $s, $m)) {
         return 'no';
     }
     return $m[0] . '|' . $m[1] . '|' . ($m[2] ?? '') . '|' . ($m[3] ?? 'X');
@@ -133,4 +133,20 @@ fn a_fallback_on_a_middle_group_really_differs() {
                RegexMatch? m = Regex.first(Regex.compile(r\"^([0-9]+)(?:-([0-9]+))?(x)?\\n?\\z\"), \"12x\");\n    \
                if (m is null) { return; }\n    Output.print(m.at(2) ?? \"X\");\n}\n";
     assert_eq!(cmd_run(phg).unwrap_or_else(|e| panic!("{e}\n{phg}")), "X");
+}
+
+/// Row 4l-b2's `$m[0]` with a trailing `$` (panel finding, row 4l-b3): PHP's `$` is zero-width before a
+/// final newline, the lifted `\n?\z` consumes it. The lifter refuses the read; this shows the refusal
+/// guards a real difference.
+#[test]
+fn a_whole_match_under_a_rewritten_dollar_really_differs() {
+    let Some(php) = php_or_gate("a_whole_match_under_a_rewritten_dollar_really_differs") else {
+        return;
+    };
+    let src = "<?php\nfunction f(string $s): string {\n    \
+               if (preg_match('/[a-z]+$/u', $s, $m) === 1) { return '[' . $m[0] . ']'; }\n    \
+               return '';\n}\necho f(\"cd\\n\");\n";
+    let err = lift::lifter::lift_source(src).expect_err("must be refused");
+    assert!(err.contains("final newline"), "{err}");
+    assert_eq!(run_php(&php, src, "dollar"), "[cd]");
 }

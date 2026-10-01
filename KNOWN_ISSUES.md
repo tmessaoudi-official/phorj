@@ -3110,7 +3110,10 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   `$$` a literal `$`; everything else — `\1` included — is literal. Before DEC-461 the crate's and PCRE's
   expansions disagreed on `\1-`, `$$`, `$1a` and `${x}` with every leg exiting 0.
 - ⚠ **Empty/zero-width matches diverge between the `regex` crate and PCRE** (affects every
-  match-iterating API: `replace`, `replaceCallback`, `findAll`, `split`). For an empty-matchable pattern
+  match-iterating API: `replace`, `replaceCallback`, `findAll`, `split`, and — since DEC-554 — `Regex.all`,
+  which the VM and tree-walker answer differently from the transpiled `preg_match_all` on an empty-matchable pattern
+  [Verified by the row 4l-b3 panel, correctness lens, 2026-10-01: 1/2 vs 2/3]; `phg lift` refuses such a
+  `preg_match_all` by name, but a hand-written `Regex.all` over one is on the same footing as `findAll`). For an empty-matchable pattern
   like `\d*`, the two engines disagree on where empty matches land: `replaceCallback(compile("\\d*"),
   "a1b22c", …)` yields `[]a[1]b[22]c[]` on the Rust backends but `[]a[1][]b[22][]c[]` under transpiled
   PCRE [Verified: `phg run` vs `transpile|php`]. This is an engine-level difference, not a Phorj bug.

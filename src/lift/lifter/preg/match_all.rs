@@ -138,7 +138,13 @@ fn call_of(e: &php::PhpExpr) -> Option<Result<Site, String>> {
         [pat, subject, php::PhpExpr::Var(var), rest @ ..] if rest.len() <= 1 => {
             (pat, subject, var, rest)
         }
-        _ => return Some(Err(POSITION.to_string())),
+        _ => {
+            return Some(Err("lift: `preg_match_all` lifts only as \
+                `preg_match_all(PATTERN, SUBJECT, $matches)` with an optional flags argument — the \
+                offset argument, a 2-argument call and a non-variable matches target have no \
+                lifted form (DEC-554)"
+                .to_string()))
+        }
     };
     if [pat, subject]
         .iter()

@@ -157,3 +157,26 @@ function f(string $s): string {
         "a `??` fallback other than `''`",
     );
 }
+
+/// Panel, row 4l-b3: a trailing `$` lifts to the consuming `\n?\z`, so the WHOLE match would carry the
+/// final newline PHP stops before. A group read is unaffected; `$m[0]` is refused unless `D`/`\z`.
+#[test]
+fn the_whole_match_of_a_rewritten_dollar_is_refused_but_a_group_is_not() {
+    refused(
+        r#"<?php
+function f(string $s): string {
+    if (preg_match('/[a-z]+$/u', $s, $m) === 1) { return $m[0]; }
+    return '';
+}"#,
+        "final newline",
+    );
+    for ok in [
+        "if (preg_match('/([a-z]+)$/u', $s, $m) === 1) { return $m[1]; }",
+        "if (preg_match('/[a-z]+$/uD', $s, $m) === 1) { return $m[0]; }",
+        "if (preg_match('/[a-z]+\\z/u', $s, $m) === 1) { return $m[0]; }",
+    ] {
+        lift(&format!(
+            "<?php\nfunction f(string $s): string {{\n    {ok}\n    return '';\n}}"
+        ));
+    }
+}
