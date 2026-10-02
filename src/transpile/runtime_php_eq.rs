@@ -23,7 +23,7 @@ use super::*;
 /// instance walk cycle-safe, like `eq_val`'s visited-pair set (an unguarded recursion would overflow).
 const HELPER: &str = r#"function __phorj_eq($a, $b) {
     static $seen = [];
-    if (is_string($a) || is_string($b)) { return $a === $b; }
+    if ($a === null || $b === null || is_string($a) || is_string($b)) { return $a === $b; }
     if (is_array($a) && is_array($b)) {
         if (count($a) !== count($b)) { return false; }
         foreach ($a as $k => $v) {
@@ -32,7 +32,6 @@ const HELPER: &str = r#"function __phorj_eq($a, $b) {
         return true;
     }
     if (is_object($a) && is_object($b)) {
-        if ($a === $b) { return true; }
         if (get_class($a) !== get_class($b)) { return false; }
         foreach ($seen as $p) { if ($p[0] === $a && $p[1] === $b) { return true; } }
         $seen[] = [$a, $b];

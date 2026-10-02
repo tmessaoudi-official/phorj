@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — string `==` / `!=` no longer transpile to PHP's loose `==` (DEC-557, 2026-10-02)
+
+`"10" == "10.0"` was `false` on the VM and the tree-walker but `true` in the transpiled PHP — silently, for any two
+numeric-looking strings (found by the 2026-10-01 PHP-parity review). String operands now emit `===`/`!==`; any operand
+the transpiler cannot pin to a scalar (containers, instances, optionals, an erased generic `T`) goes through the new
+structural `__phorj_eq` helper, which also stops a `null` equalling `0`/`false` and an instance holding a NaN equalling
+itself. A kind that contains a `decimal` keeps loose `==`, so decimal equality stays numeric. New example
+`examples/guide/string-equality.phg`. Disclosed: a decimal compared inside an erased generic is scale-sensitive on the
+PHP leg (`STRING-EQ-DECIMAL-ERASED`); `Set ==` is order-sensitive on the PHP leg (`SET-EQ-ORDER`, pre-existing);
+`List.contains` on instances uses PHP identity (`LIST-CONTAINS-INSTANCES`, pre-existing). `__phorj_eq` is unbenchmarked
+(perf OWED). The lifter half is scout row 4l-b9.
+
 ### Fixed — playground PHP pane: every example died with "strict_types declaration must be the very first statement" (2026-09-29)
 
 Since `declare(strict_types=1);` joined every emitted file (DEC-401, 2026-08-05) the playground's PHP leg failed on

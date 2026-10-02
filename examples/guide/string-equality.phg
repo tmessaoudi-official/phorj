@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Math;
 import Core.String;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
@@ -17,6 +18,10 @@ class Money {
 
 function price(): decimal {
     return 1.50d;
+}
+
+class Sample {
+    constructor(public float x) {}
 }
 
 class Tag {
@@ -83,6 +88,22 @@ function main(): void {
     Output.printLine(
         "{oa == ob} {dx == dy} {dm == dn} {m1x == m1y} {price() == 1.5d} {m1x.amount == 1.5d}"
     );
+    // A null is equal only to a null — never to 0, false, 0.0 or an empty list (PHP's loose `==` says otherwise).
+    int? nz = null;
+    int? zz = 0;
+    bool? nb = null;
+    bool? fb = false;
+    float? nf = null;
+    float? zf = 0.0;
+    Output.printLine("{nz == zz} {nz != zz} {nb == fb} {nf == zf} {nz == nz}");
+    List<int?> ln = [null];
+    List<int?> lz = [0];
+    Output.printLine("{ln == lz} {ln == ln}");
+    Output.printLine("{same(nz, zz)} {same(nb, fb)}");
+    // An instance holding a NaN is not equal even to itself (a field-wise float compare).
+    float nan = Math.sqrt(-1.0);
+    Sample sn = new Sample(nan);
+    Output.printLine("{sn == sn} {same(sn, sn)}");
     // Equal strings stay equal.
     Output.printLine("{a == \"10\"} {\"abc\" == \"abc\"} {\"abc\" == \"ABC\"}");
 }

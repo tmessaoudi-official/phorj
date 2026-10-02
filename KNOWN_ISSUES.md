@@ -10,8 +10,23 @@ compares exactly. Failing program: `function same<T>(T a, T b): bool { return a 
 case (`same("10", "10.0")`) is the common one and was silently WRONG. Statically-typed `decimal ==` is unchanged, and a
 kind that contains a decimal keeps PHP's loose `==`, so a class or `List<decimal>` compared at a known type stays
 numeric. Residual: a class/container that mixes `string` and `decimal` fields keeps the loose behaviour for its strings.
-The structural fix is a distinguishable decimal carrier in PHP (a separate large slice). Measured 2026-10-02: every decimal site whose type the transpiler can resolve (`decimal?`, `List<decimal>`, `Map<string, decimal>`, instances with decimal fields, call results, field reads) keeps loose `==` and agrees on all three legs (pinned in `examples/guide/string-equality.phg`); only an erased generic body loses it. PENDING (not ruled): whether this counts as a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the decimal-`<` entry below is deliberately left unchanged until the developer rules. The LIFTER half is open: PHP
+The structural fix is a distinguishable decimal carrier in PHP (a separate large slice). Measured 2026-10-02: every decimal site whose type the transpiler can resolve (`decimal?`, `List<decimal>`, `Map<string, decimal>`, instances with decimal fields, call results, field reads) keeps loose `==` and agrees on all three legs (pinned in `examples/guide/string-equality.phg`); only an erased generic body loses it (a null is compared as a null, never loosely, and the optional/null cases are pinned in the example; the one other known gap is SET-EQ-ORDER below). PENDING (not ruled): whether this counts as a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the decimal-`<` entry below is deliberately left unchanged until the developer rules. The LIFTER half is open: PHP
 loose `==` still lifts to strict `==` (scout row 4l-b9).
+
+## SET-EQ-ORDER — `Set == Set` is order-sensitive on the PHP leg (found 2026-10-02 by the DEC-557 panel; PRE-EXISTING)
+
+`Value::eq_val` compares two `Set`s by membership (`Set.of([1,2,3]) == Set.of([3,2,1])` is `true` natively). A Phorj
+`Set` erases to a PHP list, and the transpiler has no `Set` operand kind, so `__phorj_eq` cannot tell it from a `List`
+and compares positionally: `false` in the transpiled PHP. The bare loose `==` emitted before DEC-557 had the same defect,
+so this is not a regression, but the helper must not be described as mirroring `eq_val` for Sets. Fix needs a `Set`
+kind in `OpKind` (or a runtime tag on the carrier) — a design question about the PHP carrier, not ruled.
+
+## LIST-CONTAINS-INSTANCES — `List.contains` / `unique` / `difference` / `intersection` / `indexOf` use PHP identity on instances (found 2026-10-02 by the DEC-557 panel; PRE-EXISTING)
+
+These helpers lower to `in_array($v, $xs, true)` / `array_search(…, true)` (`src/transpile/runtime_php.rs` ~1082-1219), and
+`===` on two PHP objects is IDENTITY, while native equality is field-wise: `List.contains([new Pt(1)], new Pt(1))` is `true`
+natively and `false` in the transpiled PHP. Strings are exact there (the strict flag), so DEC-557's string class is not
+affected. Fix shape: route the object case through `__phorj_eq`. Not built.
 
 ## LIFT-FOREACH-DESTRUCTURE — positional patterns lift (row 5v, 2026-09-26); these are refused by name
 
