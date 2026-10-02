@@ -196,6 +196,10 @@ impl Transpiler {
             // method's return kind on `obj`'s class (+ inherited).
             Expr::Call { callee, .. } => match &**callee {
                 Expr::Ident(name, _) if self.classes.contains(name) => OpKind::Class(name.clone()),
+                // A bare variant constructor `Exact(1.5d)` is a value of its enum (DEC-557).
+                Expr::Ident(name, _) if self.variant_owner.contains_key(name) => {
+                    OpKind::Class(self.variant_owner[name].clone())
+                }
                 Expr::Ident(name, _) => self
                     .fn_ret_kinds
                     .get(name)
@@ -215,6 +219,16 @@ impl Transpiler {
                             if let Some(idx) = crate::native::index_of(module, name) {
                                 return opkind_of_ty(&crate::native::registry()[idx].ret);
                             }
+                        }
+                    }
+                    // A qualified variant constructor `Enum.Variant(...)` is a value of that enum (DEC-557).
+                    if let Expr::Ident(en, _) = &**object {
+                        if self.enums.contains(en)
+                            && self
+                                .variant_field_kinds
+                                .contains_key(&(en.clone(), name.clone()))
+                        {
+                            return OpKind::Class(en.clone());
                         }
                     }
                     // Otherwise a method call on a value — resolve its receiver's class.
@@ -284,8 +298,21 @@ pub(super) fn kind_of_type(ty: &Type) -> OpKind {
             "void" | "never" | "empty" | "bytes" | "Set" => OpKind::Other,
             // A user-defined class/enum/interface name → `Class`, so field reads on a value of this
             // type resolve through `class_field_kinds` (T6b).
-            other => OpKind::Class(other.to_string()),
+            other if args.is_empty() => OpKind::Class(other.to_string()),
+            // A generic INSTANTIATION (`Box<decimal>`, `Option<Money>`): keep the class AND its type
+            // arguments, so `==` can see a decimal behind them (DEC-557). The `Class` head is first.
+            other => {
+                let mut parts = vec![OpKind::Class(other.to_string())];
+                parts.extend(args.iter().map(kind_of_type));
+                OpKind::Wrapped(parts)
+            }
         },
+        // `T?`, `A | B`, `A & B` wrap their components (DEC-557): no operator specialization, but a
+        // decimal inside one must stay visible to `==`.
+        Type::Optional { inner, .. } => OpKind::Wrapped(vec![kind_of_type(inner)]),
+        Type::Union(ms, _) | Type::Intersection(ms, _) => {
+            OpKind::Wrapped(ms.iter().map(kind_of_type).collect())
+        }
         // DEC-504 / Invariant 7: a tuple annotation carries each position's own kind. This is the
         // arm that makes an ANNOTATED (or materialized) tuple local resolve `t.bp + 1` as int
         // arithmetic instead of falling through to the erased list literal's first element.

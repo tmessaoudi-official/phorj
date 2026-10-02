@@ -110,6 +110,12 @@ enum OpKind {
     /// concatenation — and the PHP leg prints `31` where both native legs print `4`, breaking the
     /// byte-identity spine (Invariant 1) rather than just running slower.
     Tuple(Vec<OpKind>),
+    /// A type that WRAPS other types the transpiler does not otherwise model: an optional's inner
+    /// type, a generic instantiation's `[Class(name), args...]`, a union's or intersection's members.
+    /// It never specializes an operator (every consumer treats it like `Other`); its one job is to let
+    /// `==` ask whether ANY component carries a `decimal` (DEC-557), because flattening `decimal?` or
+    /// `Box<decimal>` to `Other`/`Class` made a decimal look unknown and take the strict helper.
+    Wrapped(Vec<OpKind>),
     Other,
 }
 
@@ -173,6 +179,10 @@ struct Transpiler {
     class_field_kinds: HashMap<String, HashMap<String, OpKind>>,
     /// `class → direct parents` (`extends`), for inherited-field kind lookup (T6b).
     class_parents: HashMap<String, Vec<String>>,
+    /// `type -> every class that extends or implements it`: the REVERSE of `class_parents` plus the
+    /// interface edges, so `==` on an interface- or base-typed operand can see its implementers'
+    /// decimal fields (DEC-557).
+    class_subtypes: HashMap<String, Vec<String>>,
     /// `(enum, variant) → payload OpKinds` (positional) — a variant-payload match binding
     /// resolves its kind for operand specialization (T6b; DEC-329.3 keying).
     variant_field_kinds: HashMap<(String, String), Vec<OpKind>>,

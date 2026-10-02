@@ -13,8 +13,9 @@ numeric-looking strings (found by the 2026-10-01 PHP-parity review). String oper
 the transpiler cannot pin to a scalar (containers, instances, optionals, an erased generic `T`) goes through the new
 structural `__phorj_eq` helper, which also stops a `null` equalling `0`/`false`, `1` equalling `1.0` through an
 `int | float` union, an instance holding a NaN equalling itself, and two closures comparing equal. A kind that contains a `decimal` keeps loose `==`, so decimal equality stays numeric. New example
-`examples/guide/string-equality.phg`. Disclosed: a decimal behind an unresolved type parameter (an erased generic body, or a generic class
-instantiated at `decimal`) is scale-sensitive on the PHP leg (`STRING-EQ-DECIMAL-ERASED`); `Set ==` is order-sensitive on the PHP leg (`SET-EQ-ORDER`, pre-existing);
+`examples/guide/string-equality.phg`. Disclosed: a decimal inside an erased generic BODY (the bare type parameter) is scale-sensitive on the PHP
+leg (`STRING-EQ-DECIMAL-ERASED`); a string map key that PHP coerces to an int still compares equal to its string
+(`STRING-EQ-MAP-KEY`); no CI check runs the helper in php-wasm (`PLAYGROUND-EQ-UNGUARDED`); `Set ==` is order-sensitive on the PHP leg (`SET-EQ-ORDER`, pre-existing);
 `List.contains` on instances uses PHP identity (`LIST-CONTAINS-INSTANCES`, pre-existing). A very deep instance chain exhausts PHP's memory in the helper (`DEEP-EQ-PHP-LIMIT`). `__phorj_eq` is unbenchmarked
 (perf OWED). The lifter half is scout row 4l-b9.
 

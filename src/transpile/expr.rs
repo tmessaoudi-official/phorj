@@ -583,6 +583,7 @@ impl Transpiler {
             | OpKind::List(_)
             | OpKind::Tuple(_)
             | OpKind::Map(..)
+            | OpKind::Wrapped(_)
             | OpKind::Other => {
                 self.gates.uses_str = true;
                 format!("{bs}__phorj_str({code})")

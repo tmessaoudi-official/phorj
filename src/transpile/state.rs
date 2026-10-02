@@ -29,6 +29,7 @@ impl Transpiler {
             parent_aliases: None,
             class_field_kinds: HashMap::new(),
             class_parents: HashMap::new(),
+            class_subtypes: HashMap::new(),
             variant_field_kinds: HashMap::new(),
             fn_ret_kinds: HashMap::new(),
             method_ret_kinds: HashMap::new(),

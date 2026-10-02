@@ -6,19 +6,26 @@
 //! numeric-looking strings, silently (Invariant 14, tier 3).
 //!
 //! The emission is chosen from the operands' statically resolved [`OpKind`]s, in this order:
-//! 1. **A kind that contains a `decimal`** keeps PHP's loose `==`. A decimal is a PHP *string* carrier
-//!    and Phorj's decimal equality is numeric and scale-insensitive (`1.50d == 1.5d`), which loose `==`
-//!    reproduces and a strict compare would break. Known residual, disclosed in KNOWN_ISSUES: a value
-//!    that mixes `string` and `decimal` in one container/class keeps the loose string behaviour.
-//! 2. **Either side a `string`** → PHP `===` / `!==`.
+//! 1. **A kind that contains a `decimal`** — at any depth, through an optional, a generic instantiation's
+//!    type arguments, a class/enum's fields or payloads, and every subtype of an interface- or base-typed
+//!    operand (`kind_has_decimal`) — keeps PHP's loose `==`. A decimal is a PHP *string* carrier and
+//!    Phorj's decimal equality is numeric and scale-insensitive (`1.50d == 1.5d`), which loose `==`
+//!    reproduces and a strict compare would break. Residual, disclosed in KNOWN_ISSUES: a value that
+//!    mixes `string` and `decimal` keeps the loose string behaviour.
+//! 2. **Either side a `string`** → PHP `===` / `!==`, with a non-literal operand cast to `(string)`: PHP
+//!    turns an integer-like map KEY into an int while its static kind stays `string`
+//!    (KNOWN_ISSUES STRING-EQ-MAP-KEY).
 //! 3. **Both sides `int`/`float`/`bool`** → `===` / `!==`. Native equality has no cross-type scalar case
 //!    (`Int(1) == Float(1.0)` is `false`, and a union `int | float` can hold either), so PHP's loose
 //!    `1 == 1.0` / `1 == true` would disagree; `===` keeps NaN unequal and `-0.0 == 0.0` equal.
-//! 4. **Anything else** (`Other` — an erased generic `T`, an unresolved call/field/index —, lists, maps,
-//!    tuples, class/enum instances) → `__phorj_eq`, which mirrors `eq_val` structurally and compares any
-//!    two strings exactly. Under erasure a `decimal` flowing through an UNKNOWN-kind operand therefore
-//!    compares scale-sensitively on the PHP leg (developer ruling DEC-557, 2026-10-02, re-confirmed for a
-//!    generic CLASS instantiated at `decimal`, whose field kind is the unresolved type parameter).
+//! 4. **Anything else** (`Other` — the bare type parameter of an erased generic body, an unresolved
+//!    call/field/index —, lists, maps, tuples, class/enum instances) → `__phorj_eq`, which mirrors `eq_val`
+//!    structurally: two strings (or a string and an int key) exactly, a `null` only to `null`, a closure
+//!    to nothing (`eq_val` says `false` even for `f == f`), scalars strictly, maps order-independently,
+//!    instances field by field with a cycle guard. It does NOT mirror `eq_val` for a `Set` (a PHP list, so
+//!    membership equality becomes order-sensitive: KNOWN_ISSUES SET-EQ-ORDER). Inside an erased generic
+//!    BODY a `decimal` is indistinguishable from a string, so it compares scale-sensitively on the PHP leg
+//!    (developer ruling DEC-557, 2026-10-02; KNOWN_ISSUES STRING-EQ-DECIMAL-ERASED).
 
 use super::*;
 
@@ -26,7 +33,11 @@ use super::*;
 /// instance walk cycle-safe, like `eq_val`'s visited-pair set (an unguarded recursion would overflow).
 const HELPER: &str = r#"function __phorj_eq($a, $b) {
     static $seen = [];
-    if ($a === null || $b === null || is_string($a) || is_string($b)) { return $a === $b; }
+    if ($a === null || $b === null) { return $a === $b; }
+    if (is_string($a) || is_string($b)) {
+        if ((is_string($a) || is_int($a)) && (is_string($b) || is_int($b))) { return (string)$a === (string)$b; }
+        return $a === $b;
+    }
     if ($a instanceof \Closure || $b instanceof \Closure) { return false; }
     if (is_array($a) && is_array($b)) {
         if (count($a) !== count($b)) { return false; }
@@ -59,7 +70,9 @@ impl Transpiler {
             OpKind::Decimal => true,
             OpKind::List(e) => self.kind_has_decimal(e, seen),
             OpKind::Map(a, b) => self.kind_has_decimal(a, seen) || self.kind_has_decimal(b, seen),
-            OpKind::Tuple(ks) => ks.iter().any(|k| self.kind_has_decimal(k, seen)),
+            OpKind::Tuple(ks) | OpKind::Wrapped(ks) => {
+                ks.iter().any(|k| self.kind_has_decimal(k, seen))
+            }
             OpKind::Class(name) => {
                 if seen.contains(name) {
                     return false;
@@ -72,6 +85,14 @@ impl Transpiler {
                         e == name && ks.iter().any(|k| self.kind_has_decimal(k, seen))
                     })
                 {
+                    return true;
+                }
+                // An interface- or base-typed operand can hold ANY subtype, so a decimal in any
+                // implementer or subclass counts (the checker allows `Shape s1 == Shape s2`).
+                if self.class_subtypes.get(name).is_some_and(|subs| {
+                    subs.iter()
+                        .any(|c| self.kind_has_decimal(&OpKind::Class(c.clone()), seen))
+                }) {
                     return true;
                 }
                 let own = self
@@ -112,6 +133,19 @@ impl Transpiler {
             Self::paren_if_compound(lhs, l.clone()),
             Self::paren_if_compound(rhs, r.clone()),
         );
+        // PHP arrays turn an integer-like string KEY into an int, so a key read back from
+        // `Map.keys` / a `for (string k in m)` is `int(10)` while its static kind is `string`
+        // (KNOWN_ISSUES "Map key coercion"). The old loose `10 == "10"` hid that; a bare `===` would
+        // expose it. A non-literal string operand is therefore cast, which is free for a real string.
+        let norm = |e: &Expr, code: String| {
+            if op == Some(strict) && !matches!(e, Expr::Str(..)) && self.expr_kind(e) == OpKind::Str
+            {
+                format!("(string){code}")
+            } else {
+                code
+            }
+        };
+        let (pl, pr) = (norm(lhs, pl), norm(rhs, pr));
         match op {
             Some(op) => format!("{pl} {op} {pr}"),
             None => {

@@ -1,23 +1,40 @@
 # Known Issues & Limitations
 
-## STRING-EQ-DECIMAL-ERASED — a decimal behind an unresolved type parameter is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
+## STRING-EQ-DECIMAL-ERASED — a decimal compared inside an erased generic BODY is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
 
-`==`/`!=` on `string` transpiles to `===`/`!==` (statically typed) or to the `__phorj_eq` helper (any operand the transpiler
-cannot pin to a scalar). A `decimal` is a PHP *string* carrier, so where the operand's kind is UNKNOWN the helper cannot
-tell `"1.50"` the decimal from `"1.50"` the string and compares exactly. Failing programs, all `true` natively and `false`
-in the transpiled PHP: `function same<T>(T a, T b): bool { return a == b; }` with `same(1.50d, 1.5d)`; and a generic CLASS
-instantiated at decimal — `class Box<T> { constructor(public T v) {} }`, `Box<decimal> a = new Box(1.50d); Box<decimal> b =
-new Box(1.5d); a == b` — because the field's kind is the unresolved parameter `T`. Developer ruling (DEC-557, re-confirmed
-2026-10-02 for the generic-class case): strings win, because the string case (`same("10", "10.0")`) is the common one and
-was silently WRONG.
+`==`/`!=` on `string` transpiles to `===`/`!==`, and any operand whose type the transpiler cannot pin goes through the
+structural `__phorj_eq` helper. A `decimal` is a PHP *string* carrier, so where the operand's type is the bare, erased type
+parameter the helper cannot tell `"1.50"` the decimal from `"1.50"` the string and compares exactly. The ONE remaining
+shape, `true` natively and `false` in the transpiled PHP: `function same<T>(T a, T b): bool { return a == b; }` with
+`same(1.50d, 1.5d)` (also `same(o1, o2)` for two `Option<decimal>` — the body sees only `T`). Developer ruling (DEC-557):
+strings win there, because the string case (`same("10", "10.0")`) is the common one and was silently WRONG.
 
-Not affected, measured: every site whose type the transpiler resolves — `decimal?`, `List<decimal>`, `Map<string, decimal>`,
-plain classes and enums with decimal fields or payloads (alone, or nested in a class or list), call results, field reads, `xs[0]`, `(o ?? a)` — keeps loose `==` and agrees on all three
-legs (pinned in `examples/guide/string-equality.phg`). Residual: a class or container that mixes `string` and `decimal`
-fields keeps the loose behaviour for its strings. The structural fix is a distinguishable decimal carrier in PHP (a
-separate large slice). The LIFTER half is open: PHP loose `==` still lifts to strict `==` (scout row 4l-b9). PENDING (not
-ruled): whether this is a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the
-decimal-`<` entry below is deliberately left unchanged until the developer rules.
+Everything the transpiler can type keeps numeric decimal equality and agrees on all three legs, pinned by
+`examples/guide/string-equality.phg` (29 lines) and, arm by arm, by `tests/transpile_eq.rs`: `decimal`, `decimal?` (params,
+returns, fields), `List<decimal>`, `Map<string, decimal>`, plain classes and enums with decimal fields or payloads (alone,
+or nested in a class or list), an interface- or base-typed operand holding a decimal implementer, a directly constructed
+variant, a generic instantiated at decimal at a typed site (`Box<decimal>`, `Option<decimal>`, `Result<decimal, string>`),
+call results, field reads, `xs[0]`, `(o ?? a)`. Residual: a class or container that mixes `string` and `decimal` fields
+keeps the loose behaviour for its strings. The structural fix is a distinguishable decimal carrier in PHP (a separate
+large slice). The LIFTER half is open: PHP loose `==` still lifts to strict `==` (scout row 4l-b9). PENDING (not ruled):
+whether this is a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the decimal-`<` entry
+below is deliberately left unchanged until the developer rules.
+
+## STRING-EQ-MAP-KEY — `==` on a string now survives PHP's integer-key coercion (DEC-557, 2026-10-02)
+
+PHP turns an integer-like string KEY into an int, so a key read back from `Map.keys` or `for (string k in m)` is `int(10)`
+while its static kind is `string` (the older "Map key coercion" caveat, still true for DISPLAY). The loose `10 == "10"` the
+transpiler used to emit hid that for comparisons; the strict `===` DEC-557 emits would have exposed it (the panel measured
+`k == "10"` going `true` → `false` on the PHP leg). A non-literal string operand is therefore cast, `(string)$k === "10"`,
+and the helper compares a string against an int as strings, so key reads compare as they do natively
+(`Map.keys(m) == ["7"]` too, pinned in the example). Display of such a key under PHP is unchanged.
+
+## PLAYGROUND-EQ-UNGUARDED — no CI check runs `__phorj_eq` through php-wasm (found 2026-10-02 by the DEC-557 panel)
+
+`playground/tests/php-run.test.mjs` runs 8 hand-written emit-shape checks plus one real-transpiler check that needs a `phg`
+binary, which the playground CI job does not build. One reviewer ran `examples/guide/string-equality.phg`'s emitted PHP
+through php-wasm 0.1.0 (PHP 8.4.1) by hand: 23 lines identical to the VM and PHP 8.5.11 `-n` at that time (SPL,
+`spl_object_id`, `static`, `try/finally` and `\Closure` all work there). Nothing keeps that true.
 
 ## DEEP-EQ-PHP-LIMIT — comparing a very deep instance chain with `==` exhausts PHP's memory where native succeeds (found 2026-10-02 by the DEC-557 panel)
 

@@ -2,6 +2,8 @@ package Main;
 
 import Core.Output;
 import Core.Math;
+import Core.List;
+import Core.Map;
 import Core.String;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
@@ -16,6 +18,45 @@ enum Price { Exact(decimal amount), Label(string text) }
 
 class Priced {
     constructor(public Price current, public List<Price> history) {}
+}
+
+interface Shape {
+    function area(): decimal;
+}
+
+class Sq implements Shape {
+    constructor(public decimal side) {}
+    function area(): decimal {
+        return this.side;
+    }
+}
+
+open class Base {
+    constructor() {}
+}
+
+class Sub extends Base {
+    constructor(public decimal v) {}
+}
+
+class Box<T> {
+    constructor(public T v) {}
+}
+
+class Holder {
+    constructor(public decimal? amount) {}
+}
+
+function nullA(): decimal? {
+    return 1.50d;
+}
+
+function nullB(): decimal? {
+    return 1.5d;
+}
+
+function nullableParams(decimal? a, decimal? b): bool {
+    return a == b;
 }
 
 class Money {
@@ -114,6 +155,32 @@ function main(): void {
     List<Price> la = [pa];
     List<Price> lb = [pb];
     Output.printLine("{pa == pb} {wa == wb} {la == lb}");
+    // ... and so does every type that merely CONTAINS one: an optional (param, return, field), an
+    // interface- or base-typed operand holding a decimal implementer, a directly constructed variant,
+    // a generic instantiated at decimal, and the first element / `??` of a decimal list / optional.
+    Holder h1 = new Holder(1.50d);
+    Holder h2 = new Holder(1.5d);
+    Output.printLine("{nullableParams(1.50d, 1.5d)} {nullA() == nullB()} {h1 == h2}");
+    Shape s1 = new Sq(1.50d);
+    Shape s2 = new Sq(1.5d);
+    Base b1 = new Sub(1.50d);
+    Base b2 = new Sub(1.5d);
+    List<Shape> ss1 = [s1];
+    List<Shape> ss2 = [s2];
+    Output.printLine("{s1 == s2} {b1 == b2} {ss1 == ss2}");
+    bool direct = new Price.Exact(1.50d) == new Price.Exact(1.5d);
+    Box<decimal> g1 = new Box(1.50d);
+    Box<decimal> g2 = new Box(1.5d);
+    decimal? oq = 1.50d;
+    Output.printLine("{direct} {g1 == g2} {dx[0] == 1.5d} {(oq ?? 0.0d) == 1.5d}");
+    // A map KEY that looks like an int is an int in PHP, yet a `string` here: it must still equal
+    // its string (the old loose `==` hid PHP's key coercion; a bare `===` would not).
+    Map<string, int> keyed = ["10" => 1, "abc" => 2];
+    for (string k in Map.keys(keyed)) {
+        Output.printLine("{k == \"10\"} {k == \"abc\"} {same(k, \"10\")}");
+    }
+    Map<string, int> seven = ["7" => 1];
+    Output.printLine("{Map.keys(seven) == [\"7\"]}");
     // Scalars never equal across types: a union can hold 1 or 1.0, true or 1, and PHP's loose `==` says equal.
     int | float u1 = 1;
     int | float u2 = 1.0;

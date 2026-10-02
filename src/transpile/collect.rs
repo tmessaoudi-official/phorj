@@ -142,5 +142,19 @@ impl Transpiler {
                 Item::Test { .. } => {}
             }
         }
+        // DEC-557: the reverse inheritance index (`extends` + every transitively implemented interface).
+        for (child, parents) in self.class_parents.clone() {
+            for p in parents {
+                self.class_subtypes
+                    .entry(p)
+                    .or_default()
+                    .push(child.clone());
+            }
+        }
+        for (cls, ifaces) in crate::ast::class_implements(program) {
+            for i in ifaces {
+                self.class_subtypes.entry(i).or_default().push(cls.clone());
+            }
+        }
     }
 }
