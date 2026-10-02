@@ -144,7 +144,7 @@ impl Transpiler {
             self.line("$out = [];");
             self.line("foreach (explode(\"\\n\", $s) as $line) {");
             self.indent += 1;
-            self.line("$t = trim($line);");
+            self.line("$t = trim($line, \" \\t\\n\\r\\0\\x0B\");");
             self.line("if ($t === \"\") { continue; }");
             self.line("$d = json_decode($t);");
             self.line("if (json_last_error() !== JSON_ERROR_NONE) { return null; }");
@@ -175,13 +175,13 @@ impl Transpiler {
             self.line("$section = \"\";");
             self.line("foreach (explode(\"\\n\", $s) as $line) {");
             self.indent += 1;
-            self.line("$t = trim($line);");
+            self.line("$t = trim($line, \" \\t\\n\\r\\0\\x0B\");");
             self.line("if ($t === \"\" || $t[0] === \";\" || $t[0] === \"#\") { continue; }");
-            self.line("if ($t[0] === \"[\" && substr($t, -1) === \"]\") { $section = trim(substr($t, 1, -1)); continue; }");
+            self.line("if ($t[0] === \"[\" && substr($t, -1) === \"]\") { $section = trim(substr($t, 1, -1), \" \\t\\n\\r\\0\\x0B\"); continue; }");
             self.line("$eq = strpos($t, \"=\");");
             self.line("if ($eq === false) { continue; }");
-            self.line("$key = trim(substr($t, 0, $eq));");
-            self.line("$val = trim(substr($t, $eq + 1));");
+            self.line("$key = trim(substr($t, 0, $eq), \" \\t\\n\\r\\0\\x0B\");");
+            self.line("$val = trim(substr($t, $eq + 1), \" \\t\\n\\r\\0\\x0B\");");
             self.line("$full = $section === \"\" ? $key : $section . \".\" . $key;");
             self.line("$out[$full] = $val;");
             self.indent -= 1;

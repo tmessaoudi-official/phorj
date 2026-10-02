@@ -16,7 +16,9 @@
 //! Case-insensitive (PHP class names are). The list is the always-loaded core only — extension
 //! classes (mysqli, PDO, …) are intentionally excluded: they are not present without the extension,
 //! and gating on them would reject legal names. Kept in sync empirically against the transpile floor
-//! (php-8.5.8).
+//! (php-8.5.8), PLUS the 8.6 additions that could collide with a plausible user type name
+//! (`SortDirection`, `Stream*`): the 8.5 gate cannot see those, so they are listed from the 8.7-dev probe
+//! of the 2026-10-01 parity review and pinned by `tests/php_86_compat.rs`.
 
 /// The always-preloaded PHP builtin class/interface names (lowercased), the union consulted by both
 /// the DEC-202 reject and the DEC-213 variant mangle. See the module doc for the invariant.
@@ -38,6 +40,15 @@ const BUILTIN_CLASSES: &[&str] = &[
     "fiber",
     "fibererror",
     "weakreference",
+    // PHP 8.6 (verified present on the 8.7-dev build, absent on the 8.5 gate — so the gate cannot see a
+    // collision): a user `enum SortDirection` fatals there with `Class SortDirection_Asc cannot extend enum`.
+    "sortdirection",
+    "streamerror",
+    "streamexception",
+    "streamerrorstore",
+    "streamerrormode",
+    "streamerrorcode",
+    "streampollhandle",
     "weakmap",
     "stringable",
     "traversable",
@@ -158,6 +169,11 @@ pub fn is_php_builtin_class_name(name: &str) -> bool {
 /// `Cannot redeclare` fatal from the oracle, and the fix is one row here.
 const BUILTIN_FUNCTIONS: &[&str] = &[
     // array / iteration
+    // PHP 8.6+: a user `function clamp` is `Cannot redeclare` there and the 8.5 gate cannot see it
+    // (`examples/lift/arity.phg` hit it for real). Only single-word names belong here: Phorj function
+    // names are camelCase (E-NAME-CASE), so the snake_case 8.5/8.6 additions (`array_first`,
+    // `stream_last_errors`, …) can never be a user function name.
+    "clamp",
     "count",
     "sort",
     "rsort",

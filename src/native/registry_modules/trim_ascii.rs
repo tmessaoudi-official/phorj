@@ -42,7 +42,8 @@ pub(super) fn trim_ascii_natives() -> Vec<NativeFn> {
         // Only the ONE-argument form: `trim($s, $chars)` has a different arity, so the lifter's arity
         // check leaves it unmapped (DEC-545 rules the default set only).
         lift_from: &["trim"],
-        php: |a| format!("trim({})", parg(a, 0)),
+        // Explicit list, never the default: PHP 8.6 added `\f` to `trim()`'s default (rfc/trim_form_feed).
+        php: |a| format!("trim({}, \" \\t\\n\\r\\0\\x0B\")", parg(a, 0)),
     }]
 }
 

@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — transpiled output stays valid on PHP 8.6+ (parity review D-4.1–4.3, 2026-10-02)
+
+The 8.5 oracle that gates every commit cannot see three breakages that only appear on PHP 8.6+, each reproduced
+on the 8.7-dev build in the 2026-10-01 review. A user `function clamp` (a real corpus hit: `examples/lift/arity.phg`)
+is now mangled to `clamp_`, like every other PHP builtin name. A user type named `SortDirection`, `StreamError`,
+`StreamException`, `StreamErrorStore`, `StreamErrorMode`, `StreamErrorCode` or `StreamPollHandle` is now rejected
+with `E-RESERVED-NAME` (it transpiled to a class PHP 8.6 refuses to declare). `String.trimAscii` and the INI/NDJSON
+line helpers now emit `trim($s, " \t\n\r\0\x0B")` instead of the default list, because PHP 8.6 added `\f` to the
+default (`rfc/trim_form_feed`) and Phorj's set never had it — an Invariant-1 break on `\f`-bearing input. Pinned by
+`tests/php_86_compat.rs`, each case sabotaged. Not done: a dev-build drift test that diffs the oracle's
+`get_defined_functions()` / `get_declared_classes()` against a newer PHP, the deprecated user function names
+`is` / `let` / `readonly` (an 8.6 deprecation, not a fatal), and promoting the 8.6 canary to gating.
+
 ### Fixed — string `==` / `!=` no longer transpile to PHP's loose `==` (DEC-557, 2026-10-02)
 
 `"10" == "10.0"` was `false` on the VM and the tree-walker but `true` in the transpiled PHP — silently, for any two
