@@ -132,7 +132,7 @@ fn cryptography_natives_registered_and_emit() {
     );
     assert_eq!(
         php("verifyPassword", &["$pw", "$h"]),
-        "password_verify($pw, $h)"
+        "__phorj_verify_password($pw, $h)" // DEC-561: guarded against bcrypt
     );
     // hashPassword is non-deterministic (quarantined); verifyPassword is deterministic (gateable).
     let reg = crate::native::registry();

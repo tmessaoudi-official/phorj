@@ -130,9 +130,16 @@ impl Transpiler {
                 }
                 if matches!(op, BinaryOp::Rem) {
                     return Ok(match self.arith_kind(lhs, rhs) {
-                        OpKind::Int => {
+                        // DEC-560: a literal divisor other than -1 cannot overflow, so the hot-loop
+                        // `i % 2` keeps the bare operator; anything else could be `-1` against
+                        // `i64::MIN` (PHP: 0, phorj: fault) and goes through the checked helper.
+                        OpKind::Int if matches!(&**rhs, Expr::Int(n, _) if *n != -1) => {
                             let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
                             format!("{l} % {r}")
+                        }
+                        OpKind::Int => {
+                            self.gates.uses_checked_rem = true;
+                            format!("{bs}__phorj_checked_rem({l}, {r})")
                         }
                         // Float `%` routes through `__phorj_rem` (not a bare `fmod`) so a zero divisor
                         // *throws* — PHP `fmod($x, 0.0)` returns `NAN`, but Phorj faults on any

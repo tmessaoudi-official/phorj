@@ -555,9 +555,9 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             params: vec![s(), Ty::Int, Ty::Int],
             ret: Ty::String,
             pure: true,
-            eval: NativeEval::Pure(text_substring),
+            eval: NativeEval::Pure(super::text_substring::text_substring),
             lift_from: &["substr"],
-            php: |a| format!("substr({}, {}, {})", parg(a, 0), parg(a, 1), parg(a, 2)),
+            php: super::text_substring::php_substring,
         },
     ]
 }

@@ -266,8 +266,15 @@ pub fn lex_php_with_docs(
                     .map_err(|_| format!("lift lex error: bad float `{text}` (line {line})"))?;
                 push(&mut out, PTok::Float(v), line);
             } else {
-                let v: i64 = text
-                    .parse()
+                // DEC-558: a leading `0` is PHP's legacy OCTAL (`0755` = 493). Reading it as decimal
+                // silently changed the value, and phorj itself now refuses a leading-zero integer, so the
+                // lifter hands over the value PHP means. `089` is invalid octal in PHP too.
+                let radix = if text.len() > 1 && text.starts_with('0') {
+                    8
+                } else {
+                    10
+                };
+                let v: i64 = i64::from_str_radix(&text, radix)
                     .map_err(|_| format!("lift lex error: bad int `{text}` (line {line})"))?;
                 push(&mut out, PTok::Int(v), line);
             }

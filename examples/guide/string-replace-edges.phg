@@ -1,0 +1,20 @@
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// `String.replace` edge cases that PHP's `str_replace` and a naive native disagree on (DEC-559): an
+// EMPTY needle changes nothing, on every leg. (Rust's `str::replace` would insert the replacement
+// between every character: `xaxbxcx`.)
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine("[{String.replace(\"abc\", \"\", \"x\")}]");
+    Output.printLine("[{String.replace(\"\", \"\", \"x\")}]");
+    Output.printLine("[{String.replace(\"héllo\", \"\", \"-\")}]");
+    // Ordinary replacement is unaffected, including a needle that is not there and an empty replacement.
+    Output.printLine(
+        "[{String.replace(\"a-b-c\", \"-\", \"_\")}] [{String.replace(\"abc\", \"z\", \"_\")}] [{String.replace(\"a-b\", \"-\", \"\")}]"
+    );
+}

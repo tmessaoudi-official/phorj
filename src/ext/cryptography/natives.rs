@@ -33,12 +33,31 @@ pub(super) fn crypto_hash_password(args: &[Value], _: &mut String) -> Result<Val
     }
 }
 
+/// Is `hash` a bcrypt crypt string (`$2a$`, `$2b$`, `$2x$`, `$2y$`)? Mirrored by the PHP guard in
+/// `__phorj_verify_password` (`/^\$2[abxy]\$/`).
+fn is_bcrypt_hash(hash: &str) -> bool {
+    let b = hash.as_bytes();
+    b.len() >= 4
+        && b[0] == b'$'
+        && b[1] == b'2'
+        && matches!(b[2], b'a' | b'b' | b'x' | b'y')
+        && b[3] == b'$'
+}
+
 /// `Crypto.verifyPassword(string password, string hash) -> bool` — constant-time verify against a PHC
-/// hash. A malformed hash string is `false` (mirrors PHP `password_verify`), never a fault.
+/// hash. A malformed hash string is `false` (mirrors PHP `password_verify`); a bcrypt hash FAULTS (DEC-561).
 /// Deterministic. PHP: `password_verify($pw, $hash)`.
 pub(super) fn crypto_verify_password(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(pw), Value::Str(hash)] => {
+            // DEC-561: bcrypt (`$2a$`/`$2b$`/`$2x$`/`$2y$` — PHP's `password_hash` default) can never
+            // verify here, so `false` would be a silent wrong-password lockout. Fault, naming the cause.
+            if is_bcrypt_hash(hash) {
+                return Err(
+                    "Cryptography.verifyPassword: unsupported hash algorithm (bcrypt) — only argon2 hashes verify"
+                        .into(),
+                );
+            }
             let parsed = match PasswordHash::new(hash) {
                 Ok(p) => p,
                 Err(_) => return Ok(Value::Bool(false)),
@@ -73,7 +92,54 @@ pub fn cryptography_natives() -> Vec<NativeFn> {
             pure: true, // deterministic for a fixed (password, hash) → gateable
             eval: NativeEval::Pure(crypto_verify_password),
             lift_from: &["password_verify"],
-            php: |a| format!("password_verify({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_verify_password({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn verify(pw: &str, hash: &str) -> Result<Value, String> {
+        crypto_verify_password(
+            &[Value::Str(pw.into()), Value::Str(hash.into())],
+            &mut String::new(),
+        )
+    }
+
+    /// DEC-561: a bcrypt hash (PHP's `password_hash` default) can never verify here — only `argon2` is
+    /// admitted — so answering `false` was a silent wrong-password lockout. It faults, naming the cause.
+    #[test]
+    fn a_bcrypt_hash_faults_instead_of_silently_failing() {
+        for prefix in ["$2y$", "$2a$", "$2b$", "$2x$"] {
+            let hash = format!("{prefix}10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234");
+            let e = verify("secret", &hash).expect_err(prefix);
+            assert!(e.contains("bcrypt"), "{prefix}: {e}");
+        }
+    }
+
+    #[test]
+    fn other_malformed_hashes_stay_false_and_argon2_still_verifies() {
+        for bad in [
+            "",
+            "plain",
+            "$2$short",
+            "$1$md5$hash",
+            "$2y",
+            "$argon2id$garbage",
+        ] {
+            assert!(
+                matches!(verify("x", bad), Ok(Value::Bool(false))),
+                "{bad:?}"
+            );
+        }
+        let Ok(Value::Str(h)) =
+            crypto_hash_password(&[Value::Str("secret".into())], &mut String::new())
+        else {
+            panic!("hash");
+        };
+        assert!(matches!(verify("secret", &h), Ok(Value::Bool(true))));
+        assert!(matches!(verify("wrong", &h), Ok(Value::Bool(false))));
+    }
 }

@@ -232,6 +232,11 @@ pub(super) fn text_join(args: &[Value], _: &mut String) -> Result<Value, String>
 }
 pub(super) fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
+        // DEC-559: an empty needle is a no-op, like PHP's `str_replace` (Rust's `str::replace` would
+        // insert the replacement between every character).
+        [Value::Str(s), Value::Str(from), Value::Str(_)] if from.is_empty() => {
+            Ok(Value::Str(s.clone()))
+        }
         [Value::Str(s), Value::Str(from), Value::Str(to)] => {
             Ok(Value::Str(s.replace(from.as_str(), to.as_str()).into()))
         }
@@ -540,31 +545,6 @@ pub(super) fn text_parse_float(args: &[Value], _: &mut String) -> Result<Value, 
             }
         }
         _ => Err("String.parseFloat expects (string, bool)".into()),
-    }
-}
-/// `substring(string, int, int) -> string` — a byte-indexed slice mirroring PHP `substr($s, start,
-/// len)` exactly (negative start/len count from the end; out-of-range clamps to empty). Byte-based
-/// (no mbstring); a slice that splits a multibyte char yields invalid UTF-8 → faults (EV-7).
-pub(super) fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
-    match args {
-        [Value::Str(s), Value::Int(start), Value::Int(length)] => {
-            let bytes = s.as_bytes();
-            let n = bytes.len() as i64;
-            let begin = if *start < 0 {
-                (n + *start).max(0)
-            } else {
-                (*start).min(n)
-            };
-            let end = if *length < 0 {
-                (n + *length).max(begin)
-            } else {
-                begin.saturating_add(*length).min(n) // row 5z: PHP_INT_MAX means "to the end"
-            };
-            String::from_utf8(bytes[begin as usize..end as usize].to_vec())
-                .map(|s| Value::Str(s.into()))
-                .map_err(|_| "String.substring split a multibyte character (byte-indexed)".into())
-        }
-        _ => Err("String.substring expects (string, int, int)".into()),
     }
 }
 

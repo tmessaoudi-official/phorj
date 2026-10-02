@@ -93,6 +93,16 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              i128 range is a compile-time error (not a runtime fault). For dynamic/string input,\n\
              use `Decimal.of(s)` (returns `decimal?`, `null` on a bad string).\n"
         }
+        "E-LEADING-ZERO" => {
+            "E-LEADING-ZERO — an integer literal starts with a `0` (`0755`, `007`).\n\n\
+             PHP reads `0755` as OCTAL (493); phorj used to read it as decimal 755, a silent difference\n\
+             for anyone with PHP muscle memory (DEC-558), so a leading-zero integer is refused.\n\
+             Write what you mean:\n\n\
+             \t0o755   // octal 493 — explicit\n\
+             \t755     // decimal 755\n\n\
+             `0` alone, a float such as `0.5` or `007.5`, and the `0x` / `0b` / `0o` prefixes stay legal.\n\
+             The PHP lifter turns `0755` into its value, 493.\n"
+        }
         "E-VARIADIC-UNSUPPORTED" => {
             "E-VARIADIC-UNSUPPORTED — a variadic parameter (`...`) on a method or lambda.\n\n\
              Variadic parameters (`int ...nums`, DEC-298) are supported on FREE FUNCTIONS in v1; a\n\

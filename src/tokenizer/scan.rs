@@ -52,8 +52,8 @@ impl<'a> Lexer<'a> {
         line: u32,
         col: u32,
     ) -> Result<Token, Diagnostic> {
-        // Base-prefixed integers `0x` / `0b` / `0o` (Rust-style; a bare leading `0` stays decimal —
-        // implicit octal is a PHP footgun we deliberately drop). Underscore separators are allowed.
+        // Base-prefixed integers `0x` / `0b` / `0o` (Rust-style; a bare leading `0` is REFUSED below —
+        // implicit octal is a PHP footgun we deliberately drop, DEC-558). Underscore separators are allowed.
         if self.peek() == Some(b'0') {
             if let Some(radix) = match self.src.get(self.pos + 1) {
                 Some(b'x' | b'X') => Some(16u32),
@@ -189,6 +189,23 @@ impl<'a> Lexer<'a> {
             }
             TokenKind::Float(f)
         } else {
+            // DEC-558: `0755` is refused — PHP reads it as octal 493 while phorj used to lex it as
+            // decimal 755, a silent divergence for anyone with PHP muscle memory. `0` alone, a float
+            // (`007.5`) and the explicit `0o…` form (handled above) stay legal.
+            if text.len() > 1 && text.starts_with('0') {
+                let trimmed = text.trim_start_matches('0');
+                let dec = if trimmed.is_empty() { "0" } else { trimmed };
+                return Err(Diagnostic::new(
+                    Stage::Lex,
+                    format!(
+                        "`{text}` is a leading-zero integer literal — PHP reads that as octal; write \
+                         `0o{dec}` for octal or `{dec}` for decimal"
+                    ),
+                    line,
+                    col,
+                )
+                .with_code("E-LEADING-ZERO"));
+            }
             let i: i64 = text.parse().map_err(|_| {
                 Diagnostic::new(Stage::Lex, "integer literal out of range", line, col)
             })?;

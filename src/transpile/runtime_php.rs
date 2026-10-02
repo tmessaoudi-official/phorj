@@ -24,6 +24,8 @@ impl Transpiler {
             self.line("function __phorj_rem($a, $b) {");
             self.indent += 1;
             self.line("if ($b == 0) { throw new \\DivisionByZeroError(\"Modulo by zero\"); }");
+            // DEC-560: `PHP_INT_MIN % -1` is `0` in PHP but an overflow fault in phorj.
+            self.line("if (is_int($a) && is_int($b) && $b === -1 && $a === PHP_INT_MIN) { throw new \\OverflowException('integer overflow'); }");
             self.line("return (is_int($a) && is_int($b)) ? $a % $b : fmod($a, $b);");
             self.indent -= 1;
             self.line("}");
@@ -592,6 +594,40 @@ impl Transpiler {
                 self.indent -= 1;
                 self.line("}");
             }
+        }
+        if self.gates.uses_checked_rem {
+            // DEC-560: `PHP_INT_MIN % -1` is `0` in PHP; phorj faults (the quotient overflows). A zero
+            // divisor still reaches PHP's own `%`, which throws `DivisionByZeroError` like phorj.
+            self.line("function __phorj_checked_rem($a, $b) {");
+            self.indent += 1;
+            self.line("if ($b === -1 && $a === PHP_INT_MIN) { throw new \\OverflowException('integer overflow'); }");
+            self.line("return $a % $b;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.gates.uses_verify_password {
+            // DEC-561: phorj admits only argon2, so a bcrypt hash (`$2a$`/`$2b$`/`$2x$`/`$2y$`, PHP's
+            // `password_hash` default) can never verify on the native legs — they FAULT rather than
+            // answer a silent `false`. PHP's `password_verify` would verify it, so guard first.
+            self.line("function __phorj_verify_password($pw, $hash) {");
+            self.indent += 1;
+            self.line("if (preg_match('/^\\$2[abxy]\\$/', $hash) === 1) { throw new \\UnexpectedValueException('Cryptography.verifyPassword: unsupported hash algorithm (bcrypt) — only argon2 hashes verify'); }");
+            self.line("return password_verify($pw, $hash);");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.gates.uses_substring {
+            // DEC-560: `String.substring` is byte-indexed and FAULTS when the slice splits a multibyte
+            // character; PHP's `substr` returns the broken bytes. A slice of a valid UTF-8 string is valid
+            // UTF-8 exactly when both cut points fall on character boundaries (`preg_match('//u')`, core
+            // PCRE, available under `php -n`).
+            self.line("function __phorj_substring($s, $start, $length) {");
+            self.indent += 1;
+            self.line("$r = substr($s, $start, $length);");
+            self.line("if (preg_match('//u', $r) !== 1) { throw new \\UnexpectedValueException('String.substring split a multibyte character (byte-indexed)'); }");
+            self.line("return $r;");
+            self.indent -= 1;
+            self.line("}");
         }
         if self.gates.uses_checked_int {
             // DEC-255: `Math.abs`/`Math.integerPower`/`List.sum` return an int in phorj and FAULT on

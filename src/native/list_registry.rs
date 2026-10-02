@@ -93,8 +93,8 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(list_product),
-            // PHP `array_product` (empty → 1); checked-overflow faults, PHP promotes to float — the
-            // `array_sum` caveat, examples stay in i64 range.
+            // PHP `array_product` (empty → 1); checked-overflow faults, and PHP's builtin promotes to float, so
+            // `call.rs` wraps it in `__phorj_checked_int` exactly like `array_sum` (DEC-560).
             lift_from: &["array_product"],
             php: |a| format!("array_product({})", parg(a, 0)),
         },

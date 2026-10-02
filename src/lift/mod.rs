@@ -89,6 +89,8 @@ mod lifter_tests_match_true;
 #[cfg(test)]
 mod lifter_tests_ns;
 #[cfg(test)]
+mod lifter_tests_octal;
+#[cfg(test)]
 mod lifter_tests_ordering;
 #[cfg(test)]
 mod lifter_tests_php83;

@@ -270,8 +270,12 @@ impl Transpiler {
                                 "trimEnd" => self.gates.uses_text_trim_end = true,
                                 "parseFloat" => self.gates.uses_text_parse_float = true,
                                 "chunk" => self.gates.uses_text_chunk = true,
+                                "substring" => self.gates.uses_substring = true,
                                 _ => {}
                             }
+                        }
+                        if nat.module == "Core.Cryptography" && nat.name == "verifyPassword" {
+                            self.gates.uses_verify_password = true;
                         }
                         if nat.module == "Core.List" {
                             match nat.name {
@@ -443,6 +447,7 @@ impl Transpiler {
                                 ("Core.Math", "abs")
                                     | ("Core.Math", "integerPower")
                                     | ("Core.List", "sum")
+                                    | ("Core.List", "product") // DEC-560
                             ) {
                                 self.gates.uses_checked_int = true;
                                 let bs = if self.namespaced { "\\" } else { "" };

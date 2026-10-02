@@ -227,6 +227,15 @@ pub(in crate::transpile) struct HelperGates {
     /// THROW on integer overflow (bare PHP int arithmetic silently promotes to float, where phorj
     /// faults). Only int-int arithmetic wraps; a float operand yields a legitimate float (no fault).
     pub(in crate::transpile) uses_checked_arith: bool,
+    /// DEC-560: an int `%` whose divisor could be `-1` was emitted → `__phorj_checked_rem` throws on
+    /// `i64::MIN % -1` (PHP gives `0`, phorj faults). A literal divisor other than `-1` keeps bare `%`.
+    pub(in crate::transpile) uses_checked_rem: bool,
+    /// DEC-560: `String.substring` was emitted → `__phorj_substring` throws when the byte-indexed slice
+    /// splits a multibyte character (PHP's `substr` returns the broken bytes, phorj faults).
+    pub(in crate::transpile) uses_substring: bool,
+    /// DEC-561: `Cryptography.verifyPassword` was emitted → `__phorj_verify_password` throws on a bcrypt
+    /// hash (PHP's `password_verify` would verify it; phorj has no bcrypt and faults).
+    pub(in crate::transpile) uses_verify_password: bool,
     /// DEC-255: a native whose int result PHP silently promotes to float on overflow was emitted
     /// (`Math.abs` at `i64::MIN`, `Math.integerPower` overflow/neg-exp, `List.sum` overflow) → emit
     /// `__phorj_checked_int($r)` which THROWS when the wrapped result promoted, matching phorj's fault.

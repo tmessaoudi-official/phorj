@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — four silent divergences from the PHP-parity review, ruled by the developer (DEC-558–561, 2026-10-02)
+
+A leading-zero integer literal (`0755`) is now a compile error, `E-LEADING-ZERO` (it used to lex as decimal 755 while PHP
+reads octal 493); the lifter reads PHP `0755` as 493. `String.replace` with an empty needle returns the input
+unchanged on every leg, as PHP's `str_replace` does (it was `xaxbxcx` natively). Where the native legs fault, the PHP leg now
+faults too: `i64::MIN % -1` (`__phorj_checked_rem`; a literal divisor other than -1 keeps the bare `%`, so `i % 2` costs
+nothing), `List.product` overflow (wrapped in `__phorj_checked_int`) and `String.substring` splitting a multibyte character
+(`__phorj_substring`). `Cryptography.verifyPassword` on a bcrypt hash (`$2y$`…, PHP's default) faults on every leg instead
+of answering a silent `false` — a wrong-password lockout (no bcrypt crate was admitted). Each pinned by a test that was
+red first and sabotaged; the example `guide/string-replace-edges.phg` is byte-identical on all three legs. Still PENDING
+from the same review: `Math.round(1e300)`, self-referential property hooks, `int | string` equality.
+
 ### Fixed — the lifter no longer emits `implements Countable` (and friends) that `phg check` rejects (parity review C1/C2, 2026-10-02)
 
 `class Bag implements Countable` lifted to `open class Bag implements Countable`, and the draft failed `E-IFACE-IMPL`

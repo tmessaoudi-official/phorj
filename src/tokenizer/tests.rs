@@ -115,10 +115,20 @@ fn number_literals() {
     assert_eq!(kinds("3.5 0.5"), vec![Float(3.5), Float(0.5), Eof]);
 }
 
+/// DEC-558 — a leading-zero integer is REFUSED (it used to lex as decimal, while PHP reads `0755` as
+/// octal 493: a silent divergence for anyone with PHP muscle memory). `0`, a float, a `decimal`
+/// literal and the explicit `0o…` form stay legal.
 #[test]
-fn leading_zero_int_collapses() {
-    // M1: leading zeros are absorbed by i64 parsing — `007` lexes to Int(7).
-    assert_eq!(kinds("007"), vec![TokenKind::Int(7), TokenKind::Eof]);
+fn a_leading_zero_integer_literal_is_rejected() {
+    for src in ["0755", "007", "00", "0_7", "010"] {
+        let d = lex(src).expect_err(src);
+        assert_eq!(d.code, Some("E-LEADING-ZERO"), "{src}: {d:?}");
+        assert!(d.message.contains("0o"), "the hint must name `0o…`: {d:?}");
+    }
+    assert_eq!(kinds("0"), vec![TokenKind::Int(0), TokenKind::Eof]);
+    assert_eq!(kinds("0o755"), vec![TokenKind::Int(493), TokenKind::Eof]);
+    assert_eq!(kinds("0.5"), vec![TokenKind::Float(0.5), TokenKind::Eof]);
+    assert_eq!(kinds("007.5"), vec![TokenKind::Float(7.5), TokenKind::Eof]);
 }
 
 #[test]

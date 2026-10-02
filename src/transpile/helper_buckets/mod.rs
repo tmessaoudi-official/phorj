@@ -36,7 +36,7 @@
 //! ## The count was wrong three times
 //!
 //! DEC-377 said **168**; DEC-412 corrected to **149 real**; the audited figure was **165**, and it is
-//! **191** as of DEC-557 (DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers,
+//! **194** as of DEC-561 (DEC-560 added `__phorj_checked_rem` and `__phorj_substring`, DEC-561 `__phorj_verify_password`; DEC-557 reached 191; DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers,
 //! DEC-494/496/487/489/472 the charset, accent-fold, sleep, word-wrap and process rows, DEC-554 the
 //! three typed-match helpers, DEC-557 the structural `__phorj_eq`). The number moves whenever a
 //! helper is added, which is fine; what must never drift again is the number stated here versus the
@@ -45,7 +45,7 @@
 //! table, and is asserted by the test below. `__phorj_unwrap` appears in comments but was inlined at
 //! M3 S2.5 and is not a helper.
 //!
-//! ## Bucket 1 — semantic necessity (72)
+//! ## Bucket 1 — semantic necessity (75)
 //!
 //! `checked_*` PHP overflows int→float instead of faulting · `dec_*` bcmath fixed-point, PHP has no
 //! decimal · `float_*` `round_*` `trunc` `div` `rem` `add` PHP's rounding/division differ at the edges ·
@@ -60,7 +60,8 @@
 //! form DEC-472 refuses; only `proc_open`'s array form passes argv without a shell.
 //!
 //!   `__phorj_add` `__phorj_capture` `__phorj_checked_add` `__phorj_checked_int`
-//!   `__phorj_checked_mul` `__phorj_checked_neg` `__phorj_checked_sub` `__phorj_class_name`
+//!   `__phorj_checked_mul` `__phorj_checked_neg` `__phorj_checked_rem` `__phorj_checked_sub`
+//!   `__phorj_class_name`
 //!   `__phorj_debug_enums` `__phorj_debug_quote` `__phorj_debug_render` `__phorj_debug_wrap`
 //!   `__phorj_dec_add` `__phorj_dec_check` `__phorj_dec_div` `__phorj_dec_div_exact`
 //!   `__phorj_dec_fmt` `__phorj_dec_mul` `__phorj_dec_of` `__phorj_dec_rem`
@@ -75,9 +76,9 @@
 //!   `__phorj_parse_int` `__phorj_proc_run` `__phorj_reflect_of` `__phorj_rem`
 //!   `__phorj_result_and_then` `__phorj_result_get_or_else` `__phorj_result_map` `__phorj_result_map_err`
 //!   `__phorj_result_or_else` `__phorj_result_to_option` `__phorj_round` `__phorj_round_div`
-//!   `__phorj_round_mode` `__phorj_sleep` `__phorj_str` `__phorj_str_chunk`
+//!   `__phorj_round_mode` `__phorj_sleep` `__phorj_str` `__phorj_str_chunk` `__phorj_substring`
 //!   `__phorj_text_index_of` `__phorj_text_reverse` `__phorj_text_trim` `__phorj_text_trim_end`
-//!   `__phorj_text_trim_start` `__phorj_trunc` `__phorj_wordwrap`
+//!   `__phorj_text_trim_start` `__phorj_trunc` `__phorj_verify_password` `__phorj_wordwrap`
 //!
 //! ## Bucket 2 — no single-expression equivalent (119)
 //!
@@ -147,6 +148,7 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_checked_int", 1),
     ("__phorj_checked_mul", 1),
     ("__phorj_checked_neg", 1),
+    ("__phorj_checked_rem", 1),
     ("__phorj_checked_sub", 1),
     ("__phorj_clamp", 2),
     ("__phorj_class_name", 1),
@@ -344,6 +346,7 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_sort_with", 2),
     ("__phorj_str", 1),
     ("__phorj_str_chunk", 1),
+    ("__phorj_substring", 1),
     ("__phorj_take_while", 2),
     ("__phorj_text_index_of", 1),
     ("__phorj_text_reverse", 1),
@@ -351,6 +354,7 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_text_trim_end", 1),
     ("__phorj_text_trim_start", 1),
     ("__phorj_trunc", 1),
+    ("__phorj_verify_password", 1),
     // FN-STR — `String.wordWrap`. Bucket 1 (semantic necessity): PHP's own `wordwrap` is
     // byte-oriented and splits multi-byte characters into invalid UTF-8, so the naive native call
     // would be WRONG for a phorj `string`, not merely differently shaped.

@@ -7561,3 +7561,30 @@ function main(): void {
         "html_literal_ufcs_receiver",
     );
 }
+
+/// DEC-560 — where the native legs fault, the PHP leg faults too: `i64::MIN % -1` (PHP: `0`),
+/// `List.product` overflow (PHP: a float) and `String.substring` splitting a multibyte character
+/// (PHP: the broken bytes). Each was a silent success on the PHP leg.
+#[test]
+fn dec560_remainder_product_and_substring_faults_also_fault_on_php() {
+    agree_err_php(
+        r#"import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int m = -9223372036854775807 - 1; int n = -1; Output.printLine("{m % n}"); }"#,
+    );
+    agree_err_php(
+        r#"import Core.Output; #[Entry(kind: EntryKind.Cli)] function main() -> void { int m = -9223372036854775807 - 1; Output.printLine("{m % -1}"); }"#,
+    );
+    agree_err_php(
+        r#"import Core.Output; import Core.List; #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{List.product([9223372036854775807, 2])}"); }"#,
+    );
+    agree_err_php(
+        r#"import Core.Output; import Core.String; #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("[{String.substring("héllo", 0, 2)}]"); }"#,
+    );
+}
+
+/// DEC-561 — a bcrypt hash faults on every leg (PHP's `password_verify` would have verified it).
+#[test]
+fn dec561_bcrypt_hash_faults_also_fault_on_php() {
+    agree_err_php(
+        r#"import Core.Output; import Core.Cryptography; #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{Cryptography.verifyPassword("secret", "$2y$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234")}"); }"#,
+    );
+}

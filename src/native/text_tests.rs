@@ -1,3 +1,4 @@
+use super::text_substring::text_substring;
 use super::*;
 
 #[test]
@@ -391,7 +392,10 @@ fn text_breadth_pad_indexof_substring() {
         php("indexOf", &["$s", "$n"]),
         "__phorj_text_index_of($s, $n)"
     );
-    assert_eq!(php("substring", &["$s", "$a", "$b"]), "substr($s, $a, $b)");
+    assert_eq!(
+        php("substring", &["$s", "$a", "$b"]),
+        "__phorj_substring($s, $a, $b)" // DEC-560: faults on a split multibyte char
+    );
     assert_eq!(
         registry()[index_of("Core.String", "indexOf").unwrap()].ret,
         Ty::Optional(Box::new(Ty::Int))
@@ -468,4 +472,25 @@ fn text_characters_splits_by_code_point() {
     // Astral-plane (4-byte UTF-8) code points: one `char` each, matching PHP `preg_split('//u')`
     // (verified byte-identical interp ≡ VM ≡ php). This is the edge a code-point splitter gets wrong.
     assert_eq!(chars("😀a🎉"), vec!["😀", "a", "🎉"]);
+}
+
+/// DEC-559: an EMPTY needle is a no-op (PHP's `str_replace` ignores an empty search), where Rust's
+/// `str::replace` inserts the replacement between every character — `xaxbxcx` natively, `abc` in PHP.
+#[test]
+fn replace_with_an_empty_needle_returns_the_input_unchanged() {
+    let mut o = String::new();
+    for (subject, to) in [("abc", "x"), ("", "x"), ("héllo", "-")] {
+        let got = text_replace(
+            &[
+                Value::Str(subject.into()),
+                Value::Str("".into()),
+                Value::Str(to.into()),
+            ],
+            &mut o,
+        );
+        assert!(
+            matches!(&got, Ok(Value::Str(s)) if s.as_str() == subject),
+            "replace({subject:?}, \"\", {to:?}) must return the input, got {got:?}"
+        );
+    }
 }

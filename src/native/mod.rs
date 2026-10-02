@@ -50,6 +50,7 @@ mod set;
 mod text;
 mod text_format;
 mod text_registry;
+mod text_substring;
 pub(crate) use text_format::parse_format_directive;
 mod time;
 pub(crate) mod validate;
