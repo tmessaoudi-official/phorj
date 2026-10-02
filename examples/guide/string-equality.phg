@@ -12,6 +12,12 @@ function same<T>(T a, T b): bool {
     return a == b;
 }
 
+enum Price { Exact(decimal amount), Label(string text) }
+
+class Priced {
+    constructor(public Price current, public List<Price> history) {}
+}
+
 class Money {
     constructor(public decimal amount) {}
 }
@@ -100,6 +106,14 @@ function main(): void {
     List<int?> lz = [0];
     Output.printLine("{ln == lz} {ln == ln}");
     Output.printLine("{same(nz, zz)} {same(nb, fb)}");
+    // An enum whose payload is a decimal keeps numeric equality too, alone or nested in a class or list.
+    Price pa = new Exact(1.50d);
+    Price pb = new Exact(1.5d);
+    Priced wa = new Priced(pa, [pa]);
+    Priced wb = new Priced(pb, [pb]);
+    List<Price> la = [pa];
+    List<Price> lb = [pb];
+    Output.printLine("{pa == pb} {wa == wb} {la == lb}");
     // Scalars never equal across types: a union can hold 1 or 1.0, true or 1, and PHP's loose `==` says equal.
     int | float u1 = 1;
     int | float u2 = 1.0;

@@ -12,12 +12,22 @@ new Box(1.5d); a == b` — because the field's kind is the unresolved parameter 
 was silently WRONG.
 
 Not affected, measured: every site whose type the transpiler resolves — `decimal?`, `List<decimal>`, `Map<string, decimal>`,
-plain classes with decimal fields, call results, field reads, `xs[0]`, `(o ?? a)` — keeps loose `==` and agrees on all three
+plain classes and enums with decimal fields or payloads (alone, or nested in a class or list), call results, field reads, `xs[0]`, `(o ?? a)` — keeps loose `==` and agrees on all three
 legs (pinned in `examples/guide/string-equality.phg`). Residual: a class or container that mixes `string` and `decimal`
 fields keeps the loose behaviour for its strings. The structural fix is a distinguishable decimal carrier in PHP (a
 separate large slice). The LIFTER half is open: PHP loose `==` still lifts to strict `==` (scout row 4l-b9). PENDING (not
 ruled): whether this is a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the
 decimal-`<` entry below is deliberately left unchanged until the developer rules.
+
+## DEEP-EQ-PHP-LIMIT — comparing a very deep instance chain with `==` exhausts PHP's memory where native succeeds (found 2026-10-02 by the DEC-557 panel)
+
+`__phorj_eq` recurses through `(array)$obj` (one array copy and one `try/finally` frame per level). A singly linked chain
+of equal instances compared through it (`same(chain(n), chain(n))`) prints `true` natively but dies in the transpiled PHP
+under the default 128M `memory_limit`: 20000 levels pass, 30000–50000 fail with `Allowed memory size … exhausted`
+(measured twice by independent reviewers, `php -n`, php-8.5.11). Not a regression — the loose `==` it replaced segfaulted
+at 50000 — and cycles are unaffected (the pair guard is keyed on `spl_object_id`, linear). Also not new: the NATIVE
+`Value::eq_val` visited-pair scan is quadratic, so the same chain takes ~40 s natively. Fix shape: an iterative worklist
+in the helper. Not built.
 
 ## SET-EQ-ORDER — `Set == Set` is order-sensitive on the PHP leg (found 2026-10-02 by the DEC-557 panel; PRE-EXISTING)
 

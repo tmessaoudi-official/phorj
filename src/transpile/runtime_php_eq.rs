@@ -65,6 +65,15 @@ impl Transpiler {
                     return false;
                 }
                 seen.push(name.clone());
+                // An ENUM's payload kinds live in `variant_field_kinds`, not `class_field_kinds`: without
+                // this arm an enum with a `decimal` payload looked decimal-free and took the strict helper.
+                if self.enums.contains(name)
+                    && self.variant_field_kinds.iter().any(|((e, _), ks)| {
+                        e == name && ks.iter().any(|k| self.kind_has_decimal(k, seen))
+                    })
+                {
+                    return true;
+                }
                 let own = self
                     .class_field_kinds
                     .get(name)
