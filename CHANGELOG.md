@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the lifter no longer emits `implements Countable` (and friends) that `phg check` rejects (parity review C1/C2, 2026-10-02)
+
+`class Bag implements Countable` lifted to `open class Bag implements Countable`, and the draft failed `E-IFACE-IMPL`
+("not an interface"). A PHP builtin interface phorj has no counterpart for (`Countable`, `JsonSerializable`,
+`IteratorAggregate`, `Iterator`, `Traversable`, `ArrayAccess`, `Serializable`) is now dropped from the header and named in
+a `// CANNOT LIFT:` note, one per class in source order; `Stringable` is dropped silently because `__toString` already
+lifts to `#[ToString]`. A user-declared interface is untouched. Pinned by `src/lift/lifter/interfaces_tests.rs`, each
+behaviour sabotaged. Still open from the same review: the lifter copies ~30 unmapped PHP builtins verbatim without a
+marker, and `empty($s)` lifts as an unknown function.
+
 ### Fixed — the non-exhaustive `match` diagnostic named a `_` arm the parser rejects (parity review B-F2, 2026-10-02)
 
 On a non-enum scrutinee the checker said "add a `_` wildcard arm", but `_` is an ignore-placeholder only; the catch-all

@@ -62,6 +62,8 @@ fn lift_source_split(
     // LIFT-ATTR: an attribute whose class is not in this file (every framework attribute) is emitted with
     // its identity intact and named here, so the draft says why `phg check` will flag it.
     notes.push_str(&super::attrs::unresolved_attribute_notes(&prog));
+    // Parity review C1/C2: a PHP builtin interface (`Countable`, …) is dropped from the header and named.
+    notes.push_str(&super::interfaces::dropped_interface_notes(&prog));
     Ok((format!("{notes}{out}"), companions))
 }
 

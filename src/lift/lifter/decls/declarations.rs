@@ -96,8 +96,20 @@ impl Lifter {
                     },
                 )
                 .collect(),
-            implements_args: vec![Vec::new(); c.implements.len()],
-            implements: c.implements.clone(),
+            // PHP builtin interfaces phorj has no counterpart for are dropped (and noted — see `interfaces`).
+            implements_args: vec![
+                Vec::new();
+                c.implements
+                    .iter()
+                    .filter(|n| !super::super::interfaces::is_builtin_interface(n))
+                    .count()
+            ],
+            implements: c
+                .implements
+                .iter()
+                .filter(|n| !super::super::interfaces::is_builtin_interface(n))
+                .cloned()
+                .collect(),
             // PHP is extensible-by-default (only `final` seals it); Phorj is final-by-default, so a
             // non-final PHP class lifts to `open` to preserve extensibility. `abstract` implies open.
             open: c.is_abstract || !c.is_final,

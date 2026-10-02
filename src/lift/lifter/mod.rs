@@ -39,6 +39,9 @@ mod exceptions;
 mod exceptions_exprs;
 mod exprs;
 mod identity;
+mod interfaces;
+#[cfg(test)]
+mod interfaces_tests;
 mod keyword_locals;
 mod leaves;
 mod magic;

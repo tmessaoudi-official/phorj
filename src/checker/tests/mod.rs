@@ -31,6 +31,7 @@ mod intrinsic_imports;
 mod invoke_tostring;
 mod loops;
 mod matching;
+mod matching_catch_all;
 mod misc_diagnostics;
 mod mtest;
 mod must_use;
