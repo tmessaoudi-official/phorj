@@ -236,7 +236,7 @@ impl Checker {
                 _ => {
                     self.err(
                         span,
-                        "non-exhaustive match: add a `_` wildcard arm for non-enum scrutinees",
+                        "non-exhaustive match: add a `default` arm (the catch-all) for non-enum scrutinees",
                     );
                 }
             }

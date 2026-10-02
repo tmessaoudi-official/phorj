@@ -625,7 +625,7 @@ echo cap(bp: 12); echo '|'; echo cap(4); echo '|'; echo grow([1, 2], 3); echo '|
 echo '|'; echo sorted([3, 1, 2])[0];"#,
         ),
         // Row 4n, DEC-545/549: PHP's `trim($s)` lifts to `s.trimAscii()` and transpiles back to
-        // `trim($s)` — the default set exactly, so a NUL and a vertical tab go, a form feed stays.
+        // `trim($s, " \t\n\r\0\x0B")` — the pre-8.6 default set, passed explicitly, so a NUL and a vertical tab go, a form feed stays.
         (
             "trim_default_set",
             r#"<?php

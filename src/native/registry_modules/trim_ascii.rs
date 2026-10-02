@@ -1,10 +1,12 @@
-//! `String.trimAscii` (DEC-545, named DEC-549, scout row 4n) — PHP's `trim()` with its default
-//! character list, exactly: `" \t\n\r\0\x0B"` stripped from both ends, nothing else.
+//! `String.trimAscii` (DEC-545, named DEC-549, scout row 4n) — PHP's `trim()` with the character list
+//! `" \t\n\r\0\x0B"` stripped from both ends, nothing else. It is PHP's default list on PHP <= 8.5 only:
+//! 8.6 added `\f` to the default (rfc/trim_form_feed), so the emitted PHP passes the list EXPLICITLY —
+//! do not "simplify" it back to a bare `trim($s)`.
 //!
 //! `String.trim` strips Rust's Unicode White_Space set (UA-1.1), which is NOT PHP's: it also strips
 //! U+00A0, U+3000, form feed (`\x0C`)…, and it keeps `\0`. In a byte-identity harness that difference
 //! is a semantic change, so `trim($s)` could not lift to it and stayed unmapped. This native is the
-//! PHP set, so `trim($s)` lifts here and transpiles back to `trim($s)` (ladder case 1).
+//! PHP set, so `trim($s)` lifts here and transpiles back to `trim($s, " \t\n\r\0\x0B")` (ladder case 1).
 //!
 //! Also NOT Rust's `str::trim_ascii`: that set is `u8::is_ascii_whitespace` — it strips `\x0C` and
 //! keeps `\0` and `\x0B`. The name says "ASCII"; the set is PHP's, and the unit tests pin each of the

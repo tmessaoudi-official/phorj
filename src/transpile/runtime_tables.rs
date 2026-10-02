@@ -136,8 +136,8 @@ impl Transpiler {
             self.line("}");
         }
         // NDJSON (JSON Lines). `parse_lines` reuses `__phorj_json_build` (gated via uses_json_decode);
-        // `stringify_lines` reuses `__phorj_json_encode` (uses_json_encode). Split/join + the PHP
-        // `trim()` default set match the Rust `json_parse_lines`/`json_stringify_lines` exactly.
+        // `stringify_lines` reuses `__phorj_json_encode` (uses_json_encode). Split/join + the pre-8.6 `trim()`
+        // default set (passed EXPLICITLY: 8.6 added `\f` to the default) match the Rust `json_parse_lines`/`json_stringify_lines` exactly.
         if self.gates.uses_json_parse_lines {
             self.line("function __phorj_json_parse_lines($s) {");
             self.indent += 1;
@@ -165,8 +165,8 @@ impl Transpiler {
             self.line("}");
         }
         // Core.Ini — a hand-rolled simple INI parser matching `ext::ini::natives::ini_parse` line-for-line
-        // (NOT PHP `parse_ini_string`, whose type-coercion Phorj deliberately rejects). PHP `trim()`'s
-        // default set matches the Rust `trim_matches`; overwriting an existing key keeps its position
+        // (NOT PHP `parse_ini_string`, whose type-coercion Phorj deliberately rejects). The pre-8.6 `trim()`
+        // default set (passed explicitly, see above) matches the Rust `trim_matches`; overwriting an existing key keeps its position
         // (PHP array semantics == `build_map`). Returns a PHP array = the `Map<string,string>` value.
         if self.gates.uses_ini_parse {
             self.line("function __phorj_ini_parse($s) {");

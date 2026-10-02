@@ -116,7 +116,8 @@ pub(super) fn json_parse_lines(args: &[Value], _: &mut String) -> Result<Value, 
             for line in s.split('\n') {
                 // Trim exactly PHP `trim()`'s default set (space, \t, \r, \v, \0 — \n already split
                 // out), NOT Rust's Unicode `.trim()`, so the transpiled `__phorj_json_parse_lines`
-                // (which uses PHP `trim`) is byte-identical on exotic-whitespace input too.
+                // (which passes this list to PHP `trim` explicitly — 8.6 added `\f` to the default) is
+                // byte-identical on exotic-whitespace input too.
                 let t = line.trim_matches([' ', '\t', '\r', '\u{0b}', '\0']);
                 if t.is_empty() {
                     continue;

@@ -10,8 +10,8 @@
 //! `key=value` is skipped.
 //!
 //! Byte-identical interp/VM/transpiled-PHP: the transpiler emits a matching hand-rolled
-//! `__phorj_ini_parse` (never `parse_ini_string`); per-line trim uses PHP `trim()`'s exact default
-//! set on both legs.
+//! `__phorj_ini_parse` (never `parse_ini_string`); per-line trim uses the pre-8.6 default set on both
+//! legs, passed to PHP's `trim()` EXPLICITLY (8.6 added `\f` to the default).
 
 use crate::native::*;
 use crate::types::Ty;

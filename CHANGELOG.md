@@ -6,6 +6,11 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the non-exhaustive `match` diagnostic named a `_` arm the parser rejects (parity review B-F2, 2026-10-02)
+
+On a non-enum scrutinee the checker said "add a `_` wildcard arm", but `_` is an ignore-placeholder only; the catch-all
+keyword is `default` (DEC-209). The message now says `default`. Pinned by a checker test.
+
 ### Fixed — transpiled output stays valid on PHP 8.6+ (parity review D-4.1–4.3, 2026-10-02)
 
 The 8.5 oracle that gates every commit cannot see three breakages that only appear on PHP 8.6+, each reproduced

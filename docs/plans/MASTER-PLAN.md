@@ -2759,7 +2759,7 @@ developer** (AskUserQuestion, minimal failing program in the question). Register
       List<int | string> xs = [1, "two"];
       var h = xs.first();                            // h : (int | string)?
       match (h) { int i => .., string s => .., null => .. }
-      // → type error: "non-exhaustive match: add a `_` wildcard arm for non-enum scrutinees"
+      // → type error: "non-exhaustive match: add a `default` arm (the catch-all) for non-enum scrutinees"
 
   This is a genuine fork (≥2 defensible designs), NOT a mechanical extension of slice 1: it changes
   match exhaustiveness for EVERY `T?` scrutinee (`int?`, `Circle?`, `(A|B)?`), not just union-element
