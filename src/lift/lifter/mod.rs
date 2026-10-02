@@ -48,6 +48,9 @@ mod magic;
 mod map_consts;
 mod mappings;
 mod matches;
+mod unmapped_builtins;
+#[cfg(test)]
+mod unmapped_builtins_tests;
 // Row 4l-a lifts onto `Core.Regex`, which only a `regex` build has; without it `preg_match` stays
 // the unresolved call it always was, and `phg check` names it.
 #[cfg(feature = "regex")]

@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the lifter names PHP builtins it has no mapping for (2026-10-02)
+
+A lifted draft that calls a PHP internal function Phorj has no counterpart for (`strrev()`, `nl2br()`, the `empty`
+construct, …) used to emit the call verbatim and fail `phg check` with an unexplained unknown-function error. The
+lifter now scans the draft (including calls inside string interpolation holes) and prefixes one
+`// CANNOT LIFT: PHP function `name()` ...` note per name, first-seen order; method calls, user-declared functions and
+mapped builtins are not noted. Data: `src/lift/lifter/php_internal_functions.txt`.
+
 ### Fixed — four silent divergences from the PHP-parity review, ruled by the developer (DEC-558–561, 2026-10-02)
 
 A leading-zero integer literal (`0755`) is now a compile error, `E-LEADING-ZERO` (it used to lex as decimal 755 while PHP

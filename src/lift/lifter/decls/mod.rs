@@ -64,6 +64,8 @@ fn lift_source_split(
     notes.push_str(&super::attrs::unresolved_attribute_notes(&prog));
     // Parity review C1/C2: a PHP builtin interface (`Countable`, …) is dropped from the header and named.
     notes.push_str(&super::interfaces::dropped_interface_notes(&prog));
+    // Parity review C2: a PHP builtin with no phorj counterpart is copied verbatim; name each one.
+    notes.push_str(&super::unmapped_builtins::unmapped_builtin_notes(&out));
     Ok((format!("{notes}{out}"), companions))
 }
 
