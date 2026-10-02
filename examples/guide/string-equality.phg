@@ -4,6 +4,7 @@ import Core.Output;
 import Core.Math;
 import Core.List;
 import Core.Map;
+import Core.Set;
 import Core.String;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
@@ -28,6 +29,10 @@ class Cell {
 
 class GBox<T> {
     constructor(public T v) {}
+}
+
+class Tagged<T> {
+    constructor(public T v, public Set<string> s) {}
 }
 
 function chain(int n): Cell {
@@ -245,6 +250,12 @@ function main(): void {
     Output.printLine(
         "{(List.first(rxs) ?? 0.0d) == (List.first(rys) ?? 0.0d)} {Map.get(rm, \"k\") == Map.get(rn, \"k\")}"
     );
+    // An inline tuple literal with a decimal compares per position; a non-erased member of a decimal
+    // instantiation (a Set) keeps its strings exact.
+    Output.printLine("{(1, 1.50d) == (1, 1.5d)}");
+    Tagged<decimal> rt1 = new Tagged(1.50d, Set.of(["10"]));
+    Tagged<decimal> rt2 = new Tagged(1.5d, Set.of(["10.0"]));
+    Output.printLine("{rt1.v == rt2.v} {rt1.s == rt2.s}");
     // Two instances sharing structure (a DAG) compare in linear time on every leg.
     Output.printLine("{chain(22) == chain(22)}");
 }

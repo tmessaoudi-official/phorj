@@ -31,6 +31,7 @@ mod magic_php;
 mod matches;
 mod modifiers;
 mod names;
+mod op_kind;
 mod parent_calls;
 mod process_php;
 mod program_emit;
@@ -54,6 +55,7 @@ use self::escapes::*;
 use self::kinds::*;
 use self::modifiers::*;
 use self::names::*;
+use self::op_kind::OpKind;
 use gates::HelperGates;
 
 /// The Unicode White_Space PCRE character class used by every emitted PHP trim helper
@@ -86,39 +88,6 @@ const PHP_TRIM_WS: &str = r"[\x{09}-\x{0D}\x{20}\x{85}\x{A0}\x{1680}\x{2000}-\x{
 /// first *statement* in the file, which is why `build_php`'s generated-file marker is inserted as a
 /// COMMENT after `<?php` (comments are not statements, so they may precede a `declare`).
 pub(crate) const PHP_PROLOGUE: &str = "<?php\ndeclare(strict_types=1);\n";
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-enum OpKind {
-    Str,
-    Int,
-    Float,
-    /// `decimal` (M-NUM S1). A decimal operand routes `+ - *` to the `__phorj_dec_*` BCMath helpers
-    /// (exact + i128-bounds-checked), and a decimal value erases to a PHP `string` for display.
-    Decimal,
-    Bool,
-    /// A value of a user-defined class/enum/interface, carrying its name so a field read resolves
-    /// through `class_field_kinds` (T6b). Never an arithmetic/display operand itself.
-    Class(String),
-    /// `List<E>` carrying its element kind, so `xs[i]` resolves to `E` (T6d) — `xs[i] + 1` / `"{xs[i]}"`.
-    List(Box<OpKind>),
-    /// `Map<K, V>` carrying key+value kinds, so `m[k]` resolves to `V` (T6d).
-    Map(Box<OpKind>, Box<OpKind>),
-    /// A TUPLE, carrying **each position's own kind** (DEC-504) — the transpiler's mirror of
-    /// [`crate::compiler::CTy::Tuple`], and load-bearing for exactly the same reason. A tuple erases
-    /// to a list, but a list carries ONE element kind, so resolving a tuple as `List` gives every
-    /// position the kind of position 0. Here that does not merely de-specialize: it picks the wrong
-    /// PHP OPERATOR. `(source: string, bp: int) t = …; t.bp + 1` becomes `$t[1] . 1` — string
-    /// concatenation — and the PHP leg prints `31` where both native legs print `4`, breaking the
-    /// byte-identity spine (Invariant 1) rather than just running slower.
-    Tuple(Vec<OpKind>),
-    /// A type that WRAPS other types the transpiler does not otherwise model: an optional's inner
-    /// type, a generic instantiation's `[Class(name), args...]`, a union's or intersection's members.
-    /// It never specializes an operator (every consumer treats it like `Other`); its one job is to let
-    /// `==` ask whether ANY component carries a `decimal` (DEC-557), because flattening `decimal?` or
-    /// `Box<decimal>` to `Other`/`Class` made a decimal look unknown and take the strict helper.
-    Wrapped(Vec<OpKind>),
-    Other,
-}
 
 struct Transpiler {
     funcs: HashSet<String>,
@@ -193,8 +162,7 @@ struct Transpiler {
     /// `(class, method) → return OpKind` (T6c), with `extends`-chain lookup, so a method-call result
     /// (`p.price()`, `c.get() + 1`) resolves. Differing overloads collapse to `Other`.
     method_ret_kinds: HashMap<(String, String), OpKind>,
-    /// `fn name` / `(class, method)` → index of the parameter a GENERIC return echoes (`id<T>(T x): T`
-    /// ⇒ 0), recovered from the pre-erasure signature, so a call result takes its argument's kind.
+    /// fn / method → the parameter its generic return echoes (`id<T>(T x): T` ⇒ 0), for call-result kinds.
     fn_echo_param: HashMap<String, usize>,
     method_echo_param: HashMap<(String, String), usize>,
     /// Active import map (leaf qualifier → full dotted module path) — how a namespaced native call

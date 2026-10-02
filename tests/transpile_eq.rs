@@ -24,6 +24,7 @@ class Sub extends Base { constructor(public decimal v) {} }
 class Money { constructor(public decimal amount) {} }
 class Plain { constructor(public int n) {} }
 class Box<T> { constructor(public T v) {} }
+class Tagged<T> { constructor(public T v, public Set<string> s) {} }
 function mk(): decimal { return 1.50d; }
 function idt<T>(T x): T { return x; }
 "#;
@@ -203,5 +204,21 @@ fn the_helper_keeps_visited_pairs_until_the_outermost_call_returns() {
     assert!(
         !php.contains("unset($seen"),
         "a visited pair must not be forgotten per subtree"
+    );
+}
+
+#[test]
+fn an_inline_tuple_literal_with_a_decimal_keeps_loose_equality() {
+    assert_loose("int x", "(1, 1.50d) == (1, 1.5d)");
+}
+
+#[test]
+fn a_non_erased_member_of_a_decimal_instantiation_stays_strict() {
+    // `s` is a Set, not the erased `T`: it must NOT borrow the instantiation's `decimal` argument.
+    let php = emit("Tagged<decimal> a, Tagged<decimal> b", "a.s == b.s");
+    let ret = cmp_return(&php);
+    assert!(
+        ret.contains("__phorj_eq"),
+        "a Set member must use the structural helper: {ret}"
     );
 }

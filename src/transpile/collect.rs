@@ -5,6 +5,7 @@
 //! the same program that share only the `Transpiler` — `collect` answers "what names exist", the emit
 //! functions answer "what PHP do they become".
 
+use super::kinds_calls::member_kind;
 use super::*;
 
 impl Transpiler {
@@ -66,20 +67,20 @@ impl Transpiler {
                         match m {
                             ClassMember::Field { ty, name, .. }
                             | ClassMember::Hook { ty, name, .. } => {
-                                fields.insert(name.clone(), kind_of_type(ty));
+                                fields.insert(name.clone(), member_kind(ty));
                             }
                             ClassMember::Constructor { params, .. } => {
                                 // Promoted params (those with a visibility modifier) become fields;
                                 // a non-promoted param is ctor-local and never read as `o.x`, so
                                 // recording it is harmless.
                                 for p in params {
-                                    fields.insert(p.name.clone(), kind_of_type(&p.ty));
+                                    fields.insert(p.name.clone(), member_kind(&p.ty));
                                 }
                             }
                             // T6c: method return kinds — differing overloads collapse to `Other`.
                             ClassMember::Method(f) => {
                                 let key = (c.name.clone(), f.name.clone());
-                                let rk = f.ret.as_ref().map_or(OpKind::Other, kind_of_type);
+                                let rk = f.ret.as_ref().map_or(OpKind::Other, member_kind);
                                 if let Some(i) = f.generic_ret_from_param {
                                     self.method_echo_param.insert(key.clone(), i);
                                 }

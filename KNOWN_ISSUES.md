@@ -10,7 +10,7 @@ shape, `true` natively and `false` in the transpiled PHP: `function same<T>(T a,
 strings win there, because the string case (`same("10", "10.0")`) is the common one and was silently WRONG.
 
 Everything the transpiler can type keeps numeric decimal equality and agrees on all three legs, pinned by
-`examples/guide/string-equality.phg` (32 lines) and, arm by arm, by `tests/transpile_eq.rs`: `decimal`, `decimal?` (params,
+`examples/guide/string-equality.phg` (34 lines) and, arm by arm, by `tests/transpile_eq.rs`: `decimal`, `decimal?` (params,
 returns, fields), `List<decimal>`, `Map<string, decimal>`, plain classes and enums with decimal fields or payloads (alone,
 or nested in a class or list), an interface- or base-typed operand holding a decimal implementer, a directly constructed
 variant, a generic instantiated at decimal at a typed site (`Box<decimal>`, `Option<decimal>`, `Result<decimal, string>`),
@@ -21,7 +21,11 @@ type only the checker knows still reaches the string-exact helper. Residuals, bo
 class or container that mixes a `decimal` with other fields compares the OTHER fields with PHP's loose `==` on the PHP leg
 — strings numerically AND `null == 0` / `0 == false` (`new M(1.50d, null) == new M(1.5d, 0)` is `false` natively, `true` in
 PHP; found by the round-5 safety lens); (2) a generic instantiation holding a decimal gives its erased-`T` reads the type
-arguments, so `Pair<string, decimal>` reads are loose too. The structural fix is a distinguishable decimal carrier in PHP (a separate
+arguments, so `Pair<string, decimal>` reads are loose too; (3) a decimal behind a generic call whose return is NOT the bare parameter — `wrap<T>(T x): List<T>`, `wrapO<T>(T): T?`, `mkBox<T>(T): Box<T>`, and `new Box(1.50d)` with inferred arguments — is invisible to the syntactic typing (the type parameters are erased before the transpiler runs), so `wrap(1.50d)[0] == wrap(1.5d)[0]` is `true` natively and `false` in PHP (found by the round-6 correctness lens).
+
+## STRING-EQ-INT-STRING-UNION — an `int | string` holding `10` and `"10"` compares equal on the PHP leg (found by the round-6 safety lens; DEC-557 trade-off)
+
+`__phorj_eq` compares an int and a string as `(string)$a === (string)$b`, because PHP turns an integer-like string map KEY into an int (`STRING-EQ-MAP-KEY`) and a key read back through an unresolved operand must still equal its string. The same branch also equates a genuine `int` with a genuine `string` reached through `int | string`: `same(int | string a, int | string b)` with `10` and `"10"` is `false` natively and `true` in the transpiled PHP. It is a trade between two rare cases, not a bug in either; PENDING a developer ruling (narrowing the branch re-opens the map-key case). Before DEC-557 the loose `==` gave the same wrong answer. The structural fix is a distinguishable decimal carrier in PHP (a separate
 large slice). The LIFTER half is open: PHP loose `==` still lifts to strict `==` (scout row 4l-b9). PENDING (not ruled):
 whether this is a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the decimal-`<` entry
 below is deliberately left unchanged until the developer rules.

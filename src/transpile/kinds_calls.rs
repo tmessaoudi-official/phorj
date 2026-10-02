@@ -5,6 +5,7 @@
 //! call site, because a `decimal` hidden behind `Other` would take the string-exact `__phorj_eq`.
 
 use super::*;
+use crate::ast::Type;
 use crate::types::Ty;
 
 /// Peel one optional: `Wrapped([k])` (a `T?`) → `k`. A generic instantiation (head `Class`, then its
@@ -13,6 +14,24 @@ pub(super) fn unwrap_optional(k: OpKind) -> OpKind {
     match k {
         OpKind::Wrapped(mut v) if v.len() == 1 => v.remove(0),
         other => other,
+    }
+}
+
+/// A class member's kind, with an erased type parameter (`T v`) kept distinguishable from any other
+/// unresolved kind as `Wrapped([])` — only an ERASED member may borrow its type arguments from a
+/// generic instantiation (`generic_member_kind`); a `Set` or closure member must not.
+pub(super) fn member_kind(ty: &Type) -> OpKind {
+    match ty {
+        Type::Erased(_) => OpKind::Wrapped(Vec::new()),
+        other => kind_of_type(other),
+    }
+}
+
+/// `Wrapped([])` (an erased member read off a non-generic receiver) carries no information: `Other`.
+pub(super) fn known(k: OpKind) -> OpKind {
+    match k {
+        OpKind::Wrapped(v) if v.is_empty() => OpKind::Other,
+        k => k,
     }
 }
 
@@ -59,12 +78,15 @@ impl Transpiler {
             return OpKind::Other;
         };
         match member(c) {
-            OpKind::Other
+            OpKind::Wrapped(v) if v.is_empty() => {
                 if args
                     .iter()
-                    .any(|a| self.kind_has_decimal(a, &mut Vec::new())) =>
-            {
-                OpKind::Wrapped(args.to_vec())
+                    .any(|a| self.kind_has_decimal(a, &mut Vec::new()))
+                {
+                    OpKind::Wrapped(args.to_vec())
+                } else {
+                    OpKind::Other
+                }
             }
             k => k,
         }
@@ -119,15 +141,17 @@ impl Transpiler {
                 }
                 // Otherwise a method call on a value — resolve its receiver's class.
                 let recv = self.expr_kind(object);
-                let method = |c: &str| match self.lookup_method_ret_kind(c, name) {
-                    OpKind::Other => {
-                        echo(self.method_echo_param.get(&(c.to_string(), name.clone())))
-                            .unwrap_or(OpKind::Other)
+                let method = |c: &str| {
+                    let k = self.lookup_method_ret_kind(c, name);
+                    if matches!(&k, OpKind::Wrapped(v) if v.is_empty()) || k == OpKind::Other {
+                        let key = (c.to_string(), name.clone());
+                        echo(self.method_echo_param.get(&key)).unwrap_or(k)
+                    } else {
+                        k
                     }
-                    k => k,
                 };
                 match &recv {
-                    OpKind::Class(c) => method(c),
+                    OpKind::Class(c) => known(method(c)),
                     OpKind::Wrapped(_) => self.generic_member_kind(&recv, method),
                     _ => OpKind::Other,
                 }

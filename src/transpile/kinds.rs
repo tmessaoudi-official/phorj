@@ -1,6 +1,6 @@
 //! Transpiler — PHP-side kind inference (`OpKind` of locals/methods/fields/exprs).
 
-use super::kinds_calls::unwrap_optional;
+use super::kinds_calls::{known, unwrap_optional};
 use super::*;
 
 impl Transpiler {
@@ -165,9 +165,16 @@ impl Transpiler {
             }
             // A list/map literal carries its element kind from the first item, so `[1,2,3][0]`
             // resolves (M3 S1.1 analog).
-            Expr::List(items, _) => OpKind::List(Box::new(
-                items.first().map_or(OpKind::Other, |e| self.expr_kind(e)),
-            )),
+            Expr::List(items, _) => {
+                let ks: Vec<OpKind> = items.iter().map(|e| self.expr_kind(e)).collect();
+                // An erased TUPLE literal `(1, 1.50d)` is a list with differing position kinds; a real
+                // list is homogeneous. Type it per position only when a decimal is among them (DEC-557).
+                if ks.contains(&OpKind::Decimal) && ks.windows(2).any(|w| w[0] != w[1]) {
+                    OpKind::Tuple(ks)
+                } else {
+                    OpKind::List(Box::new(ks.into_iter().next().unwrap_or(OpKind::Other)))
+                }
+            }
             Expr::Map(pairs, _) => OpKind::Map(
                 Box::new(
                     pairs
@@ -193,7 +200,7 @@ impl Transpiler {
                 safe: false,
                 ..
             } => match self.expr_kind(object) {
-                OpKind::Class(c) => self.lookup_field_kind(&c, name),
+                OpKind::Class(c) => known(self.lookup_field_kind(&c, name)),
                 // A read off `Box<decimal>`: the field's own kind, else (erased `T`) the type arguments.
                 k @ OpKind::Wrapped(_) => {
                     self.generic_member_kind(&k, |c| self.lookup_field_kind(c, name))
