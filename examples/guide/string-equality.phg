@@ -10,6 +10,36 @@ import Core.Runtime.EntryKind;
 
 // `==` on strings is exact byte equality — never numeric. PHP's loose `==` would call "10" and
 // "10.0" equal; Phorj does not, and neither may the transpiled PHP (DEC-557).
+function mk(): decimal {
+    return 1.50d;
+}
+
+function mk2(): decimal {
+    return 1.5d;
+}
+
+function idt<T>(T x): T {
+    return x;
+}
+
+class Cell {
+    constructor(public Cell? l, public Cell? r) {}
+}
+
+class GBox<T> {
+    constructor(public T v) {}
+}
+
+function chain(int n): Cell {
+    mutable Cell cur = new Cell(null, null);
+    mutable int i = 0;
+    while (i < n) {
+        cur = new Cell(cur, cur);
+        i = i + 1;
+    }
+    return cur;
+}
+
 function same<T>(T a, T b): bool {
     return a == b;
 }
@@ -201,4 +231,20 @@ function main(): void {
     Output.printLine("{sn == sn} {same(sn, sn)}");
     // Equal strings stay equal.
     Output.printLine("{a == \"10\"} {\"abc\" == \"abc\"} {\"abc\" == \"ABC\"}");
+    // Decimals the transpiler can only type through a call, `??` or a generic read still compare
+    // numerically (DEC-557): 1.50d == 1.5d on every leg.
+    decimal? ro = 1.50d;
+    decimal? ro2 = 1.5d;
+    GBox<decimal> rg1 = new GBox(1.50d);
+    GBox<decimal> rg2 = new GBox(1.5d);
+    List<decimal> rxs = [1.50d];
+    List<decimal> rys = [1.5d];
+    Map<string, decimal> rm = ["k" => 1.50d];
+    Map<string, decimal> rn = ["k" => 1.5d];
+    Output.printLine("{(ro ?? 0.0d) == (ro2 ?? 0.0d)} {rg1.v == rg2.v} {idt(mk()) == idt(mk2())}");
+    Output.printLine(
+        "{(List.first(rxs) ?? 0.0d) == (List.first(rys) ?? 0.0d)} {Map.get(rm, \"k\") == Map.get(rn, \"k\")}"
+    );
+    // Two instances sharing structure (a DAG) compare in linear time on every leg.
+    Output.printLine("{chain(22) == chain(22)}");
 }

@@ -33,6 +33,8 @@ impl Transpiler {
             variant_field_kinds: HashMap::new(),
             fn_ret_kinds: HashMap::new(),
             method_ret_kinds: HashMap::new(),
+            fn_echo_param: HashMap::new(),
+            method_echo_param: HashMap::new(),
             cur_class_fields: None,
             imports: HashMap::new(),
             gates: HelperGates::default(),

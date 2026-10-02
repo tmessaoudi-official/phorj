@@ -30,30 +30,38 @@
 use super::*;
 
 /// The helper body, emitted through `self.line` at the runtime block's indentation. `$seen` makes the
-/// instance walk cycle-safe, like `eq_val`'s visited-pair set (an unguarded recursion would overflow).
+/// instance walk cycle-safe like `eq_val`'s visited-pair set, and it is KEPT until the outermost call
+/// returns: a pair already visited is either in progress (a cycle) or proven equal, and any unequal pair
+/// makes the whole comparison false, so a shared-instance DAG is walked once, not once per path.
 const HELPER: &str = r#"function __phorj_eq($a, $b) {
     static $seen = [];
-    if ($a === null || $b === null) { return $a === $b; }
-    if (is_string($a) || is_string($b)) {
-        if ((is_string($a) || is_int($a)) && (is_string($b) || is_int($b))) { return (string)$a === (string)$b; }
-        return $a === $b;
-    }
-    if ($a instanceof \Closure || $b instanceof \Closure) { return false; }
-    if (is_array($a) && is_array($b)) {
-        if (count($a) !== count($b)) { return false; }
-        foreach ($a as $k => $v) {
-            if (!array_key_exists($k, $b) || !__phorj_eq($v, $b[$k])) { return false; }
+    static $depth = 0;
+    $depth++;
+    try {
+        if ($a === null || $b === null) { return $a === $b; }
+        if (is_string($a) || is_string($b)) {
+            if ((is_string($a) || is_int($a)) && (is_string($b) || is_int($b))) { return (string)$a === (string)$b; }
+            return $a === $b;
         }
-        return true;
+        if ($a instanceof \Closure || $b instanceof \Closure) { return false; }
+        if (is_array($a) && is_array($b)) {
+            if (count($a) !== count($b)) { return false; }
+            foreach ($a as $k => $v) {
+                if (!array_key_exists($k, $b) || !__phorj_eq($v, $b[$k])) { return false; }
+            }
+            return true;
+        }
+        if (is_object($a) && is_object($b)) {
+            if (get_class($a) !== get_class($b)) { return false; }
+            $pair = spl_object_id($a) . ':' . spl_object_id($b);
+            if (isset($seen[$pair])) { return true; }
+            $seen[$pair] = true;
+            return __phorj_eq((array)$a, (array)$b);
+        }
+        return $a === $b;
+    } finally {
+        if (--$depth === 0) { $seen = []; }
     }
-    if (is_object($a) && is_object($b)) {
-        if (get_class($a) !== get_class($b)) { return false; }
-        $pair = spl_object_id($a) . ':' . spl_object_id($b);
-        if (isset($seen[$pair])) { return true; }
-        $seen[$pair] = true;
-        try { return __phorj_eq((array)$a, (array)$b); } finally { unset($seen[$pair]); }
-    }
-    return $a === $b;
 }"#;
 
 impl Transpiler {
@@ -65,7 +73,7 @@ impl Transpiler {
     }
 
     /// Does a kind carry a `decimal` anywhere inside it? `seen` guards a self-referential class.
-    fn kind_has_decimal(&self, k: &OpKind, seen: &mut Vec<String>) -> bool {
+    pub(super) fn kind_has_decimal(&self, k: &OpKind, seen: &mut Vec<String>) -> bool {
         match k {
             OpKind::Decimal => true,
             OpKind::List(e) => self.kind_has_decimal(e, seen),

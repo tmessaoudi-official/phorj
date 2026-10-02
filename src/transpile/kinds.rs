@@ -1,5 +1,6 @@
 //! Transpiler — PHP-side kind inference (`OpKind` of locals/methods/fields/exprs).
 
+use super::kinds_calls::unwrap_optional;
 use super::*;
 
 impl Transpiler {
@@ -59,9 +60,9 @@ impl Transpiler {
 
     /// Statically resolve an expression's operand [`OpKind`] for native-operator selection (T6).
     /// Covers the scalar surface — literals, typed locals/params/loop-vars, nested arithmetic/unary,
-    /// `instanceof` (bool), and `inner!` (the inner's kind). Field reads, indexing, method/function
-    /// calls and `this` are deliberately `Other` (→ runtime helper), since pinning their types down
-    /// would mean rebuilding the compiler's full type maps; the helper fallback keeps those correct.
+    /// `instanceof` (bool), and `inner!` (the inner's kind). Field reads, calls and `this` resolve
+    /// through the collected class/function tables (`kinds_calls.rs` for calls); what stays `Other`
+    /// goes to the runtime helper, which is correct for everything except a `decimal` (a PHP string).
     pub(super) fn expr_kind(&self, e: &Expr) -> OpKind {
         match e {
             Expr::Int(..) => OpKind::Int,
@@ -124,10 +125,15 @@ impl Transpiler {
                 // any enclosing arithmetic. The `_` arm below would silently make it `Other` and
                 // mis-route `(a <=> b) + 1`; rustc cannot flag that, so this arm is load-bearing.
                 BinaryOp::Spaceship => OpKind::Int,
+                // `a ?? b` is `a`'s kind with the optional peeled, else `b`'s (DEC-557 round 5).
+                BinaryOp::Coalesce => match unwrap_optional(self.expr_kind(lhs)) {
+                    OpKind::Other => self.expr_kind(rhs),
+                    k => k,
+                },
                 _ => OpKind::Other,
             },
             Expr::InstanceOf { .. } => OpKind::Bool,
-            Expr::Force { inner, .. } => self.expr_kind(inner),
+            Expr::Force { inner, .. } => unwrap_optional(self.expr_kind(inner)),
             // T6d: `xs[i]` → element kind; `m[k]` → value kind; `t[k]` → position `k`'s own kind.
             Expr::Index { object, index, .. } => {
                 // A CONSTANT index into a list LITERAL reads that element's kind directly, rather
@@ -188,57 +194,14 @@ impl Transpiler {
                 ..
             } => match self.expr_kind(object) {
                 OpKind::Class(c) => self.lookup_field_kind(&c, name),
-                _ => OpKind::Other,
-            },
-            // A call result (T6c): a constructor `ClassName(...)` (Phorj `new` is unwrapped to a
-            // `Call`) yields an instance of that class (so `mk().x` resolves); a free-function call
-            // resolves to its declared return kind; a method call `obj.m(...)` resolves to the
-            // method's return kind on `obj`'s class (+ inherited).
-            Expr::Call { callee, .. } => match &**callee {
-                Expr::Ident(name, _) if self.classes.contains(name) => OpKind::Class(name.clone()),
-                // A bare variant constructor `Exact(1.5d)` is a value of its enum (DEC-557).
-                Expr::Ident(name, _) if self.variant_owner.contains_key(name) => {
-                    OpKind::Class(self.variant_owner[name].clone())
-                }
-                Expr::Ident(name, _) => self
-                    .fn_ret_kinds
-                    .get(name)
-                    .cloned()
-                    .unwrap_or(OpKind::Other),
-                Expr::Member {
-                    object,
-                    name,
-                    safe: false,
-                    ..
-                } => {
-                    // T6d: a native call `Leaf.fn(...)` (Leaf an imported module qualifier, e.g.
-                    // `Text.upper`) resolves to the native's declared return kind (mirrors the
-                    // import-driven native resolution in `emit_call`).
-                    if let Expr::Ident(leaf, _) = &**object {
-                        if let Some(module) = self.imports.get(leaf) {
-                            if let Some(idx) = crate::native::index_of(module, name) {
-                                return opkind_of_ty(&crate::native::registry()[idx].ret);
-                            }
-                        }
-                    }
-                    // A qualified variant constructor `Enum.Variant(...)` is a value of that enum (DEC-557).
-                    if let Expr::Ident(en, _) = &**object {
-                        if self.enums.contains(en)
-                            && self
-                                .variant_field_kinds
-                                .contains_key(&(en.clone(), name.clone()))
-                        {
-                            return OpKind::Class(en.clone());
-                        }
-                    }
-                    // Otherwise a method call on a value — resolve its receiver's class.
-                    match self.expr_kind(object) {
-                        OpKind::Class(c) => self.lookup_method_ret_kind(&c, name),
-                        _ => OpKind::Other,
-                    }
+                // A read off `Box<decimal>`: the field's own kind, else (erased `T`) the type arguments.
+                k @ OpKind::Wrapped(_) => {
+                    self.generic_member_kind(&k, |c| self.lookup_field_kind(c, name))
                 }
                 _ => OpKind::Other,
             },
+            // A call result (T6c) — see `kinds_calls.rs`.
+            Expr::Call { callee, args, .. } => self.call_kind(callee, args),
             _ => OpKind::Other,
         }
     }
@@ -268,7 +231,13 @@ pub(super) fn opkind_of_ty(ty: &crate::types::Ty) -> OpKind {
         Ty::Bool => OpKind::Bool,
         Ty::List(e) => OpKind::List(Box::new(opkind_of_ty(e))),
         Ty::Map(k, v) => OpKind::Map(Box::new(opkind_of_ty(k)), Box::new(opkind_of_ty(v))),
-        Ty::Named(name, _) => OpKind::Class(name.clone()),
+        Ty::Named(name, args) if args.is_empty() => OpKind::Class(name.clone()),
+        Ty::Named(name, args) => {
+            let mut parts = vec![OpKind::Class(name.clone())];
+            parts.extend(args.iter().map(opkind_of_ty));
+            OpKind::Wrapped(parts)
+        }
+        Ty::Optional(e) => OpKind::Wrapped(vec![opkind_of_ty(e)]),
         // DEC-504: per-position kinds, so an indexed read of a tuple-returning native resolves as
         // an operand. No native returns a tuple today; the arm exists so adding one cannot silently
         // re-open the Invariant-7 trap by collapsing to `Other`.

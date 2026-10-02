@@ -4093,10 +4093,10 @@ fn m7_emitter_uses_correctness_helpers() {
     // bare `/`. The helper branches on operand types at PHP-runtime, so it stays correct (intdiv for
     // ints). This guards that the safe fallback survives all the T6 specialization layers.
     let fb = transpile_ok(
-        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; function id<T>(T x) -> T { return x; } #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{id(7) / id(2)}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind; import Core.Output; function head<T>(List<T> xs) -> T { return xs[0]; } #[Entry(kind: EntryKind.Cli)] function main()-> void { Output.printLine(\"{head([7]) / head([2])}\"); }",
     );
     assert!(
-        fb.contains("__phorj_div(id(7), id(2))")
+        fb.contains("__phorj_div(head([7]), head([2]))")
             && fb.contains("function __phorj_div")
             && fb.contains("intdiv"),
         "{fb}"

@@ -24,12 +24,14 @@ class Sub extends Base { constructor(public decimal v) {} }
 class Money { constructor(public decimal amount) {} }
 class Plain { constructor(public int n) {} }
 class Box<T> { constructor(public T v) {} }
+function mk(): decimal { return 1.50d; }
+function idt<T>(T x): T { return x; }
 "#;
 
 /// Transpile `function cmp(<sig>): bool { return <expr>; }` next to the shared declarations.
 fn emit(sig: &str, expr: &str) -> String {
     let src = format!(
-        "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n{DECLS}\n\
+        "package Main;\nimport Core.Output;\nimport Core.List;\nimport Core.Map;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\n{DECLS}\n\
          function cmp({sig}): bool {{ return {expr}; }}\n\
          #[Entry(kind: EntryKind.Cli)]\nfunction main(): void {{ Output.printLine(\"x\"); }}\n"
     );
@@ -161,4 +163,45 @@ fn a_generic_instantiated_at_decimal_keeps_loose_equality() {
 #[test]
 fn a_directly_constructed_variant_is_typed_as_its_enum() {
     assert_loose("int x", "new Price.Exact(1.50d) == new Price.Exact(1.5d)");
+}
+
+#[test]
+fn a_coalesce_over_an_optional_decimal_keeps_loose_equality() {
+    assert_loose("decimal? a, decimal? b", "(a ?? 0.0d) == (b ?? 0.0d)");
+}
+
+#[test]
+fn a_field_read_off_a_generic_instantiation_keeps_loose_equality() {
+    assert_loose("Box<decimal> a, Box<decimal> b", "a.v == b.v");
+}
+
+#[test]
+fn a_generic_call_echoes_its_argument_kind() {
+    assert_loose("int x", "idt(mk()) == idt(mk())");
+}
+
+#[test]
+fn a_native_call_binds_its_type_parameters_from_the_arguments() {
+    assert_loose(
+        "Map<string, decimal> a, Map<string, decimal> b",
+        "Map.get(a, \"k\") == Map.get(b, \"k\")",
+    );
+    assert_loose(
+        "List<decimal> a, List<decimal> b",
+        "(List.first(a) ?? 0.0d) == (List.first(b) ?? 0.0d)",
+    );
+}
+
+#[test]
+fn the_helper_keeps_visited_pairs_until_the_outermost_call_returns() {
+    // A shared-instance DAG is exponential if a pair is forgotten when its subtree returns.
+    let php = emit("Plain a, Plain b", "a == b");
+    assert!(
+        php.contains("static $depth = 0;") && php.contains("if (--$depth === 0) { $seen = []; }"),
+        "the visited-pair set must start at depth 0 and be cleared by the outermost call"
+    );
+    assert!(
+        !php.contains("unset($seen"),
+        "a visited pair must not be forgotten per subtree"
+    );
 }

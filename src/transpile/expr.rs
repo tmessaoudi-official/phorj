@@ -653,8 +653,8 @@ impl Transpiler {
             Add => unreachable!("Add handled via __phorj_add before binop()"),
             Div => unreachable!("Div handled via __phorj_div before binop()"),
             Rem => unreachable!("Rem handled via __phorj_rem before binop()"),
-            Eq => "==",
-            NotEq => "!=",
+            Eq => unreachable!("Eq handled via emit_eq (DEC-557) before binop()"),
+            NotEq => unreachable!("NotEq handled via emit_eq (DEC-557) before binop()"),
             Lt => "<",
             Le => "<=",
             // PHP's own `<=>`. Identical on every input this checker admits: int/float scalars, and

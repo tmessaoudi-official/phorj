@@ -10,12 +10,18 @@ shape, `true` natively and `false` in the transpiled PHP: `function same<T>(T a,
 strings win there, because the string case (`same("10", "10.0")`) is the common one and was silently WRONG.
 
 Everything the transpiler can type keeps numeric decimal equality and agrees on all three legs, pinned by
-`examples/guide/string-equality.phg` (29 lines) and, arm by arm, by `tests/transpile_eq.rs`: `decimal`, `decimal?` (params,
+`examples/guide/string-equality.phg` (32 lines) and, arm by arm, by `tests/transpile_eq.rs`: `decimal`, `decimal?` (params,
 returns, fields), `List<decimal>`, `Map<string, decimal>`, plain classes and enums with decimal fields or payloads (alone,
 or nested in a class or list), an interface- or base-typed operand holding a decimal implementer, a directly constructed
 variant, a generic instantiated at decimal at a typed site (`Box<decimal>`, `Option<decimal>`, `Result<decimal, string>`),
-call results, field reads, `xs[0]`, `(o ?? a)`. Residual: a class or container that mixes `string` and `decimal` fields
-keeps the loose behaviour for its strings. The structural fix is a distinguishable decimal carrier in PHP (a separate
+call results (a generic function echoes its argument's kind; a native such as `Map.get`/`List.first` binds its type
+parameters from the arguments), field reads (also off a generic instantiation, through its type arguments), `xs[0]`,
+`(o ?? a)`. The typing is SYNTACTIC (declared annotations, signatures, literals), not the checker's, so an expression whose
+type only the checker knows still reaches the string-exact helper. Residuals, both silent and `Invariant 14` tier 3: (1) a
+class or container that mixes a `decimal` with other fields compares the OTHER fields with PHP's loose `==` on the PHP leg
+— strings numerically AND `null == 0` / `0 == false` (`new M(1.50d, null) == new M(1.5d, 0)` is `false` natively, `true` in
+PHP; found by the round-5 safety lens); (2) a generic instantiation holding a decimal gives its erased-`T` reads the type
+arguments, so `Pair<string, decimal>` reads are loose too. The structural fix is a distinguishable decimal carrier in PHP (a separate
 large slice). The LIFTER half is open: PHP loose `==` still lifts to strict `==` (scout row 4l-b9). PENDING (not ruled):
 whether this is a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the decimal-`<` entry
 below is deliberately left unchanged until the developer rules.
@@ -42,7 +48,9 @@ through php-wasm 0.1.0 (PHP 8.4.1) by hand: 23 lines identical to the VM and PHP
 of equal instances compared through it (`same(chain(n), chain(n))`) prints `true` natively but dies in the transpiled PHP
 under the default 128M `memory_limit`: 20000 levels pass, 30000–50000 fail with `Allowed memory size … exhausted`
 (measured twice by independent reviewers, `php -n`, php-8.5.11). Not a regression — the loose `==` it replaced segfaulted
-at 50000 — and cycles are unaffected (the pair guard is keyed on `spl_object_id`, linear). Also not new: the NATIVE
+at 50000 — and cycles are unaffected (the pair guard is keyed on `spl_object_id`, linear). A shared-instance DAG
+(`new N(c, c)` nested 22 deep) used to be exponential on the PHP leg (>100 s); visited pairs now live until the outermost
+call returns, so it is walked once (0.4 s, pinned by the example and `tests/transpile_eq.rs`). Also not new: the NATIVE
 `Value::eq_val` visited-pair scan is quadratic, so the same chain takes ~40 s natively. Fix shape: an iterative worklist
 in the helper. Not built.
 

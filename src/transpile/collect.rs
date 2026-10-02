@@ -22,6 +22,9 @@ impl Transpiler {
                     // T6c: a free function's return kind — overloads with differing kinds collapse
                     // to `Other` (the safe fallback), since the call site can't pick statically.
                     let rk = f.ret.as_ref().map_or(OpKind::Other, kind_of_type);
+                    if let Some(i) = f.generic_ret_from_param {
+                        self.fn_echo_param.insert(f.name.clone(), i);
+                    }
                     match self.fn_ret_kinds.get(&f.name) {
                         Some(existing) if *existing != rk => {
                             self.fn_ret_kinds.insert(f.name.clone(), OpKind::Other);
@@ -77,6 +80,9 @@ impl Transpiler {
                             ClassMember::Method(f) => {
                                 let key = (c.name.clone(), f.name.clone());
                                 let rk = f.ret.as_ref().map_or(OpKind::Other, kind_of_type);
+                                if let Some(i) = f.generic_ret_from_param {
+                                    self.method_echo_param.insert(key.clone(), i);
+                                }
                                 match self.method_ret_kinds.get(&key) {
                                     Some(existing) if *existing != rk => {
                                         self.method_ret_kinds.insert(key, OpKind::Other);

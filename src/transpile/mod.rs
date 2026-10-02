@@ -24,6 +24,7 @@ mod functions;
 mod gates;
 mod helper_buckets;
 mod kinds;
+mod kinds_calls;
 mod lambda_stmt;
 mod log_php;
 mod magic_php;
@@ -192,6 +193,10 @@ struct Transpiler {
     /// `(class, method) → return OpKind` (T6c), with `extends`-chain lookup, so a method-call result
     /// (`p.price()`, `c.get() + 1`) resolves. Differing overloads collapse to `Other`.
     method_ret_kinds: HashMap<(String, String), OpKind>,
+    /// `fn name` / `(class, method)` → index of the parameter a GENERIC return echoes (`id<T>(T x): T`
+    /// ⇒ 0), recovered from the pre-erasure signature, so a call result takes its argument's kind.
+    fn_echo_param: HashMap<String, usize>,
+    method_echo_param: HashMap<(String, String), usize>,
     /// Active import map (leaf qualifier → full dotted module path) — how a namespaced native call
     /// `console.println(x)` is distinguished from a method call on a value (M3 Wave 1). The
     /// transpiler tracks no variable scope, so unlike the interpreter/compiler it cannot use a
