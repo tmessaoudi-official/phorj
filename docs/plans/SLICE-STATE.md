@@ -2,6 +2,8 @@
 
 ## ▶ CURRENT CURSOR (2026-09-07) — **scout is the forcing function. Plan: `docs/plans/2026-09-07-scout-forcing-function.plan.md`**
 
+> **▶ 2026-10-02 — DEC-557 BUILT: string `==`/`!=` no longer transpiles to PHP's loose `==`** (parity review 2026-10-01, finding E-01). `===` for string operands, `__phorj_eq` for unknown kinds/containers, strings win in erased generics (decimal there is scale-sensitive on the PHP leg — KNOWN_ISSUES `STRING-EQ-DECIMAL-ERASED`). `__phorj_eq` is UNBENCHMARKED — **perf OWED** (Invariant 18, never reported as passed). Next from the same review, not started: scout row 4l-b9 (lifter half), the 8.6 name reserves (`clamp`, `SortDirection`, `trimAscii` `\f`), and the PENDING design questions in `var/claude/review-2026-10-01/MASTER-REVIEW.md`.
+>
 > **▶ 2026-09-29 — DEPENDENCY REFRESH runs AHEAD of row 4l-b3 (developer directive, resume chooser). Plan: `docs/plans/2026-09-29-dependency-refresh.plan.md`.**
 > Rust 1.98.1 was already the latest stable; landed as `26dfd3f5` (lock refresh: 47 version changes and one removal, `mysql` 28.0.3 and
 > `webpki-roots` 1.0.9 floors, VS Code client ^10.1.2) and `655282f1` (`cranelift` ×3 0.136.1, no source change).

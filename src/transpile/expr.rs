@@ -185,6 +185,9 @@ impl Transpiler {
                     };
                     return Ok(format!("{bs}{helper}({l}, {r})"));
                 }
+                if matches!(op, BinaryOp::Eq | BinaryOp::NotEq) {
+                    return Ok(self.emit_eq(lhs, rhs, l, r, matches!(op, BinaryOp::NotEq)));
+                }
                 if matches!(op, BinaryOp::Coalesce) {
                     // `??` binds loosely in PHP; parenthesize to preserve grouping.
                     return Ok(format!("({l} ?? {r})"));

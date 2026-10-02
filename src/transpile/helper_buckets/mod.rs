@@ -36,21 +36,21 @@
 //! ## The count was wrong three times
 //!
 //! DEC-377 said **168**; DEC-412 corrected to **149 real**; the audited figure was **165**, and it is
-//! **190** as of DEC-554 (DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers,
+//! **191** as of DEC-557 (DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers,
 //! DEC-494/496/487/489/472 the charset, accent-fold, sleep, word-wrap and process rows, DEC-554 the
-//! three typed-match helpers). The number moves whenever a
+//! three typed-match helpers, DEC-557 the structural `__phorj_eq`). The number moves whenever a
 //! helper is added, which is fine; what must never drift again is the number stated here versus the
 //! source, and the ratchet below is what ties them together. Both earlier numbers came from grepping `__phorj_` and subtracting guessed
 //! artifacts; this one enumerates `function &?__phorj_x(` definitions plus the checked-arith codegen
 //! table, and is asserted by the test below. `__phorj_unwrap` appears in comments but was inlined at
 //! M3 S2.5 and is not a helper.
 //!
-//! ## Bucket 1 — semantic necessity (71)
+//! ## Bucket 1 — semantic necessity (72)
 //!
 //! `checked_*` PHP overflows int→float instead of faulting · `dec_*` bcmath fixed-point, PHP has no
 //! decimal · `float_*` `round_*` `trunc` `div` `rem` `add` PHP's rounding/division differ at the edges ·
 //! `class_name` DEC-329.3 enum-variant naming · `json_*` PHP's `json_encode` differs on key order and
-//! float rendering · `option_*` `result_*` `none` PHP has no such types · `text_*` `str_*` `index_*`
+//! float rendering · `eq` PHP's `==` is loose on numeric strings (DEC-557) · `option_*` `result_*` `none` PHP has no such types · `text_*` `str_*` `index_*`
 //! PHP's string calls are BYTE-oriented (verified above) · `debug_*` phorj's debug rendering has no PHP
 //! analog and its escape table is parity-affecting · `reflect_*` `kind_*` `capture_*` `parse_*` no
 //! native equivalent · `sleep` PHP's `sleep`/`usleep` take whole seconds or microseconds and cannot
@@ -65,7 +65,8 @@
 //!   `__phorj_dec_add` `__phorj_dec_check` `__phorj_dec_div` `__phorj_dec_div_exact`
 //!   `__phorj_dec_fmt` `__phorj_dec_mul` `__phorj_dec_of` `__phorj_dec_rem`
 //!   `__phorj_dec_round` `__phorj_dec_scale` `__phorj_dec_sub` `__phorj_dec_to_int`
-//!   `__phorj_dec_to_int_exact` `__phorj_dec_unscaled` `__phorj_div` `__phorj_float`
+//!   `__phorj_dec_to_int_exact` `__phorj_dec_unscaled` `__phorj_div` `__phorj_eq`
+//!   `__phorj_float`
 //!   `__phorj_float_to_int` `__phorj_float_to_int_exact` `__phorj_index` `__phorj_index_of`
 //!   `__phorj_json_build` `__phorj_json_decode` `__phorj_json_encode` `__phorj_json_encode_pretty`
 //!   `__phorj_json_parse_lines` `__phorj_json_pretty` `__phorj_json_stringify_lines` `__phorj_kind`
@@ -181,6 +182,10 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_dec_unscaled", 1),
     ("__phorj_div", 1),
     ("__phorj_drop_while", 2),
+    // DEC-557 — PHP's `==` is LOOSE (`"10" == "10.0"` is true) while phorj compares strings exactly, and
+    // `===` on an array is key-ORDER-sensitive while phorj map equality is not; no single PHP operator is
+    // both, so the structural compare is a helper. Bucket 1: PHP cannot do natively what phorj does.
+    ("__phorj_eq", 1),
     ("__phorj_find", 2),
     ("__phorj_float", 1),
     // DEC-468 — accent folding. Bucket 2: `strtr` alone would do it, but the map is a 190-entry

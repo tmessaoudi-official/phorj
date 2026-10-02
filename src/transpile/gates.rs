@@ -18,6 +18,8 @@ pub(in crate::transpile) struct HelperGates {
     pub(in crate::transpile) uses_rem: bool,
     /// `__phorj_add` — `+` overloaded for string concat (`is_string` ⇒ `.`, else `+`).
     pub(in crate::transpile) uses_add: bool,
+    /// `__phorj_eq` — `==`/`!=` over operands the transpiler cannot pin to a scalar (DEC-557).
+    pub(in crate::transpile) uses_eq: bool,
     pub(in crate::transpile) uses_str: bool,
     /// Set when an interpolation hole is statically a `float` and emits `__phorj_float` directly
     /// (T6) — so the shortest-round-trip float formatter is defined even when `__phorj_str` (its

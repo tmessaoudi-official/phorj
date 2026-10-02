@@ -28,6 +28,9 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.gates.uses_eq {
+            self.emit_eq_helper(); // `runtime_php_eq.rs` (DEC-557)
+        }
         if self.gates.uses_add {
             // Phorj `+` is overloaded: `string + string` concatenates, numbers add. The checker
             // guarantees both operands share a type, so `is_string($a)` selects the branch exactly

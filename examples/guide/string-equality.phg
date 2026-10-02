@@ -1,0 +1,88 @@
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// `==` on strings is exact byte equality — never numeric. PHP's loose `==` would call "10" and
+// "10.0" equal; Phorj does not, and neither may the transpiled PHP (DEC-557).
+function same<T>(T a, T b): bool {
+    return a == b;
+}
+
+class Money {
+    constructor(public decimal amount) {}
+}
+
+function price(): decimal {
+    return 1.50d;
+}
+
+class Tag {
+    constructor(public string code) {}
+}
+
+function ten(): string {
+    return "10";
+}
+
+function tenPointZero(): string {
+    return "10.0";
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    string a = "10";
+    string b = "10.0";
+    Output.printLine("{a == b} {a != b}");
+    string c = " 1";
+    string d = "1";
+    Output.printLine("{c == d} {c != d}");
+    string e = "1e3";
+    string f = "1000";
+    Output.printLine("{e == f} {e != f}");
+    string g = "0";
+    string h = "0.0";
+    Output.printLine("{g == h} {g != h}");
+    Output.printLine("{ten() == tenPointZero()} {ten() != tenPointZero()}");
+    Output.printLine("{String.trim(a) == String.trim(b)}");
+    List<string> xs = ["10"];
+    List<string> ys = ["10.0"];
+    Output.printLine("{xs == ys} {xs != ys}");
+    List<List<string>> nx = [["1e1"]];
+    List<List<string>> ny = [["10"]];
+    Output.printLine("{nx == ny}");
+    Map<string, string> m1 = ["k" => "1e1"];
+    Map<string, string> m2 = ["k" => "10"];
+    Output.printLine("{m1 == m2} {m1 != m2}");
+    Map<string, string> p = ["a" => "x", "b" => "y"];
+    Map<string, string> q = ["b" => "y", "a" => "x"];
+    Output.printLine("{p == q}");
+    Output.printLine("{same(\"10\", \"10.0\")} {same(\"10\", \"10\")}");
+    // Instances compare field by field, and a string field is exact too.
+    Tag t1 = new Tag("10");
+    Tag t2 = new Tag("10.0");
+    Tag t3 = new Tag("10");
+    Output.printLine("{t1 == t2} {t1 == t3} {t1 != t2}");
+    // Decimal `==` stays numeric and scale-insensitive (the statically-typed path is unchanged).
+    decimal x = 1.50d;
+    decimal y = 1.5d;
+    Output.printLine("{x == y}");
+    // ... at every site whose type the transpiler can resolve: optionals, lists, maps, instances,
+    // call results and field reads. Only an ERASED generic body loses that (KNOWN_ISSUES
+    // STRING-EQ-DECIMAL-ERASED), so it is deliberately not exercised with a decimal here.
+    decimal? oa = 1.50d;
+    decimal? ob = 1.5d;
+    List<decimal> dx = [1.50d];
+    List<decimal> dy = [1.5d];
+    Map<string, decimal> dm = ["k" => 1.50d];
+    Map<string, decimal> dn = ["k" => 1.5d];
+    Money m1x = new Money(1.50d);
+    Money m1y = new Money(1.5d);
+    Output.printLine(
+        "{oa == ob} {dx == dy} {dm == dn} {m1x == m1y} {price() == 1.5d} {m1x.amount == 1.5d}"
+    );
+    // Equal strings stay equal.
+    Output.printLine("{a == \"10\"} {\"abc\" == \"abc\"} {\"abc\" == \"ABC\"}");
+}
