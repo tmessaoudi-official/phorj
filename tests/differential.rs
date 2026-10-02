@@ -3681,6 +3681,9 @@ const TIER1_PHP: &[&str] = &[
     "number_format",
     "ord",
     "rtrim",
+    // SPL is always compiled in (it cannot be disabled since PHP 5.3) and answers under `php -n`;
+    // `__phorj_eq` keys its cycle guard on it so an instance-chain compare stays linear (DEC-557).
+    "spl_object_id",
     "sprintf",
     "str_contains",
     "str_ends_with",

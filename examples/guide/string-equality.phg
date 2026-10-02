@@ -75,8 +75,8 @@ function main(): void {
     decimal y = 1.5d;
     Output.printLine("{x == y}");
     // ... at every site whose type the transpiler can resolve: optionals, lists, maps, instances,
-    // call results and field reads. Only an ERASED generic body loses that (KNOWN_ISSUES
-    // STRING-EQ-DECIMAL-ERASED), so it is deliberately not exercised with a decimal here.
+    // call results and field reads. A generic class or function instantiated at `decimal` is the
+    // known exception (KNOWN_ISSUES STRING-EQ-DECIMAL-ERASED), so it is deliberately not exercised here.
     decimal? oa = 1.50d;
     decimal? ob = 1.5d;
     List<decimal> dx = [1.50d];
@@ -100,6 +100,20 @@ function main(): void {
     List<int?> lz = [0];
     Output.printLine("{ln == lz} {ln == ln}");
     Output.printLine("{same(nz, zz)} {same(nb, fb)}");
+    // Scalars never equal across types: a union can hold 1 or 1.0, true or 1, and PHP's loose `==` says equal.
+    int | float u1 = 1;
+    int | float u2 = 1.0;
+    int | bool u3 = 1;
+    int | bool u4 = true;
+    Output.printLine("{u1 == u2} {u1 != u2} {u3 == u4} {u1 == u1}");
+    List<int | float> lu = [1];
+    List<int | float> lv = [1.0];
+    Output.printLine("{lu == lv} {same(lu, lv)}");
+    // Closures are never equal, not even to themselves (equality on function values is a type error
+    // outside a generic body, where PHP's empty-array view of a Closure once made any two equal).
+    var clsA = function(int x): int => x;
+    var clsB = function(int x): int => x + 1;
+    Output.printLine("{same(clsA, clsB)} {same(clsA, clsA)}");
     // An instance holding a NaN is not equal even to itself (a field-wise float compare).
     float nan = Math.sqrt(-1.0);
     Sample sn = new Sample(nan);

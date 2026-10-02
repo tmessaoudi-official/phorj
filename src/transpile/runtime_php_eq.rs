@@ -11,11 +11,14 @@
 //!    reproduces and a strict compare would break. Known residual, disclosed in KNOWN_ISSUES: a value
 //!    that mixes `string` and `decimal` in one container/class keeps the loose string behaviour.
 //! 2. **Either side a `string`** → PHP `===` / `!==`.
-//! 3. **Both sides `int`/`float`/`bool`** → bare `==` / `!=` (same type, so identical to `===`).
+//! 3. **Both sides `int`/`float`/`bool`** → `===` / `!==`. Native equality has no cross-type scalar case
+//!    (`Int(1) == Float(1.0)` is `false`, and a union `int | float` can hold either), so PHP's loose
+//!    `1 == 1.0` / `1 == true` would disagree; `===` keeps NaN unequal and `-0.0 == 0.0` equal.
 //! 4. **Anything else** (`Other` — an erased generic `T`, an unresolved call/field/index —, lists, maps,
 //!    tuples, class/enum instances) → `__phorj_eq`, which mirrors `eq_val` structurally and compares any
 //!    two strings exactly. Under erasure a `decimal` flowing through an UNKNOWN-kind operand therefore
-//!    compares scale-sensitively on the PHP leg (developer ruling DEC-557, 2026-10-02).
+//!    compares scale-sensitively on the PHP leg (developer ruling DEC-557, 2026-10-02, re-confirmed for a
+//!    generic CLASS instantiated at `decimal`, whose field kind is the unresolved type parameter).
 
 use super::*;
 
@@ -24,6 +27,7 @@ use super::*;
 const HELPER: &str = r#"function __phorj_eq($a, $b) {
     static $seen = [];
     if ($a === null || $b === null || is_string($a) || is_string($b)) { return $a === $b; }
+    if ($a instanceof \Closure || $b instanceof \Closure) { return false; }
     if (is_array($a) && is_array($b)) {
         if (count($a) !== count($b)) { return false; }
         foreach ($a as $k => $v) {
@@ -33,11 +37,12 @@ const HELPER: &str = r#"function __phorj_eq($a, $b) {
     }
     if (is_object($a) && is_object($b)) {
         if (get_class($a) !== get_class($b)) { return false; }
-        foreach ($seen as $p) { if ($p[0] === $a && $p[1] === $b) { return true; } }
-        $seen[] = [$a, $b];
-        try { return __phorj_eq((array)$a, (array)$b); } finally { array_pop($seen); }
+        $pair = spl_object_id($a) . ':' . spl_object_id($b);
+        if (isset($seen[$pair])) { return true; }
+        $seen[$pair] = true;
+        try { return __phorj_eq((array)$a, (array)$b); } finally { unset($seen[$pair]); }
     }
-    return $a == $b;
+    return $a === $b;
 }"#;
 
 impl Transpiler {
@@ -89,10 +94,8 @@ impl Transpiler {
             || self.kind_has_decimal(&rk, &mut Vec::new())
         {
             Some(loose)
-        } else if lk == OpKind::Str || rk == OpKind::Str {
+        } else if lk == OpKind::Str || rk == OpKind::Str || (scalar(&lk) && scalar(&rk)) {
             Some(strict)
-        } else if scalar(&lk) && scalar(&rk) {
-            Some(loose)
         } else {
             None
         };

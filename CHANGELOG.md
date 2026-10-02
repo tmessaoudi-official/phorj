@@ -11,10 +11,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 `"10" == "10.0"` was `false` on the VM and the tree-walker but `true` in the transpiled PHP — silently, for any two
 numeric-looking strings (found by the 2026-10-01 PHP-parity review). String operands now emit `===`/`!==`; any operand
 the transpiler cannot pin to a scalar (containers, instances, optionals, an erased generic `T`) goes through the new
-structural `__phorj_eq` helper, which also stops a `null` equalling `0`/`false` and an instance holding a NaN equalling
-itself. A kind that contains a `decimal` keeps loose `==`, so decimal equality stays numeric. New example
-`examples/guide/string-equality.phg`. Disclosed: a decimal compared inside an erased generic is scale-sensitive on the
-PHP leg (`STRING-EQ-DECIMAL-ERASED`); `Set ==` is order-sensitive on the PHP leg (`SET-EQ-ORDER`, pre-existing);
+structural `__phorj_eq` helper, which also stops a `null` equalling `0`/`false`, `1` equalling `1.0` through an
+`int | float` union, an instance holding a NaN equalling itself, and two closures comparing equal. A kind that contains a `decimal` keeps loose `==`, so decimal equality stays numeric. New example
+`examples/guide/string-equality.phg`. Disclosed: a decimal behind an unresolved type parameter (an erased generic body, or a generic class
+instantiated at `decimal`) is scale-sensitive on the PHP leg (`STRING-EQ-DECIMAL-ERASED`); `Set ==` is order-sensitive on the PHP leg (`SET-EQ-ORDER`, pre-existing);
 `List.contains` on instances uses PHP identity (`LIST-CONTAINS-INSTANCES`, pre-existing). `__phorj_eq` is unbenchmarked
 (perf OWED). The lifter half is scout row 4l-b9.
 

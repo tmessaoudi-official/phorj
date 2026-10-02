@@ -1,17 +1,23 @@
 # Known Issues & Limitations
 
-## STRING-EQ-DECIMAL-ERASED — inside an erased generic, `decimal ==` is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
+## STRING-EQ-DECIMAL-ERASED — a decimal behind an unresolved type parameter is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
 
-`==`/`!=` on `string` transpiles to `===`/`!==` (statically typed) or to the `__phorj_eq` helper (any operand the
-transpiler cannot pin to a scalar). A `decimal` is a PHP *string* carrier, so where the kind is UNKNOWN — an erased
-generic `T`, an unresolved call/field/index — the helper cannot tell `"1.50"` the decimal from `"1.50"` the string and
-compares exactly. Failing program: `function same<T>(T a, T b): bool { return a == b; }` then `same(1.50d, 1.5d)` —
-`phg run` gives `true`, the transpiled PHP gives `false`. Developer ruling (DEC-557): strings win, because the string
-case (`same("10", "10.0")`) is the common one and was silently WRONG. Statically-typed `decimal ==` is unchanged, and a
-kind that contains a decimal keeps PHP's loose `==`, so a class or `List<decimal>` compared at a known type stays
-numeric. Residual: a class/container that mixes `string` and `decimal` fields keeps the loose behaviour for its strings.
-The structural fix is a distinguishable decimal carrier in PHP (a separate large slice). Measured 2026-10-02: every decimal site whose type the transpiler can resolve (`decimal?`, `List<decimal>`, `Map<string, decimal>`, instances with decimal fields, call results, field reads) keeps loose `==` and agrees on all three legs (pinned in `examples/guide/string-equality.phg`); only an erased generic body loses it (a null is compared as a null, never loosely, and the optional/null cases are pinned in the example; the one other known gap is SET-EQ-ORDER below). PENDING (not ruled): whether this counts as a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the decimal-`<` entry below is deliberately left unchanged until the developer rules. The LIFTER half is open: PHP
-loose `==` still lifts to strict `==` (scout row 4l-b9).
+`==`/`!=` on `string` transpiles to `===`/`!==` (statically typed) or to the `__phorj_eq` helper (any operand the transpiler
+cannot pin to a scalar). A `decimal` is a PHP *string* carrier, so where the operand's kind is UNKNOWN the helper cannot
+tell `"1.50"` the decimal from `"1.50"` the string and compares exactly. Failing programs, all `true` natively and `false`
+in the transpiled PHP: `function same<T>(T a, T b): bool { return a == b; }` with `same(1.50d, 1.5d)`; and a generic CLASS
+instantiated at decimal — `class Box<T> { constructor(public T v) {} }`, `Box<decimal> a = new Box(1.50d); Box<decimal> b =
+new Box(1.5d); a == b` — because the field's kind is the unresolved parameter `T`. Developer ruling (DEC-557, re-confirmed
+2026-10-02 for the generic-class case): strings win, because the string case (`same("10", "10.0")`) is the common one and
+was silently WRONG.
+
+Not affected, measured: every site whose type the transpiler resolves — `decimal?`, `List<decimal>`, `Map<string, decimal>`,
+plain classes with decimal fields, call results, field reads, `xs[0]`, `(o ?? a)` — keeps loose `==` and agrees on all three
+legs (pinned in `examples/guide/string-equality.phg`). Residual: a class or container that mixes `string` and `decimal`
+fields keeps the loose behaviour for its strings. The structural fix is a distinguishable decimal carrier in PHP (a
+separate large slice). The LIFTER half is open: PHP loose `==` still lifts to strict `==` (scout row 4l-b9). PENDING (not
+ruled): whether this is a third Invariant-1 exception — the "exactly TWO" count in CLAUDE.md, README and the
+decimal-`<` entry below is deliberately left unchanged until the developer rules.
 
 ## SET-EQ-ORDER — `Set == Set` is order-sensitive on the PHP leg (found 2026-10-02 by the DEC-557 panel; PRE-EXISTING)
 
