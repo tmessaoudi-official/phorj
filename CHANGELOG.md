@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `(a ?? b) == c` answered the opposite on the PHP leg when the default may be null (audit F1, 2026-10-06)
+
+DEC-557 round 5 typed `a ?? b` as `a`'s kind with the optional peeled, even when `b` is itself optional. So
+`(a ?? b) == c` over `string?` took the strict path, and its `(string)` cast turned a runtime `null` into `""`.
+`pick(null, null, null)` was `true` natively and `false` in PHP, and `pick(null, null, "")` the reverse. The same
+held for `a ?? null`, `a ?? o?.s`, a chained `??` and `!=`. `a ?? b` is now optional unless `b` is provably
+non-null, so it compares through `__phorj_eq`, and a decimal behind it keeps loose `==`. Arithmetic,
+negation, interpolation and `for` sources peel that optional again, because the checker never admits an
+optional there, so `(x ?? …) + 1` keeps `__phorj_checked_add` and a decimal keeps `__phorj_dec_*`. Pinned by
+`coalesce_with_a_nullable_default_compares_equal_on_every_leg` (three legs), three emission tests in
+`tests/transpile_eq.rs`, and a new line in `examples/guide/string-equality.phg`.
+
 ### Fixed — the lifter names PHP builtins it has no mapping for (2026-10-02)
 
 A lifted draft that calls a PHP internal function Phorj has no counterpart for (`strrev()`, `nl2br()`, the `empty`

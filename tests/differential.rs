@@ -7588,3 +7588,30 @@ fn dec561_bcrypt_hash_faults_also_fault_on_php() {
         r#"import Core.Output; import Core.Cryptography; #[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine("{Cryptography.verifyPassword("secret", "$2y$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234")}"); }"#,
     );
 }
+
+/// Audit F1 (2026-10-06): `a ?? b` is `T?` whenever `b` may itself be null — a second optional, a `null`
+/// literal, an unresolved operand (`o?.s`), or a chained `??` ending in one. The transpiler typed it as
+/// `a`'s peeled `string` (DEC-557 round 5), so `==` took the strict path and its `(string)` cast turned
+/// a runtime `null` into `""`: PHP answered `false true true` where both native legs said `true false
+/// true`. Every shape below is all-null first, then null against `""`, then a non-null match.
+#[test]
+fn coalesce_with_a_nullable_default_compares_equal_on_every_leg() {
+    agree_out_php(
+        r#"import Core.Output;
+class Named { constructor(public string? s) {} }
+function pick(string? a, string? b, string? c): bool { return (a ?? b) == c; }
+function viaNull(string? a, string? c): bool { return (a ?? null) == c; }
+function viaSafe(string? a, Named? o, string? c): bool { return (a ?? o?.s) == c; }
+function chained(string? a, string? b, string? c, string? d): bool { return (a ?? b ?? c) == d; }
+function differ(string? a, string? b, string? c): bool { return (a ?? b) != c; }
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+    Output.printLine("{pick(null, null, null)} {pick(null, null, \"\")} {pick(\"x\", null, \"x\")}");
+    Output.printLine("{viaNull(null, null)} {viaNull(null, \"\")} {viaNull(\"x\", \"x\")}");
+    Output.printLine("{viaSafe(null, new Named(null), null)} {viaSafe(null, new Named(null), \"\")} {viaSafe(null, new Named(\"y\"), \"y\")}");
+    Output.printLine("{chained(null, null, null, null)} {chained(null, null, null, \"\")} {chained(null, null, \"z\", \"z\")}");
+    Output.printLine("{differ(null, null, null)} {differ(null, null, \"\")} {differ(\"x\", null, \"x\")}");
+}"#,
+        "true false true\ntrue false true\ntrue false true\ntrue false true\nfalse true false\n",
+        "coalesce_with_a_nullable_default",
+    );
+}

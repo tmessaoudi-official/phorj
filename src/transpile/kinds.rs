@@ -1,6 +1,6 @@
 //! Transpiler — PHP-side kind inference (`OpKind` of locals/methods/fields/exprs).
 
-use super::kinds_calls::{known, unwrap_optional};
+use super::kinds_calls::{coalesce_kind, known, unwrap_optional};
 use super::*;
 
 impl Transpiler {
@@ -82,7 +82,7 @@ impl Transpiler {
                 }
             }
             Expr::Unary { op, expr, .. } => match op {
-                UnaryOp::Neg => self.expr_kind(expr),
+                UnaryOp::Neg => self.operand_kind(expr),
                 UnaryOp::Not => OpKind::Bool,
                 UnaryOp::BitNot => OpKind::Int,
             },
@@ -90,7 +90,7 @@ impl Transpiler {
                 // Arithmetic: result kind follows the operands (the checker guarantees they agree).
                 // `+` over strings is concatenation → `Str`; otherwise numeric (Float dominates Int).
                 BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => {
-                    let (l, r) = (self.expr_kind(lhs), self.expr_kind(rhs));
+                    let (l, r) = (self.operand_kind(lhs), self.operand_kind(rhs));
                     if matches!(op, BinaryOp::Add) && (l == OpKind::Str || r == OpKind::Str) {
                         OpKind::Str
                     } else if l == OpKind::Decimal || r == OpKind::Decimal {
@@ -125,11 +125,12 @@ impl Transpiler {
                 // any enclosing arithmetic. The `_` arm below would silently make it `Other` and
                 // mis-route `(a <=> b) + 1`; rustc cannot flag that, so this arm is load-bearing.
                 BinaryOp::Spaceship => OpKind::Int,
-                // `a ?? b` is `a`'s kind with the optional peeled, else `b`'s (DEC-557 round 5).
-                BinaryOp::Coalesce => match unwrap_optional(self.expr_kind(lhs)) {
-                    OpKind::Other => self.expr_kind(rhs),
-                    k => k,
-                },
+                // `a ?? b` (DEC-557 round 5; optional unless `b` is provably non-null — audit F1).
+                BinaryOp::Coalesce => coalesce_kind(
+                    self.expr_kind(lhs),
+                    self.expr_kind(rhs),
+                    matches!(**rhs, Expr::Null(..)),
+                ),
                 _ => OpKind::Other,
             },
             Expr::InstanceOf { .. } => OpKind::Bool,
@@ -217,7 +218,7 @@ impl Transpiler {
     /// is float, `Int` if either is int, else `Other` (→ runtime helper). The checker guarantees both
     /// operands share a numeric type, so resolving either suffices.
     pub(super) fn arith_kind(&self, lhs: &Expr, rhs: &Expr) -> OpKind {
-        match (self.expr_kind(lhs), self.expr_kind(rhs)) {
+        match (self.operand_kind(lhs), self.operand_kind(rhs)) {
             (OpKind::Float, _) | (_, OpKind::Float) => OpKind::Float,
             (OpKind::Int, _) | (_, OpKind::Int) => OpKind::Int,
             _ => OpKind::Other,

@@ -258,4 +258,11 @@ function main(): void {
     Output.printLine("{rt1.v == rt2.v} {rt1.s == rt2.s}");
     // Two instances sharing structure (a DAG) compare in linear time on every leg.
     Output.printLine("{chain(22) == chain(22)}");
+    // `a ?? b` is itself optional when `b` is: a null on both sides is equal, and never equal to "".
+    string? noneA = null;
+    string? noneB = null;
+    string? blank = "";
+    Output.printLine(
+        "{(noneA ?? noneB) == noneB} {(noneA ?? noneB) == blank} {(noneA ?? null) != blank}"
+    );
 }

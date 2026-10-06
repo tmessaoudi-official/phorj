@@ -66,7 +66,7 @@ impl Transpiler {
                     op,
                     BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Rem | BinaryOp::Div
                 ) {
-                    let (lk, rk) = (self.expr_kind(lhs), self.expr_kind(rhs));
+                    let (lk, rk) = (self.operand_kind(lhs), self.operand_kind(rhs));
                     if lk == OpKind::Decimal || rk == OpKind::Decimal {
                         let ls = if lk == OpKind::Decimal {
                             l.clone()
@@ -155,7 +155,7 @@ impl Transpiler {
                     });
                 }
                 if matches!(op, BinaryOp::Add) {
-                    let (lk, rk) = (self.expr_kind(lhs), self.expr_kind(rhs));
+                    let (lk, rk) = (self.operand_kind(lhs), self.operand_kind(rhs));
                     // `string + string` → `.`. INT+INT → `__phorj_checked_add` (DEC-255: phorj faults on
                     // overflow; bare `$a+$b` silently promotes to float). Any OTHER numeric (a float is
                     // involved → the result is legitimately float, no fault) → bare `+`. Unknown kind →
@@ -181,8 +181,8 @@ impl Transpiler {
                 // Route int-int subtraction/multiplication through the checked helpers (a float operand
                 // means a legitimate float result → falls through to the native `binop()` operator).
                 if matches!(op, BinaryOp::Sub | BinaryOp::Mul)
-                    && self.expr_kind(lhs) == OpKind::Int
-                    && self.expr_kind(rhs) == OpKind::Int
+                    && self.operand_kind(lhs) == OpKind::Int
+                    && self.operand_kind(rhs) == OpKind::Int
                 {
                     self.gates.uses_checked_arith = true;
                     let helper = if matches!(op, BinaryOp::Sub) {
@@ -570,7 +570,7 @@ impl Transpiler {
     /// `__phorj_float` (Ryū, irreducible) · class/list/map/unknown → the `__phorj_str` dispatch.
     fn coerce_hole_concat(&mut self, e: &Expr, code: String) -> String {
         let bs = if self.namespaced { "\\" } else { "" };
-        match self.expr_kind(e) {
+        match self.operand_kind(e) {
             // A `decimal` value is already a PHP string (its rendered form) — concatenate it directly,
             // exactly like a `string` (M-NUM S1). `as_display` of a `Value::Decimal` is the same form.
             OpKind::Str | OpKind::Decimal => Self::paren_if_compound(e, code),

@@ -23,6 +23,7 @@ open class Base { constructor() {} }
 class Sub extends Base { constructor(public decimal v) {} }
 class Money { constructor(public decimal amount) {} }
 class Plain { constructor(public int n) {} }
+class Named { constructor(public string? s) {} }
 class Box<T> { constructor(public T v) {} }
 class Tagged<T> { constructor(public T v, public Set<string> s) {} }
 function mk(): decimal { return 1.50d; }
@@ -221,4 +222,57 @@ fn a_non_erased_member_of_a_decimal_instantiation_stays_strict() {
         ret.contains("__phorj_eq"),
         "a Set member must use the structural helper: {ret}"
     );
+}
+
+/// Audit F1 (2026-10-06): `a ?? b` is `T?` whenever `b` may itself be null — a second optional, a `null`
+/// literal, an unresolved operand (`o?.s`), or a chain ending in one. Typed as `a`'s peeled `string`,
+/// `==` took the strict path and its `(string)` cast turned a runtime `null` into `""` on the PHP leg.
+#[test]
+fn a_coalesce_whose_default_may_be_null_goes_through_the_helper() {
+    for (sig, expr) in [
+        ("string? a, string? b, string? c", "(a ?? b) == c"),
+        ("string? a, string? b, string? c", "(a ?? b) != c"),
+        ("string? a, string? c", "(a ?? null) == c"),
+        ("string? a, Named? o, string? c", "(a ?? o?.s) == c"),
+        (
+            "string? a, string? b, string? c, string? d",
+            "(a ?? b ?? c) == d",
+        ),
+    ] {
+        let php = emit(sig, expr);
+        let ret = cmp_return(&php);
+        assert!(
+            ret.contains("__phorj_eq(") && !ret.contains("(string)"),
+            "`{expr}` may be null, so it must use the helper (a cast would turn null into \"\"): {ret}"
+        );
+    }
+}
+
+/// The control: a default that can never be null keeps the strict, cast path.
+#[test]
+fn a_coalesce_with_a_non_null_default_stays_strict() {
+    let php = emit("string? a, string c", "(a ?? \"x\") == c");
+    let ret = cmp_return(&php);
+    assert!(
+        ret.contains("===") && !ret.contains("__phorj_eq"),
+        "got: {ret}"
+    );
+}
+
+/// An arithmetic operand is never optional (the checker refuses one), so a `??` over an unresolved
+/// default still routes `+` through the checked helper and a decimal through its own helper.
+#[test]
+fn a_coalesce_over_an_unresolved_default_keeps_its_arithmetic_helpers() {
+    let php = emit(
+        "int? x, bool c",
+        "((x ?? (match (c) { true => 1, default => 2 })) + 1) == 3",
+    );
+    let ret = cmp_return(&php);
+    assert!(ret.contains("__phorj_checked_add("), "got: {ret}");
+    let php = emit(
+        "decimal? d, bool c",
+        "((d ?? (match (c) { true => 1.50d, default => 2.5d })) * 2) == 3.00d",
+    );
+    let ret = cmp_return(&php);
+    assert!(ret.contains("__phorj_dec_mul("), "got: {ret}");
 }

@@ -277,7 +277,7 @@ impl Transpiler {
             _ => {}
         }
         let bs = if self.namespaced { "\\" } else { "" };
-        match self.expr_kind(operand) {
+        match self.operand_kind(operand) {
             OpKind::Int => {
                 self.gates.uses_checked_arith = true;
                 Some(format!("{bs}__phorj_checked_neg({inner})"))

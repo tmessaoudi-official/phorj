@@ -186,7 +186,7 @@ impl Transpiler {
                     // A `string` iterates its characters — PHP `foreach` over a raw string is invalid,
                     // so wrap it in `str_split` (1-byte chunks; byte-identical to the backends' char
                     // walk in the ASCII domain). A List/Set transpiles to a PHP array `foreach` directly.
-                    let src = if matches!(self.expr_kind(iter), OpKind::Str) {
+                    let src = if matches!(self.operand_kind(iter), OpKind::Str) {
                         format!("str_split({it})")
                     } else {
                         it

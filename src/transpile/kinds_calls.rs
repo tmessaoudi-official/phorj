@@ -17,6 +17,26 @@ pub(super) fn unwrap_optional(k: OpKind) -> OpKind {
     }
 }
 
+/// The kind of `a ?? b`: `a`'s kind with the optional peeled (else `b`'s), itself OPTIONAL unless `b` is
+/// provably non-null. The checker types `a ?? b` as `T?` when `b` may be null (a second optional, a
+/// `null` literal, an operand the transpiler cannot resolve such as `o?.s`), and a peeled `string` sent
+/// `==` down the strict path, whose `(string)` cast turned a runtime `null` into `""` on the PHP leg
+/// (audit F1, 2026-10-06). The optional keeps its inner kind, so a decimal behind it keeps loose `==`;
+/// arithmetic, interpolation and iteration peel it again ([`Transpiler::operand_kind`]).
+pub(super) fn coalesce_kind(lhs: OpKind, rhs: OpKind, rhs_is_null: bool) -> OpKind {
+    let maybe_null =
+        rhs_is_null || rhs == OpKind::Other || matches!(&rhs, OpKind::Wrapped(v) if v.len() <= 1);
+    let k = known(match unwrap_optional(lhs) {
+        OpKind::Other => unwrap_optional(rhs),
+        k => k,
+    });
+    if maybe_null && k != OpKind::Other {
+        OpKind::Wrapped(vec![k])
+    } else {
+        k
+    }
+}
+
 /// A class member's kind, with an erased type parameter (`T v`) kept distinguishable from any other
 /// unresolved kind as `Wrapped([])` — only an ERASED member may borrow its type arguments from a
 /// generic instantiation (`generic_member_kind`); a `Set` or closure member must not.
@@ -63,6 +83,14 @@ fn subst(ty: &Ty, b: &HashMap<String, OpKind>) -> OpKind {
 }
 
 impl Transpiler {
+    /// The kind of an operand the checker proves NON-null — an arithmetic or negation operand, an
+    /// interpolation hole, a `for` source — with one optional peeled. The only `Wrapped([k])` that can
+    /// reach one is a `??` whose default the transpiler could not prove non-null ([`coalesce_kind`]);
+    /// for every kind the checker admits in those positions this is the identity.
+    pub(super) fn operand_kind(&self, e: &Expr) -> OpKind {
+        unwrap_optional(self.expr_kind(e))
+    }
+
     /// The kind of a read (`field` / `method` result) off a generic instantiation `Wrapped([Class(c),
     /// args…])`: the member's own kind, else — its type being an erased parameter — the type arguments,
     /// but only when one carries a `decimal` (anything else stays `Other`, the string-exact helper).
