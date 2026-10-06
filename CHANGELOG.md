@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `\h`/`\H` in a regex are refused on both constructors instead of answering the opposite of PHP (audit F7, scout plan row 4l-b8, 2026-10-06)
+
+`fancy-regex` reads `\h` as a hex digit, while PCRE reads it as horizontal whitespace. `Regex.compileBacktracking("a\\h")`
+passed `phg check` and printed `true false false` natively where PHP printed `false true true`. `\h`/`\H` (in or out of a
+class) now join the `pcre_divergent` scan and its PHP twin, so they are `E-REGEX-UNSUPPORTED` at check time for a literal
+and fault on every leg for a dynamic pattern. The linear-only list no longer names them, and `phg explain
+E-REGEX-UNSUPPORTED` and KNOWN_ISSUES §Core.Regex are updated. Pinned in
+`pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg` and the reject unit tests. Each half was sabotaged
+separately: the Rust arm, then the PHP twin. Still open from the same row: `\u` / `\U` (row 4l-b8b).
+
 ### Fixed — `(a ?? b) == c` answered the opposite on the PHP leg when the default may be null (audit F1, 2026-10-06)
 
 DEC-557 round 5 typed `a ?? b` as `a`'s kind with the optional peeled, even when `b` is itself optional. So

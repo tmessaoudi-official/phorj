@@ -8,7 +8,8 @@
 //!   delegates the regular subset to it) reads DIFFERENTLY from PCRE, or that only one side accepts:
 //!   class-set operators and nested classes (`[a-z&&[^aeiou]]`, `[[ab]]` — PCRE reads the brackets as
 //!   characters), POSIX classes (`[[:alpha:]]` — ASCII to the crate, Unicode under PCRE's UCP), `\v`/`\V`
-//!   (a vertical-tab LITERAL to the crate, a whitespace CLASS under PCRE), the crate-only `\<` `\>`
+//!   (a vertical-tab LITERAL to the crate, a whitespace CLASS under PCRE), `\h`/`\H` (a hex digit to
+//!   `fancy-regex`, horizontal whitespace under PCRE — audit F7, 2026-10-06), the crate-only `\<` `\>`
 //!   `\b{…}` boundaries, the inline `u`/`R` flags, and the PCRE-only constructs neither crate implements
 //!   (`\Q…\E`, `(?#…)`, `(?|…)`, `(?'n'…)`, `(?P=n)`, `(?P>n)`, `(?C…)`, `\X`, `\N`, `\0`, `\e`, `\c`),
 //!   plus the two Oniguruma-isms `fancy-regex` added and PCRE refuses (`\O` since 0.15, `(?~…)` since 0.18),
@@ -49,6 +50,12 @@ pub fn pcre_divergent(pattern: &str) -> Option<&'static str> {
                     return Some(
                         "the `\\v`/`\\V` escape (a vertical-tab literal to the native engines, a \
                          whitespace class under PCRE)",
+                    )
+                }
+                b'h' | b'H' => {
+                    return Some(
+                        "the `\\h`/`\\H` escape (a hex digit to `fancy-regex`, horizontal \
+                         whitespace under PCRE)",
                     )
                 }
                 b'Q' | b'E' => return Some("`\\Q…\\E` quoting (PCRE-only)"),
@@ -209,8 +216,8 @@ pub fn linear_unsupported(pattern: &str) -> Option<&'static str> {
             if !in_class {
                 match n {
                     b'1'..=b'9' | b'g' | b'k' => return Some("a back-reference"),
-                    b'h' | b'H' | b'R' | b'Z' | b'G' | b'K' => {
-                        return Some("a PCRE-only escape (`\\h`, `\\R`, `\\Z`, `\\G`, `\\K`)")
+                    b'R' | b'Z' | b'G' | b'K' => {
+                        return Some("a PCRE-only escape (`\\R`, `\\Z`, `\\G`, `\\K`)")
                     }
                     _ => {}
                 }
@@ -327,6 +334,9 @@ mod tests {
             r"[[:alpha:]]",
             r"a\v",
             r"\V",
+            r"a\h",
+            r"\Hx",
+            r"[\h]",
             r"(?-u)\w",
             r"(?u)a",
             r"(?R)a",
@@ -381,7 +391,6 @@ mod tests {
             r"a++",
             r"a(?=b)",
             r"(a)\1",
-            r"\hx",
             r"a\R",
             r"a\Z",
             r"a{,3}b",

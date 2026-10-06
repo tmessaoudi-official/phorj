@@ -42,6 +42,7 @@ function __phorj_regex_pcre_divergent($p) {
             if ($i + 1 >= $n) { break; }
             $x = $b[$i + 1];
             if ($x === 'v' || $x === 'V') { return 'the `\\v`/`\\V` escape (a vertical-tab literal to the native engines, a whitespace class under PCRE)'; }
+            if ($x === 'h' || $x === 'H') { return 'the `\\h`/`\\H` escape (a hex digit to `fancy-regex`, horizontal whitespace under PCRE)'; }
             if ($x === 'Q' || $x === 'E') { return '`\\Q…\\E` quoting (PCRE-only)'; }
             if (strpos('XNec0', $x) !== false) { return 'a PCRE-only escape (`\\X`, `\\N`, `\\e`, `\\c`, `\\0`)'; }
             if ($x === 'O') { return 'the `\\O` escape (any character to `fancy-regex`, an unknown escape under PCRE)'; }
@@ -120,7 +121,7 @@ function __phorj_regex_linear_unsupported($p) {
             $x = $b[$i + 1];
             if (!$inClass) {
                 if (($x >= '1' && $x <= '9') || $x === 'g' || $x === 'k') { return 'a back-reference'; }
-                if (strpos('hHRZGK', $x) !== false) { return 'a PCRE-only escape (`\\h`, `\\R`, `\\Z`, `\\G`, `\\K`)'; }
+                if (strpos('RZGK', $x) !== false) { return 'a PCRE-only escape (`\\R`, `\\Z`, `\\G`, `\\K`)'; }
             }
             $i += 2; $afterQ = false; continue;
         }

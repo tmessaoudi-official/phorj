@@ -3127,12 +3127,14 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
 - **PCRE-only syntax is rejected by `Regex.compile` on EVERY leg, and available through
   `Regex.compileBacktracking` (DEC-461, 2026-09-02).** The linear engine's reject list (look-around,
   back-references, atomic groups, possessive quantifiers, conditionals/recursion, `(*VERB)`s,
-  `\h \R \Z \G \K`) is applied at CHECK time to a literal pattern (`E-REGEX-UNSUPPORTED`) and at run
+  `\R \Z \G \K`) is applied at CHECK time to a literal pattern (`E-REGEX-UNSUPPORTED`) and at run
   time to a dynamic one, with the PHP twin porting the same scan. **Round 4 (2026-09-02) widened this to
   a second scan applied to BOTH constructors** — syntax the native engines and PCRE read DIFFERENTLY,
   or that only one side accepts, all of which used to pass every leg silently: class-set operators and
   nested classes (`[a-z&&[^aeiou]]`, `[[ab]]`), POSIX classes (`[[:alpha:]]` — ASCII natively, Unicode
-  under PCRE's UCP; write `\p{…}`), `\v`/`\V`, `\<` `\>` `\b{…}`, the inline `u`/`R` flags, and
+  under PCRE's UCP; write `\p{…}`), `\v`/`\V`, `\h`/`\H` (a hex digit to `fancy-regex`, horizontal whitespace
+  under PCRE — moved here from the linear-only list on 2026-10-06, after `compileBacktracking("a\\h")` was
+  found answering the opposite of PHP), `\<` `\>` `\b{…}`, the inline `u`/`R` flags, and
   `\Q…\E` `(?#…)` `(?|…)` `(?'n'…)` `(?P=n)` `(?P>n)` `(?C…)` `\X` `\N` `\0` `\e` `\c`, plus `\O` and
   `(?~…)` (accepted by `fancy-regex` since 0.15/0.18, refused by PCRE; added 2026-09-13 with the 0.19 upgrade), and the brace quantifiers PCRE2 10.43 re-read (DEC-522, added the same day after CI's PCRE2 10.42 redded master): `{,n}` and spaces or tabs inside `{n,m}` (`x{ 2}`, `x{1 , 2}`) are a quantifier from PCRE2 10.43 and literal text before, so the PHP leg's reading depended on the host's PCRE2 build — PHP 8.3.33 / PCRE2 10.42 prints `0` for `x{,2}y` on `xxy` where PHP 8.5.10 / PCRE2 10.44 prints `1` (both measured). `{,}` and `{ }` hold no digit, are literal under every PCRE2, and stay accepted by `compileBacktracking`. Spaces inside an ESCAPE's braces (`\x{ 41}`, `\g{ 1}`) are not in the scan: the native crates refuse them, so they fall in the dynamic-pattern gap disclosed below. A value built
   directly (`new Regex(p, e)`) is validated at first USE on every leg. **Disclosure (Invariant 14):** the

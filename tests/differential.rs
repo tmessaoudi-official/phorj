@@ -6400,6 +6400,10 @@ fn pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg() {
         r"[[:alpha:]]",
         r"a\v",
         r"a\V",
+        // A hex digit to `fancy-regex`, horizontal whitespace under PCRE (audit F7, 2026-10-06).
+        r"a\h",
+        r"a\H",
+        r"[\h]x",
         r"(?-u)\w",
         r"(?u)a",
         r"\<a",
