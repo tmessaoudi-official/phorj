@@ -6245,12 +6245,12 @@ fn regex_dollar_anchors_at_the_true_end_on_every_leg() {
 
 /// C2/C5 — PCRE-only constructs are REJECTED by the linear engine at compile time (a literal pattern is
 /// gated by the checker, `E-REGEX-UNSUPPORTED`), so `a++` can no longer parse as `(a+)+` natively while
-/// PCRE reads it as possessive, and `(?=b)`/`(a)\1`/`\h`/`\R`/`\Z`/`a{,3}b` can no longer fault natively
+/// PCRE reads it as possessive, and `(?=b)`/`(a)\1`/`\G`/`\R`/`\Z`/`a{,3}b` can no longer fault natively
 /// while PHP says `true`. A DYNAMIC pattern is rejected by the runtime on both legs (`agree_err_php`).
 #[test]
 fn linear_engine_rejects_pcre_only_constructs_on_every_leg() {
     for pat in [
-        "a++", "a(?=b)", r"(a)\1", r"\hx", r"a\R", r"a\Z", "a{,3}b", "(?>a)b", "a*+",
+        "a++", "a(?=b)", r"(a)\1", r"a\G", r"a\R", r"a\Z", "a{,3}b", "(?>a)b", "a*+",
     ] {
         // Literal: a check-time error on both native legs (the transpile leg never emits it).
         let src = with_pkg(&regex_prog(&format!(
@@ -6456,6 +6456,9 @@ fn pcre_divergent_syntax_is_rejected_on_both_engines_on_every_leg() {
         (r"[a-]", "-", "true"),
         (r"a{2}", "a", "false"),
         (r"x{2,}", "xxx", "true"),
+        // An ESCAPED backslash before `h` is a literal `\` then `h`, not the `\h` escape (audit F7): it
+        // stays accepted, and needs the backslash `ah` lacks.
+        (r"a\\h", "ah", "false"),
     ] {
         for ctor in ["compile", "compileBacktracking"] {
             agree_out_php(
@@ -7617,5 +7620,42 @@ function differ(string? a, string? b, string? c): bool { return (a ?? b) != c; }
 }"#,
         "true false true\ntrue false true\ntrue false true\ntrue false true\nfalse true false\n",
         "coalesce_with_a_nullable_default",
+    );
+}
+
+/// Audit-fix panel P0-1 and completeness P1 (2026-10-06): the F1 fix first wrapped EVERY kind behind a `??`
+/// with an unresolved default, which hid a list/map/tuple from the index, native-bind, `var` and
+/// match-binding kind sites (PHP printed `3` for `3.00`, or died with a TypeError). It also missed a
+/// `string | null` default, because the `null` type kinded as a class. Only a SCALAR is wrapped now, and
+/// `null` kinds as `Other`. The last line pins a side effect of the operand peel: arithmetic on
+/// `Box<decimal>.v` goes through the decimal helpers (PHP printed `3 2.5 -1.5` before).
+#[test]
+fn coalesce_over_an_unresolved_default_keeps_structural_kinds_on_every_leg() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.List;
+class Box<T> { constructor(public T v) {} }
+function eqIndex(List<decimal>? xs, List<decimal>? zs, bool c): bool {
+    return (xs ?? match (c) { true => [1.50d], default => [2.5d] })[0] == (zs ?? match (c) { true => [1.5d], default => [2.50d] })[0];
+}
+function viaIndex(List<decimal>? xs, bool c): decimal { return (xs ?? match (c) { true => [1.50d], default => [2.5d] })[0] * 2; }
+function viaMap(Map<string, decimal>? m, bool c): decimal { return (m ?? match (c) { true => ["k" => 1.50d], default => ["k" => 2.5d] })["k"] * 2; }
+function viaReverse(List<decimal>? xs, bool c): decimal { return List.reverse(xs ?? match (c) { true => [1.50d, 0.25d], default => [2.5d] })[0] * 2; }
+function viaMatchBind(List<decimal>? xs, bool c): decimal { return match (xs ?? match (c) { true => [1.50d], default => [2.5d] }) { ys => ys[0] * 3 }; }
+function viaTuple((name: string, amt: decimal)? t, bool c): decimal { return (t ?? match (c) { true => (name: "a", amt: 1.25d), default => (name: "b", amt: 2.5d) }).amt * 2; }
+function viaUnion(string? a, string | null b, string? c): bool { return (a ?? b) == c; }
+function viaVar(string? a, string? b, string? c): bool { var x = a ?? b; return x == c; }
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+    List<decimal>? none = null;
+    bool c = true;
+    var ys = none ?? match (c) { true => [1.50d], default => [2.5d] };
+    Output.printLine("{ys[0] * 2} {ys[0] + 1} {ys[0] == 1.5d}");
+    Output.printLine("{eqIndex(null, null, true)} {viaIndex(null, true)} {viaMap(null, true)} {viaReverse(null, true)} {viaMatchBind(null, true)} {viaTuple(null, true)}");
+    Output.printLine("{viaUnion(null, null, null)} {viaUnion(null, null, \"\")} {viaVar(null, null, null)} {viaVar(null, null, \"\")}");
+    Box<decimal> bx = new Box(1.50d);
+    Output.printLine("{bx.v * 2} {bx.v + 1} {-bx.v}");
+}"#,
+        "3.00 2.50 true\ntrue 3.00 3.00 0.50 4.50 2.50\ntrue false true false\n3.00 2.50 -1.50\n",
+        "coalesce_over_an_unresolved_default",
     );
 }

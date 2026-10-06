@@ -10,7 +10,7 @@ shape, `true` natively and `false` in the transpiled PHP: `function same<T>(T a,
 strings win there, because the string case (`same("10", "10.0")`) is the common one and was silently WRONG.
 
 Everything the transpiler can type keeps numeric decimal equality and agrees on all three legs, pinned by
-`examples/guide/string-equality.phg` (34 lines) and, arm by arm, by `tests/transpile_eq.rs`: `decimal`, `decimal?` (params,
+`examples/guide/string-equality.phg` (35 lines) and, arm by arm, by `tests/transpile_eq.rs`: `decimal`, `decimal?` (params,
 returns, fields), `List<decimal>`, `Map<string, decimal>`, plain classes and enums with decimal fields or payloads (alone,
 or nested in a class or list), an interface- or base-typed operand holding a decimal implementer, a directly constructed
 variant, a generic instantiated at decimal at a typed site (`Box<decimal>`, `Option<decimal>`, `Result<decimal, string>`),
@@ -3134,11 +3134,11 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   nested classes (`[a-z&&[^aeiou]]`, `[[ab]]`), POSIX classes (`[[:alpha:]]` — ASCII natively, Unicode
   under PCRE's UCP; write `\p{…}`), `\v`/`\V`, `\h`/`\H` (a hex digit to `fancy-regex`, horizontal whitespace
   under PCRE — moved here from the linear-only list on 2026-10-06, after `compileBacktracking("a\\h")` was
-  found answering the opposite of PHP), `\<` `\>` `\b{…}`, the inline `u`/`R` flags, and
+  found answering the opposite of PHP; `\u`/`\U` are NOT yet in the scan — `Regex.compile("a\\u0041")` passes `phg check`, matches natively and faults under PCRE: scout plan row 4l-b8b, open), `\<` `\>` `\b{…}`, the inline `u`/`R` flags, and
   `\Q…\E` `(?#…)` `(?|…)` `(?'n'…)` `(?P=n)` `(?P>n)` `(?C…)` `\X` `\N` `\0` `\e` `\c`, plus `\O` and
   `(?~…)` (accepted by `fancy-regex` since 0.15/0.18, refused by PCRE; added 2026-09-13 with the 0.19 upgrade), and the brace quantifiers PCRE2 10.43 re-read (DEC-522, added the same day after CI's PCRE2 10.42 redded master): `{,n}` and spaces or tabs inside `{n,m}` (`x{ 2}`, `x{1 , 2}`) are a quantifier from PCRE2 10.43 and literal text before, so the PHP leg's reading depended on the host's PCRE2 build — PHP 8.3.33 / PCRE2 10.42 prints `0` for `x{,2}y` on `xxy` where PHP 8.5.10 / PCRE2 10.44 prints `1` (both measured). `{,}` and `{ }` hold no digit, are literal under every PCRE2, and stay accepted by `compileBacktracking`. Spaces inside an ESCAPE's braces (`\x{ 41}`, `\g{ 1}`) are not in the scan: the native crates refuse them, so they fall in the dynamic-pattern gap disclosed below. A value built
   directly (`new Regex(p, e)`) is validated at first USE on every leg. **Disclosure (Invariant 14):** the
-  scans are NOT the `regex` crate's grammar. A LITERAL pattern is gated exactly on every leg (the crate
+  scans are NOT the `regex` crate's grammar. A LITERAL pattern is gated exactly on every leg except for the open `\u`/`\U` gap above (the crate
   itself validates it at check time); a DYNAMIC pattern is gated by the ported reject lists, which cover
   the known divergence classes — a further construct the crate refuses and PCRE accepts would still
   fault natively and run under PHP. `compileBacktracking` runs PCRE-class patterns on `fancy-regex`

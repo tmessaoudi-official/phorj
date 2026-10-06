@@ -5,7 +5,8 @@
 //! would compile it at run time (`ext::regex::engine::validate`), so a PCRE-only construct on the
 //! linear engine (`E-REGEX-UNSUPPORTED`) or a syntax error on either (`E-REGEX-INVALID`) is a
 //! compile error on every leg — before this the transpile leg emitted `preg_*` for a pattern the Rust
-//! engines refused (panel C2/C5: `a++`, `(?=b)`, `\h`, … were `true` under PHP, a fault natively).
+//! engines refused (panel C2/C5: `a++`, `(?=b)`, `\h`, … were `true` under PHP, a fault natively;
+//! `\h`/`\H` have since moved to the both-engine `pcre_divergent` scan, audit F7 2026-10-06).
 //! A dynamic pattern is left to the runtime, where `compile` faults and the PHP twin
 //! `__phorj_regex_compile` faults identically.
 use super::*;

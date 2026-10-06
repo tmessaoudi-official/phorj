@@ -24,8 +24,9 @@ DEC-557 round 5 typed `a ?? b` as `a`'s kind with the optional peeled, even when
 held for `a ?? null`, `a ?? o?.s`, a chained `??` and `!=`. `a ?? b` is now optional unless `b` is provably
 non-null, so it compares through `__phorj_eq`, and a decimal behind it keeps loose `==`. Arithmetic,
 negation, interpolation and `for` sources peel that optional again, because the checker never admits an
-optional there, so `(x ?? …) + 1` keeps `__phorj_checked_add` and a decimal keeps `__phorj_dec_*`. Pinned by
-`coalesce_with_a_nullable_default_compares_equal_on_every_leg` (three legs), three emission tests in
+optional there, so `(x ?? …) + 1` keeps `__phorj_checked_add` and a decimal keeps `__phorj_dec_*`. Only a SCALAR result is wrapped. A list, map, tuple or class behind `??` keeps its kind, so index, native-bind, `var` and match-binding reads still see a decimal: the panel caught the first version printing `3` for `3.00` and raising PHP TypeErrors. A `T | null` default counts as may-be-null, because the `null` type no longer kinds as a class. A side effect of the peel, now pinned: arithmetic on a decimal read off a generic (`Box<decimal>.v * 2`) goes through the decimal helpers. PHP used to print `3` for `3.00`. Pinned by
+`coalesce_with_a_nullable_default_compares_equal_on_every_leg` and
+`coalesce_over_an_unresolved_default_keeps_structural_kinds_on_every_leg` (three legs), three emission tests in
 `tests/transpile_eq.rs`, and a new line in `examples/guide/string-equality.phg`.
 
 ### Fixed — the lifter names PHP builtins it has no mapping for (2026-10-02)

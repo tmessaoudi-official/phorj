@@ -17,20 +17,27 @@ pub(super) fn unwrap_optional(k: OpKind) -> OpKind {
     }
 }
 
-/// The kind of `a ?? b`: `a`'s kind with the optional peeled (else `b`'s), itself OPTIONAL unless `b` is
-/// provably non-null. The checker types `a ?? b` as `T?` when `b` may be null (a second optional, a
-/// `null` literal, an operand the transpiler cannot resolve such as `o?.s`), and a peeled `string` sent
-/// `==` down the strict path, whose `(string)` cast turned a runtime `null` into `""` on the PHP leg
-/// (audit F1, 2026-10-06). The optional keeps its inner kind, so a decimal behind it keeps loose `==`;
-/// arithmetic, interpolation and iteration peel it again ([`Transpiler::operand_kind`]).
+/// The kind of `a ?? b`: `a`'s kind with the optional peeled (else `b`'s). A SCALAR result stays
+/// optional unless `b` is provably non-null. The checker types `a ?? b` as `T?` when `b` may be null (a
+/// second optional, a `null` literal, a `T | null` union, an operand the transpiler cannot resolve such
+/// as `o?.s`), and a peeled `string` sent `==` down the strict path, whose `(string)` cast turned a
+/// runtime `null` into `""` on the PHP leg (audit F1, 2026-10-06). The optional keeps its inner kind, so
+/// a decimal behind it keeps loose `==`; arithmetic, interpolation and iteration peel it again
+/// ([`Transpiler::operand_kind`]). A structural kind (list, map, tuple, class) is never wrapped: it
+/// never takes the strict path, and its index/bind/member consumers must keep seeing it (panel P0-1).
 pub(super) fn coalesce_kind(lhs: OpKind, rhs: OpKind, rhs_is_null: bool) -> OpKind {
-    let maybe_null =
-        rhs_is_null || rhs == OpKind::Other || matches!(&rhs, OpKind::Wrapped(v) if v.len() <= 1);
+    let maybe_null = rhs_is_null
+        || rhs == OpKind::Other
+        || matches!(&rhs, OpKind::Wrapped(v) if v.len() <= 1 || v.contains(&OpKind::Other));
     let k = known(match unwrap_optional(lhs) {
         OpKind::Other => unwrap_optional(rhs),
         k => k,
     });
-    if maybe_null && k != OpKind::Other {
+    let scalar = matches!(
+        k,
+        OpKind::Str | OpKind::Int | OpKind::Float | OpKind::Bool | OpKind::Decimal
+    );
+    if maybe_null && scalar {
         OpKind::Wrapped(vec![k])
     } else {
         k
@@ -85,8 +92,10 @@ fn subst(ty: &Ty, b: &HashMap<String, OpKind>) -> OpKind {
 impl Transpiler {
     /// The kind of an operand the checker proves NON-null — an arithmetic or negation operand, an
     /// interpolation hole, a `for` source — with one optional peeled. The only `Wrapped([k])` that can
-    /// reach one is a `??` whose default the transpiler could not prove non-null ([`coalesce_kind`]);
-    /// for every kind the checker admits in those positions this is the identity.
+    /// reach one is a `??` whose default the transpiler could not prove non-null ([`coalesce_kind`]),
+    /// or a decimal read off a generic instantiation (`Box<decimal>.v` is `Wrapped([Decimal])`, see
+    /// `generic_member_kind`), which this peel routes through the `__phorj_dec_*` helpers like any
+    /// other decimal; for every other kind the checker admits in those positions it is the identity.
     pub(super) fn operand_kind(&self, e: &Expr) -> OpKind {
         unwrap_optional(self.expr_kind(e))
     }

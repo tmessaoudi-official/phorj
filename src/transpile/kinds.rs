@@ -271,8 +271,9 @@ pub(super) fn kind_of_type(ty: &Type) -> OpKind {
                 Box::new(args.first().map_or(OpKind::Other, kind_of_type)),
                 Box::new(args.get(1).map_or(OpKind::Other, kind_of_type)),
             ),
-            // Non-arithmetic primitives — no native operand specialization.
-            "void" | "never" | "empty" | "bytes" | "Set" => OpKind::Other,
+            // Non-arithmetic primitives — no native operand specialization. `null` (a `T | null` member)
+            // is `Other`, which `coalesce_kind` reads as may-be-null — never a class named `null`.
+            "void" | "never" | "empty" | "bytes" | "Set" | "null" => OpKind::Other,
             // A user-defined class/enum/interface name → `Class`, so field reads on a value of this
             // type resolve through `class_field_kinds` (T6b).
             other if args.is_empty() => OpKind::Class(other.to_string()),
