@@ -54,6 +54,21 @@ are queued with plan row 5 (A5, the editor-tooling no-crash work):
 This predates the 2026-10-07 batch. Workaround: bind the copy first (`P q = p with { x = 5 }; q.d()`). The fix
 (parenthesize the `clone(…)` when it is a receiver) is queued with plan row 4b.
 
+## TRAIT-BARE-NAME — in a trait method, a bare name shared by a top-level function and the USING class's field splits the legs (found 2026-10-08)
+
+```
+function k(): int { return 5; }
+function apply(() => int f): int { return f(); }
+trait T { function m(): int { return apply(k); } }
+class C { use T; int k = 9; }   // main prints new C().m()
+```
+
+`phg check` is clean, and the VM and PHP print `5` (the function). The tree-walker, the oracle, reads `C`'s field `k` and
+faults with `` `f` is not a function, variant, or class ``. The checker types the trait body against the trait, which has
+no field `k`, so it cannot see the collision. A field declared in the trait itself is `E-BARE-FIELD` (fixed in the
+2026-10-08 round-5 work). This predates that work. Workaround: write `this.k` or rename one of the two. Queued with plan
+row 4b.
+
 ## STRING-EQ-DECIMAL-ERASED — a decimal compared inside an erased generic BODY is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
 
 `==`/`!=` on `string` transpiles to `===`/`!==`, and any operand whose type the transpiler cannot pin goes through the

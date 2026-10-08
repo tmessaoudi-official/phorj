@@ -1,28 +1,12 @@
 //! PHP transpiler — type declarations: classes, traits, members. Enums live in `enums.rs`.
 
+use super::classes_synth::is_instance_field;
 use super::*;
 
 impl Transpiler {
     pub(super) fn emit_class(&mut self, c: &ClassDecl, program: &Program) -> Result<(), String> {
-        // Names of ctor params that PHP will promote to properties.
-        let mut promoted_names: HashSet<String> = HashSet::new();
-        for m in &c.members {
-            if let ClassMember::Constructor { params, .. } = m {
-                for p in params {
-                    if is_promoted(&p.modifiers) {
-                        promoted_names.insert(p.name.clone());
-                    }
-                }
-            }
-        }
-        // Field set for `$this->` resolution = explicit decls + promoted ctor params
-        // (mirrors the checker's `collect_class`).
-        let mut fields: HashSet<String> = promoted_names.clone();
-        for m in &c.members {
-            if let ClassMember::Field { name, .. } = m {
-                fields.insert(name.clone());
-            }
-        }
+        // Promoted ctor params, and the field set for `$this->` resolution (instance fields only).
+        let (promoted_names, fields, _) = self.class_field_context(c);
         // M-faults 2b: a class `implements Error` becomes a real PHP exception — `extends \Exception`
         // (so `throw` targets a `\Throwable`, and native `getMessage()` works). The built-in `Error`
         // marker has no PHP declaration, so it is dropped from the `implements` list; any *other*
@@ -116,7 +100,9 @@ impl Transpiler {
                         }
                     }
                 }
-                ClassMember::Field { name, .. } => {
+                ClassMember::Field {
+                    name, modifiers, ..
+                } if is_instance_field(modifiers) => {
                     fields.insert(name.clone());
                 }
                 _ => {}

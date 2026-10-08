@@ -58,6 +58,18 @@ impl Checker {
         )
     }
 
+    /// `E-BARE-FIELD`: Phorj has no bare field access; a field is always `this.x`.
+    fn bare_field_err(&mut self, span: Span, name: &str) -> Ty {
+        self.err_coded(
+            span,
+            format!("bare field reference `{name}` — write `this.{name}`"),
+            "E-BARE-FIELD",
+            Some(format!(
+                "Phorj has no bare field access (like PHP's `$this->`): qualify it as `this.{name}`"
+            )),
+        )
+    }
+
     pub(in crate::checker) fn check_expr_inner(&mut self, expr: &crate::ast::Expr) -> Ty {
         use crate::ast::Expr;
         match expr {
@@ -73,17 +85,15 @@ impl Checker {
                 None => {
                     // A bare instance-field reference. Phorj requires `this.field` everywhere (like
                     // PHP's `$this->field`; no bare field access), so this is always an error. It is
-                    // checked BEFORE the function lookup: with an instance, the interpreter (the
-                    // oracle) and the VM both read the FIELD when a function shares its name, so
-                    // `apply(k)` beside a field `k` must not type-check as the function (panel
-                    // 2026-10-08, round 5). A static method has no instance; see below.
-                    if self.is_cur_field(name) && !self.in_static_method {
-                        return self.err_coded(
-                            *span,
-                            format!("bare field reference `{name}` — write `this.{name}`"),
-                            "E-BARE-FIELD",
-                            Some(format!("Phorj has no bare field access (like PHP's `$this->`): qualify it as `this.{name}`")),
-                        );
+                    // checked BEFORE the function lookup (panel 2026-10-08, round 5): when a function
+                    // shares the field's name, every leg reads the FIELD in a method, constructor or
+                    // initializer, and the legs split inside a lambda or for an inherited field — no
+                    // instance context ran the function everywhere, so typing `apply(k)` as the
+                    // function was unsound. A static method or static initializer has no instance;
+                    // there the function wins on every leg (see below).
+                    let has_instance = !self.in_static_method && !self.in_static_init;
+                    if self.is_cur_field(name) && has_instance {
+                        return self.bare_field_err(*span, name);
                     }
                     // A4: bare named-function reference in value position — `fn_name` where
                     // `fn_name` is a top-level function, not a local. Return its function type so
@@ -108,7 +118,11 @@ impl Checker {
                         return Ty::Function(param_tys, Box::new(ret_ty), throws);
                     }
                     // In a static method there is no instance, so a function of the same name won
-                    // above (as on every leg); a bare instance field alone is `E-STATIC-THIS`.
+                    // above (as on every leg); a bare instance field alone is `E-STATIC-THIS`. A
+                    // static initializer keeps its `E-BARE-FIELD`.
+                    if self.is_cur_field(name) && !self.in_static_method {
+                        return self.bare_field_err(*span, name);
+                    }
                     if self.is_cur_field(name) {
                         return self.err_coded(
                             *span,

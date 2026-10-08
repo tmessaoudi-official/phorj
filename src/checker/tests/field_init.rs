@@ -117,12 +117,23 @@ fn a_bare_value_naming_a_field_and_a_function_is_the_field() {
         let src = format!("{decls} class C {{ {body} }} function main(): void {{}}");
         assert!(has(&src, "E-BARE-FIELD"), "{body}: {:?}", errors_of(&src));
     }
-    // A static method has no instance, so every leg takes the function there.
-    let src = format!(
-        "{decls} class C {{ int k = 9; static function s(): int {{ return apply(k); }} }} \
-         function main(): void {{}}"
-    );
-    assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
+    // A static method and a static field initializer have no instance, so every leg takes the
+    // function there (re-check after round 5: the static initializer printed 5 on all three legs
+    // before the fix, and the first version of the fix rejected it).
+    for member in [
+        "static function s(): int { return apply(k); }",
+        "static int s = apply(k);",
+    ] {
+        let src = format!("{decls} class C {{ int k = 9; {member} }} function main(): void {{}}");
+        assert!(
+            errors_of(&src).is_empty(),
+            "{member}: {:?}",
+            errors_of(&src)
+        );
+    }
+    // With no function of that name, a static initializer reading the field is still an error.
+    let src = "class C { int k = 9; static int s = k; } function main(): void {}";
+    assert!(has(src, "E-BARE-FIELD"), "{:?}", errors_of(src));
 }
 
 #[test]

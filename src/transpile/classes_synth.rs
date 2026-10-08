@@ -440,8 +440,13 @@ impl Transpiler {
         }
         let mut fields: HashSet<String> = promoted_names.clone();
         for m in &c.members {
-            if let ClassMember::Field { name, .. } = m {
-                fields.insert(name.clone());
+            if let ClassMember::Field {
+                name, modifiers, ..
+            } = m
+            {
+                if is_instance_field(modifiers) {
+                    fields.insert(name.clone());
+                }
             }
         }
         let is_error = c.implements.iter().any(|i| last_segment(i) == "Error");
@@ -482,4 +487,11 @@ impl Transpiler {
         self.line("}");
         Ok(())
     }
+}
+
+/// The field set behind `$this->` resolution holds instance fields only: a `static` or `const` field is
+/// never a bare name (the checker's field map excludes both), and counting one emitted `$this->k` for
+/// a function named `k`.
+pub(super) fn is_instance_field(modifiers: &[Modifier]) -> bool {
+    !modifiers.contains(&Modifier::Static) && !modifiers.contains(&Modifier::Const)
 }

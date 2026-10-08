@@ -85,12 +85,25 @@ Round 4 (on `da473111`) found two more problems in the batch's own changes, now 
 
 Round 5 (on `5bc170c4`, the panel's cap; the developer ruled to fix the root cause) found that round 4's assumption,
 that a bare name never reads a field, failed when a top-level FUNCTION shares the field's name:
-- The checker resolved a bare value name as local, then function, then field. Both backends, and the interpreter as the
-  oracle, take the field when there is an instance. So `int a = apply(k); int k = 9;` beside `function k()` type-checked,
-  and the legs split three ways (VM `no field k`, tree-walker `5 9`, PHP an uninitialised-property error).
-- The checker now takes the field first in an instance context, which makes that program `E-BARE-FIELD`. The older
-  shape with no forward reference, `int k = 9; int a = apply(k);`, used to type-check and then fault differently on
-  each leg; it is `E-BARE-FIELD` too. A static method has no instance and keeps the function, as every leg does.
+- The checker resolved a bare value name as local, then function, then field, so `apply(k)` beside a field `k` and a
+  `function k()` type-checked. The legs did not run the function: in a method, constructor or initializer all three read
+  the field and faulted calling an int, and inside a lambda or for an inherited field they split. With round 4's walk,
+  `int a = apply(k); int k = 9;` split three ways (VM `no field k`, tree-walker `5 9`, PHP an uninitialised-property
+  error).
+- The checker now takes the field first wherever there is an instance, so every one of those shapes is `E-BARE-FIELD`.
+  A static method or static field initializer has no instance and keeps the function.
+- The targeted re-check after the cap found that only the tree-walker (the oracle) ran that function in a static context.
+  It also caught the first version of the checker fix rejecting the static initializer, which every leg ran. Fixed:
+  - The VM gave every static method a receiver slot and read the field (`cannot read .k on unit`). A static method now has
+    no receiver slot. This also fixes the static-initializer prelude inside a class-static `main`, which read the entry
+    class's fields.
+  - The PHP leg emitted `$this->k` inside a `static function`, and treated a `static`/`const` field `k` as an instance
+    field. A static method's body now emits no `$this->` field read, and only instance fields count.
+  - New tests `a_function_named_like_a_field_in_a_static_method_byte_identical`,
+    `…_in_a_static_initializer_byte_identical` and `a_function_named_like_a_static_field_byte_identical` cover all three
+    legs.
+  - The same pass found a trait-method case the checker cannot see (TRAIT-BARE-NAME in KNOWN_ISSUES), queued with plan
+    row 4b.
 - Also from round 5:
   - binder-shadowing wording is corrected;
   - `pm/vendor.rs`'s doc no longer claims `install` refuses a tampered `vendor/`;

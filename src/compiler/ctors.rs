@@ -174,7 +174,10 @@ pub(super) fn compile_method<'a>(
     for p in &f.params {
         comp.add_local(&p.name, resolve_cty(&p.ty));
     }
-    comp.this_slot = Some(0);
+    // Slot 0 still exists in a static method's frame, but there is no instance: with no receiver
+    // slot a bare name never resolves to a field there (it is the function, as on the tree-walker),
+    // and the class-static `main`'s static-init prelude below does not read the entry class's fields.
+    comp.this_slot = (!f.modifiers.contains(&crate::ast::Modifier::Static)).then_some(0);
     comp.height = comp.locals.len();
     let last_line = f.span.line;
     // Static-init prelude (class-static `main` entry only) — `<init>` then `SetStatic(slot)`, before

@@ -77,8 +77,18 @@ impl Transpiler {
             // T6: a typed param is a known operand kind for native-operator specialization.
             self.declare_kind(&p.name, kind_of_type(&p.ty));
         }
+        // A static method has no `$this`: a bare name there is never a field (the checker typed it as
+        // the function, which the tree-walker runs), so no `$this->name` may be emitted.
+        let fields = if static_prefix.is_empty() {
+            None
+        } else {
+            Some(self.cur_class_fields.take())
+        };
         for s in &f.body {
             self.emit_stmt(s)?;
+        }
+        if let Some(fields) = fields {
+            self.cur_class_fields = fields;
         }
         self.pop_scope();
         self.indent -= 1;

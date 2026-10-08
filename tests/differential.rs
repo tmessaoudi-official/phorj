@@ -7758,3 +7758,68 @@ function viaVar(string? a, string? b, string? c): bool { var x = a ?? b; return 
         "coalesce_over_an_unresolved_default",
     );
 }
+
+/// Re-check after panel round 5 (2026-10-08): in a context with NO instance, a bare name shared by a
+/// field and a top-level function is the function — the tree-walker (the oracle) runs it. The VM gave
+/// every static method a receiver slot and read the field (`cannot read .k on unit`), and the PHP leg
+/// emitted `$this->k` inside a `static function`.
+#[test]
+fn a_function_named_like_a_field_in_a_static_method_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+function k(): int { return 5; }
+function apply(() => int f): int { return f(); }
+class C {
+    int k = 9;
+    static function s(): int { return apply(k); }
+    static function l(): int { return apply(function() => apply(k)); }
+}
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{C.s()} {C.l()}\"); }",
+        "5 5\n",
+        "static_method_fn_named_like_field",
+    );
+}
+
+/// Same re-check: a non-literal static initializer runs in the class-static `main`'s frame, which the
+/// VM compiled with the entry class's fields, so `apply(k)` read the entry class's field `k`.
+#[test]
+fn a_function_named_like_a_field_in_a_static_initializer_byte_identical() {
+    for (label, entry_fields, init_fields) in [
+        ("static_init_fn_named_like_entry_field", "int k = 9;", ""),
+        ("static_init_fn_named_like_own_field", "", "int k = 9;"),
+    ] {
+        agree_out_php(
+            &format!(
+                "import Core.Output;
+function k(): int {{ return 5; }}
+function apply(() => int f): int {{ return f(); }}
+class C {{ {init_fields} static int s = apply(k); }}
+class E {{
+    {entry_fields}
+    #[Entry(kind: EntryKind.Cli)] static function main(): void {{ Output.printLine(\"{{C.s}}\"); }}
+}}"
+            ),
+            "5\n",
+            label,
+        );
+    }
+}
+
+/// Same re-check: a STATIC field is never a bare name (the checker types `k` as the function), but the
+/// PHP leg counted statics as instance fields and emitted `$this->k`.
+#[test]
+fn a_function_named_like_a_static_field_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+function k(): int { return 5; }
+function apply(() => int f): int { return f(); }
+class C {
+    static int k = 1;
+    const int K = 2;
+    function m(): int { return apply(k); }
+}
+#[Entry(kind: EntryKind.Cli)] function main() -> void { Output.printLine(\"{new C().m()} {C.k} {C.K}\"); }",
+        "5 1 2\n",
+        "static_field_fn_named_like_field",
+    );
+}

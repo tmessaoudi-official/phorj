@@ -8799,12 +8799,17 @@ a listed file under no other condition. `expr_is_never` carries the only two.
   - Round 4: the bare-name check itself rejected a CALLEE `k()` beside a field `k`. Because every bare field read is
     `E-BARE-FIELD`, the walk was reduced to `this.x` only, and the shadowing went with it.
   - Round 5 (the cap; developer-ruled to fix the root cause): that premise failed when a top-level FUNCTION shares the
-    field's name. The checker resolved a bare value as local, then function, then field, while the interpreter (the
-    oracle) and the VM take the field whenever there is an instance. So the checker now does the same: in an instance
-    context, a bare name that names a field is `E-BARE-FIELD` before any function lookup; a static method keeps the
-    function. Tests: `a_bare_value_naming_a_field_and_a_function_is_the_field`,
-    `a_function_named_like_a_later_field_is_not_a_forward_ref`, and the binder assertions in
-    `a_match_binder_named_like_a_later_field_is_not_a_forward_ref`.
+    field's name. The checker resolved a bare value as local, then function, then field. Every leg reads the field in a
+    method, constructor or initializer, and the legs split inside a lambda or for an inherited field. So the checker now
+    rejects that shape: wherever there is an instance, a bare name that names a field is `E-BARE-FIELD` before any
+    function lookup. A static method or static field initializer has no instance and keeps the function. Tests:
+    `a_bare_value_naming_a_field_and_a_function_is_the_field`, `a_function_named_like_a_later_field_is_not_a_forward_ref`,
+    and the binder assertions in `a_match_binder_named_like_a_later_field_is_not_a_forward_ref`.
+  - Re-check after the cap: in a static context only the tree-walker (the oracle) ran the function. The VM gave every
+    static method a receiver slot, and the PHP leg emitted `$this->k` there and counted `static`/`const` fields as
+    instance fields. Both backends were fixed to follow the oracle (Invariant 2; logged ASSUMED, widening the cap ruling
+    to the backends); tests `a_function_named_like_a_*_byte_identical` (3). The trait-method case is KNOWN_ISSUES
+    TRAIT-BARE-NAME (plan row 4b).
 - **What the ratchet sees.** It flags only the inert forms (`_ => {}`, `_ => false`, `_ => true`, `other => other`,
   `leaf => leaf`). A catch-all that returns anything else (`_ => Err(…)`, `_ => OpKind::Other`) passes it, even in a
   listed file.
