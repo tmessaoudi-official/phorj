@@ -30,6 +30,8 @@
 
 ## 0. CURSOR — WHERE WE ARE (update every working session)
 
+> **▶ 2026-10-08 — the 2026-10-07 full audit is ruled; the live work is `docs/plans/2026-10-08-audit-remediation.plan.md`** (P0 fix slice first: rows 1–4), mirrored in §0.10 below and in `SLICE-STATE.md`. The table below is stale (dated 2026-09-02); rewriting it as a pointer is that plan's row 7.
+
 > **THE FINISHING WAVE is the active programme** (see the section immediately after §1) — all plans/specs
 > consolidated into THIS file + UNIFIED-SPEC (2026-07-11), then execution to **100% VISION** (full PHP
 > parity + the beyond-PHP programme). The developer drives execution with Fable; this file is the single
@@ -64,6 +66,20 @@
 | `2026-07-23-typed-lsb.md` | DEC-331 D10c | Typed LSB — the `Self` return type. BUILD-READY |
 | `2026-07-26-capture-write-rejection.md` | DEC-357 | Writing to a captured local is rejected. RULED, unbuilt |
 | `2026-07-26-ufcs-lsp-companion.md` | DEC-342 / 346 / 375 | UFCS completion, import-gating, and the LSP-as-expert-companion bar. RULED, unbuilt — relevant to Invariant 17's 100% rule |
+
+## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-567)
+
+> Invariant 19 mirror: the register row is the ruling, `docs/plans/2026-10-08-audit-remediation.plan.md` is the
+> plan, `SLICE-STATE.md` is the live cursor. The register wins on any difference.
+
+| DEC | subject | status (register) |
+|---|---|---|
+| DEC-562 | Target architecture for phorj's own code (pragmatic hybrid) + the language stays architecture-neutral, with the correctness-vs-architecture boundary test | RULED — plan rows 10–12 |
+| DEC-563 | Widen DEC-359: per-native literal/const precondition table | QUEUED — plan row 14 |
+| DEC-564 | File-layout laws leave the language (W- lints, then opt-in rules); `E-PKG-PATH` stays — amends DEC-282 | QUEUED — plan row 15 |
+| DEC-565 | Site attribute `#[Allow(code, reason)]` + DEC-360 `--strict` + explain text fix; needs every diagnostic coded first | QUEUED — plan rows 13, 16 |
+| DEC-566 | Opt-in in-source layer rules, loader stays manifest-less | QUEUED — plan row 17 |
+| DEC-567 | Six strictness/neutrality questions (flow lints, provably-null `!`, ctor rule, `List.get`, refinement types, subtree visibility) | PENDING (Invariant 15) |
 
 ## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 
