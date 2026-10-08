@@ -30,7 +30,7 @@
 
 ## 0. CURSOR — WHERE WE ARE (update every working session)
 
-> **▶ 2026-10-08 — the 2026-10-07 full audit is ruled; the live work is `docs/plans/2026-10-08-audit-remediation.plan.md`** (P0 fix slice first: rows 1–4), mirrored in §0.10 below and in `SLICE-STATE.md`. The table below is stale (dated 2026-09-02); rewriting it as a pointer is that plan's row 7.
+> **▶ 2026-10-08 — the 2026-10-07 full audit is ruled; the live work is `docs/plans/2026-10-08-audit-remediation.plan.md`** (the P0 fix slice, rows 1–4, is DONE as of 2026-10-08 — commits listed in `SLICE-STATE.md`; row 5 is next), mirrored in §0.10 below and in `SLICE-STATE.md`. The table below is stale (dated 2026-09-02); rewriting it as a pointer is that plan's row 7.
 
 > **THE FINISHING WAVE is the active programme** (see the section immediately after §1) — all plans/specs
 > consolidated into THIS file + UNIFIED-SPEC (2026-07-11), then execution to **100% VISION** (full PHP

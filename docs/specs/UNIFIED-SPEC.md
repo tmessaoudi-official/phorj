@@ -102,7 +102,7 @@
   - [Secret type](#secret-type) *(2026-06-28 — SHIPPED)*
   - [Nested-value index-assignment](#nested-value-index-assignment) *(2026-07-01 — SHIPPED)*
   - [`using` — the scope guard](#using--the-scope-guard) *(2026-07-30 — DEC-364, SHIPPED)*
-  - [Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`](#mechanical-exhaustiveness-for-exprstmtpattern) *(2026-07-26 — DEC-356; SHIPPED, the sweep closed by CD-31 and CD-32 on 2026-10-08)*
+  - [Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`](#mechanical-exhaustiveness-for-exprstmtpattern) *(2026-07-26 — DEC-356; SHIPPED, the sweep closed by CD-31 and CD-32 on 2026-10-08, per the 2026-10-07 audit census)*
   - [Ordering, `<=>`, and named-field tuples](#ordering--and-named-field-tuples) *(2026-09-07 — DEC-504/DEC-505, QUEUED)*
   - [Block-scope shadowing — the redeclaration rule](#block-scope-shadowing--the-redeclaration-rule) *(2026-07-26 — DEC-339, SHIPPED)*
   - [`#[Invoke]` and `#[ToString]`](#invoke-and-tostring) *(2026-07-23 — DEC-331 D9; slice 1 SHIPPED, 1b DEFERRED)*
@@ -1058,7 +1058,8 @@ them must revisit this section.
 ## Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`
 
 **Status: core SHIPPED (DEC-356, ruled 2026-07-26, built 2026-07-30). The remainder recorded below as
-owed was closed in later slices, the last six files by CD-32 on 2026-10-08; see "Status 2026-10-08".** Source: `2026-07-26-ast-exhaustiveness.md`; original
+owed was closed in later slices, the last six files by CD-32 on 2026-10-08, as far as the 2026-10-07 audit's
+census (a heuristic scan read by hand, lens 5) can show; see "Status 2026-10-08".** Source: `2026-07-26-ast-exhaustiveness.md`; original
 analysis `docs/research/2026-07-25-completeness-register.md` §6.4.
 
 **The class, not the instances.** Every P0/P1 in the 2026-07-25 agenda shipped because *a match arm
