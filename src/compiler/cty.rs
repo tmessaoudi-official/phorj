@@ -351,6 +351,18 @@ impl Compiler<'_> {
                 op: crate::ast::BinaryOp::Spaceship,
                 ..
             } => Ok(CTy::Int),
+            // `a ?? b` has `a`'s type unless `a` says nothing — a literal `null` is `Other` — and then
+            // `b`'s: arithmetic lowers only to a typed op, so `(null ?? 4) + 1` needs `int` here or
+            // the VM refuses what the interpreter runs (panel 2026-10-08, Invariant 7).
+            Expr::Binary {
+                op: crate::ast::BinaryOp::Coalesce,
+                lhs,
+                rhs,
+                ..
+            } => match self.ctype(lhs) {
+                Ok(CTy::Other) => self.ctype(rhs),
+                lhs => lhs,
+            },
             Expr::Binary { lhs, .. } => self.ctype(lhs),
             // `value instanceof C` is a `bool` — never an arithmetic operand, but a `var b = …`
             // initializer reads `ctype`, so resolve it to `Other` rather than erroring.
@@ -439,7 +451,19 @@ impl Compiler<'_> {
             // when used directly as an arithmetic operand — it still runs correctly via the polymorphic
             // arithmetic path, only without the int/float fast op; byte-identity is unaffected.)
             Expr::Spawn { .. } => Ok(CTy::Class("Task".to_string())),
-            other => Err(format!("cannot infer numeric type of {other:?}")),
+            // A coalesce's `null` LHS (see the `Coalesce` arm); the catch-all used to error here.
+            Expr::Null(_) | Expr::NewColl { .. } => Ok(CTy::Other),
+            // Expanded or rejected before the compiler (each is `unreachable!` in `expr/core.rs`).
+            // Named rather than caught, so a new variant has to choose its arm here.
+            Expr::Html(..)
+            | Expr::TaggedTemplate { .. }
+            | Expr::Inject { .. }
+            | Expr::OverloadSelect { .. }
+            | Expr::Pipe { .. }
+            | Expr::PipePlaceholder(_)
+            | Expr::NamedArg { .. }
+            | Expr::New(..)
+            | Expr::Tuple(..) => Err(format!("cannot infer numeric type of {e:?}")),
         }
     }
 

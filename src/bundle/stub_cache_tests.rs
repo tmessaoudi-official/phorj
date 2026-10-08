@@ -139,3 +139,19 @@ fn downloads_are_https_only_including_redirects() {
     assert!(pair("--proto"), "initial protocol not https-only: {args:?}");
     assert!(pair("--proto-redir"), "redirects not https-only: {args:?}");
 }
+
+/// Panel 2026-10-08 (safety F1): `target` is resolved, so a directory whose `target` is a symlink
+/// into the developer's real checkout used to pass — and `phg build --target` then ran ITS cargo
+/// build. The resolved `target` must sit directly inside the resolved directory.
+#[cfg(unix)]
+#[test]
+fn a_target_symlinked_into_another_checkout_is_not_a_checkout() {
+    let (real, exe) = checkout("real", PHORJ);
+    let fake = scratch("fake");
+    std::fs::write(fake.join("Cargo.toml"), PHORJ).unwrap();
+    std::os::unix::fs::symlink(real.join("target"), fake.join("target")).unwrap();
+    assert!(!is_phorj_checkout(&fake, &exe));
+    assert!(is_phorj_checkout(&real, &exe));
+    let _ = std::fs::remove_dir_all(&fake);
+    let _ = std::fs::remove_dir_all(&real);
+}

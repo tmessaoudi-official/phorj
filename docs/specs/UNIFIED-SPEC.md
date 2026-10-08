@@ -1123,9 +1123,12 @@ predicates in `totality`/`common_flow`). CD-32 found two live defects that a pro
 `(new Box(4), 2)` panicked all three backends, and `E-FIELD-INIT-FORWARD-REF` was bypassed through
 `new`/named arguments/tuples. `no_fixed_rewriter_regrows_a_catch_all` now lists 24 files. Still open,
 by design or by ruling: classifier fallbacks that give the safe answer (`expr_is_never` keeps two,
-each under a `// catch-all exempt (CD-32): …` comment; `compiler/cty.rs` and `transpile/kinds.rs`
-degrade to their "other" type and are not in the ratchet), the shared total visitor B (QUEUED), and
-the fact that a NEW walking file is ratcheted only once someone adds it to the list.
+each under a `// catch-all exempt (CD-32): …` comment; `transpile/kinds.rs` degrades to its runtime
+helper; `compiler/cty.rs` was listed here too until the panel showed its error arm split the VM from
+the tree-walker on `(null ?? 4) + 1`, so it now names every variant and types `a ?? b` by `b` when `a`
+says nothing), the shared total visitor B
+(QUEUED), and two limits of the ratchet: it sees only the inert forms (`_ => {}`, `_ => false|true`,
+`other => other`), and a NEW walking file is ratcheted only once someone adds it to the list.
 
 **Technique for that fix when it happens:** an `e @ (Expr::A(..) | Expr::B(..) | …) => e` or-pattern arm
 gives full compiler enforcement — a new variant not in the list is a non-exhaustive-match error — at
@@ -2508,6 +2511,22 @@ keeping them non-throwing avoids rippling `throws` into every handler and every 
 covers future fields, still byte-identical — but it fires at respond time, so the diagnostic cannot
 name the `withHeader` call that built the bad value. Worse debugging for identical safety.
 
+**Amended 2026-10-08 (audit A1, `2a20ee85`) — `serialize()` checks too, in ADDITION, not instead.**
+The builder guard left a hole. The public constructor `new Response(status, body, lines)`, and
+`status()`, which re-constructs from the stored lines, put raw lines on the wire unchecked. So
+`serialize()` now runs `HeaderSafety.requireLine` over every line (a CR/LF/NUL fault naming the text
+before the first `:`). The builder guard stays, so its fault still names the `withHeader` call. The
+rejection above is therefore about choosing serialize-ONLY, and it still stands.
+
+What neither guard covers (panel 2026-10-08, recorded in KNOWN_ISSUES and PENDING as DEC-568):
+- a raw line that STARTS with a space or tab, which an obsolete-line-folding parser reads as a
+  continuation of the previous header;
+- a raw line with no `:`;
+- a handler-supplied `Content-Length` or `Transfer-Encoding` line, which `serialize()` emits after
+  its own `Content-Length` (`src/cli/http_prelude.rs`, the `head` line).
+
+None of these needs CR/LF, and widening the rejected set is a language/API decision.
+
 ### Two ruled extras
 
 1. **NUL joins the rejected set on BOTH sides.** The request-side gate rejected CR/LF but not NUL,
@@ -2715,9 +2734,22 @@ Source: `2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 A **distributed** phg binary (no source checkout) can cross-build by **downloading a prebuilt stub**
 from a CI registry, verifying it against a **baked sha256 manifest**, caching it, and embedding —
 closing Phase 2's P2-9 limitation. `build_stub`'s miss path becomes a 3-way branch: cache hit →
-return; `Cargo.toml` present → build locally (Phase 2, unchanged); else → `download_stub`.
+return; inside a phorj checkout → build locally (Phase 2); else → `download_stub`.
 Everything downstream is unchanged — a downloaded stub is interchangeable with a locally-built one.
 The host build never downloads.
+
+**Amended 2026-10-08 (audit A4, `395b52ef`; panel round 1).** Three things changed:
+- **"A checkout" is now recognised positively.** "`Cargo.toml` present" let any Rust project qualify,
+  so `phg build --target` there ran that project's cargo build and cached the result as the stub.
+  Now the running `phg` must live under `<cwd>/target/`, `<cwd>/Cargo.toml`'s `[package]` must be
+  named `phorj`, and the resolved `target` must sit directly inside the resolved cwd. That last
+  condition came from the panel: a `target` symlinked into a real checkout passed the first two.
+  A `CARGO_TARGET_DIR` build therefore takes the download branch.
+- **A cache hit is re-verified.** Every published stub carries a `<stub>.sha256` sidecar. A hit is
+  re-hashed against the sidecar, and off a checkout also against the baked manifest. A mismatch
+  refills the cache, publishing the sidecar before the stub. Nothing is ever deleted.
+- **The embed payload is staged in an owner-only directory** (`crate::tempdir`), not at a
+  `<pid>`-named path in the shared temp dir.
 
 ### Download-and-cache client
 
@@ -2728,7 +2760,8 @@ cache; the cache stays keyed on the phorj-hash path, so a rebuilt phorj re-downl
 failure modes are precise, embed nothing, exit 1 — the sha256-mismatch message ("refusing to embed")
 is the parity-spine refusal.
 
-**Transport:** std has no TLS, so HTTPS shells out to **`curl`** (`-fSL --proto =https,http`) —
+**Transport:** std has no TLS, so HTTPS shells out to **`curl`** (`-fSL --proto =https
+--proto-redir =https` since 2026-10-08; the original `=https,http` allowed a plaintext hop) —
 host tooling, exempt exactly like zig/objcopy; `PHORJ_CURL` override mirrors `PHORJ_OBJCOPY`.
 `file://`/local paths use `fs::copy` — the **hermetic test seam** (fixture-dir registry, no network,
 no curl). Registry base defaults to `{CARGO_PKG_REPOSITORY}/releases/download/v{version}/`
@@ -2752,7 +2785,7 @@ depend on the manifest whose entries are the hashes of those bytes — an unsolv
 Resolution: **`build.rs` + `PHORJ_BAKE_STUB_MANIFEST`** — set (CI's primary build only) → bake the
 file; unset (every other build, including all cross stubs) → bake an **empty** manifest. So cross
 stubs are manifest-independent ⇒ stable hashes ⇒ no fixpoint; dev builds get an empty manifest but
-have `Cargo.toml` anyway (build locally — correct by construction); only the `x86_64-linux-gnu`
+are run from their checkout (build locally — correct by construction); only the `x86_64-linux-gnu`
 primary carries the manifest (P3-7 — other hosts get the clear source-checkout error). Runtime
 `PHORJ_STUB_MANIFEST` overrides the baked one — the test seam. *Rejected alternatives:* a committed
 `include_str!` file CI rewrites (parks release data in git; manual circularity discipline);

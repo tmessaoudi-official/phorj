@@ -42,8 +42,12 @@ phg build app.phg --target x86_64-unknown-linux-musl   # one target
 phg build app.phg --all                                # every supported target
 ```
 
-Cross builds use **cargo-zigbuild** (the zig toolchain as the linker) and a per-target stub cache
-keyed on the Phorj binary's own hash (rebuilding Phorj invalidates stale stubs). Supported today:
+Cross builds need a stub (a `phg` for the target) and keep it in a per-target cache keyed on the
+Phorj binary's own hash (rebuilding Phorj invalidates stale stubs). A stub is built from source with
+**cargo-zigbuild** (the zig toolchain as the linker) only when the running `phg` was built in a phorj
+checkout and you run it from that checkout's root; anywhere else it is downloaded from the release
+registry and checked against the sha256 manifest baked into `phg`. Every cached stub is re-hashed
+on reuse, and a changed one is replaced. Supported today:
 Linux `x86_64-musl`, `aarch64-{gnu,musl}`, and `x86_64-pc-windows-gnu`. Each produced binary
 self-reads its own object format (ELF / PE / Mach-O) via std-only, checked-arithmetic section
 readers. The macOS reader ships and is fixture-tested, but producing a *signed* macOS stub is

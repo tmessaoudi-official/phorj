@@ -46,7 +46,7 @@ fn read_lock(root: &Path) -> Result<Option<LockFile>, String> {
 
 fn resolve_and_vendor(root: &Path, lock: Option<&LockFile>) -> Result<InstallReport, String> {
     let manifest = read_manifest(root)?;
-    let stage = crate::pm::private_temp_dir("phorj-pm-stage")?;
+    let stage = crate::tempdir::private_temp_dir("phorj-pm-stage")?;
     let vendored = vendor_from(&manifest, root, &stage, lock);
     let _ = std::fs::remove_dir_all(&stage); // on every path: the stage is ours alone
     let resolved = vendored?;

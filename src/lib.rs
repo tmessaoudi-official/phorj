@@ -53,6 +53,7 @@ pub mod serve;
 // The process-wide single ctrlc registration (DEC-204/DEC-487) — shared by `serve`'s accept loop
 // and `Time.sleep`'s interruptibility, because `ctrlc::set_handler` may only be called once.
 pub mod shutdown;
+pub(crate) mod tempdir;
 pub mod token;
 pub mod tokenizer;
 pub mod transpile;

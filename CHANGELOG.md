@@ -6,6 +6,37 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the P0 slice's close panel: five defects in the fixes and around them (2026-10-08)
+
+The three-lens panel on the frozen P0 batch (`0ee1cc14`) found these, each reproduced before the fix:
+
+- **`(null ?? 4) + 1` printed `5` on the tree-walker and failed to compile on the VM** (`cannot infer numeric type of
+  Null`). The compiler's operand-type resolver ended in a catch-all that returned an error, and CD-32 had wrongly listed it
+  as a safe fallback. Arithmetic lowers only to typed ops, so `a ?? b` now takes `b`'s type when `a` says nothing (a
+  literal `null`), and every other variant is named. Test `null_coalesce_operand_byte_identical`, including the PHP leg.
+- **A match binder named like a later field was rejected as a forward reference.** In
+  `int a = match new S.Code(3) { Code(n) when n > 0 => n, default => 0 }; int n = 7;`, the arm binder `n` read as the field
+  `n`. The arm body had been flagged since before the audit, and the guard walk A2 added extended it. Each arm's pattern
+  binders now shadow the fields in that arm's guard and body only.
+- **A directory whose `target` is a symlink into a real phorj checkout counted as a checkout**, so `phg build --target` there
+  ran that directory's cargo build. The resolved `target` must now sit directly inside the resolved working directory.
+- **The package manager's JSON parser had no depth limit**: an index or lock of 200,000 `[` overflowed the stack. It now
+  stops at `Json.parse`'s depth (`limits::MAX_JSON_DEPTH`).
+- **Three temp files still used guessable `<pid>` names in the shared temp dir:** the `phg build` payload, the `phg serve`
+  request-body spill and `phg benchmark --vs-php`'s script. A symlink planted at such a name redirects the write.
+  `pm`'s owner-only directory helper moved to `src/tempdir.rs`, and all three now use it. Spills share one directory per
+  process and are created with `create_new`.
+
+Docs corrected in the same change:
+- the UNIFIED-SPEC cross-build and response-header sections;
+- the DEC-316 row, which claimed `install` refused a tampered `vendor/`;
+- the DEC-363 row and CD-32;
+- the `examples/build` README;
+- the `examples/web` wording that the constructor "cannot inject".
+
+Three header shapes that need no CR/LF are now disclosed in KNOWN_ISSUES entry 4 and recorded as PENDING DEC-568: a line
+starting with whitespace, a line with no `:`, and a handler-supplied `Content-Length`/`Transfer-Encoding`.
+
 ### Fixed — `new` inside a tuple panicked every backend, and a field initializer could read a later field through `new`/a named argument/a tuple (audit A2, CD-32, 2026-10-08)
 
 `var (a, b) = (new Box(4), 2);` type-checked and then panicked all three legs: `Expr::New is unwrapped before …` on the VM, the

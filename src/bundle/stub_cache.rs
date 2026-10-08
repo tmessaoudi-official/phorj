@@ -15,10 +15,16 @@ use std::path::{Path, PathBuf};
 /// Is `dir` a phorj source checkout that `exe` was built in?
 pub(crate) fn is_phorj_checkout(dir: &Path, exe: &Path) -> bool {
     // Canonical on both sides: a symlinked PATH entry or a `..` in either path must not flip the answer.
-    let (Ok(target), Ok(exe)) = (dir.join("target").canonicalize(), exe.canonicalize()) else {
+    let (Ok(dir), Ok(exe)) = (dir.canonicalize(), exe.canonicalize()) else {
         return false;
     };
-    exe.starts_with(&target)
+    let Ok(target) = dir.join("target").canonicalize() else {
+        return false;
+    };
+    // `target` itself must not be a link out of `dir`: one pointing into the developer's real
+    // checkout would make any directory holding a phorj `Cargo.toml` pass (panel 2026-10-08).
+    target.parent() == Some(dir.as_path())
+        && exe.starts_with(&target)
         && std::fs::read_to_string(dir.join("Cargo.toml"))
             .is_ok_and(|manifest| package_name(&manifest) == Some("phorj"))
 }

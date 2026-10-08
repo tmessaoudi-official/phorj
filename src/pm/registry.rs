@@ -130,7 +130,7 @@ fn read_source(src: &str) -> Result<String, String> {
     // The download lands in a fresh owner-only dir (audit A4): a fixed name in the shared temp dir
     // let another local user pre-create it as a symlink that curl's `-o` would follow.
     let curl = std::env::var("PHORJ_CURL").unwrap_or_else(|_| "curl".into());
-    let dir = crate::pm::private_temp_dir("phorj-registry")?;
+    let dir = crate::tempdir::private_temp_dir("phorj-registry")?;
     let fetched = fetch_index_file(&curl, &dir.join("index.json"), src);
     let _ = std::fs::remove_dir_all(&dir);
     fetched

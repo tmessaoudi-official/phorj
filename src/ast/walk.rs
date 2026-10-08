@@ -585,7 +585,10 @@ pub fn uses_concurrency(program: &Program) -> bool {
     any_expr(program, &|e| matches!(e, Expr::Spawn { .. }))
 }
 
-fn collect_pattern_bindings(pat: &Pattern, bound: &mut std::collections::HashSet<String>) {
+pub(crate) fn collect_pattern_bindings(
+    pat: &Pattern,
+    bound: &mut std::collections::HashSet<String>,
+) {
     match pat {
         Pattern::Binding { name, .. } => {
             bound.insert(name.clone());

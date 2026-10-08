@@ -59,12 +59,22 @@ pub(in crate::checker) fn field_init_forbidden_ref(
                 scrutinee, arms, ..
             } => {
                 walk(scrutinee, f, out);
-                arms.iter().for_each(|a| {
+                for a in arms {
+                    // An arm's binders shadow same-named fields in its guard and body only.
+                    let mut bound = std::collections::HashSet::new();
+                    crate::ast::collect_pattern_bindings(&a.pattern, &mut bound);
+                    let shadowed: std::collections::HashSet<String>;
+                    let f = if bound.iter().any(|b| f.contains(b)) {
+                        shadowed = f.difference(&bound).cloned().collect();
+                        &shadowed
+                    } else {
+                        f
+                    };
                     if let Some(g) = &a.guard {
                         walk(g, f, out);
                     }
                     walk(&a.body, f, out);
-                });
+                }
             }
             Expr::Range { start, end, .. } => {
                 walk(start, f, out);

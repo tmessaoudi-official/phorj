@@ -52,6 +52,7 @@ impl Json {
         let mut p = Parser {
             b: src.as_bytes(),
             i: 0,
+            depth: 0,
         };
         p.ws();
         let v = p.value()?;
@@ -143,6 +144,9 @@ fn write_str(out: &mut String, s: &str) {
 struct Parser<'a> {
     b: &'a [u8],
     i: usize,
+    /// Open arrays/objects around the cursor. An index or lock is untrusted input, and this parser
+    /// recurses, so nesting stops at `Json.parse`'s limit (panel 2026-10-08).
+    depth: usize,
 }
 
 impl Parser<'_> {
@@ -155,8 +159,23 @@ impl Parser<'_> {
     fn value(&mut self) -> Result<Json, String> {
         self.ws();
         match self.b.get(self.i) {
-            Some(b'{') => self.object(),
-            Some(b'[') => self.array(),
+            Some(&c @ (b'{' | b'[')) => {
+                if self.depth + 1 >= crate::limits::MAX_JSON_DEPTH {
+                    return Err(format!(
+                        "JSON nested deeper than {} levels at byte {}",
+                        crate::limits::MAX_JSON_DEPTH - 1,
+                        self.i
+                    ));
+                }
+                self.depth += 1;
+                let v = if c == b'{' {
+                    self.object()
+                } else {
+                    self.array()
+                };
+                self.depth -= 1;
+                v
+            }
             Some(b'"') => Ok(Json::Str(self.string()?)),
             Some(b't') => self.lit("true", Json::Bool(true)),
             Some(b'f') => self.lit("false", Json::Bool(false)),
@@ -361,5 +380,18 @@ mod tests {
         let j = Json::parse(r#"{"b":1,"a":2}"#).unwrap();
         // insertion order preserved (b before a), not sorted
         assert_eq!(j.to_pretty(), "{\n  \"b\": 1,\n  \"a\": 2\n}\n");
+    }
+
+    /// Panel 2026-10-08 (safety F2): a registry index or lock is untrusted input, and 200k `[`
+    /// overflowed this recursive parser's stack. It now stops at `Json.parse`'s depth.
+    #[test]
+    fn nesting_is_bounded_like_json_parse() {
+        let nest = |n: usize| format!("{}{}", "[".repeat(n), "]".repeat(n));
+        let max = crate::limits::MAX_JSON_DEPTH - 1;
+        assert!(Json::parse(&nest(max)).is_ok());
+        let err = Json::parse(&nest(max + 1)).unwrap_err();
+        assert!(err.contains("nested deeper"), "{err}");
+        assert!(Json::parse(&"[".repeat(200_000)).is_err());
+        assert!(Json::parse(&"{\"a\":".repeat(200_000)).is_err());
     }
 }

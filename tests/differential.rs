@@ -4787,6 +4787,23 @@ fn spaceship_and_tuple_ordering_byte_identical() {
     );
 }
 
+/// Audit panel 2026-10-08 (Invariant 7): the compiler's `CTy` resolver had no arm for `null`, so
+/// `(null ?? 4) + 1` type-checked and ran on the tree-walker while the VM refused it at compile time
+/// (`cannot infer numeric type of Null`) — the catch-all made it an error instead of a non-operand.
+#[test]
+fn null_coalesce_operand_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    int? a = null;
+    int b = (null ?? 4) + 1;
+    Output.printLine(\"{b} {(a ?? 2) + 1} {(null ?? 6) * 2}\");
+}",
+        "5 3 12\n",
+        "null_coalesce_operand",
+    );
+}
+
 /// DEC-512's NaN pin. PHP yields `1` for EVERY NaN comparison — `NAN <=> 1.0`, `1.0 <=> NAN` and
 /// `NAN <=> NAN` alike — and an array compare STOPS at the first uncomparable element rather than
 /// treating it as equal: `[NAN, 1] <=> [NAN, 2]` is `1`, not `-1` (measured on the oracle). So the

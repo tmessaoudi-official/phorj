@@ -12,7 +12,9 @@
 //     with chainable `.path()`/`.secure()`/`.httpOnly()`/`.partitioned()` builders)
 //   * `resp.withCookies(list)`          — a copy with one `Set-Cookie` header per Cookie
 //   * `resp.serialize() -> bytes`       — render to the HTTP/1.1 wire form (checks every header
-//     line for CR/LF/NUL first, so even `new Response(status, body, lines)` cannot inject)
+//     line for CR/LF/NUL first, so even `new Response(status, body, lines)` cannot break a line;
+//     a line starting with whitespace, or a second `Content-Length`, is still accepted — see
+//     KNOWN_ISSUES entry 4)
 // Pure value construction → byte-identical across `run`, the VM, and real PHP.
 package Main;
 

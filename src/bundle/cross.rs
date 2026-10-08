@@ -19,9 +19,13 @@ pub(crate) fn embed_section(
     src: &str,
     profile: Profile,
 ) -> Result<(), String> {
-    let payload = std::env::temp_dir().join(format!("phorj-build-{}.bin", std::process::id()));
-    std::fs::write(&payload, encode_container_with(src.as_bytes(), profile))
-        .map_err(|e| format!("cannot write payload: {e}"))?;
+    // A private directory, not a `<pid>` name in the shared temp dir (panel 2026-10-08).
+    let scratch = crate::tempdir::private_temp_dir("phorj-build")?;
+    let payload = scratch.join("payload.bin");
+    if let Err(e) = std::fs::write(&payload, encode_container_with(src.as_bytes(), profile)) {
+        let _ = std::fs::remove_dir_all(&scratch);
+        return Err(format!("cannot write payload: {e}"));
+    }
     let objcopy = std::env::var("PHORJ_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
     let status = std::process::Command::new(&objcopy)
         .args([
@@ -33,7 +37,7 @@ pub(crate) fn embed_section(
         .arg(stub)
         .arg(out)
         .status();
-    let _ = std::fs::remove_file(&payload);
+    let _ = std::fs::remove_dir_all(&scratch);
     match status {
         Ok(s) if s.success() => {}
         Ok(s) => return Err(format!("{objcopy} failed with status {s}")),

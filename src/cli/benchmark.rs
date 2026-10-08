@@ -86,8 +86,16 @@ fn php_bench_section(
             )
         }
     };
-    let path = std::env::temp_dir().join(format!("phorj_bench_{}.php", std::process::id()));
+    // A private directory, not a `<pid>` name in the shared temp dir (panel 2026-10-08).
+    let Ok(scratch) = crate::tempdir::private_temp_dir("phorj-bench") else {
+        return (
+            "\nvs PHP: could not create a temp dir — skipping\n".to_string(),
+            None,
+        );
+    };
+    let path = scratch.join("bench.php");
     if std::fs::write(&path, &php_src).is_err() {
+        let _ = std::fs::remove_dir_all(&scratch);
         return (
             "\nvs PHP: could not write temp file — skipping\n".to_string(),
             None,
@@ -155,7 +163,7 @@ fn php_bench_section(
             }
         },
     };
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_dir_all(&scratch);
     (section, php_med)
 }
 

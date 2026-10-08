@@ -53,6 +53,21 @@ fn forward_ref_inside_new_named_arg_or_tuple_is_caught() {
 }
 
 #[test]
+fn a_match_binder_named_like_a_later_field_is_not_a_forward_ref() {
+    // Panel 2026-10-08: the walk was scope-blind, so an arm binder `n` in the guard or the body read
+    // as the later field `n` and a valid program was rejected. A binder shadows the field in its arm.
+    let src = "enum S { Code(int n), Off } \
+               class C { int a = match new S.Code(3) { Code(n) when n > 0 => n, default => 0 }; \
+               int n = 7; } function main(): void {}";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    // The shadow is per arm: a later arm that binds nothing still reads the field.
+    let src = "enum S { Code(int n), Off } \
+               class C { int a = match new S.Code(3) { Code(n) => n, default => n }; \
+               int n = 7; } function main(): void {}";
+    assert!(has(src, "E-FIELD-INIT-FORWARD-REF"), "{:?}", errors_of(src));
+}
+
+#[test]
 fn self_reference_is_forward_ref() {
     let src = "class C { int a = this.a + 1; } function main() -> void {}";
     assert!(has(src, "E-FIELD-INIT-FORWARD-REF"));

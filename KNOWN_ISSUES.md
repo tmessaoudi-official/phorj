@@ -1298,8 +1298,9 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    PHP-leg exercise of the tempnam/file_put_contents/file_get_contents twin — deterministic because
    the temp PATH never surfaces to phorj, only the read-back length does) — plus the extended CRLF
    `agree_err_php`. No differential-coverage gap remains on the slice.
-1. **Spill temp files leak until process exit** — spilled bodies (> 256 KiB) write
-   `phorj-spill-*` files under the OS temp dir, addressed by deterministic in-process handles
+1. **Spill temp files leak until process exit** — spilled bodies (> 256 KiB) are written to one
+   owner-only `phorj-spill-*` directory per process under the OS temp dir (since 2026-10-08; they
+   were `<pid>`-named files in the shared temp dir before), addressed by deterministic in-process handles
    (never by path, Inv 10). Nothing deletes them mid-run; the OS tmp reaper (or process exit) is
    the cleanup today. Slice 3's serve loop should clean per-response.
 2. **The 8 MiB body cap is INERT under serve** — `DEFAULT_MAX_BODY_SIZE` equals the transport
@@ -1317,7 +1318,8 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    `Cookie.render` still interpolated unchecked — the actual outbound injection sink, and a
    request-smuggling shape rather than mere response splitting. The guard now lives in the phorj
    prelude (`HeaderSafety` in `src/cli/http_prelude.rs`), so all three legs reject CR/LF/NUL — and `:`
-   in a name — identically by construction; `Http.isValidHeaderName`/`isValidHeaderValue` ship so a
+   in a name — identically by construction; `HeaderSafety.isValidName`/`isValidValue` ship (the
+   ruling's `Http.isValidHeaderName` spelling was never built, CD-12) so a
    handler can return a clean 400 for user-derived input. Rule:
    `docs/specs/UNIFIED-SPEC.md#response-side-header-injection-guard`. (This entry said "build queued"
    until 2026-09-02 — stale for over a month.) **Correction 2026-10-08 (audit A1):** the 2026-07-29 fix
@@ -1326,8 +1328,12 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    an empty `lines` list emitted a second blank line, ending the head before the body. `serialize()`
    now checks every line (`HeaderSafety.requireLine`) and ends the head with exactly one blank line;
    tests `dec363_the_public_constructor_cannot_bypass_the_guard`,
-   `an_empty_header_list_serializes_one_head_terminator`. Still accepted: a raw line with no `:` at
-   all (not CR/LF/NUL, outside DEC-363's ruled set). The per-line scan on the serve path is
+   `an_empty_header_list_serializes_one_head_terminator`. Still accepted, none of them needing CR/LF
+   and all outside DEC-363's ruled set (panel 2026-10-08; whether to widen it is PENDING as DEC-568):
+   a raw line with no `:` at all; a raw line starting with a space or tab, which an obsolete
+   line-folding parser joins to the previous header; and a handler-supplied `Content-Length` or
+   `Transfer-Encoding` line, which `serialize()` emits after its own `Content-Length`, so a proxy
+   may frame the body differently from the client. The per-line scan on the serve path is
    unmeasured — **perf OWED** (DEC-365). Separately, `Response.reason()` names only 200/400/404, so
    any other status serializes as `Internal Server Error` (e.g. `HTTP/1.1 302 Internal Server
    Error`).
@@ -2938,11 +2944,12 @@ synchronous lowering).
   the stub. Every cached stub now has a `.sha256` sidecar and is re-hashed on each reuse; off a
   checkout it must also match the baked manifest, so a cache entry changed after download is refused
   and re-downloaded. Downloads are https-only, redirects included. A `phg` installed outside its
-  checkout's `target/` (e.g. `cargo install --path .`, or a build with `CARGO_TARGET_DIR` pointing elsewhere) takes the download branch. A *distributed* (sourceless)
+  checkout's `target/` (e.g. `cargo install --path .`, or a build with `CARGO_TARGET_DIR` pointing elsewhere) takes the download branch, and so does a checkout whose `target` is a symlink (panel 2026-10-08: such a link could point into another checkout). A *distributed* (sourceless)
   phg instead **downloads** a prebuilt stub from the release registry and sha256-verifies it against its
   baked manifest. So a sourceless cross build works **once a tagged release has published the stubs**
   (the `stub-registry.yml` workflow); before the first such release, a sourceless binary still errors
-  with the "needs a source checkout" message (its baked manifest is empty). Host builds always work
+  with the "no prebuilt stub … cross-building from source needs the `phg` built in a phorj
+  checkout" message (its baked manifest is empty). Host builds always work
   offline (the running binary is the stub).
 - **No code signing (Phase 3b deferred).** Downloaded/produced binaries are unsigned. Windows
   Authenticode + macOS codesign/notarize (and the macOS stub itself) need certs + a Mac SDK the
@@ -2952,8 +2959,8 @@ synchronous lowering).
   macOS *stub* needs a macOS SDK for zig (Phase 3b). An apple/darwin `--target` errors with a clear
   message rather than emitting a broken binary.
 - **The manifest is baked only into the `x86_64-linux-gnu` primary.** Cross-building *from* a Windows or
-  aarch64 host isn't supported in v1 (those binaries carry an empty manifest → the "needs a source
-  checkout" message); the primary dev host is the only cross-build origin needed now.
+  aarch64 host isn't supported in v1 (those binaries carry an empty manifest → the same "no prebuilt
+  stub" message); the primary dev host is the only cross-build origin needed now.
 - **Built binaries honor argv + the exit code (Batch-1 B).** A standalone built binary passes its
   real command-line arguments to `Core.Process.arguments()` / `main`'s `List<string>` parameter and exits
   with `main`'s `int` return. (`--version`/`--help` remain features of the `phorj` CLI itself, not of
