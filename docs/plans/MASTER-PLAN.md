@@ -67,7 +67,7 @@
 | `2026-07-26-capture-write-rejection.md` | DEC-357 | Writing to a captured local is rejected. RULED, unbuilt |
 | `2026-07-26-ufcs-lsp-companion.md` | DEC-342 / 346 / 375 | UFCS completion, import-gating, and the LSP-as-expert-companion bar. RULED, unbuilt — relevant to Invariant 17's 100% rule |
 
-## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-567)
+## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-568)
 
 > Invariant 19 mirror: the register row is the ruling, `docs/plans/2026-10-08-audit-remediation.plan.md` is the
 > plan, `SLICE-STATE.md` is the live cursor. The register wins on any difference.
@@ -80,6 +80,7 @@
 | DEC-565 | Site attribute `#[Allow(code, reason)]` + DEC-360 `--strict` + explain text fix; needs every diagnostic coded first | QUEUED — plan rows 13, 16 |
 | DEC-566 | Opt-in in-source layer rules, loader stays manifest-less | QUEUED — plan row 17 |
 | DEC-567 | Six strictness/neutrality questions (flow lints, provably-null `!`, ctor rule, `List.get`, refinement types, subtree visibility) | PENDING (Invariant 15) |
+| DEC-568 | Whether DEC-363's header guard widens past CR/LF/NUL: leading-whitespace (obs-fold) lines, lines with no `:`, handler-supplied `Content-Length`/`Transfer-Encoding` (slice-close panel 2026-10-08; disclosed in KNOWN_ISSUES) | PENDING (Invariant 15) |
 
 ## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 

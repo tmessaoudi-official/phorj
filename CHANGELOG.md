@@ -34,7 +34,27 @@ Docs corrected in the same change:
 - the `examples/build` README;
 - the `examples/web` wording that the constructor "cannot inject".
 
-Three header shapes that need no CR/LF are now disclosed in KNOWN_ISSUES entry 4 and recorded as PENDING DEC-568: a line
+Round 2 of the same panel (on `f7ab18d2`) added:
+- **Two regressions in the round-1 fixes themselves:**
+  - The `??` typing took a CLASS right-hand side too. A subclass there is a legal widening, so the VM read `Dog`'s property
+    hook off a runtime `Animal`: `(v ?? new Dog("d")).name` gave `no method name$get on Animal`. Now only a scalar
+    right-hand side (int, float, decimal, string) lends its type.
+  - The match-binder shadow also hid `this.n`, so `Code(n) => this.n + n` passed the check and then faulted at runtime.
+    A binder now shadows only the bare name; `this.x` always means the field.
+- **`phg lsp` / `phg debug --dap` aborted on deeply nested JSON.** The editor-protocol parser (`src/json.rs`) promised
+  "never panics", but 2,000,000 `[` in one message overflowed its stack. It now has the same depth limit.
+- Both programs the round-1 fixes made legal are now in the example corpus, so every leg runs them:
+  - `examples/guide/null-safety.phg` adds `(null ?? 4) + 1`;
+  - `examples/guide/field-init.phg` adds a match binder named like a later field.
+- DEC-568 is mirrored in MASTER-PLAN §0.10.
+- Two leftover quotes of the old stub-miss error are fixed (UNIFIED-SPEC, `bundle/manifest.rs`).
+- A stale `Http.isValidHeaderName` comment in `native/http.rs` is fixed.
+- KNOWN_ISSUES no longer says process exit removes spilled request bodies: nothing does, until the OS tmp reaper runs.
+- Two OLDER parity defects it found are disclosed and queued as plan row 4b, not fixed here:
+  - on the VM, `with` and property-hook reads use the static class (KNOWN_ISSUES VM-WITH-STATIC-CLASS);
+  - `p with { … }.m()` transpiles to a PHP parse error (TRANSPILE-WITH-CALL).
+
+Three header shapes that need no CR/LF are now disclosed in KNOWN_ISSUES (§ RICHREQ-2026-07-24, item 4) and recorded as PENDING DEC-568: a line
 starting with whitespace, a line with no `:`, and a handler-supplied `Content-Length`/`Transfer-Encoding`.
 
 ### Fixed — `new` inside a tuple panicked every backend, and a field initializer could read a later field through `new`/a named argument/a tuple (audit A2, CD-32, 2026-10-08)

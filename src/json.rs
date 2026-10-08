@@ -21,7 +21,11 @@ impl Json {
     /// Parse a complete JSON document, or `None` on any malformed input (total — never panics).
     pub fn parse(input: &str) -> Option<Json> {
         let bytes = input.as_bytes();
-        let mut p = ParseState { bytes, pos: 0 };
+        let mut p = ParseState {
+            bytes,
+            pos: 0,
+            depth: 0,
+        };
         p.skip_ws();
         let v = p.value()?;
         p.skip_ws();
@@ -71,6 +75,8 @@ impl Json {
 struct ParseState<'a> {
     bytes: &'a [u8],
     pos: usize,
+    /// Open arrays/objects around the cursor, bounded by `limits::MAX_JSON_DEPTH`.
+    depth: usize,
 }
 
 impl ParseState<'_> {
@@ -94,8 +100,21 @@ impl ParseState<'_> {
 
     fn value(&mut self) -> Option<Json> {
         match self.peek()? {
-            b'{' => self.object(),
-            b'[' => self.array(),
+            c @ (b'{' | b'[') => {
+                // Bounded like `Json.parse`: editor input is untrusted and this parser recurses
+                // (panel 2026-10-08, round 2 — 2,000,000 `[` overflowed the stack).
+                if self.depth + 1 >= crate::limits::MAX_JSON_DEPTH {
+                    return None;
+                }
+                self.depth += 1;
+                let v = if c == b'{' {
+                    self.object()
+                } else {
+                    self.array()
+                };
+                self.depth -= 1;
+                v
+            }
             b'"' => self.string().map(Json::Str),
             b't' | b'f' => self.boolean(),
             b'n' => self.null(),
@@ -246,5 +265,22 @@ impl ParseState<'_> {
             .parse::<f64>()
             .ok()
             .map(Json::Num)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Json;
+
+    /// Panel 2026-10-08 (safety, round 2): `phg lsp` and `phg debug --dap` feed editor bodies to this
+    /// recursive parser, and 2,000,000 `[` overflowed its stack — an abort behind "never panics".
+    #[test]
+    fn nesting_is_bounded_and_never_overflows() {
+        let nest = |n: usize| format!("{}{}", "[".repeat(n), "]".repeat(n));
+        let max = crate::limits::MAX_JSON_DEPTH - 1;
+        assert!(Json::parse(&nest(max)).is_some());
+        assert_eq!(Json::parse(&nest(max + 1)), None);
+        assert_eq!(Json::parse(&"[".repeat(2_000_000)), None);
+        assert_eq!(Json::parse(&"{\"a\":".repeat(2_000_000)), None);
     }
 }

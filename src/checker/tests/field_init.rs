@@ -65,6 +65,20 @@ fn a_match_binder_named_like_a_later_field_is_not_a_forward_ref() {
                class C { int a = match new S.Code(3) { Code(n) => n, default => n }; \
                int n = 7; } function main(): void {}";
     assert!(has(src, "E-FIELD-INIT-FORWARD-REF"), "{:?}", errors_of(src));
+    // Round 2: a binder shadows only the BARE name. `this.n` is always the field, in the body and
+    // in the guard of a binding arm alike — the first fix hid it and the read faulted at runtime.
+    for arm in ["Code(n) => this.n + n", "Code(n) when this.n > 0 => n"] {
+        let src = format!(
+            "enum S {{ Code(int n), Off }} \
+             class C {{ int a = match new S.Code(3) {{ {arm}, default => 0 }}; int n = 7; }} \
+             function main(): void {{}}"
+        );
+        assert!(
+            has(&src, "E-FIELD-INIT-FORWARD-REF"),
+            "{arm}: {:?}",
+            errors_of(&src)
+        );
+    }
 }
 
 #[test]

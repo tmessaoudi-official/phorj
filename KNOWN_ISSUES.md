@@ -1,5 +1,28 @@
 # Known Issues & Limitations
 
+## VM-WITH-STATIC-CLASS — on the VM, `with` and property-hook reads use the STATIC class, not the runtime one (found 2026-10-08)
+
+Found by the P0 slice's close panel (round 2, correctness lens). It predates the 2026-10-07 audit batch: the 2026-10-06
+release binary behaves the same. Two VM paths pick a class at COMPILE time from the variable's declared type:
+- `compile_clone_with` (`src/compiler/expr/calls.rs`);
+- `hook_get_method` (`src/compiler/cty_members.rs`).
+
+The tree-walker and PHP use the runtime class:
+- `Animal a = new Dog("q"); Animal b = a with { name = "z" };` then `b.kind()` gives `animal z` on the VM and `dog z` on
+  the tree-walker and in PHP.
+- When `Dog` overrides `Animal`'s stored `name` with a `get` hook, `Animal a = d;` then `{d.name} {a.name}` gives
+  `hooked d` on the VM and `hooked hooked` on the other legs.
+
+This is a silent byte-identity break (Invariant 1). No example or differential case covers a `with` or a hook read
+through a supertype. Fix queued as plan row 4b (`docs/plans/2026-10-08-audit-remediation.plan.md`).
+
+## TRANSPILE-WITH-CALL — a method call directly on a `with` result transpiles to invalid PHP (found 2026-10-08)
+
+`int a = p with { x = 5 }.d();` prints `10` on the VM and the tree-walker. The transpiler emits
+`$a = clone($p, ['x' => 5])->d();`, which php-8.5.11 rejects with `Parse error: syntax error, unexpected token "->"`.
+This predates the 2026-10-07 batch. Workaround: bind the copy first (`P q = p with { x = 5 }; q.d()`). The fix
+(parenthesize the `clone(…)` when it is a receiver) is queued with plan row 4b.
+
 ## STRING-EQ-DECIMAL-ERASED — a decimal compared inside an erased generic BODY is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
 
 `==`/`!=` on `string` transpiles to `===`/`!==`, and any operand whose type the transpiler cannot pin goes through the
@@ -1298,11 +1321,13 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    PHP-leg exercise of the tempnam/file_put_contents/file_get_contents twin — deterministic because
    the temp PATH never surfaces to phorj, only the read-back length does) — plus the extended CRLF
    `agree_err_php`. No differential-coverage gap remains on the slice.
-1. **Spill temp files leak until process exit** — spilled bodies (> 256 KiB) are written to one
-   owner-only `phorj-spill-*` directory per process under the OS temp dir (since 2026-10-08; they
+1. **Spill temp files outlive the process** — on the native legs, spilled bodies (> 256 KiB) are
+   written to one owner-only `phorj-spill-*` directory per process under the OS temp dir (since 2026-10-08; they
    were `<pid>`-named files in the shared temp dir before), addressed by deterministic in-process handles
-   (never by path, Inv 10). Nothing deletes them mid-run; the OS tmp reaper (or process exit) is
-   the cleanup today. Slice 3's serve loop should clean per-response.
+   (never by path, Inv 10). Nothing deletes them, mid-run or at exit (corrected 2026-10-08: this
+   entry used to say process exit cleans up, which it never did); the OS tmp reaper is the only
+   cleanup today, so request bodies stay on disk until it runs. Slice 3's serve loop should clean per-response. The transpiled PHP leg uses
+   `tempnam(sys_get_temp_dir(), 'phorj-spill-')`, which creates each file atomically with mode 0600.
 2. **The 8 MiB body cap is INERT under serve** — `DEFAULT_MAX_BODY_SIZE` equals the transport
    frame cap `MAX_REQUEST` (head+body), so a served body can never reach it; the eager
    oversize→null→400 branch is reachable only via `Request.fake`/direct `Request.parse`. Worse: a

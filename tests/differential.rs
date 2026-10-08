@@ -4804,6 +4804,28 @@ fn null_coalesce_operand_byte_identical() {
     );
 }
 
+/// Panel 2026-10-08, round 2: the `??` typing above must not take the RHS type for a CLASS. A subclass
+/// on the right is a legal widening, so `(v ?? new Dog("d")).name` with an erased `v` made the VM read
+/// `Dog`'s property hook off the runtime `Animal` (`no method name$get on Animal`).
+#[test]
+fn null_coalesce_class_rhs_keeps_the_runtime_class() {
+    agree_out_php(
+        "import Core.Output;
+import Core.Result;
+open class Animal { constructor(public string name) {} }
+class Dog extends Animal { string name { get => \"hooked\"; } }
+function get(): Result<Animal?, string> { Animal? a = new Animal(\"a\"); return new Result.Success(a); }
+function k(Result<Animal?, string> r): string {
+    return match (r) { Result.Success(v) => (v ?? new Dog(\"d\")).name, Result.Failure(e) => e };
+}
+#[Entry(kind: EntryKind.Cli)] function main() -> void {
+    Output.printLine(k(get()));
+}",
+        "a\n",
+        "null_coalesce_class_rhs",
+    );
+}
+
 /// DEC-512's NaN pin. PHP yields `1` for EVERY NaN comparison — `NAN <=> 1.0`, `1.0 <=> NAN` and
 /// `NAN <=> NAN` alike — and an array compare STOPS at the first uncomparable element rather than
 /// treating it as equal: `[NAN, 1] <=> [NAN, 2]` is `1`, not `-1` (measured on the oracle). So the

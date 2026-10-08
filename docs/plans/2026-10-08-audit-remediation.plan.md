@@ -31,6 +31,8 @@
 - [2026-10-08 08:39] ASSUMED (review): panel round 1, the pm JSON parser shares limits::MAX_JSON_DEPTH (511 nested containers) — because one limit is easier to reason about than a pm-specific one, and phorj.json/lock/index never nest past 3. Alternatives: a smaller pm-only limit.
 - [2026-10-08 08:39] ASSUMED (review): panel round 1, the serve body spill uses ONE owner-only directory per process (OnceLock) with create_new files, not a directory per spill — because spills are per-request and frequent, and the leak-until-exit lifetime is unchanged (KNOWN_ISSUES). Alternatives: a directory per spill; tempfile-style unlink-on-drop.
 - [2026-10-08 08:39] ASSUMED (review): panel round 1, the three header shapes outside DEC-363 (leading whitespace, no colon, handler-supplied Content-Length/Transfer-Encoding) are disclosed and recorded PENDING as DEC-568, NOT built — because widening the rejected set is a language/API decision (Invariant 15). Alternatives: fault on all three now.
+- [2026-10-08 10:14] ASSUMED (review): slice-close panel round 2 on frozen `f7ab18d2` (`fix: the P0 slice's close panel — a VM≠tree-walker split, …`): the three lens agents (backend-parity, safety-promises, completeness) run on their pinned model (opus, from .claude/agents/*.md) — because autonomous mode does not ask the spawner model question and the certification schedule calls for the panel at slice close. Alternatives: advisor() only.
+- [2026-10-08 10:37] ASSUMED (review): panel round 2: the two PRE-EXISTING parity defects it found (VM `with`/property hooks use the static class; transpiled `clone(…)->m()` is a PHP parse error) are disclosed in KNOWN_ISSUES and queued as plan row 4b, the next slice, NOT fixed inside this batch — because neither was introduced by the batch, the VM fix touches class dispatch in two compiler paths and deserves its own red-first slice, and the batch is already at its third panel round. The two regressions round 2 found in this batch (coalesce class RHS, `this.n` behind a binder) and the LSP JSON depth abort ARE fixed in it. Alternatives: fix all four now.
 
 ## Formal Plan
 
@@ -62,6 +64,7 @@ check that proves the gate runs) and carries an Invariant-9 example where it cha
 | 2 | A3 native Json.parse depth 512 with PHP null semantics (511 parse, 512 None, as json_decode) — `fix(json): Json.parse rejects 512 nested arrays/objects like json_decode, bounding the recursion` | S | done | 5794d297 | src/limits.rs src/ext/json/** examples/guide/json.phg |
 | 3 | A4 in two commits — 395b52ef `fix(build): cross-build from source only in a phorj checkout running its own phg, and re-verify every cached stub`, then `fix(pm): phg install reproduces phorj.lock, so a moved tag or a vanished version stops until phg update` | M | done | af389c5b | src/bundle/** src/pm/** src/cli/pm.rs src/cli/help.rs tests/pm.rs |
 | 4 | A2 explicit arms in every total Expr/Stmt walker plus catch-all ratchet test (CD-32) — `fix(checker): `new` inside a tuple panicked every backend; close the last six catch-all walks under the ratchet` | M | done | 691f191b | src/checker/** src/cli/rewrite_new.rs src/cli/rewrite_new_tests.rs src/ast/leaves.rs examples/guide/tuples.phg |
+| 4b | Panel round 2 pre-existing parity defects: VM `with` and property-hook reads use the runtime class; transpile parenthesizes a `clone(…)` receiver (KNOWN_ISSUES VM-WITH-STATIC-CLASS, TRANSPILE-WITH-CALL) | M | todo | - | src/compiler/** src/transpile/** tests/differential.rs examples/** |
 | 5 | A5/A6 LSP panic net, panic hook, Content-Length cap, mutation-smoke test, unsafe extern JIT helpers | M | todo | - | src/lsp/** src/main.rs src/jit/** tests/** |
 | 6 | E Claude config sync (agents, phg-qa-sweep, phg-lenses, Status rows, memory, expertise, leftovers) | S | todo | - | .claude/** docs/plans/** |
 | 7 | D fact fixes across the SSOT quartet and reference docs | S | todo | - | docs/** README.md Cargo.toml CLAUDE.md FEATURES.md KNOWN_ISSUES.md |
@@ -80,6 +83,8 @@ check that proves the gate runs) and carries an Invariant-9 example where it cha
 ### Needs input
 - DEC-567 (a)–(f): six language questions recorded PENDING under Invariant 15, each with its probe program in
   `var/claude/review-2026-10-07/raw/6-strictness-neutrality.md` — ask before building any of them.
+- DEC-568: whether DEC-363's header guard widens past CR/LF/NUL (leading-whitespace lines, lines with no `:`,
+  handler-supplied `Content-Length`/`Transfer-Encoding`); the failing program is in the register row — ask before building.
 - cargo-fuzz as a dev-only out-of-workspace crate (MASTER-PLAN Tier-3 item 22): needs a dependency-policy ruling.
 ### Needs research
 ### Fragile

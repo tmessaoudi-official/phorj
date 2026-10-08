@@ -109,7 +109,7 @@ pub fn active() -> Manifest {
 /// The registry base URL the download client fetches stubs from. `PHORJ_STUB_REGISTRY` overrides it
 /// (trailing `/` normalised); otherwise the default is the crate's repository releases for the running
 /// version: `{CARGO_PKG_REPOSITORY}/releases/download/v{CARGO_PKG_VERSION}/`. `None` when no override
-/// is set and the crate has no `repository` (so the caller emits the "needs a source checkout" error).
+/// is set and the crate has no `repository` (so the caller emits the "no stub registry configured" error).
 #[must_use]
 pub fn registry_base() -> Option<String> {
     if let Some(v) = std::env::var_os("PHORJ_STUB_REGISTRY") {

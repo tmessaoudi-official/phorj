@@ -11,18 +11,23 @@ pub(in crate::checker) fn field_init_forbidden_ref(
     forbidden: &std::collections::HashSet<String>,
 ) -> Option<String> {
     use crate::ast::{Expr, StrPart};
-    pub(in crate::checker) fn walk(
-        e: &Expr,
-        f: &std::collections::HashSet<String>,
-        out: &mut Option<String>,
-    ) {
+    use std::collections::HashSet;
+    /// The fields not yet initialised, and the match binders in scope. A binder shadows a field's
+    /// BARE name only: `this.x` always means the field (panel 2026-10-08, round 2).
+    struct Scope<'a> {
+        fields: &'a HashSet<String>,
+        binders: HashSet<String>,
+    }
+    fn walk(e: &Expr, f: &Scope<'_>, out: &mut Option<String>) {
         if out.is_some() {
             return;
         }
         match e {
-            Expr::Ident(n, _) if f.contains(n) => *out = Some(n.clone()),
+            Expr::Ident(n, _) if f.fields.contains(n) && !f.binders.contains(n) => {
+                *out = Some(n.clone())
+            }
             Expr::Member { object, name, .. } => {
-                if matches!(&**object, Expr::This(_)) && f.contains(name) {
+                if matches!(&**object, Expr::This(_)) && f.fields.contains(name) {
                     *out = Some(name.clone());
                 } else {
                     walk(object, f, out);
@@ -61,14 +66,11 @@ pub(in crate::checker) fn field_init_forbidden_ref(
                 walk(scrutinee, f, out);
                 for a in arms {
                     // An arm's binders shadow same-named fields in its guard and body only.
-                    let mut bound = std::collections::HashSet::new();
-                    crate::ast::collect_pattern_bindings(&a.pattern, &mut bound);
-                    let shadowed: std::collections::HashSet<String>;
-                    let f = if bound.iter().any(|b| f.contains(b)) {
-                        shadowed = f.difference(&bound).cloned().collect();
-                        &shadowed
-                    } else {
-                        f
+                    let mut binders = f.binders.clone();
+                    crate::ast::collect_pattern_bindings(&a.pattern, &mut binders);
+                    let f = &Scope {
+                        fields: f.fields,
+                        binders,
                     };
                     if let Some(g) = &a.guard {
                         walk(g, f, out);
@@ -112,7 +114,11 @@ pub(in crate::checker) fn field_init_forbidden_ref(
         }
     }
     let mut out = None;
-    walk(e, forbidden, &mut out);
+    let scope = Scope {
+        fields: forbidden,
+        binders: HashSet::new(),
+    };
+    walk(e, &scope, &mut out);
     out
 }
 

@@ -351,16 +351,18 @@ impl Compiler<'_> {
                 op: crate::ast::BinaryOp::Spaceship,
                 ..
             } => Ok(CTy::Int),
-            // `a ?? b` has `a`'s type unless `a` says nothing — a literal `null` is `Other` — and then
-            // `b`'s: arithmetic lowers only to a typed op, so `(null ?? 4) + 1` needs `int` here or
-            // the VM refuses what the interpreter runs (panel 2026-10-08, Invariant 7).
+            // `a ?? b` with an untyped `a` (a literal `null`) takes a SCALAR `b`'s type, which the checker
+            // makes `a`'s too (Invariant 7); never a class `b`, which may subclass `a`'s runtime class.
             Expr::Binary {
                 op: crate::ast::BinaryOp::Coalesce,
                 lhs,
                 rhs,
                 ..
             } => match self.ctype(lhs) {
-                Ok(CTy::Other) => self.ctype(rhs),
+                Ok(CTy::Other) => match self.ctype(rhs) {
+                    Ok(t @ (CTy::Int | CTy::Float | CTy::Decimal | CTy::Str)) => Ok(t),
+                    _ => Ok(CTy::Other),
+                },
                 lhs => lhs,
             },
             Expr::Binary { lhs, .. } => self.ctype(lhs),

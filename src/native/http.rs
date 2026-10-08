@@ -154,7 +154,7 @@ pub(crate) fn http_natives() -> Vec<NativeFn> {
     vec![
         // DEC-363 — the fault-raising primitive for the response-header injection guard.
         //
-        // The character POLICY lives in phorj (`Http.isValidHeaderName`/`isValidHeaderValue` in the
+        // The character POLICY lives in phorj (`HeaderSafety.isValidName`/`isValidValue` in the
         // prelude), so all three legs share one definition of "forbidden" by construction. This native
         // exists only because prelude phorj has no panic-class fault primitive: there is no `panic`,
         // no `never`-returning builtin, and a checked `throw` was explicitly rejected (it would ripple

@@ -2753,7 +2753,7 @@ The host build never downloads.
 
 ### Download-and-cache client
 
-manifest lookup (miss → precise "no prebuilt stub… needs a source checkout" error) → resolve base →
+manifest lookup (miss → precise "no prebuilt stub … needs the `phg` built in a phorj checkout" error) → resolve base →
 fetch to a **temp file in the same directory** (same-fs rename) → **verify sha256 on the temp file**
 → only then atomic-rename into the cache. A corrupt/tampered/partial download never poisons the
 cache; the cache stays keyed on the phorj-hash path, so a rebuilt phorj re-downloads (B-6). All

@@ -14,6 +14,15 @@ function compute(int n): int {
     return n * 10;
 }
 
+enum Size { Known(int n), Unknown }
+
+// A match binder shadows a LATER field of the same name inside its own arm: the `n` below is the
+// pattern's binding, so this is not a forward reference to the field `n` declared after it.
+class Crate {
+    int area = match (new Size.Known(4)) { Known(n) when n > 0 => n * n, default => 0 };
+    int n = 7;
+}
+
 class Parcel {
     int weight = compute(3) + 1;
     int doubled = this.weight * 2;
@@ -31,5 +40,8 @@ function main(): void {
     Output.printLine(t.summary());
     // alpha: w=31 d=62
     Output.printLine("{t.weight + t.doubled}");
+    // 93
+    Crate c = new Crate();
+    Output.printLine("crate: area={c.area} n={c.n}");
 }
-// 93
+// crate: area=16 n=7

@@ -52,6 +52,10 @@ function main(): void {
     // a value that can be null; the `W-FORCE-UNWRAP` lint flags every use). `x` is then a real `int`.
     int forced = some!;
     Output.printLine("force: {forced + 1}");
+    // `a ?? b` is an arithmetic operand of `b`'s type even when `a` is a literal `null` (the VM once
+    // refused this shape at compile time while the interpreter ran it).
+    int fallback = (null ?? 4) + 1;
+    Output.printLine("null-literal coalesce: {fallback} {(none ?? 2) * 3}");
     // `match` over `T?` with null-arm narrowing.
     Output.printLine("match: {describe(some)} / {describe(none)}");
     // Chained `opt!` through object optionals: a 3-node list, force-unwrapping `next` twice to reach
