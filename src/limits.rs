@@ -38,6 +38,12 @@ pub const MAX_NEST_DEPTH: usize = 512;
 /// 256 MB pipeline thread around ~50–100k terms, so this sits well below with margin.
 pub const MAX_EXPR_DEPTH: usize = 10_000;
 
+/// Nesting limit of `Json.parse`, matching PHP's `json_decode` default `$depth = 512`. PHP counts the
+/// innermost value's level too, so at most `MAX_JSON_DEPTH - 1` = 511 nested arrays/objects decode and
+/// 512 return `null` (measured on php-8.5.11, audit 2026-10-07 A3). Equal limits keep the native legs
+/// and the transpiled `json_decode` agreeing on untrusted input, and bound the parser's recursion.
+pub const MAX_JSON_DEPTH: usize = 512;
+
 /// Bit width of the language's integer scalar (`int` → Rust `i64`, two's-complement). Documented
 /// here as policy; the overflow bound itself is enforced by the checked kernels in `value.rs`
 /// (`int_add`/`int_mul`/… → `FAULT_INT_OVERFLOW`). A future sized-int / bignum surface (M3) is the
@@ -59,6 +65,7 @@ mod tests {
         assert_eq!(MAX_CALL_DEPTH, 4096);
         assert_eq!(MAX_NEST_DEPTH, 512);
         assert_eq!(MAX_EXPR_DEPTH, 10_000);
+        assert_eq!(MAX_JSON_DEPTH, 512);
         assert_eq!(INT_BITS, 64);
         assert_eq!(FLOAT_BITS, 64);
     }

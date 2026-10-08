@@ -47,7 +47,7 @@ check that proves the gate runs) and carries an Invariant-9 example where it cha
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | A1 Response header guard at serialize, empty-list head, KNOWN_ISSUES correction | S | todo | - | src/cli/http_prelude.rs examples/web/** KNOWN_ISSUES.md |
+| 1 | A1 Response header guard at serialize, empty-list head, KNOWN_ISSUES correction — `fix(http): check every Response header line in serialize(), so the public constructor cannot inject` | S | done | 2a20ee85 | src/cli/http_prelude.rs examples/web/** KNOWN_ISSUES.md |
 | 2 | A3 native Json.parse depth 512 with PHP null semantics | S | todo | - | src/limits.rs src/ext/json/** src/jit/handles/** examples/** |
 | 3 | A4 phg build --target checkout detection, stub re-verify, https-only registry, install honours lock | M | todo | - | src/bundle/** src/pm/** |
 | 4 | A2 explicit arms in every total Expr/Stmt walker plus catch-all ratchet test | M | todo | - | src/checker/** src/cli/** tests/** examples/** |

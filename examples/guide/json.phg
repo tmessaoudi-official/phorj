@@ -16,6 +16,7 @@ package Main;
 
 import Core.Output;
 import Core.Json;
+import Core.String;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
@@ -69,4 +70,18 @@ function main(): void {
     } else {
         Output.printLine("malformed -> None");
     }
+    // Nesting depth follows PHP's json_decode default: 511 nested arrays parse, 512 is None — so a
+    // hostile document is bounded and every leg agrees.
+    Output.printLine(depthCheck(511));
+    Output.printLine(depthCheck(512));
+}
+
+function depthCheck(int n): string {
+    string opening = String.repeat("[", n);
+    string closing = String.repeat("]", n);
+    string doc = "{opening}{closing}";
+    if (var j = Json.parse(doc)) {
+        return "depth {n}: {shapeOf(j)}";
+    }
+    return "depth {n}: None";
 }

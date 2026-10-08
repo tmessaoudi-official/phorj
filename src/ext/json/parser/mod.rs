@@ -3,6 +3,7 @@
 //! materialization halves live in the sibling `lazy` submodule.
 
 use super::natives::jnode;
+use crate::limits::MAX_JSON_DEPTH;
 use crate::value::{build_map, Payload, Value};
 use std::rc::Rc;
 
@@ -19,6 +20,7 @@ pub(super) fn parse_json(s: &str) -> Option<Value> {
         src: s,
         b: s.as_bytes(),
         i: 0,
+        depth: 0,
     };
     p.ws();
     let v = p.value()?;
@@ -37,6 +39,8 @@ struct JParser<'a> {
     src: &'a str,
     b: &'a [u8],
     i: usize,
+    /// Open arrays/objects around the cursor, bounded by [`MAX_JSON_DEPTH`] like `json_decode`.
+    depth: usize,
 }
 
 impl JParser<'_> {
@@ -56,6 +60,18 @@ impl JParser<'_> {
         }
     }
 
+    /// Parse (or skip) one array/object one level deeper. Past [`MAX_JSON_DEPTH`] the whole document
+    /// is rejected, as `json_decode` returns `null` — which also bounds the recursion on hostile input.
+    fn nested<T>(&mut self, parse: impl FnOnce(&mut Self) -> Option<T>) -> Option<T> {
+        self.depth += 1;
+        if self.depth >= MAX_JSON_DEPTH {
+            return None;
+        }
+        let out = parse(self);
+        self.depth -= 1;
+        out
+    }
+
     fn value(&mut self) -> Option<Value> {
         self.ws();
         match self.peek()? {
@@ -66,8 +82,8 @@ impl JParser<'_> {
                 let s = self.string()?;
                 Some(jnode("String", Payload::One(Value::Str(s.into()))))
             }
-            b'[' => self.array(),
-            b'{' => self.object(),
+            b'[' => self.nested(Self::array),
+            b'{' => self.nested(Self::object),
             b'-' | b'0'..=b'9' => self.number(),
             _ => None,
         }

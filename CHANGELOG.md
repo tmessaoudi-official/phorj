@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Json.parse` has PHP's nesting limit; the native legs used to parse any depth (audit A3, 2026-10-08)
+
+`Json.parse` of 512 nested arrays returned a value on the VM and the tree-walker but `null` in the transpiled PHP, because
+`json_decode`'s default `$depth = 512` counts the innermost value's level too (511 containers decode, 512 do not —
+measured on php-8.5.11). The native parser had no limit at all: 200 000 levels parsed on the 256 MB pipeline thread and
+overflowed a normal stack. Both scanners (the eager builder and the lazy validator `Json.parse` actually uses) now count
+open arrays/objects and reject the document at `MAX_JSON_DEPTH` (512, `src/limits.rs`), so all three legs agree on
+untrusted input and the recursion is bounded. Tests: `ext::json::tests_depth` (511 accepted, 512 rejected, a 200 000-level
+document rejected without exhausting the stack — red first: depth 512 accepted, stack overflow). Example:
+`examples/guide/json.phg` prints `depth 511: array` / `depth 512: None` on all three legs.
+
+### Fixed — the public `Response` constructor bypassed the DEC-363 header guard, and an empty header list broke the head (audit A1, 2026-10-08)
+
+DEC-363 guarded `withHeader` and `Cookie`, but `new Response(status, body, lines)` (and `status()`, which re-constructs
+from the stored lines) still put raw lines on the wire, so a CR/LF in a line injected headers and ended the head early.
+`serialize()` — the one function every construction path reaches — now checks every line for CR/LF/NUL
+(`HeaderSafety.requireLine`). An empty list also emitted a second blank line (`Content-Length: 2\r\n\r\n\r\nok`); the head
+now ends with exactly one. Non-empty heads are unchanged. Tests: `dec363_the_public_constructor_cannot_bypass_the_guard`,
+`an_empty_header_list_serializes_one_head_terminator`; example lines in `examples/web/response-builders.phg`
+(`2a20ee85`).
+
 ### Fixed — `\h`/`\H` in a regex are refused on both constructors instead of answering the opposite of PHP (audit F7, scout plan row 4l-b8, 2026-10-06)
 
 `fancy-regex` reads `\h` as a hex digit, while PCRE reads it as horizontal whitespace. `Regex.compileBacktracking("a\\h")`

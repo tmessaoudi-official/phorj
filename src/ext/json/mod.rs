@@ -7,6 +7,8 @@ pub mod natives;
 mod parser;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_depth;
 
 pub use natives::json_natives;
 pub(crate) use natives::json_parse_str;

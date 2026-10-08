@@ -28,8 +28,8 @@ impl JParser<'_> {
             b't' => self.skip_lit(b"true"),
             b'f' => self.skip_lit(b"false"),
             b'"' => self.skip_string(),
-            b'[' => self.skip_array(),
-            b'{' => self.skip_object(),
+            b'[' => self.nested(Self::skip_array),
+            b'{' => self.nested(Self::skip_object),
             b'-' | b'0'..=b'9' => self.skip_number(),
             _ => None,
         }
@@ -281,6 +281,7 @@ pub(in crate::ext::json) fn validate_json(s: &str) -> Option<usize> {
         src: s,
         b: s.as_bytes(),
         i: 0,
+        depth: 0,
     };
     p.ws();
     let root = p.i;
@@ -303,6 +304,7 @@ pub fn materialize_lazy(lazy: &LazyJson) -> Value {
                 src: s,
                 b: s.as_bytes(),
                 i: lazy.start,
+                depth: 0,
             };
             p.materialize_one(&lazy.src)
                 .expect("materialize_lazy: node was validated at parse, re-parse cannot fail")
