@@ -11,7 +11,8 @@
 //     `Cookie` is an immutable value class — Secure/HttpOnly/SameSite=Lax/Path=/ by default,
 //     with chainable `.path()`/`.secure()`/`.httpOnly()`/`.partitioned()` builders)
 //   * `resp.withCookies(list)`          — a copy with one `Set-Cookie` header per Cookie
-//   * `resp.serialize() -> bytes`       — render to the HTTP/1.1 wire form
+//   * `resp.serialize() -> bytes`       — render to the HTTP/1.1 wire form (checks every header
+//     line for CR/LF/NUL first, so even `new Response(status, body, lines)` cannot inject)
 // Pure value construction → byte-identical across `run`, the VM, and real PHP.
 package Main;
 
@@ -63,4 +64,11 @@ function main(): void {
     Output.printLine("multi:  {wireLine(multi)}");
     // The original json response is untouched (immutability): still 200, no extra headers.
     Output.printLine("orig:   {wireLine(j)}");
+    // The raw constructor takes whole `Name: value` lines. `serialize()` checks every line for
+    // CR/LF/NUL, so a bad line faults instead of reaching the wire; an empty list still ends the
+    // head with exactly one blank line.
+    Response bare = new Response(200, Bytes.fromString("ok"), new List<string>());
+    Output.printLine("bare:   {wireLine(bare)}");
+    Response raw = new Response(200, Bytes.fromString("ok"), ["X-A: 1", "X-B: 2"]);
+    Output.printLine("raw:    {wireLine(raw)}");
 }

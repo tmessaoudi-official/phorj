@@ -801,6 +801,33 @@ fn dec363_a_cookie_builder_cannot_smuggle_a_bad_path() {
     );
 }
 
+// Audit 2026-10-07 (A1): the builders were guarded but the public constructor was not, so a raw
+// header line reached the socket unvalidated. The guard now also runs in `serialize()`, the one
+// function every construction path reaches.
+#[test]
+fn dec363_the_public_constructor_cannot_bypass_the_guard() {
+    faults_on_both_backends(r#"new Response(200, Bytes.fromString("ok"), ["X-User: {evil}"])"#);
+    faults_on_both_backends(r#"new Response(200, Bytes.fromString("ok"), ["X-User: {nul}"])"#);
+    // `status()` re-constructs from the stored lines, so a bad raw line survives into it too.
+    faults_on_both_backends(
+        r#"new Response(200, Bytes.fromString("ok"), ["X-User: {evil}"]).status(404)"#,
+    );
+}
+
+#[test]
+fn an_empty_header_list_serializes_one_head_terminator() {
+    // Before the fix the empty list produced `Content-Length: 2\r\n\r\n\r\nok`: the head ended at the
+    // first blank line and the 2-byte body was `\r\n`, leaving `ok` on the connection.
+    let src = injection_prog(r#"new Response(200, Bytes.fromString("ok"), new List<string>())"#);
+    let want = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok\n";
+    for (leg, res) in [
+        ("vm", phorj::cli::cmd_run(&src)),
+        ("tree-walker", phorj::cli::cmd_treewalk(&src)),
+    ] {
+        assert_eq!(res.expect(leg), want, "{leg}");
+    }
+}
+
 #[test]
 fn dec363_a_clean_response_still_serializes_and_does_not_split() {
     // The other half: the guard must not break ordinary headers or cookies, and the serialized head

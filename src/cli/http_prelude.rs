@@ -63,6 +63,14 @@ class HeaderSafety {
   static function requireValue(string name, string value): void {
     if (!HeaderSafety.isValidValue(value)) { HeaderSafety.reject(name); }
   }
+  // A whole `Name: value` line, as the public `Response` constructor accepts it. Its first `:` is the
+  // separator, so only CR/LF/NUL apply; the fault names the text before that `:`.
+  static function requireLine(string line): void {
+    if (!HeaderSafety.isValidValue(line)) {
+      List<string> parts = String.split(line, ":");
+      HeaderSafety.reject(parts[0]);
+    }
+  }
 }
 class Cookie {
   constructor(
@@ -124,9 +132,9 @@ class Response {
     return new Response(newStatus, this.body, this.headerLines);
   }
   function withHeader(string name, string value): Response {
-    // DEC-363: guard at the BUILDER, not at `serialize()`. Both chokepoints are byte-identical and
-    // safe, but faulting here names the `withHeader` call that produced the bad value instead of
-    // surfacing at respond time with no idea which header was at fault.
+    // DEC-363: guard at the BUILDER so the fault names the `withHeader` call that produced the bad
+    // value. `serialize()` checks every line again: it is the backstop the public constructor and
+    // `status()` reach too (audit 2026-10-07, A1).
     HeaderSafety.requireName(name);
     HeaderSafety.requireValue(name, value);
     return new Response(this.status, this.body, List.concat(this.headerLines, ["{name}: {value}"]));
@@ -154,8 +162,14 @@ class Response {
     int st = this.status;
     string statusLine = "HTTP/1.1 {st} {reason}";
     int bodyLen = Bytes.length(this.body);
+    for (string line in this.headerLines) {
+      HeaderSafety.requireLine(line);
+    }
+    // Each header line ends with CRLF, then one blank line ends the head — so an empty list yields
+    // exactly one terminator (it used to emit two, leaving the body's first bytes outside the head).
     string userHeaders = String.join(this.headerLines, nl);
-    string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
+    string sep = if (List.length(this.headerLines) == 0) { "" } else { nl };
+    string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{sep}{nl}";
     return Bytes.concat(Bytes.fromString(head), this.body);
   }
 }

@@ -1320,7 +1320,17 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    in a name — identically by construction; `Http.isValidHeaderName`/`isValidHeaderValue` ship so a
    handler can return a clean 400 for user-derived input. Rule:
    `docs/specs/UNIFIED-SPEC.md#response-side-header-injection-guard`. (This entry said "build queued"
-   until 2026-09-02 — stale for over a month.)
+   until 2026-09-02 — stale for over a month.) **Correction 2026-10-08 (audit A1):** the 2026-07-29 fix
+   guarded the builders and `Cookie` only; the public constructor `new Response(status, body, lines)`
+   (and `status()`, which re-constructs from the stored lines) still put raw lines on the wire, and
+   an empty `lines` list emitted a second blank line, ending the head before the body. `serialize()`
+   now checks every line (`HeaderSafety.requireLine`) and ends the head with exactly one blank line;
+   tests `dec363_the_public_constructor_cannot_bypass_the_guard`,
+   `an_empty_header_list_serializes_one_head_terminator`. Still accepted: a raw line with no `:` at
+   all (not CR/LF/NUL, outside DEC-363's ruled set). The per-line scan on the serve path is
+   unmeasured — **perf OWED** (DEC-365). Separately, `Response.reason()` names only 200/400/404, so
+   any other status serializes as `Internal Server Error` (e.g. `HTTP/1.1 302 Internal Server
+   Error`).
 4b. ~~**P2 SECURITY-HARDENING — the DEC-316 PM git path carries none of the retired vendor path's
    argument hardening**~~ — **FIXED 2026-07-29 (Q28 / DEC-414).** `src/pm/fetch.rs` now rejects the
    injection shapes before spawning git (`ext::`/`file::` remote helpers case-insensitively, a leading
