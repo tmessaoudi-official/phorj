@@ -8,7 +8,7 @@
 //! multiple requirers is a documented follow-up.
 
 use crate::pm::fetch::{fetch_git, fetch_path, Fetched};
-use crate::pm::lockfile::LockedPackage;
+use crate::pm::lockfile::{LockFile, LockedPackage};
 use crate::pm::manifest::{Dependency, Manifest, SourceSpec};
 use crate::pm::registry::RegistryIndex;
 use crate::pm::semver::Version;
@@ -33,8 +33,15 @@ struct Item {
     from_dir: PathBuf,
 }
 
-/// Resolve `root`'s dependencies transitively, staging fetched trees under `stage`.
-pub fn resolve(root: &Manifest, root_dir: &Path, stage: &Path) -> Result<Vec<Resolved>, String> {
+/// Resolve `root`'s dependencies transitively, staging fetched trees under `stage`. With a `lock`,
+/// every git/registry dependency it still governs is fetched at its locked version and must match
+/// the locked commit and tree hash (`pm::pin`); `None` resolves afresh (`phg update`).
+pub fn resolve(
+    root: &Manifest,
+    root_dir: &Path,
+    stage: &Path,
+    lock: Option<&LockFile>,
+) -> Result<Vec<Resolved>, String> {
     let mut queue: Vec<Item> = root
         .require
         .iter()
@@ -69,6 +76,7 @@ pub fn resolve(root: &Manifest, root_dir: &Path, stage: &Path) -> Result<Vec<Res
             continue; // already resolved (dedupe / cycle break)
         }
 
+        let pin = crate::pm::pin::governing(lock, &dep);
         let dest = pkg_stage_dir(stage, &dep.name)?;
         let _ = std::fs::remove_dir_all(&dest);
         if let Some(parent) = dest.parent() {
@@ -91,7 +99,10 @@ pub fn resolve(root: &Manifest, root_dir: &Path, stage: &Path) -> Result<Vec<Res
                     registry = Some(crate::pm::registry::fetch_index()?);
                 }
                 let idx = registry.as_ref().unwrap();
-                let (git, rv) = idx.resolve(&dep.name, req)?;
+                let (git, rv) = match pin {
+                    Some(locked) => crate::pm::pin::locked_version(idx, locked)?,
+                    None => idx.resolve(&dep.name, req)?,
+                };
                 (
                     fetch_git(git, &rv.tag, &dest)?,
                     rv.version.to_string(),
@@ -99,6 +110,10 @@ pub fn resolve(root: &Manifest, root_dir: &Path, stage: &Path) -> Result<Vec<Res
                 )
             }
         };
+
+        if let Some(locked) = pin {
+            crate::pm::pin::check_fetched(locked, fetched.commit.as_deref(), &fetched.hash)?;
+        }
 
         // Recurse into the fetched package's own manifest (if any). A path dep declared inside this
         // package is relative to its ORIGINAL directory, not the staged copy — so for a path source the
@@ -221,7 +236,7 @@ mod tests {
         .unwrap();
         let stage = base.join("stage");
 
-        let resolved = resolve(&root, &base, &stage).unwrap();
+        let resolved = resolve(&root, &base, &stage, None).unwrap();
         let names: Vec<&str> = resolved.iter().map(|r| r.locked.name.as_str()).collect();
         assert!(names.contains(&"Acme/A"));
         assert!(names.contains(&"Acme/B"));
@@ -248,7 +263,7 @@ mod tests {
             r#"{"name":"Acme/App","require":{"Acme/A":{"path":"a"},"Acme/X":{"path":"x2"}}}"#,
         )
         .unwrap();
-        let err = resolve(&root, &base, &base.join("stage")).unwrap_err();
+        let err = resolve(&root, &base, &base.join("stage"), None).unwrap_err();
         assert!(err.contains("conflict"), "got: {err}");
         let _ = std::fs::remove_dir_all(&base);
     }

@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `phg install` re-resolved every time, so a moved tag silently replaced a locked dependency (audit A4, 2026-10-08)
+
+`install`, `add` and `remove` ignored an existing `phorj.lock`. They re-resolved from `phorj.json`, wrote a new lock, and then
+"verified" the tree against that same freshly written lock. A git tag moved to another commit, or a registry index pointing a
+version somewhere else, produced a new lock with no error. `update` was the same code path. Now:
+
+- `install` reproduces the lock (`src/pm/pin.rs`). A git or registry dependency the lock still governs is fetched at its locked
+  version: the same `git:url@ref`, or a registry version the constraint still accepts. It must come back with the locked commit
+  and tree hash. Otherwise the install stops before `vendor/` or the lock is written, and names `phg update`.
+- A locked registry version the index no longer lists is an error, never a silent move to another version.
+- A dependency whose `phorj.json` entry changed re-resolves on its own; every other pin holds. Path dependencies are not pinned.
+- `phg update` (`ops::update`) is now the only verb that resolves without the lock.
+- An unreadable `phorj.lock` is an error rather than "no lock".
+- The package stage and the downloaded registry index use a fresh owner-only temp directory (`create_dir` with a retried
+  unique name). Before, they used a fixed `<prefix>-<pid>` name in the shared temp dir, where another local user could plant a
+  symlink that curl's `-o` would follow. The stage is now removed on failure too.
+- The docs' claim that a later install "refuses a tampered `vendor/`" was never true: `install` rebuilds `vendor/` from the
+  fetched sources. `examples/package-manager/README.md` and `docs/EXTENSIONS-AUTHORING.md` now say what it does.
+
 ### Fixed — `phg build --target` built from any Cargo project and trusted its stub cache forever (audit A4, 2026-10-08)
 
 A cross-build treated any directory with a `Cargo.toml` as a phorj checkout. Run inside an unrelated Rust project, it ran

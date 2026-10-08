@@ -7,7 +7,7 @@ use crate::pm::manifest::{validate_pkg_name, Dependency, Manifest, SourceSpec};
 use crate::pm::resolve::resolve;
 use crate::pm::vendor::{build_lock, materialize, verify};
 use crate::pm::{LockFile, LOCK_FILE, MANIFEST_FILE};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Outcome of an install-type operation, for the CLI to print.
 #[derive(Debug)]
@@ -16,28 +16,62 @@ pub struct InstallReport {
     pub installed: Vec<String>,
 }
 
-/// Resolve `phorj.json` → fetch + materialize `vendor/` → write `phorj.lock`. Idempotent: path/git
-/// sources re-resolve to the same pinned trees, so re-running is a no-op diff. This also serves
-/// `phg update` (it always re-resolves from the manifest, taking the newest satisfying versions).
+/// Resolve `phorj.json` → fetch + materialize `vendor/` → write `phorj.lock`, reproducing an
+/// existing lock: every git/registry dependency it still governs must come back at its locked commit
+/// and tree hash, or the install fails before `vendor/` or the lock is touched (audit A4; `pm::pin`).
+/// A dependency whose spec changed in `phorj.json` re-resolves on its own. `add` and `remove` go
+/// through here, so they keep every other pin too.
 pub fn install(root: &Path) -> Result<InstallReport, String> {
-    let manifest = read_manifest(root)?;
-    let stage = stage_dir();
-    let _ = std::fs::remove_dir_all(&stage);
-    let resolved = resolve(&manifest, root, &stage)?;
-    let vendor = root.join("vendor");
-    materialize(&resolved, &vendor)?;
-    let lock = build_lock(&resolved);
-    std::fs::write(root.join(LOCK_FILE), lock.to_pretty())
-        .map_err(|e| format!("cannot write {LOCK_FILE}: {e}"))?;
-    verify(&vendor, &lock)?; // freshly materialized tree must match its own lock
-    let _ = std::fs::remove_dir_all(&stage);
+    let lock = read_lock(root)?;
+    resolve_and_vendor(root, lock.as_ref())
+}
 
+/// `phg update`: re-resolve from `phorj.json` ignoring the old lock, taking the newest satisfying
+/// versions, and rewrite `phorj.lock` + `vendor/`. The only verb that accepts a moved tag.
+pub fn update(root: &Path) -> Result<InstallReport, String> {
+    resolve_and_vendor(root, None)
+}
+
+/// The existing lock, if any. One that exists but cannot be read is an error, never "no lock":
+/// treating it as absent would silently re-resolve everything it pinned.
+fn read_lock(root: &Path) -> Result<Option<LockFile>, String> {
+    match std::fs::read_to_string(root.join(LOCK_FILE)) {
+        Ok(txt) => LockFile::parse(&txt)
+            .map(Some)
+            .map_err(|e| format!("{e} — fix {LOCK_FILE}, or run `phg update` to rewrite it")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("cannot read {LOCK_FILE}: {e}")),
+    }
+}
+
+fn resolve_and_vendor(root: &Path, lock: Option<&LockFile>) -> Result<InstallReport, String> {
+    let manifest = read_manifest(root)?;
+    let stage = crate::pm::private_temp_dir("phorj-pm-stage")?;
+    let vendored = vendor_from(&manifest, root, &stage, lock);
+    let _ = std::fs::remove_dir_all(&stage); // on every path: the stage is ours alone
+    let resolved = vendored?;
     let mut installed: Vec<String> = resolved
         .iter()
         .map(|r| format!("{} {}", r.locked.name, r.locked.version))
         .collect();
     installed.sort();
     Ok(InstallReport { installed })
+}
+
+fn vendor_from(
+    manifest: &Manifest,
+    root: &Path,
+    stage: &Path,
+    lock: Option<&LockFile>,
+) -> Result<Vec<crate::pm::resolve::Resolved>, String> {
+    let resolved = resolve(manifest, root, stage, lock)?;
+    let vendor = root.join("vendor");
+    materialize(&resolved, &vendor)?;
+    let lock = build_lock(&resolved);
+    std::fs::write(root.join(LOCK_FILE), lock.to_pretty())
+        .map_err(|e| format!("cannot write {LOCK_FILE}: {e}"))?;
+    verify(&vendor, &lock)?; // freshly materialized tree must match its own lock
+    Ok(resolved)
 }
 
 /// Add (or replace) a dependency in `phorj.json`, then install. Creates a minimal manifest if none
@@ -99,13 +133,10 @@ fn write_manifest(root: &Path, m: &Manifest) -> Result<(), String> {
         .map_err(|e| format!("cannot write {MANIFEST_FILE}: {e}"))
 }
 
-fn stage_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("phorj-pm-stage-{}", std::process::id()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn tmp(name: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!("phorj_pm_ops_{}_{}", name, std::process::id()));
@@ -153,6 +184,28 @@ mod tests {
         // removing a non-dependency errors
         assert!(remove(&root, "No/Such").is_err());
 
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_refuses_an_unreadable_lock_and_update_rewrites_it() {
+        let root = tmp("badlock");
+        std::fs::create_dir_all(root.join("libs/Util")).unwrap();
+        std::fs::write(root.join("libs/Util/mod.phg"), b"package Acme.Util;").unwrap();
+        std::fs::write(
+            root.join(MANIFEST_FILE),
+            r#"{"name":"Acme/App","require":{"Acme/Util":{"path":"libs/Util"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join(LOCK_FILE), "not a lock").unwrap();
+        let err = install(&root).unwrap_err();
+        assert!(
+            err.contains("phorj.lock") && err.contains("phg update"),
+            "{err}"
+        );
+        update(&root).unwrap();
+        let lock = std::fs::read_to_string(root.join(LOCK_FILE)).unwrap();
+        assert!(LockFile::parse(&lock).is_ok());
         let _ = std::fs::remove_dir_all(&root);
     }
 

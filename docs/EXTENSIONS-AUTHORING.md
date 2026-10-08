@@ -48,7 +48,8 @@ bright line holds: *if it's `Core.`, the core team shipped it; anything else is 
 A dependency is declared in a composer.json-style **`phorj.json`** and comes from one of three sources —
 a **registry** semver constraint (`"^1.2"`), a **git** repo (`{ "git": url, "ref": tag }`), or a local
 **path** (`{ "path": dir }`) — all materialized into `vendor/<Publisher>/<Name>/` and pinned by a tree
-SHA-256 in **`phorj.lock`** (re-verified offline on the next install; a tampered/stale tree is refused).
+SHA-256 in **`phorj.lock`**. The next `phg install` reproduces the lock: a git or registry dependency
+whose tag moved, or whose locked version left the index, is refused until `phg update`.
 The central registry is a lightweight name→git-URL index (`PHORJ_REGISTRY`), so every fetch is a `git`
 checkout or a filesystem copy — no tarballs. Worked example: `examples/package-manager/`.
 
@@ -135,6 +136,7 @@ compiled-in, or nothing.
 A userland package runs with **full language capability** (it may `import Core.File`, `Core.Process`,
 `Core.HttpClient`, …) — exactly like a Composer package: unprivileged relative to the OS user, fully
 privileged relative to the app. phorj has no capability sandbox today; the package manager (DEC-316)
-pins every dependency with a tree SHA-256 in `phorj.lock` and refuses a tampered/stale `vendor/` on
-install — supply-chain integrity, though not a capability sandbox. A native extension is trusted the
+pins every git/registry dependency with a commit and tree SHA-256 in `phorj.lock` and refuses, on
+install, a fetched tree that no longer matches it — supply-chain integrity, though not a capability
+sandbox. A native extension is trusted the
 moment you compile it into your `phg` — vet it like any Cargo dependency.

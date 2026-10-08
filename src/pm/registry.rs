@@ -127,18 +127,23 @@ fn read_source(src: &str) -> Result<String, String> {
     }
 
     // http(s): shell to curl into a temp file, then read (std has no TLS — the cross.rs exemption).
+    // The download lands in a fresh owner-only dir (audit A4): a fixed name in the shared temp dir
+    // let another local user pre-create it as a symlink that curl's `-o` would follow.
     let curl = std::env::var("PHORJ_CURL").unwrap_or_else(|_| "curl".into());
-    let tmp = std::env::temp_dir().join(format!("phorj_registry_{}.json", std::process::id()));
-    let status = crate::bundle::stub_cache::curl_https(&curl, &tmp, src)
+    let dir = crate::pm::private_temp_dir("phorj-registry")?;
+    let fetched = fetch_index_file(&curl, &dir.join("index.json"), src);
+    let _ = std::fs::remove_dir_all(&dir);
+    fetched
+}
+
+fn fetch_index_file(curl: &str, tmp: &std::path::Path, src: &str) -> Result<String, String> {
+    let status = crate::bundle::stub_cache::curl_https(curl, tmp, src)
         .status()
         .map_err(|e| format!("cannot run `{curl}` to fetch the registry index: {e}"))?;
     if !status.success() {
         return Err(format!("registry index fetch failed ({status}) for {src}"));
     }
-    let text = std::fs::read_to_string(&tmp)
-        .map_err(|e| format!("cannot read fetched registry index: {e}"))?;
-    let _ = std::fs::remove_file(&tmp);
-    Ok(text)
+    std::fs::read_to_string(tmp).map_err(|e| format!("cannot read fetched registry index: {e}"))
 }
 
 #[cfg(test)]

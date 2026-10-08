@@ -97,7 +97,7 @@ mod tests {
             r#"{"name":"Acme/App","require":{"Acme/A":{"path":"pkgs/A"},"Acme/B":{"path":"pkgs/B"}}}"#,
         )
         .unwrap();
-        let resolved = resolve(&root, &base, &base.join("stage")).unwrap();
+        let resolved = resolve(&root, &base, &base.join("stage"), None).unwrap();
 
         let vendor = base.join("vendor");
         materialize(&resolved, &vendor).unwrap();

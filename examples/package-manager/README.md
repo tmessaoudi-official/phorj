@@ -65,14 +65,19 @@ Other verbs:
 $ phg add Acme/Json@^1.2            # registry dependency
 $ phg add Foo/Bar --git https://example.test/foo/bar.git --ref v2.1.0
 $ phg add Dev/Local --path ../local
-$ phg update                        # re-resolve to the newest satisfying versions
+$ phg update                        # re-resolve to the newest satisfying versions, rewrite the lock
 $ phg remove Acme/Greet             # drop from phorj.json + vendor/, re-resolve
 ```
 
 `phg add/install/update/remove` are the **only** network-capable commands — `phg run`/`check`/
 `transpile` never touch the network (Invariant 10). Every install pins each package with a tree
-SHA-256 in `phorj.lock`; a later `phg install` re-verifies those hashes offline and refuses a
-tampered or stale `vendor/` tree. Git fetching shells out to the host `git` binary; `PHORJ_GIT`
+SHA-256 in `phorj.lock`, and a later `phg install` reproduces that lock: each git or registry package
+is fetched at its locked version and must come back with the locked commit and hash. A tag that was
+moved, or a locked version the registry index no longer lists, stops the install before `vendor/`
+or the lock is touched, until `phg update` accepts the new tree. A dependency whose entry in
+`phorj.json` changed re-resolves on its own; path dependencies are your own working trees and are
+not pinned. `install` rebuilds `vendor/` from the fetched sources, so hand edits under `vendor/` are
+overwritten, not reported. Git fetching shells out to the host `git` binary; `PHORJ_GIT`
 overrides which binary is run (security-sensitive — set it only to a git you trust).
 
 ## How resolution works

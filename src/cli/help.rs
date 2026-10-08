@@ -190,7 +190,11 @@ pub fn help_for(cmd: &str) -> String {
             "install — fetch + vendor every dependency in phorj.json, write phorj.lock (DEC-316).\n\n\
                       usage: phg install\n\n\
                       Resolves the require map (registry/git/path) transitively into\n\
-                      vendor/<Publisher>/<Name>/ and pins each with a tree SHA-256 in phorj.lock.\n"
+                      vendor/<Publisher>/<Name>/ and pins each with a tree SHA-256 in phorj.lock.\n\
+                      With an existing phorj.lock, git and registry dependencies are installed at\n\
+                      their locked versions and must match the locked commit and hash: a moved tag\n\
+                      or a version gone from the index is an error until `phg update`. A dependency\n\
+                      whose spec changed in phorj.json re-resolves on its own.\n"
         }
         "update" => {
             "update — re-resolve dependencies to the newest satisfying versions (DEC-316).\n\n\

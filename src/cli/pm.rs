@@ -28,7 +28,8 @@ pub fn dispatch(cmd: &str, args: &[String]) -> Result<(), String> {
     }
 }
 
-/// `phg install` — fetch + vendor every dependency from `phorj.json`, write `phorj.lock`.
+/// `phg install` — fetch + vendor every dependency from `phorj.json`, reproducing `phorj.lock` when one
+/// exists (a moved tag or a vanished version is an error until `phg update`).
 pub fn cmd_install() -> Result<(), String> {
     report("Installed", &ops::install(&root()?)?);
     Ok(())
@@ -36,7 +37,7 @@ pub fn cmd_install() -> Result<(), String> {
 
 /// `phg update` — re-resolve from `phorj.json`, taking the newest satisfying versions.
 pub fn cmd_update() -> Result<(), String> {
-    report("Updated", &ops::install(&root()?)?);
+    report("Updated", &ops::update(&root()?)?);
     Ok(())
 }
 
