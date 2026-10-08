@@ -4804,6 +4804,43 @@ fn null_coalesce_operand_byte_identical() {
     );
 }
 
+/// Panel 2026-10-08, round 3: the scalar `??` typing has four cases and the test above exercised only
+/// `int`. `float`, `decimal` and `string` right-hand sides, with an erased (`Result` binder) or a literal
+/// `null` left side, each refused to compile on the VM before the batch.
+#[test]
+fn null_coalesce_scalar_operands_byte_identical() {
+    agree_out_php(
+        "import Core.Output;
+import Core.Result;
+function gs(bool n): Result<string?, string> { mutable string? a = null; if (!n) { a = \"a\"; } return new Result.Success(a); }
+function gd(bool n): Result<decimal?, string> { mutable decimal? a = null; if (!n) { a = 2.50d; } return new Result.Success(a); }
+function gi(bool n): Result<int?, string> { mutable int? a = null; if (!n) { a = 3; } return new Result.Success(a); }
+function gf(bool n): Result<float?, string> { mutable float? a = null; if (!n) { a = 0.5; } return new Result.Success(a); }
+function ks(Result<string?, string> r): string {
+    return match (r) { Result.Success(v) => (v ?? \"s\") + \"!\" + (v ?? \"t\"), Result.Failure(e) => e };
+}
+function kd(Result<decimal?, string> r): string {
+    return match (r) { Result.Success(v) => \"{(v ?? 1.5d) + 1.25d} {(v ?? 1.5d) * 2} {2 * (v ?? 1.5d)}\", Result.Failure(e) => e };
+}
+function ki(Result<int?, string> r): string {
+    return match (r) { Result.Success(v) => \"{(v ?? 4) + (v ?? 5)} {(v ?? 4) / 2} {(v ?? 7) % 4} {(v ?? 2) ** 3}\", Result.Failure(e) => e };
+}
+function kf(Result<float?, string> r): string {
+    return match (r) { Result.Success(v) => \"{(v ?? 4.0) + 1.0} {(v ?? 3.0) / 2.0} {(v ?? 2.0) ** 2.0}\", Result.Failure(e) => e };
+}
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+    Output.printLine(ks(gs(true))); Output.printLine(ks(gs(false)));
+    Output.printLine(kd(gd(true))); Output.printLine(kd(gd(false)));
+    Output.printLine(ki(gi(true))); Output.printLine(ki(gi(false)));
+    Output.printLine(kf(gf(true))); Output.printLine(kf(gf(false)));
+    Output.printLine(\"{(null ?? 4) + 1} {(null ?? 2.5) * 2.0} {(null ?? \\\"q\\\") + \\\"r\\\"} {(null ?? 1.10d) + 1}\");
+    Output.printLine(\"{((null ?? 4) + (null ?? 5)) * (null ?? 2)}\");
+}",
+        "s!t\na!a\n2.75 3.0 3.0\n3.75 5.00 5.00\n9 2 3 8\n6 1 3 27\n5 1.5 4\n1.5 0.25 0.25\n5 5 qr 2.10\n18\n",
+        "null_coalesce_scalar_operands",
+    );
+}
+
 /// Panel 2026-10-08, round 2: the `??` typing above must not take the RHS type for a CLASS. A subclass
 /// on the right is a legal widening, so `(v ?? new Dog("d")).name` with an erased `v` made the VM read
 /// `Dog`'s property hook off the runtime `Animal` (`no method name$get on Animal`).

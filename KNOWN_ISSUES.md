@@ -1,20 +1,43 @@
 # Known Issues & Limitations
 
-## VM-WITH-STATIC-CLASS — on the VM, `with` and property-hook reads use the STATIC class, not the runtime one (found 2026-10-08)
+## VM-WITH-STATIC-CLASS — on the VM, `with` and property-hook reads are decided at COMPILE time from the receiver's compiler type (found 2026-10-08)
 
-Found by the P0 slice's close panel (round 2, correctness lens). It predates the 2026-10-07 audit batch: the 2026-10-06
-release binary behaves the same. Two VM paths pick a class at COMPILE time from the variable's declared type:
+Found by the P0 slice's close panel (rounds 2 and 3, correctness lens). It predates the 2026-10-07 audit batch: the
+2026-10-06 release binary behaves the same. Three VM paths pick a class at compile time from the receiver's `CTy`:
 - `compile_clone_with` (`src/compiler/expr/calls.rs`);
-- `hook_get_method` (`src/compiler/cty_members.rs`).
+- `hook_get_method` and `hook_set_method` (`src/compiler/cty_members.rs`).
 
-The tree-walker and PHP use the runtime class:
-- `Animal a = new Dog("q"); Animal b = a with { name = "z" };` then `b.kind()` gives `animal z` on the VM and `dog z` on
-  the tree-walker and in PHP.
-- When `Dog` overrides `Animal`'s stored `name` with a `get` hook, `Animal a = d;` then `{d.name} {a.name}` gives
-  `hooked d` on the VM and `hooked hooked` on the other legs.
+The tree-walker and PHP use the runtime class. When the compiler cannot type the receiver at all (`CTy::Other`: an erased
+generic value such as a `Result` binder, or `null ?? …`), the hook is skipped, or `with` is refused. When it types the
+receiver as a supertype, the supertype's behaviour wins. The five observed shapes:
 
-This is a silent byte-identity break (Invariant 1). No example or differential case covers a `with` or a hook read
-through a supertype. Fix queued as plan row 4b (`docs/plans/2026-10-08-audit-remediation.plan.md`).
+| program | VM | tree-walker = PHP |
+|---|---|---|
+| `Animal a = new Dog("q"); (a with { name = "z" }).kind()` | `animal z` | `dog z` |
+| `Dog` hooks `name`; `Animal a = d;` then `{d.name} {a.name}` | `hooked d` | `hooked hooked` |
+| `Dog` hooks `name`; `c.name` with `c` a `Result<Dog, string>` binder, or `(null ?? new Dog("e")).name` | `d` / `e` (stored field) | `hooked` |
+| a hooked-only property (`string name { get => … }`, no stored field) read the same two ways | `compile error: unknown field name` | `cat:x` / `cat:z` |
+| `(null ?? new Dog("q")) with { name = "z" }`, or `with` on a `Result<Dog?, string>` binder | ``compile error: `with` requires a class instance`` | `dog z` |
+
+The first three are silent byte-identity breaks (Invariant 1); the last two are refusals of valid programs.
+`tests/differential.rs::null_coalesce_class_rhs_keeps_the_runtime_class` covers only the non-null path, and no example
+covers any of these shapes. Fix queued as plan row 4b (`docs/plans/2026-10-08-audit-remediation.plan.md`): resolve the
+hook and the `with` target at run time when the compiler's type is not exact. Its failing-first tests are the five rows
+above, plus the null path of that differential test.
+
+## DEEP-INPUT-CRASHES — three inputs still abort a `phg` process instead of failing cleanly (found 2026-10-08)
+
+Found by the P0 slice's close panel (round 3, safety lens). All three predate the 2026-10-07 batch, and the 2026-10-06
+release binary behaves the same. All are queued with plan row 5 (A5, the editor-tooling no-crash work):
+- **`phg lsp` checks on the main thread's stack.** `MAX_EXPR_DEPTH` (10,000) is sized for the 256 MB pipeline thread
+  that `phg check` uses. `int x = 1+1+…+1;` with 9,999 terms checks clean under `phg check`, but `phg lsp` on `didOpen`
+  aborts with a stack overflow (exit 134). That breaks `phg check` ≡ LSP (DEC-252) and `src/limits.rs`'s "faults
+  cleanly".
+- **Dropping a very deep syntax tree overflows the stack.** `phg check` on a 200,000-term chain aborts while FREEING the
+  AST, in `drop_glue<Expr>`, on the main thread. The depth cap protects the walkers, not `Drop`.
+- **`Content-Length` is trusted.** `phg lsp` (`src/lsp/mod.rs`) and `phg debug --dap` (`src/dap.rs`) allocate
+  `vec![0u8; len]` from the header. `Content-Length: 18446744073709551615` panics with "capacity overflow", and
+  `9223372036854775807` aborts on a failed allocation. This is row 5's planned `Content-Length` cap.
 
 ## TRANSPILE-WITH-CALL — a method call directly on a `with` result transpiles to invalid PHP (found 2026-10-08)
 
