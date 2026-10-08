@@ -48,8 +48,8 @@ check that proves the gate runs) and carries an Invariant-9 example where it cha
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | A1 Response header guard at serialize, empty-list head, KNOWN_ISSUES correction — `fix(http): check every Response header line in serialize(), so the public constructor cannot inject` | S | done | 2a20ee85 | src/cli/http_prelude.rs examples/web/** KNOWN_ISSUES.md |
-| 2 | A3 native Json.parse depth 512 with PHP null semantics | S | todo | - | src/limits.rs src/ext/json/** src/jit/handles/** examples/** |
-| 3 | A4 phg build --target checkout detection, stub re-verify, https-only registry, install honours lock | M | todo | - | src/bundle/** src/pm/** |
+| 2 | A3 native Json.parse depth 512 with PHP null semantics (511 parse, 512 None, as json_decode) — `fix(json): Json.parse rejects 512 nested arrays/objects like json_decode, bounding the recursion` | S | done | 5794d297 | src/limits.rs src/ext/json/** examples/guide/json.phg |
+| 3 | A4 phg build --target checkout detection, stub re-verify, https-only downloads (commit 3a), then install honours the lock + private temp dirs (commit 3b) | M | doing | - | src/bundle/** src/pm/** src/cli/pm.rs src/cli/help.rs tests/pm.rs |
 | 4 | A2 explicit arms in every total Expr/Stmt walker plus catch-all ratchet test | M | todo | - | src/checker/** src/cli/** tests/** examples/** |
 | 5 | A5/A6 LSP panic net, panic hook, Content-Length cap, mutation-smoke test, unsafe extern JIT helpers | M | todo | - | src/lsp/** src/main.rs src/jit/** tests/** |
 | 6 | E Claude config sync (agents, phg-qa-sweep, phg-lenses, Status rows, memory, expertise, leftovers) | S | todo | - | .claude/** docs/plans/** |

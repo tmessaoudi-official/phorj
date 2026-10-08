@@ -2,6 +2,7 @@
 
 use crate::bundle::container::encode_container_with;
 use crate::bundle::section::ELF_PE_SECTION;
+use crate::bundle::stub_cache;
 use crate::profile::Profile;
 use std::path::PathBuf;
 
@@ -182,12 +183,23 @@ pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
     let dir = cache_dir(&phorj_bytes)
         .ok_or_else(|| "cannot resolve cache dir (no HOME/XDG_CACHE_HOME)".to_string())?;
     let cached = dir.join(target).join(output_name("phg", target));
-    if cached.is_file() {
+    // A source checkout cross-builds locally; a distributed (sourceless) phorj downloads a prebuilt,
+    // sha256-verified stub from the release registry (Phase 3a). Both decisions are `stub_cache`'s:
+    // the checkout is recognised positively, and a hit is re-verified before it is embedded — off a
+    // checkout, against the baked manifest (audit A4).
+    let here = std::env::current_dir().map_err(|e| format!("cannot read the current dir: {e}"))?;
+    let checkout = stub_cache::is_phorj_checkout(&here, &phorj);
+    let manifest = crate::bundle::manifest::active();
+    let pinned = if checkout {
+        None
+    } else {
+        // No manifest entry off a checkout: nothing can vouch for a hit, so none is trusted.
+        Some(manifest.lookup(target).unwrap_or(""))
+    };
+    if cached.is_file() && stub_cache::verified_hit(&cached, pinned) {
         return Ok(cached);
     }
-    // Cache miss → a 3-way branch (Phase 3a). A source checkout cross-builds locally; a distributed
-    // (sourceless) phorj downloads a prebuilt, sha256-verified stub from the release registry.
-    if std::path::Path::new("Cargo.toml").is_file() {
+    if checkout {
         build_stub_local(target, &cached)
     } else {
         download_stub(target, &cached)
@@ -195,7 +207,7 @@ pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
 }
 
 /// Cross-compile the stub from a phorj source checkout via `cargo-zigbuild` (Phase 2, unchanged), then
-/// cache it. Reached only when a `Cargo.toml` is present.
+/// cache it. Reached only from a phorj checkout running its own build ([`stub_cache::is_phorj_checkout`]).
 fn build_stub_local(target: &str, cached: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let status = std::process::Command::new("cargo-zigbuild")
         .args(["build", "--release", "--bin", "phg", "--target", target])
@@ -223,15 +235,13 @@ fn build_stub_local(target: &str, cached: &std::path::Path) -> Result<std::path:
         .parent()
         .ok_or_else(|| "cache path has no parent".to_string())?;
     std::fs::create_dir_all(parent).map_err(|e| format!("cannot create cache dir: {e}"))?;
-    if cached.is_file() {
-        return Ok(cached.to_path_buf());
-    }
     let tmp = parent.join(format!(".build-{}", std::process::id()));
     std::fs::copy(&built, &tmp).map_err(|e| format!("cannot stage stub: {e}"))?;
-    std::fs::rename(&tmp, cached).map_err(|e| {
+    let bytes = std::fs::read(&tmp).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
-        format!("cannot publish stub into cache: {e}")
+        format!("cannot read staged stub: {e}")
     })?;
+    stub_cache::publish(&tmp, cached, &crate::bundle::sha256::sha256_hex(&bytes))?;
     Ok(cached.to_path_buf())
 }
 
@@ -246,15 +256,15 @@ pub fn download_stub(target: &str, cached: &std::path::Path) -> Result<std::path
     let manifest = manifest::active();
     let expected = manifest.lookup(target).ok_or_else(|| {
         format!(
-            "no prebuilt stub for '{target}' in phg v{} — cross-building from this host needs a \
-             phorj source checkout",
+            "no prebuilt stub for '{target}' in phg v{} — cross-building from source needs the \
+             `phg` built in a phorj checkout (under its target/), run from the checkout root",
             env!("CARGO_PKG_VERSION")
         )
     })?;
     let base = manifest::registry_base().ok_or_else(|| {
         format!(
-            "no stub registry configured for '{target}' — set PHORJ_STUB_REGISTRY, or build from a \
-             phorj source checkout"
+            "no stub registry configured for '{target}' — set PHORJ_STUB_REGISTRY, or run the `phg` \
+             built in a phorj checkout from its root"
         )
     })?;
     let url = format!("{base}{}", manifest::asset_name(target));
@@ -284,10 +294,7 @@ pub fn download_stub(target: &str, cached: &std::path::Path) -> Result<std::path
              to embed"
         ));
     }
-    std::fs::rename(&tmp, cached).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        format!("cannot publish verified stub into cache: {e}")
-    })?;
+    stub_cache::publish(&tmp, cached, &got)?;
     Ok(cached.to_path_buf())
 }
 
@@ -310,15 +317,12 @@ fn fetch(url: &str, dest: &std::path::Path) -> Result<(), String> {
     }
 
     let curl = std::env::var("PHORJ_CURL").unwrap_or_else(|_| "curl".into());
-    let status = std::process::Command::new(&curl)
-        .args(["-fSL", "--proto", "=https,http", "-o"])
-        .arg(dest)
-        .arg(url)
+    let status = stub_cache::curl_https(&curl, dest, url)
         .status()
         .map_err(|e| {
             format!(
-                "cannot run '{curl}' — needed to download prebuilt stubs; install curl, or build \
-                 from a phorj source checkout ({e})"
+                "cannot run '{curl}' — needed to download prebuilt stubs; install curl, or run the \
+                 `phg` built in a phorj checkout from its root ({e})"
             )
         })?;
     if !status.success() {

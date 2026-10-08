@@ -129,10 +129,7 @@ fn read_source(src: &str) -> Result<String, String> {
     // http(s): shell to curl into a temp file, then read (std has no TLS — the cross.rs exemption).
     let curl = std::env::var("PHORJ_CURL").unwrap_or_else(|_| "curl".into());
     let tmp = std::env::temp_dir().join(format!("phorj_registry_{}.json", std::process::id()));
-    let status = std::process::Command::new(&curl)
-        .args(["-fSL", "--proto", "=https,http", "-o"])
-        .arg(&tmp)
-        .arg(src)
+    let status = crate::bundle::stub_cache::curl_https(&curl, &tmp, src)
         .status()
         .map_err(|e| format!("cannot run `{curl}` to fetch the registry index: {e}"))?;
     if !status.success() {

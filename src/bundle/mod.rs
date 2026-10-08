@@ -9,6 +9,7 @@ pub mod manifest;
 mod pe;
 pub mod section;
 pub mod sha256;
+pub(crate) mod stub_cache;
 
 pub use container::encode_container;
 pub use section::{find_section, ELF_PE_SECTION as SECTION_NAME};

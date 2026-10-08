@@ -182,8 +182,9 @@ Cross-compilation uses [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zi
 linker) plus `llvm-objcopy`. Supported targets today: `x86_64-unknown-linux-musl`,
 `aarch64-unknown-linux-{gnu,musl}`, `x86_64-pc-windows-gnu`. The Mach-O/macOS section reader ships and
 is tested, but macOS *stub production* (signing) is deferred to a later phase — apple targets are
-rejected with a clear message. Cross-builds require a phorj source checkout (the host build does
-not). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
+rejected with a clear message. A cross-build compiles its stub from source only when you run the
+`phg` built in a phorj checkout, from that checkout's root; any other `phg` downloads a prebuilt stub
+and checks its SHA-256 against the manifest baked into the binary (the host build needs neither). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
 
 ## Testing (`phg test`)
 

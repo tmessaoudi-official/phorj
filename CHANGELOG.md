@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `phg build --target` built from any Cargo project and trusted its stub cache forever (audit A4, 2026-10-08)
+
+A cross-build treated any directory with a `Cargo.toml` as a phorj checkout. Run inside an unrelated Rust project, it ran
+that project's `cargo` build, with its build scripts, and cached the resulting `phg` as the stub for every later cross-build.
+A cache hit was also never re-checked, so the sha256 check on a download guarded only the first fill. Now:
+
+- The source branch runs only for the `phg` built in a phorj checkout, invoked from that checkout's root. Its `Cargo.toml`
+  `[package]` must be named `phorj` and the running binary must sit under its `target/`, compared canonically.
+- Each cached stub carries a `.sha256` sidecar and is re-hashed on every reuse. Off a checkout it must also match the baked
+  manifest. A refused entry is refilled, never deleted: deleting it could race a concurrent build's fresh publish.
+- Stub and registry downloads use `--proto =https --proto-redir =https`; plain http was allowed before, redirects
+  included.
+
+New module `src/bundle/stub_cache.rs`, with 9 tests in `src/bundle/stub_cache_tests.rs`.
+
 ### Fixed — `Json.parse` has PHP's nesting limit; the native legs used to parse any depth (audit A3, 2026-10-08)
 
 `Json.parse` of 512 nested arrays returned a value on the VM and the tree-walker but `null` in the transpiled PHP, because

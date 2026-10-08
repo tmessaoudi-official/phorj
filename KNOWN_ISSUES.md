@@ -2931,7 +2931,14 @@ synchronous lowering).
 ## `phg build` limitations (M2.5, in progress)
 
 - **Cross-builds: source checkout OR a published registry (Phase 3a).** `--target`/`--all` compile a
-  stub from source via `cargo-zigbuild` when run from a phorj source tree; a *distributed* (sourceless)
+  stub from source via `cargo-zigbuild` only when the running `phg` was built in a phorj checkout
+  (it lives under `<dir>/target/`) and is run from that checkout's root, whose `Cargo.toml` names the
+  `phorj` package. Until 2026-10-08 (audit A4) any directory holding a `Cargo.toml` qualified, so a
+  cross-build inside an unrelated Rust project ran that project's cargo build and cached the result as
+  the stub. Every cached stub now has a `.sha256` sidecar and is re-hashed on each reuse; off a
+  checkout it must also match the baked manifest, so a cache entry changed after download is refused
+  and re-downloaded. Downloads are https-only, redirects included. A `phg` installed outside its
+  checkout's `target/` (e.g. `cargo install --path .`, or a build with `CARGO_TARGET_DIR` pointing elsewhere) takes the download branch. A *distributed* (sourceless)
   phg instead **downloads** a prebuilt stub from the release registry and sha256-verifies it against its
   baked manifest. So a sourceless cross build works **once a tagged release has published the stubs**
   (the `stub-registry.yml` workflow); before the first such release, a sourceless binary still errors
