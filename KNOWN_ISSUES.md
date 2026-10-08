@@ -69,6 +69,25 @@ no field `k`, so it cannot see the collision. A field declared in the trait itse
 2026-10-08 round-5 work). This predates that work. Workaround: write `this.k` or rename one of the two. Queued with plan
 row 4b.
 
+## STATIC-COMPOSITION-PARITY — four static/trait/multi-parent shapes pass `phg check` and split the legs (found 2026-10-08)
+
+The correctness pass on the round-5 re-check fix found these while probing static contexts. All four predate that
+work, and each passes `phg check`. Queued as plan row 4c.
+
+1. **A trait's non-literal static initializer never runs.** `trait T { static int s = k() + 1; } class U { use T; }`,
+   then `U.s + 1`: VM `expected int, found unit`, tree-walker `cannot apply Add to unit and int`, PHP `Typed static
+   property U::$s must not be accessed before initialization`. The checker and the interpreter walk only classes'
+   static initializers.
+2. **An inherited static field read through the subclass.** `open class A { static int sa = 2; } class M extends A {}`,
+   then `M.sa`: VM `undefined variable M` (compile error), tree-walker `no static field sa on M`, PHP `2`.
+3. **A multi-parent class whose parent has a static method.** `open class A { static function fa(): int { return 1; } }
+   open class B { int j = 2; } class M extends A, B {}`: VM and tree-walker `1`; PHP `Cannot make non static method
+   IA::fa() static in class A`. The synthesized parent interface declares the method non-static.
+4. **Instance-field initializers in a trait or a multi-parent parent.** `trait T { int k = 9; … } class U { use T; }`
+   reading `this.k`: VM and tree-walker `no field k on U`, PHP `18`. With `open class A { int x = 1; } open class B
+   { int y = 2; } class M extends A, B`: VM and tree-walker `no field y on M`; PHP `M::$x must not be accessed before
+   initialization`. The "needs a trait constructor" rule further down this file is not enforced by the checker.
+
 ## STRING-EQ-DECIMAL-ERASED — a decimal compared inside an erased generic BODY is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
 
 `==`/`!=` on `string` transpiles to `===`/`!==`, and any operand whose type the transpiler cannot pin goes through the
