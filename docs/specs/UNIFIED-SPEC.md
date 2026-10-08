@@ -1125,8 +1125,9 @@ predicates in `totality`/`common_flow`). CD-32 found two live defects that a pro
 by design or by ruling: classifier fallbacks that give the safe answer (`expr_is_never` keeps two,
 each under a `// catch-all exempt (CD-32): …` comment; `transpile/kinds.rs` degrades to its runtime
 helper; `compiler/cty.rs` was listed here too until the panel showed its error arm split the VM from
-the tree-walker on `(null ?? 4) + 1`, so it now names every variant and types `a ?? b` by `b` when `a`
-says nothing), the shared total visitor B
+the tree-walker on `(null ?? 4) + 1`, so it now names every variant and types `a ?? b` by a SCALAR `b`
+(`int`/`float`/`decimal`/`string`) when `a` says nothing — never a class `b`, which may subclass `a`'s
+runtime class (panel round 2)), the shared total visitor B
 (QUEUED), and two limits of the ratchet: it sees only the inert forms (`_ => {}`, `_ => false|true`,
 `other => other`), and a NEW walking file is ratcheted only once someone adds it to the list.
 

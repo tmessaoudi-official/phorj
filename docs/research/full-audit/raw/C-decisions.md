@@ -8786,11 +8786,13 @@ a listed file under no other condition. `expr_is_never` carries the only two.
 - **Corrected by the slice-close panel (2026-10-08).** This row first said the same of `compiler/cty.rs`'s
   `other => Err(…)`, and that was wrong. An `Err` there is a VM COMPILE error, the Invariant-7 trap: `(null ?? 4) + 1`
   type-checked and printed `5` on the tree-walker while the VM refused it (`cannot infer numeric type of Null`).
-  `cty.rs` now names every variant: `Null`/`NewColl` resolve to `Other`, `a ?? b` takes `b`'s type when `a` resolves to
-  `Other` and `b` is a SCALAR (`int`/`float`/`decimal`/`string`; arithmetic lowers only to typed ops, so `Other` alone is
-  still refused). Round 2 of the panel narrowed it to scalars: a class `b` may be a subclass of `a`'s runtime class, and
-  taking it made the VM read `Dog`'s hook off a runtime `Animal` (`8b58721a`, `fix: panel round 2 …`), and the nine forms expanded before
-  the compiler keep the error explicitly. Test `null_coalesce_operand_byte_identical` covers VM, tree-walker and PHP.
+  `cty.rs` now names every variant. `Null`/`NewColl` resolve to `Other`, and the nine forms expanded before the compiler
+  keep the error explicitly. `a ?? b` takes `b`'s type when `a` resolves to `Other` and `b` is a SCALAR
+  (`int`/`float`/`decimal`/`string`): arithmetic lowers only to typed ops, so `Other` alone is still refused. Round 2 of
+  the panel narrowed it to scalars, because a class `b` may be a subclass of `a`'s runtime class, and taking it made the
+  VM read `Dog`'s hook off a runtime `Animal` (`8b58721a`, `fix: panel round 2 …`). Tests, each on VM, tree-walker and
+  PHP: `null_coalesce_operand_byte_identical`, `null_coalesce_scalar_operands_byte_identical`,
+  `null_coalesce_class_rhs_keeps_the_runtime_class`.
 - **What the ratchet sees.** It flags only the inert forms (`_ => {}`, `_ => false`, `_ => true`, `other => other`,
   `leaf => leaf`). A catch-all that returns anything else (`_ => Err(…)`, `_ => OpKind::Other`) passes it, even in a
   listed file.

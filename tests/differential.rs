@@ -4863,6 +4863,29 @@ function k(Result<Animal?, string> r): string {
     );
 }
 
+/// Panel 2026-10-08, round 4: nothing tested `new` inside a tagged-template hole. It works and also
+/// worked before the batch (the panic the panel saw came from a tuple in the same probe), and moving
+/// `TaggedTemplate` out of `unwrap_new`'s hole walk leaves this green, so this pins the BEHAVIOUR, not
+/// that arm.
+#[test]
+fn new_inside_a_tagged_template_hole_is_unwrapped() {
+    agree_out_php(
+        "import Core.Output;
+import Core.String;
+import Core.List;
+class Box { constructor(public string v) {} }
+function joined(List<string> lits, List<string> holes): string {
+    return \"{List.length(lits)} literals, holes=[{String.join(holes, \", \")}]\";
+}
+#[Entry(kind: EntryKind.Cli)] function main(): void {
+    string s = \"q\";
+    Output.printLine(joined\"x{new Box(s).v}y\");
+}",
+        "2 literals, holes=[q]\n",
+        "new_in_tagged_template",
+    );
+}
+
 /// DEC-512's NaN pin. PHP yields `1` for EVERY NaN comparison — `NAN <=> 1.0`, `1.0 <=> NAN` and
 /// `NAN <=> NAN` alike — and an array compare STOPS at the first uncomparable element rather than
 /// treating it as equal: `[NAN, 1] <=> [NAN, 2]` is `1`, not `-1` (measured on the oracle). So the

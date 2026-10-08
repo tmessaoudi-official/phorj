@@ -25,10 +25,18 @@ covers any of these shapes. Fix queued as plan row 4b (`docs/plans/2026-10-08-au
 hook and the `with` target at run time when the compiler's type is not exact. Its failing-first tests are the five rows
 above, plus the null path of that differential test.
 
-## DEEP-INPUT-CRASHES — three inputs still abort a `phg` process instead of failing cleanly (found 2026-10-08)
+## DEEP-INPUT-CRASHES — some inputs still abort a `phg` process instead of failing cleanly (found 2026-10-08)
 
-Found by the P0 slice's close panel (round 3, safety lens). All three predate the 2026-10-07 batch, and the 2026-10-06
-release binary behaves the same. All are queued with plan row 5 (A5, the editor-tooling no-crash work):
+Found by the P0 slice's close panel (rounds 3 and 4, safety lens). All predate the 2026-10-07 batch, and the 2026-10-06
+release binary behaves the same. The common cause is a command that runs the pipeline on the main thread's stack instead
+of the 256 MB thread (`on_deep_stack`) that `phg check`/`run`/`transpile`/`disassemble` and plain `phg debug` use. All
+are queued with plan row 5 (A5, the editor-tooling no-crash work):
+- **`phg debug --dap` aborts on an ordinary recursion.** `src/limits.rs` promises that exceeding `MAX_CALL_DEPTH` (4096)
+  is a clean `stack overflow` runtime error. But `run_dap` (`src/main.rs`) runs the interpreter inline on the main
+  thread, so a plain `down(3000)` recursion, which `phg run --tree-walker` finishes, aborts under DAP (`down(500)` is
+  fine).
+- **`phg format` and `phg format --check` abort on deep source.** A 9,999-term `1+1+…+1` chain checks, runs and
+  transpiles clean, but both formatter commands overflow the stack (exit 134). `phg debug --dap` does the same.
 - **`phg lsp` checks on the main thread's stack.** `MAX_EXPR_DEPTH` (10,000) is sized for the 256 MB pipeline thread
   that `phg check` uses. `int x = 1+1+…+1;` with 9,999 terms checks clean under `phg check`, but `phg lsp` on `didOpen`
   aborts with a stack overflow (exit 134). That breaks `phg check` ≡ LSP (DEC-252) and `src/limits.rs`'s "faults

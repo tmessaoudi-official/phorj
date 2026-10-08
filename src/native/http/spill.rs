@@ -40,16 +40,22 @@ pub(super) fn store(bytes: &[u8]) -> Result<i64, String> {
     SPILLS.with(|s| {
         let mut s = s.borrow_mut();
         let idx = s.len();
-        // Thread id disambiguates concurrent serve workers sharing the directory.
-        let thread = format!("{:?}", std::thread::current().id()).replace(['(', ')'], "");
-        let path = dir.join(format!("{thread}-{idx}"));
+        // A process-wide sequence, never reused: a name derived from the handle (`{thread}-{idx}`)
+        // made a file left by a failed write block every later spill on that worker (panel
+        // 2026-10-08, round 4). The handle stays the per-thread index.
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = dir.join(format!("body-{seq}"));
         let mut f = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&path)
             .map_err(|e| format!("request body spill failed: {e}"))?;
-        f.write_all(bytes)
-            .map_err(|e| format!("request body spill failed: {e}"))?;
+        if let Err(e) = f.write_all(bytes) {
+            // Don't leave a partial body behind; a failed removal leaves only an unused name.
+            let _ = std::fs::remove_file(&path);
+            return Err(format!("request body spill failed: {e}"));
+        }
         s.push(path);
         Ok(i64::try_from(idx).expect("spill count fits i64"))
     })
@@ -82,5 +88,17 @@ mod tests {
         assert_eq!(mode & 0o777, 0o700, "owner-only, got {mode:o}");
         super::SPILLS
             .with(|s| assert!(s.borrow().iter().all(|p| p.parent() == Some(dir.as_path()))));
+    }
+    /// Panel 2026-10-08, round 4: names were `{thread}-{idx}` with `create_new`, so a write that failed
+    /// midway left a file at the NEXT spill's name and every later spill on that worker faulted. A file
+    /// left in the directory must never block a spill.
+    #[test]
+    fn a_leftover_file_never_blocks_the_next_spill() {
+        let dir = super::spill_dir().unwrap();
+        let idx = super::SPILLS.with(|s| s.borrow().len());
+        let thread = format!("{:?}", std::thread::current().id()).replace(['(', ')'], "");
+        std::fs::write(dir.join(format!("{thread}-{idx}")), b"partial").unwrap();
+        let h = super::store(b"body").expect("a leftover must not block the spill");
+        assert_eq!(super::read(h).unwrap(), b"body");
     }
 }

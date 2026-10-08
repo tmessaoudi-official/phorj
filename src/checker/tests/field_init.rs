@@ -60,11 +60,11 @@ fn a_match_binder_named_like_a_later_field_is_not_a_forward_ref() {
                class C { int a = match new S.Code(3) { Code(n) when n > 0 => n, default => 0 }; \
                int n = 7; } function main(): void {}";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
-    // The shadow is per arm: a later arm that binds nothing still reads the field.
+    // A later arm that binds nothing reads the bare name, which is never a field: `E-BARE-FIELD`.
     let src = "enum S { Code(int n), Off } \
                class C { int a = match new S.Code(3) { Code(n) => n, default => n }; \
                int n = 7; } function main(): void {}";
-    assert!(has(src, "E-FIELD-INIT-FORWARD-REF"), "{:?}", errors_of(src));
+    assert!(has(src, "E-BARE-FIELD"), "{:?}", errors_of(src));
     // Round 2: a binder shadows only the BARE name. `this.n` is always the field, in the body and
     // in the guard of a binding arm alike — the first fix hid it and the read faulted at runtime.
     for arm in ["Code(n) => this.n + n", "Code(n) when this.n > 0 => n"] {
@@ -78,6 +78,26 @@ fn a_match_binder_named_like_a_later_field_is_not_a_forward_ref() {
             "{arm}: {:?}",
             errors_of(&src)
         );
+    }
+}
+
+#[test]
+fn a_function_named_like_a_later_field_is_not_a_forward_ref() {
+    // Panel 2026-10-08, round 4: a bare name never reads a field (that is `E-BARE-FIELD`), but the
+    // walk treated a CALLEE name as one, so a global `k()` beside a later field `k` was rejected — and
+    // A2's new arms carried that into `new`, named arguments and tuples.
+    for init in [
+        "int a = new Box(k()).v;",
+        "int a = pick(x: k(), y: 1);",
+        "(int, int) a = (k(), 2);",
+        "int a = pick(k(), 1);",
+    ] {
+        let src = format!(
+            "class Box {{ constructor(public int v) {{}} }} \
+             function k(): int {{ return 5; }} function pick(int x, int y): int {{ return x; }} \
+             class C {{ {init} int k = 9; }} function main(): void {{}}"
+        );
+        assert!(errors_of(&src).is_empty(), "{init}: {:?}", errors_of(&src));
     }
 }
 

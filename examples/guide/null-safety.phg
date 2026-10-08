@@ -56,6 +56,10 @@ function main(): void {
     // refused this shape at compile time while the interpreter ran it).
     int fallback = (null ?? 4) + 1;
     Output.printLine("null-literal coalesce: {fallback} {(none ?? 2) * 3}");
+    // The same holds for every scalar default: `float`, `decimal` and `string`.
+    Output.printLine(
+        "scalar coalesce: {(null ?? 2.5) * 2.0} {(null ?? 1.10d) + 1} {(null ?? \"q\") + \"r\"}"
+    );
     // `match` over `T?` with null-arm narrowing.
     Output.printLine("match: {describe(some)} / {describe(none)}");
     // Chained `opt!` through object optionals: a 3-node list, force-unwrapping `next` twice to reach

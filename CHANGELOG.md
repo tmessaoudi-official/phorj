@@ -51,8 +51,37 @@ Round 2 of the same panel (on `f7ab18d2`) added:
 - A stale `Http.isValidHeaderName` comment in `native/http.rs` is fixed.
 - KNOWN_ISSUES no longer says process exit removes spilled request bodies: nothing does, until the OS tmp reaper runs.
 - Two OLDER parity defects it found are disclosed and queued as plan row 4b, not fixed here:
-  - on the VM, `with` and property-hook reads use the static class (KNOWN_ISSUES VM-WITH-STATIC-CLASS);
+  - on the VM, `with` and property-hook reads are decided from the receiver's compiler type, so a supertype OR an
+    untypable receiver (an erased binder, `null ?? …`) gets the wrong class or a refusal (KNOWN_ISSUES
+    VM-WITH-STATIC-CLASS, five shapes);
   - `p with { … }.m()` transpiles to a PHP parse error (TRANSPILE-WITH-CALL).
+
+Round 3 (on `8b58721a`) found no defect in the round-2 fixes. It added:
+- `null_coalesce_scalar_operands_byte_identical`, which covers the float, decimal and string `??` cases;
+- the float and string cases in `examples/guide/null-safety.phg`;
+- the scalar-only rule in the register's CD-32 row;
+- the true cause of VM-WITH-STATIC-CLASS.
+
+It also disclosed three older process aborts as KNOWN_ISSUES DEEP-INPUT-CRASHES, queued with plan row 5:
+- `phg lsp` checks on the main-thread stack;
+- dropping a very deep syntax tree overflows the stack;
+- `Content-Length` is trusted by `phg lsp` and `phg debug --dap`.
+
+Round 4 (on `da473111`) found two more problems in the batch's own changes, now fixed:
+- **A function named like a later field was rejected as a forward reference.** In `int a = new Box(k()).v;` beside a
+  field `k`, the walk read the callee `k` as the field. That was already true for a direct `pick(k(), 1)`, and A2's new
+  arms carried it into `new`, named arguments and tuples. A bare name can never read a field (that is `E-BARE-FIELD`),
+  so the forward-reference check now looks only at `this.x`. The round-2 match-binder scoping is no longer needed and is
+  gone.
+- **One failed spill write blocked every later spill on that worker.** Spill files were named by the handle with
+  `create_new`, so a partial file sat at the next name. They now take a process-wide sequence number, and a failed write
+  removes its file.
+- New test `new_inside_a_tagged_template_hole_is_unwrapped` pins `new` inside a tagged-template hole on every leg. That
+  shape was never broken: the panic the panel reported came from a tuple in the same probe. Sabotage showed
+  `unwrap_new`'s tagged-template arm is not what makes it work, so the test pins the behaviour, not that arm.
+- KNOWN_ISSUES DEEP-INPUT-CRASHES gains `phg debug --dap` aborting on a 3000-deep recursion (it runs on the main thread)
+  and `phg format` aborting on deep source.
+- UNIFIED-SPEC states the scalar-only `??` rule.
 
 Three header shapes that need no CR/LF are now disclosed in KNOWN_ISSUES (§ RICHREQ-2026-07-24, item 4) and recorded as PENDING DEC-568: a line
 starting with whitespace, a line with no `:`, and a handler-supplied `Content-Length`/`Transfer-Encoding`.

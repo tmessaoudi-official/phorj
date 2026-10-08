@@ -3,7 +3,10 @@
 use super::*;
 
 /// Walk a field initializer (Feature B) for a read of a **not-yet-initialized** field — returns the
-/// first forbidden name reached via `this.X` or a bare `X`. Lambda bodies are skipped: a lambda that
+/// first forbidden name reached via `this.X`. A BARE name is never checked here: it can never read a
+/// field (any bare field read is `E-BARE-FIELD`), so treating one as a read only rejected valid
+/// programs — a global `k()` beside a later field `k` — and needed match-binder scoping to stay
+/// correct (panel 2026-10-08, rounds 1–4). Lambda bodies are skipped: a lambda that
 /// touches `this` is independently rejected (`E-LAMBDA-THIS`), so a closure default cannot smuggle in
 /// a forward reference. The set is the fields that are *not* available when this initializer runs.
 pub(in crate::checker) fn field_init_forbidden_ref(
@@ -11,23 +14,13 @@ pub(in crate::checker) fn field_init_forbidden_ref(
     forbidden: &std::collections::HashSet<String>,
 ) -> Option<String> {
     use crate::ast::{Expr, StrPart};
-    use std::collections::HashSet;
-    /// The fields not yet initialised, and the match binders in scope. A binder shadows a field's
-    /// BARE name only: `this.x` always means the field (panel 2026-10-08, round 2).
-    struct Scope<'a> {
-        fields: &'a HashSet<String>,
-        binders: HashSet<String>,
-    }
-    fn walk(e: &Expr, f: &Scope<'_>, out: &mut Option<String>) {
+    fn walk(e: &Expr, f: &std::collections::HashSet<String>, out: &mut Option<String>) {
         if out.is_some() {
             return;
         }
         match e {
-            Expr::Ident(n, _) if f.fields.contains(n) && !f.binders.contains(n) => {
-                *out = Some(n.clone())
-            }
             Expr::Member { object, name, .. } => {
-                if matches!(&**object, Expr::This(_)) && f.fields.contains(name) {
+                if matches!(&**object, Expr::This(_)) && f.contains(name) {
                     *out = Some(name.clone());
                 } else {
                     walk(object, f, out);
@@ -65,13 +58,6 @@ pub(in crate::checker) fn field_init_forbidden_ref(
             } => {
                 walk(scrutinee, f, out);
                 for a in arms {
-                    // An arm's binders shadow same-named fields in its guard and body only.
-                    let mut binders = f.binders.clone();
-                    crate::ast::collect_pattern_bindings(&a.pattern, &mut binders);
-                    let f = &Scope {
-                        fields: f.fields,
-                        binders,
-                    };
                     if let Some(g) = &a.guard {
                         walk(g, f, out);
                     }
@@ -114,11 +100,7 @@ pub(in crate::checker) fn field_init_forbidden_ref(
         }
     }
     let mut out = None;
-    let scope = Scope {
-        fields: forbidden,
-        binders: HashSet::new(),
-    };
-    walk(e, &scope, &mut out);
+    walk(e, forbidden, &mut out);
     out
 }
 
