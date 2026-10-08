@@ -16,11 +16,22 @@ function compute(int n): int {
 
 enum Size { Known(int n), Unknown }
 
-// A match binder shadows a LATER field of the same name inside its own arm: the `n` below is the
-// pattern's binding, so this is not a forward reference to the field `n` declared after it.
+// A match binder may share a LATER field's name: the bare `n` below is the pattern's binding (a bare
+// name is never a field read — that would be `this.n`), so this is not a forward reference.
 class Crate {
     int area = match (new Size.Known(4)) { Known(n) when n > 0 => n * n, default => 0 };
     int n = 7;
+}
+
+function seats(): int {
+    return 4;
+}
+
+// A CALL to a top-level function named like a later field is a call, not a field read: `seats()`
+// below is the function. (A bare VALUE `seats` beside the field would be `E-BARE-FIELD`.)
+class Bus {
+    int rows = seats() * 2;
+    int seats = 40;
 }
 
 class Parcel {
@@ -43,5 +54,8 @@ function main(): void {
     // 93
     Crate c = new Crate();
     Output.printLine("crate: area={c.area} n={c.n}");
+    // crate: area=16 n=7
+    Bus b = new Bus();
+    Output.printLine("bus: rows={b.rows} seats={b.seats}");
 }
-// crate: area=16 n=7
+// bus: rows=8 seats=40

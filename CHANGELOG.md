@@ -16,8 +16,8 @@ The three-lens panel on the frozen P0 batch (`0ee1cc14`) found these, each repro
   literal `null`), and every other variant is named. Test `null_coalesce_operand_byte_identical`, including the PHP leg.
 - **A match binder named like a later field was rejected as a forward reference.** In
   `int a = match new S.Code(3) { Code(n) when n > 0 => n, default => 0 }; int n = 7;`, the arm binder `n` read as the field
-  `n`. The arm body had been flagged since before the audit, and the guard walk A2 added extended it. Each arm's pattern
-  binders now shadow the fields in that arm's guard and body only.
+  `n`. The arm body had been flagged since before the audit, and the guard walk A2 added extended it. Round 1 made each arm's
+  pattern binders shadow the fields in that arm; round 4 replaced that with checking `this.x` only (see below).
 - **A directory whose `target` is a symlink into a real phorj checkout counted as a checkout**, so `phg build --target` there
   ran that directory's cargo build. The resolved `target` must now sit directly inside the resolved working directory.
 - **The package manager's JSON parser had no depth limit**: an index or lock of 200,000 `[` overflowed the stack. It now
@@ -40,7 +40,7 @@ Round 2 of the same panel (on `f7ab18d2`) added:
     hook off a runtime `Animal`: `(v ?? new Dog("d")).name` gave `no method name$get on Animal`. Now only a scalar
     right-hand side (int, float, decimal, string) lends its type.
   - The match-binder shadow also hid `this.n`, so `Code(n) => this.n + n` passed the check and then faulted at runtime.
-    A binder now shadows only the bare name; `this.x` always means the field.
+    Round 2 made a binder shadow only the bare name, so `this.x` always meant the field. Round 4 superseded this.
 - **`phg lsp` / `phg debug --dap` aborted on deeply nested JSON.** The editor-protocol parser (`src/json.rs`) promised
   "never panics", but 2,000,000 `[` in one message overflowed its stack. It now has the same depth limit.
 - Both programs the round-1 fixes made legal are now in the example corpus, so every leg runs them:
@@ -58,7 +58,6 @@ Round 2 of the same panel (on `f7ab18d2`) added:
 
 Round 3 (on `8b58721a`) found no defect in the round-2 fixes. It added:
 - `null_coalesce_scalar_operands_byte_identical`, which covers the float, decimal and string `??` cases;
-- the float and string cases in `examples/guide/null-safety.phg`;
 - the scalar-only rule in the register's CD-32 row;
 - the true cause of VM-WITH-STATIC-CLASS.
 
@@ -76,12 +75,31 @@ Round 4 (on `da473111`) found two more problems in the batch's own changes, now 
 - **One failed spill write blocked every later spill on that worker.** Spill files were named by the handle with
   `create_new`, so a partial file sat at the next name. They now take a process-wide sequence number, and a failed write
   removes its file.
+- `examples/guide/null-safety.phg` gains the float, decimal and string `null ??` cases.
 - New test `new_inside_a_tagged_template_hole_is_unwrapped` pins `new` inside a tagged-template hole on every leg. That
   shape was never broken: the panic the panel reported came from a tuple in the same probe. Sabotage showed
   `unwrap_new`'s tagged-template arm is not what makes it work, so the test pins the behaviour, not that arm.
 - KNOWN_ISSUES DEEP-INPUT-CRASHES gains `phg debug --dap` aborting on a 3000-deep recursion (it runs on the main thread)
   and `phg format` aborting on deep source.
 - UNIFIED-SPEC states the scalar-only `??` rule.
+
+Round 5 (on `5bc170c4`, the panel's cap; the developer ruled to fix the root cause) found that round 4's assumption,
+that a bare name never reads a field, failed when a top-level FUNCTION shares the field's name:
+- The checker resolved a bare value name as local, then function, then field. Both backends, and the interpreter as the
+  oracle, take the field when there is an instance. So `int a = apply(k); int k = 9;` beside `function k()` type-checked,
+  and the legs split three ways (VM `no field k`, tree-walker `5 9`, PHP an uninitialised-property error).
+- The checker now takes the field first in an instance context, which makes that program `E-BARE-FIELD`. The older
+  shape with no forward reference, `int k = 9; int a = apply(k);`, used to type-check and then fault differently on
+  each leg; it is `E-BARE-FIELD` too. A static method has no instance and keeps the function, as every leg does.
+- Also from round 5:
+  - binder-shadowing wording is corrected;
+  - `pm/vendor.rs`'s doc no longer claims `install` refuses a tampered `vendor/`;
+  - comments no longer suggest an `http://` registry works;
+  - the spill test's doc no longer overclaims;
+  - `examples/guide/field-init.phg` runs round 4's newly legal program: a call `seats()` to a function named like a
+    later field `seats` (`bus: rows=8 seats=40` on every leg);
+  - KNOWN_ISSUES now discloses that a `phg serve` worker keeps earlier requests' spilled bodies readable through a forged
+    `RequestBody` handle (queued with plan row 5).
 
 Three header shapes that need no CR/LF are now disclosed in KNOWN_ISSUES (§ RICHREQ-2026-07-24, item 4) and recorded as PENDING DEC-568: a line
 starting with whitespace, a line with no `:`, and a handler-supplied `Content-Length`/`Transfer-Encoding`.

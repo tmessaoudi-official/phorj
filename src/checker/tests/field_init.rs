@@ -54,8 +54,9 @@ fn forward_ref_inside_new_named_arg_or_tuple_is_caught() {
 
 #[test]
 fn a_match_binder_named_like_a_later_field_is_not_a_forward_ref() {
-    // Panel 2026-10-08: the walk was scope-blind, so an arm binder `n` in the guard or the body read
-    // as the later field `n` and a valid program was rejected. A binder shadows the field in its arm.
+    // Panel 2026-10-08: the walk read an arm binder `n` in the guard or the body as the later field
+    // `n`, and a valid program was rejected. Since round 4 the walk checks only `this.x`: a bare name
+    // is never a field read, so a binder cannot collide with one.
     let src = "enum S { Code(int n), Off } \
                class C { int a = match new S.Code(3) { Code(n) when n > 0 => n, default => 0 }; \
                int n = 7; } function main(): void {}";
@@ -65,8 +66,8 @@ fn a_match_binder_named_like_a_later_field_is_not_a_forward_ref() {
                class C { int a = match new S.Code(3) { Code(n) => n, default => n }; \
                int n = 7; } function main(): void {}";
     assert!(has(src, "E-BARE-FIELD"), "{:?}", errors_of(src));
-    // Round 2: a binder shadows only the BARE name. `this.n` is always the field, in the body and
-    // in the guard of a binding arm alike — the first fix hid it and the read faulted at runtime.
+    // Round 2: `this.n` is always the field, in the body and in the guard of a binding arm alike —
+    // the round-1 binder shadow hid it and the read faulted at runtime.
     for arm in ["Code(n) => this.n + n", "Code(n) when this.n > 0 => n"] {
         let src = format!(
             "enum S {{ Code(int n), Off }} \
@@ -99,6 +100,29 @@ fn a_function_named_like_a_later_field_is_not_a_forward_ref() {
         );
         assert!(errors_of(&src).is_empty(), "{init}: {:?}", errors_of(&src));
     }
+}
+
+#[test]
+fn a_bare_value_naming_a_field_and_a_function_is_the_field() {
+    // Panel 2026-10-08, round 5: the checker resolved a bare value name as a FUNCTION before a
+    // field, while both backends (and the interpreter, the oracle) take the field when there is an
+    // instance. So `apply(k)` beside a field `k` and a function `k` type-checked and the legs split
+    // three ways. In an instance context it is the field, hence `E-BARE-FIELD`.
+    let decls = "function k(): int { return 5; } function apply(() => int f): int { return f(); }";
+    for body in [
+        "int a = apply(k); int k = 9;",
+        "int k = 9; int a = apply(k);",
+        "int k = 9; function m(): int { return apply(k); }",
+    ] {
+        let src = format!("{decls} class C {{ {body} }} function main(): void {{}}");
+        assert!(has(&src, "E-BARE-FIELD"), "{body}: {:?}", errors_of(&src));
+    }
+    // A static method has no instance, so every leg takes the function there.
+    let src = format!(
+        "{decls} class C {{ int k = 9; static function s(): int {{ return apply(k); }} }} \
+         function main(): void {{}}"
+    );
+    assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
 }
 
 #[test]

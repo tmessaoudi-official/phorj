@@ -71,6 +71,20 @@ impl Checker {
             Expr::Ident(name, span) => match self.lookup(name) {
                 Some(t) => t,
                 None => {
+                    // A bare instance-field reference. Phorj requires `this.field` everywhere (like
+                    // PHP's `$this->field`; no bare field access), so this is always an error. It is
+                    // checked BEFORE the function lookup: with an instance, the interpreter (the
+                    // oracle) and the VM both read the FIELD when a function shares its name, so
+                    // `apply(k)` beside a field `k` must not type-check as the function (panel
+                    // 2026-10-08, round 5). A static method has no instance; see below.
+                    if self.is_cur_field(name) && !self.in_static_method {
+                        return self.err_coded(
+                            *span,
+                            format!("bare field reference `{name}` — write `this.{name}`"),
+                            "E-BARE-FIELD",
+                            Some(format!("Phorj has no bare field access (like PHP's `$this->`): qualify it as `this.{name}`")),
+                        );
+                    }
                     // A4: bare named-function reference in value position — `fn_name` where
                     // `fn_name` is a top-level function, not a local. Return its function type so
                     // it can be passed as a first-class argument or stored in a variable.
@@ -93,24 +107,14 @@ impl Checker {
                         let throws = sig.throws.clone();
                         return Ty::Function(param_tys, Box::new(ret_ty), throws);
                     }
-                    // A bare instance-field reference. Phorj requires `this.field` everywhere (like
-                    // PHP's `$this->field`; no bare field access) — so this is always an error, with a
-                    // distinct code per context: in a static method there is no instance at all
-                    // (`E-STATIC-THIS`), otherwise the fix is to qualify it (`E-BARE-FIELD`).
+                    // In a static method there is no instance, so a function of the same name won
+                    // above (as on every leg); a bare instance field alone is `E-STATIC-THIS`.
                     if self.is_cur_field(name) {
-                        if self.in_static_method {
-                            return self.err_coded(
-                                *span,
-                                format!("instance field `{name}` is not accessible in a static method"),
-                                "E-STATIC-THIS",
-                                Some("a static method has no instance — pass the value as a parameter, use a static field, or make the method non-static".into()),
-                            );
-                        }
                         return self.err_coded(
                             *span,
-                            format!("bare field reference `{name}` — write `this.{name}`"),
-                            "E-BARE-FIELD",
-                            Some(format!("Phorj has no bare field access (like PHP's `$this->`): qualify it as `this.{name}`")),
+                            format!("instance field `{name}` is not accessible in a static method"),
+                            "E-STATIC-THIS",
+                            Some("a static method has no instance — pass the value as a parameter, use a static field, or make the method non-static".into()),
                         );
                     }
                     let cands = self.in_scope_names();

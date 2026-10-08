@@ -1359,6 +1359,13 @@ best-practice/craftsmanship findings the alignment audit surfaced (coverage gaps
    entry used to say process exit cleans up, which it never did); the OS tmp reaper is the only
    cleanup today, so request bodies stay on disk until it runs. Slice 3's serve loop should clean per-response. The transpiled PHP leg uses
    `tempnam(sys_get_temp_dir(), 'phorj-spill-')`, which creates each file atomically with mode 0600.
+   **Handles outlive the request on the native legs** (found 2026-10-08, close panel round 5). The spill list is
+   thread-local, and a `phg serve` worker thread serves many requests without clearing it. So the integer handles
+   keep counting across requests, and an earlier request's body stays readable from a later one through a forged
+   `new RequestBody(b"", n)` (the constructor is public). With several workers the same handle names different bodies
+   depending on the worker, while the PHP twin starts at 0 per request. It is not reachable without the app's own
+   code forging a handle. The fix (clear the list per request, or make the handle unforgeable) is queued with plan
+   row 5.
 2. **The 8 MiB body cap is INERT under serve** — `DEFAULT_MAX_BODY_SIZE` equals the transport
    frame cap `MAX_REQUEST` (head+body), so a served body can never reach it; the eager
    oversize→null→400 branch is reachable only via `Request.fake`/direct `Request.parse`. Worse: a

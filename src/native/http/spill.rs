@@ -90,8 +90,9 @@ mod tests {
             .with(|s| assert!(s.borrow().iter().all(|p| p.parent() == Some(dir.as_path()))));
     }
     /// Panel 2026-10-08, round 4: names were `{thread}-{idx}` with `create_new`, so a write that failed
-    /// midway left a file at the NEXT spill's name and every later spill on that worker faulted. A file
-    /// left in the directory must never block a spill.
+    /// midway left a file at the NEXT spill's name and every later spill on that worker faulted. Names
+    /// now come from a process-wide sequence, so a leftover under the old scheme cannot block a spill
+    /// (a failed write also removes its own file).
     #[test]
     fn a_leftover_file_never_blocks_the_next_spill() {
         let dir = super::spill_dir().unwrap();

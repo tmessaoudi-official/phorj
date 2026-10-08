@@ -302,7 +302,7 @@ pub fn download_stub(target: &str, cached: &std::path::Path) -> Result<std::path
     Ok(cached.to_path_buf())
 }
 
-/// Fetch `url` into `dest`. `http(s)://` shells out to `curl` (std has no TLS — a host-tool exemption
+/// Fetch `url` into `dest`. A URL shells out to `curl`, https only (`curl_https`; std has no TLS — a host-tool exemption
 /// like zig/objcopy; `PHORJ_CURL` overrides the binary); `file://` or a bare local path is a
 /// `std::fs::copy` (the hermetic-test path — a fixture-dir registry needs no network or curl).
 fn fetch(url: &str, dest: &std::path::Path) -> Result<(), String> {

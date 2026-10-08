@@ -1,8 +1,8 @@
 //! Vendor materialization + integrity verification (DEC-316, phase 3). Copies resolved packages into
 //! `vendor/<Publisher>/<Name>/` — the read-only third search root the DEC-282 loader already consumes —
-//! and turns the resolution into a `phorj.lock`. A later offline `phg install` re-verifies each
-//! vendored tree's SHA-256 against the lock (the `bundle::sha256` "real security boundary"): a mismatch
-//! (tampered or stale `vendor/`) is a hard refusal.
+//! and turns the resolution into a `phorj.lock`. `phg install` does not re-verify an existing
+//! `vendor/`: it rebuilds it from freshly fetched sources, and each fetched tree's SHA-256 must match
+//! the lock (`pm::pin`) — a moved tag or a vanished registry version is refused until `phg update`.
 
 use crate::pm::fetch::{copy_tree, tree_hash};
 use crate::pm::lockfile::LockFile;

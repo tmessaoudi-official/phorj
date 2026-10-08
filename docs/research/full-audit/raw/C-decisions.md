@@ -8793,6 +8793,18 @@ a listed file under no other condition. `expr_is_never` carries the only two.
   VM read `Dog`'s hook off a runtime `Animal` (`8b58721a`, `fix: panel round 2 …`). Tests, each on VM, tree-walker and
   PHP: `null_coalesce_operand_byte_identical`, `null_coalesce_scalar_operands_byte_identical`,
   `null_coalesce_class_rhs_keeps_the_runtime_class`.
+- **The forward-reference walk after the slice-close panel (2026-10-08, rounds 1–5).**
+  - Round 1: it was scope-blind and read a match binder `n` as the later field `n`. Binder shadowing was added.
+  - Round 2: that shadowing hid `this.n`, so it was narrowed to bare names.
+  - Round 4: the bare-name check itself rejected a CALLEE `k()` beside a field `k`. Because every bare field read is
+    `E-BARE-FIELD`, the walk was reduced to `this.x` only, and the shadowing went with it.
+  - Round 5 (the cap; developer-ruled to fix the root cause): that premise failed when a top-level FUNCTION shares the
+    field's name. The checker resolved a bare value as local, then function, then field, while the interpreter (the
+    oracle) and the VM take the field whenever there is an instance. So the checker now does the same: in an instance
+    context, a bare name that names a field is `E-BARE-FIELD` before any function lookup; a static method keeps the
+    function. Tests: `a_bare_value_naming_a_field_and_a_function_is_the_field`,
+    `a_function_named_like_a_later_field_is_not_a_forward_ref`, and the binder assertions in
+    `a_match_binder_named_like_a_later_field_is_not_a_forward_ref`.
 - **What the ratchet sees.** It flags only the inert forms (`_ => {}`, `_ => false`, `_ => true`, `other => other`,
   `leaf => leaf`). A catch-all that returns anything else (`_ => Err(…)`, `_ => OpKind::Other`) passes it, even in a
   listed file.

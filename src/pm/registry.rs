@@ -96,7 +96,8 @@ impl RegistryIndex {
 }
 
 /// Read the registry index from `PHORJ_REGISTRY` (default canonical URL). `file://` or a bare path is
-/// read directly (hermetic tests); http(s) shells to `curl` into a temp file (like `bundle::cross`).
+/// read directly (hermetic tests); an `https://` URL shells to `curl` into a temp file (like
+/// `bundle::cross`) — `curl_https` refuses plain http, including on redirect.
 /// A bare/`file://` path may name the index file directly or a directory containing `index.json`.
 pub fn fetch_index() -> Result<RegistryIndex, String> {
     let base = std::env::var("PHORJ_REGISTRY").unwrap_or_else(|_| DEFAULT_REGISTRY.to_string());
@@ -126,7 +127,8 @@ fn read_source(src: &str) -> Result<String, String> {
             .map_err(|e| format!("cannot read registry index {}: {e}", path.display()));
     }
 
-    // http(s): shell to curl into a temp file, then read (std has no TLS — the cross.rs exemption).
+    // A URL: shell to curl into a temp file, then read (std has no TLS — the cross.rs exemption).
+    // `curl_https` passes `--proto =https`, so an `http://` registry fails rather than downgrading.
     // The download lands in a fresh owner-only dir (audit A4): a fixed name in the shared temp dir
     // let another local user pre-create it as a symlink that curl's `-o` would follow.
     let curl = std::env::var("PHORJ_CURL").unwrap_or_else(|_| "curl".into());
