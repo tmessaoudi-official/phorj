@@ -37,7 +37,7 @@ and never route work here (or in `/stack`) to it. Work is done directly in this 
 read-only reviewer agents in `.claude/agents/` are unaffected. The parent
 `/stack/CLAUDE.md` is excluded via `/stack/projects/.claude/settings.json` `claudeMdExcludes`.
 
-The repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
+Besides the `domain-*` expertise packs (see `expertise-core`), the repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
 ruling, 2026-08-18 — a repo may not duplicate anything that exists in `~/.claude/`):
 `/phg-ask-human` (this repo's additions to the global question protocol), `/phg-lenses` (the mandatory
 review dimensions + sleuth lens K), `/phg-qa-sweep` (end-to-end QA on the shipped `phg`
