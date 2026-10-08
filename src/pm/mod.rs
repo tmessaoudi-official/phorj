@@ -39,9 +39,14 @@ pub const LOCK_FILE: &str = "phorj.lock";
 pub(crate) fn private_temp_dir(prefix: &str) -> Result<std::path::PathBuf, String> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static SEQ: AtomicU64 = AtomicU64::new(0);
-    let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
-    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    let builder = {
+        let mut b = std::fs::DirBuilder::new();
+        std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+        b
+    };
+    #[cfg(not(unix))]
+    let builder = std::fs::DirBuilder::new();
     // The clock only makes names harder to guess; uniqueness and safety come from the exclusive
     // create below, so a clock set before 1970 just yields a guessable name that still never reuses.
     let nanos = std::time::SystemTime::now()

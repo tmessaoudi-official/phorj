@@ -128,7 +128,16 @@ pub(super) fn stmt_has_return(s: &crate::ast::Stmt) -> bool {
                     .as_ref()
                     .is_some_and(|fb| fb.iter().any(stmt_has_return))
         }
-        _ => false,
+        // No nested statements, so no `return` (one inside a lambda returns from the lambda).
+        Stmt::Destructure {
+            else_block: None, ..
+        }
+        | Stmt::VarDecl { .. }
+        | Stmt::Assign { .. }
+        | Stmt::Expr(..)
+        | Stmt::Discard(..)
+        | Stmt::Throw { .. }
+        | crate::stmt_leaves!() => false,
     }
 }
 

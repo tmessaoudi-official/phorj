@@ -59,7 +59,11 @@ since CD-31 (2026-09-02), to `Item` (8): the item-level walks that dispatch on `
   `var (a, b) = (html"<p>{n}</p>", 1);` left the literal unresolved and the compiler PANICKED on valid
   user code — `unreachable!("html literal not resolved before compilation")` [Verified by before/after].
 - **Exemptions are recorded, never silent.** `rewrite_ufcs`'s `apply_repl` keeps a catch-all (CD-27): its
-  domain is checker-CONSTRUCTED replacement shapes, not user AST. Full rule:
+  domain is checker-CONSTRUCTED replacement shapes, not user AST. A classifier whose fallback is the safe answer (CD-32:
+  `expr_is_never`, where only a provable `never` is `true`) keeps its `_ => false` under a
+  `// catch-all exempt (CD-<n>): <reason>` comment, which is the only form the ratchet accepts. CD-32
+  (2026-10-08, audit A2) also brought the last six walking files under it, after `new` inside a tuple
+  panicked all three backends. Full rule:
   `docs/specs/UNIFIED-SPEC.md#mechanical-exhaustiveness-for-exprstmtpattern`.
 
 ## T-3. Arithmetic & comparison are single-sourced in `src/value/`

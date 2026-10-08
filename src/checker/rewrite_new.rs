@@ -53,8 +53,14 @@ pub fn unwrap_new(mut program: Program) -> Program {
             Item::Function(f) => ue_block(&mut f.body),
             Item::Class(c) => ue_members(&mut c.members),
             Item::Trait(t) => ue_members(&mut t.members),
-            // Enums/interfaces/imports/aliases carry no expressions to rewrite.
-            _ => {}
+            // `phg test` runs a body as a synthetic `main` built from the un-rewritten item, but the
+            // test-mode check expands the program through here too, so a test body is walked like
+            // any other (the CD-31 rule for item walks).
+            Item::Test { body, .. } => ue_block(body),
+            // An enum's backing values are scalar literals (anything else is rejected before the
+            // backends) and an interface's methods have no bodies. Param defaults and attribute
+            // arguments are walked by no pass at all — the gap CD-31 recorded, not closed here.
+            Item::Enum(_) | Item::Interface(_) | crate::item_leaves!() => {}
         }
     }
     program
@@ -176,7 +182,7 @@ fn ue_expr(e: &mut Expr) {
     match e {
         Expr::Unary { expr, .. } => ue_expr(expr),
         Expr::Force { inner, .. } | Expr::Propagate { inner, .. } => ue_expr(inner),
-        Expr::Binary { lhs, rhs, .. } => {
+        Expr::Binary { lhs, rhs, .. } | Expr::Pipe { lhs, rhs, .. } => {
             ue_expr(lhs);
             ue_expr(rhs);
         }
@@ -192,7 +198,7 @@ fn ue_expr(e: &mut Expr) {
             ue_expr(object);
             ue_expr(index);
         }
-        Expr::Str(parts, _) | Expr::Html(parts, _) => {
+        Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
             for p in parts {
                 if let StrPart::Expr(x) = p {
                     ue_expr(x);
@@ -258,8 +264,18 @@ fn ue_expr(e: &mut Expr) {
                 ue_expr(a);
             }
         }
-        // Literals / `Ident` / `This` have no sub-expressions.
-        _ => {}
+        // Tuples and named arguments are erased only AFTER this pass, so a construction inside one
+        // is unwrapped here. Without these arms `var (a, b) = (new Box(4), 2);` reached all three
+        // backends with its `new` intact and panicked each of them (audit A2, CD-32).
+        Expr::Tuple(xs, ..) => {
+            for x in xs {
+                ue_expr(x);
+            }
+        }
+        Expr::NamedArg { value, .. } => ue_expr(value),
+        // Type arguments only (`new List<int>()`), and `inject` is expanded before the checker.
+        Expr::NewColl { .. } | Expr::Inject { .. } => {}
+        crate::expr_leaves!() => {}
     }
     if let Expr::New(inner, span) = e {
         let s: Span = *span;

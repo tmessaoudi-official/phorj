@@ -34,6 +34,25 @@ fn reads_later_sibling_is_forward_ref() {
 }
 
 #[test]
+fn forward_ref_inside_new_named_arg_or_tuple_is_caught() {
+    // Audit A2: the forward-ref walk skipped these three forms, so each read `this.later` before it
+    // was initialized at runtime instead of failing the check.
+    for src in [
+        "class Box { constructor(public int v) {} } \
+         class C { Box b = new Box(this.later); int later = 7; } function main(): void {}",
+        "function f(int n): int { return n; } \
+         class C { int a = f(n: this.later); int later = 7; } function main(): void {}",
+        "class C { (int, int) t = (this.later, 1); int later = 7; } function main(): void {}",
+    ] {
+        assert!(
+            has(src, "E-FIELD-INIT-FORWARD-REF"),
+            "{src}\n{:?}",
+            errors_of(src)
+        );
+    }
+}
+
+#[test]
 fn self_reference_is_forward_ref() {
     let src = "class C { int a = this.a + 1; } function main() -> void {}";
     assert!(has(src, "E-FIELD-INIT-FORWARD-REF"));

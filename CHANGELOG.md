@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `new` inside a tuple panicked every backend, and a field initializer could read a later field through `new`/a named argument/a tuple (audit A2, CD-32, 2026-10-08)
+
+`var (a, b) = (new Box(4), 2);` type-checked and then panicked all three legs: `Expr::New is unwrapped before …` on the VM, the
+tree-walker and the transpiler. The pass that erases `new` ended its expression walk in `_ => {}`, which swallowed `Expr::Tuple`,
+and tuples are erased only after that pass. The field-initializer forward-reference check had the same shape: it skipped `new`,
+named arguments, tuples, `parent`/`spawn` calls and match guards. So `Box b = new Box(this.later); int later = 7;` passed
+`phg check` and failed only at runtime, where the VM and the tree-walker even reported different lines.
+
+Every remaining total walk with an inert catch-all now has explicit arms, with the `src/ast/leaves.rs` macros for the true leaves:
+`checker/rewrite_new.rs`, `checker/program/walk.rs`, `checker/qualify_variants.rs` (safe only by pass order until now),
+`cli/rewrite_new.rs` (the `phg rewrite-new` tool, which missed tuples, named arguments and `test` bodies), and the statement
+predicates in `checker/program/totality.rs` and `checker/common_flow.rs`. The item walks of `unwrap_new` and
+`qualify_variants` now visit `test` bodies, the CD-31 rule.
+
+All six files joined `no_fixed_rewriter_regrows_a_catch_all`. The only catch-alls left in them are `expr_is_never`'s two
+classifier arms: `false` is their safe answer, so they stay, each under a `// catch-all exempt (CD-32): …` comment that the
+ratchet now requires for any exemption. `examples/guide/tuples.phg` destructures `(new Point(3, 4), 2)` on every leg.
+
 ### Fixed — `phg install` re-resolved every time, so a moved tag silently replaced a locked dependency (audit A4, 2026-10-08)
 
 `install`, `add` and `remove` ignored an existing `phorj.lock`. They re-resolved from `phorj.json`, wrote a new lock, and then

@@ -28,21 +28,21 @@ pub(in crate::checker) fn field_init_forbidden_ref(
                     walk(object, f, out);
                 }
             }
-            Expr::Str(parts, _) | Expr::Html(parts, _) => {
+            Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
                 for p in parts {
                     if let StrPart::Expr(x) = p {
                         walk(x, f, out);
                     }
                 }
             }
-            Expr::List(xs, _) => xs.iter().for_each(|x| walk(x, f, out)),
+            Expr::List(xs, _) | Expr::Tuple(xs, ..) => xs.iter().for_each(|x| walk(x, f, out)),
             Expr::Map(ps, _) => ps.iter().for_each(|(k, v)| {
                 walk(k, f, out);
                 walk(v, f, out);
             }),
             Expr::Unary { expr, .. } => walk(expr, f, out),
             Expr::Force { inner, .. } | Expr::Propagate { inner, .. } => walk(inner, f, out),
-            Expr::Binary { lhs, rhs, .. } => {
+            Expr::Binary { lhs, rhs, .. } | Expr::Pipe { lhs, rhs, .. } => {
                 walk(lhs, f, out);
                 walk(rhs, f, out);
             }
@@ -59,7 +59,12 @@ pub(in crate::checker) fn field_init_forbidden_ref(
                 scrutinee, arms, ..
             } => {
                 walk(scrutinee, f, out);
-                arms.iter().for_each(|a| walk(&a.body, f, out));
+                arms.iter().for_each(|a| {
+                    if let Some(g) = &a.guard {
+                        walk(g, f, out);
+                    }
+                    walk(&a.body, f, out);
+                });
             }
             Expr::Range { start, end, .. } => {
                 walk(start, f, out);
@@ -80,8 +85,20 @@ pub(in crate::checker) fn field_init_forbidden_ref(
                 walk(object, f, out);
                 fields.iter().for_each(|(_, v)| walk(v, f, out));
             }
-            // Literals / `this` / `Lambda` (its `this`-use is `E-LAMBDA-THIS`) read no forbidden field.
-            _ => {}
+            // A construction, a named argument, a `parent` call and a spawned or overload-selected
+            // call all evaluate their arguments while the initializer runs, so a later field read
+            // through one is the same forward reference. These were skipped, and the read failed
+            // only at runtime (audit A2, CD-32).
+            Expr::New(inner, _) => walk(inner, f, out),
+            Expr::NamedArg { value, .. } => walk(value, f, out),
+            Expr::Spawn { call, .. } | Expr::OverloadSelect { call, .. } => walk(call, f, out),
+            Expr::ParentCall { args, .. } => args.iter().for_each(|a| walk(a, f, out)),
+            // A lambda's `this`-use is `E-LAMBDA-THIS`, so a closure default cannot smuggle a
+            // forward read in (see the doc comment above).
+            Expr::Lambda { .. } => {}
+            // Type arguments only (`new List<int>()`), and `inject` is expanded before the checker.
+            Expr::NewColl { .. } | Expr::Inject { .. } => {}
+            crate::expr_leaves!() => {}
         }
     }
     let mut out = None;

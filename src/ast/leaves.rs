@@ -181,13 +181,26 @@ mod tests {
             // recorded that way deliberately, because overclaiming a fix is how the next reader
             // stops believing the register.
             "src/checker/rewrite_pipe/walk.rs",
+            // CD-32 (audit 2026-10-07, A2): the last total walks with a catch-all. `rewrite_new`'s
+            // `_ => {}` swallowed `Expr::Tuple`, so `var (a, b) = (new Box(4), 2);` reached all three
+            // backends with an unexpanded `new` and panicked each of them; the field-init forward-ref
+            // walk skipped `New`/`NamedArg`/`Tuple`, so `this.later` read through any of them passed
+            // the check. `qualify_variants` was safe only by pass order, `cli/rewrite_new` is the
+            // `phg rewrite-new` tool's walk, and the `Stmt` predicates fail safe but hid the decision.
+            "src/checker/rewrite_new.rs",
+            "src/checker/program/walk.rs",
+            "src/checker/qualify_variants.rs",
+            "src/cli/rewrite_new.rs",
+            "src/checker/program/totality.rs",
+            "src/checker/common_flow.rs",
         ];
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut offenders = Vec::new();
         for rel in FIXED {
             let text = std::fs::read_to_string(root.join(rel))
                 .unwrap_or_else(|e| panic!("read {rel}: {e} — did the file move? update FIXED"));
-            for (i, line) in text.lines().enumerate() {
+            let lines: Vec<&str> = text.lines().collect();
+            for (i, line) in lines.iter().enumerate() {
                 let t = line.trim();
                 if t.starts_with("//") {
                     continue;
@@ -206,7 +219,16 @@ mod tests {
                 ]
                 .iter()
                 .any(|p| t.starts_with(p));
-                if inert {
+                // CD-32: a classifier whose fallback is the SAFE answer (`expr_is_never`: only a
+                // provable `never` is `true`) is not a walk; it is exempt when the comment block directly
+                // above records it — `// catch-all exempt (CD-<n>): <reason>` — so the exemption is visible and
+                // greppable, never silent.
+                let recorded = lines[..i]
+                    .iter()
+                    .rev()
+                    .take_while(|l| l.trim().starts_with("//"))
+                    .any(|l| l.contains("catch-all exempt (CD-"));
+                if inert && !recorded {
                     // CD-27: `apply_repl`'s domain is checker-constructed replacements, not user AST.
                     // CD-31: `desugar_db`'s `rexpr_clone` arm is the same shape — it dispatches on
                     // borrowed sub-expressions during connection-fact analysis, not on user items —

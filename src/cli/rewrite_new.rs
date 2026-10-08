@@ -27,7 +27,12 @@ pub fn cmd_rewrite_new(path: &str) -> Result<String, String> {
                     names.insert(v.name.clone());
                 }
             }
-            _ => {}
+            // Only classes and enum variants are constructed with `new`.
+            Item::Function(_)
+            | Item::Trait(_)
+            | Item::Interface(_)
+            | Item::Test { .. }
+            | crate::item_leaves!() => {}
         }
     }
 
@@ -41,7 +46,9 @@ pub fn cmd_rewrite_new(path: &str) -> Result<String, String> {
             Item::Function(f) => w.block(&f.body),
             Item::Class(c) => w.members(&c.members),
             Item::Trait(t) => w.members(&t.members),
-            _ => {}
+            Item::Test { body, .. } => w.block(body),
+            // Enum backing values are scalar literals; interface methods have no bodies.
+            Item::Enum(_) | Item::Interface(_) | crate::item_leaves!() => {}
         }
     }
 
@@ -203,7 +210,7 @@ impl Walker<'_> {
             }
             Expr::Unary { expr, .. } => self.expr(expr),
             Expr::Force { inner, .. } | Expr::Propagate { inner, .. } => self.expr(inner),
-            Expr::Binary { lhs, rhs, .. } => {
+            Expr::Binary { lhs, rhs, .. } | Expr::Pipe { lhs, rhs, .. } => {
                 self.expr(lhs);
                 self.expr(rhs);
             }
@@ -217,8 +224,8 @@ impl Walker<'_> {
             // re-lexed interpolation hole carries spans *relative to the interpolation substring*, not
             // the file, so splicing at them would corrupt the source. A construction inside `"{…}"` is
             // rare; it surfaces as `E-NEW-REQUIRED` and is hand-fixed.
-            Expr::Str(_, _) | Expr::Html(_, _) => {}
-            Expr::List(xs, _) => {
+            Expr::Str(_, _) | Expr::Html(_, _) | Expr::TaggedTemplate { .. } => {}
+            Expr::List(xs, _) | Expr::Tuple(xs, ..) => {
                 for x in xs {
                     self.expr(x);
                 }
@@ -265,7 +272,21 @@ impl Walker<'_> {
                     self.expr(v);
                 }
             }
-            _ => {}
+            // A construction inside a tuple, a named argument or a `parent`/`spawn` call needs its
+            // `new` too; these were skipped (audit A2, CD-32).
+            Expr::NamedArg { value, .. } => self.expr(value),
+            Expr::Spawn { call, .. } | Expr::OverloadSelect { call, .. } => self.expr(call),
+            Expr::ParentCall { args, .. } => {
+                for a in args {
+                    self.expr(a);
+                }
+            }
+            Expr::NewColl { .. } | Expr::Inject { .. } => {}
+            crate::expr_leaves!() => {}
         }
     }
 }
+
+#[cfg(test)]
+#[path = "rewrite_new_tests.rs"]
+mod tests;

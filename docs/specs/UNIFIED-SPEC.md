@@ -102,7 +102,7 @@
   - [Secret type](#secret-type) *(2026-06-28 — SHIPPED)*
   - [Nested-value index-assignment](#nested-value-index-assignment) *(2026-07-01 — SHIPPED)*
   - [`using` — the scope guard](#using--the-scope-guard) *(2026-07-30 — DEC-364, SHIPPED)*
-  - [Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`](#mechanical-exhaustiveness-for-exprstmtpattern) *(2026-07-26 — DEC-356; core SHIPPED, rewriter sweep OWED)*
+  - [Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`](#mechanical-exhaustiveness-for-exprstmtpattern) *(2026-07-26 — DEC-356; SHIPPED, the sweep closed by CD-31 and CD-32 on 2026-10-08)*
   - [Ordering, `<=>`, and named-field tuples](#ordering--and-named-field-tuples) *(2026-09-07 — DEC-504/DEC-505, QUEUED)*
   - [Block-scope shadowing — the redeclaration rule](#block-scope-shadowing--the-redeclaration-rule) *(2026-07-26 — DEC-339, SHIPPED)*
   - [`#[Invoke]` and `#[ToString]`](#invoke-and-tostring) *(2026-07-23 — DEC-331 D9; slice 1 SHIPPED, 1b DEFERRED)*
@@ -1057,8 +1057,8 @@ them must revisit this section.
 
 ## Mechanical exhaustiveness for `Expr`/`Stmt`/`Pattern`
 
-**Status: core SHIPPED (DEC-356, ruled 2026-07-26, built 2026-07-30) — WITH A MEASURED REMAINDER that
-is still owed; see "What is not done" below.** Source: `2026-07-26-ast-exhaustiveness.md`; original
+**Status: core SHIPPED (DEC-356, ruled 2026-07-26, built 2026-07-30). The remainder recorded below as
+owed was closed in later slices, the last six files by CD-32 on 2026-10-08; see "Status 2026-10-08".** Source: `2026-07-26-ast-exhaustiveness.md`; original
 analysis `docs/research/2026-07-25-completeness-register.md` §6.4.
 
 **The class, not the instances.** Every P0/P1 in the 2026-07-25 agenda shipped because *a match arm
@@ -1114,6 +1114,17 @@ it; statically each also misses `NamedArg`, and most miss `NewColl` / `Pipe` / `
 inside a tuple works on both backends despite `erase_generics` statically missing `Tuple`. So each cell
 needs its own reproduction before a fix is written (Rule 14), and that per-cell probing plus a
 differential case per real find is what makes the remainder a slice rather than a mechanical sweep.
+
+**Status 2026-10-08 (CD-32).** The sweep this section owed has been done in pieces: the DEC-356 build,
+CD-31's item walks, K8's loader, the pipe walk (2026-09-04), and CD-32's last six files (`rewrite_new`,
+the field-init forward-ref walk, `qualify_variants`, the `phg rewrite-new` tool, and the statement
+predicates in `totality`/`common_flow`). CD-32 found two live defects that a probe confirmed:
+`(new Box(4), 2)` panicked all three backends, and `E-FIELD-INIT-FORWARD-REF` was bypassed through
+`new`/named arguments/tuples. `no_fixed_rewriter_regrows_a_catch_all` now lists 24 files. Still open,
+by design or by ruling: classifier fallbacks that give the safe answer (`expr_is_never` keeps two,
+each under a `// catch-all exempt (CD-32): …` comment; `compiler/cty.rs` and `transpile/kinds.rs`
+degrade to their "other" type and are not in the ratchet), the shared total visitor B (QUEUED), and
+the fact that a NEW walking file is ratcheted only once someone adds it to the list.
 
 **Technique for that fix when it happens:** an `e @ (Expr::A(..) | Expr::B(..) | …) => e` or-pattern arm
 gives full compiler enforcement — a new variant not in the list is a non-exhaustive-match error — at

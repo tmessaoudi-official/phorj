@@ -61,10 +61,12 @@ pub fn qualify_variants(mut program: Program, table: &HashMap<usize, String>) ->
             Item::Function(f) => qblock(&mut f.body, &ctx),
             Item::Class(c) => qmembers(&mut c.members, &ctx),
             Item::Trait(t) => qmembers(&mut t.members, &ctx),
-            // Enums (backing literals), interfaces, imports, aliases, tests: no variant use-sites
-            // reach the backends from these (tests are checker-gated out — same set `unwrap_new`
-            // walks).
-            _ => {}
+            // A test body runs as a synthetic `main` built from the un-rewritten item, but it is
+            // walked like any other body (the CD-31 rule for item walks; `unwrap_new` does the same).
+            Item::Test { body, .. } => qblock(body, &ctx),
+            // Enum backing values are scalar literals and interface methods have no bodies, so no
+            // variant use-site reaches the backends from these.
+            Item::Enum(_) | Item::Interface(_) | crate::item_leaves!() => {}
         }
     }
     program
@@ -118,8 +120,9 @@ fn qp(p: &mut Pattern, ctx: &Ctx) {
                 qp(&mut fp.pat, ctx);
             }
         }
-        // Literals / wildcard / binding / type patterns carry no variant head.
-        _ => {}
+        // A binding or a type pattern names no variant and has no sub-pattern.
+        Pattern::Binding { .. } | Pattern::Type { .. } => {}
+        crate::pattern_leaves!() => {}
     }
 }
 
@@ -248,7 +251,7 @@ fn qe(e: &mut Expr, ctx: &Ctx) {
         }
         Expr::Unary { expr, .. } => qe(expr, ctx),
         Expr::Force { inner, .. } | Expr::Propagate { inner, .. } => qe(inner, ctx),
-        Expr::Binary { lhs, rhs, .. } => {
+        Expr::Binary { lhs, rhs, .. } | Expr::Pipe { lhs, rhs, .. } => {
             qe(lhs, ctx);
             qe(rhs, ctx);
         }
@@ -258,14 +261,16 @@ fn qe(e: &mut Expr, ctx: &Ctx) {
             qe(object, ctx);
             qe(index, ctx);
         }
-        Expr::Str(parts, _) | Expr::Html(parts, _) => {
+        Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
             for p in parts {
                 if let crate::ast::StrPart::Expr(x) = p {
                     qe(x, ctx);
                 }
             }
         }
-        Expr::List(xs, _) => {
+        // Tuples are erased before this pass today, so this arm is safe only by pass order without
+        // the recursion; it walks them so a reordering cannot silently skip a construction.
+        Expr::List(xs, _) | Expr::Tuple(xs, ..) => {
             for x in xs {
                 qe(x, ctx);
             }
@@ -312,8 +317,10 @@ fn qe(e: &mut Expr, ctx: &Ctx) {
                 qe(a, ctx);
             }
         }
-        // Literals / `Ident` / `This` have no sub-expressions.
-        _ => {}
+        Expr::NamedArg { value, .. } => qe(value, ctx),
+        // Type arguments only (`new List<int>()`), and `inject` is expanded before the checker.
+        Expr::NewColl { .. } | Expr::Inject { .. } => {}
+        crate::expr_leaves!() => {}
     }
 }
 

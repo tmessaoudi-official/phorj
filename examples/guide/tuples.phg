@@ -18,6 +18,11 @@ function minMax(int a, int b): (int, int) {
     return if (a < b) { (a, b) } else { (b, a) };
 }
 
+// A tuple may hold objects: `new` works in any position, e.g. `(new Point(3, 4), 2)` below.
+class Point {
+    constructor(public int x, public int y) {}
+}
+
 // Tuples nest and mix types freely.
 function labelled(int n): (int, string) {
     return (n, if (n == 1) { "one" } else { "many" });
@@ -34,6 +39,9 @@ function main(): void {
     // A tuple literal destructured directly.
     var (x, y, z) = (2, 3, 4);
     Output.printLine("product={x * y * z}");
+    // Objects in a tuple: construct in place, then use the fields of the destructured binder.
+    var (origin, steps) = (new Point(3, 4), 2);
+    Output.printLine("moved to x={origin.x + steps} y={origin.y + steps}");
     // Explicit-type form (no `var`): spell each binder's type. Equivalent to the inferred `var (…)`
     // — use it when you want the types documented at the binding site.
     (int lo2, int hi2) = minMax(8, 2);

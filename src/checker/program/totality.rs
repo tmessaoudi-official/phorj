@@ -72,7 +72,15 @@ impl Checker {
                 self.block_terminates(body)
                     && catches.iter().all(|c| self.block_terminates(&c.body))
             }
-            _ => false,
+            // These complete normally: a declaration, an assignment, a discard or a destructure (whose
+            // `else` must itself diverge, but the statement does not), a `for` over a finite
+            // collection, and `break`/`continue`, which leave the loop rather than the function.
+            Stmt::VarDecl { .. }
+            | Stmt::Assign { .. }
+            | Stmt::Discard(..)
+            | Stmt::Destructure { .. }
+            | Stmt::For { .. }
+            | crate::stmt_leaves!() => false,
         }
     }
 
@@ -114,8 +122,22 @@ impl Checker {
             // A `using` body runs exactly once, so an assignment on all of ITS paths is an
             // assignment on all paths (DEC-364) — again the `Stmt::Block` rule.
             Stmt::Using { body, .. } => self.block_assigns_field(body, field),
-            // An `if` with no else, or a loop body (may run zero times), does not assign on all paths.
-            _ => false,
+            // An `if` with no else, or a loop body (may run zero times), does not assign on all paths;
+            // a `try` body may throw before its assignment. The rest assign no field of `this`.
+            Stmt::If {
+                else_block: None, ..
+            }
+            | Stmt::For { .. }
+            | Stmt::While { .. }
+            | Stmt::CFor { .. }
+            | Stmt::Try { .. }
+            | Stmt::VarDecl { .. }
+            | Stmt::Destructure { .. }
+            | Stmt::Return { .. }
+            | Stmt::Expr(..)
+            | Stmt::Discard(..)
+            | Stmt::Throw { .. }
+            | crate::stmt_leaves!() => false,
         }
     }
 
@@ -146,7 +168,19 @@ impl Checker {
                 };
                 cond_always && !breaks_this_loop(body)
             }
-            _ => false,
+            // A `return` is a completing path here, not a divergence; an `if` without `else` has a
+            // path that falls through; a `try` is not analysed (conservatively "may complete").
+            Stmt::Return { .. }
+            | Stmt::If {
+                else_block: None, ..
+            }
+            | Stmt::Try { .. }
+            | Stmt::For { .. }
+            | Stmt::VarDecl { .. }
+            | Stmt::Assign { .. }
+            | Stmt::Destructure { .. }
+            | Stmt::Discard(..)
+            | crate::stmt_leaves!() => false,
         }
     }
 
@@ -196,6 +230,8 @@ impl Checker {
                             false
                         }
                     }
+                    // catch-all exempt (CD-32): a classifier over the callee's SHAPE, not a walk —
+                    // only a named or qualified callee can be shown to return `never`.
                     _ => false,
                 }
             }
@@ -209,6 +245,8 @@ impl Checker {
             Expr::Match { arms, .. } => {
                 !arms.is_empty() && arms.iter().all(|a| self.expr_is_never(&a.body))
             }
+            // catch-all exempt (CD-32): a classifier, not a walk — `true` needs proof, so every
+            // other form is "may complete", the safe answer for a new variant too.
             _ => false,
         }
     }

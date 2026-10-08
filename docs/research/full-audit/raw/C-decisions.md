@@ -8732,3 +8732,48 @@ Each row here is the ruling; the plan carries the reasoning.
 | DEC-565 | Warnings cannot be controlled: `W-FORCE-UNWRAP` fires on every `!` with no way to silence a deliberate use, there are no per-code levels, and shipped `phg explain` text promises a `--strict` flag that does not exist (DEC-360 queued). Failing program: `int? a = Map.get(m, "k"); Output.printLine("{a!}");` warns forever | RULED (developer, 2026-10-08, `AskUserQuestion`): a site-level attribute `#[Allow(code: "…", reason: "…")]` on a statement, function or class, reason MANDATORY; plus build DEC-360's `--strict`; and correct the explain text now. Prerequisite: every checker and parser diagnostic gets a stable code (90 checker sites and about 15 parser sites have none today) | **QUEUED** — plan rows 13 (coding) then 16 |
 | DEC-566 | No way for a project to enforce ITS OWN chosen architecture (e.g. `Domain` may not import `Adapters`) — the user-side complement of DEC-562's neutrality | RULED (developer, 2026-10-08, `AskUserQuestion`): OPT-IN layer rules declared IN SOURCE as a package-level attribute (shape e.g. `#[Layer("domain", mayNotImport: ["adapters"])]`), never on by default; checked after import resolution in the loader so `phg check` and the LSP share it (DEC-252); the loader stays manifest-less (DEC-282 otherwise intact; a `phorj.json` placement was offered and NOT chosen). It also becomes the home of the DEC-564 file-layout rules | **QUEUED** — plan row 17, after DEC-564 |
 | DEC-567 | Six strictness/neutrality questions from the 2026-10-07 audit (lens 6), each with a probe program in `var/claude/review-2026-10-07/raw/6-strictness-neutrality.md` | **PENDING (Invariant 15)** — NOT ruled, NOT assumed: (a) flow/constant lints — unconditional recursion, loop condition never mutated, `a == a`, duplicate `else if`, `i = i`; (b) a provably-null `!` becomes an error instead of `W-FORCE-UNWRAP`; (c) Swift-style constructor rule: no `this.method()` or `this` capture while a field is unassigned (DEC-524 disclosure); (d) a total `List.get(List<T>, int): T?`; (e) integer range / refinement types (`int<1,max>`) for native parameters; (f) subtree visibility `internal(Pkg)` | **PENDING** — ask before building any |
+
+### CD-32 (2026-10-08) — audit A2: the last six walking files with an inert catch-all, and how a classifier is exempted
+
+The 2026-10-07 audit's census (lens 5, L5-01/02/09) found 15 inert catch-alls (`_ => {}` / `_ => false`) left in six files that
+walk the AST: `checker/rewrite_new.rs`, `checker/program/walk.rs` (the field-init forward-reference walk),
+`checker/qualify_variants.rs`, `cli/rewrite_new.rs` (the `phg rewrite-new` tool), `checker/program/totality.rs` and
+`checker/common_flow.rs`. None of the six was on `no_fixed_rewriter_regrows_a_catch_all`'s list.
+
+**Two were live defects, both confirmed before the fix:**
+1. `unwrap_new` swallowed `Expr::Tuple`, and tuples are erased only after it runs, so `var (a, b) = (new Box(4), 2);` type-checked
+   and then panicked the VM, the tree-walker and the transpiler alike (`Expr::New is unwrapped before …`). This is the same class as
+   the `html"…"`-in-a-tuple panic that DEC-356 was ruled for.
+2. The forward-reference walk skipped `New`, `NamedArg`, `Tuple`, `ParentCall`, `Spawn`, `OverloadSelect`, `TaggedTemplate`, `Pipe`
+   and match guards. So `Box b = new Box(this.later); int later = 7;` passed the check and faulted at runtime, where the VM and the
+   tree-walker reported different lines.
+
+**Latent hazards closed with them:**
+- `qualify_variants` missed `Tuple`/`NamedArg` but was safe only because of pass order.
+- The `phg rewrite-new` tool missed constructions in tuples, named arguments and `test` bodies. It had no test at all; it has one
+  now.
+- The `Stmt` predicates fail safe, but they hid the decision a new statement form must make. `using` once made `E-MISSING-RETURN`
+  misfire for exactly that reason.
+
+The item walks of `unwrap_new` and `qualify_variants` now visit `test` bodies (the CD-31 rule).
+
+**Exemption rule.** A classifier whose fallback is the SAFE answer is not a walk. `expr_is_never` is the case: only a provable
+`never` is `true`, so `false` is right for any form it does not recognise, a new one included. Such an arm keeps its catch-all
+only under a comment block containing `// catch-all exempt (CD-<n>): <reason>`, and the ratchet now accepts an inert catch-all in
+a listed file under no other condition. `expr_is_never` carries the only two.
+
+**Gate.** The six files join `FIXED` (24 files now). Evidence:
+- The three new tests were red first, each for its stated reason: the forward-ref check reported no error; the ratchet listed
+  exactly the 15 sites; `all_examples_match_between_backends` panicked on `examples/guide/tuples.phg`, which now destructures
+  `(new Point(3, 4), 2)`.
+- The suite is green: lib, both example-glob differentials including the PHP oracle, and pm.
+- Six sabotage mutations each reddened exactly their target test and were restored byte-exact: `unwrap_new` skipping tuples
+  (example differential); the forward-ref walk skipping `new`, named args or tuples (forward-ref test, three times); the tool
+  skipping tuples (tool test); a regrown `_ => {}` (ratchet).
+
+**Not done, stated so it is not mistaken for covered:**
+- `compiler/cty.rs`'s `other => Err(…)` and `transpile/kinds.rs`'s `_ => OpKind::Other` stay out of the ratchet. Both are
+  classifiers that degrade to their "other" answer.
+- Param defaults and attribute arguments are still walked by no pass. That gap is CD-31's.
+- The shared total visitor B is still QUEUED.
+- A NEW walking file is ratcheted only once it is added to `FIXED`.
