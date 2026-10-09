@@ -34,8 +34,9 @@ developer's own persistent install; this repo never writes it (the container-era
 NOT `/stack` infrastructure, and there is **no orchestrator agent to route to** — the
 `global-stack-lead-dev` agent was deleted 2026-08-19 at the developer's request; never recreate it,
 and never route work here (or in `/stack`) to it. Work is done directly in this conversation; the
-read-only reviewer agents in `.claude/agents/` are unaffected. The parent
-`/stack/CLAUDE.md` is excluded via `/stack/projects/.claude/settings.json` `claudeMdExcludes`.
+read-only reviewer agents in `.claude/agents/` are unaffected. No `/stack`-level
+CLAUDE.md loads here: this repo's `.claude/settings.local.json` excludes them (`claudeMdExcludes`,
+written by `~/.claude/bin/stack-claude-md-scope.sh`).
 
 Besides the `domain-*` expertise packs (see `expertise-core`), the repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
 ruling, 2026-08-18 — a repo may not duplicate anything that exists in `~/.claude/`):
