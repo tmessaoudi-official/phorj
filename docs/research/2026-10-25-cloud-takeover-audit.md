@@ -108,7 +108,8 @@ All verified this session, and none in the 2026-10-08 remediation plan's text un
    gates' self-tests run only in the local pre-push. Worse, `ci.yml` triggers only on pushes and PRs to `master`.
    **So a cloud commit on a session branch today gets no automated gate at all.** Pre-push cannot run here (no
    oracle) and CI never sees the branch until the developer lands it. Overlaps row 9's CI feature jobs and makes
-   them urgent.
+   them urgent. *Resolved the same day (developer ruling): `ci.yml` also runs on `ccr-*` pushes, and the
+   environment setup script (§ 5.4) supplies the oracle so pre-push can run in the cloud.*
 7. `http-server-tls` is a Cargo feature with no `src/ext/registry.rs` row and no stated exemption.
 8. `editors/vscode` registers no debugger, so `phg debug --dap` has no editor wiring (Invariant 17 surface).
 
