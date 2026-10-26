@@ -8088,6 +8088,35 @@ fn backed_enum_value_through_an_untyped_receiver_beside_a_value_field_or_method(
         );
     }
 }
+/// Panel round 5 (completeness F1): the untyped `?.value` form on its two other lowerings — no class
+/// names a `value` member (the uninterned name compiles to `EnumValue`, round 3) and a class HOOKS
+/// `value` (`GetFieldOrHook`, round 2). The round-4 test above reaches only `GetField`. Both binders
+/// also take the null path (`?.` short-circuits, so the fallback prints).
+#[test]
+fn backed_enum_safe_value_through_an_untyped_receiver_on_every_lowering() {
+    for (member, tag) in [
+        ("", "vwsc_enum_safe_value_no_member"),
+        (
+            "class K { string value { get => \"hooked\"; } }",
+            "vwsc_enum_safe_value_beside_hook",
+        ),
+    ] {
+        agree_out_php(
+            &format!(
+                "import Core.Output; import Core.Result; enum Color: string {{ Red = \"r\", Blue = \"b\" }} {member} \
+                 function pickn(): Result<Color?, string> {{ Color? c = Color.from(\"b\"); return new Result.Success(c); }} \
+                 function pickz(): Result<Color?, string> {{ Color? c = null; return new Result.Success(c); }} \
+                 #[Entry(kind: EntryKind.Cli)] function main(): void {{ \
+                 string? s = match (pickn()) {{ Result.Success(v) => v?.value, Result.Failure(e) => e }}; \
+                 Output.printLine(s ?? \"-\"); \
+                 string? z = match (pickz()) {{ Result.Success(v) => v?.value, Result.Failure(e) => e }}; \
+                 Output.printLine(z ?? \"-\"); }}"
+            ),
+            "b\n-\n",
+            tag,
+        );
+    }
+}
 
 /// `this` in a trait body is any using class or a subclass of one, so a hook a subclass declares
 /// is found at run time — the trait-body form of a base-class method reading `this.name`.

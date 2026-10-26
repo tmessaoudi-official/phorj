@@ -124,7 +124,8 @@ on the pre-fix binary:
 
 Tests: the `vm_with_*`, `vm_hook_*`, `vm_trait_body_this_read_runs_a_subclass_hook`,
 `backed_enum_value_ignores_an_unrelated_hook_only_value_property`,
-the three `backed_enum_value_through_an_untyped_receiver_*` cases (close panel rounds 2–4),
+the three `backed_enum_value_through_an_untyped_receiver_*` cases and
+`backed_enum_safe_value_through_an_untyped_receiver_on_every_lowering` (close panel rounds 2–5),
 `vm_runtime_class_ops_compose_in_one_expression` and `null_coalesce_class_rhs_null_path_runs_the_hook` cases in
 `tests/differential.rs`, and `src/compiler/tests_hook_gate.rs` (which receivers pay for run-time dispatch).
 
