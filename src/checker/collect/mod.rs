@@ -13,4 +13,5 @@ mod functions;
 mod inherit;
 mod interfaces;
 mod overrides;
+mod subtyping;
 mod types_decls;

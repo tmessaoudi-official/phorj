@@ -1,4 +1,4 @@
-//! Collection pass — inheritance: member merging, interface flattening, subtyping.
+//! Collection pass — inheritance: member merging (class `extends` and trait `use`).
 
 use super::*;
 
@@ -20,7 +20,7 @@ impl Checker {
         let mut done: std::collections::HashSet<String> = std::collections::HashSet::new();
         let names: Vec<String> = parents.keys().cloned().collect();
         for name in names {
-            self.merge_inherited(&name, &parents, &mut done);
+            self.merge_inherited_pass(&name, &parents, &mut done, false);
         }
         // M-RT S8: after class inheritance is flattened, merge each `use`d trait's members (methods +
         // fields) into the using class's `ClassInfo`, so calling a trait method / reading a trait field
@@ -150,21 +150,37 @@ impl Checker {
                 if !child.has_ctor && tinfo.has_ctor {
                     child.ctor = tinfo.ctor.clone();
                     child.ctor_defaults = tinfo.ctor_defaults.clone();
+                    // DEC-297: the param names travel with the signature, so `new U(k: 3)` resolves.
+                    child.ctor_param_names = tinfo.ctor_param_names.clone();
                     // DEC-221: the trait ctor's declared throws come with its signature.
                     child.ctor_throws = tinfo.ctor_throws.clone();
                     child.has_ctor = true;
                 }
             }
         }
+        // Plan row 4c item 5: a SUBCLASS of a trait-using class inherits what its parent composed (the
+        // runtime's dispatch table and `ast::ctor_plan` already reach a parent's trait). The first pass
+        // ran before any trait merged, so inherit again: every member copy is `or_insert`-shaped, so
+        // nothing the first pass placed changes, and a class with no own constructor rebuilds its
+        // concatenated signature from its parents' final ones (`rebuild_ctor`).
+        let mut done: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let names: Vec<String> = parents.keys().cloned().collect();
+        for name in names {
+            self.merge_inherited_pass(&name, &parents, &mut done, true);
+        }
     }
 
     /// Ensure `name`'s [`ClassInfo`] has merged in all of its (already-merged) parents' members.
     /// Recurses parents-first; memoized via `done`, which also breaks any `extends` cycle.
-    pub(in crate::checker) fn merge_inherited(
+    /// `rebuild_ctor` (the second pass, after traits merged) first clears a no-own-ctor class's
+    /// concatenated constructor signature so the parents' final ones rebuild it instead of appending
+    /// a second copy — the one non-`or_insert` step, which makes the pass safe to run twice.
+    pub(in crate::checker) fn merge_inherited_pass(
         &mut self,
         name: &str,
         parents: &HashMap<String, Vec<String>>,
         done: &mut std::collections::HashSet<String>,
+        rebuild_ctor: bool,
     ) {
         if !done.insert(name.to_string()) {
             return;
@@ -172,8 +188,18 @@ impl Checker {
         let Some(ps) = parents.get(name).cloned() else {
             return;
         };
+        if rebuild_ctor {
+            if let Some(child) = self.classes.get_mut(name) {
+                if !child.has_ctor && !ps.is_empty() {
+                    child.ctor.clear();
+                    child.ctor_defaults.clear();
+                    child.ctor_param_names.clear();
+                    child.ctor_throws.clear();
+                }
+            }
+        }
         for p in &ps {
-            self.merge_inherited(p, parents, done);
+            self.merge_inherited_pass(p, parents, done, rebuild_ctor);
             let Some(parent_info) = self.classes.get(p).cloned() else {
                 continue; // unknown parent — already reported E-EXTEND-UNKNOWN
             };
@@ -304,180 +330,5 @@ impl Checker {
                 }
             }
         }
-    }
-
-    /// True if `name`'s `extends` chain reaches `name` again (a cycle). Visited-guarded.
-    pub(in crate::checker) fn iface_in_cycle(
-        &self,
-        name: &str,
-        stack: &mut std::collections::BTreeSet<String>,
-    ) -> bool {
-        fn walk(
-            this: &Checker,
-            cur: &str,
-            target: &str,
-            seen: &mut std::collections::BTreeSet<String>,
-        ) -> bool {
-            let Some(info) = this.interfaces.get(cur) else {
-                return false;
-            };
-            for parent in &info.extends {
-                if parent == target {
-                    return true;
-                }
-                if seen.insert(parent.clone()) && walk(this, parent, target, seen) {
-                    return true;
-                }
-            }
-            false
-        }
-        walk(self, name, name, stack)
-    }
-
-    /// An interface's flattened method set: its own methods plus every (transitive) parent's,
-    /// the child's signature winning on a name clash. Cycle-guarded.
-    pub(in crate::checker) fn iface_flat_methods(
-        &self,
-        name: &str,
-    ) -> Vec<(String, (Vec<Ty>, Ty))> {
-        let mut acc: HashMap<String, (Vec<Ty>, Ty)> = HashMap::new();
-        let mut seen = std::collections::BTreeSet::new();
-        self.iface_collect_methods(name, &mut acc, &mut seen);
-        let mut out: Vec<_> = acc.into_iter().collect();
-        out.sort_by(|a, b| a.0.cmp(&b.0));
-        out
-    }
-
-    pub(in crate::checker) fn iface_collect_methods(
-        &self,
-        name: &str,
-        acc: &mut HashMap<String, (Vec<Ty>, Ty)>,
-        seen: &mut std::collections::BTreeSet<String>,
-    ) {
-        if !seen.insert(name.to_string()) {
-            return;
-        }
-        let Some(info) = self.interfaces.get(name) else {
-            return;
-        };
-        // Parents first, so a child interface's own signature overrides on a clash.
-        for parent in &info.extends {
-            self.iface_collect_methods(parent, acc, seen);
-        }
-        for (m, sig) in &info.methods {
-            acc.insert(m.clone(), (sig.params.clone(), sig.ret.clone()));
-        }
-    }
-
-    /// A class method conforms to an interface signature when arities match and each parameter type
-    /// and the return type are equal (exact — no variance this slice, matching `assignable`'s
-    /// function rule).
-    /// `have` is the class's overload set for the method name (M-RT overloading): conformance holds
-    /// when *any* overload matches the interface signature exactly.
-    pub(in crate::checker) fn sig_conforms(&self, have: &[FnSig], want: &(Vec<Ty>, Ty)) -> bool {
-        have.iter().any(|h| Self::one_sig_conforms(h, want))
-    }
-
-    /// Whether ONE overload matches the interface signature exactly — extracted from
-    /// [`Self::sig_conforms`] so DEC-379's conformance check can ask *which* overload matches, not just
-    /// whether any does. Single-sourced deliberately: two copies of this predicate could drift, and the
-    /// visibility rule would then enforce against a different overload than the one conformance blessed.
-    pub(in crate::checker) fn one_sig_conforms(h: &FnSig, want: &(Vec<Ty>, Ty)) -> bool {
-        h.params.len() == want.0.len()
-            && h.params.iter().zip(&want.0).all(|(a, b)| a == b)
-            && h.ret == want.1
-    }
-
-    /// Nominal subtyping for assignability and `instanceof`: `a` is a subtype of `b` when they are
-    /// equal, when class `a` implements interface `b` (transitively, via [`Self::class_implements`]),
-    /// when class `a` extends class `b` (transitively, via [`Self::class_supertypes`] — M-RT S6), or
-    /// when interface `a` extends interface `b` (transitively).
-    pub(in crate::checker) fn is_subtype(&self, a: &str, b: &str) -> bool {
-        if a == b {
-            return true;
-        }
-        if self
-            .class_implements
-            .get(a)
-            .is_some_and(|ifaces| ifaces.iter().any(|i| i == b))
-        {
-            return true;
-        }
-        // class `a` extends class `b` transitively (M-RT S6)?
-        if self
-            .class_supertypes
-            .get(a)
-            .is_some_and(|sup| sup.iter().any(|s| s == b))
-        {
-            return true;
-        }
-        // interface `a` extends `b` transitively?
-        if self.interfaces.contains_key(a) {
-            let mut seen = std::collections::BTreeSet::new();
-            return self.iface_in_cycle_to(a, b, &mut seen);
-        }
-        false
-    }
-
-    pub(in crate::checker) fn iface_in_cycle_to(
-        &self,
-        cur: &str,
-        target: &str,
-        seen: &mut std::collections::BTreeSet<String>,
-    ) -> bool {
-        let Some(info) = self.interfaces.get(cur) else {
-            return false;
-        };
-        for parent in &info.extends {
-            if parent == target {
-                return true;
-            }
-            if seen.insert(parent.clone()) && self.iface_in_cycle_to(parent, target, seen) {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Context-aware assignability: [`Ty::assignable`] plus this checker's nominal subtyping.
-    pub(in crate::checker) fn ty_assignable(&self, from: &Ty, to: &Ty) -> bool {
-        // DEC-211: a BOUNDED type parameter is assignable to its bound interface (and anything the
-        // bound is assignable to) — so `T` where `T: Comparable` satisfies a `Comparable` parameter.
-        // The same-param `T <: T` case falls through to the structural path below.
-        if let Ty::Param(p) = from {
-            if let Some((_, iface)) = self.active_type_param_bounds.iter().find(|(n, _)| n == p) {
-                if self.ty_assignable(&Ty::Named(iface.clone(), Vec::new()), to) {
-                    return true;
-                }
-            }
-        }
-        // DEC-257 generic interfaces: a class instance flowing into a PARAMETERIZED interface type
-        // (`Ints` → `Producer<int>`) must match the arguments it implements the interface with —
-        // the name-only `subtype` closure below can't see them, and would wrongly accept
-        // `Ints` → `Producer<string>`. Invariant per argument (`Ty::Error` is the wildcard, same
-        // rule as same-head generics); the class's own type parameters in the recorded arguments
-        // are substituted from the instance (`Boxed<int>` → `Producer<int>`). A class whose
-        // generic-implements is only INHERITED from a parent has no recorded entry and falls
-        // through to the name-based path (documented deferral — direct implementors only).
-        if let (Ty::Named(fc, fargs), Ty::Named(tn, targs)) = (from, to) {
-            if !targs.is_empty() && fc != tn && self.interfaces.contains_key(tn) {
-                if let Some(ci) = self.classes.get(fc) {
-                    if let Some(decl_args) = ci.iface_args.get(tn) {
-                        let theta: HashMap<String, Ty> = ci
-                            .type_params
-                            .iter()
-                            .cloned()
-                            .zip(fargs.iter().cloned())
-                            .collect();
-                        return decl_args.len() == targs.len()
-                            && decl_args.iter().zip(targs).all(|(da, ta)| {
-                                let da = crate::checker::common::apply_subst(da, &theta);
-                                da == *ta || da == Ty::Error || *ta == Ty::Error
-                            });
-                    }
-                }
-            }
-        }
-        Ty::assignable_with(from, to, &|a, b| self.is_subtype(a, b))
     }
 }

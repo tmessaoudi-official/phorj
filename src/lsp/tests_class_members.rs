@@ -109,3 +109,28 @@ fn completion_after_a_class_name_lists_its_static_members() {
     }
     assert!(!got.contains(&"describe"), "instance method in {got:?}");
 }
+
+#[test]
+fn completion_lists_a_trait_static_on_its_user_and_on_the_users_subclass() {
+    // Plan row 4c item 5 (Invariant 17): `U.sf()` / `V.s` check clean, so `U.` and `V.` must list a
+    // trait's static members — the chain walked only the classes' own declarations.
+    let src = "package Main;
+trait T { mutable static int s = 1; static function sf(): int { return 3; } }
+open class U { use T; }
+class V extends U {}
+function f(): int {
+    V.
+    return 0; }
+";
+    let offset = src.find("V.\n").unwrap() + 2;
+    let resp =
+        super::completion::complete(src, offset, None, None, &std::collections::HashMap::new());
+    let got: Vec<&str> = resp
+        .split("\"label\":\"")
+        .skip(1)
+        .filter_map(|r| r.split('"').next())
+        .collect();
+    for want in ["s", "sf"] {
+        assert!(got.contains(&want), "want {want} in {got:?}");
+    }
+}
