@@ -105,6 +105,18 @@ impl Compiler<'_> {
                     self.emit(Op::Pop, span.line); // discard the set's return value
                     Ok(())
                 }
+                // Plan row 4b: a hooked write the receiver's compile-time class does not decide — the
+                // runtime class's `<name>$set` or the stored field, then discard the `Unit` left.
+                Expr::Member { object, name, .. }
+                    if self.hook_dynamic(object, name, "set").is_some() =>
+                {
+                    let (fidx, hidx) = self.hook_dynamic(object, name, "set").unwrap();
+                    self.expr(object)?; // [instance]
+                    self.expr(value)?; // [instance, value]
+                    self.emit(Op::SetFieldOrHook(fidx, hidx), span.line); // [unit]
+                    self.emit(Op::Pop, span.line);
+                    Ok(())
+                }
                 // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6). Evaluate the
                 // object then the value (interpreter eval order), then `SetField` mutates the shared
                 // `Rc<Instance>` cell in place and pops both. The field is checker-guaranteed `mutable`.

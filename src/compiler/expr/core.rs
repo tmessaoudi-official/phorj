@@ -279,6 +279,18 @@ impl Compiler<'_> {
                         let idx = self.field_name_index(&getm)?;
                         self.emit(Op::CallMethod(idx, 0), line);
                     }
+                } else if let Some((fidx, hidx)) = self.hook_dynamic(object, name, "get") {
+                    // Plan row 4b: some class hooks `name` but the receiver's compile-time class
+                    // does not decide it — dispatch on the RUNTIME class (`vm/runtime_class.rs`).
+                    if *safe {
+                        self.compile_safe_access(object, line, |c| {
+                            c.emit(Op::GetFieldOrHook(fidx, hidx), line);
+                            Ok(())
+                        })?;
+                    } else {
+                        self.expr(object)?;
+                        self.emit(Op::GetFieldOrHook(fidx, hidx), line);
+                    }
                 } else if name == "value" && self.is_backed_enum_receiver(object) {
                     // DEC-302 `s.value` on a backed enum → `Op::EnumValue` (backing lookup), not a
                     // `GetField` (an enum value has no instance field). `?.value` short-circuits null.

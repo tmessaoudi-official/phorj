@@ -810,6 +810,9 @@ impl<'a> Vm<'a> {
                     }
                 }
             }
+            Op::CloneInstance => self.op_clone_instance()?, // row 4b — runtime-class ops,
+            Op::GetFieldOrHook(f, h) => self.op_get_field_or_hook(f, h)?, // `vm/runtime_class.rs`
+            Op::SetFieldOrHook(f, h) => self.op_set_field_or_hook(f, h)?,
             Op::GetStatic(idx) => {
                 // Program-lifetime static read `ClassName.field` (M-mut.7).
                 self.stack.push(self.statics[idx].clone());

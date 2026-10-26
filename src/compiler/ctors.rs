@@ -62,6 +62,7 @@ pub(super) fn compile_constructor<'a>(
     );
     comp.cur_class = Some(c.name.clone()); // `this` resolves to this class (ctype)
     comp.parent_parents = Some(parent_parents); // M-RT super/parent resolution in a ctor body
+    comp.class_parents_all = Some(parent_parents); // row 4b class exactness
     for p in &all_params {
         comp.add_local(&p.name, resolve_cty(&p.ty));
     }
@@ -170,6 +171,7 @@ pub(super) fn compile_method<'a>(
     );
     comp.cur_class = Some(class_name.to_string()); // `this` resolves to this class (ctype)
     comp.parent_parents = Some(parent_parents); // M-RT super/parent resolution in a method body
+    comp.class_parents_all = Some(parent_parents); // row 4b class exactness
     comp.add_local("$this", CTy::Other); // slot 0 = receiver
     for p in &f.params {
         comp.add_local(&p.name, resolve_cty(&p.ty));

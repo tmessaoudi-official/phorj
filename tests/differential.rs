@@ -7836,3 +7836,124 @@ fn clone_with_as_a_receiver_agrees_on_every_leg() {
         "clone_with_as_a_receiver",
     );
 }
+
+// ── VM-WITH-STATIC-CLASS (plan row 4b step 2) ─────────────────────────────────────────────────────
+// The VM used to pick a `with` target and a property hook at COMPILE time from the receiver's
+// compiler type; the tree-walker (the oracle) and PHP use the RUNTIME class. Each program below
+// split the legs on the pre-fix binary; the expected text is the oracle's output.
+const VWSC_ANIMAL: &str = "open class Animal { constructor(public string name) {} \
+    open function kind(): string { return \"animal\"; } }";
+
+#[test]
+fn vm_with_through_a_supertype_keeps_the_runtime_class() {
+    agree_out_php(
+        &format!("import Core.Output; {VWSC_ANIMAL} class Dog extends Animal {{ function kind(): string {{ return \"dog\"; }} }} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void {{ Animal a = new Dog(\"q\"); Animal b = a with {{ name = \"z\" }}; \
+         Output.printLine(\"{{b.kind()}} {{b.name}} {{a.name}}\"); }}"),
+        "dog z q\n",
+        "vwsc_with_supertype",
+    );
+}
+
+#[test]
+fn vm_hook_read_through_a_supertype_runs_the_hook() {
+    agree_out_php(
+        &format!("import Core.Output; {VWSC_ANIMAL} class Dog extends Animal {{ string name {{ get => \"hooked\"; }} }} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void {{ Dog d = new Dog(\"d\"); Animal a = d; \
+         Output.printLine(\"{{d.name}} {{a.name}}\"); }}"),
+        "hooked hooked\n",
+        "vwsc_hook_supertype",
+    );
+}
+
+#[test]
+fn vm_hook_read_on_an_untyped_receiver_runs_the_hook() {
+    agree_out_php(
+        &format!("import Core.Output; import Core.Result; {VWSC_ANIMAL} class Dog extends Animal {{ string name {{ get => \"hooked\"; }} }} \
+         function get(): Result<Dog, string> {{ return new Result.Success(new Dog(\"d\")); }} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void {{ string s = match (get()) {{ Result.Success(c) => c.name, Result.Failure(e) => e }}; \
+         Dog e = null ?? new Dog(\"e\"); Output.printLine(\"{{s}} {{(null ?? new Dog(\"e\")).name}} {{e.name}}\"); }}"),
+        "hooked hooked hooked\n",
+        "vwsc_hook_untyped",
+    );
+}
+
+#[test]
+fn vm_hook_only_property_on_an_untyped_receiver_compiles_and_runs() {
+    agree_out_php(
+        "import Core.Output; import Core.Result; class Cat { constructor(public string tag) {} string name { get => \"cat:\" + this.tag; } } \
+         function get(): Result<Cat, string> { return new Result.Success(new Cat(\"x\")); } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { string s = match (get()) { Result.Success(c) => c.name, Result.Failure(e) => e }; \
+         Output.printLine(\"{s} {(null ?? new Cat(\"z\")).name}\"); }",
+        "cat:x cat:z\n",
+        "vwsc_hook_only",
+    );
+}
+
+#[test]
+fn vm_with_on_an_untyped_receiver_compiles_and_keeps_the_runtime_class() {
+    agree_out_php(
+        &format!("import Core.Output; import Core.Result; {VWSC_ANIMAL} class Dog extends Animal {{ function kind(): string {{ return \"dog\"; }} }} \
+         function get(): Result<Dog?, string> {{ Dog? d = new Dog(\"r\"); return new Result.Success(d); }} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void {{ Animal x = (null ?? new Dog(\"q\")) with {{ name = \"z\" }}; \
+         string s = match (get()) {{ Result.Success(c) => ((c ?? new Dog(\"n\")) with {{ name = \"y\" }}).kind(), Result.Failure(e) => e }}; \
+         Output.printLine(\"{{x.kind()}} {{x.name}} {{s}}\"); }}"),
+        "dog z dog\n",
+        "vwsc_with_untyped",
+    );
+}
+
+#[test]
+fn null_coalesce_class_rhs_null_path_runs_the_hook() {
+    agree_out_php(
+        "import Core.Output; import Core.Result; open class Animal { constructor(public string name) {} } \
+         class Dog extends Animal { string name { get => \"hooked\"; } } \
+         function get(): Result<Animal?, string> { Animal? a = null; return new Result.Success(a); } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { \
+         string s = match (get()) { Result.Success(v) => (v ?? new Dog(\"d\")).name, Result.Failure(e) => e }; Output.printLine(s); }",
+        "hooked\n",
+        "null_coalesce_class_rhs_null_path",
+    );
+}
+
+#[test]
+fn vm_hook_write_through_a_supertype_runs_the_setter() {
+    agree_out_php(
+        "import Core.Output; open class Animal { constructor(public mutable string name) {} } \
+         class Dog extends Animal { string name { get => \"hooked\"; set(string v) { Output.printLine(\"set:{v}\"); } } } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Dog(\"d\"); Animal a = d; a.name = \"w\"; \
+         Output.printLine(\"{d.name} {a.name}\"); }",
+        "set:w\nhooked hooked\n",
+        "vwsc_hook_write_supertype",
+    );
+}
+
+#[test]
+fn vm_with_evaluates_overrides_in_source_order() {
+    agree_out_php(
+        "import Core.Output; class P { constructor(public int x, public int y) {} } \
+         function f(string tag, int v): int { Output.printLine(tag); return v; } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { P p = new P(1, 2); \
+         P q = p with { y = f(\"y\", 9), x = f(\"x\", 8) }; Output.printLine(\"{q.x} {q.y}\"); }",
+        "y\nx\n8 9\n",
+        "vwsc_with_override_order",
+    );
+}
+
+/// Invariant 8 (two `with` scratch slots in one expression, and one nested in an override), plus
+/// two shapes the same compile-time decision broke: a base-class method reading `this.name` that a
+/// subclass hooks, and a `?.` read through the runtime-class path.
+#[test]
+fn vm_runtime_class_ops_compose_in_one_expression() {
+    agree_out_php(
+        "import Core.Output; open class Animal { constructor(public string name) {} \
+         open function kind(): string { return \"animal\"; } function show(): string { return \"show:\" + this.name; } } \
+         class Dog extends Animal { string name { get => \"hooked\"; } function kind(): string { return \"dog\"; } } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Animal a = new Dog(\"q\"); \
+         Output.printLine((a with { name = \"x\" }).kind() + \"/\" + (a with { name = \"y\" }).kind()); \
+         Animal n = a with { name = (a with { name = \"inner\" }).kind() }; Animal? m = a; \
+         Output.printLine(\"{n.kind()} {a.show()} {m?.name ?? \"none\"}\"); }",
+        "dog/dog\ndog show:hooked hooked\n",
+        "vwsc_compose",
+    );
+}

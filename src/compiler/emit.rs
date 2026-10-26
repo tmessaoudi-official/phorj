@@ -54,6 +54,7 @@ impl<'a> Compiler<'a> {
             method_overloads,
             cur_class: None,
             parent_parents: None,
+            class_parents_all: None,
             match_bindings: Vec::new(),
             narrow_overlay: Default::default(),
             height: 0,
@@ -114,11 +115,14 @@ impl<'a> Compiler<'a> {
             Op::CallStaticOverload(_, argc) => -(*argc as isize),
             Op::MakeEnum(idx) => 1 - self.enum_descs[*idx].arity as isize,
             Op::MakeInstance(idx) => 1 - self.class_descs[*idx].fields.len() as isize,
-            Op::GetField(_) => 0,   // pop instance, push field value
-            Op::SetField(_) => -2,  // pop instance + value, push nothing (statement)
-            Op::GetStatic(_) => 1,  // push the static's value
-            Op::SetStatic(_) => -1, // pop the value into the static slot
-            Op::IsInstance(_) => 0, // pop value, push bool
+            Op::GetField(_) => 0,         // pop instance, push field value
+            Op::SetField(_) => -2,        // pop instance + value, push nothing (statement)
+            Op::CloneInstance => 0,       // pop instance, push its runtime-class copy (row 4b)
+            Op::GetFieldOrHook(..) => 0,  // pop instance, push the hook result or the field
+            Op::SetFieldOrHook(..) => -1, // pop instance + value, push `Unit` (then `Pop`)
+            Op::GetStatic(_) => 1,        // push the static's value
+            Op::SetStatic(_) => -1,       // pop the value into the static slot
+            Op::IsInstance(_) => 0,       // pop value, push bool
             // Pops the receiver + `argc` args, pushes one result.
             Op::CallMethod(_, argc) => -(*argc as isize),
             // `parent`/super dispatch (M-RT): pops `this` + `argc` args, pushes the result → net -argc.

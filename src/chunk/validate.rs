@@ -95,6 +95,12 @@ impl BytecodeProgram {
                             format!("field-name index {idx} out of range (name pool has {nnames})")
                         })
                     }
+                    Op::GetFieldOrHook(f, h) | Op::SetFieldOrHook(f, h) => {
+                        let bad = if *f >= nnames { *f } else { *h };
+                        (*f >= nnames || *h >= nnames).then(|| {
+                            format!("field-name index {bad} out of range (name pool has {nnames})")
+                        })
+                    }
                     Op::CallNative(idx, _) => (*idx >= nnatives).then(|| {
                         format!("native index {idx} out of range (registry has {nnatives})")
                     }),
@@ -147,6 +153,7 @@ impl BytecodeProgram {
                     // DEC-513: carries an arity + a projection kind, not a pool index.
                     | Op::CmpSeq(_, _)
                     | Op::Pop
+                    | Op::CloneInstance
                     | Op::GetLocal(_)
                     | Op::SetLocal(_)
                     | Op::SetIndexLocal(_)

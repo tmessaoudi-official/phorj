@@ -263,6 +263,19 @@ pub enum Op {
     /// the write is visible through every binding to the same instance. Pushes nothing (statement
     /// form). The field is checker-guaranteed to exist and be `mutable`.
     SetField(usize),
+    /// `obj with { … }` when the receiver's class is not known exactly at compile time (plan row 4b,
+    /// VM-WITH-STATIC-CLASS): pop an instance and push a shallow copy of it — its RUNTIME class,
+    /// layout and field values; the constructor does not run. The compiler then writes each
+    /// override with `SetField` in source order, exactly as the interpreter does.
+    CloneInstance,
+    /// `o.name` when some class in the program hooks `name` and the receiver's compile-time class
+    /// does not decide it (row 4b): `(field, hook)` are `names` indices. If the RUNTIME class has the
+    /// `hook` (`<name>$get`) method, call it with the instance as `this`; else act as `GetField(field)`.
+    GetFieldOrHook(usize, usize),
+    /// The write twin of [`Self::GetFieldOrHook`]: pop a value then an instance; call the runtime
+    /// class's `<name>$set` with that value, or else act as `SetField(field)`. Either way one value is
+    /// left on the stack (the setter's `Unit`, or a pushed `Unit`), which the statement discards.
+    SetFieldOrHook(usize, usize),
     /// Push a clone of the program-level static field `static_inits[idx]`'s current value (M-mut.7):
     /// `ClassName.field` static read. The slot lives in the VM's runtime `statics` vector.
     GetStatic(usize),
