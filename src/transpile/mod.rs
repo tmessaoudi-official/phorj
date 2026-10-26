@@ -108,6 +108,9 @@ struct Transpiler {
     /// is in this set emits as `ClassName::NAME` (no `$`) — checked before the static-field `::$name`
     /// path. PHP resolves an inherited `Sub::MAX` itself, so only the keys are needed.
     consts: HashSet<(String, String)>,
+    /// `(class, static field) → owning class` (plan row 4c item 2): `C.f` emits `Owner::$f`, the one
+    /// slot the native legs share — `M::$f` is M's own trait copy when `M`'s parent is decomposed.
+    static_owners: std::collections::BTreeMap<(String, String), String>,
     variants: HashSet<String>,
     /// DEC-320 split emission: `Some` = only these top-level items emit; `None` = classic emit.
     keep: Option<HashSet<String>>,

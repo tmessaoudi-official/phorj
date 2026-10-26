@@ -147,6 +147,9 @@ pub struct Interp<'c> {
     /// (base-first across ancestors, declaration order). Seeded once at load from the shared
     /// [`crate::ast::field_initializers`]; evaluated per-instance in `construct` after promotion.
     field_inits: HashMap<String, Vec<(String, Expr)>>,
+    /// `(class, static field) → owning class` (plan row 4c item 2): an inherited static names its
+    /// owner's one slot. Seeded once at load from the shared [`crate::ast::static_field_owners`].
+    static_owners: HashMap<(String, String), String>,
     /// The shared `name → slot` field layout per class (M-perf S1b), built once at load from
     /// [`crate::ast::class_field_layout`] — the *same* source the compiler/VM build their layouts
     /// from, so an interpreter-built instance and a VM-built instance of one class agree on slots.
@@ -293,6 +296,7 @@ fn run_program_main(
         statics: HashMap::new(),
         consts: HashMap::new(),
         field_inits: HashMap::new(),
+        static_owners: HashMap::new(),
         layouts: HashMap::new(),
         frame: CallScopes::new(),
         this: None,

@@ -87,7 +87,8 @@ impl<'c> Interp<'c> {
                     if let Expr::Ident(cls, _) = &**object {
                         if self.frame.lookup(cls).is_none() && self.classes.contains_key(cls) {
                             let v = self.eval(value)?;
-                            self.statics.insert((cls.clone(), name.clone()), v);
+                            let key = self.static_key(cls, name);
+                            self.statics.insert(key, v);
                             return Ok(());
                         }
                     }

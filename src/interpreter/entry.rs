@@ -31,6 +31,7 @@ fn fresh_interp(program: &Program) -> Interp<'_> {
         statics: HashMap::new(),
         consts: HashMap::new(),
         field_inits: HashMap::new(),
+        static_owners: HashMap::new(),
         layouts: HashMap::new(),
         frame: CallScopes::new(),
         this: None,

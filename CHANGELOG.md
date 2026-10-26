@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — plan row 4c: static and composition parity (2026-10-26)
+
+- **An inherited static field read or written through a subclass** (`M.sa` with `sa` declared in `A`) was a VM compile
+  error and a tree-walker fault, and a write through `M` forked a second copy. It is now the declaring class's one slot
+  on every leg, as in PHP (`ast::static_field_owners`, shared by all three backends); a redeclaring subclass keeps its
+  own slot and a trait's static stays a per-using-class copy.
+- **A multi-parent class whose parent has a static method** transpiled to PHP that was fatal (`Cannot make non static
+  method IA::fa() static`): the synthesized parent interface now declares the method `static`.
+
 ### Fixed — plan row 4b: three backend parity defects around `with`, property hooks and traits (2026-10-26)
 
 - **`p with { x = 5 }.d()` transpiled to a PHP 8.5 parse error** (`clone($p, [...])->d()`). A `with` result used as

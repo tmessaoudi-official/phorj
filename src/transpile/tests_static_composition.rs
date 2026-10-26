@@ -27,3 +27,25 @@ fn a_decomposed_parents_static_method_is_static_in_its_interface() {
     // An instance method keeps its non-static signature.
     assert!(out.contains("public function g(): int;"), "{out}");
 }
+
+#[test]
+fn an_inherited_static_names_its_owners_slot() {
+    // Item 2: `M.sa` is A's ONE slot on the native legs, so the PHP must name `A::$sa`. With `A`
+    // decomposed (a parent of a multi-parent class) `M::$sa` would be M's own trait copy, a second slot.
+    let out = php(
+        "open class A { static mutable int sa = 2; } open class B { function g(): int { return 1; } } \
+         class M extends A, B {} \
+         function main(): void { M.sa = 7; int v = M.sa; }",
+    );
+    assert!(
+        out.contains("A::$sa = 7;"),
+        "the write must name A's slot:\n{out}"
+    );
+    assert!(!out.contains("M::$sa"), "no second slot through M:\n{out}");
+    // A redeclaring subclass keeps its own.
+    let own = php(
+        "open class A { static mutable int sa = 2; } class M extends A { static mutable int sa = 5; } \
+         function main(): void { M.sa = 7; }",
+    );
+    assert!(own.contains("M::$sa = 7;"), "{own}");
+}
