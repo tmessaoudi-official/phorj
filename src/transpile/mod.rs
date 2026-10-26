@@ -238,6 +238,8 @@ mod tests_docs;
 mod tests_enums;
 #[cfg(test)]
 mod tests_fault_parity;
+#[cfg(test)]
+mod tests_receivers;
 
 impl Transpiler {
     /// The PHP form of a unary negation when a bare `-$x` would be WRONG, or `None` when the native

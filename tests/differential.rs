@@ -7823,3 +7823,16 @@ class C {
         "static_field_fn_named_like_field",
     );
 }
+
+/// TRANSPILE-WITH-CALL (plan row 4b): a method call or field read directly on a `with` result. The
+/// backends always ran it; the PHP leg emitted `clone(…)->d()`, a PHP 8.5 parse error.
+#[test]
+fn clone_with_as_a_receiver_agrees_on_every_leg() {
+    agree_out_php(
+        "import Core.Output; class P { constructor(public int x) {} function d(): int { return this.x * 2; } } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { P p = new P(1); int a = p with { x = 5 }.d(); \
+         int b = (p with { x = 6 }).x; Output.printLine(\"{a} {b} {p.x}\"); }",
+        "10 6 1\n",
+        "clone_with_as_a_receiver",
+    );
+}
