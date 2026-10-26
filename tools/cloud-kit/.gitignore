@@ -1,0 +1,7 @@
+# DEC-570: only ciphertext, scripts and the PUBLIC key may be committed here.
+*.tar
+*.tar.gz
+*.tgz
+*.key
+key.txt
+*.md.plain
