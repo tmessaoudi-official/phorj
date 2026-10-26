@@ -7992,3 +7992,17 @@ fn vm_runtime_hook_cache_is_keyed_on_the_runtime_class() {
         "vwsc_hook_cache_polymorphic",
     );
 }
+
+/// TRAIT-BARE-NAME (plan row 4b step 3): with no using class storing `k`, a trait body's bare `k` is
+/// the function on every leg. (A using class that stores `k` now makes it `E-BARE-FIELD` — see
+/// `src/checker/tests/trait_bare_name.rs`.)
+#[test]
+fn trait_bare_name_without_a_using_field_is_the_function_on_every_leg() {
+    agree_out_php(
+        "import Core.Output; function k(): int { return 5; } function apply(() => int f): int { return f(); } \
+         trait T { function m(): int { return apply(k); } } class C { use T; int other = 9; } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{new C().m()}\"); }",
+        "5\n",
+        "trait_bare_name_function",
+    );
+}

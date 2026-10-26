@@ -394,6 +394,9 @@ pub struct Checker {
     /// machinery), but a trait is **not a type**: this set lets `resolve_type`/`instanceof`/construction
     /// reject a trait name where a type is expected.
     traits: std::collections::HashSet<String>,
+    /// Trait name → the classes that `use` it (row 4b, TRAIT-BARE-NAME): a trait body runs with `this`
+    /// = a using class, so a bare name one of them stores as a field is a field read there.
+    trait_users: HashMap<String, Vec<String>>,
     /// Type names registered by the name-binding **pre-pass** (`prebind_types`) before any member type
     /// is resolved, so a type reference is **order-independent** — a forward reference (a later type in
     /// the same file) and a cross-file reference (a sibling file merged earlier, after the loader's

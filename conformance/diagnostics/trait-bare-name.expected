@@ -1,0 +1,5 @@
+type error at 15:22: bare field reference `k` — write `this.k`
+        return apply(k);
+                     ^
+  [E-BARE-FIELD]
+  hint: Phorj has no bare field access (like PHP's `$this->`): qualify it as `this.k`

@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — plan row 4b: three backend parity defects around `with`, property hooks and traits (2026-10-26)
+
+- **`p with { x = 5 }.d()` transpiled to a PHP 8.5 parse error** (`clone($p, [...])->d()`). A `with` result used as
+  the receiver of a call or a field read is now emitted as `(clone(…))` (`Transpiler::emit_receiver`).
+- **The VM picked a `with` target and a property hook at compile time from the receiver's static type**, while the
+  tree-walker and PHP use the runtime class. A `Dog` held as an `Animal` came back from `with` as an `Animal`; a
+  subclass's hook was skipped when read or written through the base type, including `this.name` in a base-class
+  method; `with` and hook reads on an erased receiver (`null ?? …`, a `Result` binder) failed to compile; and `with`
+  evaluated side-effecting overrides in declaration order instead of source order. Exact classes keep their
+  compile-time path, so every existing example's bytecode is unchanged. Elsewhere three new ops decide at run time
+  (`CloneInstance`, `GetFieldOrHook`, `SetFieldOrHook`, in `src/vm/runtime_class.rs`), with the hook lookup cached
+  per site (monomorphic ≈1.39× faster than uncached; one site alternating classes ≈14% slower).
+- **A trait method's bare name shared by a function and the using class's field split the legs.** The checker now
+  applies the round-5 field-first rule to every class using the trait: `E-BARE-FIELD` (write `this.k`).
+
+Found and recorded, not fixed: KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION (PHP runs a subclass's set hook during
+construction and `with`; the native legs do not; PENDING as DEC-571) and DISASSEMBLE-OVERLOAD-ORDER
+(`phg disassemble` numbers overload sets nondeterministically).
+
 ### Fixed — the P0 slice's close panel: five defects in the fixes and around them (2026-10-08)
 
 The three-lens panel on the frozen P0 batch (`0ee1cc14`) found these, each reproduced before the fix:
