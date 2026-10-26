@@ -29,15 +29,29 @@ impl Vm<'_> {
     }
 
     /// The runtime class's method named `names[hook]`, if it has one — the same `methods` table and
-    /// key `CallMethod` resolves through. A hook is never overloaded, so no overload selection.
-    fn runtime_hook(&self, receiver: usize, hook: usize) -> Option<usize> {
-        match &self.stack[receiver] {
-            Value::Instance(inst) => {
-                let key = (inst.class.to_string(), self.program.names[hook].clone());
-                self.program.methods.get(&key).copied()
-            }
-            _ => None,
+    /// key `CallMethod` resolves through (a hook is never overloaded). Cached per op site exactly as
+    /// `CallMethod` caches its target, keyed on the class-name pointer; `NO_HOOK` caches "this class
+    /// has no hook", so a monomorphic site does no lookup and no `String` allocation after its first run.
+    fn runtime_hook(
+        &self,
+        receiver: usize,
+        hook: usize,
+        (func, fr): (usize, usize),
+    ) -> Option<usize> {
+        const NO_HOOK: u32 = u32::MAX;
+        let Value::Instance(inst) = &self.stack[receiver] else {
+            return None;
+        };
+        let class_ptr: *const u8 = inst.class.as_ptr();
+        let cell = &self.method_caches[func][self.frames[fr].ip - 1];
+        let (cached_class, cached) = cell.get();
+        if cached_class == class_ptr {
+            return (cached != NO_HOOK).then_some(cached as usize);
         }
+        let key = (inst.class.to_string(), self.program.names[hook].clone());
+        let found = self.program.methods.get(&key).copied();
+        cell.set((class_ptr, found.map_or(NO_HOOK, |f| f as u32)));
+        found
     }
 
     /// Enter `func` with the `argc + 1` values on top of the stack as its slots (receiver = `this`),
@@ -56,9 +70,14 @@ impl Vm<'_> {
     }
 
     /// `Op::GetFieldOrHook(field, hook)`: `[.., instance]` → the hook's result, or the stored field.
-    pub(super) fn op_get_field_or_hook(&mut self, field: usize, hook: usize) -> Result<(), String> {
+    pub(super) fn op_get_field_or_hook(
+        &mut self,
+        field: usize,
+        hook: usize,
+        site: (usize, usize),
+    ) -> Result<(), String> {
         let receiver = self.stack.len() - 1;
-        if let Some(f) = self.runtime_hook(receiver, hook) {
+        if let Some(f) = self.runtime_hook(receiver, hook, site) {
             return self.enter_hook(f, 0);
         }
         match self.pop() {
@@ -82,9 +101,14 @@ impl Vm<'_> {
     }
 
     /// `Op::SetFieldOrHook(field, hook)`: `[.., instance, value]` → `[.., Unit]`.
-    pub(super) fn op_set_field_or_hook(&mut self, field: usize, hook: usize) -> Result<(), String> {
+    pub(super) fn op_set_field_or_hook(
+        &mut self,
+        field: usize,
+        hook: usize,
+        site: (usize, usize),
+    ) -> Result<(), String> {
         let receiver = self.stack.len() - 2;
-        if let Some(f) = self.runtime_hook(receiver, hook) {
+        if let Some(f) = self.runtime_hook(receiver, hook, site) {
             return self.enter_hook(f, 1);
         }
         let value = self.pop();
