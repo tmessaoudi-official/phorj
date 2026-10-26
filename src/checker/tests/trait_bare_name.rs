@@ -65,7 +65,7 @@ fn a_bare_field_in_the_class_itself_still_advises_this() {
 #[test]
 fn the_trait_hint_without_a_shadowed_function_does_not_mention_one() {
     // Panel round 2 (completeness F4): with no function `k` anywhere, "rename the function" names a
-    // function that does not exist; the advice is to declare the field in the trait or pass it in.
+    // function that does not exist; the advice is to pass the value in or require an abstract method.
     let src = "trait T { function m(): int { return k; } } class C { use T; int k = 9; } \
                function main(): void { int r = new C().m(); }";
     let errs = errors_of(src);
@@ -75,8 +75,11 @@ fn the_trait_hint_without_a_shadowed_function_does_not_mention_one() {
         .expect("E-BARE-FIELD");
     let text = format!("{} {}", e.message, e.hint.clone().unwrap_or_default());
     assert!(
-        !text.contains("function"),
+        !text.contains("rename the function"),
         "names a missing function: {text}"
     );
-    assert!(text.contains("declare `k` in the trait"), "{text}");
+    // Not "declare `k` in the trait": a trait's own field initializer is not applied yet (KNOWN_ISSUES
+    // STATIC-COMPOSITION-PARITY item 4), so that advice led into a fault (panel round 3).
+    assert!(text.contains("abstract function k()"), "{text}");
+    assert!(!text.contains("declare `k` in the trait"), "{text}");
 }

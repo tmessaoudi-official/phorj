@@ -20,6 +20,23 @@ impl Compiler<'_> {
             .ok_or_else(|| format!("unknown field `{name}`"))
     }
 
+    /// Emit the plain read of `.name` on the value on top of the stack: `GetField`, or `EnumValue` for
+    /// a `.value` whose name no class declares as a field or hook — the checker accepted the read, so
+    /// the receiver (one the compiler could not type: `m ?? …`, a `Result` binder) is a backed enum
+    /// (plan row 4b, close panel round 3).
+    pub(in crate::compiler) fn emit_field_read(
+        &mut self,
+        name: &str,
+        line: u32,
+    ) -> Result<(), String> {
+        match self.field_name_index(name) {
+            Ok(idx) => self.emit(Op::GetField(idx), line),
+            Err(_) if name == "value" => self.emit(Op::EnumValue, line),
+            Err(e) => return Err(e),
+        }
+        Ok(())
+    }
+
     /// Resolve a `ClassName.field` static-field access to its program-level static slot (M-mut.7).
     /// Returns `Some(idx)` only when `object` is a class *name* (not shadowed by a local) and `field`
     /// is one of its `static` fields — i.e. exactly the static-access shape the checker accepts.

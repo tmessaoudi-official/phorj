@@ -99,7 +99,7 @@
   - [Comment syntax](#comment-syntax) *(2026-07-31 — DEC-419, SHIPPED)*
 - **Part III — Type system & semantics**
   - [Comprehensive statics](#comprehensive-statics) *(2026-06-28 — A+B SHIPPED, LSB deferred)*
-  - [Runtime-class dispatch — `with` and property hooks](#runtime-class-dispatch--with-and-property-hooks) *(2026-10-26 — row 4b, SHIPPED; three PENDING questions)*
+  - [Runtime-class dispatch — `with` and property hooks](#runtime-class-dispatch--with-and-property-hooks) *(2026-10-26 — row 4b, SHIPPED; three rulings queued as rows 4e–4g)*
   - [Secret type](#secret-type) *(2026-06-28 — SHIPPED)*
   - [Nested-value index-assignment](#nested-value-index-assignment) *(2026-07-01 — SHIPPED)*
   - [`using` — the scope guard](#using--the-scope-guard) *(2026-07-30 — DEC-364, SHIPPED)*
@@ -744,10 +744,10 @@ The VM decides at compile time only when it is exact (a class no class extends) 
 `CloneInstance` / `GetFieldOrHook` / `SetFieldOrHook`. Those are emitted only when the receiver's class or a descendant
 has the hook, which is an implementation detail with no observable effect.
 
-**PENDING (Invariant 15) — not yet the language:** DEC-571 (does a subclass's set hook run during parent-constructor
-promotion and `with`; PHP runs it), DEC-572 (does a subclass inherit its parent's hook; PHP inherits, the native legs do
-not), DEC-573 (does a bare name read a field only a subclass stores). Until ruled, these shapes are disclosed splits in
-KNOWN_ISSUES, not specified behaviour.
+**RULED 2026-10-26 (developer, option (a) each), not yet built:** DEC-571 — a subclass's set hook runs during
+parent-constructor promotion and `with`, as in PHP (plan row 4f); DEC-572 — a subclass inherits its parent's hooks, as in
+PHP (row 4e); DEC-573 — a bare name never reads a field, so a name matching only a subclass's field is the top-level
+function (row 4g). Until those rows land, the shapes remain disclosed splits in KNOWN_ISSUES.
 
 ## Secret type
 

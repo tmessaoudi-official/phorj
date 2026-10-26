@@ -183,3 +183,74 @@ fn the_clone_lowering_agrees_with_the_oracle_end_to_end() {
     assert_eq!(jit_out, oracle);
     assert_eq!(oracle, "45 7 46 4 33 15\n");
 }
+
+/// The L2b `this`-field TAKE (`analyze/this_take.rs`) must stay off in a method holding a runtime-class
+/// op: a hook (`D.b`) may read any field of `this`, so moving a field's word out at its "last" read
+/// would leave the hook reading a poisoned slot. Owned temp receivers (`new D(..).m()`) are exactly
+/// the owned-`this` shape the take applies to; the per-iteration `probe` allocation would reuse a
+/// wrongly freed word.
+const TAKE_SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+    import Core.Output;\n\
+    open class C { constructor(public string a, public string b) {} \
+      function m(): string { return this.a + this.b; } function h(): string { return this.b; } \
+      function n(): string { return this.a + this.h(); } \
+      function w(): C { return this with { a = this.a + \"w\" }; } }\n\
+    class D extends C { string b { get => this.a + \"!\"; } }\n\
+    function f(int k): int { mutable int s = 0; for (mutable int i = 0; i < k; i++) { \
+      string x = new D(\"p\" + \"q\", \"r\" + \"s\").m() + \"|\"; \
+      string y = new D(\"p\" + \"q\", \"r\" + \"s\").n() + \"|\"; \
+      string z = new D(\"p\" + \"q\", \"r\" + \"s\").w().b + \"|\"; string probe = \"zz\" + \"zz\"; \
+      if (x == \"pqpq!|\") { s = s + 1; } if (y == \"pqpq!|\") { s = s + 10; } \
+      if (z == \"pqw!|\") { s = s + 100; } } return s; }\n\
+    #[Entry(kind: EntryKind.Cli)]\n\
+    function main(): void { Output.printLine(\"{f(10)}\"); }\n";
+
+#[test]
+fn owned_this_methods_holding_runtime_class_ops_take_no_field() {
+    let program = compile_source(TAKE_SRC);
+    let f = func_index(&program, "f");
+    let args = [Value::Int(1000)];
+    assert_eq!(ub_int(&program, f, &args), 111_000, "unboxed JIT result");
+    assert_eq!(vm_int(&program, f, args.to_vec()), 111_000, "VM oracle");
+    assert_eq!(
+        crate::cli::cmd_treewalk(TAKE_SRC).expect("oracle"),
+        "1110\n"
+    );
+}
+
+/// Pinned declines (each fails closed to the VM, never miscompiles): a class with a map field has no
+/// clone repr, and an instance arriving as a parameter has no exact kind at the copy.
+const DECLINE_SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+    import Core.Output;\n\
+    open class Mapped { constructor(public Map<string, int> m, public int k) {} }\n\
+    class SubMapped extends Mapped {}\n\
+    open class Base { constructor(public int n) {} }\n\
+    class Sub extends Base {}\n\
+    function cloneMapped(int k): int { Mapped a = new Mapped([\"x\" => 1], 0); Mapped b = a with { k = k + 0 }; \
+      return b.k; }\n\
+    function cloneParam(Base b, int k): int { Base c = b with { n = k + 0 }; return c.n; }\n\
+    #[Entry(kind: EntryKind.Cli)]\n\
+    function main(): void { Output.printLine(\"{cloneMapped(3)} {cloneParam(new Sub(1), 4)}\"); }\n";
+
+#[test]
+fn a_map_field_or_a_parameter_receiver_declines_the_clone_cleanly() {
+    let program = compile_source(DECLINE_SRC);
+    for (name, reason) in [
+        ("cloneMapped", "StrIntMap"),
+        ("cloneParam", "CloneInstance on"),
+    ] {
+        let f = func_index(&program, name);
+        assert!(
+            emits_clone_instance(&program, f),
+            "{name}: the `with` must be CloneInstance"
+        );
+        let err = crate::jit::Compiled::compile_unboxed(&program, f)
+            .err()
+            .unwrap_or_else(|| panic!("{name} must decline — if it compiles, add a ub_int proof"));
+        assert!(format!("{err:?}").contains(reason), "{name}: {err:?}");
+    }
+    assert_eq!(
+        crate::cli::cmd_run(DECLINE_SRC).expect("jit-wired run ok"),
+        crate::cli::cmd_treewalk(DECLINE_SRC).expect("oracle")
+    );
+}

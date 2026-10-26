@@ -21,8 +21,12 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   and the field slot cached per site (monomorphic ≈1.39× faster than an uncached lookup; one site alternating classes
   ≈14% slower). The unboxed JIT lowers the read and write ops per site from the receiver's exact class (step 5), which
   closed the ~57× / ~80× default-engine cliffs the first cut had (release: 3522 → 49 ms, 3865 → 52 ms), and lowers
-  `CloneInstance` to a slot copy that clones each string/list field (step 5b: 1330 → 49 ms on a hot `with` loop). On the
-  VM alone a supertype read is ~7% slower than the pre-fix `GetField`.
+  `CloneInstance` to a slot copy that clones each string/list field (step 5b: 1330 → 49 ms on a hot `with` loop). Where a
+  read is not JIT-compiled (`--no-jit`, or a function the unboxed tier declines) the run-time check still costs a few
+  percent (~7% debug `--no-jit`; +2 to +12% release).
+- **Close-panel round 3**: a backed enum's `.value` behind a receiver the compiler cannot type, with no class declaring a
+  `value` field or hook, was a VM compile error while the tree-walker read the backing — it now lowers to `EnumValue`; the
+  trait `E-BARE-FIELD` hint no longer advises declaring the field in the trait (that faults today, row 4c).
 - **Close-panel round 2**: a backed enum's `.value` behind a receiver the compiler cannot type (`null ?? …`, a `Result`
   binder) faulted when a class hooks `value` — `GetFieldOrHook` now reads the backing; the example gains a subclass
   overriding the base's get and set hooks (the first `SetFieldOrHook` in an example); the trait `E-BARE-FIELD` hint no

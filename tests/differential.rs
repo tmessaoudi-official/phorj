@@ -8036,6 +8036,24 @@ fn backed_enum_value_through_an_untyped_receiver_reads_the_backing() {
     );
 }
 
+/// Panel round 3 (safety F2, pre-existing): with NO class declaring a `value` field or hook, a
+/// backed enum's `.value` behind a receiver the compiler cannot type (`m ?? …`, a Result binder) was
+/// a VM compile error (`unknown field value`) while the tree-walker read the backing. An untyped
+/// `.value` whose name is no field anywhere can only be a backed enum, so it lowers to `EnumValue`.
+#[test]
+fn backed_enum_value_through_an_untyped_receiver_with_no_value_member_anywhere() {
+    agree_out_php(
+        "import Core.Output; import Core.Result; enum Color: string { Red = \"r\", Blue = \"b\" } \
+         function pick(): Result<Color?, string> { Color? c = null; return new Result.Success(c); } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Color? m = null; \
+         Output.printLine((m ?? Color.from(\"r\")).value); \
+         string s = match (pick()) { Result.Success(v) => (v ?? Color.from(\"b\")).value, Result.Failure(e) => e }; \
+         Output.printLine(s); }",
+        "r\nb\n",
+        "vwsc_enum_value_untyped_no_member",
+    );
+}
+
 /// `this` in a trait body is any using class or a subclass of one, so a hook a subclass declares
 /// is found at run time — the trait-body form of a base-class method reading `this.name`.
 #[test]

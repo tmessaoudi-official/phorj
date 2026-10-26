@@ -11,7 +11,8 @@ unchanged by it, and the interpreter and the VM agree. Two shapes split the inte
 | the same `Dog`, then `d with { name = "Fido" }` | writes the slot; the setter does not run | `clone($d, ['name' => 'Fido'])` runs the set hook |
 
 A get-only hook is not affected (no setter to run). Which behaviour phorj wants is a language question, recorded
-PENDING as DEC-571 (Invariant 15). `vm_hook_write_through_a_supertype_runs_the_setter` pins today's PHP output so
+PENDING as DEC-571 (Invariant 15); **RULED (a) by the developer, 2026-10-26: the setter runs, as in PHP** — queued as plan
+row 4f. `vm_hook_write_through_a_supertype_runs_the_setter` pins today's PHP output so
 that either side changing reopens it.
 
 ## HOOK-INHERITANCE — a subclass does not inherit its parent's property hook on the native legs; PHP does (found 2026-10-26)
@@ -30,7 +31,8 @@ Until row 4b's close the VM also disagreed with the oracle on both (``no method 
 agrees (`tests/differential.rs::vm_hook_on_an_extended_class_is_decided_by_the_runtime_class`, which compares only the
 native legs; the write row was found by round 2 of the close panel). The silent write drop on a program that checks
 clean is the strongest case for DEC-572's recommended option. Whether hooks are inherited is a language question,
-recorded PENDING as DEC-572 (Invariant 15).
+recorded PENDING as DEC-572 (Invariant 15). **RULED (a) by the developer, 2026-10-26: hooks are inherited, as in PHP**
+— queued as plan row 4e.
 
 ## BARE-NAME-SUBCLASS — a bare name that matches a field only a SUBCLASS stores splits the legs (found 2026-10-26)
 
@@ -46,15 +48,19 @@ class D extends C { int k = 9; }   // main: C c = new D(); c.m()
 `phg check` is clean; the VM and PHP print `5` (the function); the tree-walker reads `D`'s field and faults with
 `` `f` is not a function, variant, or class ``. The same holds when `m` sits in a trait that `open class C` uses. The
 checker's `is_cur_field` looks at the current class and the trait's direct users, never at their subclasses. Which side
-is right is a language question, recorded PENDING as DEC-573 (Invariant 15). Workaround: rename the function or the
-field.
+is right is a language question, recorded PENDING as DEC-573 (Invariant 15); **RULED (a) by the developer, 2026-10-26: a bare name
+is never a field, so `k` is the function on every leg** — queued as plan row 4g. Workaround until then: rename the
+function or the field.
 
 ## TRACE-FRAME-NAMES — two stack-trace frame names differ between the native legs (found 2026-10-26)
 
 Found by row 4b's close panel (round 2, correctness lens); both predate the row and change no output, fault kind,
 message or exit code — only the frame names in the trace. (1) A fault inside a trait method names the frame `C::f`
 (the using class) on the tree-walker and `T::f` (the trait) on the VM. (2) A get hook that reads itself
-(`get => this.name`) overflows the stack on both legs, with different frame names in the trace. Not yet fixed.
+(`get => this.name`) overflows the stack on both legs, with different frame names in the trace. (3) A fault inside a get
+hook reports the hook's line and a `Sub::name$get` frame on the VM, the caller's line and no hook frame on the
+tree-walker (round 3, correctness lens; the exact-class path too). Owner: plan row 9 (the craftsmanship batch), with
+DISASSEMBLE-OVERLOAD-ORDER.
 
 ## DISASSEMBLE-OVERLOAD-ORDER — `phg disassemble` numbers overload sets nondeterministically (found 2026-10-26)
 
@@ -123,8 +129,12 @@ the unboxed subset declines, exactly as the exact-class static path declines the
 field, which has no clone repr, declines `with` on a non-exact receiver. **Step 5b closed the third cliff**: `with` on a
 non-exact class (`CloneInstance`) took 1330 vs 35 ms (~38×) in a hot loop; the unboxed tier now copies the exact class's
 slot word by word and clones each string/list handle (`emit_unboxed/clone.rs`), 46–53 ms against 50–56 ms hook-free.
-On the VM alone (`--no-jit`) a supertype read
-costs ~7% more than the pre-fix `GetField` (`phg benchmark`, median of 101: 1560.2 vs 1462.8 ms, debug builds).
+What remains is the run-time check itself, paid
+wherever a read is NOT JIT-compiled: on the VM (`--no-jit`), and on the default engine in any function the unboxed tier
+declines (an instance arriving as a parameter, for one). Measured: debug `--no-jit` `phg benchmark` median of 101,
+1560.2 vs 1462.8 ms (~7%); release `--no-jit`, K=11 twice, 1286 vs 1148 and 1224 vs 1169 ms (+5 to +12%); release default
+engine on a declined parameter receiver, K=21 and K=11, 557 vs 507 and 519 vs 507 ms (+2 to +10%) — a few percent, at
+the edge of run-to-run noise.
 `bench/micro` has no entry for these shapes, so `microbench-gate` cannot see them; the micro (with and without a
 subclass hook) and its baseline need the PC (docker + PHP) and are OWED. Tests: `src/jit/tests/runtime_class_ops.rs`.
 Example:
@@ -184,8 +194,9 @@ check inside the trait, which declares no `k`). Queued with plan row 4b.
 
 **Fixed 2026-10-26 (row 4b, step 3):** the checker records which classes use each trait (`trait_users`), and
 `is_cur_field` answers for all of them inside a trait body, so the program above is `E-BARE-FIELD`, whose hint
-names the using class and advises renaming the function `k` or the field (or, with no such function, declaring `k`
-in the trait). A trait whose
+names the using class and advises renaming the function `k` or the field (or, with no such function, passing the value
+in or requiring it with an abstract method — not declaring `k` in the trait, which faults today: STATIC-COMPOSITION-PARITY
+item 4). A trait whose
 users store no `k` keeps the function. Tests: `src/checker/tests/trait_bare_name.rs`,
 `tests/differential.rs::trait_bare_name_without_a_using_field_is_the_function_on_every_leg`; golden:
 `conformance/diagnostics/trait-bare-name.phg`.
