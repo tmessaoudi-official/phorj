@@ -21,9 +21,10 @@ impl Compiler<'_> {
     }
 
     /// Emit the plain read of `.name` on the value on top of the stack: `GetField`, or `EnumValue` for
-    /// a `.value` whose name no class declares as a field or hook — the checker accepted the read, so
-    /// the receiver (one the compiler could not type: `m ?? …`, a `Result` binder) is a backed enum
-    /// (plan row 4b, close panel round 3).
+    /// a `.value` whose name was never interned (no class names a `value` member of any kind) — the
+    /// checker accepted the read, so the receiver (one the compiler could not type: `m ?? …`, a
+    /// `Result` binder) is a backed enum (plan row 4b, close panel round 3). Once the name IS interned
+    /// the read is a `GetField`, and the VM's `GetField` reads an enum's backing for `value` (round 4).
     pub(in crate::compiler) fn emit_field_read(
         &mut self,
         name: &str,

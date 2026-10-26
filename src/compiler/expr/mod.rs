@@ -6,3 +6,4 @@ mod binary;
 mod calls;
 mod core;
 mod lambda;
+mod member;

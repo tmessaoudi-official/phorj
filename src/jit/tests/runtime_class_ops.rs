@@ -236,7 +236,7 @@ const DECLINE_SRC: &str = "package Main; import Core.Runtime.Entry; import Core.
 fn a_map_field_or_a_parameter_receiver_declines_the_clone_cleanly() {
     let program = compile_source(DECLINE_SRC);
     for (name, reason) in [
-        ("cloneMapped", "StrIntMap"),
+        ("cloneMapped", "CloneInstance field kind StrIntMap"),
         ("cloneParam", "CloneInstance on"),
     ] {
         let f = func_index(&program, name);

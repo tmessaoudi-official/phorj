@@ -52,9 +52,9 @@ is right is a language question, recorded PENDING as DEC-573 (Invariant 15); **R
 is never a field, so `k` is the function on every leg** — queued as plan row 4g. Workaround until then: rename the
 function or the field.
 
-## TRACE-FRAME-NAMES — two stack-trace frame names differ between the native legs (found 2026-10-26)
+## TRACE-FRAME-NAMES — three stack-trace frame-name forms differ between the native legs (found 2026-10-26)
 
-Found by row 4b's close panel (round 2, correctness lens); both predate the row and change no output, fault kind,
+Found by row 4b's close panel (rounds 2 and 3, correctness lens); all three predate the row and change no output, fault kind,
 message or exit code — only the frame names in the trace. (1) A fault inside a trait method names the frame `C::f`
 (the using class) on the tree-walker and `T::f` (the trait) on the VM. (2) A get hook that reads itself
 (`get => this.name`) overflows the stack on both legs, with different frame names in the trace. (3) A fault inside a get
@@ -69,6 +69,15 @@ overload-set indices in `CallOverload(set, argc)` are permuted from run to run. 
 every leg runs it the same way. But the listing is user-facing, and Invariant 10 requires any list derived from
 `HashMap` iteration to be sorted before it is rendered. This predates the 2026-10-26 work. Likely cause [Inferred]:
 overload sets are numbered by iterating a `HashMap` in the compiler. Not yet fixed.
+
+## NULL-SAFE-UNKNOWN-MEMBER — `null?.foo` on a literal `null` fails to compile on the VM (found 2026-10-26)
+
+Found by row 4b's close panel (round 4, correctness lens); it predates the row. The checker types any `null?.x` as
+`null`, so it accepts a member name that nothing declares: `int? a = null?.foo; int t = a ?? 3;` then printing `t`
+gives `3` on the tree-walker, while `phg run` (and `--no-jit`) stop with exit 1, `compile error: unknown field
+\`foo\``, because the name was never interned; `null?.foo()` fails the same way [Verified: `target/release/phg`, all
+three legs, 2026-10-26]. Only a literal `null` receiver reaches it [Inferred: any other receiver the checker
+accepts names a declared member, which is interned; `var z = null` is already rejected]. Owner: plan row 9 (the craftsmanship batch).
 
 ## FIXED — VM-WITH-STATIC-CLASS — on the VM, `with` and property-hook reads are decided at COMPILE time from the receiver's compiler type (found 2026-10-08, fixed 2026-10-26)
 
@@ -115,6 +124,7 @@ on the pre-fix binary:
 
 Tests: the `vm_with_*`, `vm_hook_*`, `vm_trait_body_this_read_runs_a_subclass_hook`,
 `backed_enum_value_ignores_an_unrelated_hook_only_value_property`,
+the three `backed_enum_value_through_an_untyped_receiver_*` cases (close panel rounds 2–4),
 `vm_runtime_class_ops_compose_in_one_expression` and `null_coalesce_class_rhs_null_path_runs_the_hook` cases in
 `tests/differential.rs`, and `src/compiler/tests_hook_gate.rs` (which receivers pay for run-time dispatch).
 
@@ -124,9 +134,10 @@ took 3522 ms against 62 ms hook-free (~57×), a supertype write 3865 vs 50 ms (~
 one core, 2×10⁷ iterations]. **Step 5 closed both**: the unboxed tier knows each receiver's exact class
 (`Kind::Inst`), so `src/jit/analyze/runtime_class.rs` resolves each site to the class's own hook (`CallMethod`) or the
 field (`GetField`, or `SetField` consuming the `Pop` after it); the same probes now run in 47–55 ms, equal to the
-hook-free controls. Two shapes still decline: (1) a write whose runtime class HAS the setter runs a void method, which
+hook-free controls. Three shapes still decline: (1) a write whose runtime class HAS the setter runs a void method, which
 the unboxed subset declines, exactly as the exact-class static path declines the same call; (2) a class with a map
-field, which has no clone repr, declines `with` on a non-exact receiver. **Step 5b closed the third cliff**: `with` on a
+field, which has no clone repr, declines `with` on a non-exact receiver; (3) `with` on an instance that arrives as a
+parameter (or `this` reached through a method call) declines on its Unknown receiver kind, as `CallMethod` does there. **Step 5b closed the third cliff**: `with` on a
 non-exact class (`CloneInstance`) took 1330 vs 35 ms (~38×) in a hot loop; the unboxed tier now copies the exact class's
 slot word by word and clones each string/list handle (`emit_unboxed/clone.rs`), 46–53 ms against 50–56 ms hook-free.
 What remains is the run-time check itself, paid

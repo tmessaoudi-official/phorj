@@ -7918,9 +7918,9 @@ fn null_coalesce_class_rhs_null_path_runs_the_hook() {
 
 /// The VM fix is guarded on the two native legs. The PHP leg is PINNED to its known, different
 /// output: PHP runs a subclass's set hook when the parent constructor assigns a promoted field
-/// (`set:d` at construction); the native legs do not. Which semantics phorj wants is a PENDING
-/// language question (KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION, register DEC-571), so this test
-/// asserts today's split exactly — any change on either side reopens it instead of drifting.
+/// (`set:d` at construction); the native legs do not. DEC-571 is RULED (a), PHP's semantics (KNOWN_ISSUES
+/// SET-HOOK-DURING-CONSTRUCTION, plan row 4f); until row 4f lands this test asserts today's split
+/// exactly, so either side changing reopens it instead of drifting.
 #[test]
 fn vm_hook_write_through_a_supertype_runs_the_setter() {
     let src = with_pkg(
@@ -7942,7 +7942,7 @@ fn vm_hook_write_through_a_supertype_runs_the_setter() {
         assert_eq!(
             run_php(&php, &php_src, "vwsc_hook_write_supertype"),
             "set:d\nset:w\nhooked hooked\n",
-            "the PHP leg's known SET-HOOK-DURING-CONSTRUCTION split changed — reopen DEC-571"
+            "the PHP leg's known SET-HOOK-DURING-CONSTRUCTION split changed — see plan row 4f (DEC-571)"
         );
     }
 }
@@ -7951,7 +7951,7 @@ fn vm_hook_write_through_a_supertype_runs_the_setter() {
 /// grandchild does not inherit it — so a receiver typed as an extended class is decided at run time
 /// on the VM too: `d.name` with `Dog d = new Puppy(…)` reads the stored field, and a hook-only
 /// property read through such a receiver faults `no field`, never `no method … $get`. The PHP leg
-/// inherits hooks (KNOWN_ISSUES HOOK-INHERITANCE, DEC-572 PENDING), so it is not compared here.
+/// inherits hooks (KNOWN_ISSUES HOOK-INHERITANCE; DEC-572 RULED (a), plan row 4e), so it is not compared here.
 #[test]
 fn vm_hook_on_an_extended_class_is_decided_by_the_runtime_class() {
     let read = with_pkg(
@@ -7987,7 +7987,7 @@ fn vm_hook_on_an_extended_class_is_decided_by_the_runtime_class() {
     // The write twin (panel round 2, completeness F1): a get+set hook-only property written through
     // an extended class whose runtime class has no hook is DROPPED by the oracle (no slot, no
     // setter) — the VM now does the same instead of faulting `no method label$set`. A silent drop is
-    // part of DEC-572's case; this pins today's native behaviour so a change reopens it.
+    // part of DEC-572's case (RULED (a): it becomes a setter call in plan row 4e); this pins it until then.
     let write = with_pkg(
         "import Core.Output; open class Dog { constructor(public mutable int raw) {} \
          int label { get => this.raw; set(int v) { this.raw = v * 10; } } } class Puppy extends Dog {} \
@@ -8052,6 +8052,41 @@ fn backed_enum_value_through_an_untyped_receiver_with_no_value_member_anywhere()
         "r\nb\n",
         "vwsc_enum_value_untyped_no_member",
     );
+}
+
+/// Panel round 4 (correctness F2, pre-existing): when some class stores a field or declares a method
+/// named `value` (no hook), the name is interned, so an untyped `.value` compiles to `GetField` — and
+/// the VM faulted `cannot read .value on enum` on a backed enum while the tree-walker read the
+/// backing. `GetField` of `value` on an enum now reads the backing, as `GetFieldOrHook` does. Also
+/// pins the untyped `?.value` form (completeness F7), which shares `emit_field_read`.
+#[test]
+fn backed_enum_value_through_an_untyped_receiver_beside_a_value_field_or_method() {
+    for (member, tag) in [
+        (
+            "constructor(public int value) {}",
+            "vwsc_enum_value_beside_field",
+        ),
+        (
+            "function value(): int { return 1; }",
+            "vwsc_enum_value_beside_method",
+        ),
+    ] {
+        agree_out_php(
+            &format!(
+                "import Core.Output; import Core.Result; enum Color: string {{ Red = \"r\", Blue = \"b\" }} \
+                 class K {{ {member} }} \
+                 function pick(): Result<Color, string> {{ return new Result.Success(Color.from(\"r\")); }} \
+                 function pickn(): Result<Color?, string> {{ Color? c = Color.from(\"b\"); return new Result.Success(c); }} \
+                 #[Entry(kind: EntryKind.Cli)] function main(): void {{ \
+                 string s = match (pick()) {{ Result.Success(v) => v.value, Result.Failure(e) => e }}; \
+                 Output.printLine(s); \
+                 string? s2 = match (pickn()) {{ Result.Success(v) => v?.value, Result.Failure(e) => e }}; \
+                 Output.printLine(s2 ?? \"-\"); }}"
+            ),
+            "r\nb\n",
+            tag,
+        );
+    }
 }
 
 /// `this` in a trait body is any using class or a subclass of one, so a hook a subclass declares
