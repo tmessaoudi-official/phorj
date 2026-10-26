@@ -19,9 +19,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   Elsewhere three new ops decide at run time (`CloneInstance`, `GetFieldOrHook`, `SetFieldOrHook`, in
   `src/vm/runtime_class.rs`), emitted only when the receiver's class or a descendant has the hook, with the hook lookup
   and the field slot cached per site (monomorphic ≈1.39× faster than an uncached lookup; one site alternating classes
-  ≈14% slower). **Disclosed regression, OWED:** the unboxed JIT declines any function containing one of the three ops,
-  so a hot supertype read whose subclass hooks the name runs ~57× slower than the pre-fix JIT-compiled loop (release,
-  3522 vs 62 ms); on the VM alone (`--no-jit`) it is ~7% slower. Fix queued as row 4b step 5.
+  ≈14% slower). The unboxed JIT lowers the read and write ops per site from the receiver's exact class (step 5), which
+  closed the ~57× / ~80× default-engine cliffs the first cut had (release: 3522 → 49 ms, 3865 → 52 ms). Still OWED:
+  `with` on a non-exact class (`CloneInstance`) declines the JIT, ~38× in a hot loop (step 5b); on the VM alone a
+  supertype read is ~7% slower than the pre-fix `GetField`.
 - **Close-panel round 2**: a backed enum's `.value` behind a receiver the compiler cannot type (`null ?? …`, a `Result`
   binder) faulted when a class hooks `value` — `GetFieldOrHook` now reads the backing; the example gains a subclass
   overriding the base's get and set hooks (the first `SetFieldOrHook` in an example); the trait `E-BARE-FIELD` hint no

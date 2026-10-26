@@ -21,6 +21,7 @@ mod listcontains;
 mod map_materialize;
 mod math_verticals;
 mod range_and_overflow;
+mod runtime_class_ops;
 mod set_ops;
 mod string_scan;
 mod sumby;

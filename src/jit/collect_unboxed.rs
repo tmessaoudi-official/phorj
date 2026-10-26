@@ -242,7 +242,9 @@ pub(super) fn collect_functions_unboxed(
                 // required). Kind/layout gates live in `unboxed_analyze`; `CallMethod` targets
                 // are discovered by `resolve_unboxed_graph`'s fixpoint (receiver kinds needed).
                 Op::MakeInstance(_) | Op::GetField(_) | Op::SetField(_) => uses_handles = true,
-                Op::CallMethod(..) => {
+                // Row 4b: `Get`/`SetFieldOrHook` resolve per site to a field op or a hook `CallMethod`
+                // (`analyze/runtime_class.rs`), so it is counted as the call it may be.
+                Op::CallMethod(..) | Op::GetFieldOrHook(..) | Op::SetFieldOrHook(..) => {
                     has_call = true;
                     uses_handles = true;
                 }

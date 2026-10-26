@@ -13,6 +13,7 @@ mod call_plumbing;
 mod concat;
 mod ec;
 mod enums;
+mod fault_exit;
 mod index_lists;
 mod list_contains;
 mod make_seq;
@@ -29,6 +30,7 @@ use call_plumbing::*;
 use concat::*;
 use ec::*;
 use enums::*;
+use fault_exit::*;
 use index_lists::*;
 use make_seq::*;
 use objects::*;
@@ -139,48 +141,13 @@ pub(super) fn build_body_unboxed(
             .iter()
             .enumerate()
             .any(|(ip, op)| reach[ip] && speculated(op) && !proven_ops[ip]);
-    // `DivF` also branches to the fault-exit (a zero divisor → code 5), as do `DivI`/`RemI` (hardware
-    // trap) and `Call` (depth guard + fault propagation) — every op that emits a `fault_if`/direct
-    // `brif` to the shared exit must be counted here, or the block won't exist when it is needed.
-    // P-2a: `Index` (bounds), `Concat` and `String.length` (defensive bad-handle) also branch to the
-    // shared fault-exit (code 5, redo on VM). `Fault` (the match-exhaustiveness backstop) jumps to
-    // it unconditionally. `GetField` is counted because a BORROWED field word returned from the
-    // function CLONES at `Return` (fault on a defensive mismatch) — the `return this.field;`
-    // shape has no other counted op (every other borrowed-returnable value traces to one).
+    // Every op that may branch to the shared fault-exit block: `fault_exit::counts_fault_exit`.
     let needs_fault_exit = needs_sticky
         || !entry_guards.is_empty()
-        || code.iter().enumerate().any(|(ip, op)| {
-            reach[ip]
-                && matches!(
-                    op,
-                    Op::DivI
-                        | Op::RemI
-                        | Op::DivF
-                        | Op::Call(_)
-                        | Op::CallValue(_)
-                        | Op::CallMethod(..)
-                        | Op::Index
-                        | Op::Len
-                        | Op::Concat(_)
-                        | Op::CallNative(..)
-                        | Op::MakeList(_)
-                        | Op::MakeMap(_)
-                        | Op::MakeInstance(_)
-                        | Op::GetField(_)
-                        | Op::Fault(_)
-                        // STRING `Op::Eq`/`Op::Ne` emit a defensive bad-handle `fault_if` (the
-                        // `Eq(str)` helper arm, :1058); int/float/bool Eq/Ne go to `arm_cmp` and
-                        // emit no fault, so for those this over-counts a fault-exit block that is
-                        // unreferenced (terminated + DCE'd by opt_level=speed — same tolerance the
-                        // CallNative/GetField/MakeList entries above already rely on). Counting it
-                        // here is REQUIRED once a str operand can reach an `Eq`: DEC-333's entry
-                        // str-param seed makes `match (s) { "1" => … }` (firstOne) compile, and a
-                        // string-Eq-only function has NO other counted op — the missing block was
-                        // a `fault_if`-without-fault-exit panic.
-                        | Op::Eq
-                        | Op::Ne
-                )
-        });
+        || code
+            .iter()
+            .enumerate()
+            .any(|(ip, op)| reach[ip] && counts_fault_exit(op));
 
     let mut fbctx = FunctionBuilderContext::new();
     let mut b = FunctionBuilder::new(&mut cl_ctx.func, &mut fbctx);
@@ -409,7 +376,11 @@ pub(super) fn build_body_unboxed(
         if current.is_none() {
             continue;
         }
-
+        let resolved = resolve_runtime_class_op(program, &kinds, code, &is_leader, ip)?;
+        if resolved.as_ref().is_some_and(|r| r.consumes_next_pop) {
+            skip_ip = Some(ip + 1);
+        }
+        let op = resolved.as_ref().map_or(op, |r| &r.op);
         match op {
             Op::Const(idx) => match func.chunk.consts.get(*idx) {
                 Some(Value::Int(k)) => {
