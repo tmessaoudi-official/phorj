@@ -222,8 +222,8 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              rebind what looked like a field. Qualify it:\n\n\
              \tfunction total(): int { return this.amount + this.tax; }  // not `amount + tax`\n\n\
              In a trait body the error also fires when a class USING the trait stores the field. There the\n\
-             trait cannot write `this.field` (it declares no such field), so rename the top-level name or\n\
-             the field instead.\n\n\
+             trait cannot write `this.field` (it declares no such field): rename the top-level function or\n\
+             the field when both exist, else declare the field in the trait or pass the value in.\n\n\
              (In a static method there is no instance at all — that is `E-STATIC-THIS`.)\n"
         }
         "E-CONST-INSTANCE-ACCESS" => {

@@ -87,8 +87,25 @@ impl Vm<'_> {
         Some(s)
     }
 
+    /// A backed enum value's scalar backing (DEC-302) — `Op::EnumValue`, and `GetFieldOrHook` when an
+    /// untyped receiver turns out to be an enum (plan row 4b, panel round 2).
+    pub(super) fn enum_backing(&self, ev: &crate::value::EnumVal) -> Result<Value, String> {
+        self.program
+            .enum_descs
+            .iter()
+            .find(|d| d.ty == ev.ty && d.variant == ev.variant)
+            .and_then(|d| d.backing.clone())
+            .ok_or_else(|| {
+                format!(
+                    "enum `{}` variant `{}` has no backing value",
+                    ev.ty, ev.variant
+                )
+            })
+    }
+
     /// `Op::GetFieldOrHook(field, hook)`: `[.., instance]` → the hook's result, or the stored field.
     /// The receiver is read in place: the stored value replaces it, or it becomes the hook's `this`.
+    /// A backed enum read as `.value` (behind a receiver the compiler could not type) reads its backing.
     pub(super) fn op_get_field_or_hook(
         &mut self,
         field: usize,
@@ -105,6 +122,7 @@ impl Vm<'_> {
                     .and_then(|s| inst.fields.borrow()[s].clone())
                     .ok_or_else(|| faults::no_field(&self.program.names[field], &inst.class))),
             },
+            Value::Enum(ev) if self.program.names[field] == "value" => Ok(self.enum_backing(ev)),
             v => {
                 return Err(format!(
                     "cannot read `.{}` on {}",
@@ -141,7 +159,9 @@ impl Vm<'_> {
                 if let Some(s) = self.cached_slot(&inst, field, site) {
                     inst.fields.borrow_mut()[s] = Some(value);
                 }
-                // A name not in the layout is checker-unreachable — dropped, as `SetField` does.
+                // A name not in the layout is dropped, as the oracle's `set_field` does: a hook-only
+                // property written on a class that does not declare the hook (KNOWN_ISSUES
+                // HOOK-INHERITANCE — a subclass does not inherit it; DEC-572).
                 self.stack.push(Value::Unit);
                 Ok(())
             }

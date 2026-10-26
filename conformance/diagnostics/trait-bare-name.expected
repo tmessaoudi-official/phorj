@@ -2,4 +2,4 @@ type error at 15:22: bare name `k` matches the field `k` of `C`, which uses this
         return apply(k);
                      ^
   [E-BARE-FIELD]
-  hint: the trait body runs with `this` = `C`, where the bare name would read that field; rename the function or the field (the trait reaches a field only if it declares `k` itself)
+  hint: the trait body runs with `this` = `C`, where the bare name would read that field; a trait reaches only the fields it declares: rename the function `k` or the field

@@ -64,13 +64,20 @@ impl Checker {
     fn bare_field_err(&mut self, span: Span, name: &str) -> Ty {
         let owner = self.cur_field_owner(name);
         if let Some(owner) = owner.filter(|o| Some(o) != self.cur_class.as_ref()) {
+            // A trait reaches only the fields it declares. With a top-level function of the same
+            // name the bare name is ambiguous, so the advice is a rename; without one, declare it.
+            let advice = if self.funcs.contains_key(name) {
+                format!("rename the function `{name}` or the field")
+            } else {
+                format!("declare `{name}` in the trait, or pass the value in")
+            };
             return self.err_coded(
                 span,
                 format!("bare name `{name}` matches the field `{name}` of `{owner}`, which uses this trait"),
                 "E-BARE-FIELD",
                 Some(format!(
                     "the trait body runs with `this` = `{owner}`, where the bare name would read that field; \
-                     rename the function or the field (the trait reaches a field only if it declares `{name}` itself)"
+                     a trait reaches only the fields it declares: {advice}"
                 )),
             );
         }

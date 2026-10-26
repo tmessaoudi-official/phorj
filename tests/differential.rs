@@ -7983,6 +7983,24 @@ fn vm_hook_on_an_extended_class_is_decided_by_the_runtime_class() {
             .is_err_and(|e| e.contains("no field `label` on `Puppy`")),
         "oracle fault: {tree:?}"
     );
+
+    // The write twin (panel round 2, completeness F1): a get+set hook-only property written through
+    // an extended class whose runtime class has no hook is DROPPED by the oracle (no slot, no
+    // setter) — the VM now does the same instead of faulting `no method label$set`. A silent drop is
+    // part of DEC-572's case; this pins today's native behaviour so a change reopens it.
+    let write = with_pkg(
+        "import Core.Output; open class Dog { constructor(public mutable int raw) {} \
+         int label { get => this.raw; set(int v) { this.raw = v * 10; } } } class Puppy extends Dog {} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Puppy(1); d.label = 5; \
+         Dog e = new Dog(1); e.label = 5; Output.printLine(\"{d.raw} {e.raw}\"); }",
+    );
+    let tree = cmd_treewalk(&write);
+    assert_eq!(
+        tree,
+        cmd_run(&write),
+        "interp vs VM for vwsc_hook_extended_write"
+    );
+    assert_eq!(tree.as_deref(), Ok("1 50\n"), "oracle output");
 }
 
 /// A backed enum's `.value` stays `EnumValue` when some class has a hook-only `value` property:
@@ -7997,6 +8015,24 @@ fn backed_enum_value_ignores_an_unrelated_hook_only_value_property() {
          Output.printLine(c.value); Output.printLine(new Box(1).value); }",
         "r\nboxed\n",
         "vwsc_enum_value_hook",
+    );
+}
+
+/// Panel round 2 (safety F2): behind a receiver the compiler cannot type (an erased `Result`
+/// binder, `null ?? …`), a backed enum's `.value` reaches `GetFieldOrHook` when some class hooks
+/// `value`; it must read the backing as `EnumValue` does, not fault `cannot read .value on enum`.
+#[test]
+fn backed_enum_value_through_an_untyped_receiver_reads_the_backing() {
+    agree_out_php(
+        "import Core.Output; import Core.Result; enum Color: string { Red = \"r\", Blue = \"b\" } \
+         class K { string value { get => \"hook\"; } } \
+         function pick(): Result<Color?, string> { Color? c = null; return new Result.Success(c); } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Color? m = null; \
+         Output.printLine((m ?? Color.from(\"r\")).value); Output.printLine(new K().value); \
+         string s = match (pick()) { Result.Success(v) => (v ?? Color.from(\"b\")).value, Result.Failure(e) => e }; \
+         Output.printLine(s); }",
+        "r\nhook\nb\n",
+        "vwsc_enum_value_untyped",
     );
 }
 
