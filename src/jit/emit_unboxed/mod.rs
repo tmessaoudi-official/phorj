@@ -10,6 +10,7 @@
 use super::*;
 
 mod call_plumbing;
+mod clone;
 mod concat;
 mod ec;
 mod enums;
@@ -27,6 +28,7 @@ mod verticals_map;
 mod verticals_set;
 
 use call_plumbing::*;
+use clone::*;
 use concat::*;
 use ec::*;
 use enums::*;
@@ -1231,6 +1233,16 @@ pub(super) fn build_body_unboxed(
                     .collect::<Result<_, _>>()?;
                 arm_make_instance(&mut b, &ec, &vars, &fvars, &mut kinds, *cidx, &perm)?;
             }
+            Op::CloneInstance => arm_clone_instance(
+                &mut b,
+                &ec,
+                ub_refs.as_ref(),
+                &vars,
+                &fvars,
+                &mut kinds,
+                program,
+                info,
+            )?,
             Op::GetField(nidx) => {
                 let h = ub_ref(ub_refs.as_ref(), "GetField")?;
                 // L2b: the proven single-read `this.field` in an owned-`this` method MOVES

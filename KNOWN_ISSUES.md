@@ -119,9 +119,11 @@ one core, 2×10⁷ iterations]. **Step 5 closed both**: the unboxed tier knows e
 (`Kind::Inst`), so `src/jit/analyze/runtime_class.rs` resolves each site to the class's own hook (`CallMethod`) or the
 field (`GetField`, or `SetField` consuming the `Pop` after it); the same probes now run in 47–55 ms, equal to the
 hook-free controls. Two shapes still decline: (1) a write whose runtime class HAS the setter runs a void method, which
-the unboxed subset declines, exactly as the exact-class static path declines the same call; (2) **`with` on a non-exact
-class (`CloneInstance`) — 1330 vs 35 ms (~38×) in a hot loop, OWED as row 4b step 5b** (a clone needs an
-ownership-aware copy of string and handle fields in the unsafe island). On the VM alone (`--no-jit`) a supertype read
+the unboxed subset declines, exactly as the exact-class static path declines the same call; (2) a class with a map
+field, which has no clone repr, declines `with` on a non-exact receiver. **Step 5b closed the third cliff**: `with` on a
+non-exact class (`CloneInstance`) took 1330 vs 35 ms (~38×) in a hot loop; the unboxed tier now copies the exact class's
+slot word by word and clones each string/list handle (`emit_unboxed/clone.rs`), 46–53 ms against 50–56 ms hook-free.
+On the VM alone (`--no-jit`) a supertype read
 costs ~7% more than the pre-fix `GetField` (`phg benchmark`, median of 101: 1560.2 vs 1462.8 ms, debug builds).
 `bench/micro` has no entry for these shapes, so `microbench-gate` cannot see them; the micro (with and without a
 subclass hook) and its baseline need the PC (docker + PHP) and are OWED. Tests: `src/jit/tests/runtime_class_ops.rs`.

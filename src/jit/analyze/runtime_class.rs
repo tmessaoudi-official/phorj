@@ -66,3 +66,57 @@ pub(in crate::jit) fn resolve_runtime_class_op(
         consumes_next_pop: true,
     }))
 }
+
+/// The clone repr of a field kind for `rt_u_clone_value` (`None` = a scalar word, copied as-is), or
+/// `Err` for a kind the copy cannot carry (a map has no clone repr; anything else is not an
+/// instance field in the unboxed subset). Analyze and emit both gate on it.
+pub(in crate::jit) fn clone_repr(fk: Kind) -> Result<Option<i64>, JitError> {
+    match fk {
+        Kind::Int => Ok(None),
+        Kind::Str(_) => Ok(Some(2)),
+        Kind::StrList(_) => Ok(Some(3)),
+        Kind::IntList(_) => Ok(Some(4)),
+        Kind::DynList(_) => Ok(Some(5)),
+        other => Err(JitError::Unsupported(format!(
+            "unboxed: CloneInstance field kind {other:?} (deferred)"
+        ))),
+    }
+}
+
+/// Analyze `Op::CloneInstance` (step 5b) — the stack effect and gates the emit arm
+/// (`emit_unboxed/clone.rs`) relies on: an exact `Kind::Inst(c)` receiver, a class `MakeInstance`
+/// could build (every field ctor-initialized, ≤ 15), and every field kind known and copyable. Pushes
+/// the OWNED copy.
+pub(in crate::jit) fn analyze_clone_instance(
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let k = kinds
+        .pop()
+        .ok_or_else(|| JitError::Codegen("unboxed analyze: CloneInstance underflow".to_string()))?;
+    let Kind::Inst(c, _) = k else {
+        return Err(JitError::Unsupported(format!(
+            "unboxed: CloneInstance on {k:?} (deferred)"
+        )));
+    };
+    let desc = &program.class_descs[c];
+    let nf = desc.fields.len();
+    if desc.layout.len() != nf || nf > 15 {
+        return Err(JitError::Unsupported(
+            "unboxed: CloneInstance of a non-ctor-initialized or >15-field class (deferred)"
+                .to_string(),
+        ));
+    }
+    for j in 0..nf {
+        let fk = info.field_kind(c, j).ok_or_else(|| {
+            JitError::Unsupported(
+                "unboxed: CloneInstance before class signature is known (fixpoint retry)"
+                    .to_string(),
+            )
+        })?;
+        clone_repr(fk)?;
+    }
+    kinds.push(Kind::Inst(c, Own::Owned));
+    Ok(())
+}

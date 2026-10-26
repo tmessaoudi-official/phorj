@@ -19,7 +19,7 @@ pub(super) fn is_wide(program: &BytecodeProgram, c: usize) -> bool {
 
 /// The (base-pointer, byte-offset) of `layout_slot` given the instance's A-slot pointer
 /// `pa` — a wide class's fields 7.. take the ONE extra hop through the B-index word.
-fn field_addr(
+pub(super) fn field_addr(
     b: &mut FunctionBuilder,
     ec: &Ec,
     pa: ClValue,
