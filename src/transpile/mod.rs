@@ -43,6 +43,7 @@ mod runtime_tables;
 pub mod split;
 mod state;
 mod stmt;
+mod trait_clauses;
 mod types;
 mod wordwrap_php;
 
@@ -240,6 +241,8 @@ mod tests_enums;
 mod tests_fault_parity;
 #[cfg(test)]
 mod tests_receivers;
+#[cfg(test)]
+mod tests_static_composition;
 
 impl Transpiler {
     /// The PHP form of a unary negation when a bare `-$x` would be WRONG, or `None` when the native

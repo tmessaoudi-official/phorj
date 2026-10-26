@@ -8192,3 +8192,20 @@ fn trait_bare_name_without_a_using_field_is_the_function_on_every_leg() {
         "trait_bare_name_function",
     );
 }
+
+// ── Plan row 4c — statics and composition parity (KNOWN_ISSUES STATIC-COMPOSITION-PARITY) ──
+
+/// Item 3: a multi-parent class whose parent has a static method. The native legs agreed; the PHP leg was fatal (`Cannot make non static method IA::fa() static in class A`) because
+/// the synthesized parent interface declared the method non-static. (`B` has a method, not a field:
+/// a multi-parent parent's field initializer is item 4.)
+#[test]
+fn static_method_on_a_decomposed_parent_agrees() {
+    agree_out_php(
+        "import Core.Output; open class A { static function fa(): int { return 1; } } \
+         open class B { function g(): int { return 2; } } class M extends A, B {} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { M m = new M(); \
+         Output.printLine(\"{A.fa()} {M.fa()} {m.g()}\"); }",
+        "1 1 2\n",
+        "row4c_static_method_decomposed_parent",
+    );
+}
