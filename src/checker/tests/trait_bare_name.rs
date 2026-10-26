@@ -33,3 +33,31 @@ fn a_trait_whose_users_have_no_such_field_keeps_the_function() {
                function main(): void { int r = new C().m(); }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
+
+#[test]
+fn the_trait_hint_does_not_advise_a_this_read_the_trait_cannot_check() {
+    // Panel round 1 (completeness lens): `this.k` inside `T` is "type T has no field k", so the fix
+    // for a using class's field is a rename, and the message must say so.
+    let src = "function k(): int { return 5; } function apply(() => int f): int { return f(); } \
+               trait T { function m(): int { return apply(k); } } class C { use T; int k = 9; } \
+               function main(): void { int r = new C().m(); }";
+    let errs = errors_of(src);
+    let e = errs
+        .iter()
+        .find(|e| e.code == Some("E-BARE-FIELD"))
+        .expect("E-BARE-FIELD");
+    let text = format!("{} {}", e.message, e.hint.clone().unwrap_or_default());
+    assert!(!text.contains("this.k"), "dead-end advice: {text}");
+    assert!(text.contains("`C`") && text.contains("rename"), "{text}");
+}
+
+#[test]
+fn a_bare_field_in_the_class_itself_still_advises_this() {
+    let src = "class C { int k = 9; function m(): int { return k; } } function main(): void {}";
+    let errs = errors_of(src);
+    let e = errs
+        .iter()
+        .find(|e| e.code == Some("E-BARE-FIELD"))
+        .expect("E-BARE-FIELD");
+    assert!(e.message.contains("write `this.k`"), "{}", e.message);
+}

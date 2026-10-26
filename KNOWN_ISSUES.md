@@ -14,6 +14,49 @@ A get-only hook is not affected (no setter to run). Which behaviour phorj wants 
 PENDING as DEC-571 (Invariant 15). `vm_hook_write_through_a_supertype_runs_the_setter` pins today's PHP output so
 that either side changing reopens it.
 
+## HOOK-INHERITANCE — a subclass does not inherit its parent's property hook on the native legs; PHP does (found 2026-10-26)
+
+Found by row 4b's close panel (correctness and safety lenses). It predates the row. The oracle looks a hook up on the
+runtime class's own members and its `use`d traits only (`Interpreter::hook_get` / `hook_set`), never on a parent, and
+the VM's `methods` table aliases inherited methods but not the synthetic `<name>$get` / `<name>$set`:
+
+| program | interpreter = VM | PHP |
+|---|---|---|
+| `open class Animal { constructor(public mutable string name) {} }`, `open class Dog extends Animal { string name { get => "hooked"; } }`, `class Puppy extends Dog {}`; `Puppy p = new Puppy("p"); p.name` | `p` (the stored field) | inherits the hook, presumably `hooked` [Unverified: no PHP 8.5 in the cloud box] |
+| `open class Dog { string label { get => "L"; } }`, `class Puppy extends Dog {}`; `Dog d = new Puppy(); d.label` | ``runtime error: no field `label` on `Puppy` `` | inherits the hook |
+
+Until row 4b's close the VM also disagreed with the oracle on both (``no method `name$get` on `Puppy` ``); it now
+agrees (`tests/differential.rs::vm_hook_on_an_extended_class_is_decided_by_the_runtime_class`, which compares only the
+native legs). Whether hooks are inherited is a language question, recorded PENDING as DEC-572 (Invariant 15).
+
+## BARE-NAME-SUBCLASS — a bare name that matches a field only a SUBCLASS stores splits the legs (found 2026-10-26)
+
+Found by row 4b's close panel (all three lenses). It predates the row and is the sibling TRAIT-BARE-NAME leaves out:
+
+```
+function k(): int { return 5; }
+function apply(() => int f): int { return f(); }
+open class C { function m(): int { return apply(k); } }
+class D extends C { int k = 9; }   // main: C c = new D(); c.m()
+```
+
+`phg check` is clean; the VM and PHP print `5` (the function); the tree-walker reads `D`'s field and faults with
+`` `f` is not a function, variant, or class ``. The same holds when `m` sits in a trait that `open class C` uses. The
+checker's `is_cur_field` looks at the current class and the trait's direct users, never at their subclasses. Which side
+is right is a language question, recorded PENDING as DEC-573 (Invariant 15). Workaround: rename the function or the
+field.
+
+## TRAIT-FIELD-INIT — a stored field declared in a trait never gets a slot in the using class (found 2026-10-26)
+
+```
+trait Tagged { mutable string name = "stored"; }
+class Base { use Tagged; }   // main: Output.printLine(new Base().name)
+```
+
+`phg check` is clean. Both native legs fault ``no field `name` on `Base` `` (the pre-row-4b binary does too); PHP's
+trait property would print `stored`. Found while writing row 4b's trait-`this` test. Not yet investigated; queued as
+plan row 4d.
+
 ## DISASSEMBLE-OVERLOAD-ORDER — `phg disassemble` numbers overload sets nondeterministically (found 2026-10-26)
 
 Running `phg disassemble examples/guide/overloading.phg` six times on one binary gave four different listings: the
@@ -47,22 +90,37 @@ covers any of these shapes. Fix queued as plan row 4b (`docs/plans/2026-10-08-au
 hook and the `with` target at run time when the compiler's type is not exact. Its failing-first tests are the five rows
 above, plus the null path of that differential test.
 
-**Fixed 2026-10-26 (row 4b, step 2).** The compile-time path stays only where it is exact: a class no class extends
-(`Compiler::is_exact_class`), and for `with`, overrides already in declaration order. Everywhere else the VM decides
-at run time with three new ops (`src/vm/runtime_class.rs`): `CloneInstance` copies the runtime instance, and the
-overrides are then written in SOURCE order; `GetFieldOrHook` / `SetFieldOrHook` call the runtime class's
-`<name>$get` / `<name>$set`, or else use the stored field. A hook-only property compiles to `CallMethod`. The fix also
-covers three shapes found while building it, each split on the pre-fix binary:
+**Fixed 2026-10-26 (row 4b, step 2; corrected by its close panel, round 1).** The compile-time path stays only where
+it is exact: a CLASS (not a trait, whose `this` is any using class) that no class extends (`Compiler::is_exact_class`),
+and for `with`, overrides already in declaration order. Everywhere else the VM decides at run time with three new ops
+(`src/vm/runtime_class.rs`): `CloneInstance` copies the runtime instance, and the overrides are then written in SOURCE
+order; `GetFieldOrHook` / `SetFieldOrHook` call the runtime class's `<name>$get` / `<name>$set`, or else use the stored
+field. The run-time ops are emitted only when the receiver's class or a class extending it has the hook
+(`hooked_at_or_below`), any class for an untyped receiver or a trait's `this`; a hook in an unrelated hierarchy leaves
+`GetField`. A hook-only property takes the same ops, so a class without the hook faults `no field`, as the oracle does.
+The first cut of the fix (frozen at `3b61324c`) got two of these wrong, both caught by the panel before any merge: it
+called `<name>$get` at compile time on an EXTENDED class that has the hook, which a subclass does not inherit
+(HOOK-INHERITANCE below), and on ANY receiver when no class stores the name, which made a backed enum's `.value` fault
+whenever a class had a hook-only `value` property. The fix also covers three shapes found while building it, each split
+on the pre-fix binary:
 - a hooked WRITE through a supertype (the VM wrote the stored field; the oracle runs the setter);
 - `this.name` read inside a base-class method that a subclass hooks;
 - a `with` whose overrides have side effects, written out of declaration order (the VM evaluated them in
   declaration order; the oracle uses source order).
 
-Tests: the `vm_with_*`, `vm_hook_*`, `vm_runtime_class_ops_compose_in_one_expression` and
-`null_coalesce_class_rhs_null_path_runs_the_hook` cases in `tests/differential.rs`. Example:
-`examples/guide/runtime-class-dispatch.phg`. Bytecode of every other example is unchanged: all 436 listings were
-disassembled before and after, and the only listing that differed is DISASSEMBLE-OVERLOAD-ORDER below, which is not
-this change.
+Tests: the `vm_with_*`, `vm_hook_*`, `vm_trait_body_this_read_runs_a_subclass_hook`,
+`backed_enum_value_ignores_an_unrelated_hook_only_value_property`,
+`vm_runtime_class_ops_compose_in_one_expression` and `null_coalesce_class_rhs_null_path_runs_the_hook` cases in
+`tests/differential.rs`, and `src/compiler/tests_hook_gate.rs` (which receivers pay for run-time dispatch). Cost
+[Verified: debug builds, `taskset -c 0`, K=11 interleaved, `--no-jit`]: a read through a supertype whose subclass hooks
+the name, on an instance without the hook, takes ~8% longer per loop than the pre-fix `GetField` (median 1727 vs 1596
+ms, 6M iterations), because the op checks the hook cache before the field cache. The pre-fix VM was faster there only
+by skipping a hook the runtime class may have. Release-build size of the gap: not measured. Example:
+`examples/guide/runtime-class-dispatch.phg`. Bytecode, measured with `phg disassemble` on the pre-row-4b and the final
+binary over every example that loads as a single file (277; the 74 project and library files do not): 274 listings are
+identical; `property-hooks.phg` and `traits.phg` differ only in name-pool indices (a hook's bare name is now interned
+for the stored-field fallback), and the third is the new example. `overloading.phg` can also differ between any two
+runs (DISASSEMBLE-OVERLOAD-ORDER), which is not this change.
 
 ## DEEP-INPUT-CRASHES — some inputs still abort a `phg` process instead of failing cleanly (found 2026-10-08)
 
@@ -109,8 +167,8 @@ class C { use T; int k = 9; }   // main prints new C().m()
 `phg check` is clean, and the VM and PHP print `5` (the function). The tree-walker, the oracle, reads `C`'s field `k` and
 faults with `` `f` is not a function, variant, or class ``. The checker types the trait body against the trait, which has
 no field `k`, so it cannot see the collision. A field declared in the trait itself is `E-BARE-FIELD` (fixed in the
-2026-10-08 round-5 work). This predates that work. Workaround: write `this.k` or rename one of the two. Queued with plan
-row 4b.
+2026-10-08 round-5 work). This predates that work. Workaround: rename the function or the field (`this.k` does not
+check inside the trait, which declares no `k`). Queued with plan row 4b.
 
 **Fixed 2026-10-26 (row 4b, step 3):** the checker records which classes use each trait (`trait_users`), and
 `is_cur_field` answers for all of them inside a trait body, so the program above is `E-BARE-FIELD`. A trait whose

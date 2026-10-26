@@ -145,3 +145,20 @@ fn parent_call_with_two_declaring_parents_is_ambiguous() {
         "E-PARENT-AMBIGUOUS",
     );
 }
+
+#[test]
+fn the_did_you_mean_hint_is_deterministic_on_a_tie() {
+    // Panel round 1 (correctness lens, F5; Invariant 10): `c` is one edit from `w`, `x`, `a` and
+    // `n`, and the candidates come from `HashMap` scopes, so the tie was broken by iteration order.
+    // Each check builds fresh maps with fresh seeds, so twenty runs expose an unsorted tie.
+    let src =
+        "function main(): void { int w = 1; int x = 2; int a = 3; int n = 4; int r = c + 1; }";
+    for _ in 0..20 {
+        let errs = errors_of(src);
+        let e = errs
+            .iter()
+            .find(|e| e.code == Some("E-UNKNOWN-IDENT"))
+            .expect("unknown ident");
+        assert_eq!(e.hint.as_deref(), Some("did you mean `a`?"), "{errs:?}");
+    }
+}

@@ -487,3 +487,5 @@ mod narrow;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_hook_gate;
