@@ -49,3 +49,91 @@ fn an_inherited_static_names_its_owners_slot() {
     );
     assert!(own.contains("M::$sa = 7;"), "{own}");
 }
+
+#[test]
+fn trait_initializers_run_in_the_using_classs_constructor() {
+    // Item 4: a trait never synthesizes an init-only `__construct` (two such traits collide fatally,
+    // and a user's own constructor overrode it); the using class's constructor runs the set.
+    let out = php(
+        "trait T { int k = 9; } trait R { int r = 4; } class U { use T; use R; } \
+         class W { use T; int j; constructor(int j0) { this.j = j0; } }",
+    );
+    let trait_t = out
+        .split("trait T {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(
+        !trait_t.contains("__construct"),
+        "trait T must not construct:\n{out}"
+    );
+    assert!(
+        out.contains("$this->k = 9;\n        $this->r = 4;"),
+        "U's constructor runs both trait sets:\n{out}"
+    );
+    let w = out.split("class W {").nth(1).unwrap();
+    assert!(
+        w.contains(
+            "function __construct(int $j0) {\n        $this->k = 9;\n        $this->j = $j0;"
+        ),
+        "W's own constructor runs the trait set first:\n{out}"
+    );
+}
+
+#[test]
+fn a_trait_constructor_user_keeps_it_unless_it_has_more_initializers() {
+    // Plain: the trait's `__construct` (with its own prelude) is the class's; a synthesized zero-arg
+    // `__construct` would override it.
+    let plain = php(
+        "trait T { int k = 9; int m; constructor(int m0) { this.m = m0; } } class U { use T; }",
+    );
+    let u = plain
+        .split("class U {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(
+        !u.contains("__construct"),
+        "U keeps T's constructor:\n{plain}"
+    );
+    // More initializers than the trait constructor runs: the class emits its own, from the plan.
+    let more = php(
+        "trait T { int k = 9; int m; constructor(int m0) { this.m = m0; } } trait R { int r = 4; } \
+         class U { use T; use R; int j = 3; }",
+    );
+    assert!(
+        more.contains(
+            "public function __construct(int $m0) {\n        $this->k = 9;\n        $this->r = 4;\n        $this->j = 3;\n        $this->m = $m0;"
+        ),
+        "{more}"
+    );
+}
+
+#[test]
+fn a_synthesized_constructor_promotes_initializes_then_runs_bodies() {
+    // The native order across a multi-parent plan: every promoted param, the initializer set, then the
+    // bodies (it interleaved promotion and bodies per parent before). A decomposed parent with no
+    // constructor still runs its own initializer.
+    let out = php(
+        "open class A { mutable int x = 1; constructor(public int a) { this.x = this.a + 10; } } \
+         open class B { int y = 2; constructor(public int b) {} } class M extends A, B {}",
+    );
+    let m = out.split("final class M").nth(1).unwrap();
+    assert!(
+        m.contains(
+            "$this->a = $a;\n        $this->b = $b;\n        $this->x = 1;\n        $this->y = 2;\n        $this->x = $this->a + 10;"
+        ),
+        "{out}"
+    );
+    let only_init =
+        php("open class A { int x = 1; } open class B { int y = 2; } class M extends A, B {}");
+    let a = only_init.split("class A implements IA {").nth(1).unwrap();
+    assert!(
+        a.contains("public function __construct() {\n        $this->x = 1;"),
+        "{only_init}"
+    );
+}

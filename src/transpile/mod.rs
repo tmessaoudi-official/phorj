@@ -18,6 +18,7 @@ mod driver;
 mod enums;
 mod escapes;
 mod expr;
+mod field_inits;
 mod fold_php;
 mod fs_php;
 mod functions;
@@ -111,6 +112,18 @@ struct Transpiler {
     /// `(class, static field) → owning class` (plan row 4c item 2): `C.f` emits `Owner::$f`, the one
     /// slot the native legs share — `M::$f` is M's own trait copy when `M`'s parent is decomposed.
     static_owners: std::collections::BTreeMap<(String, String), String>,
+    /// Plan row 4c item 4: each class's initializer set (its traits' then its own) and each trait's own,
+    /// for the `__construct` prelude a class or a trait constructor emits (`ast::field_inits`).
+    init_sets: HashMap<String, Vec<(String, Expr)>>,
+    /// The user traits: a trait never synthesizes an init-only `__construct` (its user carries them).
+    trait_names: HashSet<String>,
+    /// Classes with no constructor of their own that compose a trait constructor AND have other
+    /// initializers: their `__construct` is emitted from the plan (`emit_synth_construct`), so every
+    /// initializer runs, not only the trait constructor's own prelude.
+    trait_ctor_route: HashSet<String>,
+    /// Every class with no constructor of its own that takes a trait constructor: it never synthesizes a
+    /// zero-arg `__construct`, which would override that constructor (routed or not).
+    trait_ctor_users: HashSet<String>,
     variants: HashSet<String>,
     /// DEC-320 split emission: `Some` = only these top-level items emit; `None` = classic emit.
     keep: Option<HashSet<String>>,
