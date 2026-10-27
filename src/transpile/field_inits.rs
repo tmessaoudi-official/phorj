@@ -75,6 +75,45 @@ impl Transpiler {
         }
     }
 
+    /// Feature B's zero-arg `__construct` for a class with initializers and no constructor (moved from
+    /// `classes.rs`, Invariant 13).
+    pub(super) fn emit_init_only_construct(
+        &mut self,
+        c: &ClassDecl,
+        as_trait: bool,
+    ) -> Result<(), String> {
+        // Feature B: a class with expression field initializers but NO constructor needs a synthesized
+        // zero-arg `__construct` to run them (PHP property defaults can't be arbitrary expressions). Not
+        // for a decomposed trait body (`as_trait`) — its construction is emitted via `emit_synth_construct`.
+        // Plan row 4c item 4: never on a user trait — its initializers belong to the using class's set,
+        // so two traits cannot collide on `__construct` and a user's own constructor cannot drop them;
+        // never on a class that takes a trait constructor (`trait_ctor_users`; the routed ones emit theirs
+        // from the plan).
+        if !as_trait
+            && !self.composition.trait_names.contains(&c.name)
+            && !self.composition.trait_ctor_users.contains(&c.name)
+            && !c
+                .members
+                .iter()
+                .any(|m| matches!(m, ClassMember::Constructor { .. }))
+        {
+            let field_inits = self.init_set(c);
+            if !field_inits.is_empty() {
+                self.line("function __construct() {");
+                self.indent += 1;
+                self.push_scope();
+                for (fname, init) in &field_inits {
+                    let e = self.emit_expr(init)?;
+                    self.line(&format!("$this->{fname} = {e};"));
+                }
+                self.pop_scope();
+                self.indent -= 1;
+                self.line("}");
+            }
+        }
+        Ok(())
+    }
+
     /// The initializer set a class's (or a user trait's real) constructor prelude runs.
     pub(super) fn init_set(&self, c: &ClassDecl) -> Vec<(String, Expr)> {
         self.composition
@@ -83,4 +122,31 @@ impl Transpiler {
             .cloned()
             .unwrap_or_else(|| crate::ast::own_field_initializers(c))
     }
+}
+
+/// True when the static `cls.field` (declared on the class or a trait it uses) is not publicly
+/// writable, so `__phorj_init_statics` must set it from the class's scope (row 4c close panel, safety
+/// F6: `C::$c = …` from a global function is a PHP error for a `protected`/`private` static).
+pub(super) fn static_is_restricted(program: &Program, cls: &str, field: &str) -> bool {
+    let restricted = |members: &[ClassMember]| {
+        members.iter().any(|m| {
+            matches!(m, ClassMember::Field { name, modifiers, .. }
+                if name == field
+                    && modifiers.iter().any(|md| matches!(
+                        md,
+                        Modifier::Private | Modifier::Protected | Modifier::PrivateSet | Modifier::ProtectedSet
+                    )))
+        })
+    };
+    program.items.iter().any(|it| match it {
+        Item::Class(c) if c.name == cls => {
+            restricted(&c.members)
+                || c.uses.iter().any(|u| {
+                    program.items.iter().any(
+                |t| matches!(t, Item::Trait(td) if td.name == u.name && restricted(&td.members)),
+            )
+                })
+        }
+        _ => false,
+    })
 }

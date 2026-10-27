@@ -67,7 +67,7 @@
 | `2026-07-26-capture-write-rejection.md` | DEC-357 | Writing to a captured local is rejected. RULED, unbuilt |
 | `2026-07-26-ufcs-lsp-companion.md` | DEC-342 / 346 / 375 | UFCS completion, import-gating, and the LSP-as-expert-companion bar. RULED, unbuilt — relevant to Invariant 17's 100% rule |
 
-## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-568, DEC-571 … DEC-575)
+## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-568, DEC-571 … DEC-576)
 
 > Invariant 19 mirror: the register row is the ruling, `docs/plans/2026-10-08-audit-remediation.plan.md` is the
 > plan, `SLICE-STATE.md` is the live cursor. The register wins on any difference.
@@ -86,6 +86,7 @@
 | DEC-573 | A bare name never reads a field: one matching only a subclass's field is the top-level function on every leg (KNOWN_ISSUES BARE-NAME-SUBCLASS) | RULED (a) 2026-10-26 — plan row 4g |
 | DEC-574 | A multi-parent class's parent static is the parent's one shared slot, as in single inheritance; PHP emits a decomposed parent's statics public (row 4c close panel; KNOWN_ISSUES STATIC-COMPOSITION-PARITY item 2) | RULED (a) 2026-10-27 — built in plan row 4c |
 | DEC-575 | Every class's field initializers run on construction, base-first down the chain, each class's traits then its own (KNOWN_ISSUES INIT-CHAIN) | RULED (a) 2026-10-27 — plan row 4h |
+| DEC-576 | Computed static initializers run per class in program order: its traits' statics, then its own (row 4c close panel round 2) | RULED (a) 2026-10-27 — built in plan row 4c |
 
 ## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 

@@ -64,33 +64,6 @@ fn main_bootstrap_stmt(program: &Program, ns_prefix: &str) -> String {
 /// initializer of such a class (the singleton pattern — `static C inst = new C(...)`) must run in the
 /// class's own scope in PHP, else PHP rejects the construction from the global `__phorj_init_statics`
 /// while the Phorj backends (which treat a static init as in-class) accept it — a byte-identity break.
-/// True when the static `cls.field` (declared on the class or a trait it uses) is not publicly
-/// writable, so `__phorj_init_statics` must set it from the class's scope (row 4c close panel, safety
-/// F6: `C::$c = …` from a global function is a PHP error for a `protected`/`private` static).
-fn static_is_restricted(program: &Program, cls: &str, field: &str) -> bool {
-    let restricted = |members: &[ClassMember]| {
-        members.iter().any(|m| {
-            matches!(m, ClassMember::Field { name, modifiers, .. }
-                if name == field
-                    && modifiers.iter().any(|md| matches!(
-                        md,
-                        Modifier::Private | Modifier::Protected | Modifier::PrivateSet | Modifier::ProtectedSet
-                    )))
-        })
-    };
-    program.items.iter().any(|it| match it {
-        Item::Class(c) if c.name == cls => {
-            restricted(&c.members)
-                || c.uses.iter().any(|u| {
-                    program.items.iter().any(
-                |t| matches!(t, Item::Trait(td) if td.name == u.name && restricted(&td.members)),
-            )
-                })
-        }
-        _ => false,
-    })
-}
-
 fn class_has_restricted_ctor(program: &Program, cls: &str) -> bool {
     program.items.iter().any(|it| {
         matches!(it, Item::Class(c) if c.name == cls
@@ -189,7 +162,7 @@ impl Transpiler {
             self.indent += 1;
             for (cls, field, e) in &rt_statics {
                 let v = self.emit_expr(e)?;
-                if static_is_restricted(program, cls, field) {
+                if super::field_inits::static_is_restricted(program, cls, field) {
                     // A non-public static is not assignable from this global function: run the whole
                     // assignment in the class's scope (row 4c close panel, safety F6).
                     self.line(&format!(

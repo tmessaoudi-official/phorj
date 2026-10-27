@@ -710,8 +710,8 @@ No runtime concept needed, no new `Op`/`Value`. Low cost, closes the most common
 names the ONE slot of the first class that declares `f` in `[C]` then its ancestors depth-first in
 `extends` order (`ast::class_lookup_order`, the order the checker types it in); a redeclaring subclass
 has its own slot, and a trait's static is a per-using-class copy. Computed static initializers run once
-before `main`, class by class in program order: the class's traits' statics, then its own. Instance
-field initializers run traits' first, then the class's own, owned by the class whose constructor plan
+before `main`, class by class in program order: the class's traits' statics, then its own (DEC-576). Instance
+field initializers run traits' first (forced: a trait initializer cannot name its user's fields), then the class's own, owned by the class whose constructor plan
 runs (`ast::field_initializers`; DEC-575 widens this to the whole chain, plan row 4h).
 
 ### Area B — overloaded static methods — BUILT

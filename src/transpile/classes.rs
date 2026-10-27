@@ -413,35 +413,7 @@ impl Transpiler {
                 }
             }
         }
-        // Feature B: a class with expression field initializers but NO constructor needs a synthesized
-        // zero-arg `__construct` to run them (PHP property defaults can't be arbitrary expressions). Not
-        // for a decomposed trait body (`as_trait`) — its construction is emitted via `emit_synth_construct`.
-        // Plan row 4c item 4: never on a user trait — its initializers belong to the using class's set,
-        // so two traits cannot collide on `__construct` and a user's own constructor cannot drop them;
-        // never on a class that takes a trait constructor (`trait_ctor_users`; the routed ones emit theirs
-        // from the plan).
-        if !as_trait
-            && !self.composition.trait_names.contains(&c.name)
-            && !self.composition.trait_ctor_users.contains(&c.name)
-            && !c
-                .members
-                .iter()
-                .any(|m| matches!(m, ClassMember::Constructor { .. }))
-        {
-            let field_inits = self.init_set(c);
-            if !field_inits.is_empty() {
-                self.line("function __construct() {");
-                self.indent += 1;
-                self.push_scope();
-                for (fname, init) in &field_inits {
-                    let e = self.emit_expr(init)?;
-                    self.line(&format!("$this->{fname} = {e};"));
-                }
-                self.pop_scope();
-                self.indent -= 1;
-                self.line("}");
-            }
-        }
+        self.emit_init_only_construct(c, as_trait)?;
         Ok(())
     }
 }

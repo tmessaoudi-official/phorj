@@ -110,7 +110,7 @@ as `string`, the VM's trait-copy loop overwrites the class's own slot (`1!`), th
 reject the composition [Inferred]. (2) Two traits declaring a same-named static of different types: VM `r1`, tree-walker
 a type fault. (3) `use P.m` is not applied when the checker types a call, so `string x = v.f()` holding an `int` runs on
 every leg. (4) A static redeclared in one arm of a diamond transpiles to two traits declaring `$s` with different
-defaults, which PHP rejects as incompatible [Inferred]. The likely fix is a checker rejection of a type-changing
+defaults, which PHP rejects as incompatible [Verified: CI run #681 on PHP 8.5, `TR and TBase define the same property ($s) … incompatible`; the diamond case of `static_owner_order_trait_first_inits_and_a_protected_multi_parent_static` is pinned on the native legs only until row 4i rules]. The likely fix is a checker rejection of a type-changing
 redeclaration across a composition (a language decision, Invariant 15). Owner: plan row 4i.
 
 ## DIAMOND-EXPONENTIAL — stacked diamonds take exponential time to run and transpile (found 2026-10-27)

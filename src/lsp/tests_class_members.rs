@@ -166,4 +166,9 @@ function f(): int { return M.s + V.ts; }
     let (l, c) = pos("V.ts", 2);
     let def = &s.handle(&super::tests::req_at("definition", l, c))[0];
     assert!(def.contains("\"start\":{\"line\":4,"), "T's static: {def}");
+    let hover = &s.handle(&super::tests::req_at("hover", l, c))[0];
+    assert!(
+        hover.contains("mutable static int ts = 7"),
+        "T's static: {hover}"
+    );
 }
