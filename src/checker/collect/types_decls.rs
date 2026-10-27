@@ -162,7 +162,7 @@ impl Checker {
         }
         let mut fields = HashMap::new();
         // Member visibility (Wave 1.1): instance-field and method name → (vis, owner==this class).
-        // Inherited entries (with their original owner) are merged in by `merge_inherited`.
+        // Inherited entries (with their original owner) are merged in by `merge_inherited_pass`.
         let mut field_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut method_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut method_overload_vis: HashMap<String, Vec<MemberVis>> = HashMap::new();
@@ -559,6 +559,6 @@ impl Checker {
         info.ctor_throws = ctor_throws;
         info.ctor_vis = ctor_vis;
         // `ctor_owner` was initialized to the class's own name; an own ctor keeps it. An inherited
-        // ctor's owner/visibility are merged in `merge_inherited` for a class with no own ctor.
+        // ctor's owner/visibility are merged in `merge_inherited_pass` for a class with no own ctor.
     }
 }

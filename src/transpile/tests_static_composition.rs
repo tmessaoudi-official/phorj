@@ -137,3 +137,22 @@ fn a_synthesized_constructor_promotes_initializes_then_runs_bodies() {
         "{only_init}"
     );
 }
+
+#[test]
+fn a_decomposed_parents_protected_static_is_public_and_restricted_inits_run_in_scope() {
+    // DEC-574: `M.sa` is A's one slot, named `A::$sa` from M, which PHP does not count as a subclass —
+    // so the decomposed parent's static is `public` (the checker enforces `protected`).
+    let out = php(
+        "open class A { protected static mutable int sa = 2; } open class B {} class M extends A, B {}",
+    );
+    assert!(out.contains("public static int $sa = 2;"), "{out}");
+    assert!(!out.contains("protected static int $sa"), "{out}");
+    // Safety F6: a non-public computed static is assigned inside the class's scope.
+    let init = php(
+        "function k(): int { return 1; } class C { protected static int c = k(); } function main(): void {}",
+    );
+    assert!(
+        init.contains("(\\Closure::bind(static function () { C::$c = k(); }, null, C::class))();"),
+        "{init}"
+    );
+}

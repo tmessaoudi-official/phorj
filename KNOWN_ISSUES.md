@@ -89,6 +89,36 @@ format every_repo_…` blocks with a thread in `unix_stream_data_wait` on fd 0; 
 a test-isolation defect, not a language one. Workaround: run the suite with `</dev/null`. Fix: give the sweep's
 in-process runs an empty stdin. Owner: plan row 9 (the craftsmanship batch).
 
+## INIT-CHAIN — a subclass with its own initializers or constructor does not run its ancestors' field initializers (found 2026-10-27; RULED, queued)
+
+Found by row 4c's close panel (correctness F2/F4/F5, safety F3); it predates the row. Only the class whose constructor
+plan runs contributes its initializer set (`ast::field_initializers`), so `open class A { int x = 1; } class B extends A
+{ int y = 2; }` then `new B().x` checks clean and faults `no field x on B` on every leg; the same when `B` declares a
+constructor without `parent.constructor(…)`, for a trait's initializers on a subclass of its user, and for a diamond
+whose arms have initializers of their own (the shared base's never run). Two related PHP-leg shapes: a class with its
+own initializers and an inherited constructor synthesizes a zero-arg `__construct` that overrides the inherited one
+(`transpile/classes.rs`), and `parent.constructor(…)` into a parent whose constructor comes from a trait inlines an
+empty block (`checker/inline_parent_ctor.rs` `find_owner` looks only for an own constructor). **DEC-575 RULED (a) by
+the developer, 2026-10-27: every class's initializers run, base-first down the chain**, each class's traits then its
+own; PHP via a `protected function __phorj_init_<Class>()` per class. Queued as plan row 4h.
+
+## STATIC-REDECL-TYPE — a static or member redeclared with another type through a trait or an arm splits the legs (found 2026-10-27)
+
+Found by row 4c's close panel; all predate the row and pass `phg check`. (1) A class that redeclares its trait's static
+with another type (`trait T { static int s = 1; } class U { use T; static string s = "abc"; }`): the checker types `U.s`
+as `string`, the VM's trait-copy loop overwrites the class's own slot (`1!`), the tree-walker faults, and PHP should
+reject the composition [Inferred]. (2) Two traits declaring a same-named static of different types: VM `r1`, tree-walker
+a type fault. (3) `use P.m` is not applied when the checker types a call, so `string x = v.f()` holding an `int` runs on
+every leg. (4) A static redeclared in one arm of a diamond transpiles to two traits declaring `$s` with different
+defaults, which PHP rejects as incompatible [Inferred]. The likely fix is a checker rejection of a type-changing
+redeclaration across a composition (a language decision, Invariant 15). Owner: plan row 4i.
+
+## DIAMOND-EXPONENTIAL — stacked diamonds take exponential time to run and transpile (found 2026-10-27)
+
+Found by row 4c's close panel (safety lens); mostly pre-existing. Eighteen stacked diamonds run in ~11.8 s and transpile
+in ~10.1 s (`phg check` 0.03 s), ~10 s even with no initializers; `ast::field_initializers` walks parents the same 2^n
+way. Never a crash. Owner: plan row 9.
+
 ## FIXED — VM-WITH-STATIC-CLASS — on the VM, `with` and property-hook reads are decided at COMPILE time from the receiver's compiler type (found 2026-10-08, fixed 2026-10-26)
 
 Found by the P0 slice's close panel (rounds 2 and 3, correctness lens). It predates the 2026-10-07 audit batch: the
@@ -225,8 +255,10 @@ users store no `k` keeps the function. Tests: `src/checker/tests/trait_bare_name
 
 ## STATIC-COMPOSITION-PARITY — static/trait/multi-parent shapes that pass `phg check` and split the legs (found 2026-10-08; all five items FIXED 2026-10-26/27, row 4c)
 
-The correctness pass on the round-5 re-check fix found these while probing static contexts. All four predate that
-work, and each passes `phg check`. Queued as plan row 4c.
+The correctness pass on the round-5 re-check fix found the first four while probing static contexts; row 4c found
+the fifth. All predated that work, and each passed `phg check`. All five are fixed in plan row 4c; the close panel's
+round 1 (2026-10-27) tightened items 1 and 2 (below), and the shapes it found outside them are recorded in
+INIT-CHAIN and STATIC-REDECL-TYPE.
 
 1. **FIXED 2026-10-26 (row 4c) — a trait's non-literal static initializer never ran.** `trait T { static int s = k() + 1;
    } class U { use T; }`, then `U.s + 1`: VM `expected int, found unit`, tree-walker `cannot apply Add to unit and int`,
@@ -235,7 +267,8 @@ work, and each passes `phg check`. Queued as plan row 4c.
    there printed on the VM only). `ast::static_runtime_inits` is now the one ordered list all three run — each class's
    own non-literal statics, then each class's copy of its traits' — and the checker type-checks a trait's initializer
    (`a_trait_non_literal_static_initializer_runs_once_per_user`, `a_trait_static_initializer_is_type_checked`; example
-   `guide/static-init.phg`).
+   `guide/static-init.phg`). Close panel round 1: each class runs its traits' statics, then its own — the first cut ran
+   every class's own first, so `class U { use T; static int own = U.s + 1; }` read the trait copy before it ran.
 2. **FIXED 2026-10-26 (row 4c) — an inherited static field read through the subclass.** `open class A { static int sa
    = 2; } class M extends A {}`, then `M.sa`: VM `undefined variable M` (compile error), tree-walker `no static field
    sa on M`, PHP `2`; a write through `M` forked a second copy on the tree-walker. `ast::static_field_owners` now maps
@@ -243,7 +276,12 @@ work, and each passes `phg check`. Queued as plan row 4c.
    first — spec Area A's rule for static methods), and all three backends use it: the VM aliases the owner's slot, the
    interpreter keys reads and writes on the owner, the transpiler emits `Owner::$f` (for a multi-parent child,
    `M::$f` would be M's own trait copy). Tests: `an_inherited_static_field_is_the_declaring_classs_one_slot`,
-   `transpile::tests_static_composition`; example `guide/static-inheritance.phg`.
+   `transpile::tests_static_composition`; example `guide/static-inheritance.phg`). Close panel round 1: the owner is
+   found in the CHECKER's order (`ast::class_lookup_order`, depth-first in `extends` order) — the first cut used the
+   breadth-first MRO, so a diamond whose right arm redeclared the static with another type split the native legs
+   (VM `r1`, tree-walker a type fault); the LSP's hover and definition use the same order (they answered with the
+   farthest redeclaration); and per DEC-574 (RULED, one shared slot) a decomposed parent's static is emitted `public`
+   in PHP, so a `protected` one named through a multi-parent child is valid there.
 3. **FIXED 2026-10-26 (row 4c) — a multi-parent class whose parent has a static method.** `open class A { static
    function fa(): int { return 1; } } open class B { int j = 2; } class M extends A, B {}`: VM and tree-walker `1`; PHP
    `Cannot make non static method IA::fa() static in class A`. The synthesized parent interface declared the method
@@ -2649,9 +2687,9 @@ not a panic:
   MI-decomposition path), byte-identical interp ≡ VM≡real PHP (`guide/trait-conflicts.phg`). Narrower
   remaining edge: a collision where one trait supplies the method only via its *own* nested `use`
   (not a direct declaration) isn't detected by the clause builder — caught by the PHP oracle if it
-  arises. (5) **immutable trait instance
-  fields need a trait constructor** to initialize (promotion) — the same M-mut rule as a plain class
-  (an immutable field can't be assigned via `this.f = …`, even in the using class's ctor). (6) `const`
+  arises. (5) An immutable trait instance field takes an initializer (`int k = 9;`, run for every
+  using class — row 4c, 2026-10-27) or a trait constructor (promotion); like a plain class, it can't be
+  assigned via `this.f = …`, even in the using class's ctor. (6) `const`
   *class/trait* members are a pre-existing non-feature (`E-FIELD-INIT`), unrelated to traits.
 
 - **Declaration visibility** (`public`/`internal`/`private`) ships for top-level declarations, but a

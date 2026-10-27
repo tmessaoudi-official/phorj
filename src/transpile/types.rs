@@ -10,6 +10,7 @@ impl Transpiler {
         if let Expr::Ident(cls, _) = object {
             if !self.is_local(cls) && self.classes.contains(cls) {
                 let owner = self
+                    .composition
                     .static_owners
                     .get(&(cls.clone(), name.to_string()))
                     .unwrap_or(cls);

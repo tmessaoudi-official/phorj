@@ -77,7 +77,7 @@ impl Transpiler {
         }
         let prev = self.cur_class_fields.replace(fields);
         self.emit_class_members(c, &promoted_names, is_error, false)?;
-        if self.trait_ctor_route.contains(&c.name) {
+        if self.composition.trait_ctor_route.contains(&c.name) {
             self.emit_synth_construct(c, program)?; // plan row 4c item 4
         }
         self.emit_tostring_delegate(c)?; // DEC-331 D9b (magic_php.rs)
@@ -219,6 +219,10 @@ impl Transpiler {
                             self.emit_type(ty)
                         ));
                     } else if modifiers.contains(&Modifier::Static) {
+                        // DEC-574: a decomposed parent's static is ONE slot its multi-parent children
+                        // name as `Parent::$f`, and PHP does not count them as subclasses — so it is
+                        // `public` there; the checker enforces the declared visibility on every leg.
+                        let v = if as_trait { "public".to_string() } else { v };
                         // A `static` field → PHP `public static <type> $name`. A **literal** initializer
                         // round-trips as a PHP default (`= 0;`). A **non-literal** initializer (Feature
                         // B-static) can't be a PHP property default (PHP requires a constant expression),
@@ -417,8 +421,8 @@ impl Transpiler {
         // never on a class that takes a trait constructor (`trait_ctor_users`; the routed ones emit theirs
         // from the plan).
         if !as_trait
-            && !self.trait_names.contains(&c.name)
-            && !self.trait_ctor_users.contains(&c.name)
+            && !self.composition.trait_names.contains(&c.name)
+            && !self.composition.trait_ctor_users.contains(&c.name)
             && !c
                 .members
                 .iter()

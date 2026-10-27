@@ -8272,8 +8272,8 @@ fn a_subclass_of_a_trait_user_inherits_the_trait_members() {
 }
 
 /// Item 1: a trait's NON-literal static initializer runs once per using class (the S8 per-user copy),
-/// in one shared order (`ast::static_runtime_inits`): every class's own statics in program order,
-/// then each class's traits' statics. Before, the VM evaluated it once into an inert trait slot (a
+/// in one shared order (`ast::static_runtime_inits`): class by class in program order, its traits'
+/// statics, then its own (close panel round 1 — so `U` and `W`, declared first, initialize before `C`). Before, the VM evaluated it once into an inert trait slot (a
 /// side effect printed there, never on the tree-walker) and every user read `Unit`.
 #[test]
 fn a_trait_non_literal_static_initializer_runs_once_per_user() {
@@ -8283,7 +8283,7 @@ fn a_trait_non_literal_static_initializer_runs_once_per_user() {
          class C { static int c = k(1); } \
          #[Entry(kind: EntryKind.Cli)] function main(): void { U.s = U.s + 10; \
          Output.printLine(\"{U.s} {W.s} {C.c}\"); }",
-        "init 1\ninit 4\ninit 4\n15 5 1\n",
+        "init 4\ninit 4\ninit 1\n15 5 1\n",
         "row4c_trait_static_runtime_init",
     );
 }
@@ -8353,6 +8353,44 @@ fn trait_and_multi_parent_field_initializers_run_on_every_leg() {
              Output.printLine(\"{m.x} {m.y} {m.a} {m.b}\"); }",
             "15 2 5 6\n",
             "row4c_init_multi_parent_order",
+        ),
+    ] {
+        agree_out_php(&format!("import Core.Output; {src}"), expected, tag);
+    }
+}
+
+/// Row 4c close panel round 1. (A) correctness F1: in a diamond whose right arm redeclares a static
+/// with another type, `D.s` resolved through the BFS MRO to R while the checker typed it as the left
+/// arm's (Base's) `int` — the VM printed `r1`, the tree-walker faulted. The owner map now walks the
+/// checker's order (`ast::class_lookup_order`: depth-first, `extends` order). (B) correctness F3: a
+/// class static reading its own trait's static ran before the trait copy (classes' statics all ran
+/// first); each class now runs its traits' statics, then its own. (D) DEC-574: a protected static of a
+/// multi-parent parent, used by the child.
+#[test]
+fn static_owner_order_trait_first_inits_and_a_protected_multi_parent_static() {
+    for (src, expected, tag) in [
+        (
+            "open class Base { static mutable int s = 1; } open class L extends Base {} \
+             open class R extends Base { static mutable string s = \"r\"; } class D extends L, R {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { int x = D.s + 1; \
+             Output.printLine(\"{x} {R.s}\"); }",
+            "2 r\n",
+            "row4c_r1_diamond_static_owner",
+        ),
+        (
+            "function k(): int { return 4; } trait T { static int s = k() + 1; } \
+             class U { use T; static int own = U.s + 1; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{U.own}\"); }",
+            "6\n",
+            "row4c_r1_static_reads_its_trait_static",
+        ),
+        (
+            "open class A { protected static mutable int sa = 2; } open class B {} \
+             class M extends A, B { function bump(): int { M.sa = M.sa + 1; return M.sa; } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { int r = new M().bump(); \
+             Output.printLine(\"{r}\"); }",
+            "3\n",
+            "row4c_r1_protected_multi_parent_static",
         ),
     ] {
         agree_out_php(&format!("import Core.Output; {src}"), expected, tag);
